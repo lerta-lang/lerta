@@ -7,6 +7,7 @@ const LERTA_IMMORTAL = '-9223372036854775808'
 export const ir_type = (type: Type): string => {
   switch (type.kind) {
     case 'String':
+    case 'Array':
       return 'ptr'
     case 'Int':
       return 'i64'
@@ -38,9 +39,10 @@ const ir_string_bytes = (bytes: Uint8Array): string =>
 export const string_constant = (ir: IrBuilder, value: string): string => {
   const bytes = new TextEncoder().encode(value)
   const bytes_type = `[${bytes.length} x i8]`
-  const type = `{ i64, i64, ${bytes_type} }`
+  // The header (reference count and drop function), the length and the bytes.
+  const type = `{ i64, ptr, i64, ${bytes_type} }`
   const bytes_init = `${bytes_type} c"${ir_string_bytes(bytes)}"`
-  const init = `{ i64 ${LERTA_IMMORTAL}, i64 ${bytes.length}, ${bytes_init} }`
+  const init = `{ i64 ${LERTA_IMMORTAL}, ptr null, i64 ${bytes.length}, ${bytes_init} }`
   return ir.global('lerta.string', `private unnamed_addr constant ${type} ${init}`)
 }
 

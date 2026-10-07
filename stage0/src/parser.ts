@@ -130,15 +130,18 @@ class Parser {
   private parse_declaration(): Declaration {
     const token = this.tokens.next()
     const name = this.expressions.parse_identifier()
+    const type = this.tokens.accept(':') ? this.expressions.parse_type_name() : undefined
     this.tokens.expect('=', "'='")
     const value = this.expressions.parse_expression()
     const mutable = token.kind === 'var'
-    return { kind: 'declaration', mutable, name, value, line: token.line, column: token.column }
+    const position = { line: token.line, column: token.column }
+    return { kind: 'declaration', mutable, name, type, value, ...position }
   }
 
   private parse_assignment(target: Expression, operator: AssignmentOperator): Statement {
-    if (target.kind !== 'identifier') {
-      throw new CompileError('only a name can be assigned to', target.line, target.column)
+    if (target.kind !== 'identifier' && target.kind !== 'index') {
+      const message = 'only a name or an indexed item can be assigned to'
+      throw new CompileError(message, target.line, target.column)
     }
     this.tokens.next()
     const value = this.expressions.parse_expression()
@@ -150,7 +153,7 @@ class Parser {
   private starts_command_argument(token: Token): boolean {
     if (!token.spaced) return false
     if (token.kind === '-') return !this.tokens.peek(2).spaced
-    return token.kind === '(' || command_argument_starts.includes(token.kind)
+    return token.kind === '(' || token.kind === '[' || command_argument_starts.includes(token.kind)
   }
 
   // `f x, y`: the arguments run to the end of the line.

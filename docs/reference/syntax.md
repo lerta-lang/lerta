@@ -15,8 +15,8 @@
 
 ## Declarations and assignment
 
-- `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value.
-- `name = value` assigns to a `var`. `+=` `-=` `*=` `/=` `%=` combine an `Int` `var` with an `Int` value.
+- `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Array<Int> = []`).
+- `name = value` assigns to a `var`, and `xs[i] = value` to an item of an array. `+=` `-=` `*=` `/=` `%=` combine an `Int` `var` with an `Int` value.
 - An assignment is a statement, not an expression.
 
 ## Statements
@@ -34,7 +34,8 @@
   5. **A call with zero arguments requires parentheses**: `f()`. A bare `f` is the function value.
 - Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
 - `(x)` groups an expression.
-- `x.name()` calls a method of `x`. As with `(`, no space is allowed before `.`.
+- `x.name()` calls a method of `x`, `x.name` reads a property and `xs[i]` indexes. As with `(`, no space is allowed before `.` or `[`. At the start of a statement, `f [1]` is the call `f([1])`.
+- Types are written as names, with type arguments in `<>`: `Int`, `Array<String>`.
 
 ## Operators
 

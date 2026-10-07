@@ -1,4 +1,4 @@
-import { string_type, stringable_type, void_type, type Type } from './types.ts'
+import { int_type, string_type, stringable_type, void_type, type Type } from './types.ts'
 
 export type Builtin = {
   type: Type
@@ -26,11 +26,26 @@ export const builtins = new Map<string, Builtin>([
   ],
 ])
 
-const to_string: Type = { kind: 'function', params: [], result: string_type }
+const method = (params: Type[], result: Type): Type => ({ kind: 'function', params, result })
 
-// Methods of builtin types, by the receiver's type kind.
-export const builtin_methods: Partial<Record<Type['kind'], Map<string, Type>>> = {
-  String: new Map([['to_string', to_string]]),
-  Int: new Map([['to_string', to_string]]),
-  Bool: new Map([['to_string', to_string]]),
+// The type of a method of a builtin type, if it has one.
+export const builtin_method = (receiver: Type, name: string): Type | undefined => {
+  const is_stringable = ['String', 'Int', 'Bool'].includes(receiver.kind)
+  if (name === 'to_string' && is_stringable) return method([], string_type)
+  if (receiver.kind !== 'Array') return undefined
+  const { element } = receiver
+  switch (name) {
+    case 'push':
+      return method([element], void_type)
+    case 'pop':
+      return method([], element)
+    case 'join':
+      return element.kind === 'String' ? method([string_type], string_type) : undefined
+    default:
+      return undefined
+  }
 }
+
+// The type of a property of a builtin type, read without a call, if it has one.
+export const builtin_property = (receiver: Type, name: string): Type | undefined =>
+  receiver.kind === 'Array' && name === 'length' ? int_type : undefined

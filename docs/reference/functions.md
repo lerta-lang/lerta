@@ -19,4 +19,4 @@ const greet = -> print 'hello'
 
 ## Types
 
-Type names: `Int`, `String`, `Bool`, and `void` as a return type.
+Type names: `Int`, `String`, `Bool`, `Array<T>`, and `void` as a return type.

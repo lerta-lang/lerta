@@ -1,19 +1,22 @@
 import {
   is_arithmetic,
+  type ArrayLiteral,
   type Binary,
   type Call,
   type Case,
   type Expression,
   type Identifier,
+  type Index,
   type Member,
   type Unary,
 } from './ast.ts'
-import { builtin_methods, builtins } from './builtins.ts'
+import { builtin_method, builtin_property, builtins } from './builtins.ts'
 import type { Types } from './checker.ts'
 import { CompileError } from './errors.ts'
 import type { Functions } from './functions.ts'
 import type { Scopes } from './scopes.ts'
 import {
+  array_type,
   bool_type,
   format_type,
   int_type,
@@ -46,9 +49,7 @@ export class ExpressionChecker {
   }
 
   type_of(expression: Expression): Type {
-    const type = this.compute_type(expression)
-    this.types.set(expression, type)
-    return type
+    return this.record(expression, this.compute_type(expression))
   }
 
   private compute_type(expression: Expression): Type {
@@ -73,11 +74,13 @@ export class ExpressionChecker {
       case 'binary':
         return this.type_of_binary(expression)
       case 'case':
-        return this.type_of_case(expression)
-      case 'member': {
-        const message = `a method must be called: write \`${expression.name.name}()\``
-        throw new CompileError(message, expression.name.line, expression.name.column)
-      }
+        return this.type_of_case(expression, undefined)
+      case 'member':
+        return this.type_of_property(expression)
+      case 'array':
+        return this.type_of_array(expression, undefined)
+      case 'index':
+        return this.type_of_index(expression)
       case 'function': {
         const message = 'a function can only be the value of a top-level const so far'
         throw new CompileError(message, expression.line, expression.column)
@@ -127,7 +130,7 @@ export class ExpressionChecker {
   private type_of_method(member: Member): Type {
     const object_type = this.type_of(member.object)
     const { name, line, column } = member.name
-    const method = builtin_methods[object_type.kind]?.get(name)
+    const method = builtin_method(object_type, name)
     if (method === undefined) {
       throw new CompileError(
         `type ${format_type(object_type)} has no method '${name}'`,
@@ -137,6 +140,51 @@ export class ExpressionChecker {
     }
     this.types.set(member, method)
     return method
+  }
+
+  // A member that is not called is a property such as `length`.
+  private type_of_property(member: Member): Type {
+    const object_type = this.type_of(member.object)
+    const { name, line, column } = member.name
+    const property = builtin_property(object_type, name)
+    if (property !== undefined) return property
+    if (builtin_method(object_type, name) !== undefined) {
+      throw new CompileError(`a method must be called: write \`${name}()\``, line, column)
+    }
+    const message = `type ${format_type(object_type)} has no property '${name}'`
+    throw new CompileError(message, line, column)
+  }
+
+  // The element type comes from the expected type if there is one, so that `[[], [1]]` can be
+  // typed; otherwise from the first element.
+  private type_of_array(array: ArrayLiteral, expected: Type | undefined): Type {
+    if (expected?.kind === 'Array') {
+      for (const item of array.elements) this.expect_type(item, expected.element)
+      return expected
+    }
+    const [first, ...rest] = array.elements
+    if (first === undefined) {
+      const message =
+        'the type of an empty array must be written, as in `const xs: Array<Int> = []`'
+      throw new CompileError(message, array.line, array.column)
+    }
+    const element = this.type_of(first)
+    if (element.kind === 'void' || element.kind === 'function') {
+      const message = `an array cannot hold values of type ${format_type(element)}`
+      throw new CompileError(message, first.line, first.column)
+    }
+    for (const item of rest) this.expect_type(item, element)
+    return array_type(element)
+  }
+
+  private type_of_index(index: Index): Type {
+    const object_type = this.type_of(index.object)
+    if (object_type.kind !== 'Array') {
+      const message = `cannot index a value of type ${format_type(object_type)}`
+      throw new CompileError(message, index.object.line, index.object.column)
+    }
+    this.expect_type(index.index, int_type)
+    return object_type.element
   }
 
   private type_of_unary(unary: Unary): Type {
@@ -174,8 +222,16 @@ export class ExpressionChecker {
   }
 
   // Every arm must have the type of the first one.
-  private type_of_case(case_expression: Case): Type {
+  // With an expected array type, every arm is checked against it, which can type `[]`; otherwise
+  // every arm must have the type of the first one. (An expected type such as Stringable is a set
+  // of types, which cannot be the type of the `case`.)
+  private type_of_case(case_expression: Case, expected: Type | undefined): Type {
     for (const arm of case_expression.arms) this.expect_type(arm.condition, bool_type)
+    const values = [...case_expression.arms.map((arm) => arm.value), case_expression.otherwise]
+    if (expected?.kind === 'Array') {
+      for (const value of values) this.expect_type(value, expected)
+      return expected
+    }
     const [first, ...rest] = case_expression.arms.map((arm) => arm.value)
     const type = this.type_of(first)
     for (const value of [...rest, case_expression.otherwise]) {
@@ -189,8 +245,20 @@ export class ExpressionChecker {
     return type
   }
 
+  // The expected type also gives `[]` its type, including inside arrays and `case` arms.
   expect_type(expression: Expression, expected: Type): void {
-    this.require_type(expression, this.type_of(expression), expected)
+    const type =
+      expression.kind === 'array'
+        ? this.record(expression, this.type_of_array(expression, expected))
+        : expression.kind === 'case'
+          ? this.record(expression, this.type_of_case(expression, expected))
+          : this.type_of(expression)
+    this.require_type(expression, type, expected)
+  }
+
+  private record(expression: Expression, type: Type): Type {
+    this.types.set(expression, type)
+    return type
   }
 
   private require_type(expression: Expression, type: Type, expected: Type): void {

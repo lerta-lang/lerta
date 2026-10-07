@@ -6,6 +6,10 @@ export type Interpolation = Position & { kind: 'interpolation'; parts: (string |
 export type BooleanLiteral = Position & { kind: 'boolean'; value: boolean }
 export type IntegerLiteral = Position & { kind: 'integer'; value: bigint }
 export type Identifier = Position & { kind: 'identifier'; name: string }
+// `[a, b]`
+export type ArrayLiteral = Position & { kind: 'array'; elements: Expression[] }
+// `object[index]`
+export type Index = Position & { kind: 'index'; object: Expression; index: Expression }
 export type Call = Position & { kind: 'call'; callee: Expression; args: Expression[] }
 // `object.name`; so far only a method of a builtin type, and only when called.
 export type Member = Position & { kind: 'member'; object: Expression; name: Identifier }
@@ -30,7 +34,7 @@ export type Binary = Position & {
 export type Range = Position & { kind: 'range'; start: Expression; end: Expression }
 
 // A type written in the source, such as `Int` in a parameter.
-export type TypeName = Position & { kind: 'type_name'; name: string }
+export type TypeName = Position & { kind: 'type_name'; name: string; args: TypeName[] }
 
 export type Parameter = { name: Identifier; type: TypeName }
 
@@ -52,6 +56,8 @@ export type Expression =
   | BooleanLiteral
   | IntegerLiteral
   | Identifier
+  | ArrayLiteral
+  | Index
   | Call
   | Member
   | Unary
@@ -72,6 +78,7 @@ export type Declaration = Position & {
   kind: 'declaration'
   mutable: boolean
   name: Identifier
+  type: TypeName | undefined
   value: Expression
 }
 
@@ -80,7 +87,7 @@ export type AssignmentOperator = (typeof assignment_operators)[number]
 export type Assignment = Position & {
   kind: 'assignment'
   operator: AssignmentOperator
-  target: Identifier
+  target: Identifier | Index
   value: Expression
 }
 

@@ -1,10 +1,12 @@
 import {
   is_expression,
   type Assignment,
+  type AssignmentOperator,
   type Declaration,
   type For,
   type FunctionLiteral,
   type If,
+  type Index,
   type Jump,
   type Program,
   type Return,
@@ -12,6 +14,7 @@ import {
   type While,
 } from './ast.ts'
 import type { Types } from './checker.ts'
+import { emit_get, emit_length, emit_set } from './array_codegen.ts'
 import { CheckedInt } from './checked_int.ts'
 import { ExpressionGenerator, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder, IrModule } from './ir_builder.ts'
@@ -169,20 +172,38 @@ class FunctionGenerator {
   // The new value is stored before the old one is released, which is safe even if they are the
   // same object.
   private generate_assignment(assignment: Assignment): void {
-    const local = this.locals.lookup(assignment.target.name)!
+    const { target } = assignment
+    if (target.kind === 'index') return this.generate_index_assignment(assignment, target)
+    const local = this.locals.lookup(target.name)!
     if (local.kind !== 'slot') throw new Error('only slots can be assigned')
     const type = ir_type(local.type)
     const old = this.ir.assign(`load ${type}, ptr ${local.pointer}`)
     const value = this.expressions.generate(assignment.value)
-    const { operator } = assignment
-    const result =
-      operator === '='
-        ? value
-        : operator === '/=' || operator === '%='
-          ? this.checked_int.division(operator[0] as '/' | '%', old, value)
-          : this.checked_int.arithmetic(operator[0] as '+' | '-' | '*', old, value)
+    const result = this.combine(assignment.operator, old, value)
     this.ir.emit(`store ${type} ${result}, ptr ${local.pointer}`)
     if (is_reference_type(local.type)) emit_release(this.ir, old)
+  }
+
+  // The array retains the new item and releases the old one.
+  private generate_index_assignment(assignment: Assignment, target: Index): void {
+    const element = this.types.get(target)!
+    const array = this.expressions.generate(target.object)
+    const index = this.expressions.generate(target.index)
+    const old = assignment.operator === '=' ? '' : emit_get(this.ir, array, index, element)
+    const value = this.expressions.generate(assignment.value)
+    const result = this.combine(assignment.operator, old, value)
+    emit_set(this.ir, array, index, result, element)
+    if (is_reference_type(element)) emit_release(this.ir, result)
+    emit_release(this.ir, array)
+  }
+
+  // The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
+  private combine(operator: AssignmentOperator, old: string, value: string): string {
+    if (operator === '=') return value
+    if (operator === '/=' || operator === '%=') {
+      return this.checked_int.division(operator[0] as '/' | '%', old, value)
+    }
+    return this.checked_int.arithmetic(operator[0] as '+' | '-' | '*', old, value)
   }
 
   private generate_if(if_statement: If): void {
@@ -214,13 +235,55 @@ class FunctionGenerator {
     this.ir.start_block(exit_label)
   }
 
-  // The bounds are evaluated once. The variable is a phi in the header; it is incremented in the
-  // latch block, which cannot overflow since it is less than the end there.
+  // A range's bounds are evaluated once. An array is held for the whole loop in a scope of its
+  // own, so a `return` from the body releases it too; its length is read each round.
   private generate_for(for_statement: For): void {
-    const { iterable, variable } = for_statement
-    if (iterable.kind !== 'range') throw new Error('only ranges can be iterated')
-    const start = this.expressions.generate(iterable.start)
-    const end = this.expressions.generate(iterable.end)
+    const { iterable, variable, body } = for_statement
+    if (iterable.kind === 'range') {
+      const start = this.expressions.generate(iterable.start)
+      const end = this.expressions.generate(iterable.end)
+      this.generate_counting_loop(
+        start,
+        () => end,
+        body,
+        (scope, current) =>
+          scope.set(variable.name, { kind: 'value', operand: current, type: int_type }),
+      )
+      return
+    }
+    const type = this.types.get(iterable)!
+    if (type.kind !== 'Array') throw new Error('only ranges and arrays can be iterated')
+    const array_scope = this.locals.push()
+    const array = this.expressions.generate(iterable)
+    array_scope.set(' iterated array', this.store_in_slot(array, type))
+    this.generate_counting_loop(
+      '0',
+      () => emit_length(this.ir, array),
+      body,
+      (scope, current) => {
+        const item = emit_get(this.ir, array, current, type.element)
+        scope.set(variable.name, this.store_in_slot(item, type.element))
+      },
+    )
+    this.release_scope(array_scope)
+    this.locals.pop()
+  }
+
+  private store_in_slot(value: string, type: Type): CodegenLocal {
+    const pointer = this.ir.alloca(ir_type(type))
+    this.ir.emit(`store ${ir_type(type)} ${value}, ptr ${pointer}`)
+    return { kind: 'slot', pointer, type }
+  }
+
+  // Counts from start while the counter is below the end, which is evaluated in the header. The
+  // counter is a phi in the header, incremented in the latch block; it cannot overflow there,
+  // since it is below the end.
+  private generate_counting_loop(
+    start: string,
+    end: () => string,
+    body: Statement[],
+    define: (scope: Scope<CodegenLocal>, current: string) => void,
+  ): void {
     const preheader_label = this.ir.current_block
     const header_label = this.ir.fresh_label('for.header')
     const body_label = this.ir.fresh_label('for.body')
@@ -233,13 +296,11 @@ class FunctionGenerator {
     const current = this.ir.assign(
       `phi i64 [ ${start}, %${preheader_label} ], [ ${next}, %${latch_label} ]`,
     )
-    const in_range = this.ir.assign(`icmp slt i64 ${current}, ${end}`)
+    const in_range = this.ir.assign(`icmp slt i64 ${current}, ${end()}`)
     this.ir.emit(`br i1 ${in_range}, label %${body_label}, label %${exit_label}`)
 
     this.ir.start_block(body_label)
-    this.generate_loop_body(for_statement.body, exit_label, latch_label, (scope) =>
-      scope.set(variable.name, { kind: 'value', operand: current, type: int_type }),
-    )
+    this.generate_loop_body(body, exit_label, latch_label, (scope) => define(scope, current))
     this.ir.emit(`br label %${latch_label}`)
 
     this.ir.start_block(latch_label)

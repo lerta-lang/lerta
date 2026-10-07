@@ -31,7 +31,7 @@ const run_main = (name: string, main_body: string, optimize: boolean): Outcome =
 const expect_status = (expected: number, actual: number | null): string[] =>
   expected === actual ? [] : [`expected exit status ${expected}, got ${actual}`]
 
-const leak = '  lerta_alloc(16);'
+const leak = '  lerta_alloc(16, NULL);'
 const checks: Check[] = [
   {
     name: 'the debug runtime reports a leak',
@@ -43,7 +43,11 @@ const checks: Check[] = [
   {
     name: 'the debug runtime accepts released objects',
     run: () => {
-      const { stderr, status } = run_main('released', '  lerta_release(lerta_alloc(16));', false)
+      const { stderr, status } = run_main(
+        'released',
+        '  lerta_release(lerta_alloc(16, NULL));',
+        false,
+      )
       return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
     },
   },

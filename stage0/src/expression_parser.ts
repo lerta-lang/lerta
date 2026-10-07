@@ -174,29 +174,53 @@ export class ExpressionParser {
     return { kind: 'function', params, return_type, body, line: token.line, column: token.column }
   }
 
-  private parse_type_name(): TypeName {
+  parse_type_name(): TypeName {
     const { name, line, column } = this.parse_identifier()
-    return { kind: 'type_name', name, line, column }
+    const args: TypeName[] = []
+    if (this.tokens.accept('<')) {
+      do args.push(this.parse_type_name())
+      while (this.tokens.accept(','))
+      this.tokens.expect('>', "'>'")
+    }
+    return { kind: 'type_name', name, args, line, column }
   }
 
-  // Calls `f(x)` and member accesses `x.name`, written without a space before `(` or `.`.
+  // Calls `f(x)`, indexing `xs[i]` and member accesses `x.name`, written without a space before
+  // `(`, `[` or `.`.
   private parse_postfix(primary: Expression): Expression {
     let expression = primary
     for (;;) {
       const token = this.tokens.peek()
-      if (token.spaced || (token.kind !== '(' && token.kind !== '.')) return expression
+      if (token.spaced || !['(', '[', '.'].includes(token.kind)) return expression
       this.tokens.next()
       const position = { line: expression.line, column: expression.column }
-      expression =
-        token.kind === '('
-          ? {
-              kind: 'call',
-              callee: expression,
-              args: this.parse_parenthesized_arguments(),
-              ...position,
-            }
-          : { kind: 'member', object: expression, name: this.parse_identifier(), ...position }
+      if (token.kind === '(') {
+        const args = this.parse_parenthesized_arguments()
+        expression = { kind: 'call', callee: expression, args, ...position }
+      } else if (token.kind === '[') {
+        const index = this.parse_expression()
+        this.tokens.expect(']', "']'")
+        expression = { kind: 'index', object: expression, index, ...position }
+      } else {
+        expression = {
+          kind: 'member',
+          object: expression,
+          name: this.parse_identifier(),
+          ...position,
+        }
+      }
     }
+  }
+
+  // `[a, b, c]` on one line; `[]` is empty.
+  private parse_array_literal(position: Position): Expression {
+    const elements: Expression[] = []
+    if (!this.tokens.accept(']')) {
+      do elements.push(this.parse_expression())
+      while (this.tokens.accept(','))
+      this.tokens.expect(']', "']'")
+    }
+    return { kind: 'array', elements, ...position }
   }
 
   // The arguments after an opening parenthesis, through the closing one.
@@ -227,6 +251,7 @@ export class ExpressionParser {
       return { kind: 'boolean', value: token.kind === 'true', ...position }
     }
     if (token.kind === 'case') return this.parse_case(position)
+    if (token.kind === '[') return this.parse_array_literal(position)
     if (token.kind === 'integer')
       return { kind: 'integer', value: integer_value(BigInt(token.text), position), ...position }
     if (token.kind === '(') {

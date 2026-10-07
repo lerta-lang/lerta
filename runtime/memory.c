@@ -2,18 +2,15 @@
 
 #include "lerta.h"
 
-typedef struct {
-  int64_t ref_count;
-} LertaObject;
-
 #ifdef LERTA_DEBUG
 static int64_t live_objects = 0;
 #endif
 
-void *lerta_alloc(int64_t size) {
-  LertaObject *object = malloc((size_t)size);
+void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
+  LertaHeader *object = malloc((size_t)size);
   if (object == NULL) lerta_panic("out of memory");
   object->ref_count = 1;
+  object->drop = drop;
 #ifdef LERTA_DEBUG
   live_objects++;
 #endif
@@ -21,14 +18,15 @@ void *lerta_alloc(int64_t size) {
 }
 
 void lerta_retain(void *object) {
-  LertaObject *header = object;
+  LertaHeader *header = object;
   if (header->ref_count != LERTA_IMMORTAL) header->ref_count++;
 }
 
 void lerta_release(void *object) {
-  LertaObject *header = object;
+  LertaHeader *header = object;
   if (header->ref_count == LERTA_IMMORTAL) return;
   if (--header->ref_count > 0) return;
+  if (header->drop != NULL) header->drop(object);
   free(object);
 #ifdef LERTA_DEBUG
   live_objects--;

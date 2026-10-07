@@ -43,6 +43,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 
 - **No threads, so counts are non-atomic.**
 - Weak references follow Rust's `Rc` approach (a weak count is kept; while weak references remain, the memory is not returned and only the contents are destroyed).
+- Every heap object starts with a header: its reference count and a drop function, which releases what the object owns before it is freed (`runtime/lerta.h`).
 - Static objects such as string literals are made immortal (exempt from count operations).
 - In stage0, every expression of a reference type yields an owned (+1) reference, and its consumer releases it: arguments are borrowed and released by the caller after the call, and a discarded statement value is released at once. An immortal literal is owned for free.
 

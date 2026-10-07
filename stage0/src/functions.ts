@@ -1,8 +1,9 @@
 // Top-level functions. They can be used anywhere in the module, before their declaration too, so
 // a function's body is checked on demand: when its return type is first needed, or at the end.
-import type { FunctionLiteral, Identifier, Position, TypeName } from './ast.ts'
+import type { FunctionLiteral, Identifier, Position } from './ast.ts'
 import { CompileError } from './errors.ts'
-import { bool_type, int_type, string_type, void_type, type Type } from './types.ts'
+import { resolve_type } from './type_names.ts'
+import type { Type } from './types.ts'
 
 export type FunctionEntry = {
   name: Identifier
@@ -10,22 +11,6 @@ export type FunctionEntry = {
   // Known from the annotations, or once the body is checked when the return type is inferred.
   type: Type | undefined
   state: 'unchecked' | 'checking' | 'checked'
-}
-
-const named_types = new Map<string, Type>([
-  ['Int', int_type],
-  ['String', string_type],
-  ['Bool', bool_type],
-])
-
-// `void` is only allowed as a return type.
-export const resolve_type = (type_name: TypeName, allow_void = false): Type => {
-  if (allow_void && type_name.name === 'void') return void_type
-  const type = named_types.get(type_name.name)
-  if (type === undefined) {
-    throw new CompileError(`unknown type '${type_name.name}'`, type_name.line, type_name.column)
-  }
-  return type
 }
 
 export const parameter_types = (literal: FunctionLiteral): Type[] =>

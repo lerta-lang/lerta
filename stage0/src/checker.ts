@@ -5,9 +5,11 @@ import {
   type Expression,
   type For,
   type FunctionLiteral,
+  type Identifier,
   type If,
   type Position,
   type Program,
+  type Range,
   type Return,
   type Statement,
   type While,
@@ -16,6 +18,7 @@ import { CompileError, CompileWarning } from './errors.ts'
 import { ExpressionChecker, type CheckerLocal } from './expression_checker.ts'
 import { Functions, parameter_types, type FunctionEntry } from './functions.ts'
 import { Scopes } from './scopes.ts'
+import { resolve_type } from './type_names.ts'
 import {
   bool_type,
   format_type,
@@ -121,7 +124,11 @@ class Checker {
   private check_last_statement(statement: Statement): void {
     const context = this.context!
     let gives_value = false
-    if (is_expression(statement)) {
+    const expects_value = context.annotated !== undefined && context.annotated.kind !== 'void'
+    if (is_expression(statement) && expects_value) {
+      this.record_result(this.type_of_result(statement), statement)
+      gives_value = true
+    } else if (is_expression(statement)) {
       const type = this.expressions.type_of(statement)
       gives_value = type.kind !== 'void' && context.annotated?.kind !== 'void'
       if (gives_value) this.record_result(type, statement)
@@ -158,8 +165,20 @@ class Checker {
       throw new CompileError(message, return_statement.line, return_statement.column)
     }
     const { value } = return_statement
-    const type = value === undefined ? void_type : this.expressions.type_of(value)
+    const type = value === undefined ? void_type : this.type_of_result(value)
     this.record_result(type, value ?? return_statement)
+  }
+
+  // A written return type is the expected type of an array or `case` returned, which can type `[]`.
+  // Other values keep their own type, so that a mismatch is reported as one of the return value.
+  private type_of_result(value: Expression): Type {
+    const annotated = this.context!.annotated
+    const takes_expected = value.kind === 'array' || value.kind === 'case'
+    if (annotated === undefined || annotated.kind === 'void' || !takes_expected) {
+      return this.expressions.type_of(value)
+    }
+    this.expressions.expect_type(value, annotated)
+    return annotated
   }
 
   // A block is a scope; `define` declares the names that belong to it besides its statements, and
@@ -208,6 +227,21 @@ class Checker {
     }
   }
 
+  private check_range(range: Range): Type {
+    this.expressions.expect_type(range.start, int_type)
+    this.expressions.expect_type(range.end, int_type)
+    return int_type
+  }
+
+  private check_iterated_array(iterable: Expression): Type {
+    const type = this.expressions.type_of(iterable)
+    if (type.kind !== 'Array') {
+      const message = `expected a range or an array after 'in', got ${format_type(type)}`
+      throw new CompileError(message, iterable.line, iterable.column)
+    }
+    return type.element
+  }
+
   private check_while(while_statement: While): void {
     this.expressions.expect_type(while_statement.condition, bool_type)
     this.check_loop_body(while_statement.body)
@@ -226,7 +260,9 @@ class Checker {
       const message = 'a function can only be declared at the top level so far'
       throw new CompileError(message, declaration.line, declaration.column)
     }
-    const type = this.expressions.type_of(declaration.value)
+    const annotated = declaration.type === undefined ? undefined : resolve_type(declaration.type)
+    if (annotated !== undefined) this.expressions.expect_type(declaration.value, annotated)
+    const type = annotated ?? this.expressions.type_of(declaration.value)
     if (type.kind === 'void' || type.kind === 'function') {
       const message = `cannot store a value of type ${format_type(type)}`
       throw new CompileError(message, declaration.value.line, declaration.value.column)
@@ -243,18 +279,26 @@ class Checker {
   // Compound assignments such as `+=` apply to Ints only.
   private check_assignment(assignment: Assignment): void {
     const { target } = assignment
+    const target_type =
+      target.kind === 'index'
+        ? this.expressions.type_of(target)
+        : this.check_variable_target(target)
+    if (assignment.operator !== '=' && target_type.kind !== 'Int') {
+      const message = `expected Int, got ${format_type(target_type)}`
+      throw new CompileError(message, target.line, target.column)
+    }
+    this.expressions.expect_type(assignment.value, target_type)
+  }
+
+  private check_variable_target(target: Identifier): Type {
     const local = this.scopes.lookup(target.name)
     if (local === undefined || !local.mutable) {
       const reason = local === undefined ? 'is not a variable' : 'is not a var'
       throw new CompileError(`'${target.name}' ${reason}`, target.line, target.column)
     }
-    // A write is not a use: the target's type is checked without reading it.
+    // A write is not a use: the target's type is found without reading it.
     this.types.set(target, local.type)
-    if (assignment.operator !== '=' && local.type.kind !== 'Int') {
-      const message = `expected Int, got ${format_type(local.type)}`
-      throw new CompileError(message, target.line, target.column)
-    }
-    this.expressions.expect_type(assignment.value, local.type)
+    return local.type
   }
 
   private warn_if_unused(local: CheckerLocal): void {
@@ -264,18 +308,15 @@ class Checker {
     }
   }
 
-  // Only ranges can be iterated so far.
+  // A range gives Ints; an array gives its items.
   private check_for(for_statement: For): void {
     const { iterable, variable } = for_statement
-    if (iterable.kind !== 'range') {
-      throw new CompileError("expected a range after 'in'", iterable.line, iterable.column)
-    }
-    this.expressions.expect_type(iterable.start, int_type)
-    this.expressions.expect_type(iterable.end, int_type)
+    const item_type =
+      iterable.kind === 'range' ? this.check_range(iterable) : this.check_iterated_array(iterable)
     this.check_loop_body(for_statement.body, () =>
       this.define_local({
         identifier: variable,
-        type: int_type,
+        type: item_type,
         mutable: false,
         declared: false,
         used: false,

@@ -16,7 +16,7 @@ int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]) {
 }
 
 static LertaString *string_from_bytes(const uint8_t *bytes, int64_t length) {
-  LertaString *s = lerta_alloc((int64_t)sizeof(LertaString) + length);
+  LertaString *s = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
   s->length = length;
   memcpy(s->bytes, bytes, (size_t)length);
   return s;
@@ -35,7 +35,7 @@ LertaString *lerta_string_concat(int64_t count, ...) {
   for (int64_t i = 0; i < count; i++) length += va_arg(args, const LertaString *)->length;
   va_end(args);
 
-  LertaString *result = lerta_alloc((int64_t)sizeof(LertaString) + length);
+  LertaString *result = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
   result->length = length;
   int64_t offset = 0;
   va_start(args, count);
