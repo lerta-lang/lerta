@@ -25,6 +25,9 @@ import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
 import { format_type, int_type, type Type } from './types.ts'
 
+// A local, and the narrower type it has where the condition is `when`.
+type Narrowing = { local: CheckerLocal; when: boolean; type: Type }
+
 export class StatementChecker {
   private readonly types: Types
   private readonly warnings: CompileWarning[]
@@ -122,6 +125,13 @@ export class StatementChecker {
         return this.check_declaration(statement)
       case 'assignment':
         return this.check_assignment(statement)
+      case 'type_alias':
+        if (this.context === undefined && this.scopes.depth === 1) return
+        throw new CompileError(
+          'a type can only be declared at the top level',
+          statement.line,
+          statement.column,
+        )
       case 'import':
         if (this.context === undefined && this.scopes.depth === 1) return
         throw new CompileError(
@@ -179,15 +189,15 @@ export class StatementChecker {
     const narrowing = this.narrowing_of(condition)
     this.check_block(then_body, () => {
       define()
-      if (narrowing?.when === true) this.narrow(narrowing.local)
+      if (narrowing?.when === true) this.narrow(narrowing)
     })
     this.check_block(else_body, () => {
-      if (narrowing?.when === false) this.narrow(narrowing.local)
+      if (narrowing?.when === false) this.narrow(narrowing)
     })
     const is_guard =
       else_body.length === 0 &&
       ends_with_jump(then_body, (expression) => this.types.get(expression)?.kind === 'never')
-    if (narrowing?.when === false && is_guard) this.narrow(narrowing.local)
+    if (narrowing?.when === false && is_guard) this.narrow(narrowing)
   }
 
   // Returns what the condition defines in the body: the name of `const name = value`.
@@ -209,16 +219,21 @@ export class StatementChecker {
 
   // The optional local a condition tests, and the value of the condition when it is not nil.
   // Only a local that cannot be reassigned is narrowed.
-  private narrowing_of(condition: Condition): { local: CheckerLocal; when: boolean } | undefined {
+  private narrowing_of(condition: Condition): Narrowing | undefined {
     const tested = tested_name(condition)
     if (tested === undefined) return undefined
     const local = this.scopes.lookup(tested.name.name)
-    if (local === undefined || local.mutable || local.type.kind !== 'Optional') return undefined
-    return { local, when: tested.when }
+    if (local === undefined || local.mutable) return undefined
+    if (tested.is_type !== undefined) {
+      if (local.type.kind !== 'Union') return undefined
+      return { local, when: tested.when, type: this.resolver.resolve(tested.is_type) }
+    }
+    if (local.type.kind !== 'Optional') return undefined
+    return { local, when: tested.when, type: local.type.inner }
   }
 
-  private narrow(local: CheckerLocal): void {
-    this.scopes.narrow(local.identifier.name, narrowed_view(local))
+  private narrow({ local, type }: Narrowing): void {
+    this.scopes.narrow(local.identifier.name, narrowed_view(local, type))
   }
 
   // A top-level function was added to `functions` before checking started.
@@ -319,7 +334,10 @@ export class StatementChecker {
     const { name, line, column } = identifier
     const is_top_level = this.context === undefined && this.scopes.depth === 1
     const is_taken =
-      this.functions.has(name) || this.objects.object_type(name) || this.imports.has(name)
+      this.functions.has(name) ||
+      this.objects.object_type(name) ||
+      this.imports.has(name) ||
+      this.resolver.has_alias(name)
     if (is_top_level && is_taken) {
       throw new CompileError(`'${name}' is already defined`, line, column)
     }

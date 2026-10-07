@@ -1,11 +1,13 @@
 // Types written in the source, such as `Array<Int>` in an annotation.
-import type { TypeName } from './ast.ts'
+import type { NamedType, Position, TypeAlias, TypeName, UnionTypeName } from './ast.ts'
 import { CompileError } from './errors.ts'
 import {
   array_type,
   format_type,
   is_reference_type,
   optional_type,
+  same_type,
+  union_type,
   binary_type,
   bool_type,
   int_type,
@@ -31,13 +33,34 @@ export const is_builtin_type_name = (name: string): boolean =>
 // Resolves type names, including the classes and structs of the program.
 export class TypeResolver {
   private readonly object_type: (name: string) => Type | undefined
+  // Type aliases, resolved on first use, so that they can refer to each other in any order.
+  private readonly aliases = new Map<string, { alias: TypeAlias; type: Type | undefined }>()
+  private readonly resolving = new Set<string>()
 
   constructor(object_type: (name: string) => Type | undefined) {
     this.object_type = object_type
   }
 
+  add_alias(alias: TypeAlias): void {
+    const { name } = alias.name
+    if (this.aliases.has(name) || is_builtin_type_name(name) || this.object_type(name)) {
+      throw new CompileError(`'${name}' is already defined`, alias.name.line, alias.name.column)
+    }
+    this.aliases.set(name, { alias, type: undefined })
+  }
+
+  // Resolves every alias, so that an alias that is never used is checked too.
+  resolve_aliases(): void {
+    for (const { alias } of this.aliases.values()) this.resolve_alias(alias.name.name, alias.name)
+  }
+
+  has_alias(name: string): boolean {
+    return this.aliases.has(name)
+  }
+
   // `void` is only allowed as a return type.
   resolve(type_name: TypeName, allow_void = false): Type {
+    if (type_name.kind === 'union_type') return this.resolve_union(type_name)
     const type = this.resolve_name(type_name, allow_void)
     if (!type_name.optional) return type
     if (type.kind === 'void') {
@@ -46,13 +69,42 @@ export class TypeResolver {
     return optional_type(type)
   }
 
-  private resolve_name(type_name: TypeName, allow_void: boolean): Type {
+  // A union holds classes and structs; a member that is itself a union is flattened.
+  private resolve_union(type_name: UnionTypeName): Type {
+    const members = type_name.members.flatMap((member) => {
+      const type = this.resolve(member)
+      if (type.kind === 'Union') return type.members
+      if (type.kind === 'Object') return [type]
+      const message = `a union can only hold classes and structs so far, not ${format_type(type)}`
+      throw new CompileError(message, member.line, member.column)
+    })
+    const unique = members.filter(
+      (type, i) => members.findIndex((other) => same_type(other, type)) === i,
+    )
+    return union_type(unique)
+  }
+
+  private resolve_alias(name: string, at: Position): Type | undefined {
+    const entry = this.aliases.get(name)
+    if (entry === undefined) return undefined
+    if (entry.type !== undefined) return entry.type
+    if (this.resolving.has(name)) {
+      throw new CompileError(`the type '${name}' refers to itself`, at.line, at.column)
+    }
+    this.resolving.add(name)
+    entry.type = this.resolve(entry.alias.type)
+    this.resolving.delete(name)
+    return entry.type
+  }
+
+  private resolve_name(type_name: NamedType, allow_void: boolean): Type {
     const { name, args, line, column } = type_name
     if (name === 'Array' && args.length === 1) return array_type(this.resolve_element(args[0]))
     if (name === 'Array') throw new CompileError('Array takes one type argument', line, column)
     if (args.length > 0) throw new CompileError(`'${name}' takes no type arguments`, line, column)
     if (allow_void && name === 'void') return void_type
-    const type = simple_types.get(name) ?? this.object_type(name)
+    const type =
+      simple_types.get(name) ?? this.object_type(name) ?? this.resolve_alias(name, type_name)
     if (type === undefined) throw new CompileError(`unknown type '${name}'`, line, column)
     return type
   }

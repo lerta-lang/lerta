@@ -6,11 +6,13 @@ import {
   type Case,
   type Expression,
   type Identifier,
+  type IsTest,
   type Index,
   type Member,
 } from './ast.ts'
 import { builtin_method, builtin_property, builtins } from './builtins.ts'
 import type { Conversions, SelfContext, Shared, Types } from './checker.ts'
+import { CaseChecker } from './case_checker.ts'
 import { CompileError } from './errors.ts'
 import type { Functions } from './functions.ts'
 import type { Imports } from './imports.ts'
@@ -19,6 +21,7 @@ import { byte_literal, is_contextual } from './literals.ts'
 import { ObjectChecker } from './object_checker.ts'
 import { OperatorChecker } from './operator_checker.ts'
 import type { Scopes } from './scopes.ts'
+import type { TypeResolver } from './type_names.ts'
 import {
   array_type,
   bool_type,
@@ -59,6 +62,8 @@ export class ExpressionChecker {
   private readonly imports: Imports
   private readonly operators = new OperatorChecker(this)
   private readonly objects: ObjectChecker
+  private readonly cases: CaseChecker
+  private readonly resolver: TypeResolver
 
   constructor(shared: Shared, scopes: Scopes<CheckerLocal>, self: SelfContext | undefined) {
     this.imports = shared.imports
@@ -69,6 +74,8 @@ export class ExpressionChecker {
     this.scopes = scopes
     this.self = self
     this.objects = new ObjectChecker(this, shared, scopes, self)
+    this.cases = new CaseChecker(this, scopes, shared.objects, shared.conversions)
+    this.resolver = shared.resolver
   }
 
   field_target(member: Member): Type {
@@ -97,6 +104,8 @@ export class ExpressionChecker {
       case 'throw':
         this.expect_type(expression.message, string_type)
         return never_type
+      case 'is':
+        return this.type_of_is_test(expression)
       case 'this':
         return this.objects.type_of_this(expression)
       case 'unwrap':
@@ -114,7 +123,7 @@ export class ExpressionChecker {
       case 'binary':
         return this.operators.type_of_binary(expression, expected)
       case 'case':
-        return this.type_of_case(expression, expected)
+        return this.cases.type_of_case(expression, expected)
       case 'member':
         return this.type_of_property(expression)
       case 'array':
@@ -263,41 +272,31 @@ export class ExpressionChecker {
     return object_type.kind === 'Array' ? object_type.element : uint8_type
   }
 
-  // With an expected type, every arm is checked against it, which can type `[]` and literals;
-  // otherwise the arms must agree, a mix of T, T? and nil giving T?.
-  private type_of_case(case_expression: Case, expected: Type | undefined): Type {
-    for (const arm of case_expression.arms) this.expect_type(arm.condition, bool_type)
-    const values = [...case_expression.arms.map((arm) => arm.value), case_expression.otherwise]
-    if (expected !== undefined) {
-      for (const value of values) this.expect_type(value, expected)
-      return expected
-    }
-    // A mix of T, T? and nil gives T?, to which the arms are converted.
-    const value_types = values.map((value) => this.type_of(value))
-    let type = value_types[0]
-    values.forEach((value, i) => {
-      const unified = unify(type, value_types[i])
-      if (unified === undefined) {
-        const types = `expected ${format_type(type)}, got ${format_type(value_types[i])}`
-        const message = `case arms must have the same type: ${types}`
-        throw new CompileError(message, value.line, value.column)
-      }
-      type = unified
-    })
-    if (type.kind === 'nil') {
-      const message = 'nil alone does not give the type of a case; write it in an annotation'
-      throw new CompileError(message, case_expression.line, case_expression.column)
-    }
-    values.forEach((value, i) => {
-      if (!same_type(value_types[i], type)) this.conversions.set(value, type)
-    })
-    return type
-  }
-
   // Stringable is a set of types, not one a value can be given, so it is no hint.
   expect_type(expression: Expression, expected: Type): void {
     const hint = expected.kind === 'Stringable' ? undefined : expected
     this.require_type(expression, this.type_of(expression, hint), expected)
+  }
+
+  // `x is T`: x has a union type, and T is one of its types.
+  private type_of_is_test(test: IsTest): Type {
+    const value_type = this.type_of(test.value)
+    if (value_type.kind !== 'Union') {
+      const message = `expected a value of a union type, got ${format_type(value_type)}`
+      throw new CompileError(message, test.value.line, test.value.column)
+    }
+    const type = this.resolver.resolve(test.type)
+    this.types.set(test.type, type)
+    if (!value_type.members.some((member) => same_type(member, type))) {
+      const message = `${format_type(type)} is not one of the types ${format_type(value_type)}`
+      throw new CompileError(message, test.type.line, test.type.column)
+    }
+    return bool_type
+  }
+
+  // Records the type of an expression that is not computed by type_of, such as a type pattern.
+  record_type(expression: Expression, type: Type): void {
+    this.types.set(expression, type)
   }
 
   private record(expression: Expression, type: Type): Type {

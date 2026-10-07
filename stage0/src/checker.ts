@@ -2,6 +2,7 @@
 import {
   type Declaration,
   type Expression,
+  type NamedType,
   type FunctionLiteral,
   type Program,
   type Statement,
@@ -15,8 +16,9 @@ import { StatementChecker } from './statement_checker.ts'
 import { TypeResolver } from './type_names.ts'
 import { same_type, void_type, type Type } from './types.ts'
 
-// The type of every expression in a checked program.
-export type Types = Map<Expression, Type>
+// The type of every expression in a checked program, and the type that the name of `x is T`
+// stands for.
+export type Types = Map<Expression | NamedType, Type>
 // The type an expression is converted to where it is used, such as an Int passed as an Int?.
 export type Conversions = Map<Expression, Type>
 
@@ -70,8 +72,16 @@ export const check = (program: Program): Checked => {
         (statement): statement is TypeDeclaration => statement.kind === 'type_declaration',
       ),
     )
-    add_top_level_functions(program, functions, objects)
-    imports.add(program, (name) => functions.has(name) || objects.object_type(name) !== undefined)
+    for (const statement of program) {
+      if (statement.kind === 'type_alias') resolver.add_alias(statement)
+    }
+    resolver.resolve_aliases()
+    add_top_level_functions(program, functions, objects, resolver)
+    imports.add(
+      program,
+      (name) =>
+        functions.has(name) || objects.object_type(name) !== undefined || resolver.has_alias(name),
+    )
     objects.add_members(resolver, functions)
     new StatementChecker(shared, undefined, undefined).check_block(program)
     objects.check_all()
@@ -91,6 +101,7 @@ const add_top_level_functions = (
   program: Program,
   functions: Functions,
   objects: ObjectTypes,
+  resolver: TypeResolver,
 ): void => {
   for (const statement of program.filter(is_function_declaration)) {
     if (statement.mutable) {
@@ -98,7 +109,7 @@ const add_top_level_functions = (
       throw new CompileError(message, statement.line, statement.column)
     }
     const { name } = statement
-    if (objects.object_type(name.name) !== undefined) {
+    if (objects.object_type(name.name) !== undefined || resolver.has_alias(name.name)) {
       throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
     }
     functions.add(name.name, name, statement.value as FunctionLiteral)

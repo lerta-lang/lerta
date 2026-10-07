@@ -23,7 +23,7 @@ while n > 0
 
 - A condition is a `Bool`, or an optional value, which holds when it is not nil (a `Bool?` holds when it is `true`). The operands of `and`, `or` and `not` follow the same rule.
 - `if const name = value` and `while const name = value` hold when the optional value is not nil; inside the body, `name` is the value without nil.
-- **Narrowing.** A `const`, a parameter or a loop variable of type `T?` that a condition tests (`x`, `x != nil`, `not x` or `x == nil`) has type `T` where it is known not to be nil: in the `then` branch of `if x`, in the `else` branch of `if not x`, and after a guard such as `return if x == nil` (an `if` with no `else` whose body ends with `return`, `break`, `continue` or `throw`). A `var` is not narrowed, since it could be reassigned.
+- **Narrowing.** A `const`, a parameter or a loop variable of type `T?` that a condition tests (`x`, `x != nil`, `not x` or `x == nil`) has type `T` where it is known not to be nil, and one of a union type tested with `x is T` has type `T` where the test holds: in the `then` branch of `if x`, in the `else` branch of `if not x`, and after a guard such as `return if x == nil` (an `if` with no `else` whose body ends with `return`, `break`, `continue` or `throw`). A `var` is not narrowed, since it could be reassigned.
 - `break` leaves the innermost `while` or `for`, and `continue` goes on to its next round. Either is an error outside a loop.
 - **Postfix forms** `<statement> if <condition>` and `<statement> while <condition>` apply to one statement other than a declaration (`break if done`, `x *= 2 while x < 100`). The condition of a postfix `while` is evaluated first.
 - `and` and `or` evaluate their right operand only when the left one does not decide the result. Their operands and `not`'s are `Bool`s.
@@ -40,6 +40,24 @@ for i in 0...3
 - Both ends are `Int`s, evaluated once before the loop.
 - The loop variable is a `const` `Int`.
 - A range can only appear after `in` of a `for` so far. `...` does not chain (`a...b...c` is an error).
+
+## case with a subject
+
+```
+case e
+  when Num then e.value
+  when Add then eval(e.left) + eval(e.right)
+  when Mul then eval(e.left) * eval(e.right)
+
+case c
+  when '+', '-' then 'additive'
+  else 'other'
+```
+
+- The subject is evaluated once, and the first arm whose pattern matches is taken. An arm may list several patterns, separated by commas.
+- **Type patterns.** For a subject of a union type, a pattern names one of its types. In an arm with one pattern, a subject that is a `const`, a parameter or a loop variable is narrowed to that type. Without an `else` arm, every type of the union must be handled.
+- **Value patterns.** For a subject of type `Int`, `UInt8`, `Bool` or `String`, a pattern is a value, compared with `==`. The `else` arm is required.
+- The arms' values follow the same rules as below.
 
 ## case without a subject
 

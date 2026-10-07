@@ -1,7 +1,7 @@
 # Type system
 
 - TypeScript-like. **Local inference + bidirectional type checking.** Function parameters are explicit (lambdas may omit them when there is an expected type). Return values and locals are inferred (the return type of a recursive function is explicit). No global inference in the style of Crystal.
-- Union types, and narrowing by control-flow analysis (`T` only inside `if x != nil`).
+- Union types, and narrowing by control-flow analysis (`T` only inside `if x != nil`). Unions of classes and structs, `type` aliases and `is` are implemented: see [the reference](../reference/types.md#unions).
 - Types and values share one namespace. The same name cannot be defined as both a type and a value in the same scope.
 - Builtins (standard types, interfaces and built-in functions) and shadowing: see [the reference](../reference/control-flow.md#blocks-and-scopes).
 - `type Expr = Num | Plus | Neg` names a type (an alias).

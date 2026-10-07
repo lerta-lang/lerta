@@ -47,6 +47,7 @@ const punctuations = [
     '?',
     '!',
     '@',
+    '|',
   ],
 ] as const
 type Punctuation = (typeof punctuations)[number]

@@ -4,19 +4,29 @@ import {
   type Condition,
   type Expression,
   type Identifier,
+  type NamedType,
   type Statement,
 } from './ast.ts'
 import type { CheckerLocal } from './expression_checker.ts'
+import type { Type } from './types.ts'
 
-// `x`, `x != nil`, `not x` and `x == nil` test the name x: it is not nil when the condition is
-// `when`.
-export const tested_name = (
-  condition: Condition,
-): { name: Identifier; when: boolean } | undefined => {
-  if (condition.kind === 'identifier') return { name: condition, when: true }
+// `x`, `x != nil`, `not x`, `x == nil` and `x is T` test the name x: it is not nil, or is a T,
+// when the condition is `when`.
+export type TestedName = {
+  name: Identifier
+  when: boolean
+  // For `x is T`, the type x has when the test holds; otherwise x is tested against nil.
+  is_type: NamedType | undefined
+}
+
+export const tested_name = (condition: Condition): TestedName | undefined => {
+  if (condition.kind === 'identifier') return { name: condition, when: true, is_type: undefined }
+  if (condition.kind === 'is' && condition.value.kind === 'identifier') {
+    return { name: condition.value, when: true, is_type: condition.type }
+  }
   if (condition.kind === 'unary' && condition.operator === 'not') {
     const inner = tested_name(condition.operand)
-    return inner && { name: inner.name, when: !inner.when }
+    return inner && { ...inner, when: !inner.when }
   }
   if (condition.kind !== 'binary' || (condition.operator !== '==' && condition.operator !== '!=')) {
     return undefined
@@ -24,7 +34,7 @@ export const tested_name = (
   const { left, right } = condition
   const name = left.kind === 'nil' ? right : right.kind === 'nil' ? left : undefined
   if (name?.kind !== 'identifier') return undefined
-  return { name, when: condition.operator === '!=' }
+  return { name, when: condition.operator === '!=', is_type: undefined }
 }
 
 // A body that cannot go on past its end: it ends with `return`, `break`, `continue`, or an
@@ -40,7 +50,10 @@ export const ends_with_jump = (
 }
 
 // A view of an optional local with its type without nil, which marks the local itself as used.
-export const narrowed_view = (local: CheckerLocal): CheckerLocal => {
-  if (local.type.kind !== 'Optional') throw new Error('only an optional local is narrowed')
-  return { ...local, type: local.type.inner, declared: false, origin: local.origin ?? local }
-}
+// A view of a local with a narrower type, which marks the local itself as used.
+export const narrowed_view = (local: CheckerLocal, type: Type): CheckerLocal => ({
+  ...local,
+  type,
+  declared: false,
+  origin: local.origin ?? local,
+})

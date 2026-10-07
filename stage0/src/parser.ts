@@ -12,6 +12,7 @@ import {
   type Program,
   type Return,
   type Statement,
+  type TypeAlias,
   type TypeDeclaration,
   type While,
 } from './ast.ts'
@@ -86,6 +87,7 @@ class Parser {
       case 'import':
         return this.parse_import()
       default:
+        if (this.at_type_alias()) return this.parse_type_alias()
         return this.parse_postfix_conditions(this.parse_simple_statement())
     }
   }
@@ -174,6 +176,21 @@ class Parser {
     const callee = this.expressions.parse_primary()
     const { args, named_args } = this.expressions.parse_arguments()
     return { kind: 'call', callee, args, named_args, line: callee.line, column: callee.column }
+  }
+
+  // `type Name = ...`; `type` is not a keyword, so that it stays usable as a name.
+  private at_type_alias(): boolean {
+    const [first, second, third] = [0, 1, 2].map((offset) => this.tokens.peek(offset))
+    const starts_with_type = first.kind === 'identifier' && first.text === 'type'
+    return starts_with_type && second.kind === 'identifier' && third.kind === '='
+  }
+
+  private parse_type_alias(): TypeAlias {
+    const token = this.tokens.next()
+    const name = this.expressions.parse_identifier()
+    this.tokens.expect('=', "'='")
+    const type = this.expressions.parse_type_name()
+    return { kind: 'type_alias', name, type, line: token.line, column: token.column }
   }
 
   // `import { a, b } from 'module'`. `from` is not a keyword, so that it stays usable as a name.

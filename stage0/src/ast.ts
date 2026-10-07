@@ -50,13 +50,18 @@ export type Binary = Position & {
 export type Range = Position & { kind: 'range'; start: Expression; end: Expression }
 
 // A type written in the source, such as `Int` in a parameter.
-export type TypeName = Position & {
+export type NamedType = Position & {
   kind: 'type_name'
   name: string
   args: TypeName[]
   // Written with `?`: the type or nil.
   optional: boolean
 }
+
+// `A | B`: a value of any of the member types.
+export type UnionTypeName = Position & { kind: 'union_type'; members: NamedType[] }
+
+export type TypeName = NamedType | UnionTypeName
 
 export type Parameter = { name: Identifier; type: TypeName }
 
@@ -68,9 +73,20 @@ export type FunctionLiteral = Position & {
   body: Statement[]
 }
 
-// `case` without a subject: the first arm whose condition is true gives the value.
-export type CaseArm = { condition: Expression; value: Expression }
-export type Case = Position & { kind: 'case'; arms: CaseArm[]; otherwise: Expression }
+// `case` without a subject takes the first arm whose condition (its one pattern) is true. With a
+// subject, a pattern is a type, which the subject must have, or a value, which it must equal; an
+// arm may list several. `otherwise` is the `else` arm, which a case over every type of a union may
+// leave out.
+export type CaseArm = { patterns: Expression[]; value: Expression }
+export type Case = Position & {
+  kind: 'case'
+  subject: Expression | undefined
+  arms: CaseArm[]
+  otherwise: Expression | undefined
+}
+
+// `x is T`: whether x, of a union type, holds a T.
+export type IsTest = Position & { kind: 'is'; value: Expression; type: NamedType }
 
 export type Expression =
   | StringLiteral
@@ -91,6 +107,7 @@ export type Expression =
   | Throw
   | Range
   | Case
+  | IsTest
   | FunctionLiteral
 
 export type For = Position & {
@@ -154,6 +171,9 @@ export type TypeDeclaration = Position & {
   members: MemberDeclaration[]
 }
 
+// `type Name = A | B`: another name for a type.
+export type TypeAlias = Position & { kind: 'type_alias'; name: Identifier; type: TypeName }
+
 // `import { a, b } from 'std:io'`.
 export type Import = Position & { kind: 'import'; names: Identifier[]; module: string }
 
@@ -161,6 +181,7 @@ export type Statement =
   | Expression
   | Import
   | TypeDeclaration
+  | TypeAlias
   | Declaration
   | Assignment
   | If
@@ -173,6 +194,7 @@ export type Program = Statement[]
 
 const statement_only_kinds = [
   'import',
+  'type_alias',
   'type_declaration',
   'declaration',
   'assignment',

@@ -221,6 +221,7 @@ export class FunctionGenerator {
       case 'continue':
         return this.control_flow.generate_jump(statement)
       case 'type_declaration':
+      case 'type_alias':
       case 'import':
         return
       default:

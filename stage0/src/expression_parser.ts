@@ -7,6 +7,7 @@ import {
   type Expression,
   type FunctionLiteral,
   type Identifier,
+  type NamedType,
   type NamedArgument,
   type Parameter,
   type Position,
@@ -89,6 +90,11 @@ export class ExpressionParser {
   // `a < b < c` is an error: comparisons do not chain.
   private parse_comparison(): Expression {
     const left = this.parse_range()
+    if (this.at_is()) {
+      this.tokens.next()
+      const type = this.parse_named_type()
+      return { kind: 'is', value: left, type, line: left.line, column: left.column }
+    }
     if (!this.at_comparison()) return left
     const operator = this.tokens.next().kind as ComparisonOperator
     const right = this.parse_range()
@@ -110,6 +116,12 @@ export class ExpressionParser {
       throw new CompileError('ranges cannot be chained', token.line, token.column)
     }
     return { kind: 'range', start, end, line: start.line, column: start.column }
+  }
+
+  // `is` is not a keyword, so that it stays usable as a name.
+  private at_is(): boolean {
+    const token = this.tokens.peek()
+    return this.tokens.peek_continuation() === 'identifier' && token.text === 'is'
   }
 
   private at_comparison(): boolean {
@@ -186,7 +198,16 @@ export class ExpressionParser {
     return { kind: 'function', params, return_type, body, line: token.line, column: token.column }
   }
 
+  // A named type, or a union of them: `A | B`.
   parse_type_name(): TypeName {
+    const first = this.parse_named_type()
+    if (this.tokens.peek().kind !== '|') return first
+    const members = [first]
+    while (this.tokens.accept('|')) members.push(this.parse_named_type())
+    return { kind: 'union_type', members, line: first.line, column: first.column }
+  }
+
+  private parse_named_type(): NamedType {
     const { name, line, column } = this.parse_identifier()
     const args: TypeName[] = []
     if (this.tokens.accept('<')) {
@@ -310,19 +331,25 @@ export class ExpressionParser {
   }
 
   // `case` followed by an indented block of `when` arms and a final `else` arm.
+  // With a subject, an arm may list several patterns, and the `else` arm may be left out (whether
+  // it may is checked later).
   private parse_case(position: Position): Case {
+    const subject = this.tokens.peek().kind === 'newline' ? undefined : this.parse_expression()
     this.tokens.expect('newline', 'end of line')
     this.tokens.expect('indent', "indented 'when' arms")
     const arms: CaseArm[] = []
     do {
       this.tokens.expect('when', "'when'")
-      const condition = this.parse_expression()
-      arms.push({ condition, value: this.parse_arm_body('then') })
+      const patterns = [this.parse_expression()]
+      while (subject !== undefined && this.tokens.accept(','))
+        patterns.push(this.parse_expression())
+      arms.push({ patterns, value: this.parse_arm_body('then') })
     } while (this.tokens.peek().kind === 'when')
-    this.tokens.expect('else', "'when' or 'else'")
-    const otherwise = this.parse_arm_body('else')
+    const has_else = subject === undefined || this.tokens.peek().kind === 'else'
+    if (has_else) this.tokens.expect('else', "'when' or 'else'")
+    const otherwise = has_else ? this.parse_arm_body('else') : undefined
     this.tokens.expect('dedent', 'end of block')
-    return { kind: 'case', arms, otherwise, ...position }
+    return { kind: 'case', subject, arms, otherwise, ...position }
   }
 
   // The expression on the same line (`when c then x`, `else x`), or alone in an indented block.

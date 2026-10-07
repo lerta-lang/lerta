@@ -58,5 +58,6 @@ const eval = (e: Expr): Int ->
 - Each arm is `when pattern` followed by `then` and an expression, or by an indented block. The `else` arm is `else expression` or a block (because of `when`, patterns and `else` do not look alike).
 - If the pattern is a type, it branches on the type and narrows the subject inside the arm (the same rule as `is`). If it is a value, it compares with `==` (several allowed, like `"+", "-"`).
   - Syntactically a pattern is an expression. Name resolution decides whether it is a type or a value.
+- `case` with a subject, on types (unions of classes and structs) and on values, is implemented: see [the reference](../reference/control-flow.md#case-with-a-subject).
 - **`case` without a subject** is implemented: see [the reference](../reference/control-flow.md#case-without-a-subject). Several conditions separated by commas are not allowed (they would read like `and`/`or`; write `or`). Use it when you want a value from a chain of conditions; an `if`/`else` statement is for statements.
 - When branching on types, not handling every type of the union is a compile error (exhaustiveness check). Not needed if there is an `else`. When branching on values, `else` is required.

@@ -44,3 +44,11 @@ export const define_object = (module: IrModule, ir: IrBuilder, info: ObjectInfo)
   ir.emit('ret void')
   ir.finish(`void ${drop_symbol(name)}(ptr %object)`)
 }
+
+// An i1: whether the object is of the type. The drop function in the header tells the type, since
+// every type has its own.
+export const emit_type_test = (ir: IrBuilder, object: string, type_name: string): string => {
+  const pointer = ir.assign(`getelementptr { i64, ptr }, ptr ${object}, i32 0, i32 1`)
+  const drop = ir.assign(`load ptr, ptr ${pointer}`)
+  return ir.assign(`icmp eq ptr ${drop}, ${drop_symbol(type_name)}`)
+}

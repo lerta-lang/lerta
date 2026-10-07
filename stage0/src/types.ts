@@ -7,6 +7,8 @@ export type Type =
   | { kind: 'Array'; element: Type }
   // A class or struct, by name (see ObjectTypes).
   | { kind: 'Object'; name: string; is_struct: boolean }
+  // `A | B`: classes and structs, by name; the object carries which one it is.
+  | { kind: 'Union'; members: Type[] }
   // `T?`: a T or nil.
   | { kind: 'Optional'; inner: Type }
   // The type of the literal `nil`, which fits any optional type.
@@ -32,6 +34,11 @@ export const stringable_type: Type = { kind: 'Stringable' }
 
 export const array_type = (element: Type): Type => ({ kind: 'Array', element })
 export const optional_type = (inner: Type): Type => ({ kind: 'Optional', inner })
+// The members are kept in name order, so that `A | B` and `B | A` are the same type.
+export const union_type = (members: Type[]): Type => {
+  const sorted = members.toSorted((a, b) => format_type(a).localeCompare(format_type(b)))
+  return { kind: 'Union', members: sorted }
+}
 export const nil_type: Type = { kind: 'nil' }
 
 export const format_type = (type: Type): string => {
@@ -40,8 +47,10 @@ export const format_type = (type: Type): string => {
       return `Array<${format_type(type.element)}>`
     case 'Object':
       return type.name
+    case 'Union':
+      return type.members.map(format_type).join(' | ')
     case 'Optional':
-      return type.inner.kind === 'function'
+      return type.inner.kind === 'function' || type.inner.kind === 'Union'
         ? `(${format_type(type.inner)})?`
         : `${format_type(type.inner)}?`
     case 'function': {
@@ -57,14 +66,18 @@ export const same_type = (a: Type, b: Type): boolean => format_type(a) === forma
 
 // Values of these types are reference counted.
 export const is_reference_type = (type: Type): boolean =>
-  ['String', 'Binary', 'Array', 'Object'].includes(type.kind) ||
+  ['String', 'Binary', 'Array', 'Object', 'Union'].includes(type.kind) ||
   (type.kind === 'Optional' && is_reference_type(type.inner))
 
 // A T or nil also fits where a T? is expected.
 export const is_assignable = (value: Type, target: Type): boolean => {
   if (value.kind === 'never') return true
   if (target.kind === 'Stringable') return is_stringable(value)
-  if (target.kind === 'Optional' && (value.kind === 'nil' || same_type(value, target.inner))) {
+  if (target.kind === 'Union') {
+    const members = value.kind === 'Union' ? value.members : [value]
+    return members.every((member) => target.members.some((type) => same_type(type, member)))
+  }
+  if (target.kind === 'Optional' && (value.kind === 'nil' || is_assignable(value, target.inner))) {
     return true
   }
   return same_type(value, target)
