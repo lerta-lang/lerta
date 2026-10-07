@@ -24,6 +24,9 @@ bool lerta_check_leaks(void);
 
 // Strings (string.c)
 LertaString *lerta_int_to_string(int64_t n);
+// Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
+LertaString *lerta_string_concat(int64_t count, ...);
+bool lerta_string_equals(const LertaString *a, const LertaString *b);
 
 // Output (io.c)
 void lerta_print_string(const LertaString *s);

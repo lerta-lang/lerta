@@ -2,12 +2,11 @@
 
 ## Basics
 
-Source files, comments, identifiers, indentation, integer literals and `'...'` strings are implemented: see [the reference](../reference/syntax.md).
+Source files, comments, identifiers, indentation, integer literals and `'...'`/`"..."` strings are implemented: see [the reference](../reference/syntax.md).
 
 - CoffeeScript-like. Indentation forms blocks. Implicit return. Expression-oriented.
 - Names starting with `_` produce no warning when unused.
-- String literals besides `'...'`:
-  - `"..."`: escapes (`\n` `\t` `\r` `\0` `\\` `\"` `\#` `\u{1F600}`) and interpolation `"#{name}"`.
+- String literals besides `'...'` and `"..."` (see the reference):
   - Multi-line strings use `"""..."""`. The common leading indentation is removed, measured from the position of the closing `"""` (the Swift approach).
 
 ## Declarations

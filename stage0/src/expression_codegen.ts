@@ -5,6 +5,7 @@ import type {
   ComparisonOperator,
   Expression,
   Identifier,
+  Interpolation,
   Member,
   Unary,
 } from './ast.ts'
@@ -22,6 +23,7 @@ import {
   string_constant,
 } from './lerta_ir.ts'
 import type { Scopes } from './scopes.ts'
+import { emit_concat, emit_equals, emit_to_string } from './string_codegen.ts'
 import { is_reference_type, type Type } from './types.ts'
 
 const comparison_predicates: Record<ComparisonOperator, string> = {
@@ -65,6 +67,8 @@ export class ExpressionGenerator {
     switch (expression.kind) {
       case 'string':
         return string_constant(this.ir, expression.value)
+      case 'interpolation':
+        return this.generate_interpolation(expression)
       case 'integer':
         return expression.value.toString()
       case 'boolean':
@@ -125,20 +129,16 @@ export class ExpressionGenerator {
   // `to_string()` is the only method so far. A String returns itself, passing on its ownership.
   private generate_method_call(member: Member): string {
     const object = this.generate(member.object)
-    switch (this.types.get(member.object)!.kind) {
-      case 'String':
-        return object
-      case 'Int':
-        this.ir.declare('lerta_int_to_string', 'declare ptr @lerta_int_to_string(i64)')
-        return this.ir.assign(`call ptr @lerta_int_to_string(i64 ${object})`)
-      case 'Bool': {
-        const true_text = string_constant(this.ir, 'true')
-        const false_text = string_constant(this.ir, 'false')
-        return this.ir.assign(`select i1 ${object}, ptr ${true_text}, ptr ${false_text}`)
-      }
-      default:
-        throw new Error('no to_string for this type')
-    }
+    return emit_to_string(this.ir, object, this.types.get(member.object)!)
+  }
+
+  private generate_interpolation(interpolation: Interpolation): string {
+    const parts = interpolation.parts.map((part) =>
+      typeof part === 'string'
+        ? string_constant(this.ir, part)
+        : emit_to_string(this.ir, this.generate(part), this.types.get(part)!),
+    )
+    return emit_concat(this.ir, parts)
   }
 
   // Every expression of a reference type yields an owned reference, which its consumer releases.
@@ -157,6 +157,11 @@ export class ExpressionGenerator {
     const left = this.generate(binary.left)
     const right = this.generate(binary.right)
     const { operator } = binary
+    if (this.types.get(binary.left)!.kind === 'String') {
+      if (operator === '+') return emit_concat(this.ir, [left, right])
+      const equal = emit_equals(this.ir, left, right)
+      return operator === '==' ? equal : this.ir.assign(`xor i1 ${equal}, true`)
+    }
     if (operator === '/' || operator === '%') {
       return this.checked_int.division(operator, left, right)
     }

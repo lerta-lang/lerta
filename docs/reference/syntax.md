@@ -5,6 +5,7 @@
 - Identifiers are `[A-Za-z_][A-Za-z0-9_]*` (ASCII only).
 - Integer literals are decimal. `_` may separate digits (`1_000_000`). A leading zero is not allowed except in `0` itself, so `010` is not mistaken for octal. Where a prefix `-` may appear, a `-` directly followed by an integer literal is part of the literal (`-1`); otherwise it is the prefix operator. After an operand, `-` is always subtraction (`x-1`, `1 -1`).
 - `'...'` string literals have no escapes and no interpolation. They are single line only and cannot contain `'`.
+- `"..."` string literals are single line and have escapes, `\n` `\t` `\r` `\0` `\\` `\"` `\#` and `\u{1F600}` (a code point in hex, not a surrogate), and interpolation `"#{expression}"`, which inserts the text of a `Stringable` value (see `to_string` in [types.md](types.md#methods)). An interpolated expression cannot contain a function literal.
 
 ## Indentation
 

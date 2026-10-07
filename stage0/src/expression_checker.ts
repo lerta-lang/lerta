@@ -20,6 +20,7 @@ import {
   is_assignable,
   same_type,
   string_type,
+  stringable_type,
   type Type,
 } from './types.ts'
 
@@ -53,6 +54,11 @@ export class ExpressionChecker {
   private compute_type(expression: Expression): Type {
     switch (expression.kind) {
       case 'string':
+        return string_type
+      case 'interpolation':
+        for (const part of expression.parts) {
+          if (typeof part !== 'string') this.expect_type(part, stringable_type)
+        }
         return string_type
       case 'integer':
         return int_type
@@ -146,15 +152,20 @@ export class ExpressionChecker {
       this.expect_type(binary.right, bool_type)
       return bool_type
     }
-    this.expect_type(binary.left, int_type)
+    const left_type = this.type_of(binary.left)
+    if (binary.operator === '+' && left_type.kind === 'String') {
+      this.expect_type(binary.right, string_type)
+      return string_type
+    }
+    this.require_type(binary.left, left_type, int_type)
     this.expect_type(binary.right, int_type)
     return is_arithmetic(binary.operator) ? int_type : bool_type
   }
 
-  // `==` and `!=` compare two Ints or two Bools.
+  // `==` and `!=` compare two Ints, Bools or Strings.
   private type_of_equality(binary: Binary): Type {
     const left_type = this.type_of(binary.left)
-    if (left_type.kind !== 'Int' && left_type.kind !== 'Bool') {
+    if (!['Int', 'Bool', 'String'].includes(left_type.kind)) {
       const message = `cannot compare values of type ${format_type(left_type)}`
       throw new CompileError(message, binary.left.line, binary.left.column)
     }
@@ -179,7 +190,10 @@ export class ExpressionChecker {
   }
 
   expect_type(expression: Expression, expected: Type): void {
-    const type = this.type_of(expression)
+    this.require_type(expression, this.type_of(expression), expected)
+  }
+
+  private require_type(expression: Expression, type: Type, expected: Type): void {
     if (!is_assignable(type, expected)) {
       const message = `expected ${format_type(expected)}, got ${format_type(type)}`
       throw new CompileError(message, expression.line, expression.column)

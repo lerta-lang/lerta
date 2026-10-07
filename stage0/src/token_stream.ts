@@ -8,6 +8,7 @@ const describe_token = (token: Token): string => {
     case 'integer':
       return 'integer literal'
     case 'string':
+    case 'interpolated':
       return 'string literal'
     case 'newline':
       return 'end of line'

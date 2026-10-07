@@ -13,6 +13,7 @@ import {
   type TypeName,
 } from './ast.ts'
 import { CompileError } from './errors.ts'
+import { tokenize_fragment } from './lexer.ts'
 import { TokenStream } from './token_stream.ts'
 
 const INT_MIN = -(2n ** 63n)
@@ -214,6 +215,14 @@ export class ExpressionParser {
     const position = { line: token.line, column: token.column }
     if (token.kind === 'identifier') return { kind: 'identifier', name: token.text, ...position }
     if (token.kind === 'string') return { kind: 'string', value: token.text, ...position }
+    if (token.kind === 'interpolated') {
+      const parts = token.parts!.map((part) =>
+        part.kind === 'text'
+          ? part.text
+          : parse_interpolated_code(part.source, token.line, part.column),
+      )
+      return { kind: 'interpolation', parts, ...position }
+    }
     if (token.kind === 'true' || token.kind === 'false') {
       return { kind: 'boolean', value: token.kind === 'true', ...position }
     }
@@ -268,4 +277,20 @@ const integer_value = (value: bigint, position: Position): bigint => {
     throw new CompileError('integer literal does not fit in Int', position.line, position.column)
   }
   return value
+}
+
+// Interpolated code is one expression; a function literal, whose body is made of statements,
+// cannot be written there.
+const no_bodies = (line: number, column: number): BodyParser => {
+  const reject = (): never => {
+    throw new CompileError('a function cannot be written in an interpolation', line, column)
+  }
+  return { parse_block: reject, parse_simple_statement: reject }
+}
+
+const parse_interpolated_code = (source: string, line: number, column: number): Expression => {
+  const tokens = new TokenStream(tokenize_fragment(source, line, column))
+  const expression = new ExpressionParser(tokens, no_bodies(line, column)).parse_expression()
+  tokens.expect('newline', 'end of interpolation')
+  return expression
 }

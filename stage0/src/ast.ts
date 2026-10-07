@@ -1,6 +1,8 @@
 export type Position = { line: number; column: number }
 
 export type StringLiteral = Position & { kind: 'string'; value: string }
+// `"a#{b}c"`: text parts and interpolated expressions, in order.
+export type Interpolation = Position & { kind: 'interpolation'; parts: (string | Expression)[] }
 export type BooleanLiteral = Position & { kind: 'boolean'; value: boolean }
 export type IntegerLiteral = Position & { kind: 'integer'; value: bigint }
 export type Identifier = Position & { kind: 'identifier'; name: string }
@@ -46,6 +48,7 @@ export type Case = Position & { kind: 'case'; arms: CaseArm[]; otherwise: Expres
 
 export type Expression =
   | StringLiteral
+  | Interpolation
   | BooleanLiteral
   | IntegerLiteral
   | Identifier

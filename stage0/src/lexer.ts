@@ -1,12 +1,14 @@
 // Covers only the tokens the parser uses so far; any other character is an
 // unexpected character until the feature that needs it is implemented.
 import { CompileError } from './errors.ts'
+import { scan_double_quoted, type TemplatePart } from './string_literal.ts'
 
 export type TokenKind =
   | 'identifier'
   | Keyword
   | 'integer'
   | 'string'
+  | 'interpolated'
   | Punctuation
   | 'newline'
   | 'indent'
@@ -38,6 +40,8 @@ export type Token = {
   line: number
   // Counted in code points, starting at 1.
   column: number
+  // The parts of an `interpolated` string.
+  parts?: TemplatePart[]
 }
 
 // A line split into code points, so that an index plus one is the column.
@@ -98,12 +102,28 @@ const emit_indentation = (
   }
 }
 
-const tokenize_line = (chars: Chars, start: number, line: number): Token[] => {
+// The tokens of an interpolated expression, placed where it is in the source line.
+export const tokenize_fragment = (source: string, line: number, column: number): Token[] => {
+  const tokens = tokenize_line(Array.from(source), 0, line, column - 1)
+  const end = column + Array.from(source).length
+  tokens.push({ kind: 'newline', text: '', spaced: true, line, column: end })
+  tokens.push({ kind: 'eof', text: '', spaced: true, line, column: end })
+  return tokens
+}
+
+// `column_offset` places `chars` in its line, for the code of an interpolation.
+const tokenize_line = (chars: Chars, start: number, line: number, column_offset = 0): Token[] => {
   const tokens: Token[] = []
   let i = start
-  const push = (kind: TokenKind, text: string, token_start: number, end: number) => {
+  const push = (
+    kind: TokenKind,
+    text: string,
+    token_start: number,
+    end: number,
+    parts?: TemplatePart[],
+  ) => {
     const spaced = token_start === 0 || chars[token_start - 1] === ' '
-    tokens.push({ kind, text, spaced, line, column: token_start + 1 })
+    tokens.push({ kind, text, spaced, line, column: token_start + 1 + column_offset, parts })
     i = end
   }
   while (i < chars.length) {
@@ -118,15 +138,23 @@ const tokenize_line = (chars: Chars, start: number, line: number): Token[] => {
       push(is_keyword(word) ? word : 'identifier', word, i, end)
     } else if (c === "'") {
       const close = chars.indexOf("'", i + 1)
-      if (close === -1) throw new CompileError('unterminated string literal', line, i + 1)
+      const column = i + 1 + column_offset
+      if (close === -1) throw new CompileError('unterminated string literal', line, column)
       push('string', chars.slice(i + 1, close).join(''), i, close + 1)
+    } else if (c === '"') {
+      const { parts, end } = scan_double_quoted(chars, i, line, column_offset)
+      const [first] = parts
+      if (parts.length === 1 && first.kind === 'text') push('string', first.text, i, end)
+      else push('interpolated', '', i, end, parts)
     } else if (is_digit(c)) {
       const end = scan_while(chars, i, is_identifier_part)
-      push('integer', integer_digits(chars.slice(i, end).join(''), line, i + 1), i, end)
+      const digits = integer_digits(chars.slice(i, end).join(''), line, i + 1 + column_offset)
+      push('integer', digits, i, end)
     } else {
       const punctuation = punctuation_at(chars, i)
       if (punctuation === undefined) {
-        throw new CompileError(`unexpected character ${describe_char(c)}`, line, i + 1)
+        const column = i + 1 + column_offset
+        throw new CompileError(`unexpected character ${describe_char(c)}`, line, column)
       }
       push(punctuation, punctuation, i, i + punctuation.length)
     }

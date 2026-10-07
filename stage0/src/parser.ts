@@ -23,6 +23,7 @@ const command_argument_starts = [
   'identifier',
   'integer',
   'string',
+  'interpolated',
   'true',
   'false',
   'not',
