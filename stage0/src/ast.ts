@@ -5,6 +5,8 @@ export type BooleanLiteral = Position & { kind: 'boolean'; value: boolean }
 export type IntegerLiteral = Position & { kind: 'integer'; value: bigint }
 export type Identifier = Position & { kind: 'identifier'; name: string }
 export type Call = Position & { kind: 'call'; callee: Expression; args: Expression[] }
+// `object.name`; so far only a method of a builtin type, and only when called.
+export type Member = Position & { kind: 'member'; object: Expression; name: Identifier }
 export type UnaryOperator = '-'
 export type Unary = Position & { kind: 'unary'; operator: UnaryOperator; operand: Expression }
 export const arithmetic_operators = ['+', '-', '*', '/', '%'] as const
@@ -34,6 +36,7 @@ export type Expression =
   | IntegerLiteral
   | Identifier
   | Call
+  | Member
   | Unary
   | Binary
   | Range

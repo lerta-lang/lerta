@@ -6,5 +6,7 @@ void lerta_main(void);
 
 int main(void) {
   lerta_main();
-  return lerta_stdout_flush() ? 0 : 1;
+  bool flushed = lerta_stdout_flush();
+  bool leak_free = lerta_check_leaks();
+  return flushed && leak_free ? 0 : 1;
 }

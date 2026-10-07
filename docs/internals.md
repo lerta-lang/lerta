@@ -44,12 +44,14 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 - **No threads, so counts are non-atomic.**
 - Weak references follow Rust's `Rc` approach (a weak count is kept; while weak references remain, the memory is not returned and only the contents are destroyed).
 - Static objects such as string literals are made immortal (exempt from count operations).
+- In stage0, every expression of a reference type yields an owned (+1) reference, and its consumer releases it: arguments are borrowed and released by the caller after the call, and a discarded statement value is released at once. An immortal literal is owned for free.
 
 ### Leak checking
 
 - A debug runtime counts live objects (allocations minus releases, excluding immortal static objects).
-- At exit, a non-zero count is reported as a leak. The remaining objects are traversed to report cycles (by type).
-- Release builds do not count.
+- At exit, a non-zero count is reported as a leak. The remaining objects are traversed to report cycles (by type; not implemented yet).
+- Release builds do not count. In stage0, a build without `-O` uses the debug runtime.
+- An exit through an uncaught `throw` is not checked, since it ends the program in the middle of its work.
 
 ## Structs
 

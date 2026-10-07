@@ -5,6 +5,7 @@ import {
   type CaseArm,
   type ComparisonOperator,
   type Expression,
+  type Identifier,
   type Position,
 } from './ast.ts'
 import { CompileError } from './errors.ts'
@@ -89,20 +90,31 @@ export class ExpressionParser {
     return { kind: 'unary', operator: '-', operand, line: token.line, column: token.column }
   }
 
+  parse_identifier(): Identifier {
+    const token = this.tokens.peek()
+    if (token.kind !== 'identifier') throw this.tokens.error_at(token, 'name')
+    this.tokens.next()
+    return { kind: 'identifier', name: token.text, line: token.line, column: token.column }
+  }
+
+  // Calls `f(x)` and member accesses `x.name`, written without a space before `(` or `.`.
   private parse_postfix(primary: Expression): Expression {
     let expression = primary
-    while (this.tokens.peek().kind === '(' && !this.tokens.peek().spaced) {
+    for (;;) {
+      const token = this.tokens.peek()
+      if (token.spaced || (token.kind !== '(' && token.kind !== '.')) return expression
       this.tokens.next()
-      const args = this.parse_parenthesized_arguments()
-      expression = {
-        kind: 'call',
-        callee: expression,
-        args,
-        line: expression.line,
-        column: expression.column,
-      }
+      const position = { line: expression.line, column: expression.column }
+      expression =
+        token.kind === '('
+          ? {
+              kind: 'call',
+              callee: expression,
+              args: this.parse_parenthesized_arguments(),
+              ...position,
+            }
+          : { kind: 'member', object: expression, name: this.parse_identifier(), ...position }
     }
-    return expression
   }
 
   // The arguments after an opening parenthesis, through the closing one.

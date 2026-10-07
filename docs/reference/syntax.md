@@ -27,6 +27,7 @@
   5. **A call with zero arguments requires parentheses**: `f()`. A bare `f` is the function value.
 - Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
 - `(x)` groups an expression.
+- `x.name()` calls a method of `x`. As with `(`, no space is allowed before `.`.
 
 ## Operators
 

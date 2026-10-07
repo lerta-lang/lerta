@@ -13,6 +13,6 @@
     | `Equatable` | `equals(other: Self): Bool` | `==`, `!=` |
     | `Comparable` | `compare(other: Self): Int` (negative, 0, positive) | `<`, `<=`, `>`, `>=` (requires `Equatable`) |
     | `Hashable` | `hash(): Int` | none (requires `Equatable`; the constraint on `Map` keys `Map<K: Hashable, V>`) |
-  - `Stringable` (`to_string(): String`): string interpolation `"#{x}"` is `x.to_string()`. Built-in types and `String` itself satisfy it. Structs and classes do not satisfy it automatically.
+  - `Stringable` (`to_string(): String`; implemented for builtin types: see [the reference](../reference/types.md#methods)): string interpolation `"#{x}"` is `x.to_string()`. Built-in types and `String` itself satisfy it. Structs and classes do not satisfy it automatically.
   - `+=` is derived automatically from `+`.
 - Interfaces for construction from literals (like Swift's `ExpressibleByIntegerLiteral`) let types added later, such as BigInt, be treated almost like built-ins.

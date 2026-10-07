@@ -6,6 +6,7 @@ lerta build <source> -o <output> [-O] [--emit-llvm <path>]
 
 builds an executable.
 
+- Without `-O`, the program checks for leaked memory when it exits: a leak is reported to stderr as `leak: <n> object(s)`, and the exit code is 1.
 - `-O` optimizes, including across the generated code and the runtime (link-time optimization).
 - `--emit-llvm <path>` also writes the generated LLVM IR, before optimization, to `<path>`.
 

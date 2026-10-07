@@ -12,3 +12,7 @@
 
 - `Bool` has the values `true` and `false`.
 - `==` and `!=` compare two `Bool`s. There is no ordering (`<` and so on).
+
+## Methods
+
+`String`, `Int` and `Bool` have `to_string(): String`, which gives the text that `print` writes. A method must be called: `x.to_string` without `()` is an error.

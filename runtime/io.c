@@ -1,4 +1,6 @@
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
 
@@ -51,17 +53,9 @@ void lerta_print_string(const LertaString *s) {
 }
 
 void lerta_print_int(int64_t n) {
-  // 19 digits and a sign; digits are produced from the end.
-  uint8_t digits[20];
-  int64_t start = sizeof digits;
-  // Working with the negative value avoids overflow on INT64_MIN.
-  int64_t negative = n < 0 ? n : -n;
-  do {
-    digits[--start] = (uint8_t)('0' - negative % 10);
-    negative /= 10;
-  } while (negative != 0);
-  if (n < 0) digits[--start] = '-';
-  stdout_write(digits + start, (int64_t)sizeof digits - start);
+  uint8_t text[LERTA_INT_TEXT_MAX];
+  int64_t start = lerta_format_int(n, text);
+  stdout_write(text + start, LERTA_INT_TEXT_MAX - start);
   stdout_write(&newline, 1);
 }
 
@@ -76,10 +70,22 @@ void lerta_print_bool(bool b) {
   stdout_write(&newline, 1);
 }
 
+void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
+  // stderr is the last resort for reporting; a failure there cannot be reported.
+  write_all(STDERR_FD, bytes, length);
+}
+
 void lerta_throw(const LertaString *message) {
   // Flush first so that stdout and stderr appear in program order.
   lerta_stdout_flush();
-  write_all(STDERR_FD, message->bytes, message->length);
-  write_all(STDERR_FD, &newline, 1);
+  lerta_stderr_write(message->bytes, message->length);
+  lerta_stderr_write(&newline, 1);
   _exit(1);
+}
+
+void lerta_panic(const char *message) {
+  lerta_stdout_flush();
+  lerta_stderr_write((const uint8_t *)message, (int64_t)strlen(message));
+  lerta_stderr_write(&newline, 1);
+  abort();
 }

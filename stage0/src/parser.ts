@@ -1,4 +1,4 @@
-import type { Call, For, Identifier, Program, Statement } from './ast.ts'
+import type { Call, For, Program, Statement } from './ast.ts'
 import { ExpressionParser } from './expression_parser.ts'
 import type { Token } from './lexer.ts'
 import { TokenStream } from './token_stream.ts'
@@ -57,18 +57,11 @@ class Parser {
   // `for <name> in <expression>` followed by an indented block.
   private parse_for(): For {
     const token = this.tokens.next()
-    const variable = this.parse_identifier()
+    const variable = this.expressions.parse_identifier()
     this.tokens.expect('in', "'in'")
     const iterable = this.expressions.parse_expression()
     const body = this.parse_block()
     return { kind: 'for', variable, iterable, body, line: token.line, column: token.column }
-  }
-
-  private parse_identifier(): Identifier {
-    const token = this.tokens.peek()
-    if (token.kind !== 'identifier') throw this.tokens.error_at(token, 'name')
-    this.tokens.next()
-    return { kind: 'identifier', name: token.text, line: token.line, column: token.column }
   }
 
   // `f x, y`: the arguments run to the end of the line.

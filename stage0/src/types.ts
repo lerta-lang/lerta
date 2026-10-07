@@ -21,6 +21,9 @@ export const format_type = (type: Type): string => {
 
 export const same_type = (a: Type, b: Type): boolean => format_type(a) === format_type(b)
 
+// Values of these types are reference counted.
+export const is_reference_type = (type: Type): boolean => type.kind === 'String'
+
 export const is_assignable = (value: Type, target: Type): boolean => {
   if (target.kind === 'Stringable') return ['String', 'Int', 'Bool'].includes(value.kind)
   return same_type(value, target)

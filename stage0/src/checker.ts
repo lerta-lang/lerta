@@ -6,11 +6,12 @@ import {
   type Expression,
   type For,
   type Identifier,
+  type Member,
   type Program,
   type Statement,
   type Unary,
 } from './ast.ts'
-import { builtins } from './builtins.ts'
+import { builtin_methods, builtins } from './builtins.ts'
 import { CompileError, CompileWarning } from './errors.ts'
 import {
   bool_type,
@@ -131,6 +132,10 @@ class Checker {
         return this.type_of_binary(expression)
       case 'case':
         return this.type_of_case(expression)
+      case 'member': {
+        const message = `a method must be called: write \`${expression.name.name}()\``
+        throw new CompileError(message, expression.name.line, expression.name.column)
+      }
       case 'range':
         throw new CompileError(
           "a range can only be used after 'in' of a 'for'",
@@ -150,7 +155,9 @@ class Checker {
   }
 
   private type_of_call(call: Call): Type {
-    const callee_type = this.type_of(call.callee)
+    const { callee } = call
+    const callee_type =
+      callee.kind === 'member' ? this.type_of_method(callee) : this.type_of(callee)
     if (callee_type.kind !== 'function') {
       const message = `cannot call a value of type ${format_type(callee_type)}`
       throw new CompileError(message, call.line, call.column)
@@ -162,6 +169,21 @@ class Checker {
     }
     call.args.forEach((arg, i) => this.expect_type(arg, params[i]))
     return callee_type.result
+  }
+
+  private type_of_method(member: Member): Type {
+    const object_type = this.type_of(member.object)
+    const { name, line, column } = member.name
+    const method = builtin_methods[object_type.kind]?.get(name)
+    if (method === undefined) {
+      throw new CompileError(
+        `type ${format_type(object_type)} has no method '${name}'`,
+        line,
+        column,
+      )
+    }
+    this.types.set(member, method)
+    return method
   }
 
   private type_of_unary(unary: Unary): Type {

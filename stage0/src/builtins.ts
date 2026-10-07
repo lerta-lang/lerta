@@ -1,4 +1,4 @@
-import { stringable_type, void_type, type Type } from './types.ts'
+import { string_type, stringable_type, void_type, type Type } from './types.ts'
 
 export type Builtin = {
   type: Type
@@ -25,3 +25,12 @@ export const builtins = new Map<string, Builtin>([
     },
   ],
 ])
+
+const to_string: Type = { kind: 'function', params: [], result: string_type }
+
+// Methods of builtin types, by the receiver's type kind.
+export const builtin_methods: Partial<Record<Type['kind'], Map<string, Type>>> = {
+  String: new Map([['to_string', to_string]]),
+  Int: new Map([['to_string', to_string]]),
+  Bool: new Map([['to_string', to_string]]),
+}

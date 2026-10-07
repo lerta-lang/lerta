@@ -20,7 +20,7 @@ type Keyword = (typeof keywords)[number]
 const punctuations = [
   '...',
   ...['==', '!=', '<=', '>='],
-  ...['(', ')', ',', '+', '-', '*', '/', '%', '<', '>'],
+  ...['(', ')', ',', '.', '+', '-', '*', '/', '%', '<', '>'],
 ] as const
 type Punctuation = (typeof punctuations)[number]
 
