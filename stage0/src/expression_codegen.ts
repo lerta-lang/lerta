@@ -1,15 +1,16 @@
-import type {
-  ArrayLiteral,
-  Binary,
-  Call,
-  Case,
-  ComparisonOperator,
-  Expression,
-  Identifier,
-  Index,
-  Interpolation,
-  Member,
-  Unary,
+import {
+  is_arithmetic,
+  type ArrayLiteral,
+  type Binary,
+  type Call,
+  type Case,
+  type ComparisonOperator,
+  type Expression,
+  type Identifier,
+  type Index,
+  type Interpolation,
+  type Member,
+  type Unary,
 } from './ast.ts'
 import {
   emit_array_new,
@@ -19,6 +20,7 @@ import {
   emit_pop,
   emit_push,
 } from './array_codegen.ts'
+import { emit_binary_get, emit_binary_length, emit_binary_slice } from './binary_codegen.ts'
 import { builtins } from './builtins.ts'
 import type { Types } from './checker.ts'
 import type { CheckedInt } from './checked_int.ts'
@@ -76,6 +78,9 @@ export class ExpressionGenerator {
   generate(expression: Expression): string {
     switch (expression.kind) {
       case 'string':
+        if (this.types.get(expression)!.kind === 'UInt8') {
+          return new TextEncoder().encode(expression.value)[0].toString()
+        }
         return string_constant(this.ir, expression.value)
       case 'interpolation':
         return this.generate_interpolation(expression)
@@ -147,9 +152,12 @@ export class ExpressionGenerator {
     const object = this.generate(member.object)
     const { name } = member.name
     if (name === 'to_string') return emit_to_string(this.ir, object, object_type)
-    if (object_type.kind !== 'Array') throw new Error(`no method ${name} on ${object_type.kind}`)
+    if (name === 'to_int') return this.ir.assign(`zext i8 ${object} to i64`)
     const args = call.args.map((arg) => this.generate(arg))
-    const result = this.call_array_method(name, object, object_type.element, args)
+    const result =
+      object_type.kind === 'Array'
+        ? this.call_array_method(name, object, object_type.element, args)
+        : emit_binary_slice(this.ir, object, args[0], args[1])
     call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
     emit_release(this.ir, object)
     return result
@@ -183,18 +191,24 @@ export class ExpressionGenerator {
   }
 
   private generate_index(index: Index): string {
-    const array = this.generate(index.object)
+    const object = this.generate(index.object)
     const position = this.generate(index.index)
-    const item = emit_get(this.ir, array, position, this.types.get(index)!)
-    emit_release(this.ir, array)
+    const item =
+      this.types.get(index.object)!.kind === 'Binary'
+        ? emit_binary_get(this.ir, object, position)
+        : emit_get(this.ir, object, position, this.types.get(index)!)
+    emit_release(this.ir, object)
     return item
   }
 
-  // `length` is the only property so far.
+  // `s.binary` is the string itself, passing on its ownership; `length` borrows its object.
   private generate_property(member: Member): string {
-    const array = this.generate(member.object)
-    const length = emit_length(this.ir, array)
-    emit_release(this.ir, array)
+    const object = this.generate(member.object)
+    const object_kind = this.types.get(member.object)!.kind
+    if (object_kind === 'String') return object
+    const length =
+      object_kind === 'Binary' ? emit_binary_length(this.ir, object) : emit_length(this.ir, object)
+    emit_release(this.ir, object)
     return length
   }
 
@@ -215,7 +229,7 @@ export class ExpressionGenerator {
   private generate_unary(unary: Unary): string {
     const operand = this.generate(unary.operand)
     if (unary.operator === 'not') return this.ir.assign(`xor i1 ${operand}, true`)
-    return this.checked_int.arithmetic('-', '0', operand)
+    return this.checked_int.apply('-', '0', operand, this.types.get(unary)!)
   }
 
   private generate_binary(binary: Binary): string {
@@ -228,16 +242,12 @@ export class ExpressionGenerator {
       const equal = emit_equals(this.ir, left, right)
       return operator === '==' ? equal : this.ir.assign(`xor i1 ${equal}, true`)
     }
-    if (operator === '/' || operator === '%') {
-      return this.checked_int.division(operator, left, right)
-    }
-    if (operator === '+' || operator === '-' || operator === '*') {
-      return this.checked_int.arithmetic(operator, left, right)
-    }
-    const operand_type = ir_type(this.types.get(binary.left)!)
-    return this.ir.assign(
-      `icmp ${comparison_predicates[operator]} ${operand_type} ${left}, ${right}`,
-    )
+    const operand_type = this.types.get(binary.left)!
+    if (is_arithmetic(operator)) return this.checked_int.apply(operator, left, right, operand_type)
+    const is_byte = operand_type.kind === 'UInt8'
+    // UInt8 is ordered as unsigned.
+    const predicate = comparison_predicates[operator].replace(/^s/, is_byte ? 'u' : 's')
+    return this.ir.assign(`icmp ${predicate} ${ir_type(operand_type)} ${left}, ${right}`)
   }
 
   // Short-circuit: the right operand is evaluated only when the left one does not decide.

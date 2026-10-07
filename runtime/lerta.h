@@ -54,6 +54,12 @@ LertaString *lerta_int_to_string(int64_t n);
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
 
+// Binary (binary.c): the same representation as String, without the UTF-8 guarantee. An index or
+// a slice out of range throws.
+int64_t lerta_binary_length(const LertaString *binary);
+uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
+LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
+
 // Arrays (array.c). Items in and out are borrowed, except that get and pop return owned
 // references. An index out of range throws.
 LertaArray *lerta_array_new(bool owns_references);
@@ -68,9 +74,11 @@ LertaString *lerta_string_join(const LertaArray *strings, const LertaString *sep
 void lerta_print_string(const LertaString *s);
 void lerta_print_int(int64_t n);
 void lerta_print_bool(bool b);
+void lerta_print_byte(uint8_t b);
 
 // stage0 has no catch: a throw prints the message to stderr and exits.
 _Noreturn void lerta_throw(const LertaString *message);
+_Noreturn void lerta_throw_index_out_of_range(void);
 // Returns false if any output to stdout has failed.
 bool lerta_stdout_flush(void);
 void lerta_stderr_write(const uint8_t *bytes, int64_t length);

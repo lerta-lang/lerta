@@ -6,6 +6,8 @@
 
 #include "lerta.h"
 
+LERTA_STATIC_STRING(index_out_of_range, "index out of range");
+
 enum { STDOUT_FD = 1, STDERR_FD = 2, STDOUT_BUFFER_SIZE = 4096 };
 
 static uint8_t stdout_buffer[STDOUT_BUFFER_SIZE];
@@ -59,6 +61,8 @@ void lerta_print_int(int64_t n) {
   stdout_write(&newline, 1);
 }
 
+void lerta_print_byte(uint8_t b) { lerta_print_int(b); }
+
 void lerta_print_bool(bool b) {
   static const uint8_t true_text[] = "true";
   static const uint8_t false_text[] = "false";
@@ -81,6 +85,10 @@ void lerta_throw(const LertaString *message) {
   lerta_stderr_write(message->bytes, message->length);
   lerta_stderr_write(&newline, 1);
   _exit(1);
+}
+
+void lerta_throw_index_out_of_range(void) {
+  lerta_throw((const LertaString *)&index_out_of_range);
 }
 
 void lerta_panic(const char *message) {

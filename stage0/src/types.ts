@@ -2,15 +2,19 @@ export type Type =
   | { kind: 'String' }
   | { kind: 'Int' }
   | { kind: 'Bool' }
+  | { kind: 'UInt8' }
+  | { kind: 'Binary' }
   | { kind: 'Array'; element: Type }
   | { kind: 'void' }
-  // Built-in rule of stage0: satisfied by String, Int and Bool. Only usable as a parameter type.
+  // Built-in rule of stage0: satisfied by String, Int, UInt8 and Bool. Only usable as a parameter type.
   | { kind: 'Stringable' }
   | { kind: 'function'; params: Type[]; result: Type }
 
 export const string_type: Type = { kind: 'String' }
 export const int_type: Type = { kind: 'Int' }
 export const bool_type: Type = { kind: 'Bool' }
+export const uint8_type: Type = { kind: 'UInt8' }
+export const binary_type: Type = { kind: 'Binary' }
 export const void_type: Type = { kind: 'void' }
 export const stringable_type: Type = { kind: 'Stringable' }
 
@@ -33,9 +37,12 @@ export const same_type = (a: Type, b: Type): boolean => format_type(a) === forma
 
 // Values of these types are reference counted.
 export const is_reference_type = (type: Type): boolean =>
-  type.kind === 'String' || type.kind === 'Array'
+  type.kind === 'String' || type.kind === 'Binary' || type.kind === 'Array'
 
 export const is_assignable = (value: Type, target: Type): boolean => {
-  if (target.kind === 'Stringable') return ['String', 'Int', 'Bool'].includes(value.kind)
+  if (target.kind === 'Stringable') return is_stringable(value)
   return same_type(value, target)
 }
+
+export const is_stringable = (type: Type): boolean =>
+  ['String', 'Int', 'UInt8', 'Bool'].includes(type.kind)

@@ -6,6 +6,7 @@ import {
   type For,
   type FunctionLiteral,
   type Identifier,
+  type Index,
   type If,
   type Position,
   type Program,
@@ -169,16 +170,12 @@ class Checker {
     this.record_result(type, value ?? return_statement)
   }
 
-  // A written return type is the expected type of an array or `case` returned, which can type `[]`.
-  // Other values keep their own type, so that a mismatch is reported as one of the return value.
+  // A written return type is a hint for the value's type, which can type `[]` and literals; the
+  // value is then checked as a return value, for a message that says so.
   private type_of_result(value: Expression): Type {
     const annotated = this.context!.annotated
-    const takes_expected = value.kind === 'array' || value.kind === 'case'
-    if (annotated === undefined || annotated.kind === 'void' || !takes_expected) {
-      return this.expressions.type_of(value)
-    }
-    this.expressions.expect_type(value, annotated)
-    return annotated
+    const hint = annotated?.kind === 'void' ? undefined : annotated
+    return this.expressions.type_of(value, hint)
   }
 
   // A block is a scope; `define` declares the names that belong to it besides its statements, and
@@ -280,14 +277,23 @@ class Checker {
   private check_assignment(assignment: Assignment): void {
     const { target } = assignment
     const target_type =
-      target.kind === 'index'
-        ? this.expressions.type_of(target)
-        : this.check_variable_target(target)
-    if (assignment.operator !== '=' && target_type.kind !== 'Int') {
-      const message = `expected Int, got ${format_type(target_type)}`
+      target.kind === 'index' ? this.check_item_target(target) : this.check_variable_target(target)
+    const is_numeric = target_type.kind === 'Int' || target_type.kind === 'UInt8'
+    if (assignment.operator !== '=' && !is_numeric) {
+      const message = `expected Int or UInt8, got ${format_type(target_type)}`
       throw new CompileError(message, target.line, target.column)
     }
     this.expressions.expect_type(assignment.value, target_type)
+  }
+
+  // Only array items can be replaced; a Binary is immutable.
+  private check_item_target(target: Index): Type {
+    const type = this.expressions.type_of(target)
+    if (this.types.get(target.object)!.kind === 'Binary') {
+      const message = 'a Binary cannot be changed'
+      throw new CompileError(message, target.line, target.column)
+    }
+    return type
   }
 
   private check_variable_target(target: Identifier): Type {

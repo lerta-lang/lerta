@@ -7,12 +7,15 @@ const LERTA_IMMORTAL = '-9223372036854775808'
 export const ir_type = (type: Type): string => {
   switch (type.kind) {
     case 'String':
+    case 'Binary':
     case 'Array':
       return 'ptr'
     case 'Int':
       return 'i64'
     case 'Bool':
       return 'i1'
+    case 'UInt8':
+      return 'i8'
     default:
       throw new Error(`no IR type for ${type.kind}`)
   }
@@ -24,9 +27,9 @@ export const ir_return_type = (type: Type): string =>
 // The symbol of a top-level function; the prefix keeps it apart from the runtime's C symbols.
 export const function_symbol = (name: string): string => `@lerta.fn.${name}`
 
-// A C `bool` parameter expects its argument zero-extended.
+// C `bool` and `uint8_t` parameters expect their arguments zero-extended.
 export const ir_param_type = (type: Type): string =>
-  type.kind === 'Bool' ? 'i1 zeroext' : ir_type(type)
+  type.kind === 'Bool' || type.kind === 'UInt8' ? `${ir_type(type)} zeroext` : ir_type(type)
 
 // Bytes other than printable ASCII, '"' and '\' are written as \XX in IR strings.
 const ir_string_bytes = (bytes: Uint8Array): string =>

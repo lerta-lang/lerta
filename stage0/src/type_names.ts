@@ -1,12 +1,24 @@
 // Types written in the source, such as `Array<Int>` in an annotation.
 import type { TypeName } from './ast.ts'
 import { CompileError } from './errors.ts'
-import { array_type, bool_type, int_type, string_type, void_type, type Type } from './types.ts'
+import {
+  array_type,
+  binary_type,
+  bool_type,
+  int_type,
+  string_type,
+  uint8_type,
+  void_type,
+  type Type,
+} from './types.ts'
 
 const simple_types = new Map<string, Type>([
   ['Int', int_type],
   ['String', string_type],
   ['Bool', bool_type],
+  ['UInt8', uint8_type],
+  ['Byte', uint8_type],
+  ['Binary', binary_type],
 ])
 
 // `void` is only allowed as a return type.

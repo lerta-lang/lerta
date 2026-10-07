@@ -1,7 +1,7 @@
 // Operations on Strings in the generated code. Operands are owned Strings unless noted.
 import type { IrBuilder } from './ir_builder.ts'
 import { emit_release, string_constant } from './lerta_ir.ts'
-import type { Type } from './types.ts'
+import { int_type, type Type } from './types.ts'
 
 // An owned String with the text of a Stringable value; a String is passed on as is.
 export const emit_to_string = (ir: IrBuilder, operand: string, type: Type): string => {
@@ -11,6 +11,8 @@ export const emit_to_string = (ir: IrBuilder, operand: string, type: Type): stri
     case 'Int':
       ir.declare('lerta_int_to_string', 'declare ptr @lerta_int_to_string(i64)')
       return ir.assign(`call ptr @lerta_int_to_string(i64 ${operand})`)
+    case 'UInt8':
+      return emit_to_string(ir, ir.assign(`zext i8 ${operand} to i64`), int_type)
     case 'Bool': {
       const true_text = string_constant(ir, 'true')
       const false_text = string_constant(ir, 'false')

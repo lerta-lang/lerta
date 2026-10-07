@@ -1,6 +1,7 @@
 // Operations on arrays in the generated code, through the runtime (runtime/array.c). An item is
-// 8 bytes: an Int as is, a Bool zero-extended and a reference as its address.
+// 8 bytes: an Int as is, a Bool or a UInt8 zero-extended and a reference as its address.
 import type { IrBuilder } from './ir_builder.ts'
+import { ir_type } from './lerta_ir.ts'
 import { is_reference_type, type Type } from './types.ts'
 
 const runtime_functions = {
@@ -29,13 +30,17 @@ const call = (ir: IrBuilder, name: RuntimeFunction, args: string): string => {
 
 export const to_item = (ir: IrBuilder, operand: string, type: Type): string => {
   if (type.kind === 'Int') return operand
-  if (type.kind === 'Bool') return ir.assign(`zext i1 ${operand} to i64`)
+  if (type.kind === 'Bool' || type.kind === 'UInt8') {
+    return ir.assign(`zext ${ir_type(type)} ${operand} to i64`)
+  }
   return ir.assign(`ptrtoint ptr ${operand} to i64`)
 }
 
 export const from_item = (ir: IrBuilder, item: string, type: Type): string => {
   if (type.kind === 'Int') return item
-  if (type.kind === 'Bool') return ir.assign(`trunc i64 ${item} to i1`)
+  if (type.kind === 'Bool' || type.kind === 'UInt8') {
+    return ir.assign(`trunc i64 ${item} to ${ir_type(type)}`)
+  }
   return ir.assign(`inttoptr i64 ${item} to ptr`)
 }
 

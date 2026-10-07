@@ -31,7 +31,7 @@ These follow the Ruby approach, constrained by types.
 
 ## Numeric types
 
-`Int` and its arithmetic are implemented: see [the reference](../reference/types.md).
+`Int`, `UInt8` and their arithmetic, and the typing of literals by context, are implemented: see [the reference](../reference/types.md).
 
 
 - `Int8/16/32/64`, `UInt8/16/32/64`, `Int` (an alias of Int64), `Float`.

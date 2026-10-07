@@ -179,7 +179,7 @@ class FunctionGenerator {
     const type = ir_type(local.type)
     const old = this.ir.assign(`load ${type}, ptr ${local.pointer}`)
     const value = this.expressions.generate(assignment.value)
-    const result = this.combine(assignment.operator, old, value)
+    const result = this.combine(assignment.operator, old, value, local.type)
     this.ir.emit(`store ${type} ${result}, ptr ${local.pointer}`)
     if (is_reference_type(local.type)) emit_release(this.ir, old)
   }
@@ -191,19 +191,16 @@ class FunctionGenerator {
     const index = this.expressions.generate(target.index)
     const old = assignment.operator === '=' ? '' : emit_get(this.ir, array, index, element)
     const value = this.expressions.generate(assignment.value)
-    const result = this.combine(assignment.operator, old, value)
+    const result = this.combine(assignment.operator, old, value, element)
     emit_set(this.ir, array, index, result, element)
     if (is_reference_type(element)) emit_release(this.ir, result)
     emit_release(this.ir, array)
   }
 
   // The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
-  private combine(operator: AssignmentOperator, old: string, value: string): string {
+  private combine(operator: AssignmentOperator, old: string, value: string, type: Type): string {
     if (operator === '=') return value
-    if (operator === '/=' || operator === '%=') {
-      return this.checked_int.division(operator[0] as '/' | '%', old, value)
-    }
-    return this.checked_int.arithmetic(operator[0] as '+' | '-' | '*', old, value)
+    return this.checked_int.apply(operator[0] as '+' | '-' | '*' | '/' | '%', old, value, type)
   }
 
   private generate_if(if_statement: If): void {

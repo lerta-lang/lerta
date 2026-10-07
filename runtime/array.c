@@ -3,7 +3,6 @@
 
 #include "lerta.h"
 
-LERTA_STATIC_STRING(index_out_of_range, "index out of range");
 LERTA_STATIC_STRING(pop_from_empty, "pop from an empty array");
 
 static void drop_array(void *object) {
@@ -26,7 +25,7 @@ LertaArray *lerta_array_new(bool owns_references) {
 int64_t lerta_array_length(const LertaArray *array) { return array->length; }
 
 static void check_index(const LertaArray *array, int64_t index) {
-  if (index < 0 || index >= array->length) lerta_throw((const LertaString *)&index_out_of_range);
+  if (index < 0 || index >= array->length) lerta_throw_index_out_of_range();
 }
 
 static void retain_item(const LertaArray *array, int64_t item) {
