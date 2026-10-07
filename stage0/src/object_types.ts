@@ -28,6 +28,8 @@ export type ObjectInfo = {
   type: Type
   fields: FieldInfo[]
   methods: Map<string, FunctionLiteral>
+  // Those of the declaring module, which hold the methods' types; set by add_members.
+  functions: Functions | undefined
   has_init: boolean
   state: 'unchecked' | 'checking' | 'checked'
 }
@@ -36,12 +38,24 @@ const is_method = (member: MemberDeclaration): boolean =>
   member.value?.kind === 'function' && member.modifier !== 'var'
 
 export class ObjectTypes {
+  // The classes and structs that the module declares.
   private readonly infos = new Map<string, ObjectInfo>()
+  // Those of every module checked so far, by name, which is unique across the program: a value
+  // may have a type that the module does not name.
+  private readonly program_infos: Map<string, ObjectInfo>
   // Checks the initializers of the fields, setting the types that they give.
   private readonly check_initializers: (info: ObjectInfo) => void
+  // A class or struct that the module imports, marking the import as used.
+  private readonly imported: (name: string) => ObjectInfo | undefined
 
-  constructor(check_initializers: (info: ObjectInfo) => void) {
+  constructor(
+    check_initializers: (info: ObjectInfo) => void,
+    imported: (name: string) => ObjectInfo | undefined,
+    program_infos: Map<string, ObjectInfo>,
+  ) {
     this.check_initializers = check_initializers
+    this.imported = imported
+    this.program_infos = program_infos
   }
 
   // Registers the names first, so that the members can refer to any of the types.
@@ -57,16 +71,19 @@ export class ObjectTypes {
         type,
         fields: [],
         methods: new Map(),
+        functions: undefined,
         has_init: false,
         state: 'unchecked',
       }
       this.infos.set(name.name, info)
+      this.program_infos.set(name.name, info)
     }
   }
 
   // Resolves the written field types and adds the methods to `functions`.
   add_members(resolver: TypeResolver, functions: Functions): void {
     for (const info of this.infos.values()) {
+      info.functions = functions
       const seen = new Set<string>()
       for (const member of info.declaration.members) {
         const { name } = member.name
@@ -112,14 +129,15 @@ export class ObjectTypes {
   }
 
   object_type(name: string): Type | undefined {
-    return this.infos.get(name)?.type
+    return (this.infos.get(name) ?? this.imported(name))?.type
   }
 
   info(type: Type): ObjectInfo {
     if (type.kind !== 'Object') throw new Error('expected a class or struct type')
-    return this.infos.get(type.name)!
+    return this.program_infos.get(type.name)!
   }
 
+  // The classes and structs that the module declares.
   all(): ObjectInfo[] {
     return [...this.infos.values()]
   }

@@ -1,5 +1,5 @@
 // Types written in the source, such as `Array<Int>` in an annotation.
-import type { NamedType, Position, TypeAlias, TypeName, UnionTypeName } from './ast.ts'
+import type { Identifier, NamedType, Position, TypeAlias, TypeName, UnionTypeName } from './ast.ts'
 import { CompileError } from './errors.ts'
 import {
   array_type,
@@ -54,6 +54,10 @@ export class TypeResolver {
   // Resolves every alias, so that an alias that is never used is checked too.
   resolve_aliases(): void {
     for (const { alias } of this.aliases.values()) this.resolve_alias(alias.name.name, alias.name)
+  }
+
+  alias_type(name: Identifier): Type {
+    return this.resolve_alias(name.name, name)!
   }
 
   has_alias(name: string): boolean {

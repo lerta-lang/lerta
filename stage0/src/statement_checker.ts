@@ -112,6 +112,14 @@ export class StatementChecker {
   }
 
   check_statement(statement: Statement): void {
+    const is_top_level = this.context === undefined && this.scopes.depth === 1
+    if ('exported' in statement && statement.exported && !is_top_level) {
+      throw new CompileError(
+        'export can only be at the top level',
+        statement.line,
+        statement.column,
+      )
+    }
     switch (statement.kind) {
       case 'for':
         return this.check_for(statement)

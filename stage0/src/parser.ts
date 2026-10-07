@@ -86,6 +86,8 @@ class Parser {
         return this.parse_type_declaration()
       case 'import':
         return this.parse_import()
+      case 'export':
+        return this.parse_export()
       default:
         if (this.at_type_alias()) return this.parse_type_alias()
         return this.parse_postfix_conditions(this.parse_simple_statement())
@@ -191,6 +193,22 @@ class Parser {
     this.tokens.expect('=', "'='")
     const type = this.expressions.parse_type_name()
     return { kind: 'type_alias', name, type, line: token.line, column: token.column }
+  }
+
+  // `export` before a function or a type; the checker tells whether it is at the top level.
+  private parse_export(): Statement {
+    const token = this.tokens.next()
+    const statement = this.parse_statement()
+    const is_function =
+      statement.kind === 'declaration' && !statement.mutable && statement.value.kind === 'function'
+    if (is_function || statement.kind === 'type_declaration' || statement.kind === 'type_alias') {
+      return { ...statement, exported: true }
+    }
+    throw new CompileError(
+      'only functions and types can be exported so far',
+      token.line,
+      token.column,
+    )
   }
 
   // `import { a, b } from 'module'`. `from` is not a keyword, so that it stays usable as a name.

@@ -5,7 +5,9 @@
 // Every test that compiles runs twice, without and with optimization, to catch
 // code whose behavior changes when optimized. The unoptimized build goes through
 // --emit-llvm, so every test also checks that the emitted IR builds.
-//   tests/**/<name>.lerta  expected files next to it
+//   tests/**/<name>.lerta  expected files next to it; a lib/ directory holds
+//                          modules that tests import, which are checked only
+//                          through those tests
 //   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
@@ -33,10 +35,11 @@ const expected_extensions = ['out', 'err', 'warn']
 
 const examples_expected_dir = 'tests/examples'
 
-// `dir` and its subdirectories, relative to the root, except `excluded`.
+// `dir` and its subdirectories, relative to the root, except `excluded` and lib/ directories.
 const directory_tree = (dir: string, excluded: string): string[] => [
   dir,
   ...readdirSync(join(root_dir, dir))
+    .filter((entry) => entry !== 'lib')
     .map((entry) => `${dir}/${entry}`)
     .filter((path) => path !== excluded && statSync(join(root_dir, path)).isDirectory())
     .flatMap((path) => directory_tree(path, excluded)),

@@ -1,12 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { check } from './checker.ts'
+import { check_modules } from './checker.ts'
 import { generate } from './codegen.ts'
 import type { CompileWarning } from './errors.ts'
-import { tokenize } from './lexer.ts'
-import { parse } from './parser.ts'
+import { load_modules } from './loader.ts'
 
 const runtime_dir = join(import.meta.dirname, '../../runtime')
 
@@ -35,12 +34,12 @@ export const build = (
   output_path: string,
   options: BuildOptions,
 ): CompileWarning[] => {
-  const program = parse(tokenize(readFileSync(source_path, 'utf8')))
-  const checked = check(program)
+  const modules = load_modules(source_path)
+  const checked = check_modules(modules)
   const work_dir = mkdtempSync(join(tmpdir(), 'lerta-'))
   try {
     const ir_path = options.llvm_path ?? join(work_dir, 'main.ll')
-    writeFileSync(ir_path, generate(program, checked))
+    writeFileSync(ir_path, generate(modules, checked))
     const clang_args = [
       // clang warns that the .ll has no target triple; the host default is intended.
       '-Wno-override-module',
@@ -50,7 +49,7 @@ export const build = (
       output_path,
     ]
     execFileSync('clang', clang_args, { stdio: 'inherit' })
-    return checked.warnings
+    return checked.at(-1)!.warnings
   } finally {
     rmSync(work_dir, { recursive: true, force: true })
   }

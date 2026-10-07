@@ -8,7 +8,6 @@ import {
   type FunctionLiteral,
   type Index,
   type Member,
-  type Program,
   type Return,
   type Statement,
 } from './ast.ts'
@@ -25,12 +24,14 @@ import {
   emit_release,
   emit_retain,
   function_symbol,
+  module_init_symbol,
   ir_return_type,
   ir_type,
   method_symbol,
 } from './lerta_ir.ts'
 import { define_object, emit_allocate, emit_field_pointer } from './object_codegen.ts'
 import type { FieldInfo, ObjectInfo, ObjectTypes } from './object_types.ts'
+import type { Module } from './loader.ts'
 import { Scopes, type Scope } from './scopes.ts'
 import { is_reference_type, void_type, type Type } from './types.ts'
 
@@ -39,29 +40,53 @@ type FunctionDeclaration = Declaration & { value: FunctionLiteral }
 const is_function_declaration = (statement: Statement): statement is FunctionDeclaration =>
   statement.kind === 'declaration' && statement.value.kind === 'function'
 
-// Emits LLVM IR for a checked program: its top-level code becomes lerta_main; each top-level
+// Emits LLVM IR for the checked modules (see check_modules) as one program. The entry module's
+// top-level code becomes lerta_main, which first runs that of the other modules, in order; each
 // function, method and constructor becomes a function of its own.
-export const generate = (program: Program, checked: CheckedTypes): string => {
-  const module = new IrModule()
-  const functions = program.filter(is_function_declaration)
-  const function_names = new Set(functions.map((declaration) => declaration.name.name))
-  const new_generator = () => new FunctionGenerator(module, checked, function_names)
-  const is_main_code = (statement: Statement) =>
-    !is_function_declaration(statement) && statement.kind !== 'type_declaration'
-  new_generator().generate_main(program.filter(is_main_code))
-  for (const declaration of functions) {
-    const symbol = function_symbol(declaration.name.name)
-    new_generator().generate_function(symbol, declaration.value, undefined)
-  }
-  for (const info of checked.objects.all()) {
-    define_object(module, new IrBuilder(module), info)
-    new_generator().generate_constructor(info)
-    for (const [name, literal] of info.methods) {
-      const symbol = method_symbol(info.declaration.name.name, name)
-      new_generator().generate_function(symbol, literal, info.type)
+export const generate = (modules: Module[], checked: Checked[]): string => {
+  const ir_module = new IrModule()
+  const entry = modules.at(-1)!
+  for (const module of modules) {
+    const main =
+      module === entry
+        ? { signature: 'void @lerta_main()', runs_first: modules.slice(0, -1) }
+        : { signature: `void ${module_init_symbol(module.index)}()`, runs_first: [] }
+    const generator = () =>
+      new FunctionGenerator(ir_module, checked[module.index], function_symbols(module, checked))
+    const is_main_code = (statement: Statement) =>
+      !is_function_declaration(statement) && statement.kind !== 'type_declaration'
+    generator().generate_main(
+      module.program.filter(is_main_code),
+      main.signature,
+      main.runs_first.map((other) => module_init_symbol(other.index)),
+    )
+    for (const declaration of module.program.filter(is_function_declaration)) {
+      const symbol = function_symbol(module.index, declaration.name.name)
+      generator().generate_function(symbol, declaration.value, undefined)
+    }
+    for (const info of checked[module.index].objects.all()) {
+      define_object(ir_module, new IrBuilder(ir_module), info)
+      generator().generate_constructor(info)
+      for (const [name, literal] of info.methods) {
+        const symbol = method_symbol(info.declaration.name.name, name)
+        generator().generate_function(symbol, literal, info.type)
+      }
     }
   }
-  return module.render()
+  return ir_module.render()
+}
+
+// The symbols of the functions a module can call by name: its own and those it imports.
+const function_symbols = (module: Module, checked: Checked[]): Map<string, string> => {
+  const symbols = new Map<string, string>()
+  for (const declaration of module.program.filter(is_function_declaration)) {
+    symbols.set(declaration.name.name, function_symbol(module.index, declaration.name.name))
+  }
+  for (const imported of checked[module.index].imports.all()) {
+    const { export: export_ } = imported
+    if (export_.kind === 'lerta_function') symbols.set(imported.name.name, export_.symbol)
+  }
+  return symbols
 }
 
 type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects' | 'imports'>
@@ -78,7 +103,7 @@ export class FunctionGenerator {
   private result_type: Type = void_type
   private readonly control_flow: ControlFlowGenerator
 
-  constructor(module: IrModule, checked: CheckedTypes, function_names: Set<string>) {
+  constructor(module: IrModule, checked: CheckedTypes, function_symbols: Map<string, string>) {
     this.types = checked.types
     this.objects = checked.objects
     this.ir = new IrBuilder(module)
@@ -90,7 +115,7 @@ export class FunctionGenerator {
       this.throws,
       this.checked_int,
       this.locals,
-      function_names,
+      function_symbols,
     )
     this.control_flow = new ControlFlowGenerator(
       this,
@@ -101,10 +126,12 @@ export class FunctionGenerator {
     )
   }
 
-  generate_main(statements: Statement[]): void {
+  // `runs_first` are the symbols of the top-level code of the imported modules.
+  generate_main(statements: Statement[], signature: string, runs_first: string[]): void {
+    for (const symbol of runs_first) this.ir.emit(`call void ${symbol}()`)
     this.generate_block(statements)
     this.ir.emit('ret void')
-    this.finish('void @lerta_main()')
+    this.finish(signature)
   }
 
   // Parameters are borrowed SSA values; a method gets its object first, as `@`. The last

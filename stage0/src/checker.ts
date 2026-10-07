@@ -4,13 +4,17 @@ import {
   type Expression,
   type NamedType,
   type FunctionLiteral,
+  type Import,
   type Program,
   type Statement,
   type TypeDeclaration,
 } from './ast.ts'
 import { CompileError, CompileWarning } from './errors.ts'
 import { Functions, parameter_types, type FunctionEntry } from './functions.ts'
-import { Imports } from './imports.ts'
+import { Imports, type Export } from './imports.ts'
+import { function_symbol } from './lerta_ir.ts'
+import { is_file_import, with_module_path, type Module } from './loader.ts'
+import { std_modules } from './std_modules.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
 import { StatementChecker } from './statement_checker.ts'
 import { TypeResolver } from './type_names.ts'
@@ -55,16 +59,81 @@ export type Checked = {
   objects: ObjectTypes
   imports: Imports
   warnings: CompileWarning[]
+  // What the module exports, for the modules that import it.
+  exports: Map<string, Export>
 }
 
-export const check = (program: Program): Checked => {
+// Checks the modules in order, each after those it imports (see load_modules). The warnings of
+// all the modules come back with the last one's, or with the error.
+export const check_modules = (modules: Module[]): Checked[] => {
+  const checked: Checked[] = []
+  const warnings: CompileWarning[] = []
+  const type_modules = new Map<string, Module>()
+  const program_infos = new Map<string, ObjectInfo>()
+  try {
+    for (const module of modules) {
+      const exports_of = (statement: Import) =>
+        is_file_import(statement)
+          ? checked[module.imported.get(statement)!.index].exports
+          : std_modules.get(statement.module)
+      const result = with_module_path(module.display_path, () => {
+        reject_type_declared_elsewhere(module, type_modules)
+        return check(module, exports_of, program_infos)
+      })
+      for (const warning of result.warnings) warning.module_path = module.display_path
+      warnings.push(...result.warnings)
+      checked.push(result)
+    }
+  } catch (error) {
+    if (error instanceof CompileError) error.warnings = [...warnings, ...error.warnings]
+    throw error
+  }
+  checked.at(-1)!.warnings = warnings
+  return checked
+}
+
+// A class or struct is known by its name in the generated code, so the name must be unique
+// across the program so far.
+const reject_type_declared_elsewhere = (module: Module, type_modules: Map<string, Module>) => {
+  for (const statement of module.program) {
+    if (statement.kind !== 'type_declaration') continue
+    const { name } = statement
+    const other = type_modules.get(name.name)
+    if (other !== undefined) {
+      const where = other.display_path ?? 'the entry module'
+      const message = `a type named '${name.name}' is declared in ${where} too; type names must be unique across the program so far`
+      throw new CompileError(message, name.line, name.column)
+    }
+    type_modules.set(name.name, module)
+  }
+}
+
+const check = (
+  module: Module,
+  exports_of: (statement: Import) => Map<string, Export> | undefined,
+  program_infos: Map<string, ObjectInfo>,
+): Checked => {
+  const { program } = module
   const types: Types = new Map()
   const conversions: Conversions = new Map()
   const warnings: CompileWarning[] = []
-  const objects: ObjectTypes = new ObjectTypes((info) => check_object(shared, info))
-  const resolver = new TypeResolver((name) => objects.object_type(name))
+  const imports = new Imports(exports_of)
+  // An imported type, marking its import as used.
+  const imported_type = (name: string) => {
+    const imported = imports.get(name)
+    if (imported?.export.kind !== 'type') return undefined
+    imports.use(name)
+    return imported.export
+  }
+  const objects: ObjectTypes = new ObjectTypes(
+    (info) => check_object(shared, info),
+    (name) => imported_type(name)?.info,
+    program_infos,
+  )
+  const resolver = new TypeResolver(
+    (name) => objects.object_type(name) ?? imported_type(name)?.type,
+  )
   const functions: Functions = new Functions((entry) => check_function(shared, entry), resolver)
-  const imports = new Imports()
   const shared: Shared = { types, conversions, warnings, functions, objects, resolver, imports }
   try {
     objects.add(
@@ -75,13 +144,12 @@ export const check = (program: Program): Checked => {
     for (const statement of program) {
       if (statement.kind === 'type_alias') resolver.add_alias(statement)
     }
-    resolver.resolve_aliases()
-    add_top_level_functions(program, functions, objects, resolver)
     imports.add(
       program,
-      (name) =>
-        functions.has(name) || objects.object_type(name) !== undefined || resolver.has_alias(name),
+      (name) => objects.object_type(name) !== undefined || resolver.has_alias(name),
     )
+    resolver.resolve_aliases()
+    add_top_level_functions(program, functions, objects, resolver, imports)
     objects.add_members(resolver, functions)
     new StatementChecker(shared, undefined, undefined).check_block(program)
     objects.check_all()
@@ -91,7 +159,32 @@ export const check = (program: Program): Checked => {
     if (error instanceof CompileError) error.warnings = in_source_order(warnings)
     throw error
   }
-  return { types, conversions, objects, imports, warnings: in_source_order(warnings) }
+  const exports = exports_of_module(module, functions, objects, resolver)
+  return { types, conversions, objects, imports, warnings: in_source_order(warnings), exports }
+}
+
+const exports_of_module = (
+  module: Module,
+  functions: Functions,
+  objects: ObjectTypes,
+  resolver: TypeResolver,
+): Map<string, Export> => {
+  const exports = new Map<string, Export>()
+  for (const statement of module.program) {
+    if (!('exported' in statement && statement.exported)) continue
+    const { name } = statement
+    if (statement.kind === 'declaration') {
+      const type = functions.type_of(name.name, name)!
+      const symbol = function_symbol(module.index, name.name)
+      exports.set(name.name, { kind: 'lerta_function', type, symbol })
+    } else if (statement.kind === 'type_declaration') {
+      const type = objects.object_type(name.name)!
+      exports.set(name.name, { kind: 'type', type, info: objects.info(type) })
+    } else {
+      exports.set(name.name, { kind: 'type', type: resolver.alias_type(name), info: undefined })
+    }
+  }
+  return exports
 }
 
 const is_function_declaration = (statement: Statement): statement is Declaration =>
@@ -102,6 +195,7 @@ const add_top_level_functions = (
   functions: Functions,
   objects: ObjectTypes,
   resolver: TypeResolver,
+  imports: Imports,
 ): void => {
   for (const statement of program.filter(is_function_declaration)) {
     if (statement.mutable) {
@@ -109,7 +203,11 @@ const add_top_level_functions = (
       throw new CompileError(message, statement.line, statement.column)
     }
     const { name } = statement
-    if (objects.object_type(name.name) !== undefined || resolver.has_alias(name.name)) {
+    const is_taken =
+      objects.object_type(name.name) !== undefined ||
+      resolver.has_alias(name.name) ||
+      imports.has(name.name)
+    if (is_taken) {
       throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
     }
     functions.add(name.name, name, statement.value as FunctionLiteral)

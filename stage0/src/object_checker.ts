@@ -79,7 +79,8 @@ export class ObjectChecker {
   // with that method.
   method_type(object_type: Type, name: Identifier): Type | undefined {
     if (!this.has_method(object_type, name.name)) return undefined
-    return this.functions.type_of(method_key(object_type.name, name.name), name)
+    const { functions } = this.objects.info(object_type)
+    return functions!.type_of(method_key(object_type.name, name.name), name)
   }
 
   // A type guard, so that a caller can go on with the object type once it knows the method exists.

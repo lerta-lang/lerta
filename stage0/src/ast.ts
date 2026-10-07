@@ -123,13 +123,17 @@ export type For = Position & {
 }
 
 // `const name = value` or `var name = value`.
-export type Declaration = Position & {
-  kind: 'declaration'
-  mutable: boolean
-  name: Identifier
-  type: TypeName | undefined
-  value: Expression
-}
+// What `export` can precede: a top-level function or type. `exported` is set by `export`.
+type Exportable = { exported?: true }
+
+export type Declaration = Position &
+  Exportable & {
+    kind: 'declaration'
+    mutable: boolean
+    name: Identifier
+    type: TypeName | undefined
+    value: Expression
+  }
 
 export const assignment_operators = ['=', '+=', '-=', '*=', '/=', '%='] as const
 export type AssignmentOperator = (typeof assignment_operators)[number]
@@ -169,17 +173,19 @@ export type MemberDeclaration = Position & {
   value: Expression | undefined
 }
 
-export type TypeDeclaration = Position & {
-  kind: 'type_declaration'
-  is_struct: boolean
-  name: Identifier
-  members: MemberDeclaration[]
-}
+export type TypeDeclaration = Position &
+  Exportable & {
+    kind: 'type_declaration'
+    is_struct: boolean
+    name: Identifier
+    members: MemberDeclaration[]
+  }
 
 // `type Name = A | B`: another name for a type.
-export type TypeAlias = Position & { kind: 'type_alias'; name: Identifier; type: TypeName }
+export type TypeAlias = Position &
+  Exportable & { kind: 'type_alias'; name: Identifier; type: TypeName }
 
-// `import { a, b } from 'std:io'`.
+// `import { a, b } from 'std:io'`, or from another file, `'./util'`.
 export type Import = Position & { kind: 'import'; names: Identifier[]; module: string }
 
 export type Statement =

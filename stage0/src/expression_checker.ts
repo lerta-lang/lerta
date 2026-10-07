@@ -148,6 +148,9 @@ export class ExpressionChecker {
       throw new CompileError(message, identifier.line, identifier.column)
     }
     const imported = this.imports.use(identifier.name)
+    if (imported?.export.kind === 'type') {
+      throw new CompileError(`'${identifier.name}' is a type`, identifier.line, identifier.column)
+    }
     if (imported !== undefined) return imported.export.type
     const builtin = builtins.get(identifier.name)
     if (builtin === undefined) {

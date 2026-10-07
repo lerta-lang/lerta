@@ -35,7 +35,10 @@ export const ir_return_type = (type: Type): string =>
   type.kind === 'void' || type.kind === 'never' ? 'void' : ir_type(type)
 
 // Symbols of generated functions; the prefixes keep them apart from the runtime's C symbols.
-export const function_symbol = (name: string): string => `@lerta.fn.${name}`
+// A function is named by its module too, since two modules may declare the same name.
+export const function_symbol = (module_index: number, name: string): string =>
+  `@lerta.fn.${module_index}.${name}`
+export const module_init_symbol = (module_index: number): string => `@lerta.module.${module_index}`
 export const method_symbol = (type_name: string, method: string): string =>
   `@lerta.method.${type_name}.${method}`
 export const constructor_symbol = (type_name: string): string => `@lerta.new.${type_name}`

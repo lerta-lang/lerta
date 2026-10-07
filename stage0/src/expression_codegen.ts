@@ -18,7 +18,6 @@ import {
   emit_release,
   emit_retain,
   constructor_symbol,
-  function_symbol,
   method_symbol,
   ir_param_type,
   ir_return_type,
@@ -51,8 +50,9 @@ export class ExpressionGenerator {
   private readonly ir: IrBuilder
   private readonly types: Types
   private readonly locals: Scopes<CodegenLocal>
-  // Top-level functions, which a call prefers to a builtin of the same name.
-  private readonly function_names: Set<string>
+  // The symbols of top-level functions, own and imported, which a call prefers to a builtin of the
+  // same name.
+  private readonly function_symbols: Map<string, string>
 
   private readonly conversions: Conversions
   private readonly objects: ObjectTypes
@@ -67,7 +67,7 @@ export class ExpressionGenerator {
     throws: ThrowBlocks,
     checked_int: CheckedInt,
     locals: Scopes<CodegenLocal>,
-    function_names: Set<string>,
+    function_symbols: Map<string, string>,
   ) {
     this.ir = ir
     this.types = checked.types
@@ -78,7 +78,7 @@ export class ExpressionGenerator {
     this.cases = new CaseGenerator(this, ir, checked.types)
     this.collections = new CollectionGenerator(this, ir, checked.types)
     this.locals = locals
-    this.function_names = function_names
+    this.function_symbols = function_symbols
   }
 
   // Returns the IR operand holding the value, converted where it is used (an Int as an Int?, for
@@ -195,9 +195,11 @@ export class ExpressionGenerator {
     const arg_types = call.args.map((arg) => this.type_at_use(arg))
     const operands = call.args.map((arg) => this.generate(arg))
     const args = operands.map((operand, i) => `${ir_type(arg_types[i])} ${operand}`).join(', ')
-    const result = this.function_names.has(callee.name)
-      ? this.call_user_function(function_symbol(callee.name), callee_type, args)
-      : this.call_builtin(callee.name, arg_types, args)
+    const symbol = this.function_symbols.get(callee.name)
+    const result =
+      symbol !== undefined
+        ? this.call_user_function(symbol, callee_type, args)
+        : this.call_builtin(callee.name, arg_types, args)
     call.args.forEach((arg, i) => this.release_if_reference(arg, operands[i]))
     return result
   }
@@ -223,7 +225,7 @@ export class ExpressionGenerator {
 
   // A builtin name can be taken by a local or a top-level function.
   private is_builtin_name(name: string): boolean {
-    return this.locals.lookup(name) === undefined && !this.function_names.has(name)
+    return this.locals.lookup(name) === undefined && !this.function_symbols.has(name)
   }
 
   private call_user_function(symbol: string, type: Type, args: string): string {
