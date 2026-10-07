@@ -1,9 +1,11 @@
 import {
   is_arithmetic,
+  is_nil_test,
   type ArrayLiteral,
   type Binary,
   type Call,
   type Case,
+  type Coalesce,
   type Expression,
   type Identifier,
   type Index,
@@ -11,7 +13,7 @@ import {
   type Unary,
 } from './ast.ts'
 import { builtin_method, builtin_property, builtins } from './builtins.ts'
-import type { Types } from './checker.ts'
+import type { Conversions, Types } from './checker.ts'
 import { CompileError } from './errors.ts'
 import type { Functions } from './functions.ts'
 import type { Scopes } from './scopes.ts'
@@ -20,11 +22,14 @@ import {
   bool_type,
   format_type,
   int_type,
+  nil_type,
   is_assignable,
+  is_reference_type,
   same_type,
   string_type,
   stringable_type,
   uint8_type,
+  unify,
   type Type,
 } from './types.ts'
 
@@ -35,6 +40,8 @@ export type CheckerLocal = {
   // Declared with `const` or `var`, as opposed to a loop variable.
   declared: boolean
   used: boolean
+  // For a narrowed view of a local (see Scopes.narrow), the local itself.
+  origin?: CheckerLocal
 }
 
 // Whether an expression takes its type from the context: a literal, or arithmetic on such
@@ -70,8 +77,16 @@ export class ExpressionChecker {
   private readonly scopes: Scopes<CheckerLocal>
   private readonly functions: Functions
 
-  constructor(types: Types, scopes: Scopes<CheckerLocal>, functions: Functions) {
+  private readonly conversions: Conversions
+
+  constructor(
+    types: Types,
+    conversions: Conversions,
+    scopes: Scopes<CheckerLocal>,
+    functions: Functions,
+  ) {
     this.types = types
+    this.conversions = conversions
     this.scopes = scopes
     this.functions = functions
   }
@@ -93,6 +108,12 @@ export class ExpressionChecker {
         return string_type
       case 'integer':
         return wants_byte ? this.byte_literal(expression) : int_type
+      case 'nil':
+        return nil_type
+      case 'unwrap':
+        return this.expect_optional(expression.operand)
+      case 'coalesce':
+        return this.type_of_coalesce(expression)
       case 'boolean':
         return bool_type
       case 'identifier':
@@ -127,7 +148,7 @@ export class ExpressionChecker {
   private type_of_identifier(identifier: Identifier): Type {
     const local = this.scopes.lookup(identifier.name)
     if (local !== undefined) {
-      local.used = true
+      ;(local.origin ?? local).used = true
       return local.type
     }
     const function_type = this.functions.type_of(identifier.name, identifier)
@@ -200,7 +221,13 @@ export class ExpressionChecker {
       throw new CompileError(message, array.line, array.column)
     }
     const element = this.type_of(anchor)
-    if (element.kind === 'void' || element.kind === 'function') {
+    // An item is 8 bytes, which cannot hold an optional Int, UInt8 or Bool.
+    const is_optional_value = element.kind === 'Optional' && !is_reference_type(element)
+    if (element.kind === 'nil') {
+      const message = 'nil alone does not give the type of an array; write it in an annotation'
+      throw new CompileError(message, anchor.line, anchor.column)
+    }
+    if (element.kind === 'void' || element.kind === 'function' || is_optional_value) {
       const message = `an array cannot hold values of type ${format_type(element)}`
       throw new CompileError(message, anchor.line, anchor.column)
     }
@@ -222,7 +249,7 @@ export class ExpressionChecker {
 
   private type_of_unary(unary: Unary, expected: Type | undefined): Type {
     if (unary.operator === 'not') {
-      this.expect_type(unary.operand, bool_type)
+      this.expect_condition(unary.operand)
       return bool_type
     }
     const hint =
@@ -235,13 +262,32 @@ export class ExpressionChecker {
     return type
   }
 
+  // `x == nil` and `x != nil` test an optional value.
+  private type_of_nil_test(binary: Binary): Type {
+    const [nil, value] =
+      binary.left.kind === 'nil' ? [binary.left, binary.right] : [binary.right, binary.left]
+    this.record(nil, nil_type)
+    this.expect_optional(value)
+    return bool_type
+  }
+
+  // `x ? fallback` is x without nil; the fallback has that type too.
+  private type_of_coalesce(coalesce: Coalesce): Type {
+    const inner = this.expect_optional(coalesce.value)
+    this.expect_type(coalesce.fallback, inner)
+    return inner
+  }
+
   // Arithmetic passes the expected type to its operands; a comparison's operands have their own.
   private type_of_binary(binary: Binary, expected: Type | undefined): Type {
     const { operator } = binary
     if (operator === 'and' || operator === 'or') {
-      this.expect_type(binary.left, bool_type)
-      this.expect_type(binary.right, bool_type)
+      this.expect_condition(binary.left)
+      this.expect_condition(binary.right)
       return bool_type
+    }
+    if (is_nil_test(binary)) {
+      return this.type_of_nil_test(binary)
     }
     if (operator === '==' || operator === '!=') {
       this.type_of_operands(binary, undefined, ['Int', 'UInt8', 'Bool', 'String'], (type) => {
@@ -288,16 +334,25 @@ export class ExpressionChecker {
       for (const value of values) this.expect_type(value, expected)
       return expected
     }
-    const [first, ...rest] = values
-    const type = this.type_of(first)
-    for (const value of rest) {
-      const value_type = this.type_of(value)
-      if (!same_type(value_type, type)) {
-        const types = `expected ${format_type(type)}, got ${format_type(value_type)}`
+    // A mix of T, T? and nil gives T?, to which the arms are converted.
+    const value_types = values.map((value) => this.type_of(value))
+    let type = value_types[0]
+    values.forEach((value, i) => {
+      const unified = unify(type, value_types[i])
+      if (unified === undefined) {
+        const types = `expected ${format_type(type)}, got ${format_type(value_types[i])}`
         const message = `case arms must have the same type: ${types}`
         throw new CompileError(message, value.line, value.column)
       }
+      type = unified
+    })
+    if (type.kind === 'nil') {
+      const message = 'nil alone does not give the type of a case; write it in an annotation'
+      throw new CompileError(message, case_expression.line, case_expression.column)
     }
+    values.forEach((value, i) => {
+      if (!same_type(value_types[i], type)) this.conversions.set(value, type)
+    })
     return type
   }
 
@@ -328,10 +383,34 @@ export class ExpressionChecker {
     return type
   }
 
+  // A T or nil where a T? is expected is converted, which codegen does where it generates it.
   private require_type(expression: Expression, type: Type, expected: Type): void {
     if (!is_assignable(type, expected)) {
       const message = `expected ${format_type(expected)}, got ${format_type(type)}`
       throw new CompileError(message, expression.line, expression.column)
     }
+    if (expected.kind === 'Optional' && !same_type(type, expected)) {
+      this.conversions.set(expression, expected)
+    }
+  }
+
+  // A condition is a Bool, or an optional value that holds when it is not nil.
+  expect_condition(expression: Expression): Type {
+    const type = this.type_of(expression)
+    if (type.kind !== 'Bool' && type.kind !== 'Optional') {
+      const message = `expected Bool or an optional value, got ${format_type(type)}`
+      throw new CompileError(message, expression.line, expression.column)
+    }
+    return type
+  }
+
+  // The type of an optional value without nil.
+  expect_optional(expression: Expression): Type {
+    const type = this.type_of(expression)
+    if (type.kind !== 'Optional') {
+      const message = `expected an optional value, got ${format_type(type)}`
+      throw new CompileError(message, expression.line, expression.column)
+    }
+    return type.inner
   }
 }

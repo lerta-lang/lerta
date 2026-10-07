@@ -2,6 +2,7 @@ import {
   assignment_operators,
   type AssignmentOperator,
   type Call,
+  type Condition,
   type Declaration,
   type Expression,
   type For,
@@ -26,6 +27,7 @@ const command_argument_starts = [
   'interpolated',
   'true',
   'false',
+  'nil',
   'not',
   'case',
   '->',
@@ -102,7 +104,8 @@ class Parser {
     let result = statement
     for (;;) {
       const token = this.tokens.peek()
-      if (token.kind !== 'if' && token.kind !== 'while') return result
+      const kind = this.tokens.peek_continuation()
+      if (kind !== 'if' && kind !== 'while') return result
       if (result.kind === 'declaration') {
         const message = `a declaration cannot have a postfix '${token.kind}'`
         throw new CompileError(message, token.line, token.column)
@@ -177,9 +180,20 @@ class Parser {
     return { kind: 'for', variable, iterable, body, line: token.line, column: token.column }
   }
 
+  // A condition, or `const name = value`, which holds when the value is not nil.
+  private parse_condition(): Condition {
+    const token = this.tokens.peek()
+    if (token.kind !== 'const') return this.expressions.parse_expression()
+    this.tokens.next()
+    const name = this.expressions.parse_identifier()
+    this.tokens.expect('=', "'='")
+    const value = this.expressions.parse_expression()
+    return { kind: 'binding', name, value, line: token.line, column: token.column }
+  }
+
   private parse_while(): While {
     const token = this.tokens.next()
-    const condition = this.expressions.parse_expression()
+    const condition = this.parse_condition()
     const body = this.parse_block()
     return { kind: 'while', condition, body, line: token.line, column: token.column }
   }
@@ -187,7 +201,7 @@ class Parser {
   // `if` with an optional `else` block; `else if` chains further.
   private parse_if(): If {
     const token = this.tokens.next()
-    const condition = this.expressions.parse_expression()
+    const condition = this.parse_condition()
     const then_body = this.parse_block()
     const position = { line: token.line, column: token.column }
     if (this.tokens.peek().kind !== 'else') {

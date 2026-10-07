@@ -1,6 +1,6 @@
 // How Lerta values are represented in LLVM IR.
 import type { IrBuilder } from './ir_builder.ts'
-import type { Type } from './types.ts'
+import { is_reference_type, type Type } from './types.ts'
 
 const LERTA_IMMORTAL = '-9223372036854775808'
 
@@ -16,6 +16,9 @@ export const ir_type = (type: Type): string => {
       return 'i1'
     case 'UInt8':
       return 'i8'
+    case 'Optional':
+      // A reference is nil when null; a value carries a flag that tells whether it is there.
+      return is_reference_type(type) ? 'ptr' : `{ i1, ${ir_type(type.inner)} }`
     default:
       throw new Error(`no IR type for ${type.kind}`)
   }

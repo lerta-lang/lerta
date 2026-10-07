@@ -51,3 +51,22 @@ LertaString *lerta_string_concat(int64_t count, ...) {
 bool lerta_string_equals(const LertaString *a, const LertaString *b) {
   return a->length == b->length && memcmp(a->bytes, b->bytes, (size_t)a->length) == 0;
 }
+
+// Digits are accumulated as a negative number, which can hold INT64_MIN.
+bool lerta_string_parse_int(const LertaString *s, int64_t *result) {
+  int64_t i = 0;
+  bool negative = s->length > 0 && s->bytes[0] == '-';
+  if (negative) i++;
+  if (i == s->length) return false;
+  int64_t value = 0;
+  for (; i < s->length; i++) {
+    uint8_t c = s->bytes[i];
+    if (c < '0' || c > '9') return false;
+    int64_t digit = c - '0';
+    if (value < (INT64_MIN + digit) / 10) return false;
+    value = value * 10 - digit;
+  }
+  if (!negative && value == INT64_MIN) return false;
+  *result = negative ? value : -value;
+  return true;
+}

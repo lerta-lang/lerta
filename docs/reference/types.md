@@ -27,9 +27,27 @@
 
 ## Binary
 
-- `Binary` is an immutable sequence of bytes. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them.
+- `Binary` is an immutable sequence of bytes. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.decode_utf8()` goes back (see [Optional values](#optional-values)).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `UInt8`; an index outside `0 ... b.length` throws `index out of range`.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
+
+## Optional values
+
+```
+var name: String? = nil
+print name ? 'nobody'
+if const n = '42'.parse_int()
+  print n + 1
+```
+
+- `T?` is a `T` or `nil`. A `T` or `nil` fits where a `T?` is expected. `nil` has no type of its own, so `const x = nil` needs a type (`const x: String? = nil`).
+- `x!` is `x` without nil; it throws `unwrapped nil` if `x` is nil.
+- `x ? fallback` is `x` without nil, or `fallback`, which has that type, if `x` is nil. The fallback is evaluated only then. `?` binds weaker than every other binary operator, and `a ? b ? c` is `a ? (b ? c)`.
+- `x == nil` and `x != nil` test an optional value.
+- An optional value can be a condition (see [control flow](control-flow.md#if-and-while)).
+- An array cannot hold optional `Int`, `UInt8` or `Bool` values yet; optional references are fine (`Array<String?>`).
+- `s.parse_int()` gives the `Int` that a `String` of decimal digits, with an optional leading `-`, stands for, or nil if it is anything else or does not fit in an `Int`.
+- `b.decode_utf8()` gives the `Binary` as a `String` if its bytes are valid UTF-8, without copying them, or nil otherwise.
 
 ## Array
 

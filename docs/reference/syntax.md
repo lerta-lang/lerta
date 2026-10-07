@@ -35,12 +35,13 @@
 - Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
 - `(x)` groups an expression.
 - `x.name()` calls a method of `x`, `x.name` reads a property and `xs[i]` indexes. As with `(`, no space is allowed before `.` or `[`. At the start of a statement, `f [1]` is the call `f([1])`.
-- Types are written as names, with type arguments in `<>`: `Int`, `Array<String>`.
+- Types are written as names, with type arguments in `<>` and `?` for an optional type: `Int`, `Array<String>`, `String?`.
+- `x!` unwraps an optional value; no space is allowed before `!`.
 
 ## Operators
 
-From weakest: `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
+From weakest: `?` (nil coalescing) < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
 
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`).
 - Comparisons cannot be chained: `a < b < c` is a syntax error; use parentheses.
-- `true` `false` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `return` `case` `when` `then` are keywords and cannot be used as names.
+- `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `return` `case` `when` `then` are keywords and cannot be used as names.

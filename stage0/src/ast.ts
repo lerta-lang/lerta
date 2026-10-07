@@ -3,9 +3,14 @@ export type Position = { line: number; column: number }
 export type StringLiteral = Position & { kind: 'string'; value: string }
 // `"a#{b}c"`: text parts and interpolated expressions, in order.
 export type Interpolation = Position & { kind: 'interpolation'; parts: (string | Expression)[] }
+export type NilLiteral = Position & { kind: 'nil' }
 export type BooleanLiteral = Position & { kind: 'boolean'; value: boolean }
 export type IntegerLiteral = Position & { kind: 'integer'; value: bigint }
 export type Identifier = Position & { kind: 'identifier'; name: string }
+// `x!`: x without nil; it throws if x is nil.
+export type Unwrap = Position & { kind: 'unwrap'; operand: Expression }
+// `x ? fallback`: x without nil, or the fallback if x is nil.
+export type Coalesce = Position & { kind: 'coalesce'; value: Expression; fallback: Expression }
 // `[a, b]`
 export type ArrayLiteral = Position & { kind: 'array'; elements: Expression[] }
 // `object[index]`
@@ -34,7 +39,13 @@ export type Binary = Position & {
 export type Range = Position & { kind: 'range'; start: Expression; end: Expression }
 
 // A type written in the source, such as `Int` in a parameter.
-export type TypeName = Position & { kind: 'type_name'; name: string; args: TypeName[] }
+export type TypeName = Position & {
+  kind: 'type_name'
+  name: string
+  args: TypeName[]
+  // Written with `?`: the type or nil.
+  optional: boolean
+}
 
 export type Parameter = { name: Identifier; type: TypeName }
 
@@ -54,6 +65,7 @@ export type Expression =
   | StringLiteral
   | Interpolation
   | BooleanLiteral
+  | NilLiteral
   | IntegerLiteral
   | Identifier
   | ArrayLiteral
@@ -62,6 +74,8 @@ export type Expression =
   | Member
   | Unary
   | Binary
+  | Unwrap
+  | Coalesce
   | Range
   | Case
   | FunctionLiteral
@@ -91,15 +105,21 @@ export type Assignment = Position & {
   value: Expression
 }
 
+// `if const name = value`: the condition holds when value is not nil, and name is the value
+// without nil inside the body.
+export type Binding = Position & { kind: 'binding'; name: Identifier; value: Expression }
+
+export type Condition = Expression | Binding
+
 // `else if` is an `if` alone in the else branch.
 export type If = Position & {
   kind: 'if'
-  condition: Expression
+  condition: Condition
   then_body: Statement[]
   else_body: Statement[]
 }
 
-export type While = Position & { kind: 'while'; condition: Expression; body: Statement[] }
+export type While = Position & { kind: 'while'; condition: Condition; body: Statement[] }
 
 export type Jump = Position & { kind: 'break' | 'continue' }
 
@@ -122,3 +142,8 @@ const statement_only_kinds = [
 
 export const is_expression = (statement: Statement): statement is Expression =>
   !statement_only_kinds.includes(statement.kind)
+
+// `x == nil` or `x != nil`, on either side.
+export const is_nil_test = (binary: Binary): boolean =>
+  (binary.operator === '==' || binary.operator === '!=') &&
+  (binary.left.kind === 'nil' || binary.right.kind === 'nil')

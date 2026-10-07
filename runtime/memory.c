@@ -17,14 +17,15 @@ void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
   return object;
 }
 
+// NULL is nil, which holds no object.
 void lerta_retain(void *object) {
   LertaHeader *header = object;
-  if (header->ref_count != LERTA_IMMORTAL) header->ref_count++;
+  if (header != NULL && header->ref_count != LERTA_IMMORTAL) header->ref_count++;
 }
 
 void lerta_release(void *object) {
   LertaHeader *header = object;
-  if (header->ref_count == LERTA_IMMORTAL) return;
+  if (header == NULL || header->ref_count == LERTA_IMMORTAL) return;
   if (--header->ref_count > 0) return;
   if (header->drop != NULL) header->drop(object);
   free(object);

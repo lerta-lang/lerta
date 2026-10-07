@@ -1,6 +1,7 @@
 import {
   is_expression,
   type Assignment,
+  type Condition,
   type Declaration,
   type Expression,
   type For,
@@ -26,28 +27,44 @@ import {
   int_type,
   is_assignable,
   same_type,
+  unify,
   void_type,
   type Type,
 } from './types.ts'
 
 // The type of every expression in a checked program.
 export type Types = Map<Expression, Type>
+// The type an expression is converted to where it is used, such as an Int passed as an Int?.
+export type Conversions = Map<Expression, Type>
 
 // Warnings are found as scopes end; they are reported in source order.
 const in_source_order = (warnings: CompileWarning[]): CompileWarning[] =>
   warnings.toSorted((a, b) => a.line - b.line || a.column - b.column)
 
 // What all the checkers of one program share.
-type Shared = { types: Types; warnings: CompileWarning[]; functions: Functions }
+type Shared = {
+  types: Types
+  conversions: Conversions
+  warnings: CompileWarning[]
+  functions: Functions
+}
 
 // The function whose body is being checked: its written return type, or the one being inferred.
-type FunctionContext = { annotated: Type | undefined; inferred: Type | undefined }
+type FunctionContext = {
+  annotated: Type | undefined
+  inferred: Type | undefined
+  // The returned values, converted to the return type once it is known.
+  results: { value: Expression; type: Type }[]
+}
 
-export const check = (program: Program): { types: Types; warnings: CompileWarning[] } => {
+export type Checked = { types: Types; conversions: Conversions; warnings: CompileWarning[] }
+
+export const check = (program: Program): Checked => {
   const types: Types = new Map()
+  const conversions: Conversions = new Map()
   const warnings: CompileWarning[] = []
   const functions: Functions = new Functions((entry) => check_function(shared, entry))
-  const shared: Shared = { types, warnings, functions }
+  const shared: Shared = { types, conversions, warnings, functions }
   try {
     add_top_level_functions(program, functions)
     new Checker(shared, undefined).check_block(program)
@@ -56,7 +73,7 @@ export const check = (program: Program): { types: Types; warnings: CompileWarnin
     if (error instanceof CompileError) error.warnings = in_source_order(warnings)
     throw error
   }
-  return { types, warnings: in_source_order(warnings) }
+  return { types, conversions, warnings: in_source_order(warnings) }
 }
 
 const is_function_declaration = (statement: Statement): statement is Declaration =>
@@ -78,9 +95,18 @@ const check_function = (shared: Shared, entry: FunctionEntry): void => {
   const context: FunctionContext = {
     annotated: entry.type?.kind === 'function' ? entry.type.result : undefined,
     inferred: undefined,
+    results: [],
   }
   new Checker(shared, context).check_function_body(literal, params)
-  entry.type ??= { kind: 'function', params, result: context.inferred ?? void_type }
+  const result = context.annotated ?? context.inferred ?? void_type
+  if (result.kind === 'nil') {
+    const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
+    throw new CompileError(message, literal.line, literal.column)
+  }
+  for (const { value, type } of context.results) {
+    if (!same_type(type, result)) shared.conversions.set(value, result)
+  }
+  entry.type ??= { kind: 'function', params, result }
   shared.types.set(literal, entry.type)
 }
 
@@ -88,6 +114,7 @@ class Checker {
   private readonly types: Types
   private readonly warnings: CompileWarning[]
   private readonly functions: Functions
+  private readonly conversions: Conversions
   private readonly context: FunctionContext | undefined
   private readonly scopes = new Scopes<CheckerLocal>()
   private readonly expressions: ExpressionChecker
@@ -97,8 +124,14 @@ class Checker {
     this.types = shared.types
     this.warnings = shared.warnings
     this.functions = shared.functions
+    this.conversions = shared.conversions
     this.context = context
-    this.expressions = new ExpressionChecker(this.types, this.scopes, this.functions)
+    this.expressions = new ExpressionChecker(
+      this.types,
+      shared.conversions,
+      this.scopes,
+      this.functions,
+    )
   }
 
   // The parameters are borrowed locals. The last statement gives the return value.
@@ -145,19 +178,27 @@ class Checker {
   }
 
   // A return value must fit the written return type, or agree with the others when inferred.
-  private record_result(type: Type, at: Position): void {
+  // A return value must fit the written return type. Without one, the values decide it: a mix of
+  // T, T? and nil gives T?. Values are converted to the return type when the function is done.
+  private record_result(type: Type, at: Expression | Return): void {
     const context = this.context!
-    const expected = context.annotated ?? context.inferred
-    if (expected === undefined) {
+    if (at.kind !== 'return') context.results.push({ value: at, type })
+    if (context.annotated !== undefined) {
+      if (is_assignable(type, context.annotated)) return
+      this.reject_result(context.annotated, type, at)
+    }
+    if (context.inferred === undefined) {
       context.inferred = type
       return
     }
-    if (
-      !(context.annotated === undefined ? same_type(type, expected) : is_assignable(type, expected))
-    ) {
-      const message = `expected a return value of type ${format_type(expected)}, got ${format_type(type)}`
-      throw new CompileError(message, at.line, at.column)
-    }
+    const unified = unify(context.inferred, type)
+    if (unified === undefined) this.reject_result(context.inferred, type, at)
+    context.inferred = unified
+  }
+
+  private reject_result(expected: Type, type: Type, at: Position): never {
+    const message = `expected a return value of type ${format_type(expected)}, got ${format_type(type)}`
+    throw new CompileError(message, at.line, at.column)
   }
 
   private check_return(return_statement: Return): void {
@@ -240,14 +281,64 @@ class Checker {
   }
 
   private check_while(while_statement: While): void {
-    this.expressions.expect_type(while_statement.condition, bool_type)
-    this.check_loop_body(while_statement.body)
+    const define = this.check_condition(while_statement.condition)
+    this.check_loop_body(while_statement.body, define)
   }
 
+  // An optional name tested in the condition is narrowed where it is known not to be nil: in the
+  // then branch of `if x`, in the else branch of `if not x`, and after a guard such as
+  // `return if x == nil`.
   private check_if(if_statement: If): void {
-    this.expressions.expect_type(if_statement.condition, bool_type)
-    this.check_block(if_statement.then_body)
-    this.check_block(if_statement.else_body)
+    const { condition, then_body, else_body } = if_statement
+    const define = this.check_condition(condition)
+    const narrowing = this.narrowing_of(condition)
+    this.check_block(then_body, () => {
+      define()
+      if (narrowing?.when === true) this.narrow(narrowing.local)
+    })
+    this.check_block(else_body, () => {
+      if (narrowing?.when === false) this.narrow(narrowing.local)
+    })
+    const is_guard = else_body.length === 0 && ends_with_jump(then_body)
+    if (narrowing?.when === false && is_guard) this.narrow(narrowing.local)
+  }
+
+  // Returns what the condition defines in the body: the name of `const name = value`.
+  private check_condition(condition: Condition): () => void {
+    if (condition.kind !== 'binding') {
+      this.expressions.expect_condition(condition)
+      return () => {}
+    }
+    const inner = this.expressions.expect_optional(condition.value)
+    return () =>
+      this.define_local({
+        identifier: condition.name,
+        type: inner,
+        mutable: false,
+        declared: true,
+        used: false,
+      })
+  }
+
+  // The optional local a condition tests, and the value of the condition when it is not nil.
+  // Only a local that cannot be reassigned is narrowed.
+  private narrowing_of(condition: Condition): { local: CheckerLocal; when: boolean } | undefined {
+    const tested = tested_name(condition)
+    if (tested === undefined) return undefined
+    const local = this.scopes.lookup(tested.name.name)
+    if (local === undefined || local.mutable || local.type.kind !== 'Optional') return undefined
+    return { local, when: tested.when }
+  }
+
+  private narrow(local: CheckerLocal): void {
+    if (local.type.kind !== 'Optional') throw new Error('only an optional local is narrowed')
+    const narrowed = {
+      ...local,
+      type: local.type.inner,
+      declared: false,
+      origin: local.origin ?? local,
+    }
+    this.scopes.narrow(local.identifier.name, narrowed)
   }
 
   // A top-level function was added to `functions` before checking started.
@@ -260,7 +351,7 @@ class Checker {
     const annotated = declaration.type === undefined ? undefined : resolve_type(declaration.type)
     if (annotated !== undefined) this.expressions.expect_type(declaration.value, annotated)
     const type = annotated ?? this.expressions.type_of(declaration.value)
-    if (type.kind === 'void' || type.kind === 'function') {
+    if (type.kind === 'void' || type.kind === 'function' || type.kind === 'nil') {
       const message = `cannot store a value of type ${format_type(type)}`
       throw new CompileError(message, declaration.value.line, declaration.value.column)
     }
@@ -369,4 +460,26 @@ class Checker {
     }
     throw new CompileError('value is unused', statement.line, statement.column)
   }
+}
+
+// `x`, `x != nil`, `not x` and `x == nil` test the name x: it is not nil when the condition is
+// `when`.
+const tested_name = (condition: Condition): { name: Identifier; when: boolean } | undefined => {
+  if (condition.kind === 'identifier') return { name: condition, when: true }
+  if (condition.kind === 'unary' && condition.operator === 'not') {
+    const inner = tested_name(condition.operand)
+    return inner && { name: inner.name, when: !inner.when }
+  }
+  if (condition.kind !== 'binary' || (condition.operator !== '==' && condition.operator !== '!=')) {
+    return undefined
+  }
+  const { left, right } = condition
+  const name = left.kind === 'nil' ? right : right.kind === 'nil' ? left : undefined
+  if (name?.kind !== 'identifier') return undefined
+  return { name, when: condition.operator === '!=' }
+}
+
+const ends_with_jump = (statements: Statement[]): boolean => {
+  const last = statements.at(-1)
+  return last?.kind === 'return' || last?.kind === 'break' || last?.kind === 'continue'
 }

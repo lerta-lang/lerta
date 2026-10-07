@@ -36,11 +36,11 @@ export const build = (
   options: BuildOptions,
 ): CompileWarning[] => {
   const program = parse(tokenize(readFileSync(source_path, 'utf8')))
-  const { types, warnings } = check(program)
+  const checked = check(program)
   const work_dir = mkdtempSync(join(tmpdir(), 'lerta-'))
   try {
     const ir_path = options.llvm_path ?? join(work_dir, 'main.ll')
-    writeFileSync(ir_path, generate(program, types))
+    writeFileSync(ir_path, generate(program, checked))
     const clang_args = [
       // clang warns that the .ll has no target triple; the host default is intended.
       '-Wno-override-module',
@@ -50,7 +50,7 @@ export const build = (
       output_path,
     ]
     execFileSync('clang', clang_args, { stdio: 'inherit' })
-    return warnings
+    return checked.warnings
   } finally {
     rmSync(work_dir, { recursive: true, force: true })
   }

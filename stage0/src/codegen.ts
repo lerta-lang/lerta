@@ -2,6 +2,7 @@ import {
   is_expression,
   type Assignment,
   type AssignmentOperator,
+  type Condition,
   type Declaration,
   type For,
   type FunctionLiteral,
@@ -13,12 +14,14 @@ import {
   type Statement,
   type While,
 } from './ast.ts'
-import type { Types } from './checker.ts'
+import type { Checked, Types } from './checker.ts'
 import { emit_get, emit_length, emit_set } from './array_codegen.ts'
 import { CheckedInt } from './checked_int.ts'
+import { ThrowBlocks } from './throw_blocks.ts'
 import { ExpressionGenerator, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder, IrModule } from './ir_builder.ts'
 import { emit_release, function_symbol, ir_return_type, ir_type } from './lerta_ir.ts'
+import { emit_is_present, emit_unwrap } from './optional_codegen.ts'
 import { Scopes, type Scope } from './scopes.ts'
 import { int_type, is_reference_type, type Type } from './types.ts'
 
@@ -29,17 +32,19 @@ const is_function_declaration = (statement: Statement): statement is FunctionDec
 
 // Emits LLVM IR for a checked program: its top-level code becomes lerta_main, and each top-level
 // function a function of its own.
-export const generate = (program: Program, types: Types): string => {
+export const generate = (program: Program, checked: CheckedTypes): string => {
   const module = new IrModule()
   const functions = program.filter(is_function_declaration)
   const function_names = new Set(functions.map((declaration) => declaration.name.name))
-  const new_generator = () => new FunctionGenerator(module, types, function_names)
+  const new_generator = () => new FunctionGenerator(module, checked, function_names)
   new_generator().generate_main(program.filter((statement) => !is_function_declaration(statement)))
   for (const declaration of functions) {
     new_generator().generate_function(declaration.name.name, declaration.value)
   }
   return module.render()
 }
+
+type CheckedTypes = Pick<Checked, 'types' | 'conversions'>
 
 // Where `break` and `continue` jump, and how many scopes enclose the loop.
 type Loop = { break_label: string; continue_label: string; scope_depth: number }
@@ -48,17 +53,20 @@ class FunctionGenerator {
   private readonly types: Types
   private readonly ir: IrBuilder
   private readonly locals = new Scopes<CodegenLocal>()
+  private readonly throws: ThrowBlocks
   private readonly checked_int: CheckedInt
   private readonly expressions: ExpressionGenerator
   private readonly loops: Loop[] = []
 
-  constructor(module: IrModule, types: Types, function_names: Set<string>) {
-    this.types = types
+  constructor(module: IrModule, checked: CheckedTypes, function_names: Set<string>) {
+    this.types = checked.types
     this.ir = new IrBuilder(module)
-    this.checked_int = new CheckedInt(this.ir)
+    this.throws = new ThrowBlocks(this.ir)
+    this.checked_int = new CheckedInt(this.ir, this.throws)
     this.expressions = new ExpressionGenerator(
       this.ir,
-      types,
+      checked,
+      this.throws,
       this.checked_int,
       this.locals,
       function_names,
@@ -98,7 +106,7 @@ class FunctionGenerator {
   }
 
   private finish(signature: string): void {
-    this.checked_int.emit_throw_blocks()
+    this.throws.emit_blocks()
     this.ir.finish(signature)
   }
 
@@ -110,7 +118,7 @@ class FunctionGenerator {
 
   private generate_return(return_statement: Return): void {
     const { value } = return_statement
-    const type = value === undefined ? undefined : this.types.get(value)!
+    const type = value === undefined ? undefined : this.expressions.type_at_use(value)
     const operand = value === undefined ? '' : this.expressions.generate(value)
     this.emit_return(type ?? { kind: 'void' }, operand)
     this.ir.start_block(this.ir.fresh_label('unreachable'))
@@ -162,7 +170,7 @@ class FunctionGenerator {
   }
 
   private generate_declaration(declaration: Declaration): void {
-    const type = this.types.get(declaration.value)!
+    const type = this.types.get(declaration.name)!
     const value = this.expressions.generate(declaration.value)
     const pointer = this.ir.alloca(ir_type(type))
     this.ir.emit(`store ${ir_type(type)} ${value}, ptr ${pointer}`)
@@ -204,18 +212,40 @@ class FunctionGenerator {
   }
 
   private generate_if(if_statement: If): void {
-    const condition = this.expressions.generate(if_statement.condition)
+    const { test, define } = this.generate_condition(if_statement.condition)
     const then_label = this.ir.fresh_label('if.then')
     const else_label = this.ir.fresh_label('if.else')
     const end_label = this.ir.fresh_label('if.end')
-    this.ir.emit(`br i1 ${condition}, label %${then_label}, label %${else_label}`)
+    this.ir.emit(`br i1 ${test}, label %${then_label}, label %${else_label}`)
     this.ir.start_block(then_label)
-    this.generate_block(if_statement.then_body)
+    this.generate_block(if_statement.then_body, define)
     this.ir.emit(`br label %${end_label}`)
     this.ir.start_block(else_label)
     this.generate_block(if_statement.else_body)
     this.ir.emit(`br label %${end_label}`)
     this.ir.start_block(end_label)
+  }
+
+  // The test of a condition, and what it defines in the body: for `const name = value`, the value
+  // without nil, which the body's scope owns.
+  private generate_condition(condition: Condition): {
+    test: string
+    define: (scope: Scope<CodegenLocal>) => void
+  } {
+    if (condition.kind !== 'binding') {
+      return { test: this.expressions.generate_condition(condition), define: () => {} }
+    }
+    const value = this.expressions.generate(condition.value)
+    const type = this.types.get(condition.value)!
+    if (type.kind !== 'Optional') throw new Error('a binding has an optional value')
+    return {
+      test: emit_is_present(this.ir, value, type),
+      define: (scope) =>
+        scope.set(
+          condition.name.name,
+          this.store_in_slot(emit_unwrap(this.ir, value, type), type.inner),
+        ),
+    }
   }
 
   private generate_while(while_statement: While): void {
@@ -224,10 +254,10 @@ class FunctionGenerator {
     const exit_label = this.ir.fresh_label('while.exit')
     this.ir.emit(`br label %${header_label}`)
     this.ir.start_block(header_label)
-    const condition = this.expressions.generate(while_statement.condition)
-    this.ir.emit(`br i1 ${condition}, label %${body_label}, label %${exit_label}`)
+    const { test, define } = this.generate_condition(while_statement.condition)
+    this.ir.emit(`br i1 ${test}, label %${body_label}, label %${exit_label}`)
     this.ir.start_block(body_label)
-    this.generate_loop_body(while_statement.body, exit_label, header_label)
+    this.generate_loop_body(while_statement.body, exit_label, header_label, define)
     this.ir.emit(`br label %${header_label}`)
     this.ir.start_block(exit_label)
   }

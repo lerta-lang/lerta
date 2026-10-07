@@ -43,7 +43,16 @@ export class ExpressionParser {
   }
 
   parse_expression(): Expression {
-    return this.parse_or()
+    return this.parse_coalesce()
+  }
+
+  // `a ? b ? c` is `a ? (b ? c)`.
+  private parse_coalesce(): Expression {
+    const value = this.parse_or()
+    if (this.tokens.peek_continuation() !== '?') return value
+    this.tokens.next()
+    const fallback = this.parse_coalesce()
+    return { kind: 'coalesce', value, fallback, line: value.line, column: value.column }
   }
 
   private parse_or(): Expression {
@@ -182,19 +191,22 @@ export class ExpressionParser {
       while (this.tokens.accept(','))
       this.tokens.expect('>', "'>'")
     }
-    return { kind: 'type_name', name, args, line, column }
+    const optional = this.tokens.accept('?')
+    return { kind: 'type_name', name, args, optional, line, column }
   }
 
-  // Calls `f(x)`, indexing `xs[i]` and member accesses `x.name`, written without a space before
-  // `(`, `[` or `.`.
+  // Calls `f(x)`, indexing `xs[i]`, member accesses `x.name` and unwrapping `x!`, written without
+  // a space before `(`, `[`, `.` or `!`.
   private parse_postfix(primary: Expression): Expression {
     let expression = primary
     for (;;) {
       const token = this.tokens.peek()
-      if (token.spaced || !['(', '[', '.'].includes(token.kind)) return expression
+      if (token.spaced || !['(', '[', '.', '!'].includes(token.kind)) return expression
       this.tokens.next()
       const position = { line: expression.line, column: expression.column }
-      if (token.kind === '(') {
+      if (token.kind === '!') {
+        expression = { kind: 'unwrap', operand: expression, ...position }
+      } else if (token.kind === '(') {
         const args = this.parse_parenthesized_arguments()
         expression = { kind: 'call', callee: expression, args, ...position }
       } else if (token.kind === '[') {
@@ -247,6 +259,7 @@ export class ExpressionParser {
       )
       return { kind: 'interpolation', parts, ...position }
     }
+    if (token.kind === 'nil') return { kind: 'nil', ...position }
     if (token.kind === 'true' || token.kind === 'false') {
       return { kind: 'boolean', value: token.kind === 'true', ...position }
     }

@@ -41,7 +41,8 @@ typedef struct {
   bool owns_references;
 } LertaArray;
 
-// Memory (memory.c). Release frees an object when its count reaches zero.
+// Memory (memory.c). Release frees an object when its count reaches zero. Both accept NULL,
+// which is how nil is represented.
 void *lerta_alloc(int64_t size, void (*drop)(void *object));
 void lerta_retain(void *object);
 void lerta_release(void *object);
@@ -53,12 +54,17 @@ LertaString *lerta_int_to_string(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
+// Decimal digits with an optional leading `-`. Returns false if there are none, if anything else
+// is there, or if the value does not fit in an Int.
+bool lerta_string_parse_int(const LertaString *s, int64_t *result);
 
 // Binary (binary.c): the same representation as String, without the UTF-8 guarantee. An index or
 // a slice out of range throws.
 int64_t lerta_binary_length(const LertaString *binary);
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
+// The same object as a String if its bytes are valid UTF-8 (retained), or NULL (nil).
+LertaString *lerta_binary_decode_utf8(LertaString *binary);
 
 // Arrays (array.c). Items in and out are borrowed, except that get and pop return owned
 // references. An index out of range throws.

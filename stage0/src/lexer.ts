@@ -16,7 +16,7 @@ export type TokenKind =
   | 'eof'
 
 const keywords = [
-  ...['true', 'false', 'and', 'or', 'not'],
+  ...['true', 'false', 'nil', 'and', 'or', 'not'],
   ...['const', 'var', 'if', 'else', 'while', 'for', 'in', 'break', 'continue', 'return'],
   ...['case', 'when', 'then'],
 ] as const
@@ -26,7 +26,7 @@ type Keyword = (typeof keywords)[number]
 const punctuations = [
   '...',
   ...['==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '->'],
-  ...['(', ')', '[', ']', ',', '.', ':', '+', '-', '*', '/', '%', '<', '>', '='],
+  ...['(', ')', '[', ']', ',', '.', ':', '+', '-', '*', '/', '%', '<', '>', '=', '?', '!'],
 ] as const
 type Punctuation = (typeof punctuations)[number]
 

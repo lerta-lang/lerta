@@ -40,3 +40,13 @@ export const emit_equals = (ir: IrBuilder, left: string, right: string): string 
   emit_release(ir, right)
   return result
 }
+
+// An Int?, nil unless the String is an integer in decimal.
+export const emit_parse_int = (ir: IrBuilder, string: string): string => {
+  ir.declare('lerta_string_parse_int', 'declare zeroext i1 @lerta_string_parse_int(ptr, ptr)')
+  const slot = ir.alloca('i64')
+  const parsed = ir.assign(`call zeroext i1 @lerta_string_parse_int(ptr ${string}, ptr ${slot})`)
+  const value = ir.assign(`load i64, ptr ${slot}`)
+  const flagged = ir.assign(`insertvalue { i1, i64 } { i1 false, i64 0 }, i1 ${parsed}, 0`)
+  return ir.assign(`insertvalue { i1, i64 } ${flagged}, i64 ${value}, 1`)
+}
