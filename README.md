@@ -48,7 +48,7 @@ Requirements: Node.js, pnpm, `clang` (LLVM).
 ```
 cd stage0
 pnpm install
-pnpm check   # type check and format check
+pnpm check   # type and format checks, and spelling across the repository (cspell.json)
 pnpm test
 ```
 

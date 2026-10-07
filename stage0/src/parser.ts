@@ -15,7 +15,7 @@ const describe_token = (token: Token): string => {
     case 'indent':
       return 'indentation'
     case 'dedent':
-      return 'dedentation'
+      return 'end of block'
     case 'eof':
       return 'end of file'
     default:
