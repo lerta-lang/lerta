@@ -92,6 +92,14 @@ export type Case = Position & {
 // `x is T`: whether x, of a union type, holds a T.
 export type IsTest = Position & { kind: 'is'; value: Expression; type: NamedType }
 
+// `condition then a else b`.
+export type Conditional = Position & {
+  kind: 'conditional'
+  condition: Expression
+  then_value: Expression
+  else_value: Expression
+}
+
 export type Expression =
   | StringLiteral
   | Interpolation
@@ -101,6 +109,7 @@ export type Expression =
   | Identifier
   | ArrayLiteral
   | MapLiteral
+  | Conditional
   | Index
   | Call
   | This

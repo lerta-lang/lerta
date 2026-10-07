@@ -8,7 +8,14 @@ import {
   type Statement,
 } from './ast.ts'
 import type { CheckerLocal } from './expression_checker.ts'
+import type { Scopes } from './scopes.ts'
+import type { TypeResolver } from './type_names.ts'
 import type { Type } from './types.ts'
+
+// A local, and the narrower type it has.
+export type Narrowing = { local: CheckerLocal; type: Type }
+// ... where the condition is `when`.
+export type ConditionNarrowing = Narrowing & { when: boolean }
 
 // `x`, `x != nil`, `not x`, `x == nil` and `x is T` test the name x: it is not nil, or is a T,
 // when the condition is `when`.
@@ -49,7 +56,6 @@ export const ends_with_jump = (
   return is_expression(last) && is_never(last)
 }
 
-// A view of an optional local with its type without nil, which marks the local itself as used.
 // A view of a local with a narrower type, which marks the local itself as used.
 export const narrowed_view = (local: CheckerLocal, type: Type): CheckerLocal => ({
   ...local,
@@ -57,3 +63,22 @@ export const narrowed_view = (local: CheckerLocal, type: Type): CheckerLocal => 
   declared: false,
   origin: local.origin ?? local,
 })
+
+// The local a condition tests, and the value of the condition when it has the narrower type. Only
+// a local that cannot be reassigned is narrowed.
+export const narrowing_of = (
+  condition: Condition,
+  scopes: Scopes<CheckerLocal>,
+  resolver: TypeResolver,
+): ConditionNarrowing | undefined => {
+  const tested = tested_name(condition)
+  if (tested === undefined) return undefined
+  const local = scopes.lookup(tested.name.name)
+  if (local === undefined || local.mutable) return undefined
+  if (tested.is_type !== undefined) {
+    if (local.type.kind !== 'Union') return undefined
+    return { local, when: tested.when, type: resolver.resolve(tested.is_type) }
+  }
+  if (local.type.kind !== 'Optional') return undefined
+  return { local, when: tested.when, type: local.type.inner }
+}

@@ -153,6 +153,8 @@ export class ExpressionGenerator {
         return this.operators.generate_binary(expression)
       case 'case':
         return this.cases.generate(expression)
+      case 'conditional':
+        return this.cases.generate_conditional(expression)
       case 'identifier':
         return this.generate_identifier(expression)
       case 'range':

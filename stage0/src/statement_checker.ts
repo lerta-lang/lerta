@@ -17,16 +17,18 @@ import type { FunctionContext, SelfContext, Shared, Types } from './checker.ts'
 import { CompileError, CompileWarning } from './errors.ts'
 import { ExpressionChecker, type CheckerLocal } from './expression_checker.ts'
 import type { Functions } from './functions.ts'
-import { ends_with_jump, narrowed_view, tested_name } from './narrowing.ts'
+import {
+  ends_with_jump,
+  narrowed_view,
+  narrowing_of,
+  type ConditionNarrowing,
+} from './narrowing.ts'
 import { ResultChecker } from './result_checker.ts'
 import { Scopes } from './scopes.ts'
 import type { Imports } from './imports.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
 import { format_type, int_type, type Type } from './types.ts'
-
-// A local, and the narrower type it has where the condition is `when`.
-type Narrowing = { local: CheckerLocal; when: boolean; type: Type }
 
 export class StatementChecker {
   private readonly types: Types
@@ -192,7 +194,7 @@ export class StatementChecker {
   private check_if(if_statement: If): void {
     const { condition, then_body, else_body } = if_statement
     const define = this.check_condition(condition)
-    const narrowing = this.narrowing_of(condition)
+    const narrowing = narrowing_of(condition, this.scopes, this.resolver)
     this.check_block(then_body, () => {
       define()
       if (narrowing?.when === true) this.narrow(narrowing)
@@ -223,22 +225,7 @@ export class StatementChecker {
       })
   }
 
-  // The optional local a condition tests, and the value of the condition when it is not nil.
-  // Only a local that cannot be reassigned is narrowed.
-  private narrowing_of(condition: Condition): Narrowing | undefined {
-    const tested = tested_name(condition)
-    if (tested === undefined) return undefined
-    const local = this.scopes.lookup(tested.name.name)
-    if (local === undefined || local.mutable) return undefined
-    if (tested.is_type !== undefined) {
-      if (local.type.kind !== 'Union') return undefined
-      return { local, when: tested.when, type: this.resolver.resolve(tested.is_type) }
-    }
-    if (local.type.kind !== 'Optional') return undefined
-    return { local, when: tested.when, type: local.type.inner }
-  }
-
-  private narrow({ local, type }: Narrowing): void {
+  private narrow({ local, type }: ConditionNarrowing): void {
     this.scopes.narrow(local.identifier.name, narrowed_view(local, type))
   }
 

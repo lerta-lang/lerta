@@ -63,7 +63,7 @@ export class ExpressionChecker {
     this.scopes = scopes
     this.self = self
     this.objects = new ObjectChecker(this, shared, scopes, self)
-    this.cases = new CaseChecker(this, scopes, shared.objects, shared.conversions)
+    this.cases = new CaseChecker(this, scopes, shared.objects, shared.conversions, shared.resolver)
     this.resolver = shared.resolver
     this.collections = new CollectionChecker(this, scopes, shared.functions)
   }
@@ -114,6 +114,8 @@ export class ExpressionChecker {
         return this.operators.type_of_binary(expression, expected)
       case 'case':
         return this.cases.type_of_case(expression, expected)
+      case 'conditional':
+        return this.cases.type_of_conditional(expression, expected)
       case 'member':
         return this.type_of_property(expression)
       case 'array':

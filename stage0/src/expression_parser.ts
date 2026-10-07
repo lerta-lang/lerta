@@ -47,7 +47,20 @@ export class ExpressionParser {
   }
 
   parse_expression(): Expression {
-    return this.parse_coalesce()
+    return this.parse_conditional()
+  }
+
+  // `c then a else b`, which binds weaker than the binary operators; `c then a else d then b else
+  // e` is `c then a else (d then b else e)`.
+  private parse_conditional(): Expression {
+    const condition = this.parse_coalesce()
+    if (this.tokens.peek_continuation() !== 'then') return condition
+    this.tokens.next()
+    const then_value = this.parse_conditional()
+    this.tokens.expect('else', "'else'")
+    const else_value = this.parse_conditional()
+    const position = { line: condition.line, column: condition.column }
+    return { kind: 'conditional', condition, then_value, else_value, ...position }
   }
 
   // `a ? b ? c` is `a ? (b ? c)`.
@@ -367,9 +380,9 @@ export class ExpressionParser {
     const arms: CaseArm[] = []
     do {
       this.tokens.expect('when', "'when'")
-      const patterns = [this.parse_expression()]
-      while (subject !== undefined && this.tokens.accept(','))
-        patterns.push(this.parse_expression())
+      // A pattern stops before `then`, which begins the arm's value.
+      const patterns = [this.parse_coalesce()]
+      while (subject !== undefined && this.tokens.accept(',')) patterns.push(this.parse_coalesce())
       arms.push({ patterns, value: this.parse_arm_body('then') })
     } while (this.tokens.peek().kind === 'when')
     const has_else = subject === undefined || this.tokens.peek().kind === 'else'

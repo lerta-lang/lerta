@@ -1,11 +1,12 @@
-// Types `case`: its conditions or patterns, and the values of its arms.
-import type { Case, Expression } from './ast.ts'
+// Types `case` (its conditions or patterns, and the values of its arms) and `then`/`else`.
+import type { Case, Conditional, Expression } from './ast.ts'
 import { CompileError } from './errors.ts'
 import type { CheckerLocal, ExpressionChecker } from './expression_checker.ts'
-import { narrowed_view } from './narrowing.ts'
+import { narrowed_view, narrowing_of, type Narrowing } from './narrowing.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { Scopes } from './scopes.ts'
-import { bool_type, format_type, same_type, unify, type Type } from './types.ts'
+import type { TypeResolver } from './type_names.ts'
+import { format_type, same_type, unify, type Type } from './types.ts'
 
 const value_kinds = ['Int', 'UInt8', 'Bool', 'String']
 
@@ -14,31 +15,67 @@ export class CaseChecker {
   private readonly scopes: Scopes<CheckerLocal>
   private readonly objects: ObjectTypes
   private readonly conversions: Map<Expression, Type>
+  private readonly resolver: TypeResolver
 
   constructor(
     expressions: ExpressionChecker,
     scopes: Scopes<CheckerLocal>,
     objects: ObjectTypes,
     conversions: Map<Expression, Type>,
+    resolver: TypeResolver,
   ) {
     this.expressions = expressions
     this.scopes = scopes
     this.objects = objects
     this.conversions = conversions
+    this.resolver = resolver
   }
 
   type_of_case(case_expression: Case, expected: Type | undefined): Type {
     const arm_narrowing = this.check_patterns(case_expression)
-    const values = case_expression.arms.map((arm, i) => ({
+    const branches: Branch[] = case_expression.arms.map((arm, i) => ({
       value: arm.value,
       narrowing: arm_narrowing[i],
     }))
     if (case_expression.otherwise !== undefined) {
-      values.push({ value: case_expression.otherwise, narrowing: undefined })
+      branches.push({ value: case_expression.otherwise, narrowing: undefined })
     }
-    // Each arm's value is typed with the subject narrowed to the arm's type, if it has one.
-    const type_of_value = (index: number, check: (value: Expression) => Type): Type => {
-      const { value, narrowing } = values[index]
+    return this.type_of_branches(branches, expected, case_expression, 'case arms')
+  }
+
+  // A condition of a case without a subject is one of an `if`, which narrows a local in its arm.
+  private check_condition(condition: Expression): Narrowing | undefined {
+    this.expressions.expect_condition(condition)
+    const narrowing = narrowing_of(condition, this.scopes, this.resolver)
+    return narrowing?.when === true ? narrowing : undefined
+  }
+
+  // The condition narrows a local as `if` does: in the value for when it holds, or the other.
+  type_of_conditional(conditional: Conditional, expected: Type | undefined): Type {
+    this.expressions.expect_condition(conditional.condition)
+    const narrowing = narrowing_of(conditional.condition, this.scopes, this.resolver)
+    const narrowing_when = (when: boolean) => (narrowing?.when === when ? narrowing : undefined)
+    const branches = [
+      { value: conditional.then_value, narrowing: narrowing_when(true) },
+      { value: conditional.else_value, narrowing: narrowing_when(false) },
+    ]
+    const description = 'the values of then and else'
+    const void_message = 'then and else must give values; to run statements, write an if'
+    return this.type_of_branches(branches, expected, conditional, description, void_message)
+  }
+
+  // The type of the values the branches give: the expected type, or else one that they unify to
+  // (see unify), to which they are converted. Each value is typed with a local narrowed, if its
+  // branch narrows one.
+  private type_of_branches(
+    branches: Branch[],
+    expected: Type | undefined,
+    at: Expression,
+    description: string,
+    // The error for a value that is void, which the branches may give unless it is set.
+    void_message?: string,
+  ): Type {
+    const type_of_value = ({ value, narrowing }: Branch, check: (value: Expression) => Type) => {
       if (narrowing === undefined) return check(value)
       this.scopes.push()
       this.scopes.narrow(
@@ -52,38 +89,41 @@ export class CaseChecker {
       }
     }
     if (expected !== undefined) {
-      values.forEach((_, i) =>
-        type_of_value(i, (value) => (this.expressions.expect_type(value, expected), expected)),
-      )
+      for (const branch of branches) {
+        type_of_value(branch, (value) => (this.expressions.expect_type(value, expected), expected))
+      }
       return expected
     }
-    return this.unify_values(
-      case_expression,
-      values.map((_, i) => ({
-        value: values[i].value,
-        type: type_of_value(i, (value) => this.expressions.type_of(value)),
-      })),
-    )
+    const values = branches.map((branch) => ({
+      value: branch.value,
+      type: type_of_value(branch, (value) => this.expressions.type_of(value)),
+    }))
+    const valueless = values.find(({ type }) => type.kind === 'void')
+    if (void_message !== undefined && valueless !== undefined) {
+      throw new CompileError(void_message, valueless.value.line, valueless.value.column)
+    }
+    return this.unify_values(values, at, description)
   }
 
-  // A mix of T, T? and nil gives T?, to which the arms are converted.
-  private unify_values(case_expression: Case, values: { value: Expression; type: Type }[]): Type {
+  // A mix of T, T? and nil gives T?, to which the values are converted.
+  private unify_values(
+    values: { value: Expression; type: Type }[],
+    at: Expression,
+    description: string,
+  ): Type {
     let type = values[0].type
     for (const { value, type: value_type } of values) {
       const unified = unify(type, value_type)
       if (unified === undefined) {
         const types = `expected ${format_type(type)}, got ${format_type(value_type)}`
-        throw new CompileError(
-          `case arms must have the same type: ${types}`,
-          value.line,
-          value.column,
-        )
+        const message = `${description} must have the same type: ${types}`
+        throw new CompileError(message, value.line, value.column)
       }
       type = unified
     }
     if (type.kind === 'nil') {
-      const message = 'nil alone does not give the type of a case; write it in an annotation'
-      throw new CompileError(message, case_expression.line, case_expression.column)
+      const message = `nil alone does not give the type of ${description}; write it in an annotation`
+      throw new CompileError(message, at.line, at.column)
     }
     for (const { value, type: value_type } of values) {
       if (value_type.kind !== 'never' && !same_type(value_type, type))
@@ -95,10 +135,7 @@ export class CaseChecker {
   // Checks the conditions or patterns; returns, for each arm, how the subject is narrowed in it.
   private check_patterns(case_expression: Case): (Narrowing | undefined)[] {
     const { subject, arms } = case_expression
-    if (subject === undefined) {
-      for (const arm of arms) this.expressions.expect_type(arm.patterns[0], bool_type)
-      return arms.map(() => undefined)
-    }
+    if (subject === undefined) return arms.map((arm) => this.check_condition(arm.patterns[0]))
     const subject_type = this.expressions.type_of(subject)
     if (subject_type.kind === 'Union')
       return this.check_type_patterns(case_expression, subject_type)
@@ -162,4 +199,5 @@ export class CaseChecker {
   }
 }
 
-type Narrowing = { local: CheckerLocal; type: Type }
+// A value of a case or a then/else, and the local narrowed where it is evaluated, if any.
+type Branch = { value: Expression; narrowing: Narrowing | undefined }

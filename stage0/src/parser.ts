@@ -170,6 +170,8 @@ class Parser {
   private starts_command_argument(token: Token): boolean {
     if (!token.spaced) return false
     if (token.kind === '-') return !this.tokens.peek(2).spaced
+    // `is` is not a keyword, but `x is T` is a test, not a call of x.
+    if (token.kind === 'identifier' && token.text === 'is') return false
     return ['(', '[', '{', ...command_argument_starts].includes(token.kind)
   }
 

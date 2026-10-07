@@ -1,5 +1,6 @@
-// `case` in the generated code: the tests of its arms, and the values they merge.
-import type { Case, CaseArm, Expression } from './ast.ts'
+// `case` and `then`/`else` in the generated code: the tests of their arms, and the values they
+// merge.
+import type { Case, CaseArm, Conditional, Expression } from './ast.ts'
 import type { Types } from './checker.ts'
 import type { ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
@@ -52,13 +53,36 @@ export class CaseGenerator {
     return result
   }
 
+  // The condition is tested as an `if` tests it; both values jump to one end block that merges
+  // them.
+  generate_conditional(conditional: Conditional): string {
+    const test = this.expressions.generate_condition(conditional.condition)
+    const then_label = this.ir.fresh_label('then')
+    const else_label = this.ir.fresh_label('else')
+    const end_label = this.ir.fresh_label('then.end')
+    this.ir.emit(`br i1 ${test}, label %${then_label}, label %${else_label}`)
+    const incoming = [
+      { label: then_label, value: conditional.then_value },
+      { label: else_label, value: conditional.else_value },
+    ].map(({ label, value }) => {
+      this.ir.start_block(label)
+      const operand = this.expressions.generate(value)
+      const from = this.ir.current_block
+      this.ir.emit(`br label %${end_label}`)
+      return `[ ${operand}, %${from} ]`
+    })
+    this.ir.start_block(end_label)
+    const type = ir_type(this.types.get(conditional)!)
+    return this.ir.assign(`phi ${type} ${incoming.join(', ')}`)
+  }
+
   // An i1 that holds when any of the arm's patterns matches.
   private generate_test(
     arm: CaseArm,
     subject: Expression | undefined,
     operand: string | undefined,
   ): string {
-    if (subject === undefined) return this.expressions.generate(arm.patterns[0])
+    if (subject === undefined) return this.expressions.generate_condition(arm.patterns[0])
     const subject_type = this.types.get(subject)!
     const tests = arm.patterns.map((pattern) =>
       subject_type.kind === 'Union'
