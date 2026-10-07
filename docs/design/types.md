@@ -3,8 +3,7 @@
 - TypeScript-like. **Local inference + bidirectional type checking.** Function parameters are explicit (lambdas may omit them when there is an expected type). Return values and locals are inferred (the return type of a recursive function is explicit). No global inference in the style of Crystal.
 - Union types, and narrowing by control-flow analysis (`T` only inside `if x != nil`).
 - Types and values share one namespace. The same name cannot be defined as both a type and a value in the same scope.
-- Standard types, interfaces and built-in functions (builtins) live in the outermost scope, and user definitions can shadow them (so additions to the standard library do not break existing code). Shadowing a builtin produces no warning, for the same reason.
-- Declaring a name in an inner scope that is already declared by the user in an outer scope (shadowing) produces a warning. Until warnings are implemented, stage0 rejects it as an error.
+- Builtins (standard types, interfaces and built-in functions) and shadowing: see [the reference](../reference/control-flow.md#blocks-and-scopes).
 - `type Expr = Num | Plus | Neg` names a type (an alias).
 - Discriminated unions are unions of classes. The discriminator is the class type itself (no `kind` field, no enum; branch with `case`).
 - Type notation: function types `(Int, String) -> Bool` (no parameters `() -> Int`, no return value `(Int) -> void`), generics `Array<Int>`, `Map<String, Int>`.

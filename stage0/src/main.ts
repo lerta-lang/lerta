@@ -14,9 +14,11 @@ if (
   process.exit(2)
 }
 try {
-  build(source_path, output_path)
+  const warnings = build(source_path, output_path)
+  for (const warning of warnings) console.error(warning.format(source_path))
 } catch (error) {
   if (!(error instanceof CompileError)) throw error
+  for (const warning of error.warnings) console.error(warning.format(source_path))
   console.error(error.format(source_path))
   process.exit(1)
 }

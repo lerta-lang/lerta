@@ -66,7 +66,7 @@ class Generator {
   private readonly types: Types
   private readonly ir = new IrBuilder()
   private readonly thrown = new Set<Exception>()
-  // The IR operands of local names in scope. Locals never shadow each other, so one map suffices.
+  // The IR operands of the local names in scope.
   private readonly locals = new Map<string, string>()
 
   constructor(types: Types) {
@@ -110,9 +110,11 @@ class Generator {
     this.ir.emit(`br i1 ${in_range}, label %${body_label}, label %${exit_label}`)
 
     this.ir.start_block(body_label)
+    const shadowed = this.locals.get(variable.name)
     this.locals.set(variable.name, current)
     this.generate_statements(for_statement.body)
-    this.locals.delete(variable.name)
+    if (shadowed === undefined) this.locals.delete(variable.name)
+    else this.locals.set(variable.name, shadowed)
     this.ir.emit(`br label %${latch_label}`)
 
     this.ir.start_block(latch_label)

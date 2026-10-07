@@ -1,7 +1,7 @@
 // Run tests: each source is compiled and run, and its output is compared with
-// <name>.out (stdout) and <name>.err (stderr: a compile error or an uncaught
-// throw). A missing file means empty output, but at least one must exist.
-// The run must fail exactly when <name>.err exists.
+// <name>.out (stdout), <name>.err (stderr: a compile error or an uncaught
+// throw) and <name>.warn (compile warnings). A missing file means empty output,
+// but at least one must exist. The run must fail exactly when <name>.err exists.
 //   tests/**/<name>.lerta  expected files next to it
 //   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
 import { spawnSync } from 'node:child_process'
@@ -25,7 +25,7 @@ type TestCase = {
 
 type Suite = Omit<TestCase, 'label' | 'name'>
 
-const expected_extensions = ['out', 'err']
+const expected_extensions = ['out', 'err', 'warn']
 
 const examples_expected_dir = 'tests/examples'
 
@@ -83,22 +83,31 @@ const expected_output = (test: TestCase, extension: string): string | undefined 
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined
 }
 
-type Outcome = { stdout: string; stderr: string; failed: boolean }
+type Outcome = { stdout: string; stderr: string; warnings: string; failed: boolean }
 
-// A compile error is reported as the CLI prints it for a bare file name, so
-// that the expected .err does not depend on where the test directory is.
+const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join('')
+
+// Diagnostics are reported as the CLI prints them for a bare file name, so
+// that the expected files do not depend on where the test directory is.
 const compile_and_run = (test: TestCase): Outcome => {
   const source_file = `${test.name}.lerta`
   const executable = join(work_dir, test.label.replaceAll('/', '_'))
+  let warnings: string
   try {
-    build(join(root_dir, test.source_dir, source_file), executable)
+    const compile_warnings = build(join(root_dir, test.source_dir, source_file), executable)
+    warnings = lines(compile_warnings.map((warning) => warning.format(source_file)))
   } catch (error) {
     if (!(error instanceof CompileError)) throw error
-    return { stdout: '', stderr: `${error.format(source_file)}\n`, failed: true }
+    return {
+      stdout: '',
+      stderr: lines([error.format(source_file)]),
+      warnings: lines(error.warnings.map((warning) => warning.format(source_file))),
+      failed: true,
+    }
   }
   const run = spawnSync(executable, { encoding: 'utf8' })
   if (run.error !== undefined) throw run.error
-  return { stdout: run.stdout, stderr: run.stderr, failed: run.status !== 0 }
+  return { stdout: run.stdout, stderr: run.stderr, warnings, failed: run.status !== 0 }
 }
 
 const run_test = (test: TestCase): boolean => {
@@ -118,6 +127,7 @@ const run_test = (test: TestCase): boolean => {
     return (
       outcome.stdout === (expected.get('out') ?? '') &&
       outcome.stderr === (expected.get('err') ?? '') &&
+      outcome.warnings === (expected.get('warn') ?? '') &&
       outcome.failed === expected.has('err')
     )
   } catch (error) {

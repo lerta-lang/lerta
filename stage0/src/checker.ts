@@ -11,7 +11,7 @@ import {
   type Unary,
 } from './ast.ts'
 import { builtins } from './builtins.ts'
-import { CompileError } from './errors.ts'
+import { CompileError, CompileWarning } from './errors.ts'
 import {
   bool_type,
   format_type,
@@ -25,20 +25,22 @@ import {
 // The type of every expression in a checked program.
 export type Types = Map<Expression, Type>
 
-export const check = (program: Program): Types => {
-  const types: Types = new Map()
-  new Checker(types).check_statements(program)
-  return types
+export const check = (program: Program): { types: Types; warnings: CompileWarning[] } => {
+  const checker = new Checker()
+  try {
+    checker.check_statements(program)
+  } catch (error) {
+    if (error instanceof CompileError) error.warnings = checker.warnings
+    throw error
+  }
+  return { types: checker.types, warnings: checker.warnings }
 }
 
 class Checker {
-  private readonly types: Types
+  readonly types: Types = new Map()
+  readonly warnings: CompileWarning[] = []
   // Local names, innermost scope last.
   private readonly scopes: Map<string, Type>[] = []
-
-  constructor(types: Types) {
-    this.types = types
-  }
 
   check_statements(statements: Statement[]): void {
     for (const statement of statements) this.check_statement(statement)
@@ -72,14 +74,17 @@ class Checker {
     }
   }
 
-  // Builtins may be shadowed. Shadowing a local name is planned to be a warning; until warnings
-  // exist, it is an error.
+  // Shadowing a builtin is silent, so that new builtins do not affect existing code. Shadowing a
+  // local name is a warning, unless the name starts with `_` to show that it is intended.
   private define_local(identifier: Identifier, type: Type): void {
-    if (this.scopes.some((scope) => scope.has(identifier.name))) {
-      const message = `'${identifier.name}' is already defined`
-      throw new CompileError(message, identifier.line, identifier.column)
+    const { name, line, column } = identifier
+    const is_shadowing = this.scopes.some((scope) => scope.has(name))
+    if (is_shadowing && !name.startsWith('_')) {
+      this.warnings.push(
+        new CompileWarning(`'${name}' shadows a name in an outer scope`, line, column),
+      )
     }
-    this.scopes.at(-1)!.set(identifier.name, type)
+    this.scopes.at(-1)!.set(name, type)
     this.types.set(identifier, type)
   }
 

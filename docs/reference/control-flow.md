@@ -4,8 +4,8 @@
 
 - An indented block holds statements, one per line.
 - A name declared in a block (such as a loop variable) is visible only inside it.
-- A name cannot be declared again while it is visible (planned to become a warning; see [design/types.md](../design/types.md)).
-- Builtins can be shadowed: inside `for print in 0...3`, `print` is the loop variable.
+- Declaring a name that is already visible from an outer scope (shadowing) is a warning. Inside the block, the name refers to the new declaration. A name starting with `_` produces no warning, to show that the shadowing is intended.
+- Builtins (standard types, interfaces and built-in functions) live outside every scope and can be shadowed without a warning, so that adding a builtin does not affect existing code. Inside `for print in 0...3`, `print` is the loop variable.
 
 ## for and ranges
 
