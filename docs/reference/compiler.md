@@ -1,10 +1,17 @@
 # Compiler
 
 ```
-lerta build <source> -o <output>
+lerta build <source> -o <output> [-O] [--emit-llvm <path>]
 ```
 
-builds an executable. Diagnostics are printed to stderr, one per line:
+builds an executable.
+
+- `-O` optimizes, including across the generated code and the runtime (link-time optimization).
+- `--emit-llvm <path>` also writes the generated LLVM IR, before optimization, to `<path>`.
+
+## Diagnostics
+
+Diagnostics are printed to stderr, one per line:
 
 ```
 <path>:<line>:<column>: <message>

@@ -56,5 +56,5 @@ pnpm test
 stage0 runs its TypeScript directly with Node.js (22.18 or later), so there is no build step. To compile a program:
 
 ```
-node stage0/src/main.ts build examples/hello.lerta -o hello
+node stage0/src/main.ts build examples/hello.lerta -o hello [-O] [--emit-llvm hello.ll]
 ```
