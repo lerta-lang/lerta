@@ -13,7 +13,7 @@ import {
   type Statement,
   type While,
 } from './ast.ts'
-import type { Conversions, FunctionContext, SelfContext, Shared, Types } from './checker.ts'
+import type { FunctionContext, SelfContext, Shared, Types } from './checker.ts'
 import { CompileError, CompileWarning } from './errors.ts'
 import { ExpressionChecker, type CheckerLocal } from './expression_checker.ts'
 import type { Functions } from './functions.ts'
@@ -32,7 +32,6 @@ export class StatementChecker {
   private readonly types: Types
   private readonly warnings: CompileWarning[]
   private readonly functions: Functions
-  private readonly conversions: Conversions
   private readonly context: FunctionContext | undefined
   private readonly self: SelfContext | undefined
   private readonly objects: ObjectTypes
@@ -47,7 +46,6 @@ export class StatementChecker {
     this.types = shared.types
     this.warnings = shared.warnings
     this.functions = shared.functions
-    this.conversions = shared.conversions
     this.objects = shared.objects
     this.imports = shared.imports
     this.resolver = shared.resolver

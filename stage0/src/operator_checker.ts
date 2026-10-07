@@ -1,12 +1,5 @@
 // Types unary and binary operators, nil tests and `?`.
-import {
-  is_arithmetic,
-  is_nil_test,
-  type Binary,
-  type Coalesce,
-  type Expression,
-  type Unary,
-} from './ast.ts'
+import { is_arithmetic, is_nil_test, type Binary, type Coalesce, type Unary } from './ast.ts'
 import { CompileError } from './errors.ts'
 import { is_contextual } from './literals.ts'
 import type { ExpressionChecker } from './expression_checker.ts'

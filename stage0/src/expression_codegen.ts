@@ -1,32 +1,16 @@
 import {
-  type ArrayLiteral,
-  type Binary,
   type Call,
-  type Case,
   type Expression,
   type Identifier,
-  type Index,
   type Interpolation,
-  type MapLiteral,
   type Member,
   type Throw,
 } from './ast.ts'
-import {
-  emit_array_new,
-  emit_get,
-  emit_join,
-  emit_length,
-  emit_pop,
-  emit_push,
-} from './array_codegen.ts'
-import {
-  emit_binary_get,
-  emit_binary_length,
-  emit_binary_slice,
-  emit_decode_utf8,
-} from './binary_codegen.ts'
+import { call_array_method, emit_length } from './array_codegen.ts'
+import { emit_binary_length, emit_binary_slice, emit_decode_utf8 } from './binary_codegen.ts'
 import { builtins } from './builtins.ts'
 import { CaseGenerator } from './case_codegen.ts'
+import { CollectionGenerator } from './collection_codegen.ts'
 import type { Conversions, Types } from './checker.ts'
 import type { CheckedInt } from './checked_int.ts'
 import type { IrBuilder } from './ir_builder.ts'
@@ -41,13 +25,7 @@ import {
   ir_type,
   string_constant,
 } from './lerta_ir.ts'
-import {
-  call_map_method,
-  emit_map_get,
-  emit_map_length,
-  emit_map_new,
-  emit_map_set,
-} from './map_codegen.ts'
+import { call_map_method, emit_map_length, emit_map_new } from './map_codegen.ts'
 import { emit_is_present, emit_unwrap, emit_wrap, nil_constant } from './optional_codegen.ts'
 import { OperatorGenerator } from './operator_codegen.ts'
 import { emit_field_pointer, emit_type_test } from './object_codegen.ts'
@@ -81,6 +59,7 @@ export class ExpressionGenerator {
   private readonly imports: Imports
   private readonly operators: OperatorGenerator
   private readonly cases: CaseGenerator
+  private readonly collections: CollectionGenerator
 
   constructor(
     ir: IrBuilder,
@@ -97,6 +76,7 @@ export class ExpressionGenerator {
     this.imports = checked.imports
     this.operators = new OperatorGenerator(this, ir, checked.types, checked_int, throws)
     this.cases = new CaseGenerator(this, ir, checked.types)
+    this.collections = new CollectionGenerator(this, ir, checked.types)
     this.locals = locals
     this.function_names = function_names
   }
@@ -180,11 +160,11 @@ export class ExpressionGenerator {
       case 'member':
         return this.generate_property(expression)
       case 'array':
-        return this.generate_array(expression)
+        return this.collections.generate_array(expression)
       case 'map':
-        return this.generate_map(expression)
+        return this.collections.generate_map(expression)
       case 'index':
-        return this.generate_index(expression)
+        return this.collections.generate_index(expression)
       case 'function':
         throw new Error('functions are only generated at the top level')
     }
@@ -300,71 +280,13 @@ export class ExpressionGenerator {
     const args = call.args.map((arg) => this.generate(arg))
     const result =
       object_type.kind === 'Array'
-        ? this.call_array_method(name, object, object_type.element, args)
+        ? call_array_method(this.ir, name, object, object_type.element, args)
         : object_type.kind === 'Map'
           ? call_map_method(this.ir, name, object, args, object_type)
           : emit_binary_slice(this.ir, object, args[0], args[1])
     call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
     emit_release(this.ir, object)
     return result
-  }
-
-  private call_array_method(name: string, array: string, element: Type, args: string[]): string {
-    switch (name) {
-      case 'push':
-        emit_push(this.ir, array, args[0], element)
-        return ''
-      case 'pop':
-        return emit_pop(this.ir, array, element)
-      case 'join':
-        return emit_join(this.ir, array, args[0])
-      default:
-        throw new Error(`no array method ${name}`)
-    }
-  }
-
-  // Each item is pushed, so the array retains it; the item's own reference is then released.
-  private generate_array(array: ArrayLiteral): string {
-    const type = this.types.get(array)!
-    if (type.kind !== 'Array') throw new Error('an array literal has an array type')
-    const result = emit_array_new(this.ir, type.element)
-    for (const element of array.elements) {
-      const value = this.generate(element)
-      emit_push(this.ir, result, value, type.element)
-      this.release_if_reference(element, value)
-    }
-    return result
-  }
-
-  // Each entry is set, so the map retains its key and value, whose own references are then
-  // released.
-  private generate_map(map: MapLiteral): string {
-    const type = this.types.get(map)!
-    if (type.kind !== 'Map') throw new Error('a map literal has a map type')
-    const result = emit_map_new(this.ir, type)
-    for (const entry of map.entries) {
-      const key = this.generate(entry.key)
-      const value = this.generate(entry.value)
-      emit_map_set(this.ir, result, key, value, type)
-      this.release_if_reference(entry.key, key)
-      this.release_if_reference(entry.value, value)
-    }
-    return result
-  }
-
-  private generate_index(index: Index): string {
-    const object = this.generate(index.object)
-    const object_type = this.types.get(index.object)!
-    const position = this.generate(index.index)
-    const item =
-      object_type.kind === 'Binary'
-        ? emit_binary_get(this.ir, object, position)
-        : object_type.kind === 'Map'
-          ? emit_map_get(this.ir, object, position, object_type)
-          : emit_get(this.ir, object, position, this.types.get(index)!)
-    this.release_if_reference(index.index, position)
-    emit_release(this.ir, object)
-    return item
   }
 
   // A field's value is retained, since every expression yields an owned reference.

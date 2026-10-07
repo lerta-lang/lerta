@@ -63,3 +63,23 @@ export const emit_pop = (ir: IrBuilder, array: string, element: Type): string =>
 
 export const emit_join = (ir: IrBuilder, array: string, separator: string): string =>
   call(ir, 'lerta_string_join', `ptr ${array}, ptr ${separator}`)
+
+export const call_array_method = (
+  ir: IrBuilder,
+  name: string,
+  array: string,
+  element: Type,
+  args: string[],
+): string => {
+  switch (name) {
+    case 'push':
+      emit_push(ir, array, args[0], element)
+      return ''
+    case 'pop':
+      return emit_pop(ir, array, element)
+    case 'join':
+      return emit_join(ir, array, args[0])
+    default:
+      throw new Error(`no array method ${name}`)
+  }
+}
