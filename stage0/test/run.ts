@@ -2,8 +2,8 @@
 // <name>.out (stdout), <name>.err (stderr: a compile error or an uncaught
 // throw) and <name>.warn (compile warnings). A missing file means empty output,
 // but at least one must exist. The run must fail exactly when <name>.err exists.
-// Every test runs twice, without and with optimization, to catch code whose
-// behavior changes when optimized. The unoptimized build goes through
+// Every test that compiles runs twice, without and with optimization, to catch
+// code whose behavior changes when optimized. The unoptimized build goes through
 // --emit-llvm, so every test also checks that the emitted IR builds.
 //   tests/**/<name>.lerta  expected files next to it
 //   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build } from '../src/build.ts'
 import { CompileError } from '../src/errors.ts'
+import { compare_text, run_checks, type Check } from './report.ts'
 
 const root_dir = join(import.meta.dirname, '../..')
 const work_dir = mkdtempSync(join(tmpdir(), 'lerta-test-'))
@@ -86,7 +87,13 @@ const expected_output = (test: TestCase, extension: string): string | undefined 
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined
 }
 
-type Outcome = { stdout: string; stderr: string; warnings: string; failed: boolean }
+type Outcome = {
+  stdout: string
+  stderr: string
+  warnings: string
+  failed: boolean
+  compile_error: boolean
+}
 
 const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join('')
 
@@ -111,54 +118,64 @@ const compile_and_run = (test: TestCase, optimize: boolean): Outcome => {
       stderr: lines([error.format(source_file)]),
       warnings: lines(error.warnings.map((warning) => warning.format(source_file))),
       failed: true,
+      compile_error: true,
     }
   }
   const run = spawnSync(executable, { encoding: 'utf8' })
   if (run.error !== undefined) throw run.error
-  return { stdout: run.stdout, stderr: run.stderr, warnings, failed: run.status !== 0 }
+  const failed = run.status !== 0
+  return { stdout: run.stdout, stderr: run.stderr, warnings, failed, compile_error: false }
 }
 
-const run_test = (test: TestCase, optimize: boolean): boolean => {
-  try {
-    const expected = new Map(
-      test.extensions.flatMap((extension) => {
-        const content = expected_output(test, extension)
-        return content === undefined ? [] : [[extension, content] as const]
-      }),
-    )
-    if (expected.size === 0) {
-      const candidates = test.extensions.map((extension) => `${test.name}.${extension}`)
-      console.error(`${test.label}: needs ${candidates.join(' or ')} in ${test.expected_dir}`)
-      return false
-    }
-    const outcome = compile_and_run(test, optimize)
-    return (
-      outcome.stdout === (expected.get('out') ?? '') &&
-      outcome.stderr === (expected.get('err') ?? '') &&
-      outcome.warnings === (expected.get('warn') ?? '') &&
-      outcome.failed === expected.has('err')
-    )
-  } catch (error) {
-    console.error(error)
-    return false
+const run_test = (test: TestCase, optimize: boolean): string[] => {
+  const expected = new Map(
+    test.extensions.flatMap((extension) => {
+      const content = expected_output(test, extension)
+      return content === undefined ? [] : [[extension, content] as const]
+    }),
+  )
+  if (expected.size === 0) {
+    const candidates = test.extensions.map((extension) => `${test.name}.${extension}`)
+    return [`needs ${candidates.join(' or ')} in ${test.expected_dir}`]
   }
+  const outcome = compile_and_run(test, optimize)
+  if (outcome.compile_error) failed_to_compile.add(test)
+  const expects_failure = expected.has('err')
+  const status_reasons =
+    outcome.failed === expects_failure
+      ? []
+      : [`expected the run to ${expects_failure ? 'fail' : 'succeed'}, but it did not`]
+  return [
+    ...compare_text('stdout', expected.get('out') ?? '', outcome.stdout),
+    ...compare_text('stderr', expected.get('err') ?? '', outcome.stderr),
+    ...compare_text('warnings', expected.get('warn') ?? '', outcome.warnings),
+    ...status_reasons,
+  ]
 }
 
 const strays = suites.flatMap(stray_files)
-for (const file of strays) console.error(`stray file, not read by any test: ${file}`)
 
-const runs = suites
-  .flatMap(collect)
-  .flatMap((test) => [false, true].map((optimize) => ({ test, optimize })))
-let failed: typeof runs
+// A compile error happens before any optimization, so a test that fails to compile
+// without -O is not repeated with it. This relies on each test's unoptimized check
+// running, and recording its compile error here, before its -O check.
+const failed_to_compile = new Set<TestCase>()
+
+// A stray file fails the run as a check of its own, so the summary lists it.
+const stray_checks: Check[] = strays.map((file) => ({
+  name: file,
+  run: () => ['stray file: no test reads it'],
+}))
+
+const test_checks: Check[] = suites.flatMap(collect).flatMap((test) =>
+  [false, true].map((optimize) => ({
+    name: `${test.label}${optimize ? ' (-O)' : ''}`,
+    run: () => (optimize && failed_to_compile.has(test) ? undefined : run_test(test, optimize)),
+  })),
+)
+let failed_count: number
 try {
-  failed = runs.filter(({ test, optimize }) => !run_test(test, optimize))
+  failed_count = run_checks('run tests', [...stray_checks, ...test_checks])
 } finally {
   rmSync(work_dir, { recursive: true, force: true })
 }
-
-for (const { test, optimize } of failed) {
-  console.error(`FAIL ${test.label}${optimize ? ' (-O)' : ''}`)
-}
-console.log(`${runs.length - failed.length}/${runs.length} passed, ${strays.length} stray file(s)`)
-process.exit(failed.length === 0 && strays.length === 0 ? 0 : 1)
+process.exit(failed_count === 0 ? 0 : 1)

@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { run_checks } from './report.ts'
 
 const root_dir = join(import.meta.dirname, '../..')
 const cli_work_dir = mkdtempSync(join(tmpdir(), 'lerta-cli-'))
@@ -29,16 +30,27 @@ const cli_cases: CliCase[] = [
   { args: ['build', hello, '-o', exe, '--unknown'], status: 2 },
 ]
 const main_path = join(import.meta.dirname, '../src/main.ts')
-const cli_succeeds = ({ args, status, produced }: CliCase): boolean =>
-  spawnSync(process.execPath, [main_path, ...args], { stdio: 'ignore' }).status === status &&
-  (produced?.() ?? true)
-let failed_cli: CliCase[]
+// Paths are shown relative to the repository, and the work directory as <tmp>.
+const shorten_path = (arg: string): string =>
+  arg.replace(cli_work_dir, '<tmp>').replace(`${root_dir}/`, '')
+
+const run_cli_case = ({ args, status, produced }: CliCase): string[] => {
+  const actual = spawnSync(process.execPath, [main_path, ...args], { stdio: 'ignore' }).status
+  if (actual !== status) return [`expected exit status ${status}, got ${actual}`]
+  if (produced !== undefined && !produced()) return ['the build did not produce what it should']
+  return []
+}
+
+let failed_count: number
 try {
-  failed_cli = cli_cases.filter((cli_case) => !cli_succeeds(cli_case))
+  failed_count = run_checks(
+    'CLI checks',
+    cli_cases.map((cli_case) => ({
+      name: `lerta ${cli_case.args.map(shorten_path).join(' ')}`,
+      run: () => run_cli_case(cli_case),
+    })),
+  )
 } finally {
   rmSync(cli_work_dir, { recursive: true, force: true })
 }
-
-for (const { args } of failed_cli) console.error(`FAIL lerta ${args.join(' ')}`)
-console.log(`${cli_cases.length - failed_cli.length}/${cli_cases.length} CLI checks passed`)
-process.exit(failed_cli.length === 0 ? 0 : 1)
+process.exit(failed_count === 0 ? 0 : 1)
