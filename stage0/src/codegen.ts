@@ -57,6 +57,7 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
   const globals = modules.map((module) =>
     define_top_level_globals(
       ir_module,
+      module.index,
       module.program.filter(is_top_level_value),
       checked[module.index].types,
     ),
@@ -132,15 +133,17 @@ export class FunctionGenerator implements BlockGenerator {
     top_level: { values: Map<string, TopLevelGlobal>; top_level_code: boolean },
   ) {
     this.top_level = top_level
+    // Outside every scope: the module's top-level values, which a function checks to be
+    // initialized, and the values it imports, whose modules have initialized them.
     this.locals = new Scopes<CodegenLocal>((name) => {
       const global = top_level.top_level_code ? undefined : top_level.values.get(name)
-      if (global === undefined) return undefined
-      return {
-        kind: 'slot',
-        pointer: global.pointer,
-        type: global.type,
-        top_level: { global, is_checked: true },
+      if (global !== undefined) {
+        const { pointer, type } = global
+        return { kind: 'slot', pointer, type, top_level: { global, is_checked: true } }
       }
+      const imported = checked.imports.get(name)?.export
+      if (imported?.kind !== 'lerta_value') return undefined
+      return { kind: 'slot', pointer: imported.pointer, type: imported.type }
     })
     this.types = checked.types
     this.objects = checked.objects

@@ -38,6 +38,9 @@ export const ir_return_type = (type: Type): string =>
 // A function is named by its module too, since two modules may declare the same name.
 export const function_symbol = (module_index: number, name: string): string =>
   `@lerta.fn.${module_index}.${name}`
+// The global that holds a top-level value, and its flag (see top_level_codegen.ts).
+export const top_level_symbol = (module_index: number, name: string): string =>
+  `@lerta.value.${module_index}.${name}`
 export const module_init_symbol = (module_index: number): string => `@lerta.module.${module_index}`
 // A class or struct is named by its symbol (see Type), which tells apart those of different modules.
 const object_symbol = (type: Type): string => {

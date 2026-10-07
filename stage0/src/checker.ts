@@ -12,7 +12,7 @@ import {
 import { CompileError, CompileWarning } from './errors.ts'
 import { Functions, parameter_types, type FunctionEntry } from './functions.ts'
 import { Imports, type Export } from './imports.ts'
-import { function_symbol } from './lerta_ir.ts'
+import { function_symbol, top_level_symbol } from './lerta_ir.ts'
 import { is_file_import, with_module_path, type Module } from './loader.ts'
 import { std_modules } from './std_modules.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
@@ -158,7 +158,7 @@ const check = (
     if (error instanceof CompileError) error.warnings = in_source_order(warnings)
     throw error
   }
-  const exports = exports_of_module(module, functions, objects, resolver)
+  const exports = exports_of_module(module, functions, objects, resolver, types)
   return { types, conversions, objects, imports, warnings: in_source_order(warnings), exports }
 }
 
@@ -178,15 +178,20 @@ const exports_of_module = (
   functions: Functions,
   objects: ObjectTypes,
   resolver: TypeResolver,
+  types: Types,
 ): Map<string, Export> => {
   const exports = new Map<string, Export>()
   for (const statement of module.program) {
     if (!('exported' in statement && statement.exported)) continue
     const { name } = statement
-    if (statement.kind === 'declaration') {
+    if (statement.kind === 'declaration' && statement.value.kind === 'function') {
       const type = functions.type_of(name.name, name)!
       const symbol = function_symbol(module.index, name.name)
       exports.set(name.name, { kind: 'lerta_function', type, symbol })
+    } else if (statement.kind === 'declaration') {
+      const type = types.get(name)!
+      const pointer = top_level_symbol(module.index, name.name)
+      exports.set(name.name, { kind: 'lerta_value', type, pointer })
     } else if (statement.kind === 'type_declaration') {
       const type = objects.object_type(name.name)!
       exports.set(name.name, { kind: 'type', type, info: objects.info(type) })

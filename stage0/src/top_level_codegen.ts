@@ -4,13 +4,14 @@
 import type { Declaration } from './ast.ts'
 import type { Types } from './checker.ts'
 import type { IrBuilder, IrModule } from './ir_builder.ts'
-import { emit_release, ir_type, string_constant } from './lerta_ir.ts'
+import { emit_release, ir_type, string_constant, top_level_symbol } from './lerta_ir.ts'
 import { is_reference_type, type Type } from './types.ts'
 
 export type TopLevelGlobal = { name: string; type: Type; pointer: string; flag: string }
 
 export const define_top_level_globals = (
   module: IrModule,
+  module_index: number,
   declarations: Declaration[],
   types: Types,
 ): Map<string, TopLevelGlobal> =>
@@ -18,11 +19,10 @@ export const define_top_level_globals = (
     declarations.map((declaration) => {
       const { name } = declaration.name
       const type = types.get(declaration.name)!
-      const pointer = module.global(
-        'lerta.value',
-        `internal global ${ir_type(type)} zeroinitializer`,
-      )
-      const flag = module.global('lerta.value_set', 'internal global i1 false')
+      const pointer = top_level_symbol(module_index, name)
+      const flag = `${pointer}.set`
+      module.define_global(pointer, `internal global ${ir_type(type)} zeroinitializer`)
+      module.define_global(flag, 'internal global i1 false')
       return [name, { name, type, pointer, flag }]
     }),
   )

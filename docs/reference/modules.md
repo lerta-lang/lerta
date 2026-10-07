@@ -18,13 +18,12 @@ export struct Point
 export type Shape = Point | Circle
 
 export const origin = (): Point -> Point(x: 0, y: 0)
+export const unit = 1
 ```
 
-- `export` before a top-level function, class, struct or type alias makes it importable. Names are local to their module: other names cannot be imported, and different modules may use the same name. Classes and structs of the same name in different modules are different types; where a message would not tell them apart, it names their modules.
+- `export` before a top-level `const` (a function or a value), class, struct or type alias makes it importable. An imported value cannot be assigned, and is narrowed as a `const` is (see [control flow](control-flow.md#if-and-while)). An exported value is not warned about if its module does not use it. Names are local to their module: other names cannot be imported, and different modules may use the same name. Classes and structs of the same name in different modules are different types; where a message would not tell them apart, it names their modules.
 - Before the entry module's top-level code, that of every module it imports, directly or not, runs once, each after the modules it imports.
-- So far:
-  - only functions and types can be exported, not other values;
-  - imports cannot be circular.
+- So far, imports cannot be circular.
 
 ## std:io
 

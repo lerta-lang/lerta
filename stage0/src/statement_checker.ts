@@ -63,7 +63,12 @@ export class StatementChecker implements BlockChecker {
     // A function or a method sees the top-level values; the top-level code declares them.
     const is_top_level_code = context === undefined && self === undefined
     this.scopes_see_top_level = !is_top_level_code
-    this.scopes = new Scopes(is_top_level_code ? undefined : (name) => this.top_level.lookup(name))
+    // Outside every scope: the top-level values, for a function or a method, and imported values.
+    this.scopes = new Scopes(
+      (name) =>
+        (is_top_level_code ? undefined : this.top_level.lookup(name)) ??
+        this.imports.value_local(name),
+    )
     this.expressions = new ExpressionChecker(
       shared,
       this.scopes,
@@ -294,7 +299,8 @@ export class StatementChecker implements BlockChecker {
       type,
       mutable: declaration.mutable,
       declared: true,
-      used: false,
+      // An exported value is for other modules to use.
+      used: declaration.exported === true,
     })
   }
 

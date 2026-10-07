@@ -198,20 +198,17 @@ class Parser {
     return { kind: 'type_alias', name, type, line: token.line, column: token.column }
   }
 
-  // `export` before a function or a type; the checker tells whether it is at the top level.
+  // `export` before a `const` (a function or a value) or a type; the checker tells whether it is at
+  // the top level.
   private parse_export(): Statement {
     const token = this.tokens.next()
     const statement = this.parse_statement()
-    const is_function =
-      statement.kind === 'declaration' && !statement.mutable && statement.value.kind === 'function'
-    if (is_function || statement.kind === 'type_declaration' || statement.kind === 'type_alias') {
+    const is_const = statement.kind === 'declaration' && !statement.mutable
+    if (is_const || statement.kind === 'type_declaration' || statement.kind === 'type_alias') {
       return { ...statement, exported: true }
     }
-    throw new CompileError(
-      'only functions and types can be exported so far',
-      token.line,
-      token.column,
-    )
+    const message = 'only a const, a class, a struct or a type alias can be exported'
+    throw new CompileError(message, token.line, token.column)
   }
 
   // `import { a, b } from 'module'`. `from` is not a keyword, so that it stays usable as a name.

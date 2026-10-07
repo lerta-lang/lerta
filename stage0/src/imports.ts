@@ -1,15 +1,18 @@
 // The names a module imports, from the standard modules or from other files.
 import type { Identifier, Import, Program } from './ast.ts'
 import { CompileError, CompileWarning } from './errors.ts'
+import type { CheckerLocal } from './expression_checker.ts'
 import type { ObjectInfo } from './object_types.ts'
 import type { StdExport } from './std_modules.ts'
 import type { Type } from './types.ts'
 
-// What a module exports under a name: a standard function or value, a function of another file,
-// or a type (a class or struct, which brings its info, or an alias).
+// What a module exports under a name: a standard function or value, a function or a `const` of
+// another file (the global that holds it), or a type (a class or struct, which brings its info, or
+// an alias).
 export type Export =
   | StdExport
   | { kind: 'lerta_function'; type: Type; symbol: string }
+  | { kind: 'lerta_value'; type: Type; pointer: string }
   | { kind: 'type'; type: Type; info: ObjectInfo | undefined }
 
 // `name` is the name the module knows it by: its alias, if it has one.
@@ -67,6 +70,16 @@ export class Imports {
     const imported = this.names.get(name)
     if (imported !== undefined) imported.used = true
     return imported
+  }
+
+  // An imported `const` of another file as a local that cannot be assigned, so that it is read
+  // and narrowed as one; using it marks the import as used.
+  value_local(name: string): CheckerLocal | undefined {
+    const imported = this.names.get(name)
+    if (imported?.export.kind !== 'lerta_value') return undefined
+    imported.used = true
+    const { type } = imported.export
+    return { identifier: imported.name, type, mutable: false, declared: false, used: true }
   }
 
   get(name: string): ImportedName | undefined {

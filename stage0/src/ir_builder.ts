@@ -21,6 +21,11 @@ export class IrModule {
     return name
   }
 
+  // Adds `<name> = <definition>` for a global whose name is chosen by the caller.
+  define_global(name: string, definition: string): void {
+    this.globals.push(`${name} = ${definition}`)
+  }
+
   add_type(definition: string): void {
     this.type_definitions.push(definition)
   }
