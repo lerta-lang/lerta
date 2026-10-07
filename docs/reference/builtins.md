@@ -2,6 +2,6 @@
 
 Builtins need no import.
 
-- `print(s: String)` writes `s` and a newline to stdout.
+- `print(x: Stringable)` writes `x` and a newline to stdout. `String` and `Int` are `Stringable`.
 
 stdout is buffered and flushed when the program exits.

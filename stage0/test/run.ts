@@ -1,8 +1,10 @@
-// Run tests: each source comes with exactly one expected file, <name>.out for
-// the program's stdout or <name>.err for the expected compile error.
-//   tests/<name>.lerta     expected file next to it
+// Run tests: each source is compiled and run, and its output is compared with
+// <name>.out (stdout) and <name>.err (stderr: a compile error or an uncaught
+// throw). A missing file means empty output, but at least one must exist.
+// The run must fail exactly when <name>.err exists.
+//   tests/<name>.lerta     expected files next to it
 //   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
-import { execFileSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -66,17 +68,21 @@ const expected_output = (test: TestCase, extension: string): string | undefined 
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined
 }
 
-// Returns the program's stdout, or the compile error as the CLI prints it.
-const compile_and_run = (test: TestCase): { stdout: string } | { error: string } => {
+type Outcome = { stdout: string; stderr: string; failed: boolean }
+
+// A compile error is reported as the CLI prints it.
+const compile_and_run = (test: TestCase): Outcome => {
   const source_file = `${test.name}.lerta`
   const executable = join(work_dir, test.label.replaceAll('/', '_'))
   try {
     build(join(root_dir, test.source_dir, source_file), executable)
   } catch (error) {
     if (!(error instanceof CompileError)) throw error
-    return { error: `${error.format(source_file)}\n` }
+    return { stdout: '', stderr: `${error.format(source_file)}\n`, failed: true }
   }
-  return { stdout: execFileSync(executable, { encoding: 'utf8' }) }
+  const run = spawnSync(executable, { encoding: 'utf8' })
+  if (run.error !== undefined) throw run.error
+  return { stdout: run.stdout, stderr: run.stderr, failed: run.status !== 0 }
 }
 
 const run_test = (test: TestCase): boolean => {
@@ -87,16 +93,17 @@ const run_test = (test: TestCase): boolean => {
         return content === undefined ? [] : [[extension, content] as const]
       }),
     )
-    if (expected.size !== 1) {
+    if (expected.size === 0) {
       const candidates = test.extensions.map((extension) => `${test.name}.${extension}`)
-      console.error(
-        `${test.label}: needs exactly one of ${candidates.join(', ')} in ${test.expected_dir}`,
-      )
+      console.error(`${test.label}: needs ${candidates.join(' or ')} in ${test.expected_dir}`)
       return false
     }
-    const result = compile_and_run(test)
-    if ('error' in result) return result.error === expected.get('err')
-    return result.stdout === expected.get('out')
+    const outcome = compile_and_run(test)
+    return (
+      outcome.stdout === (expected.get('out') ?? '') &&
+      outcome.stderr === (expected.get('err') ?? '') &&
+      outcome.failed === expected.has('err')
+    )
   } catch (error) {
     console.error(error)
     return false

@@ -1,13 +1,24 @@
-import type { Call, Expression, Program } from './ast.ts'
+import type { BinaryOperator, Call, Expression, Position, Program } from './ast.ts'
 import { CompileError } from './errors.ts'
 import type { Token, TokenKind } from './lexer.ts'
 
 export const parse = (tokens: Token[]): Program => new Parser(tokens).parse_program()
 
+const INT_MIN = -(2n ** 63n)
+const INT_MAX = 2n ** 63n - 1n
+
+// Binary operators by precedence, weakest first.
+const binary_precedence: BinaryOperator[][] = [
+  ['+', '-'],
+  ['*', '/', '%'],
+]
+
 const describe_token = (token: Token): string => {
   switch (token.kind) {
     case 'identifier':
       return `'${token.text}'`
+    case 'integer':
+      return 'integer literal'
     case 'string':
       return 'string literal'
     case 'newline':
@@ -47,10 +58,11 @@ class Parser {
   }
 
   // A call without parentheses, allowed only at the start of a statement.
+  // `f -1` is `f(-1)`, but `f - 1` is a subtraction.
   private starts_command_argument(token: Token): boolean {
-    const starts_expression =
-      token.kind === 'identifier' || token.kind === 'string' || token.kind === '('
-    return token.spaced && starts_expression
+    if (!token.spaced) return false
+    if (token.kind === '-') return !this.peek(2).spaced
+    return ['identifier', 'integer', 'string', '('].includes(token.kind)
   }
 
   // `f x, y`: the arguments run to the end of the line.
@@ -62,7 +74,39 @@ class Parser {
   }
 
   private parse_expression(): Expression {
-    let expression = this.parse_primary()
+    return this.parse_binary(0)
+  }
+
+  private parse_binary(level: number): Expression {
+    if (level === binary_precedence.length) return this.parse_unary()
+    const operators = binary_precedence[level]
+    let left = this.parse_binary(level + 1)
+    while (operators.includes(this.peek().kind as BinaryOperator)) {
+      const operator = this.next().kind as BinaryOperator
+      const right = this.parse_binary(level + 1)
+      left = { kind: 'binary', operator, left, right, line: left.line, column: left.column }
+    }
+    return left
+  }
+
+  private parse_unary(): Expression {
+    const token = this.peek()
+    if (token.kind !== '-') return this.parse_postfix(this.parse_primary())
+    this.next()
+    // `-1` with no space is a negative literal, so that the minimum Int can be written.
+    const literal = this.peek()
+    if (literal.kind === 'integer' && !literal.spaced) {
+      this.next()
+      const position = { line: token.line, column: token.column }
+      const value = integer_value(-BigInt(literal.text), position)
+      return this.parse_postfix({ kind: 'integer', value, ...position })
+    }
+    const operand = this.parse_unary()
+    return { kind: 'unary', operator: '-', operand, line: token.line, column: token.column }
+  }
+
+  private parse_postfix(primary: Expression): Expression {
+    let expression = primary
     while (this.peek().kind === '(' && !this.peek().spaced) {
       this.next()
       const args = this.parse_parenthesized_arguments()
@@ -92,6 +136,8 @@ class Parser {
     const position = { line: token.line, column: token.column }
     if (token.kind === 'identifier') return { kind: 'identifier', name: token.text, ...position }
     if (token.kind === 'string') return { kind: 'string', value: token.text, ...position }
+    if (token.kind === 'integer')
+      return { kind: 'integer', value: integer_value(BigInt(token.text), position), ...position }
     if (token.kind === '(') {
       const expression = this.parse_expression()
       this.expect(')', "')'")
@@ -128,4 +174,11 @@ class Parser {
       token.column,
     )
   }
+}
+
+const integer_value = (value: bigint, position: Position): bigint => {
+  if (value < INT_MIN || value > INT_MAX) {
+    throw new CompileError('integer literal does not fit in Int', position.line, position.column)
+  }
+  return value
 }

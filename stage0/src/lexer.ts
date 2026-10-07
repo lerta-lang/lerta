@@ -3,11 +3,15 @@
 import { CompileError } from './errors.ts'
 
 export type TokenKind =
-  'identifier' | 'string' | '(' | ')' | ',' | 'newline' | 'indent' | 'dedent' | 'eof'
+  'identifier' | 'integer' | 'string' | Punctuation | 'newline' | 'indent' | 'dedent' | 'eof'
+
+const punctuations = ['(', ')', ',', '+', '-', '*', '/', '%'] as const
+type Punctuation = (typeof punctuations)[number]
 
 export type Token = {
   kind: TokenKind
-  // The identifier name, the string literal's contents or the punctuation; empty for layout tokens.
+  // The identifier name, the integer's digits without separators, the string literal's contents
+  // or the punctuation; empty for layout tokens.
   text: string
   // Whether whitespace or the start of the line precedes it: `f (x)` and `f(x)` parse differently.
   spaced: boolean
@@ -21,7 +25,9 @@ type Chars = string[]
 
 const is_identifier_start = (c: string): boolean => /[A-Za-z_]/.test(c)
 const is_identifier_part = (c: string): boolean => /[A-Za-z0-9_]/.test(c)
-const punctuations = new Set(['(', ')', ','])
+const is_digit = (c: string): boolean => /[0-9]/.test(c)
+const is_punctuation = (c: string): c is Punctuation =>
+  (punctuations as readonly string[]).includes(c)
 const is_printable_ascii = (c: string): boolean => /[ -~]/.test(c)
 
 export const tokenize = (source: string): Token[] => {
@@ -94,13 +100,24 @@ const tokenize_line = (chars: Chars, start: number, line: number): Token[] => {
       const close = chars.indexOf("'", i + 1)
       if (close === -1) throw new CompileError('unterminated string literal', line, i + 1)
       push('string', chars.slice(i + 1, close).join(''), i, close + 1)
-    } else if (punctuations.has(c)) {
-      push(c as TokenKind, c, i, i + 1)
+    } else if (is_digit(c)) {
+      const end = scan_while(chars, i, is_identifier_part)
+      push('integer', integer_digits(chars.slice(i, end).join(''), line, i + 1), i, end)
+    } else if (is_punctuation(c)) {
+      push(c, c, i, i + 1)
     } else {
       throw new CompileError(`unexpected character ${describe_char(c)}`, line, i + 1)
     }
   }
   return tokens
+}
+
+// `1_000` is 1000. A separator goes only between digits, and a leading zero is
+// rejected so that `010` is not mistaken for octal.
+const integer_digits = (text: string, line: number, column: number): string => {
+  const is_valid = /^(0|[1-9](_?[0-9])*)$/.test(text)
+  if (!is_valid) throw new CompileError(`invalid integer literal '${text}'`, line, column)
+  return text.replaceAll('_', '')
 }
 
 const scan_while = (chars: Chars, start: number, predicate: (c: string) => boolean): number => {

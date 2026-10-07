@@ -1,13 +1,26 @@
-import { string_type, void_type, type Type } from './types.ts'
+import { stringable_type, void_type, type Type } from './types.ts'
 
-export type Builtin = { type: Type; runtime_symbol: string }
+export type Builtin = {
+  type: Type
+  // The runtime C function to call, chosen by the argument types.
+  runtime_symbol: (arg_types: Type[]) => string
+}
+
+const print_symbols: Partial<Record<Type['kind'], string>> = {
+  String: 'lerta_print_string',
+  Int: 'lerta_print_int',
+}
 
 export const builtins = new Map<string, Builtin>([
   [
     'print',
     {
-      type: { kind: 'function', params: [string_type], result: void_type },
-      runtime_symbol: 'lerta_print',
+      type: { kind: 'function', params: [stringable_type], result: void_type },
+      runtime_symbol: ([arg_type]) => {
+        const symbol = print_symbols[arg_type.kind]
+        if (symbol === undefined) throw new Error(`no print for ${arg_type.kind}`)
+        return symbol
+      },
     },
   ],
 ])

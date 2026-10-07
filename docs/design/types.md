@@ -31,6 +31,9 @@ These follow the Ruby approach, constrained by types.
 
 ## Numeric types
 
+`Int` and its arithmetic are implemented: see [the reference](../reference/types.md).
+
+
 - `Int8/16/32/64`, `UInt8/16/32/64`, `Int` (an alias of Int64), `Float`.
 - **No implicit conversions** (`UInt8 + Int` is an error). The type of a literal is decided by context.
   - A one-byte string literal becomes a `Byte` when the expected type is `Byte` (`c >= '0'`, `"\n"` in `case c`). Without an expected type it is a `String`. Using two or more bytes as a `Byte` is an error.

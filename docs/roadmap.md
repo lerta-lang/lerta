@@ -6,7 +6,7 @@
 
 ### Included
 
-- **Syntax**: `#` comments, `'...'`/`"..."` strings, indented blocks, `const`/`var`, implicit return, parenthesis-free calls (at statement start), `then`/`else` expressions, `if`/`else` statements, `case`, `while`, `for x in xs`, `break`/`continue`, `return`, postfix `if`/`while`/`for`, comprehensions (`(...)` for `Iter<T>`, `[...]` for `Array<T>`), string interpolation, destructuring, named arguments (omitting `{}` of an anonymous struct), multi-line literals (newline separation inside brackets, bracketless blocks)
+- **Syntax**: `#` comments, `'...'`/`"..."` strings, indented blocks, `const`/`var`, implicit return, parenthesis-free calls (at statement start), `then`/`else` expressions, `if`/`else` statements, `case`, `while`, `for x in xs`, `break`/`continue`, `return`, postfix `if`/`while`/`for`, comprehensions (`(...)` for `Iter<T>`, `[...]` for `Array<T>`), ranges `a...b`, `case` without a subject, string interpolation, destructuring, named arguments (omitting `{}` of an anonymous struct), multi-line literals (newline separation inside brackets, bracketless blocks)
 - **Types**: `Int` (Int64), `UInt8` (with `Byte` as its alias), `Bool`, `String`, `void`, `never`, unions and narrowing, `type` aliases, `T?`, `as`, `!`, `is` tests, local inference
 - **Data**: `class`/`struct` (no inheritance, the type body rules, `@`, named constructors, `init`, `deinit`), anonymous structs, `Map` literals, `Array<T>`, `Map<K, V>`, `Iter<T>` (**only built-in types are generic**; user-defined generics come later)
 - **Functions**: first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
@@ -32,7 +32,7 @@
 | `'std:process'` | `argv`, `exit(code: Int): never` |
 
 - In stage0, writes are synchronous. Making them asynchronous is decided in Phase 2.
-- Until `extern` is implemented, `print` is implemented in the C runtime (`lerta_print`) and called directly by the compiler. It moves to Lerta once `extern` exists.
+- Until `extern` is implemented, `print` is implemented in the C runtime (`lerta_print_string` and `lerta_print_int`) and called directly by the compiler. It moves to Lerta once `extern` exists.
 
 ### Not included (later)
 
@@ -52,6 +52,10 @@
 - Windows
 - Formatter, LSP, package management
 
+## Follow-ups
+
+- `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
+
 ## Phases and bootstrap
 
 Run tests (source → execution result) are shared by all stages. They run with the debug runtime and fail on any leak ([leak checking](internals.md#leak-checking)), from stage0 on.
@@ -68,6 +72,8 @@ Run tests (source → execution result) are shared by all stages. They run with 
 
 ## Open questions
 
+- Whether `-1.abs()` is `(-1).abs()` (the negative literal binds first) or `-(1.abs())` (as in Rust and Python). Decide when methods on literals are implemented.
+- Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
 - Whether to add enums without payloads (for now, `case` on values substitutes).
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).

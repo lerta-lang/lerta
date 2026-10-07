@@ -2,10 +2,9 @@
 
 ## Basics
 
-Source files, comments, identifiers, indentation and `'...'` strings are implemented: see [the reference](../reference/syntax.md).
+Source files, comments, identifiers, indentation, integer literals and `'...'` strings are implemented: see [the reference](../reference/syntax.md).
 
 - CoffeeScript-like. Indentation forms blocks. Implicit return. Expression-oriented.
-- Numeric literals may use separators: `1_000_000`.
 - Names starting with `_` produce no warning when unused.
 - String literals besides `'...'`:
   - `"..."`: escapes (`\n` `\t` `\r` `\0` `\\` `\"` `\#` `\u{1F600}`) and interpolation `"#{name}"`.
@@ -51,7 +50,7 @@ Source files, comments, identifiers, indentation and `'...'` strings are impleme
 
 The basic rules are implemented: see [the reference](../reference/syntax.md#calls). Planned:
 
-- Whitespace after an identifier at the start of a statement also starts the arguments before other tokens: `f [1]` is `f([1])` and `f -1` is `f(-1)`. Without whitespace it is `f[1]` (indexing). If there is also whitespace after the operator, as in `f - 1`, it is a binary operator. In the middle of an expression there are no parenthesis-free calls, so `x -1` is `x - 1`.
+- Whitespace after an identifier at the start of a statement also starts the arguments before `[`: `f [1]` is `f([1])`, while `f[1]` is indexing.
 - If the last argument is a closure, it may continue as an indented block.
 - A call with explicit type arguments requires parentheses: `f<T>(x)` (to avoid a clash with `a < b`).
 
@@ -60,4 +59,5 @@ The basic rules are implemented: see [the reference](../reference/syntax.md#call
 From weakest: postfix `for` / postfix `if` / postfix `while` < parenthesis-free call < `then`/`else` < `?` < other binary operators
 
 - `?` is the weakest binary operator (`a ? b + c` is `a ? (b + c)`).
+- The other binary operators (the arithmetic ones are implemented: see [the reference](../reference/syntax.md#operators)), from weakest: `or` < `and` < `not` (prefix) < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`. All binary operators except `then`/`else` are left-associative.
 - Comparison operators cannot be chained (`a < b < c` and `a < b > c` are syntax errors; use parentheses or `and`). Because of this, `f<T>(x)` always reads as a call with type arguments.

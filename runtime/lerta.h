@@ -14,7 +14,11 @@ typedef struct {
   uint8_t bytes[];  // UTF-8, not NUL-terminated
 } LertaString;
 
-void lerta_print(const LertaString *s);
+void lerta_print_string(const LertaString *s);
+void lerta_print_int(int64_t n);
+
+// stage0 has no catch: a throw prints the message to stderr and exits.
+_Noreturn void lerta_throw(const LertaString *message);
 // Returns false if any output to stdout has failed.
 bool lerta_stdout_flush(void);
 

@@ -5,7 +5,8 @@ This reference documents only implemented behavior. The planned design is in [..
 | File | Topic |
 |---|---|
 | [syntax.md](syntax.md) | Lexical rules, indentation, statements and calls |
-| [errors.md](errors.md) | Compile-time rules such as discarded values |
+| [types.md](types.md) | Types and their operations |
+| [errors.md](errors.md) | Exceptions and discarded values |
 | [builtins.md](builtins.md) | Builtin functions |
 | [compiler.md](compiler.md) | Compiler usage and error format |
 | [style.md](style.md) | Coding conventions for Lerta code |

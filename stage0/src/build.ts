@@ -11,11 +11,11 @@ const runtime_dir = join(import.meta.dirname, '../../runtime')
 
 export const build = (source_path: string, output_path: string): void => {
   const program = parse(tokenize(readFileSync(source_path, 'utf8')))
-  check(program)
+  const types = check(program)
   const work_dir = mkdtempSync(join(tmpdir(), 'lerta-'))
   try {
     const ir_path = join(work_dir, 'main.ll')
-    writeFileSync(ir_path, generate(program))
+    writeFileSync(ir_path, generate(program, types))
     const runtime_sources = readdirSync(runtime_dir)
       .filter((file) => file.endsWith('.c'))
       .map((file) => join(runtime_dir, file))
