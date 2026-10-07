@@ -278,17 +278,22 @@ export class ExpressionParser {
     return { kind: 'member', object, name: this.parse_identifier(), ...position }
   }
 
-  // The items of a list after its opening bracket, through `close`. Items are separated by commas
-  // or line ends, and the last may be followed by either.
+  // The items of a list after its opening bracket, through `close`. Items are separated by a comma,
+  // which the next item follows on the same line, or by a line end.
   parse_list<T>(close: ')' | ']' | '}', parse_item: () => T): T[] {
     return this.tokens.inside('separate', () => {
       const items: T[] = []
       this.tokens.accept('line_break')
       while (!this.tokens.accept(close)) {
         items.push(parse_item())
-        const has_comma = this.tokens.accept(',')
-        const is_separated = this.tokens.accept('line_break') || has_comma
-        if (!is_separated) {
+        if (this.tokens.accept(',')) {
+          const next = this.tokens.peek()
+          if (next.kind === 'line_break' || next.kind === close) {
+            throw this.tokens.error_at(next, "an item after ','")
+          }
+          continue
+        }
+        if (!this.tokens.accept('line_break')) {
           this.tokens.expect(close, `'${close}'`)
           break
         }
@@ -340,6 +345,8 @@ export class ExpressionParser {
   parse_arguments(): Arguments {
     const items = [this.parse_argument()]
     while (this.tokens.peek_continuation() === ',' && this.tokens.next()) {
+      const next = this.tokens.peek()
+      if (next.kind === 'newline') throw this.tokens.error_at(next, "an item after ','")
       items.push(this.parse_argument())
     }
     return to_arguments(items)
