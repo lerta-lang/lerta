@@ -14,6 +14,7 @@ import {
 } from './ast.ts'
 import type { Checked, Types } from './checker.ts'
 import { emit_get, emit_set } from './array_codegen.ts'
+import { emit_map_set } from './map_codegen.ts'
 import { CheckedInt } from './checked_int.ts'
 import { ControlFlowGenerator } from './control_flow_codegen.ts'
 import { ThrowBlocks } from './throw_blocks.ts'
@@ -272,8 +273,11 @@ export class FunctionGenerator {
     emit_release(this.ir, object)
   }
 
-  // The array retains the new item and releases the old one.
+  // The array or map retains the new item and releases the old one.
   private generate_index_assignment(assignment: Assignment, target: Index): void {
+    const object_type = this.types.get(target.object)!
+    if (object_type.kind === 'Map')
+      return this.generate_map_assignment(assignment, target, object_type)
     const element = this.types.get(target)!
     const array = this.expressions.generate(target.object)
     const index = this.expressions.generate(target.index)
@@ -283,6 +287,21 @@ export class FunctionGenerator {
     emit_set(this.ir, array, index, result, element)
     if (is_reference_type(element)) emit_release(this.ir, result)
     emit_release(this.ir, array)
+  }
+
+  // Only `=` applies to a map value. The key, like an index, is evaluated before the value.
+  private generate_map_assignment(
+    assignment: Assignment,
+    target: Index,
+    type: Extract<Type, { kind: 'Map' }>,
+  ): void {
+    const map = this.expressions.generate(target.object)
+    const key = this.expressions.generate(target.index)
+    const value = this.expressions.generate(assignment.value)
+    emit_map_set(this.ir, map, key, value, type)
+    this.expressions.release_if_reference(target.index, key)
+    this.expressions.release_if_reference(assignment.value, value)
+    emit_release(this.ir, map)
   }
 
   // For `=`, the value is evaluated before the old one is loaded, since evaluating it may change

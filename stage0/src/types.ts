@@ -5,6 +5,7 @@ export type Type =
   | { kind: 'UInt8' }
   | { kind: 'Binary' }
   | { kind: 'Array'; element: Type }
+  | { kind: 'Map'; key: Type; value: Type }
   // A class or struct, by name (see ObjectTypes).
   | { kind: 'Object'; name: string; is_struct: boolean }
   // `A | B`: classes and structs, by name; the object carries which one it is.
@@ -33,6 +34,7 @@ export const writer_type: Type = { kind: 'Writer' }
 export const stringable_type: Type = { kind: 'Stringable' }
 
 export const array_type = (element: Type): Type => ({ kind: 'Array', element })
+export const map_type = (key: Type, value: Type): Type => ({ kind: 'Map', key, value })
 export const optional_type = (inner: Type): Type => ({ kind: 'Optional', inner })
 // The members are kept in name order, so that `A | B` and `B | A` are the same type.
 export const union_type = (members: Type[]): Type => {
@@ -45,6 +47,8 @@ export const format_type = (type: Type): string => {
   switch (type.kind) {
     case 'Array':
       return `Array<${format_type(type.element)}>`
+    case 'Map':
+      return `Map<${format_type(type.key)}, ${format_type(type.value)}>`
     case 'Object':
       return type.name
     case 'Union':
@@ -66,7 +70,7 @@ export const same_type = (a: Type, b: Type): boolean => format_type(a) === forma
 
 // Values of these types are reference counted.
 export const is_reference_type = (type: Type): boolean =>
-  ['String', 'Binary', 'Array', 'Object', 'Union'].includes(type.kind) ||
+  ['String', 'Binary', 'Array', 'Map', 'Object', 'Union'].includes(type.kind) ||
   (type.kind === 'Optional' && is_reference_type(type.inner))
 
 // A T or nil also fits where a T? is expected.
@@ -82,6 +86,10 @@ export const is_assignable = (value: Type, target: Type): boolean => {
   }
   return same_type(value, target)
 }
+
+// Maps hash and compare their keys in the runtime, which knows these two kinds.
+export const is_map_key_type = (type: Type): boolean =>
+  type.kind === 'String' || type.kind === 'Int'
 
 export const is_stringable = (type: Type): boolean =>
   ['String', 'Int', 'UInt8', 'Bool'].includes(type.kind)

@@ -7,6 +7,7 @@ import {
   type Expression,
   type Identifier,
   type IsTest,
+  type MapLiteral,
   type Index,
   type Member,
 } from './ast.ts'
@@ -31,6 +32,9 @@ import {
   nil_type,
   is_assignable,
   is_reference_type,
+  is_map_key_type,
+  map_type,
+  optional_type,
   same_type,
   string_type,
   stringable_type,
@@ -117,7 +121,7 @@ export class ExpressionChecker {
       case 'identifier':
         return this.type_of_identifier(expression)
       case 'call':
-        return this.type_of_call(expression)
+        return this.type_of_call(expression, expected)
       case 'unary':
         return this.operators.type_of_unary(expression, expected)
       case 'binary':
@@ -128,6 +132,8 @@ export class ExpressionChecker {
         return this.type_of_property(expression)
       case 'array':
         return this.type_of_array(expression, expected)
+      case 'map':
+        return this.type_of_map(expression, expected)
       case 'index':
         return this.type_of_index(expression)
       case 'function': {
@@ -165,8 +171,9 @@ export class ExpressionChecker {
     return builtin.type
   }
 
-  private type_of_call(call: Call): Type {
+  private type_of_call(call: Call, expected: Type | undefined): Type {
     const { callee } = call
+    if (this.is_empty_map(callee)) return this.type_of_empty_map(call, expected)
     const object_type = this.objects.constructed_type(callee)
     if (object_type !== undefined) return this.objects.type_of_construction(call, object_type)
     if (call.named_args.length > 0) {
@@ -244,26 +251,84 @@ export class ExpressionChecker {
         'the type of an empty array must be written, as in `const xs: Array<Int> = []`'
       throw new CompileError(message, array.line, array.column)
     }
-    const element = this.type_of(anchor)
-    // An item is 8 bytes, which cannot hold an optional Int, UInt8 or Bool.
-    const is_optional_value = element.kind === 'Optional' && !is_reference_type(element)
-    if (element.kind === 'nil') {
-      const message = 'nil alone does not give the type of an array; write it in an annotation'
-      throw new CompileError(message, anchor.line, anchor.column)
-    }
-    const has_no_value = element.kind === 'void' || element.kind === 'never'
-    if (has_no_value || element.kind === 'function' || is_optional_value) {
-      const message = `an array cannot hold values of type ${format_type(element)}`
-      throw new CompileError(message, anchor.line, anchor.column)
-    }
+    const element = this.item_type(anchor, 'an array')
     for (const item of array.elements) {
       if (item !== anchor) this.expect_type(item, element)
     }
     return array_type(element)
   }
 
+  // An item is 8 bytes, which cannot hold an optional Int, UInt8 or Bool.
+  private item_type(item: Expression, container: string): Type {
+    const type = this.type_of(item)
+    if (type.kind === 'nil') {
+      const message = `nil alone does not give the type of ${container}; write it in an annotation`
+      throw new CompileError(message, item.line, item.column)
+    }
+    const is_optional_value = type.kind === 'Optional' && !is_reference_type(type)
+    const has_no_value = type.kind === 'void' || type.kind === 'never'
+    if (has_no_value || type.kind === 'function' || is_optional_value) {
+      const message = `${container} cannot hold values of type ${format_type(type)}`
+      throw new CompileError(message, item.line, item.column)
+    }
+    return type
+  }
+
+  // The types come from the expected type if there is one, otherwise from the first entry.
+  private type_of_map(map: MapLiteral, expected: Type | undefined): Type {
+    const type = expected?.kind === 'Map' ? expected : this.map_type_of_entry(map.entries[0])
+    if (type.kind !== 'Map') throw new Error('a map literal has a map type')
+    for (const entry of map.entries) {
+      this.expect_type(entry.key, type.key)
+      this.expect_type(entry.value, type.value)
+    }
+    return type
+  }
+
+  private map_type_of_entry(entry: MapLiteral['entries'][number]): Type {
+    const key = this.type_of(entry.key)
+    if (!is_map_key_type(key)) {
+      const message = `a map key must be a String or an Int, got ${format_type(key)}`
+      throw new CompileError(message, entry.key.line, entry.key.column)
+    }
+    const value = this.item_type(entry.value, 'a map')
+    // A missing key reads as nil, so a value cannot be nil itself.
+    if (value.kind === 'Optional') {
+      const message = `a map cannot hold values of type ${format_type(value)}`
+      throw new CompileError(message, entry.value.line, entry.value.column)
+    }
+    return map_type(key, value)
+  }
+
+  // `Map()`, unless the name is taken in the program.
+  private is_empty_map(callee: Expression): boolean {
+    return (
+      callee.kind === 'identifier' &&
+      callee.name === 'Map' &&
+      this.scopes.lookup('Map') === undefined &&
+      !this.functions.has('Map')
+    )
+  }
+
+  private type_of_empty_map(call: Call, expected: Type | undefined): Type {
+    if (expected?.kind !== 'Map') {
+      const message =
+        'the type of an empty map must be written, as in `const m: Map<String, Int> = Map()`'
+      throw new CompileError(message, call.line, call.column)
+    }
+    if (call.args.length > 0 || call.named_args.length > 0) {
+      throw new CompileError('Map() takes no arguments', call.line, call.column)
+    }
+    return expected
+  }
+
+  // An item of an array or a Binary, or the value of a map's key, which may not be there.
   private type_of_index(index: Index): Type {
     const object_type = this.type_of(index.object)
+    if (object_type.kind === 'Map') {
+      this.expect_type(index.index, object_type.key)
+      return optional_type(object_type.value)
+    }
     if (object_type.kind !== 'Array' && object_type.kind !== 'Binary') {
       const message = `cannot index a value of type ${format_type(object_type)}`
       throw new CompileError(message, index.object.line, index.object.column)

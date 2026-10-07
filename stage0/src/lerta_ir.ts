@@ -9,6 +9,7 @@ export const ir_type = (type: Type): string => {
     case 'String':
     case 'Binary':
     case 'Array':
+    case 'Map':
     case 'Object':
     case 'Union':
       return 'ptr'

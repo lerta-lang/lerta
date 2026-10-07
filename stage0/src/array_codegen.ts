@@ -2,9 +2,10 @@
 // 8 bytes: an Int as is, a Bool or a UInt8 zero-extended and a reference as its address.
 import type { IrBuilder } from './ir_builder.ts'
 import { ir_type } from './lerta_ir.ts'
+import { runtime_caller } from './runtime_calls.ts'
 import { is_reference_type, type Type } from './types.ts'
 
-const runtime_functions = {
+const call = runtime_caller({
   lerta_array_new: 'ptr @lerta_array_new(i1 zeroext)',
   lerta_array_length: 'i64 @lerta_array_length(ptr)',
   lerta_array_get: 'i64 @lerta_array_get(ptr, i64)',
@@ -12,21 +13,7 @@ const runtime_functions = {
   lerta_array_push: 'void @lerta_array_push(ptr, i64)',
   lerta_array_pop: 'i64 @lerta_array_pop(ptr)',
   lerta_string_join: 'ptr @lerta_string_join(ptr, ptr)',
-} as const
-
-type RuntimeFunction = keyof typeof runtime_functions
-
-const call = (ir: IrBuilder, name: RuntimeFunction, args: string): string => {
-  const signature = runtime_functions[name]
-  ir.declare(name, `declare ${signature}`)
-  const [result_type] = signature.split(' ')
-  const instruction = `call ${result_type} @${name}(${args})`
-  if (result_type === 'void') {
-    ir.emit(instruction)
-    return ''
-  }
-  return ir.assign(instruction)
-}
+})
 
 export const to_item = (ir: IrBuilder, operand: string, type: Type): string => {
   // An Int, and a Writer (a file descriptor), are already 8 bytes.

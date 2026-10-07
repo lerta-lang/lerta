@@ -168,7 +168,7 @@ class Parser {
   private starts_command_argument(token: Token): boolean {
     if (!token.spaced) return false
     if (token.kind === '-') return !this.tokens.peek(2).spaced
-    return token.kind === '(' || token.kind === '[' || command_argument_starts.includes(token.kind)
+    return ['(', '[', '{', ...command_argument_starts].includes(token.kind)
   }
 
   // `f x, y`: the arguments run to the end of the line.

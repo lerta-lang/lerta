@@ -7,6 +7,7 @@ import {
   type Identifier,
   type Index,
   type Interpolation,
+  type MapLiteral,
   type Member,
   type Throw,
 } from './ast.ts'
@@ -40,6 +41,13 @@ import {
   ir_type,
   string_constant,
 } from './lerta_ir.ts'
+import {
+  call_map_method,
+  emit_map_get,
+  emit_map_length,
+  emit_map_new,
+  emit_map_set,
+} from './map_codegen.ts'
 import { emit_is_present, emit_unwrap, emit_wrap, nil_constant } from './optional_codegen.ts'
 import { OperatorGenerator } from './operator_codegen.ts'
 import { emit_field_pointer, emit_type_test } from './object_codegen.ts'
@@ -173,6 +181,8 @@ export class ExpressionGenerator {
         return this.generate_property(expression)
       case 'array':
         return this.generate_array(expression)
+      case 'map':
+        return this.generate_map(expression)
       case 'index':
         return this.generate_index(expression)
       case 'function':
@@ -184,6 +194,11 @@ export class ExpressionGenerator {
   private generate_call(call: Call): string {
     const { callee } = call
     if (callee.kind === 'member') return this.generate_method_call(call, callee)
+    const call_type = this.types.get(call)!
+    if (callee.kind === 'identifier' && callee.name === 'Map' && this.is_builtin_name('Map')) {
+      if (call_type.kind !== 'Map') throw new Error('Map() has a map type')
+      return emit_map_new(this.ir, call_type)
+    }
     if (callee.kind !== 'identifier') throw new Error('only named functions can be called')
     const callee_type = this.types.get(callee)!
     if (callee_type.kind === 'Object') return this.generate_construction(call, callee_type)
@@ -224,6 +239,11 @@ export class ExpressionGenerator {
     const object = this.ir.assign(`call ptr ${constructor_symbol(name)}(${args.join(', ')})`)
     for (const { arg, operand } of given.values()) this.release_if_reference(arg.value, operand)
     return object
+  }
+
+  // A builtin name can be taken by a local or a top-level function.
+  private is_builtin_name(name: string): boolean {
+    return this.locals.lookup(name) === undefined && !this.function_names.has(name)
   }
 
   private call_user_function(symbol: string, type: Type, args: string): string {
@@ -281,7 +301,9 @@ export class ExpressionGenerator {
     const result =
       object_type.kind === 'Array'
         ? this.call_array_method(name, object, object_type.element, args)
-        : emit_binary_slice(this.ir, object, args[0], args[1])
+        : object_type.kind === 'Map'
+          ? call_map_method(this.ir, name, object, args, object_type)
+          : emit_binary_slice(this.ir, object, args[0], args[1])
     call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
     emit_release(this.ir, object)
     return result
@@ -314,13 +336,33 @@ export class ExpressionGenerator {
     return result
   }
 
+  // Each entry is set, so the map retains its key and value, whose own references are then
+  // released.
+  private generate_map(map: MapLiteral): string {
+    const type = this.types.get(map)!
+    if (type.kind !== 'Map') throw new Error('a map literal has a map type')
+    const result = emit_map_new(this.ir, type)
+    for (const entry of map.entries) {
+      const key = this.generate(entry.key)
+      const value = this.generate(entry.value)
+      emit_map_set(this.ir, result, key, value, type)
+      this.release_if_reference(entry.key, key)
+      this.release_if_reference(entry.value, value)
+    }
+    return result
+  }
+
   private generate_index(index: Index): string {
     const object = this.generate(index.object)
+    const object_type = this.types.get(index.object)!
     const position = this.generate(index.index)
     const item =
-      this.types.get(index.object)!.kind === 'Binary'
+      object_type.kind === 'Binary'
         ? emit_binary_get(this.ir, object, position)
-        : emit_get(this.ir, object, position, this.types.get(index)!)
+        : object_type.kind === 'Map'
+          ? emit_map_get(this.ir, object, position, object_type)
+          : emit_get(this.ir, object, position, this.types.get(index)!)
+    this.release_if_reference(index.index, position)
     emit_release(this.ir, object)
     return item
   }
@@ -344,7 +386,11 @@ export class ExpressionGenerator {
     if (object_kind === 'Object') return this.read_field(object, object_type, member)
     if (object_kind === 'String') return object
     const length =
-      object_kind === 'Binary' ? emit_binary_length(this.ir, object) : emit_length(this.ir, object)
+      object_kind === 'Binary'
+        ? emit_binary_length(this.ir, object)
+        : object_kind === 'Map'
+          ? emit_map_length(this.ir, object)
+          : emit_length(this.ir, object)
     emit_release(this.ir, object)
     return length
   }

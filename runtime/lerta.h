@@ -41,6 +41,28 @@ typedef struct {
   bool owns_references;
 } LertaArray;
 
+typedef struct {
+  int64_t key;
+  int64_t value;
+  uint64_t hash;
+  bool live;
+} LertaMapEntry;
+
+// Keys and values are 8 bytes each, as array items are. Entries are kept in insertion order, and
+// `slots` is an open-addressing index into them.
+typedef struct {
+  LertaHeader header;
+  int64_t length;  // live entries
+  int64_t entry_count;
+  int64_t entry_capacity;
+  LertaMapEntry *entries;
+  int64_t slot_count;  // a power of two
+  int64_t *slots;
+  // String keys are compared by their bytes and retained; other keys are Ints.
+  bool string_keys;
+  bool owns_values;
+} LertaMap;
+
 // Memory (memory.c). Release frees an object when its count reaches zero. Both accept NULL,
 // which is how nil is represented.
 void *lerta_alloc(int64_t size, void (*drop)(void *object));
@@ -75,6 +97,16 @@ void lerta_array_set(LertaArray *array, int64_t index, int64_t item);
 void lerta_array_push(LertaArray *array, int64_t item);
 int64_t lerta_array_pop(LertaArray *array);
 LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator);
+
+// Maps (map.c). Keys and values in are borrowed. get returns whether the key is there, and its
+// value owned through `value` (0 otherwise); keys returns them in insertion order.
+LertaMap *lerta_map_new(bool string_keys, bool owns_values);
+int64_t lerta_map_length(const LertaMap *map);
+bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value);
+bool lerta_map_has(const LertaMap *map, int64_t key);
+void lerta_map_set(LertaMap *map, int64_t key, int64_t value);
+void lerta_map_remove(LertaMap *map, int64_t key);
+LertaArray *lerta_map_keys(const LertaMap *map);
 
 // Process (process.c). The arguments exclude the program name.
 void lerta_set_arguments(int argc, char **argv);

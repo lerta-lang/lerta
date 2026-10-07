@@ -163,16 +163,21 @@ export class ExpressionParser {
     return { kind: 'identifier', name: token.text, line: token.line, column: token.column }
   }
 
-  // `(` starts a function literal when its closing `)` is followed by `:` or `->`.
+  // `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
+  // `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
+  // map key: `{ (k): v }`.
   private starts_function_literal(): boolean {
-    if (this.tokens.peek().kind === '->') return true
-    if (this.tokens.peek().kind !== '(') return false
+    const [first, second, third] = [0, 1, 2].map((offset) => this.tokens.peek(offset).kind)
+    if (first === '->') return true
+    if (first !== '(') return false
+    if (second === ')') return third === ':' || third === '->'
+    if (second === 'identifier' && third === ':') return true
     let depth = 0
     for (let offset = 0; ; offset++) {
       const kind = this.tokens.peek(offset).kind
       if (kind === '(') depth++
       if (kind === ')') depth--
-      if (depth === 0) return [':', '->'].includes(this.tokens.peek(offset + 1).kind)
+      if (depth === 0) return this.tokens.peek(offset + 1).kind === '->'
       if (kind === 'newline' || kind === 'eof') return false
     }
   }
@@ -267,6 +272,27 @@ export class ExpressionParser {
     return { kind: 'array', elements, ...position }
   }
 
+  // `{ k: v, ... }` on one line. A key that is a name would make an anonymous struct, so a name's
+  // value is written as a key in parentheses: `{ (k): v }`.
+  private parse_map_literal(position: Position): Expression {
+    if (this.tokens.peek().kind === '}') {
+      throw new CompileError('the empty map is written `Map()`', position.line, position.column)
+    }
+    const entries: { key: Expression; value: Expression }[] = []
+    do {
+      const token = this.tokens.peek()
+      if (token.kind === 'identifier' && this.tokens.peek(1).kind === ':') {
+        const message = `anonymous structs are not supported yet; for the value of '${token.text}' as a key, write (${token.text})`
+        throw new CompileError(message, token.line, token.column)
+      }
+      const key = this.parse_expression()
+      this.tokens.expect(':', "':'")
+      entries.push({ key, value: this.parse_expression() })
+    } while (this.tokens.accept(','))
+    this.tokens.expect('}', "'}'")
+    return { kind: 'map', entries, ...position }
+  }
+
   // The arguments after an opening parenthesis, through the closing one.
   private parse_parenthesized_arguments(): Arguments {
     if (this.tokens.accept(')')) return { args: [], named_args: [] }
@@ -319,6 +345,7 @@ export class ExpressionParser {
     }
     if (token.kind === 'case') return this.parse_case(position)
     if (token.kind === '[') return this.parse_array_literal(position)
+    if (token.kind === '{') return this.parse_map_literal(position)
     if (token.kind === 'integer')
       return { kind: 'integer', value: integer_value(BigInt(token.text), position), ...position }
     if (token.kind === '(') {

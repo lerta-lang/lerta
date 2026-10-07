@@ -270,7 +270,7 @@ export class StatementChecker {
     const { target } = assignment
     const target_type =
       target.kind === 'index'
-        ? this.check_item_target(target)
+        ? this.check_item_target(target, assignment.operator)
         : target.kind === 'member'
           ? this.expressions.field_target(target)
           : this.check_variable_target(target)
@@ -282,10 +282,19 @@ export class StatementChecker {
     this.expressions.expect_type(assignment.value, target_type)
   }
 
-  // Only array items can be replaced; a Binary is immutable.
-  private check_item_target(target: Index): Type {
+  // Array items and map values can be replaced; a Binary is immutable. A map's key may be missing,
+  // so its value cannot be combined with `+=` and so on.
+  private check_item_target(target: Index, operator: Assignment['operator']): Type {
     const type = this.expressions.type_of(target)
-    if (this.types.get(target.object)!.kind === 'Binary') {
+    const object_type = this.types.get(target.object)!
+    if (object_type.kind === 'Map') {
+      if (operator !== '=') {
+        const message = `a map value cannot be updated with '${operator}'; write m[k] = (m[k] ? 0) ${operator.slice(0, -1)} x`
+        throw new CompileError(message, target.line, target.column)
+      }
+      return object_type.value
+    }
+    if (object_type.kind === 'Binary') {
       const message = 'a Binary cannot be changed'
       throw new CompileError(message, target.line, target.column)
     }

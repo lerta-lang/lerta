@@ -3,6 +3,8 @@ import type { NamedType, Position, TypeAlias, TypeName, UnionTypeName } from './
 import { CompileError } from './errors.ts'
 import {
   array_type,
+  is_map_key_type,
+  map_type,
   format_type,
   is_reference_type,
   optional_type,
@@ -28,7 +30,7 @@ const simple_types = new Map<string, Type>([
 
 // Names of builtin types, which a class or struct cannot take.
 export const is_builtin_type_name = (name: string): boolean =>
-  simple_types.has(name) || name === 'Array' || name === 'void'
+  simple_types.has(name) || name === 'Array' || name === 'Map' || name === 'void'
 
 // Resolves type names, including the classes and structs of the program.
 export class TypeResolver {
@@ -101,11 +103,34 @@ export class TypeResolver {
     const { name, args, line, column } = type_name
     if (name === 'Array' && args.length === 1) return array_type(this.resolve_element(args[0]))
     if (name === 'Array') throw new CompileError('Array takes one type argument', line, column)
+    if (name === 'Map' && args.length === 2) {
+      return map_type(this.resolve_key(args[0]), this.resolve_map_value(args[1]))
+    }
+    if (name === 'Map') throw new CompileError('Map takes two type arguments', line, column)
     if (args.length > 0) throw new CompileError(`'${name}' takes no type arguments`, line, column)
     if (allow_void && name === 'void') return void_type
     const type =
       simple_types.get(name) ?? this.object_type(name) ?? this.resolve_alias(name, type_name)
     if (type === undefined) throw new CompileError(`unknown type '${name}'`, line, column)
+    return type
+  }
+
+  private resolve_key(type_name: TypeName): Type {
+    const type = this.resolve(type_name)
+    if (!is_map_key_type(type)) {
+      const message = `a map key must be a String or an Int, got ${format_type(type)}`
+      throw new CompileError(message, type_name.line, type_name.column)
+    }
+    return type
+  }
+
+  // A missing key reads as nil, so a value cannot be nil itself.
+  private resolve_map_value(type_name: TypeName): Type {
+    const type = this.resolve(type_name)
+    if (type.kind === 'Optional') {
+      const message = `a map cannot hold values of type ${format_type(type)}`
+      throw new CompileError(message, type_name.line, type_name.column)
+    }
     return type
   }
 

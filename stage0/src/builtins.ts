@@ -1,5 +1,7 @@
 import {
+  array_type,
   binary_type,
+  bool_type,
   int_type,
   is_stringable,
   optional_type,
@@ -49,6 +51,7 @@ export const builtin_method = (receiver: Type, name: string): Type | undefined =
   }
   if (receiver.kind === 'String' && name === 'parse_int') return method([], optional_type(int_type))
   if (receiver.kind === 'Writer') return writer_method(name)
+  if (receiver.kind === 'Map') return map_method(receiver.key, name)
   if (receiver.kind !== 'Array') return undefined
   const { element } = receiver
   switch (name) {
@@ -65,10 +68,23 @@ export const builtin_method = (receiver: Type, name: string): Type | undefined =
 
 // The type of a property of a builtin type, read without a call, if it has one.
 export const builtin_property = (receiver: Type, name: string): Type | undefined => {
-  const has_length = receiver.kind === 'Array' || receiver.kind === 'Binary'
+  const has_length = ['Array', 'Map', 'Binary'].includes(receiver.kind)
   if (name === 'length' && has_length) return int_type
   if (name === 'binary' && receiver.kind === 'String') return binary_type
   return undefined
+}
+
+const map_method = (key: Type, name: string): Type | undefined => {
+  switch (name) {
+    case 'has':
+      return method([key], bool_type)
+    case 'remove':
+      return method([key], void_type)
+    case 'keys':
+      return method([], array_type(key))
+    default:
+      return undefined
+  }
 }
 
 const writer_method = (name: string): Type | undefined => {

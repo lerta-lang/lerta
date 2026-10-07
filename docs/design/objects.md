@@ -1,6 +1,6 @@
 # Classes, structs and interfaces
 
-Classes and structs with fields, initializers, methods, `init` and named construction are implemented: see [the reference](../reference/objects.md). Planned beyond that: `deinit`, `weak`, function fields, `==` and `hash`, anonymous structs, Map literals and interfaces.
+Classes and structs with fields, initializers, methods, `init` and named construction are implemented: see [the reference](../reference/objects.md). Planned beyond that: `deinit`, `weak`, function fields, `==` and `hash`, anonymous structs and interfaces.
 
 - **No inheritance** (`extends`/`super` do not exist).
 - There are no static members (`static`). Functions related to a type are module functions (`import rgb from './rgb'` → `rgb.parse(s)`; the module is the namespace).
@@ -71,6 +71,8 @@ Circle(r: 1) == Circle(r: 1)   # true
   - Constructing a class or struct, `Circle(r: 1)`, is also a call to a constructor that takes an anonymous struct with the type-only fields.
 
 ## Map literals
+
+Map literals with keys that are not names are implemented: see [the reference](../reference/types.md#map).
 
 - If the keys in `{}` are identifiers, it is an anonymous struct. If they are other expressions, it is a `Map`.
   ```

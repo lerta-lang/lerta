@@ -15,6 +15,10 @@ export type Unwrap = Position & { kind: 'unwrap'; operand: Expression }
 export type Coalesce = Position & { kind: 'coalesce'; value: Expression; fallback: Expression }
 // `[a, b]`
 export type ArrayLiteral = Position & { kind: 'array'; elements: Expression[] }
+export type MapLiteral = Position & {
+  kind: 'map'
+  entries: { key: Expression; value: Expression }[]
+}
 // `object[index]`
 export type Index = Position & { kind: 'index'; object: Expression; index: Expression }
 // `f(a, b)`, or `Point(x: 1, y: 2)` with named arguments, which construct a class or struct.
@@ -96,6 +100,7 @@ export type Expression =
   | IntegerLiteral
   | Identifier
   | ArrayLiteral
+  | MapLiteral
   | Index
   | Call
   | This
