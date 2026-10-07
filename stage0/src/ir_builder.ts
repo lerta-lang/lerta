@@ -4,6 +4,8 @@ export class IrBuilder {
   private readonly globals: string[] = []
   private readonly declarations = new Map<string, string>()
   private readonly body: string[] = []
+  // Stack slots go first in the entry block, where LLVM promotes them to registers.
+  private readonly stack_slots: string[] = []
   private register_count = 0
   private label_count = 0
   private current_label = 'entry'
@@ -40,6 +42,13 @@ export class IrBuilder {
     this.emit(`${register} = ${value}`)
   }
 
+  // A stack slot for a value of the IR type, valid in the whole function.
+  alloca(type: string): string {
+    const register = this.fresh_register()
+    this.stack_slots.push(`  ${register} = alloca ${type}`)
+    return register
+  }
+
   emit(instruction: string): void {
     this.body.push(`  ${instruction}`)
   }
@@ -60,7 +69,13 @@ export class IrBuilder {
 
   // The module with the function `define <signature>` holding everything emitted.
   render(signature: string): string {
-    const function_lines = [`define ${signature} {`, 'entry:', ...this.body, '}']
+    const function_lines = [
+      `define ${signature} {`,
+      'entry:',
+      ...this.stack_slots,
+      ...this.body,
+      '}',
+    ]
     return [...this.globals, ...this.declarations.values(), ...function_lines].join('\n') + '\n'
   }
 }

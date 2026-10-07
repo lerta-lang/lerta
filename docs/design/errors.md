@@ -20,7 +20,7 @@ Literals, arithmetic and comparisons, and function values are implemented: see [
 - A call returning `Iter<T>` (`xs.map f`) → **error** "does nothing until consumed" (equivalent to Rust's `#[must_use]`; an essential diagnostic for laziness).
 - Methods of immutable types (`String`, `Binary`) that return a new value (`s.trim()`) → **error** (since the type is immutable, the type shows that "discarding = doing nothing").
 - Other calls to non-`void` functions → allowed (interpreted as calls for side effects). A `must_use` annotation can make individual ones an error.
-- Unused `const`/`var`/`import` → warning.
+- Unused `import` → warning (for `const`/`var`, see [the reference](../reference/errors.md#unused-names)).
 
 ## Exceptions
 

@@ -11,3 +11,7 @@ These apply when a value in statement position is not captured.
 - A literal or an operator expression (`'a'`, `1 + 2`, `x == 1`) → error. An unused comparison often means a mistyped assignment.
 - A function value itself (`print`) → error "to call it, write `print()`".
 - A call, or an expression with no value such as a `case` whose arms are calls to `void` functions → allowed.
+
+## Unused names
+
+A `const` or `var` that is never read (assigning to it does not count) produces a warning, unless its name starts with `_`.

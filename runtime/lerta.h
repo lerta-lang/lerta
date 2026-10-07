@@ -17,6 +17,7 @@ typedef struct {
 // Memory (memory.c). Every heap object starts with its reference count.
 // Release frees an object when its count reaches zero; strings own no other objects.
 void *lerta_alloc(int64_t size);
+void lerta_retain(void *object);
 void lerta_release(void *object);
 // With LERTA_DEBUG, live objects are counted; returns false after reporting a leak to stderr.
 bool lerta_check_leaks(void);

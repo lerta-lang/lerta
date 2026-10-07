@@ -12,6 +12,12 @@
 - A line that is empty, or contains only spaces and optionally a comment, is ignored, whatever its indentation.
 - A line indented less than the previous one must return to the indentation of an enclosing block.
 
+## Declarations and assignment
+
+- `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value.
+- `name = value` assigns to a `var`. `+=` `-=` `*=` `/=` `%=` combine an `Int` `var` with an `Int` value.
+- An assignment is a statement, not an expression.
+
 ## Statements
 
 - One statement per line. A statement is an expression; see [discarded values](errors.md#discarded-values) for which expressions may stand alone.
@@ -31,8 +37,8 @@
 
 ## Operators
 
-From weakest: comparisons (`==` `!=` `<` `<=` `>` `>=`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
+From weakest: `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
 
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`).
 - Comparisons cannot be chained: `a < b < c` is a syntax error; use parentheses.
-- `true`, `false`, `case`, `when`, `then`, `else`, `for` and `in` are keywords and cannot be used as names.
+- `true` `false` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `case` `when` `then` are keywords and cannot be used as names.

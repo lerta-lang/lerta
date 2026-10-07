@@ -12,7 +12,9 @@ Source files, comments, identifiers, indentation, integer literals and `'...'` s
 
 ## Declarations
 
-- Variable declarations are required: `const` (cannot be reassigned) / `var` (can be reassigned). `let` is not used.
+`const`/`var` with an initial value and assignment are implemented: see [the reference](../reference/syntax.md#declarations-and-assignment). Planned:
+
+- `let` is not used.
   - This is the same at top level and inside functions, for values and for functions. It avoids ambiguity between declaration and assignment (the CoffeeScript pitfall).
   - Inside a type body the keyword may be omitted. Then methods default to `const` and fields to `var` (in a struct everything is `const`). Writing the keyword explicitly overrides the default (see [objects.md](objects.md#type-body-shared-by-class-and-struct)).
   - `const` only makes the binding immutable. Immutability of the contents is handled by types.

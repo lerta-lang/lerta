@@ -4,8 +4,8 @@ This reference documents only implemented behavior. The planned design is in [..
 
 | File | Topic |
 |---|---|
-| [syntax.md](syntax.md) | Lexical rules, indentation, statements and calls |
-| [control-flow.md](control-flow.md) | Blocks, `for`, ranges, `case` |
+| [syntax.md](syntax.md) | Lexical rules, indentation, declarations, statements and calls |
+| [control-flow.md](control-flow.md) | Blocks, `if`, `while`, `for`, ranges, `case` |
 | [types.md](types.md) | Types and their operations |
 | [errors.md](errors.md) | Exceptions and discarded values |
 | [builtins.md](builtins.md) | Builtin functions |

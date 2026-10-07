@@ -3,9 +3,27 @@
 ## Blocks and scopes
 
 - An indented block holds statements, one per line.
-- A name declared in a block (such as a loop variable) is visible only inside it.
+- A name declared in a block (such as a loop variable) is visible only inside it. Declaring it again in the same block is an error.
 - Declaring a name that is already visible from an outer scope (shadowing) is a warning. Inside the block, the name refers to the new declaration. A name starting with `_` produces no warning, to show that the shadowing is intended.
 - Builtins (standard types, interfaces and built-in functions) live outside every scope and can be shadowed without a warning, so that adding a builtin does not affect existing code. Inside `for print in 0...3`, `print` is the loop variable.
+
+## if and while
+
+```
+if n == 0
+  print 'zero'
+else if n < 0
+  print 'negative'
+else
+  print 'positive'
+while n > 0
+  n -= 1
+```
+
+- Conditions are `Bool`s.
+- `break` leaves the innermost `while` or `for`, and `continue` goes on to its next round. Either is an error outside a loop.
+- **Postfix forms** `<statement> if <condition>` and `<statement> while <condition>` apply to one statement other than a declaration (`break if done`, `x *= 2 while x < 100`). The condition of a postfix `while` is evaluated first.
+- `and` and `or` evaluate their right operand only when the left one does not decide the result. Their operands and `not`'s are `Bool`s.
 
 ## for and ranges
 

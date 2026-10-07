@@ -20,6 +20,11 @@ void *lerta_alloc(int64_t size) {
   return object;
 }
 
+void lerta_retain(void *object) {
+  LertaObject *header = object;
+  if (header->ref_count != LERTA_IMMORTAL) header->ref_count++;
+}
+
 void lerta_release(void *object) {
   LertaObject *header = object;
   if (header->ref_count == LERTA_IMMORTAL) return;

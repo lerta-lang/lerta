@@ -29,7 +29,35 @@ export class ExpressionParser {
   }
 
   parse_expression(): Expression {
-    return this.parse_comparison()
+    return this.parse_or()
+  }
+
+  private parse_or(): Expression {
+    let left = this.parse_and()
+    while (this.tokens.peek_continuation() === 'or') {
+      this.tokens.next()
+      const right = this.parse_and()
+      left = { kind: 'binary', operator: 'or', left, right, line: left.line, column: left.column }
+    }
+    return left
+  }
+
+  private parse_and(): Expression {
+    let left = this.parse_not()
+    while (this.tokens.peek_continuation() === 'and') {
+      this.tokens.next()
+      const right = this.parse_not()
+      left = { kind: 'binary', operator: 'and', left, right, line: left.line, column: left.column }
+    }
+    return left
+  }
+
+  private parse_not(): Expression {
+    const token = this.tokens.peek()
+    if (token.kind !== 'not') return this.parse_comparison()
+    this.tokens.next()
+    const operand = this.parse_not()
+    return { kind: 'unary', operator: 'not', operand, line: token.line, column: token.column }
   }
 
   // `a < b < c` is an error: comparisons do not chain.

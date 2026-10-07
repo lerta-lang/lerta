@@ -13,14 +13,18 @@ export type TokenKind =
   | 'dedent'
   | 'eof'
 
-const keywords = ['true', 'false', 'case', 'when', 'then', 'else', 'for', 'in'] as const
+const keywords = [
+  ...['true', 'false', 'and', 'or', 'not'],
+  ...['const', 'var', 'if', 'else', 'while', 'for', 'in', 'break', 'continue'],
+  ...['case', 'when', 'then'],
+] as const
 type Keyword = (typeof keywords)[number]
 
 // Longer punctuations come first so that `<=` is not read as `<` and `=`.
 const punctuations = [
   '...',
-  ...['==', '!=', '<=', '>='],
-  ...['(', ')', ',', '.', '+', '-', '*', '/', '%', '<', '>'],
+  ...['==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%='],
+  ...['(', ')', ',', '.', '+', '-', '*', '/', '%', '<', '>', '='],
 ] as const
 type Punctuation = (typeof punctuations)[number]
 

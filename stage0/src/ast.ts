@@ -7,7 +7,7 @@ export type Identifier = Position & { kind: 'identifier'; name: string }
 export type Call = Position & { kind: 'call'; callee: Expression; args: Expression[] }
 // `object.name`; so far only a method of a builtin type, and only when called.
 export type Member = Position & { kind: 'member'; object: Expression; name: Identifier }
-export type UnaryOperator = '-'
+export type UnaryOperator = '-' | 'not'
 export type Unary = Position & { kind: 'unary'; operator: UnaryOperator; operand: Expression }
 export const arithmetic_operators = ['+', '-', '*', '/', '%'] as const
 export type ArithmeticOperator = (typeof arithmetic_operators)[number]
@@ -15,7 +15,8 @@ export const comparison_operators = ['==', '!=', '<', '<=', '>', '>='] as const
 export type ComparisonOperator = (typeof comparison_operators)[number]
 export const is_arithmetic = (operator: BinaryOperator): operator is ArithmeticOperator =>
   (arithmetic_operators as readonly string[]).includes(operator)
-export type BinaryOperator = ArithmeticOperator | ComparisonOperator
+export type LogicalOperator = 'and' | 'or'
+export type BinaryOperator = ArithmeticOperator | ComparisonOperator | LogicalOperator
 export type Binary = Position & {
   kind: 'binary'
   operator: BinaryOperator
@@ -49,6 +50,35 @@ export type For = Position & {
   body: Statement[]
 }
 
-export type Statement = Expression | For
+// `const name = value` or `var name = value`.
+export type Declaration = Position & {
+  kind: 'declaration'
+  mutable: boolean
+  name: Identifier
+  value: Expression
+}
+
+export const assignment_operators = ['=', '+=', '-=', '*=', '/=', '%='] as const
+export type AssignmentOperator = (typeof assignment_operators)[number]
+export type Assignment = Position & {
+  kind: 'assignment'
+  operator: AssignmentOperator
+  target: Identifier
+  value: Expression
+}
+
+// `else if` is an `if` alone in the else branch.
+export type If = Position & {
+  kind: 'if'
+  condition: Expression
+  then_body: Statement[]
+  else_body: Statement[]
+}
+
+export type While = Position & { kind: 'while'; condition: Expression; body: Statement[] }
+
+export type Jump = Position & { kind: 'break' | 'continue' }
+
+export type Statement = Expression | Declaration | Assignment | If | While | For | Jump
 
 export type Program = Statement[]
