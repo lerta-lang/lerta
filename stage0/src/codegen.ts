@@ -1,56 +1,30 @@
-import type {
-  Assignment,
-  Binary,
-  Call,
-  Case,
-  ComparisonOperator,
-  Declaration,
-  Expression,
-  For,
-  Identifier,
-  If,
-  Jump,
-  Member,
-  Program,
-  Statement,
-  Unary,
-  While,
-} from './ast.ts'
-import { builtins } from './builtins.ts'
+import type { Assignment, Declaration, For, If, Jump, Program, Statement, While } from './ast.ts'
 import type { Types } from './checker.ts'
 import { CheckedInt } from './checked_int.ts'
+import { ExpressionGenerator, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder } from './ir_builder.ts'
-import { ir_param_type, ir_type, string_constant } from './lerta_ir.ts'
-import { is_reference_type, type Type } from './types.ts'
+import { emit_release, ir_type } from './lerta_ir.ts'
+import { Scopes, type Scope } from './scopes.ts'
+import { is_reference_type } from './types.ts'
 
 // Emits LLVM IR for a checked program: its top-level code becomes lerta_main.
 export const generate = (program: Program, types: Types): string =>
   new Generator(types).generate(program)
 
-const comparison_predicates: Record<ComparisonOperator, string> = {
-  '==': 'eq',
-  '!=': 'ne',
-  '<': 'slt',
-  '<=': 'sle',
-  '>': 'sgt',
-  '>=': 'sge',
-}
-
-// A loop variable is an SSA value; a `const` or `var` lives in a stack slot.
-type Local = { kind: 'value'; operand: string } | { kind: 'slot'; pointer: string; type: Type }
-type Scope = Map<string, Local>
 // Where `break` and `continue` jump, and how many scopes enclose the loop.
 type Loop = { break_label: string; continue_label: string; scope_depth: number }
 
 class Generator {
   private readonly types: Types
   private readonly ir = new IrBuilder()
+  private readonly locals = new Scopes<CodegenLocal>()
   private readonly checked_int = new CheckedInt(this.ir)
-  private readonly scopes: Scope[] = []
+  private readonly expressions: ExpressionGenerator
   private readonly loops: Loop[] = []
 
   constructor(types: Types) {
     this.types = types
+    this.expressions = new ExpressionGenerator(this.ir, types, this.checked_int, this.locals)
   }
 
   generate(program: Program): string {
@@ -61,19 +35,21 @@ class Generator {
   }
 
   // A block is a scope: the references held by its locals are released at its end.
-  private generate_block(statements: Statement[], define = (_scope: Scope) => {}): void {
-    const scope: Scope = new Map()
-    this.scopes.push(scope)
+  private generate_block(
+    statements: Statement[],
+    define = (_scope: Scope<CodegenLocal>) => {},
+  ): void {
+    const scope = this.locals.push()
     define(scope)
     for (const statement of statements) this.generate_statement(statement)
     this.release_scope(scope)
-    this.scopes.pop()
+    this.locals.pop()
   }
 
-  private release_scope(scope: Scope): void {
+  private release_scope(scope: Scope<CodegenLocal>): void {
     for (const local of scope.values()) {
       if (local.kind === 'slot' && is_reference_type(local.type)) {
-        this.release(this.ir.assign(`load ptr, ptr ${local.pointer}`))
+        emit_release(this.ir, this.ir.assign(`load ptr, ptr ${local.pointer}`))
       }
     }
   }
@@ -94,26 +70,29 @@ class Generator {
       case 'continue':
         return this.generate_jump(statement)
       default:
-        return this.release_if_reference(statement, this.generate_expression(statement))
+        return this.expressions.release_if_reference(
+          statement,
+          this.expressions.generate(statement),
+        )
     }
   }
 
   private generate_declaration(declaration: Declaration): void {
     const type = this.types.get(declaration.value)!
-    const value = this.generate_expression(declaration.value)
+    const value = this.expressions.generate(declaration.value)
     const pointer = this.ir.alloca(ir_type(type))
     this.ir.emit(`store ${ir_type(type)} ${value}, ptr ${pointer}`)
-    this.scopes.at(-1)!.set(declaration.name.name, { kind: 'slot', pointer, type })
+    this.locals.define(declaration.name.name, { kind: 'slot', pointer, type })
   }
 
   // The new value is stored before the old one is released, which is safe even if they are the
   // same object.
   private generate_assignment(assignment: Assignment): void {
-    const local = this.lookup(assignment.target.name)
+    const local = this.locals.lookup(assignment.target.name)!
     if (local.kind !== 'slot') throw new Error('only slots can be assigned')
     const type = ir_type(local.type)
     const old = this.ir.assign(`load ${type}, ptr ${local.pointer}`)
-    const value = this.generate_expression(assignment.value)
+    const value = this.expressions.generate(assignment.value)
     const { operator } = assignment
     const result =
       operator === '='
@@ -122,11 +101,11 @@ class Generator {
           ? this.checked_int.division(operator[0] as '/' | '%', old, value)
           : this.checked_int.arithmetic(operator[0] as '+' | '-' | '*', old, value)
     this.ir.emit(`store ${type} ${result}, ptr ${local.pointer}`)
-    if (is_reference_type(local.type)) this.release(old)
+    if (is_reference_type(local.type)) emit_release(this.ir, old)
   }
 
   private generate_if(if_statement: If): void {
-    const condition = this.generate_expression(if_statement.condition)
+    const condition = this.expressions.generate(if_statement.condition)
     const then_label = this.ir.fresh_label('if.then')
     const else_label = this.ir.fresh_label('if.else')
     const end_label = this.ir.fresh_label('if.end')
@@ -146,7 +125,7 @@ class Generator {
     const exit_label = this.ir.fresh_label('while.exit')
     this.ir.emit(`br label %${header_label}`)
     this.ir.start_block(header_label)
-    const condition = this.generate_expression(while_statement.condition)
+    const condition = this.expressions.generate(while_statement.condition)
     this.ir.emit(`br i1 ${condition}, label %${body_label}, label %${exit_label}`)
     this.ir.start_block(body_label)
     this.generate_loop_body(while_statement.body, exit_label, header_label)
@@ -159,8 +138,8 @@ class Generator {
   private generate_for(for_statement: For): void {
     const { iterable, variable } = for_statement
     if (iterable.kind !== 'range') throw new Error('only ranges can be iterated')
-    const start = this.generate_expression(iterable.start)
-    const end = this.generate_expression(iterable.end)
+    const start = this.expressions.generate(iterable.start)
+    const end = this.expressions.generate(iterable.end)
     const preheader_label = this.ir.current_block
     const header_label = this.ir.fresh_label('for.header')
     const body_label = this.ir.fresh_label('for.body')
@@ -193,9 +172,9 @@ class Generator {
     body: Statement[],
     break_label: string,
     continue_label: string,
-    define?: (scope: Scope) => void,
+    define?: (scope: Scope<CodegenLocal>) => void,
   ): void {
-    this.loops.push({ break_label, continue_label, scope_depth: this.scopes.length })
+    this.loops.push({ break_label, continue_label, scope_depth: this.locals.depth })
     this.generate_block(body, define)
     this.loops.pop()
   }
@@ -204,167 +183,9 @@ class Generator {
   // jump is unreachable but still needs a block to go in.
   private generate_jump(jump: Jump): void {
     const loop = this.loops.at(-1)!
-    for (const scope of this.scopes.slice(loop.scope_depth).toReversed()) this.release_scope(scope)
+    for (const scope of this.locals.inner_scopes(loop.scope_depth)) this.release_scope(scope)
     const target = jump.kind === 'break' ? loop.break_label : loop.continue_label
     this.ir.emit(`br label %${target}`)
     this.ir.start_block(this.ir.fresh_label('unreachable'))
-  }
-
-  private lookup(name: string): Local {
-    for (const scope of this.scopes.toReversed()) {
-      const local = scope.get(name)
-      if (local !== undefined) return local
-    }
-    throw new Error(`no local named ${name}`)
-  }
-
-  // Reading a reference from a slot retains it, since every expression yields an owned reference.
-  private generate_identifier(identifier: Identifier): string {
-    const local = this.lookup(identifier.name)
-    if (local.kind === 'value') return local.operand
-    const value = this.ir.assign(`load ${ir_type(local.type)}, ptr ${local.pointer}`)
-    if (is_reference_type(local.type)) {
-      this.ir.declare('lerta_retain', 'declare void @lerta_retain(ptr)')
-      this.ir.emit(`call void @lerta_retain(ptr ${value})`)
-    }
-    return value
-  }
-
-  // Returns the IR operand holding the value; void calls return ''.
-  private generate_expression(expression: Expression): string {
-    switch (expression.kind) {
-      case 'string':
-        return string_constant(this.ir, expression.value)
-      case 'integer':
-        return expression.value.toString()
-      case 'boolean':
-        return expression.value ? 'true' : 'false'
-      case 'call':
-        return this.generate_call(expression)
-      case 'unary':
-        return this.generate_unary(expression)
-      case 'binary':
-        return this.generate_binary(expression)
-      case 'case':
-        return this.generate_case(expression)
-      case 'identifier':
-        return this.generate_identifier(expression)
-      case 'range':
-        throw new Error('ranges are only generated by for')
-      case 'member':
-        throw new Error('members are only generated as method calls')
-    }
-  }
-
-  // Arguments are borrowed: the caller releases its temporaries after the call.
-  private generate_call(call: Call): string {
-    const { callee } = call
-    if (callee.kind === 'member') return this.generate_method_call(callee)
-    if (callee.kind !== 'identifier') throw new Error('only builtins can be called')
-    const arg_types = call.args.map((arg) => this.types.get(arg)!)
-    const symbol = builtins.get(callee.name)!.runtime_symbol(arg_types)
-    const params = arg_types.map(ir_param_type).join(', ')
-    this.ir.declare(symbol, `declare void @${symbol}(${params})`)
-    const operands = call.args.map((arg) => this.generate_expression(arg))
-    const args = operands.map((operand, i) => `${ir_type(arg_types[i])} ${operand}`)
-    this.ir.emit(`call void @${symbol}(${args.join(', ')})`)
-    call.args.forEach((arg, i) => this.release_if_reference(arg, operands[i]))
-    return ''
-  }
-
-  // `to_string()` is the only method so far. A String returns itself, passing on its ownership.
-  private generate_method_call(member: Member): string {
-    const object = this.generate_expression(member.object)
-    switch (this.types.get(member.object)!.kind) {
-      case 'String':
-        return object
-      case 'Int':
-        this.ir.declare('lerta_int_to_string', 'declare ptr @lerta_int_to_string(i64)')
-        return this.ir.assign(`call ptr @lerta_int_to_string(i64 ${object})`)
-      case 'Bool': {
-        const true_text = string_constant(this.ir, 'true')
-        const false_text = string_constant(this.ir, 'false')
-        return this.ir.assign(`select i1 ${object}, ptr ${true_text}, ptr ${false_text}`)
-      }
-      default:
-        throw new Error('no to_string for this type')
-    }
-  }
-
-  // Every expression of a reference type yields an owned reference, which its consumer releases.
-  private release_if_reference(expression: Expression, operand: string): void {
-    const type = this.types.get(expression)
-    if (type !== undefined && is_reference_type(type)) this.release(operand)
-  }
-
-  private release(operand: string): void {
-    this.ir.declare('lerta_release', 'declare void @lerta_release(ptr)')
-    this.ir.emit(`call void @lerta_release(ptr ${operand})`)
-  }
-
-  private generate_unary(unary: Unary): string {
-    const operand = this.generate_expression(unary.operand)
-    if (unary.operator === 'not') return this.ir.assign(`xor i1 ${operand}, true`)
-    return this.checked_int.arithmetic('-', '0', operand)
-  }
-
-  private generate_binary(binary: Binary): string {
-    if (binary.operator === 'and' || binary.operator === 'or') return this.generate_logical(binary)
-    const left = this.generate_expression(binary.left)
-    const right = this.generate_expression(binary.right)
-    const { operator } = binary
-    if (operator === '/' || operator === '%') {
-      return this.checked_int.division(operator, left, right)
-    }
-    if (operator === '+' || operator === '-' || operator === '*') {
-      return this.checked_int.arithmetic(operator, left, right)
-    }
-    const operand_type = ir_type(this.types.get(binary.left)!)
-    return this.ir.assign(
-      `icmp ${comparison_predicates[operator]} ${operand_type} ${left}, ${right}`,
-    )
-  }
-
-  // Short-circuit: the right operand is evaluated only when the left one does not decide.
-  private generate_logical(binary: Binary): string {
-    const left = this.generate_expression(binary.left)
-    const left_block = this.ir.current_block
-    const right_label = this.ir.fresh_label('logical.right')
-    const end_label = this.ir.fresh_label('logical.end')
-    const is_and = binary.operator === 'and'
-    const [if_true, if_false] = is_and ? [right_label, end_label] : [end_label, right_label]
-    this.ir.emit(`br i1 ${left}, label %${if_true}, label %${if_false}`)
-    this.ir.start_block(right_label)
-    const right = this.generate_expression(binary.right)
-    const right_block = this.ir.current_block
-    this.ir.emit(`br label %${end_label}`)
-    this.ir.start_block(end_label)
-    const decided = is_and ? 'false' : 'true'
-    return this.ir.assign(`phi i1 [ ${decided}, %${left_block} ], [ ${right}, %${right_block} ]`)
-  }
-
-  // Tests the conditions in order; every arm jumps to one end block that merges the values.
-  private generate_case(case_expression: Case): string {
-    const end_label = this.ir.fresh_label('case.end')
-    const incoming: string[] = []
-    const generate_arm_value = (value: Expression) => {
-      const operand = this.generate_expression(value)
-      incoming.push(`[ ${operand}, %${this.ir.current_block} ]`)
-      this.ir.emit(`br label %${end_label}`)
-    }
-    for (const arm of case_expression.arms) {
-      const condition = this.generate_expression(arm.condition)
-      const arm_label = this.ir.fresh_label('case.arm')
-      const next_label = this.ir.fresh_label('case.next')
-      this.ir.emit(`br i1 ${condition}, label %${arm_label}, label %${next_label}`)
-      this.ir.start_block(arm_label)
-      generate_arm_value(arm.value)
-      this.ir.start_block(next_label)
-    }
-    generate_arm_value(case_expression.otherwise)
-    this.ir.start_block(end_label)
-    const type = this.types.get(case_expression)!
-    if (type.kind === 'void') return ''
-    return this.ir.assign(`phi ${ir_type(type)} ${incoming.join(', ')}`)
   }
 }

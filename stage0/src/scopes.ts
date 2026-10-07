@@ -1,34 +1,27 @@
-// Local names, innermost scope last. Builtins live outside every scope.
-import type { Identifier } from './ast.ts'
-import type { Type } from './types.ts'
+// Nested scopes of local names, innermost last. Builtins live outside every scope.
 
-export type Local = {
-  identifier: Identifier
-  type: Type
-  mutable: boolean
-  // Declared with `const` or `var`, as opposed to a loop variable.
-  declared: boolean
-  used: boolean
-}
+export type Scope<T> = Map<string, T>
 
-export class Scopes {
-  private readonly scopes: Map<string, Local>[] = []
+export class Scopes<T> {
+  private readonly scopes: Scope<T>[] = []
 
-  // Runs body in a new scope and returns the locals it declared.
-  within(body: () => void): Local[] {
-    this.scopes.push(new Map())
-    try {
-      body()
-      return [...this.scopes.at(-1)!.values()]
-    } finally {
-      this.scopes.pop()
-    }
+  get depth(): number {
+    return this.scopes.length
+  }
+
+  push(): Scope<T> {
+    const scope: Scope<T> = new Map()
+    this.scopes.push(scope)
+    return scope
+  }
+
+  pop(): Scope<T> {
+    return this.scopes.pop()!
   }
 
   // Returns whether the name is new, already defined in the innermost scope (and then not
   // defined again), or shadows a name of an outer scope.
-  define(local: Local): 'new' | 'redefined' | 'shadowing' {
-    const { name } = local.identifier
+  define(name: string, local: T): 'new' | 'redefined' | 'shadowing' {
     const innermost = this.scopes.at(-1)!
     if (innermost.has(name)) return 'redefined'
     const is_shadowing = this.scopes.some((scope) => scope.has(name))
@@ -36,11 +29,16 @@ export class Scopes {
     return is_shadowing ? 'shadowing' : 'new'
   }
 
-  lookup(name: string): Local | undefined {
+  lookup(name: string): T | undefined {
     for (const scope of this.scopes.toReversed()) {
       const local = scope.get(name)
       if (local !== undefined) return local
     }
     return undefined
+  }
+
+  // The scopes from `depth` inward, innermost first.
+  inner_scopes(depth: number): Scope<T>[] {
+    return this.scopes.slice(depth).toReversed()
   }
 }

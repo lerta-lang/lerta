@@ -37,3 +37,14 @@ export const string_constant = (ir: IrBuilder, value: string): string => {
   const init = `{ i64 ${LERTA_IMMORTAL}, i64 ${bytes.length}, ${bytes_init} }`
   return ir.global('lerta.string', `private unnamed_addr constant ${type} ${init}`)
 }
+
+// Reference counting of an object operand (see runtime/memory.c).
+export const emit_retain = (ir: IrBuilder, operand: string): void => {
+  ir.declare('lerta_retain', 'declare void @lerta_retain(ptr)')
+  ir.emit(`call void @lerta_retain(ptr ${operand})`)
+}
+
+export const emit_release = (ir: IrBuilder, operand: string): void => {
+  ir.declare('lerta_release', 'declare void @lerta_release(ptr)')
+  ir.emit(`call void @lerta_release(ptr ${operand})`)
+}
