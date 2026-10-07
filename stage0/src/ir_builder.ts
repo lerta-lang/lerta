@@ -5,6 +5,15 @@ export class IrModule {
   private readonly declarations = new Map<string, string>()
   private readonly functions: string[] = []
 
+  private readonly defined = new Set<string>()
+
+  // Runs `define` the first time `key` is given, for definitions that are made on demand.
+  define_once(key: string, define: (module: IrModule) => void): void {
+    if (this.defined.has(key)) return
+    this.defined.add(key)
+    define(this)
+  }
+
   // Declaring the same symbol again with the same text is harmless.
   declare(symbol: string, declaration: string): void {
     const existing = this.declarations.get(symbol)
@@ -65,6 +74,10 @@ export class IrBuilder {
 
   global(prefix: string, definition: string): string {
     return this.module.global(prefix, definition)
+  }
+
+  define_once(key: string, define: (module: IrModule) => void): void {
+    this.module.define_once(key, define)
   }
 
   // Emits `%r<n> = <value>` and returns the register.

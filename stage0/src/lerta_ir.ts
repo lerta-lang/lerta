@@ -2,7 +2,7 @@
 import type { IrBuilder } from './ir_builder.ts'
 import { is_reference_type, type Type } from './types.ts'
 
-const LERTA_IMMORTAL = '-9223372036854775808'
+export const LERTA_IMMORTAL = '-9223372036854775808'
 
 export const ir_type = (type: Type): string => {
   switch (type.kind) {
@@ -12,6 +12,7 @@ export const ir_type = (type: Type): string => {
     case 'Map':
     case 'Object':
     case 'Union':
+    case 'function':
       return 'ptr'
     case 'Int':
       return 'i64'

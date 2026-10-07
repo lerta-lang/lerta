@@ -305,9 +305,9 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     })
   }
 
-  // nil alone gives no type, void and never give no value, and functions cannot be stored yet.
+  // nil alone gives no type, and void and never give no value.
   private reject_if_not_storable(type: Type, value: Expression): void {
-    if (['void', 'never', 'function', 'nil'].includes(type.kind)) {
+    if (['void', 'never', 'nil'].includes(type.kind)) {
       const message = `cannot store a value of type ${format_type(type)}`
       throw new CompileError(message, value.line, value.column)
     }

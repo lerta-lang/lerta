@@ -59,6 +59,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 ## Objects
 
 - A class or struct object is a heap object: the header, then its fields in declaration order, each in its IR type. A generated drop function releases the references the fields hold.
+- A function value is a closure: a heap object with the header, the pointer to its code, then its captured values. The code takes the closure first, then the arguments, borrowed as in any call. The closure of a top-level function is an immortal constant whose code, a generated thunk, calls the function without the closure.
 - Each type has a generated constructor function, which takes the constructor arguments borrowed, like any call, and computes the initialized fields; methods are functions that take the object first.
 
 ## Structs

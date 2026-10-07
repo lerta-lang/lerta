@@ -62,7 +62,7 @@ export class CollectionChecker {
     }
     const is_optional_value = type.kind === 'Optional' && !is_reference_type(type)
     const has_no_value = type.kind === 'void' || type.kind === 'never'
-    if (has_no_value || type.kind === 'function' || is_optional_value) {
+    if (has_no_value || is_optional_value) {
       const message = `${container} cannot hold values of type ${format_type(type)}`
       throw new CompileError(message, item.line, item.column)
     }

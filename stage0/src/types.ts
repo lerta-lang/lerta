@@ -110,9 +110,9 @@ export const type_key = (type: Type): string => {
 
 export const same_type = (a: Type, b: Type): boolean => type_key(a) === type_key(b)
 
-// Values of these types are reference counted.
+// Values of these types are reference counted; a function value is a closure (see closure_codegen.ts).
 export const is_reference_type = (type: Type): boolean =>
-  ['String', 'Binary', 'Array', 'Map', 'Object', 'Union'].includes(type.kind) ||
+  ['String', 'Binary', 'Array', 'Map', 'Object', 'Union', 'function'].includes(type.kind) ||
   (type.kind === 'Optional' && is_reference_type(type.inner))
 
 // A T or nil also fits where a T? is expected.

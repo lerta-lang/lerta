@@ -223,11 +223,28 @@ export class ExpressionParser {
 
   // A named type, or a union of them: `A | B`.
   parse_type_name(): TypeName {
+    if (this.tokens.peek().kind === '(') return this.parse_parenthesized_type()
     const first = this.parse_named_type()
     if (this.tokens.peek().kind !== '|') return first
     const members = [first]
     while (this.tokens.accept('|')) members.push(this.parse_named_type())
     return { kind: 'union_type', members, line: first.line, column: first.column }
+  }
+
+  // `(A, B) -> R`, or a function type in parentheses, `((A) -> R)?`, to make it optional.
+  private parse_parenthesized_type(): TypeName {
+    const open = this.tokens.next()
+    const position = { line: open.line, column: open.column }
+    const types = this.parse_list(')', () => this.parse_type_name())
+    if (this.tokens.accept('->')) {
+      const result = this.parse_type_name()
+      return { kind: 'function_type', params: types, result, optional: false, ...position }
+    }
+    const [inner] = types
+    if (types.length !== 1 || inner.kind !== 'function_type') {
+      throw this.tokens.error_at(this.tokens.peek(), "'->'")
+    }
+    return { ...inner, optional: this.tokens.accept('?'), ...position }
   }
 
   private parse_named_type(): NamedType {

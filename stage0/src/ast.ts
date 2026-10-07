@@ -65,7 +65,16 @@ export type NamedType = Position & {
 // `A | B`: a value of any of the member types.
 export type UnionTypeName = Position & { kind: 'union_type'; members: NamedType[] }
 
-export type TypeName = NamedType | UnionTypeName
+// `(A, B) -> R`: a function. Written in parentheses with `?` after them, `((A) -> R)?`, it may
+// be nil.
+export type FunctionTypeName = Position & {
+  kind: 'function_type'
+  params: TypeName[]
+  result: TypeName
+  optional: boolean
+}
+
+export type TypeName = NamedType | UnionTypeName | FunctionTypeName
 
 export type Parameter = { name: Identifier; type: TypeName }
 

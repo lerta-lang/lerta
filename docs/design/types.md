@@ -6,8 +6,8 @@
 - Builtins (standard types, interfaces and built-in functions) and shadowing: see [the reference](../reference/control-flow.md#blocks-and-scopes).
 - `type Expr = Num | Plus | Neg` names a type (an alias).
 - Discriminated unions are unions of classes. The discriminator is the class type itself (no `kind` field, no enum; branch with `case`).
-- Type notation: function types `(Int, String) -> Bool` (no parameters `() -> Int`, no return value `(Int) -> void`), generics `Array<Int>`, `Map<String, Int>`.
-  - `?` binds tighter than `|` (`Int | String?` is `Int | (String?)`). To make a function type nilable, write `(() -> Int)?`.
+- Type notation: function types and generics `Array<Int>`, `Map<String, Int>` are implemented: see [the reference](../reference/functions.md#function-values).
+  - `?` binds tighter than `|` (`Int | String?` is `Int | (String?)`).
 - Lambda parameter types may be omitted where the expected type is known (`xs.map (x) -> x * 2`).
 - `T?` is shorthand for `T | nil` (the Swift/Kotlin approach). Unions remain the general form. `T?`, `nil` and nil tests are implemented: see [the reference](../reference/types.md#optional-values).
 - There is only one `nil` (no `undefined`, no `null`). JSON `null` is Lerta `nil`. `nil` is a type with one element. "No key" is distinguished with `m.has(k)`.

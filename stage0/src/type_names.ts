@@ -1,5 +1,13 @@
 // Types written in the source, such as `Array<Int>` in an annotation.
-import type { Identifier, NamedType, Position, TypeAlias, TypeName, UnionTypeName } from './ast.ts'
+import type {
+  FunctionTypeName,
+  Identifier,
+  NamedType,
+  Position,
+  TypeAlias,
+  TypeName,
+  UnionTypeName,
+} from './ast.ts'
 import { CompileError } from './errors.ts'
 import {
   array_type,
@@ -67,12 +75,20 @@ export class TypeResolver {
   // `void` is only allowed as a return type.
   resolve(type_name: TypeName, allow_void = false): Type {
     if (type_name.kind === 'union_type') return this.resolve_union(type_name)
-    const type = this.resolve_name(type_name, allow_void)
+    const type =
+      type_name.kind === 'function_type'
+        ? this.resolve_function(type_name)
+        : this.resolve_name(type_name, allow_void)
     if (!type_name.optional) return type
     if (type.kind === 'void') {
       throw new CompileError('void cannot be optional', type_name.line, type_name.column)
     }
     return optional_type(type)
+  }
+
+  private resolve_function(type_name: FunctionTypeName): Type {
+    const params = type_name.params.map((param) => this.resolve(param))
+    return { kind: 'function', params, result: this.resolve(type_name.result, true) }
   }
 
   // A union holds classes and structs; a member that is itself a union is flattened.

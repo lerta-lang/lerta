@@ -176,7 +176,8 @@ export class ExpressionChecker {
     }
   }
 
-  private type_of_identifier(identifier: Identifier): Type {
+  // A builtin or a standard module's function can only be called so far, not used as a value.
+  private type_of_identifier(identifier: Identifier, is_callee = false): Type {
     const local = this.scopes.lookup(identifier.name)
     if (local !== undefined) {
       ;(local.origin ?? local).used = true
@@ -192,6 +193,8 @@ export class ExpressionChecker {
     if (imported?.export.kind === 'type') {
       throw new CompileError(`'${identifier.name}' is a type`, identifier.line, identifier.column)
     }
+    const is_runtime_function = imported?.export.kind === 'function'
+    if (is_runtime_function && !is_callee) throw this.only_called(identifier)
     if (imported !== undefined) return imported.export.type
     const pending = this.top_level?.pending_error(identifier)
     if (pending !== undefined) throw pending
@@ -200,7 +203,13 @@ export class ExpressionChecker {
       const message = `undefined name '${identifier.name}'`
       throw new CompileError(message, identifier.line, identifier.column)
     }
+    if (!is_callee) throw this.only_called(identifier)
     return builtin.type
+  }
+
+  private only_called(identifier: Identifier): CompileError {
+    const message = `'${identifier.name}' can only be called so far, not used as a value`
+    return new CompileError(message, identifier.line, identifier.column)
   }
 
   private type_of_call(call: Call, expected: Type | undefined): Type {
@@ -215,7 +224,11 @@ export class ExpressionChecker {
       throw new CompileError(message, name.line, name.column)
     }
     const callee_type =
-      callee.kind === 'member' ? this.type_of_method(callee) : this.type_of(callee)
+      callee.kind === 'member'
+        ? this.type_of_method(callee)
+        : callee.kind === 'identifier'
+          ? this.record(callee, this.type_of_identifier(callee, true))
+          : this.type_of(callee)
     if (callee_type.kind !== 'function') {
       const message = `cannot call a value of type ${format_type(callee_type)}`
       throw new CompileError(message, call.line, call.column)
@@ -233,7 +246,9 @@ export class ExpressionChecker {
     const object_type = this.type_of(member.object)
     const { name, line, column } = member.name
     const method =
-      this.objects.method_type(object_type, member.name) ?? builtin_method(object_type, name)
+      this.objects.method_type(object_type, member.name) ??
+      builtin_method(object_type, name) ??
+      this.objects.field_type(object_type, member)
     if (method === undefined) {
       throw new CompileError(
         `type ${format_type(object_type)} has no method '${name}'`,

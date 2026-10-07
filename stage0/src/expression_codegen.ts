@@ -9,6 +9,7 @@ import {
 import { call_array_method, emit_length } from './array_codegen.ts'
 import { emit_binary_length, emit_binary_slice, emit_decode_utf8 } from './binary_codegen.ts'
 import { builtins } from './builtins.ts'
+import { emit_closure_call, emit_function_closure } from './closure_codegen.ts'
 import { CaseGenerator, type BlockGenerator } from './case_codegen.ts'
 import { CollectionGenerator } from './collection_codegen.ts'
 import type { Conversions, Types } from './checker.ts'
@@ -204,7 +205,9 @@ export class ExpressionGenerator {
       if (call_type.kind !== 'Map') throw new Error('Map() has a map type')
       return emit_map_new(this.ir, call_type)
     }
-    if (callee.kind !== 'identifier') throw new Error('only named functions can be called')
+    const is_value = callee.kind !== 'identifier' || this.locals.lookup(callee.name) !== undefined
+    if (is_value)
+      return this.call_closure(this.generate(callee), this.types.get(callee)!, call.args)
     const callee_type = this.types.get(callee)!
     if (callee_type.kind === 'Object') return this.generate_construction(call, callee_type)
     const imported = this.locals.lookup(callee.name) ? undefined : this.imports.get(callee.name)
@@ -226,6 +229,16 @@ export class ExpressionGenerator {
         ? this.call_user_function(symbol, callee_type, args)
         : this.call_builtin(callee.name, arg_types, args)
     call.args.forEach((arg, i) => this.release_if_reference(arg, operands[i]))
+    return result
+  }
+
+  // Calls a function value, a closure, which the call owns and releases; it is evaluated before
+  // the arguments, as a named function is known before them.
+  private call_closure(closure: string, type: Type, args: Expression[]): string {
+    const operands = args.map((arg) => this.generate(arg))
+    const result = emit_closure_call(this.ir, closure, type, operands)
+    args.forEach((arg, i) => this.release_if_reference(arg, operands[i]))
+    emit_release(this.ir, closure)
     return result
   }
 
@@ -281,6 +294,11 @@ export class ExpressionGenerator {
       emit_writer_method(this.ir, name, object, args)
       call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
       return ''
+    }
+    if (object_type.kind === 'Object' && !this.objects.info(object_type).methods.has(name)) {
+      // A field that holds a function.
+      const closure = this.read_field(object, object_type, member)
+      return this.call_closure(closure, this.types.get(member)!, call.args)
     }
     if (object_type.kind === 'Object') {
       const args = call.args.map((arg) => this.generate(arg))
@@ -361,6 +379,10 @@ export class ExpressionGenerator {
   // A local narrowed to its type without nil is read as such.
   private generate_identifier(identifier: Identifier): string {
     const local = this.locals.lookup(identifier.name)
+    const symbol = this.function_symbols.get(identifier.name)
+    if (local === undefined && symbol !== undefined) {
+      return emit_function_closure(this.ir, symbol, this.types.get(identifier)!)
+    }
     if (local === undefined) return this.generate_imported_value(identifier)
     const value =
       local.kind === 'value'
