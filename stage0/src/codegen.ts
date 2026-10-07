@@ -17,6 +17,7 @@ import { emit_map_set } from './map_codegen.ts'
 import { CheckedInt } from './checked_int.ts'
 import { ControlFlowGenerator } from './control_flow_codegen.ts'
 import { ThrowBlocks } from './throw_blocks.ts'
+import type { BlockGenerator } from './case_codegen.ts'
 import { ExpressionGenerator, slot_pointer, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder, IrModule } from './ir_builder.ts'
 import {
@@ -109,7 +110,7 @@ const function_symbols = (module: Module, checked: Checked[]): Map<string, strin
 
 type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects' | 'imports'>
 
-export class FunctionGenerator {
+export class FunctionGenerator implements BlockGenerator {
   private readonly types: Types
   private readonly objects: ObjectTypes
   private readonly ir: IrBuilder
@@ -153,6 +154,7 @@ export class FunctionGenerator {
       this.checked_int,
       this.locals,
       function_symbols,
+      this,
     )
     this.control_flow = new ControlFlowGenerator(
       this,
@@ -256,6 +258,19 @@ export class FunctionGenerator {
     const { value } = return_statement
     this.emit_return(value === undefined ? '' : this.expressions.generate(value))
     this.ir.start_block(this.ir.fresh_label('unreachable'))
+  }
+
+  // A block that gives a value (see BlockGenerator). The value is computed before the locals are
+  // released, as it may be one of them.
+  generate_block_value(body: Statement[]): string {
+    const scope = this.locals.push()
+    for (const statement of body.slice(0, -1)) this.generate_statement(statement)
+    const last = body.at(-1)!
+    const value = is_expression(last) ? this.expressions.generate(last) : ''
+    if (!is_expression(last)) this.generate_statement(last)
+    this.release_scope(scope)
+    this.locals.pop()
+    return value
   }
 
   // A block is a scope: the references held by its locals are released at its end.

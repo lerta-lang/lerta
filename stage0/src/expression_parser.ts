@@ -400,7 +400,7 @@ export class ExpressionParser {
       // A pattern stops before `then`, which begins the arm's value.
       const patterns = [this.parse_coalesce()]
       while (subject !== undefined && this.tokens.accept(',')) patterns.push(this.parse_coalesce())
-      arms.push({ patterns, value: this.parse_arm_body('then') })
+      arms.push({ patterns, body: this.parse_arm_body('then') })
     } while (this.tokens.peek().kind === 'when')
     const has_else = subject === undefined || this.tokens.peek().kind === 'else'
     if (has_else) this.tokens.expect('else', "'when' or 'else'")
@@ -410,20 +410,18 @@ export class ExpressionParser {
   }
 
   // The expression on the same line (`when c then x`, `else x`), or alone in an indented block.
-  private parse_arm_body(arm: 'then' | 'else'): Expression {
+  private parse_arm_body(arm: 'then' | 'else'): Statement[] {
     const is_inline =
       arm === 'then' ? this.tokens.accept('then') : this.tokens.peek().kind !== 'newline'
     if (is_inline) {
       const value = this.parse_expression()
       this.tokens.expect_line_end()
-      return value
+      return [value]
     }
-    this.tokens.expect('newline', arm === 'then' ? "'then' or end of line" : 'end of line')
-    this.tokens.expect('indent', 'indented block')
-    const value = this.parse_expression()
-    this.tokens.expect_line_end()
-    this.tokens.expect('dedent', 'end of block')
-    return value
+    if (this.tokens.peek().kind !== 'newline') {
+      throw this.tokens.error_at(this.tokens.peek(), "'then' or end of line")
+    }
+    return this.bodies.parse_block()
   }
 }
 

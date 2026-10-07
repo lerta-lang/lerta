@@ -9,7 +9,7 @@ import {
 import { call_array_method, emit_length } from './array_codegen.ts'
 import { emit_binary_length, emit_binary_slice, emit_decode_utf8 } from './binary_codegen.ts'
 import { builtins } from './builtins.ts'
-import { CaseGenerator } from './case_codegen.ts'
+import { CaseGenerator, type BlockGenerator } from './case_codegen.ts'
 import { CollectionGenerator } from './collection_codegen.ts'
 import type { Conversions, Types } from './checker.ts'
 import type { CheckedInt } from './checked_int.ts'
@@ -83,6 +83,7 @@ export class ExpressionGenerator {
     checked_int: CheckedInt,
     locals: Scopes<CodegenLocal>,
     function_symbols: Map<string, string>,
+    blocks: BlockGenerator,
   ) {
     this.ir = ir
     this.types = checked.types
@@ -90,7 +91,7 @@ export class ExpressionGenerator {
     this.objects = checked.objects
     this.imports = checked.imports
     this.operators = new OperatorGenerator(this, ir, checked.types, checked_int, throws)
-    this.cases = new CaseGenerator(this, ir, checked.types)
+    this.cases = new CaseGenerator(this, ir, checked.types, blocks)
     this.collections = new CollectionGenerator(this, ir, checked.types)
     this.locals = locals
     this.function_symbols = function_symbols

@@ -1,0 +1,36 @@
+# Splits a source text into tokens.
+
+export struct Token
+  kind: String
+  text: String
+
+const is_digit = (c: Byte): Bool -> c >= '0' and c <= '9'
+const is_letter = (c: Byte): Bool -> (c >= 'a' and c <= 'z') or c == '_'
+
+const symbols = { '+': true, '-': true, '*': true, '/': true, '(': true, ')': true, '=': true, ';': true }
+
+export const tokenize = (source: String): Array<Token> ->
+  const tokens: Array<Token> = []
+  const bytes = source.binary
+  var i = 0
+  while i < bytes.length
+    const c = bytes[i]
+    if c == ' '
+      i += 1
+      continue
+    var end = i + 1
+    if is_digit(c)
+      end += 1 while end < bytes.length and is_digit(bytes[end])
+      tokens.push(Token(kind: 'number', text: bytes.slice(i, end).decode_utf8()!))
+    else if is_letter(c)
+      end += 1 while end < bytes.length and is_letter(bytes[end])
+      const word = bytes.slice(i, end).decode_utf8()!
+      const kind = word == 'let' or word == 'print' then word else 'name'
+      tokens.push(Token(kind: kind, text: word))
+    else
+      const symbol = bytes.slice(i, end).decode_utf8()!
+      throw "unexpected character '#{symbol}'" if not symbols.has(symbol)
+      tokens.push(Token(kind: symbol, text: symbol))
+    i = end
+  tokens.push(Token(kind: 'end', text: ''))
+  tokens

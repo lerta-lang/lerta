@@ -80,13 +80,13 @@ export type FunctionLiteral = Position & {
 // `case` without a subject takes the first arm whose condition (its one pattern) is true. With a
 // subject, a pattern is a type, which the subject must have, or a value, which it must equal; an
 // arm may list several. `otherwise` is the `else` arm, which a case over every type of a union may
-// leave out.
-export type CaseArm = { patterns: Expression[]; value: Expression }
+// leave out. An arm's body is its value after `then`, or a block whose last statement gives it.
+export type CaseArm = { patterns: Expression[]; body: Statement[] }
 export type Case = Position & {
   kind: 'case'
   subject: Expression | undefined
   arms: CaseArm[]
-  otherwise: Expression | undefined
+  otherwise: Statement[] | undefined
 }
 
 // `x is T`: whether x, of a union type, holds a T.

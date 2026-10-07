@@ -3,7 +3,7 @@
 import { type Call, type Expression, type Identifier, type IsTest, type Member } from './ast.ts'
 import { builtin_method, builtin_property, builtins } from './builtins.ts'
 import type { Conversions, SelfContext, Shared, Types } from './checker.ts'
-import { CaseChecker } from './case_checker.ts'
+import { CaseChecker, type BlockChecker } from './case_checker.ts'
 import { CollectionChecker } from './collection_checker.ts'
 import { CompileError } from './errors.ts'
 import type { Functions } from './functions.ts'
@@ -62,6 +62,7 @@ export class ExpressionChecker {
     scopes: Scopes<CheckerLocal>,
     self: SelfContext | undefined,
     top_level: TopLevelValues | undefined,
+    blocks: BlockChecker,
   ) {
     this.imports = shared.imports
     this.top_level = top_level
@@ -72,7 +73,14 @@ export class ExpressionChecker {
     this.scopes = scopes
     this.self = self
     this.objects = new ObjectChecker(this, shared, scopes, self)
-    this.cases = new CaseChecker(this, scopes, shared.objects, shared.conversions, shared.resolver)
+    this.cases = new CaseChecker(
+      this,
+      scopes,
+      shared.objects,
+      shared.conversions,
+      shared.resolver,
+      blocks,
+    )
     this.resolver = shared.resolver
     this.collections = new CollectionChecker(this, scopes, shared.functions)
   }

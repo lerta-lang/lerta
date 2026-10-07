@@ -1,5 +1,6 @@
 // Checks statements and blocks, defining the locals they declare.
 import {
+  is_expression,
   type Assignment,
   type Condition,
   type Declaration,
@@ -29,9 +30,10 @@ import type { TopLevelValues } from './top_level_values.ts'
 import type { Imports } from './imports.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
-import { format_type, int_type, type Type } from './types.ts'
+import { format_type, int_type, never_type, void_type, type Type } from './types.ts'
+import type { BlockChecker } from './case_checker.ts'
 
-export class StatementChecker {
+export class StatementChecker implements BlockChecker {
   private readonly types: Types
   private readonly warnings: CompileWarning[]
   private readonly functions: Functions
@@ -67,6 +69,7 @@ export class StatementChecker {
       this.scopes,
       self,
       is_top_level_code ? undefined : this.top_level,
+      this,
     )
     this.results = new ResultChecker(this, this.expressions, context)
   }
@@ -116,6 +119,26 @@ export class StatementChecker {
     return () => {
       for (const local of scope.values()) this.warn_if_unused(local)
     }
+  }
+
+  // A block that gives a value (see BlockChecker); its last statement is typed in its scope.
+  type_of_block(
+    body: Statement[],
+    define: () => void,
+    type_of_last: (value: Expression) => Type,
+  ): Type {
+    const last = body.at(-1)!
+    let type: Type = void_type
+    this.check_block(body.slice(0, -1), define, () => {
+      if (is_expression(last)) {
+        type = type_of_last(last)
+        return
+      }
+      this.check_statement(last)
+      const is_never = (expression: Expression) => this.types.get(expression)?.kind === 'never'
+      if (ends_with_jump([last], is_never)) type = never_type
+    })
+    return type
   }
 
   // A block is a scope; `define` declares the names that belong to it besides its statements, and
