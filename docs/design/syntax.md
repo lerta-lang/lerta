@@ -2,13 +2,12 @@
 
 ## Basics
 
-- Source files use the extension `.lerta`.
-- CoffeeScript-like. Indentation (**spaces only**; a tab is a lexical error) forms blocks. Implicit return. Expression-oriented.
+Source files, comments, identifiers, indentation and `'...'` strings are implemented: see [the reference](../reference/syntax.md).
+
+- CoffeeScript-like. Indentation forms blocks. Implicit return. Expression-oriented.
 - Numeric literals may use separators: `1_000_000`.
-- Comments run from `#` to the end of the line. There are no block comments.
-- Identifiers are `[A-Za-z_][A-Za-z0-9_]*` (ASCII only). Names starting with `_` produce no warning when unused.
-- There are two kinds of string literals:
-  - `'...'`: no escapes and no interpolation. Single line only. It cannot contain `'` (use `"..."` if needed).
+- Names starting with `_` produce no warning when unused.
+- String literals besides `'...'`:
   - `"..."`: escapes (`\n` `\t` `\r` `\0` `\\` `\"` `\#` `\u{1F600}`) and interpolation `"#{name}"`.
   - Multi-line strings use `"""..."""`. The common leading indentation is removed, measured from the position of the closing `"""` (the Swift approach).
 

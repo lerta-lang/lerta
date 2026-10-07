@@ -1,6 +1,6 @@
 # Language design (planned)
 
-This directory holds the planned design of the language as the user sees it. None of it is implemented yet.
+This directory holds the planned design of the language as the user sees it. What is implemented has moved out of it.
 
 When a feature is implemented, its description moves to [../reference/](../reference/README.md) and is removed from here, leaving a pointer.
 

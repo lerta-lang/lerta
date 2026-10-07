@@ -1,4 +1,5 @@
 import { build } from './build.ts'
+import { CompileError } from './errors.ts'
 
 const usage = 'usage: lerta build <source> -o <output>'
 
@@ -7,4 +8,10 @@ if (command !== 'build' || source_path === undefined || output_flag !== '-o' || 
   console.error(usage)
   process.exit(2)
 }
-build(source_path, output_path)
+try {
+  build(source_path, output_path)
+} catch (error) {
+  if (!(error instanceof CompileError)) throw error
+  console.error(error.format(source_path))
+  process.exit(1)
+}
