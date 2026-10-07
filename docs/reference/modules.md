@@ -5,7 +5,7 @@ import { read_file, stdout } from 'std:io'
 import { argv, exit } from 'std:process'
 ```
 
-- A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. Imports are written at the top level. An import that is never used is a warning.
+- A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import { a as c } from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. Imports are written at the top level. An import that is never used is a warning.
 - `'std:io'` and `'std:process'` are standard modules (below). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
 
 ## Exports
@@ -20,12 +20,11 @@ export type Shape = Point | Circle
 export const origin = (): Point -> Point(x: 0, y: 0)
 ```
 
-- `export` before a top-level function, class, struct or type alias makes it importable. Other names cannot be imported, and two modules may each have a function or a type alias of the same name.
+- `export` before a top-level function, class, struct or type alias makes it importable. Names are local to their module: other names cannot be imported, and different modules may use the same name. Classes and structs of the same name in different modules are different types; where a message would not tell them apart, it names their modules.
 - Before the entry module's top-level code, that of every module it imports, directly or not, runs once, each after the modules it imports.
 - So far:
   - only functions and types can be exported, not other values;
-  - imports cannot be circular;
-  - the name of a class or struct must be unique across the program.
+  - imports cannot be circular.
 
 ## std:io
 

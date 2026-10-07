@@ -12,7 +12,7 @@ import { narrowed_view, narrowing_of, type Narrowing } from './narrowing.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { Scopes } from './scopes.ts'
 import type { TypeResolver } from './type_names.ts'
-import { format_type, same_type, unify, type Type } from './types.ts'
+import { format_member, format_type, same_type, type_key, unify, type Type } from './types.ts'
 
 const value_kinds = ['Int', 'UInt8', 'Bool', 'String']
 
@@ -179,18 +179,20 @@ export class CaseChecker {
     const arm_narrowing = case_expression.arms.map((arm) => {
       const types = arm.patterns.map((pattern) => this.type_pattern(pattern, union))
       for (const [i, type] of types.entries()) {
-        const name = format_type(type)
-        if (handled.has(name)) {
+        const key = type_key(type)
+        if (handled.has(key)) {
           const { line, column } = arm.patterns[i]
-          throw new CompileError(`${name} is already handled by an earlier arm`, line, column)
+          const message = `${format_member(type, union)} is already handled by an earlier arm`
+          throw new CompileError(message, line, column)
         }
-        handled.add(name)
+        handled.add(key)
       }
       return types.length === 1 ? this.narrowing(case_expression.subject!, types[0]) : undefined
     })
-    const missing = union.members.filter((member) => !handled.has(format_type(member)))
+    const missing = union.members.filter((member) => !handled.has(type_key(member)))
     if (case_expression.otherwise === undefined && missing.length > 0) {
-      const message = `case does not handle ${missing.map(format_type).join(', ')}; add them or an else arm`
+      const missing_types = missing.map((member) => format_member(member, union)).join(', ')
+      const message = `case does not handle ${missing_types}; add them or an else arm`
       throw new CompileError(message, case_expression.line, case_expression.column)
     }
     return arm_narrowing

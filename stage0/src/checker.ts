@@ -70,7 +70,6 @@ export type Checked = {
 export const check_modules = (modules: Module[]): Checked[] => {
   const checked: Checked[] = []
   const warnings: CompileWarning[] = []
-  const type_modules = new Map<string, Module>()
   const program_infos = new Map<string, ObjectInfo>()
   try {
     for (const module of modules) {
@@ -78,10 +77,9 @@ export const check_modules = (modules: Module[]): Checked[] => {
         is_file_import(statement)
           ? checked[module.imported.get(statement)!.index].exports
           : std_modules.get(statement.module)
-      const result = with_module_path(module.display_path, () => {
-        reject_type_declared_elsewhere(module, type_modules)
-        return check(module, exports_of, program_infos)
-      })
+      const result = with_module_path(module.display_path, () =>
+        check(module, exports_of, program_infos),
+      )
       for (const warning of result.warnings) warning.module_path = module.display_path
       warnings.push(...result.warnings)
       checked.push(result)
@@ -92,22 +90,6 @@ export const check_modules = (modules: Module[]): Checked[] => {
   }
   checked.at(-1)!.warnings = warnings
   return checked
-}
-
-// A class or struct is known by its name in the generated code, so the name must be unique
-// across the program so far.
-const reject_type_declared_elsewhere = (module: Module, type_modules: Map<string, Module>) => {
-  for (const statement of module.program) {
-    if (statement.kind !== 'type_declaration') continue
-    const { name } = statement
-    const other = type_modules.get(name.name)
-    if (other !== undefined) {
-      const where = other.display_path ?? 'the entry module'
-      const message = `a type named '${name.name}' is declared in ${where} too; type names must be unique across the program so far`
-      throw new CompileError(message, name.line, name.column)
-    }
-    type_modules.set(name.name, module)
-  }
 }
 
 const check = (
@@ -131,6 +113,8 @@ const check = (
     (info) => check_object(shared, info),
     (name) => imported_type(name)?.info,
     program_infos,
+    module.index,
+    module.display_path ?? 'the entry module',
   )
   const resolver = new TypeResolver(
     (name) => objects.object_type(name) ?? imported_type(name)?.type,
@@ -156,10 +140,8 @@ const check = (
     for (const statement of program) {
       if (statement.kind === 'type_alias') resolver.add_alias(statement)
     }
-    imports.add(
-      program,
-      (name) => objects.object_type(name) !== undefined || resolver.has_alias(name),
-    )
+    imports.add(program)
+    reject_types_named_like_imports(program, imports)
     resolver.resolve_aliases()
     add_top_level_functions(program, functions, objects, resolver, imports)
     objects.add_members(resolver, functions)
@@ -178,6 +160,17 @@ const check = (
   }
   const exports = exports_of_module(module, functions, objects, resolver)
   return { types, conversions, objects, imports, warnings: in_source_order(warnings), exports }
+}
+
+// A class, struct or type alias cannot have the name of an import; the error points at it.
+const reject_types_named_like_imports = (program: Program, imports: Imports): void => {
+  for (const statement of program) {
+    if (statement.kind !== 'type_declaration' && statement.kind !== 'type_alias') continue
+    const { name } = statement
+    if (imports.has(name.name)) {
+      throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
+    }
+  }
 }
 
 const exports_of_module = (

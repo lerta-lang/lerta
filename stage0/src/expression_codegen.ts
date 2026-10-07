@@ -136,7 +136,7 @@ export class ExpressionGenerator {
         const object = this.generate(expression.value)
         const type = this.types.get(expression.type)!
         if (type.kind !== 'Object') throw new Error('is tests a class or struct')
-        const test = emit_type_test(this.ir, object, type.name)
+        const test = emit_type_test(this.ir, object, type)
         emit_release(this.ir, object)
         return test
       }
@@ -235,8 +235,7 @@ export class ExpressionGenerator {
         const value = given.get(field.name.name)?.operand ?? nil_constant(field.type!)
         return `${ir_type(field.type!)} ${value}`
       })
-    const name = info.declaration.name.name
-    const object = this.ir.assign(`call ptr ${constructor_symbol(name)}(${args.join(', ')})`)
+    const object = this.ir.assign(`call ptr ${constructor_symbol(info.type)}(${args.join(', ')})`)
     for (const { arg, operand } of given.values()) this.release_if_reference(arg.value, operand)
     return object
   }
@@ -279,7 +278,7 @@ export class ExpressionGenerator {
     if (object_type.kind === 'Object') {
       const args = call.args.map((arg) => this.generate(arg))
       const typed_args = args.map((arg, i) => `${ir_type(this.type_at_use(call.args[i]))} ${arg}`)
-      const symbol = method_symbol(object_type.name, name)
+      const symbol = method_symbol(object_type, name)
       const result = this.call_user_function(
         symbol,
         this.types.get(member)!,

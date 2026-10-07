@@ -18,6 +18,7 @@ import type { TypeResolver } from './type_names.ts'
 import {
   bool_type,
   format_type,
+  format_types,
   int_type,
   never_type,
   nil_type,
@@ -279,7 +280,8 @@ export class ExpressionChecker {
   // A T or nil where a T? is expected is converted, which codegen does where it generates it.
   private require_type(expression: Expression, type: Type, expected: Type): void {
     if (!is_assignable(type, expected)) {
-      const message = `expected ${format_type(expected)}, got ${format_type(type)}`
+      const [expected_text, type_text] = format_types(expected, type)
+      const message = `expected ${expected_text}, got ${type_text}`
       throw new CompileError(message, expression.line, expression.column)
     }
     if (expected.kind === 'Optional' && type.kind !== 'never' && !same_type(type, expected)) {

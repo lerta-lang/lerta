@@ -3,12 +3,10 @@
 import type { IrBuilder, IrModule } from './ir_builder.ts'
 import { drop_symbol, emit_release, ir_type, object_ir_type } from './lerta_ir.ts'
 import type { FieldInfo, ObjectInfo } from './object_types.ts'
-import { is_reference_type } from './types.ts'
+import { is_reference_type, type Type } from './types.ts'
 
 // The two header fields come before the object's own.
 const HEADER_FIELDS = 2
-
-const type_name_of = (info: ObjectInfo): string => info.declaration.name.name
 
 export const emit_field_pointer = (
   ir: IrBuilder,
@@ -17,38 +15,37 @@ export const emit_field_pointer = (
   field: FieldInfo,
 ): string => {
   const index = info.fields.indexOf(field) + HEADER_FIELDS
-  return ir.assign(
-    `getelementptr ${object_ir_type(type_name_of(info))}, ptr ${object}, i32 0, i32 ${index}`,
-  )
+  return ir.assign(`getelementptr ${object_ir_type(info.type)}, ptr ${object}, i32 0, i32 ${index}`)
 }
 
 // A new object with reference count 1 and uninitialized fields.
 export const emit_allocate = (ir: IrBuilder, info: ObjectInfo): string => {
   ir.declare('lerta_alloc', 'declare ptr @lerta_alloc(i64, ptr)')
-  const type = object_ir_type(type_name_of(info))
+  const type = object_ir_type(info.type)
   const end = ir.assign(`getelementptr ${type}, ptr null, i32 1`)
   const size = ir.assign(`ptrtoint ptr ${end} to i64`)
-  return ir.assign(`call ptr @lerta_alloc(i64 ${size}, ptr ${drop_symbol(type_name_of(info))})`)
+  return ir.assign(`call ptr @lerta_alloc(i64 ${size}, ptr ${drop_symbol(info.type)})`)
 }
 
 // The struct type, and the drop function, which releases the references the fields hold.
 export const define_object = (module: IrModule, ir: IrBuilder, info: ObjectInfo): void => {
   const field_types = info.fields.map((field) => ir_type(field.type!))
-  const name = type_name_of(info)
-  module.add_type(`${object_ir_type(name)} = type { ${['i64', 'ptr', ...field_types].join(', ')} }`)
+  module.add_type(
+    `${object_ir_type(info.type)} = type { ${['i64', 'ptr', ...field_types].join(', ')} }`,
+  )
   for (const field of info.fields) {
     if (!is_reference_type(field.type!)) continue
     const pointer = emit_field_pointer(ir, '%object', info, field)
     emit_release(ir, ir.assign(`load ptr, ptr ${pointer}`))
   }
   ir.emit('ret void')
-  ir.finish(`void ${drop_symbol(name)}(ptr %object)`)
+  ir.finish(`void ${drop_symbol(info.type)}(ptr %object)`)
 }
 
 // An i1: whether the object is of the type. The drop function in the header tells the type, since
 // every type has its own.
-export const emit_type_test = (ir: IrBuilder, object: string, type_name: string): string => {
+export const emit_type_test = (ir: IrBuilder, object: string, type: Type): string => {
   const pointer = ir.assign(`getelementptr { i64, ptr }, ptr ${object}, i32 0, i32 1`)
   const drop = ir.assign(`load ptr, ptr ${pointer}`)
-  return ir.assign(`icmp eq ptr ${drop}, ${drop_symbol(type_name)}`)
+  return ir.assign(`icmp eq ptr ${drop}, ${drop_symbol(type)}`)
 }

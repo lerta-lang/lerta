@@ -39,12 +39,17 @@ export const ir_return_type = (type: Type): string =>
 export const function_symbol = (module_index: number, name: string): string =>
   `@lerta.fn.${module_index}.${name}`
 export const module_init_symbol = (module_index: number): string => `@lerta.module.${module_index}`
-export const method_symbol = (type_name: string, method: string): string =>
-  `@lerta.method.${type_name}.${method}`
-export const constructor_symbol = (type_name: string): string => `@lerta.new.${type_name}`
-export const drop_symbol = (type_name: string): string => `@lerta.drop.${type_name}`
+// A class or struct is named by its symbol (see Type), which tells apart those of different modules.
+const object_symbol = (type: Type): string => {
+  if (type.kind !== 'Object') throw new Error('expected a class or struct type')
+  return type.symbol
+}
+export const method_symbol = (type: Type, method: string): string =>
+  `@lerta.method.${object_symbol(type)}.${method}`
+export const constructor_symbol = (type: Type): string => `@lerta.new.${object_symbol(type)}`
+export const drop_symbol = (type: Type): string => `@lerta.drop.${object_symbol(type)}`
 // The LLVM struct type of a class or struct: the object header, then the fields in order.
-export const object_ir_type = (type_name: string): string => `%lerta.object.${type_name}`
+export const object_ir_type = (type: Type): string => `%lerta.object.${object_symbol(type)}`
 
 // C `bool` and `uint8_t` parameters expect their arguments zero-extended.
 export const ir_param_type = (type: Type): string =>

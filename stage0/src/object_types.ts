@@ -40,9 +40,11 @@ const is_method = (member: MemberDeclaration): boolean =>
 export class ObjectTypes {
   // The classes and structs that the module declares.
   private readonly infos = new Map<string, ObjectInfo>()
-  // Those of every module checked so far, by name, which is unique across the program: a value
-  // may have a type that the module does not name.
+  // Those of every module checked so far, by symbol: a value may have a type that the module does
+  // not name.
   private readonly program_infos: Map<string, ObjectInfo>
+  private readonly module_index: number
+  private readonly module_name: string
   // Checks the initializers of the fields, setting the types that they give.
   private readonly check_initializers: (info: ObjectInfo) => void
   // A class or struct that the module imports, marking the import as used.
@@ -52,7 +54,11 @@ export class ObjectTypes {
     check_initializers: (info: ObjectInfo) => void,
     imported: (name: string) => ObjectInfo | undefined,
     program_infos: Map<string, ObjectInfo>,
+    module_index: number,
+    module_name: string,
   ) {
+    this.module_index = module_index
+    this.module_name = module_name
     this.check_initializers = check_initializers
     this.imported = imported
     this.program_infos = program_infos
@@ -65,7 +71,14 @@ export class ObjectTypes {
       if (this.infos.has(name.name) || is_builtin_type_name(name.name)) {
         throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
       }
-      const type: Type = { kind: 'Object', name: name.name, is_struct }
+      const symbol = `${this.module_index}.${name.name}`
+      const type: Type = {
+        kind: 'Object',
+        name: name.name,
+        symbol,
+        module: this.module_name,
+        is_struct,
+      }
       const info: ObjectInfo = {
         declaration,
         type,
@@ -76,7 +89,7 @@ export class ObjectTypes {
         state: 'unchecked',
       }
       this.infos.set(name.name, info)
-      this.program_infos.set(name.name, info)
+      this.program_infos.set(symbol, info)
     }
   }
 
@@ -134,7 +147,7 @@ export class ObjectTypes {
 
   info(type: Type): ObjectInfo {
     if (type.kind !== 'Object') throw new Error('expected a class or struct type')
-    return this.program_infos.get(type.name)!
+    return this.program_infos.get(type.symbol)!
   }
 
   // The classes and structs that the module declares.

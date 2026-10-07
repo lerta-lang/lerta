@@ -194,8 +194,10 @@ export type TypeDeclaration = Position &
 export type TypeAlias = Position &
   Exportable & { kind: 'type_alias'; name: Identifier; type: TypeName }
 
-// `import { a, b } from 'std:io'`, or from another file, `'./util'`.
-export type Import = Position & { kind: 'import'; names: Identifier[]; module: string }
+// `import { a, b as c } from 'std:io'`, or from another file, `'./util'`. An imported name is
+// known in the module by its alias, if it has one.
+export type ImportName = { name: Identifier; alias: Identifier | undefined }
+export type Import = Position & { kind: 'import'; names: ImportName[]; module: string }
 
 export type Statement =
   | Expression

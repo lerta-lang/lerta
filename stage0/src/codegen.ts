@@ -87,7 +87,7 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
       define_object(ir_module, new IrBuilder(ir_module), info)
       generator().generate_constructor(info)
       for (const [name, literal] of info.methods) {
-        const symbol = method_symbol(info.declaration.name.name, name)
+        const symbol = method_symbol(info.type, name)
         generator().generate_function(symbol, literal, info.type)
       }
     }
@@ -228,11 +228,10 @@ export class FunctionGenerator implements BlockGenerator {
       }
     }
     this.locals.pop()
-    const name = info.declaration.name.name
-    if (info.has_init) this.ir.emit(`call void ${method_symbol(name, 'init')}(ptr ${object})`)
+    if (info.has_init) this.ir.emit(`call void ${method_symbol(info.type, 'init')}(ptr ${object})`)
     this.ir.emit(`ret ptr ${object}`)
     const params = arguments_.map((field, i) => `${ir_type(field.type!)} %p${i}`).join(', ')
-    this.finish(`ptr ${constructor_symbol(name)}(${params})`)
+    this.finish(`ptr ${constructor_symbol(info.type)}(${params})`)
   }
 
   private store_field(object: string, info: ObjectInfo, field: FieldInfo, value: string): void {

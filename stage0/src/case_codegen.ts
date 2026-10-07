@@ -111,7 +111,7 @@ export class CaseGenerator {
 
   private type_test(object: string, type: Type): string {
     if (type.kind !== 'Object') throw new Error('a type pattern names a class or struct')
-    return emit_type_test(this.ir, object, type.name)
+    return emit_type_test(this.ir, object, type)
   }
 
   // The subject is borrowed by the comparison, as it is tested again by the next patterns.

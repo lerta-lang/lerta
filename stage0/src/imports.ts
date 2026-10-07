@@ -12,6 +12,7 @@ export type Export =
   | { kind: 'lerta_function'; type: Type; symbol: string }
   | { kind: 'type'; type: Type; info: ObjectInfo | undefined }
 
+// `name` is the name the module knows it by: its alias, if it has one.
 export type ImportedName = { name: Identifier; export: Export; used: boolean }
 
 export class Imports {
@@ -23,14 +24,14 @@ export class Imports {
     this.exports_of = exports_of
   }
 
-  // `is_taken` tells whether a top-level name is already used by a type.
-  add(program: Program, is_taken: (name: string) => boolean): void {
+  // The module's own names that clash with imports are rejected as they are declared.
+  add(program: Program): void {
     for (const statement of program) {
-      if (statement.kind === 'import') this.add_import(statement, is_taken)
+      if (statement.kind === 'import') this.add_import(statement)
     }
   }
 
-  private add_import(statement: Import, is_taken: (name: string) => boolean): void {
+  private add_import(statement: Import): void {
     const exports = this.exports_of(statement)
     if (exports === undefined) {
       const hint = statement.module.startsWith('std:')
@@ -39,16 +40,17 @@ export class Imports {
       const message = `unknown module '${statement.module}'; ${hint}`
       throw new CompileError(message, statement.line, statement.column)
     }
-    for (const name of statement.names) {
+    for (const { name, alias } of statement.names) {
       const export_ = exports.get(name.name)
       if (export_ === undefined) {
         const message = `'${statement.module}' has no export '${name.name}'`
         throw new CompileError(message, name.line, name.column)
       }
-      if (this.names.has(name.name) || is_taken(name.name)) {
-        throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
+      const local = alias ?? name
+      if (this.names.has(local.name)) {
+        throw new CompileError(`'${local.name}' is already defined`, local.line, local.column)
       }
-      this.names.set(name.name, { name, export: export_, used: false })
+      this.names.set(local.name, { name: local, export: export_, used: false })
     }
   }
 

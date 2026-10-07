@@ -9,6 +9,7 @@ import {
   type For,
   type If,
   type Import,
+  type ImportName,
   type Program,
   type Return,
   type Statement,
@@ -218,7 +219,7 @@ class Parser {
     const token = this.tokens.next()
     this.tokens.expect('{', "'{'")
     const first = this.tokens.peek()
-    const names = this.expressions.parse_list('}', () => this.expressions.parse_identifier())
+    const names = this.expressions.parse_list('}', () => this.parse_import_name())
     if (names.length === 0) throw this.tokens.error_at(first, 'a name to import')
     const from = this.tokens.peek()
     if (from.kind !== 'identifier' || from.text !== 'from')
@@ -228,6 +229,15 @@ class Parser {
     if (module.kind !== 'string') throw this.tokens.error_at(module, 'module name')
     this.tokens.next()
     return { kind: 'import', names, module: module.text, line: token.line, column: token.column }
+  }
+
+  // `name` or `name as alias`. `as` is not a keyword, so that it stays usable as a name.
+  private parse_import_name(): ImportName {
+    const name = this.expressions.parse_identifier()
+    const next = this.tokens.peek()
+    if (next.kind !== 'identifier' || next.text !== 'as') return { name, alias: undefined }
+    this.tokens.next()
+    return { name, alias: this.expressions.parse_identifier() }
   }
 
   // `class Name` or `struct Name` followed by an indented block of members, one per line.
