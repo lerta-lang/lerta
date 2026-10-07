@@ -39,11 +39,26 @@ import {
 } from './std_codegen.ts'
 import { emit_concat, emit_parse_int, emit_to_string } from './string_codegen.ts'
 import type { ThrowBlocks } from './throw_blocks.ts'
+import { emit_initialized_check, type TopLevelGlobal } from './top_level_codegen.ts'
 import { is_reference_type, type Type } from './types.ts'
 
 // A loop variable or a parameter is an SSA value; a `const` or `var` lives in a stack slot.
+// A slot of a top-level value is its global (see top_level_codegen.ts); outside the top-level code,
+// it is checked to be initialized before it is used.
 export type CodegenLocal =
-  { kind: 'value'; operand: string; type: Type } | { kind: 'slot'; pointer: string; type: Type }
+  | { kind: 'value'; operand: string; type: Type }
+  | { kind: 'slot'; pointer: string; type: Type; top_level?: TopLevelSlot }
+
+export type TopLevelSlot = { global: TopLevelGlobal; is_checked: boolean }
+
+// The slot's pointer, once a top-level value is known to be initialized.
+export const slot_pointer = (
+  ir: IrBuilder,
+  local: Extract<CodegenLocal, { kind: 'slot' }>,
+): string => {
+  if (local.top_level?.is_checked) emit_initialized_check(ir, local.top_level.global)
+  return local.pointer
+}
 
 // Expressions. Each yields an IR operand; a reference-typed one is owned by the consumer.
 export class ExpressionGenerator {
@@ -343,7 +358,7 @@ export class ExpressionGenerator {
     const value =
       local.kind === 'value'
         ? local.operand
-        : this.ir.assign(`load ${ir_type(local.type)}, ptr ${local.pointer}`)
+        : this.ir.assign(`load ${ir_type(local.type)}, ptr ${slot_pointer(this.ir, local)}`)
     if (is_reference_type(local.type)) emit_retain(this.ir, value)
     const is_narrowed =
       local.type.kind === 'Optional' && this.types.get(identifier)!.kind !== 'Optional'

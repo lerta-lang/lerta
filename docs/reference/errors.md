@@ -16,4 +16,4 @@ These apply when a value in statement position is not captured.
 
 ## Unused names
 
-A `const` or `var` that is never read (assigning to it does not count) produces a warning, unless its name starts with `_`.
+A `const` or `var` that is never read (assigning to it does not count) produces a warning, unless its name starts with `_`. A top-level one may be read by any function, so it is warned about only when the whole module compiles.

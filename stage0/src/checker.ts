@@ -17,6 +17,7 @@ import { is_file_import, with_module_path, type Module } from './loader.ts'
 import { std_modules } from './std_modules.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
 import { StatementChecker } from './statement_checker.ts'
+import { TopLevelValues } from './top_level_values.ts'
 import { TypeResolver } from './type_names.ts'
 import { same_type, void_type, type Type } from './types.ts'
 
@@ -39,6 +40,7 @@ export type Shared = {
   objects: ObjectTypes
   resolver: TypeResolver
   imports: Imports
+  top_level: TopLevelValues
 }
 
 // The object that `@` refers to: in a method, or in the initializer of a field, which sees the
@@ -134,7 +136,17 @@ const check = (
     (name) => objects.object_type(name) ?? imported_type(name)?.type,
   )
   const functions: Functions = new Functions((entry) => check_function(shared, entry), resolver)
-  const shared: Shared = { types, conversions, warnings, functions, objects, resolver, imports }
+  const top_level = new TopLevelValues(program)
+  const shared: Shared = {
+    types,
+    conversions,
+    warnings,
+    functions,
+    objects,
+    resolver,
+    imports,
+    top_level,
+  }
   try {
     objects.add(
       program.filter(
@@ -151,9 +163,14 @@ const check = (
     resolver.resolve_aliases()
     add_top_level_functions(program, functions, objects, resolver, imports)
     objects.add_members(resolver, functions)
-    new StatementChecker(shared, undefined, undefined).check_block(program)
+    const warn_unused_top_level = new StatementChecker(
+      shared,
+      undefined,
+      undefined,
+    ).check_top_level(program)
     objects.check_all()
     functions.check_all()
+    warn_unused_top_level()
     warnings.push(...imports.unused_warnings())
   } catch (error) {
     if (error instanceof CompileError) error.warnings = in_source_order(warnings)

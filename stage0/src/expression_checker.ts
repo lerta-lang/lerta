@@ -8,6 +8,7 @@ import { CollectionChecker } from './collection_checker.ts'
 import { CompileError } from './errors.ts'
 import type { Functions } from './functions.ts'
 import type { Imports } from './imports.ts'
+import type { TopLevelValues } from './top_level_values.ts'
 import type { ObjectTypes } from './object_types.ts'
 import { byte_literal } from './literals.ts'
 import { ObjectChecker } from './object_checker.ts'
@@ -48,14 +49,22 @@ export class ExpressionChecker {
   private readonly object_types: ObjectTypes
   private readonly self: SelfContext | undefined
   private readonly imports: Imports
+  private readonly top_level: TopLevelValues | undefined
   private readonly operators = new OperatorChecker(this)
   private readonly objects: ObjectChecker
   private readonly cases: CaseChecker
   private readonly collections: CollectionChecker
   private readonly resolver: TypeResolver
 
-  constructor(shared: Shared, scopes: Scopes<CheckerLocal>, self: SelfContext | undefined) {
+  // `top_level` is given to the checker of a function or a method, which sees the top-level values.
+  constructor(
+    shared: Shared,
+    scopes: Scopes<CheckerLocal>,
+    self: SelfContext | undefined,
+    top_level: TopLevelValues | undefined,
+  ) {
     this.imports = shared.imports
+    this.top_level = top_level
     this.types = shared.types
     this.conversions = shared.conversions
     this.functions = shared.functions
@@ -154,6 +163,8 @@ export class ExpressionChecker {
       throw new CompileError(`'${identifier.name}' is a type`, identifier.line, identifier.column)
     }
     if (imported !== undefined) return imported.export.type
+    const pending = this.top_level?.pending_error(identifier)
+    if (pending !== undefined) throw pending
     const builtin = builtins.get(identifier.name)
     if (builtin === undefined) {
       const message = `undefined name '${identifier.name}'`

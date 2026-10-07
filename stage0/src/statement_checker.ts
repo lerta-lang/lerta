@@ -25,6 +25,7 @@ import {
 } from './narrowing.ts'
 import { ResultChecker } from './result_checker.ts'
 import { Scopes } from './scopes.ts'
+import type { TopLevelValues } from './top_level_values.ts'
 import type { Imports } from './imports.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
@@ -39,7 +40,10 @@ export class StatementChecker {
   private readonly objects: ObjectTypes
   private readonly imports: Imports
   private readonly resolver: TypeResolver
-  private readonly scopes = new Scopes<CheckerLocal>()
+  private readonly scopes: Scopes<CheckerLocal>
+  private readonly top_level: TopLevelValues
+  // Whether this checks a function or a method, which sees the top-level values.
+  private readonly scopes_see_top_level: boolean
   private readonly expressions: ExpressionChecker
   private readonly results: ResultChecker
   private loop_depth = 0
@@ -53,7 +57,17 @@ export class StatementChecker {
     this.resolver = shared.resolver
     this.context = context
     this.self = self
-    this.expressions = new ExpressionChecker(shared, this.scopes, self)
+    this.top_level = shared.top_level
+    // A function or a method sees the top-level values; the top-level code declares them.
+    const is_top_level_code = context === undefined && self === undefined
+    this.scopes_see_top_level = !is_top_level_code
+    this.scopes = new Scopes(is_top_level_code ? undefined : (name) => this.top_level.lookup(name))
+    this.expressions = new ExpressionChecker(
+      shared,
+      this.scopes,
+      self,
+      is_top_level_code ? undefined : this.top_level,
+    )
     this.results = new ResultChecker(this, this.expressions, context)
   }
 
@@ -91,6 +105,17 @@ export class StatementChecker {
     this.check_block(body.slice(0, -1), define_params, () => {
       if (last !== undefined) this.results.check_last_statement(last)
     })
+  }
+
+  // The top-level code. Its names may be used by the functions, which are checked later, so the
+  // returned function warns about those never used once they are.
+  check_top_level(program: Statement[]): () => void {
+    this.scopes.push()
+    for (const statement of program) this.check_statement(statement)
+    const scope = this.scopes.pop()
+    return () => {
+      for (const local of scope.values()) this.warn_if_unused(local)
+    }
   }
 
   // A block is a scope; `define` declares the names that belong to it besides its statements, and
@@ -296,6 +321,8 @@ export class StatementChecker {
 
   private check_variable_target(target: Identifier): Type {
     const local = this.scopes.lookup(target.name)
+    const pending = this.scopes_see_top_level ? this.top_level.pending_error(target) : undefined
+    if (pending !== undefined) throw pending
     if (local === undefined || !local.mutable) {
       const reason = local === undefined ? 'is not a variable' : 'is not a var'
       throw new CompileError(`'${target.name}' ${reason}`, target.line, target.column)
@@ -347,12 +374,15 @@ export class StatementChecker {
     if (definition === 'redefined') {
       throw new CompileError(`'${name}' is already defined in this scope`, line, column)
     }
+    if (is_top_level) this.top_level.define(local)
     const shadowed =
       definition === 'shadowing'
         ? 'a name in an outer scope'
         : this.functions.has(name)
           ? 'a top-level function'
-          : undefined
+          : this.scopes_see_top_level && this.top_level.has(name)
+            ? 'a top-level value'
+            : undefined
     if (shadowed !== undefined && !name.startsWith('_')) {
       this.warnings.push(new CompileWarning(`'${name}' shadows ${shadowed}`, line, column))
     }

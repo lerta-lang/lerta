@@ -17,7 +17,7 @@ import { emit_map_set } from './map_codegen.ts'
 import { CheckedInt } from './checked_int.ts'
 import { ControlFlowGenerator } from './control_flow_codegen.ts'
 import { ThrowBlocks } from './throw_blocks.ts'
-import { ExpressionGenerator, type CodegenLocal } from './expression_codegen.ts'
+import { ExpressionGenerator, slot_pointer, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder, IrModule } from './ir_builder.ts'
 import {
   constructor_symbol,
@@ -33,6 +33,13 @@ import { define_object, emit_allocate, emit_field_pointer } from './object_codeg
 import type { FieldInfo, ObjectInfo, ObjectTypes } from './object_types.ts'
 import type { Module } from './loader.ts'
 import { Scopes, type Scope } from './scopes.ts'
+import {
+  define_top_level_globals,
+  emit_mark_initialized,
+  emit_release_globals,
+  type TopLevelGlobal,
+} from './top_level_codegen.ts'
+import { is_top_level_value } from './top_level_values.ts'
 import { is_reference_type, void_type, type Type } from './types.ts'
 
 type FunctionDeclaration = Declaration & { value: FunctionLiteral }
@@ -46,19 +53,30 @@ const is_function_declaration = (statement: Statement): statement is FunctionDec
 export const generate = (modules: Module[], checked: Checked[]): string => {
   const ir_module = new IrModule()
   const entry = modules.at(-1)!
+  const globals = modules.map((module) =>
+    define_top_level_globals(
+      ir_module,
+      module.program.filter(is_top_level_value),
+      checked[module.index].types,
+    ),
+  )
   for (const module of modules) {
     const main =
       module === entry
         ? { signature: 'void @lerta_main()', runs_first: modules.slice(0, -1) }
         : { signature: `void ${module_init_symbol(module.index)}()`, runs_first: [] }
-    const generator = () =>
-      new FunctionGenerator(ir_module, checked[module.index], function_symbols(module, checked))
+    const generator = (top_level_code = false) =>
+      new FunctionGenerator(ir_module, checked[module.index], function_symbols(module, checked), {
+        values: globals[module.index],
+        top_level_code,
+      })
     const is_main_code = (statement: Statement) =>
       !is_function_declaration(statement) && statement.kind !== 'type_declaration'
-    generator().generate_main(
+    generator(true).generate_main(
       module.program.filter(is_main_code),
       main.signature,
       main.runs_first.map((other) => module_init_symbol(other.index)),
+      module === entry ? globals.flatMap((values) => [...values.values()]) : [],
     )
     for (const declaration of module.program.filter(is_function_declaration)) {
       const symbol = function_symbol(module.index, declaration.name.name)
@@ -95,7 +113,10 @@ export class FunctionGenerator {
   private readonly types: Types
   private readonly objects: ObjectTypes
   private readonly ir: IrBuilder
-  private readonly locals = new Scopes<CodegenLocal>()
+  private readonly locals: Scopes<CodegenLocal>
+  // The top-level values of the module, and whether this is its top-level code, which declares
+  // them, rather than a function, which uses them once they are initialized.
+  private readonly top_level: { values: Map<string, TopLevelGlobal>; top_level_code: boolean }
   private readonly throws: ThrowBlocks
   private readonly checked_int: CheckedInt
   private readonly expressions: ExpressionGenerator
@@ -103,7 +124,23 @@ export class FunctionGenerator {
   private result_type: Type = void_type
   private readonly control_flow: ControlFlowGenerator
 
-  constructor(module: IrModule, checked: CheckedTypes, function_symbols: Map<string, string>) {
+  constructor(
+    module: IrModule,
+    checked: CheckedTypes,
+    function_symbols: Map<string, string>,
+    top_level: { values: Map<string, TopLevelGlobal>; top_level_code: boolean },
+  ) {
+    this.top_level = top_level
+    this.locals = new Scopes<CodegenLocal>((name) => {
+      const global = top_level.top_level_code ? undefined : top_level.values.get(name)
+      if (global === undefined) return undefined
+      return {
+        kind: 'slot',
+        pointer: global.pointer,
+        type: global.type,
+        top_level: { global, is_checked: true },
+      }
+    })
     this.types = checked.types
     this.objects = checked.objects
     this.ir = new IrBuilder(module)
@@ -126,10 +163,17 @@ export class FunctionGenerator {
     )
   }
 
-  // `runs_first` are the symbols of the top-level code of the imported modules.
-  generate_main(statements: Statement[], signature: string, runs_first: string[]): void {
+  // `runs_first` are the symbols of the top-level code of the imported modules; the values of all
+  // modules are released at the end of the entry module's.
+  generate_main(
+    statements: Statement[],
+    signature: string,
+    runs_first: string[],
+    releases: TopLevelGlobal[],
+  ): void {
     for (const symbol of runs_first) this.ir.emit(`call void ${symbol}()`)
     this.generate_block(statements)
+    emit_release_globals(this.ir, releases)
     this.ir.emit('ret void')
     this.finish(signature)
   }
@@ -225,7 +269,7 @@ export class FunctionGenerator {
 
   release_scope(scope: Scope<CodegenLocal>): void {
     for (const local of scope.values()) {
-      if (local.kind === 'slot' && is_reference_type(local.type)) {
+      if (local.kind === 'slot' && local.top_level === undefined && is_reference_type(local.type)) {
         emit_release(this.ir, this.ir.assign(`load ptr, ptr ${local.pointer}`))
       }
     }
@@ -263,7 +307,17 @@ export class FunctionGenerator {
   private generate_declaration(declaration: Declaration): void {
     const type = this.types.get(declaration.name)!
     const value = this.expressions.generate(declaration.value)
-    this.locals.define(declaration.name.name, this.store_in_slot(value, type))
+    const { name } = declaration.name
+    const global = this.top_level.values.get(name)
+    const is_top_level = this.top_level.top_level_code && this.locals.depth === 1
+    if (!is_top_level || global === undefined) {
+      this.locals.define(name, this.store_in_slot(value, type))
+      return
+    }
+    this.ir.emit(`store ${ir_type(type)} ${value}, ptr ${global.pointer}`)
+    emit_mark_initialized(this.ir, global)
+    const top_level = { global, is_checked: false }
+    this.locals.define(name, { kind: 'slot', pointer: global.pointer, type, top_level })
   }
 
   // The new value is stored before the old one is released, which is safe even if they are the
@@ -274,12 +328,13 @@ export class FunctionGenerator {
     if (target.kind === 'member') return this.generate_field_assignment(assignment, target)
     const local = this.locals.lookup(target.name)!
     if (local.kind !== 'slot') throw new Error('only slots can be assigned')
+    const pointer = slot_pointer(this.ir, local)
     const type = ir_type(local.type)
     const { old, value } = this.load_and_evaluate(assignment, () =>
-      this.ir.assign(`load ${type}, ptr ${local.pointer}`),
+      this.ir.assign(`load ${type}, ptr ${pointer}`),
     )
     const result = this.combine(assignment.operator, old, value, local.type)
-    this.ir.emit(`store ${type} ${result}, ptr ${local.pointer}`)
+    this.ir.emit(`store ${type} ${result}, ptr ${pointer}`)
     if (is_reference_type(local.type)) emit_release(this.ir, old)
   }
 

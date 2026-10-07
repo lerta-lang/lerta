@@ -15,7 +15,9 @@ const greet = -> print 'hello'
 - The return type may be omitted; it is then the type of the returned values, which must all agree, or `void` if there are none. A mix of `T`, `T?` and `nil` gives `T?`; `nil` alone does not give a type, so the return type must then be written. A recursive function must write its return type.
 - A function whose return type is not `void` must end with its return value or a `return`. This is decided by the last statement alone: a body ending in `while true` or in an `if` whose branches all return still needs a final value.
 - Top-level functions can be used anywhere in the module, before their declaration too, so they can call each other recursively.
-- A function body sees its parameters, its own locals, top-level functions and builtins. It does not see the top-level `const`s and `var`s of the program, or the locals around it (closures are not implemented yet).
+- A function body sees its parameters, its own locals, the top-level functions, `const`s and `var`s of its module, and builtins. It does not see the locals of blocks around it (closures are not implemented yet), including those of a block at the top level such as an `if`.
+- A top-level value read or assigned by a function or a method before the top-level code has initialized it throws `'<name>' is used before it is initialized`. Its type must be known where it is used: if top-level code above its declaration calls a function whose return type is inferred, or constructs an object whose field type is inferred from an initializer, and that function or initializer uses the value, it is an error; move the declaration up, or write the type of the function or field.
+- A parameter or local of a function with the name of a top-level value shadows it, which is a warning (see [blocks and scopes](control-flow.md#blocks-and-scopes)).
 
 ## Types
 

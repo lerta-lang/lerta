@@ -55,7 +55,7 @@
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
-- Modules lack, for now: exported values other than functions (functions cannot see top-level values yet), circular imports, classes and structs of the same name in different modules (the generated code names them by their name alone), `import { a as b }` and `import mod from`.
+- Modules lack, for now: exported values other than functions, circular imports, classes and structs of the same name in different modules (the generated code names them by their name alone), `import { a as b }` and `import mod from`.
 
 ## Phases and bootstrap
 

@@ -7,6 +7,12 @@ export class Scopes<T> {
   // Narrowed views of names, such as a `const x: Int?` known to be an Int; per scope, so that
   // they end with it. They are separate from the definitions, which they do not redefine.
   private readonly overlays: Scope<T>[] = []
+  // Names outside every scope, which a name of the scopes shadows.
+  private readonly outer: (name: string) => T | undefined
+
+  constructor(outer: (name: string) => T | undefined = () => undefined) {
+    this.outer = outer
+  }
 
   get depth(): number {
     return this.scopes.length
@@ -46,7 +52,7 @@ export class Scopes<T> {
       const local = this.overlays[depth].get(name) ?? this.scopes[depth].get(name)
       if (local !== undefined) return local
     }
-    return undefined
+    return this.outer(name)
   }
 
   // The scopes from `depth` inward, innermost first.
