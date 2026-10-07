@@ -10,3 +10,19 @@
 - Indentation forms blocks. It is made of **spaces only**; a tab in indentation is a compile error.
 - A line that is empty, or contains only spaces and optionally a comment, is ignored, whatever its indentation.
 - A line indented less than the previous one must return to the indentation of an enclosing block.
+
+## Statements
+
+- One statement per line. A statement is an expression; see [discarded values](errors.md#discarded-values) for which expressions may stand alone.
+
+## Calls
+
+- `f(x, y)` calls `f`. The `(` must follow the callee without whitespace.
+- **Calls without parentheses** (the Nim command syntax approach): `f x, y`.
+  1. Allowed **only at the start of a statement**. In the middle of an expression (`g(f x)`), parentheses are required.
+  2. Arguments are taken **greedily to the end of the line**.
+  3. There are no nested parenthesis-free calls. (`f g x` is an error; write `f g(x)`.)
+  4. At the start of a statement, whitespace after an identifier marks the start of the arguments: `f (a), b` is `f((a), b)`, while `f(a)` is a call with parentheses.
+  5. **A call with zero arguments requires parentheses**: `f()`. A bare `f` is the function value.
+- Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
+- `(x)` groups an expression.

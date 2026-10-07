@@ -6,7 +6,7 @@
 - Paths: `'./util'` and `'../lib/x'` are relative to the importing file (`./`/`../` required, the extension `.lerta` omitted, no `index` resolution for directories). `'std:io'` is a standard module. Bare names like `'util'` are reserved for future packages.
 - There are builtins (no import needed) and standard modules (`'std:...'`). For what each holds in stage0, see [the roadmap](../roadmap.md#standard-library-layout-in-stage0).
 
-  - `stdout`/`stderr` are values of type `Writer` (`write(s: String)`, `write_binary(b: Binary)`). `print(x: Stringable)` writes `x.to_string()` and a newline to `stdout` (once user-defined generics arrive, it changes to `<T: Stringable>(x: T)` and becomes a direct call through monomorphization).
+  - `stdout`/`stderr` are values of type `Writer` (`write(s: String)`, `write_binary(b: Binary)`). `print(x: Stringable)` (implemented for `String` only: see [the reference](../reference/builtins.md)) writes `x.to_string()` and a newline to `stdout` (once user-defined generics arrive, it changes to `<T: Stringable>(x: T)` and becomes a direct call through monomorphization).
   - `stdout` is buffered and flushed automatically at exit (including `exit`); `flush()` also exists. `stderr` is not buffered (so messages just before an abnormal exit are not lost).
 - There is no `main` function. A program runs the top-level code of the entry module from top to bottom.
 - Order of top-level declarations:

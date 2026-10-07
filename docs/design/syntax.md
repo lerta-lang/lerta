@@ -49,17 +49,11 @@ Source files, comments, identifiers, indentation and `'...'` strings are impleme
 
 ## Calls without parentheses
 
-`f x, y` is supported (the Nim command syntax approach). Rules:
+The basic rules are implemented: see [the reference](../reference/syntax.md#calls). Planned:
 
-1. Allowed **only at the start of a statement**. In the middle of an expression (`a + f x`, `g(f x)`), parentheses are required.
-2. Arguments are taken **greedily to the end of the line** (the end of the line acts as the closing parenthesis).
-3. There are no nested parenthesis-free calls. (`f g x` is an error; write `f g(x)`.)
-4. **At the start of a statement, whitespace after an identifier marks the start of the arguments**: `f [1]` is `f([1])`, `f -1` is `f(-1)`, `f (a), b` is `f((a), b)`. Without whitespace it is `f[1]` (indexing) or `f(a)` (call). If there is also whitespace after the operator, as in `f - 1`, it is a binary operator. In the middle of an expression there are no parenthesis-free calls, so `x -1` is `x - 1`.
-5. **A call with zero arguments requires parentheses**: `f()`. A bare `f` is the function value (functions are ordinary values, with one notation).
-6. If the last argument is a closure, it may continue as an indented block.
-7. A call with explicit type arguments requires parentheses: `f<T>(x)` (to avoid a clash with `a < b`).
-
-- Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
+- Whitespace after an identifier at the start of a statement also starts the arguments before other tokens: `f [1]` is `f([1])` and `f -1` is `f(-1)`. Without whitespace it is `f[1]` (indexing). If there is also whitespace after the operator, as in `f - 1`, it is a binary operator. In the middle of an expression there are no parenthesis-free calls, so `x -1` is `x - 1`.
+- If the last argument is a closure, it may continue as an indented block.
+- A call with explicit type arguments requires parentheses: `f<T>(x)` (to avoid a clash with `a < b`).
 
 ## Operator precedence
 

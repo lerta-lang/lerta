@@ -14,8 +14,9 @@ The definition of safety is in [philosophy.md](../philosophy.md#safety). Concret
 
 These apply when a value in statement position is not captured.
 
-- Operator expressions, field access, literals, comparisons (`a + b`, `obj.x`, `x == 1`) → **error** (no side effects; `x == 1` catches a mistyped `x = 1`; same as Go).
-- A function value itself (`cleanup`) → error "to call it, write `cleanup()`".
+Literals and function values are implemented: see [the reference](../reference/errors.md#discarded-values). Planned:
+
+- Operator expressions, field access, comparisons (`a + b`, `obj.x`, `x == 1`) → **error** (no side effects; `x == 1` catches a mistyped `x = 1`; same as Go).
 - A call returning `Iter<T>` (`xs.map f`) → **error** "does nothing until consumed" (equivalent to Rust's `#[must_use]`; an essential diagnostic for laziness).
 - Methods of immutable types (`String`, `Binary`) that return a new value (`s.trim()`) → **error** (since the type is immutable, the type shows that "discarding = doing nothing").
 - Other calls to non-`void` functions → allowed (interpreted as calls for side effects). A `must_use` annotation can make individual ones an error.

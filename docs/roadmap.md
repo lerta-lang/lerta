@@ -32,6 +32,7 @@
 | `'std:process'` | `argv`, `exit(code: Int): never` |
 
 - In stage0, writes are synchronous. Making them asynchronous is decided in Phase 2.
+- Until `extern` is implemented, `print` is implemented in the C runtime (`lerta_print`) and called directly by the compiler. It moves to Lerta once `extern` exists.
 
 ### Not included (later)
 
