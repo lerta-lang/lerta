@@ -1,21 +1,19 @@
 import {
-  is_arithmetic,
-  is_nil_test,
   type ArrayLiteral,
   type Binary,
   type Call,
   type Case,
-  type Coalesce,
   type Expression,
   type Identifier,
   type Index,
   type Member,
-  type Unary,
 } from './ast.ts'
 import { builtin_method, builtin_property, builtins } from './builtins.ts'
 import type { Conversions, Types } from './checker.ts'
 import { CompileError } from './errors.ts'
 import type { Functions } from './functions.ts'
+import { byte_literal, is_contextual } from './literals.ts'
+import { OperatorChecker } from './operator_checker.ts'
 import type { Scopes } from './scopes.ts'
 import {
   array_type,
@@ -44,40 +42,14 @@ export type CheckerLocal = {
   origin?: CheckerLocal
 }
 
-// Whether an expression takes its type from the context: a literal, or arithmetic on such
-// expressions, so that `1 + 2` is a UInt8 where one is expected.
-export const is_contextual = (expression: Expression): boolean => {
-  switch (expression.kind) {
-    case 'integer':
-    case 'string':
-      return true
-    case 'unary':
-      return expression.operator === '-' && is_contextual(expression.operand)
-    case 'binary':
-      return (
-        is_arithmetic(expression.operator) &&
-        is_contextual(expression.left) &&
-        is_contextual(expression.right)
-      )
-    default:
-      return false
-  }
-}
-
-const numeric_kinds = ['Int', 'UInt8']
-
-// Lists kinds for a message, such as "Int or UInt8".
-const describe_kinds = (kinds: string[]): string =>
-  kinds.length === 1 ? kinds[0] : `${kinds.slice(0, -1).join(', ')} or ${kinds.at(-1)}`
-
 // Computes the types of expressions and records them. An expected type, where one is known, is
 // passed down so that it can give literals their type.
 export class ExpressionChecker {
   private readonly types: Types
   private readonly scopes: Scopes<CheckerLocal>
   private readonly functions: Functions
-
   private readonly conversions: Conversions
+  private readonly operators = new OperatorChecker(this)
 
   constructor(
     types: Types,
@@ -100,20 +72,20 @@ export class ExpressionChecker {
     const wants_byte = expected?.kind === 'UInt8'
     switch (expression.kind) {
       case 'string':
-        return wants_byte ? this.byte_literal(expression) : string_type
+        return wants_byte ? byte_literal(expression) : string_type
       case 'interpolation':
         for (const part of expression.parts) {
           if (typeof part !== 'string') this.expect_type(part, stringable_type)
         }
         return string_type
       case 'integer':
-        return wants_byte ? this.byte_literal(expression) : int_type
+        return wants_byte ? byte_literal(expression) : int_type
       case 'nil':
         return nil_type
       case 'unwrap':
         return this.expect_optional(expression.operand)
       case 'coalesce':
-        return this.type_of_coalesce(expression)
+        return this.operators.type_of_coalesce(expression)
       case 'boolean':
         return bool_type
       case 'identifier':
@@ -121,9 +93,9 @@ export class ExpressionChecker {
       case 'call':
         return this.type_of_call(expression)
       case 'unary':
-        return this.type_of_unary(expression, expected)
+        return this.operators.type_of_unary(expression, expected)
       case 'binary':
-        return this.type_of_binary(expression, expected)
+        return this.operators.type_of_binary(expression, expected)
       case 'case':
         return this.type_of_case(expression, expected)
       case 'member':
@@ -247,83 +219,6 @@ export class ExpressionChecker {
     return object_type.kind === 'Array' ? object_type.element : uint8_type
   }
 
-  private type_of_unary(unary: Unary, expected: Type | undefined): Type {
-    if (unary.operator === 'not') {
-      this.expect_condition(unary.operand)
-      return bool_type
-    }
-    const hint =
-      expected !== undefined && numeric_kinds.includes(expected.kind) ? expected : undefined
-    const type = this.type_of(unary.operand, hint)
-    if (!numeric_kinds.includes(type.kind)) {
-      const message = `expected ${describe_kinds(numeric_kinds)}, got ${format_type(type)}`
-      throw new CompileError(message, unary.operand.line, unary.operand.column)
-    }
-    return type
-  }
-
-  // `x == nil` and `x != nil` test an optional value.
-  private type_of_nil_test(binary: Binary): Type {
-    const [nil, value] =
-      binary.left.kind === 'nil' ? [binary.left, binary.right] : [binary.right, binary.left]
-    this.record(nil, nil_type)
-    this.expect_optional(value)
-    return bool_type
-  }
-
-  // `x ? fallback` is x without nil; the fallback has that type too.
-  private type_of_coalesce(coalesce: Coalesce): Type {
-    const inner = this.expect_optional(coalesce.value)
-    this.expect_type(coalesce.fallback, inner)
-    return inner
-  }
-
-  // Arithmetic passes the expected type to its operands; a comparison's operands have their own.
-  private type_of_binary(binary: Binary, expected: Type | undefined): Type {
-    const { operator } = binary
-    if (operator === 'and' || operator === 'or') {
-      this.expect_condition(binary.left)
-      this.expect_condition(binary.right)
-      return bool_type
-    }
-    if (is_nil_test(binary)) {
-      return this.type_of_nil_test(binary)
-    }
-    if (operator === '==' || operator === '!=') {
-      this.type_of_operands(binary, undefined, ['Int', 'UInt8', 'Bool', 'String'], (type) => {
-        return `cannot compare values of type ${format_type(type)}`
-      })
-      return bool_type
-    }
-    const allowed = operator === '+' ? [...numeric_kinds, 'String'] : numeric_kinds
-    const reject = (type: Type) => `expected ${describe_kinds(allowed)}, got ${format_type(type)}`
-    if (!is_arithmetic(operator)) {
-      this.type_of_operands(binary, undefined, numeric_kinds, reject)
-      return bool_type
-    }
-    const hint = expected !== undefined && allowed.includes(expected.kind) ? expected : undefined
-    return this.type_of_operands(binary, hint, allowed, reject)
-  }
-
-  // The type both operands share. An operand whose type comes from the context is checked against
-  // the other one, so that `c == 'a'` and `'a' == c` compare UInt8s when `c` is one.
-  private type_of_operands(
-    binary: Binary,
-    expected: Type | undefined,
-    allowed_kinds: string[],
-    reject: (type: Type) => string,
-  ): Type {
-    const { left, right } = binary
-    const right_first = is_contextual(left) && !is_contextual(right)
-    const [first, second] = right_first ? [right, left] : [left, right]
-    const type = this.type_of(first, expected)
-    if (!allowed_kinds.includes(type.kind)) {
-      throw new CompileError(reject(type), first.line, first.column)
-    }
-    this.expect_type(second, type)
-    return type
-  }
-
   // Every arm must have the type of the first one.
   // With an expected type, every arm is checked against it, which can type `[]` and literals;
   // otherwise every arm must have the type of the first one.
@@ -360,22 +255,6 @@ export class ExpressionChecker {
   expect_type(expression: Expression, expected: Type): void {
     const hint = expected.kind === 'Stringable' ? undefined : expected
     this.require_type(expression, this.type_of(expression, hint), expected)
-  }
-
-  // An integer from 0 to 255, or a string of one byte, can be a UInt8.
-  private byte_literal(literal: Expression): Type {
-    const fits =
-      literal.kind === 'integer'
-        ? literal.value >= 0n && literal.value <= 255n
-        : literal.kind === 'string' && new TextEncoder().encode(literal.value).length === 1
-    if (!fits) {
-      const message =
-        literal.kind === 'integer'
-          ? 'integer literal does not fit in UInt8'
-          : 'a string literal used as a UInt8 must be one byte long'
-      throw new CompileError(message, literal.line, literal.column)
-    }
-    return uint8_type
   }
 
   private record(expression: Expression, type: Type): Type {
