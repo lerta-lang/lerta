@@ -179,7 +179,12 @@ export class ExpressionParser {
   // `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
   // `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
   // map key: `{ (k): v }`.
+  // The lookahead skips line breaks, which may separate the parameters.
   private starts_function_literal(): boolean {
+    return this.tokens.inside('skip', () => this.looks_like_function_literal())
+  }
+
+  private looks_like_function_literal(): boolean {
     const [first, second, third] = [0, 1, 2].map((offset) => this.tokens.peek(offset).kind)
     if (first === '->') return true
     if (first !== '(') return false
@@ -199,13 +204,13 @@ export class ExpressionParser {
   private parse_function_literal(): FunctionLiteral {
     const token = this.tokens.peek()
     const params: Parameter[] = []
-    if (this.tokens.accept('(') && !this.tokens.accept(')')) {
-      do {
+    if (this.tokens.accept('(')) {
+      const parse_param = () => {
         const name = this.parse_identifier()
         this.tokens.expect(':', "':'")
-        params.push({ name, type: this.parse_type_name() })
-      } while (this.tokens.accept(','))
-      this.tokens.expect(')', "')'")
+        return { name, type: this.parse_type_name() }
+      }
+      params.push(...this.parse_list(')', parse_param))
     }
     const return_type = this.tokens.accept(':') ? this.parse_type_name() : undefined
     this.tokens.expect('->', "'->'")
@@ -252,8 +257,7 @@ export class ExpressionParser {
         const { args, named_args } = this.parse_parenthesized_arguments()
         expression = { kind: 'call', callee: expression, args, named_args, ...position }
       } else if (token.kind === '[') {
-        const index = this.parse_expression()
-        this.tokens.expect(']', "']'")
+        const index = this.parse_grouped(']')
         expression = { kind: 'index', object: expression, index, ...position }
       } else {
         expression = {
@@ -274,25 +278,44 @@ export class ExpressionParser {
     return { kind: 'member', object, name: this.parse_identifier(), ...position }
   }
 
-  // `[a, b, c]` on one line; `[]` is empty.
+  // The items of a list after its opening bracket, through `close`. Items are separated by commas
+  // or line ends, and the last may be followed by either.
+  parse_list<T>(close: ')' | ']' | '}', parse_item: () => T): T[] {
+    return this.tokens.inside('separate', () => {
+      const items: T[] = []
+      this.tokens.accept('line_break')
+      while (!this.tokens.accept(close)) {
+        items.push(parse_item())
+        const has_comma = this.tokens.accept(',')
+        const is_separated = this.tokens.accept('line_break') || has_comma
+        if (!is_separated) {
+          this.tokens.expect(close, `'${close}'`)
+          break
+        }
+      }
+      return items
+    })
+  }
+
+  // The contents of a grouping or an index, through `close`; line ends inside are skipped.
+  private parse_grouped(close: ')' | ']'): Expression {
+    return this.tokens.inside('skip', () => {
+      const expression = this.parse_expression()
+      this.tokens.expect(close, `'${close}'`)
+      return expression
+    })
+  }
+
+  // `[a, b, c]`; `[]` is empty.
   private parse_array_literal(position: Position): Expression {
-    const elements: Expression[] = []
-    if (!this.tokens.accept(']')) {
-      do elements.push(this.parse_expression())
-      while (this.tokens.accept(','))
-      this.tokens.expect(']', "']'")
-    }
+    const elements = this.parse_list(']', () => this.parse_expression())
     return { kind: 'array', elements, ...position }
   }
 
-  // `{ k: v, ... }` on one line. A key that is a name would make an anonymous struct, so a name's
-  // value is written as a key in parentheses: `{ (k): v }`.
+  // `{ k: v, ... }`. A key that is a name would make an anonymous struct, so a name's value is
+  // written as a key in parentheses: `{ (k): v }`.
   private parse_map_literal(position: Position): Expression {
-    if (this.tokens.peek().kind === '}') {
-      throw new CompileError('the empty map is written `Map()`', position.line, position.column)
-    }
-    const entries: { key: Expression; value: Expression }[] = []
-    do {
+    const entries = this.parse_list('}', () => {
       const token = this.tokens.peek()
       if (token.kind === 'identifier' && this.tokens.peek(1).kind === ':') {
         const message = `anonymous structs are not supported yet; for the value of '${token.text}' as a key, write (${token.text})`
@@ -300,39 +323,34 @@ export class ExpressionParser {
       }
       const key = this.parse_expression()
       this.tokens.expect(':', "':'")
-      entries.push({ key, value: this.parse_expression() })
-    } while (this.tokens.accept(','))
-    this.tokens.expect('}', "'}'")
+      return { key, value: this.parse_expression() }
+    })
+    if (entries.length === 0) {
+      throw new CompileError('the empty map is written `Map()`', position.line, position.column)
+    }
     return { kind: 'map', entries, ...position }
   }
 
   // The arguments after an opening parenthesis, through the closing one.
   private parse_parenthesized_arguments(): Arguments {
-    if (this.tokens.accept(')')) return { args: [], named_args: [] }
-    const result = this.parse_arguments()
-    this.tokens.expect(')', "')'")
-    return result
+    return to_arguments(this.parse_list(')', () => this.parse_argument()))
   }
 
-  // Arguments separated by commas; named ones (`name: value`) come last.
+  // Arguments separated by commas, to the end of the line, as a call without parentheses has.
   parse_arguments(): Arguments {
-    const args: Expression[] = []
-    const named_args: NamedArgument[] = []
-    do {
-      const is_named = this.tokens.peek().kind === 'identifier' && this.tokens.peek(1).kind === ':'
-      if (is_named) {
-        const name = this.parse_identifier()
-        this.tokens.next()
-        named_args.push({ name, value: this.parse_expression() })
-      } else if (named_args.length > 0) {
-        const token = this.tokens.peek()
-        const message = 'a positional argument cannot follow a named one'
-        throw new CompileError(message, token.line, token.column)
-      } else {
-        args.push(this.parse_expression())
-      }
-    } while (this.tokens.peek_continuation() === ',' && this.tokens.next())
-    return { args, named_args }
+    const items = [this.parse_argument()]
+    while (this.tokens.peek_continuation() === ',' && this.tokens.next()) {
+      items.push(this.parse_argument())
+    }
+    return to_arguments(items)
+  }
+
+  private parse_argument(): Argument {
+    const is_named = this.tokens.peek().kind === 'identifier' && this.tokens.peek(1).kind === ':'
+    if (!is_named) return { name: undefined, value: this.parse_expression() }
+    const name = this.parse_identifier()
+    this.tokens.next()
+    return { name, value: this.parse_expression() }
   }
 
   parse_primary(): Expression {
@@ -362,8 +380,7 @@ export class ExpressionParser {
     if (token.kind === 'integer')
       return { kind: 'integer', value: integer_value(BigInt(token.text), position), ...position }
     if (token.kind === '(') {
-      const expression = this.parse_expression()
-      this.tokens.expect(')', "')'")
+      const expression = this.parse_grouped(')')
       // Diagnostics about the group point at its opening parenthesis.
       return { ...expression, ...position }
     }
@@ -408,6 +425,25 @@ export class ExpressionParser {
     this.tokens.expect('dedent', 'end of block')
     return value
   }
+}
+
+type Argument = { name: Identifier | undefined; value: Expression }
+
+// Named arguments come last.
+const to_arguments = (items: Argument[]): Arguments => {
+  const args: Expression[] = []
+  const named_args: NamedArgument[] = []
+  for (const { name, value } of items) {
+    if (name !== undefined) {
+      named_args.push({ name, value })
+    } else if (named_args.length > 0) {
+      const message = 'a positional argument cannot follow a named one'
+      throw new CompileError(message, value.line, value.column)
+    } else {
+      args.push(value)
+    }
+  }
+  return { args, named_args }
 }
 
 const integer_value = (value: bigint, position: Position): bigint => {

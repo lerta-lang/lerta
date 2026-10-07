@@ -12,6 +12,8 @@ const describe_token = (token: Token): string => {
       return 'string literal'
     case 'newline':
       return 'end of line'
+    case 'line_break':
+      return 'end of line inside brackets'
     case 'indent':
       return 'indentation'
     case 'dedent':
@@ -27,6 +29,9 @@ const describe_token = (token: Token): string => {
 export class TokenStream {
   private readonly tokens: Token[]
   private index = 0
+  // How line breaks are read inside the brackets being parsed: as separators of a list's items,
+  // or skipped, as in a grouping. Outside brackets there are none.
+  private readonly line_breaks: ('separate' | 'skip')[] = []
 
   constructor(tokens: Token[]) {
     this.tokens = tokens
@@ -47,14 +52,37 @@ export class TokenStream {
     if (!this.ended_with_block()) this.expect('newline', 'end of line')
   }
 
+  // Runs `parse` on the contents of brackets, whose line breaks it reads as `mode` says.
+  inside<T>(mode: 'separate' | 'skip', parse: () => T): T {
+    this.line_breaks.push(mode)
+    try {
+      return parse()
+    } finally {
+      this.line_breaks.pop()
+    }
+  }
+
   peek(offset = 0): Token {
-    return this.tokens[Math.min(this.index + offset, this.tokens.length - 1)]
+    return this.tokens[this.index_at(offset)]
   }
 
   next(): Token {
-    const token = this.peek()
-    if (token.kind !== 'eof') this.index++
+    const index = this.index_at(0)
+    const token = this.tokens[index]
+    if (token.kind !== 'eof') this.index = index + 1
     return token
+  }
+
+  // The index of the token `offset` tokens ahead, past the line breaks that are skipped.
+  private index_at(offset: number): number {
+    const skips = this.line_breaks.at(-1) !== 'separate'
+    let index = this.index
+    for (let remaining = offset; ; index++) {
+      if (index >= this.tokens.length - 1) return this.tokens.length - 1
+      if (skips && this.tokens[index].kind === 'line_break') continue
+      if (remaining === 0) return index
+      remaining--
+    }
   }
 
   accept(kind: TokenKind): boolean {

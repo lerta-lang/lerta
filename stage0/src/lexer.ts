@@ -11,6 +11,8 @@ export type TokenKind =
   | 'interpolated'
   | Punctuation
   | 'newline'
+  // A line end inside brackets (see Brackets).
+  | 'line_break'
   | 'indent'
   | 'dedent'
   | 'eof'
@@ -78,6 +80,7 @@ const is_printable_ascii = (c: string): boolean => /[ -~]/.test(c)
 export const tokenize = (source: string): Token[] => {
   const tokens: Token[] = []
   const indent_stack = [0]
+  const brackets = new Brackets()
   const lines = source.split(/\r?\n/)
 
   lines.forEach((line_text, index) => {
@@ -89,10 +92,15 @@ export const tokenize = (source: string): Token[] => {
     if (chars[indent] === '\t') {
       throw new CompileError('tabs are not allowed in indentation', line, indent + 1)
     }
-    emit_indentation(tokens, indent_stack, indent, line)
-    tokens.push(...tokenize_line(chars, indent, line))
-    tokens.push({ kind: 'newline', text: '', spaced: true, line, column: chars.length + 1 })
+    if (!brackets.are_open()) emit_indentation(tokens, indent_stack, indent, line)
+    for (const token of tokenize_line(chars, indent, line)) {
+      brackets.update(token)
+      tokens.push(token)
+    }
+    const kind = brackets.are_open() ? 'line_break' : 'newline'
+    tokens.push({ kind, text: '', spaced: true, line, column: chars.length + 1 })
   })
+  brackets.check_closed()
 
   const eof_line = lines.length
   while (indent_stack.length > 1) {
@@ -101,6 +109,29 @@ export const tokenize = (source: string): Token[] => {
   }
   tokens.push({ kind: 'eof', text: '', spaced: true, line: eof_line, column: 1 })
   return tokens
+}
+
+// Lines inside brackets continue the line that opened them, whatever their indentation, and end
+// with a line_break, which the parser reads as it reads the brackets: a separator in a list, and
+// nothing in a grouping.
+class Brackets {
+  private readonly open: Token[] = []
+
+  update(token: Token): void {
+    if (token.kind === '(' || token.kind === '[' || token.kind === '{') this.open.push(token)
+    else if (token.kind === ')' || token.kind === ']' || token.kind === '}') this.open.pop()
+  }
+
+  are_open(): boolean {
+    return this.open.length > 0
+  }
+
+  check_closed(): void {
+    const unclosed = this.open.at(-1)
+    if (unclosed === undefined) return
+    const message = `'${unclosed.kind}' is never closed`
+    throw new CompileError(message, unclosed.line, unclosed.column)
+  }
 }
 
 const emit_indentation = (

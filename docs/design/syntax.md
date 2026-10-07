@@ -26,8 +26,9 @@ Source files, comments, identifiers, indentation, integer literals and `'...'`/`
 
 ## Multi-line literals
 
-- **Newlines inside brackets**: inside list brackets (`[...]`, `{...}`, call `f(...)`), a newline separates elements (no comma needed). Inside grouping parentheses `(...)`, newlines are ignored and the content reads as the continuation of one expression.
-  - Inside list brackets, one line is one element (a line starting with `-x` is a new element). To split an element over several lines, the element itself must open a block, or be wrapped in `(...)`.
+Newlines inside brackets are implemented: see [the reference](../reference/syntax.md#lines-inside-brackets). Planned beyond that:
+
+- An item inside brackets may open an indented block; otherwise, to split an item over several lines, wrap it in `(...)`.
 - **Bracketless blocks**: an indented block may follow a trailing `=` or a trailing `key:`. Its content decides its kind.
   - All lines `identifier: value` → anonymous struct. All lines `expression: value` → Map. Anything else → array (one element per line). Mixing is an error.
   - If `key: value` lines follow a call, an anonymous struct is passed as the last argument (named arguments). There is no form that passes an array as an argument without brackets.

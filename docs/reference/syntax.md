@@ -13,6 +13,26 @@
 - A line that is empty, or contains only spaces and optionally a comment, is ignored, whatever its indentation.
 - A line indented less than the previous one must return to the indentation of an enclosing block.
 
+## Lines inside brackets
+
+```
+const keywords = [
+  'const'
+  'var', 'if'
+]
+print add(
+  1
+  2
+)
+const total = (1 +
+  2)
+```
+
+- Lines inside brackets, `(` `[` `{`, continue the line that opened them, whatever their indentation, until the brackets close. The `<` `>` of type arguments are not brackets.
+- In a list (the brackets of an array or a map, the parentheses of a call's arguments or of a function's parameters, the braces of an import), a line end separates items as a comma does. Items on one line are separated by commas. The last item may be followed by a comma.
+- In grouping parentheses and an index, `xs[i]`, lines simply continue the expression.
+- So far, an item inside brackets cannot open an indented block (a `case`, a function body).
+
 ## Declarations and assignment
 
 - `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Array<Int> = []`).

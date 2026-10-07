@@ -59,7 +59,7 @@ print xs[0] + xs.length
 ```
 
 - `Array<T>` is a growable sequence of items of type `T`, which can be any type with values (not `void` or a function type). Arrays are mutable and shared: assigning or passing an array does not copy it.
-- `[a, b, c]` makes an array (on one line). Its item type comes from the expected type if there is one (a type annotation, a parameter, a return type), otherwise from the first item. `[]` needs an expected type.
+- `[a, b, c]` makes an array (over several lines too: see [lines inside brackets](syntax.md#lines-inside-brackets)). Its item type comes from the expected type if there is one (a type annotation, a parameter, a return type), otherwise from the first item. `[]` needs an expected type.
 - `xs[i]` reads an item and `xs[i] = value` replaces one (`+=` and so on work on `Int` items). An index outside `0 ... xs.length` throws `index out of range`.
 - `xs.length` is the number of items.
 - `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`.
@@ -76,7 +76,7 @@ print ages['ann'] ? 0
 ```
 
 - `Map<K, V>` maps keys of type `K`, a `String` or an `Int`, to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
-- `{ k: v, ... }` makes a map (on one line). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. A key that is a name would make an anonymous struct, which is not supported yet: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
+- `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. A key that is a name would make an anonymous struct, which is not supported yet: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there.
 - `m.keys()` is an `Array<K>` of the keys in the order they were first added (a key removed and added again counts as new).

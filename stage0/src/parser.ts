@@ -217,9 +217,9 @@ class Parser {
   private parse_import(): Import {
     const token = this.tokens.next()
     this.tokens.expect('{', "'{'")
-    const names = [this.expressions.parse_identifier()]
-    while (this.tokens.accept(',')) names.push(this.expressions.parse_identifier())
-    this.tokens.expect('}', "'}'")
+    const first = this.tokens.peek()
+    const names = this.expressions.parse_list('}', () => this.expressions.parse_identifier())
+    if (names.length === 0) throw this.tokens.error_at(first, 'a name to import')
     const from = this.tokens.peek()
     if (from.kind !== 'identifier' || from.text !== 'from')
       throw this.tokens.error_at(from, "'from'")
