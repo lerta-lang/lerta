@@ -6,6 +6,7 @@ export class IrBuilder {
   private readonly body: string[] = []
   private register_count = 0
   private label_count = 0
+  private current_label = 'entry'
 
   // Declaring the same symbol again with the same text is harmless.
   declare(symbol: string, declaration: string): void {
@@ -40,6 +41,12 @@ export class IrBuilder {
 
   start_block(label: string): void {
     this.body.push(`${label}:`)
+    this.current_label = label
+  }
+
+  // The block that instructions are being emitted into, as needed by `phi`.
+  get current_block(): string {
+    return this.current_label
   }
 
   // The module with the function `define <signature>` holding everything emitted.

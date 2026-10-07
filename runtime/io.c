@@ -65,6 +65,17 @@ void lerta_print_int(int64_t n) {
   stdout_write(&newline, 1);
 }
 
+void lerta_print_bool(bool b) {
+  static const uint8_t true_text[] = "true";
+  static const uint8_t false_text[] = "false";
+  if (b) {
+    stdout_write(true_text, sizeof true_text - 1);
+  } else {
+    stdout_write(false_text, sizeof false_text - 1);
+  }
+  stdout_write(&newline, 1);
+}
+
 void lerta_throw(const LertaString *message) {
   // Flush first so that stdout and stderr appear in program order.
   lerta_stdout_flush();

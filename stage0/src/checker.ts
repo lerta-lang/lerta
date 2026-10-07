@@ -1,7 +1,24 @@
-import type { Binary, Call, Expression, Identifier, Program, Unary } from './ast.ts'
+import {
+  is_arithmetic,
+  type Binary,
+  type Call,
+  type Case,
+  type Expression,
+  type Identifier,
+  type Program,
+  type Unary,
+} from './ast.ts'
 import { builtins } from './builtins.ts'
 import { CompileError } from './errors.ts'
-import { format_type, int_type, is_assignable, string_type, type Type } from './types.ts'
+import {
+  bool_type,
+  format_type,
+  int_type,
+  is_assignable,
+  same_type,
+  string_type,
+  type Type,
+} from './types.ts'
 
 // The type of every expression in a checked program.
 export type Types = Map<Expression, Type>
@@ -23,7 +40,7 @@ class Checker {
   // See the rules for discarded values in docs/reference/errors.md.
   check_statement(statement: Expression): void {
     const type = this.type_of(statement)
-    if (statement.kind === 'call') return
+    if (statement.kind === 'call' || type.kind === 'void') return
     if (type.kind === 'function' && statement.kind === 'identifier') {
       const message = `function value is unused; to call it, write \`${statement.name}()\``
       throw new CompileError(message, statement.line, statement.column)
@@ -43,6 +60,8 @@ class Checker {
         return string_type
       case 'integer':
         return int_type
+      case 'boolean':
+        return bool_type
       case 'identifier':
         return this.type_of_identifier(expression)
       case 'call':
@@ -51,6 +70,8 @@ class Checker {
         return this.type_of_unary(expression)
       case 'binary':
         return this.type_of_binary(expression)
+      case 'case':
+        return this.type_of_case(expression)
     }
   }
 
@@ -84,9 +105,37 @@ class Checker {
   }
 
   private type_of_binary(binary: Binary): Type {
+    if (binary.operator === '==' || binary.operator === '!=') return this.type_of_equality(binary)
     this.expect_type(binary.left, int_type)
     this.expect_type(binary.right, int_type)
-    return int_type
+    return is_arithmetic(binary.operator) ? int_type : bool_type
+  }
+
+  // `==` and `!=` compare two Ints or two Bools.
+  private type_of_equality(binary: Binary): Type {
+    const left_type = this.type_of(binary.left)
+    if (left_type.kind !== 'Int' && left_type.kind !== 'Bool') {
+      const message = `cannot compare values of type ${format_type(left_type)}`
+      throw new CompileError(message, binary.left.line, binary.left.column)
+    }
+    this.expect_type(binary.right, left_type)
+    return bool_type
+  }
+
+  // Every arm must have the type of the first one.
+  private type_of_case(case_expression: Case): Type {
+    for (const arm of case_expression.arms) this.expect_type(arm.condition, bool_type)
+    const [first, ...rest] = case_expression.arms.map((arm) => arm.value)
+    const type = this.type_of(first)
+    for (const value of [...rest, case_expression.otherwise]) {
+      const value_type = this.type_of(value)
+      if (!same_type(value_type, type)) {
+        const types = `expected ${format_type(type)}, got ${format_type(value_type)}`
+        const message = `case arms must have the same type: ${types}`
+        throw new CompileError(message, value.line, value.column)
+      }
+    }
+    return type
   }
 
   private expect_type(expression: Expression, expected: Type): void {

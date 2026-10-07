@@ -56,11 +56,5 @@ const eval = (e: Expr): Int ->
 - Each arm is `when pattern` followed by `then` and an expression, or by an indented block. The `else` arm is `else expression` or a block (because of `when`, patterns and `else` do not look alike).
 - If the pattern is a type, it branches on the type and narrows the subject inside the arm (the same rule as `is`). If it is a value, it compares with `==` (several allowed, like `"+", "-"`).
   - Syntactically a pattern is an expression. Name resolution decides whether it is a type or a value.
-- **`case` without a subject**: each `when` is followed by a `Bool` condition. The conditions are evaluated from the top, and the first true arm is taken (Go's `switch {}`). `else` is required. Several conditions separated by commas are not allowed (they would read like `and`/`or`; write `or`). Use it when you want a value from a chain of conditions; an `if`/`else` statement is for statements.
-  ```
-  print case
-    when i % 15 == 0 then 'FizzBuzz'
-    when i % 3 == 0 then 'Fizz'
-    else i.to_string()
-  ```
+- **`case` without a subject** is implemented: see [the reference](../reference/control-flow.md#case-without-a-subject). Several conditions separated by commas are not allowed (they would read like `and`/`or`; write `or`). Use it when you want a value from a chain of conditions; an `if`/`else` statement is for statements.
 - When branching on types, not handling every type of the union is a compile error (exhaustiveness check). Not needed if there is an `else`. When branching on values, `else` is required.

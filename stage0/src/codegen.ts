@@ -1,4 +1,4 @@
-import type { Binary, Call, Expression, Program, Unary } from './ast.ts'
+import type { Binary, Call, Case, ComparisonOperator, Expression, Program, Unary } from './ast.ts'
 import { builtins } from './builtins.ts'
 import type { Types } from './checker.ts'
 import { IrBuilder } from './ir_builder.ts'
@@ -17,9 +17,23 @@ const ir_type = (type: Type): string => {
       return 'ptr'
     case 'Int':
       return 'i64'
+    case 'Bool':
+      return 'i1'
     default:
       throw new Error(`no IR type for ${type.kind}`)
   }
+}
+
+// A C `bool` parameter expects its argument zero-extended.
+const ir_param_type = (type: Type): string => (type.kind === 'Bool' ? 'i1 zeroext' : ir_type(type))
+
+const comparison_predicates: Record<ComparisonOperator, string> = {
+  '==': 'eq',
+  '!=': 'ne',
+  '<': 'slt',
+  '<=': 'sle',
+  '>': 'sgt',
+  '>=': 'sge',
 }
 
 const overflow_intrinsics = { '+': 'sadd', '-': 'ssub', '*': 'smul' } as const
@@ -61,12 +75,16 @@ class Generator {
         return this.string_constant(expression.value)
       case 'integer':
         return expression.value.toString()
+      case 'boolean':
+        return expression.value ? 'true' : 'false'
       case 'call':
         return this.generate_call(expression)
       case 'unary':
         return this.generate_unary(expression)
       case 'binary':
         return this.generate_binary(expression)
+      case 'case':
+        return this.generate_case(expression)
       case 'identifier':
         throw new Error('function values are not supported')
     }
@@ -76,9 +94,11 @@ class Generator {
     if (call.callee.kind !== 'identifier') throw new Error('only builtins can be called')
     const arg_types = call.args.map((arg) => this.types.get(arg)!)
     const symbol = builtins.get(call.callee.name)!.runtime_symbol(arg_types)
-    const param_ir_types = arg_types.map(ir_type)
-    this.ir.declare(symbol, `declare void @${symbol}(${param_ir_types.join(', ')})`)
-    const args = call.args.map((arg, i) => `${param_ir_types[i]} ${this.generate_expression(arg)}`)
+    const params = arg_types.map(ir_param_type).join(', ')
+    this.ir.declare(symbol, `declare void @${symbol}(${params})`)
+    const args = call.args.map(
+      (arg, i) => `${ir_type(arg_types[i])} ${this.generate_expression(arg)}`,
+    )
     this.ir.emit(`call void @${symbol}(${args.join(', ')})`)
     return ''
   }
@@ -91,10 +111,40 @@ class Generator {
   private generate_binary(binary: Binary): string {
     const left = this.generate_expression(binary.left)
     const right = this.generate_expression(binary.right)
-    if (binary.operator === '/' || binary.operator === '%') {
-      return this.checked_division(binary.operator, left, right)
+    const { operator } = binary
+    if (operator === '/' || operator === '%') return this.checked_division(operator, left, right)
+    if (operator === '+' || operator === '-' || operator === '*') {
+      return this.checked_arithmetic(operator, left, right)
     }
-    return this.checked_arithmetic(binary.operator, left, right)
+    const operand_type = ir_type(this.types.get(binary.left)!)
+    return this.ir.assign(
+      `icmp ${comparison_predicates[operator]} ${operand_type} ${left}, ${right}`,
+    )
+  }
+
+  // Tests the conditions in order; every arm jumps to one end block that merges the values.
+  private generate_case(case_expression: Case): string {
+    const end_label = this.ir.fresh_label('case.end')
+    const incoming: string[] = []
+    const generate_arm_value = (value: Expression) => {
+      const operand = this.generate_expression(value)
+      incoming.push(`[ ${operand}, %${this.ir.current_block} ]`)
+      this.ir.emit(`br label %${end_label}`)
+    }
+    for (const arm of case_expression.arms) {
+      const condition = this.generate_expression(arm.condition)
+      const arm_label = this.ir.fresh_label('case.arm')
+      const next_label = this.ir.fresh_label('case.next')
+      this.ir.emit(`br i1 ${condition}, label %${arm_label}, label %${next_label}`)
+      this.ir.start_block(arm_label)
+      generate_arm_value(arm.value)
+      this.ir.start_block(next_label)
+    }
+    generate_arm_value(case_expression.otherwise)
+    this.ir.start_block(end_label)
+    const type = this.types.get(case_expression)!
+    if (type.kind === 'void') return ''
+    return this.ir.assign(`phi ${ir_type(type)} ${incoming.join(', ')}`)
   }
 
   private checked_arithmetic(operator: '+' | '-' | '*', left: string, right: string): string {

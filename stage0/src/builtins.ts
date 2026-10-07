@@ -9,6 +9,7 @@ export type Builtin = {
 const print_symbols: Partial<Record<Type['kind'], string>> = {
   String: 'lerta_print_string',
   Int: 'lerta_print_int',
+  Bool: 'lerta_print_bool',
 }
 
 export const builtins = new Map<string, Builtin>([

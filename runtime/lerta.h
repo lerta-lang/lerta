@@ -16,6 +16,7 @@ typedef struct {
 
 void lerta_print_string(const LertaString *s);
 void lerta_print_int(int64_t n);
+void lerta_print_bool(bool b);
 
 // stage0 has no catch: a throw prints the message to stderr and exits.
 _Noreturn void lerta_throw(const LertaString *message);

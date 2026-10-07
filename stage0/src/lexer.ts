@@ -3,9 +3,24 @@
 import { CompileError } from './errors.ts'
 
 export type TokenKind =
-  'identifier' | 'integer' | 'string' | Punctuation | 'newline' | 'indent' | 'dedent' | 'eof'
+  | 'identifier'
+  | Keyword
+  | 'integer'
+  | 'string'
+  | Punctuation
+  | 'newline'
+  | 'indent'
+  | 'dedent'
+  | 'eof'
 
-const punctuations = ['(', ')', ',', '+', '-', '*', '/', '%'] as const
+const keywords = ['true', 'false', 'case', 'when', 'then', 'else'] as const
+type Keyword = (typeof keywords)[number]
+
+// Longer punctuations come first so that `<=` is not read as `<` and `=`.
+const punctuations = [
+  ...['==', '!=', '<=', '>='],
+  ...['(', ')', ',', '+', '-', '*', '/', '%', '<', '>'],
+] as const
 type Punctuation = (typeof punctuations)[number]
 
 export type Token = {
@@ -26,8 +41,7 @@ type Chars = string[]
 const is_identifier_start = (c: string): boolean => /[A-Za-z_]/.test(c)
 const is_identifier_part = (c: string): boolean => /[A-Za-z0-9_]/.test(c)
 const is_digit = (c: string): boolean => /[0-9]/.test(c)
-const is_punctuation = (c: string): c is Punctuation =>
-  (punctuations as readonly string[]).includes(c)
+const is_keyword = (word: string): word is Keyword => (keywords as readonly string[]).includes(word)
 const is_printable_ascii = (c: string): boolean => /[ -~]/.test(c)
 
 export const tokenize = (source: string): Token[] => {
@@ -95,7 +109,8 @@ const tokenize_line = (chars: Chars, start: number, line: number): Token[] => {
       break
     } else if (is_identifier_start(c)) {
       const end = scan_while(chars, i, is_identifier_part)
-      push('identifier', chars.slice(i, end).join(''), i, end)
+      const word = chars.slice(i, end).join('')
+      push(is_keyword(word) ? word : 'identifier', word, i, end)
     } else if (c === "'") {
       const close = chars.indexOf("'", i + 1)
       if (close === -1) throw new CompileError('unterminated string literal', line, i + 1)
@@ -103,10 +118,12 @@ const tokenize_line = (chars: Chars, start: number, line: number): Token[] => {
     } else if (is_digit(c)) {
       const end = scan_while(chars, i, is_identifier_part)
       push('integer', integer_digits(chars.slice(i, end).join(''), line, i + 1), i, end)
-    } else if (is_punctuation(c)) {
-      push(c, c, i, i + 1)
     } else {
-      throw new CompileError(`unexpected character ${describe_char(c)}`, line, i + 1)
+      const punctuation = punctuation_at(chars, i)
+      if (punctuation === undefined) {
+        throw new CompileError(`unexpected character ${describe_char(c)}`, line, i + 1)
+      }
+      push(punctuation, punctuation, i, i + punctuation.length)
     }
   }
   return tokens
@@ -119,6 +136,9 @@ const integer_digits = (text: string, line: number, column: number): string => {
   if (!is_valid) throw new CompileError(`invalid integer literal '${text}'`, line, column)
   return text.replaceAll('_', '')
 }
+
+const punctuation_at = (chars: Chars, i: number): Punctuation | undefined =>
+  punctuations.find((p) => chars.slice(i, i + p.length).join('') === p)
 
 const scan_while = (chars: Chars, start: number, predicate: (c: string) => boolean): number => {
   let end = start

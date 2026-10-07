@@ -59,5 +59,5 @@ The basic rules are implemented: see [the reference](../reference/syntax.md#call
 From weakest: postfix `for` / postfix `if` / postfix `while` < parenthesis-free call < `then`/`else` < `?` < other binary operators
 
 - `?` is the weakest binary operator (`a ? b + c` is `a ? (b + c)`).
-- The other binary operators (the arithmetic ones are implemented: see [the reference](../reference/syntax.md#operators)), from weakest: `or` < `and` < `not` (prefix) < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`. All binary operators except `then`/`else` are left-associative.
+- The other binary operators (the arithmetic and comparison operators are implemented: see [the reference](../reference/syntax.md#operators)), from weakest: `or` < `and` < `not` (prefix) < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`. All binary operators except `then`/`else` are left-associative.
 - Comparison operators cannot be chained (`a < b < c` and `a < b > c` are syntax errors; use parentheses or `and`). Because of this, `f<T>(x)` always reads as a call with type arguments.
