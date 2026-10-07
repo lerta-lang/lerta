@@ -7,6 +7,8 @@ export type NilLiteral = Position & { kind: 'nil' }
 export type BooleanLiteral = Position & { kind: 'boolean'; value: boolean }
 export type IntegerLiteral = Position & { kind: 'integer'; value: bigint }
 export type Identifier = Position & { kind: 'identifier'; name: string }
+// `throw message`: stops with the message, a String. It never gives a value.
+export type Throw = Position & { kind: 'throw'; message: Expression }
 // `x!`: x without nil; it throws if x is nil.
 export type Unwrap = Position & { kind: 'unwrap'; operand: Expression }
 // `x ? fallback`: x without nil, or the fallback if x is nil.
@@ -86,6 +88,7 @@ export type Expression =
   | Binary
   | Unwrap
   | Coalesce
+  | Throw
   | Range
   | Case
   | FunctionLiteral
@@ -151,12 +154,25 @@ export type TypeDeclaration = Position & {
   members: MemberDeclaration[]
 }
 
+// `import { a, b } from 'std:io'`.
+export type Import = Position & { kind: 'import'; names: Identifier[]; module: string }
+
 export type Statement =
-  Expression | TypeDeclaration | Declaration | Assignment | If | While | For | Jump | Return
+  | Expression
+  | Import
+  | TypeDeclaration
+  | Declaration
+  | Assignment
+  | If
+  | While
+  | For
+  | Jump
+  | Return
 
 export type Program = Statement[]
 
 const statement_only_kinds = [
+  'import',
   'type_declaration',
   'declaration',
   'assignment',

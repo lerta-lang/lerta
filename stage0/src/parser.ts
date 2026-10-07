@@ -8,6 +8,7 @@ import {
   type Expression,
   type For,
   type If,
+  type Import,
   type Program,
   type Return,
   type Statement,
@@ -34,6 +35,7 @@ const command_argument_starts = [
   'case',
   '->',
   '@',
+  'throw',
 ]
 
 // Statements: the program, blocks, declarations, assignments, control flow and calls without
@@ -81,6 +83,8 @@ class Parser {
       case 'class':
       case 'struct':
         return this.parse_type_declaration()
+      case 'import':
+        return this.parse_import()
       default:
         return this.parse_postfix_conditions(this.parse_simple_statement())
     }
@@ -170,6 +174,23 @@ class Parser {
     const callee = this.expressions.parse_primary()
     const { args, named_args } = this.expressions.parse_arguments()
     return { kind: 'call', callee, args, named_args, line: callee.line, column: callee.column }
+  }
+
+  // `import { a, b } from 'module'`. `from` is not a keyword, so that it stays usable as a name.
+  private parse_import(): Import {
+    const token = this.tokens.next()
+    this.tokens.expect('{', "'{'")
+    const names = [this.expressions.parse_identifier()]
+    while (this.tokens.accept(',')) names.push(this.expressions.parse_identifier())
+    this.tokens.expect('}', "'}'")
+    const from = this.tokens.peek()
+    if (from.kind !== 'identifier' || from.text !== 'from')
+      throw this.tokens.error_at(from, "'from'")
+    this.tokens.next()
+    const module = this.tokens.peek()
+    if (module.kind !== 'string') throw this.tokens.error_at(module, 'module name')
+    this.tokens.next()
+    return { kind: 'import', names, module: module.text, line: token.line, column: token.column }
   }
 
   // `class Name` or `struct Name` followed by an indented block of members, one per line.

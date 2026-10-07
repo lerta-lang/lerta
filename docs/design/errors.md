@@ -24,6 +24,8 @@ Literals, arithmetic and comparisons, and function values are implemented: see [
 
 ## Exceptions
 
+`throw` with a String message, which ends the program in stage0, is implemented: see [the reference](../reference/errors.md#exceptions).
+
 - **`throw` and `try`/`catch`/`finally` blocks** (same form as JS).
   ```
   try

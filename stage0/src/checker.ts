@@ -9,6 +9,7 @@ import {
 } from './ast.ts'
 import { CompileError, CompileWarning } from './errors.ts'
 import { Functions, parameter_types, type FunctionEntry } from './functions.ts'
+import { Imports } from './imports.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
 import { StatementChecker } from './statement_checker.ts'
 import { TypeResolver } from './type_names.ts'
@@ -31,6 +32,7 @@ export type Shared = {
   functions: Functions
   objects: ObjectTypes
   resolver: TypeResolver
+  imports: Imports
 }
 
 // The object that `@` refers to: in a method, or in the initializer of a field, which sees the
@@ -49,6 +51,7 @@ export type Checked = {
   types: Types
   conversions: Conversions
   objects: ObjectTypes
+  imports: Imports
   warnings: CompileWarning[]
 }
 
@@ -59,7 +62,8 @@ export const check = (program: Program): Checked => {
   const objects: ObjectTypes = new ObjectTypes((info) => check_object(shared, info))
   const resolver = new TypeResolver((name) => objects.object_type(name))
   const functions: Functions = new Functions((entry) => check_function(shared, entry), resolver)
-  const shared: Shared = { types, conversions, warnings, functions, objects, resolver }
+  const imports = new Imports()
+  const shared: Shared = { types, conversions, warnings, functions, objects, resolver, imports }
   try {
     objects.add(
       program.filter(
@@ -67,15 +71,17 @@ export const check = (program: Program): Checked => {
       ),
     )
     add_top_level_functions(program, functions, objects)
+    imports.add(program, (name) => functions.has(name) || objects.object_type(name) !== undefined)
     objects.add_members(resolver, functions)
     new StatementChecker(shared, undefined, undefined).check_block(program)
     objects.check_all()
     functions.check_all()
+    warnings.push(...imports.unused_warnings())
   } catch (error) {
     if (error instanceof CompileError) error.warnings = in_source_order(warnings)
     throw error
   }
-  return { types, conversions, objects, warnings: in_source_order(warnings) }
+  return { types, conversions, objects, imports, warnings: in_source_order(warnings) }
 }
 
 const is_function_declaration = (statement: Statement): statement is Declaration =>
@@ -118,7 +124,7 @@ const check_function = (shared: Shared, entry: FunctionEntry): void => {
     throw new CompileError(message, literal.line, literal.column)
   }
   for (const { value, type } of context.results) {
-    if (!same_type(type, result)) shared.conversions.set(value, result)
+    if (type.kind !== 'never' && !same_type(type, result)) shared.conversions.set(value, result)
   }
   entry.type ??= { kind: 'function', params, result }
   shared.types.set(literal, entry.type)

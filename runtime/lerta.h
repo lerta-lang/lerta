@@ -76,11 +76,25 @@ void lerta_array_push(LertaArray *array, int64_t item);
 int64_t lerta_array_pop(LertaArray *array);
 LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator);
 
+// Process (process.c). The arguments exclude the program name.
+void lerta_set_arguments(int argc, char **argv);
+LertaArray *lerta_argv(void);
+// Flushes stdout and ends the program; leaks are not checked, as for a throw.
+_Noreturn void lerta_exit(int64_t code);
+
+// Files (file.c). A failure throws.
+LertaString *lerta_read_file(const LertaString *path);
+void lerta_write_file(const LertaString *path, const LertaString *data);
+
 // Output (io.c)
 void lerta_print_string(const LertaString *s);
 void lerta_print_int(int64_t n);
 void lerta_print_bool(bool b);
 void lerta_print_byte(uint8_t b);
+// A Writer is a file descriptor: 1 for stdout, which is buffered, or 2 for stderr, which is not.
+// Writing to stderr flushes stdout first, so that the two keep their order.
+void lerta_writer_write(int64_t fd, const LertaString *bytes);
+void lerta_writer_flush(int64_t fd);
 
 // stage0 has no catch: a throw prints the message to stderr and exits.
 _Noreturn void lerta_throw(const LertaString *message);
@@ -94,5 +108,6 @@ enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign
 // Writes the decimal text of n at the end of buffer and returns where it starts.
 int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
 _Noreturn void lerta_panic(const char *message);
+bool lerta_is_valid_utf8(const uint8_t *bytes, int64_t length);
 
 #endif

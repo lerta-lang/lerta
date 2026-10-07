@@ -31,7 +31,7 @@ import {
 import { define_object, emit_allocate, emit_field_pointer } from './object_codegen.ts'
 import type { FieldInfo, ObjectInfo, ObjectTypes } from './object_types.ts'
 import { Scopes, type Scope } from './scopes.ts'
-import { is_reference_type, type Type } from './types.ts'
+import { is_reference_type, void_type, type Type } from './types.ts'
 
 type FunctionDeclaration = Declaration & { value: FunctionLiteral }
 
@@ -63,7 +63,7 @@ export const generate = (program: Program, checked: CheckedTypes): string => {
   return module.render()
 }
 
-type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects'>
+type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects' | 'imports'>
 
 export class FunctionGenerator {
   private readonly types: Types
@@ -73,6 +73,8 @@ export class FunctionGenerator {
   private readonly throws: ThrowBlocks
   private readonly checked_int: CheckedInt
   private readonly expressions: ExpressionGenerator
+  // The result type of the function being generated; lerta_main returns nothing.
+  private result_type: Type = void_type
   private readonly control_flow: ControlFlowGenerator
 
   constructor(module: IrModule, checked: CheckedTypes, function_names: Set<string>) {
@@ -109,6 +111,7 @@ export class FunctionGenerator {
   generate_function(symbol: string, literal: FunctionLiteral, this_type: Type | undefined): void {
     const type = this.types.get(literal)!
     if (type.kind !== 'function') throw new Error('a function literal has a function type')
+    this.result_type = type.result
     const params = literal.params.map((param, i) => ({
       name: param.name.name,
       type: type.params[i],
@@ -122,10 +125,10 @@ export class FunctionGenerator {
     const last = literal.body.at(-1)
     for (const statement of literal.body.slice(0, -1)) this.generate_statement(statement)
     if (last !== undefined && is_expression(last) && type.result.kind !== 'void') {
-      this.emit_return(type.result, this.expressions.generate(last))
+      this.emit_return(this.expressions.generate(last))
     } else {
       if (last !== undefined) this.generate_statement(last)
-      if (type.result.kind === 'void') this.emit_return(type.result, '')
+      if (type.result.kind === 'void') this.emit_return('')
       else this.ir.emit('unreachable')
     }
     this.locals.pop()
@@ -168,17 +171,18 @@ export class FunctionGenerator {
     this.ir.finish(signature)
   }
 
-  // Releases every scope of the function before returning the owned value.
-  private emit_return(type: Type, value: string): void {
+  // Releases every scope of the function before returning the owned value. The function's result
+  // type decides the instruction: a returned value that never comes (`return throw ...`) is poison.
+  private emit_return(value: string): void {
     for (const scope of this.locals.inner_scopes(0)) this.release_scope(scope)
-    this.ir.emit(type.kind === 'void' ? 'ret void' : `ret ${ir_type(type)} ${value}`)
+    const result = this.result_type
+    const returns_nothing = result.kind === 'void' || result.kind === 'never'
+    this.ir.emit(returns_nothing ? 'ret void' : `ret ${ir_type(result)} ${value}`)
   }
 
   private generate_return(return_statement: Return): void {
     const { value } = return_statement
-    const type = value === undefined ? undefined : this.expressions.type_at_use(value)
-    const operand = value === undefined ? '' : this.expressions.generate(value)
-    this.emit_return(type ?? { kind: 'void' }, operand)
+    this.emit_return(value === undefined ? '' : this.expressions.generate(value))
     this.ir.start_block(this.ir.fresh_label('unreachable'))
   }
 
@@ -217,6 +221,7 @@ export class FunctionGenerator {
       case 'continue':
         return this.control_flow.generate_jump(statement)
       case 'type_declaration':
+      case 'import':
         return
       default:
         return this.expressions.release_if_reference(

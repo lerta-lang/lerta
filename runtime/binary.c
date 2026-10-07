@@ -33,7 +33,7 @@ static int64_t sequence_length(uint8_t lead) {
 }
 
 // Rejects overlong forms, surrogates and code points above U+10FFFF, as the standard requires.
-static bool is_valid_utf8(const uint8_t *bytes, int64_t length) {
+bool lerta_is_valid_utf8(const uint8_t *bytes, int64_t length) {
   for (int64_t i = 0; i < length;) {
     int64_t n = sequence_length(bytes[i]);
     if (n == 0 || i + n > length) return false;
@@ -51,7 +51,7 @@ static bool is_valid_utf8(const uint8_t *bytes, int64_t length) {
 }
 
 LertaString *lerta_binary_decode_utf8(LertaString *binary) {
-  if (!is_valid_utf8(binary->bytes, binary->length)) return NULL;
+  if (!lerta_is_valid_utf8(binary->bytes, binary->length)) return NULL;
   lerta_retain(binary);
   return binary;
 }

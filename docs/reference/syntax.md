@@ -45,4 +45,4 @@ From weakest: `?` (nil coalescing) < `or` < `and` < prefix `not` < comparisons (
 
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`).
 - Comparisons cannot be chained: `a < b < c` is a syntax error; use parentheses.
-- `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `return` `case` `when` `then` `class` `struct` are keywords and cannot be used as names.
+- `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `return` `case` `when` `then` `class` `struct` `throw` `import` are keywords (`from` is not) and cannot be used as names.

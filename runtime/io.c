@@ -79,6 +79,19 @@ void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
   write_all(STDERR_FD, bytes, length);
 }
 
+void lerta_writer_write(int64_t fd, const LertaString *bytes) {
+  if (fd == STDOUT_FD) {
+    stdout_write(bytes->bytes, bytes->length);
+    return;
+  }
+  lerta_stdout_flush();
+  lerta_stderr_write(bytes->bytes, bytes->length);
+}
+
+void lerta_writer_flush(int64_t fd) {
+  if (fd == STDOUT_FD) lerta_stdout_flush();
+}
+
 void lerta_throw(const LertaString *message) {
   // Flush first so that stdout and stderr appear in program order.
   lerta_stdout_flush();

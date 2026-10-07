@@ -20,6 +20,7 @@ import type { Functions } from './functions.ts'
 import { ends_with_jump, narrowed_view, tested_name } from './narrowing.ts'
 import { ResultChecker } from './result_checker.ts'
 import { Scopes } from './scopes.ts'
+import type { Imports } from './imports.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
 import { format_type, int_type, type Type } from './types.ts'
@@ -32,6 +33,7 @@ export class StatementChecker {
   private readonly context: FunctionContext | undefined
   private readonly self: SelfContext | undefined
   private readonly objects: ObjectTypes
+  private readonly imports: Imports
   private readonly resolver: TypeResolver
   private readonly scopes = new Scopes<CheckerLocal>()
   private readonly expressions: ExpressionChecker
@@ -44,6 +46,7 @@ export class StatementChecker {
     this.functions = shared.functions
     this.conversions = shared.conversions
     this.objects = shared.objects
+    this.imports = shared.imports
     this.resolver = shared.resolver
     this.context = context
     this.self = self
@@ -119,6 +122,13 @@ export class StatementChecker {
         return this.check_declaration(statement)
       case 'assignment':
         return this.check_assignment(statement)
+      case 'import':
+        if (this.context === undefined && this.scopes.depth === 1) return
+        throw new CompileError(
+          'an import can only be at the top level',
+          statement.line,
+          statement.column,
+        )
       case 'type_declaration':
         if (this.context === undefined && this.scopes.depth === 1) return
         throw new CompileError(
@@ -174,7 +184,9 @@ export class StatementChecker {
     this.check_block(else_body, () => {
       if (narrowing?.when === false) this.narrow(narrowing.local)
     })
-    const is_guard = else_body.length === 0 && ends_with_jump(then_body)
+    const is_guard =
+      else_body.length === 0 &&
+      ends_with_jump(then_body, (expression) => this.types.get(expression)?.kind === 'never')
     if (narrowing?.when === false && is_guard) this.narrow(narrowing.local)
   }
 
@@ -230,9 +242,9 @@ export class StatementChecker {
     })
   }
 
-  // nil alone gives no type, and void and functions are not values that can be stored yet.
+  // nil alone gives no type, void and never give no value, and functions cannot be stored yet.
   private reject_if_not_storable(type: Type, value: Expression): void {
-    if (type.kind === 'void' || type.kind === 'function' || type.kind === 'nil') {
+    if (['void', 'never', 'function', 'nil'].includes(type.kind)) {
       const message = `cannot store a value of type ${format_type(type)}`
       throw new CompileError(message, value.line, value.column)
     }
@@ -306,7 +318,9 @@ export class StatementChecker {
     const { identifier, type } = local
     const { name, line, column } = identifier
     const is_top_level = this.context === undefined && this.scopes.depth === 1
-    if (is_top_level && (this.functions.has(name) || this.objects.object_type(name))) {
+    const is_taken =
+      this.functions.has(name) || this.objects.object_type(name) || this.imports.has(name)
+    if (is_top_level && is_taken) {
       throw new CompileError(`'${name}' is already defined`, line, column)
     }
     const definition = this.scopes.define(name, local)
@@ -331,7 +345,7 @@ export class StatementChecker {
 
   // See the rules for discarded values in docs/reference/errors.md.
   check_discarded(statement: Expression, type: Type): void {
-    if (statement.kind === 'call' || type.kind === 'void') return
+    if (statement.kind === 'call' || type.kind === 'void' || type.kind === 'never') return
     if (type.kind === 'function' && statement.kind === 'identifier') {
       const message = `function value is unused; to call it, write \`${statement.name}()\``
       throw new CompileError(message, statement.line, statement.column)

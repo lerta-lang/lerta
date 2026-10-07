@@ -19,6 +19,21 @@ const cli_cases: CliCase[] = [
       spawnSync(`${exe}_O`, { encoding: 'utf8' }).stdout === hello_output &&
       existsSync(`${exe}_O.ll`),
   },
+  {
+    // A built program gets its command-line arguments, which must be valid UTF-8.
+    args: ['build', join(root_dir, 'examples/wc.lerta'), '-o', `${exe}_wc`],
+    status: 0,
+    produced: () => {
+      const counted = spawnSync(`${exe}_wc`, [hello], { encoding: 'utf8' })
+      // Node passes arguments as UTF-8, so the shell makes the invalid byte.
+      const invalid = spawnSync('sh', ['-c', '"$0" "$(printf \'\\377\')"', `${exe}_wc`])
+      return (
+        counted.stdout === `1 3 21 ${hello}\n` &&
+        invalid.status === 1 &&
+        invalid.stderr.toString() === 'a command-line argument is not valid UTF-8\n'
+      )
+    },
+  },
   { args: ['build', join(root_dir, 'tests/name/undefined.lerta'), '-o', exe], status: 1 },
   { args: ['build'], status: 2 },
   { args: ['run', hello, '-o', exe], status: 2 },

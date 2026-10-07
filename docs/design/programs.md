@@ -2,6 +2,8 @@
 
 ## Modules
 
+Named imports from the standard modules are implemented: see [the reference](../reference/modules.md).
+
 - **ESM style** (`import`/`export`). A file is a module.
 - Paths: `'./util'` and `'../lib/x'` are relative to the importing file (`./`/`../` required, the extension `.lerta` omitted, no `index` resolution for directories). `'std:io'` is a standard module. Bare names like `'util'` are reserved for future packages.
 - There are builtins (no import needed) and standard modules (`'std:...'`). For what each holds in stage0, see [the roadmap](../roadmap.md#standard-library-layout-in-stage0).

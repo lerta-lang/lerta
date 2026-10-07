@@ -290,6 +290,8 @@ export class ExpressionParser {
       return { kind: 'interpolation', parts, ...position }
     }
     if (token.kind === 'nil') return { kind: 'nil', ...position }
+    if (token.kind === 'throw')
+      return { kind: 'throw', message: this.parse_expression(), ...position }
     if (token.kind === '@') return this.parse_this(position)
     if (token.kind === 'true' || token.kind === 'false') {
       return { kind: 'boolean', value: token.kind === 'true', ...position }

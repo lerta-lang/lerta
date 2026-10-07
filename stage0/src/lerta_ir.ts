@@ -17,6 +17,9 @@ export const ir_type = (type: Type): string => {
       return 'i1'
     case 'UInt8':
       return 'i8'
+    case 'Writer':
+      // A Writer is its file descriptor.
+      return 'i64'
     case 'Optional':
       // A reference is nil when null; a value carries a flag that tells whether it is there.
       return is_reference_type(type) ? 'ptr' : `{ i1, ${ir_type(type.inner)} }`
@@ -25,8 +28,9 @@ export const ir_type = (type: Type): string => {
   }
 }
 
+// A function that never returns is declared as returning nothing.
 export const ir_return_type = (type: Type): string =>
-  type.kind === 'void' ? 'void' : ir_type(type)
+  type.kind === 'void' || type.kind === 'never' ? 'void' : ir_type(type)
 
 // Symbols of generated functions; the prefixes keep them apart from the runtime's C symbols.
 export const function_symbol = (name: string): string => `@lerta.fn.${name}`

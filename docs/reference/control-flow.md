@@ -23,7 +23,7 @@ while n > 0
 
 - A condition is a `Bool`, or an optional value, which holds when it is not nil (a `Bool?` holds when it is `true`). The operands of `and`, `or` and `not` follow the same rule.
 - `if const name = value` and `while const name = value` hold when the optional value is not nil; inside the body, `name` is the value without nil.
-- **Narrowing.** A `const`, a parameter or a loop variable of type `T?` that a condition tests (`x`, `x != nil`, `not x` or `x == nil`) has type `T` where it is known not to be nil: in the `then` branch of `if x`, in the `else` branch of `if not x`, and after a guard such as `return if x == nil` (an `if` with no `else` whose body ends with `return`, `break` or `continue`). A `var` is not narrowed, since it could be reassigned.
+- **Narrowing.** A `const`, a parameter or a loop variable of type `T?` that a condition tests (`x`, `x != nil`, `not x` or `x == nil`) has type `T` where it is known not to be nil: in the `then` branch of `if x`, in the `else` branch of `if not x`, and after a guard such as `return if x == nil` (an `if` with no `else` whose body ends with `return`, `break`, `continue` or `throw`). A `var` is not narrowed, since it could be reassigned.
 - `break` leaves the innermost `while` or `for`, and `continue` goes on to its next round. Either is an error outside a loop.
 - **Postfix forms** `<statement> if <condition>` and `<statement> while <condition>` apply to one statement other than a declaration (`break if done`, `x *= 2 while x < 100`). The condition of a postfix `while` is evaluated first.
 - `and` and `or` evaluate their right operand only when the left one does not decide the result. Their operands and `not`'s are `Bool`s.

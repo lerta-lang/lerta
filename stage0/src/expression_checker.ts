@@ -13,6 +13,7 @@ import { builtin_method, builtin_property, builtins } from './builtins.ts'
 import type { Conversions, SelfContext, Shared, Types } from './checker.ts'
 import { CompileError } from './errors.ts'
 import type { Functions } from './functions.ts'
+import type { Imports } from './imports.ts'
 import type { ObjectTypes } from './object_types.ts'
 import { byte_literal, is_contextual } from './literals.ts'
 import { ObjectChecker } from './object_checker.ts'
@@ -23,6 +24,7 @@ import {
   bool_type,
   format_type,
   int_type,
+  never_type,
   nil_type,
   is_assignable,
   is_reference_type,
@@ -54,10 +56,12 @@ export class ExpressionChecker {
   private readonly conversions: Conversions
   private readonly object_types: ObjectTypes
   private readonly self: SelfContext | undefined
+  private readonly imports: Imports
   private readonly operators = new OperatorChecker(this)
   private readonly objects: ObjectChecker
 
   constructor(shared: Shared, scopes: Scopes<CheckerLocal>, self: SelfContext | undefined) {
+    this.imports = shared.imports
     this.types = shared.types
     this.conversions = shared.conversions
     this.functions = shared.functions
@@ -90,6 +94,9 @@ export class ExpressionChecker {
         return wants_byte ? byte_literal(expression) : int_type
       case 'nil':
         return nil_type
+      case 'throw':
+        this.expect_type(expression.message, string_type)
+        return never_type
       case 'this':
         return this.objects.type_of_this(expression)
       case 'unwrap':
@@ -139,6 +146,8 @@ export class ExpressionChecker {
       const message = `'${identifier.name}' is a type; construct it as ${identifier.name}(...)`
       throw new CompileError(message, identifier.line, identifier.column)
     }
+    const imported = this.imports.use(identifier.name)
+    if (imported !== undefined) return imported.export.type
     const builtin = builtins.get(identifier.name)
     if (builtin === undefined) {
       const message = `undefined name '${identifier.name}'`
@@ -209,14 +218,18 @@ export class ExpressionChecker {
   }
 
   // The element type comes from the expected type if there is one, so that `[[], [1]]` can be
-  // typed; otherwise from the first element whose type does not come from the context, so that
-  // `[1, c]` holds UInt8s when `c` is one.
+  // typed; otherwise from the first element whose type does not come from the context and which
+  // gives a value (not a `throw`), so that `[1, c]` holds UInt8s when `c` is one.
   private type_of_array(array: ArrayLiteral, expected: Type | undefined): Type {
     if (expected?.kind === 'Array') {
       for (const item of array.elements) this.expect_type(item, expected.element)
       return expected
     }
-    const anchor = array.elements.find((item) => !is_contextual(item)) ?? array.elements[0]
+    const gives_value = (item: Expression) => item.kind !== 'throw'
+    const anchor =
+      array.elements.find((item) => gives_value(item) && !is_contextual(item)) ??
+      array.elements.find(gives_value) ??
+      array.elements[0]
     if (anchor === undefined) {
       const message =
         'the type of an empty array must be written, as in `const xs: Array<Int> = []`'
@@ -229,7 +242,8 @@ export class ExpressionChecker {
       const message = 'nil alone does not give the type of an array; write it in an annotation'
       throw new CompileError(message, anchor.line, anchor.column)
     }
-    if (element.kind === 'void' || element.kind === 'function' || is_optional_value) {
+    const has_no_value = element.kind === 'void' || element.kind === 'never'
+    if (has_no_value || element.kind === 'function' || is_optional_value) {
       const message = `an array cannot hold values of type ${format_type(element)}`
       throw new CompileError(message, anchor.line, anchor.column)
     }
@@ -297,7 +311,7 @@ export class ExpressionChecker {
       const message = `expected ${format_type(expected)}, got ${format_type(type)}`
       throw new CompileError(message, expression.line, expression.column)
     }
-    if (expected.kind === 'Optional' && !same_type(type, expected)) {
+    if (expected.kind === 'Optional' && type.kind !== 'never' && !same_type(type, expected)) {
       this.conversions.set(expression, expected)
     }
   }
@@ -305,7 +319,7 @@ export class ExpressionChecker {
   // A condition is a Bool, or an optional value that holds when it is not nil.
   expect_condition(expression: Expression): Type {
     const type = this.type_of(expression)
-    if (type.kind !== 'Bool' && type.kind !== 'Optional') {
+    if (!['Bool', 'Optional', 'never'].includes(type.kind)) {
       const message = `expected Bool or an optional value, got ${format_type(type)}`
       throw new CompileError(message, expression.line, expression.column)
     }
