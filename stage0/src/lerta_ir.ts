@@ -1,0 +1,39 @@
+// How Lerta values are represented in LLVM IR.
+import type { IrBuilder } from './ir_builder.ts'
+import type { Type } from './types.ts'
+
+const LERTA_IMMORTAL = '-9223372036854775808'
+
+export const ir_type = (type: Type): string => {
+  switch (type.kind) {
+    case 'String':
+      return 'ptr'
+    case 'Int':
+      return 'i64'
+    case 'Bool':
+      return 'i1'
+    default:
+      throw new Error(`no IR type for ${type.kind}`)
+  }
+}
+
+// A C `bool` parameter expects its argument zero-extended.
+export const ir_param_type = (type: Type): string =>
+  type.kind === 'Bool' ? 'i1 zeroext' : ir_type(type)
+
+// Bytes other than printable ASCII, '"' and '\' are written as \XX in IR strings.
+const ir_string_bytes = (bytes: Uint8Array): string =>
+  Array.from(bytes, (b) => {
+    const is_plain = b >= 0x20 && b <= 0x7e && b !== 0x22 && b !== 0x5c
+    return is_plain ? String.fromCharCode(b) : `\\${b.toString(16).toUpperCase().padStart(2, '0')}`
+  }).join('')
+
+// An immortal LertaString (see runtime/lerta.h) holding the literal's bytes.
+export const string_constant = (ir: IrBuilder, value: string): string => {
+  const bytes = new TextEncoder().encode(value)
+  const bytes_type = `[${bytes.length} x i8]`
+  const type = `{ i64, i64, ${bytes_type} }`
+  const bytes_init = `${bytes_type} c"${ir_string_bytes(bytes)}"`
+  const init = `{ i64 ${LERTA_IMMORTAL}, i64 ${bytes.length}, ${bytes_init} }`
+  return ir.global('lerta.string', `private unnamed_addr constant ${type} ${init}`)
+}

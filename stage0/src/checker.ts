@@ -11,8 +11,9 @@ import {
   type Statement,
   type Unary,
 } from './ast.ts'
-import { builtin_methods, builtins } from './builtins.ts'
+import { builtin_methods } from './builtins.ts'
 import { CompileError, CompileWarning } from './errors.ts'
+import { Scopes } from './scopes.ts'
 import {
   bool_type,
   format_type,
@@ -40,8 +41,7 @@ export const check = (program: Program): { types: Types; warnings: CompileWarnin
 class Checker {
   readonly types: Types = new Map()
   readonly warnings: CompileWarning[] = []
-  // Local names, innermost scope last.
-  private readonly scopes: Map<string, Type>[] = []
+  private readonly scopes = new Scopes()
 
   check_statements(statements: Statement[]): void {
     for (const statement of statements) this.check_statement(statement)
@@ -60,41 +60,22 @@ class Checker {
     }
     this.expect_type(iterable.start, int_type)
     this.expect_type(iterable.end, int_type)
-    this.with_scope(() => {
+    this.scopes.within(() => {
       this.define_local(variable, int_type)
       this.check_statements(for_statement.body)
     })
-  }
-
-  private with_scope(body: () => void): void {
-    this.scopes.push(new Map())
-    try {
-      body()
-    } finally {
-      this.scopes.pop()
-    }
   }
 
   // Shadowing a builtin is silent, so that new builtins do not affect existing code. Shadowing a
   // local name is a warning, unless the name starts with `_` to show that it is intended.
   private define_local(identifier: Identifier, type: Type): void {
     const { name, line, column } = identifier
-    const is_shadowing = this.scopes.some((scope) => scope.has(name))
-    if (is_shadowing && !name.startsWith('_')) {
+    if (this.scopes.define(identifier, type) && !name.startsWith('_')) {
       this.warnings.push(
         new CompileWarning(`'${name}' shadows a name in an outer scope`, line, column),
       )
     }
-    this.scopes.at(-1)!.set(name, type)
     this.types.set(identifier, type)
-  }
-
-  private lookup(name: string): Type | undefined {
-    for (const scope of this.scopes.toReversed()) {
-      const type = scope.get(name)
-      if (type !== undefined) return type
-    }
-    return builtins.get(name)?.type
   }
 
   // See the rules for discarded values in docs/reference/errors.md.
@@ -146,7 +127,7 @@ class Checker {
   }
 
   private type_of_identifier(identifier: Identifier): Type {
-    const type = this.lookup(identifier.name)
+    const type = this.scopes.lookup(identifier.name)
     if (type === undefined) {
       const message = `undefined name '${identifier.name}'`
       throw new CompileError(message, identifier.line, identifier.column)
