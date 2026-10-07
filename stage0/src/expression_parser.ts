@@ -360,6 +360,15 @@ export class ExpressionParser {
     return { name, value: this.parse_expression() }
   }
 
+  // Whether the next token ends the expression, so that `return` there has no value.
+  private ends_expression(): boolean {
+    const ends = [
+      ...['newline', 'dedent', 'eof', 'line_break'],
+      ...['if', 'while', 'then', 'else', ')', ']', '}', ','],
+    ]
+    return ends.includes(this.tokens.peek_continuation())
+  }
+
   parse_primary(): Expression {
     if (this.starts_function_literal()) return this.parse_function_literal()
     const token = this.tokens.next()
@@ -375,6 +384,12 @@ export class ExpressionParser {
       return { kind: 'interpolation', parts, ...position }
     }
     if (token.kind === 'nil') return { kind: 'nil', ...position }
+    if (token.kind === 'break' || token.kind === 'continue')
+      return { kind: token.kind, ...position }
+    if (token.kind === 'return') {
+      const value = this.ends_expression() ? undefined : this.parse_expression()
+      return { kind: 'return', value, ...position }
+    }
     if (token.kind === 'throw')
       return { kind: 'throw', message: this.parse_expression(), ...position }
     if (token.kind === '@') return this.parse_this(position)

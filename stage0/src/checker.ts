@@ -17,6 +17,7 @@ import { is_file_import, with_module_path, type Module } from './loader.ts'
 import { std_modules } from './std_modules.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
 import { StatementChecker } from './statement_checker.ts'
+import { reject_misplaced_jumps } from './jump_positions.ts'
 import { TopLevelValues } from './top_level_values.ts'
 import { TypeResolver } from './type_names.ts'
 import { same_type, void_type, type Type } from './types.ts'
@@ -132,6 +133,7 @@ const check = (
     top_level,
   }
   try {
+    reject_misplaced_jumps(program)
     objects.add(
       program.filter(
         (statement): statement is TypeDeclaration => statement.kind === 'type_declaration',

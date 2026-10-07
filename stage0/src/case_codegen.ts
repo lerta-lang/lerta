@@ -1,6 +1,6 @@
 // `case` and `then`/`else` in the generated code: the tests of their arms, and the values they
 // merge.
-import type { Case, CaseArm, Conditional, Expression, Statement } from './ast.ts'
+import type { Case, CaseArm, Conditional, Expression, Jump, Return, Statement } from './ast.ts'
 import type { Types } from './checker.ts'
 import type { ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
@@ -11,6 +11,10 @@ import { is_reference_type, type Type } from './types.ts'
 // Generates a block whose last statement, if an expression, gives its value: the operand, or ''.
 export type BlockGenerator = {
   generate_block_value(body: Statement[]): string
+  generate_jump(jump: Jump | Return): void
+  // Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
+  // function releases it where the code goes on.
+  hold(value: string, type: Type): () => void
 }
 
 export class CaseGenerator {
@@ -33,10 +37,16 @@ export class CaseGenerator {
 
   // The subject is evaluated once and released at the end. The arms are tested in order; every
   // arm jumps to one end block that merges the values. A case over every type of a union has no
-  // else arm, and falling past its last test cannot happen.
+  // else arm, and falling past its last test cannot happen. A subject that is a reference is held
+  // (see BlockGenerator), so that a jump out of an arm releases it too.
   generate(case_expression: Case): string {
     const { subject } = case_expression
     const subject_operand = subject === undefined ? undefined : this.expressions.generate(subject)
+    const subject_type = subject === undefined ? undefined : this.types.get(subject)!
+    const release_subject =
+      subject_type !== undefined && is_reference_type(subject_type)
+        ? this.blocks.hold(subject_operand!, subject_type)
+        : () => {}
     const end_label = this.ir.fresh_label('case.end')
     const incoming: string[] = []
     // An arm that ends with a jump gives no operand; it never reaches the end.
@@ -58,9 +68,7 @@ export class CaseGenerator {
     else generate_arm_value(case_expression.otherwise)
     this.ir.start_block(end_label)
     const result = this.merge(this.types.get(case_expression)!, incoming)
-    if (subject !== undefined && is_reference_type(this.types.get(subject)!)) {
-      emit_release(this.ir, subject_operand!)
-    }
+    release_subject()
     return result
   }
 

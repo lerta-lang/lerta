@@ -44,16 +44,15 @@ export const tested_name = (condition: Condition): TestedName | undefined => {
   return { name, when: condition.operator === '!=', is_type: undefined }
 }
 
-// A body that cannot go on past its end: it ends with `return`, `break`, `continue`, an
-// expression that never gives a value, such as `throw` or a call to `exit`, or an `if` whose
-// branches both end so.
+// A body that cannot go on past its end: it ends with an expression that never gives a value,
+// such as `return`, `break`, `continue`, `throw` or a call to `exit`, or an `if` whose branches
+// both end so.
 export const ends_with_jump = (
   statements: Statement[],
   is_never: (expression: Expression) => boolean,
 ): boolean => {
   const last = statements.at(-1)
   if (last === undefined) return false
-  if (['return', 'break', 'continue'].includes(last.kind)) return true
   if (last.kind === 'if') {
     return ends_with_jump(last.then_body, is_never) && ends_with_jump(last.else_body, is_never)
   }

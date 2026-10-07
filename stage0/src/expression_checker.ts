@@ -1,6 +1,14 @@
 // Types expressions; ObjectChecker types classes and structs, OperatorChecker the operators,
 // CaseChecker case, and CollectionChecker arrays and maps.
-import { type Call, type Expression, type Identifier, type IsTest, type Member } from './ast.ts'
+import {
+  type Call,
+  type Expression,
+  type Identifier,
+  type IsTest,
+  type Jump,
+  type Member,
+  type Return,
+} from './ast.ts'
 import { builtin_method, builtin_property, builtins } from './builtins.ts'
 import type { Conversions, SelfContext, Shared, Types } from './checker.ts'
 import { CaseChecker, type BlockChecker } from './case_checker.ts'
@@ -29,6 +37,11 @@ import {
   type Type,
 } from './types.ts'
 
+// Checks where `break`, `continue` and `return` are, and what `return` gives.
+export type JumpChecker = {
+  check_jump(jump: Jump | Return): void
+}
+
 export type CheckerLocal = {
   identifier: Identifier
   type: Type
@@ -51,6 +64,7 @@ export class ExpressionChecker {
   private readonly self: SelfContext | undefined
   private readonly imports: Imports
   private readonly top_level: TopLevelValues | undefined
+  private readonly jumps: JumpChecker
   private readonly operators = new OperatorChecker(this)
   private readonly objects: ObjectChecker
   private readonly cases: CaseChecker
@@ -64,7 +78,9 @@ export class ExpressionChecker {
     self: SelfContext | undefined,
     top_level: TopLevelValues | undefined,
     blocks: BlockChecker,
+    jumps: JumpChecker,
   ) {
+    this.jumps = jumps
     this.imports = shared.imports
     this.top_level = top_level
     this.types = shared.types
@@ -111,6 +127,11 @@ export class ExpressionChecker {
         return nil_type
       case 'throw':
         this.expect_type(expression.message, string_type)
+        return never_type
+      case 'break':
+      case 'continue':
+      case 'return':
+        this.jumps.check_jump(expression)
         return never_type
       case 'is':
         return this.type_of_is_test(expression)

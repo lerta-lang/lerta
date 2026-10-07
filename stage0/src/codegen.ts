@@ -8,6 +8,7 @@ import {
   type FunctionLiteral,
   type Index,
   type Member,
+  type Jump,
   type Return,
   type Statement,
 } from './ast.ts'
@@ -256,8 +257,20 @@ export class FunctionGenerator implements BlockGenerator {
     this.ir.emit(returns_nothing ? 'ret void' : `ret ${ir_type(result)} ${value}`)
   }
 
-  private generate_return(return_statement: Return): void {
-    const { value } = return_statement
+  hold(value: string, type: Type): () => void {
+    const scope = this.locals.push()
+    // The name cannot be written in the source, so no code can read it.
+    scope.set('(held)', this.store_in_slot(value, type))
+    return () => {
+      this.release_scope(scope)
+      this.locals.pop()
+    }
+  }
+
+  // A jump ends the block; the code after it, until the next label, is unreachable.
+  generate_jump(jump: Jump | Return): void {
+    if (jump.kind !== 'return') return this.control_flow.generate_jump(jump)
+    const { value } = jump
     this.emit_return(value === undefined ? '' : this.expressions.generate(value))
     this.ir.start_block(this.ir.fresh_label('unreachable'))
   }
@@ -304,11 +317,6 @@ export class FunctionGenerator implements BlockGenerator {
         return this.generate_declaration(statement)
       case 'assignment':
         return this.generate_assignment(statement)
-      case 'return':
-        return this.generate_return(statement)
-      case 'break':
-      case 'continue':
-        return this.control_flow.generate_jump(statement)
       case 'type_declaration':
       case 'type_alias':
       case 'import':

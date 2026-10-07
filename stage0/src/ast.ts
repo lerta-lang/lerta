@@ -119,6 +119,8 @@ export type Expression =
   | Unwrap
   | Coalesce
   | Throw
+  | Jump
+  | Return
   | Range
   | Case
   | IsTest
@@ -169,6 +171,7 @@ export type If = Position & {
 
 export type While = Position & { kind: 'while'; condition: Condition; body: Statement[] }
 
+// `break`, `continue` and `return` are expressions that never give a value, like `throw`.
 export type Jump = Position & { kind: 'break' | 'continue' }
 
 export type Return = Position & { kind: 'return'; value: Expression | undefined }
@@ -200,17 +203,7 @@ export type ImportName = { name: Identifier; alias: Identifier | undefined }
 export type Import = Position & { kind: 'import'; names: ImportName[]; module: string }
 
 export type Statement =
-  | Expression
-  | Import
-  | TypeDeclaration
-  | TypeAlias
-  | Declaration
-  | Assignment
-  | If
-  | While
-  | For
-  | Jump
-  | Return
+  Expression | Import | TypeDeclaration | TypeAlias | Declaration | Assignment | If | While | For
 
 export type Program = Statement[]
 
@@ -223,9 +216,6 @@ const statement_only_kinds = [
   'if',
   'while',
   'for',
-  'break',
-  'continue',
-  'return',
 ]
 
 export const is_expression = (statement: Statement): statement is Expression =>

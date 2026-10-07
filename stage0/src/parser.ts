@@ -11,7 +11,6 @@ import {
   type Import,
   type ImportName,
   type Program,
-  type Return,
   type Statement,
   type TypeAlias,
   type TypeDeclaration,
@@ -98,12 +97,6 @@ class Parser {
   // A statement that fits on one line, which postfix `if` and `while` can follow.
   parse_simple_statement(): Statement {
     const token = this.tokens.peek()
-    const position = { line: token.line, column: token.column }
-    if (token.kind === 'break' || token.kind === 'continue') {
-      this.tokens.next()
-      return { kind: token.kind, ...position }
-    }
-    if (token.kind === 'return') return this.parse_return()
     if (token.kind === 'const' || token.kind === 'var') return this.parse_declaration()
     const is_command_call =
       token.kind === 'identifier' && this.starts_command_argument(this.tokens.peek(1))
@@ -133,16 +126,6 @@ class Parser {
           ? { kind: 'if', condition, then_body: [result], else_body: [], ...position }
           : { kind: 'while', condition, body: [result], ...position }
     }
-  }
-
-  // `return` alone ends a function without a value.
-  private parse_return(): Return {
-    const token = this.tokens.next()
-    const ends_statement = ['newline', 'dedent', 'eof', 'if', 'while'].includes(
-      this.tokens.peek_continuation(),
-    )
-    const value = ends_statement ? undefined : this.expressions.parse_expression()
-    return { kind: 'return', value, line: token.line, column: token.column }
   }
 
   private parse_declaration(): Declaration {

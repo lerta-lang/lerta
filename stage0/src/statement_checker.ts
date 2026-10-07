@@ -9,14 +9,16 @@ import {
   type FunctionLiteral,
   type Identifier,
   type Index,
+  type Jump,
   type If,
   type Range,
+  type Return,
   type Statement,
   type While,
 } from './ast.ts'
 import type { FunctionContext, SelfContext, Shared, Types } from './checker.ts'
 import { CompileError, CompileWarning } from './errors.ts'
-import { ExpressionChecker, type CheckerLocal } from './expression_checker.ts'
+import { ExpressionChecker, type CheckerLocal, type JumpChecker } from './expression_checker.ts'
 import type { Functions } from './functions.ts'
 import {
   ends_with_jump,
@@ -33,7 +35,7 @@ import type { TypeResolver } from './type_names.ts'
 import { format_type, int_type, never_type, void_type, type Type } from './types.ts'
 import type { BlockChecker } from './case_checker.ts'
 
-export class StatementChecker implements BlockChecker {
+export class StatementChecker implements BlockChecker, JumpChecker {
   private readonly types: Types
   private readonly warnings: CompileWarning[]
   private readonly functions: Functions
@@ -74,6 +76,7 @@ export class StatementChecker implements BlockChecker {
       this.scopes,
       self,
       is_top_level_code ? undefined : this.top_level,
+      this,
       this,
     )
     this.results = new ResultChecker(this, this.expressions, context)
@@ -123,6 +126,13 @@ export class StatementChecker implements BlockChecker {
     const scope = this.scopes.pop()
     return () => {
       for (const local of scope.values()) this.warn_if_unused(local)
+    }
+  }
+
+  check_jump(jump: Jump | Return): void {
+    if (jump.kind === 'return') return this.results.check_return(jump)
+    if (this.loop_depth === 0) {
+      throw new CompileError(`'${jump.kind}' outside a loop`, jump.line, jump.column)
     }
   }
 
@@ -207,15 +217,6 @@ export class StatementChecker implements BlockChecker {
           statement.line,
           statement.column,
         )
-      case 'return':
-        return this.results.check_return(statement)
-      case 'break':
-      case 'continue':
-        if (this.loop_depth === 0) {
-          const message = `'${statement.kind}' outside a loop`
-          throw new CompileError(message, statement.line, statement.column)
-        }
-        return
       default:
         return this.check_expression_statement(statement)
     }
@@ -411,6 +412,10 @@ export class StatementChecker implements BlockChecker {
   // See the rules for discarded values in docs/reference/errors.md.
   check_discarded(statement: Expression, type: Type): void {
     if (statement.kind === 'call' || type.kind === 'void' || type.kind === 'never') return
+    // `x ? return` is a guard: its value is the reason to stop, not something to use.
+    const is_guard =
+      statement.kind === 'coalesce' && this.types.get(statement.fallback)?.kind === 'never'
+    if (is_guard) return
     if (type.kind === 'function' && statement.kind === 'identifier') {
       const message = `function value is unused; to call it, write \`${statement.name}()\``
       throw new CompileError(message, statement.line, statement.column)
