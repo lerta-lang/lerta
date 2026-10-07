@@ -23,15 +23,39 @@ void lerta_retain(void *object) {
   if (header != NULL && header->ref_count != LERTA_IMMORTAL) header->ref_count++;
 }
 
+// Objects whose count reaches zero wait here to be dropped and freed. Dropping one releases what
+// it owns, which may queue more; a loop, not recursion, handles them, so that a long chain such as
+// a linked list does not overflow the stack.
+static void **pending = NULL;
+static int64_t pending_length = 0;
+static int64_t pending_capacity = 0;
+static bool draining = false;
+
+static void push_pending(void *object) {
+  if (pending_length == pending_capacity) {
+    pending_capacity = pending_capacity == 0 ? 64 : pending_capacity * 2;
+    pending = realloc(pending, (size_t)pending_capacity * sizeof(void *));
+    if (pending == NULL) lerta_panic("out of memory");
+  }
+  pending[pending_length++] = object;
+}
+
 void lerta_release(void *object) {
   LertaHeader *header = object;
   if (header == NULL || header->ref_count == LERTA_IMMORTAL) return;
   if (--header->ref_count > 0) return;
-  if (header->drop != NULL) header->drop(object);
-  free(object);
+  push_pending(object);
+  if (draining) return;
+  draining = true;
+  while (pending_length > 0) {
+    LertaHeader *dead = pending[--pending_length];
+    if (dead->drop != NULL) dead->drop(dead);
+    free(dead);
 #ifdef LERTA_DEBUG
-  live_objects--;
+    live_objects--;
 #endif
+  }
+  draining = false;
 }
 
 bool lerta_check_leaks(void) {

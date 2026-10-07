@@ -1,8 +1,9 @@
-// Top-level functions. They can be used anywhere in the module, before their declaration too, so
-// a function's body is checked on demand: when its return type is first needed, or at the end.
+// Top-level functions and the methods of classes and structs. They can be used anywhere in the
+// module, before their declaration too, so a body is checked on demand: when its return type is
+// first needed, or at the end.
 import type { FunctionLiteral, Identifier, Position } from './ast.ts'
 import { CompileError } from './errors.ts'
-import { resolve_type } from './type_names.ts'
+import type { TypeResolver } from './type_names.ts'
 import type { Type } from './types.ts'
 
 export type FunctionEntry = {
@@ -11,22 +12,27 @@ export type FunctionEntry = {
   // Known from the annotations, or once the body is checked when the return type is inferred.
   type: Type | undefined
   state: 'unchecked' | 'checking' | 'checked'
+  // The class or struct of a method, which its body sees as `@`.
+  this_type: Type | undefined
 }
 
-export const parameter_types = (literal: FunctionLiteral): Type[] =>
-  literal.params.map((param) => resolve_type(param.type))
+export const parameter_types = (literal: FunctionLiteral, resolver: TypeResolver): Type[] =>
+  literal.params.map((param) => resolver.resolve(param.type))
 
 export class Functions {
   private readonly entries = new Map<string, FunctionEntry>()
   // Checks a body, setting the entry's type if it was not annotated.
   private readonly check_body: (entry: FunctionEntry) => void
+  private readonly resolver: TypeResolver
 
-  constructor(check_body: (entry: FunctionEntry) => void) {
+  constructor(check_body: (entry: FunctionEntry) => void, resolver: TypeResolver) {
     this.check_body = check_body
+    this.resolver = resolver
   }
 
-  add(name: Identifier, literal: FunctionLiteral): void {
-    if (this.entries.has(name.name)) {
+  // A method is keyed by its type and name, as `Point.length` (see `method_key`).
+  add(key: string, name: Identifier, literal: FunctionLiteral, this_type?: Type): void {
+    if (this.entries.has(key)) {
       throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
     }
     const type: Type | undefined =
@@ -34,10 +40,10 @@ export class Functions {
         ? undefined
         : {
             kind: 'function',
-            params: parameter_types(literal),
-            result: resolve_type(literal.return_type, true),
+            params: parameter_types(literal, this.resolver),
+            result: this.resolver.resolve(literal.return_type, true),
           }
-    this.entries.set(name.name, { name, literal, type, state: 'unchecked' })
+    this.entries.set(key, { name, literal, type, state: 'unchecked', this_type })
   }
 
   has(name: string): boolean {
@@ -68,3 +74,5 @@ export class Functions {
     entry.state = 'checked'
   }
 }
+
+export const method_key = (type_name: string, method: string): string => `${type_name}.${method}`

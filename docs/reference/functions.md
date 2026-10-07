@@ -19,4 +19,4 @@ const greet = -> print 'hello'
 
 ## Types
 
-Type names: `Int`, `UInt8` (or `Byte`), `Bool`, `String`, `Binary`, `Array<T>`, and `void` as a return type.
+Type names: `Int`, `UInt8` (or `Byte`), `Bool`, `String`, `Binary`, `Array<T>`, the names of classes and structs, and `void` as a return type.

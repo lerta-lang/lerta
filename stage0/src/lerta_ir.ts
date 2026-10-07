@@ -9,6 +9,7 @@ export const ir_type = (type: Type): string => {
     case 'String':
     case 'Binary':
     case 'Array':
+    case 'Object':
       return 'ptr'
     case 'Int':
       return 'i64'
@@ -27,8 +28,14 @@ export const ir_type = (type: Type): string => {
 export const ir_return_type = (type: Type): string =>
   type.kind === 'void' ? 'void' : ir_type(type)
 
-// The symbol of a top-level function; the prefix keeps it apart from the runtime's C symbols.
+// Symbols of generated functions; the prefixes keep them apart from the runtime's C symbols.
 export const function_symbol = (name: string): string => `@lerta.fn.${name}`
+export const method_symbol = (type_name: string, method: string): string =>
+  `@lerta.method.${type_name}.${method}`
+export const constructor_symbol = (type_name: string): string => `@lerta.new.${type_name}`
+export const drop_symbol = (type_name: string): string => `@lerta.drop.${type_name}`
+// The LLVM struct type of a class or struct: the object header, then the fields in order.
+export const object_ir_type = (type_name: string): string => `%lerta.object.${type_name}`
 
 // C `bool` and `uint8_t` parameters expect their arguments zero-extended.
 export const ir_param_type = (type: Type): string =>

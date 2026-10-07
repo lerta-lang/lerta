@@ -16,13 +16,14 @@ import {
   type Statement,
   type While,
 } from './ast.ts'
-import type { Conversions, FunctionContext, Shared, Types } from './checker.ts'
+import type { Conversions, FunctionContext, SelfContext, Shared, Types } from './checker.ts'
 import { CompileError, CompileWarning } from './errors.ts'
 import { ExpressionChecker, type CheckerLocal } from './expression_checker.ts'
 import type { Functions } from './functions.ts'
 import { ends_with_jump, narrowed_view, tested_name } from './narrowing.ts'
 import { Scopes } from './scopes.ts'
-import { resolve_type } from './type_names.ts'
+import type { ObjectTypes } from './object_types.ts'
+import type { TypeResolver } from './type_names.ts'
 import { format_type, int_type, is_assignable, unify, void_type, type Type } from './types.ts'
 
 export class StatementChecker {
@@ -31,22 +32,40 @@ export class StatementChecker {
   private readonly functions: Functions
   private readonly conversions: Conversions
   private readonly context: FunctionContext | undefined
+  private readonly self: SelfContext | undefined
+  private readonly objects: ObjectTypes
+  private readonly resolver: TypeResolver
   private readonly scopes = new Scopes<CheckerLocal>()
   private readonly expressions: ExpressionChecker
   private loop_depth = 0
 
-  constructor(shared: Shared, context: FunctionContext | undefined) {
+  constructor(shared: Shared, context: FunctionContext | undefined, self: SelfContext | undefined) {
     this.types = shared.types
     this.warnings = shared.warnings
     this.functions = shared.functions
     this.conversions = shared.conversions
+    this.objects = shared.objects
+    this.resolver = shared.resolver
     this.context = context
-    this.expressions = new ExpressionChecker(
-      this.types,
-      shared.conversions,
-      this.scopes,
-      this.functions,
-    )
+    this.self = self
+    this.expressions = new ExpressionChecker(shared, this.scopes, self)
+  }
+
+  // Each initializer sees the constructor arguments and the fields initialized before it.
+  check_initializers(): void {
+    const self = this.self!
+    for (const field of self.info.fields) {
+      if (field.value === undefined) continue
+      self.initializing = field
+      if (field.type !== undefined) {
+        this.expressions.expect_type(field.value, field.type)
+        continue
+      }
+      const type = this.expressions.type_of(field.value)
+      this.reject_if_not_storable(type, field.value)
+      field.type = type
+    }
+    self.initializing = undefined
   }
 
   // The parameters are borrowed locals. The last statement gives the return value.
@@ -166,6 +185,13 @@ export class StatementChecker {
         return this.check_declaration(statement)
       case 'assignment':
         return this.check_assignment(statement)
+      case 'type_declaration':
+        if (this.context === undefined && this.scopes.depth === 1) return
+        throw new CompileError(
+          'a class or struct can only be declared at the top level',
+          statement.line,
+          statement.column,
+        )
       case 'return':
         return this.check_return(statement)
       case 'break':
@@ -256,13 +282,11 @@ export class StatementChecker {
       const message = 'a function can only be declared at the top level so far'
       throw new CompileError(message, declaration.line, declaration.column)
     }
-    const annotated = declaration.type === undefined ? undefined : resolve_type(declaration.type)
+    const annotated =
+      declaration.type === undefined ? undefined : this.resolver.resolve(declaration.type)
     if (annotated !== undefined) this.expressions.expect_type(declaration.value, annotated)
     const type = annotated ?? this.expressions.type_of(declaration.value)
-    if (type.kind === 'void' || type.kind === 'function' || type.kind === 'nil') {
-      const message = `cannot store a value of type ${format_type(type)}`
-      throw new CompileError(message, declaration.value.line, declaration.value.column)
-    }
+    this.reject_if_not_storable(type, declaration.value)
     this.define_local({
       identifier: declaration.name,
       type,
@@ -272,11 +296,23 @@ export class StatementChecker {
     })
   }
 
+  // nil alone gives no type, and void and functions are not values that can be stored yet.
+  private reject_if_not_storable(type: Type, value: Expression): void {
+    if (type.kind === 'void' || type.kind === 'function' || type.kind === 'nil') {
+      const message = `cannot store a value of type ${format_type(type)}`
+      throw new CompileError(message, value.line, value.column)
+    }
+  }
+
   // Compound assignments such as `+=` apply to Ints only.
   private check_assignment(assignment: Assignment): void {
     const { target } = assignment
     const target_type =
-      target.kind === 'index' ? this.check_item_target(target) : this.check_variable_target(target)
+      target.kind === 'index'
+        ? this.check_item_target(target)
+        : target.kind === 'member'
+          ? this.expressions.field_target(target)
+          : this.check_variable_target(target)
     const is_numeric = target_type.kind === 'Int' || target_type.kind === 'UInt8'
     if (assignment.operator !== '=' && !is_numeric) {
       const message = `expected Int or UInt8, got ${format_type(target_type)}`
@@ -336,7 +372,7 @@ export class StatementChecker {
     const { identifier, type } = local
     const { name, line, column } = identifier
     const is_top_level = this.context === undefined && this.scopes.depth === 1
-    if (is_top_level && this.functions.has(name)) {
+    if (is_top_level && (this.functions.has(name) || this.objects.object_type(name))) {
       throw new CompileError(`'${name}' is already defined`, line, column)
     }
     const definition = this.scopes.define(name, local)

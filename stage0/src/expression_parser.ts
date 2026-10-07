@@ -7,6 +7,7 @@ import {
   type Expression,
   type FunctionLiteral,
   type Identifier,
+  type NamedArgument,
   type Parameter,
   type Position,
   type Statement,
@@ -24,6 +25,8 @@ const arithmetic_precedence: ArithmeticOperator[][] = [
   ['+', '-'],
   ['*', '/', '%'],
 ]
+
+export type Arguments = { args: Expression[]; named_args: NamedArgument[] }
 
 // Function bodies are statements, which the statement parser reads.
 export type BodyParser = {
@@ -207,8 +210,8 @@ export class ExpressionParser {
       if (token.kind === '!') {
         expression = { kind: 'unwrap', operand: expression, ...position }
       } else if (token.kind === '(') {
-        const args = this.parse_parenthesized_arguments()
-        expression = { kind: 'call', callee: expression, args, ...position }
+        const { args, named_args } = this.parse_parenthesized_arguments()
+        expression = { kind: 'call', callee: expression, args, named_args, ...position }
       } else if (token.kind === '[') {
         const index = this.parse_expression()
         this.tokens.expect(']', "']'")
@@ -224,6 +227,14 @@ export class ExpressionParser {
     }
   }
 
+  // `@` is the object; `@x`, written without a space, is its member x.
+  private parse_this(position: Position): Expression {
+    const object: Expression = { kind: 'this', ...position }
+    const next = this.tokens.peek()
+    if (next.kind !== 'identifier' || next.spaced) return object
+    return { kind: 'member', object, name: this.parse_identifier(), ...position }
+  }
+
   // `[a, b, c]` on one line; `[]` is empty.
   private parse_array_literal(position: Position): Expression {
     const elements: Expression[] = []
@@ -236,13 +247,32 @@ export class ExpressionParser {
   }
 
   // The arguments after an opening parenthesis, through the closing one.
-  private parse_parenthesized_arguments(): Expression[] {
-    const args: Expression[] = []
-    if (this.tokens.accept(')')) return args
-    args.push(this.parse_expression())
-    while (this.tokens.accept(',')) args.push(this.parse_expression())
+  private parse_parenthesized_arguments(): Arguments {
+    if (this.tokens.accept(')')) return { args: [], named_args: [] }
+    const result = this.parse_arguments()
     this.tokens.expect(')', "')'")
-    return args
+    return result
+  }
+
+  // Arguments separated by commas; named ones (`name: value`) come last.
+  parse_arguments(): Arguments {
+    const args: Expression[] = []
+    const named_args: NamedArgument[] = []
+    do {
+      const is_named = this.tokens.peek().kind === 'identifier' && this.tokens.peek(1).kind === ':'
+      if (is_named) {
+        const name = this.parse_identifier()
+        this.tokens.next()
+        named_args.push({ name, value: this.parse_expression() })
+      } else if (named_args.length > 0) {
+        const token = this.tokens.peek()
+        const message = 'a positional argument cannot follow a named one'
+        throw new CompileError(message, token.line, token.column)
+      } else {
+        args.push(this.parse_expression())
+      }
+    } while (this.tokens.peek_continuation() === ',' && this.tokens.next())
+    return { args, named_args }
   }
 
   parse_primary(): Expression {
@@ -260,6 +290,7 @@ export class ExpressionParser {
       return { kind: 'interpolation', parts, ...position }
     }
     if (token.kind === 'nil') return { kind: 'nil', ...position }
+    if (token.kind === '@') return this.parse_this(position)
     if (token.kind === 'true' || token.kind === 'false') {
       return { kind: 'boolean', value: token.kind === 'true', ...position }
     }

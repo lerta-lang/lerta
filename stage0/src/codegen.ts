@@ -9,6 +9,7 @@ import {
   type If,
   type Index,
   type Jump,
+  type Member,
   type Program,
   type Return,
   type Statement,
@@ -20,7 +21,17 @@ import { CheckedInt } from './checked_int.ts'
 import { ThrowBlocks } from './throw_blocks.ts'
 import { ExpressionGenerator, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder, IrModule } from './ir_builder.ts'
-import { emit_release, function_symbol, ir_return_type, ir_type } from './lerta_ir.ts'
+import {
+  constructor_symbol,
+  emit_release,
+  emit_retain,
+  function_symbol,
+  ir_return_type,
+  ir_type,
+  method_symbol,
+} from './lerta_ir.ts'
+import { define_object, emit_allocate, emit_field_pointer } from './object_codegen.ts'
+import type { FieldInfo, ObjectInfo, ObjectTypes } from './object_types.ts'
 import { emit_is_present, emit_unwrap } from './optional_codegen.ts'
 import { Scopes, type Scope } from './scopes.ts'
 import { int_type, is_reference_type, type Type } from './types.ts'
@@ -30,27 +41,39 @@ type FunctionDeclaration = Declaration & { value: FunctionLiteral }
 const is_function_declaration = (statement: Statement): statement is FunctionDeclaration =>
   statement.kind === 'declaration' && statement.value.kind === 'function'
 
-// Emits LLVM IR for a checked program: its top-level code becomes lerta_main, and each top-level
-// function a function of its own.
+// Emits LLVM IR for a checked program: its top-level code becomes lerta_main; each top-level
+// function, method and constructor becomes a function of its own.
 export const generate = (program: Program, checked: CheckedTypes): string => {
   const module = new IrModule()
   const functions = program.filter(is_function_declaration)
   const function_names = new Set(functions.map((declaration) => declaration.name.name))
   const new_generator = () => new FunctionGenerator(module, checked, function_names)
-  new_generator().generate_main(program.filter((statement) => !is_function_declaration(statement)))
+  const is_main_code = (statement: Statement) =>
+    !is_function_declaration(statement) && statement.kind !== 'type_declaration'
+  new_generator().generate_main(program.filter(is_main_code))
   for (const declaration of functions) {
-    new_generator().generate_function(declaration.name.name, declaration.value)
+    const symbol = function_symbol(declaration.name.name)
+    new_generator().generate_function(symbol, declaration.value, undefined)
+  }
+  for (const info of checked.objects.all()) {
+    define_object(module, new IrBuilder(module), info)
+    new_generator().generate_constructor(info)
+    for (const [name, literal] of info.methods) {
+      const symbol = method_symbol(info.declaration.name.name, name)
+      new_generator().generate_function(symbol, literal, info.type)
+    }
   }
   return module.render()
 }
 
-type CheckedTypes = Pick<Checked, 'types' | 'conversions'>
+type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects'>
 
 // Where `break` and `continue` jump, and how many scopes enclose the loop.
 type Loop = { break_label: string; continue_label: string; scope_depth: number }
 
 class FunctionGenerator {
   private readonly types: Types
+  private readonly objects: ObjectTypes
   private readonly ir: IrBuilder
   private readonly locals = new Scopes<CodegenLocal>()
   private readonly throws: ThrowBlocks
@@ -60,6 +83,7 @@ class FunctionGenerator {
 
   constructor(module: IrModule, checked: CheckedTypes, function_names: Set<string>) {
     this.types = checked.types
+    this.objects = checked.objects
     this.ir = new IrBuilder(module)
     this.throws = new ThrowBlocks(this.ir)
     this.checked_int = new CheckedInt(this.ir, this.throws)
@@ -79,8 +103,9 @@ class FunctionGenerator {
     this.finish('void @lerta_main()')
   }
 
-  // Parameters are borrowed SSA values. The last statement, if an expression, gives the result.
-  generate_function(name: string, literal: FunctionLiteral): void {
+  // Parameters are borrowed SSA values; a method gets its object first, as `@`. The last
+  // statement, if an expression, gives the result.
+  generate_function(symbol: string, literal: FunctionLiteral, this_type: Type | undefined): void {
     const type = this.types.get(literal)!
     if (type.kind !== 'function') throw new Error('a function literal has a function type')
     const params = literal.params.map((param, i) => ({
@@ -88,6 +113,8 @@ class FunctionGenerator {
       type: type.params[i],
     }))
     const scope = this.locals.push()
+    if (this_type !== undefined)
+      scope.set('@', { kind: 'value', operand: '%this', type: this_type })
     for (const [i, param] of params.entries()) {
       scope.set(param.name, { kind: 'value', operand: `%p${i}`, type: param.type })
     }
@@ -101,8 +128,38 @@ class FunctionGenerator {
       else this.ir.emit('unreachable')
     }
     this.locals.pop()
-    const param_list = params.map((param, i) => `${ir_type(param.type)} %p${i}`).join(', ')
-    this.finish(`${ir_return_type(type.result)} ${function_symbol(name)}(${param_list})`)
+    const param_list = params.map((param, i) => `${ir_type(param.type)} %p${i}`)
+    if (this_type !== undefined) param_list.unshift('ptr %this')
+    this.finish(`${ir_return_type(type.result)} ${symbol}(${param_list.join(', ')})`)
+  }
+
+  // Takes the constructor arguments (the fields without an initializer, in order) borrowed, as
+  // for any call; then computes the other fields in order, and runs `init` last.
+  generate_constructor(info: ObjectInfo): void {
+    const object = emit_allocate(this.ir, info)
+    const arguments_ = info.fields.filter((field) => field.value === undefined)
+    for (const [i, field] of arguments_.entries()) {
+      if (is_reference_type(field.type!)) emit_retain(this.ir, `%p${i}`)
+      this.store_field(object, info, field, `%p${i}`)
+    }
+    const scope = this.locals.push()
+    scope.set('@', { kind: 'value', operand: object, type: info.type })
+    for (const field of info.fields) {
+      if (field.value !== undefined) {
+        this.store_field(object, info, field, this.expressions.generate(field.value))
+      }
+    }
+    this.locals.pop()
+    const name = info.declaration.name.name
+    if (info.has_init) this.ir.emit(`call void ${method_symbol(name, 'init')}(ptr ${object})`)
+    this.ir.emit(`ret ptr ${object}`)
+    const params = arguments_.map((field, i) => `${ir_type(field.type!)} %p${i}`).join(', ')
+    this.finish(`ptr ${constructor_symbol(name)}(${params})`)
+  }
+
+  private store_field(object: string, info: ObjectInfo, field: FieldInfo, value: string): void {
+    const pointer = emit_field_pointer(this.ir, object, info, field)
+    this.ir.emit(`store ${ir_type(field.type!)} ${value}, ptr ${pointer}`)
   }
 
   private finish(signature: string): void {
@@ -161,6 +218,8 @@ class FunctionGenerator {
       case 'break':
       case 'continue':
         return this.generate_jump(statement)
+      case 'type_declaration':
+        return
       default:
         return this.expressions.release_if_reference(
           statement,
@@ -182,14 +241,33 @@ class FunctionGenerator {
   private generate_assignment(assignment: Assignment): void {
     const { target } = assignment
     if (target.kind === 'index') return this.generate_index_assignment(assignment, target)
+    if (target.kind === 'member') return this.generate_field_assignment(assignment, target)
     const local = this.locals.lookup(target.name)!
     if (local.kind !== 'slot') throw new Error('only slots can be assigned')
     const type = ir_type(local.type)
-    const old = this.ir.assign(`load ${type}, ptr ${local.pointer}`)
-    const value = this.expressions.generate(assignment.value)
+    const { old, value } = this.load_and_evaluate(assignment, () =>
+      this.ir.assign(`load ${type}, ptr ${local.pointer}`),
+    )
     const result = this.combine(assignment.operator, old, value, local.type)
     this.ir.emit(`store ${type} ${result}, ptr ${local.pointer}`)
     if (is_reference_type(local.type)) emit_release(this.ir, old)
+  }
+
+  // The field takes the new value's reference and releases the old one.
+  private generate_field_assignment(assignment: Assignment, target: Member): void {
+    const object_type = this.types.get(target.object)!
+    const info = this.objects.info(object_type)
+    const field = info.fields.find((field) => field.name.name === target.name.name)!
+    const object = this.expressions.generate(target.object)
+    const pointer = emit_field_pointer(this.ir, object, info, field)
+    const type = field.type!
+    const { old, value } = this.load_and_evaluate(assignment, () =>
+      this.ir.assign(`load ${ir_type(type)}, ptr ${pointer}`),
+    )
+    const result = this.combine(assignment.operator, old, value, type)
+    this.ir.emit(`store ${ir_type(type)} ${result}, ptr ${pointer}`)
+    if (is_reference_type(type)) emit_release(this.ir, old)
+    emit_release(this.ir, object)
   }
 
   // The array retains the new item and releases the old one.
@@ -203,6 +281,21 @@ class FunctionGenerator {
     emit_set(this.ir, array, index, result, element)
     if (is_reference_type(element)) emit_release(this.ir, result)
     emit_release(this.ir, array)
+  }
+
+  // For `=`, the value is evaluated before the old one is loaded, since evaluating it may change
+  // the target (a method that assigns the same field, for example); releasing a stale old value
+  // would then free it twice. For `+=` and so on, the old Int is loaded first, as it is combined.
+  private load_and_evaluate(
+    assignment: Assignment,
+    load: () => string,
+  ): { old: string; value: string } {
+    if (assignment.operator !== '=') {
+      const old = load()
+      return { old, value: this.expressions.generate(assignment.value) }
+    }
+    const value = this.expressions.generate(assignment.value)
+    return { old: load(), value }
   }
 
   // The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.

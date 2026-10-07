@@ -1,5 +1,6 @@
 // Accumulates the text of an LLVM IR module. It knows IR syntax only, not Lerta semantics.
 export class IrModule {
+  private readonly type_definitions: string[] = []
   private readonly globals: string[] = []
   private readonly declarations = new Map<string, string>()
   private readonly functions: string[] = []
@@ -20,12 +21,22 @@ export class IrModule {
     return name
   }
 
+  add_type(definition: string): void {
+    this.type_definitions.push(definition)
+  }
+
   add_function(definition: string): void {
     this.functions.push(definition)
   }
 
   render(): string {
-    return [...this.globals, ...this.declarations.values(), ...this.functions].join('\n') + '\n'
+    const parts = [
+      this.type_definitions,
+      this.globals,
+      [...this.declarations.values()],
+      this.functions,
+    ]
+    return parts.flat().join('\n') + '\n'
   }
 }
 

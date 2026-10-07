@@ -24,33 +24,46 @@ const simple_types = new Map<string, Type>([
   ['Binary', binary_type],
 ])
 
-// `void` is only allowed as a return type.
-export const resolve_type = (type_name: TypeName, allow_void = false): Type => {
-  const type = resolve_name(type_name, allow_void)
-  if (!type_name.optional) return type
-  if (type.kind === 'void') {
-    throw new CompileError('void cannot be optional', type_name.line, type_name.column)
-  }
-  return optional_type(type)
-}
+// Names of builtin types, which a class or struct cannot take.
+export const is_builtin_type_name = (name: string): boolean =>
+  simple_types.has(name) || name === 'Array' || name === 'void'
 
-const resolve_name = (type_name: TypeName, allow_void: boolean): Type => {
-  const { name, args, line, column } = type_name
-  if (name === 'Array' && args.length === 1) return array_type(resolve_element(args[0]))
-  if (name === 'Array') throw new CompileError('Array takes one type argument', line, column)
-  if (args.length > 0) throw new CompileError(`'${name}' takes no type arguments`, line, column)
-  if (allow_void && name === 'void') return void_type
-  const type = simple_types.get(name)
-  if (type === undefined) throw new CompileError(`unknown type '${name}'`, line, column)
-  return type
-}
+// Resolves type names, including the classes and structs of the program.
+export class TypeResolver {
+  private readonly object_type: (name: string) => Type | undefined
 
-// An array item is 8 bytes, which cannot hold an optional Int, UInt8 or Bool.
-const resolve_element = (type_name: TypeName): Type => {
-  const type = resolve_type(type_name)
-  if (type.kind === 'Optional' && !is_reference_type(type)) {
-    const message = `an array cannot hold values of type ${format_type(type)} yet`
-    throw new CompileError(message, type_name.line, type_name.column)
+  constructor(object_type: (name: string) => Type | undefined) {
+    this.object_type = object_type
   }
-  return type
+
+  // `void` is only allowed as a return type.
+  resolve(type_name: TypeName, allow_void = false): Type {
+    const type = this.resolve_name(type_name, allow_void)
+    if (!type_name.optional) return type
+    if (type.kind === 'void') {
+      throw new CompileError('void cannot be optional', type_name.line, type_name.column)
+    }
+    return optional_type(type)
+  }
+
+  private resolve_name(type_name: TypeName, allow_void: boolean): Type {
+    const { name, args, line, column } = type_name
+    if (name === 'Array' && args.length === 1) return array_type(this.resolve_element(args[0]))
+    if (name === 'Array') throw new CompileError('Array takes one type argument', line, column)
+    if (args.length > 0) throw new CompileError(`'${name}' takes no type arguments`, line, column)
+    if (allow_void && name === 'void') return void_type
+    const type = simple_types.get(name) ?? this.object_type(name)
+    if (type === undefined) throw new CompileError(`unknown type '${name}'`, line, column)
+    return type
+  }
+
+  // An array item is 8 bytes, which cannot hold an optional Int, UInt8 or Bool.
+  private resolve_element(type_name: TypeName): Type {
+    const type = this.resolve(type_name)
+    if (type.kind === 'Optional' && !is_reference_type(type)) {
+      const message = `an array cannot hold values of type ${format_type(type)} yet`
+      throw new CompileError(message, type_name.line, type_name.column)
+    }
+    return type
+  }
 }

@@ -5,6 +5,8 @@ export type Type =
   | { kind: 'UInt8' }
   | { kind: 'Binary' }
   | { kind: 'Array'; element: Type }
+  // A class or struct, by name (see ObjectTypes).
+  | { kind: 'Object'; name: string; is_struct: boolean }
   // `T?`: a T or nil.
   | { kind: 'Optional'; inner: Type }
   // The type of the literal `nil`, which fits any optional type.
@@ -30,6 +32,8 @@ export const format_type = (type: Type): string => {
   switch (type.kind) {
     case 'Array':
       return `Array<${format_type(type.element)}>`
+    case 'Object':
+      return type.name
     case 'Optional':
       return type.inner.kind === 'function'
         ? `(${format_type(type.inner)})?`
@@ -47,7 +51,7 @@ export const same_type = (a: Type, b: Type): boolean => format_type(a) === forma
 
 // Values of these types are reference counted.
 export const is_reference_type = (type: Type): boolean =>
-  ['String', 'Binary', 'Array'].includes(type.kind) ||
+  ['String', 'Binary', 'Array', 'Object'].includes(type.kind) ||
   (type.kind === 'Optional' && is_reference_type(type.inner))
 
 // A T or nil also fits where a T? is expected.

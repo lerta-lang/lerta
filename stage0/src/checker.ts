@@ -5,10 +5,13 @@ import {
   type FunctionLiteral,
   type Program,
   type Statement,
+  type TypeDeclaration,
 } from './ast.ts'
 import { CompileError, CompileWarning } from './errors.ts'
 import { Functions, parameter_types, type FunctionEntry } from './functions.ts'
+import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
 import { StatementChecker } from './statement_checker.ts'
+import { TypeResolver } from './type_names.ts'
 import { same_type, void_type, type Type } from './types.ts'
 
 // The type of every expression in a checked program.
@@ -26,7 +29,13 @@ export type Shared = {
   conversions: Conversions
   warnings: CompileWarning[]
   functions: Functions
+  objects: ObjectTypes
+  resolver: TypeResolver
 }
+
+// The object that `@` refers to: in a method, or in the initializer of a field, which sees the
+// constructor arguments and the fields initialized before it.
+export type SelfContext = { info: ObjectInfo; initializing: FieldInfo | undefined }
 
 // The function whose body is being checked: its written return type, or the one being inferred.
 export type FunctionContext = {
@@ -36,47 +45,73 @@ export type FunctionContext = {
   results: { value: Expression; type: Type }[]
 }
 
-export type Checked = { types: Types; conversions: Conversions; warnings: CompileWarning[] }
+export type Checked = {
+  types: Types
+  conversions: Conversions
+  objects: ObjectTypes
+  warnings: CompileWarning[]
+}
 
 export const check = (program: Program): Checked => {
   const types: Types = new Map()
   const conversions: Conversions = new Map()
   const warnings: CompileWarning[] = []
-  const functions: Functions = new Functions((entry) => check_function(shared, entry))
-  const shared: Shared = { types, conversions, warnings, functions }
+  const objects: ObjectTypes = new ObjectTypes((info) => check_object(shared, info))
+  const resolver = new TypeResolver((name) => objects.object_type(name))
+  const functions: Functions = new Functions((entry) => check_function(shared, entry), resolver)
+  const shared: Shared = { types, conversions, warnings, functions, objects, resolver }
   try {
-    add_top_level_functions(program, functions)
-    new StatementChecker(shared, undefined).check_block(program)
+    objects.add(
+      program.filter(
+        (statement): statement is TypeDeclaration => statement.kind === 'type_declaration',
+      ),
+    )
+    add_top_level_functions(program, functions, objects)
+    objects.add_members(resolver, functions)
+    new StatementChecker(shared, undefined, undefined).check_block(program)
+    objects.check_all()
     functions.check_all()
   } catch (error) {
     if (error instanceof CompileError) error.warnings = in_source_order(warnings)
     throw error
   }
-  return { types, conversions, warnings: in_source_order(warnings) }
+  return { types, conversions, objects, warnings: in_source_order(warnings) }
 }
 
 const is_function_declaration = (statement: Statement): statement is Declaration =>
   statement.kind === 'declaration' && statement.value.kind === 'function'
 
-const add_top_level_functions = (program: Program, functions: Functions): void => {
+const add_top_level_functions = (
+  program: Program,
+  functions: Functions,
+  objects: ObjectTypes,
+): void => {
   for (const statement of program.filter(is_function_declaration)) {
     if (statement.mutable) {
       const message = 'a function must be declared with const'
       throw new CompileError(message, statement.line, statement.column)
     }
-    functions.add(statement.name, statement.value as FunctionLiteral)
+    const { name } = statement
+    if (objects.object_type(name.name) !== undefined) {
+      throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
+    }
+    functions.add(name.name, name, statement.value as FunctionLiteral)
   }
 }
 
 const check_function = (shared: Shared, entry: FunctionEntry): void => {
   const { literal } = entry
-  const params = parameter_types(literal)
+  const params = parameter_types(literal, shared.resolver)
   const context: FunctionContext = {
     annotated: entry.type?.kind === 'function' ? entry.type.result : undefined,
     inferred: undefined,
     results: [],
   }
-  new StatementChecker(shared, context).check_function_body(literal, params)
+  const self =
+    entry.this_type === undefined
+      ? undefined
+      : { info: shared.objects.info(entry.this_type), initializing: undefined }
+  new StatementChecker(shared, context, self).check_function_body(literal, params)
   const result = context.annotated ?? context.inferred ?? void_type
   if (result.kind === 'nil') {
     const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
@@ -87,4 +122,9 @@ const check_function = (shared: Shared, entry: FunctionEntry): void => {
   }
   entry.type ??= { kind: 'function', params, result }
   shared.types.set(literal, entry.type)
+}
+
+const check_object = (shared: Shared, info: ObjectInfo): void => {
+  const self: SelfContext = { info, initializing: undefined }
+  new StatementChecker(shared, undefined, self).check_initializers()
 }

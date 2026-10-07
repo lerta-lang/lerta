@@ -42,6 +42,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 ## Memory management
 
 - **No threads, so counts are non-atomic.**
+- An object whose count reaches zero is queued, and a loop drops and frees the queued objects; dropping one may queue more. This keeps the stack flat when a long chain, such as a linked list, is released.
 - Weak references follow Rust's `Rc` approach (a weak count is kept; while weak references remain, the memory is not returned and only the contents are destroyed).
 - Every heap object starts with a header: its reference count and a drop function, which releases what the object owns before it is freed (`runtime/lerta.h`).
 - Static objects such as string literals are made immortal (exempt from count operations).
@@ -54,6 +55,11 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 - At exit, a non-zero count is reported as a leak. The remaining objects are traversed to report cycles (by type; not implemented yet).
 - Release builds do not count. In stage0, a build without `-O` uses the debug runtime.
 - An exit through an uncaught `throw` is not checked, since it ends the program in the middle of its work.
+
+## Objects
+
+- A class or struct object is a heap object: the header, then its fields in declaration order, each in its IR type. A generated drop function releases the references the fields hold.
+- Each type has a generated constructor function, which takes the constructor arguments borrowed, like any call, and computes the initialized fields; methods are functions that take the object first.
 
 ## Structs
 

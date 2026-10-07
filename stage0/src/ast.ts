@@ -15,7 +15,16 @@ export type Coalesce = Position & { kind: 'coalesce'; value: Expression; fallbac
 export type ArrayLiteral = Position & { kind: 'array'; elements: Expression[] }
 // `object[index]`
 export type Index = Position & { kind: 'index'; object: Expression; index: Expression }
-export type Call = Position & { kind: 'call'; callee: Expression; args: Expression[] }
+// `f(a, b)`, or `Point(x: 1, y: 2)` with named arguments, which construct a class or struct.
+export type NamedArgument = { name: Identifier; value: Expression }
+export type Call = Position & {
+  kind: 'call'
+  callee: Expression
+  args: Expression[]
+  named_args: NamedArgument[]
+}
+// `@` inside a method or a field initializer: the object itself. `@x` is `this.x`.
+export type This = Position & { kind: 'this' }
 // `object.name`; so far only a method of a builtin type, and only when called.
 export type Member = Position & { kind: 'member'; object: Expression; name: Identifier }
 export type UnaryOperator = '-' | 'not'
@@ -71,6 +80,7 @@ export type Expression =
   | ArrayLiteral
   | Index
   | Call
+  | This
   | Member
   | Unary
   | Binary
@@ -101,7 +111,7 @@ export type AssignmentOperator = (typeof assignment_operators)[number]
 export type Assignment = Position & {
   kind: 'assignment'
   operator: AssignmentOperator
-  target: Identifier | Index
+  target: Identifier | Index | Member
   value: Expression
 }
 
@@ -125,11 +135,29 @@ export type Jump = Position & { kind: 'break' | 'continue' }
 
 export type Return = Position & { kind: 'return'; value: Expression | undefined }
 
-export type Statement = Expression | Declaration | Assignment | If | While | For | Jump | Return
+// A member of a class or struct body: a field (with a type, an initial value, or both) or, for a
+// function literal value, a method.
+export type MemberDeclaration = Position & {
+  name: Identifier
+  modifier: 'const' | 'var' | undefined
+  type: TypeName | undefined
+  value: Expression | undefined
+}
+
+export type TypeDeclaration = Position & {
+  kind: 'type_declaration'
+  is_struct: boolean
+  name: Identifier
+  members: MemberDeclaration[]
+}
+
+export type Statement =
+  Expression | TypeDeclaration | Declaration | Assignment | If | While | For | Jump | Return
 
 export type Program = Statement[]
 
 const statement_only_kinds = [
+  'type_declaration',
   'declaration',
   'assignment',
   'if',

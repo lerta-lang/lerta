@@ -4,12 +4,14 @@ import {
   type Call,
   type Condition,
   type Declaration,
+  type MemberDeclaration,
   type Expression,
   type For,
   type If,
   type Program,
   type Return,
   type Statement,
+  type TypeDeclaration,
   type While,
 } from './ast.ts'
 import { CompileError } from './errors.ts'
@@ -31,6 +33,7 @@ const command_argument_starts = [
   'not',
   'case',
   '->',
+  '@',
 ]
 
 // Statements: the program, blocks, declarations, assignments, control flow and calls without
@@ -75,6 +78,9 @@ class Parser {
         return this.parse_while()
       case 'if':
         return this.parse_if()
+      case 'class':
+      case 'struct':
+        return this.parse_type_declaration()
       default:
         return this.parse_postfix_conditions(this.parse_simple_statement())
     }
@@ -142,8 +148,8 @@ class Parser {
   }
 
   private parse_assignment(target: Expression, operator: AssignmentOperator): Statement {
-    if (target.kind !== 'identifier' && target.kind !== 'index') {
-      const message = 'only a name or an indexed item can be assigned to'
+    if (target.kind !== 'identifier' && target.kind !== 'index' && target.kind !== 'member') {
+      const message = 'only a name, an indexed item or a field can be assigned to'
       throw new CompileError(message, target.line, target.column)
     }
     this.tokens.next()
@@ -162,12 +168,44 @@ class Parser {
   // `f x, y`: the arguments run to the end of the line.
   private parse_command_call(): Call {
     const callee = this.expressions.parse_primary()
-    const args = [this.expressions.parse_expression()]
-    while (this.tokens.peek_continuation() === ',') {
-      this.tokens.next()
-      args.push(this.expressions.parse_expression())
+    const { args, named_args } = this.expressions.parse_arguments()
+    return { kind: 'call', callee, args, named_args, line: callee.line, column: callee.column }
+  }
+
+  // `class Name` or `struct Name` followed by an indented block of members, one per line.
+  private parse_type_declaration(): TypeDeclaration {
+    const token = this.tokens.next()
+    const name = this.expressions.parse_identifier()
+    this.tokens.expect('newline', 'end of line')
+    this.tokens.expect('indent', 'indented members')
+    const members: MemberDeclaration[] = []
+    while (this.tokens.peek().kind !== 'dedent') {
+      members.push(this.parse_member())
+      this.tokens.expect_line_end()
     }
-    return { kind: 'call', callee, args, line: callee.line, column: callee.column }
+    this.tokens.next()
+    const is_struct = token.kind === 'struct'
+    return {
+      kind: 'type_declaration',
+      is_struct,
+      name,
+      members,
+      line: token.line,
+      column: token.column,
+    }
+  }
+
+  // `[const | var] name[: Type][ = value]`, with a type, a value or both.
+  private parse_member(): MemberDeclaration {
+    const token = this.tokens.peek()
+    const modifier = token.kind === 'const' || token.kind === 'var' ? token.kind : undefined
+    if (modifier !== undefined) this.tokens.next()
+    const name = this.expressions.parse_identifier()
+    const type = this.tokens.accept(':') ? this.expressions.parse_type_name() : undefined
+    const has_value = type === undefined || this.tokens.peek().kind === '='
+    if (has_value) this.tokens.expect('=', type === undefined ? "':' or '='" : "'='")
+    const value = has_value ? this.expressions.parse_expression() : undefined
+    return { name, modifier, type, value, line: token.line, column: token.column }
   }
 
   // `for <name> in <expression>` followed by an indented block.
