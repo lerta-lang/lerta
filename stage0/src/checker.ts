@@ -4,8 +4,10 @@ import {
   type Call,
   type Case,
   type Expression,
+  type For,
   type Identifier,
   type Program,
+  type Statement,
   type Unary,
 } from './ast.ts'
 import { builtins } from './builtins.ts'
@@ -25,20 +27,72 @@ export type Types = Map<Expression, Type>
 
 export const check = (program: Program): Types => {
   const types: Types = new Map()
-  const checker = new Checker(types)
-  for (const statement of program) checker.check_statement(statement)
+  new Checker(types).check_statements(program)
   return types
 }
 
 class Checker {
   private readonly types: Types
+  // Local names, innermost scope last.
+  private readonly scopes: Map<string, Type>[] = []
 
   constructor(types: Types) {
     this.types = types
   }
 
+  check_statements(statements: Statement[]): void {
+    for (const statement of statements) this.check_statement(statement)
+  }
+
+  private check_statement(statement: Statement): void {
+    if (statement.kind === 'for') this.check_for(statement)
+    else this.check_expression_statement(statement)
+  }
+
+  // Only ranges can be iterated so far.
+  private check_for(for_statement: For): void {
+    const { iterable, variable } = for_statement
+    if (iterable.kind !== 'range') {
+      throw new CompileError("expected a range after 'in'", iterable.line, iterable.column)
+    }
+    this.expect_type(iterable.start, int_type)
+    this.expect_type(iterable.end, int_type)
+    this.with_scope(() => {
+      this.define_local(variable, int_type)
+      this.check_statements(for_statement.body)
+    })
+  }
+
+  private with_scope(body: () => void): void {
+    this.scopes.push(new Map())
+    try {
+      body()
+    } finally {
+      this.scopes.pop()
+    }
+  }
+
+  // Builtins may be shadowed. Shadowing a local name is planned to be a warning; until warnings
+  // exist, it is an error.
+  private define_local(identifier: Identifier, type: Type): void {
+    if (this.scopes.some((scope) => scope.has(identifier.name))) {
+      const message = `'${identifier.name}' is already defined`
+      throw new CompileError(message, identifier.line, identifier.column)
+    }
+    this.scopes.at(-1)!.set(identifier.name, type)
+    this.types.set(identifier, type)
+  }
+
+  private lookup(name: string): Type | undefined {
+    for (const scope of this.scopes.toReversed()) {
+      const type = scope.get(name)
+      if (type !== undefined) return type
+    }
+    return builtins.get(name)?.type
+  }
+
   // See the rules for discarded values in docs/reference/errors.md.
-  check_statement(statement: Expression): void {
+  private check_expression_statement(statement: Expression): void {
     const type = this.type_of(statement)
     if (statement.kind === 'call' || type.kind === 'void') return
     if (type.kind === 'function' && statement.kind === 'identifier') {
@@ -72,16 +126,22 @@ class Checker {
         return this.type_of_binary(expression)
       case 'case':
         return this.type_of_case(expression)
+      case 'range':
+        throw new CompileError(
+          "a range can only be used after 'in' of a 'for'",
+          expression.line,
+          expression.column,
+        )
     }
   }
 
   private type_of_identifier(identifier: Identifier): Type {
-    const builtin = builtins.get(identifier.name)
-    if (builtin === undefined) {
+    const type = this.lookup(identifier.name)
+    if (type === undefined) {
       const message = `undefined name '${identifier.name}'`
       throw new CompileError(message, identifier.line, identifier.column)
     }
-    return builtin.type
+    return type
   }
 
   private type_of_call(call: Call): Type {

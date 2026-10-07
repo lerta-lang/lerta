@@ -21,12 +21,31 @@ export type Binary = Position & {
   right: Expression
 }
 
+// `start...end`: the integers from start up to, but not including, end.
+export type Range = Position & { kind: 'range'; start: Expression; end: Expression }
+
 // `case` without a subject: the first arm whose condition is true gives the value.
 export type CaseArm = { condition: Expression; value: Expression }
 export type Case = Position & { kind: 'case'; arms: CaseArm[]; otherwise: Expression }
 
 export type Expression =
-  StringLiteral | BooleanLiteral | IntegerLiteral | Identifier | Call | Unary | Binary | Case
+  | StringLiteral
+  | BooleanLiteral
+  | IntegerLiteral
+  | Identifier
+  | Call
+  | Unary
+  | Binary
+  | Range
+  | Case
 
-// Every statement is an expression statement so far.
-export type Program = Expression[]
+export type For = Position & {
+  kind: 'for'
+  variable: Identifier
+  iterable: Expression
+  body: Statement[]
+}
+
+export type Statement = Expression | For
+
+export type Program = Statement[]

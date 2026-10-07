@@ -26,9 +26,18 @@ export class IrBuilder {
 
   // Emits `%r<n> = <value>` and returns the register.
   assign(value: string): string {
-    const register = `%r${this.register_count++}`
-    this.emit(`${register} = ${value}`)
+    const register = this.fresh_register()
+    this.assign_to(register, value)
     return register
+  }
+
+  // A register to be assigned later with `assign_to`, for `phi` operands defined further down.
+  fresh_register(): string {
+    return `%r${this.register_count++}`
+  }
+
+  assign_to(register: string, value: string): void {
+    this.emit(`${register} = ${value}`)
   }
 
   emit(instruction: string): void {

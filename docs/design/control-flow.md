@@ -26,8 +26,9 @@
 
 ## Ranges
 
-- **`a...b`** is the range of integers `a <= i < b` (the end is excluded). It is a value of the built-in type `Range`, which can be traversed any number of times (unlike `Iter<T>`).
-- `for i in a...b` compiles to a counting loop; no `Range` object is created.
+`a...b` in a `for` is implemented: see [the reference](../reference/control-flow.md#for-and-ranges). Planned:
+
+- A range is a value of the built-in type `Range`, which can be traversed any number of times (unlike `Iter<T>`).
 - Whether to also have a range that includes its end (`..`) is an [open question](../roadmap.md#open-questions).
 
 ## for and comprehensions

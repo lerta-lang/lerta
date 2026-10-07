@@ -6,8 +6,11 @@ import {
   type CaseArm,
   type ComparisonOperator,
   type Expression,
+  type For,
+  type Identifier,
   type Position,
   type Program,
+  type Statement,
 } from './ast.ts'
 import { CompileError } from './errors.ts'
 import type { Token, TokenKind } from './lexer.ts'
@@ -53,15 +56,30 @@ class Parser {
   }
 
   parse_program(): Program {
-    const statements: Program = []
-    while (this.peek().kind !== 'eof') {
+    return this.parse_statements('eof')
+  }
+
+  // Statements, one per line, up to the token that ends the block.
+  private parse_statements(end: 'eof' | 'dedent'): Statement[] {
+    const statements: Statement[] = []
+    while (this.peek().kind !== end && this.peek().kind !== 'eof') {
       statements.push(this.parse_statement())
       this.expect_line_end()
     }
     return statements
   }
 
-  private parse_statement(): Expression {
+  // A newline and an indented block of statements.
+  private parse_block(): Statement[] {
+    this.expect('newline', 'end of line')
+    this.expect('indent', 'indented block')
+    const statements = this.parse_statements('dedent')
+    this.expect('dedent', 'end of block')
+    return statements
+  }
+
+  private parse_statement(): Statement {
+    if (this.peek().kind === 'for') return this.parse_for()
     const is_command_call =
       this.peek().kind === 'identifier' && this.starts_command_argument(this.peek(1))
     return is_command_call ? this.parse_command_call() : this.parse_expression()
@@ -73,6 +91,23 @@ class Parser {
     if (!token.spaced) return false
     if (token.kind === '-') return !this.peek(2).spaced
     return ['identifier', 'integer', 'string', 'true', 'false', 'case', '('].includes(token.kind)
+  }
+
+  // `for <name> in <expression>` followed by an indented block.
+  private parse_for(): For {
+    const token = this.next()
+    const variable = this.parse_identifier()
+    this.expect('in', "'in'")
+    const iterable = this.parse_expression()
+    const body = this.parse_block()
+    return { kind: 'for', variable, iterable, body, line: token.line, column: token.column }
+  }
+
+  private parse_identifier(): Identifier {
+    const token = this.peek()
+    if (token.kind !== 'identifier') throw this.error_at(token, 'name')
+    this.next()
+    return { kind: 'identifier', name: token.text, line: token.line, column: token.column }
   }
 
   // `f x, y`: the arguments run to the end of the line.
@@ -92,15 +127,28 @@ class Parser {
 
   // `a < b < c` is an error: comparisons do not chain.
   private parse_comparison(): Expression {
-    const left = this.parse_arithmetic(0)
+    const left = this.parse_range()
     if (!this.at_comparison()) return left
     const operator = this.next().kind as ComparisonOperator
-    const right = this.parse_arithmetic(0)
+    const right = this.parse_range()
     if (this.at_comparison()) {
       const token = this.peek()
       throw new CompileError('comparison operators cannot be chained', token.line, token.column)
     }
     return { kind: 'binary', operator, left, right, line: left.line, column: left.column }
+  }
+
+  // Ranges do not chain either: `a...b...c` is an error.
+  private parse_range(): Expression {
+    const start = this.parse_arithmetic(0)
+    if (this.peek_continuation() !== '...') return start
+    this.next()
+    const end = this.parse_arithmetic(0)
+    if (this.peek_continuation() === '...') {
+      const token = this.peek()
+      throw new CompileError('ranges cannot be chained', token.line, token.column)
+    }
+    return { kind: 'range', start, end, line: start.line, column: start.column }
   }
 
   private at_comparison(): boolean {

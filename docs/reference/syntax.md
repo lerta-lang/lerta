@@ -30,8 +30,8 @@
 
 ## Operators
 
-From weakest: comparisons (`==` `!=` `<` `<=` `>` `>=`) < `+` `-` < `*` `/` `%` < prefix `-`.
+From weakest: comparisons (`==` `!=` `<` `<=` `>` `>=`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
 
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`).
 - Comparisons cannot be chained: `a < b < c` is a syntax error; use parentheses.
-- `true`, `false`, `case`, `when`, `then` and `else` are keywords and cannot be used as names.
+- `true`, `false`, `case`, `when`, `then`, `else`, `for` and `in` are keywords and cannot be used as names.
