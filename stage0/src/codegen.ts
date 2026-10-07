@@ -1,37 +1,116 @@
-import type { Assignment, Declaration, For, If, Jump, Program, Statement, While } from './ast.ts'
+import {
+  is_expression,
+  type Assignment,
+  type Declaration,
+  type For,
+  type FunctionLiteral,
+  type If,
+  type Jump,
+  type Program,
+  type Return,
+  type Statement,
+  type While,
+} from './ast.ts'
 import type { Types } from './checker.ts'
 import { CheckedInt } from './checked_int.ts'
 import { ExpressionGenerator, type CodegenLocal } from './expression_codegen.ts'
-import { IrBuilder } from './ir_builder.ts'
-import { emit_release, ir_type } from './lerta_ir.ts'
+import { IrBuilder, IrModule } from './ir_builder.ts'
+import { emit_release, function_symbol, ir_return_type, ir_type } from './lerta_ir.ts'
 import { Scopes, type Scope } from './scopes.ts'
-import { is_reference_type } from './types.ts'
+import { int_type, is_reference_type, type Type } from './types.ts'
 
-// Emits LLVM IR for a checked program: its top-level code becomes lerta_main.
-export const generate = (program: Program, types: Types): string =>
-  new Generator(types).generate(program)
+type FunctionDeclaration = Declaration & { value: FunctionLiteral }
+
+const is_function_declaration = (statement: Statement): statement is FunctionDeclaration =>
+  statement.kind === 'declaration' && statement.value.kind === 'function'
+
+// Emits LLVM IR for a checked program: its top-level code becomes lerta_main, and each top-level
+// function a function of its own.
+export const generate = (program: Program, types: Types): string => {
+  const module = new IrModule()
+  const functions = program.filter(is_function_declaration)
+  const function_names = new Set(functions.map((declaration) => declaration.name.name))
+  const new_generator = () => new FunctionGenerator(module, types, function_names)
+  new_generator().generate_main(program.filter((statement) => !is_function_declaration(statement)))
+  for (const declaration of functions) {
+    new_generator().generate_function(declaration.name.name, declaration.value)
+  }
+  return module.render()
+}
 
 // Where `break` and `continue` jump, and how many scopes enclose the loop.
 type Loop = { break_label: string; continue_label: string; scope_depth: number }
 
-class Generator {
+class FunctionGenerator {
   private readonly types: Types
-  private readonly ir = new IrBuilder()
+  private readonly ir: IrBuilder
   private readonly locals = new Scopes<CodegenLocal>()
-  private readonly checked_int = new CheckedInt(this.ir)
+  private readonly checked_int: CheckedInt
   private readonly expressions: ExpressionGenerator
   private readonly loops: Loop[] = []
 
-  constructor(types: Types) {
+  constructor(module: IrModule, types: Types, function_names: Set<string>) {
     this.types = types
-    this.expressions = new ExpressionGenerator(this.ir, types, this.checked_int, this.locals)
+    this.ir = new IrBuilder(module)
+    this.checked_int = new CheckedInt(this.ir)
+    this.expressions = new ExpressionGenerator(
+      this.ir,
+      types,
+      this.checked_int,
+      this.locals,
+      function_names,
+    )
   }
 
-  generate(program: Program): string {
-    this.generate_block(program)
+  generate_main(statements: Statement[]): void {
+    this.generate_block(statements)
     this.ir.emit('ret void')
+    this.finish('void @lerta_main()')
+  }
+
+  // Parameters are borrowed SSA values. The last statement, if an expression, gives the result.
+  generate_function(name: string, literal: FunctionLiteral): void {
+    const type = this.types.get(literal)!
+    if (type.kind !== 'function') throw new Error('a function literal has a function type')
+    const params = literal.params.map((param, i) => ({
+      name: param.name.name,
+      type: type.params[i],
+    }))
+    const scope = this.locals.push()
+    for (const [i, param] of params.entries()) {
+      scope.set(param.name, { kind: 'value', operand: `%p${i}`, type: param.type })
+    }
+    const last = literal.body.at(-1)
+    for (const statement of literal.body.slice(0, -1)) this.generate_statement(statement)
+    if (last !== undefined && is_expression(last) && type.result.kind !== 'void') {
+      this.emit_return(type.result, this.expressions.generate(last))
+    } else {
+      if (last !== undefined) this.generate_statement(last)
+      if (type.result.kind === 'void') this.emit_return(type.result, '')
+      else this.ir.emit('unreachable')
+    }
+    this.locals.pop()
+    const param_list = params.map((param, i) => `${ir_type(param.type)} %p${i}`).join(', ')
+    this.finish(`${ir_return_type(type.result)} ${function_symbol(name)}(${param_list})`)
+  }
+
+  private finish(signature: string): void {
     this.checked_int.emit_throw_blocks()
-    return this.ir.render('void @lerta_main()')
+    this.ir.finish(signature)
+  }
+
+  // Releases every scope of the function before returning the owned value.
+  private emit_return(type: Type, value: string): void {
+    for (const scope of this.locals.inner_scopes(0)) this.release_scope(scope)
+    this.ir.emit(type.kind === 'void' ? 'ret void' : `ret ${ir_type(type)} ${value}`)
+  }
+
+  private generate_return(return_statement: Return): void {
+    const { value } = return_statement
+    const type = value === undefined ? undefined : this.types.get(value)!
+    const operand = value === undefined ? '' : this.expressions.generate(value)
+    this.emit_return(type ?? { kind: 'void' }, operand)
+    this.ir.start_block(this.ir.fresh_label('unreachable'))
   }
 
   // A block is a scope: the references held by its locals are released at its end.
@@ -66,6 +145,8 @@ class Generator {
         return this.generate_declaration(statement)
       case 'assignment':
         return this.generate_assignment(statement)
+      case 'return':
+        return this.generate_return(statement)
       case 'break':
       case 'continue':
         return this.generate_jump(statement)
@@ -157,7 +238,7 @@ class Generator {
 
     this.ir.start_block(body_label)
     this.generate_loop_body(for_statement.body, exit_label, latch_label, (scope) =>
-      scope.set(variable.name, { kind: 'value', operand: current }),
+      scope.set(variable.name, { kind: 'value', operand: current, type: int_type }),
     )
     this.ir.emit(`br label %${latch_label}`)
 

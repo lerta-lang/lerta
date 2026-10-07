@@ -20,7 +20,7 @@ Source files, comments, identifiers, indentation, integer literals and `'...'` s
   - `const` only makes the binding immutable. Immutability of the contents is handled by types.
   - A type annotation is required only when the initial value does not determine the type, such as `nil` or an empty `[]` (`var x: Node | nil = nil`, `const xs: Array<Int> = []`).
   - For `var x: Type | nil` the initial value may be omitted; it defaults to nil.
-- There is no function declaration (`def`). Only the form `const f = (x) -> ...`.
+- There is no function declaration (`def`). Only the form `const f = (x) -> ...` (top-level functions are implemented: see [the reference](../reference/functions.md)).
   - With no parameters, `()` may be omitted (`const f = -> ...`). The call `f()` cannot omit them.
   - Variadic parameters are `xs...`. Default parameter values are undecided.
 - Destructuring `const { a, b } = obj` is supported.

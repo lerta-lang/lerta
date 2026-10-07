@@ -27,6 +27,19 @@ export type Binary = Position & {
 // `start...end`: the integers from start up to, but not including, end.
 export type Range = Position & { kind: 'range'; start: Expression; end: Expression }
 
+// A type written in the source, such as `Int` in a parameter.
+export type TypeName = Position & { kind: 'type_name'; name: string }
+
+export type Parameter = { name: Identifier; type: TypeName }
+
+// `(x: Int): Int -> body`. The body's last expression is the return value.
+export type FunctionLiteral = Position & {
+  kind: 'function'
+  params: Parameter[]
+  return_type: TypeName | undefined
+  body: Statement[]
+}
+
 // `case` without a subject: the first arm whose condition is true gives the value.
 export type CaseArm = { condition: Expression; value: Expression }
 export type Case = Position & { kind: 'case'; arms: CaseArm[]; otherwise: Expression }
@@ -42,6 +55,7 @@ export type Expression =
   | Binary
   | Range
   | Case
+  | FunctionLiteral
 
 export type For = Position & {
   kind: 'for'
@@ -79,6 +93,22 @@ export type While = Position & { kind: 'while'; condition: Expression; body: Sta
 
 export type Jump = Position & { kind: 'break' | 'continue' }
 
-export type Statement = Expression | Declaration | Assignment | If | While | For | Jump
+export type Return = Position & { kind: 'return'; value: Expression | undefined }
+
+export type Statement = Expression | Declaration | Assignment | If | While | For | Jump | Return
 
 export type Program = Statement[]
+
+const statement_only_kinds = [
+  'declaration',
+  'assignment',
+  'if',
+  'while',
+  'for',
+  'break',
+  'continue',
+  'return',
+]
+
+export const is_expression = (statement: Statement): statement is Expression =>
+  !statement_only_kinds.includes(statement.kind)

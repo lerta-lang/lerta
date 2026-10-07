@@ -11,6 +11,7 @@ import {
 import { builtin_methods, builtins } from './builtins.ts'
 import type { Types } from './checker.ts'
 import { CompileError } from './errors.ts'
+import type { Functions } from './functions.ts'
 import type { Scopes } from './scopes.ts'
 import {
   bool_type,
@@ -35,10 +36,12 @@ export type CheckerLocal = {
 export class ExpressionChecker {
   private readonly types: Types
   private readonly scopes: Scopes<CheckerLocal>
+  private readonly functions: Functions
 
-  constructor(types: Types, scopes: Scopes<CheckerLocal>) {
+  constructor(types: Types, scopes: Scopes<CheckerLocal>, functions: Functions) {
     this.types = types
     this.scopes = scopes
+    this.functions = functions
   }
 
   type_of(expression: Expression): Type {
@@ -69,6 +72,10 @@ export class ExpressionChecker {
         const message = `a method must be called: write \`${expression.name.name}()\``
         throw new CompileError(message, expression.name.line, expression.name.column)
       }
+      case 'function': {
+        const message = 'a function can only be the value of a top-level const so far'
+        throw new CompileError(message, expression.line, expression.column)
+      }
       case 'range':
         throw new CompileError(
           "a range can only be used after 'in' of a 'for'",
@@ -84,6 +91,8 @@ export class ExpressionChecker {
       local.used = true
       return local.type
     }
+    const function_type = this.functions.type_of(identifier.name, identifier)
+    if (function_type !== undefined) return function_type
     const builtin = builtins.get(identifier.name)
     if (builtin === undefined) {
       const message = `undefined name '${identifier.name}'`

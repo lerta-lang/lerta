@@ -1,17 +1,30 @@
-import type {
-  Assignment,
-  Declaration,
-  Expression,
-  For,
-  If,
-  Program,
-  Statement,
-  While,
+import {
+  is_expression,
+  type Assignment,
+  type Declaration,
+  type Expression,
+  type For,
+  type FunctionLiteral,
+  type If,
+  type Position,
+  type Program,
+  type Return,
+  type Statement,
+  type While,
 } from './ast.ts'
 import { CompileError, CompileWarning } from './errors.ts'
 import { ExpressionChecker, type CheckerLocal } from './expression_checker.ts'
+import { Functions, parameter_types, type FunctionEntry } from './functions.ts'
 import { Scopes } from './scopes.ts'
-import { bool_type, format_type, int_type, type Type } from './types.ts'
+import {
+  bool_type,
+  format_type,
+  int_type,
+  is_assignable,
+  same_type,
+  void_type,
+  type Type,
+} from './types.ts'
 
 // The type of every expression in a checked program.
 export type Types = Map<Expression, Type>
@@ -20,29 +33,142 @@ export type Types = Map<Expression, Type>
 const in_source_order = (warnings: CompileWarning[]): CompileWarning[] =>
   warnings.toSorted((a, b) => a.line - b.line || a.column - b.column)
 
+// What all the checkers of one program share.
+type Shared = { types: Types; warnings: CompileWarning[]; functions: Functions }
+
+// The function whose body is being checked: its written return type, or the one being inferred.
+type FunctionContext = { annotated: Type | undefined; inferred: Type | undefined }
+
 export const check = (program: Program): { types: Types; warnings: CompileWarning[] } => {
-  const checker = new Checker()
+  const types: Types = new Map()
+  const warnings: CompileWarning[] = []
+  const functions: Functions = new Functions((entry) => check_function(shared, entry))
+  const shared: Shared = { types, warnings, functions }
   try {
-    checker.check_block(program)
+    add_top_level_functions(program, functions)
+    new Checker(shared, undefined).check_block(program)
+    functions.check_all()
   } catch (error) {
-    if (error instanceof CompileError) error.warnings = in_source_order(checker.warnings)
+    if (error instanceof CompileError) error.warnings = in_source_order(warnings)
     throw error
   }
-  return { types: checker.types, warnings: in_source_order(checker.warnings) }
+  return { types, warnings: in_source_order(warnings) }
+}
+
+const is_function_declaration = (statement: Statement): statement is Declaration =>
+  statement.kind === 'declaration' && statement.value.kind === 'function'
+
+const add_top_level_functions = (program: Program, functions: Functions): void => {
+  for (const statement of program.filter(is_function_declaration)) {
+    if (statement.mutable) {
+      const message = 'a function must be declared with const'
+      throw new CompileError(message, statement.line, statement.column)
+    }
+    functions.add(statement.name, statement.value as FunctionLiteral)
+  }
+}
+
+const check_function = (shared: Shared, entry: FunctionEntry): void => {
+  const { literal } = entry
+  const params = parameter_types(literal)
+  const context: FunctionContext = {
+    annotated: entry.type?.kind === 'function' ? entry.type.result : undefined,
+    inferred: undefined,
+  }
+  new Checker(shared, context).check_function_body(literal, params)
+  entry.type ??= { kind: 'function', params, result: context.inferred ?? void_type }
+  shared.types.set(literal, entry.type)
 }
 
 class Checker {
-  readonly types: Types = new Map()
-  readonly warnings: CompileWarning[] = []
+  private readonly types: Types
+  private readonly warnings: CompileWarning[]
+  private readonly functions: Functions
+  private readonly context: FunctionContext | undefined
   private readonly scopes = new Scopes<CheckerLocal>()
-  private readonly expressions = new ExpressionChecker(this.types, this.scopes)
+  private readonly expressions: ExpressionChecker
   private loop_depth = 0
 
-  // A block is a scope; `define` declares the names that belong to it besides its statements.
-  check_block(statements: Statement[], define = () => {}): void {
+  constructor(shared: Shared, context: FunctionContext | undefined) {
+    this.types = shared.types
+    this.warnings = shared.warnings
+    this.functions = shared.functions
+    this.context = context
+    this.expressions = new ExpressionChecker(this.types, this.scopes, this.functions)
+  }
+
+  // The parameters are borrowed locals. The last statement gives the return value.
+  check_function_body(literal: FunctionLiteral, params: Type[]): void {
+    const define_params = () =>
+      literal.params.forEach((param, i) =>
+        this.define_local({
+          identifier: param.name,
+          type: params[i],
+          mutable: false,
+          declared: false,
+          used: false,
+        }),
+      )
+    const body = literal.body
+    const last = body.at(-1)
+    this.check_block(body.slice(0, -1), define_params, () => {
+      if (last !== undefined) this.check_last_statement(last)
+    })
+  }
+
+  // A function with a result must end with its value or a `return`. This is decided by the last
+  // statement alone, not by whether the end can be reached.
+  private check_last_statement(statement: Statement): void {
+    const context = this.context!
+    let gives_value = false
+    if (is_expression(statement)) {
+      const type = this.expressions.type_of(statement)
+      gives_value = type.kind !== 'void' && context.annotated?.kind !== 'void'
+      if (gives_value) this.record_result(type, statement)
+      else this.check_discarded(statement, type)
+    } else {
+      this.check_statement(statement)
+    }
+    const result = context.annotated ?? context.inferred ?? void_type
+    if (result.kind !== 'void' && !gives_value && statement.kind !== 'return') {
+      const message = `the function must end with its return value of type ${format_type(result)} or a return`
+      throw new CompileError(message, statement.line, statement.column)
+    }
+  }
+
+  // A return value must fit the written return type, or agree with the others when inferred.
+  private record_result(type: Type, at: Position): void {
+    const context = this.context!
+    const expected = context.annotated ?? context.inferred
+    if (expected === undefined) {
+      context.inferred = type
+      return
+    }
+    if (
+      !(context.annotated === undefined ? same_type(type, expected) : is_assignable(type, expected))
+    ) {
+      const message = `expected a return value of type ${format_type(expected)}, got ${format_type(type)}`
+      throw new CompileError(message, at.line, at.column)
+    }
+  }
+
+  private check_return(return_statement: Return): void {
+    if (this.context === undefined) {
+      const message = "'return' outside a function"
+      throw new CompileError(message, return_statement.line, return_statement.column)
+    }
+    const { value } = return_statement
+    const type = value === undefined ? void_type : this.expressions.type_of(value)
+    this.record_result(type, value ?? return_statement)
+  }
+
+  // A block is a scope; `define` declares the names that belong to it besides its statements, and
+  // `finish` checks more before the scope ends.
+  check_block(statements: Statement[], define = () => {}, finish = () => {}): void {
     this.scopes.push()
     define()
     for (const statement of statements) this.check_statement(statement)
+    finish()
     // A compile error stops checking for good, so the scope needs no cleanup on the way out.
     for (const local of this.scopes.pop().values()) this.warn_if_unused(local)
   }
@@ -68,6 +194,8 @@ class Checker {
         return this.check_declaration(statement)
       case 'assignment':
         return this.check_assignment(statement)
+      case 'return':
+        return this.check_return(statement)
       case 'break':
       case 'continue':
         if (this.loop_depth === 0) {
@@ -91,7 +219,13 @@ class Checker {
     this.check_block(if_statement.else_body)
   }
 
+  // A top-level function was added to `functions` before checking started.
   private check_declaration(declaration: Declaration): void {
+    if (declaration.value.kind === 'function') {
+      if (this.context === undefined && this.scopes.depth === 1) return
+      const message = 'a function can only be declared at the top level so far'
+      throw new CompileError(message, declaration.line, declaration.column)
+    }
     const type = this.expressions.type_of(declaration.value)
     if (type.kind === 'void' || type.kind === 'function') {
       const message = `cannot store a value of type ${format_type(type)}`
@@ -150,25 +284,37 @@ class Checker {
   }
 
   // Shadowing a builtin is silent, so that new builtins do not affect existing code. Shadowing a
-  // local name is a warning, unless the name starts with `_` to show that it is intended.
+  // local name or a top-level function is a warning, unless the name starts with `_` to show that
+  // it is intended.
   private define_local(local: CheckerLocal): void {
     const { identifier, type } = local
     const { name, line, column } = identifier
+    const is_top_level = this.context === undefined && this.scopes.depth === 1
+    if (is_top_level && this.functions.has(name)) {
+      throw new CompileError(`'${name}' is already defined`, line, column)
+    }
     const definition = this.scopes.define(name, local)
     if (definition === 'redefined') {
       throw new CompileError(`'${name}' is already defined in this scope`, line, column)
     }
-    if (definition === 'shadowing' && !name.startsWith('_')) {
-      this.warnings.push(
-        new CompileWarning(`'${name}' shadows a name in an outer scope`, line, column),
-      )
+    const shadowed =
+      definition === 'shadowing'
+        ? 'a name in an outer scope'
+        : this.functions.has(name)
+          ? 'a top-level function'
+          : undefined
+    if (shadowed !== undefined && !name.startsWith('_')) {
+      this.warnings.push(new CompileWarning(`'${name}' shadows ${shadowed}`, line, column))
     }
     this.types.set(identifier, type)
   }
 
-  // See the rules for discarded values in docs/reference/errors.md.
   private check_expression_statement(statement: Expression): void {
-    const type = this.expressions.type_of(statement)
+    this.check_discarded(statement, this.expressions.type_of(statement))
+  }
+
+  // See the rules for discarded values in docs/reference/errors.md.
+  private check_discarded(statement: Expression, type: Type): void {
     if (statement.kind === 'call' || type.kind === 'void') return
     if (type.kind === 'function' && statement.kind === 'identifier') {
       const message = `function value is unused; to call it, write \`${statement.name}()\``

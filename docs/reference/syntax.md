@@ -41,4 +41,4 @@ From weakest: `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` 
 
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`).
 - Comparisons cannot be chained: `a < b < c` is a syntax error; use parentheses.
-- `true` `false` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `case` `when` `then` are keywords and cannot be used as names.
+- `true` `false` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `return` `case` `when` `then` are keywords and cannot be used as names.

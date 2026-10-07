@@ -5,8 +5,12 @@ import {
   type CaseArm,
   type ComparisonOperator,
   type Expression,
+  type FunctionLiteral,
   type Identifier,
+  type Parameter,
   type Position,
+  type Statement,
+  type TypeName,
 } from './ast.ts'
 import { CompileError } from './errors.ts'
 import { TokenStream } from './token_stream.ts'
@@ -20,12 +24,21 @@ const arithmetic_precedence: ArithmeticOperator[][] = [
   ['*', '/', '%'],
 ]
 
+// Function bodies are statements, which the statement parser reads.
+export type BodyParser = {
+  parse_block(): Statement[]
+  parse_simple_statement(): Statement
+}
+
 // Expressions, from the weakest operators down to primaries such as literals and `case`.
 export class ExpressionParser {
   private readonly tokens: TokenStream
 
-  constructor(tokens: TokenStream) {
+  private readonly bodies: BodyParser
+
+  constructor(tokens: TokenStream, bodies: BodyParser) {
     this.tokens = tokens
+    this.bodies = bodies
   }
 
   parse_expression(): Expression {
@@ -125,6 +138,46 @@ export class ExpressionParser {
     return { kind: 'identifier', name: token.text, line: token.line, column: token.column }
   }
 
+  // `(` starts a function literal when its closing `)` is followed by `:` or `->`.
+  private starts_function_literal(): boolean {
+    if (this.tokens.peek().kind === '->') return true
+    if (this.tokens.peek().kind !== '(') return false
+    let depth = 0
+    for (let offset = 0; ; offset++) {
+      const kind = this.tokens.peek(offset).kind
+      if (kind === '(') depth++
+      if (kind === ')') depth--
+      if (depth === 0) return [':', '->'].includes(this.tokens.peek(offset + 1).kind)
+      if (kind === 'newline' || kind === 'eof') return false
+    }
+  }
+
+  // `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted.
+  private parse_function_literal(): FunctionLiteral {
+    const token = this.tokens.peek()
+    const params: Parameter[] = []
+    if (this.tokens.accept('(') && !this.tokens.accept(')')) {
+      do {
+        const name = this.parse_identifier()
+        this.tokens.expect(':', "':'")
+        params.push({ name, type: this.parse_type_name() })
+      } while (this.tokens.accept(','))
+      this.tokens.expect(')', "')'")
+    }
+    const return_type = this.tokens.accept(':') ? this.parse_type_name() : undefined
+    this.tokens.expect('->', "'->'")
+    const body =
+      this.tokens.peek().kind === 'newline'
+        ? this.bodies.parse_block()
+        : [this.bodies.parse_simple_statement()]
+    return { kind: 'function', params, return_type, body, line: token.line, column: token.column }
+  }
+
+  private parse_type_name(): TypeName {
+    const { name, line, column } = this.parse_identifier()
+    return { kind: 'type_name', name, line, column }
+  }
+
   // Calls `f(x)` and member accesses `x.name`, written without a space before `(` or `.`.
   private parse_postfix(primary: Expression): Expression {
     let expression = primary
@@ -156,6 +209,7 @@ export class ExpressionParser {
   }
 
   parse_primary(): Expression {
+    if (this.starts_function_literal()) return this.parse_function_literal()
     const token = this.tokens.next()
     const position = { line: token.line, column: token.column }
     if (token.kind === 'identifier') return { kind: 'identifier', name: token.text, ...position }

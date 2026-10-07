@@ -1,14 +1,8 @@
-// Accumulates the text of an LLVM IR module with a single function. It knows
-// IR syntax only, not Lerta semantics.
-export class IrBuilder {
+// Accumulates the text of an LLVM IR module. It knows IR syntax only, not Lerta semantics.
+export class IrModule {
   private readonly globals: string[] = []
   private readonly declarations = new Map<string, string>()
-  private readonly body: string[] = []
-  // Stack slots go first in the entry block, where LLVM promotes them to registers.
-  private readonly stack_slots: string[] = []
-  private register_count = 0
-  private label_count = 0
-  private current_label = 'entry'
+  private readonly functions: string[] = []
 
   // Declaring the same symbol again with the same text is harmless.
   declare(symbol: string, declaration: string): void {
@@ -24,6 +18,37 @@ export class IrBuilder {
     const name = `@${prefix}.${this.globals.length}`
     this.globals.push(`${name} = ${definition}`)
     return name
+  }
+
+  add_function(definition: string): void {
+    this.functions.push(definition)
+  }
+
+  render(): string {
+    return [...this.globals, ...this.declarations.values(), ...this.functions].join('\n') + '\n'
+  }
+}
+
+// Accumulates the body of one function of a module.
+export class IrBuilder {
+  private readonly module: IrModule
+  private readonly body: string[] = []
+  // Stack slots go first in the entry block, where LLVM promotes them to registers.
+  private readonly stack_slots: string[] = []
+  private register_count = 0
+  private label_count = 0
+  private current_label = 'entry'
+
+  constructor(module: IrModule) {
+    this.module = module
+  }
+
+  declare(symbol: string, declaration: string): void {
+    this.module.declare(symbol, declaration)
+  }
+
+  global(prefix: string, definition: string): string {
+    return this.module.global(prefix, definition)
   }
 
   // Emits `%r<n> = <value>` and returns the register.
@@ -67,15 +92,9 @@ export class IrBuilder {
     return this.current_label
   }
 
-  // The module with the function `define <signature>` holding everything emitted.
-  render(signature: string): string {
-    const function_lines = [
-      `define ${signature} {`,
-      'entry:',
-      ...this.stack_slots,
-      ...this.body,
-      '}',
-    ]
-    return [...this.globals, ...this.declarations.values(), ...function_lines].join('\n') + '\n'
+  // Adds the function `define <signature>`, holding everything emitted, to the module.
+  finish(signature: string): void {
+    const lines = [`define ${signature} {`, 'entry:', ...this.stack_slots, ...this.body, '}']
+    this.module.add_function(lines.join('\n'))
   }
 }

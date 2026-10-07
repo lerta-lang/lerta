@@ -15,7 +15,7 @@ export type TokenKind =
 
 const keywords = [
   ...['true', 'false', 'and', 'or', 'not'],
-  ...['const', 'var', 'if', 'else', 'while', 'for', 'in', 'break', 'continue'],
+  ...['const', 'var', 'if', 'else', 'while', 'for', 'in', 'break', 'continue', 'return'],
   ...['case', 'when', 'then'],
 ] as const
 type Keyword = (typeof keywords)[number]
@@ -23,8 +23,8 @@ type Keyword = (typeof keywords)[number]
 // Longer punctuations come first so that `<=` is not read as `<` and `=`.
 const punctuations = [
   '...',
-  ...['==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%='],
-  ...['(', ')', ',', '.', '+', '-', '*', '/', '%', '<', '>', '='],
+  ...['==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '->'],
+  ...['(', ')', ',', '.', ':', '+', '-', '*', '/', '%', '<', '>', '='],
 ] as const
 type Punctuation = (typeof punctuations)[number]
 

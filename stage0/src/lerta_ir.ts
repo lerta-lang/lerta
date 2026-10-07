@@ -17,6 +17,12 @@ export const ir_type = (type: Type): string => {
   }
 }
 
+export const ir_return_type = (type: Type): string =>
+  type.kind === 'void' ? 'void' : ir_type(type)
+
+// The symbol of a top-level function; the prefix keeps it apart from the runtime's C symbols.
+export const function_symbol = (name: string): string => `@lerta.fn.${name}`
+
 // A C `bool` parameter expects its argument zero-extended.
 export const ir_param_type = (type: Type): string =>
   type.kind === 'Bool' ? 'i1 zeroext' : ir_type(type)
