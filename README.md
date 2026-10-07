@@ -48,6 +48,12 @@ Requirements: Node.js, pnpm, `clang` (LLVM).
 ```
 cd stage0
 pnpm install
-pnpm build
+pnpm check   # type check
 pnpm test
+```
+
+stage0 runs its TypeScript directly with Node.js (22.18 or later), so there is no build step. To compile a program:
+
+```
+node stage0/src/main.ts build tests/empty.lerta -o empty
 ```
