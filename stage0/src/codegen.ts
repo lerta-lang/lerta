@@ -1,23 +1,21 @@
+// Generates the functions of a program: blocks, declarations, assignments, returns and
+// constructors; ControlFlowGenerator generates control flow.
 import {
   is_expression,
   type Assignment,
   type AssignmentOperator,
-  type Condition,
   type Declaration,
-  type For,
   type FunctionLiteral,
-  type If,
   type Index,
-  type Jump,
   type Member,
   type Program,
   type Return,
   type Statement,
-  type While,
 } from './ast.ts'
 import type { Checked, Types } from './checker.ts'
-import { emit_get, emit_length, emit_set } from './array_codegen.ts'
+import { emit_get, emit_set } from './array_codegen.ts'
 import { CheckedInt } from './checked_int.ts'
+import { ControlFlowGenerator } from './control_flow_codegen.ts'
 import { ThrowBlocks } from './throw_blocks.ts'
 import { ExpressionGenerator, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder, IrModule } from './ir_builder.ts'
@@ -32,9 +30,8 @@ import {
 } from './lerta_ir.ts'
 import { define_object, emit_allocate, emit_field_pointer } from './object_codegen.ts'
 import type { FieldInfo, ObjectInfo, ObjectTypes } from './object_types.ts'
-import { emit_is_present, emit_unwrap } from './optional_codegen.ts'
 import { Scopes, type Scope } from './scopes.ts'
-import { int_type, is_reference_type, type Type } from './types.ts'
+import { is_reference_type, type Type } from './types.ts'
 
 type FunctionDeclaration = Declaration & { value: FunctionLiteral }
 
@@ -68,10 +65,7 @@ export const generate = (program: Program, checked: CheckedTypes): string => {
 
 type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects'>
 
-// Where `break` and `continue` jump, and how many scopes enclose the loop.
-type Loop = { break_label: string; continue_label: string; scope_depth: number }
-
-class FunctionGenerator {
+export class FunctionGenerator {
   private readonly types: Types
   private readonly objects: ObjectTypes
   private readonly ir: IrBuilder
@@ -79,7 +73,7 @@ class FunctionGenerator {
   private readonly throws: ThrowBlocks
   private readonly checked_int: CheckedInt
   private readonly expressions: ExpressionGenerator
-  private readonly loops: Loop[] = []
+  private readonly control_flow: ControlFlowGenerator
 
   constructor(module: IrModule, checked: CheckedTypes, function_names: Set<string>) {
     this.types = checked.types
@@ -94,6 +88,13 @@ class FunctionGenerator {
       this.checked_int,
       this.locals,
       function_names,
+    )
+    this.control_flow = new ControlFlowGenerator(
+      this,
+      this.ir,
+      this.types,
+      this.locals,
+      this.expressions,
     )
   }
 
@@ -182,10 +183,7 @@ class FunctionGenerator {
   }
 
   // A block is a scope: the references held by its locals are released at its end.
-  private generate_block(
-    statements: Statement[],
-    define = (_scope: Scope<CodegenLocal>) => {},
-  ): void {
+  generate_block(statements: Statement[], define = (_scope: Scope<CodegenLocal>) => {}): void {
     const scope = this.locals.push()
     define(scope)
     for (const statement of statements) this.generate_statement(statement)
@@ -193,7 +191,7 @@ class FunctionGenerator {
     this.locals.pop()
   }
 
-  private release_scope(scope: Scope<CodegenLocal>): void {
+  release_scope(scope: Scope<CodegenLocal>): void {
     for (const local of scope.values()) {
       if (local.kind === 'slot' && is_reference_type(local.type)) {
         emit_release(this.ir, this.ir.assign(`load ptr, ptr ${local.pointer}`))
@@ -204,11 +202,11 @@ class FunctionGenerator {
   private generate_statement(statement: Statement): void {
     switch (statement.kind) {
       case 'for':
-        return this.generate_for(statement)
+        return this.control_flow.generate_for(statement)
       case 'while':
-        return this.generate_while(statement)
+        return this.control_flow.generate_while(statement)
       case 'if':
-        return this.generate_if(statement)
+        return this.control_flow.generate_if(statement)
       case 'declaration':
         return this.generate_declaration(statement)
       case 'assignment':
@@ -217,7 +215,7 @@ class FunctionGenerator {
         return this.generate_return(statement)
       case 'break':
       case 'continue':
-        return this.generate_jump(statement)
+        return this.control_flow.generate_jump(statement)
       case 'type_declaration':
         return
       default:
@@ -231,9 +229,7 @@ class FunctionGenerator {
   private generate_declaration(declaration: Declaration): void {
     const type = this.types.get(declaration.name)!
     const value = this.expressions.generate(declaration.value)
-    const pointer = this.ir.alloca(ir_type(type))
-    this.ir.emit(`store ${ir_type(type)} ${value}, ptr ${pointer}`)
-    this.locals.define(declaration.name.name, { kind: 'slot', pointer, type })
+    this.locals.define(declaration.name.name, this.store_in_slot(value, type))
   }
 
   // The new value is stored before the old one is released, which is safe even if they are the
@@ -304,150 +300,9 @@ class FunctionGenerator {
     return this.checked_int.apply(operator[0] as '+' | '-' | '*' | '/' | '%', old, value, type)
   }
 
-  private generate_if(if_statement: If): void {
-    const { test, define } = this.generate_condition(if_statement.condition)
-    const then_label = this.ir.fresh_label('if.then')
-    const else_label = this.ir.fresh_label('if.else')
-    const end_label = this.ir.fresh_label('if.end')
-    this.ir.emit(`br i1 ${test}, label %${then_label}, label %${else_label}`)
-    this.ir.start_block(then_label)
-    this.generate_block(if_statement.then_body, define)
-    this.ir.emit(`br label %${end_label}`)
-    this.ir.start_block(else_label)
-    this.generate_block(if_statement.else_body)
-    this.ir.emit(`br label %${end_label}`)
-    this.ir.start_block(end_label)
-  }
-
-  // The test of a condition, and what it defines in the body: for `const name = value`, the value
-  // without nil, which the body's scope owns.
-  private generate_condition(condition: Condition): {
-    test: string
-    define: (scope: Scope<CodegenLocal>) => void
-  } {
-    if (condition.kind !== 'binding') {
-      return { test: this.expressions.generate_condition(condition), define: () => {} }
-    }
-    const value = this.expressions.generate(condition.value)
-    const type = this.types.get(condition.value)!
-    if (type.kind !== 'Optional') throw new Error('a binding has an optional value')
-    return {
-      test: emit_is_present(this.ir, value, type),
-      define: (scope) =>
-        scope.set(
-          condition.name.name,
-          this.store_in_slot(emit_unwrap(this.ir, value, type), type.inner),
-        ),
-    }
-  }
-
-  private generate_while(while_statement: While): void {
-    const header_label = this.ir.fresh_label('while.header')
-    const body_label = this.ir.fresh_label('while.body')
-    const exit_label = this.ir.fresh_label('while.exit')
-    this.ir.emit(`br label %${header_label}`)
-    this.ir.start_block(header_label)
-    const { test, define } = this.generate_condition(while_statement.condition)
-    this.ir.emit(`br i1 ${test}, label %${body_label}, label %${exit_label}`)
-    this.ir.start_block(body_label)
-    this.generate_loop_body(while_statement.body, exit_label, header_label, define)
-    this.ir.emit(`br label %${header_label}`)
-    this.ir.start_block(exit_label)
-  }
-
-  // A range's bounds are evaluated once. An array is held for the whole loop in a scope of its
-  // own, so a `return` from the body releases it too; its length is read each round.
-  private generate_for(for_statement: For): void {
-    const { iterable, variable, body } = for_statement
-    if (iterable.kind === 'range') {
-      const start = this.expressions.generate(iterable.start)
-      const end = this.expressions.generate(iterable.end)
-      this.generate_counting_loop(
-        start,
-        () => end,
-        body,
-        (scope, current) =>
-          scope.set(variable.name, { kind: 'value', operand: current, type: int_type }),
-      )
-      return
-    }
-    const type = this.types.get(iterable)!
-    if (type.kind !== 'Array') throw new Error('only ranges and arrays can be iterated')
-    const array_scope = this.locals.push()
-    const array = this.expressions.generate(iterable)
-    array_scope.set(' iterated array', this.store_in_slot(array, type))
-    this.generate_counting_loop(
-      '0',
-      () => emit_length(this.ir, array),
-      body,
-      (scope, current) => {
-        const item = emit_get(this.ir, array, current, type.element)
-        scope.set(variable.name, this.store_in_slot(item, type.element))
-      },
-    )
-    this.release_scope(array_scope)
-    this.locals.pop()
-  }
-
-  private store_in_slot(value: string, type: Type): CodegenLocal {
+  store_in_slot(value: string, type: Type): CodegenLocal {
     const pointer = this.ir.alloca(ir_type(type))
     this.ir.emit(`store ${ir_type(type)} ${value}, ptr ${pointer}`)
     return { kind: 'slot', pointer, type }
-  }
-
-  // Counts from start while the counter is below the end, which is evaluated in the header. The
-  // counter is a phi in the header, incremented in the latch block; it cannot overflow there,
-  // since it is below the end.
-  private generate_counting_loop(
-    start: string,
-    end: () => string,
-    body: Statement[],
-    define: (scope: Scope<CodegenLocal>, current: string) => void,
-  ): void {
-    const preheader_label = this.ir.current_block
-    const header_label = this.ir.fresh_label('for.header')
-    const body_label = this.ir.fresh_label('for.body')
-    const latch_label = this.ir.fresh_label('for.latch')
-    const exit_label = this.ir.fresh_label('for.exit')
-    const next = this.ir.fresh_register()
-    this.ir.emit(`br label %${header_label}`)
-
-    this.ir.start_block(header_label)
-    const current = this.ir.assign(
-      `phi i64 [ ${start}, %${preheader_label} ], [ ${next}, %${latch_label} ]`,
-    )
-    const in_range = this.ir.assign(`icmp slt i64 ${current}, ${end()}`)
-    this.ir.emit(`br i1 ${in_range}, label %${body_label}, label %${exit_label}`)
-
-    this.ir.start_block(body_label)
-    this.generate_loop_body(body, exit_label, latch_label, (scope) => define(scope, current))
-    this.ir.emit(`br label %${latch_label}`)
-
-    this.ir.start_block(latch_label)
-    this.ir.assign_to(next, `add nsw i64 ${current}, 1`)
-    this.ir.emit(`br label %${header_label}`)
-
-    this.ir.start_block(exit_label)
-  }
-
-  private generate_loop_body(
-    body: Statement[],
-    break_label: string,
-    continue_label: string,
-    define?: (scope: Scope<CodegenLocal>) => void,
-  ): void {
-    this.loops.push({ break_label, continue_label, scope_depth: this.locals.depth })
-    this.generate_block(body, define)
-    this.loops.pop()
-  }
-
-  // Leaving the loop's scopes early releases their references, as their ends would. Code after the
-  // jump is unreachable but still needs a block to go in.
-  private generate_jump(jump: Jump): void {
-    const loop = this.loops.at(-1)!
-    for (const scope of this.locals.inner_scopes(loop.scope_depth)) this.release_scope(scope)
-    const target = jump.kind === 'break' ? loop.break_label : loop.continue_label
-    this.ir.emit(`br label %${target}`)
-    this.ir.start_block(this.ir.fresh_label('unreachable'))
   }
 }

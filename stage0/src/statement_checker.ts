@@ -1,6 +1,5 @@
 // Checks statements and blocks, defining the locals they declare.
 import {
-  is_expression,
   type Assignment,
   type Condition,
   type Declaration,
@@ -10,9 +9,7 @@ import {
   type Identifier,
   type Index,
   type If,
-  type Position,
   type Range,
-  type Return,
   type Statement,
   type While,
 } from './ast.ts'
@@ -21,10 +18,11 @@ import { CompileError, CompileWarning } from './errors.ts'
 import { ExpressionChecker, type CheckerLocal } from './expression_checker.ts'
 import type { Functions } from './functions.ts'
 import { ends_with_jump, narrowed_view, tested_name } from './narrowing.ts'
+import { ResultChecker } from './result_checker.ts'
 import { Scopes } from './scopes.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
-import { format_type, int_type, is_assignable, unify, void_type, type Type } from './types.ts'
+import { format_type, int_type, type Type } from './types.ts'
 
 export class StatementChecker {
   private readonly types: Types
@@ -37,6 +35,7 @@ export class StatementChecker {
   private readonly resolver: TypeResolver
   private readonly scopes = new Scopes<CheckerLocal>()
   private readonly expressions: ExpressionChecker
+  private readonly results: ResultChecker
   private loop_depth = 0
 
   constructor(shared: Shared, context: FunctionContext | undefined, self: SelfContext | undefined) {
@@ -49,6 +48,7 @@ export class StatementChecker {
     this.context = context
     this.self = self
     this.expressions = new ExpressionChecker(shared, this.scopes, self)
+    this.results = new ResultChecker(this, this.expressions, context)
   }
 
   // Each initializer sees the constructor arguments and the fields initialized before it.
@@ -83,74 +83,8 @@ export class StatementChecker {
     const body = literal.body
     const last = body.at(-1)
     this.check_block(body.slice(0, -1), define_params, () => {
-      if (last !== undefined) this.check_last_statement(last)
+      if (last !== undefined) this.results.check_last_statement(last)
     })
-  }
-
-  // A function with a result must end with its value or a `return`. This is decided by the last
-  // statement alone, not by whether the end can be reached.
-  private check_last_statement(statement: Statement): void {
-    const context = this.context!
-    let gives_value = false
-    const expects_value = context.annotated !== undefined && context.annotated.kind !== 'void'
-    if (is_expression(statement) && expects_value) {
-      this.record_result(this.type_of_result(statement), statement)
-      gives_value = true
-    } else if (is_expression(statement)) {
-      const type = this.expressions.type_of(statement)
-      gives_value = type.kind !== 'void' && context.annotated?.kind !== 'void'
-      if (gives_value) this.record_result(type, statement)
-      else this.check_discarded(statement, type)
-    } else {
-      this.check_statement(statement)
-    }
-    const result = context.annotated ?? context.inferred ?? void_type
-    if (result.kind !== 'void' && !gives_value && statement.kind !== 'return') {
-      const message = `the function must end with its return value of type ${format_type(result)} or a return`
-      throw new CompileError(message, statement.line, statement.column)
-    }
-  }
-
-  // A return value must fit the written return type, or agree with the others when inferred.
-  // A return value must fit the written return type. Without one, the values decide it: a mix of
-  // T, T? and nil gives T?. Values are converted to the return type when the function is done.
-  private record_result(type: Type, at: Expression | Return): void {
-    const context = this.context!
-    if (at.kind !== 'return') context.results.push({ value: at, type })
-    if (context.annotated !== undefined) {
-      if (is_assignable(type, context.annotated)) return
-      this.reject_result(context.annotated, type, at)
-    }
-    if (context.inferred === undefined) {
-      context.inferred = type
-      return
-    }
-    const unified = unify(context.inferred, type)
-    if (unified === undefined) this.reject_result(context.inferred, type, at)
-    context.inferred = unified
-  }
-
-  private reject_result(expected: Type, type: Type, at: Position): never {
-    const message = `expected a return value of type ${format_type(expected)}, got ${format_type(type)}`
-    throw new CompileError(message, at.line, at.column)
-  }
-
-  private check_return(return_statement: Return): void {
-    if (this.context === undefined) {
-      const message = "'return' outside a function"
-      throw new CompileError(message, return_statement.line, return_statement.column)
-    }
-    const { value } = return_statement
-    const type = value === undefined ? void_type : this.type_of_result(value)
-    this.record_result(type, value ?? return_statement)
-  }
-
-  // A written return type is a hint for the value's type, which can type `[]` and literals; the
-  // value is then checked as a return value, for a message that says so.
-  private type_of_result(value: Expression): Type {
-    const annotated = this.context!.annotated
-    const hint = annotated?.kind === 'void' ? undefined : annotated
-    return this.expressions.type_of(value, hint)
   }
 
   // A block is a scope; `define` declares the names that belong to it besides its statements, and
@@ -173,7 +107,7 @@ export class StatementChecker {
     }
   }
 
-  private check_statement(statement: Statement): void {
+  check_statement(statement: Statement): void {
     switch (statement.kind) {
       case 'for':
         return this.check_for(statement)
@@ -193,7 +127,7 @@ export class StatementChecker {
           statement.column,
         )
       case 'return':
-        return this.check_return(statement)
+        return this.results.check_return(statement)
       case 'break':
       case 'continue':
         if (this.loop_depth === 0) {
@@ -396,7 +330,7 @@ export class StatementChecker {
   }
 
   // See the rules for discarded values in docs/reference/errors.md.
-  private check_discarded(statement: Expression, type: Type): void {
+  check_discarded(statement: Expression, type: Type): void {
     if (statement.kind === 'call' || type.kind === 'void') return
     if (type.kind === 'function' && statement.kind === 'identifier') {
       const message = `function value is unused; to call it, write \`${statement.name}()\``
