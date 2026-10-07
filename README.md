@@ -29,6 +29,7 @@ Early development: the bootstrap compiler (stage0) is in progress. See `docs/roa
 | `stage0/` | Bootstrap compiler in TypeScript |
 | `runtime/` | C runtime |
 | `tests/` | Run tests: Lerta source and expected output |
+| `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
 | `docs/` | Documentation (see below) |
 
 ## Documentation
