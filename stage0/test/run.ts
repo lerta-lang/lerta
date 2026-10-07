@@ -2,10 +2,10 @@
 // <name>.out (stdout) and <name>.err (stderr: a compile error or an uncaught
 // throw). A missing file means empty output, but at least one must exist.
 // The run must fail exactly when <name>.err exists.
-//   tests/<name>.lerta     expected files next to it
+//   tests/**/<name>.lerta  expected files next to it
 //   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build } from '../src/build.ts'
@@ -27,10 +27,25 @@ type Suite = Omit<TestCase, 'label' | 'name'>
 
 const expected_extensions = ['out', 'err']
 
+const examples_expected_dir = 'tests/examples'
+
+// `dir` and its subdirectories, relative to the root, except `excluded`.
+const directory_tree = (dir: string, excluded: string): string[] => [
+  dir,
+  ...readdirSync(join(root_dir, dir))
+    .map((entry) => `${dir}/${entry}`)
+    .filter((path) => path !== excluded && statSync(join(root_dir, path)).isDirectory())
+    .flatMap((path) => directory_tree(path, excluded)),
+]
+
 const suites: Suite[] = [
-  { source_dir: 'tests', expected_dir: 'tests', extensions: expected_extensions },
+  ...directory_tree('tests', examples_expected_dir).map((dir) => ({
+    source_dir: dir,
+    expected_dir: dir,
+    extensions: expected_extensions,
+  })),
   // Examples are living documentation: they must compile and run.
-  { source_dir: 'examples', expected_dir: 'tests/examples', extensions: ['out'] },
+  { source_dir: 'examples', expected_dir: examples_expected_dir, extensions: ['out'] },
 ]
 
 const names_with_extension = (dir: string, extension: string): string[] =>
@@ -70,7 +85,8 @@ const expected_output = (test: TestCase, extension: string): string | undefined 
 
 type Outcome = { stdout: string; stderr: string; failed: boolean }
 
-// A compile error is reported as the CLI prints it.
+// A compile error is reported as the CLI prints it for a bare file name, so
+// that the expected .err does not depend on where the test directory is.
 const compile_and_run = (test: TestCase): Outcome => {
   const source_file = `${test.name}.lerta`
   const executable = join(work_dir, test.label.replaceAll('/', '_'))
