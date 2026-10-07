@@ -35,16 +35,14 @@ export class Scopes<T> {
     this.overlays.at(-1)!.set(name, local)
   }
 
-  // Returns whether the name is new, already defined in the innermost scope (and then not
-  // defined again), or shadows a name of an outer scope.
-  define(name: string, local: T): 'new' | 'redefined' | 'shadowing' {
+  // Returns false, without defining the name, if the innermost scope already has it.
+  define(name: string, local: T): boolean {
     const innermost = this.scopes.at(-1)!
-    if (innermost.has(name)) return 'redefined'
-    const is_shadowing = this.scopes.some((scope) => scope.has(name))
+    if (innermost.has(name)) return false
     innermost.set(name, local)
     // The new name replaces a narrowed view of the outer one in this scope.
     this.overlays.at(-1)!.delete(name)
-    return is_shadowing ? 'shadowing' : 'new'
+    return true
   }
 
   lookup(name: string): T | undefined {

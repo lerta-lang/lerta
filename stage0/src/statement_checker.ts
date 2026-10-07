@@ -378,9 +378,7 @@ export class StatementChecker implements BlockChecker {
     )
   }
 
-  // Shadowing a builtin is silent, so that new builtins do not affect existing code. Shadowing a
-  // local name or a top-level function is a warning, unless the name starts with `_` to show that
-  // it is intended.
+  // A local may shadow any name of an outer scope, a top-level name or a builtin.
   private define_local(local: CheckerLocal): void {
     const { identifier, type } = local
     const { name, line, column } = identifier
@@ -393,22 +391,10 @@ export class StatementChecker implements BlockChecker {
     if (is_top_level && is_taken) {
       throw new CompileError(`'${name}' is already defined`, line, column)
     }
-    const definition = this.scopes.define(name, local)
-    if (definition === 'redefined') {
+    if (!this.scopes.define(name, local)) {
       throw new CompileError(`'${name}' is already defined in this scope`, line, column)
     }
     if (is_top_level) this.top_level.define(local)
-    const shadowed =
-      definition === 'shadowing'
-        ? 'a name in an outer scope'
-        : this.functions.has(name)
-          ? 'a top-level function'
-          : this.scopes_see_top_level && this.top_level.has(name)
-            ? 'a top-level value'
-            : undefined
-    if (shadowed !== undefined && !name.startsWith('_')) {
-      this.warnings.push(new CompileWarning(`'${name}' shadows ${shadowed}`, line, column))
-    }
     this.types.set(identifier, type)
   }
 

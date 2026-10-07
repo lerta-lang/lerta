@@ -17,7 +17,6 @@ const greet = -> print 'hello'
 - Top-level functions can be used anywhere in the module, before their declaration too, so they can call each other recursively.
 - A function body sees its parameters, its own locals, the top-level functions, `const`s and `var`s of its module, and builtins. It does not see the locals of blocks around it (closures are not implemented yet), including those of a block at the top level such as an `if`.
 - A top-level value read or assigned by a function or a method before the top-level code has initialized it throws `'<name>' is used before it is initialized`. Its type must be known where it is used: if top-level code above its declaration calls a function whose return type is inferred, or constructs an object whose field type is inferred from an initializer, and that function or initializer uses the value, it is an error; move the declaration up, or write the type of the function or field.
-- A parameter or local of a function with the name of a top-level value shadows it, which is a warning (see [blocks and scopes](control-flow.md#blocks-and-scopes)).
 
 ## Types
 

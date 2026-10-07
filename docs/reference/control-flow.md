@@ -4,9 +4,7 @@
 
 - An indented block holds statements, one per line.
 - A name declared in a block (such as a loop variable) is visible only inside it. Declaring it again in the same block is an error.
-- Declaring a name that is already visible from an outer scope (shadowing) is a warning. Inside the block, the name refers to the new declaration. A name starting with `_` produces no warning, to show that the shadowing is intended.
-- A local that has the name of a top-level function shadows it, which is also a warning.
-- Builtins (standard types, interfaces and built-in functions) live outside every scope and can be shadowed without a warning, so that adding a builtin does not affect existing code. Inside `for print in 0...3`, `print` is the loop variable.
+- A declaration may have the name of one visible from an outer scope, a top-level name or a builtin (shadowing). Inside its block, the name refers to the new declaration. Builtins (standard types, interfaces and built-in functions) live outside every scope: inside `for print in 0...3`, `print` is the loop variable.
 
 ## if and while
 
