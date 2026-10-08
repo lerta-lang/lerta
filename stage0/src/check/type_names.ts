@@ -26,7 +26,7 @@ import {
   bool_type,
   int_type,
   string_type,
-  uint8_type,
+  byte_type,
   void_type,
   type Type,
 } from '../types.ts'
@@ -35,8 +35,7 @@ const simple_types = new Map<string, Type>([
   ['Int', int_type],
   ['String', string_type],
   ['Bool', bool_type],
-  ['UInt8', uint8_type],
-  ['Byte', uint8_type],
+  ['Byte', byte_type],
   ['Binary', binary_type],
 ])
 
@@ -212,7 +211,7 @@ export class TypeResolver {
     return type
   }
 
-  // An array item is 8 bytes, which cannot hold an optional Int, UInt8 or Bool.
+  // An array item is 8 bytes, which cannot hold an optional Int, Byte or Bool.
   private resolve_element(type_name: TypeName): Type {
     const type = this.resolve(type_name)
     if (type.kind === 'Optional' && !is_reference_type(type)) {

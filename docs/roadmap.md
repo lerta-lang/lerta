@@ -7,7 +7,7 @@
 ### Included
 
 - **Syntax**: `#` comments, `'...'`/`"..."` strings, indented blocks, `const`/`var`, implicit return, parenthesis-free calls (at statement start), `then`/`else` expressions, `if`/`else` statements, `case`, `while`, `for x in xs`, `break`/`continue`, `return`, postfix `if`/`while`/`for`, comprehensions (`(...)` for `Iter<T>`, `[...]` for `Array<T>`), ranges `a...b`, `case` without a subject, string interpolation, destructuring, named arguments (omitting `{}` of an anonymous struct), multi-line literals (newline separation inside brackets, bracketless blocks)
-- **Types**: `Int` (Int64), `UInt8` (with `Byte` as its alias), `Bool`, `String`, `void`, `never`, unions and narrowing, `type` aliases, `T?`, `as`, `!`, `is` tests, local inference
+- **Types**: `Int` (64-bit), `Byte` (unsigned 8-bit), `Bool`, `String`, `void`, `never`, unions and narrowing, `type` aliases, `T?`, `as`, `!`, `is` tests, local inference
 - **Data**: `class`/`struct` (no inheritance, the type body rules, `@`, named constructors, `init`, `deinit`), anonymous structs, `Map` literals, `Array<T>`, `Map<K, V>`, `Iter<T>` (**only built-in types are generic**; user-defined generic types come later), `extend`, of the generic builtin types too (`extend <T> Array<T>`)
 - **Functions**: generic top-level functions and methods of extends (monomorphized, checked per instance, with the bound `Stringable`, which is structural), first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
 - **Strings**: immutable, UTF-8, **flat only**. `Binary`, `Byte`, `s.binary`, `b.decode_utf8()`, `s.parse_int()`, `length`, `equals`, `hash`, `==`, `+` (concatenation), `join`
@@ -21,7 +21,7 @@
 
 ### Runtime C functions in stage0
 
-- In stage0 the only integer types are `Int` (64-bit) and `UInt8`, so runtime C functions are written with `int64_t` / `uint8_t`.
+- In stage0 the only integer types are `Int` (64-bit) and `Byte`, so runtime C functions are written with `int64_t` / `uint8_t`.
 
 ### Standard library layout in stage0
 

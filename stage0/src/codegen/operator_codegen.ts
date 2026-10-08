@@ -68,8 +68,8 @@ export class OperatorGenerator {
     }
     const operand_type = this.types.get(binary.left)!
     if (is_arithmetic(operator)) return this.checked_int.apply(operator, left, right, operand_type)
-    const is_byte = operand_type.kind === 'UInt8'
-    // UInt8 is ordered as unsigned.
+    const is_byte = operand_type.kind === 'Byte'
+    // Byte is ordered as unsigned.
     const predicate = comparison_predicates[operator].replace(/^s/, is_byte ? 'u' : 's')
     return this.ir.assign(`icmp ${predicate} ${ir_type(operand_type)} ${left}, ${right}`)
   }

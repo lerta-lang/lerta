@@ -46,7 +46,7 @@ for i in 0...3
 ```
 
 - `for <name> in <array>` runs its block for each item of the array, in order. The array's length is read before each round, so items pushed during the loop are visited too.
-- `for <name> in <binary>` runs its block for each byte of a [`Binary`](types.md#binary), a `UInt8`, in order.
+- `for <name> in <binary>` runs its block for each byte of a [`Binary`](types.md#binary), a `Byte`, in order.
 - `for <name> in <iter>` runs its block for each item of an [`Iter`](types.md#iter), which starts its one traversal.
 - `for <name> in <start>...<end>` runs its block for each integer from `<start>` up to, but not including, `<end>`. If `<end>` is not greater than `<start>`, the block does not run.
 - Both ends are `Int`s, evaluated once before the loop.
@@ -71,7 +71,7 @@ case c
 
 - The subject is evaluated once, and the first arm whose pattern matches is taken. An arm may list several patterns, separated by commas.
 - **Type patterns.** For a subject of a union type, a pattern names one of its types. In an arm with one pattern, a subject that is a `const`, a parameter or a loop variable is narrowed to that type. Without an `else` arm, every type of the union must be handled.
-- **Value patterns.** For a subject of type `Int`, `UInt8`, `Bool` or `String`, a pattern is a value, compared with `==`. The `else` arm is required.
+- **Value patterns.** For a subject of type `Int`, `Byte`, `Bool` or `String`, a pattern is a value, compared with `==`. The `else` arm is required.
 - The arms' values follow the same rules as below.
 
 ## case without a subject

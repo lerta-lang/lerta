@@ -46,7 +46,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 - Weak references follow Rust's `Rc` approach (a weak count is kept; while weak references remain, the memory is not returned and only the contents are destroyed).
 - Every heap object starts with a header: its reference count and a drop function, which releases what the object owns before it is freed (`runtime/lerta.h`).
 - Static objects such as string literals are made immortal (exempt from count operations).
-- nil is a null pointer for an optional reference, and `{ i1, T }` with a false flag for an optional `Int`, `UInt8` or `Bool`.
+- nil is a null pointer for an optional reference, and `{ i1, T }` with a false flag for an optional `Int`, `Byte` or `Bool`.
 - In stage0, every expression of a reference type yields an owned (+1) reference, and its consumer releases it: arguments are borrowed and released by the caller after the call, and a discarded statement value is released at once. An immortal literal is owned for free.
 
 ### Leak checking
@@ -77,7 +77,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/builtins.md#methods-of-the-builtin-types)):
 
 - **Built into the compiler**: the operations on the representation of arrays, maps and Iters, whose items are 8 bytes and retained by kind (see [memory management](#memory-management)): `length`, indexing, `push`, `pop`, `remove`, `keys`, and the Iter protocol, `has_next` and `next`; `s.binary`, which passes on the String itself; and `take`, which stops reading its source, which an Iter written in Lerta, a comprehension, cannot. It moves to Lerta once an Iter's `has_next` and `next` can be written in Lerta.
-- **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join` and `slice`; the conversion of a `UInt8` to an `Int`; and `lerta_binary_as_string`, which gives `decode_utf8` and `split` their Strings once Lerta knows the bytes are valid UTF-8.
+- **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join` and `slice`; the conversion of a `Byte` to an `Int`; and `lerta_binary_as_string`, which gives `decode_utf8` and `split` their Strings once Lerta knows the bytes are valid UTF-8.
 - The rest is Lerta: `print` writes through `stdout`, `parse_int`, `split` and the UTF-8 check of `decode_utf8` read bytes with `b[i]`, `has` reads the map, `iter` of an array and `map`, `filter` and `to_array` of an Iter are comprehensions, and `any`, `all` and `find` of an Iter are `for` loops; those of an array go through its `iter`.
 
 ## Output

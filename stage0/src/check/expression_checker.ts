@@ -103,7 +103,7 @@ export class ExpressionChecker {
 
   // `expected` is a hint: the caller still checks that the type fits.
   private compute_type(expression: Expression, expected: Type | undefined): Type {
-    const wants_byte = expected?.kind === 'UInt8'
+    const wants_byte = expected?.kind === 'Byte'
     switch (expression.kind) {
       case 'string':
         return wants_byte ? byte_literal(expression) : string_type

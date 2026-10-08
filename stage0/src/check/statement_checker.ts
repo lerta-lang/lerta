@@ -336,9 +336,9 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
         : target.kind === 'member'
           ? this.expressions.field_target(target)
           : this.check_variable_target(target)
-    const is_numeric = target_type.kind === 'Int' || target_type.kind === 'UInt8'
+    const is_numeric = target_type.kind === 'Int' || target_type.kind === 'Byte'
     if (assignment.operator !== '=' && !is_numeric) {
-      const message = `expected Int or UInt8, got ${format_type(target_type)}`
+      const message = `expected Int or Byte, got ${format_type(target_type)}`
       throw new CompileError(message, target.line, target.column)
     }
     this.expressions.expect_type(assignment.value, target_type)

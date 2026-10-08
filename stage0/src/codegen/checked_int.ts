@@ -1,4 +1,4 @@
-// Integer arithmetic. Int throws on overflow; UInt8 wraps around. Both throw on division by zero.
+// Integer arithmetic. Int throws on overflow; Byte wraps around. Both throw on division by zero.
 import type { IrBuilder } from './ir_builder.ts'
 import type { ThrowBlocks } from './throw_blocks.ts'
 import type { Type } from '../types.ts'
@@ -37,9 +37,9 @@ export class CheckedInt {
     return this.ir.assign(`${instruction} i64 ${left}, ${right}`)
   }
 
-  // An arithmetic operator applied to two Ints or two UInt8s.
+  // An arithmetic operator applied to two Ints or two Bytes.
   apply(operator: '+' | '-' | '*' | '/' | '%', left: string, right: string, type: Type): string {
-    const is_byte = type.kind === 'UInt8'
+    const is_byte = type.kind === 'Byte'
     if (operator === '/' || operator === '%') {
       return is_byte
         ? this.byte_division(operator, left, right)

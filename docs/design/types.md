@@ -32,15 +32,15 @@ These follow the Ruby approach, constrained by types.
 
 ## Numeric types
 
-`Int`, `UInt8` and their arithmetic, and the typing of literals by context, are implemented: see [the reference](../reference/types.md).
+`Int`, `Byte` and their arithmetic, and the typing of literals by context, are implemented: see [the reference](../reference/types.md).
 
 
-- `Int8/16/32/64`, `UInt8/16/32/64`, `Int` (an alias of Int64), `Float`.
-- **No implicit conversions** (`UInt8 + Int` is an error). The type of a literal is decided by context.
+- `Int` (64-bit) and `Byte` (unsigned 8-bit), and later `Int8/16/32`, `UInt16/32/64` and `Float`. The 64-bit signed integer and the unsigned 8-bit one have one name each, `Int` and `Byte`, rather than also `Int64` and `UInt8`, so that the common types have no second name to choose between.
+- **No implicit conversions** (`Byte + Int` is an error). The type of a literal is decided by context.
   - A one-byte string literal becomes a `Byte` when the expected type is `Byte` (`c >= '0'`, `"\n"` in `case c`). Without an expected type it is a `String`. Using two or more bytes as a `Byte` is an error.
 - Overflow behavior is **decided by signedness** (the Ada modular type approach).
-  - `Int`, `Int8` to `Int64`: **throw** (exception).
-  - `UInt8` to `UInt64`, `Byte`: **wraparound**.
+  - `Int`, `Int8` to `Int32`: **throw** (exception).
+  - `Byte`, `UInt16` to `UInt64`: **wraparound**.
   - Since there are no implicit conversions, both operands always have the same type, and the rule for each operation is unique. No dedicated operators like `&+` are needed.
   - For the rare case of wanting signed wraparound, use a method such as `x.wrapping_add(y)`.
   - For the convention on which integer type to use for quantities, see [the style guide](../reference/style.md).

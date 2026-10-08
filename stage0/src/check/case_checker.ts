@@ -16,7 +16,7 @@ import type { Scopes } from '../scopes.ts'
 import type { TypeResolver } from './type_names.ts'
 import { format_member, format_type, same_type, type_key, unify, type Type } from '../types.ts'
 
-const value_kinds = ['Int', 'UInt8', 'Bool', 'String']
+const value_kinds = ['Int', 'Byte', 'Bool', 'String']
 
 export class CaseChecker {
   private readonly expressions: ExpressionChecker

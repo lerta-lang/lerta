@@ -8,12 +8,12 @@
 - `+` `-` `*` and prefix `-` throw `integer overflow` when the result does not fit.
 - `/` is the quotient, truncated toward zero, and `%` is the remainder (`-7 / 2 == -3`, `-7 % 2 == -1`). Both throw `division by zero` when the divisor is 0, and `integer overflow` for the minimum value divided by `-1`.
 
-## UInt8
+## Byte
 
-- `UInt8` is an unsigned 8-bit integer; `Byte` is another name for it.
+- `Byte` is an unsigned 8-bit integer.
 - `+` `-` `*` and prefix `-` wrap around (`250 + 10` is `4`). `/` and `%` throw `division by zero` when the divisor is 0. Comparisons treat values as unsigned.
-- There are no implicit conversions: `UInt8` and `Int` cannot be mixed in one operation. `b.to_int()` converts a `UInt8` to an `Int`.
-- **The type of a literal is decided by context.** Where a `UInt8` is expected, an integer literal from 0 to 255 is a `UInt8`, and so is a string literal of one byte (`'a'`). The expected type reaches literals inside arithmetic (`c == 1 + 2`), `case` arms, array items and return values. An operand of `+`, `==`, `<` and so on whose type comes from the context is expected to have the type of the other operand, so `c >= '0'` and `'0' <= c` compare two `UInt8`s when `c` is one; likewise `[1, c]` is an `Array<UInt8>`. Without such a context, `'a'` is a `String` and `1` an `Int`.
+- There are no implicit conversions: `Byte` and `Int` cannot be mixed in one operation. `b.to_int()` converts a `Byte` to an `Int`.
+- **The type of a literal is decided by context.** Where a `Byte` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a string literal of one byte (`'a'`). The expected type reaches literals inside arithmetic (`c == 1 + 2`), `case` arms, array items and return values. An operand of `+`, `==`, `<` and so on whose type comes from the context is expected to have the type of the other operand, so `c >= '0'` and `'0' <= c` compare two `Byte`s when `c` is one; likewise `[1, c]` is an `Array<Byte>`. Without such a context, `'a'` is a `String` and `1` an `Int`.
 
 ## Bool
 
@@ -29,7 +29,7 @@
 ## Binary
 
 - `Binary` is an immutable sequence of bytes. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.decode_utf8()` goes back (see [Optional values](#optional-values)).
-- `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `UInt8`; an index outside `0 ... b.length` throws `index out of range`.
+- `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
 
@@ -47,7 +47,7 @@ if const n = '42'.parse_int()
 - `x ? fallback` is `x` without nil, or `fallback`, which has that type, if `x` is nil. The fallback is evaluated only then. `?` binds weaker than every other binary operator, and `a ? b ? c` is `a ? (b ? c)`.
 - `x == nil` and `x != nil` test an optional value.
 - An optional value can be a condition (see [control flow](control-flow.md#if-and-while)).
-- An array cannot hold optional `Int`, `UInt8` or `Bool` values yet; optional references are fine (`Array<String?>`).
+- An array cannot hold optional `Int`, `Byte` or `Bool` values yet; optional references are fine (`Array<String?>`).
 - `s.parse_int()` gives the `Int` that a `String` of decimal digits, with an optional leading `-`, stands for, or nil if it is anything else or does not fit in an `Int`.
 - `b.decode_utf8()` gives the `Binary` as a `String` if its bytes are valid UTF-8, without copying them, or nil otherwise.
 
@@ -109,7 +109,7 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 
 ## Methods
 
-`String`, `Int`, `UInt8` and `Bool` have `to_string(): String` (for arrays, see [Array](#array)), which gives the text that `print` writes and interpolation inserts; so may a class or struct (see [Stringable](builtins.md#stringable)). A method must be called: `x.to_string` without `()` is an error.
+`String`, `Int`, `Byte` and `Bool` have `to_string(): String` (for arrays, see [Array](#array)), which gives the text that `print` writes and interpolation inserts; so may a class or struct (see [Stringable](builtins.md#stringable)). A method must be called: `x.to_string` without `()` is an error.
 
 ## Unions
 

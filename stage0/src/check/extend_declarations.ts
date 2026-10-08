@@ -28,7 +28,7 @@ const extendable_kinds: Type['kind'][] = [
   'String',
   'Int',
   'Bool',
-  'UInt8',
+  'Byte',
   'Binary',
   'Array',
   'Map',
@@ -51,7 +51,7 @@ export const declare_extend = (
   reject_bounds(type_params)
   const receiver = resolver.with_type_parameters(placeholders(type_params)).resolve(statement.type)
   if (!extendable_kinds.includes(receiver.kind)) {
-    const message = `${format_type(receiver)} cannot be extended; only String, Int, Bool, UInt8, Binary, arrays, maps, Iters, classes and structs can be so far`
+    const message = `${format_type(receiver)} cannot be extended; only String, Int, Bool, Byte, Binary, arrays, maps, Iters, classes and structs can be so far`
     throw new CompileError(message, statement.type.line, statement.type.column)
   }
   reject_unused_type_parameters(type_params, receiver)

@@ -2,7 +2,7 @@ export type Type =
   | { kind: 'String' }
   | { kind: 'Int' }
   | { kind: 'Bool' }
-  | { kind: 'UInt8' }
+  | { kind: 'Byte' }
   | { kind: 'Binary' }
   | { kind: 'Array'; element: Type }
   | { kind: 'Map'; key: Type; value: Type }
@@ -32,7 +32,7 @@ export type Type =
 export const string_type: Type = { kind: 'String' }
 export const int_type: Type = { kind: 'Int' }
 export const bool_type: Type = { kind: 'Bool' }
-export const uint8_type: Type = { kind: 'UInt8' }
+export const byte_type: Type = { kind: 'Byte' }
 export const binary_type: Type = { kind: 'Binary' }
 export const void_type: Type = { kind: 'void' }
 export const never_type: Type = { kind: 'never' }
@@ -145,7 +145,7 @@ export const is_reference_type = (type: Type): boolean =>
 // go through.
 export const iterable_item = (type: Type): Type | undefined => {
   if (type.kind === 'Array') return type.element
-  if (type.kind === 'Binary') return uint8_type
+  if (type.kind === 'Binary') return byte_type
   return type.kind === 'Iter' ? type.item : undefined
 }
 

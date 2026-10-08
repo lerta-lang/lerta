@@ -11,9 +11,9 @@ import { is_contextual } from './literals.ts'
 import type { ExpressionChecker } from './expression_checker.ts'
 import { bool_type, format_type, type Type } from '../types.ts'
 
-const numeric_kinds = ['Int', 'UInt8']
+const numeric_kinds = ['Int', 'Byte']
 
-// Lists kinds for a message, such as "Int or UInt8".
+// Lists kinds for a message, such as "Int or Byte".
 const describe_kinds = (kinds: string[]): string =>
   kinds.length === 1 ? kinds[0] : `${kinds.slice(0, -1).join(', ')} or ${kinds.at(-1)}`
 
@@ -67,7 +67,7 @@ export class OperatorChecker {
       return this.type_of_nil_test(binary)
     }
     if (operator === '==' || operator === '!=') {
-      this.type_of_operands(binary, undefined, ['Int', 'UInt8', 'Bool', 'String'], (type) => {
+      this.type_of_operands(binary, undefined, ['Int', 'Byte', 'Bool', 'String'], (type) => {
         return `cannot compare values of type ${format_type(type)}`
       })
       return bool_type
@@ -83,7 +83,7 @@ export class OperatorChecker {
   }
 
   // The type both operands share. An operand whose type comes from the context is checked against
-  // the other one, so that `c == 'a'` and `'a' == c` compare UInt8s when `c` is one.
+  // the other one, so that `c == 'a'` and `'a' == c` compare Bytes when `c` is one.
   private type_of_operands(
     binary: Binary,
     expected: Type | undefined,

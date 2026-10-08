@@ -1,5 +1,5 @@
 // Optional values in the generated code. An optional reference is a pointer that is null for nil;
-// an optional Int, UInt8 or Bool is a `{ i1, T }` whose flag tells whether the value is there.
+// an optional Int, Byte or Bool is a `{ i1, T }` whose flag tells whether the value is there.
 import type { IrBuilder } from './ir_builder.ts'
 import { ir_type } from './lerta_ir.ts'
 import { is_reference_type, optional_type, type Type } from '../types.ts'

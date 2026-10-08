@@ -144,7 +144,7 @@ export class ExpressionGenerator {
       case 'coalesce':
         return this.operators.generate_coalesce(expression)
       case 'string':
-        if (this.types.get(expression)!.kind === 'UInt8') {
+        if (this.types.get(expression)!.kind === 'Byte') {
           return new TextEncoder().encode(expression.value)[0].toString()
         }
         return string_constant(this.ir, expression.value)

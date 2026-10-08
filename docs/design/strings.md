@@ -4,7 +4,7 @@
 - The internal representation is **UTF-8**. (A PEP 393 style variable-width representation was considered, but UTF-8 was chosen because of the conversion cost at I/O boundaries.)
 - There is **no** integer indexing `s[i]` (to prevent the mistake of taking it for a character). For bytes use `s.binary[i]`, for characters `s.chars()`, and for graphemes a separate iterator.
 - `Binary`, `Byte`, `s.binary`, `b.slice` and `b[i]` are implemented: see [the reference](../reference/types.md#binary).
-- **`Binary`** (an immutable byte sequence) is separate from `String`. **`Byte`** is an alias of `UInt8`. Lerta does not adopt the Python 2 / Go idea that "a string is any byte sequence".
+- **`Binary`** (an immutable byte sequence) is separate from `String`. **`Byte`** is the unsigned 8-bit integer. Lerta does not adopt the Python 2 / Go idea that "a string is any byte sequence".
   - `Binary` and `String` have **the same internal representation**. `String` only adds the invariant "valid UTF-8".
   - `s.binary` needs no validation and is O(1). `b.decode_utf8()` validates and is O(n); on failure it returns nil (`String?`; to make it an exception, `b.decode_utf8()!`).
   - Conversion to an integer is `s.parse_int(): Int?`.

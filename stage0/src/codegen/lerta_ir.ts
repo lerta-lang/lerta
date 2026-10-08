@@ -22,7 +22,7 @@ export const ir_type = (type: Type): string => {
       return 'i64'
     case 'Bool':
       return 'i1'
-    case 'UInt8':
+    case 'Byte':
       return 'i8'
     case 'Optional':
       // A reference is nil when null; a value carries a flag that tells whether it is there.
@@ -38,7 +38,7 @@ export const ir_return_type = (type: Type): string =>
 
 // A C function's `bool` and `uint8_t` results come zero-extended, as its parameters go.
 export const ir_c_return_type = (type: Type): string =>
-  type.kind === 'Bool' || type.kind === 'UInt8' ? `zeroext ${ir_type(type)}` : ir_return_type(type)
+  type.kind === 'Bool' || type.kind === 'Byte' ? `zeroext ${ir_type(type)}` : ir_return_type(type)
 
 // Symbols of generated functions; the prefixes keep them apart from the runtime's C symbols.
 // A function is named by its module too, since two modules may declare the same name.
@@ -79,7 +79,7 @@ export const object_ir_type = (type: Type): string => `%lerta.object.${object_sy
 
 // C `bool` and `uint8_t` parameters expect their arguments zero-extended.
 export const ir_param_type = (type: Type): string =>
-  type.kind === 'Bool' || type.kind === 'UInt8' ? `${ir_type(type)} zeroext` : ir_type(type)
+  type.kind === 'Bool' || type.kind === 'Byte' ? `${ir_type(type)} zeroext` : ir_type(type)
 
 // Bytes other than printable ASCII, '"' and '\' are written as \XX in IR strings.
 const ir_string_bytes = (bytes: Uint8Array): string =>

@@ -13,7 +13,7 @@ import {
   is_reference_type,
   map_type,
   optional_type,
-  uint8_type,
+  byte_type,
   type Type,
 } from '../types.ts'
 
@@ -31,7 +31,7 @@ export const check_value_type = (type: Type, at: Position, container: string): T
 }
 
 // The type of an item of a container, such as 'an array', which `at` gives. An item is 8 bytes,
-// which cannot hold an optional Int, UInt8 or Bool.
+// which cannot hold an optional Int, Byte or Bool.
 export const check_item_type = (type: Type, at: Position, container: string): Type => {
   check_value_type(type, at, container)
   if (type.kind === 'Optional' && !is_reference_type(type)) {
@@ -73,7 +73,7 @@ export class CollectionChecker {
 
   // The element type comes from the expected type if there is one, so that `[[], [1]]` can be
   // typed; otherwise from the first element whose type does not come from the context and which
-  // gives a value (not a `throw`), so that `[1, c]` holds UInt8s when `c` is one.
+  // gives a value (not a `throw`), so that `[1, c]` holds Bytes when `c` is one.
   type_of_array(array: ArrayLiteral, expected: Type | undefined): Type {
     if (expected?.kind === 'Array') {
       for (const item of array.elements) this.expressions.expect_type(item, expected.element)
@@ -148,6 +148,6 @@ export class CollectionChecker {
       throw new CompileError(message, index.object.line, index.object.column)
     }
     this.expressions.expect_type(index.index, int_type)
-    return object_type.kind === 'Array' ? object_type.element : uint8_type
+    return object_type.kind === 'Array' ? object_type.element : byte_type
   }
 }

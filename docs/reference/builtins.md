@@ -6,7 +6,7 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 
 ## Stringable
 
-`Stringable` is the bound of a type parameter (see [generic functions](functions.md#generic-functions)) satisfied by the types that have a method `to_string(): String`: `String`, `Int`, `UInt8` and `Bool`, and any type that declares one or gets one from an extend in effect. A field that holds a function does not count, nor does a `to_string` with parameters or another result. `Int?`, unions and arrays are not `Stringable`, unless an extend gives them `to_string`. String interpolation, `"#{x}"`, requires a `Stringable` value and inserts `x.to_string()` (see [syntax](syntax.md)).
+`Stringable` is the bound of a type parameter (see [generic functions](functions.md#generic-functions)) satisfied by the types that have a method `to_string(): String`: `String`, `Int`, `Byte` and `Bool`, and any type that declares one or gets one from an extend in effect. A field that holds a function does not count, nor does a `to_string` with parameters or another result. `Int?`, unions and arrays are not `Stringable`, unless an extend gives them `to_string`. String interpolation, `"#{x}"`, requires a `Stringable` value and inserts `x.to_string()` (see [syntax](syntax.md)).
 
 ## Methods of the builtin types
 
@@ -15,7 +15,7 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | Type | In `std/builtins.lerta` | Built into the compiler |
 |---|---|---|
 | `Int` | `to_string` | |
-| `UInt8` | `to_int`, `to_string` | |
+| `Byte` | `to_int`, `to_string` | |
 | `Bool` | `to_string` | |
 | `String` | `to_string`, `parse_int`, `split` | `binary` |
 | `Binary` | `slice`, `decode_utf8` | `length` |
@@ -23,4 +23,4 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | `Map<K, V>` | `has` | `length`, `remove`, `keys` |
 | `Iter<T>` | `map`, `filter`, `to_array`, `any`, `all`, `find` | `has_next`, `next`, `take` |
 
-A `Bool` gives `true` or `false` as its text, and a `UInt8` a number. Why each of the others is built in is in [internals](../internals.md#builtins).
+A `Bool` gives `true` or `false` as its text, and a `Byte` a number. Why each of the others is built in is in [internals](../internals.md#builtins).
