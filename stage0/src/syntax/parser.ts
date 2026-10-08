@@ -120,8 +120,14 @@ class Parser {
     const token = this.tokens.peek()
     const is_command_call =
       token.kind === 'identifier' && this.starts_command_argument(this.tokens.peek(1))
-    if (is_command_call) return this.parse_command_call()
-    const expression = this.expressions.parse_expression()
+    const expression = is_command_call
+      ? this.parse_command_call()
+      : this.expressions.parse_expression()
+    const takes_block_arguments = ['call', 'identifier', 'member'].includes(expression.kind)
+    if (takes_block_arguments && this.expressions.starts_block_arguments()) {
+      return this.expressions.parse_block_arguments(expression)
+    }
+    if (is_command_call) return expression
     const operator = this.tokens.peek_continuation()
     if (!(assignment_operators as readonly string[]).includes(operator)) return expression
     return this.parse_assignment(expression, operator as AssignmentOperator)
@@ -178,7 +184,7 @@ class Parser {
     const name = this.expressions.parse_identifier()
     const type = this.tokens.accept(':') ? this.types.parse_type_name() : undefined
     this.tokens.expect('=', "'='")
-    const value = this.expressions.parse_expression()
+    const value = this.expressions.parse_value()
     const mutable = token.kind === 'var'
     const position = { line: token.line, column: token.column }
     return { kind: 'declaration', mutable, name, type, value, ...position }
@@ -201,7 +207,7 @@ class Parser {
       throw new CompileError(message, target.line, target.column)
     }
     this.tokens.next()
-    const value = this.expressions.parse_expression()
+    const value = this.expressions.parse_value()
     return { kind: 'assignment', operator, target, value, line: target.line, column: target.column }
   }
 
@@ -333,7 +339,7 @@ class Parser {
     const type = this.tokens.accept(':') ? this.types.parse_type_name() : undefined
     const has_value = type === undefined || this.tokens.peek().kind === '='
     if (has_value) this.tokens.expect('=', type === undefined ? "':' or '='" : "'='")
-    const value = has_value ? this.expressions.parse_expression() : undefined
+    const value = has_value ? this.expressions.parse_value() : undefined
     return { name, modifier, type, value, line: token.line, column: token.column }
   }
 

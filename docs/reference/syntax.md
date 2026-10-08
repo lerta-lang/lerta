@@ -33,6 +33,22 @@ const total = (1 +
 - In grouping parentheses and an index, `xs[i]`, lines simply continue the expression.
 - So far, an item inside brackets cannot open an indented block (a `case`, a function body).
 
+## Bracketless blocks
+
+```
+const config =
+  name: 'lerta'
+  targets:
+    'linux'
+    'macos'
+draw 'p'
+  x: 10
+  y: 20
+```
+
+- After a trailing `=` (of a declaration, an assignment or a field) or a trailing `key:`, an indented block on the next lines is a literal. Its lines decide its kind: all `name: value` make an anonymous struct, all `key: value` (a key that is not a name) a map, and all plain values an array, one element per line. Mixing them is an error.
+- A statement that is a call, a name or a method, followed by an indented block whose first line is `name: value` gives the block as its named arguments (see [anonymous structs](types.md#anonymous-structs)). An array cannot be passed this way, and an array inside an array cannot be written without brackets.
+
 ## Declarations and assignment
 
 - `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Array<Int> = []`).

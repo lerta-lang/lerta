@@ -26,27 +26,9 @@ Source files, comments, identifiers, indentation, integer literals and `'...'`/`
 
 ## Multi-line literals
 
-Newlines inside brackets are implemented: see [the reference](../reference/syntax.md#lines-inside-brackets). Planned beyond that:
+Newlines inside brackets and bracketless blocks are implemented: see [the reference](../reference/syntax.md#lines-inside-brackets). Planned beyond that:
 
 - An item inside brackets may open an indented block; otherwise, to split an item over several lines, wrap it in `(...)`.
-- **Bracketless blocks**: an indented block may follow a trailing `=` or a trailing `key:`. Its content decides its kind.
-  - All lines `identifier: value` → anonymous struct. All lines `expression: value` → Map. Anything else → array (one element per line). Mixing is an error.
-  - If `key: value` lines follow a call, an anonymous struct is passed as the last argument (named arguments). There is no form that passes an array as an argument without brackets.
-  - An array inside an array cannot be written without brackets (the element lines have no marker for the inner array).
-  ```
-  const config =
-    name: 'lerta'
-    targets:
-      'linux'
-      'macos'
-    limits:
-      depth: 64
-      width: 100
-
-  draw
-    x: 10
-    y: 20
-  ```
 
 ## Calls without parentheses
 

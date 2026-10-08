@@ -1,14 +1,17 @@
 import {
   comparison_operators,
   type ArithmeticOperator,
+  type Call,
   type ComparisonOperator,
   type Expression,
   type Identifier,
   type NamedArgument,
   type Position,
+  type RecordLiteral,
 } from './ast.ts'
 import { CompileError } from '../errors.ts'
 import { tokenize_fragment } from './lexer.ts'
+import { BlockLiteralParser } from './block_literal_parser.ts'
 import { CompoundParser, type BodyParser } from './compound_parser.ts'
 import { TokenStream } from './token_stream.ts'
 import { TypeParser } from './type_parser.ts'
@@ -38,17 +41,54 @@ export class ExpressionParser {
 
   private readonly compounds: CompoundParser
 
+  private readonly block_literals: BlockLiteralParser
+
   // Shared with the statement parser, for the types of declarations.
   readonly types: TypeParser
 
   constructor(tokens: TokenStream, bodies: BodyParser) {
     this.tokens = tokens
     this.compounds = new CompoundParser(tokens, this, bodies)
+    this.block_literals = new BlockLiteralParser(tokens, this)
     this.types = new TypeParser(tokens, this)
   }
 
   parse_expression(): Expression {
     return this.parse_conditional()
+  }
+
+  // The value after `=` or `key:`, which may be a literal in an indented block on the next lines.
+  parse_value(): Expression {
+    return this.block_literals.starts_block()
+      ? this.block_literals.parse()
+      : this.parse_expression()
+  }
+
+  // `f`, or `f x`, followed by an indented block of `name: value` lines: its named arguments.
+  parse_block_arguments(callee: Expression): Call {
+    const call: Call =
+      callee.kind === 'call'
+        ? callee
+        : {
+            kind: 'call',
+            callee,
+            args: [],
+            named_args: [],
+            line: callee.line,
+            column: callee.column,
+          }
+    // The block starts with a `name:` line, so it is an anonymous struct.
+    const block = this.block_literals.parse() as RecordLiteral
+    if (call.named_args.length > 0) {
+      const message = 'named arguments are all on the line or all in the indented block'
+      throw new CompileError(message, block.line, block.column)
+    }
+    call.named_args = block.fields
+    return call
+  }
+
+  starts_block_arguments(): boolean {
+    return this.block_literals.starts_field_block()
   }
 
   // `c then a else b`, which binds weaker than the binary operators; `c then a else d then b else
@@ -287,7 +327,7 @@ export class ExpressionParser {
     if (!is_named) return { name: undefined, value: this.parse_expression() }
     const name = this.parse_identifier()
     this.tokens.next()
-    return { name, value: this.parse_expression() }
+    return { name, value: this.parse_value() }
   }
 
   // Whether the next token ends the expression, so that `return` there has no value.
