@@ -141,8 +141,9 @@ _Noreturn void lerta_exit(int64_t code);
 LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
 
-// Output (io.c). A Writer is a file descriptor: 1 for stdout, which is buffered, or 2 for stderr, which is not.
-// Writing to stderr flushes stdout first, so that the two keep their order.
+// Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. For how stdout is
+// buffered, which init decides, see docs/internals.md#output.
+void lerta_stdout_init(void);
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
 

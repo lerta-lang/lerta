@@ -6,6 +6,7 @@ void lerta_main(void);
 
 int main(int argc, char **argv) {
   lerta_set_arguments(argc, argv);
+  lerta_stdout_init();
   lerta_main();
   bool flushed = lerta_stdout_flush();
   bool leak_free = lerta_check_leaks();

@@ -13,6 +13,8 @@ enum { STDOUT_FD = 1, STDERR_FD = 2, STDOUT_BUFFER_SIZE = 4096 };
 
 static uint8_t stdout_buffer[STDOUT_BUFFER_SIZE];
 static int64_t stdout_buffered = 0;
+// As in C stdio: a terminal shows each write at once, while a pipe or a file gets few large writes.
+static bool stdout_is_terminal = false;
 // Once a write fails, later output is dropped and the program exits non-zero.
 static bool stdout_failed = false;
 
@@ -32,6 +34,10 @@ static void stdout_write_all(const uint8_t *bytes, int64_t length) {
   if (!stdout_failed && !write_all(STDOUT_FD, bytes, length)) stdout_failed = true;
 }
 
+void lerta_stdout_init(void) {
+  stdout_is_terminal = isatty(STDOUT_FD);
+}
+
 bool lerta_stdout_flush(void) {
   stdout_write_all(stdout_buffer, stdout_buffered);
   stdout_buffered = 0;
@@ -40,7 +46,7 @@ bool lerta_stdout_flush(void) {
 
 static void stdout_write(const uint8_t *bytes, int64_t length) {
   if (stdout_buffered + length > STDOUT_BUFFER_SIZE) lerta_stdout_flush();
-  if (length > STDOUT_BUFFER_SIZE) {
+  if (stdout_is_terminal || length > STDOUT_BUFFER_SIZE) {
     stdout_write_all(bytes, length);
     return;
   }

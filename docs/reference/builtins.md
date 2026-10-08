@@ -2,7 +2,7 @@
 
 Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the module `'std:builtins'`, which every other module but `std:io` imports as `import 'std:builtins'` (see [modules](modules.md)); what it exports is a builtin, and a module's own names shadow them.
 
-- `print<T: Stringable>(x: T)` writes `x.to_string()` and a newline with `stdout.write` of [std:io](modules.md#stdio), so the output of the two keeps its order. stdout is flushed when the program exits.
+- `print<T: Stringable>(x: T)` writes `x.to_string()` followed by a newline, in one `stdout.write` of [std:io](modules.md#stdio), so the output of the two keeps its order.
 
 ## Stringable
 

@@ -80,6 +80,11 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 - **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join` and `slice`; the conversion of a `UInt8` to an `Int`; and `lerta_binary_as_string`, which gives `decode_utf8` and `split` their Strings once Lerta knows the bytes are valid UTF-8.
 - The rest is Lerta: `print` writes through `stdout`, `parse_int`, `split` and the UTF-8 check of `decode_utf8` read bytes with `b[i]`, `has` reads the map, `iter` of an array and `map`, `filter` and `to_array` of an Iter are comprehensions, and `any`, `all` and `find` of an Iter are `for` loops; those of an array go through its `iter`.
 
+## Output
+
+- stdout is buffered as C stdio buffers it. On a terminal, which the runtime checks with `isatty` at start, it is not buffered, so that each write shows at once. On a pipe or a file, it is fully buffered, so that few system calls carry the output: the buffer is flushed when it is full, before each write to stderr, which is never buffered, so that the two keep their order, and at exit.
+- `print` makes one write of its text and the newline, which copies the text into a new String in either mode: unbuffered, that copy is cheaper than a second system call; buffered, it adds an allocation and a copy of the text per line, which is small next to producing the text.
+
 ## Lazy iterators
 
 - Desugared into "the source iterator + a closure for the body". No coroutines needed (possible in Phase 0).

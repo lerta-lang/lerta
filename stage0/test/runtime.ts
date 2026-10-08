@@ -12,10 +12,11 @@ const work_dir = mkdtempSync(join(tmpdir(), 'lerta-runtime-'))
 
 type Outcome = { stdout: string; stderr: string; status: number | null }
 
-const run_main = (name: string, main_body: string, optimize: boolean): Outcome => {
+// Builds the program and returns the path of its executable.
+const build_main = (name: string, main_body: string, optimize: boolean): string => {
   const source = join(work_dir, `${name}.c`)
   const executable = join(work_dir, name)
-  const includes = '#include "lerta.h"\n'
+  const includes = '#include <unistd.h>\n#include "lerta.h"\n'
   writeFileSync(source, `${includes}void lerta_main(void) {\n${main_body}\n}\n`)
   execFileSync('clang', [
     '-I',
@@ -25,9 +26,35 @@ const run_main = (name: string, main_body: string, optimize: boolean): Outcome =
     '-o',
     executable,
   ])
-  const run = spawnSync(executable, { encoding: 'utf8' })
+  return executable
+}
+
+const run_main = (name: string, main_body: string, optimize: boolean): Outcome => {
+  const run = spawnSync(build_main(name, main_body, optimize), { encoding: 'utf8' })
   return { stdout: run.stdout, stderr: run.stderr, status: run.status }
 }
+
+// Runs the program with stdout and stderr on a terminal, which `script` makes, and returns what the
+// terminal shows. The terminal ends lines with CRLF, and macOS's `script` may show the end of its
+// input first.
+const run_on_terminal = (executable: string): string => {
+  const args =
+    process.platform === 'darwin'
+      ? ['-q', '/dev/null', executable]
+      : ['-qec', executable, '/dev/null']
+  return spawnSync('script', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).stdout
+}
+
+// Writes to stdout, then stderr, then stdout, and ends without flushing stdout.
+const interleaved_writes = [
+  '  LERTA_STATIC_STRING(first, "first\\n");',
+  '  LERTA_STATIC_STRING(second, "second\\n");',
+  '  LERTA_STATIC_STRING(third, "third\\n");',
+  '  lerta_writer_write(1, (const LertaString *)&first);',
+  '  lerta_writer_write(2, (const LertaString *)&second);',
+  '  lerta_writer_write(1, (const LertaString *)&third);',
+  '  _exit(0);',
+].join('\n')
 
 const expect_status = (expected: number, actual: number | null): string[] =>
   expected === actual ? [] : [`expected exit status ${expected}, got ${actual}`]
@@ -57,6 +84,28 @@ const checks: Check[] = [
     run: () => {
       const { stderr, status } = run_main('leak_optimized', leak, true)
       return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
+    },
+  },
+  {
+    name: 'stdout to a pipe is buffered, and flushed before a write to stderr',
+    run: () => {
+      const { stdout, stderr } = run_main('buffered', interleaved_writes, false)
+      return [
+        ...compare_text('stdout', 'first\n', stdout),
+        ...compare_text('stderr', 'second\n', stderr),
+      ]
+    },
+  },
+  {
+    name: 'stdout to a terminal is not buffered',
+    run: () => {
+      const shown = run_on_terminal(build_main('terminal', interleaved_writes, false))
+      const expected = 'first\r\nsecond\r\nthird\r\n'
+      return shown.endsWith(expected)
+        ? []
+        : [
+            `expected the terminal to end with ${JSON.stringify(expected)}, got ${JSON.stringify(shown)}`,
+          ]
     },
   },
 ]
