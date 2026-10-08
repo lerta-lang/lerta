@@ -1,0 +1,216 @@
+# Splits a source into tokens, with the indentation as indent and dedent tokens. Covers only the
+# tokens the parser uses so far; any other character is an unexpected character until the feature
+# that needs it is implemented.
+import { compile_error } from '../errors'
+import { hex } from '../hex'
+import { SourceLine } from './source_line'
+import { scan_double_quoted, TemplatePart, TextPart } from './string_literal'
+
+export struct Token
+  # A keyword or a punctuation is its own kind; the others are 'identifier', 'integer', 'string',
+  # 'interpolated', 'newline', 'line_break' (a line end inside brackets, see Brackets), 'indent',
+  # 'dedent' and 'eof'.
+  kind: String
+  # The identifier name, the integer's text without separators (with its `0x` prefix if
+  # hexadecimal), the string literal's contents or the punctuation; empty for layout tokens.
+  text: String
+  # Whether whitespace or the start of the line precedes it: `f (x)` and `f(x)` parse differently.
+  spaced: Bool
+  line: Int
+  # Counted in code points, starting at 1.
+  column: Int
+  # The parts of an 'interpolated' string.
+  parts: Array<TemplatePart>?
+
+const KEYWORDS = [
+  'true', 'false', 'nil', 'and', 'or', 'not'
+  'const', 'var', 'if', 'else', 'while', 'for', 'in', 'break', 'continue', 'return'
+  'case', 'when', 'then', 'class', 'struct', 'throw', 'import', 'export', 'extern'
+  'extend'
+]
+
+# Longer punctuations come first so that `<=` is not read as `<` and `=`.
+const PUNCTUATIONS = [
+  '...'
+  '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '->'
+  '(', ')', '[', ']', '{', '}', ',', '.', ':', '+', '-', '*', '/', '%', '<', '>', '=', '?', '!'
+  '@', '|'
+]
+
+# `path` names the source in diagnostics.
+export const tokenize = (source: String, path: String): Array<Token> ->
+  const tokens: Array<Token> = []
+  const indents = [0]
+  const brackets = Brackets(path)
+  const lines = source.split("\n")
+  for index in 0...lines.length
+    const ends_with_lf = index + 1 < lines.length
+    const bytes = ends_with_lf then without_carriage_return(lines[index]) else lines[index].binary
+    const line = SourceLine(path, bytes, number: index + 1)
+    const indent = line.scan_while(0, is_space)
+    const is_blank = indent == line.length or line.bytes[indent] == '#'
+    continue if is_blank
+    line.fail('tabs are not allowed in indentation', indent) if line.bytes[indent] == "\t"
+    emit_indentation(tokens, indents, line, indent) if not brackets.are_open()
+    for token in LineScanner(line, position: indent).run()
+      brackets.update(token)
+      tokens.push(token)
+    const kind = brackets.are_open() then 'line_break' else 'newline'
+    tokens.push(layout_token(kind, line.number, line.column(line.length)))
+  brackets.check_closed()
+  const eof_line = lines.length
+  while indents.length > 1
+    indents.pop()
+    tokens.push(layout_token('dedent', eof_line, 1))
+  tokens.push(layout_token('eof', eof_line, 1))
+  tokens
+
+# A line that LF ends may end with CRLF.
+const without_carriage_return = (line: String): Binary ->
+  const bytes = line.binary
+  const ends_with_cr = bytes.length > 0 and bytes[bytes.length - 1] == "\r"
+  ends_with_cr then bytes.slice(0, bytes.length - 1) else bytes
+
+const layout_token = (kind: String, line: Int, column: Int): Token ->
+  Token(kind, line, column, text: '', spaced: true)
+
+# Lines inside brackets continue the line that opened them, whatever their indentation, and end
+# with a line_break, which the parser reads as it reads the brackets: a separator in a list, and
+# nothing in a grouping.
+class Brackets
+  path: String
+  open: Array<Token> = []
+
+  update = (token: Token) ->
+    const kind = token.kind
+    if kind == '(' or kind == '[' or kind == '{'
+      @open.push(token)
+    # An extra closing bracket is left to the parser to report.
+    else if (kind == ')' or kind == ']' or kind == '}') and @are_open()
+      @open.pop()
+
+  are_open = (): Bool -> @open.length > 0
+
+  check_closed = ->
+    return if @open.length == 0
+    const unclosed = @open[@open.length - 1]
+    compile_error(@path, unclosed.line, unclosed.column, "'#{unclosed.kind}' is never closed")
+
+const emit_indentation = (
+  tokens: Array<Token>
+  indents: Array<Int>
+  line: SourceLine
+  indent: Int
+) ->
+  const column = line.column(indent)
+  if indent > top(indents)
+    indents.push(indent)
+    tokens.push(layout_token('indent', line.number, column))
+    return
+  while indent < top(indents)
+    indents.pop()
+    tokens.push(layout_token('dedent', line.number, column))
+  line.fail('indentation does not match any outer block', indent) if indent != top(indents)
+
+const top = (indents: Array<Int>): Int -> indents[indents.length - 1]
+
+# The tokens of one line, from `position`.
+class LineScanner
+  line: SourceLine
+  position: Int
+  tokens: Array<Token> = []
+
+  run = (): Array<Token> ->
+    while @position < @line.length
+      const c = @line.bytes[@position]
+      if c == ' '
+        @position += 1
+      else if c == '#'
+        break
+      else if is_identifier_start(c)
+        @scan_word()
+      else if c == "'"
+        @scan_raw_string()
+      else if c == '"'
+        @scan_double_quoted()
+      else if c.is_digit()
+        @scan_integer()
+      else
+        @scan_punctuation()
+    @tokens
+
+  # Adds the token that starts at the position, and moves to `end`, after it.
+  add = (kind: String, text: String, end: Int, parts: Array<TemplatePart>?) ->
+    const start = @position
+    const spaced = start == 0 or @line.bytes[start - 1] == ' '
+    const column = @line.column(start)
+    @tokens.push(Token(kind, text, spaced, parts, column, line: @line.number))
+    @position = end
+
+  scan_word = ->
+    const end = @line.scan_while(@position, is_identifier_part)
+    const word = @line.text(@position, end)
+    @add(is_keyword(word) then word else 'identifier', word, end, nil)
+
+  scan_raw_string = ->
+    const start = @position
+    const close = @line.index_of("'", start + 1) ? @line.fail('unterminated string literal', start)
+    @add('string', @line.text(start + 1, close), close + 1, nil)
+
+  scan_double_quoted = ->
+    const { parts, end } = scan_double_quoted(@line, @position)
+    if const text = plain_text(parts)
+      @add('string', text, end, nil)
+    else
+      @add('interpolated', '', end, parts)
+
+  scan_integer = ->
+    const end = @line.scan_while(@position, is_identifier_part)
+    const text = @line.text(@position, end)
+    const is_valid = is_integer_literal(text.binary)
+    @line.fail("invalid integer literal '#{text}'", @position) if not is_valid
+    @add('integer', text.split('_').join(''), end, nil)
+
+  scan_punctuation = ->
+    const punctuation = PUNCTUATIONS.find((p) -> @at(p)) ? @fail_unexpected_character()
+    @add(punctuation, punctuation, @position + punctuation.binary.length, nil)
+
+  # Compares bytes, since the next ones may not be a whole character.
+  at = (punctuation: String): Bool -> @line.bytes.occurs_at(@position, punctuation.binary)
+
+  # Control characters such as '\r' would garble the error line if printed raw.
+  fail_unexpected_character = (): never ->
+    const code_point = @line.code_point_at(@position)
+    const is_printable_ascii = code_point >= 0x20 and code_point <= 0x7E
+    const shown = case
+      when is_printable_ascii then "'#{@line.text(@position, @position + 1)}'"
+      else "U+#{hex(code_point, 4)}"
+    @line.fail("unexpected character #{shown}", @position)
+
+# The text of a literal without interpolations, or nil.
+const plain_text = (parts: Array<TemplatePart>): String? ->
+  return nil if parts.length != 1
+  const part = parts[0]
+  part is TextPart then part.text else nil
+
+const is_space = (c: Byte): Bool -> c == ' '
+const is_identifier_start = (c: Byte): Bool -> c.is_letter() or c == '_'
+const is_identifier_part = (c: Byte): Bool -> is_identifier_start(c) or c.is_digit()
+const is_keyword = (word: String): Bool -> KEYWORDS.any((keyword) -> keyword == word)
+const is_hex_digit = (c: Byte): Bool ->
+  c.is_digit() or (c >= 'a' and c <= 'f') or (c >= 'A' and c <= 'F')
+
+# `1_000` is 1000. A separator goes only between digits, and a leading zero is rejected so that
+# `010` is not mistaken for octal. `0xFF` is hexadecimal.
+const is_integer_literal = (text: Binary): Bool ->
+  if text.occurs_at(0, '0x'.binary)
+    return false if text.length == 2
+    for i in 2...text.length
+      return false if not is_hex_digit(text[i])
+    return true
+  return text.length == 1 if text[0] == '0'
+  for i in 1...text.length
+    const c = text[i]
+    const separates_digits = c == '_' and i + 1 < text.length and text[i + 1].is_digit()
+    return false if not c.is_digit() and not separates_digits
+  true
