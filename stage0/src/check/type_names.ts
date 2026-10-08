@@ -115,6 +115,10 @@ export class TypeResolver {
       const message = `${type.kind} cannot be optional`
       throw new CompileError(message, type_name.line, type_name.column)
     }
+    if (type.kind === 'Optional') {
+      const message = `${format_type(type)} cannot be optional again: its nil would be ambiguous`
+      throw new CompileError(message, type_name.line, type_name.column)
+    }
     return optional_type(type)
   }
 

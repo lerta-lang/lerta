@@ -42,7 +42,7 @@ if const n = '42'.parse_int()
   print n + 1
 ```
 
-- `T?` is a `T` or `nil`. A `T` or `nil` fits where a `T?` is expected. `nil` has no type of its own, so `const x = nil` needs a type (`const x: String? = nil`).
+- `T?` is a `T` or `nil`, where `T` is not itself optional: `T?` of an optional type, such as `Name?` after `type Name = String?`, is an error, since its nil would be ambiguous. A `T` or `nil` fits where a `T?` is expected. `nil` has no type of its own, so `const x = nil` needs a type (`const x: String? = nil`).
 - `x!` is `x` without nil; it throws `unwrapped nil` if `x` is nil.
 - `x ? fallback` is `x` without nil, or `fallback`, which has that type, if `x` is nil. The fallback is evaluated only then. `?` binds weaker than every other binary operator, and `a ? b ? c` is `a ? (b ? c)`.
 - `x == nil` and `x != nil` test an optional value.
@@ -100,7 +100,10 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
   - `xs.take(n)` gives the first `n` items, or all of them if there are fewer (none if `n` is not positive).
 
   The `Iter` of an array reads the array as it goes, as a `for` does. The functions' parameter types may be left out, as in `(w) -> w + '!'`; `map`'s result type is that of its function.
-- An `Iter` is consumed by `for`, by a comprehension over it, by `it.to_array()`, which gives its items as an array (of a `T` an array can hold), and by `it.map`, `it.filter` and `it.take`, whose `Iter` reads it.
+- These methods of an array or an `Iter` search the items with a function of an item that gives a `Bool`, and stop reading at the first item that decides the result:
+  - `xs.any(f)` tells whether `f` is true for some item, and `xs.all(f)` whether it is for every item (so `all` of no items is true).
+  - `xs.find(f)` gives the first item for which `f` is true, or nil if there is none. Its type is `T?`, so for items of an optional type it is an error (see [optional values](#optional-values)).
+- An `Iter` is consumed by `for`, by a comprehension over it, by `it.to_array()`, which gives its items as an array (of a `T` an array can hold), by `it.any`, `it.all` and `it.find`, and by `it.map`, `it.filter` and `it.take`, whose `Iter` reads it.
 - `it.has_next()` tells whether there is an item left, and `it.next()` gives it; past the end, `next` throws `next past the end of an Iter`.
 - **An `Iter` can be traversed only once.** Calling `has_next` or `next` traverses it, and so does any consumer above, which throws `an Iter can be traversed only once` if a traversal has started. To go through the items several times, keep them with `to_array()`.
 

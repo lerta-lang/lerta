@@ -104,7 +104,7 @@ export class GenericFunction {
       error.add_context(`from ${this.describe(this.instances[0])}`)
       throw error
     }
-    const instance = found ?? this.add_instance(type_arguments, methods, same_arguments.length)
+    const instance = found ?? this.add_instance(type_arguments, methods, same_arguments.length, at)
     // As for a function that is not generic, a body whose return type is written is checked once
     // the calling module is, so that it may use what the module declares after the call.
     if (found === undefined && instance.type === undefined) this.check(instance)
@@ -120,7 +120,12 @@ export class GenericFunction {
     return new Map(this.type_params.map(({ name }, i) => [name.name, type_arguments[i]]))
   }
 
-  private add_instance(type_arguments: Type[], methods: ExtensionMethod[], variant: number) {
+  private add_instance(
+    type_arguments: Type[],
+    methods: ExtensionMethod[],
+    variant: number,
+    at: Position,
+  ) {
     const bindings = this.bindings(type_arguments)
     const resolver = this.resolver.with_type_parameters(bindings)
     // Each instance's expressions have types of their own.
@@ -128,7 +133,7 @@ export class GenericFunction {
     const instance: Instance = {
       name: this.name,
       literal,
-      type: annotated_type(literal, resolver),
+      type: undefined,
       state: 'unchecked',
       this_type: this.receiver === undefined ? undefined : substitute(this.receiver.type, bindings),
       generic: this,
@@ -138,6 +143,7 @@ export class GenericFunction {
       resolver,
       variant,
     }
+    instance.type = this.resolve_annotation(instance, at)
     this.instances.push(instance)
     return instance
   }
@@ -159,6 +165,19 @@ export class GenericFunction {
       throw error
     }
     instance.state = 'checked'
+  }
+
+  // A written type that the type arguments make wrong, such as `T?` of an optional type, is the
+  // call's error, as a type argument that misses its bound is.
+  private resolve_annotation(instance: Instance, at: Position): Type | undefined {
+    try {
+      return annotated_type(instance.literal, instance.resolver)
+    } catch (error) {
+      if (!(error instanceof CompileError)) throw error
+      const call_error = new CompileError(error.message, at.line, at.column)
+      call_error.add_context(`in ${this.describe(instance)}`)
+      throw call_error
+    }
   }
 
   // `print<Int>`, as messages write an instance; a method's, `Array<Int>.map<String>`, by its

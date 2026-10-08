@@ -19,8 +19,8 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | `Bool` | `to_string` | |
 | `String` | `to_string`, `parse_int`, `split` | `binary` |
 | `Binary` | `slice`, `decode_utf8` | `length` |
-| `Array<T>` | `iter`, `map`, `filter`, and `join` of an `Array<String>` | `length`, `push`, `pop`, `take` |
+| `Array<T>` | `iter`, `map`, `filter`, `any`, `all`, `find`, and `join` of an `Array<String>` | `length`, `push`, `pop`, `take` |
 | `Map<K, V>` | `has` | `length`, `remove`, `keys` |
-| `Iter<T>` | `map`, `filter`, `to_array` | `has_next`, `next`, `take` |
+| `Iter<T>` | `map`, `filter`, `to_array`, `any`, `all`, `find` | `has_next`, `next`, `take` |
 
 A `Bool` gives `true` or `false` as its text, and a `UInt8` a number. Why each of the others is built in is in [internals](../internals.md#builtins).
