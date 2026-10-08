@@ -1,13 +1,16 @@
 # Internals
 
+This describes the implementation design. Unmarked statements describe stage0 as implemented; plans are marked *(planned)* on a heading or **Planned:** on an item.
+
 ## Overall architecture
 
-- LLVM emits objects, and `lld` links them (on all platforms).
-- The core of the runtime (RC, the representation and basic operations of strings, arrays and dictionaries, the event loop) is **written in C** and shared by all stages.
+- stage0 writes `.ll` text and has `clang` compile and link it with the runtime.
+- **Planned:** LLVM emits objects, and `lld` links them (on all platforms).
+- The core of the runtime (RC, the representation and basic operations of strings, arrays and dictionaries) is **written in C** and shared by all stages.
   - Builtins and standard modules are written in Lerta where possible (such as `print`). C is limited to the minimal primitives that cannot be written in Lerta (writing to an fd, memory allocation and so on), and the compiler to the operations that need the representation of the builtin types (see [builtins](#builtins)).
-- I/O and the event loop use libuv.
+- **Planned:** an event loop, in the C core of the runtime, on libuv, which I/O uses too.
 
-### Interface with LLVM
+### Interface with LLVM (planned)
 
 - The compiler itself (in Lerta) goes as far as producing IR. Beyond that, a **C++ shim** takes over (it exposes a few functions with `extern "C"`).
   - The exposed units are not one-to-one with the LLVM API. They are the operations the compiler needs (output, linking, JIT execution, REPL).
@@ -20,30 +23,34 @@
   - A fine-grained builder that calls an extern per instruction is not adopted (too many externs, and keeping up with versions is heavy).
 - The runtime is also linked into the compiler, and during JIT execution its symbols resolve as in-process symbols.
 
-## Execution model (frame chain)
+## Execution model
+
+- stage0 has no frame chain. A closure copies the values that cannot change (`const`s, parameters, loop variables) in (see [objects](#objects)), and each captured `var` lives in a heap cell of its own, which the closure holds.
+
+### Frame chain (planned)
 
 The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 - At the start of each function, a **frame record** is `alloca`ed (a parent pointer plus slots for locals holding RC references) and linked to the global variable `current_frame` (the LLVM shadow stack approach). There are no threads, so a global variable is fine.
 - **Non-RC values (Int, Float, Bool) stay as SSA values** in registers. They are not put in the frame record.
 - RC references that are temporaries not living across a function call are not put there either.
-- Only variables captured by closures and variables living across `await` are placed in a heap **context object** (the V8 approach). Only the captured variables, not the whole frame. stage0 copies the values that cannot change (`const`s, parameters, loop variables) into the closure instead (see [objects](#objects)), and puts each captured `var` in a heap cell of its own, which the closure holds.
+- Only variables captured by closures and variables living across `await` are placed in a heap **context object** (the V8 approach). Only the captured variables, not the whole frame.
 - For an async function, the context is the coroutine frame itself.
 - The cost per function call is a few stores.
 
-### Exception implementation (undecided; candidates)
+### Exception implementation (planned; undecided candidates)
 
 - **Frame chain + `longjmp`**: `throw` walks the chain to find a handler, releasing the RC references in the records along the way, then `longjmp`s. No tables needed; suited to microcontrollers.
 - **LLVM zero-cost unwinding (Itanium ABI)**: zero cost on the normal path, throw is heavy. Needs per-platform unwind tables.
 - **Error return values (the Swift approach)**: a branch on every call, but no unwinding mechanism needed.
 
-Stack overflow is detected by checking the remaining stack at function entry (the Go approach), and it panics.
+**Planned:** stack overflow is detected by checking the remaining stack at function entry (the Go approach), and it panics.
 
 ## Memory management
 
 - **No threads, so counts are non-atomic.**
 - An object whose count reaches zero is queued, and a loop drops and frees the queued objects; dropping one may queue more. This keeps the stack flat when a long chain, such as a linked list, is released.
-- Weak references follow Rust's `Rc` approach (a weak count is kept; while weak references remain, the memory is not returned and only the contents are destroyed).
+- **Planned:** weak references follow Rust's `Rc` approach (a weak count is kept; while weak references remain, the memory is not returned and only the contents are destroyed).
 - Every heap object starts with a header: its reference count and a drop function, which releases what the object owns before it is freed (`runtime/lerta.h`).
 - Static objects such as string literals are made immortal (exempt from count operations).
 - nil is a null pointer for an optional reference, and `{ i1, T }` with a false flag for an optional `Int`, `Byte` or `Bool`.
@@ -52,7 +59,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 ### Leak checking
 
 - A debug runtime counts live objects (allocations minus releases, excluding immortal static objects).
-- At exit, a non-zero count is reported as a leak. The remaining objects are traversed to report cycles (by type; not implemented yet).
+- At exit, a non-zero count is reported as a leak. **Planned:** the remaining objects are traversed to report cycles (by type).
 - Release builds do not count. In stage0, a build without `-O` uses the debug runtime.
 - An exit through an uncaught `throw` is not checked, since it ends the program in the middle of its work.
 
@@ -63,7 +70,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 - A function value is a closure: a heap object with the header, the pointer to its code, then its captured values. The code takes the closure first, then the arguments, borrowed as in any call. A function literal's closure is allocated where the literal is evaluated, with the captured values copied in (references retained) and a generated drop function that releases them. A closure that captures nothing, such as that of a top-level function, whose code is a generated thunk that calls the function without the closure, is an immortal constant instead.
 - Each type has a generated constructor function, which takes the constructor arguments borrowed, like any call, and computes the initialized fields; methods are functions that take the object first.
 
-## Structs
+## Structs (planned)
 
 - The implementation may copy or share structs, for example inline for small ones and shared via RC for large ones.
 
@@ -92,7 +99,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 - No intermediate data structures are made, but each item goes through calls of code pointers. Fusing a chain into the `for` loop that consumes it is left for later.
 - A started flag is kept, and starting a second traversal throws.
 
-## Interfaces
+## Interfaces (planned)
 
 - The Go approach: assigning a concrete type to an interface produces a fat pointer (object pointer, itab).
 - There is no `any`, so the source concrete type of a conversion to an interface is known at compile time, and itabs are generated statically.
@@ -103,18 +110,19 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 ## Generics
 
-- Monomorphized instances are emitted by the using module as `linkonce_odr` and managed by mangled names.
+- **Planned:** monomorphized instances are emitted by the using module as `linkonce_odr` and managed by mangled names.
 - stage0 compiles the whole program into one LLVM module, so it emits each instance once, with the module that declares the generic function or method, under a symbol made of the function's and the type arguments' names (`lerta.fn.0.print<Int>`), and for a method, of the receiver's too (`lerta.extend.0.Array<T>.map<Int, String>`). An instance is a copy of the function literal, checked with the type parameters standing for its type arguments; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
 
 ## Strings
 
 - String interpolation is expanded at compile time into a call to the runtime variadic function `lerta_string_concat(a, b, ...)` (this expansion is internal to the compiler, so user-facing variadic parameters are not needed). The total length is computed and allocated once.
-- Kinds of representation (in priority order):
+- stage0 has flat strings only.
+- **Planned:** the set of representations (in priority order):
   1. Small strings as immediate values (String is a 16-byte value with 15 bytes inline)
   2. Flat strings
   3. **Ropes** (concatenation kept as a tree)
   4. Slices (`StringSlice`)
-- Rope rules:
+- **Planned:** rope rules:
   - Operations that do not flatten: concatenation, length, iteration, output (`writev`), equality comparison.
   - Operations that flatten: byte indexing (`s.binary[i]`), passing to C, hashing (use as a dictionary key).
     - So the O(1) of `s.binary` holds for flat strings. For a rope, the first access costs an O(n) flatten.
@@ -122,19 +130,19 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
   - A concatenation with a short result copies immediately without creating a node (equivalent to V8's 13 characters).
   - There is a depth limit. Beyond it, the rope is flattened.
 
-## Regular expressions
+## Regular expressions (planned)
 
 - For literals, the engine's bytecode is embedded in the binary (no parsing at run time). No machine code generation.
 
 ## FFI
 
-- For now, C receives pointers to heap representations such as `LertaString*` (the ABI after small strings become immediate values is undecided).
+- C receives pointers to heap representations such as `LertaString*`. **Planned:** the ABI after small strings become immediate values is undecided.
   - Arguments are borrowed (the C side does not release them). Return values carry ownership (returned with reference count 1).
-  - Avoid direct access to the representation; use the accessors in the runtime header (`lerta_string_bytes(s, &len)` and so on). This survives changes to the representation. Ropes are flattened here.
-- Headers are parsed with **libclang** (no custom parser; the same approach as Zig's `@cImport` and Swift's clang importer).
-- Callbacks: a trampoline from closure to C function pointer. If called from another thread, the call is forwarded to the event loop.
+  - **Planned:** avoid direct access to the representation; use the accessors in the runtime header (`lerta_string_bytes(s, &len)` and so on). This survives changes to the representation. Ropes are flattened here.
+- **Planned:** headers are parsed with **libclang** (no custom parser; the same approach as Zig's `@cImport` and Swift's clang importer).
+- **Planned:** callbacks, a trampoline from closure to C function pointer. If called from another thread, the call is forwarded to the event loop.
 
-## Platforms
+## Platforms (planned)
 
 - Targets are Linux / macOS / **Windows**. Windows support comes in Phase 3.
   - No POSIX-specific assumptions from the start (OS dependencies are confined to the boundary of libuv and the runtime).
