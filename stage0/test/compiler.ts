@@ -14,6 +14,10 @@ const work_dir = mkdtempSync(join(tmpdir(), 'lerta-compiler-'))
 const compiler = join(work_dir, 'lerta')
 const stage0_main = join(import.meta.dirname, '../src/main.ts')
 
+// Check names show these directories by name, so that they stay short enough for a line.
+const shorten_paths = (text: string): string =>
+  text.replaceAll(work_dir, '<tmp>').replaceAll(root_dir, '<root>')
+
 const source_dirs = ['compiler', 'examples', 'std', 'tests']
 const commands = ['dump-tokens', 'dump-ast', 'dump-checked', 'build']
 
@@ -112,16 +116,13 @@ const usage_checks = [
   ['-O', '--emit-llvm', join(work_dir, 'usage.ll'), '--root', root_dir],
   ['--emit-llvm', join(work_dir, 'usage.ll')],
   ['--emit-llvm', join(work_dir, 'usage.ll'), '--root', root_dir, '--root', root_dir],
-].map((args) => {
-  const shown = args.join(' ').replaceAll(root_dir, '<root>')
-  return {
-    name: `build examples/hello.lerta ${shown} is a usage error`,
-    run: async () => {
-      const { status } = await run(compiler, ['build', 'examples/hello.lerta', ...args])
-      return status === 2 ? [] : [`expected exit status 2, got ${status}`]
-    },
-  }
-})
+].map((args) => ({
+  name: `build examples/hello.lerta ${shorten_paths(args.join(' '))} is a usage error`,
+  run: async () => {
+    const { status } = await run(compiler, ['build', 'examples/hello.lerta', ...args])
+    return status === 2 ? [] : [`expected exit status 2, got ${status}`]
+  },
+}))
 
 let failed_count: number
 try {
@@ -135,7 +136,7 @@ try {
   const checks = commands
     .flatMap((command) => paths_of(command).map((path) => ({ command, path })))
     .map(({ command, path }, check) => ({
-      name: `${command} ${path}`,
+      name: `${command} ${shorten_paths(path)}`,
       run: () => compare(command, path, check),
     }))
   const all_checks = [...checks, ...build_checks, ...usage_checks]

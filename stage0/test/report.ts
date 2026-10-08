@@ -11,6 +11,9 @@ export type Check = {
 }
 
 const MAX_SHOWN_LINES = 10
+// Names are padded to align the times, but only up to this width, so that one long name does not
+// push every line past the width of a terminal.
+const MAX_NAME_WIDTH = 72
 const CONTEXT_LINES = 2
 
 // Lines with their line ends, so that a missing final newline stays visible.
@@ -75,7 +78,8 @@ export const run_checks = async (
   concurrency = 1,
 ): Promise<number> => {
   // Results are printed as they come, so the width also counts checks that turn out not to apply.
-  const name_width = Math.max(0, ...checks.map((check) => check.name.length))
+  const longest = Math.max(0, ...checks.map((check) => check.name.length))
+  const name_width = Math.min(longest, MAX_NAME_WIDTH)
   const started = performance.now()
   const failed: string[] = []
   let run_count = 0
