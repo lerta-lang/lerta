@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { build, ClangError, type BuildOptions } from './build.ts'
+import { build, ClangError, load_and_check, type BuildOptions } from './build.ts'
 import { CompileError } from './errors.ts'
 import { is_file, SourceFileError } from './loader.ts'
+import { dump_checked } from './checked_dump.ts'
 import { tokenize } from './syntax/lexer.ts'
 import { dump_tokens } from './token_dump.ts'
 import { dump_ast } from './ast_dump.ts'
@@ -11,6 +12,7 @@ const usage = [
   'usage: lerta build <source> -o <output> [-O] [--emit-llvm <path>]',
   '       lerta dump-tokens <source>',
   '       lerta dump-ast <source>',
+  '       lerta dump-checked <source>',
 ].join('\n')
 
 const fail_usage = (): never => {
@@ -63,6 +65,17 @@ const run_dump = async (args: string[], dump: (source: string) => string): Promi
   })
 }
 
+// Prints the checked syntax trees of the program, as `build` loads and checks it.
+const run_dump_checked = async (args: string[]): Promise<void> => {
+  const [source_path] = args
+  if (args.length !== 1 || !is_value(source_path)) fail_usage()
+  await report_failure(source_path, async () => {
+    const { modules, checked, warnings } = load_and_check(source_path)
+    for (const warning of warnings) console.error(warning.format(source_path))
+    process.stdout.write(dump_checked(source_path, modules, checked))
+  })
+}
+
 // Runs `f`, printing a failure that it throws and exiting with code 1.
 const report_failure = async (source_path: string, f: () => Promise<void>): Promise<void> => {
   try {
@@ -87,4 +100,5 @@ const [command, ...rest] = process.argv.slice(2)
 if (command === 'build') await run_build(rest)
 else if (command === 'dump-tokens') await run_dump(rest, (source) => dump_tokens(tokenize(source)))
 else if (command === 'dump-ast') await run_dump(rest, (source) => dump_ast(parse(tokenize(source))))
+else if (command === 'dump-checked') await run_dump_checked(rest)
 else fail_usage()

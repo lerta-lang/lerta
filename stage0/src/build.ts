@@ -2,10 +2,10 @@ import { execFile } from 'node:child_process'
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { check_modules } from './check/checker.ts'
+import { check_modules, type Checked } from './check/checker.ts'
 import { generate } from './codegen/codegen.ts'
 import type { CompileWarning } from './errors.ts'
-import { load_modules } from './loader.ts'
+import { load_modules, type Module } from './loader.ts'
 
 const runtime_dir = join(import.meta.dirname, '../../runtime')
 
@@ -38,6 +38,16 @@ export class ClangError extends Error {
   }
 }
 
+// The program's modules (see load_modules), what checking them found, and its warnings; a compile
+// error is thrown as a CompileError.
+export const load_and_check = (
+  source_path: string,
+): { modules: Module[]; checked: Checked[]; warnings: CompileWarning[] } => {
+  const modules = load_modules(source_path)
+  const checked = check_modules(modules)
+  return { modules, checked, warnings: checked.at(-1)!.warnings }
+}
+
 // Returns the warnings, and clang's messages, if it wrote any; a compile error is thrown as a
 // CompileError, and clang's failure as a ClangError. Asynchronous, so that several builds can run
 // clang at once.
@@ -46,8 +56,7 @@ export const build = async (
   output_path: string,
   options: BuildOptions,
 ): Promise<{ warnings: CompileWarning[]; clang_messages: string }> => {
-  const modules = load_modules(source_path)
-  const checked = check_modules(modules)
+  const { modules, checked, warnings } = load_and_check(source_path)
   const work_dir = mkdtempSync(join(tmpdir(), 'lerta-'))
   try {
     const ir_path = options.llvm_path ?? join(work_dir, 'main.ll')
@@ -61,7 +70,7 @@ export const build = async (
       output_path,
     ]
     const clang_messages = await run_clang(clang_args)
-    return { warnings: checked.at(-1)!.warnings, clang_messages }
+    return { warnings, clang_messages }
   } finally {
     rmSync(work_dir, { recursive: true, force: true })
   }
