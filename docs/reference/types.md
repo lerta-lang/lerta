@@ -22,13 +22,14 @@
 
 ## String
 
+- A `String` is immutable text in UTF-8.
 - `+` concatenates two `String`s into a new one.
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws `split by an empty separator`.
 - `==` and `!=` compare two `String`s byte by byte.
 
 ## Binary
 
-- `Binary` is an immutable sequence of bytes. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.decode_utf8()` goes back (see [Optional values](#optional-values)).
+- `Binary` is an immutable sequence of bytes; a mutable one is an `Array<Byte>`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.decode_utf8()` goes back (see [Optional values](#optional-values)).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
@@ -79,7 +80,7 @@ print ages['ann'] ? 0
 ```
 
 - `Map<K, V>` maps keys of type `K`, a `String` or an `Int`, to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
-- `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
+- `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there.
 - `m.keys()` is an `Array<K>` of the keys in the order they were first added (a key removed and added again counts as new).
@@ -117,7 +118,7 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 type Expr = Num | Add | Mul
 ```
 
-- `A | B` is a value of any of the member types, which are classes and structs so far. A union whose member is itself a union is flattened, and the order of the members does not matter.
+- `A | B` is a value of any of the member types, which are classes and structs so far. A discriminated union needs no tag: the member's type itself tells the members apart, with no `kind` field or enum (branch with `is` or `case`). A union whose member is itself a union is flattened, and the order of the members does not matter.
 - `type Name = ...` names a type at the top level. Aliases may refer to types and aliases declared later, but not to themselves.
 - A member's value fits where the union is expected. A union's fields and methods cannot be used directly: branch on its type first.
 - `x is T` tells whether a union value holds a `T`. Like nil tests, it narrows a `const`, a parameter or a loop variable to `T` where it holds (see [control flow](control-flow.md#if-and-while)).

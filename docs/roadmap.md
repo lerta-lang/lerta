@@ -91,7 +91,7 @@ Run tests (source → execution result) are shared by all stages. They run with 
 - The type of a character (code point) (the element of `s.chars()`; `Int` or a `Char` type).
 - `Binary` literals (`'...'.binary` can substitute).
 - The ABI of `String` at the FFI boundary (pass as a 16-byte value, or box it in the heap representation; decide when small strings become immediate values).
-- The exception implementation strategy (choose from [the candidates](internals.md#exception-implementation-undecided-candidates)).
+- The exception implementation strategy (choose from [the candidates](internals.md#exception-implementation-planned-undecided-candidates)).
 - The scope of runtime type information (whether to keep field names).
 - How to trigger serialization code generation (an annotation on the type, or automatic generation from calls such as `json.decode<T>`).
 - How to hold type information for separate compilation (interface files).

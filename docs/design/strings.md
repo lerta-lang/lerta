@@ -1,18 +1,10 @@
 # Strings
 
-- **Immutable.**
-- The internal representation is **UTF-8**. (A PEP 393 style variable-width representation was considered, but UTF-8 was chosen because of the conversion cost at I/O boundaries.)
-- There is **no** integer indexing `s[i]` (to prevent the mistake of taking it for a character). For bytes use `s.binary[i]`, for characters `s.chars()`, and for graphemes a separate iterator.
-- `Binary`, `Byte`, `s.binary`, `b.slice` and `b[i]` are implemented: see [the reference](../reference/types.md#binary).
-- **`Binary`** (an immutable byte sequence) is separate from `String`. **`Byte`** is the unsigned 8-bit integer. Lerta does not adopt the Python 2 / Go idea that "a string is any byte sequence".
-  - `Binary` and `String` have **the same internal representation**. `String` only adds the invariant "valid UTF-8".
-  - `s.binary` needs no validation and is O(1). `b.decode_utf8()` validates and is O(n); on failure it returns nil (`String?`; to make it an exception, `b.decode_utf8()!`).
-  - Conversion to an integer is `s.parse_int(): Int?`.
-  - A mutable byte sequence is `Array<Byte>`.
-  - A subsequence is `b.slice(start, end): Binary` (`end` is exclusive; out of range throws; since it is immutable, copying or sharing is up to the implementation).
-  - For I/O, sockets and FFI, `void*` is `Binary` and `char*` is `String`. Encoding conversions are provided as functions between `Binary` and `String`.
+`String`, `Binary`, `Byte`, `s.binary`, `b.decode_utf8()`, `s.parse_int()`, `b.slice`, `b[i]` and `join` are implemented: see [the reference](../reference/types.md#string). Why: UTF-8 (a PEP 393 style variable-width representation was considered, but UTF-8 was chosen because of the conversion cost at I/O boundaries); `Binary` separate from `String`, which only adds the invariant "valid UTF-8", rather than the Python 2 / Go idea that "a string is any byte sequence"; no integer indexing `s[i]`, to prevent the mistake of taking it for a character; and no StringBuilder, since `push` onto an `Array<String>` and `join` is O(n) (the Python approach), an idiom that stays valid once ropes make `+` O(1). Planned:
+
+- `s.chars()` for characters (their type is an [open question](../roadmap.md#open-questions)), and a separate iterator for graphemes.
 - Slicing uses a separate type `StringSlice`, as in Swift. Converting to `String` is an explicit copy.
-- There is **no** StringBuilder. To build a string in a loop, `push` onto an `Array<String>` and `join` (the Python approach, O(n)). Once ropes are introduced, `+` becomes O(1), but the idiom stays valid.
+- For I/O, sockets and FFI, `void*` is `Binary` and `char*` is `String`. Encoding conversions are provided as functions between `Binary` and `String`.
 
 ## Regular expressions
 

@@ -116,7 +116,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 ## Strings
 
 - String interpolation is expanded at compile time into a call to the runtime variadic function `lerta_string_concat(a, b, ...)` (this expansion is internal to the compiler, so user-facing variadic parameters are not needed). The total length is computed and allocated once.
-- stage0 has flat strings only.
+- stage0 has flat strings only. A `Binary` has the representation of a `String` (`LertaString` in `runtime/lerta.h`) without the UTF-8 guarantee, so `s.binary` and `decode_utf8` pass the object on.
 - **Planned:** the set of representations (in priority order):
   1. Small strings as immediate values (String is a 16-byte value with 15 bytes inline)
   2. Flat strings

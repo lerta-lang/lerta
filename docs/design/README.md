@@ -6,12 +6,12 @@ When a feature is implemented, its description moves to [../reference/](../refer
 
 | File | Topic |
 |---|---|
-| [syntax.md](syntax.md) | Lexical rules, declarations, multi-line literals, calls without parentheses, operator precedence |
-| [control-flow.md](control-flow.md) | Statements and expressions, `void`/`never`, conditionals, loops, comprehensions, `case` |
+| [syntax.md](syntax.md) | Multi-line strings, declarations, multi-line literals, calls without parentheses, `?.` |
+| [control-flow.md](control-flow.md) | `if`/`else` with a value, `?.`, `Range`, lazy methods |
 | [types.md](types.md) | Type system and numeric types |
 | [strings.md](strings.md) | Strings, `Binary`, regular expressions |
 | [objects.md](objects.md) | Classes, structs, interfaces |
 | [operators.md](operators.md) | Operator overloading |
 | [errors.md](errors.md) | Safety, discarded values, exceptions, panics |
 | [runtime.md](runtime.md) | Memory management and concurrency |
-| [programs.md](programs.md) | Modules, program structure, FFI, tools |
+| [programs.md](programs.md) | Modules, FFI, tools |

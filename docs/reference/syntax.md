@@ -64,7 +64,7 @@ draw 'p'
 - `f(x, y)` calls `f`. The `(` must follow the callee without whitespace.
 - **Calls without parentheses** (the Nim command syntax approach): `f x, y`.
   1. Allowed **only at the start of a statement**. In the middle of an expression (`g(f x)`), parentheses are required.
-  2. Arguments are taken **greedily to the end of the line**.
+  2. Arguments are taken **greedily to the end of the line**, or to a postfix `if`, `while` or `for`, which applies to the whole call: `print x if done` is `(print x) if done`, while `f a then b else c` passes `a then b else c`.
   3. There are no nested parenthesis-free calls. (`f g x` is an error; write `f g(x)`.)
   4. At the start of a statement, whitespace after an identifier marks the start of the arguments: `f (a), b` is `f((a), b)`, while `f(a)` is a call with parentheses. `f -1` is `f(-1)`; if there is also whitespace after the operator, as in `f - 1`, it is a binary operator. In the middle of an expression there are no parenthesis-free calls, so `x -1` is `x - 1`.
   5. **A call with zero arguments requires parentheses**: `f()`. A bare `f` is the function value.
@@ -77,8 +77,8 @@ draw 'p'
 
 ## Operators
 
-From weakest: `then`/`else` < `?` (nil coalescing) < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
+From weakest: `then`/`else` < `?` (nil coalescing) < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=` and `is`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
 
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`). `then`/`else` and `?` are right-associative: `a then x else b then y else z` is `a then x else (b then y else z)`.
-- Comparisons cannot be chained: `a < b < c` is a syntax error; use parentheses.
+- Comparisons, `is` included, cannot be chained: `a < b < c` is a syntax error; use parentheses.
 - `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `return` `case` `when` `then` `class` `struct` `throw` `import` `export` `extern` `extend` are keywords (`from` is not) and cannot be used as names.

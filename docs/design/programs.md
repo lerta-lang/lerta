@@ -2,26 +2,10 @@
 
 ## Modules
 
-Named imports from the standard modules and from files, and exports of functions and types, are implemented: see [the reference](../reference/modules.md).
+Named imports, with `as`, from the standard modules and from files, `import 'module'`, exports, and the order in which modules and top-level code run are implemented: see [the reference](../reference/modules.md). Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)); paths need `./` or `../` and have no `index` resolution for directories; a reference to a top-level value through a function is checked at run time, so that functions can be declared in any order. Planned:
 
-- **ESM style** (`import`/`export`). A file is a module.
-- Paths: `'./util'` and `'../lib/x'` are relative to the importing file (`./`/`../` required, the extension `.lerta` omitted, no `index` resolution for directories). `'std:io'` is a standard module. Bare names like `'util'` are reserved for future packages.
-- There are builtins (no import needed) and standard modules (`'std:...'`). For what each holds in stage0, see [the roadmap](../roadmap.md#standard-library-layout-in-stage0).
-
-  - `stdout`/`stderr` and `Writer` are implemented in `std:io`: see [the reference](../reference/modules.md#stdio). `print` is implemented: see [the reference](../reference/builtins.md).
-- There is no `main` function. A program runs the top-level code of the entry module from top to bottom.
-- Order of top-level declarations:
-  - Type declarations (`struct`/`class`/`type`/`interface`) and `const` whose value is a function literal do not depend on order (they can be referenced from anywhere in the module; mutual recursion and self-referential types can be written).
-  - Other `const`/`var` and statements run from top to bottom.
-  - Reading a value before it is initialized: a direct reference (`const a = b` where `b` comes later) is a compile error. A reference through a function is checked at run time and throws (see [internals](../internals.md#modules)).
-- The top level of an imported module runs exactly once, in dependency order (same as ESM; exported values may be built with statements).
-  - Circular imports are allowed. Reading an uninitialized value during the cycle throws via the run-time check above.
-- There is **no** `import *`.
-- There is **no** `export default` (named exports only).
-- `import { <exported_name> } from 'module'` gives access to individual names.
 - `import mod from 'module'` gives access as `mod.<exported_name>`.
-- `import 'module'` imports no name, for the module's effects alone: implemented, see [the reference](../reference/modules.md).
-- `import { <exported_name> as <alias> } from 'module'` gives access under an alias.
+- Circular imports. Reading an uninitialized value during the cycle throws, as through a function.
 
 ## C ABI / FFI
 
@@ -36,5 +20,5 @@ Named imports from the standard modules and from files, and exports of functions
 
 ## Tools
 
+- `lerta build` is implemented: see [the reference](../reference/compiler.md). Planned: bitcode output, `lerta run` (runs directly with JIT) and `lerta repl`.
 - A formatter (like gofmt) is provided from day one.
-- Commands: `lerta build` (produces an executable; optionally outputs `.ll`/bitcode), `lerta run` (runs directly with JIT), `lerta repl`.

@@ -2,27 +2,16 @@
 
 ## Basics
 
-Source files, comments, identifiers, indentation, integer literals and `'...'`/`"..."` strings are implemented: see [the reference](../reference/syntax.md).
+Source files, comments, identifiers, indentation, integer literals, `'...'`/`"..."` strings and implicit return are implemented: see [the reference](../reference/syntax.md). Planned:
 
-- CoffeeScript-like. Indentation forms blocks. Implicit return. Expression-oriented.
-- Names starting with `_` produce no warning when unused.
-- String literals besides `'...'` and `"..."` (see the reference):
-  - Multi-line strings use `"""..."""`. The common leading indentation is removed, measured from the position of the closing `"""` (the Swift approach).
+- Multi-line strings use `"""..."""`. The common leading indentation is removed, measured from the position of the closing `"""` (the Swift approach).
 
 ## Declarations
 
-`const`/`var` with an initial value and assignment are implemented: see [the reference](../reference/syntax.md#declarations-and-assignment). Planned:
+`const`/`var` with an initial value, assignment and destructuring are implemented: see [the reference](../reference/syntax.md#declarations-and-assignment). Why: there is no `let` and no function declaration (`def`), so that declarations look the same at the top level, inside functions and in type bodies, for values and for functions, which avoids the CoffeeScript ambiguity between declaration and assignment; and `const` only makes the binding immutable, since immutability of the contents is handled by types. Planned:
 
-- `let` is not used.
-  - This is the same at top level and inside functions, for values and for functions. It avoids ambiguity between declaration and assignment (the CoffeeScript pitfall).
-  - Inside a type body the keyword may be omitted. Then methods default to `const` and fields to `var` (in a struct everything is `const`). Writing the keyword explicitly overrides the default (see [objects.md](objects.md#type-body-shared-by-class-and-struct)).
-  - `const` only makes the binding immutable. Immutability of the contents is handled by types.
-  - A type annotation is required only when the initial value does not determine the type, such as `nil` or an empty `[]` (`var x: Node | nil = nil`, `const xs: Array<Int> = []`).
-  - For `var x: Type | nil` the initial value may be omitted; it defaults to nil.
-- There is no function declaration (`def`). Only the form `const f = (x) -> ...` (top-level functions are implemented: see [the reference](../reference/functions.md)).
-  - With no parameters, `()` may be omitted (`const f = -> ...`). The call `f()` cannot omit them.
-  - Variadic parameters are `xs...`. Default parameter values are undecided.
-- Destructuring `const { a, b } = obj` is implemented: see [the reference](../reference/types.md#anonymous-structs).
+- For `var x: T?` the initial value may be omitted; it defaults to nil.
+- Variadic parameters are `xs...`. Default parameter values are an [open question](../roadmap.md#open-questions).
 
 ## Multi-line literals
 
@@ -32,15 +21,12 @@ Newlines inside brackets and bracketless blocks are implemented: see [the refere
 
 ## Calls without parentheses
 
-The basic rules are implemented: see [the reference](../reference/syntax.md#calls). Planned:
+The rules are implemented: see [the reference](../reference/syntax.md#calls). Planned:
 
 - If the last argument is a closure, it may continue as an indented block.
-- A call with explicit type arguments requires parentheses: `f<T>(x)` (to avoid a clash with `a < b`): implemented, see [the reference](../reference/functions.md#generic-functions).
 
 ## Operator precedence
 
-From weakest: postfix `for` / postfix `if` / postfix `while` < parenthesis-free call < `then`/`else` < `?` < other binary operators
+The precedence and associativity of the implemented operators are in [the reference](../reference/syntax.md#operators). Planned:
 
-- `?` is the weakest binary operator (`a ? b + c` is `a ? (b + c)`).
-- The other binary operators (the arithmetic, comparison and range operators are implemented: see [the reference](../reference/syntax.md#operators)), from weakest: `or` < `and` < `not` (prefix) < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`. All binary operators except `then`/`else` are left-associative.
-- Comparison operators cannot be chained (`a < b < c` and `a < b > c` are syntax errors; use parentheses or `and`). Because of this, `f<T>(x)` always reads as a call with type arguments.
+- `?.` (see [control flow](control-flow.md)) binds as `.` does.

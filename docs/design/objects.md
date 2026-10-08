@@ -1,13 +1,10 @@
 # Classes, structs and interfaces
 
-Classes and structs with fields, initializers, methods, `init` and named construction are implemented: see [the reference](../reference/objects.md). `deinit` is implemented too. Planned beyond that: `weak`, function fields, `==` and `hash`, and interfaces.
+Classes and structs with fields, initializers, methods, `init`, `deinit` and named construction are implemented: see [the reference](../reference/objects.md). Planned beyond that: `weak`, replaceable (`var`) function fields, `==` and `hash`, and interfaces.
 
-- **No inheritance** (`extends`/`super` do not exist).
 - There are no static members (`static`). Functions related to a type are module functions (`import rgb from './rgb'` → `rgb.parse(s)`; the module is the namespace). Methods can be added to an existing type by `extend` (see [the reference](../reference/objects.md#extend)), but not functions without a receiver.
 
 ## Type body (shared by class and struct)
-
-Members of a class and a struct are written the same way. The only difference is the keyword.
 
 ```
 class Button
@@ -25,24 +22,14 @@ class Button
 const b = Button(label: 'OK', on_click: -> log 'hi')
 ```
 
-- `@x` is `this.x`. `@` alone is `this`.
-- With `=` it is a field with an initializer. Without it, it is a constructor argument (a type annotation does not matter).
-- Construction is always named: `Button(label: ...)` (there is no `new` and no positional form). In order: (1) the arguments are assigned to the type-only fields, (2) the initializer fields are computed in declaration order (earlier fields can be referenced with `@`), (3) `init` runs if present.
-  - Initializer fields cannot be overridden by the constructor (computed fields are not broken from outside).
-- A method exists once per type, and `this` is passed at call time. Not everything is a function field, because closures capturing `this` would create a cycle in every object.
-- `const` / `var` mean the same as in [syntax.md](syntax.md#declarations) (whether reassignment is allowed). When omitted, methods default to `const` and fields to `var` (in a struct everything is `const`, and `var` cannot be written).
-  - A function literal member is a method, one per type, when `const` (the default). When `var`, it is a function field held per instance so it can be replaced. The difference in representation follows necessarily from whether reassignment is allowed.
-- A type-only field is a required argument. But if it is nilable (`T?`) it may be omitted, and defaults to nil.
+- A function literal member is a method, one per type, with `@` passed at call time, when `const` (the default). When `var`, it is a function field held per instance so it can be replaced (class only). The difference in representation follows necessarily from whether reassignment is allowed. Not everything is a function field, because closures capturing `@` would create a cycle in every object.
 
 ## Differences between class and struct
 
 |  | `class` | `struct` |
 |---|---|---|
-| Fields | Mutable by default (`const` makes them immutable) | Immutable |
-| Role of `init` | Continues initialization (may assign `var` fields) | Validation only (no assignment) |
 | Default `==` | Pointer comparison | Field-by-field comparison |
 | Default `hash` | Address | Computed from fields (automatic if all fields are `Hashable`) |
-| `deinit` | Yes | No |
 | `weak` references | Allowed | Not allowed |
 | Cycles | Possible | Impossible |
 
@@ -57,29 +44,19 @@ struct Circle
 Circle(r: 1) == Circle(r: 1)   # true
 ```
 
-- A struct is immutable, so copying and sharing cannot be told apart from outside. The implementation may choose either (see [internals](../internals.md#structs)).
+- A struct is immutable, so copying and sharing cannot be told apart from outside. The implementation may choose either (see [internals](../internals.md#structs-planned)).
 - A struct has no `deinit` and no `weak` because if the time of release were observable, the freedom above would be lost. The use of weak (breaking cycles) is not needed for structs either.
 - Rules for `deinit`: it does not throw (failures are swallowed; to handle errors, call `close()` explicitly), it is synchronous only (no `await`), and it does nothing but cleanup (beware of reentrancy).
 
 ## Anonymous structs
 
-Anonymous struct literals and types, the `{ x, y }` shorthand, destructuring and leaving out `{}` for a last argument are implemented: see [the reference](../reference/types.md#anonymous-structs).
+Anonymous struct literals and types, the `{ x, y }` shorthand, destructuring and leaving out `{}` for a last argument are implemented: see [the reference](../reference/types.md#anonymous-structs). Planned:
 
-- If the last argument is an anonymous struct literal, `{}` may be omitted (`draw(x: 1, y: 2)` is `draw({ x: 1, y: 2 })`). This is how named arguments are expressed.
-  - Constructing a class or struct, `Circle(r: 1)`, is also a call to a constructor that takes an anonymous struct with the type-only fields.
+- Constructing a class or struct, `Circle(r: 1)`, is also a call to a constructor that takes an anonymous struct with the type-only fields.
 
 ## Map literals
 
-Map literals with keys that are not names are implemented: see [the reference](../reference/types.md#map).
-
-- If the keys in `{}` are identifiers, it is an anonymous struct. If they are other expressions, it is a `Map`.
-  ```
-  { x: 0, y: 1 }            # anonymous struct
-  { 'x': 0, 'y': 1 }        # Map<String, Int>
-  { 1: 'one', 2: 'two' }    # Map<Int, String>
-  { (k): v }                # to use a variable's value as a key, make it an expression with parentheses
-  ```
-- Mixing both (`{ a: 1, 'b': 2 }`) is an error. The empty Map is `Map()`.
+Implemented: see [the reference](../reference/types.md#map).
 
 ## interface
 

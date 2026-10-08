@@ -23,7 +23,7 @@ export const unit = 1
 ```
 
 - `export` before a top-level `const` (a function or a value), class, struct or type alias makes it importable. An imported value cannot be assigned, and is narrowed as a `const` is (see [control flow](control-flow.md#if-and-while)). An exported value is not warned about if its module does not use it. Names are local to their module: other names cannot be imported, and different modules may use the same name. Classes and structs of the same name in different modules are different types; where a message would not tell them apart, it names their modules.
-- Before the entry module's top-level code, that of every module it imports, directly or not, runs once, each after the modules it imports.
+- A program runs the top-level code of its entry module from top to bottom; there is no `main`. Before it, that of every module it imports, directly or not, runs once, each after the modules it imports.
 - So far, imports cannot be circular.
 
 ## std:io

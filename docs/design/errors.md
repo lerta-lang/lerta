@@ -2,10 +2,9 @@
 
 ## Safety
 
-The definition of safety is in [philosophy.md](../philosophy.md#safety). Concretely:
+The definition of safety is in [philosophy.md](../philosophy.md#safety). Bounds checks, integer overflow and division by zero are implemented: see [the reference](../reference/types.md). Planned:
 
-- Bounds checks (`a[i]` throws when out of range; `a.get(i)` returns `T | nil`).
-- Signed integer overflow and division by zero throw (exception).
+- `a.get(i)` returns `T?` where `a[i]` throws.
 - Nil safety, weak safety, no data races (solved by design).
 - Modification during iteration is detected and throws (the Java approach), or is defined by the specification.
 - FFI and raw pointer operations only inside `unsafe` blocks.
@@ -19,7 +18,6 @@ Literals, arithmetic and comparisons, function values and `Iter<T>` values are i
 - Other operator expressions and field access (`obj.x`) → **error** (no side effects; same as Go).
 - Methods of immutable types (`String`, `Binary`) that return a new value (`s.trim()`) → **error** (since the type is immutable, the type shows that "discarding = doing nothing").
 - Other calls to non-`void` functions → allowed (interpreted as calls for side effects). A `must_use` annotation can make individual ones an error.
-- Unused `import` → warning (for `const`/`var`, see [the reference](../reference/errors.md#unused-names)).
 
 ## Exceptions
 
