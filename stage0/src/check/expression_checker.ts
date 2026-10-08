@@ -225,11 +225,6 @@ export class ExpressionChecker {
       return this.collections.type_of_empty_map(call, expected)
     const object_type = this.objects.constructed_type(callee)
     if (object_type !== undefined) return this.objects.type_of_construction(call, object_type)
-    if (call.named_args.length > 0) {
-      const [{ name }] = call.named_args
-      const message = 'named arguments are only used to construct a class or struct'
-      throw new CompileError(message, name.line, name.column)
-    }
     const callee_type =
       callee.kind === 'member'
         ? this.type_of_method(callee)
@@ -241,12 +236,30 @@ export class ExpressionChecker {
       throw new CompileError(message, call.line, call.column)
     }
     const { params } = callee_type
+    if (call.named_args.length > 0) this.gather_named_args(call, params.at(-1))
     if (call.args.length !== params.length) {
       const message = `expected ${params.length} argument(s), got ${call.args.length}`
       throw new CompileError(message, call.line, call.column)
     }
     call.args.forEach((arg, i) => this.expect_type(arg, params[i]))
     return callee_type.result
+  }
+
+  // Named arguments are the fields of an anonymous struct for the last parameter: `draw(x: 1, y: 2)`
+  // is `draw({ x: 1, y: 2 })`. The call is rewritten into that form so that codegen, which reads
+  // named arguments only as a construction, generates it as any other call. Every pass reading the
+  // arguments (jump_positions, codegen) visits the same values in either form.
+  private gather_named_args(call: Call, last_param: Type | undefined): void {
+    const [{ name }] = call.named_args
+    const record = last_param?.kind === 'Optional' ? last_param.inner : last_param
+    if (record?.kind !== 'Record') {
+      const message =
+        'named arguments construct a class or struct, or give a last parameter of an anonymous struct type'
+      throw new CompileError(message, name.line, name.column)
+    }
+    const fields = call.named_args.map((arg) => ({ name: arg.name, value: arg.value }))
+    call.args.push({ kind: 'record', fields, line: name.line, column: name.column })
+    call.named_args = []
   }
 
   private type_of_method(member: Member): Type {
