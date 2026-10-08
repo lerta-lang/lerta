@@ -17,25 +17,25 @@ import { TextPart } from './lexer/string_literal'
 class Copies
   expressions: Map<Expression, Expression> = Map()
 
-export const clone_function = (literal: FunctionLiteral): FunctionLiteral ->
+export const clone_function = (literal: FunctionLiteral) ->
   clone_literal(Copies(), literal)
 
-const clone_literal = (copies: Copies, literal: FunctionLiteral): FunctionLiteral ->
+const clone_literal = (copies: Copies, literal: FunctionLiteral) ->
   const type_params = [clone_type_parameter(param) for param in literal.type_params]
   const params = [clone_parameter(param) for param in literal.params]
   const return_type = clone_optional_type(literal.return_type)
   const body = clone_statements(copies, literal.body)
   FunctionLiteral(type_params, params, return_type, body, position: literal.position)
 
-const clone_type_parameter = (param: TypeParameter): TypeParameter ->
+const clone_type_parameter = (param: TypeParameter) ->
   const bound = param.bound
   const name = copy_identifier(param.name)
   TypeParameter(name, bound: bound then copy_identifier(bound) else nil)
 
-const clone_parameter = (param: Parameter): Parameter ->
+const clone_parameter = (param: Parameter) ->
   Parameter(name: copy_identifier(param.name), type: clone_optional_type(param.type))
 
-const clone_statements = (copies: Copies, statements: Array<Statement>): Array<Statement> ->
+const clone_statements = (copies: Copies, statements: Array<Statement>) ->
   [clone_statement(copies, statement) for statement in statements]
 
 const clone_statement = (copies: Copies, statement: Statement): Statement ->
@@ -96,11 +96,11 @@ const clone_statement = (copies: Copies, statement: Statement): Statement ->
       Import(names, position, module: statement.module)
     else clone(copies, as_expression(statement)!)
 
-const clone_import_name = (name: ImportName): ImportName ->
+const clone_import_name = (name: ImportName) ->
   const alias = name.alias
   ImportName(name: copy_identifier(name.name), alias: alias then copy_identifier(alias) else nil)
 
-const clone_member = (copies: Copies, member: MemberDeclaration): MemberDeclaration ->
+const clone_member = (copies: Copies, member: MemberDeclaration) ->
   const value = member.value
   MemberDeclaration(
     name: copy_identifier(member.name), modifier: member.modifier, position: member.position
@@ -114,19 +114,19 @@ const clone_condition = (copies: Copies, condition: Condition): Condition ->
       Binding(name, value: clone(copies, condition.value), position: condition.position)
     else clone(copies, as_expression(condition)!)
 
-const clone = (copies: Copies, expression: Expression): Expression ->
+const clone = (copies: Copies, expression: Expression) ->
   if const copied = copies.expressions[expression]
     return copied
   const copy = copy_expression(copies, expression)
   copies.expressions[expression] = copy
   copy
 
-const clone_optional = (copies: Copies, expression: Expression?): Expression? ->
+const clone_optional = (copies: Copies, expression: Expression?) ->
   expression then clone(copies, expression) else nil
 
 const copy_expression = (copies: Copies, expression: Expression): Expression ->
   const position = expression.position
-  const each = (values: Array<Expression>): Array<Expression> ->
+  const each = (values: Array<Expression>) ->
     [clone(copies, value) for value in values]
   case expression
     when StringLiteral then StringLiteral(position, value: expression.value)
@@ -188,27 +188,27 @@ const clone_part = (copies: Copies, part: InterpolationPart): InterpolationPart 
     when TextPart then part
     when Call then clone_call(copies, part)
 
-const clone_call = (copies: Copies, call: Call): Call ->
+const clone_call = (copies: Copies, call: Call) ->
   const callee = clone(copies, call.callee)
   const args = [clone(copies, arg) for arg in call.args]
   const named_args = clone_named_values(copies, call.named_args)
   const type_args = [clone_type(type) for type in call.type_args]
   Call(callee, args, named_args, type_args, position: call.position)
 
-const clone_named_values = (copies: Copies, values: Array<NamedValue>): Array<NamedValue> ->
-  const clone_value = (value: NamedValue): NamedValue ->
+const clone_named_values = (copies: Copies, values: Array<NamedValue>) ->
+  const clone_value = (value: NamedValue) ->
     NamedValue(name: copy_identifier(value.name), value: clone(copies, value.value))
   [clone_value(value) for value in values]
 
-const clone_entry = (copies: Copies, entry: MapEntry): MapEntry ->
+const clone_entry = (copies: Copies, entry: MapEntry) ->
   MapEntry(key: clone(copies, entry.key), value: clone(copies, entry.value))
 
-const clone_arm = (copies: Copies, arm: CaseArm): CaseArm ->
+const clone_arm = (copies: Copies, arm: CaseArm) ->
   const patterns = [clone(copies, pattern) for pattern in arm.patterns]
   CaseArm(patterns, body: clone_statements(copies, arm.body))
 
 # The lazy functions share the element and the guard, which are copied once.
-const clone_comprehension = (copies: Copies, comprehension: Comprehension): Comprehension ->
+const clone_comprehension = (copies: Copies, comprehension: Comprehension) ->
   const element = clone(copies, comprehension.element)
   const variable = copy_identifier(comprehension.variable)
   const iterable = clone(copies, comprehension.iterable)
@@ -218,12 +218,12 @@ const clone_comprehension = (copies: Copies, comprehension: Comprehension): Comp
   const position = comprehension.position
   Comprehension(element, variable, iterable, guard, position, lazy: lazy_copy)
 
-const clone_lazy = (copies: Copies, lazy: LazyFunctions): LazyFunctions ->
+const clone_lazy = (copies: Copies, lazy: LazyFunctions) ->
   const guard = lazy.guard
   const guard_copy = guard then clone_literal(copies, guard) else nil
   LazyFunctions(guard: guard_copy, element: clone_literal(copies, lazy.element))
 
-const clone_optional_type = (type: TypeName?): TypeName? -> type then clone_type(type) else nil
+const clone_optional_type = (type: TypeName?) -> type then clone_type(type) else nil
 
 const clone_type = (type: TypeName): TypeName ->
   case type
@@ -242,12 +242,12 @@ const clone_union_member = (member: UnionMember): UnionMember ->
     when NamedType then clone_named_type(member)
     when RecordTypeName then clone_record_type(member)
 
-const clone_named_type = (type: NamedType): NamedType ->
+const clone_named_type = (type: NamedType) ->
   const args = [clone_type(arg) for arg in type.args]
   NamedType(args, name: type.name, optional: type.optional, position: type.position)
 
-const clone_record_type = (type: RecordTypeName): RecordTypeName ->
-  const clone_field = (field: RecordTypeField): RecordTypeField ->
+const clone_record_type = (type: RecordTypeName) ->
+  const clone_field = (field: RecordTypeField) ->
     RecordTypeField(name: copy_identifier(field.name), type: clone_type(field.type))
   const fields = [clone_field(field) for field in type.fields]
   RecordTypeName(fields, optional: type.optional, position: type.position)

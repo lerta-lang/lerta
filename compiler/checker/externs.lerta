@@ -15,12 +15,12 @@ export const declare_externs = (
   program: ProgramWide
   shared: Shared
   statements: Array<Statement>
-): void ->
+) ->
   for statement in statements
     if statement is Extern
       declare_extern(program, shared, statement)
 
-const declare_extern = (program: ProgramWide, shared: Shared, statement: Extern): void ->
+const declare_extern = (program: ProgramWide, shared: Shared, statement: Extern) ->
   const type = resolve_result(program, module_resolver(shared.index), statement.type)
   if not (type is FunctionType)
     fail(program, statement.type.position, 'an extern is a C function, of a function type')
@@ -36,11 +36,7 @@ const declare_extern = (program: ProgramWide, shared: Shared, statement: Extern)
   add_extern(program, shared, statement.name, type, symbol.name)
 
 # Of the optional values that are not references, only an Int? has a C type, LertaOptionalInt.
-const reject_optionals_without_c_type = (
-  program: ProgramWide
-  type: FunctionType
-  at: Position
-): void ->
+const reject_optionals_without_c_type = (program: ProgramWide, type: FunctionType, at: Position) ->
   for value_type in value_types(type)
     if value_type is OptionalType
       const has_c_type = is_reference_type(value_type) or is_kind(value_type.inner, 'Int')
@@ -49,7 +45,7 @@ const reject_optionals_without_c_type = (
         const message = "a C function cannot take or return a #{format_type(value_type)}; #{reason}"
         fail(program, at, message)
 
-const value_types = (type: FunctionType): Array<Type> ->
+const value_types = (type: FunctionType) ->
   const types = [param for param in type.params]
   types.push(type.result)
   types
@@ -60,7 +56,7 @@ const c_type = (type: Type): String ->
   return 'pointer' if is_reference_type(type)
   type is OptionalType then "#{c_type(type.inner)}?" else kind_of(type)
 
-const c_signature = (type: Type): String ->
+const c_signature = (type: Type) ->
   case type
     when FunctionType
       "(#{[c_type(param) for param in type.params].join(', ')}) -> #{c_type(type.result)}"

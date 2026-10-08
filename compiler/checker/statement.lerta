@@ -22,10 +22,10 @@ import {
 } from '../types'
 
 # Does nothing, where a block has nothing more to define or check.
-export const nothing = (): void -> return
+export const nothing = () -> return
 
 # Each initializer sees the constructor arguments and the fields initialized before it.
-export const check_initializers = (body: Body, info: ObjectInfo, self: SelfContext): void ->
+export const check_initializers = (body: Body, info: ObjectInfo, self: SelfContext) ->
   for field in info.fields
     const value = field.value ? continue
     self.initializing = field
@@ -45,7 +45,7 @@ export const check_function_body = (
   literal: FunctionLiteral
   params: Array<Type>
   holds: Expression?
-): void ->
+) ->
   const define_params = ->
     if const self = body.self
       const identifier = Identifier(name: '@', position: literal.position)
@@ -63,10 +63,7 @@ export const check_function_body = (
 
 # The top-level code. Its names may be used by the functions, which are checked later, so its
 # scope is kept to warn about those never used once they are.
-export const check_top_level_code = (
-  body: Body
-  statements: Array<Statement>
-): Map<String, Local> ->
+export const check_top_level_code = (body: Body, statements: Array<Statement>) ->
   body.scopes.push()
   check_statement(body, statement) for statement in statements
   body.scopes.pop()
@@ -78,7 +75,7 @@ export const type_of_block = (
   statements: Array<Statement>
   define: () -> void
   type_of_last: (Expression) -> Type
-): Type ->
+) ->
   const last = statements[statements.length - 1]
   var type: Type = void_type
   const finish = ->
@@ -90,11 +87,11 @@ export const type_of_block = (
   check_block(body, all_but_last(statements), define, finish)
   type
 
-export const all_but_last = (statements: Array<Statement>): Array<Statement> ->
+export const all_but_last = (statements: Array<Statement>) ->
   [statements[i] for i in 0...(statements.length - 1)]
 
 # Whether the expression was typed `never`.
-const is_never_typed = (body: Body, expression: Expression): Bool ->
+const is_never_typed = (body: Body, expression: Expression) ->
   const type = body.shared.types[expression] ? return false
   is_kind(type, 'never')
 
@@ -106,7 +103,7 @@ export const check_block = (
   statements: Array<Statement>
   define: () -> void
   finish: () -> void
-): void ->
+) ->
   body.scopes.push()
   define()
   check_statement(body, statement) for statement in statements
@@ -137,7 +134,7 @@ export const check_statement = (body: Body, statement: Statement): void ->
 # An optional name tested in the condition is narrowed where it is known not to be nil: in the
 # then branch of `if x`, in the else branch of `if not x`, and after a guard such as
 # `return if x == nil`.
-const check_if = (body: Body, if_statement: If): void ->
+const check_if = (body: Body, if_statement: If) ->
   const { condition, then_body, else_body } = if_statement
   const define = check_condition(body, condition)
   const narrowing = narrowing_of(body, condition)
@@ -149,7 +146,7 @@ const check_if = (body: Body, if_statement: If): void ->
     narrow_where(true)
   check_block(body, then_body, define_then, nothing)
   check_block(body, else_body, () -> narrow_where(false), nothing)
-  const is_never = (expression: Expression): Bool -> is_never_typed(body, expression)
+  const is_never = (expression: Expression) -> is_never_typed(body, expression)
   narrow_where(false) if else_body.length == 0 and ends_with_jump(then_body, is_never)
 
 # Checks the condition, and returns what it defines in the body: the name of `const name = value`.
@@ -159,22 +156,22 @@ export const check_condition = (body: Body, condition: Condition): () -> void ->
       const inner = expect_optional(body, condition.value)
       const identifier = condition.name
       const local = Local(identifier, type: inner, mutable: false, declared: true, used: false)
-      (): void -> define_local(body, local)
+      () -> define_local(body, local)
     else
       expect_condition(body, as_expression(condition)!)
       nothing
 
 # Until the innermost scope ends, the local is seen with the narrower type.
-const narrow = (body: Body, local: Local, type: Type): void ->
+const narrow = (body: Body, local: Local, type: Type) ->
   body.scopes.narrow(local.identifier.name, narrowed_view(local, type))
 
 # Narrows, in the current scope, the local that the condition tests, where it holds.
-export const narrow_where_holds = (body: Body, condition: Expression): void ->
+export const narrow_where_holds = (body: Body, condition: Expression) ->
   const narrowing = narrowing_of(body, condition) ? return
   narrow(body, narrowing.local, narrowing.type) if narrowing.condition_value
 
 # A top-level function was added to the module's functions before checking started.
-const check_declaration = (body: Body, declaration: Declaration): void ->
+const check_declaration = (body: Body, declaration: Declaration) ->
   const is_top_level = body.context == nil and body.self == nil
   const value = declaration.value
   return if value is FunctionLiteral and is_top_level and body.scopes.depth() == 1
@@ -188,12 +185,12 @@ const check_declaration = (body: Body, declaration: Declaration): void ->
   define_local(body, Local(type, mutable, identifier: name, declared: true, used: exported))
 
 # nil alone gives no type, and void and never give no value.
-const reject_if_not_storable = (body: Body, type: Type, value: Expression): void ->
+const reject_if_not_storable = (body: Body, type: Type, value: Expression) ->
   if is_one_of_kinds(type, ['void', 'never', 'nil'])
     fail(body.program, value.position, "cannot store a value of type #{format_type(type)}")
 
 # A local may shadow any name of an outer scope, a top-level name or a builtin.
-export const define_local = (body: Body, local: Local): void ->
+export const define_local = (body: Body, local: Local) ->
   const { name, position } = local.identifier
   const { program, shared } = body
   const is_top_level = body.context == nil and body.scopes.depth() == 1
@@ -207,11 +204,11 @@ export const define_local = (body: Body, local: Local): void ->
   define_top_level(shared.top_level, local) if is_top_level
   shared.types[local.identifier] = local.type
 
-const check_expression_statement = (body: Body, statement: Expression): void ->
+const check_expression_statement = (body: Body, statement: Expression) ->
   check_discarded(body, statement, type_of(body, statement, nil))
 
 # See the rules for discarded values in docs/reference/errors.md.
-export const check_discarded = (body: Body, statement: Expression, type: Type): void ->
+export const check_discarded = (body: Body, statement: Expression, type: Type) ->
   const program = body.program
   const at = statement.position
   fail(program, at, 'an Iter does nothing until it is consumed') if type is IterType

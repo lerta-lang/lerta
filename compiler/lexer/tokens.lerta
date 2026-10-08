@@ -38,7 +38,7 @@ const PUNCTUATIONS = [
 ]
 
 # `path` names the source in diagnostics.
-export const tokenize = (source: String, path: String): Array<Token> ->
+export const tokenize = (source: String, path: String) ->
   const tokens: Array<Token> = []
   const indents = [0]
   const brackets = Brackets(path)
@@ -66,12 +66,7 @@ export const tokenize = (source: String, path: String): Array<Token> ->
   tokens
 
 # The tokens of an interpolated expression, placed where it is in the source line.
-export const tokenize_fragment = (
-  source: String
-  path: String
-  line: Int
-  column: Int
-): Array<Token> ->
+export const tokenize_fragment = (source: String, path: String, line: Int, column: Int) ->
   const fragment = SourceLine(path, bytes: source.binary, number: line, column_offset: column - 1)
   const tokens = LineScanner(line: fragment, position: 0).run()
   const end = fragment.column(fragment.length)
@@ -80,12 +75,12 @@ export const tokenize_fragment = (
   tokens
 
 # A line that LF ends may end with CRLF.
-const without_carriage_return = (line: String): Binary ->
+const without_carriage_return = (line: String) ->
   const bytes = line.binary
   const ends_with_cr = bytes.length > 0 and bytes[bytes.length - 1] == "\r"
   ends_with_cr then bytes.slice(0, bytes.length - 1) else bytes
 
-const layout_token = (kind: String, line: Int, column: Int): Token ->
+const layout_token = (kind: String, line: Int, column: Int) ->
   Token(kind, line, column, text: '', spaced: true)
 
 # Lines inside brackets continue the line that opened them, whatever their indentation, and end
@@ -103,7 +98,7 @@ class Brackets
         @open.pop() if @are_open()
       else return
 
-  are_open = (): Bool -> @open.length > 0
+  are_open = () -> @open.length > 0
 
   check_closed = ->
     return if @open.length == 0
@@ -126,7 +121,7 @@ const emit_indentation = (
     tokens.push(layout_token('dedent', line.number, column))
   line.fail('indentation does not match any outer block', indent) if indent != top(indents)
 
-const top = (indents: Array<Int>): Int -> indents[indents.length - 1]
+const top = (indents: Array<Int>) -> indents[indents.length - 1]
 
 # The tokens of one line, from `position`.
 class LineScanner
@@ -134,7 +129,7 @@ class LineScanner
   position: Int
   tokens: Array<Token> = []
 
-  run = (): Array<Token> ->
+  run = () ->
     while @position < @line.length
       const c = @line.bytes[@position]
       case
@@ -185,7 +180,7 @@ class LineScanner
     @add(punctuation, punctuation, @position + punctuation.binary.length, nil)
 
   # Compares bytes, since the next ones may not be a whole character.
-  at = (punctuation: String): Bool -> @line.bytes.occurs_at(@position, punctuation.binary)
+  at = (punctuation: String) -> @line.bytes.occurs_at(@position, punctuation.binary)
 
   # Control characters such as '\r' would garble the error line if printed raw.
   fail_unexpected_character = (): never ->
@@ -197,21 +192,21 @@ class LineScanner
     @line.fail("unexpected character #{shown}", @position)
 
 # The text of a literal without interpolations, or nil.
-const plain_text = (parts: Array<TemplatePart>): String? ->
+const plain_text = (parts: Array<TemplatePart>) ->
   return nil if parts.length != 1
   const part = parts[0]
   part is TextPart then part.text else nil
 
-const is_space = (c: Byte): Bool -> c == ' '
-const is_identifier_start = (c: Byte): Bool -> c.is_letter() or c == '_'
-const is_identifier_part = (c: Byte): Bool -> is_identifier_start(c) or c.is_digit()
-const is_keyword = (word: String): Bool -> KEYWORDS.any((keyword) -> keyword == word)
-const is_hex_digit = (c: Byte): Bool ->
+const is_space = (c: Byte) -> c == ' '
+const is_identifier_start = (c: Byte) -> c.is_letter() or c == '_'
+const is_identifier_part = (c: Byte) -> is_identifier_start(c) or c.is_digit()
+const is_keyword = (word: String) -> KEYWORDS.any((keyword) -> keyword == word)
+const is_hex_digit = (c: Byte) ->
   c.is_digit() or (c >= 'a' and c <= 'f') or (c >= 'A' and c <= 'F')
 
 # `1_000` is 1000. A separator goes only between digits, and a leading zero is rejected so that
 # `010` is not mistaken for octal. `0xFF` is hexadecimal.
-const is_integer_literal = (text: Binary): Bool ->
+const is_integer_literal = (text: Binary) ->
   if text.occurs_at(0, '0x'.binary)
     return false if text.length == 2
     for i in 2...text.length

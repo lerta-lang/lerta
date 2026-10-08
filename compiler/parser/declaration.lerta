@@ -11,11 +11,11 @@ import { token_position, TokenStream } from './token_stream'
 import { parse_type_name } from './type'
 
 # `type Name = ...`; `type` is not a keyword, so that it stays usable as a name.
-export const starts_type_alias = (tokens: TokenStream): Bool ->
+export const starts_type_alias = (tokens: TokenStream) ->
   const name_follows = tokens.peek_at(1).kind == 'identifier'
   tokens.at_word('type') and name_follows and tokens.peek_at(2).kind == '='
 
-export const parse_type_alias = (tokens: TokenStream): TypeAlias ->
+export const parse_type_alias = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const name = parse_identifier(tokens)
   tokens.expect('=', "'='")
@@ -49,7 +49,7 @@ export const parse_export = (tokens: TokenStream): Statement ->
     else fail()
 
 # `extern symbol as name: (A) -> R`.
-export const parse_extern = (tokens: TokenStream): Extern ->
+export const parse_extern = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const symbol = parse_identifier(tokens)
   const has_name = tokens.at_word('as')
@@ -60,7 +60,7 @@ export const parse_extern = (tokens: TokenStream): Extern ->
 
 # `import { a, b } from 'module'`, or `import 'module'` for its effects alone. `from` is not a
 # keyword, so that it stays usable as a name.
-export const parse_import = (tokens: TokenStream): Import ->
+export const parse_import = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   if tokens.peek().kind == 'string'
     return Import(position, names: [], module: parse_module_name(tokens))
@@ -72,21 +72,21 @@ export const parse_import = (tokens: TokenStream): Import ->
   tokens.next()
   Import(names, position, module: parse_module_name(tokens))
 
-const parse_module_name = (tokens: TokenStream): String ->
+const parse_module_name = (tokens: TokenStream) ->
   const module = tokens.peek()
   tokens.fail_expecting(module, 'module name') if module.kind != 'string'
   tokens.next()
   module.text
 
 # `name` or `name as alias`. `as` is not a keyword, so that it stays usable as a name.
-const parse_import_name = (tokens: TokenStream): ImportName ->
+const parse_import_name = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   return ImportName(name) if not tokens.at_word('as')
   tokens.next()
   ImportName(name, alias: parse_identifier(tokens))
 
 # `class Name` or `struct Name` followed by an indented block of members, one per line.
-export const parse_type_declaration = (tokens: TokenStream): TypeDeclaration ->
+export const parse_type_declaration = (tokens: TokenStream) ->
   const token = tokens.next()
   const name = parse_identifier(tokens)
   const members = parse_members(tokens)
@@ -94,14 +94,14 @@ export const parse_type_declaration = (tokens: TokenStream): TypeDeclaration ->
 
 # `extend Type`, or `extend<T> Array<T>` for a generic one, followed by an indented block of
 # methods, one per line.
-export const parse_extend = (tokens: TokenStream): Extend ->
+export const parse_extend = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const is_generic = tokens.peek().kind == '<'
   const type_params: Array<TypeParameter> = is_generic then parse_type_parameters(tokens) else []
   const type = parse_type_name(tokens)
   Extend(type_params, type, position, members: parse_members(tokens))
 
-const parse_members = (tokens: TokenStream): Array<MemberDeclaration> ->
+const parse_members = (tokens: TokenStream) ->
   tokens.expect('newline', 'end of line')
   tokens.expect('indent', 'indented members')
   const members: Array<MemberDeclaration> = []
@@ -112,7 +112,7 @@ const parse_members = (tokens: TokenStream): Array<MemberDeclaration> ->
   members
 
 # `[const | var] name[: Type][ = value]`, with a type, a value or both.
-const parse_member = (tokens: TokenStream): MemberDeclaration ->
+const parse_member = (tokens: TokenStream) ->
   const token = tokens.peek()
   const has_modifier = token.kind == 'const' or token.kind == 'var'
   tokens.next() if has_modifier

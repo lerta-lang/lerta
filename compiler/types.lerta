@@ -71,7 +71,7 @@ export const nil_type = SimpleType(kind: 'nil')
 
 # The kind of a type: that of a simple type, `Array`, `Map`, `Iter`, `Record`, `Object`, `Union`,
 # `Optional`, `TypeParameter` or `function`.
-export const kind_of = (type: Type): String ->
+export const kind_of = (type: Type) ->
   case type
     when SimpleType then type.kind
     when ArrayType then 'Array'
@@ -84,13 +84,13 @@ export const kind_of = (type: Type): String ->
     when TypeParameterType then 'TypeParameter'
     when FunctionType then 'function'
 
-export const is_kind = (type: Type, kind: String): Bool -> kind_of(type) == kind
+export const is_kind = (type: Type, kind: String) -> kind_of(type) == kind
 
-export const is_one_of_kinds = (type: Type, kinds: Array<String>): Bool ->
+export const is_one_of_kinds = (type: Type, kinds: Array<String>) ->
   const kind = kind_of(type)
   kinds.any((each) -> each == kind)
 
-export const record_type = (fields: Array<RecordField>): RecordType ->
+export const record_type = (fields: Array<RecordField>) ->
   RecordType(fields: sorted(fields, (a, b) -> compare_text(a.name, b.name)))
 
 # `T?` of a T that may be nil already, as a type argument may be, is T.
@@ -98,15 +98,15 @@ export const optional_type = (inner: Type): Type ->
   inner is OptionalType then inner else OptionalType(inner)
 
 # The members are kept in the order of their keys, so that `A | B` and `B | A` are the same type.
-export const union_type = (members: Array<Type>): UnionType ->
+export const union_type = (members: Array<Type>) ->
   UnionType(members: sorted(members, (a, b) -> compare_text(type_key(a), type_key(b))))
 
 # How a type is written in messages. A class or struct is written by its name, and with its module
 # where `qualified` says so, or where a union holds another of the same name.
-export const format_type = (type: Type): String -> format_qualified(type, false)
+export const format_type = (type: Type) -> format_qualified(type, false)
 
 export const format_qualified = (type: Type, qualified: Bool): String ->
-  const format = (inner: Type): String -> format_qualified(inner, qualified)
+  const format = (inner: Type) -> format_qualified(inner, qualified)
   case type
     when SimpleType then type.kind
     when ArrayType then "Array<#{format(type.element)}>"
@@ -127,20 +127,20 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
       "(#{[format(param) for param in type.params].join(', ')}) -> #{format(type.result)}"
 
 # A member of a union, with its module if another member has the same name.
-export const format_member = (member: Type, union: Type): String ->
+export const format_member = (member: Type, union: Type) ->
   format_member_qualified(member, union, false)
 
-const format_member_qualified = (member: Type, union: Type, qualified: Bool): String ->
+const format_member_qualified = (member: Type, union: Type, qualified: Bool) ->
   return format_qualified(member, qualified) if not (member is ObjectType)
   return format_qualified(member, qualified) if not (union is UnionType)
-  const shares_name = (other: Type): Bool ->
+  const shares_name = (other: Type) ->
     return false if not (other is ObjectType)
     other.name == member.name and not same_type(other, member)
   format_qualified(member, qualified or union.members.any(shares_name))
 
 # Two types for a message: as format_type writes them, or, if that cannot tell them apart, with
 # the modules of their classes and structs.
-export const format_types = (a: Type, b: Type): { first: String, second: String } ->
+export const format_types = (a: Type, b: Type) ->
   const first = format_type(a)
   const second = format_type(b)
   return { first, second } if first != second
@@ -162,7 +162,7 @@ export const type_key = (type: Type): String ->
       "(#{[type_key(param) for param in type.params].join(', ')}) -> #{type_key(type.result)}"
     when TypeParameterType then type.name
 
-export const same_type = (a: Type, b: Type): Bool -> type_key(a) == type_key(b)
+export const same_type = (a: Type, b: Type) -> type_key(a) == type_key(b)
 
 # Values of these types are reference counted; a function value is a closure.
 export const is_reference_type = (type: Type): Bool ->
@@ -185,7 +185,7 @@ export const is_assignable = (value: Type, target: Type): Bool ->
   return true if is_kind(value, 'never')
   if target is UnionType
     const members = value is UnionType then value.members else [value]
-    const is_member = (member: Type): Bool -> target.members.any((type) -> same_type(type, member))
+    const is_member = (member: Type) -> target.members.any((type) -> same_type(type, member))
     return members.all(is_member)
   if target is OptionalType
     return true if is_kind(value, 'nil') or is_assignable(value, target.inner)
@@ -200,12 +200,12 @@ export const is_identity_type = (type: Type): Bool ->
     else false
 
 # Maps hash and compare their keys in the runtime, which knows these kinds.
-export const is_map_key_type = (type: Type): Bool ->
+export const is_map_key_type = (type: Type) ->
   is_one_of_kinds(type, ['String', 'Int']) or is_identity_type(type)
 
 # The type of a value that is either an `a` or a `b`: the same type, or `T?` for a mix of `T`,
 # `T?` and nil; `never`, which gives no value, does not count. Nil if there is none.
-export const unify = (a: Type, b: Type): Type? ->
+export const unify = (a: Type, b: Type) ->
   return a if same_type(a, b) or is_kind(b, 'never')
   return b if is_kind(a, 'never')
   return a if is_kind(a, 'nil') and is_kind(b, 'nil')
@@ -214,4 +214,4 @@ export const unify = (a: Type, b: Type): Type? ->
   const is_optional = a is OptionalType or b is OptionalType
   is_optional and same_type(inner_of(a), inner_of(b)) then optional_type(inner_of(a)) else nil
 
-const inner_of = (type: Type): Type -> type is OptionalType then type.inner else type
+const inner_of = (type: Type) -> type is OptionalType then type.inner else type

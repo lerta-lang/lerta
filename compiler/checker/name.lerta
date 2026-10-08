@@ -4,20 +4,17 @@ import { Expression, Identifier } from '../ast'
 import { captured } from './closure'
 import { fail } from './diagnostics'
 import { function_type_of, generic_function, has_function } from './functions'
-import { GenericRef } from './generics'
 import {
   builtin_export, Export, ExternExport, FunctionExport, GenericExport, imported_export, TypeExport
   use_import, value_local, ValueExport
 } from './imports'
 import { object_type } from './object_types'
-import { Local } from './scopes'
 import { Body } from './shared'
 import { fail_runs_later, reject_pending } from './top_level_values'
-import { Type } from '../types'
 
 # The local of the name: in the scopes, or outside them, as a function literal captures it from
 # around it, as a top-level value that a function or a method sees, or as an imported value.
-export const lookup = (body: Body, name: String): Local? ->
+export const lookup = (body: Body, name: String) ->
   if const local = body.scopes.lookup_local(name)
     return local
   if const outer = captured(body, name)
@@ -28,7 +25,7 @@ export const lookup = (body: Body, name: String): Local? ->
   value_local(body.program, body.shared, name)
 
 # A builtin or a standard module's function can only be called so far, not used as a value.
-export const type_of_identifier = (body: Body, identifier: Identifier, is_callee: Bool): Type ->
+export const type_of_identifier = (body: Body, identifier: Identifier, is_callee: Bool) ->
   const { program, shared } = body
   const { name, position } = identifier
   if const local = lookup(body, name)
@@ -53,7 +50,7 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
 
 # The generic function that the callee names: one of the module, an imported one or a builtin,
 # unless a local or another name of the module takes the name.
-export const generic_callee = (body: Body, callee: Expression): GenericRef? ->
+export const generic_callee = (body: Body, callee: Expression) ->
   return nil if not (callee is Identifier)
   const { program, shared } = body
   const name = callee.name
@@ -72,12 +69,7 @@ export const generic_callee = (body: Body, callee: Expression): GenericRef? ->
 
 # A generic function is called through generic_callee, so here it is used as a value. A value
 # whose type is not known yet is reported by type_of_identifier.
-const type_of_export = (
-  body: Body
-  exported: Export
-  identifier: Identifier
-  is_callee: Bool
-): Type ->
+const type_of_export = (body: Body, exported: Export, identifier: Identifier, is_callee: Bool) ->
   const { name, position } = identifier
   case exported
     when TypeExport then fail(body.program, position, "'#{name}' is a type")

@@ -15,10 +15,7 @@ export type TemplatePart = TextPart | CodePart
 const MAX_CODE_POINT = 0x10FFFF
 
 # Reads the literal whose opening quote is at `start`. Returns its parts and the index after it.
-export const scan_double_quoted = (
-  line: SourceLine
-  start: Int
-): { parts: Array<TemplatePart>, end: Int } ->
+export const scan_double_quoted = (line: SourceLine, start: Int) ->
   const parts: Array<TemplatePart> = []
   var text: Array<Byte> = []
   var i = start + 1
@@ -45,9 +42,9 @@ export const scan_double_quoted = (
   { parts, end: i + 1 }
 
 # Escapes and interpolations split the text only between whole characters.
-const decode = (bytes: Array<Byte>): String -> bytes.to_binary().decode_utf8()!
+const decode = (bytes: Array<Byte>) -> bytes.to_binary().decode_utf8()!
 
-const read_escape = (line: SourceLine, start: Int): { value: Binary, end: Int } ->
+const read_escape = (line: SourceLine, start: Int) ->
   const kind: Byte = start + 1 < line.length then line.bytes[start + 1] else 0
   const simple = simple_escape(kind)
   return { value: simple.binary, end: start + 2 } if simple
@@ -57,7 +54,7 @@ const read_escape = (line: SourceLine, start: Int): { value: Binary, end: Int } 
   const code_point = parse_code_point(digits) ? line.fail('invalid unicode escape', start)
   { value: encode_utf8(code_point), end: close + 1 }
 
-const simple_escape = (kind: Byte): String? ->
+const simple_escape = (kind: Byte) ->
   case kind
     when 'n' then "\n"
     when 't' then "\t"
@@ -69,7 +66,7 @@ const simple_escape = (kind: Byte): String? ->
     else nil
 
 # The code point that 1 to 6 hexadecimal digits give, or nil if they do not give one.
-const parse_code_point = (digits: Binary): Int? ->
+const parse_code_point = (digits: Binary) ->
   return nil if digits.length == 0 or digits.length > 6
   var value = 0
   for digit in digits
@@ -78,7 +75,7 @@ const parse_code_point = (digits: Binary): Int? ->
   const is_surrogate = value >= 0xD800 and value <= 0xDFFF
   value <= MAX_CODE_POINT and not is_surrogate then value else nil
 
-const encode_utf8 = (code_point: Int): Binary ->
+const encode_utf8 = (code_point: Int) ->
   const bytes: Array<Byte> = case
     when code_point < 0x80 then [code_point.to_byte()]
     when code_point < 0x800 then [(0xC0 + code_point / 0x40).to_byte(), continuation(code_point)]
@@ -93,7 +90,7 @@ const encode_utf8 = (code_point: Int): Binary ->
   bytes.to_binary()
 
 # The continuation byte of the low 6 bits.
-const continuation = (bits: Int): Byte -> (0x80 + bits % 0x40).to_byte()
+const continuation = (bits: Int) -> (0x80 + bits % 0x40).to_byte()
 
 # The index of the `}` that closes an interpolation, skipping nested braces and string literals.
 # Each arm moves past what it reads.

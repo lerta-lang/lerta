@@ -55,7 +55,7 @@ const parse_this = (tokens: TokenStream, position: Position): Expression ->
   Member(object, position, name: parse_identifier(tokens))
 
 # Whether the next token ends the expression, so that `return` there has no value.
-const ends_expression = (tokens: TokenStream): Bool ->
+const ends_expression = (tokens: TokenStream) ->
   is_one_of(tokens.peek_continuation(), EXPRESSION_ENDS)
 
 # The value of an integer literal's text, negated if `is_negative`.
@@ -64,7 +64,7 @@ export const integer_value = (
   text: String
   is_negative: Bool
   position: Position
-): Int ->
+) ->
   const fail = (): never -> tokens.fail(position, 'integer literal does not fit in Int')
   const negated = negated_value(text) ? fail()
   return negated if is_negative
@@ -73,7 +73,7 @@ export const integer_value = (
 
 # The value of a literal's text, decimal or hexadecimal, negated, or nil if that is below the
 # minimum Int. It is computed negated since the minimum Int has no positive counterpart.
-const negated_value = (text: String): Int? ->
+const negated_value = (text: String) ->
   const is_hex = text.binary.occurs_at(0, '0x'.binary)
   const base = is_hex then 16 else 10
   const digits = is_hex then text.binary.slice(2, text.binary.length) else text.binary
@@ -85,7 +85,7 @@ const negated_value = (text: String): Int? ->
     value = value * base - digit_value
   value
 
-const parse_interpolation = (tokens: TokenStream, token: Token): Expression ->
+const parse_interpolation = (tokens: TokenStream, token: Token) ->
   const parts = [interpolation_part(tokens.path, part, token.line) for part in token.parts!]
   Interpolation(parts, position: token_position(token))
 
@@ -94,17 +94,12 @@ const interpolation_part = (path: String, part: TemplatePart, line: Int): Interp
     when TextPart then part
     when CodePart then to_string_call(parse_interpolated_code(path, part.source, line, part.column))
 
-const to_string_call = (value: Expression): Call ->
+const to_string_call = (value: Expression) ->
   const position = value.position
   const callee = Member(position, object: value, name: Identifier(position, name: 'to_string'))
   Call(callee, position, args: [], named_args: [], type_args: [])
 
-const parse_interpolated_code = (
-  path: String
-  source: String
-  line: Int
-  column: Int
-): Expression ->
+const parse_interpolated_code = (path: String, source: String, line: Int, column: Int) ->
   const fragment = tokenize_fragment(source, path, line, column)
   const tokens = TokenStream(path, tokens: fragment, interpolation: Position(line, column))
   const expression = parse_expression(tokens)

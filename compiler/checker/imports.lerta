@@ -64,7 +64,7 @@ export class Imports
   builtins: Int? = nil
 
 # The declarations that the module exports, by name.
-export const exported_statements = (program: Array<Statement>): Map<String, Exportable> ->
+export const exported_statements = (program: Array<Statement>) ->
   const exported: Map<String, Exportable> = Map()
   for statement in program
     if const declaration = exported_declaration(statement)
@@ -97,18 +97,14 @@ export const imported_export = (program: ProgramWide, imported: ImportedName): E
     when ExternExport then source
 
 # The module's own names that clash with imports are rejected as they are declared.
-export const add_imports = (
-  program: ProgramWide
-  shared: Shared
-  statements: Array<Statement>
-): void ->
+export const add_imports = (program: ProgramWide, shared: Shared, statements: Array<Statement>) ->
   for statement in statements
     if statement is Import
       const exporter = program.modules[shared.index].imported[statement]!
       shared.imports.builtins = exporter if statement.module == BUILTINS_MODULE
       add_import(program, shared, statement, exporter)
 
-const add_import = (program: ProgramWide, shared: Shared, statement: Import, exporter: Int): void ->
+const add_import = (program: ProgramWide, shared: Shared, statement: Import, exporter: Int) ->
   const names = shared.imports.names
   for imported in statement.names
     const { name } = imported
@@ -127,22 +123,22 @@ export const add_extern = (
   name: Identifier
   type: Type
   symbol: String
-): void ->
+) ->
   const names = shared.imports.names
   fail(program, name.position, "'#{name.name}' is already defined") if names.has(name.name)
   const source = ExternExport(type, symbol)
   names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
 
-export const has_import = (shared: Shared, name: String): Bool -> shared.imports.names.has(name)
+export const has_import = (shared: Shared, name: String) -> shared.imports.names.has(name)
 
 # The imported name, marked as used.
-export const use_import = (shared: Shared, name: String): ImportedName? ->
+export const use_import = (shared: Shared, name: String) ->
   const imported = shared.imports.names[name] ? return nil
   imported.used = true
   imported
 
 # An imported type, marking its import as used.
-export const imported_type = (program: ProgramWide, shared: Shared, name: String): TypeExport? ->
+export const imported_type = (program: ProgramWide, shared: Shared, name: String) ->
   const imported = shared.imports.names[name] ? return nil
   const exported = imported_export(program, imported)
   return nil if not (exported is TypeExport)
@@ -152,7 +148,7 @@ export const imported_type = (program: ProgramWide, shared: Shared, name: String
 # An imported `const` of another file as a local that cannot be assigned, so that it is read and
 # narrowed as one; using it marks the import as used. One whose type is not known yet is left to
 # type_of_export, which reports it where it is used.
-export const value_local = (program: ProgramWide, shared: Shared, name: String): Local? ->
+export const value_local = (program: ProgramWide, shared: Shared, name: String) ->
   const imported = shared.imports.names[name] ? return nil
   const exported = imported_export(program, imported)
   return nil if not (exported is ValueExport)
@@ -160,7 +156,7 @@ export const value_local = (program: ProgramWide, shared: Shared, name: String):
   imported.used = true
   Local(type, identifier: imported.name, mutable: false, declared: false, used: true)
 
-export const builtin_export = (program: ProgramWide, shared: Shared, name: String): Export? ->
+export const builtin_export = (program: ProgramWide, shared: Shared, name: String) ->
   const builtins = shared.imports.builtins ? return nil
   return nil if not program.shared[builtins].exported.has(name)
   export_of(program, builtins, name)

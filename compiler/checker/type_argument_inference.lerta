@@ -28,7 +28,7 @@ export struct Inference
   inferred: Array<InferredArgument>
 
 # The type arguments of a generic method that the receiver gives, if it gives all of them.
-export const receiver_type_arguments = (generic: GenericFunction, receiver: Type): Array<Type>? ->
+export const receiver_type_arguments = (generic: GenericFunction, receiver: Type) ->
   const bindings: Map<String, Type> = Map()
   infer(generic.receiver!.type, receiver, (name, type) -> bindings[name] = type)
   return nil if generic.type_params.any((param) -> not bindings.has(param.name.name))
@@ -47,7 +47,7 @@ export const infer_type_arguments = (
   generic: GenericFunction
   expected: Type?
   receiver: TypeBinding?
-): Inference ->
+) ->
   const params = generic.params
   const bindings = written_bindings(body, call, generic)
   const written: Map<String, Bool> = Map()
@@ -74,8 +74,8 @@ export const infer_type_arguments = (
     fail(body.program, arg.position, 'expected a value, got void') if is_kind(type, 'void')
     bind_from(params[index], type, arg.position)
     inferred.push(InferredArgument(arg, type, index))
-  const is_function = (i: Int): Bool -> call.args[i] is FunctionLiteral
-  const is_literal = (i: Int): Bool -> needs_context(call.args[i]) and not is_function(i)
+  const is_function = (i: Int) -> call.args[i] is FunctionLiteral
+  const is_literal = (i: Int) -> needs_context(call.args[i]) and not is_function(i)
   check_argument(i) for i in 0...call.args.length when not needs_context(call.args[i])
   if const result = generic.result
     bind_from(result, expected, call.position) if expected
@@ -84,15 +84,11 @@ export const infer_type_arguments = (
   Inference(bindings, inferred)
 
 # An X? after an X makes the type argument X?.
-const widens = (bound: Type, type: Type): Bool ->
+const widens = (bound: Type, type: Type) ->
   type is OptionalType then same_type(type.inner, bound) else false
 
 # `f<Int>(x)` gives all the type arguments.
-const written_bindings = (
-  body: Body
-  call: Call
-  generic: GenericFunction
-): Map<String, TypeBinding> ->
+const written_bindings = (body: Body, call: Call, generic: GenericFunction) ->
   const bindings: Map<String, TypeBinding> = Map()
   const { type_params, name } = generic
   return bindings if call.type_args.length == 0
@@ -106,7 +102,7 @@ const written_bindings = (
   bindings
 
 # A literal whose type may depend on what is expected of it.
-const needs_context = (arg: Expression): Bool ->
+const needs_context = (arg: Expression) ->
   case arg
     when FunctionLiteral then true
     when NilLiteral then true
@@ -117,7 +113,7 @@ const needs_context = (arg: Expression): Bool ->
     when RecordLiteral then true
     else false
 
-const types_of = (bindings: Map<String, TypeBinding>): Map<String, Type> ->
+const types_of = (bindings: Map<String, TypeBinding>) ->
   const types: Map<String, Type> = Map()
   types[name] = bindings[name]!.type for name in bindings.keys()
   types

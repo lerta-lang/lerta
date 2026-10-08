@@ -54,7 +54,7 @@ class Loader
 
 # The modules, each after those it imports unless they import it back, so the entry module comes
 # last. The standard modules are the files of std/ under `root_dir`.
-export const load_modules = (entry_path: String, root_dir: String): Array<Module> ->
+export const load_modules = (entry_path: String, root_dir: String) ->
   throw "'#{entry_path}' is not a file" if not is_file(entry_path)
   const std_dir = join(root_dir, 'std')
   const builtins_and_dependencies = [
@@ -69,7 +69,7 @@ export const load_modules = (entry_path: String, root_dir: String): Array<Module
 # Files are known by their real paths, so that one file reached by different paths loads once, and
 # a module's imports are relative to where it really is. Diagnostics name a module by a path from
 # the entry module's directory as given. Returns the module's place in the loading order.
-const load = (loader: Loader, path: String, display_path: String?): Int ->
+const load = (loader: Loader, path: String, display_path: String?) ->
   const real = real_path_text(path)
   const location = module_location(loader.entry_path, display_path)
   const source = read_file(path).decode_utf8() ? throw "'#{path}' is not valid UTF-8"
@@ -88,10 +88,10 @@ const load = (loader: Loader, path: String, display_path: String?): Int ->
   loader.order.push(id)
   id
 
-const builtins_import = (): Import ->
+const builtins_import = () ->
   Import(names: [], module: BUILTINS_MODULE, position: Position(line: 1, column: 1))
 
-const prepend = (first: Statement, rest: Array<Statement>): Array<Statement> ->
+const prepend = (first: Statement, rest: Array<Statement>) ->
   const statements = [first]
   statements.push(statement) for statement in rest
   statements
@@ -112,12 +112,7 @@ const visit = (loader: Loader, path: String, statement: Import, location: String
 
 # The file an import names: a path that starts with `./` or `../` is relative to `from`, the
 # directory of the importing file; `std:name` is a standard module. Other names are reserved.
-const imported_file = (
-  loader: Loader
-  statement: Import
-  from: String
-  location: String
-): String ->
+const imported_file = (loader: Loader, statement: Import, from: String, location: String) ->
   const module = statement.module
   const bytes = module.binary
   if bytes.occurs_at(0, './'.binary) or bytes.occurs_at(0, '../'.binary)
@@ -134,20 +129,20 @@ const imported_file = (
   const { line, column } = statement.position
   compile_error(location, line, column, message)
 
-const finished_module = (loader: Loader, id: Int): Module ->
+const finished_module = (loader: Loader, id: Int) ->
   const loading = loader.loaded[id]
-  const index_of = (place: Int): Int -> loader.loaded[place].index
+  const index_of = (place: Int) -> loader.loaded[place].index
   const imported: Map<Import, Int> = Map()
   for statement in loading.imported.keys()
     imported[statement] = index_of(loading.imported[statement]!)
   const { index, display_path, program } = loading
   Module(index, display_path, program, imported)
 
-export const is_standard_module = (module: Module): Bool ->
+export const is_standard_module = (module: Module) ->
   if const path = module.display_path
     return path.binary.occurs_at(0, 'std:'.binary)
   false
 
 # Paths are compared as text, so a real path must be UTF-8.
-const real_path_text = (path: String): String ->
+const real_path_text = (path: String) ->
   real_path(path).decode_utf8() ? throw "the real path of '#{path}' is not valid UTF-8"

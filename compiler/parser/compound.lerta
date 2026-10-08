@@ -3,10 +3,10 @@
 import {
   ArrayLiteral, BooleanLiteral, Case, CaseArm, Comprehension, Conditional, copy_identifier
   Expression, FunctionLiteral, Identifier, LazyFunctions, MapEntry, MapLiteral
-  NamedValue, Parameter, Position, RecordLiteral, Statement, TypeName, TypeParameter
+  NamedValue, Parameter, Position, RecordLiteral, Statement, TypeParameter
 } from '../ast'
 import {
-  LoopHeader, parse_coalesce, parse_expression, parse_identifier, parse_list, parse_list_rest
+  parse_coalesce, parse_expression, parse_identifier, parse_list, parse_list_rest
   parse_loop_header
 } from './expression'
 import { parse_block, parse_simple_statement } from './statement'
@@ -17,10 +17,10 @@ import { parse_type_name } from './type'
 # `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
 # map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
 # The lookahead skips line breaks, which may separate the parameters.
-export const starts_function_literal = (tokens: TokenStream): Bool ->
+export const starts_function_literal = (tokens: TokenStream) ->
   inside(tokens, 'skip', () -> looks_like_function_literal(tokens))
 
-const looks_like_function_literal = (tokens: TokenStream): Bool ->
+const looks_like_function_literal = (tokens: TokenStream) ->
   const first = tokens.peek().kind
   const second = tokens.peek_at(1).kind
   const third = tokens.peek_at(2).kind
@@ -41,7 +41,7 @@ const looks_like_function_literal = (tokens: TokenStream): Bool ->
 # `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted, and so may
 # the parameters' types, `(a, b) -> body`, where a function type is expected. Type parameters,
 # `<T, U: Stringable>`, come first.
-export const parse_function_literal = (tokens: TokenStream): FunctionLiteral ->
+export const parse_function_literal = (tokens: TokenStream) ->
   const token = tokens.peek()
   const is_generic = token.kind == '<'
   const type_params: Array<TypeParameter> = is_generic then parse_type_parameters(tokens) else []
@@ -58,29 +58,29 @@ export const parse_function_literal = (tokens: TokenStream): FunctionLiteral ->
   const body = is_block then parse_block(tokens) else [parse_simple_statement(tokens)]
   FunctionLiteral(type_params, params, return_type, body, position: token_position(token))
 
-const parse_parameter = (tokens: TokenStream): Parameter ->
+const parse_parameter = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   Parameter(name, type: parse_type_annotation(tokens))
 
 # `: Type`, if it follows.
-const parse_type_annotation = (tokens: TokenStream): TypeName? ->
+const parse_type_annotation = (tokens: TokenStream) ->
   tokens.accept(':') then parse_type_name(tokens) else nil
 
 # `<T, U: Stringable>`.
-export const parse_type_parameters = (tokens: TokenStream): Array<TypeParameter> ->
+export const parse_type_parameters = (tokens: TokenStream) ->
   tokens.expect('<', "'<'")
   const type_params = [parse_type_parameter(tokens)]
   type_params.push(parse_type_parameter(tokens)) while tokens.accept(',')
   tokens.expect('>', "'>'")
   type_params
 
-const parse_type_parameter = (tokens: TokenStream): TypeParameter ->
+const parse_type_parameter = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   const bound = tokens.accept(':') then parse_identifier(tokens) else nil
   TypeParameter(name, bound)
 
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
-export const parse_array_literal = (tokens: TokenStream, position: Position): Expression ->
+export const parse_array_literal = (tokens: TokenStream, position: Position) ->
   const parse_contents = (): Expression ->
     tokens.accept('line_break')
     return ArrayLiteral(position, elements: []) if tokens.accept(']')
@@ -92,8 +92,8 @@ export const parse_array_literal = (tokens: TokenStream, position: Position): Ex
   inside(tokens, 'separate', parse_contents)
 
 # `(a)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends inside are skipped.
-export const parse_parenthesized = (tokens: TokenStream, position: Position): Expression ->
-  const parse_contents = (): Expression ->
+export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
+  const parse_contents = () ->
     const first = parse_expression(tokens)
     return parse_comprehension(tokens, first, position, ')') if tokens.peek().kind == 'for'
     tokens.expect(')', "')'")
@@ -110,7 +110,7 @@ const parse_comprehension = (
   position: Position
   close: String
 ): Expression ->
-  const parse_header = (): LoopHeader ->
+  const parse_header = () ->
     const header = parse_loop_header(tokens)
     tokens.expect(close, "'#{close}'")
     header
@@ -126,7 +126,7 @@ export const parse_map_literal = (tokens: TokenStream, position: Position): Expr
   tokens.fail(position, 'the empty map is written `Map()`') if entries.length == 0
   MapLiteral(entries, position)
 
-const parse_map_entry = (tokens: TokenStream): MapEntry ->
+const parse_map_entry = (tokens: TokenStream) ->
   if starts_record_field(tokens)
     const token = tokens.peek()
     const name = token.text
@@ -138,15 +138,15 @@ const parse_map_entry = (tokens: TokenStream): MapEntry ->
 
 # A name followed by `:`, `,` or `}` starts a field of an anonymous struct; a map's keys are
 # other expressions.
-const starts_record_field = (tokens: TokenStream): Bool ->
+const starts_record_field = (tokens: TokenStream) ->
   const follows_name = is_one_of(tokens.peek_at(1).kind, [':', ',', '}', 'line_break'])
   tokens.peek().kind == 'identifier' and follows_name
 
 # `{ x: 1, y }`; a field without a value takes that of the name.
-const parse_record_literal = (tokens: TokenStream, position: Position): Expression ->
+const parse_record_literal = (tokens: TokenStream, position: Position) ->
   RecordLiteral(position, fields: parse_list(tokens, '}', () -> parse_record_field(tokens)))
 
-const parse_record_field = (tokens: TokenStream): NamedValue ->
+const parse_record_field = (tokens: TokenStream) ->
   if not starts_record_field(tokens)
     const message = 'an anonymous struct and a map cannot be mixed'
     tokens.fail(token_position(tokens.peek()), message)
@@ -158,7 +158,7 @@ const parse_record_field = (tokens: TokenStream): NamedValue ->
 # `case` followed by an indented block of `when` arms and a final `else` arm.
 # With a subject, an arm may list several patterns, and the `else` arm may be left out (whether
 # it may is checked later).
-export const parse_case = (tokens: TokenStream, position: Position): Case ->
+export const parse_case = (tokens: TokenStream, position: Position) ->
   const subject = tokens.peek().kind == 'newline' then nil else parse_expression(tokens)
   tokens.expect('newline', 'end of line')
   tokens.expect('indent', "indented 'when' arms")
@@ -171,7 +171,7 @@ export const parse_case = (tokens: TokenStream, position: Position): Case ->
   tokens.expect('dedent', 'end of block')
   Case(subject, arms, otherwise, position)
 
-const parse_case_arm = (tokens: TokenStream, has_subject: Bool): CaseArm ->
+const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
   tokens.expect('when', "'when'")
   # A pattern stops before `then`, which begins the arm's value.
   const patterns = [parse_coalesce(tokens)]
@@ -193,19 +193,15 @@ const parse_arm_body = (tokens: TokenStream, arm: String): Array<Statement> ->
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
 # Comprehension). The guard's function tests its condition as an `if` would:
 # `guard then true else false`.
-const lazy_functions = (
-  element: Expression
-  variable: Identifier
-  guard: Expression?
-): LazyFunctions ->
+const lazy_functions = (element: Expression, variable: Identifier, guard: Expression?) ->
   const guard_function = guard then function_of(as_test(guard), variable) else nil
   LazyFunctions(guard: guard_function, element: function_of(element, variable))
 
-const function_of = (body: Expression, variable: Identifier): FunctionLiteral ->
+const function_of = (body: Expression, variable: Identifier) ->
   const params = [Parameter(name: copy_identifier(variable))]
   FunctionLiteral(params, type_params: [], body: [body], position: body.position)
 
-const as_test = (guard: Expression): Expression ->
+const as_test = (guard: Expression) ->
   const position = guard.position
   const then_value = BooleanLiteral(position, value: true)
   const else_value = BooleanLiteral(position, value: false)

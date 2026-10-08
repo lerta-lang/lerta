@@ -23,7 +23,7 @@ import { FunctionType, is_kind } from '../types'
 # all the modules are gathered at the end (see all_warnings), or with an error, since a module
 # that calls a generic function of another checks an instance of it there, which may find warnings
 # and use names of that module.
-export const check_modules = (entry_path: String, modules: Array<Module>): ProgramWide ->
+export const check_modules = (entry_path: String, modules: Array<Module>) ->
   const program = ProgramWide(entry_path, modules)
   program.shared.push(create_shared(module)) for module in modules
   for shared in program.shared
@@ -36,19 +36,19 @@ export const check_modules = (entry_path: String, modules: Array<Module>): Progr
   for_each_module(program, declare_later_extends)
   for_each_module(program, check_top_level)
   for_each_module(program, check_bodies)
-  const has_pending = (shared: Shared): Bool ->
+  const has_pending = (shared: Shared) ->
     shared.generics.any((generic) -> check_pending(program, generic))
   var pending = true
   pending = program.shared.any(has_pending) while pending
   program
 
-const for_each_module = (program: ProgramWide, step: (ProgramWide, Shared) -> void): void ->
+const for_each_module = (program: ProgramWide, step: (ProgramWide, Shared) -> void) ->
   for shared in program.shared
     enter_module(program, shared)
     step(program, shared)
     leave_module(program)
 
-const create_shared = (module: Module): Shared ->
+const create_shared = (module: Module) ->
   const index = module.index
   const name = module.display_path ? 'the entry module'
   const path = module.display_path
@@ -60,21 +60,21 @@ const create_shared = (module: Module): Shared ->
 # The names of the top-level code are warned about if never used once the functions, checked
 # later, and the instances of generic functions that other modules call, which may use them, are
 # checked (see all_warnings).
-const check_top_level = (program: ProgramWide, shared: Shared): void ->
+const check_top_level = (program: ProgramWide, shared: Shared) ->
   shared.top_level.started = true
   const resolver = module_resolver(shared.index)
   const { extensions } = shared
   const body = Body(program, shared, resolver, extensions, context: nil, self: nil, enclosing: nil)
   shared.top_level_scope = check_top_level_code(body, program.modules[shared.index].program)
 
-const check_bodies = (program: ProgramWide, shared: Shared): void ->
+const check_bodies = (program: ProgramWide, shared: Shared) ->
   check_all_objects(program, shared)
   check_all_functions(program, shared)
   reject_deinit_results(program, shared)
   program.bodies_checked.push(shared.index)
 
 # A deinit runs as part of a release, where nothing could take a value it gave, or handle a throw.
-const reject_deinit_results = (program: ProgramWide, shared: Shared): void ->
+const reject_deinit_results = (program: ProgramWide, shared: Shared) ->
   for type_name in shared.objects.keys()
     const info = shared.objects[type_name]!
     const literal = info.methods['deinit'] ? continue

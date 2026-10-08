@@ -31,21 +31,21 @@ const report_error = (program: ProgramWide, at: Position, message: String): neve
   compile_error(location, at.line, at.column, message)
 
 # The path of the innermost module being checked; nil for the entry module.
-const error_module_path = (program: ProgramWide): String? ->
+const error_module_path = (program: ProgramWide) ->
   const paths = program.module_paths
   paths.length > 0 then paths[paths.length - 1] else nil
 
 # Diagnostics name the module whose code is checked until `leave_module`.
-export const enter_module = (program: ProgramWide, shared: Shared): void ->
+export const enter_module = (program: ProgramWide, shared: Shared) ->
   program.module_paths.push(shared.path)
 
-export const leave_module = (program: ProgramWide): void -> program.module_paths.pop()
+export const leave_module = (program: ProgramWide) -> program.module_paths.pop()
 
-export const warn = (shared: Shared, at: Position, message: String): void ->
+export const warn = (shared: Shared, at: Position, message: String) ->
   shared.warnings.push(Warning(message, line: at.line, column: at.column))
 
 # A `const` or `var` that is never read, unless its name starts with `_`.
-export const warn_if_unused = (shared: Shared, local: Local): void ->
+export const warn_if_unused = (shared: Shared, local: Local) ->
   const { name, position } = local.identifier
   return if not local.declared or local.used or name.binary.occurs_at(0, '_'.binary)
   warn(shared, position, "'#{name}' is never used")
@@ -54,7 +54,7 @@ export const warn_if_unused = (shared: Shared, local: Local): void ->
 # warnings of the standard modules, which would warn, for example, about the names that only
 # generic functions the program never calls use. The unused names of a module are known once its
 # functions are checked, which may use them.
-export const all_warnings = (program: ProgramWide): Array<String> ->
+export const all_warnings = (program: ProgramWide) ->
   warn_unused(program.shared[index]) for index in program.bodies_checked
   const lines: Array<String> = []
   for module in program.modules
@@ -65,7 +65,7 @@ export const all_warnings = (program: ProgramWide): Array<String> ->
   lines
 
 # The names of the top-level code and the imports that are never used.
-const warn_unused = (shared: Shared): void ->
+const warn_unused = (shared: Shared) ->
   if const scope = shared.top_level_scope
     warn_if_unused(shared, scope[name]!) for name in scope.keys()
   for imported in shared.imports.names.keys()
@@ -74,7 +74,7 @@ const warn_unused = (shared: Shared): void ->
 
 # Warnings are found as scopes end; they are reported in source order, once each, though each
 # instance of a generic function finds those of its body again.
-const in_source_order = (warnings: Array<Warning>): Array<Warning> ->
+const in_source_order = (warnings: Array<Warning>) ->
   const seen: Map<String, Bool> = Map()
   const unique: Array<Warning> = []
   for warning in warnings
@@ -82,6 +82,6 @@ const in_source_order = (warnings: Array<Warning>): Array<Warning> ->
     continue if seen.has(key)
     seen[key] = true
     unique.push(warning)
-  const compare = (a: Warning, b: Warning): Int ->
+  const compare = (a: Warning, b: Warning) ->
     a.line != b.line then a.line - b.line else a.column - b.column
   sorted(unique, compare)

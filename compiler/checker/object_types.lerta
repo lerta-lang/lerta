@@ -34,20 +34,20 @@ export class ObjectInfo
   state = 'unchecked'
 
 # The function literal of a member that is a method.
-export const method_literal = (member: MemberDeclaration): FunctionLiteral? ->
+export const method_literal = (member: MemberDeclaration) ->
   return nil if modifier_of(member) == 'var'
   const value = member.value ? return nil
   value is FunctionLiteral then value else nil
 
 # 'const', 'var' or, if neither is written, ''.
-const modifier_of = (member: MemberDeclaration): String -> member.modifier ? ''
+const modifier_of = (member: MemberDeclaration) -> member.modifier ? ''
 
 # Registers the names first, so that the members can refer to any of the types.
 export const add_objects = (
   program: ProgramWide
   shared: Shared
   declarations: Array<TypeDeclaration>
-): void ->
+) ->
   for declaration in declarations
     const { name, position } = declaration.name
     if shared.objects.has(name) or is_builtin_type_name(name)
@@ -60,7 +60,7 @@ export const add_objects = (
     program.infos[symbol] = info
 
 # Resolves the written field types and adds the methods to the module's functions.
-export const add_members = (program: ProgramWide, shared: Shared): void ->
+export const add_members = (program: ProgramWide, shared: Shared) ->
   for type_name in shared.objects.keys()
     const info = shared.objects[type_name]!
     const seen: Map<String, Bool> = Map()
@@ -81,7 +81,7 @@ const add_method = (
   info: ObjectInfo
   member: MemberDeclaration
   literal: FunctionLiteral
-): void ->
+) ->
   const type_name = info.declaration.name.name
   const { name } = member.name
   const runs_alone = name == 'init' or name == 'deinit'
@@ -99,7 +99,7 @@ const field_of_member = (
   shared: Shared
   info: ObjectInfo
   member: MemberDeclaration
-): FieldInfo ->
+) ->
   const is_struct = info.declaration.is_struct
   const value = member.value
   if value
@@ -115,14 +115,14 @@ const field_of_member = (
   FieldInfo(type, mutable, value, name: member.name)
 
 # The class or struct of the name, of the module or imported.
-export const object_type = (program: ProgramWide, shared: Shared, name: String): ObjectType? ->
+export const object_type = (program: ProgramWide, shared: Shared, name: String) ->
   if const info = shared.objects[name]
     return info.type
   const exported = imported_type(program, shared, name) ? return nil
   const info = exported.info ? return nil
   info.type
 
-export const info_of = (program: ProgramWide, type: ObjectType): ObjectInfo ->
+export const info_of = (program: ProgramWide, type: ObjectType) ->
   program.infos[type.symbol]!
 
 # The field's type, checking the initializers first if it is given by one alone.
@@ -131,7 +131,7 @@ export const field_type = (
   info: ObjectInfo
   field: FieldInfo
   at: Position
-): Type ->
+) ->
   if const type = field.type
     return type
   if info.state == 'checking'
@@ -139,12 +139,12 @@ export const field_type = (
   check_info(program, info)
   field.type!
 
-export const check_all_objects = (program: ProgramWide, shared: Shared): void ->
+export const check_all_objects = (program: ProgramWide, shared: Shared) ->
   check_info(program, shared.objects[name]!) for name in shared.objects.keys()
 
 # Checks the initializers of the fields with the declaring module's checker, setting the types
 # that they give.
-const check_info = (program: ProgramWide, info: ObjectInfo): void ->
+const check_info = (program: ProgramWide, info: ObjectInfo) ->
   return if info.state != 'unchecked'
   info.state = 'checking'
   check_object(program, info)

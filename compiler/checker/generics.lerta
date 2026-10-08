@@ -65,7 +65,7 @@ export const make_generic_function = (
   name: Identifier
   literal: FunctionLiteral
   receiver: Receiver?
-): GenericFunction ->
+) ->
   const type_params: Array<TypeParameter> = []
   if receiver
     type_params.push(param) for param in receiver.type_params
@@ -82,7 +82,7 @@ const reject_bad_type_parameters = (
   program: ProgramWide
   resolver: Resolver
   type_params: Array<TypeParameter>
-): void ->
+) ->
   const seen: Map<String, Bool> = Map()
   for param in type_params
     const { name, position } = param.name
@@ -93,7 +93,7 @@ const reject_bad_type_parameters = (
       if bound.name != STRINGABLE
         fail(program, bound.position, "only #{STRINGABLE} can bound a type parameter so far")
 
-export const generic_of = (program: ProgramWide, ref: GenericRef): GenericFunction ->
+export const generic_of = (program: ProgramWide, ref: GenericRef) ->
   program.shared[ref.module_index].generics[ref.index]
 
 # The instance of the type arguments, whose extends in effect are `methods`, checked if new.
@@ -103,7 +103,7 @@ export const instantiate = (
   type_arguments: Array<Type>
   methods: Array<ExtensionMethod>
   at: Position
-): Instance ->
+) ->
   const generic = generic_of(program, ref)
   const key = arguments_key(type_arguments)
   const same_arguments = [
@@ -123,14 +123,11 @@ export const instantiate = (
     fail(program, at, "'#{generic.name.name}' is recursive, so its return type must be written")
   instance
 
-const arguments_key = (type_arguments: Array<Type>): String ->
+const arguments_key = (type_arguments: Array<Type>) ->
   [type_key(type) for type in type_arguments].join(', ')
 
 # The type arguments by the names of the type parameters.
-export const bindings = (
-  generic: GenericFunction
-  type_arguments: Array<Type>
-): Map<String, Type> ->
+export const bindings = (generic: GenericFunction, type_arguments: Array<Type>) ->
   const types: Map<String, Type> = Map()
   const { type_params } = generic
   types[type_params[i].name.name] = type_arguments[i] for i in 0...type_params.length
@@ -143,7 +140,7 @@ const add_instance = (
   methods: Array<ExtensionMethod>
   variant: Int
   at: Position
-): Instance ->
+) ->
   const generic = generic_of(program, ref)
   const type_bindings = bindings(generic, type_arguments)
   const resolver = with_type_parameters(module_resolver(generic.module_index), type_bindings)
@@ -161,14 +158,14 @@ const add_instance = (
   instance
 
 # Checks the instances left unchecked; returns whether there were any.
-export const check_pending = (program: ProgramWide, generic: GenericFunction): Bool ->
-  const is_pending = (instance: Instance): Bool -> instance.entry.state == 'unchecked'
+export const check_pending = (program: ProgramWide, generic: GenericFunction) ->
+  const is_pending = (instance: Instance) -> instance.entry.state == 'unchecked'
   const pending = [instance for instance in generic.instances when is_pending(instance)]
   check(program, generic, instance) for instance in pending
   pending.length > 0
 
 # An error in the body says which instance it was found in.
-const check = (program: ProgramWide, generic: GenericFunction, instance: Instance): void ->
+const check = (program: ProgramWide, generic: GenericFunction, instance: Instance) ->
   instance.entry.state = 'checking'
   program.contexts.push("in #{describe(generic, instance)}")
   check_instance(program, generic.module_index, instance)
@@ -182,7 +179,7 @@ const resolve_annotation = (
   generic: GenericFunction
   instance: Instance
   at: Position
-): Type? ->
+) ->
   program.annotated_call = AnnotatedCall(at, context: "in #{describe(generic, instance)}")
   const type = annotated_type(program, instance.resolver, instance.entry.literal)
   program.annotated_call = nil
@@ -190,7 +187,7 @@ const resolve_annotation = (
 
 # `print<Int>`, as messages write an instance; a method's, `Array<Int>.map<String>`, by its
 # receiver and the type arguments of its own.
-const describe = (generic: GenericFunction, instance: Instance): String ->
+const describe = (generic: GenericFunction, instance: Instance) ->
   const receiver = generic.receiver
   const receiver_count = receiver then receiver.type_params.length else 0
   const own_arguments = [
@@ -202,5 +199,5 @@ const describe = (generic: GenericFunction, instance: Instance): String ->
   return name if own_arguments.length == 0
   "#{name}<#{[format_type(type) for type in own_arguments].join(', ')}>"
 
-const same_methods = (a: Array<ExtensionMethod>, b: Array<ExtensionMethod>): Bool ->
+const same_methods = (a: Array<ExtensionMethod>, b: Array<ExtensionMethod>) ->
   a.length == b.length and a.all((method) -> b.any((other) -> other == method))

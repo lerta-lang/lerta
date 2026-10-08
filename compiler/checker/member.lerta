@@ -6,7 +6,7 @@ import { fail } from './diagnostics'
 import { check_arguments, set_type, type_of } from './expression'
 import { plain_method_type } from './extensions'
 import { receiver_instance, type_of_generic_method_call } from './generic_call'
-import { GenericRef, STRINGABLE } from './generics'
+import { STRINGABLE } from './generics'
 import { BuiltinMethod, ExtensionSource, find_method, MethodSource, OwnMethod } from './methods'
 import { common_field_type, field_type, method_owner, object_method_type } from './object'
 import { Body } from './shared'
@@ -14,12 +14,7 @@ import { format_type, FunctionType, is_assignable, string_type, Type, UnionType 
 
 # The result of a call of the method that `member` names: a method of the object's type (see
 # find_method), or a field that holds a function.
-export const type_of_method_call = (
-  body: Body
-  call: Call
-  member: Member
-  expected: Type?
-): Type ->
+export const type_of_method_call = (body: Body, call: Call, member: Member, expected: Type?) ->
   const receiver = type_of(body, member.object, nil)
   const source = find(body, receiver, member.name.name)
   const generic = generic_method(source)
@@ -29,16 +24,11 @@ export const type_of_method_call = (
   set_type(body, member, method)
   method.result
 
-const generic_method = (source: MethodSource?): GenericRef? ->
+const generic_method = (source: MethodSource?) ->
   return nil if source == nil
   source is ExtensionSource then source.method.generic else nil
 
-const type_of_method = (
-  body: Body
-  member: Member
-  receiver: Type
-  source: MethodSource?
-): Type ->
+const type_of_method = (body: Body, member: Member, receiver: Type, source: MethodSource?) ->
   const { name, position } = member.name
   reject_deinit(body, receiver, member)
   const from_source = source then method_type(body, receiver, source, member.name, nil) else nil
@@ -47,7 +37,7 @@ const type_of_method = (
   const method = from_source ? (field_type(body, receiver, member) ? no_method())
   set_type(body, member, method)
 
-const find = (body: Body, receiver: Type, name: String): MethodSource? ->
+const find = (body: Body, receiver: Type, name: String) ->
   find_method(body.program, receiver, name, body.extensions)
 
 # The type of the method, checking its body first if needed. A generic one's comes from its
@@ -59,7 +49,7 @@ const method_type = (
   source: MethodSource
   name: Identifier
   call: Call?
-): Type? ->
+) ->
   case source
     when OwnMethod then object_method_type(body, source.receiver, name)
     when BuiltinMethod then source.type
@@ -71,7 +61,7 @@ const method_type = (
 
 # The type of `to_string(): String` of the type, if it is Stringable; a field that holds a
 # function does not count.
-const stringable_method = (body: Body, type: Type, at: Position, call: Call?): Type? ->
+const stringable_method = (body: Body, type: Type, at: Position, call: Call?) ->
   const name = Identifier(position: at, name: 'to_string')
   const source = find(body, type, name.name) ? return nil
   const method = method_type(body, type, source, name, call) ? return nil
@@ -79,7 +69,7 @@ const stringable_method = (body: Body, type: Type, at: Position, call: Call?): T
   method.params.length == 0 and is_assignable(method.result, string_type) then method else nil
 
 # Rejects a type that is not Stringable.
-export const reject_not_stringable = (body: Body, type: Type, at: Position): void ->
+export const reject_not_stringable = (body: Body, type: Type, at: Position) ->
   fail_not_stringable(body, type, at) if stringable_method(body, type, at, nil) == nil
 
 const fail_not_stringable = (body: Body, type: Type, at: Position): never ->
@@ -88,7 +78,7 @@ const fail_not_stringable = (body: Body, type: Type, at: Position): never ->
 
 # `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
 # is typed once.
-export const check_interpolated = (body: Body, part: Call): void ->
+export const check_interpolated = (body: Body, part: Call) ->
   const member = part.callee
   throw 'an interpolated value is read by a call of its to_string()' if not (member is Member)
   const type = type_of(body, member.object, nil)
@@ -98,7 +88,7 @@ export const check_interpolated = (body: Body, part: Call): void ->
   set_type(body, part, string_type)
 
 # A class's deinit is only run by a release.
-const reject_deinit = (body: Body, object_type: Type, member: Member): void ->
+const reject_deinit = (body: Body, object_type: Type, member: Member) ->
   const { name, position } = member.name
   return if name != 'deinit' or method_owner(body, object_type, name) == nil
   const message = 'deinit runs when the object is released; it cannot be called or used'
@@ -120,7 +110,7 @@ export const type_of_property = (body: Body, member: Member): Type ->
   fail(body.program, position, "type #{format_type(object_type)} has no property '#{name}'")
 
 # `@x` in a method or an initializer reads the object's field.
-const type_of_object = (body: Body, member: Member): Type ->
+const type_of_object = (body: Body, member: Member) ->
   const object = member.object
   if object is This
     if const self = body.self

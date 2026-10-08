@@ -14,22 +14,22 @@ import {
   ArrayType, bool_type, format_type, int_type, iterable_item, IterType, Type, void_type
 } from '../types'
 
-export const check_loop_jump = (body: Body, jump: Jump): void ->
+export const check_loop_jump = (body: Body, jump: Jump) ->
   fail(body.program, jump.position, "'#{jump.kind}' outside a loop") if body.loop_depth == 0
 
 # A loop variable is a const declared by the loop rather than by a statement, hence not
 # `declared`.
-const define_loop_variable = (body: Body, variable: Identifier, type: Type): void ->
+const define_loop_variable = (body: Body, variable: Identifier, type: Type) ->
   const local = Local(type, identifier: variable, mutable: false, declared: false, used: false)
   define_local(body, local)
 
 # A range gives Int values; an array, a Binary or an Iter gives its items.
-export const check_for = (body: Body, for_statement: For): void ->
+export const check_for = (body: Body, for_statement: For) ->
   const { iterable, variable } = for_statement
   const item_type = type_of_iterated(body, iterable)
   check_loop_body(body, for_statement.body, () -> define_loop_variable(body, variable, item_type))
 
-export const check_while = (body: Body, while_statement: While): void ->
+export const check_while = (body: Body, while_statement: While) ->
   const define = check_condition(body, while_statement.condition)
   check_loop_body(body, while_statement.body, define)
 
@@ -59,7 +59,7 @@ export const type_of_comprehension = (
   check_block(body, [], define, finish)
   ArrayType(element: check_item_type(body.program, element_type, element.position, 'an array'))
 
-const expected_array_element = (expected: Type?): Type? ->
+const expected_array_element = (expected: Type?) ->
   const type = expected ? return nil
   type is ArrayType then type.element else nil
 
@@ -70,7 +70,7 @@ const type_of_iter_comprehension = (
   comprehension: Comprehension
   item_type: Type
   expected: Type?
-): Type ->
+) ->
   const { guard, element } = comprehension.lazy!
   type_of_item_function(body, guard, item_type, bool_type, nil) if guard
   const expected_item = expected_iter_item(expected)
@@ -80,11 +80,11 @@ const type_of_iter_comprehension = (
   const item = check_value_type(body.program, element_type.result, at, 'an Iter')
   IterType(item)
 
-const expected_iter_item = (expected: Type?): Type? ->
+const expected_iter_item = (expected: Type?) ->
   const type = expected ? return nil
   type is IterType then type.item else nil
 
-const check_loop_body = (body: Body, statements: Array<Statement>, define: () -> void): void ->
+const check_loop_body = (body: Body, statements: Array<Statement>, define: () -> void) ->
   body.loop_depth += 1
   check_block(body, statements, define, nothing)
   body.loop_depth -= 1

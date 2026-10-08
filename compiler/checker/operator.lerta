@@ -12,28 +12,28 @@ const NUMERIC_KINDS = ['Int', 'Byte']
 
 const ARITHMETIC_OPERATORS = ['+', '-', '*', '/', '%']
 
-export const is_arithmetic = (operator: String): Bool ->
+export const is_arithmetic = (operator: String) ->
   ARITHMETIC_OPERATORS.any((each) -> each == operator)
 
 # `x == nil` or `x != nil`, on either side.
-const is_nil_test = (binary: BinaryOperation): Bool ->
+const is_nil_test = (binary: BinaryOperation) ->
   const compares = binary.operator == '==' or binary.operator == '!='
   compares and (binary.left is NilLiteral or binary.right is NilLiteral)
 
-const classes_of = (type: Type): Array<Type> -> type is UnionType then type.members else [type]
+const classes_of = (type: Type) -> type is UnionType then type.members else [type]
 
-const share_a_class = (a: Type, b: Type): Bool ->
+const share_a_class = (a: Type, b: Type) ->
   const others = classes_of(b)
   classes_of(a).any((member) -> others.any((other) -> same_type(member, other)))
 
 # Lists kinds for a message, such as "Int or Byte".
-const describe_kinds = (kinds: Array<String>): String ->
+const describe_kinds = (kinds: Array<String>) ->
   return kinds[0] if kinds.length == 1
   const all_but_last = [kinds[i] for i in 0...(kinds.length - 1)]
   "#{all_but_last.join(', ')} or #{kinds[kinds.length - 1]}"
 
 # The expected type, if it is of one of the kinds, as a hint for the operands.
-const hint_of = (expected: Type?, kinds: Array<String>): Type? ->
+const hint_of = (expected: Type?, kinds: Array<String>) ->
   const type = expected ? return nil
   is_one_of_kinds(type, kinds) then type else nil
 
@@ -48,14 +48,14 @@ export const type_of_unary = (body: Body, unary: UnaryOperation, expected: Type?
   type
 
 # `x == nil` and `x != nil` test an optional value.
-const type_of_nil_test = (body: Body, binary: BinaryOperation): Type ->
+const type_of_nil_test = (body: Body, binary: BinaryOperation) ->
   const left_is_nil = binary.left is NilLiteral
   type_of(body, left_is_nil then binary.left else binary.right, nil)
   expect_optional(body, left_is_nil then binary.right else binary.left)
   bool_type
 
 # `x ? fallback` is x without nil; the fallback has that type too.
-export const type_of_coalesce = (body: Body, coalesce: Coalesce): Type ->
+export const type_of_coalesce = (body: Body, coalesce: Coalesce) ->
   const inner = expect_optional(body, coalesce.value)
   expect_type(body, coalesce.fallback, inner)
   inner
@@ -70,11 +70,11 @@ export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Ty
   return type_of_nil_test(body, binary) if is_nil_test(binary)
   if operator == '==' or operator == '!='
     const comparable = ['Int', 'Byte', 'Bool', 'String', 'Binary']
-    const reject = (type: Type): String -> "cannot compare values of type #{format_type(type)}"
+    const reject = (type: Type) -> "cannot compare values of type #{format_type(type)}"
     type_of_operands(body, binary, nil, comparable, reject)
     return bool_type
   const allowed = operator == '+' then ['Int', 'Byte', 'String'] else NUMERIC_KINDS
-  const reject = (type: Type): String ->
+  const reject = (type: Type) ->
     "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if not is_arithmetic(operator)
     type_of_operands(body, binary, nil, NUMERIC_KINDS, reject)
@@ -89,7 +89,7 @@ const type_of_operands = (
   expected: Type?
   allowed_kinds: Array<String>
   reject: (Type) -> String
-): Type ->
+) ->
   const { left, right } = binary
   const right_first = is_contextual(left) and not is_contextual(right)
   const first = right_first then right else left
@@ -103,7 +103,7 @@ const type_of_operands = (
 
 # Objects compared by identity may be of different types, as a class and a union that holds it,
 # as long as both can hold an object of the same class.
-const type_of_identity_operand = (body: Body, second: Expression, first_type: Type): Type ->
+const type_of_identity_operand = (body: Body, second: Expression, first_type: Type) ->
   const type = type_of(body, second, nil)
   if not (is_identity_type(type) and share_a_class(first_type, type))
     const message = "cannot compare #{format_type(first_type)} with #{format_type(type)}"

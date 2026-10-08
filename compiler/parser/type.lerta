@@ -19,7 +19,7 @@ export const parse_type_name = (tokens: TokenStream): TypeName ->
   UnionTypeName(members, position: first.position)
 
 # `(A, B) -> R`, or a function type in parentheses, `((A) -> R)?`, to make it optional.
-const parse_parenthesized_type = (tokens: TokenStream): TypeName ->
+const parse_parenthesized_type = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const types = parse_list(tokens, ')', () -> parse_type_name(tokens))
   if tokens.accept('->')
@@ -40,23 +40,23 @@ const parse_union_member = (tokens: TokenStream): UnionMember ->
   tokens.peek().kind == '{' then parse_record_type(tokens) else parse_named_type(tokens)
 
 # `{ x: Int, y: String }`, with `?` after it if it may be nil.
-const parse_record_type = (tokens: TokenStream): RecordTypeName ->
+const parse_record_type = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const fields = parse_list(tokens, '}', () -> parse_record_type_field(tokens))
   RecordTypeName(fields, position, optional: tokens.accept('?'))
 
-const parse_record_type_field = (tokens: TokenStream): RecordTypeField ->
+const parse_record_type_field = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   tokens.expect(':', "':'")
   RecordTypeField(name, type: parse_type_name(tokens))
 
-export const parse_named_type = (tokens: TokenStream): NamedType ->
+export const parse_named_type = (tokens: TokenStream) ->
   const { name, position } = parse_identifier(tokens)
   const args: Array<TypeName> = tokens.peek().kind == '<' then parse_type_arguments(tokens) else []
   NamedType(name, args, position, optional: tokens.accept('?'))
 
 # `<A, B>`.
-export const parse_type_arguments = (tokens: TokenStream): Array<TypeName> ->
+export const parse_type_arguments = (tokens: TokenStream) ->
   tokens.expect('<', "'<'")
   const args = [parse_type_name(tokens)]
   args.push(parse_type_name(tokens)) while tokens.accept(',')
@@ -65,7 +65,7 @@ export const parse_type_arguments = (tokens: TokenStream): Array<TypeName> ->
 
 # Whether type arguments follow, written without a space and followed by `(`, as in `f<Int>(x)`.
 # Comparisons do not chain, so `a<b>(c)` cannot be read otherwise.
-export const starts_type_arguments = (tokens: TokenStream): Bool ->
+export const starts_type_arguments = (tokens: TokenStream) ->
   const open = tokens.peek()
   return false if open.kind != '<' or open.spaced
   var depth = 0

@@ -4,7 +4,7 @@ import { builtin_method, builtin_property } from './builtins'
 import { fail } from './diagnostics'
 import { add_own, ExtensionMethod } from './extensions'
 import { add_function, add_generic, method_key } from './functions'
-import { GenericRef, make_generic_function, Receiver } from './generics'
+import { make_generic_function, Receiver } from './generics'
 import { info_of, method_literal } from './object_types'
 import { ProgramWide, Shared } from './shared'
 import { module_resolver, resolve, with_type_parameters } from './type_names'
@@ -19,7 +19,7 @@ const EXTENDABLE_KINDS = [
 # Puts the extend's methods in effect in the module, and adds them to its functions, which check
 # their bodies with `@` as the receiver, or makes them generic methods, whose instances are
 # checked so.
-export const declare_extend = (program: ProgramWide, shared: Shared, statement: Extend): void ->
+export const declare_extend = (program: ProgramWide, shared: Shared, statement: Extend) ->
   const { type_params } = statement
   reject_bounds(program, type_params)
   const resolver = with_type_parameters(module_resolver(shared.index), placeholders(type_params))
@@ -51,11 +51,11 @@ const extension_method = (
   receiver: Receiver
   name: Identifier
   literal: FunctionLiteral
-): ExtensionMethod ->
+) ->
   const type = receiver.type
   const key = method_key(format_type(type), name.name)
   const is_generic = receiver.type_params.length > 0 or literal.type_params.length > 0
-  const make_generic = (): GenericRef ->
+  const make_generic = () ->
     add_generic(shared, make_generic_function(program, shared, name, literal, receiver))
   const generic = is_generic then make_generic() else nil
   const module_index = shared.index
@@ -63,7 +63,7 @@ const extension_method = (
   ExtensionMethod(name, literal, generic, key, module_index, module_name, receiver: type)
 
 # The receiver gives an extend's type arguments, whose bounds would go unchecked.
-const reject_bounds = (program: ProgramWide, type_params: Array<TypeParameter>): void ->
+const reject_bounds = (program: ProgramWide, type_params: Array<TypeParameter>) ->
   for param in type_params
     if const bound = param.bound
       fail(program, bound.position, "an extend's type parameter takes no bound")
@@ -73,7 +73,7 @@ const reject_unused_type_parameters = (
   program: ProgramWide
   type_params: Array<TypeParameter>
   receiver: Type
-): void ->
+) ->
   const used: Map<String, Bool> = Map()
   add_type_parameters(used, receiver)
   for param in type_params
@@ -84,7 +84,7 @@ const add_type_parameters = (used: Map<String, Bool>, type: Type): void ->
   used[type.name] = true if type is TypeParameterType
   add_type_parameters(used, part) for part in parts_of(type)
 
-const has_member = (program: ProgramWide, receiver: Type, name: String): Bool ->
+const has_member = (program: ProgramWide, receiver: Type, name: String) ->
   if receiver is ObjectType
     const info = info_of(program, receiver)
     return info.methods.has(name) or info.fields.any((field) -> field.name.name == name)
