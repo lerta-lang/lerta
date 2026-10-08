@@ -2,15 +2,16 @@
 import {
   is_expression,
   type Expression,
+  type FunctionLiteral,
   type Position,
   type Return,
   type Statement,
 } from './ast.ts'
-import type { FunctionContext } from './checker.ts'
+import type { Conversions, FunctionContext } from './checker.ts'
 import { CompileError } from './errors.ts'
 import type { ExpressionChecker } from './expression_checker.ts'
 import type { StatementChecker } from './statement_checker.ts'
-import { format_type, is_assignable, unify, void_type, type Type } from './types.ts'
+import { format_type, is_assignable, same_type, unify, void_type, type Type } from './types.ts'
 
 export class ResultChecker {
   private readonly statements: StatementChecker
@@ -91,4 +92,23 @@ export class ResultChecker {
     const hint = annotated?.kind === 'void' ? undefined : annotated
     return this.expressions.type_of(value, hint)
   }
+}
+
+// The type of a function once its body is checked: its return type is the written one, or the one
+// its results give, to which they are converted.
+export const finish_function_type = (
+  context: FunctionContext,
+  literal: FunctionLiteral,
+  params: Type[],
+  conversions: Conversions,
+): Type => {
+  const result = context.annotated ?? context.inferred ?? void_type
+  if (result.kind === 'nil') {
+    const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
+    throw new CompileError(message, literal.line, literal.column)
+  }
+  for (const { value, type } of context.results) {
+    if (type.kind !== 'never' && !same_type(type, result)) conversions.set(value, result)
+  }
+  return { kind: 'function', params, result }
 }

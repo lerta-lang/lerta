@@ -76,7 +76,8 @@ export type FunctionTypeName = Position & {
 
 export type TypeName = NamedType | UnionTypeName | FunctionTypeName
 
-export type Parameter = { name: Identifier; type: TypeName }
+// A parameter's type may be left out where a function type is expected for the literal.
+export type Parameter = { name: Identifier; type: TypeName | undefined }
 
 // `(x: Int): Int -> body`. The body's last expression is the return value.
 export type FunctionLiteral = Position & {

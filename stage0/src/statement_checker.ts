@@ -16,17 +16,22 @@ import {
   type Statement,
   type While,
 } from './ast.ts'
-import type { FunctionContext, SelfContext, Shared, Types } from './checker.ts'
+import type { Capture, FunctionContext, SelfContext, Shared, Types } from './checker.ts'
 import { CompileError, CompileWarning } from './errors.ts'
-import { ExpressionChecker, type CheckerLocal, type JumpChecker } from './expression_checker.ts'
-import type { Functions } from './functions.ts'
+import {
+  ExpressionChecker,
+  reject_captured_var,
+  type CheckerLocal,
+  type JumpChecker,
+} from './expression_checker.ts'
+import { parameter_types, type Functions } from './functions.ts'
 import {
   ends_with_jump,
   narrowed_view,
   narrowing_of,
   type ConditionNarrowing,
 } from './narrowing.ts'
-import { ResultChecker } from './result_checker.ts'
+import { finish_function_type, ResultChecker } from './result_checker.ts'
 import { Scopes } from './scopes.ts'
 import type { TopLevelValues } from './top_level_values.ts'
 import type { Imports } from './imports.ts'
@@ -34,6 +39,13 @@ import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
 import { format_type, int_type, never_type, void_type, type Type } from './types.ts'
 import type { BlockChecker } from './case_checker.ts'
+
+// The enclosing functions of a function literal's body: how to find their names, and the
+// captures found.
+type ClosureContext = {
+  enclosing: (name: string) => CheckerLocal | undefined
+  captures: Capture[]
+}
 
 export class StatementChecker implements BlockChecker, JumpChecker {
   private readonly types: Types
@@ -51,8 +63,19 @@ export class StatementChecker implements BlockChecker, JumpChecker {
   private readonly expressions: ExpressionChecker
   private readonly results: ResultChecker
   private loop_depth = 0
+  private readonly shared: Shared
+  private readonly closure: ClosureContext | undefined
 
-  constructor(shared: Shared, context: FunctionContext | undefined, self: SelfContext | undefined) {
+  // `closure` is given for the body of a function literal in an expression, which captures the
+  // names it uses from around it.
+  constructor(
+    shared: Shared,
+    context: FunctionContext | undefined,
+    self: SelfContext | undefined,
+    closure?: ClosureContext,
+  ) {
+    this.shared = shared
+    this.closure = closure
     this.types = shared.types
     this.warnings = shared.warnings
     this.functions = shared.functions
@@ -68,6 +91,7 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     // Outside every scope: the top-level values, for a function or a method, and imported values.
     this.scopes = new Scopes(
       (name) =>
+        this.captured(name) ??
         (is_top_level_code ? undefined : this.top_level.lookup(name)) ??
         this.imports.value_local(name),
     )
@@ -126,6 +150,52 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     const scope = this.scopes.pop()
     return () => {
       for (const local of scope.values()) this.warn_if_unused(local)
+    }
+  }
+
+  // The body is checked here, where the names around it are known; those it uses from the
+  // enclosing functions are its captures.
+  type_of_function_literal(literal: FunctionLiteral, expected: Type | undefined): Type {
+    const expected_function = expected?.kind === 'function' ? expected : undefined
+    const has_untyped = literal.params.some((param) => param.type === undefined)
+    const count = literal.params.length
+    if (
+      has_untyped &&
+      expected_function !== undefined &&
+      expected_function.params.length !== count
+    ) {
+      const message = `expected ${format_type(expected_function)}, got a function of ${count} parameter(s)`
+      throw new CompileError(message, literal.line, literal.column)
+    }
+    const params = parameter_types(literal, this.resolver, expected_function?.params)
+    const annotated =
+      literal.return_type === undefined
+        ? expected_function?.result
+        : this.resolver.resolve(literal.return_type, true)
+    const context: FunctionContext = { annotated, inferred: undefined, results: [] }
+    const captures: Capture[] = []
+    const enclosing = (name: string) => this.scopes.lookup_local(name) ?? this.captured(name)
+    const body = new StatementChecker(this.shared, context, undefined, { enclosing, captures })
+    body.check_function_body(literal, params)
+    this.shared.captures.set(literal, captures)
+    return finish_function_type(context, literal, params, this.shared.conversions)
+  }
+
+  // A local of an enclosing function, seen from a function literal, which captures its value; a
+  // top-level value is not captured but read where it is.
+  private captured(name: string): CheckerLocal | undefined {
+    if (this.closure === undefined) return undefined
+    const local = this.closure.enclosing(name)
+    if (local === undefined || local === this.top_level.lookup(name)) return undefined
+    const { captures } = this.closure
+    if (!captures.some((capture) => capture.name === name))
+      captures.push({ name, type: local.type })
+    return {
+      ...local,
+      mutable: false,
+      declared: false,
+      origin: local.origin ?? local,
+      captured: true,
     }
   }
 
@@ -285,11 +355,8 @@ export class StatementChecker implements BlockChecker, JumpChecker {
 
   // A top-level function was added to `functions` before checking started.
   private check_declaration(declaration: Declaration): void {
-    if (declaration.value.kind === 'function') {
-      if (this.context === undefined && this.scopes.depth === 1) return
-      const message = 'a function can only be declared at the top level so far'
-      throw new CompileError(message, declaration.line, declaration.column)
-    }
+    const is_top_level = this.context === undefined && this.self === undefined
+    if (declaration.value.kind === 'function' && is_top_level && this.scopes.depth === 1) return
     const annotated =
       declaration.type === undefined ? undefined : this.resolver.resolve(declaration.type)
     if (annotated !== undefined) this.expressions.expect_type(declaration.value, annotated)
@@ -353,6 +420,7 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     const local = this.scopes.lookup(target.name)
     const pending = this.scopes_see_top_level ? this.top_level.pending_error(target) : undefined
     if (pending !== undefined) throw pending
+    reject_captured_var(local, target)
     if (local === undefined || !local.mutable) {
       const reason = local === undefined ? 'is not a variable' : 'is not a var'
       throw new CompileError(`'${target.name}' ${reason}`, target.line, target.column)

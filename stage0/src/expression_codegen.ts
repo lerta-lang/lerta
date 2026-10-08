@@ -192,7 +192,7 @@ export class ExpressionGenerator {
       case 'index':
         return this.collections.generate_index(expression)
       case 'function':
-        throw new Error('functions are only generated at the top level')
+        return this.blocks.generate_closure(expression)
     }
   }
 
@@ -384,13 +384,18 @@ export class ExpressionGenerator {
       return emit_function_closure(this.ir, symbol, this.types.get(identifier)!)
     }
     if (local === undefined) return this.generate_imported_value(identifier)
+    return this.read_local(local, this.types.get(identifier)!)
+  }
+
+  // The local's value, retained if a reference, as the type it has where it is read: without nil
+  // where it is narrowed.
+  read_local(local: CodegenLocal, type: Type): string {
     const value =
       local.kind === 'value'
         ? local.operand
         : this.ir.assign(`load ${ir_type(local.type)}, ptr ${slot_pointer(this.ir, local)}`)
     if (is_reference_type(local.type)) emit_retain(this.ir, value)
-    const is_narrowed =
-      local.type.kind === 'Optional' && this.types.get(identifier)!.kind !== 'Optional'
+    const is_narrowed = local.type.kind === 'Optional' && type.kind !== 'Optional'
     return is_narrowed ? emit_unwrap(this.ir, value, local.type) : value
   }
   private generate_imported_value(identifier: Identifier): string {

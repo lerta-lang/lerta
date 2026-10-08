@@ -200,15 +200,15 @@ export class ExpressionParser {
     }
   }
 
-  // `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted.
+  // `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted, and so may
+  // the parameters' types, `(a, b) -> body`, where a function type is expected.
   private parse_function_literal(): FunctionLiteral {
     const token = this.tokens.peek()
     const params: Parameter[] = []
     if (this.tokens.accept('(')) {
       const parse_param = () => {
         const name = this.parse_identifier()
-        this.tokens.expect(':', "':'")
-        return { name, type: this.parse_type_name() }
+        return { name, type: this.tokens.accept(':') ? this.parse_type_name() : undefined }
       }
       params.push(...this.parse_list(')', parse_param))
     }

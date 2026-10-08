@@ -4,6 +4,7 @@ import {
   type Case,
   type Conditional,
   type Expression,
+  type FunctionLiteral,
   type Statement,
 } from './ast.ts'
 import { CompileError } from './errors.ts'
@@ -228,4 +229,6 @@ export type BlockChecker = {
     define: () => void,
     type_of_last: (value: Expression) => Type,
   ): Type
+  // A function literal in an expression, whose body is checked where it is written.
+  type_of_function_literal(literal: FunctionLiteral, expected: Type | undefined): Type
 }

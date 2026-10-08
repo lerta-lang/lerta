@@ -16,8 +16,20 @@ export type FunctionEntry = {
   this_type: Type | undefined
 }
 
-export const parameter_types = (literal: FunctionLiteral, resolver: TypeResolver): Type[] =>
-  literal.params.map((param) => resolver.resolve(param.type))
+// The written types of the parameters; `expected`, the types a function type expects, stands in
+// for those left out (the caller checks that there are as many).
+export const parameter_types = (
+  literal: FunctionLiteral,
+  resolver: TypeResolver,
+  expected: Type[] = [],
+): Type[] =>
+  literal.params.map((param, i) => {
+    if (param.type !== undefined) return resolver.resolve(param.type)
+    const type = expected[i]
+    if (type !== undefined) return type
+    const { name, line, column } = param.name
+    throw new CompileError(`the type of the parameter '${name}' must be written`, line, column)
+  })
 
 export class Functions {
   private readonly entries = new Map<string, FunctionEntry>()

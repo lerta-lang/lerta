@@ -6,6 +6,12 @@ export class IrModule {
   private readonly functions: string[] = []
 
   private readonly defined = new Set<string>()
+  private symbol_count = 0
+
+  // A new global symbol, `@<prefix>.<n>`.
+  fresh_symbol(prefix: string): string {
+    return `@${prefix}.${this.symbol_count++}`
+  }
 
   // Runs `define` the first time `key` is given, for definitions that are made on demand.
   define_once(key: string, define: (module: IrModule) => void): void {

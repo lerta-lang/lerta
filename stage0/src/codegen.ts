@@ -12,13 +12,14 @@ import {
   type Return,
   type Statement,
 } from './ast.ts'
-import type { Checked, Types } from './checker.ts'
+import type { Capture, Checked, Types } from './checker.ts'
 import { emit_get, emit_set } from './array_codegen.ts'
 import { emit_map_set } from './map_codegen.ts'
 import { CheckedInt } from './checked_int.ts'
 import { ControlFlowGenerator } from './control_flow_codegen.ts'
 import { ThrowBlocks } from './throw_blocks.ts'
 import type { BlockGenerator } from './case_codegen.ts'
+import { emit_capture_pointer, emit_closure, emit_static_closure } from './closure_codegen.ts'
 import { ExpressionGenerator, slot_pointer, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder, IrModule } from './ir_builder.ts'
 import {
@@ -110,13 +111,16 @@ const function_symbols = (module: Module, checked: Checked[]): Map<string, strin
   return symbols
 }
 
-type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects' | 'imports'>
+type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects' | 'imports' | 'captures'>
 
 export class FunctionGenerator implements BlockGenerator {
   private readonly types: Types
   private readonly objects: ObjectTypes
   private readonly ir: IrBuilder
   private readonly locals: Scopes<CodegenLocal>
+  private readonly module: IrModule
+  private readonly checked: CheckedTypes
+  private readonly function_symbols: Map<string, string>
   // The top-level values of the module, and whether this is its top-level code, which declares
   // them, rather than a function, which uses them once they are initialized.
   private readonly top_level: { values: Map<string, TopLevelGlobal>; top_level_code: boolean }
@@ -133,6 +137,9 @@ export class FunctionGenerator implements BlockGenerator {
     function_symbols: Map<string, string>,
     top_level: { values: Map<string, TopLevelGlobal>; top_level_code: boolean },
   ) {
+    this.module = module
+    this.checked = checked
+    this.function_symbols = function_symbols
     this.top_level = top_level
     // Outside every scope: the module's top-level values, which a function checks to be
     // initialized, and the values it imports, whose modules have initialized them.
@@ -184,9 +191,32 @@ export class FunctionGenerator implements BlockGenerator {
     this.finish(signature)
   }
 
-  // Parameters are borrowed SSA values; a method gets its object first, as `@`. The last
-  // statement, if an expression, gives the result.
-  generate_function(symbol: string, literal: FunctionLiteral, this_type: Type | undefined): void {
+  generate_closure(literal: FunctionLiteral): string {
+    const captures = this.checked.captures.get(literal)!
+    const symbol = this.module.fresh_symbol('lerta.lambda')
+    const body_generator = new FunctionGenerator(this.module, this.checked, this.function_symbols, {
+      values: this.top_level.values,
+      top_level_code: false,
+    })
+    body_generator.generate_function(symbol, literal, undefined, captures)
+    const captured = captures.map(({ name, type }) => ({
+      type,
+      operand: this.expressions.read_local(this.locals.lookup(name)!, type),
+    }))
+    return captured.length === 0
+      ? emit_static_closure(this.ir, symbol)
+      : emit_closure(this.ir, symbol, captured)
+  }
+
+  // Parameters are borrowed SSA values; a method gets its object first, as `@`, and a function
+  // literal its closure, from which it reads the values it captures. The last statement, if an
+  // expression, gives the result.
+  generate_function(
+    symbol: string,
+    literal: FunctionLiteral,
+    this_type: Type | undefined,
+    captures?: Capture[],
+  ): void {
     const type = this.types.get(literal)!
     if (type.kind !== 'function') throw new Error('a function literal has a function type')
     this.result_type = type.result
@@ -200,6 +230,15 @@ export class FunctionGenerator implements BlockGenerator {
     for (const [i, param] of params.entries()) {
       scope.set(param.name, { kind: 'value', operand: `%p${i}`, type: param.type })
     }
+    const captured_types = (captures ?? []).map((capture) => capture.type)
+    for (const [i, { name, type }] of (captures ?? []).entries()) {
+      const pointer = emit_capture_pointer(this.ir, '%closure', captured_types, i)
+      scope.set(name, {
+        kind: 'value',
+        operand: this.ir.assign(`load ${ir_type(type)}, ptr ${pointer}`),
+        type,
+      })
+    }
     const last = literal.body.at(-1)
     for (const statement of literal.body.slice(0, -1)) this.generate_statement(statement)
     if (last !== undefined && is_expression(last) && type.result.kind !== 'void') {
@@ -212,6 +251,7 @@ export class FunctionGenerator implements BlockGenerator {
     this.locals.pop()
     const param_list = params.map((param, i) => `${ir_type(param.type)} %p${i}`)
     if (this_type !== undefined) param_list.unshift('ptr %this')
+    if (captures !== undefined) param_list.unshift('ptr %closure')
     this.finish(`${ir_return_type(type.result)} ${symbol}(${param_list.join(', ')})`)
   }
 

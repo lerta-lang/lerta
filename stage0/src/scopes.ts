@@ -45,12 +45,17 @@ export class Scopes<T> {
     return true
   }
 
-  lookup(name: string): T | undefined {
+  // The name in the scopes, not outside them.
+  lookup_local(name: string): T | undefined {
     for (let depth = this.scopes.length - 1; depth >= 0; depth--) {
       const local = this.overlays[depth].get(name) ?? this.scopes[depth].get(name)
       if (local !== undefined) return local
     }
-    return this.outer(name)
+    return undefined
+  }
+
+  lookup(name: string): T | undefined {
+    return this.lookup_local(name) ?? this.outer(name)
   }
 
   // The scopes from `depth` inward, innermost first.

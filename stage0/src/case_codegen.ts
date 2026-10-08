@@ -1,6 +1,15 @@
 // `case` and `then`/`else` in the generated code: the tests of their arms, and the values they
 // merge.
-import type { Case, CaseArm, Conditional, Expression, Jump, Return, Statement } from './ast.ts'
+import type {
+  Case,
+  CaseArm,
+  Conditional,
+  Expression,
+  FunctionLiteral,
+  Jump,
+  Return,
+  Statement,
+} from './ast.ts'
 import type { Types } from './checker.ts'
 import type { ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
@@ -15,6 +24,9 @@ export type BlockGenerator = {
   // Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
   // function releases it where the code goes on.
   hold(value: string, type: Type): () => void
+  // A function literal in an expression: its code, generated as a function of its own, and a new
+  // closure of it with the values it captures.
+  generate_closure(literal: FunctionLiteral): string
 }
 
 export class CaseGenerator {

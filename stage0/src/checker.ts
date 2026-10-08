@@ -16,17 +16,22 @@ import { function_symbol, top_level_symbol } from './lerta_ir.ts'
 import { is_file_import, with_module_path, type Module } from './loader.ts'
 import { std_modules } from './std_modules.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
+import { finish_function_type } from './result_checker.ts'
 import { StatementChecker } from './statement_checker.ts'
 import { reject_misplaced_jumps } from './jump_positions.ts'
 import { TopLevelValues } from './top_level_values.ts'
 import { TypeResolver } from './type_names.ts'
-import { same_type, void_type, type Type } from './types.ts'
+import type { Type } from './types.ts'
 
 // The type of every expression in a checked program, and the type that the name of `x is T`
 // stands for.
 export type Types = Map<Expression | NamedType, Type>
 // The type an expression is converted to where it is used, such as an Int passed as an Int?.
 export type Conversions = Map<Expression, Type>
+// What each function literal that is not a top-level function captures from around it: the names
+// and the types they have there, which may be narrowed.
+export type Capture = { name: string; type: Type }
+export type Captures = Map<FunctionLiteral, Capture[]>
 
 // Warnings are found as scopes end; they are reported in source order.
 const in_source_order = (warnings: CompileWarning[]): CompileWarning[] =>
@@ -42,6 +47,7 @@ export type Shared = {
   resolver: TypeResolver
   imports: Imports
   top_level: TopLevelValues
+  captures: Captures
 }
 
 // The object that `@` refers to: in a method, or in the initializer of a field, which sees the
@@ -62,6 +68,7 @@ export type Checked = {
   objects: ObjectTypes
   imports: Imports
   warnings: CompileWarning[]
+  captures: Captures
   // What the module exports, for the modules that import it.
   exports: Map<string, Export>
 }
@@ -122,6 +129,7 @@ const check = (
   )
   const functions: Functions = new Functions((entry) => check_function(shared, entry), resolver)
   const top_level = new TopLevelValues(program)
+  const captures: Captures = new Map()
   const shared: Shared = {
     types,
     conversions,
@@ -131,6 +139,7 @@ const check = (
     resolver,
     imports,
     top_level,
+    captures,
   }
   try {
     reject_misplaced_jumps(program)
@@ -161,7 +170,15 @@ const check = (
     throw error
   }
   const exports = exports_of_module(module, functions, objects, resolver, types)
-  return { types, conversions, objects, imports, warnings: in_source_order(warnings), exports }
+  return {
+    types,
+    conversions,
+    objects,
+    imports,
+    warnings: in_source_order(warnings),
+    captures,
+    exports,
+  }
 }
 
 // A class, struct or type alias cannot have the name of an import; the error points at it.
@@ -244,15 +261,9 @@ const check_function = (shared: Shared, entry: FunctionEntry): void => {
       ? undefined
       : { info: shared.objects.info(entry.this_type), initializing: undefined }
   new StatementChecker(shared, context, self).check_function_body(literal, params)
-  const result = context.annotated ?? context.inferred ?? void_type
-  if (result.kind === 'nil') {
-    const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
-    throw new CompileError(message, literal.line, literal.column)
-  }
-  for (const { value, type } of context.results) {
-    if (type.kind !== 'never' && !same_type(type, result)) shared.conversions.set(value, result)
-  }
-  entry.type ??= { kind: 'function', params, result }
+  // The conversions of the results are recorded even if the type was known from its annotation.
+  const type = finish_function_type(context, literal, params, shared.conversions)
+  entry.type ??= type
   shared.types.set(literal, entry.type)
 }
 

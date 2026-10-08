@@ -27,7 +27,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - At the start of each function, a **frame record** is `alloca`ed (a parent pointer plus slots for locals holding RC references) and linked to the global variable `current_frame` (the LLVM shadow stack approach). There are no threads, so a global variable is fine.
 - **Non-RC values (Int, Float, Bool) stay as SSA values** in registers. They are not put in the frame record.
 - RC references that are temporaries not living across a function call are not put there either.
-- Only variables captured by closures and variables living across `await` are placed in a heap **context object** (the V8 approach). Only the captured variables, not the whole frame.
+- Only variables captured by closures and variables living across `await` are placed in a heap **context object** (the V8 approach). Only the captured variables, not the whole frame. stage0 captures only values that cannot change (`const`s, parameters, loop variables), so it copies them into the closure instead (see [objects](#objects)); a captured `var` will need the context.
 - For an async function, the context is the coroutine frame itself.
 - The cost per function call is a few stores.
 
@@ -59,7 +59,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 ## Objects
 
 - A class or struct object is a heap object: the header, then its fields in declaration order, each in its IR type. A generated drop function releases the references the fields hold.
-- A function value is a closure: a heap object with the header, the pointer to its code, then its captured values. The code takes the closure first, then the arguments, borrowed as in any call. The closure of a top-level function is an immortal constant whose code, a generated thunk, calls the function without the closure.
+- A function value is a closure: a heap object with the header, the pointer to its code, then its captured values. The code takes the closure first, then the arguments, borrowed as in any call. A function literal's closure is allocated where the literal is evaluated, with the captured values copied in (references retained) and a generated drop function that releases them. A closure that captures nothing, such as that of a top-level function, whose code is a generated thunk that calls the function without the closure, is an immortal constant instead.
 - Each type has a generated constructor function, which takes the constructor arguments borrowed, like any call, and computes the initialized fields; methods are functions that take the object first.
 
 ## Structs
