@@ -13,7 +13,7 @@ Read these before changing behavior:
 ## Workflow
 
 1. **Plan first.** Before implementing, explain the approach and get the user's agreement.
-2. **Implement with tests.** Every language feature gets run tests in `tests/`: a Lerta source file plus its expected output. Write them in the stage0 subset (see `docs/roadmap.md` for why). Programs in `examples/` are run as tests too; their expected output goes in `tests/examples/`.
+2. **Implement with tests.** Every language feature gets run tests in `tests/`: a Lerta source file plus its expected output (the expected files are described at the top of `stage0/test/run.ts`). Write them in the stage0 subset (see `docs/roadmap.md` for why). Programs in `examples/` are run as tests too; their expected output goes in `tests/examples/`.
 3. **Review.** After implementing, run an adversarial review with a subagent that follows `.agents/reviewer.md`.
    - Run `pnpm check` and `pnpm test` yourself before each review; the reviewer does not.
    - Show the reviewer only the code and the tests. Do not pass the intent, the background or your design decisions.
