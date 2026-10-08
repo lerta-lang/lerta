@@ -262,12 +262,16 @@ export type Extern = Position &
     type: TypeName
   }
 
+// `extend String` followed by methods, which the type has where the extend is in effect.
+export type Extend = Position & { kind: 'extend'; type: TypeName; members: MemberDeclaration[] }
+
 export type Statement =
   | Expression
   | Import
   | TypeDeclaration
   | TypeAlias
   | Extern
+  | Extend
   | Declaration
   | Assignment
   | If
@@ -279,6 +283,7 @@ export type Program = Statement[]
 const statement_only_kinds = [
   'import',
   'extern',
+  'extend',
   'type_alias',
   'type_declaration',
   'declaration',

@@ -5,6 +5,7 @@ import {
   type Condition,
   type Declaration,
   type Destructuring,
+  type Extend,
   type Extern,
   type Identifier,
   type MemberDeclaration,
@@ -96,6 +97,8 @@ class Parser {
         return this.parse_export()
       case 'extern':
         return this.parse_extern()
+      case 'extend':
+        return this.parse_extend()
       default:
         if (this.at_type_alias()) return this.parse_type_alias()
         if (this.at_declaration()) return this.reject_postfix(this.parse_declaration())
@@ -311,14 +314,7 @@ class Parser {
   private parse_type_declaration(): TypeDeclaration {
     const token = this.tokens.next()
     const name = this.expressions.parse_identifier()
-    this.tokens.expect('newline', 'end of line')
-    this.tokens.expect('indent', 'indented members')
-    const members: MemberDeclaration[] = []
-    while (this.tokens.peek().kind !== 'dedent') {
-      members.push(this.parse_member())
-      this.tokens.expect_line_end()
-    }
-    this.tokens.next()
+    const members = this.parse_members()
     const is_struct = token.kind === 'struct'
     return {
       kind: 'type_declaration',
@@ -328,6 +324,26 @@ class Parser {
       line: token.line,
       column: token.column,
     }
+  }
+
+  // `extend Type` followed by an indented block of methods, one per line.
+  private parse_extend(): Extend {
+    const token = this.tokens.next()
+    const type = this.types.parse_type_name()
+    const members = this.parse_members()
+    return { kind: 'extend', type, members, line: token.line, column: token.column }
+  }
+
+  private parse_members(): MemberDeclaration[] {
+    this.tokens.expect('newline', 'end of line')
+    this.tokens.expect('indent', 'indented members')
+    const members: MemberDeclaration[] = []
+    while (this.tokens.peek().kind !== 'dedent') {
+      members.push(this.parse_member())
+      this.tokens.expect_line_end()
+    }
+    this.tokens.next()
+    return members
   }
 
   // `[const | var] name[: Type][ = value]`, with a type, a value or both.

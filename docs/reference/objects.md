@@ -29,6 +29,23 @@ print c.count
 - Objects are reference counted. Assigning or passing an object shares it.
 - Objects cannot be compared with `==` yet.
 
+## extend
+
+```
+extend String
+  shout = (): String -> @ + '!'
+
+extend Point
+  sum = (): Int -> @x + @y
+
+print 'hi'.shout()
+```
+
+- `extend Type` at the top level, followed by an indented block of methods, written as a class's, gives a type more methods. Inside them, `@` is the receiver. An extend has no fields, and no `init` or `deinit`.
+- Only `String`, `Int`, `Bool`, `UInt8`, `Binary`, classes and structs can be extended so far. Extending a generic type (an array, a map, an `Iter`, an optional, a function, a union or an anonymous struct type) is an error.
+- An extend is in effect in the module that declares it and in the modules that import that module directly, by any import, `import 'module'` included (see [modules](modules.md)). It is not in effect further: a module that imports one of those does not get it.
+- It is an error, at the extend's method, for the method to have the name of a member that the type has already, builtin or of its class or struct, or of a method that another extend in effect in the module gives the same type. When two imported modules' extends conflict, the error is at the second import.
+
 ## deinit
 
 ```

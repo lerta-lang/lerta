@@ -36,7 +36,7 @@ export type ObjectInfo = {
   state: 'unchecked' | 'checking' | 'checked'
 }
 
-const is_method = (member: MemberDeclaration): boolean =>
+export const is_method = (member: MemberDeclaration): boolean =>
   member.value?.kind === 'function' && member.modifier !== 'var'
 
 export class ObjectTypes {

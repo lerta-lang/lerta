@@ -29,6 +29,7 @@ import {
   constructor_symbol,
   emit_release,
   emit_retain,
+  extension_symbol,
   function_symbol,
   module_init_symbol,
   top_level_symbol,
@@ -98,6 +99,9 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
         generator().generate_function(symbol, literal, info.type)
       }
     }
+    for (const method of checked[module.index].extensions.own) {
+      generator().generate_function(extension_symbol(method), method.literal, method.receiver)
+    }
   }
   return ir_module.render()
 }
@@ -119,7 +123,7 @@ const function_symbols = (module: Module, checked: Checked[]): Map<string, strin
 
 type CheckedTypes = Pick<
   Checked,
-  'types' | 'conversions' | 'objects' | 'imports' | 'captures' | 'shared_vars'
+  'types' | 'conversions' | 'objects' | 'imports' | 'extensions' | 'captures' | 'shared_vars'
 >
 
 export class FunctionGenerator implements BlockGenerator {
@@ -290,7 +294,7 @@ export class FunctionGenerator implements BlockGenerator {
     }
     this.locals.pop()
     const param_list = params.map((param, i) => `${ir_type(param.type)} %p${i}`)
-    if (this_type !== undefined) param_list.unshift('ptr %this')
+    if (this_type !== undefined) param_list.unshift(`${ir_type(this_type)} %this`)
     if (captures !== undefined) param_list.unshift('ptr %closure')
     this.finish(`${ir_return_type(type.result)} ${symbol}(${param_list.join(', ')})`)
   }
@@ -412,6 +416,7 @@ export class FunctionGenerator implements BlockGenerator {
       case 'type_alias':
       case 'import':
       case 'extern':
+      case 'extend':
         return
       default:
         return this.expressions.release_if_reference(

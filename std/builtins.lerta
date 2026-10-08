@@ -1,0 +1,30 @@
+# The methods of the builtin types that are not generic, which every module has: the compiler
+# imports this module into every other (see runtime/string.c and runtime/binary.c).
+
+extern lerta_int_to_string: (Int) -> String
+extern lerta_string_parse_int: (String) -> Int?
+extern lerta_byte_to_int: (UInt8) -> Int
+extern lerta_binary_slice: (Binary, Int, Int) -> Binary
+extern lerta_binary_decode_utf8: (Binary) -> String?
+
+extend Int
+  to_string = (): String -> lerta_int_to_string(@)
+
+extend Bool
+  to_string = (): String -> @ then 'true' else 'false'
+
+extend UInt8
+  to_int = (): Int -> lerta_byte_to_int(@)
+  to_string = (): String -> @.to_int().to_string()
+
+extend String
+  to_string = (): String -> @
+  # nil unless the String is an integer in decimal, with an optional leading `-`, that fits in an
+  # Int.
+  parse_int = (): Int? -> lerta_string_parse_int(@)
+
+extend Binary
+  # The bytes from `start` up to `end`, which is exclusive. Throws if they are out of range.
+  slice = (start: Int, end: Int): Binary -> lerta_binary_slice(@, start, end)
+  # The same bytes as a String if they are valid UTF-8, otherwise nil.
+  decode_utf8 = (): String? -> lerta_binary_decode_utf8(@)

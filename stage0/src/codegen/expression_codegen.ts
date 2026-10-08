@@ -7,7 +7,7 @@ import {
   type Throw,
 } from '../syntax/ast.ts'
 import { call_array_method, emit_length } from './array_codegen.ts'
-import { emit_binary_length, emit_binary_slice, emit_decode_utf8 } from './binary_codegen.ts'
+import { emit_binary_length } from './binary_codegen.ts'
 import { builtins } from '../check/builtins.ts'
 import { emit_closure_call, emit_function_closure } from './closure_codegen.ts'
 import { call_iter_method, is_iter_method } from './iter_codegen.ts'
@@ -21,6 +21,7 @@ import {
   emit_release,
   emit_retain,
   constructor_symbol,
+  extension_symbol,
   method_symbol,
   ir_param_type,
   ir_return_type,
@@ -31,11 +32,12 @@ import { call_map_method, emit_map_length, emit_map_new } from './map_codegen.ts
 import { emit_is_present, emit_unwrap, emit_wrap, nil_constant } from './optional_codegen.ts'
 import { OperatorGenerator } from './operator_codegen.ts'
 import { emit_field_pointer, emit_type_test } from './object_codegen.ts'
+import type { Extensions } from '../check/extensions.ts'
 import type { Imports } from '../check/imports.ts'
 import type { ObjectTypes } from '../check/object_types.ts'
 import type { Scopes } from '../scopes.ts'
 import { emit_runtime_call, emit_unreachable } from './extern_codegen.ts'
-import { emit_concat, emit_parse_int, emit_to_string } from './string_codegen.ts'
+import { emit_concat, emit_to_string } from './string_codegen.ts'
 import type { ThrowBlocks } from './throw_blocks.ts'
 import { emit_initialized_check, type TopLevelGlobal } from './top_level_codegen.ts'
 import { is_reference_type, type Type } from '../types.ts'
@@ -75,6 +77,7 @@ export class ExpressionGenerator {
   private readonly conversions: Conversions
   private readonly objects: ObjectTypes
   private readonly imports: Imports
+  private readonly extensions: Extensions
   private readonly operators: OperatorGenerator
   private readonly cases: CaseGenerator
   private readonly blocks: BlockGenerator
@@ -82,7 +85,13 @@ export class ExpressionGenerator {
 
   constructor(
     ir: IrBuilder,
-    checked: { types: Types; conversions: Conversions; objects: ObjectTypes; imports: Imports },
+    checked: {
+      types: Types
+      conversions: Conversions
+      objects: ObjectTypes
+      imports: Imports
+      extensions: Extensions
+    },
     throws: ThrowBlocks,
     checked_int: CheckedInt,
     locals: Scopes<CodegenLocal>,
@@ -94,6 +103,7 @@ export class ExpressionGenerator {
     this.conversions = checked.conversions
     this.objects = checked.objects
     this.imports = checked.imports
+    this.extensions = checked.extensions
     this.operators = new OperatorGenerator(this, ir, checked.types, checked_int, throws)
     this.blocks = blocks
     this.cases = new CaseGenerator(this, ir, checked.types, blocks)
@@ -152,9 +162,7 @@ export class ExpressionGenerator {
       }
       case 'this': {
         const object = this.locals.lookup('@')!
-        if (object.kind !== 'value') throw new Error('@ is a value')
-        emit_retain(this.ir, object.operand)
-        return object.operand
+        return this.read_local(object, object.type)
       }
       case 'unwrap':
         return this.operators.generate_unwrap(expression)
@@ -293,9 +301,8 @@ export class ExpressionGenerator {
     return ''
   }
 
-  // `to_string()` passes on the object's ownership (a String returns itself), and so do the methods
-  // of Iters (see call_iter_method), with the arguments; the other methods borrow the object and
-  // release it after the call, as they do the arguments.
+  // The methods of Iters (see call_iter_method) take the object and the arguments; the other
+  // methods borrow them, and the object and the arguments are released after the call.
   private generate_method_call(call: Call, member: Member): string {
     const object_type = this.types.get(member.object)!
     const object = this.generate(member.object)
@@ -305,47 +312,43 @@ export class ExpressionGenerator {
       emit_release(this.ir, object)
       return this.call_closure(closure, this.types.get(member)!, call.args)
     }
-    if (object_type.kind === 'Object' && !this.objects.info(object_type).methods.has(name)) {
+    const symbol = this.method_symbol(object_type, name)
+    if (symbol === undefined && object_type.kind === 'Object') {
       // A field that holds a function.
       const closure = this.read_field(object, object_type, member)
       return this.call_closure(closure, this.types.get(member)!, call.args)
-    }
-    if (object_type.kind === 'Object') {
-      const args = call.args.map((arg) => this.generate(arg))
-      const typed_args = args.map((arg, i) => `${ir_type(this.type_at_use(call.args[i]))} ${arg}`)
-      const symbol = method_symbol(object_type, name)
-      const result = this.call_user_function(
-        symbol,
-        this.types.get(member)!,
-        [`ptr ${object}`, ...typed_args].join(', '),
-      )
-      call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
-      emit_release(this.ir, object)
-      return result
     }
     if (is_iter_method(object_type, name)) {
       const args = call.args.map((arg) => this.generate(arg))
       const arg_types = call.args.map((arg) => this.type_at_use(arg))
       return call_iter_method(this.ir, name, object, object_type, args, arg_types)
     }
-    if (name === 'to_string') return emit_to_string(this.ir, object, object_type)
-    if (name === 'to_int') return this.ir.assign(`zext i8 ${object} to i64`)
-    if (name === 'parse_int' || name === 'decode_utf8') {
-      const result =
-        name === 'parse_int' ? emit_parse_int(this.ir, object) : emit_decode_utf8(this.ir, object)
-      emit_release(this.ir, object)
-      return result
-    }
     const args = call.args.map((arg) => this.generate(arg))
+    const typed_args = args.map((arg, i) => `${ir_type(this.type_at_use(call.args[i]))} ${arg}`)
+    const receiver = `${ir_type(object_type)} ${object}`
+    const method_type = this.types.get(member)!
     const result =
-      object_type.kind === 'Array'
-        ? call_array_method(this.ir, name, object, object_type.element, args)
-        : object_type.kind === 'Map'
-          ? call_map_method(this.ir, name, object, args, object_type)
-          : emit_binary_slice(this.ir, object, args[0], args[1])
+      symbol !== undefined
+        ? this.call_user_function(symbol, method_type, [receiver, ...typed_args].join(', '))
+        : this.call_collection_method(name, object, object_type, args)
     call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
-    emit_release(this.ir, object)
+    this.release_if_reference(member.object, object)
     return result
+  }
+
+  private call_collection_method(name: string, object: string, type: Type, args: string[]): string {
+    if (type.kind === 'Array') return call_array_method(this.ir, name, object, type.element, args)
+    if (type.kind === 'Map') return call_map_method(this.ir, name, object, args, type)
+    throw new Error(`no method '${name}' of ${type.kind}`)
+  }
+
+  // The symbol of a method written in Lerta: of a class or struct, or of an extend.
+  private method_symbol(type: Type, name: string): string | undefined {
+    if (type.kind === 'Object' && this.objects.info(type).methods.has(name)) {
+      return method_symbol(type, name)
+    }
+    const extension = this.extensions.find(type, name)
+    return extension === undefined ? undefined : extension_symbol(extension)
   }
 
   // A field's value is retained, since every expression yields an owned reference.

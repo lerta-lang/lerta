@@ -39,6 +39,7 @@ const visit_statement = (statement: Statement, jumps: Jumps): void => {
       visit(statement.iterable, no_jumps)
       return visit_statements(statement.body, in_loop)
     case 'type_declaration':
+    case 'extend':
       for (const member of statement.members) {
         if (member.value !== undefined) visit(member.value, all_jumps)
       }

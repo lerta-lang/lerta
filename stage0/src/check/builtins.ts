@@ -3,9 +3,7 @@ import {
   binary_type,
   bool_type,
   int_type,
-  is_stringable,
   iter_type,
-  optional_type,
   string_type,
   stringable_type,
   void_type,
@@ -41,16 +39,9 @@ export const builtins = new Map<string, Builtin>([
 
 const method = (params: Type[], result: Type): Type => ({ kind: 'function', params, result })
 
-// The type of a method of a builtin type, if it has one.
+// The type of a method of a generic builtin type, if it has one. The other builtin types have their
+// methods from std/builtins.lerta, as extends.
 export const builtin_method = (receiver: Type, name: string): Type | undefined => {
-  if (name === 'to_string' && is_stringable(receiver)) return method([], string_type)
-  if (receiver.kind === 'UInt8' && name === 'to_int') return method([], int_type)
-  if (receiver.kind === 'Binary' && name === 'slice')
-    return method([int_type, int_type], binary_type)
-  if (receiver.kind === 'Binary' && name === 'decode_utf8') {
-    return method([], optional_type(string_type))
-  }
-  if (receiver.kind === 'String' && name === 'parse_int') return method([], optional_type(int_type))
   if (receiver.kind === 'Map') return map_method(receiver.key, name)
   if (receiver.kind === 'Iter') return iter_method(receiver.item, name)
   if (receiver.kind !== 'Array') return undefined

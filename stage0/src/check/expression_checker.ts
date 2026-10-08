@@ -14,6 +14,7 @@ import type { Conversions, SelfContext, Shared, Types } from './checker.ts'
 import { CaseChecker, type BlockChecker } from './case_checker.ts'
 import { check_item_type, check_value_type, CollectionChecker } from './collection_checker.ts'
 import { CompileError } from '../errors.ts'
+import type { Extensions } from './extensions.ts'
 import type { Functions } from './functions.ts'
 import type { Imports } from './imports.ts'
 import type { TopLevelValues } from './top_level_values.ts'
@@ -68,6 +69,7 @@ export class ExpressionChecker {
   private readonly object_types: ObjectTypes
   private readonly self: SelfContext | undefined
   private readonly imports: Imports
+  private readonly extensions: Extensions
   private readonly top_level: TopLevelValues | undefined
   private readonly jumps: JumpChecker
   private readonly blocks: BlockChecker
@@ -89,6 +91,7 @@ export class ExpressionChecker {
     this.jumps = jumps
     this.blocks = blocks
     this.imports = shared.imports
+    this.extensions = shared.extensions
     this.top_level = top_level
     this.types = shared.types
     this.conversions = shared.conversions
@@ -306,6 +309,7 @@ export class ExpressionChecker {
     this.reject_deinit(object_type, member)
     const method =
       this.objects.method_type(object_type, member.name) ??
+      this.extensions.method_type(object_type, member.name) ??
       builtin_method(object_type, name) ??
       this.objects.field_type(object_type, member)
     if (method === undefined) {
@@ -334,19 +338,21 @@ export class ExpressionChecker {
   private type_of_property(member: Member): Type {
     const object_type =
       member.object.kind === 'this' && this.self !== undefined
-        ? this.record(member.object, this.self.info.type)
+        ? this.record(member.object, this.self.type)
         : this.type_of(member.object)
     const { name, line, column } = member.name
     this.reject_deinit(object_type, member)
     const field_type = this.objects.field_type(object_type, member)
     if (field_type !== undefined) return field_type
-    if (this.objects.has_method(object_type, name)) {
-      throw new CompileError(`a method must be called: write \`${name}()\``, line, column)
-    }
     const property = builtin_property(object_type, name)
     if (property !== undefined) return property
     const is_map = name === 'map' && iterable_item(object_type) !== undefined
-    if (builtin_method(object_type, name) !== undefined || is_map) {
+    const is_method =
+      this.objects.has_method(object_type, name) ||
+      this.extensions.find(object_type, name) !== undefined ||
+      builtin_method(object_type, name) !== undefined ||
+      is_map
+    if (is_method) {
       throw new CompileError(`a method must be called: write \`${name}()\``, line, column)
     }
     const message = `type ${format_type(object_type)} has no property '${name}'`

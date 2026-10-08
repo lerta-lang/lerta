@@ -1,6 +1,6 @@
-// Top-level functions and the methods of classes and structs. They can be used anywhere in the
-// module, before their declaration too, so a body is checked on demand: when its return type is
-// first needed, or at the end.
+// Top-level functions and the methods of classes, structs and extends. They can be used anywhere
+// in the module, before their declaration too, so a body is checked on demand: when its return
+// type is first needed, or at the end.
 import type { FunctionLiteral, Identifier, Position } from '../syntax/ast.ts'
 import { CompileError } from '../errors.ts'
 import type { TypeResolver } from './type_names.ts'
@@ -12,7 +12,8 @@ export type FunctionEntry = {
   // Known from the annotations, or once the body is checked when the return type is inferred.
   type: Type | undefined
   state: 'unchecked' | 'checking' | 'checked'
-  // The class or struct of a method, which its body sees as `@`.
+  // The type of a method's object, a class or struct or an extended type, which its body sees as
+  // `@`.
   this_type: Type | undefined
 }
 

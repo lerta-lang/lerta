@@ -1,4 +1,5 @@
-// Reads the entry module and the modules it imports, directly or not.
+// Reads the entry module and the modules it imports, directly or not, including std:builtins, which
+// every other module imports.
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import type { Import, Program } from './syntax/ast.ts'
@@ -19,6 +20,17 @@ export type Module = {
 
 // The standard modules, `std:name`, are the files of this directory.
 const std_dir = join(import.meta.dirname, '../../std')
+
+// Every module but std:builtins itself imports it, as `import 'std:builtins'`, for the methods of
+// the builtin types that it gives.
+const builtins_import = (): Import => ({
+  kind: 'import',
+  names: [],
+  module: 'std:builtins',
+  line: 1,
+  column: 1,
+})
+const builtins_real_path = realpathSync(join(std_dir, 'builtins.lerta'))
 
 // The file an import names: a path that starts with `./` or `../` is relative to `from`, the
 // directory of the importing file; `std:name` is a standard module. Other names are reserved.
@@ -60,6 +72,7 @@ export const load_modules = (entry_path: string): Module[] => {
     const program = with_module_path(display_path, () =>
       parse(tokenize(readFileSync(path, 'utf8'))),
     )
+    if (real_path !== builtins_real_path) program.unshift(builtins_import())
     const imported = new Map<Import, Module>()
     loading.add(real_path)
     for (const statement of program) {

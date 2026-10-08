@@ -5,12 +5,14 @@ import {
   type NamedType,
   type FunctionLiteral,
   type Identifier,
+  type Position,
   type Import,
   type Program,
   type Statement,
   type TypeDeclaration,
 } from '../syntax/ast.ts'
 import { CompileError, CompileWarning } from '../errors.ts'
+import { Extensions } from './extensions.ts'
 import { Functions, method_key, parameter_types, type FunctionEntry } from './functions.ts'
 import { Imports, type Export } from './imports.ts'
 import { with_module_path, type Module } from '../loader.ts'
@@ -45,16 +47,19 @@ export type Shared = {
   objects: ObjectTypes
   resolver: TypeResolver
   imports: Imports
+  extensions: Extensions
   top_level: TopLevelValues
   captures: Captures
-  extern_types: Map<string, Type>
+  extern_types: Map<string, ExternType>
+  // How messages name the module.
+  module_name: string
   // The `var`s that function literals capture, by their declarations' names.
   shared_vars: Set<Identifier>
 }
 
-// The object that `@` refers to: in a method, or in the initializer of a field, which sees the
-// constructor arguments and the fields initialized before it.
-export type SelfContext = { info: ObjectInfo; initializing: FieldInfo | undefined }
+// The type of the object that `@` refers to: in a method, the method of an extend, or the
+// initializer of a field, which sees the constructor arguments and the fields initialized before it.
+export type SelfContext = { type: Type; initializing: FieldInfo | undefined }
 
 // The function whose body is being checked: its written return type, or the one being inferred.
 export type FunctionContext = {
@@ -69,16 +74,20 @@ export type Checked = {
   conversions: Conversions
   objects: ObjectTypes
   imports: Imports
+  extensions: Extensions
   warnings: CompileWarning[]
   captures: Captures
   shared_vars: Set<Identifier>
-  // What the module exports, for the modules that import it.
+  // What the module exports, for the modules that import it, besides its extends.
   exports: Map<string, Export>
 }
 
 // What the modules share: the classes and structs of every module checked so far, by symbol, and
 // the type each C function was first declared with by an extern.
-type ProgramWide = { infos: Map<string, ObjectInfo>; extern_types: Map<string, Type> }
+type ProgramWide = { infos: Map<string, ObjectInfo>; extern_types: Map<string, ExternType> }
+
+// The type of a C function, and the module of the extern that first declared it.
+type ExternType = { type: Type; module_name: string }
 
 // Checks the modules in order, each after those it imports (see load_modules). The warnings of
 // all the modules come back with the last one's, or with the error.
@@ -88,10 +97,9 @@ export const check_modules = (modules: Module[]): Checked[] => {
   const program_wide: ProgramWide = { infos: new Map(), extern_types: new Map() }
   try {
     for (const module of modules) {
-      const exports_of = (statement: Import) =>
-        checked[module.imported.get(statement)!.index].exports
+      const imported = (statement: Import) => checked[module.imported.get(statement)!.index]
       const result = with_module_path(module.display_path, () =>
-        check(module, exports_of, program_wide),
+        check(module, imported, program_wide),
       )
       for (const warning of result.warnings) warning.module_path = module.display_path
       warnings.push(...result.warnings)
@@ -105,17 +113,19 @@ export const check_modules = (modules: Module[]): Checked[] => {
   return checked
 }
 
+// `imported` gives the checked module that an import names.
 const check = (
   module: Module,
-  exports_of: (statement: Import) => Map<string, Export>,
+  imported: (statement: Import) => Checked,
   program_wide: ProgramWide,
 ): Checked => {
   const { program } = module
-  const shared = create_shared(module, exports_of, program_wide)
+  const shared = create_shared(module, (statement) => imported(statement).exports, program_wide)
   const { types, conversions, warnings, functions, objects, resolver, imports, captures } = shared
   try {
     reject_misplaced_jumps(program)
     declare_names(program, shared)
+    declare_extends(module, imported, shared)
     check_code(program, shared)
   } catch (error) {
     if (error instanceof CompileError) error.warnings = in_source_order(warnings)
@@ -127,6 +137,7 @@ const check = (
     conversions,
     objects,
     imports,
+    extensions: shared.extensions,
     warnings: in_source_order(warnings),
     captures,
     shared_vars: shared.shared_vars,
@@ -147,12 +158,13 @@ const create_shared = (
     imports.use(name)
     return imported.export
   }
+  const module_name = module.display_path ?? 'the entry module'
   const objects: ObjectTypes = new ObjectTypes(
     (info) => check_object(shared, info),
     (name) => imported_type(name)?.info,
     program_wide.infos,
     module.index,
-    module.display_path ?? 'the entry module',
+    module_name,
   )
   const resolver = new TypeResolver(
     (name) => objects.object_type(name) ?? imported_type(name)?.type,
@@ -166,9 +178,11 @@ const create_shared = (
     objects,
     resolver,
     imports,
+    extensions: new Extensions(module.index, module_name),
     top_level: new TopLevelValues(module.program),
     captures: new Map(),
     extern_types: program_wide.extern_types,
+    module_name,
     shared_vars: new Set(),
   }
   return shared
@@ -194,10 +208,29 @@ const declare_names = (program: Program, shared: Shared): void => {
   objects.add_members(resolver, functions)
 }
 
+// The extends in effect in the module: those of the modules it imports, then its own, once the
+// types they extend are complete.
+const declare_extends = (
+  module: Module,
+  imported: (statement: Import) => Checked,
+  { extensions, resolver, objects, functions }: Shared,
+): void => {
+  for (const statement of module.program) {
+    if (statement.kind !== 'import') continue
+    extensions.add_imported(imported(statement).extensions.own, statement)
+  }
+  for (const statement of module.program) {
+    if (statement.kind === 'extend') extensions.declare(statement, resolver, objects, functions)
+  }
+}
+
 // An extern's type is a function type, which gives the C function's parameters and result. A C
 // function has one C type, so all the externs of a symbol in the program must agree on it; a String
 // and a Binary, both pointers, can stand for the same parameter.
-const declare_externs = (program: Program, { resolver, imports, extern_types }: Shared): void => {
+const declare_externs = (
+  program: Program,
+  { resolver, imports, extern_types, module_name }: Shared,
+): void => {
   for (const statement of program) {
     if (statement.kind !== 'extern') continue
     const type = resolver.resolve(statement.type, true)
@@ -205,19 +238,32 @@ const declare_externs = (program: Program, { resolver, imports, extern_types }: 
       const { line, column } = statement.type
       throw new CompileError('an extern is a C function, of a function type', line, column)
     }
+    reject_optionals_without_c_type(type, statement.type)
     const { symbol } = statement
     const declared = extern_types.get(symbol.name)
-    if (declared !== undefined && c_signature(declared) !== c_signature(type)) {
-      const message = `the C function '${symbol.name}' is declared as ${format_type(declared)} elsewhere`
+    if (declared !== undefined && c_signature(declared.type) !== c_signature(type)) {
+      const message = `the C function '${symbol.name}' is declared as ${format_type(declared.type)} in ${declared.module_name}`
       throw new CompileError(message, symbol.line, symbol.column)
     }
-    extern_types.set(symbol.name, type)
+    if (declared === undefined) extern_types.set(symbol.name, { type, module_name })
     imports.add_extern(statement.name, type, symbol.name)
   }
 }
 
-// The C type that a value of the type is passed as: a reference is a pointer, and an optional Int,
-// UInt8 or Bool a pair of a flag and the value (see codegen/lerta_ir.ts).
+// Of the optional values that are not references, only an Int? has a C type, LertaOptionalInt.
+const reject_optionals_without_c_type = (type: Type, at: Position): void => {
+  if (type.kind !== 'function') return
+  for (const value_type of [...type.params, type.result]) {
+    const is_value = value_type.kind === 'Optional' && !is_reference_type(value_type)
+    if (is_value && value_type.inner.kind !== 'Int') {
+      const message = `a C function cannot take or return a ${format_type(value_type)}; of the optional values, only references and Int? have a C type`
+      throw new CompileError(message, at.line, at.column)
+    }
+  }
+}
+
+// The C type that a value of the type is passed as: a reference is a pointer, and an Int? a pair of
+// a flag and the value (LertaOptionalInt in runtime/lerta.h; see codegen/lerta_ir.ts).
 const c_type = (type: Type): string => {
   if (is_reference_type(type)) return 'pointer'
   return type.kind === 'Optional' ? `${c_type(type.inner)}?` : type.kind
@@ -344,9 +390,7 @@ const check_function = (shared: Shared, entry: FunctionEntry): void => {
     results: [],
   }
   const self =
-    entry.this_type === undefined
-      ? undefined
-      : { info: shared.objects.info(entry.this_type), initializing: undefined }
+    entry.this_type === undefined ? undefined : { type: entry.this_type, initializing: undefined }
   new StatementChecker(shared, context, self).check_function_body(literal, params)
   // The conversions of the results are recorded even if the type was known from its annotation.
   const type = reject_nil_result(finish_function_type(context, params, shared.conversions), literal)
@@ -355,6 +399,6 @@ const check_function = (shared: Shared, entry: FunctionEntry): void => {
 }
 
 const check_object = (shared: Shared, info: ObjectInfo): void => {
-  const self: SelfContext = { info, initializing: undefined }
+  const self: SelfContext = { type: info.type, initializing: undefined }
   new StatementChecker(shared, undefined, self).check_initializers()
 }

@@ -102,7 +102,7 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
   // Each initializer sees the constructor arguments and the fields initialized before it.
   check_initializers(): void {
     const self = this.self!
-    for (const field of self.info.fields) {
+    for (const field of this.objects.info(self.type).fields) {
       if (field.value === undefined) continue
       self.initializing = field
       if (field.type !== undefined) {
@@ -124,7 +124,7 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
       if (this.self !== undefined) {
         const { line, column } = literal
         const identifier: Identifier = { kind: 'identifier', name: '@', line, column }
-        const type = this.self.info.type
+        const { type } = this.self
         this.scopes.define('@', { identifier, type, mutable: false, declared: false, used: true })
       }
       literal.params.forEach((param, i) =>
@@ -230,36 +230,27 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
       case 'assignment':
         return this.check_assignment(statement)
       case 'type_alias':
-        if (this.context === undefined && this.scopes.depth === 1) return
-        throw new CompileError(
-          'a type can only be declared at the top level',
-          statement.line,
-          statement.column,
-        )
+        return this.require_top_level(statement, 'a type can only be declared at the top level')
       case 'extern':
-        if (this.context === undefined && this.scopes.depth === 1) return
-        throw new CompileError(
-          'an extern can only be declared at the top level',
-          statement.line,
-          statement.column,
-        )
+        return this.require_top_level(statement, 'an extern can only be declared at the top level')
+      case 'extend':
+        return this.require_top_level(statement, 'an extend can only be at the top level')
       case 'import':
-        if (this.context === undefined && this.scopes.depth === 1) return
-        throw new CompileError(
-          'an import can only be at the top level',
-          statement.line,
-          statement.column,
-        )
+        return this.require_top_level(statement, 'an import can only be at the top level')
       case 'type_declaration':
-        if (this.context === undefined && this.scopes.depth === 1) return
-        throw new CompileError(
+        return this.require_top_level(
+          statement,
           'a class or struct can only be declared at the top level',
-          statement.line,
-          statement.column,
         )
       default:
         return this.check_expression_statement(statement)
     }
+  }
+
+  // A declaration of the module, which declare_names has taken in.
+  private require_top_level(statement: Statement, message: string): void {
+    if (this.context === undefined && this.scopes.depth === 1) return
+    throw new CompileError(message, statement.line, statement.column)
   }
 
   // An optional name tested in the condition is narrowed where it is known not to be nil: in the

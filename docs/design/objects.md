@@ -3,7 +3,7 @@
 Classes and structs with fields, initializers, methods, `init` and named construction are implemented: see [the reference](../reference/objects.md). `deinit` is implemented too. Planned beyond that: `weak`, function fields, `==` and `hash`, and interfaces.
 
 - **No inheritance** (`extends`/`super` do not exist).
-- There are no static members (`static`). Functions related to a type are module functions (`import rgb from './rgb'` → `rgb.parse(s)`; the module is the namespace).
+- There are no static members (`static`). Functions related to a type are module functions (`import rgb from './rgb'` → `rgb.parse(s)`; the module is the namespace). Methods can be added to an existing type by `extend` (see [the reference](../reference/objects.md#extend)), but not functions without a receiver.
 
 ## Type body (shared by class and struct)
 

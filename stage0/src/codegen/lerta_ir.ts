@@ -1,4 +1,5 @@
 // How Lerta values are represented in LLVM IR.
+import type { ExtensionMethod } from '../check/extensions.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import { is_reference_type, type Type } from '../types.ts'
 
@@ -53,6 +54,12 @@ const object_symbol = (type: Type): string => {
 }
 export const method_symbol = (type: Type, method: string): string =>
   `@lerta.method.${object_symbol(type)}.${method}`
+// A method of an extend is named by its module, which may extend a type that another module extends
+// too, and by its receiver: a builtin type by its kind, a class or struct by its symbol.
+export const extension_symbol = ({ module_index, receiver, name }: ExtensionMethod): string => {
+  const receiver_symbol = receiver.kind === 'Object' ? receiver.symbol : receiver.kind
+  return `@lerta.extend.${module_index}.${receiver_symbol}.${name.name}`
+}
 export const constructor_symbol = (type: Type): string => `@lerta.new.${object_symbol(type)}`
 export const drop_symbol = (type: Type): string => `@lerta.drop.${object_symbol(type)}`
 // The LLVM struct type of a class or struct: the object header, then the fields in order.

@@ -158,7 +158,7 @@ export const is_assignable = (value: Type, target: Type): boolean => {
 export const is_map_key_type = (type: Type): boolean =>
   type.kind === 'String' || type.kind === 'Int'
 
-export const is_stringable = (type: Type): boolean =>
+const is_stringable = (type: Type): boolean =>
   ['String', 'Int', 'UInt8', 'Bool'].includes(type.kind)
 
 // The type of a value that is either an `a` or a `b`: the same type, or `T?` for a mix of `T`,
