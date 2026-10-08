@@ -1,8 +1,14 @@
-// Runs checks one by one and prints each result as it finishes.
+// Runs checks, several at once if asked, and prints each result in order as soon as it and those
+// before it have finished.
 
 // A check returns why it failed; an empty list means it passed, and undefined means it does not
 // apply, so it is neither shown nor counted.
-export type Check = { name: string; run: () => string[] | undefined }
+export type Check = {
+  name: string
+  // Something to wait for before the check starts, not counted in its time.
+  wait?: () => Promise<unknown> | undefined
+  run: () => string[] | undefined | Promise<string[] | undefined>
+}
 
 const MAX_SHOWN_LINES = 10
 const CONTEXT_LINES = 2
@@ -38,12 +44,18 @@ export const compare_text = (what: string, expected: string, actual: string): st
   ]
 }
 
-const run_one = (check: Check): string[] | undefined => {
+type Result = { reasons: string[] | undefined; duration: number }
+
+const run_one = async (check: Check): Promise<Result> => {
+  await check.wait?.()
+  const started = performance.now()
   try {
-    return check.run()
+    const reasons = await check.run()
+    return { reasons, duration: performance.now() - started }
   } catch (error) {
     const description = error instanceof Error ? (error.stack ?? error.message) : String(error)
-    return ['threw:', ...description.split('\n').map((line) => `  ${line}`)]
+    const reasons = ['threw:', ...description.split('\n').map((line) => `  ${line}`)]
+    return { reasons, duration: performance.now() - started }
   }
 }
 
@@ -56,24 +68,40 @@ const format_duration = (milliseconds: number): string => {
   return `${(milliseconds / 1000).toFixed(1)}s`
 }
 
-// Returns the number of failed checks.
-export const run_checks = (title: string, checks: Check[]): number => {
+// Returns the number of failed checks. At most `concurrency` checks run at once.
+export const run_checks = async (
+  title: string,
+  checks: Check[],
+  concurrency = 1,
+): Promise<number> => {
   // Results are printed as they come, so the width also counts checks that turn out not to apply.
   const name_width = Math.max(0, ...checks.map((check) => check.name.length))
   const started = performance.now()
   const failed: string[] = []
   let run_count = 0
-  for (const check of checks) {
-    const check_started = performance.now()
-    const reasons = run_one(check)
-    if (reasons === undefined) continue
+  const print = (check: Check, { reasons, duration }: Result) => {
+    if (reasons === undefined) return
     run_count++
-    const duration = format_duration(performance.now() - check_started)
     const status = reasons.length === 0 ? 'ok  ' : 'FAIL'
-    console.log(`${status}  ${check.name.padEnd(name_width)}  ${duration.padStart(6)}`)
+    const shown_duration = format_duration(duration).padStart(6)
+    console.log(`${status}  ${check.name.padEnd(name_width)}  ${shown_duration}`)
     for (const reason of reasons) console.log(`      ${reason}`)
     if (reasons.length > 0) failed.push(check.name)
   }
+  const results: (Result | undefined)[] = checks.map(() => undefined)
+  let next_to_print = 0
+  let next_to_start = 0
+  const worker = async () => {
+    while (next_to_start < checks.length) {
+      const index = next_to_start++
+      results[index] = await run_one(checks[index])
+      while (results[next_to_print] !== undefined) {
+        print(checks[next_to_print], results[next_to_print]!)
+        next_to_print++
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker))
   const total = format_duration(performance.now() - started)
   const passed = run_count - failed.length
   console.log(`${title}: ${passed} passed, ${failed.length} failed in ${total}`)

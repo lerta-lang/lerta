@@ -107,7 +107,7 @@ const checks: Check[] = [
 
 let failed_count: number
 try {
-  failed_count = run_checks('runtime checks', checks)
+  failed_count = await run_checks('runtime checks', checks)
 } finally {
   rmSync(work_dir, { recursive: true, force: true })
 }

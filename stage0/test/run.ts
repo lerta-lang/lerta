@@ -2,6 +2,7 @@
 // <name>.out (stdout), <name>.err (stderr: a compile error or an uncaught
 // throw) and <name>.warn (compile warnings). A missing file means empty output,
 // but at least one must exist. The run must fail exactly when <name>.err exists.
+// Tests run in parallel, up to the number of cores, and are reported in order.
 // Every test that compiles runs twice, without and with optimization, to catch
 // code whose behavior changes when optimized. The unoptimized build goes through
 // --emit-llvm, so every test also checks that the emitted IR builds.
@@ -9,11 +10,11 @@
 //                          modules that tests import, which are checked only
 //                          through those tests
 //   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
-import { spawnSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { availableParallelism, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { build } from '../src/build.ts'
+import { build, OUTPUT_LIMIT } from '../src/build.ts'
 import { CompileError } from '../src/errors.ts'
 import { compare_text, run_checks, type Check } from './report.ts'
 
@@ -102,14 +103,19 @@ const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join
 
 // Diagnostics are reported as the CLI prints them for a bare file name, so
 // that the expected files do not depend on where the test directory is.
-const compile_and_run = (test: TestCase, optimize: boolean): Outcome => {
+const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outcome> => {
   const source_file = `${test.name}.lerta`
   const executable = join(work_dir, `${test.label.replaceAll('/', '_')}${optimize ? '_O' : ''}`)
   const options = optimize ? { optimize } : { optimize, llvm_path: `${executable}.ll` }
   let warnings: string
   try {
     const source_path = join(root_dir, test.source_dir, source_file)
-    const compile_warnings = build(source_path, executable, options)
+    const { warnings: compile_warnings, clang_messages } = await build(
+      source_path,
+      executable,
+      options,
+    )
+    if (clang_messages !== '') throw new Error(`clang wrote:\n${clang_messages}`)
     if (options.llvm_path !== undefined && !existsSync(options.llvm_path)) {
       throw new Error(`--emit-llvm did not leave ${options.llvm_path}`)
     }
@@ -124,13 +130,20 @@ const compile_and_run = (test: TestCase, optimize: boolean): Outcome => {
       compile_error: true,
     }
   }
-  const run = spawnSync(executable, { encoding: 'utf8' })
-  if (run.error !== undefined) throw run.error
-  const failed = run.status !== 0
-  return { stdout: run.stdout, stderr: run.stderr, warnings, failed, compile_error: false }
+  const run = await run_program(executable)
+  return { ...run, warnings, compile_error: false }
 }
 
-const run_test = (test: TestCase, optimize: boolean): string[] => {
+// Runs a built program, whose exit status tells whether it failed.
+const run_program = (path: string): Promise<{ stdout: string; stderr: string; failed: boolean }> =>
+  new Promise((resolve, reject) => {
+    execFile(path, { encoding: 'utf8', maxBuffer: OUTPUT_LIMIT }, (error, stdout, stderr) => {
+      if (error !== null && typeof error.code !== 'number') reject(error)
+      else resolve({ stdout, stderr, failed: error !== null })
+    })
+  })
+
+const run_test = async (test: TestCase, optimize: boolean): Promise<string[]> => {
   const expected = new Map(
     test.extensions.flatMap((extension) => {
       const content = expected_output(test, extension)
@@ -141,8 +154,9 @@ const run_test = (test: TestCase, optimize: boolean): string[] => {
     const candidates = test.extensions.map((extension) => `${test.name}.${extension}`)
     return [`needs ${candidates.join(' or ')} in ${test.expected_dir}`]
   }
-  const outcome = compile_and_run(test, optimize)
-  if (outcome.compile_error) failed_to_compile.add(test)
+  const pending = compile_and_run(test, optimize)
+  if (!optimize) unoptimized_runs.set(test, pending)
+  const outcome = await pending
   const expects_failure = expected.has('err')
   const status_reasons =
     outcome.failed === expects_failure
@@ -159,9 +173,8 @@ const run_test = (test: TestCase, optimize: boolean): string[] => {
 const strays = suites.flatMap(stray_files)
 
 // A compile error happens before any optimization, so a test that fails to compile
-// without -O is not repeated with it. This relies on each test's unoptimized check
-// running, and recording its compile error here, before its -O check.
-const failed_to_compile = new Set<TestCase>()
+// without -O is not repeated with it: the -O check waits for the unoptimized one.
+const unoptimized_runs = new Map<TestCase, Promise<Outcome>>()
 
 // A stray file fails the run as a check of its own, so the summary lists it.
 const stray_checks: Check[] = strays.map((file) => ({
@@ -169,15 +182,26 @@ const stray_checks: Check[] = strays.map((file) => ({
   run: () => ['stray file: no test reads it'],
 }))
 
-const test_checks: Check[] = suites.flatMap(collect).flatMap((test) =>
-  [false, true].map((optimize) => ({
-    name: `${test.label}${optimize ? ' (-O)' : ''}`,
-    run: () => (optimize && failed_to_compile.has(test) ? undefined : run_test(test, optimize)),
-  })),
-)
+const test_checks: Check[] = suites.flatMap(collect).flatMap((test) => [
+  { name: test.label, run: () => run_test(test, false) },
+  {
+    name: `${test.label} (-O)`,
+    // The time is counted from the end of the wait.
+    wait: () => unoptimized_runs.get(test)?.catch(() => undefined),
+    run: async () => {
+      const unoptimized = await unoptimized_runs.get(test)
+      return unoptimized?.compile_error ? undefined : run_test(test, true)
+    },
+  },
+])
+
 let failed_count: number
 try {
-  failed_count = run_checks('run tests', [...stray_checks, ...test_checks])
+  failed_count = await run_checks(
+    'run tests',
+    [...stray_checks, ...test_checks],
+    availableParallelism(),
+  )
 } finally {
   rmSync(work_dir, { recursive: true, force: true })
 }

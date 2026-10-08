@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,12 +28,24 @@ export const runtime_clang_args = (optimize: boolean): string[] => [
     .map((file) => join(runtime_dir, file)),
 ]
 
-// Returns the warnings; a compile error is thrown as a CompileError.
-export const build = (
+// What clang wrote, which it writes for problems in the generated code or the runtime.
+export class ClangError extends Error {
+  readonly messages: string
+
+  constructor(messages: string) {
+    super(`clang failed:\n${messages}`)
+    this.messages = messages
+  }
+}
+
+// Returns the warnings, and clang's messages, if it wrote any; a compile error is thrown as a
+// CompileError, and clang's failure as a ClangError. Asynchronous, so that several builds can run
+// clang at once.
+export const build = async (
   source_path: string,
   output_path: string,
   options: BuildOptions,
-): CompileWarning[] => {
+): Promise<{ warnings: CompileWarning[]; clang_messages: string }> => {
   const modules = load_modules(source_path)
   const checked = check_modules(modules)
   const work_dir = mkdtempSync(join(tmpdir(), 'lerta-'))
@@ -48,9 +60,27 @@ export const build = (
       '-o',
       output_path,
     ]
-    execFileSync('clang', clang_args, { stdio: 'inherit' })
-    return checked.at(-1)!.warnings
+    const clang_messages = await run_clang(clang_args)
+    return { warnings: checked.at(-1)!.warnings, clang_messages }
   } finally {
     rmSync(work_dir, { recursive: true, force: true })
   }
 }
+
+// The most output kept from a program that a build or a test runs.
+export const OUTPUT_LIMIT = 64 * 1024 * 1024
+
+// Returns what clang wrote to stderr.
+const run_clang = (args: string[]): Promise<string> =>
+  new Promise((resolve, reject) => {
+    // The limit is only there to stop runaway output.
+    execFile(
+      'clang',
+      args,
+      { encoding: 'utf8', maxBuffer: OUTPUT_LIMIT },
+      (error, _stdout, stderr) => {
+        if (error === null) resolve(stderr)
+        else reject(new ClangError(stderr || error.message))
+      },
+    )
+  })

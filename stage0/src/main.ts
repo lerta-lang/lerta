@@ -1,4 +1,4 @@
-import { build, type BuildOptions } from './build.ts'
+import { build, ClangError, type BuildOptions } from './build.ts'
 import { CompileError } from './errors.ts'
 
 const usage = 'usage: lerta build <source> -o <output> [-O] [--emit-llvm <path>]'
@@ -38,9 +38,14 @@ const parse_arguments = (args: string[]): Arguments => {
 
 const { source_path, output_path, options } = parse_arguments(process.argv.slice(2))
 try {
-  const warnings = build(source_path, output_path, options)
+  const { warnings, clang_messages } = await build(source_path, output_path, options)
   for (const warning of warnings) console.error(warning.format(source_path))
+  process.stderr.write(clang_messages)
 } catch (error) {
+  if (error instanceof ClangError) {
+    process.stderr.write(error.messages)
+    process.exit(1)
+  }
   if (!(error instanceof CompileError)) throw error
   for (const warning of error.warnings) console.error(warning.format(source_path))
   console.error(error.format(source_path))

@@ -58,7 +58,7 @@ const run_cli_case = ({ args, status, produced }: CliCase): string[] => {
 
 let failed_count: number
 try {
-  failed_count = run_checks(
+  failed_count = await run_checks(
     'CLI checks',
     cli_cases.map((cli_case) => ({
       name: `lerta ${cli_case.args.map(shorten_path).join(' ')}`,
