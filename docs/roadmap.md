@@ -69,7 +69,7 @@ Run tests (source → execution result) are shared by all stages. They run with 
    - Decide the minimal subset needed for self-hosting ([stage0 subset](#stage0-subset-for-self-hosting)) first.
 2. **Phase 1**: rewrite the compiler in the Lerta subset and bootstrap.
    - stage1: compile the compiler's own source with stage0.
-   - stage2 / stage3: recompile the same source with stage1, then again with stage2. **stage2 == stage3** means the bootstrap succeeded.
+   - stage2 / stage3: recompile the same source with stage1, then again with stage2. **stage2 == stage3** means the bootstrap succeeded: the two write the same LLVM IR for the compiler (`stage0/test/bootstrap.ts`, run by `pnpm test`). The executables differ, as the linker writes an identifier of its own into each.
 3. **Phase 2**: complete the core of the language — exceptions and the frame chain, async and the event loop, `weak`, `interface`, user-defined generics, `Float` and all integer types.
 4. **Phase 3**: the surroundings — `lerta run`/`lerta repl`, `.ll`/bitcode output from `lerta build` ([tools](design/programs.md#tools)), advanced string representations, operator overloading, regular expressions, libclang FFI, Windows, tooling.
 

@@ -28,7 +28,7 @@ Early development: the bootstrap compiler (stage0) is in progress. See `docs/roa
 
 | Path | Contents |
 |---|---|
-| `stage0/` | Bootstrap compiler in TypeScript: `src/syntax/` reads the source, `src/check/` checks it, `src/codegen/` emits LLVM IR; `test/` runs the tests: `run.ts` the run tests, `cli.ts` the command line, `compiler.ts` the comparison of `compiler/` with stage0, `runtime.ts` runtime checks no Lerta program can trigger |
+| `stage0/` | Bootstrap compiler in TypeScript: `src/syntax/` reads the source, `src/check/` checks it, `src/codegen/` emits LLVM IR; `test/` runs the tests: `run.ts` the run tests, `cli.ts` the command line, `compiler.ts` the comparison of `compiler/` with stage0, `bootstrap.ts` the bootstrap, `runtime.ts` runtime checks no Lerta program can trigger |
 | `compiler/` | The compiler written in Lerta, ported from stage0 one layer at a time: so far `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, `checker/`, which checks them, and `codegen/`, which emits LLVM IR, behind `build` (in `build.lerta`), `dump-tokens`, `dump-ast` and `dump-checked`; `build` and `dump-checked` take `--root <dir>`, the directory that holds `std/` and `runtime/`, which the compiler cannot find on its own yet |
 | `runtime/` | C runtime |
 | `tests/` | Run tests: Lerta source and expected output |
@@ -57,7 +57,7 @@ pnpm check   # type and format checks, and spelling across the repository (cspel
 pnpm test
 ```
 
-stage0 runs its TypeScript directly with Node.js (22.18 or later), so there is no build step. To compile a program:
+The tests run at a low priority (`nice`). stage0 runs its TypeScript directly with Node.js (22.18 or later), so there is no build step. To compile a program:
 
 ```
 node stage0/src/main.ts build examples/hello.lerta -o hello [-O] [--emit-llvm hello.ll]
