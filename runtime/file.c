@@ -1,9 +1,5 @@
-#include <errno.h>
-#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #include "lerta.h"
 
@@ -15,12 +11,41 @@ _Noreturn static void throw_file_error(const void *prefix, const LertaString *pa
   lerta_throw(lerta_string_concat(2, prefix, path));
 }
 
-// Reads in chunks, so that files whose size is not known in advance work too.
 LertaString *lerta_read_file(const LertaString *path) {
   char *name = lerta_c_string(path);
-  int fd = name == NULL ? -1 : open(name, O_RDONLY);
+  LertaString *contents = name == NULL ? NULL : lerta_os_read_file(name);
   free(name);
-  if (fd < 0) throw_file_error(&cannot_read, path);
+  if (contents == NULL) throw_file_error(&cannot_read, path);
+  return contents;
+}
+
+void lerta_write_file(const LertaString *path, const LertaString *data) {
+  char *name = lerta_c_string(path);
+  bool written = name != NULL && lerta_os_write_file(name, data->bytes, data->length);
+  free(name);
+  if (!written) throw_file_error(&cannot_write, path);
+}
+
+bool lerta_is_file(const LertaString *path) {
+  char *name = lerta_c_string(path);
+  bool is_file = name != NULL && lerta_os_is_file(name);
+  free(name);
+  return is_file;
+}
+
+LertaString *lerta_real_path(const LertaString *path) {
+  char *name = lerta_c_string(path);
+  char *resolved = name == NULL ? NULL : lerta_os_real_path(name);
+  free(name);
+  if (resolved == NULL) throw_file_error(&cannot_resolve, path);
+  LertaString *result = lerta_string_from_bytes(resolved, (int64_t)strlen(resolved));
+  free(resolved);
+  return result;
+}
+
+// Reads in chunks, so that files whose size is not known in advance work too.
+LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size),
+                               void *file) {
   int64_t capacity = 4096;
   int64_t length = 0;
   uint8_t *bytes = malloc((size_t)capacity);
@@ -31,53 +56,15 @@ LertaString *lerta_read_file(const LertaString *path) {
       bytes = realloc(bytes, (size_t)capacity);
       if (bytes == NULL) lerta_panic("out of memory");
     }
-    ssize_t count = read(fd, bytes + length, (size_t)(capacity - length));
-    if (count < 0 && errno == EINTR) continue;
+    int64_t count = read(file, bytes + length, capacity - length);
     if (count == 0) break;
     if (count < 0) {
-      close(fd);
-      throw_file_error(&cannot_read, path);
+      free(bytes);
+      return NULL;
     }
     length += count;
   }
-  close(fd);
   LertaString *result = lerta_string_from_bytes(bytes, length);
   free(bytes);
-  return result;
-}
-
-void lerta_write_file(const LertaString *path, const LertaString *data) {
-  char *name = lerta_c_string(path);
-  int fd = name == NULL ? -1 : open(name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  free(name);
-  if (fd < 0) throw_file_error(&cannot_write, path);
-  int64_t written = 0;
-  while (written < data->length) {
-    ssize_t count = write(fd, data->bytes + written, (size_t)(data->length - written));
-    if (count < 0 && errno == EINTR) continue;
-    if (count <= 0) {
-      close(fd);
-      throw_file_error(&cannot_write, path);
-    }
-    written += count;
-  }
-  close(fd);
-}
-
-bool lerta_is_file(const LertaString *path) {
-  char *name = lerta_c_string(path);
-  struct stat status;
-  bool is_file = name != NULL && stat(name, &status) == 0 && S_ISREG(status.st_mode);
-  free(name);
-  return is_file;
-}
-
-LertaString *lerta_real_path(const LertaString *path) {
-  char *name = lerta_c_string(path);
-  char *resolved = name == NULL ? NULL : realpath(name, NULL);
-  free(name);
-  if (resolved == NULL) throw_file_error(&cannot_resolve, path);
-  LertaString *result = lerta_string_from_bytes(resolved, (int64_t)strlen(resolved));
-  free(resolved);
   return result;
 }

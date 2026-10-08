@@ -51,7 +51,6 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 - `Float` (literals are only lexed and kept as strings)
 - `Int8/16/32`, `UInt16/32/64`
 - Importing C headers with libclang
-- Windows (the tests of `run` in `tests/process/` run `sh`)
 - Formatter, LSP, package management
 
 ## Follow-ups
@@ -71,7 +70,7 @@ Run tests (source → execution result) are shared by all stages; they now check
    - stage1: compile the compiler's own source with stage0.
    - stage2 / stage3: recompile the same source with stage1, then again with stage2. **stage2 == stage3** means the bootstrap succeeded: the two write the same LLVM IR for the compiler (`stage0/test/bootstrap.ts`, run by `pnpm test`). The executables differ, as the linker writes an identifier of its own into each.
 3. **Phase 2**: complete the core of the language — exceptions and the frame chain, async and the event loop, `weak`, `interface`, user-defined generics, `Float` and all integer types.
-4. **Phase 3**: the surroundings — `lerta run`/`lerta repl`, `.ll`/bitcode output from `lerta build` ([tools](design/programs.md#tools)), advanced string representations, operator overloading, regular expressions, libclang FFI, Windows, tooling.
+4. **Phase 3**: the surroundings — `lerta run`/`lerta repl`, `.ll`/bitcode output from `lerta build` ([tools](design/programs.md#tools)), advanced string representations, operator overloading, regular expressions, libclang FFI, tooling. Windows programs can already be built and run (see [platforms](internals.md#platforms)); the compiler itself is not tested there yet.
 
 ## Open questions
 

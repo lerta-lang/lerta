@@ -31,7 +31,7 @@ loads and checks the program as `build` does, without generating code, to compar
 
 ## The compiler written in Lerta
 
-The compiler in `compiler/` takes the same commands, with `--root <dir>` added to `build` and `dump-checked`: the directory that holds `std/` and `runtime/`, which it cannot find on its own yet. Its `build` also takes `--target <triple>` with `-o`, which clang builds the executable for, such as `i686-linux-gnu`; without it, the executable is for the host. Its `build` with `-o` and without `--emit-llvm` writes the IR to `<output>.ll` and leaves it there, since it cannot remove a file or make a temporary directory yet.
+The compiler in `compiler/` takes the same commands, with `--root <dir>` added to `build` and `dump-checked`: the directory that holds `std/` and `runtime/`, which it cannot find on its own yet. Its `build` also takes `--target <triple>` with `-o`, which clang builds the executable for, such as `i686-linux-gnu` or `x86_64-w64-mingw32`; without it, the executable is for the host. A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it. Its `build` with `-o` and without `--emit-llvm` writes the IR to `<output>.ll` and leaves it there, since it cannot remove a file or make a temporary directory yet.
 
 ## Diagnostics
 

@@ -11,20 +11,25 @@
 //                          modules that tests import, which are checked only
 //                          through those tests
 //   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
+//   tests/bin/<name>.lerta commands that tests run, the same on every platform, unlike those of
+//                          the system; they are built first and found on PATH
+//   tests/**/posix/        tests of what only POSIX systems have, such as signals, which are not
+//                          run for Windows
 import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { build, OUTPUT_LIMIT } from '../src/build.ts'
 import { compare_text, run_checks, type Check } from './report.ts'
-import { target_args } from './target.ts'
+import { parse_target } from './target.ts'
 
 const root_dir = join(import.meta.dirname, '../..')
 const work_dir = mkdtempSync(join(tmpdir(), 'lerta-test-'))
 // The compiler written in Lerta, which stage0 builds first; the tests check it.
 const compiler = join(work_dir, 'lerta')
 
-const target = target_args('run.ts')
+const target = parse_target('run.ts')
+const executable_suffix = target.windows ? '.exe' : ''
 
 type TestCase = {
   // Shown in failures, such as `examples/hello`.
@@ -40,23 +45,30 @@ type Suite = Omit<TestCase, 'label' | 'name'>
 const expected_extensions = ['out', 'err', 'warn']
 
 const examples_expected_dir = 'tests/examples'
+const commands_dir = 'tests/bin'
 
 // `dir` and its subdirectories, relative to the root, except `excluded` and lib/ directories.
-const directory_tree = (dir: string, excluded: string): string[] => [
+const directory_tree = (dir: string, excluded: string[]): string[] => [
   dir,
   ...readdirSync(join(root_dir, dir))
     .filter((entry) => entry !== 'lib')
     .map((entry) => `${dir}/${entry}`)
-    .filter((path) => path !== excluded && statSync(join(root_dir, path)).isDirectory())
+    .filter((path) => !excluded.includes(path) && statSync(join(root_dir, path)).isDirectory())
     .flatMap((path) => directory_tree(path, excluded)),
 ]
 
+const test_dirs = directory_tree('tests', [examples_expected_dir, commands_dir])
+const is_posix_only = (dir: string): boolean => dir.split('/').includes('posix')
+const skipped_dirs = target.windows ? test_dirs.filter(is_posix_only) : []
+
 const suites: Suite[] = [
-  ...directory_tree('tests', examples_expected_dir).map((dir) => ({
-    source_dir: dir,
-    expected_dir: dir,
-    extensions: expected_extensions,
-  })),
+  ...test_dirs
+    .filter((dir) => !skipped_dirs.includes(dir))
+    .map((dir) => ({
+      source_dir: dir,
+      expected_dir: dir,
+      extensions: expected_extensions,
+    })),
   // Examples are living documentation: they must compile and run.
   { source_dir: 'examples', expected_dir: examples_expected_dir, extensions: ['out'] },
 ]
@@ -110,11 +122,21 @@ const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join
 // that the expected files do not depend on where the test directory is.
 const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outcome> => {
   const source_file = `${test.name}.lerta`
-  const executable = join(work_dir, `${test.label.replaceAll('/', '_')}${optimize ? '_O' : ''}`)
+  const name = `${test.label.replaceAll('/', '_')}${optimize ? '_O' : ''}`
+  const executable = join(work_dir, `${name}${executable_suffix}`)
   // Not `<executable>.ll`, which the compiler writes when --emit-llvm is not given.
   const llvm_path = `${executable}.emitted.ll`
   const options = optimize ? ['-O'] : ['--emit-llvm', llvm_path]
-  const args = ['build', source_file, '-o', executable, ...options, ...target, '--root', root_dir]
+  const args = [
+    'build',
+    source_file,
+    '-o',
+    executable,
+    ...options,
+    ...target.args,
+    '--root',
+    root_dir,
+  ]
   const cwd = join(root_dir, test.source_dir)
   const { status, failure, stderr } = await run_file(compiler, args, cwd)
   const diagnostics = stderr.split('\n').filter((line) => line !== '')
@@ -158,12 +180,34 @@ const run_file = (
     })
   })
 
+// The commands of tests/bin are built next to the tested programs, and `run` finds them on PATH:
+// a POSIX program on the PATH given here, and a Windows program under Wine on its Windows PATH,
+// to which Wine adds WINEPATH (Z: is the root of the Unix file system).
+const command_env = {
+  ...process.env,
+  PATH: `${work_dir}${delimiter}${process.env.PATH}`,
+  WINEPATH: `Z:${work_dir}`,
+}
+
+const build_commands = async (): Promise<void> => {
+  const cwd = join(root_dir, commands_dir)
+  for (const name of names_with_extension(commands_dir, 'lerta')) {
+    const executable = join(work_dir, `${name}${executable_suffix}`)
+    const args = ['build', `${name}.lerta`, '-o', executable, '-O', ...target.args]
+    const { status, failure, stderr } = await run_file(compiler, [...args, '--root', root_dir], cwd)
+    if (status !== 0)
+      throw new Error(`the build of ${commands_dir}/${name} failed (${failure}):\n${stderr}`)
+  }
+}
+
 // Runs a built program, whose exit status tells whether it failed, in a directory of its own, so
-// that files it writes do not meet those of the other runs.
+// that files it writes do not meet those of the other runs. Wine runs a Windows program.
 const run_program = (path: string): Promise<{ stdout: string; stderr: string; failed: boolean }> =>
   new Promise((resolve, reject) => {
     const cwd = mkdtempSync(join(work_dir, 'run-'))
-    execFile(path, { cwd, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT }, (error, stdout, stderr) => {
+    const [file, args] = target.windows ? ['wine', [path]] : [path, []]
+    const options = { cwd, env: command_env, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT } as const
+    execFile(file, args, options, (error, stdout, stderr) => {
       // An exit status, or a signal such as a panic's abort, is a failed run; an error with a code
       // of its own, such as too much output, or none, is a failure to run it.
       const ended =
@@ -231,6 +275,8 @@ let failed_count: number
 try {
   // Optimized, as it runs for every test; the bootstrap check runs it unoptimized, checking leaks.
   await build(join(root_dir, 'compiler/main.lerta'), compiler, { optimize: true })
+  await build_commands()
+  for (const dir of skipped_dirs) console.log(`not run for Windows: ${dir}`)
   failed_count = await run_checks(
     'run tests',
     [...stray_checks, ...test_checks],

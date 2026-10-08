@@ -11,7 +11,8 @@ import { join } from './paths'
 # The C files of the runtime, runtime/<name>.c, listed here, since the compiler cannot list a
 # directory yet.
 const RUNTIME_FILES = [
-  'array', 'binary', 'file', 'io', 'iter', 'lerta', 'map', 'memory', 'process', 'stack', 'string'
+  'array', 'binary', 'file', 'io', 'iter', 'lerta', 'map', 'memory', 'platform_posix'
+  'platform_windows', 'process', 'string'
 ]
 
 # What to build: the IR, written to `ir_path`, and, if there is an `output`, the executable made
@@ -35,6 +36,12 @@ export const build = (request: BuildRequest) ->
   if output
     exit(1) if run('clang', clang_args(request, ir_path, output)) != 0
 
+const MINGW_SUFFIX = '-w64-mingw32'.binary
+
+const is_mingw = (target: String) ->
+  const triple = target.binary
+  triple.occurs_at(triple.length - MINGW_SUFFIX.length, MINGW_SUFFIX)
+
 # Link-time optimization lets the generated code inline the runtime's C functions; unoptimized
 # builds use the debug runtime, which checks for leaks at exit.
 const clang_args = (request: BuildRequest, ir_path: String, output: String) ->
@@ -42,6 +49,8 @@ const clang_args = (request: BuildRequest, ir_path: String, output: String) ->
   const args = ['-Wno-override-module', ir_path]
   if const target = request.target
     args.push("--target=#{target}")
+    # GNU ld, which clang uses for mingw by default, cannot link the bitcode of -flto.
+    args.push('-fuse-ld=lld') if is_mingw(target)
   const flags = request.optimize then ['-O2', '-flto'] else ['-D', 'LERTA_DEBUG']
   args.push(flag) for flag in flags
   args.push(join(request.root, "runtime/#{name}.c")) for name in RUNTIME_FILES

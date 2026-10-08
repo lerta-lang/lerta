@@ -76,8 +76,11 @@ typedef struct {
 
 // An Iter. Its has_next and next take the Iter itself, whose state follows these fields; next
 // returns the item, owned, in the representation of its type, so the compiler declares its type.
+// The header's fields are spelled out: the generated code lays them out flat, while a nested
+// LertaHeader would be padded to the alignment of its int64_t, which is 8 on 32-bit Windows.
 typedef struct LertaIter {
-  LertaHeader header;
+  int64_t ref_count;
+  void (*drop)(void *object);
   bool (*has_next)(struct LertaIter *iter);
   void *next;
   // Whether a traversal has started; a second one throws.
@@ -162,9 +165,34 @@ LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
 bool lerta_is_file(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);
+// Reads a file to its end through `read`, which returns how many bytes it put in `buffer`, 0 at
+// the end, or -1 on failure; returns NULL on failure.
+LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size),
+                               void *file);
 
-// Stack overflow (stack.c): reported as a panic. Called first thing in main.
+// What differs between systems: platform_posix.c and platform_windows.c, each of which compiles to
+// nothing on the other. Paths and arguments are NUL-terminated UTF-8, and a false or NULL result
+// is a failure.
+// Stack overflow: reported as a panic. Called first thing in main.
 void lerta_stack_init(void);
+// Gives main's arguments as the system's bytes, which are UTF-8 on Windows: POSIX leaves them as
+// they are, and Windows replaces them with ones read from its UTF-16 command line.
+void lerta_os_arguments(int *argc, char ***argv);
+// Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
+bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
+bool lerta_os_is_terminal(int fd);
+// Ends the program at once, without flushing stdout.
+_Noreturn void lerta_os_exit(int code);
+// Ends the program as a failure that is not an exit code, as C's abort does.
+_Noreturn void lerta_os_abort(void);
+LertaString *lerta_os_read_file(const char *path);
+bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
+bool lerta_os_is_file(const char *path);
+// The absolute path with no links, which the caller frees.
+char *lerta_os_real_path(const char *path);
+// Runs the command `args[0]`, found as the system finds commands, with `args`, which end with
+// NULL, and waits for it to end.
+bool lerta_os_run(char **args, int64_t *exit_code);
 
 // Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. For how stdout is
 // buffered, which init decides, see docs/internals.md#output.

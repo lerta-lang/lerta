@@ -47,7 +47,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 ### Stack overflow
 
 - stage0 relies on the guard page below the stack: touching it raises SIGSEGV (or SIGBUS), whose handler, on a stack of its own (`sigaltstack`), panics if the faulting address is in the stack's range, which a stack without a limit, or with one beyond the address space, does not have. It costs nothing per call. Other faults keep their default action.
-- **Planned:** Windows does the same with a vectored exception handler and `SetThreadStackGuarantee`.
+- Windows raises `EXCEPTION_STACK_OVERFLOW` in the overflowing thread, on what is left of its stack. A vectored exception handler panics on it; `SetThreadStackGuarantee` keeps 64 KiB of the stack for the handler, which writes the message and ends the process with `TerminateProcess` (exit code 3, as C's `abort` gives there), since the code that `ExitProcess` runs may need more. Other exceptions go on to the handlers after it.
 - **Planned:** where there is no guard page, as on microcontrollers, or if stack overflow becomes an exception that can be caught, the remaining stack is checked at function entry instead (the Go approach); catching it then works like any throw, since the handler runs after unwinding.
 
 ## Memory management
@@ -94,7 +94,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 ## Output
 
-- stdout follows the buffering that [the reference](reference/modules.md#stdio) states, as C stdio does, in a buffer of the runtime's own (`runtime/io.c`). The runtime checks for a terminal with `isatty` at start and leaves stdout unbuffered on one, so that each write shows at once. Elsewhere it flushes the buffer before a write that would overflow it and writes one larger than the buffer directly, so that few system calls carry the output.
+- stdout follows the buffering that [the reference](reference/modules.md#stdio) states, as C stdio does, in a buffer of the runtime's own (`runtime/io.c`). The runtime checks for a terminal (`isatty`, or a console on Windows) at start and leaves stdout unbuffered on one, so that each write shows at once. Elsewhere it flushes the buffer before a write that would overflow it and writes one larger than the buffer directly, so that few system calls carry the output.
 - `print` makes one write of its text and the newline, which copies the text into a new String in either mode: unbuffered, that copy is cheaper than a second system call; buffered, it adds an allocation and a copy of the text per line, which is small next to producing the text.
 
 ## Lazy iterators
@@ -147,11 +147,13 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 - **Planned:** headers are parsed with **libclang** (no custom parser; the same approach as Zig's `@cImport` and Swift's clang importer).
 - **Planned:** callbacks, a trampoline from closure to C function pointer. If called from another thread, the call is forwarded to the event loop.
 
-## Platforms (planned)
+## Platforms
 
-- Targets are Linux / macOS / **Windows**. Windows support comes in Phase 3.
-  - No POSIX-specific assumptions from the start (OS dependencies are confined to the boundary of libuv and the runtime).
-- libuv absorbs platform differences.
+- Targets are Linux / macOS / **Windows**. No POSIX-specific assumptions from the start (OS dependencies are confined to the boundary of libuv and the runtime).
+- In the runtime, what differs between systems is a small set of functions, declared together in `runtime/lerta.h` and implemented by `platform_posix.c` and `platform_windows.c`. Each file compiles to nothing on the other kind of system, so both are always compiled; the rest of the runtime is shared and calls no system functions.
+- Windows uses the wide-character (UTF-16) Win32 functions, converting from and to UTF-8: for paths, for the arguments, which it reads from the command line (`CommandLineToArgvW`), since the C runtime's `argv` is in the ANSI code page, and for the command line of `run` (`CreateProcessW`), which quotes each argument so that the child's C runtime reads it back as it was. `run` searches only `PATH` for a command, as `posix_spawnp` does (`SearchPathW`), since `CreateProcessW` would look in the program's and the current directory first. stdout and stderr are written with `WriteFile`, so no newline becomes CRLF; to a console, they are written as UTF-16 with `WriteConsoleW`, which shows them whatever the console's code page.
+- The tests build Windows programs with mingw-w64 and run them under Wine (`tools/test_in_docker.sh`).
+- **Planned:** libuv absorbs platform differences.
 - **Future target: microcontrollers** (STM32 / Cortex-M, ESP32-C3/C6 / RISC-V; Xtensa-based chips after upstream LLVM support matures).
   - `Int` stays fixed at 64 bits (TinyGo's environment-dependent `int` is not adopted). Hot spots use `Int32` explicitly.
   - The event loop is not tied to libuv; **the backend is replaceable** (libuv on PCs; an interrupt-driven scheduler or FreeRTOS/Zephyr on microcontrollers). The boundary is decided during the Phase 2 design.

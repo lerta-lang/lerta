@@ -9,13 +9,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build, OUTPUT_LIMIT } from '../src/build.ts'
 import { compare_text, run_checks } from './report.ts'
-import { target_args } from './target.ts'
+import { parse_target } from './target.ts'
 
 const root_dir = join(import.meta.dirname, '../..')
 const work_dir = mkdtempSync(join(tmpdir(), 'lerta-bootstrap-'))
 const main_source = join(root_dir, 'compiler/main.lerta')
 const stage = (n: number): string => join(work_dir, `stage${n}`)
-const target = target_args('bootstrap.ts')
+const parsed_target = parse_target('bootstrap.ts')
+// Its stages would be Windows programs, which need Wine to run and a clang for Windows to build
+// the next stage.
+if (parsed_target.windows) {
+  console.error('the bootstrap does not support Windows targets yet')
+  process.exit(2)
+}
+const target = parsed_target.args
 
 // Builds the next stage with the compiler of stage `n`, writing its IR beside it. Returns why it
 // failed, if it did.

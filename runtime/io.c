@@ -1,8 +1,4 @@
-#include <errno.h>
-#include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <unistd.h>
 
 #include "lerta.h"
 
@@ -18,24 +14,12 @@ static bool stdout_is_terminal = false;
 // Once a write fails, later output is dropped and the program exits non-zero.
 static bool stdout_failed = false;
 
-// Returns false if the write failed.
-static bool write_all(int fd, const uint8_t *bytes, int64_t length) {
-  while (length > 0) {
-    ssize_t written = write(fd, bytes, (size_t)length);
-    if (written < 0 && errno == EINTR) continue;
-    if (written <= 0) return false;
-    bytes += written;
-    length -= written;
-  }
-  return true;
-}
-
 static void stdout_write_all(const uint8_t *bytes, int64_t length) {
-  if (!stdout_failed && !write_all(STDOUT_FD, bytes, length)) stdout_failed = true;
+  if (!stdout_failed && !lerta_os_write(STDOUT_FD, bytes, length)) stdout_failed = true;
 }
 
 void lerta_stdout_init(void) {
-  stdout_is_terminal = isatty(STDOUT_FD);
+  stdout_is_terminal = lerta_os_is_terminal(STDOUT_FD);
 }
 
 // The buffer is emptied before it is written, so that a panic during the write, such as a stack
@@ -61,7 +45,7 @@ static const uint8_t newline = '\n';
 
 void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
   // stderr is the last resort for reporting; a failure there cannot be reported.
-  write_all(STDERR_FD, bytes, length);
+  lerta_os_write(STDERR_FD, bytes, length);
 }
 
 static void check_writer(int64_t fd) {
@@ -88,7 +72,7 @@ void lerta_throw(const LertaString *message) {
   lerta_stdout_flush();
   lerta_stderr_write(message->bytes, message->length);
   lerta_stderr_write(&newline, 1);
-  _exit(1);
+  lerta_os_exit(1);
 }
 
 void lerta_throw_index_out_of_range(void) {
@@ -99,5 +83,5 @@ void lerta_panic(const char *message) {
   lerta_stdout_flush();
   lerta_stderr_write((const uint8_t *)message, (int64_t)strlen(message));
   lerta_stderr_write(&newline, 1);
-  abort();
+  lerta_os_abort();
 }
