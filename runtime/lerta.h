@@ -141,6 +141,9 @@ _Noreturn void lerta_exit(int64_t code);
 LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
 
+// Stack overflow (stack.c): reported as a panic. Called first thing in main.
+void lerta_stack_init(void);
+
 // Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. For how stdout is
 // buffered, which init decides, see docs/internals.md#output.
 void lerta_stdout_init(void);

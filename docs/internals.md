@@ -44,7 +44,11 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - **LLVM zero-cost unwinding (Itanium ABI)**: zero cost on the normal path, throw is heavy. Needs per-platform unwind tables.
 - **Error return values (the Swift approach)**: a branch on every call, but no unwinding mechanism needed.
 
-**Planned:** stack overflow is detected by checking the remaining stack at function entry (the Go approach), and it panics.
+### Stack overflow
+
+- stage0 relies on the guard page below the stack: touching it raises SIGSEGV (or SIGBUS), whose handler, on a stack of its own (`sigaltstack`), panics if the faulting address is in the stack's range, which a stack without a limit, or with one beyond the address space, does not have. It costs nothing per call. Other faults keep their default action.
+- **Planned:** Windows does the same with a vectored exception handler and `SetThreadStackGuarantee`.
+- **Planned:** where there is no guard page, as on microcontrollers, or if stack overflow becomes an exception that can be caught, the remaining stack is checked at function entry instead (the Go approach); catching it then works like any throw, since the handler runs after unwinding.
 
 ## Memory management
 

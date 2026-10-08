@@ -5,6 +5,7 @@
 void lerta_main(void);
 
 int main(int argc, char **argv) {
+  lerta_stack_init();
   lerta_set_arguments(argc, argv);
   lerta_stdout_init();
   lerta_main();

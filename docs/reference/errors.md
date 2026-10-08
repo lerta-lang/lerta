@@ -6,6 +6,10 @@
 
 An uncaught exception prints its message and a newline to stderr, after flushing stdout, and the program exits with status 1. stage0 has no `catch`, so every exception is uncaught.
 
+## Panics
+
+A panic prints its message and a newline to stderr, after flushing stdout, and aborts the program; it cannot be caught. Running out of memory panics with `out of memory`, and recursing too deep with `stack overflow`.
+
 ## Discarded values
 
 These apply when a value in statement position is not captured.

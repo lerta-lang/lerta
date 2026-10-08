@@ -38,9 +38,12 @@ void lerta_stdout_init(void) {
   stdout_is_terminal = isatty(STDOUT_FD);
 }
 
+// The buffer is emptied before it is written, so that a panic during the write, such as a stack
+// overflow, does not write it again.
 bool lerta_stdout_flush(void) {
-  stdout_write_all(stdout_buffer, stdout_buffered);
+  int64_t length = stdout_buffered;
   stdout_buffered = 0;
+  stdout_write_all(stdout_buffer, length);
   return !stdout_failed;
 }
 

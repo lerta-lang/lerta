@@ -47,4 +47,4 @@ These cause a panic:
 
 - Allocation failure.
 - Violation of the runtime's internal invariants (for example a corrupted reference count; things that should never happen).
-- Stack overflow. The handler itself needs stack, so it cannot be an exception (Go also treats it as fatal).
+- Stack overflow (implemented: see [the reference](../reference/errors.md#panics)). Whether it should instead be an exception that can be caught is open: that needs the check at function entry described in [internals](../internals.md#stack-overflow).
