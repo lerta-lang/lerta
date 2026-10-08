@@ -1,5 +1,3 @@
-#include <string.h>
-
 #include "lerta.h"
 
 LERTA_STATIC_STRING(slice_out_of_range, "slice out of range");
@@ -21,17 +19,12 @@ LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_
   if (start < 0 || start > end || end > binary->length) {
     lerta_throw((const LertaString *)&slice_out_of_range);
   }
-  int64_t length = end - start;
-  LertaString *slice = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
-  slice->length = length;
-  memcpy(slice->bytes, binary->bytes + start, (size_t)length);
-  return slice;
+  return lerta_string_from_bytes(binary->bytes + start, end - start);
 }
 
 // The items of an Array<Byte>, each held in the low 8 bits of its slot.
 LertaString *lerta_binary_from_bytes(const LertaArray *bytes) {
-  LertaString *binary = lerta_alloc((int64_t)sizeof(LertaString) + bytes->length, NULL);
-  binary->length = bytes->length;
+  LertaString *binary = lerta_string_new(bytes->length);
   for (int64_t i = 0; i < bytes->length; i++) binary->bytes[i] = (uint8_t)bytes->items[i];
   return binary;
 }

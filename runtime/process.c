@@ -23,10 +23,7 @@ void lerta_set_arguments(int argc, char **argv) {
 LertaArray *lerta_argv(void) {
   LertaArray *result = lerta_array_new(true);
   for (int i = 1; i < argument_count; i++) {
-    int64_t length = (int64_t)strlen(arguments[i]);
-    LertaString *argument = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
-    argument->length = length;
-    memcpy(argument->bytes, arguments[i], (size_t)length);
+    LertaString *argument = lerta_string_from_bytes(arguments[i], (int64_t)strlen(arguments[i]));
     lerta_array_push(result, (int64_t)(intptr_t)argument);
     lerta_release(argument);
   }

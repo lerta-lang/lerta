@@ -41,9 +41,7 @@ LertaString *lerta_read_file(const LertaString *path) {
     length += count;
   }
   close(fd);
-  LertaString *result = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
-  result->length = length;
-  memcpy(result->bytes, bytes, (size_t)length);
+  LertaString *result = lerta_string_from_bytes(bytes, length);
   free(bytes);
   return result;
 }
@@ -79,10 +77,7 @@ LertaString *lerta_real_path(const LertaString *path) {
   char *resolved = name == NULL ? NULL : realpath(name, NULL);
   free(name);
   if (resolved == NULL) throw_file_error(&cannot_resolve, path);
-  int64_t length = (int64_t)strlen(resolved);
-  LertaString *result = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
-  result->length = length;
-  memcpy(result->bytes, resolved, (size_t)length);
+  LertaString *result = lerta_string_from_bytes(resolved, (int64_t)strlen(resolved));
   free(resolved);
   return result;
 }

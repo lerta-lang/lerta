@@ -94,7 +94,10 @@ bool lerta_check_leaks(void);
 // does not drop it twice; deinit must not keep it, which would bring a dropped object back.
 void lerta_run_deinit(void *object, void (*deinit)(void *object));
 
-// Strings (string.c)
+// Strings (string.c). Also the constructors of Binary values, which share the representation:
+// `lerta_string_new` leaves the bytes for the caller to fill.
+LertaString *lerta_string_new(int64_t length);
+LertaString *lerta_string_from_bytes(const void *bytes, int64_t length);
 LertaString *lerta_int_to_string(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);

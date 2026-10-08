@@ -72,8 +72,7 @@ LertaString *lerta_string_join(const LertaArray *strings, const LertaString *sep
     length += ((const LertaString *)(intptr_t)strings->items[i])->length;
   }
   if (strings->length > 0) length += separator->length * (strings->length - 1);
-  LertaString *result = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
-  result->length = length;
+  LertaString *result = lerta_string_new(length);
   int64_t offset = 0;
   for (int64_t i = 0; i < strings->length; i++) {
     if (i > 0) {
