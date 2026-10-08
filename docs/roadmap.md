@@ -80,6 +80,7 @@ Run tests (source → execution result) are shared by all stages. They run with 
 - How an `Iter` is written in Lerta (its `has_next` and `next`), which `take` needs to move to `std/builtins.lerta`.
 - Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
 - Whether to add enums without payloads (for now, `case` on values substitutes).
+- Statements in `case` arms: whether an assignment may follow `then` (`when c == ' ' then i += 1`), and how to write an arm that does nothing, since a `case` with a subject requires `else` and a value alone may not stand as a statement (`compiler/syntax/` writes `else return`, or repeats a step in each arm).
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).
 - How to handle conversion from an interface value to another interface (the concrete type is unknown until run time, so a static itab is not enough; forbid it or generate at run time).

@@ -82,12 +82,12 @@ class Brackets
   open: Array<Token> = []
 
   update = (token: Token) ->
-    const kind = token.kind
-    if kind == '(' or kind == '[' or kind == '{'
-      @open.push(token)
-    # An extra closing bracket is left to the parser to report.
-    else if (kind == ')' or kind == ']' or kind == '}') and @are_open()
-      @open.pop()
+    case token.kind
+      when '(', '[', '{' then @open.push(token)
+      # An extra closing bracket is left to the parser to report.
+      when ')', ']', '}'
+        @open.pop() if @are_open()
+      else return
 
   are_open = (): Bool -> @open.length > 0
 
@@ -123,20 +123,15 @@ class LineScanner
   run = (): Array<Token> ->
     while @position < @line.length
       const c = @line.bytes[@position]
-      if c == ' '
-        @position += 1
-      else if c == '#'
-        break
-      else if is_identifier_start(c)
-        @scan_word()
-      else if c == "'"
-        @scan_raw_string()
-      else if c == '"'
-        @scan_double_quoted()
-      else if c.is_digit()
-        @scan_integer()
-      else
-        @scan_punctuation()
+      case
+        when c == ' '
+          @position += 1
+        when c == '#' then break
+        when is_identifier_start(c) then @scan_word()
+        when c == "'" then @scan_raw_string()
+        when c == '"' then @scan_double_quoted()
+        when c.is_digit() then @scan_integer()
+        else @scan_punctuation()
     @tokens
 
   # Adds the token that starts at the position, and moves to `end`, after it.
