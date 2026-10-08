@@ -5,8 +5,9 @@ import type { Types } from '../check/shared.ts'
 import type { CheckedInt } from './checked_int.ts'
 import { slot_pointer, type CodegenLocal, type ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
-import { emit_release, ir_type } from './lerta_ir.ts'
+import { emit_release, emit_retain, ir_type } from './lerta_ir.ts'
 import { emit_map_set } from './map_codegen.ts'
+import { emit_concat } from './string_codegen.ts'
 import { emit_field_pointer } from './heap_object.ts'
 import type { ObjectTypes } from '../check/object_types.ts'
 import type { Scopes } from '../scopes.ts'
@@ -45,13 +46,7 @@ export class AssignmentGenerator {
     const local = this.locals.lookup(target.name)!
     if (local.kind !== 'slot') throw new Error('only slots can be assigned')
     const pointer = slot_pointer(this.ir, local)
-    const type = ir_type(local.type)
-    const { old, value } = this.load_and_evaluate(assignment, () =>
-      this.ir.assign(`load ${type}, ptr ${pointer}`),
-    )
-    const result = this.combine(assignment.operator, old, value, local.type)
-    this.ir.emit(`store ${type} ${result}, ptr ${pointer}`)
-    if (is_reference_type(local.type)) emit_release(this.ir, old)
+    this.assign_through(assignment, pointer, local.type)
   }
 
   // The field takes the new value's reference and releases the old one.
@@ -61,13 +56,7 @@ export class AssignmentGenerator {
     const field = info.fields.find((field) => field.name.name === target.name.name)!
     const object = this.expressions.generate(target.object)
     const pointer = emit_field_pointer(this.ir, object, info, field)
-    const type = field.type!
-    const { old, value } = this.load_and_evaluate(assignment, () =>
-      this.ir.assign(`load ${ir_type(type)}, ptr ${pointer}`),
-    )
-    const result = this.combine(assignment.operator, old, value, type)
-    this.ir.emit(`store ${ir_type(type)} ${result}, ptr ${pointer}`)
-    if (is_reference_type(type)) emit_release(this.ir, old)
+    this.assign_through(assignment, pointer, field.type!)
     emit_release(this.ir, object)
   }
 
@@ -102,24 +91,30 @@ export class AssignmentGenerator {
     emit_release(this.ir, map)
   }
 
-  // For `=`, the value is evaluated before the old one is loaded, since evaluating it may change
-  // the target (a method that assigns the same field, for example); releasing a stale old value
-  // would then free it twice. For `+=` and so on, the old Int is loaded first, as it is combined.
-  private load_and_evaluate(
-    assignment: Assignment,
-    load: () => string,
-  ): { old: string; value: string } {
+  // For `+=` and so on, the old value is loaded, and owned, before the value is evaluated, as it
+  // is combined. Evaluating the value may change the target (a method that assigns the same field,
+  // for example), so the value to release is loaded again after it: releasing a stale one would
+  // free it twice.
+  private assign_through(assignment: Assignment, pointer: string, type: Type): void {
+    const load = () => this.ir.assign(`load ${ir_type(type)}, ptr ${pointer}`)
+    const is_reference = is_reference_type(type)
+    let old = ''
     if (assignment.operator !== '=') {
-      const old = load()
-      return { old, value: this.expressions.generate(assignment.value) }
+      old = load()
+      if (is_reference) emit_retain(this.ir, old)
     }
     const value = this.expressions.generate(assignment.value)
-    return { old: load(), value }
+    const result = this.combine(assignment.operator, old, value, type)
+    const replaced = is_reference ? load() : ''
+    this.ir.emit(`store ${ir_type(type)} ${result}, ptr ${pointer}`)
+    if (is_reference) emit_release(this.ir, replaced)
   }
 
   // The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
+  // Both are owned.
   private combine(operator: AssignmentOperator, old: string, value: string, type: Type): string {
     if (operator === '=') return value
+    if (type.kind === 'String') return emit_concat(this.ir, [old, value])
     return this.checked_int.apply(operator[0] as '+' | '-' | '*' | '/' | '%', old, value, type)
   }
 }

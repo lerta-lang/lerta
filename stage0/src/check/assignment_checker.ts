@@ -26,7 +26,7 @@ export class AssignmentChecker {
     this.top_level = top_level
   }
 
-  // Compound assignments such as `+=` apply to Ints only.
+  // Compound assignments such as `+=` apply to Ints and Bytes, and `+=` to Strings too.
   check_assignment(assignment: Assignment): void {
     const { target } = assignment
     const target_type =
@@ -35,9 +35,10 @@ export class AssignmentChecker {
         : target.kind === 'member'
           ? this.expressions.field_target(target)
           : this.check_variable_target(target)
-    const is_numeric = target_type.kind === 'Int' || target_type.kind === 'Byte'
-    if (assignment.operator !== '=' && !is_numeric) {
-      const message = `expected Int or Byte, got ${format_type(target_type)}`
+    const kinds = assignment.operator === '+=' ? ['Int', 'Byte', 'String'] : ['Int', 'Byte']
+    if (assignment.operator !== '=' && !kinds.includes(target_type.kind)) {
+      const expected = assignment.operator === '+=' ? 'Int, Byte or String' : 'Int or Byte'
+      const message = `expected ${expected}, got ${format_type(target_type)}`
       throw new CompileError(message, target.line, target.column)
     }
     this.expressions.expect_type(assignment.value, target_type)
