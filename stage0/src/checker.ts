@@ -106,9 +106,33 @@ const check = (
   program_infos: Map<string, ObjectInfo>,
 ): Checked => {
   const { program } = module
-  const types: Types = new Map()
-  const conversions: Conversions = new Map()
-  const warnings: CompileWarning[] = []
+  const shared = create_shared(module, exports_of, program_infos)
+  const { types, conversions, warnings, functions, objects, resolver, imports, captures } = shared
+  try {
+    reject_misplaced_jumps(program)
+    declare_names(program, shared)
+    check_code(program, shared)
+  } catch (error) {
+    if (error instanceof CompileError) error.warnings = in_source_order(warnings)
+    throw error
+  }
+  const exports = exports_of_module(module, functions, objects, resolver, types)
+  return {
+    types,
+    conversions,
+    objects,
+    imports,
+    warnings: in_source_order(warnings),
+    captures,
+    exports,
+  }
+}
+
+const create_shared = (
+  module: Module,
+  exports_of: (statement: Import) => Map<string, Export> | undefined,
+  program_infos: Map<string, ObjectInfo>,
+): Shared => {
   const imports = new Imports(exports_of)
   // An imported type, marking its import as used.
   const imported_type = (name: string) => {
@@ -128,57 +152,48 @@ const check = (
     (name) => objects.object_type(name) ?? imported_type(name)?.type,
   )
   const functions: Functions = new Functions((entry) => check_function(shared, entry), resolver)
-  const top_level = new TopLevelValues(program)
-  const captures: Captures = new Map()
   const shared: Shared = {
-    types,
-    conversions,
-    warnings,
+    types: new Map(),
+    conversions: new Map(),
+    warnings: [],
     functions,
     objects,
     resolver,
     imports,
-    top_level,
-    captures,
+    top_level: new TopLevelValues(module.program),
+    captures: new Map(),
   }
-  try {
-    reject_misplaced_jumps(program)
-    objects.add(
-      program.filter(
-        (statement): statement is TypeDeclaration => statement.kind === 'type_declaration',
-      ),
-    )
-    for (const statement of program) {
-      if (statement.kind === 'type_alias') resolver.add_alias(statement)
-    }
-    imports.add(program)
-    reject_types_named_like_imports(program, imports)
-    resolver.resolve_aliases()
-    add_top_level_functions(program, functions, objects, resolver, imports)
-    objects.add_members(resolver, functions)
-    const warn_unused_top_level = new StatementChecker(
-      shared,
-      undefined,
-      undefined,
-    ).check_top_level(program)
-    objects.check_all()
-    functions.check_all()
-    warn_unused_top_level()
-    warnings.push(...imports.unused_warnings())
-  } catch (error) {
-    if (error instanceof CompileError) error.warnings = in_source_order(warnings)
-    throw error
+  return shared
+}
+
+// The module's types, aliases, imports, functions and members, which the code may use before
+// their declarations.
+const declare_names = (program: Program, shared: Shared): void => {
+  const { objects, resolver, imports, functions } = shared
+  objects.add(
+    program.filter(
+      (statement): statement is TypeDeclaration => statement.kind === 'type_declaration',
+    ),
+  )
+  for (const statement of program) {
+    if (statement.kind === 'type_alias') resolver.add_alias(statement)
   }
-  const exports = exports_of_module(module, functions, objects, resolver, types)
-  return {
-    types,
-    conversions,
-    objects,
-    imports,
-    warnings: in_source_order(warnings),
-    captures,
-    exports,
-  }
+  imports.add(program)
+  reject_types_named_like_imports(program, imports)
+  resolver.resolve_aliases()
+  add_top_level_functions(program, functions, objects, resolver, imports)
+  objects.add_members(resolver, functions)
+}
+
+// The top-level code, then the objects and functions, which may use its names.
+const check_code = (program: Program, shared: Shared): void => {
+  const warn_unused_top_level = new StatementChecker(shared, undefined, undefined).check_top_level(
+    program,
+  )
+  shared.objects.check_all()
+  shared.functions.check_all()
+  warn_unused_top_level()
+  shared.warnings.push(...shared.imports.unused_warnings())
 }
 
 // A class, struct or type alias cannot have the name of an import; the error points at it.

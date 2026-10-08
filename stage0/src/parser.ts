@@ -22,6 +22,7 @@ import { CompileError } from './errors.ts'
 import { ExpressionParser } from './expression_parser.ts'
 import type { Token } from './lexer.ts'
 import { TokenStream } from './token_stream.ts'
+import type { TypeParser } from './type_parser.ts'
 
 export const parse = (tokens: Token[]): Program =>
   new Parser(new TokenStream(tokens)).parse_program()
@@ -46,10 +47,12 @@ const command_argument_starts = [
 class Parser {
   private readonly tokens: TokenStream
   private readonly expressions: ExpressionParser
+  private readonly types: TypeParser
 
   constructor(tokens: TokenStream) {
     this.tokens = tokens
     this.expressions = new ExpressionParser(tokens, this)
+    this.types = this.expressions.types
   }
 
   parse_program(): Program {
@@ -170,7 +173,7 @@ class Parser {
     const token = this.tokens.next()
     if (this.tokens.peek().kind === '{') return this.parse_destructuring(token)
     const name = this.expressions.parse_identifier()
-    const type = this.tokens.accept(':') ? this.expressions.parse_type_name() : undefined
+    const type = this.tokens.accept(':') ? this.types.parse_type_name() : undefined
     this.tokens.expect('=', "'='")
     const value = this.expressions.parse_expression()
     const mutable = token.kind === 'var'
@@ -227,7 +230,7 @@ class Parser {
     const token = this.tokens.next()
     const name = this.expressions.parse_identifier()
     this.tokens.expect('=', "'='")
-    const type = this.expressions.parse_type_name()
+    const type = this.types.parse_type_name()
     return { kind: 'type_alias', name, type, line: token.line, column: token.column }
   }
 
@@ -299,7 +302,7 @@ class Parser {
     const modifier = token.kind === 'const' || token.kind === 'var' ? token.kind : undefined
     if (modifier !== undefined) this.tokens.next()
     const name = this.expressions.parse_identifier()
-    const type = this.tokens.accept(':') ? this.expressions.parse_type_name() : undefined
+    const type = this.tokens.accept(':') ? this.types.parse_type_name() : undefined
     const has_value = type === undefined || this.tokens.peek().kind === '='
     if (has_value) this.tokens.expect('=', type === undefined ? "':' or '='" : "'='")
     const value = has_value ? this.expressions.parse_expression() : undefined

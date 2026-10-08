@@ -7,17 +7,15 @@ import {
   type Expression,
   type FunctionLiteral,
   type Identifier,
-  type NamedType,
-  type RecordTypeName,
   type NamedArgument,
   type Parameter,
   type Position,
   type Statement,
-  type TypeName,
 } from './ast.ts'
 import { CompileError } from './errors.ts'
 import { tokenize_fragment } from './lexer.ts'
 import { TokenStream } from './token_stream.ts'
+import { TypeParser } from './type_parser.ts'
 
 const INT_MIN = -(2n ** 63n)
 const INT_MAX = 2n ** 63n - 1n
@@ -42,9 +40,13 @@ export class ExpressionParser {
 
   private readonly bodies: BodyParser
 
+  // Shared with the statement parser, for the types of declarations.
+  readonly types: TypeParser
+
   constructor(tokens: TokenStream, bodies: BodyParser) {
     this.tokens = tokens
     this.bodies = bodies
+    this.types = new TypeParser(tokens, this)
   }
 
   parse_expression(): Expression {
@@ -106,7 +108,7 @@ export class ExpressionParser {
     const left = this.parse_range()
     if (this.at_is()) {
       this.tokens.next()
-      const type = this.parse_named_type()
+      const type = this.types.parse_named_type()
       return { kind: 'is', value: left, type, line: left.line, column: left.column }
     }
     if (!this.at_comparison()) return left
@@ -209,73 +211,17 @@ export class ExpressionParser {
     if (this.tokens.accept('(')) {
       const parse_param = () => {
         const name = this.parse_identifier()
-        return { name, type: this.tokens.accept(':') ? this.parse_type_name() : undefined }
+        return { name, type: this.tokens.accept(':') ? this.types.parse_type_name() : undefined }
       }
       params.push(...this.parse_list(')', parse_param))
     }
-    const return_type = this.tokens.accept(':') ? this.parse_type_name() : undefined
+    const return_type = this.tokens.accept(':') ? this.types.parse_type_name() : undefined
     this.tokens.expect('->', "'->'")
     const body =
       this.tokens.peek().kind === 'newline'
         ? this.bodies.parse_block()
         : [this.bodies.parse_simple_statement()]
     return { kind: 'function', params, return_type, body, line: token.line, column: token.column }
-  }
-
-  // A named type, or a union of them: `A | B`.
-  parse_type_name(): TypeName {
-    if (this.tokens.peek().kind === '(') return this.parse_parenthesized_type()
-    const first = this.parse_union_member()
-    if (this.tokens.peek().kind !== '|') return first
-    const members = [first]
-    while (this.tokens.accept('|')) members.push(this.parse_union_member())
-    return { kind: 'union_type', members, line: first.line, column: first.column }
-  }
-
-  // `(A, B) -> R`, or a function type in parentheses, `((A) -> R)?`, to make it optional.
-  private parse_parenthesized_type(): TypeName {
-    const open = this.tokens.next()
-    const position = { line: open.line, column: open.column }
-    const types = this.parse_list(')', () => this.parse_type_name())
-    if (this.tokens.accept('->')) {
-      const result = this.parse_type_name()
-      return { kind: 'function_type', params: types, result, optional: false, ...position }
-    }
-    const [inner] = types
-    if (types.length !== 1 || inner.kind !== 'function_type') {
-      throw this.tokens.error_at(this.tokens.peek(), "'->'")
-    }
-    return { ...inner, optional: this.tokens.accept('?'), ...position }
-  }
-
-  // A type that `|` can join: a named type or an anonymous struct, which the checker rejects as a
-  // member so far.
-  private parse_union_member(): NamedType | RecordTypeName {
-    return this.tokens.peek().kind === '{' ? this.parse_record_type() : this.parse_named_type()
-  }
-
-  // `{ x: Int, y: String }`, with `?` after it if it may be nil.
-  private parse_record_type(): RecordTypeName {
-    const open = this.tokens.next()
-    const fields = this.parse_list('}', () => {
-      const name = this.parse_identifier()
-      this.tokens.expect(':', "':'")
-      return { name, type: this.parse_type_name() }
-    })
-    const optional = this.tokens.accept('?')
-    return { kind: 'record_type', fields, optional, line: open.line, column: open.column }
-  }
-
-  private parse_named_type(): NamedType {
-    const { name, line, column } = this.parse_identifier()
-    const args: TypeName[] = []
-    if (this.tokens.accept('<')) {
-      do args.push(this.parse_type_name())
-      while (this.tokens.accept(','))
-      this.tokens.expect('>', "'>'")
-    }
-    const optional = this.tokens.accept('?')
-    return { kind: 'type_name', name, args, optional, line, column }
   }
 
   // Calls `f(x)`, indexing `xs[i]`, member accesses `x.name` and unwrapping `x!`, written without
