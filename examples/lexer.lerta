@@ -1,0 +1,110 @@
+# The first step of a Lerta compiler written in Lerta: it splits a source into tokens, with the
+# indentation as indent and dedent tokens, and prints them. It covers a subset of Lerta: names,
+# keywords, integers, '...' strings and some punctuation, but not "..." strings or tabs.
+
+struct Token
+  kind: String
+  text: String
+  line: Int
+
+const keywords = { 'const': true, 'var': true, 'if': true, 'else': true, 'for': true, 'in': true }
+# Longer punctuations come first, so that `->` is not read as `-` and `>`.
+const punctuations = ['...', '->', '==', '+=', '(', ')', ':', ',', '=', '+', '-', '*', '%', '<', '>']
+
+const is_digit = (c: Byte): Bool -> c >= '0' and c <= '9'
+const is_letter = (c: Byte): Bool -> (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
+
+class Lexer
+  source: Binary
+  tokens: Array<Token> = []
+  indents: Array<Int> = [0]
+  var position = 0
+  var line = 1
+
+  add = (kind: String, text: String) -> @tokens.push(Token(kind: kind, text: text, line: @line))
+  peek = (): Byte -> @position < @source.length then @source[@position] else "\n"
+  text = (start: Int, end: Int): String -> @source.slice(start, end).decode_utf8()!
+  top_indent = (): Int -> @indents[@indents.length - 1]
+
+  run = (): Array<Token> ->
+    @scan_line() while @position < @source.length
+    @add('dedent', '') for _ in 0...@indents.length - 1
+    @tokens
+
+  # A line that is blank or holds only a comment gives no tokens, so it does not change the
+  # indentation.
+  scan_line = ->
+    const start = @position
+    @position += 1 while @peek() == ' '
+    if @peek() != "\n" and @peek() != '#'
+      @indent(@position - start)
+      @scan_token() while @peek() != "\n" and @peek() != '#'
+      @add('newline', '')
+    @position += 1 while @peek() != "\n"
+    @position += 1
+    @line += 1
+
+  indent = (width: Int) ->
+    if width > @top_indent()
+      @indents.push(width)
+      @add('indent', '')
+    while width < @top_indent()
+      @indents.pop()
+      @add('dedent', '')
+    throw "#{@line}: the indentation matches no outer block" if width != @top_indent()
+
+  scan_token = ->
+    const start = @position
+    const c = @peek()
+    case
+      when c == ' '
+        @position += 1
+      when is_digit(c)
+        @position += 1 while is_digit(@peek())
+        @add('integer', @text(start, @position))
+      when is_letter(c)
+        @position += 1 while is_letter(@peek()) or is_digit(@peek())
+        const word = @text(start, @position)
+        @add(keywords.has(word) then word else 'name', word)
+      when c == "'"
+        @position += 1
+        @position += 1 while @peek() != "'" and @peek() != "\n"
+        throw "#{@line}: the string is not closed" if @peek() != "'"
+        @position += 1
+        @add('string', @text(start + 1, @position - 1))
+      else
+        @scan_punctuation()
+
+  scan_punctuation = ->
+    const candidates = [p for p in punctuations when @at(p)]
+    throw "#{@line}: unexpected character" if candidates.length == 0
+    const punctuation = candidates[0]
+    @position += punctuation.binary.length
+    @add(punctuation, punctuation)
+
+  # Compares bytes, since the next ones may not be a whole character.
+  at = (punctuation: String): Bool ->
+    const bytes = punctuation.binary
+    return false if @position + bytes.length > @source.length
+    for i in 0...bytes.length
+      return false if @source[@position + i] != bytes[i]
+    true
+
+const source = [
+  '# sums the squares of the even numbers'
+  'const square = (x: Int): Int -> x * x'
+  'var total = 0'
+  'for i in 0...10'
+  '  # odd numbers are skipped'
+  ''
+  '  if i % 2 == 0'
+  '    total += square(i)'
+  "print 'done'"
+  'for j in 0...2'
+  '  if j == 1'
+  "    print 'last'"
+].join("\n") + "\n"
+
+for token in Lexer(source: source.binary).run()
+  const shown = token.text == '' then '' else " #{token.text}"
+  print "#{token.line} #{token.kind}#{shown}"
