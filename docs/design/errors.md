@@ -41,7 +41,7 @@ Literals, arithmetic and comparisons, function values and `Iter<T>` values are i
 
 ## Panic
 
-A panic cannot be caught. It prints the message (and a stack trace if available) to stderr and exits with a non-zero code.
+A panic cannot be caught. It prints the message (and a stack trace if available) to stderr and aborts the process.
 
 These cause a panic:
 

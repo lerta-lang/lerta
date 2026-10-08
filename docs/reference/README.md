@@ -10,7 +10,7 @@ This reference documents only implemented behavior. The planned design is in [..
 | [functions.md](functions.md) | Function declarations, parameters and return values |
 | [types.md](types.md) | Types and their operations |
 | [errors.md](errors.md) | Exceptions and discarded values |
-| [builtins.md](builtins.md) | Builtin functions |
+| [builtins.md](builtins.md) | Builtin functions, `Stringable` and the methods of the builtin types |
 | [modules.md](modules.md) | Imports and the standard modules |
 | [compiler.md](compiler.md) | Compiler usage and error format |
 | [style.md](style.md) | Coding conventions for Lerta code |

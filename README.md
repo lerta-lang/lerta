@@ -4,6 +4,8 @@ Lerta is a statically typed, compiled language with CoffeeScript-like syntax and
 
 The name comes from the Esperanto word *lerta*, meaning "skillful", "deft" or "good at".
 
+The language as planned (for what works today, see `docs/reference/`):
+
 ```
 struct Circle
   r: Float
