@@ -56,7 +56,7 @@ export class LoopChecker {
     }
   }
 
-  // A loop variable is a const, which the loop declares rather than a statement.
+  // A loop variable is a const declared by the loop rather than by a statement, hence not `declared`.
   private define_loop_variable(variable: Identifier, type: Type): void {
     this.bodies.define_local({
       identifier: variable,

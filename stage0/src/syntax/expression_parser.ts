@@ -24,8 +24,6 @@ const arithmetic_precedence: ArithmeticOperator[][] = [
 
 export type Arguments = { args: Expression[]; named_args: NamedArgument[] }
 
-// Expressions, from the weakest operators down to primaries; compound expressions are read by the
-// compound parser.
 // `for x in xs`, with `when guard` after it if there is one.
 export type LoopHeader = {
   variable: Identifier
@@ -33,6 +31,8 @@ export type LoopHeader = {
   guard: Expression | undefined
 }
 
+// Expressions, from the weakest operators down to primaries; compound expressions are read by the
+// compound parser.
 export class ExpressionParser {
   private readonly tokens: TokenStream
 
