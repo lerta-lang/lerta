@@ -50,7 +50,6 @@ export const builtin_method = (receiver: Type, name: string): Type | undefined =
     return method([], optional_type(string_type))
   }
   if (receiver.kind === 'String' && name === 'parse_int') return method([], optional_type(int_type))
-  if (receiver.kind === 'Writer') return writer_method(name)
   if (receiver.kind === 'Map') return map_method(receiver.key, name)
   if (receiver.kind !== 'Array') return undefined
   const { element } = receiver
@@ -82,19 +81,6 @@ const map_method = (key: Type, name: string): Type | undefined => {
       return method([key], void_type)
     case 'keys':
       return method([], array_type(key))
-    default:
-      return undefined
-  }
-}
-
-const writer_method = (name: string): Type | undefined => {
-  switch (name) {
-    case 'write':
-      return method([string_type], void_type)
-    case 'write_binary':
-      return method([binary_type], void_type)
-    case 'flush':
-      return method([], void_type)
     default:
       return undefined
   }

@@ -16,8 +16,8 @@ const call = runtime_caller({
 })
 
 export const to_item = (ir: IrBuilder, operand: string, type: Type): string => {
-  // An Int, and a Writer (a file descriptor), are already 8 bytes.
-  if (type.kind === 'Int' || type.kind === 'Writer') return operand
+  // An Int is already 8 bytes.
+  if (type.kind === 'Int') return operand
   if (type.kind === 'Bool' || type.kind === 'UInt8') {
     return ir.assign(`zext ${ir_type(type)} ${operand} to i64`)
   }
@@ -25,7 +25,7 @@ export const to_item = (ir: IrBuilder, operand: string, type: Type): string => {
 }
 
 export const from_item = (ir: IrBuilder, item: string, type: Type): string => {
-  if (type.kind === 'Int' || type.kind === 'Writer') return item
+  if (type.kind === 'Int') return item
   if (type.kind === 'Bool' || type.kind === 'UInt8') {
     return ir.assign(`trunc i64 ${item} to ${ir_type(type)}`)
   }

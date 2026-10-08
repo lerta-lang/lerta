@@ -1,22 +1,7 @@
-// The standard modules in the generated code (see std_modules.ts and runtime/process.c, file.c).
+// Calls to C functions that externs declare.
 import type { IrBuilder } from './ir_builder.ts'
 import { ir_c_return_type, ir_param_type } from './lerta_ir.ts'
-import type { StdExport } from '../check/std_modules.ts'
 import type { Type } from '../types.ts'
-
-const STDOUT_FD = '1'
-const STDERR_FD = '2'
-
-// The value of an imported name such as `stdout` or `argv`; `argv` is a new array each time.
-export const emit_std_value = (
-  ir: IrBuilder,
-  read: Extract<StdExport, { kind: 'value' }>['read'],
-): string => {
-  if (read === 'stdout') return STDOUT_FD
-  if (read === 'stderr') return STDERR_FD
-  ir.declare('lerta_argv', 'declare ptr @lerta_argv()')
-  return ir.assign('call ptr @lerta_argv()')
-}
 
 // Calls a runtime function; one that never returns ends the block, code after it is unreachable,
 // and its value, which never comes, is poison.
@@ -45,20 +30,4 @@ export const emit_runtime_call = (
 export const emit_unreachable = (ir: IrBuilder): void => {
   ir.emit('unreachable')
   ir.start_block(ir.fresh_label('unreachable'))
-}
-
-export const emit_writer_method = (
-  ir: IrBuilder,
-  name: string,
-  writer: string,
-  args: string[],
-): void => {
-  if (name === 'flush') {
-    ir.declare('lerta_writer_flush', 'declare void @lerta_writer_flush(i64)')
-    ir.emit(`call void @lerta_writer_flush(i64 ${writer})`)
-    return
-  }
-  // A Binary has the same representation as a String, so both are written the same way.
-  ir.declare('lerta_writer_write', 'declare void @lerta_writer_write(i64, ptr)')
-  ir.emit(`call void @lerta_writer_write(i64 ${writer}, ptr ${args[0]})`)
 }

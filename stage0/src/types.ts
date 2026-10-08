@@ -22,8 +22,6 @@ export type Type =
   | { kind: 'void' }
   // The result of what does not return, such as `throw`; it fits wherever a value is expected.
   | { kind: 'never' }
-  // `stdout` or `stderr` (see std_modules.ts).
-  | { kind: 'Writer' }
   // Built-in rule of stage0: satisfied by String, Int, UInt8 and Bool. Only usable as a parameter type.
   | { kind: 'Stringable' }
   | { kind: 'function'; params: Type[]; result: Type }
@@ -35,7 +33,6 @@ export const uint8_type: Type = { kind: 'UInt8' }
 export const binary_type: Type = { kind: 'Binary' }
 export const void_type: Type = { kind: 'void' }
 export const never_type: Type = { kind: 'never' }
-export const writer_type: Type = { kind: 'Writer' }
 export const stringable_type: Type = { kind: 'Stringable' }
 
 // An order that does not depend on the locale, for types that must be the same everywhere.

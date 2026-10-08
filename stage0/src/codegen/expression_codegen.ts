@@ -33,12 +33,7 @@ import { emit_field_pointer, emit_type_test } from './object_codegen.ts'
 import type { Imports } from '../check/imports.ts'
 import type { ObjectTypes } from '../check/object_types.ts'
 import type { Scopes } from '../scopes.ts'
-import {
-  emit_runtime_call,
-  emit_std_value,
-  emit_unreachable,
-  emit_writer_method,
-} from './std_codegen.ts'
+import { emit_runtime_call, emit_unreachable } from './extern_codegen.ts'
 import { emit_concat, emit_parse_int, emit_to_string } from './string_codegen.ts'
 import type { ThrowBlocks } from './throw_blocks.ts'
 import { emit_initialized_check, type TopLevelGlobal } from './top_level_codegen.ts'
@@ -298,12 +293,6 @@ export class ExpressionGenerator {
     const object_type = this.types.get(member.object)!
     const object = this.generate(member.object)
     const { name } = member.name
-    if (object_type.kind === 'Writer') {
-      const args = call.args.map((arg) => this.generate(arg))
-      emit_writer_method(this.ir, name, object, args)
-      call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
-      return ''
-    }
     if (object_type.kind === 'Record') {
       const closure = emit_record_field(this.ir, object, object_type, name)
       emit_release(this.ir, object)
@@ -402,7 +391,8 @@ export class ExpressionGenerator {
     if (local === undefined && symbol !== undefined) {
       return emit_function_closure(this.ir, symbol, this.types.get(identifier)!)
     }
-    if (local === undefined) return this.generate_imported_value(identifier)
+    // The checker allows no other name as a value: a C function can only be called.
+    if (local === undefined) throw new Error(`no value for '${identifier.name}'`)
     return this.read_local(local, this.types.get(identifier)!)
   }
 
@@ -417,12 +407,6 @@ export class ExpressionGenerator {
     const is_narrowed = local.type.kind === 'Optional' && type.kind !== 'Optional'
     return is_narrowed ? emit_unwrap(this.ir, value, local.type) : value
   }
-  private generate_imported_value(identifier: Identifier): string {
-    const imported = this.imports.get(identifier.name)!.export
-    if (imported.kind !== 'value') throw new Error('only an imported value is read as a name')
-    return emit_std_value(this.ir, imported.read)
-  }
-
   // The message is not released, since the program ends here.
   private generate_throw(throw_expression: Throw): string {
     const message = this.generate(throw_expression.message)

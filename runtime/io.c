@@ -7,6 +7,7 @@
 #include "lerta.h"
 
 LERTA_STATIC_STRING(index_out_of_range, "index out of range");
+LERTA_STATIC_STRING(unknown_writer, "a Writer writes to stdout (1) or stderr (2) only");
 
 enum { STDOUT_FD = 1, STDERR_FD = 2, STDOUT_BUFFER_SIZE = 4096 };
 
@@ -79,7 +80,12 @@ void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
   write_all(STDERR_FD, bytes, length);
 }
 
+static void check_writer(int64_t fd) {
+  if (fd != STDOUT_FD && fd != STDERR_FD) lerta_throw((const LertaString *)&unknown_writer);
+}
+
 void lerta_writer_write(int64_t fd, const LertaString *bytes) {
+  check_writer(fd);
   if (fd == STDOUT_FD) {
     stdout_write(bytes->bytes, bytes->length);
     return;
@@ -89,6 +95,7 @@ void lerta_writer_write(int64_t fd, const LertaString *bytes) {
 }
 
 void lerta_writer_flush(int64_t fd) {
+  check_writer(fd);
   if (fd == STDOUT_FD) lerta_stdout_flush();
 }
 

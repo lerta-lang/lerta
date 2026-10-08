@@ -21,9 +21,6 @@ export const ir_type = (type: Type): string => {
       return 'i1'
     case 'UInt8':
       return 'i8'
-    case 'Writer':
-      // A Writer is its file descriptor.
-      return 'i64'
     case 'Optional':
       // A reference is nil when null; a value carries a flag that tells whether it is there.
       return is_reference_type(type) ? 'ptr' : `{ i1, ${ir_type(type.inner)} }`

@@ -7,7 +7,7 @@ import { argv, exit } from 'std:process'
 
 - A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import { a as c } from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. Imports are written at the top level. An imported name that is never used is a warning.
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), as any import of it does.
-- `'std:io'` and `'std:process'` are standard modules (below). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository: `'std:io'` and `'std:process'` so far (below). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
 
 ## Exports
 
@@ -34,11 +34,11 @@ export const unit = 1
 | `write_file(path: String, data: Binary)` | Replaces the contents of a file, creating it if needed. Throws `cannot write file: <path>` on failure. |
 | `stdout`, `stderr` | `Writer`s. `stdout` is buffered and flushed at exit; `stderr` is not buffered, and writing to it flushes `stdout` first, so that the two keep their order. |
 
-A `Writer` has `write(s: String)`, `write_binary(b: Binary)` and `flush()`. `print` writes to `stdout` too.
+`Writer`, exported too, is a struct of a file descriptor with the methods `write(s: String)`, `write_binary(b: Binary)` and `flush()`; a `Writer` of a file descriptor other than 1 (stdout) or 2 (stderr) throws when it is used. `print` writes to `stdout` too.
 
 ## std:process
 
 | Name | |
 |---|---|
-| `argv: Array<String>` | The command-line arguments, without the program name. Reading it throws if an argument is not valid UTF-8. |
+| `argv: Array<String>` | The command-line arguments, without the program name, read when the module runs. A program that imports `std:process` throws at its start if an argument is not valid UTF-8. |
 | `exit(code: Int): never` | Flushes `stdout` and ends the program with the exit code, from 0 to 255; another code throws. If the flush fails, a code of 0 becomes 1. |

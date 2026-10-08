@@ -1,12 +1,16 @@
 import { dirname, join } from 'node:path'
 
 // A diagnostic in an imported module carries the module's path, relative to the directory of the
-// entry module; otherwise it is in the entry module, whose path is given when it is formatted.
+// entry module, or the name of a standard module, `std:io`; otherwise it is in the entry module,
+// whose path is given when it is formatted.
 const location = (entry_path: string, diagnostic: CompileWarning | CompileError): string => {
+  const { module_path } = diagnostic
   const path =
-    diagnostic.module_path === undefined
+    module_path === undefined
       ? entry_path
-      : join(dirname(entry_path), diagnostic.module_path)
+      : module_path.startsWith('std:')
+        ? module_path
+        : join(dirname(entry_path), module_path)
   return `${path}:${diagnostic.line}:${diagnostic.column}`
 }
 

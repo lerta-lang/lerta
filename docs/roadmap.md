@@ -25,10 +25,12 @@
 
 ### Standard library layout in stage0
 
+The standard modules are Lerta files in `std/`, which call the C runtime through `extern`.
+
 | Location | Contents |
 |---|---|
 | builtins | `print`, basic types (`Int`, `String`, `Array` and so on), standard interfaces |
-| `'std:io'` | `read_file(path: String): Binary`, `write_file`, `stdout`, `stderr` |
+| `'std:io'` | `read_file(path: String): Binary`, `write_file`, `Writer`, `stdout`, `stderr` |
 | `'std:process'` | `argv`, `exit(code: Int): never` |
 
 - In stage0, writes are synchronous. Making them asynchronous is decided in Phase 2.

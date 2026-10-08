@@ -1,5 +1,5 @@
 // Reads the entry module and the modules it imports, directly or not.
-import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import type { Import, Program } from './syntax/ast.ts'
 import { CompileError } from './errors.ts'
@@ -9,16 +9,41 @@ import { parse } from './syntax/parser.ts'
 export type Module = {
   // Its position in the list of modules, which keeps its symbols apart from the others'.
   index: number
-  // Relative to the entry module's directory, for diagnostics; undefined for the entry module.
+  // For diagnostics: relative to the entry module's directory, or `std:name` for a standard module;
+  // undefined for the entry module.
   display_path: string | undefined
   program: Program
-  // The modules that its imports of files refer to.
+  // The modules that its imports refer to.
   imported: Map<Import, Module>
 }
 
-// A path that starts with `./` or `../` names a file; others name standard modules.
-export const is_file_import = (statement: Import): boolean =>
-  statement.module.startsWith('./') || statement.module.startsWith('../')
+// The standard modules, `std:name`, are the files of this directory.
+const std_dir = join(import.meta.dirname, '../../std')
+
+// The file an import names: a path that starts with `./` or `../` is relative to `from`, the
+// directory of the importing file; `std:name` is a standard module. Other names are reserved.
+const imported_file = (statement: Import, from: string): string => {
+  const { module } = statement
+  if (module.startsWith('./') || module.startsWith('../')) return join(from, `${module}.lerta`)
+  const std_name = module.startsWith('std:') ? module.slice('std:'.length) : undefined
+  if (std_name !== undefined && std_modules().includes(std_name)) {
+    return join(std_dir, `${std_name}.lerta`)
+  }
+  const message =
+    std_name === undefined
+      ? `unknown module '${module}'; a file is imported by a path that starts with ./ or ../`
+      : `unknown module '${module}'; the standard modules are ${std_modules()
+          .map((name) => `std:${name}`)
+          .join(', ')}`
+  throw new CompileError(message, statement.line, statement.column)
+}
+
+// The names of the standard modules, the files of std_dir.
+const std_modules = (): string[] =>
+  readdirSync(std_dir)
+    .filter((file) => file.endsWith('.lerta'))
+    .map((file) => file.slice(0, -'.lerta'.length))
+    .sort()
 
 // The modules, each after those it imports, so the entry module comes last.
 export const load_modules = (entry_path: string): Module[] => {
@@ -38,12 +63,11 @@ export const load_modules = (entry_path: string): Module[] => {
     const imported = new Map<Import, Module>()
     loading.add(real_path)
     for (const statement of program) {
-      if (statement.kind !== 'import' || !is_file_import(statement)) continue
-      const target = join(dirname(real_path), `${statement.module}.lerta`)
-      imported.set(
-        statement,
-        with_module_path(display_path, () => visit(target, statement)),
+      if (statement.kind !== 'import') continue
+      const module = with_module_path(display_path, () =>
+        visit(imported_file(statement, dirname(real_path)), statement),
       )
+      imported.set(statement, module)
     }
     loading.delete(real_path)
     const module = { index: modules.length, display_path, program, imported }
@@ -64,7 +88,9 @@ export const load_modules = (entry_path: string): Module[] => {
       const message = `'${statement.module}' imports this module back; circular imports are not supported yet`
       throw new CompileError(message, statement.line, statement.column)
     }
-    return load(path, relative(entry_dir, path))
+    const is_std = dirname(real_path) === realpathSync(std_dir)
+    const display_path = is_std ? statement.module : relative(entry_dir, path)
+    return load(path, display_path)
   }
 
   load(entry_path, undefined)

@@ -34,6 +34,18 @@ const cli_cases: CliCase[] = [
       )
     },
   },
+  {
+    // std:process reads the arguments as it runs, even for a program that only uses `exit`.
+    args: ['build', join(root_dir, 'tests/io/lib/exit_only.lerta'), '-o', `${exe}_exit`],
+    status: 0,
+    produced: () => {
+      const invalid = spawnSync('sh', ['-c', '"$0" "$(printf \'\\377\')"', `${exe}_exit`])
+      return (
+        invalid.status === 1 &&
+        invalid.stderr.toString() === 'a command-line argument is not valid UTF-8\n'
+      )
+    },
+  },
   { args: ['build', join(root_dir, 'tests/name/undefined.lerta'), '-o', exe], status: 1 },
   { args: ['build'], status: 2 },
   { args: ['run', hello, '-o', exe], status: 2 },

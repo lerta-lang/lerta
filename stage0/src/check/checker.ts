@@ -12,15 +12,14 @@ import {
 import { CompileError, CompileWarning } from '../errors.ts'
 import { Functions, parameter_types, type FunctionEntry } from './functions.ts'
 import { Imports, type Export } from './imports.ts'
-import { is_file_import, with_module_path, type Module } from '../loader.ts'
-import { std_modules } from './std_modules.ts'
+import { with_module_path, type Module } from '../loader.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
 import { finish_function_type } from './result_checker.ts'
 import { StatementChecker } from './statement_checker.ts'
 import { reject_misplaced_jumps } from './jump_positions.ts'
 import { TopLevelValues } from './top_level_values.ts'
 import { TypeResolver } from './type_names.ts'
-import { format_type, same_type, type Type } from '../types.ts'
+import { format_type, is_reference_type, type Type } from '../types.ts'
 
 // The type of every expression in a checked program, and the type that the name of `x is T`
 // stands for.
@@ -86,9 +85,7 @@ export const check_modules = (modules: Module[]): Checked[] => {
   try {
     for (const module of modules) {
       const exports_of = (statement: Import) =>
-        is_file_import(statement)
-          ? checked[module.imported.get(statement)!.index].exports
-          : std_modules.get(statement.module)
+        checked[module.imported.get(statement)!.index].exports
       const result = with_module_path(module.display_path, () =>
         check(module, exports_of, program_wide),
       )
@@ -106,7 +103,7 @@ export const check_modules = (modules: Module[]): Checked[] => {
 
 const check = (
   module: Module,
-  exports_of: (statement: Import) => Map<string, Export> | undefined,
+  exports_of: (statement: Import) => Map<string, Export>,
   program_wide: ProgramWide,
 ): Checked => {
   const { program } = module
@@ -134,7 +131,7 @@ const check = (
 
 const create_shared = (
   module: Module,
-  exports_of: (statement: Import) => Map<string, Export> | undefined,
+  exports_of: (statement: Import) => Map<string, Export>,
   program_wide: ProgramWide,
 ): Shared => {
   const imports = new Imports(exports_of)
@@ -192,7 +189,8 @@ const declare_names = (program: Program, shared: Shared): void => {
 }
 
 // An extern's type is a function type, which gives the C function's parameters and result. A C
-// function has one type, so all the externs of a symbol in the program must agree.
+// function has one C type, so all the externs of a symbol in the program must agree on it; a String
+// and a Binary, both pointers, can stand for the same parameter.
 const declare_externs = (program: Program, { resolver, imports, extern_types }: Shared): void => {
   for (const statement of program) {
     if (statement.kind !== 'extern') continue
@@ -203,13 +201,25 @@ const declare_externs = (program: Program, { resolver, imports, extern_types }: 
     }
     const { symbol } = statement
     const declared = extern_types.get(symbol.name)
-    if (declared !== undefined && !same_type(declared, type)) {
+    if (declared !== undefined && c_signature(declared) !== c_signature(type)) {
       const message = `the C function '${symbol.name}' is declared as ${format_type(declared)} elsewhere`
       throw new CompileError(message, symbol.line, symbol.column)
     }
     extern_types.set(symbol.name, type)
     imports.add_extern(statement.name, type, symbol.name)
   }
+}
+
+// The C type that a value of the type is passed as: a reference is a pointer, and an optional Int,
+// UInt8 or Bool a pair of a flag and the value (see codegen/lerta_ir.ts).
+const c_type = (type: Type): string => {
+  if (is_reference_type(type)) return 'pointer'
+  return type.kind === 'Optional' ? `${c_type(type.inner)}?` : type.kind
+}
+
+const c_signature = (type: Type): string => {
+  if (type.kind !== 'function') throw new Error('an extern has a function type')
+  return `(${type.params.map(c_type).join(', ')}) -> ${c_type(type.result)}`
 }
 
 // The top-level code, then the objects and functions, which may use its names.

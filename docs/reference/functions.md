@@ -53,7 +53,7 @@ export extern lerta_write_file as write_file: (String, Binary) -> void
 
 - `extern <symbol> as <name>: <function type>` declares a C function of the runtime, by its C symbol, as `name` in the module; without `as <name>`, its name is the symbol. Its type gives its parameters and result: `Int` is `int64_t`, `UInt8` is `uint8_t`, `Bool` is `bool`, references are pointers (see [internals](../internals.md)); arguments are borrowed and a returned reference is owned. An extern is declared at the top level and can be exported like a function, but, like a standard module's function, it can only be called so far, not used as a value.
 - Its result may be `void`, or `never` for a C function that does not return, such as `exit`.
-- All the externs of one C symbol in the program must have the same type. The compiler does not check that the C function exists or has that type: a wrong declaration fails when the program is linked, or misbehaves. A wrong type for a runtime function that the compiler also calls itself can make the compiler fail with an internal error.
+- All the externs of one C symbol in the program must agree on its C type; a `String` and a `Binary`, both pointers, may stand for the same parameter. The compiler does not check that the C function exists or has that type: a wrong declaration fails when the program is linked, or misbehaves. A wrong type for a runtime function that the compiler also calls itself can make the compiler fail with an internal error.
 
 ## Types
 

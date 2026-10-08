@@ -3,7 +3,7 @@
 // first, then the arguments, which are borrowed, and gives an owned result.
 import { IrBuilder } from './ir_builder.ts'
 import { emit_release, ir_return_type, ir_type, LERTA_IMMORTAL } from './lerta_ir.ts'
-import { emit_unreachable } from './std_codegen.ts'
+import { emit_unreachable } from './extern_codegen.ts'
 import { is_reference_type, type Type } from '../types.ts'
 
 // The code pointer comes after the header.
