@@ -1,5 +1,5 @@
-// Generates control flow: `if`, `while`, `for` over ranges, arrays and Iters, comprehensions,
-// `break` and `continue`.
+// Generates control flow: `if`, `while`, `for` over ranges, arrays, Binary values and Iters,
+// comprehensions, `break` and `continue`.
 import type {
   Comprehension,
   Condition,
@@ -11,12 +11,13 @@ import type {
   Statement,
   While,
 } from '../syntax/ast.ts'
-import { emit_array_new, emit_get, emit_length, emit_push } from './array_codegen.ts'
+import { emit_array_new, emit_push } from './array_codegen.ts'
 import type { Types } from '../check/shared.ts'
 import type { FunctionGenerator } from './function_codegen.ts'
 import type { CodegenLocal, ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import { emit_is_present, emit_unwrap } from './optional_codegen.ts'
+import { emit_sequence_get, emit_sequence_length } from './sequence_codegen.ts'
 import type { Scope, Scopes } from '../scopes.ts'
 import {
   emit_comprehension_iter,
@@ -103,8 +104,9 @@ export class ControlFlowGenerator {
     this.ir.start_block(exit_label)
   }
 
-  // A range's bounds are evaluated once. An array or an Iter is held for the whole loop in a scope
-  // of its own, so a `return` from the body releases it too; an array's length is read each round.
+  // A range's bounds are evaluated once. An array, a Binary or an Iter is held for the whole loop
+  // in a scope of its own, so a `return` from the body releases it too; an array's length is read
+  // each round.
   generate_for(for_statement: For): void {
     const { iterable, variable, body } = for_statement
     this.generate_iteration(iterable, variable, body)
@@ -175,20 +177,20 @@ export class ControlFlowGenerator {
     }
     const type = this.types.get(iterable)!
     if (type.kind === 'Iter') return this.generate_iter_loop(iterable, type, variable, body)
-    if (type.kind !== 'Array') throw new Error('only ranges, arrays and Iters can be iterated')
-    const array_scope = this.locals.push()
-    const array = this.expressions.generate(iterable)
-    array_scope.set(' iterated array', this.blocks.store_in_slot(array, type))
+    const item_type = iterable_item(type)!
+    const sequence_scope = this.locals.push()
+    const sequence = this.expressions.generate(iterable)
+    sequence_scope.set(' iterated sequence', this.blocks.store_in_slot(sequence, type))
     this.generate_counting_loop(
       '0',
-      () => emit_length(this.ir, array),
+      () => emit_sequence_length(this.ir, sequence, type),
       body,
       (scope, current) => {
-        const item = emit_get(this.ir, array, current, type.element)
-        scope.set(variable.name, this.blocks.store_in_slot(item, type.element))
+        const item = emit_sequence_get(this.ir, sequence, current, type)
+        scope.set(variable.name, this.blocks.store_in_slot(item, item_type))
       },
     )
-    this.blocks.release_scope(array_scope)
+    this.blocks.release_scope(sequence_scope)
     this.locals.pop()
   }
 

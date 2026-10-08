@@ -30,6 +30,7 @@
 
 - `Binary` is an immutable sequence of bytes. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.decode_utf8()` goes back (see [Optional values](#optional-values)).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `UInt8`; an index outside `0 ... b.length` throws `index out of range`.
+- `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
 
 ## Optional values

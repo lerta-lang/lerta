@@ -141,10 +141,13 @@ export const is_reference_type = (type: Type): boolean =>
   ) ||
   (type.kind === 'Optional' && is_reference_type(type.inner))
 
-// The type of the items of an array or an Iter, which `for` and lazy methods such as `map` go
-// through.
-export const iterable_item = (type: Type): Type | undefined =>
-  type.kind === 'Array' ? type.element : type.kind === 'Iter' ? type.item : undefined
+// The type of the items of an array, a Binary or an Iter, which `for` and lazy methods such as `map`
+// go through.
+export const iterable_item = (type: Type): Type | undefined => {
+  if (type.kind === 'Array') return type.element
+  if (type.kind === 'Binary') return uint8_type
+  return type.kind === 'Iter' ? type.item : undefined
+}
 
 // A T or nil also fits where a T? is expected.
 export const is_assignable = (value: Type, target: Type): boolean => {

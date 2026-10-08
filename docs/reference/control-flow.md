@@ -46,6 +46,7 @@ for i in 0...3
 ```
 
 - `for <name> in <array>` runs its block for each item of the array, in order. The array's length is read before each round, so items pushed during the loop are visited too.
+- `for <name> in <binary>` runs its block for each byte of a [`Binary`](types.md#binary), a `UInt8`, in order.
 - `for <name> in <iter>` runs its block for each item of an [`Iter`](types.md#iter), which starts its one traversal.
 - `for <name> in <start>...<end>` runs its block for each integer from `<start>` up to, but not including, `<end>`. If `<end>` is not greater than `<start>`, the block does not run.
 - Both ends are `Int`s, evaluated once before the loop.

@@ -1,9 +1,8 @@
 // Iters in the generated code. An Iter is a heap object (see heap_object.ts) whose first fields are
 // the code of its has_next and next, which take the Iter itself, and whether a traversal of it has
-// started (LertaIter in runtime/lerta.h); the state of its kind follows. The kinds are an Iter of an
-// array's items, of a range's Ints, and those that map, filter or take the items of another Iter,
-// which they own; each is generated once per type it depends on.
-import { emit_get, emit_length } from './array_codegen.ts'
+// started (LertaIter in runtime/lerta.h); the state of its kind follows. The kinds are an Iter of
+// the items of an array or a Binary, of a range's Ints, and those that map, filter or take the
+// items of another Iter, which they own; each is generated once per type it depends on.
 import { emit_closure_call } from './closure_codegen.ts'
 import {
   define_heap_object,
@@ -16,6 +15,7 @@ import {
 import { IrBuilder } from './ir_builder.ts'
 import { emit_release, ir_type } from './lerta_ir.ts'
 import { runtime_caller } from './runtime_calls.ts'
+import { emit_sequence_get, emit_sequence_length } from './sequence_codegen.ts'
 import {
   bool_type,
   int_type,
@@ -149,24 +149,24 @@ export const emit_iter_loop = (
   ir.start_block(exit_label)
 }
 
-// The items of an array, which the Iter holds. The length is read each time, as a for loop reads
-// it, so items pushed meanwhile are visited too.
-export const emit_array_iter = (ir: IrBuilder, array: string, type: Type): string => {
+// The items of an array or a Binary, which the Iter holds. The length is read each time, as a for
+// loop reads it, so items pushed to an array meanwhile are visited too.
+const emit_sequence_iter = (ir: IrBuilder, sequence: string, type: Type): string => {
   const element = iterable_item(type)!
-  const kind = define_kind(ir, `array ${type_key(element)}`, [type, int_type], element, {
+  const kind = define_kind(ir, `sequence ${type_key(type)}`, [type, int_type], element, {
     has_next: (body, kind) => {
-      const length = emit_length(body, load_state(body, kind, 0))
+      const length = emit_sequence_length(body, load_state(body, kind, 0), type)
       const index = load_state(body, kind, 1)
       body.emit(`ret i1 ${body.assign(`icmp slt i64 ${index}, ${length}`)}`)
     },
     next: (body, kind) => {
       const index = load_state(body, kind, 1)
-      const item = emit_get(body, load_state(body, kind, 0), index, element)
+      const item = emit_sequence_get(body, load_state(body, kind, 0), index, type)
       store_state(body, kind, 1, body.assign(`add nsw i64 ${index}, 1`))
       body.emit(`ret ${ir_type(element)} ${item}`)
     },
   })
-  return emit_iter(ir, kind, [array, '0'])
+  return emit_iter(ir, kind, [sequence, '0'])
 }
 
 // The Ints from start up to, but not including, end.
@@ -273,10 +273,10 @@ const emit_take_iter = (ir: IrBuilder, source: string, count: string, item: Type
   return emit_iter(ir, kind, [source, count])
 }
 
-// An owned array or Iter as an Iter to read from: an Iter of the array's items, or the Iter
-// itself, whose traversal starts here.
+// An owned array, Binary or Iter as an Iter to read from: an Iter of the array's or the Binary's
+// items, or the Iter itself, whose traversal starts here.
 export const emit_source_iter = (ir: IrBuilder, value: string, type: Type): string => {
-  if (type.kind === 'Array') return emit_array_iter(ir, value, type)
+  if (type.kind === 'Array' || type.kind === 'Binary') return emit_sequence_iter(ir, value, type)
   emit_iter_start(ir, value)
   return value
 }

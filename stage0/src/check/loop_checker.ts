@@ -1,5 +1,5 @@
-// Checks loops: `for` over a range, an array or an Iter, `while`, comprehensions, and where `break`
-// and `continue` may be.
+// Checks loops: `for` over a range, an array, a Binary or an Iter, `while`, comprehensions, and
+// where `break` and `continue` may be.
 import type {
   Comprehension,
   Condition,
@@ -72,7 +72,7 @@ export class LoopChecker {
     })
   }
 
-  // A range gives Ints; an array or an Iter gives its items.
+  // A range gives Ints; an array, a Binary or an Iter gives its items.
   check_for(for_statement: For): void {
     const { iterable, variable } = for_statement
     const item_type = this.type_of_iterated(iterable)
@@ -139,7 +139,7 @@ export class LoopChecker {
     }
   }
 
-  // The type of the items a `for` goes through: Ints for a range, or an array's or an Iter's items.
+  // The type of the items a `for` goes through: Ints for a range, or the items of anything else.
   private type_of_iterated(iterable: Expression): Type {
     return iterable.kind === 'range' ? this.check_range(iterable) : this.check_iterated(iterable)
   }
@@ -154,7 +154,7 @@ export class LoopChecker {
     const type = this.expressions.type_of(iterable)
     const item = iterable_item(type)
     if (item !== undefined) return item
-    const message = `expected a range, an array or an Iter after 'in', got ${format_type(type)}`
+    const message = `expected a range, an array, a Binary or an Iter after 'in', got ${format_type(type)}`
     throw new CompileError(message, iterable.line, iterable.column)
   }
 }
