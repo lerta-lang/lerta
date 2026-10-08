@@ -48,15 +48,19 @@ export const load_and_check = (
   return { modules, checked, warnings: checked.at(-1)!.warnings }
 }
 
-// Returns the warnings, and clang's messages, if it wrote any; a compile error is thrown as a
-// CompileError, and clang's failure as a ClangError. Asynchronous, so that several builds can run
-// clang at once.
+// Without `output_path`, only writes the IR, to the llvm_path of the options. Returns the
+// warnings, and clang's messages, if it wrote any; a compile error is thrown as a CompileError,
+// and clang's failure as a ClangError. Asynchronous, so that several builds can run clang at once.
 export const build = async (
   source_path: string,
-  output_path: string,
+  output_path: string | undefined,
   options: BuildOptions,
 ): Promise<{ warnings: CompileWarning[]; clang_messages: string }> => {
   const { modules, checked, warnings } = load_and_check(source_path)
+  if (output_path === undefined) {
+    writeFileSync(options.llvm_path!, generate(modules, checked))
+    return { warnings, clang_messages: '' }
+  }
   const work_dir = mkdtempSync(join(tmpdir(), 'lerta-'))
   try {
     const ir_path = options.llvm_path ?? join(work_dir, 'main.ll')

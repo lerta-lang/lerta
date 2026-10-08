@@ -2,13 +2,14 @@
 
 ```
 lerta build <source> -o <output> [-O] [--emit-llvm <path>]
+lerta build <source> --emit-llvm <path>
 ```
 
-builds an executable. In stage0, `lerta` is `node stage0/src/main.ts` (see the [README](../../README.md)). Arguments that do not fit this usage (an unknown or repeated option, a missing source or `-o`, or a value that starts with `-`) print the usage to stderr and exit with code 2.
+builds an executable, or, without `-o`, only writes the generated LLVM IR. In stage0, `lerta` is `node stage0/src/main.ts` (see the [README](../../README.md)). Arguments that do not fit this usage (an unknown or repeated option, a missing source, neither `-o` nor `--emit-llvm`, `-O` without `-o`, or a value that starts with `-`) print the usage to stderr and exit with code 2.
 
 - Without `-O`, the program checks for leaked memory when it exits: a leak is reported to stderr as `leak: <n> object(s)`, and the exit code is 1.
 - `-O` optimizes, including across the generated code and the runtime (link-time optimization).
-- `--emit-llvm <path>` also writes the generated LLVM IR, before optimization, to `<path>`.
+- `--emit-llvm <path>` writes the generated LLVM IR, before optimization, to `<path>`; with `-o`, it does so besides building the executable.
 
 ```
 lerta dump-tokens <source>

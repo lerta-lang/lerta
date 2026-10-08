@@ -108,7 +108,15 @@ const cli_cases: CliCase[] = [
     status: 1,
     stderr: `'${join(cli_work_dir, 'missing.lerta')}' is not a file\n`,
   },
+  {
+    // Without -o, only the IR is written.
+    args: ['build', hello, '--emit-llvm', `${exe}_ir.ll`],
+    status: 0,
+    produced: () => readFileSync(`${exe}_ir.ll`, 'utf8').includes('define void @lerta_main()'),
+  },
   { args: ['build'], status: 2 },
+  { args: ['build', hello], status: 2 },
+  { args: ['build', hello, '-O', '--emit-llvm', `${exe}_ir.ll`], status: 2 },
   { args: ['run', hello, '-o', exe], status: 2 },
   { args: ['build', hello, '-o', exe, '-o', exe], status: 2 },
   { args: ['build', hello, '-o', exe, '-O', '-O'], status: 2 },

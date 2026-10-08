@@ -10,6 +10,7 @@ import { parse } from './syntax/parser.ts'
 
 const usage = [
   'usage: lerta build <source> -o <output> [-O] [--emit-llvm <path>]',
+  '       lerta build <source> --emit-llvm <path>',
   '       lerta dump-tokens <source>',
   '       lerta dump-ast <source>',
   '       lerta dump-checked <source>',
@@ -20,7 +21,12 @@ const fail_usage = (): never => {
   process.exit(2)
 }
 
-type BuildArguments = { source_path: string; output_path: string; options: BuildOptions }
+// Without an output, the build only writes the IR.
+type BuildArguments = {
+  source_path: string
+  output_path: string | undefined
+  options: BuildOptions
+}
 
 const is_value = (arg: string | undefined): arg is string =>
   arg !== undefined && !arg.startsWith('-')
@@ -42,8 +48,11 @@ const parse_build_arguments = (args: string[]): BuildArguments => {
     else if (source_path === undefined && is_value(arg)) source_path = arg
     else fail_usage()
   }
-  if (source_path === undefined || output_path === undefined) fail_usage()
-  return { source_path: source_path!, output_path: output_path!, options }
+  // Without an output, only the IR is written, so there is nothing to optimize.
+  const has_output = output_path !== undefined
+  const has_target = has_output || options.llvm_path !== undefined
+  if (source_path === undefined || !has_target || (options.optimize && !has_output)) fail_usage()
+  return { source_path: source_path!, output_path, options }
 }
 
 const run_build = async (args: string[]): Promise<void> => {
