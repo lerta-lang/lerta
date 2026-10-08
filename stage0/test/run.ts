@@ -1,6 +1,6 @@
-// Run tests: each source is compiled and run, and its output is compared with
-// <name>.out (stdout), <name>.err (stderr: a compile error or an uncaught
-// throw) and <name>.warn (compile warnings). A missing file means empty output,
+// Run tests: each source is compiled by the compiler written in Lerta, which stage0 builds first,
+// and run, and its output is compared with <name>.out (stdout), <name>.err (stderr: a compile error
+// or an uncaught throw) and <name>.warn (compile warnings). A missing file means empty output,
 // but at least one must exist. The run must fail exactly when <name>.err exists.
 // Tests run in parallel, up to the number of cores, and are reported in order;
 // each program runs in an empty directory of its own, where it may write files.
@@ -16,11 +16,24 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } 
 import { availableParallelism, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build, OUTPUT_LIMIT } from '../src/build.ts'
-import { CompileError } from '../src/errors.ts'
 import { compare_text, run_checks, type Check } from './report.ts'
 
 const root_dir = join(import.meta.dirname, '../..')
 const work_dir = mkdtempSync(join(tmpdir(), 'lerta-test-'))
+// The compiler written in Lerta, which stage0 builds first; the tests check it.
+const compiler = join(work_dir, 'lerta')
+
+// `--target <triple>` builds the tests for another target than the host, such as i686-linux-gnu for
+// the 32-bit programs that an x86-64 host can run.
+const target_args = ((): string[] => {
+  const [option, triple, ...rest] = process.argv.slice(2)
+  if (option === undefined) return []
+  if (option !== '--target' || triple === undefined || rest.length > 0) {
+    console.error('usage: node test/run.ts [--target <triple>]')
+    process.exit(2)
+  }
+  return ['--target', triple]
+})()
 
 type TestCase = {
   // Shown in failures, such as `examples/hello`.
@@ -107,33 +120,61 @@ const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join
 const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outcome> => {
   const source_file = `${test.name}.lerta`
   const executable = join(work_dir, `${test.label.replaceAll('/', '_')}${optimize ? '_O' : ''}`)
-  const options = optimize ? { optimize } : { optimize, llvm_path: `${executable}.ll` }
-  let warnings: string
-  try {
-    const source_path = join(root_dir, test.source_dir, source_file)
-    const { warnings: compile_warnings, clang_messages } = await build(
-      source_path,
-      executable,
-      options,
-    )
-    if (clang_messages !== '') throw new Error(`clang wrote:\n${clang_messages}`)
-    if (options.llvm_path !== undefined && !existsSync(options.llvm_path)) {
-      throw new Error(`--emit-llvm did not leave ${options.llvm_path}`)
-    }
-    warnings = lines(compile_warnings.map((warning) => warning.format(source_file)))
-  } catch (error) {
-    if (!(error instanceof CompileError)) throw error
+  // Not `<executable>.ll`, which the compiler writes when --emit-llvm is not given.
+  const llvm_path = `${executable}.emitted.ll`
+  const options = optimize ? ['-O'] : ['--emit-llvm', llvm_path]
+  const args = [
+    'build',
+    source_file,
+    '-o',
+    executable,
+    ...options,
+    ...target_args,
+    '--root',
+    root_dir,
+  ]
+  const cwd = join(root_dir, test.source_dir)
+  const { status, failure, stderr } = await run_file(compiler, args, cwd)
+  const diagnostics = stderr.split('\n').filter((line) => line !== '')
+  const warnings = diagnostics.filter((line) => WARNING.test(line))
+  const others = diagnostics.filter((line) => !WARNING.test(line))
+  const is_compile_error = status === 1 && others.length === 1 && DIAGNOSTIC.test(others[0])
+  if (is_compile_error) {
     return {
       stdout: '',
-      stderr: lines([error.format(source_file)]),
-      warnings: lines(error.warnings.map((warning) => warning.format(source_file))),
+      stderr: lines(others),
+      warnings: lines(warnings),
       failed: true,
       compile_error: true,
     }
   }
+  if (status !== 0 || others.length > 0)
+    throw new Error(`the build failed (${failure}):\n${stderr}`)
+  if (!optimize && !existsSync(llvm_path)) throw new Error(`--emit-llvm did not leave ${llvm_path}`)
   const run = await run_program(executable)
-  return { ...run, warnings, compile_error: false }
+  return { ...run, warnings: lines(warnings), compile_error: false }
 }
+
+// A diagnostic names its place first; anything else, such as clang's messages, is a failure of the
+// build itself.
+const DIAGNOSTIC = /^.+?:\d+:\d+: /
+const WARNING = /^.+?:\d+:\d+: warning: /
+
+// Runs a file to its end, whatever its exit status; `failure` tells how it ended, for messages.
+const run_file = (
+  file: string,
+  args: string[],
+  cwd: string,
+): Promise<{ status: number | null; failure: string; stderr: string }> =>
+  new Promise((resolve) => {
+    const options = { cwd, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT } as const
+    execFile(file, args, options, (error, _stdout, stderr) => {
+      const status = error === null ? 0 : typeof error.code === 'number' ? error.code : null
+      const failure =
+        error === null ? 'exit status 0' : status === null ? error.message : `exit status ${status}`
+      resolve({ status, failure, stderr })
+    })
+  })
 
 // Runs a built program, whose exit status tells whether it failed, in a directory of its own, so
 // that files it writes do not meet those of the other runs.
@@ -206,6 +247,8 @@ const test_checks: Check[] = suites.flatMap(collect).flatMap((test) => [
 
 let failed_count: number
 try {
+  // Optimized, as it runs for every test; the bootstrap check runs it unoptimized, checking leaks.
+  await build(join(root_dir, 'compiler/main.lerta'), compiler, { optimize: true })
   failed_count = await run_checks(
     'run tests',
     [...stray_checks, ...test_checks],

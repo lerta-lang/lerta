@@ -61,7 +61,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 
 ## Phases and bootstrap
 
-Run tests (source → execution result) are shared by all stages. They run with the debug runtime and fail on any leak ([leak checking](internals.md#leak-checking)), from stage0 on.
+Run tests (source → execution result) are shared by all stages; they now check the compiler written in Lerta. They run with the debug runtime and fail on any leak ([leak checking](internals.md#leak-checking)), from stage0 on.
 
 1. **Phase 0** (done): implement the subset above in TypeScript (stage0).
    - stage0 outputs `.ll` (LLVM IR text) and calls `clang` as a child process.

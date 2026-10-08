@@ -22,13 +22,21 @@ typedef struct {
   uint8_t bytes[];  // UTF-8, not NUL-terminated
 } LertaString;
 
+// Marks an array that holds no terminating NUL, which compilers that know the attribute would
+// otherwise warn about; older ones do not know it.
+#if defined(__has_attribute) && __has_attribute(nonstring)
+#define LERTA_NONSTRING __attribute__((nonstring))
+#else
+#define LERTA_NONSTRING
+#endif
+
 // An immortal string constant, as the compiler emits for literals. Like any LertaString, its bytes
 // are not NUL-terminated.
 #define LERTA_STATIC_STRING(name, text)                     \
   static const struct {                                      \
     LertaHeader header;                                      \
     int64_t length;                                          \
-    uint8_t bytes[sizeof(text) - 1] __attribute__((nonstring)); \
+    uint8_t bytes[sizeof(text) - 1] LERTA_NONSTRING;         \
   } name = {{LERTA_IMMORTAL, NULL}, sizeof(text) - 1, text}
 
 // Items are 8 bytes each: an Int as is, a Bool zero-extended and a reference as its address.

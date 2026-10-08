@@ -15,13 +15,15 @@ const RUNTIME_FILES = [
 ]
 
 # What to build: the IR, written to `ir_path`, and, if there is an `output`, the executable made
-# from it. `root` holds std/ and runtime/.
+# from it, for `target` (a triple such as i686-linux-gnu) or else for the host. `root` holds std/
+# and runtime/.
 export struct BuildRequest
   source: String
   root: String
   ir_path: String
   output: String?
   optimize: Bool
+  target: String?
 
 # A compile error is thrown; clang's messages go to stderr as clang writes them, and its failure
 # exits with code 1.
@@ -36,8 +38,10 @@ export const build = (request: BuildRequest) ->
 # Link-time optimization lets the generated code inline the runtime's C functions; unoptimized
 # builds use the debug runtime, which checks for leaks at exit.
 const clang_args = (request: BuildRequest, ir_path: String, output: String) ->
-  # clang warns that the .ll has no target triple; the host default is intended.
+  # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
   const args = ['-Wno-override-module', ir_path]
+  if const target = request.target
+    args.push("--target=#{target}")
   const flags = request.optimize then ['-O2', '-flto'] else ['-D', 'LERTA_DEBUG']
   args.push(flag) for flag in flags
   args.push(join(request.root, "runtime/#{name}.c")) for name in RUNTIME_FILES

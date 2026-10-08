@@ -1,9 +1,11 @@
-// CLI checks: each invocation of the command line and its expected exit status.
+// CLI checks: each invocation of the command line and its expected exit status, of stage0 and of the
+// compiler written in Lerta, which stage0 builds first.
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { run_checks } from './report.ts'
+import { build } from '../src/build.ts'
+import { compare_text, run_checks } from './report.ts'
 
 const root_dir = join(import.meta.dirname, '../..')
 const cli_work_dir = mkdtempSync(join(tmpdir(), 'lerta-cli-'))
@@ -463,7 +465,7 @@ const cli_cases: CliCase[] = [
 const main_path = join(import.meta.dirname, '../src/main.ts')
 // Paths are shown relative to the repository, and the work directory as <tmp>.
 const shorten_path = (arg: string): string =>
-  arg.replace(cli_work_dir, '<tmp>').replace(`${root_dir}/`, '')
+  arg.replace(cli_work_dir, '<tmp>').replace(`${root_dir}/`, '').replace(root_dir, '<root>')
 
 const run_cli_case = ({ args, status, stdout, stderr, produced }: CliCase): string[] => {
   const actual = spawnSync(process.execPath, [main_path, ...args], { encoding: 'utf8' })
@@ -488,14 +490,51 @@ const std_checks = readdirSync(std_dir).map((file) => ({
   },
 }))
 
+// The compiler written in Lerta: building a program, optimized or not, and for a target given as
+// the host's own triple, which every host can run; and arguments that do not fit its usage.
+const compiler = join(cli_work_dir, 'lerta')
+const host_triple = spawnSync('clang', ['-print-target-triple'], { encoding: 'utf8' }).stdout.trim()
+const run_compiler = (args: string[]) =>
+  spawnSync(compiler, ['build', hello, ...args], { encoding: 'utf8' })
+const compiler_build_checks = [[], ['-O'], ['--target', host_triple]].map((flags) => ({
+  name: `compiler build examples/hello.lerta ${[...flags, ''].join(' ')}and run it`,
+  run: () => {
+    const executable = join(cli_work_dir, `compiled${flags.join('')}`)
+    const built = run_compiler(['-o', executable, ...flags, '--root', root_dir])
+    if (built.status !== 0) return [`build exit status ${built.status}, stderr:\n${built.stderr}`]
+    const ran = spawnSync(executable, { encoding: 'utf8' })
+    const status_reasons =
+      ran.status === 0 ? [] : [`exit status ${ran.status}, stderr:\n${ran.stderr}`]
+    return [...compare_text('stdout', hello_output, ran.stdout), ...status_reasons]
+  },
+}))
+const usage_ir = join(cli_work_dir, 'usage.ll')
+const compiler_usage_checks = [
+  ['--root', root_dir],
+  ['-O', '--emit-llvm', usage_ir, '--root', root_dir],
+  ['--target', host_triple, '--emit-llvm', usage_ir, '--root', root_dir],
+  ['-o', exe, '--target', host_triple, '--target', host_triple, '--root', root_dir],
+  ['--emit-llvm', usage_ir],
+  ['--emit-llvm', usage_ir, '--root', root_dir, '--root', root_dir],
+].map((args) => ({
+  name: `compiler build examples/hello.lerta ${args.map(shorten_path).join(' ')} is a usage error`,
+  run: () => {
+    const { status } = run_compiler(args)
+    return status === 2 ? [] : [`expected exit status 2, got ${status}`]
+  },
+}))
+
 let failed_count: number
 try {
+  await build(join(root_dir, 'compiler/main.lerta'), compiler, { optimize: true })
   failed_count = await run_checks('CLI checks', [
     ...cli_cases.map((cli_case) => ({
       name: `lerta ${cli_case.args.map(shorten_path).join(' ')}`,
       run: () => run_cli_case(cli_case),
     })),
     ...std_checks,
+    ...compiler_build_checks,
+    ...compiler_usage_checks,
   ])
 } finally {
   rmSync(cli_work_dir, { recursive: true, force: true })

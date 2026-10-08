@@ -95,35 +95,6 @@ const compare = async (command: string, path: string, check: number): Promise<st
   ]
 }
 
-// The compiler builds a program, optimized or not, which must give the expected output.
-const hello_output = readFileSync(join(root_dir, 'tests/examples/hello.out'), 'utf8')
-const build_checks = [[], ['-O']].map((flags) => ({
-  name: `build examples/hello.lerta ${[...flags, ''].join(' ')}and run it`,
-  run: async () => {
-    const executable = join(work_dir, `hello${flags.join('')}`)
-    const args = ['build', 'examples/hello.lerta', '-o', executable, ...flags, '--root', root_dir]
-    const built = await run(compiler, args)
-    if (built.status !== 0) return [`build exit status ${built.status}, stderr:\n${built.stderr}`]
-    const ran = await run(executable, [])
-    const status_reasons = ran.status === 0 ? [] : [`exit status ${ran.status}`]
-    return [...compare_text('stdout', hello_output, ran.stdout), ...status_reasons]
-  },
-}))
-
-// Arguments that do not fit the usage of the compiler's build.
-const usage_checks = [
-  ['--root', root_dir],
-  ['-O', '--emit-llvm', join(work_dir, 'usage.ll'), '--root', root_dir],
-  ['--emit-llvm', join(work_dir, 'usage.ll')],
-  ['--emit-llvm', join(work_dir, 'usage.ll'), '--root', root_dir, '--root', root_dir],
-].map((args) => ({
-  name: `build examples/hello.lerta ${shorten_paths(args.join(' '))} is a usage error`,
-  run: async () => {
-    const { status } = await run(compiler, ['build', 'examples/hello.lerta', ...args])
-    return status === 2 ? [] : [`expected exit status 2, got ${status}`]
-  },
-}))
-
 let failed_count: number
 try {
   await build(join(root_dir, 'compiler/main.lerta'), compiler, { optimize: false })
@@ -139,8 +110,7 @@ try {
       name: `${command} ${shorten_paths(path)}`,
       run: () => compare(command, path, check),
     }))
-  const all_checks = [...checks, ...build_checks, ...usage_checks]
-  failed_count = await run_checks('compiler checks', all_checks, availableParallelism())
+  failed_count = await run_checks('compiler checks', checks, availableParallelism())
 } finally {
   rmSync(work_dir, { recursive: true, force: true })
 }

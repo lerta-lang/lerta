@@ -13,7 +13,8 @@ import { parse } from './parser/statement'
 import { dump_tokens } from './token_dump'
 
 const USAGE = [
-  "usage: lerta build <source> -o <output> [-O] [--emit-llvm <path>] --root <dir>\n"
+  "usage: lerta build <source> -o <output> [-O] [--target <triple>] [--emit-llvm <path>]\n"
+  "                   --root <dir>\n"
   "       lerta build <source> --emit-llvm <path> --root <dir>\n"
   "       lerta dump-tokens <source>\n"
   "       lerta dump-ast <source>\n"
@@ -44,12 +45,14 @@ const run_dump_checked = (args: Array<String>) ->
   stdout.write(dump_checked(program))
 
 # Each option may be given once, and `--root` names the directory that holds std/ and runtime/
-# (see run_dump_checked). Without `-o`, only the IR is written, so `-O` needs `-o`.
+# (see run_dump_checked). Without `-o`, only the IR is written, so `-O` and `--target`, which
+# concern the executable, need `-o`.
 const parse_build_arguments = (args: Array<String>) ->
   var source: String? = nil
   var output: String? = nil
   var llvm_path: String? = nil
   var root: String? = nil
+  var target: String? = nil
   var optimize = false
   var i = 0
   const take_value = (previous: String?) ->
@@ -68,18 +71,22 @@ const parse_build_arguments = (args: Array<String>) ->
         llvm_path = take_value(llvm_path)
       when '--root'
         root = take_value(root)
+      when '--target'
+        target = take_value(target)
       else
         fail_usage() if source != nil or not is_value(arg)
         source = arg
     i += 1
   const executable = output
-  fail_usage() if optimize and executable == nil
+  fail_usage() if (optimize or target != nil) and executable == nil
   # Without --emit-llvm, the IR is left beside the executable, as the compiler cannot remove a
   # file or make a temporary directory yet.
   const ir_path = llvm_path ? (executable then "#{executable}.ll" else fail_usage())
   const given_source = source ? fail_usage()
   const given_root = root ? fail_usage()
-  BuildRequest(ir_path, optimize, output: executable, source: given_source, root: given_root)
+  BuildRequest(
+    ir_path, optimize, target, output: executable, source: given_source, root: given_root
+  )
 
 const dump_file_tokens = (source: String, path: String) ->
   dump_tokens(tokenize(source, path))
