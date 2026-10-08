@@ -9,7 +9,7 @@ import type { Export, Imports } from './imports.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { Scopes } from '../scopes.ts'
 import type { Shared } from './shared.ts'
-import type { TopLevelValues } from './top_level_values.ts'
+import { runs_later_error, type TopLevelValues } from './top_level_values.ts'
 import type { Type } from '../types.ts'
 
 export class NameChecker {
@@ -43,7 +43,14 @@ export class NameChecker {
       throw new CompileError(message, identifier.line, identifier.column)
     }
     const imported = this.imports.use(identifier.name)
-    if (imported !== undefined) return type_of_export(imported.export, identifier, is_callee)
+    if (imported !== undefined) {
+      const export_ = imported.export
+      if (export_.kind === 'lerta_value' && export_.type === undefined) {
+        const in_function = this.top_level !== undefined
+        throw runs_later_error(identifier, `'${imported.module}'`, in_function)
+      }
+      return type_of_export(export_, identifier, is_callee)
+    }
     const pending = this.top_level?.pending_error(identifier)
     if (pending !== undefined) throw pending
     const builtin = this.imports.builtin(identifier.name)
@@ -68,7 +75,8 @@ export class NameChecker {
   }
 }
 
-// A generic function is called through generic_callee, so here it is used as a value.
+// A generic function is called through generic_callee, so here it is used as a value. A value
+// whose type is not known yet is reported by type_of_identifier.
 const type_of_export = (export_: Export, identifier: Identifier, is_callee: boolean): Type => {
   switch (export_.kind) {
     case 'type':
@@ -78,7 +86,10 @@ const type_of_export = (export_: Export, identifier: Identifier, is_callee: bool
     case 'function':
       if (!is_callee) throw only_called(identifier)
       return export_.type
-    default:
+    case 'lerta_function':
+      return export_.functions.type_of(export_.name, identifier)!
+    case 'lerta_value':
+      if (export_.type === undefined) throw new Error('the type of an imported value is not known')
       return export_.type
   }
 }

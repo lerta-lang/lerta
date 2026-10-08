@@ -80,7 +80,8 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 ## Modules
 
-- Reading a top-level value through a function before it is initialized is detected with an initialized flag. The check is optimized away where initialization is certain.
+- Reading a top-level value through a function before it is initialized is detected with an initialized flag, as is reading an imported value of a module of the same import cycle. The check is optimized away where initialization is certain: in the module's own top-level code, and for the values of the modules outside the cycle, which have run.
+- stage0 checks the modules step by step, each step for all of them before the next, so that the modules of a cycle can use each other's names: their names, then their declarations, their extends (those of the modules of the cycle that run later last), their top-level code in the order it runs, and then the bodies of their functions and the initializers of their fields. An export is worked out when an importer asks for it, and an inferred type on demand, across modules as within one.
 - At the end of the program, the top-level values are released in the reverse order of their initialization, so that a `deinit` that runs then can still use those initialized before, as `print` uses `stdout`.
 
 ## Builtins

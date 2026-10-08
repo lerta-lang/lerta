@@ -30,12 +30,12 @@ import {
   constructor_symbol,
   emit_release,
   emit_retain,
-  top_level_symbol,
   ir_return_type,
   ir_type,
   method_symbol,
 } from './lerta_ir.ts'
 import type { FieldInfo, ObjectInfo, ObjectTypes } from '../check/object_types.ts'
+import type { Module } from '../loader.ts'
 import { Scopes, type Scope } from '../scopes.ts'
 import {
   emit_mark_initialized,
@@ -56,6 +56,22 @@ type CheckedTypes = Pick<
   | 'instances'
 >
 
+// The modules and their top-level values, by module index; the module of the code being generated;
+// and whether this is its top-level code, which declares its values, rather than a function, which
+// uses them once they are initialized.
+export type TopLevelContext = {
+  modules: Module[]
+  globals: Map<string, TopLevelGlobal>[]
+  module: Module
+  top_level_code: boolean
+}
+
+// A top-level value that may be used before it is initialized, so it is checked.
+const checked_slot = (global: TopLevelGlobal): CodegenLocal => {
+  const { pointer, type } = global
+  return { kind: 'slot', pointer, type, top_level: { global, is_checked: true } }
+}
+
 export class FunctionGenerator implements BlockGenerator {
   private readonly types: Types
   private readonly objects: ObjectTypes
@@ -64,9 +80,7 @@ export class FunctionGenerator implements BlockGenerator {
   private readonly module: IrModule
   private readonly checked: CheckedTypes
   private readonly function_symbols: Map<string, string>
-  // The top-level values of the module, and whether this is its top-level code, which declares
-  // them, rather than a function, which uses them once they are initialized.
-  private readonly top_level: { values: Map<string, TopLevelGlobal>; top_level_code: boolean }
+  private readonly top_level: TopLevelContext
   private readonly throws: ThrowBlocks
   private readonly checked_int: CheckedInt
   private readonly expressions: ExpressionGenerator
@@ -79,24 +93,24 @@ export class FunctionGenerator implements BlockGenerator {
     module: IrModule,
     checked: CheckedTypes,
     function_symbols: Map<string, string>,
-    top_level: { values: Map<string, TopLevelGlobal>; top_level_code: boolean },
+    top_level: TopLevelContext,
   ) {
     this.module = module
     this.checked = checked
     this.function_symbols = function_symbols
     this.top_level = top_level
     // Outside every scope: the module's top-level values, which a function checks to be
-    // initialized, and the values it imports, whose modules have initialized them.
+    // initialized, and the values it imports. Those of the modules of its import cycle are checked
+    // too; the other modules have initialized theirs.
     this.locals = new Scopes<CodegenLocal>((name) => {
-      const global = top_level.top_level_code ? undefined : top_level.values.get(name)
-      if (global !== undefined) {
-        const { pointer, type } = global
-        return { kind: 'slot', pointer, type, top_level: { global, is_checked: true } }
-      }
+      const own = top_level.top_level_code ? undefined : this.own_values().get(name)
+      if (own !== undefined) return checked_slot(own)
       const imported = checked.imports.get(name)?.export
       if (imported?.kind !== 'lerta_value') return undefined
-      const pointer = top_level_symbol(imported.module_index, imported.name)
-      return { kind: 'slot', pointer, type: imported.type }
+      const global = top_level.globals[imported.module_index].get(imported.name)!
+      const exporter = top_level.modules[imported.module_index]
+      if (top_level.module.cycle?.has(exporter)) return checked_slot(global)
+      return { kind: 'slot', pointer: global.pointer, type: global.type }
     })
     this.types = checked.types
     this.objects = checked.objects
@@ -144,6 +158,10 @@ export class FunctionGenerator implements BlockGenerator {
     this.finish(signature)
   }
 
+  private own_values(): Map<string, TopLevelGlobal> {
+    return this.top_level.globals[this.top_level.module.index]
+  }
+
   generate_comprehension(comprehension: Comprehension): string {
     return this.control_flow.generate_comprehension(comprehension)
   }
@@ -152,7 +170,7 @@ export class FunctionGenerator implements BlockGenerator {
     const captures = this.checked.captures.get(literal)!
     const symbol = this.module.fresh_symbol('lerta.lambda')
     const body_generator = new FunctionGenerator(this.module, this.checked, this.function_symbols, {
-      values: this.top_level.values,
+      ...this.top_level,
       top_level_code: false,
     })
     body_generator.generate_function(symbol, literal, undefined, captures)
@@ -360,7 +378,7 @@ export class FunctionGenerator implements BlockGenerator {
     const type = this.types.get(declaration.name)!
     const value = this.expressions.generate(declaration.value)
     const { name } = declaration.name
-    const global = this.top_level.values.get(name)
+    const global = this.own_values().get(name)
     const is_top_level = this.top_level.top_level_code && this.locals.depth === 1
     if (this.checked.shared_vars.has(declaration.name)) {
       const cell = emit_cell(this.ir, type, value)

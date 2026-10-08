@@ -49,7 +49,9 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
     const symbols = function_symbols(module, checked)
     const generator = (top_level_code = false, extensions = module_checked.extensions) =>
       new FunctionGenerator(ir_module, { ...module_checked, extensions }, symbols, {
-        values: globals[module.index],
+        modules,
+        globals,
+        module,
         top_level_code,
       })
     const is_main_code = (statement: Statement) =>

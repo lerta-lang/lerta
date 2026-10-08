@@ -8,7 +8,8 @@ import { tokenize } from './syntax/lexer.ts'
 import { parse } from './syntax/parser.ts'
 
 export type Module = {
-  // Its position in the list of modules, which keeps its symbols apart from the others'.
+  // Its position in the list of modules, which keeps its symbols apart from the others', and is
+  // the order in which their top-level code runs.
   index: number
   // For diagnostics: relative to the entry module's directory, or `std:name` for a standard module;
   // undefined for the entry module.
@@ -16,6 +17,8 @@ export type Module = {
   program: Program
   // The modules that its imports refer to.
   imported: Map<Import, Module>
+  // The modules of the import cycle it is in, itself included, if it is in one.
+  cycle: Set<Module> | undefined
 }
 
 // The standard modules, `std:name`, are the files of this directory.
@@ -65,12 +68,14 @@ const std_modules = (): string[] =>
 // An entry path that names no file, which has no line to report a compile error at.
 export class SourceFileError extends Error {}
 
-// The modules, each after those it imports, so the entry module comes last.
+// The modules, each after those it imports unless they import it back, so the entry module comes
+// last.
 export const load_modules = (entry_path: string): Module[] => {
   if (!is_file(entry_path)) throw new SourceFileError(`'${entry_path}' is not a file`)
   const modules: Module[] = []
   const by_real_path = new Map<string, Module>()
-  const loading = new Set<string>()
+  // The modules whose imports are being loaded, in the order they started.
+  const loading = new Map<string, Module>()
   const entry_dir = dirname(entry_path)
 
   // Files are known by their real paths, so that one file reached by different paths loads once,
@@ -82,20 +87,36 @@ export const load_modules = (entry_path: string): Module[] => {
       parse(tokenize(readFileSync(path, 'utf8'))),
     )
     if (!builtins_and_dependencies.includes(real_path)) program.unshift(builtins_import())
-    const imported = new Map<Import, Module>()
-    loading.add(real_path)
+    // Its index is set once its imports are loaded.
+    const module: Module = {
+      index: -1,
+      display_path,
+      program,
+      imported: new Map(),
+      cycle: undefined,
+    }
+    by_real_path.set(real_path, module)
+    loading.set(real_path, module)
     for (const statement of program) {
       if (statement.kind !== 'import') continue
-      const module = with_module_path(display_path, () =>
+      const imported = with_module_path(display_path, () =>
         visit(imported_file(statement, dirname(real_path)), statement),
       )
-      imported.set(statement, module)
+      module.imported.set(statement, imported)
     }
     loading.delete(real_path)
-    const module = { index: modules.length, display_path, program, imported }
+    module.index = modules.length
     modules.push(module)
-    by_real_path.set(real_path, module)
     return module
+  }
+
+  // An import of a module whose imports are being loaded closes a cycle: that module and those
+  // loading after it. Cycles that share a module are one.
+  const close_cycle = (back: Module): void => {
+    const stack = [...loading.values()]
+    const members = stack.slice(stack.indexOf(back))
+    const cycle = new Set(members.flatMap((member) => [...(member.cycle ?? [member])]))
+    for (const member of cycle) member.cycle = cycle
   }
 
   const visit = (path: string, statement: Import): Module => {
@@ -105,11 +126,8 @@ export const load_modules = (entry_path: string): Module[] => {
     }
     const real_path = realpathSync(path)
     const loaded = by_real_path.get(real_path)
+    if (loaded !== undefined && loading.has(real_path)) close_cycle(loaded)
     if (loaded !== undefined) return loaded
-    if (loading.has(real_path)) {
-      const message = `'${statement.module}' imports this module back; circular imports are not supported yet`
-      throw new CompileError(message, statement.line, statement.column)
-    }
     const is_std = dirname(real_path) === realpathSync(std_dir)
     const display_path = is_std ? statement.module : relative(entry_dir, path)
     return load(path, display_path)

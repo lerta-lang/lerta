@@ -57,7 +57,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
-- Modules lack, for now: circular imports and `import mod from`.
+- Modules lack, for now: `import mod from`.
 
 ## Phases and bootstrap
 

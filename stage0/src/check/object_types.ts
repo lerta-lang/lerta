@@ -34,6 +34,9 @@ export type ObjectInfo = {
   // `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
   has_deinit: boolean
   state: 'unchecked' | 'checking' | 'checked'
+  // Checks the initializers of the fields with the declaring module's checker, setting the types
+  // that they give.
+  check_initializers: () => void
 }
 
 export const is_method = (member: MemberDeclaration): boolean =>
@@ -90,6 +93,7 @@ export class ObjectTypes {
         has_init: false,
         has_deinit: false,
         state: 'unchecked',
+        check_initializers: () => this.check_initializers(info),
       }
       this.infos.set(name.name, info)
       this.program_infos.set(symbol, info)
@@ -181,7 +185,7 @@ export class ObjectTypes {
   private check(info: ObjectInfo): void {
     if (info.state !== 'unchecked') return
     info.state = 'checking'
-    this.check_initializers(info)
+    info.check_initializers()
     info.state = 'checked'
   }
 }

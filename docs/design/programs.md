@@ -2,10 +2,9 @@
 
 ## Modules
 
-Named imports, with `as`, from the standard modules and from files, `import 'module'`, exports, and the order in which modules and top-level code run are implemented: see [the reference](../reference/modules.md). Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)); paths need `./` or `../` and have no `index` resolution for directories; a reference to a top-level value through a function is checked at run time, so that functions can be declared in any order. Planned:
+Named imports, with `as`, from the standard modules and from files, `import 'module'`, exports, circular imports, and the order in which modules and top-level code run are implemented: see [the reference](../reference/modules.md). Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)); paths need `./` or `../` and have no `index` resolution for directories; a reference to a top-level value through a function is checked at run time, so that functions can be declared in any order. Planned:
 
 - `import mod from 'module'` gives access as `mod.<exported_name>`.
-- Circular imports. Reading an uninitialized value during the cycle throws, as through a function.
 
 ## C ABI / FFI
 

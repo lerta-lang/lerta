@@ -1,25 +1,24 @@
 // Declares the module's names, which its code may use before their declarations, and puts the
-// extends in effect.
+// extends in effect. Each step is taken for all the modules before the next (see check_modules).
 import {
   is_function_declaration,
   is_generic,
-  type Import,
   type Program,
   type TypeDeclaration,
 } from '../syntax/ast.ts'
 import { make_generic_function } from './bodies.ts'
-import type { Checked } from './checker.ts'
 import { CompileError } from '../errors.ts'
 import { declare_extend, type MakeGenericMethod } from './extend_declarations.ts'
 import { declare_externs } from './externs.ts'
+import type { Extensions } from './extensions.ts'
 import type { Imports } from './imports.ts'
 import type { Module } from '../loader.ts'
 import type { Shared } from './shared.ts'
 
-// The module's types, aliases, imports, functions and members, which the code may use before
-// their declarations.
+// The module's types, aliases and imports, which the declarations of the modules in its import
+// cycle may use before their own are complete.
 export const declare_names = (program: Program, shared: Shared): void => {
-  const { objects, resolver, imports, functions } = shared
+  const { objects, resolver, imports } = shared
   objects.add(
     program.filter(
       (statement): statement is TypeDeclaration => statement.kind === 'type_declaration',
@@ -29,6 +28,12 @@ export const declare_names = (program: Program, shared: Shared): void => {
     if (statement.kind === 'type_alias') resolver.add_alias(statement)
   }
   imports.add(program)
+}
+
+// The types of the aliases, the externs, the functions and the members, which the code may use
+// before their declarations.
+export const complete_declarations = (program: Program, shared: Shared): void => {
+  const { objects, resolver, functions, imports } = shared
   resolver.resolve_aliases()
   declare_externs(program, shared)
   reject_types_named_like_imports(program, imports)
@@ -36,24 +41,52 @@ export const declare_names = (program: Program, shared: Shared): void => {
   objects.add_members(resolver, functions)
 }
 
-// The extends in effect in the module: those of the modules it imports, then its own, once the
-// types they extend are complete.
+// The extends in effect in the module, once the types they extend are complete: those of the
+// modules it imports that run before it, then its own. Those of the modules of its import cycle
+// that run after it come later (see declare_later_extends), once theirs are declared.
 export const declare_extends = (
   module: Module,
-  imported: (statement: Import) => Checked,
+  extensions_of: (module: Module) => Extensions,
   shared: Shared,
 ): void => {
   const { extensions, resolver, objects, functions } = shared
-  for (const statement of module.program) {
-    if (statement.kind !== 'import') continue
-    extensions.add_imported(imported(statement).extensions.own, statement)
-  }
+  add_imported_extends(
+    module,
+    extensions_of,
+    extensions,
+    (imported) => imported.index < module.index,
+  )
   const make_generic: MakeGenericMethod = (name, literal, receiver) =>
     make_generic_function(shared, name, literal, receiver)
   for (const statement of module.program) {
     if (statement.kind === 'extend') {
       declare_extend(statement, extensions, resolver, objects, functions, make_generic)
     }
+  }
+}
+
+export const declare_later_extends = (
+  module: Module,
+  extensions_of: (module: Module) => Extensions,
+  shared: Shared,
+): void =>
+  add_imported_extends(
+    module,
+    extensions_of,
+    shared.extensions,
+    (imported) => imported.index > module.index,
+  )
+
+const add_imported_extends = (
+  module: Module,
+  extensions_of: (module: Module) => Extensions,
+  extensions: Extensions,
+  is_added: (imported: Module) => boolean,
+): void => {
+  for (const statement of module.program) {
+    if (statement.kind !== 'import') continue
+    const imported = module.imported.get(statement)!
+    if (is_added(imported)) extensions.add_imported(extensions_of(imported).own, statement)
   }
 }
 
