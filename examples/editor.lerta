@@ -1,0 +1,70 @@
+# A tiny editor run by a script of commands, which can undo its changes.
+struct Insert
+  text: String
+struct Delete
+  count: Int
+struct Undo
+  steps: Int
+type Command = Insert | Delete | Undo
+
+const parse = (line: String): Command? ->
+  const words = line.split(' ')
+  const argument = words.length > 1 then words[1] else ''
+  case words[0]
+    when 'insert'
+      return nil if words.length == 1
+      const start = words[0].binary.length + 1
+      Insert(text: line.binary.slice(start, line.binary.length).decode_utf8()!)
+    when 'delete'
+      const count = argument.parse_int() ? return nil
+      Delete(count)
+    when 'undo' then Undo(steps: argument.parse_int() ? 1)
+    else nil
+
+class Editor
+  on_change: (String) -> void
+  text = ''
+  history: Array<String> = []
+
+  init = -> print 'opened'
+  deinit = -> print "closed, undo history: #{@history.length}"
+
+  run = (command: Command) ->
+    case command
+      when Insert then @change(@text + command.text)
+      when Delete
+        const end = @text.binary.length - command.count
+        @change(@text.binary.slice(0, end < 0 then 0 else end).decode_utf8()!)
+      when Undo
+        for _ in 0...command.steps
+          @text = @history.pop() if @history.length > 0
+        @on_change(@text)
+
+  change = (text: String) ->
+    @history.push(@text)
+    @text = text
+    @on_change(text)
+
+# Gives a function that numbers the lines it prints, counting in a variable it keeps.
+const numbered_printer = (): (String) -> void ->
+  var count = 0
+  (text) ->
+    count += 1
+    print "#{count}: #{text}"
+
+const edit = (script: Array<String>) ->
+  const editor = Editor(on_change: numbered_printer())
+  for line in script
+    const command = parse(line) ? continue
+    editor.run(command)
+
+edit [
+  'insert Hello'
+  'insert , world'
+  'delete 7'
+  'insert , Lerta!'
+  'bogus'
+  'insert'
+  'undo 2'
+  'undo'
+]

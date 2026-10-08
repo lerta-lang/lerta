@@ -1,0 +1,66 @@
+# Summarizes a stock list: its value by category, what to reorder and the range of prices.
+type Item = { name: String, category: String, price: Int, stock: Int }
+
+const ITEMS: Array<Item> =
+  { name: 'apple', category: 'fruit', price: 120, stock: 40 }
+  { name: 'banana', category: 'fruit', price: 90, stock: 3 }
+  { name: 'carrot', category: 'vegetable', price: 60, stock: 25 }
+  { name: 'leek', category: 'vegetable', price: 180, stock: 0 }
+  { name: 'milk', category: 'dairy', price: 210, stock: 12 }
+  { name: 'cheese', category: 'dairy', price: 4_800, stock: 4 }
+
+struct Yen
+  amount: Int
+  to_string = (): String -> "¥#{with_commas(@amount)}"
+
+const with_commas = (n: Int): String ->
+  return "-#{with_commas(-n)}" if n < 0
+  return n.to_string() if n < 1000
+  "#{with_commas(n / 1000)},#{pad_left(n % 1000, 3, '0')}"
+
+const pad_left = <T: Stringable>(x: T, width: Int, fill: String): String ->
+  var text = x.to_string()
+  text = fill + text while text.binary.length < width
+  text
+
+const pad_right = <T: Stringable>(x: T, width: Int): String ->
+  var text = x.to_string()
+  text += ' ' while text.binary.length < width
+  text
+
+extend <T> Array<T>
+  sum = (f: (T) -> Int): Int ->
+    var total = 0
+    total += f(x) for x in @
+    total
+
+# Expects at least one item.
+const price_range = (xs: Array<Item>): { cheapest: Item, dearest: Item } ->
+  var cheapest = xs[0]
+  var dearest = xs[0]
+  for x in xs
+    cheapest = x if x.price < cheapest.price
+    dearest = x if x.price > dearest.price
+  { cheapest, dearest }
+
+const by_category: Map<String, Array<Item>> = Map()
+for item in ITEMS
+  by_category[item.category] = [] if not by_category.has(item.category)
+  by_category[item.category]!.push(item)
+
+print 'Value by category'
+for category in by_category.keys()
+  const amount = by_category[category]!.sum((item) -> item.price * item.stock)
+  print "  #{pad_right(category, 10)}#{pad_left(Yen(amount), 10, ' ')}"
+const total = Yen(amount: ITEMS.sum((item) -> item.price * item.stock))
+print "  #{pad_right('total', 10)}#{pad_left(total, 10, ' ')}"
+
+const to_reorder = (item.name for item in ITEMS when item.stock < 5)
+print "Reorder: #{to_reorder.to_array().join(', ')}"
+if const sold_out = ITEMS.find((item) -> item.stock == 0)
+  print "Sold out: #{sold_out.name}"
+
+const { cheapest, dearest } = price_range(ITEMS)
+const lowest = Yen(amount: cheapest.price)
+const highest = Yen(amount: dearest.price)
+print "Prices from #{lowest} (#{cheapest.name}) to #{highest} (#{dearest.name})"
