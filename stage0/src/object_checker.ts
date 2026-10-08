@@ -88,18 +88,18 @@ export class ObjectChecker {
     return object_type.kind === 'Object' && this.objects.info(object_type).methods.has(name)
   }
 
-  // In an initializer, the object is not complete, so it can only be used to read the fields set
-  // before (see field_of): not passed on or called, which could reach the others.
+  // `@` is a local of a method's body (see StatementChecker.check_function_body), which a function
+  // literal in it captures like any other. An initializer has no such local: there the object is
+  // not complete, so `@` can only read the fields set before (see field_of), not be passed on or
+  // called, which could reach the others.
   type_of_this(at: Expression): Type {
-    if (this.self === undefined) {
-      const message = "'@' can only be used in a method or a field initializer"
-      throw new CompileError(message, at.line, at.column)
-    }
-    if (this.self.initializing !== undefined) {
-      const message = 'an initializer can only use `@` to read a field, as in `@name`'
-      throw new CompileError(message, at.line, at.column)
-    }
-    return this.self.info.type
+    const local = this.scopes.lookup('@')
+    if (local !== undefined) return local.type
+    const message =
+      this.self !== undefined
+        ? 'an initializer can only use `@` to read a field, as in `@name`'
+        : "'@' can only be used in a method, a function literal in a method, or a field initializer"
+    throw new CompileError(message, at.line, at.column)
   }
 
   // The type of the field `member` names, of a class, a struct or an anonymous struct.

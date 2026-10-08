@@ -123,8 +123,15 @@ export class StatementChecker implements BlockChecker, JumpChecker {
   }
 
   // The parameters are borrowed locals. The last statement gives the return value.
+  // A method's body also has `@`, the object, as a local that cannot be written in the source.
   check_function_body(literal: FunctionLiteral, params: Type[]): void {
-    const define_params = () =>
+    const define_params = () => {
+      if (this.self !== undefined) {
+        const { line, column } = literal
+        const identifier: Identifier = { kind: 'identifier', name: '@', line, column }
+        const type = this.self.info.type
+        this.scopes.define('@', { identifier, type, mutable: false, declared: false, used: true })
+      }
       literal.params.forEach((param, i) =>
         this.define_local({
           identifier: param.name,
@@ -134,6 +141,7 @@ export class StatementChecker implements BlockChecker, JumpChecker {
           used: false,
         }),
       )
+    }
     const body = literal.body
     const last = body.at(-1)
     this.check_block(body.slice(0, -1), define_params, () => {
