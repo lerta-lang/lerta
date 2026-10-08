@@ -17,6 +17,22 @@ import {
   type Type,
 } from './types.ts'
 
+// The type of an item of a container, such as 'an array', which `at` gives. An item is 8 bytes,
+// which cannot hold an optional Int, UInt8 or Bool.
+export const check_item_type = (type: Type, at: Expression, container: string): Type => {
+  if (type.kind === 'nil') {
+    const message = `nil alone does not give the type of ${container}; write it in an annotation`
+    throw new CompileError(message, at.line, at.column)
+  }
+  const is_optional_value = type.kind === 'Optional' && !is_reference_type(type)
+  const has_no_value = type.kind === 'void' || type.kind === 'never'
+  if (has_no_value || is_optional_value) {
+    const message = `${container} cannot hold values of type ${format_type(type)}`
+    throw new CompileError(message, at.line, at.column)
+  }
+  return type
+}
+
 export class CollectionChecker {
   private readonly expressions: ExpressionChecker
   private readonly scopes: Scopes<CheckerLocal>
@@ -53,20 +69,8 @@ export class CollectionChecker {
     return array_type(element)
   }
 
-  // An item is 8 bytes, which cannot hold an optional Int, UInt8 or Bool.
   private item_type(item: Expression, container: string): Type {
-    const type = this.expressions.type_of(item)
-    if (type.kind === 'nil') {
-      const message = `nil alone does not give the type of ${container}; write it in an annotation`
-      throw new CompileError(message, item.line, item.column)
-    }
-    const is_optional_value = type.kind === 'Optional' && !is_reference_type(type)
-    const has_no_value = type.kind === 'void' || type.kind === 'never'
-    if (has_no_value || is_optional_value) {
-      const message = `${container} cannot hold values of type ${format_type(type)}`
-      throw new CompileError(message, item.line, item.column)
-    }
-    return type
+    return check_item_type(this.expressions.type_of(item), item, container)
   }
 
   // The types come from the expected type if there is one, otherwise from the first entry.

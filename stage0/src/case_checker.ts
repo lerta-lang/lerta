@@ -2,6 +2,7 @@
 import {
   is_expression,
   type Case,
+  type Comprehension,
   type Conditional,
   type Expression,
   type FunctionLiteral,
@@ -231,4 +232,6 @@ export type BlockChecker = {
   ): Type
   // A function literal in an expression, whose body is checked where it is written.
   type_of_function_literal(literal: FunctionLiteral, expected: Type | undefined): Type
+  // `[f(x) for x in xs when g(x)]`, whose element and guard see the loop variable.
+  type_of_comprehension(comprehension: Comprehension, expected: Type | undefined): Type
 }

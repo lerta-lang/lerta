@@ -2,6 +2,7 @@
 import {
   is_expression,
   type Assignment,
+  type Comprehension,
   type Condition,
   type Declaration,
   type Expression,
@@ -32,12 +33,13 @@ import {
   type ConditionNarrowing,
 } from './narrowing.ts'
 import { finish_function_type, ResultChecker } from './result_checker.ts'
+import { check_item_type } from './collection_checker.ts'
 import { Scopes } from './scopes.ts'
 import type { TopLevelValues } from './top_level_values.ts'
 import type { Imports } from './imports.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
-import { format_type, int_type, never_type, void_type, type Type } from './types.ts'
+import { array_type, format_type, int_type, never_type, void_type, type Type } from './types.ts'
 import type { BlockChecker } from './case_checker.ts'
 
 // The enclosing functions of a function literal's body: how to find their names, and the
@@ -292,6 +294,44 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     }
   }
 
+  // The guard narrows the loop variable in the element as an `if` would.
+  type_of_comprehension(comprehension: Comprehension, expected: Type | undefined): Type {
+    const { element, variable, iterable, guard } = comprehension
+    const item_type = this.type_of_iterated(iterable)
+    const expected_element = expected?.kind === 'Array' ? expected.element : undefined
+    let element_type: Type = void_type
+    this.check_block(
+      [],
+      () => {
+        this.define_local({
+          identifier: variable,
+          type: item_type,
+          mutable: false,
+          declared: false,
+          used: false,
+        })
+        if (guard === undefined) return
+        this.expressions.expect_condition(guard)
+        const narrowing = narrowing_of(guard, this.scopes, this.resolver)
+        if (narrowing?.when === true) this.narrow(narrowing)
+      },
+      () => {
+        element_type =
+          expected_element === undefined
+            ? this.expressions.type_of(element)
+            : (this.expressions.expect_type(element, expected_element), expected_element)
+      },
+    )
+    return array_type(check_item_type(element_type, element, 'an array'))
+  }
+
+  // The type of the items a `for` goes through: Ints for a range, or an array's items.
+  private type_of_iterated(iterable: Expression): Type {
+    return iterable.kind === 'range'
+      ? this.check_range(iterable)
+      : this.check_iterated_array(iterable)
+  }
+
   private check_range(range: Range): Type {
     this.expressions.expect_type(range.start, int_type)
     this.expressions.expect_type(range.end, int_type)
@@ -440,8 +480,7 @@ export class StatementChecker implements BlockChecker, JumpChecker {
   // A range gives Ints; an array gives its items.
   private check_for(for_statement: For): void {
     const { iterable, variable } = for_statement
-    const item_type =
-      iterable.kind === 'range' ? this.check_range(iterable) : this.check_iterated_array(iterable)
+    const item_type = this.type_of_iterated(iterable)
     this.check_loop_body(for_statement.body, () =>
       this.define_local({
         identifier: variable,

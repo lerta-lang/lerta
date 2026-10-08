@@ -3,6 +3,7 @@
 import type {
   Case,
   CaseArm,
+  Comprehension,
   Conditional,
   Expression,
   FunctionLiteral,
@@ -27,6 +28,7 @@ export type BlockGenerator = {
   // A function literal in an expression: its code, generated as a function of its own, and a new
   // closure of it with the values it captures.
   generate_closure(literal: FunctionLiteral): string
+  generate_comprehension(comprehension: Comprehension): string
 }
 
 export class CaseGenerator {

@@ -134,12 +134,17 @@ class Parser {
     )
   }
 
-  // `statement if condition` and `statement while condition`, applied from left to right.
+  // `statement if condition`, `statement while condition` and `statement for x in xs when guard`,
+  // applied from left to right.
   private parse_postfix_conditions(statement: Statement): Statement {
     let result = statement
     for (;;) {
       const token = this.tokens.peek()
       const kind = this.tokens.peek_continuation()
+      if (kind === 'for') {
+        result = this.wrap_in_for(result)
+        continue
+      }
       if (kind !== 'if' && kind !== 'while') return result
       this.tokens.next()
       const condition = this.expressions.parse_expression()
@@ -149,6 +154,16 @@ class Parser {
           ? { kind: 'if', condition, then_body: [result], else_body: [], ...position }
           : { kind: 'while', condition, body: [result], ...position }
     }
+  }
+
+  private wrap_in_for(statement: Statement): For {
+    const { variable, iterable, guard } = this.expressions.parse_loop_header()
+    const position = { line: statement.line, column: statement.column }
+    const body: Statement[] =
+      guard === undefined
+        ? [statement]
+        : [{ kind: 'if', condition: guard, then_body: [statement], else_body: [], ...position }]
+    return { kind: 'for', variable, iterable, body, ...position }
   }
 
   private parse_declaration(): Declaration | Destructuring {
@@ -293,10 +308,12 @@ class Parser {
 
   // `for <name> in <expression>` followed by an indented block.
   private parse_for(): For {
-    const token = this.tokens.next()
-    const variable = this.expressions.parse_identifier()
-    this.tokens.expect('in', "'in'")
-    const iterable = this.expressions.parse_expression()
+    const token = this.tokens.peek()
+    const { variable, iterable, guard } = this.expressions.parse_loop_header()
+    if (guard !== undefined) {
+      const message = "a for loop with a block has no 'when'; write an if in the block"
+      throw new CompileError(message, guard.line, guard.column)
+    }
     const body = this.parse_block()
     return { kind: 'for', variable, iterable, body, line: token.line, column: token.column }
   }

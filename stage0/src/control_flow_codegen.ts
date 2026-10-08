@@ -1,6 +1,16 @@
 // Generates control flow: `if`, `while`, `for` over ranges and arrays, `break` and `continue`.
-import type { Condition, For, If, Jump, Statement, While } from './ast.ts'
-import { emit_get, emit_length } from './array_codegen.ts'
+import type {
+  Comprehension,
+  Condition,
+  Expression,
+  For,
+  Identifier,
+  If,
+  Jump,
+  Statement,
+  While,
+} from './ast.ts'
+import { emit_array_new, emit_get, emit_length, emit_push } from './array_codegen.ts'
 import type { Types } from './checker.ts'
 import type { FunctionGenerator } from './codegen.ts'
 import type { CodegenLocal, ExpressionGenerator } from './expression_codegen.ts'
@@ -89,6 +99,37 @@ export class ControlFlowGenerator {
   // own, so a `return` from the body releases it too; its length is read each round.
   generate_for(for_statement: For): void {
     const { iterable, variable, body } = for_statement
+    this.generate_iteration(iterable, variable, body)
+  }
+
+  // A new array, of the comprehension's elements, which the loop pushes. Its loop can be the target
+  // of no `break` or `continue`, which its element and guard cannot hold (see jump_positions.ts).
+  generate_comprehension(comprehension: Comprehension): string {
+    const { element, variable, iterable, guard } = comprehension
+    const type = this.types.get(comprehension)!
+    if (type.kind !== 'Array') throw new Error('a comprehension gives an array')
+    const result = emit_array_new(this.ir, type.element)
+    this.generate_iteration(iterable, variable, () => {
+      const push_label = this.ir.fresh_label('comprehension.push')
+      const next_label = this.ir.fresh_label('comprehension.next')
+      const test = guard === undefined ? 'true' : this.expressions.generate_condition(guard)
+      this.ir.emit(`br i1 ${test}, label %${push_label}, label %${next_label}`)
+      this.ir.start_block(push_label)
+      const value = this.expressions.generate(element)
+      emit_push(this.ir, result, value, type.element)
+      this.expressions.release_if_reference(element, value)
+      this.ir.emit(`br label %${next_label}`)
+      this.ir.start_block(next_label)
+    })
+    return result
+  }
+
+  // The body is a block, or, for a comprehension, a function that generates it in the loop's scope.
+  private generate_iteration(
+    iterable: Expression,
+    variable: Identifier,
+    body: Statement[] | (() => void),
+  ): void {
     if (iterable.kind === 'range') {
       const start = this.expressions.generate(iterable.start)
       const end = this.expressions.generate(iterable.end)
@@ -125,7 +166,7 @@ export class ControlFlowGenerator {
   private generate_counting_loop(
     start: string,
     end: () => string,
-    body: Statement[],
+    body: Statement[] | (() => void),
     define: (scope: Scope<CodegenLocal>, current: string) => void,
   ): void {
     const preheader_label = this.ir.current_block
@@ -155,7 +196,7 @@ export class ControlFlowGenerator {
   }
 
   private generate_loop_body(
-    body: Statement[],
+    body: Statement[] | (() => void),
     break_label: string,
     continue_label: string,
     define?: (scope: Scope<CodegenLocal>) => void,

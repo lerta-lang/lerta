@@ -95,6 +95,11 @@ const visit = (expression: Expression, jumps: Jumps): void => {
       return
     case 'array':
       return expression.elements.forEach(operand)
+    case 'comprehension':
+      operand(expression.element)
+      operand(expression.iterable)
+      if (expression.guard !== undefined) operand(expression.guard)
+      return
     case 'record':
       for (const field of expression.fields) operand(field.value)
       return

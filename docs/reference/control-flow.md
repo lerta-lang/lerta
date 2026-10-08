@@ -49,7 +49,9 @@ for i in 0...3
 - `for <name> in <start>...<end>` runs its block for each integer from `<start>` up to, but not including, `<end>`. If `<end>` is not greater than `<start>`, the block does not run.
 - Both ends are `Int`s, evaluated once before the loop.
 - The loop variable is a `const` `Int`.
-- A range can only appear after `in` of a `for` so far. `...` does not chain (`a...b...c` is an error).
+- A range can only appear after `in` of a `for` or a comprehension so far. `...` does not chain (`a...b...c` is an error).
+- **Postfix `for`** `<statement> for <name> in <iterable>` runs one statement for each item, as a `for` block would: `print x for x in xs`. `when <condition>` after it runs the statement only for the items for which the condition holds: `total += x for x in xs when x > 0`. A `for` with a block has no `when`. A postfix `for` ends the arguments of a call without parentheses, as a line end would: `print x for x in xs` prints each `x`. Postfix forms apply from left to right.
+- **Comprehensions** `[<element> for <name> in <iterable>]` make a new array of the element's value for each item, and `when <condition>` keeps only the items for which it holds: `[name + '!' for name in names when name]`. The condition narrows the loop variable in the element as an `if` would. The loop variable is only seen in the comprehension.
 
 ## case with a subject
 

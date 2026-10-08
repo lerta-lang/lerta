@@ -318,24 +318,34 @@ export class ExpressionParser {
   // which the next item follows on the same line, or by a line end.
   parse_list<T>(close: ')' | ']' | '}', parse_item: () => T): T[] {
     return this.tokens.inside('separate', () => {
-      const items: T[] = []
       this.tokens.accept('line_break')
-      while (!this.tokens.accept(close)) {
-        items.push(parse_item())
-        if (this.tokens.accept(',')) {
-          const next = this.tokens.peek()
-          if (next.kind === 'line_break' || next.kind === close) {
-            throw this.tokens.error_at(next, "an item after ','")
-          }
-          continue
-        }
-        if (!this.tokens.accept('line_break')) {
-          this.tokens.expect(close, `'${close}'`)
-          break
-        }
-      }
-      return items
+      return this.parse_list_rest(close, parse_item, [])
     })
+  }
+
+  // The rest of a list whose first items are `items`, through `close`.
+  private parse_list_rest<T>(close: ')' | ']' | '}', parse_item: () => T, items: T[]): T[] {
+    if (items.length > 0 && !this.ends_item(close)) return items
+    while (!this.tokens.accept(close)) {
+      items.push(parse_item())
+      if (!this.ends_item(close)) break
+    }
+    return items
+  }
+
+  // After an item: whether a separator, which is consumed, follows it; otherwise the closing
+  // bracket must, and is consumed.
+  private ends_item(close: ')' | ']' | '}'): boolean {
+    if (this.tokens.accept(',')) {
+      const next = this.tokens.peek()
+      if (next.kind === 'line_break' || next.kind === close) {
+        throw this.tokens.error_at(next, "an item after ','")
+      }
+      return true
+    }
+    if (this.tokens.accept('line_break')) return true
+    this.tokens.expect(close, `'${close}'`)
+    return false
   }
 
   // The contents of a grouping or an index, through `close`; line ends inside are skipped.
@@ -347,10 +357,42 @@ export class ExpressionParser {
     })
   }
 
-  // `[a, b, c]`; `[]` is empty.
+  // `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
   private parse_array_literal(position: Position): Expression {
-    const elements = this.parse_list(']', () => this.parse_expression())
-    return { kind: 'array', elements, ...position }
+    return this.tokens.inside('separate', () => {
+      this.tokens.accept('line_break')
+      if (this.tokens.accept(']')) return { kind: 'array', elements: [], ...position }
+      const first = this.parse_expression()
+      const for_follows = (offset: number) => this.tokens.peek(offset).kind === 'for'
+      if (this.tokens.peek().kind === 'line_break' && for_follows(1)) this.tokens.next()
+      if (for_follows(0)) return this.parse_comprehension(first, position)
+      const parse_element = () => this.parse_expression()
+      const elements = this.parse_list_rest(']', parse_element, [first])
+      return { kind: 'array', elements, ...position }
+    })
+  }
+
+  // `for x in xs when guard]`, after the element; line ends inside are skipped.
+  private parse_comprehension(element: Expression, position: Position): Expression {
+    return this.tokens.inside('skip', () => {
+      const { variable, iterable, guard } = this.parse_loop_header()
+      this.tokens.expect(']', "']'")
+      return { kind: 'comprehension', element, variable, iterable, guard, ...position }
+    })
+  }
+
+  // `for x in xs`, with `when guard` after it if there is one.
+  parse_loop_header(): {
+    variable: Identifier
+    iterable: Expression
+    guard: Expression | undefined
+  } {
+    this.tokens.expect('for', "'for'")
+    const variable = this.parse_identifier()
+    this.tokens.expect('in', "'in'")
+    const iterable = this.parse_expression()
+    const guard = this.tokens.accept('when') ? this.parse_expression() : undefined
+    return { variable, iterable, guard }
   }
 
   // `{ k: v, ... }`. A key that is a name would make an anonymous struct, so a name's value is

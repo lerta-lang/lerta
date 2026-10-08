@@ -4,6 +4,7 @@ import {
   is_expression,
   type Assignment,
   type AssignmentOperator,
+  type Comprehension,
   type Declaration,
   type FunctionLiteral,
   type Index,
@@ -191,6 +192,10 @@ export class FunctionGenerator implements BlockGenerator {
     this.finish(signature)
   }
 
+  generate_comprehension(comprehension: Comprehension): string {
+    return this.control_flow.generate_comprehension(comprehension)
+  }
+
   generate_closure(literal: FunctionLiteral): string {
     const captures = this.checked.captures.get(literal)!
     const symbol = this.module.fresh_symbol('lerta.lambda')
@@ -329,10 +334,18 @@ export class FunctionGenerator implements BlockGenerator {
   }
 
   // A block is a scope: the references held by its locals are released at its end.
-  generate_block(statements: Statement[], define = (_scope: Scope<CodegenLocal>) => {}): void {
+  // The body is statements, or a function that generates code in the block's scope.
+  generate_block(
+    body: Statement[] | (() => void),
+    define = (_scope: Scope<CodegenLocal>) => {},
+  ): void {
     const scope = this.locals.push()
     define(scope)
-    for (const statement of statements) this.generate_statement(statement)
+    if (Array.isArray(body)) {
+      for (const statement of body) this.generate_statement(statement)
+    } else {
+      body()
+    }
     this.release_scope(scope)
     this.locals.pop()
   }

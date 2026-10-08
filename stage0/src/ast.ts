@@ -19,6 +19,16 @@ export type MapLiteral = Position & {
   kind: 'map'
   entries: { key: Expression; value: Expression }[]
 }
+// `[f(x) for x in xs when g(x)]`: an array of the values of `element`, for each item for which the
+// guard, if any, holds.
+export type Comprehension = Position & {
+  kind: 'comprehension'
+  element: Expression
+  variable: Identifier
+  iterable: Expression
+  guard: Expression | undefined
+}
+
 // `{ x: 1, y: 'a' }`, an anonymous struct; `{ x }` is short for `{ x: x }`.
 export type RecordLiteral = Position & {
   kind: 'record'
@@ -133,6 +143,7 @@ export type Expression =
   | IntegerLiteral
   | Identifier
   | ArrayLiteral
+  | Comprehension
   | MapLiteral
   | RecordLiteral
   | Conditional

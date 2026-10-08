@@ -173,6 +173,8 @@ export class ExpressionChecker {
         return this.collections.type_of_array(expression, expected)
       case 'map':
         return this.collections.type_of_map(expression, expected)
+      case 'comprehension':
+        return this.blocks.type_of_comprehension(expression, expected)
       case 'record':
         return this.objects.type_of_record(expression, expected)
       case 'index':

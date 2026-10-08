@@ -34,11 +34,8 @@
 
 ## for and comprehensions
 
-- **`for` is always a loop that runs on the spot** (`void`). The postfix form `do(x) for x in xs` is the same.
-  - A postfix `for` terminates the arguments of a parenthesis-free call (treated like the end of the line).
+- Postfix `for` and `[...]` comprehensions with `when` are implemented: see [the reference](../reference/control-flow.md#for-and-ranges). `Iter<T>` is not yet.
 - **`(f(x) for x in xs)`**: wrapped in parentheses it is an `Iter<T>` (a lazy iterator). It is not evaluated until consumed (the Rust approach; avoids CoffeeScript's implicit arrays and the intermediate-array problem of eager `map` in Ruby/JS).
-- **`[f(x) for x in xs when x]`**: wrapped in square brackets it is an `Array<T>` (allocated on the spot).
-- The guard is `when` (the same in comprehensions and postfix `for`). This distinguishes it from postfix `if`. Like `when` in a `case` arm, it means "under this condition".
 - `map`/`filter`/`take` and so on of `Array` also return `Iter<T>` (lazy chains).
 - The `Iter<T>` protocol is `has_next()` / `next()` (with `next(): T?`, the end could not be distinguished when `T` is nilable).
 - **Cannot be traversed again.** A second traversal throws (it does not silently become empty like a Python generator). To use it several times, materialize it with `.to_array()`.

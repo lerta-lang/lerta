@@ -190,6 +190,8 @@ export class ExpressionGenerator {
         return this.collections.generate_array(expression)
       case 'map':
         return this.collections.generate_map(expression)
+      case 'comprehension':
+        return this.blocks.generate_comprehension(expression)
       case 'record': {
         const values = new Map(
           expression.fields.map((field) => [field.name.name, this.generate(field.value)]),
