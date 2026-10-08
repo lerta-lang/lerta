@@ -1,0 +1,133 @@
+# The protocol of Iters in the generated code. An Iter is a heap object (see heap_object) whose
+# first fields are the code of its has_next and next, which take the Iter itself, and whether a
+# traversal of it has started (LertaIter in runtime/lerta.h); the state of its kind follows.
+import {
+  define_heap_object, emit_heap_allocate, emit_heap_field_pointer, HeapField, heap_object_type
+  plain_field
+} from './heap_object'
+import { IrBuilder, IrModule } from './ir_builder'
+import { ir_type, without_sigil } from './lerta_ir'
+import { call_runtime } from './runtime_calls'
+import { Type } from '../types'
+
+# The fields every Iter starts with, and the layout through which those of any Iter are reached.
+const PROTOCOL = [plain_field('ptr'), plain_field('ptr'), plain_field('i1')]
+const HAS_NEXT_FIELD = 0
+const NEXT_FIELD = 1
+const STARTED_FIELD = 2
+const PROTOCOL_LAYOUT = heap_object_type(PROTOCOL)
+
+# A kind of Iter: its LLVM struct type, and the fields of its state.
+export struct IterKind
+  layout: String
+  state: Array<HeapField>
+
+# The code of a kind is the bodies of has_next, which returns an i1, and of next, which returns the
+# item and runs only when has_next is true. They get the Iter as `%iter`.
+export type IterCode = (IrBuilder, IterKind) -> void
+
+const symbol_of = (kind: IterKind, part: String) -> "@#{without_sigil(kind.layout)}.#{part}"
+
+const all_fields = (kind: IterKind) ->
+  const fields: Array<HeapField> = []
+  fields.push(field) for field in PROTOCOL
+  fields.push(field) for field in kind.state
+  fields
+
+# The kind of `key`, defined with its drop function and code the first time it is given. Its next
+# does not check for the end: its callers ask has_next first (see emit_checked_next).
+export const define_kind = (
+  ir: IrBuilder
+  key: String
+  state: Array<HeapField>
+  item: Type
+  has_next: IterCode
+  next: IterCode
+) ->
+  const define = (layout: String, module: IrModule) ->
+    const kind = IterKind(layout, state)
+    define_heap_object(module, layout, symbol_of(kind, 'drop'), all_fields(kind), nil)
+    const has_next_body = IrBuilder(module)
+    has_next(has_next_body, kind)
+    has_next_body.finish("i1 #{symbol_of(kind, 'has_next')}(ptr %iter)")
+    const next_body = IrBuilder(module)
+    next(next_body, kind)
+    next_body.finish("#{ir_type(item)} #{symbol_of(kind, 'next')}(ptr %iter)")
+  IterKind(state, layout: ir.module.named("iter #{key}", '%lerta.iter', define))
+
+const emit_throw_unless = (ir: IrBuilder, condition: String) ->
+  const ended_label = ir.fresh_label('iter.ended')
+  const go_label = ir.fresh_label('iter.go')
+  ir.emit("br i1 #{condition}, label %#{go_label}, label %#{ended_label}")
+  ir.start_block(ended_label)
+  call_runtime(ir, 'void @lerta_throw_iter_ended()', '')
+  ir.emit('unreachable')
+  ir.start_block(go_label)
+
+# A new Iter of the kind, not started, which takes over the values of its state.
+export const emit_iter = (ir: IrBuilder, kind: IterKind, state_values: Array<String>) ->
+  const iter = emit_heap_allocate(ir, kind.layout, symbol_of(kind, 'drop'))
+  const values = [symbol_of(kind, 'has_next'), symbol_of(kind, 'next'), 'false']
+  values.push(value) for value in state_values
+  const fields = all_fields(kind)
+  for i in 0...fields.length
+    const pointer = emit_heap_field_pointer(ir, kind.layout, iter, i)
+    ir.emit("store #{fields[i].ir_type} #{values[i]}, ptr #{pointer}")
+  iter
+
+const state_pointer = (ir: IrBuilder, kind: IterKind, index: Int) ->
+  emit_heap_field_pointer(ir, kind.layout, '%iter', PROTOCOL.length + index)
+
+export const load_state = (ir: IrBuilder, kind: IterKind, index: Int) ->
+  const pointer = state_pointer(ir, kind, index)
+  ir.assign("load #{kind.state[index].ir_type}, ptr #{pointer}")
+
+export const store_state = (ir: IrBuilder, kind: IterKind, index: Int, value: String) ->
+  const pointer = state_pointer(ir, kind, index)
+  ir.emit("store #{kind.state[index].ir_type} #{value}, ptr #{pointer}")
+
+const protocol_field = (ir: IrBuilder, iter: String, index: Int) ->
+  emit_heap_field_pointer(ir, PROTOCOL_LAYOUT, iter, index)
+
+# Whether the Iter, which is borrowed, has a next item.
+export const emit_has_next = (ir: IrBuilder, iter: String) ->
+  const code = ir.assign("load ptr, ptr #{protocol_field(ir, iter, HAS_NEXT_FIELD)}")
+  ir.assign("call i1 #{code}(ptr #{iter})")
+
+# The next item, owned, of a borrowed Iter whose has_next is true.
+export const emit_next = (ir: IrBuilder, iter: String, item: Type) ->
+  const code = ir.assign("load ptr, ptr #{protocol_field(ir, iter, NEXT_FIELD)}")
+  ir.assign("call #{ir_type(item)} #{code}(ptr #{iter})")
+
+# The next item, owned, of a borrowed Iter, which code outside the Iters asks for without knowing
+# that there is one: past the end, it throws.
+export const emit_checked_next = (ir: IrBuilder, iter: String, item: Type) ->
+  emit_throw_unless(ir, emit_has_next(ir, iter))
+  emit_next(ir, iter, item)
+
+# Starts a traversal, which throws if the Iter has started one.
+export const emit_iter_start = (ir: IrBuilder, iter: String) ->
+  call_runtime(ir, 'void @lerta_iter_start(ptr)', "ptr #{iter}")
+
+# Runs `body` for each item, owned, of a borrowed Iter whose traversal has started. `body` gets the
+# item and the labels that leave the loop and go on to the next item.
+export const emit_iter_loop = (
+  ir: IrBuilder
+  iter: String
+  item: Type
+  body: (String, String, String) -> void
+) ->
+  const header_label = ir.fresh_label('iter.header')
+  const body_label = ir.fresh_label('iter.body')
+  const exit_label = ir.fresh_label('iter.exit')
+  ir.emit("br label %#{header_label}")
+  ir.start_block(header_label)
+  ir.emit("br i1 #{emit_has_next(ir, iter)}, label %#{body_label}, label %#{exit_label}")
+  ir.start_block(body_label)
+  body(emit_next(ir, iter, item), exit_label, header_label)
+  ir.emit("br label %#{header_label}")
+  ir.start_block(exit_label)
+
+# Calling has_next or next traverses the Iter, so that it cannot be traversed again.
+export const emit_mark_started = (ir: IrBuilder, iter: String) ->
+  ir.emit("store i1 true, ptr #{protocol_field(ir, iter, STARTED_FIELD)}")

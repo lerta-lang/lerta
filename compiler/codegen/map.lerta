@@ -1,0 +1,62 @@
+# Operations on maps in the generated code, through the runtime (runtime/map.c). Keys and values
+# are 8 bytes, as array items are.
+import { from_item, to_item } from './array'
+import { IrBuilder } from './ir_builder'
+import { ir_type } from './lerta_ir'
+import { call_runtime } from './runtime_calls'
+import {
+  is_identity_type, is_kind, is_reference_type, MapType, optional_type, Type
+} from '../types'
+
+# The values of LertaKeyKind in runtime/lerta.h.
+const key_kind = (key: Type) ->
+  case
+    when is_kind(key, 'Int') then 0
+    when is_kind(key, 'String') then 1
+    when is_identity_type(key) then 2
+    else throw 'no map key kind'
+
+export const emit_map_new = (ir: IrBuilder, type: MapType) ->
+  const args = "i32 #{key_kind(type.key)}, i1 zeroext #{is_reference_type(type.value)}"
+  call_runtime(ir, 'ptr @lerta_map_new(i32, i1 zeroext)', args)
+
+export const emit_map_length = (ir: IrBuilder, map: String) ->
+  call_runtime(ir, 'i64 @lerta_map_length(ptr)', "ptr #{map}")
+
+# The value as a V?, owned when it is a reference; a missing reference reads as null, which is
+# nil.
+export const emit_map_get = (ir: IrBuilder, map: String, key: String, type: MapType) ->
+  const slot = ir.alloca('i64')
+  const args = "ptr #{map}, i64 #{to_item(ir, key, type.key)}, ptr #{slot}"
+  const found = call_runtime(ir, 'i1 @lerta_map_get(ptr, i64, ptr)', args)
+  const value = from_item(ir, ir.assign("load i64, ptr #{slot}"), type.value)
+  return value if is_reference_type(type.value)
+  const optional = ir_type(optional_type(type.value))
+  const flagged = ir.assign("insertvalue #{optional} undef, i1 #{found}, 0")
+  ir.assign("insertvalue #{optional} #{flagged}, #{ir_type(type.value)} #{value}, 1")
+
+# The map retains the key and the value, which stay owned by the caller.
+export const emit_map_set = (
+  ir: IrBuilder
+  map: String
+  key: String
+  value: String
+  type: MapType
+) ->
+  const key_item = to_item(ir, key, type.key)
+  const args = "ptr #{map}, i64 #{key_item}, i64 #{to_item(ir, value, type.value)}"
+  call_runtime(ir, 'void @lerta_map_set(ptr, i64, i64)', args)
+
+export const call_map_method = (
+  ir: IrBuilder
+  name: String
+  map: String
+  args: Array<String>
+  type: MapType
+) ->
+  case name
+    when 'remove'
+      const key = "ptr #{map}, i64 #{to_item(ir, args[0], type.key)}"
+      call_runtime(ir, 'void @lerta_map_remove(ptr, i64)', key)
+    when 'keys' then call_runtime(ir, 'ptr @lerta_map_keys(ptr)', "ptr #{map}")
+    else throw "no map method #{name}"

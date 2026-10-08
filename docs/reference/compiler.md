@@ -29,6 +29,10 @@ lerta dump-checked <source>
 
 loads and checks the program as `build` does, without generating code, to compare the checkers. For each module that is not a standard module, in the order they are loaded, it prints a line `module <path>`, with the path as given for the entry module and as diagnostics write it for the others, then the module's syntax tree as `dump-ast` prints it, as loaded, with the implicit import of `std:builtins`. The header line of each node that the checker gave a type is followed by ` : <type>`, and by ` => <type>` if the node is converted where it is used, such as an `Int` passed as an `Int?`; types are written as in messages. The bodies of generic functions, which are checked only for each use, have no types. Warnings and errors are reported as by `build`. The rest of what the checker works out (the captures of closures, the shared variables, the instances of generic functions and their checked bodies, the exports, the extensions and the objects) is not printed; comparing the generated IR checks it.
 
+## The compiler written in Lerta
+
+The compiler in `compiler/` takes the same commands, with `--root <dir>` added to `build` and `dump-checked`: the directory that holds `std/` and `runtime/`, which it cannot find on its own yet. Its `build` with `-o` and without `--emit-llvm` writes the IR to `<output>.ll` and leaves it there, since it cannot remove a file or make a temporary directory yet.
+
 ## Diagnostics
 
 Diagnostics are printed to stderr, one per line:

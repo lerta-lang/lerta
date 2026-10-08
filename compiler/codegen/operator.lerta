@@ -1,0 +1,110 @@
+# Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
+import {
+  BinaryOperation, Coalesce, is_nil_test, NilLiteral, UnaryOperation, Unwrap
+} from '../ast'
+import { is_arithmetic } from '../checker/operator'
+import { apply_arithmetic } from './checked_int'
+import { generate, generate_condition, release_if_reference, type_of } from './expression'
+import { Generator } from './generator'
+import { emit_release, ir_type } from './lerta_ir'
+import { emit_is_present, emit_unwrap } from './optional'
+import { emit_concat, emit_equals } from './string'
+import { throw_if, UNWRAPPED_NIL } from './throw_blocks'
+import { is_identity_type, is_kind, is_one_of_kinds } from '../types'
+
+# The predicates of `icmp` for the comparisons of signed integers; Byte is ordered as unsigned.
+const SIGNED_PREDICATES = {
+  '==': 'eq', '!=': 'ne', '<': 'slt', '<=': 'sle', '>': 'sgt', '>=': 'sge'
+}
+const UNSIGNED_PREDICATES = {
+  '==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': 'ugt', '>=': 'uge'
+}
+
+export const generate_unary = (g: Generator, unary: UnaryOperation) ->
+  if unary.operator == 'not'
+    return g.ir.assign("xor i1 #{generate_condition(g, unary.operand)}, true")
+  const operand = generate(g, unary.operand)
+  apply_arithmetic(g, '-', '0', operand, type_of(g, unary))
+
+export const generate_binary = (g: Generator, binary: BinaryOperation) ->
+  const operator = binary.operator
+  return generate_logical(g, binary) if operator == 'and' or operator == 'or'
+  return generate_nil_test(g, binary) if is_nil_test(binary)
+  const left = generate(g, binary.left)
+  const right = generate(g, binary.right)
+  const operand_type = type_of(g, binary.left)
+  const is_string = is_kind(operand_type, 'String')
+  return emit_concat(g.ir, [left, right]) if is_string and operator == '+'
+  if is_identity_type(operand_type)
+    return negate_if_unequal(g, operator, generate_same_object(g, left, right))
+  if is_one_of_kinds(operand_type, ['String', 'Binary'])
+    return negate_if_unequal(g, operator, emit_equals(g.ir, left, right))
+  return apply_arithmetic(g, operator, left, right, operand_type) if is_arithmetic(operator)
+  const is_byte = is_kind(operand_type, 'Byte')
+  const predicate = (is_byte then UNSIGNED_PREDICATES else SIGNED_PREDICATES)[operator]!
+  g.ir.assign("icmp #{predicate} #{ir_type(operand_type)} #{left}, #{right}")
+
+# `!=` is the negation of the equality.
+const negate_if_unequal = (g: Generator, operator: String, equal: String) ->
+  operator == '!=' then g.ir.assign("xor i1 #{equal}, true") else equal
+
+# Whether two references are to one object; releases them.
+const generate_same_object = (g: Generator, left: String, right: String) ->
+  const same = g.ir.assign("icmp eq ptr #{left}, #{right}")
+  emit_release(g.ir, left)
+  emit_release(g.ir, right)
+  same
+
+# `x == nil` or `x != nil`.
+const generate_nil_test = (g: Generator, binary: BinaryOperation) ->
+  const value = binary.left is NilLiteral then binary.right else binary.left
+  const operand = generate(g, value)
+  const present = emit_is_present(g.ir, operand, type_of(g, value))
+  release_if_reference(g, value, operand)
+  binary.operator == '!=' then present else g.ir.assign("xor i1 #{present}, true")
+
+# Short-circuit: the right operand is evaluated only when the left one does not decide.
+const generate_logical = (g: Generator, binary: BinaryOperation) ->
+  const ir = g.ir
+  const left = generate_condition(g, binary.left)
+  const left_block = ir.current_block
+  const right_label = ir.fresh_label('logical.right')
+  const end_label = ir.fresh_label('logical.end')
+  const is_and = binary.operator == 'and'
+  const if_true = is_and then right_label else end_label
+  const if_false = is_and then end_label else right_label
+  ir.emit("br i1 #{left}, label %#{if_true}, label %#{if_false}")
+  ir.start_block(right_label)
+  const right = generate_condition(g, binary.right)
+  const right_block = ir.current_block
+  ir.emit("br label %#{end_label}")
+  ir.start_block(end_label)
+  const decided = is_and then 'false' else 'true'
+  ir.assign("phi i1 [ #{decided}, %#{left_block} ], [ #{right}, %#{right_block} ]")
+
+# `x!` throws if x is nil.
+export const generate_unwrap = (g: Generator, unwrap: Unwrap) ->
+  const operand = generate(g, unwrap.operand)
+  const type = type_of(g, unwrap.operand)
+  const absent = g.ir.assign("xor i1 #{emit_is_present(g.ir, operand, type)}, true")
+  throw_if(g, absent, UNWRAPPED_NIL)
+  emit_unwrap(g.ir, operand, type)
+
+# The fallback is only evaluated when the value is nil.
+export const generate_coalesce = (g: Generator, coalesce: Coalesce) ->
+  const ir = g.ir
+  const operand = generate(g, coalesce.value)
+  const type = type_of(g, coalesce.value)
+  const present = emit_is_present(ir, operand, type)
+  const unwrapped = emit_unwrap(ir, operand, type)
+  const value_block = ir.current_block
+  const fallback_label = ir.fresh_label('coalesce.fallback')
+  const end_label = ir.fresh_label('coalesce.end')
+  ir.emit("br i1 #{present}, label %#{end_label}, label %#{fallback_label}")
+  ir.start_block(fallback_label)
+  const fallback = generate(g, coalesce.fallback)
+  const fallback_block = ir.current_block
+  ir.emit("br label %#{end_label}")
+  ir.start_block(end_label)
+  const incoming = "[ #{unwrapped}, %#{value_block} ], [ #{fallback}, %#{fallback_block} ]"
+  ir.assign("phi #{ir_type(type_of(g, coalesce))} #{incoming}")

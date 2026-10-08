@@ -1,0 +1,212 @@
+# Generates control flow: `if`, `while`, `for` over ranges, arrays, Binary values and Iters,
+# comprehensions, `break` and `continue`.
+import {
+  as_expression, Binding, Comprehension, Condition, Expression, For, Identifier, If, Jump
+  LazyFunctions, Range, While
+} from '../ast'
+import { emit_array_new, emit_push } from './array'
+import { generate, generate_condition, release_if_reference, type_of } from './expression'
+import {
+  generate_block, generate_block_with, generate_closure, no_locals, release_scope, statements_code
+  store_in_slot
+} from './function'
+import { CodegenLocal, Generator, Loop, ValueLocal } from './generator'
+import {
+  emit_comprehension_iter, emit_range_iter, emit_sequence_get, emit_sequence_length
+  emit_source_iter
+} from './iter'
+import { emit_iter_loop, emit_iter_start } from './iter_protocol'
+import { emit_is_present, emit_unwrap } from './optional'
+import { ArrayType, int_type, iterable_item, IterType, OptionalType, Type } from '../types'
+
+export const generate_if = (g: Generator, if_statement: If) ->
+  const ir = g.ir
+  const condition = generate_condition_of(g, if_statement.condition)
+  const then_label = ir.fresh_label('if.then')
+  const else_label = ir.fresh_label('if.else')
+  const end_label = ir.fresh_label('if.end')
+  ir.emit("br i1 #{condition.test}, label %#{then_label}, label %#{else_label}")
+  ir.start_block(then_label)
+  generate_block(g, if_statement.then_body, condition.define)
+  ir.emit("br label %#{end_label}")
+  ir.start_block(else_label)
+  generate_block(g, if_statement.else_body, no_locals)
+  ir.emit("br label %#{end_label}")
+  ir.start_block(end_label)
+
+# The test of a condition, and what it defines in the body: for `const name = value`, the value
+# without nil, which the body's scope owns.
+const generate_condition_of = (g: Generator, condition: Condition) ->
+  case condition
+    when Binding
+      const value = generate(g, condition.value)
+      const type = type_of(g, condition.value)
+      const optional = type is OptionalType then type else throw 'a binding has an optional value'
+      const define = (scope: Map<String, CodegenLocal>) ->
+        const unwrapped = emit_unwrap(g.ir, value, optional)
+        scope[condition.name.name] = store_in_slot(g, unwrapped, optional.inner)
+      { test: emit_is_present(g.ir, value, optional), define }
+    else { test: generate_condition(g, as_expression(condition)!), define: no_locals }
+
+export const generate_while = (g: Generator, while_statement: While) ->
+  const ir = g.ir
+  const header_label = ir.fresh_label('while.header')
+  const body_label = ir.fresh_label('while.body')
+  const exit_label = ir.fresh_label('while.exit')
+  ir.emit("br label %#{header_label}")
+  ir.start_block(header_label)
+  const condition = generate_condition_of(g, while_statement.condition)
+  ir.emit("br i1 #{condition.test}, label %#{body_label}, label %#{exit_label}")
+  ir.start_block(body_label)
+  const body = statements_code(g, while_statement.body)
+  generate_loop_body(g, body, exit_label, header_label, condition.define)
+  ir.emit("br label %#{header_label}")
+  ir.start_block(exit_label)
+
+# A range's bounds are evaluated once. An array, a Binary or an Iter is held for the whole loop
+# in a scope of its own, so a `return` from the body releases it too; an array's length is read
+# each round.
+export const generate_for = (g: Generator, for_statement: For) ->
+  const { iterable, variable } = for_statement
+  generate_iteration(g, iterable, variable, statements_code(g, for_statement.body))
+
+# A new array, of the comprehension's elements, which the loop pushes. Its loop can be the target
+# of no `break` or `continue`, which its element and guard cannot hold (see jump_positions).
+export const generate_comprehension = (g: Generator, comprehension: Comprehension): String ->
+  const { element, variable, iterable, guard } = comprehension
+  if const lazy = comprehension.lazy
+    return generate_iter_comprehension(g, iterable, lazy)
+  const type = type_of(g, comprehension)
+  const array_type = type is ArrayType then type else throw 'a comprehension gives an array'
+  const element_type = array_type.element
+  const ir = g.ir
+  const result = emit_array_new(ir, element_type)
+  const body = ->
+    const push_label = ir.fresh_label('comprehension.push')
+    const next_label = ir.fresh_label('comprehension.next')
+    const test = guard then generate_condition(g, guard) else 'true'
+    ir.emit("br i1 #{test}, label %#{push_label}, label %#{next_label}")
+    ir.start_block(push_label)
+    const value = generate(g, element)
+    emit_push(ir, result, value, element_type)
+    release_if_reference(g, element, value)
+    ir.emit("br label %#{next_label}")
+    ir.start_block(next_label)
+  generate_iteration(g, iterable, variable, body)
+  result
+
+# The source is evaluated first, then the closures, which capture the values they see then.
+const generate_iter_comprehension = (g: Generator, iterable: Expression, lazy: LazyFunctions) ->
+  const ir = g.ir
+  const source = case iterable
+    when Range then emit_range_iter(ir, generate(g, iterable.start), generate(g, iterable.end))
+    else emit_source_iter(ir, generate(g, iterable), type_of(g, iterable))
+  const item: Type = iterable is Range then int_type else iterable_item(type_of(g, iterable))!
+  const lazy_guard = lazy.guard
+  const guard = lazy_guard then generate_closure(g, lazy_guard) else nil
+  const element = generate_closure(g, lazy.element)
+  emit_comprehension_iter(ir, source, item, guard, element, type_of(g, lazy.element))
+
+# The body generates the loop's code in its scope, where the loop variable is defined.
+const generate_iteration = (
+  g: Generator
+  iterable: Expression
+  variable: Identifier
+  body: () -> void
+) ->
+  if iterable is Range
+    const start = generate(g, iterable.start)
+    const end = generate(g, iterable.end)
+    const define = (scope: Map<String, CodegenLocal>, current: String) ->
+      scope[variable.name] = ValueLocal(operand: current, type: int_type)
+    generate_counting_loop(g, start, () -> end, body, define)
+    return
+  const type = type_of(g, iterable)
+  return generate_iter_loop(g, iterable, type, variable, body) if type is IterType
+  const item_type = iterable_item(type)!
+  const sequence_scope = g.locals.push()
+  const sequence = generate(g, iterable)
+  sequence_scope[' iterated sequence'] = store_in_slot(g, sequence, type)
+  const define = (scope: Map<String, CodegenLocal>, current: String) ->
+    const item = emit_sequence_get(g.ir, sequence, current, type)
+    scope[variable.name] = store_in_slot(g, item, item_type)
+  const end = () -> emit_sequence_length(g.ir, sequence, type)
+  generate_counting_loop(g, '0', end, body, define)
+  release_scope(g, sequence_scope)
+  g.locals.pop()
+
+const generate_iter_loop = (
+  g: Generator
+  iterable: Expression
+  type: Type
+  variable: Identifier
+  body: () -> void
+) ->
+  const item = iterable_item(type)!
+  const iter_scope = g.locals.push()
+  const iter = generate(g, iterable)
+  iter_scope[' iterated Iter'] = store_in_slot(g, iter, type)
+  emit_iter_start(g.ir, iter)
+  const loop_body = (value: String, exit_label: String, next_label: String) ->
+    const define = (scope: Map<String, CodegenLocal>) ->
+      scope[variable.name] = store_in_slot(g, value, item)
+    generate_loop_body(g, body, exit_label, next_label, define)
+  emit_iter_loop(g.ir, iter, item, loop_body)
+  release_scope(g, iter_scope)
+  g.locals.pop()
+
+# Counts from start while the counter is below the end, which is evaluated in the header. The
+# counter is a phi in the header, incremented in the latch block; it cannot overflow there, since
+# it is below the end.
+const generate_counting_loop = (
+  g: Generator
+  start: String
+  end: () -> String
+  body: () -> void
+  define: (Map<String, CodegenLocal>, String) -> void
+) ->
+  const ir = g.ir
+  const preheader_label = ir.current_block
+  const header_label = ir.fresh_label('for.header')
+  const body_label = ir.fresh_label('for.body')
+  const latch_label = ir.fresh_label('for.latch')
+  const exit_label = ir.fresh_label('for.exit')
+  const next = ir.fresh_register()
+  ir.emit("br label %#{header_label}")
+
+  ir.start_block(header_label)
+  const incoming = "[ #{start}, %#{preheader_label} ], [ #{next}, %#{latch_label} ]"
+  const current = ir.assign("phi i64 #{incoming}")
+  const in_range = ir.assign("icmp slt i64 #{current}, #{end()}")
+  ir.emit("br i1 #{in_range}, label %#{body_label}, label %#{exit_label}")
+
+  ir.start_block(body_label)
+  const define_current = (scope: Map<String, CodegenLocal>) -> define(scope, current)
+  generate_loop_body(g, body, exit_label, latch_label, define_current)
+  ir.emit("br label %#{latch_label}")
+
+  ir.start_block(latch_label)
+  ir.assign_to(next, "add nsw i64 #{current}, 1")
+  ir.emit("br label %#{header_label}")
+
+  ir.start_block(exit_label)
+
+const generate_loop_body = (
+  g: Generator
+  body: () -> void
+  break_label: String
+  continue_label: String
+  define: (Map<String, CodegenLocal>) -> void
+): void ->
+  g.loops.push(Loop(break_label, continue_label, scope_depth: g.locals.depth()))
+  generate_block_with(g, body, define)
+  g.loops.pop()
+
+# Leaving the loop's scopes early releases their references, as their ends would. Code after the
+# jump is unreachable but still needs a block to go in.
+export const generate_control_jump = (g: Generator, jump: Jump) ->
+  const loop = g.loops[g.loops.length - 1]
+  release_scope(g, scope) for scope in g.locals.inner_scopes(loop.scope_depth)
+  const target = jump.kind == 'break' then loop.break_label else loop.continue_label
+  g.ir.emit("br label %#{target}")
+  g.ir.start_block(g.ir.fresh_label('unreachable'))

@@ -1,0 +1,62 @@
+# Integer arithmetic. Int throws on overflow; Byte wraps around. Both throw on division by zero.
+import { Generator } from './generator'
+import { DIVISION_BY_ZERO, OVERFLOW, throw_if } from './throw_blocks'
+import { is_kind, Type } from '../types'
+
+const INT_MIN = '-9223372036854775808'
+
+# An arithmetic operator, `+`, `-`, `*`, `/` or `%`, applied to two Ints or two Bytes.
+export const apply_arithmetic = (
+  g: Generator
+  operator: String
+  left: String
+  right: String
+  type: Type
+) ->
+  const is_division = operator == '/' or operator == '%'
+  const is_byte = is_kind(type, 'Byte')
+  case
+    when is_division and is_byte then byte_division(g, operator, left, right)
+    when is_division then division(g, operator, left, right)
+    when is_byte then byte_arithmetic(g, operator, left, right)
+    else arithmetic(g, operator, left, right)
+
+const arithmetic = (g: Generator, operator: String, left: String, right: String) ->
+  const operation = case operator
+    when '+' then 'sadd'
+    when '-' then 'ssub'
+    when '*' then 'smul'
+    else throw "no arithmetic operator #{operator}"
+  const intrinsic = "llvm.#{operation}.with.overflow.i64"
+  const ir = g.ir
+  ir.module.declare(intrinsic, "declare { i64, i1 } @#{intrinsic}(i64, i64)")
+  const result = ir.assign("call { i64, i1 } @#{intrinsic}(i64 #{left}, i64 #{right})")
+  const overflowed = ir.assign("extractvalue { i64, i1 } #{result}, 1")
+  throw_if(g, overflowed, OVERFLOW)
+  ir.assign("extractvalue { i64, i1 } #{result}, 0")
+
+# INT_MIN / -1 overflows; INT_MIN % -1 is rejected too, since LLVM leaves it undefined.
+const division = (g: Generator, operator: String, left: String, right: String) ->
+  const ir = g.ir
+  const is_zero = ir.assign("icmp eq i64 #{right}, 0")
+  throw_if(g, is_zero, DIVISION_BY_ZERO)
+  const is_min = ir.assign("icmp eq i64 #{left}, #{INT_MIN}")
+  const is_minus_one = ir.assign("icmp eq i64 #{right}, -1")
+  const overflows = ir.assign("and i1 #{is_min}, #{is_minus_one}")
+  throw_if(g, overflows, OVERFLOW)
+  const instruction = operator == '/' then 'sdiv' else 'srem'
+  ir.assign("#{instruction} i64 #{left}, #{right}")
+
+const byte_arithmetic = (g: Generator, operator: String, left: String, right: String) ->
+  const instruction = case operator
+    when '+' then 'add'
+    when '-' then 'sub'
+    when '*' then 'mul'
+    else throw "no arithmetic operator #{operator}"
+  g.ir.assign("#{instruction} i8 #{left}, #{right}")
+
+const byte_division = (g: Generator, operator: String, left: String, right: String) ->
+  const is_zero = g.ir.assign("icmp eq i8 #{right}, 0")
+  throw_if(g, is_zero, DIVISION_BY_ZERO)
+  const instruction = operator == '/' then 'udiv' else 'urem'
+  g.ir.assign("#{instruction} i8 #{left}, #{right}")

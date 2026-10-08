@@ -1,0 +1,32 @@
+# Operations on Strings and Binaries in the generated code, through the runtime (runtime/string.c
+# and runtime/binary.c).
+import { IrBuilder } from './ir_builder'
+import { emit_release } from './lerta_ir'
+import { call_runtime } from './runtime_calls'
+
+# A new String holding the parts, which are owned Strings, one after another; the parts are
+# released.
+export const emit_concat = (ir: IrBuilder, parts: Array<String>) ->
+  ir.module.declare('lerta_string_concat', 'declare ptr @lerta_string_concat(i64, ...)')
+  const args = ["ptr #{part}" for part in parts].join(', ')
+  const call = "call ptr (i64, ...) @lerta_string_concat(i64 #{parts.length}, #{args})"
+  const result = ir.assign(call)
+  emit_release(ir, part) for part in parts
+  result
+
+# Whether two Strings have the same bytes; both are borrowed.
+export const emit_string_equals = (ir: IrBuilder, left: String, right: String) ->
+  call_runtime(ir, 'zeroext i1 @lerta_string_equals(ptr, ptr)', "ptr #{left}, ptr #{right}")
+
+# Whether two owned Strings have the same bytes; both are released.
+export const emit_equals = (ir: IrBuilder, left: String, right: String) ->
+  const result = emit_string_equals(ir, left, right)
+  emit_release(ir, left)
+  emit_release(ir, right)
+  result
+
+export const emit_binary_length = (ir: IrBuilder, binary: String) ->
+  call_runtime(ir, 'i64 @lerta_binary_length(ptr)', "ptr #{binary}")
+
+export const emit_binary_get = (ir: IrBuilder, binary: String, index: String) ->
+  call_runtime(ir, 'zeroext i8 @lerta_binary_get(ptr, i64)', "ptr #{binary}, i64 #{index}")

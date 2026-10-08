@@ -1,0 +1,28 @@
+# Optional values in the generated code. An optional reference is a pointer that is null for nil;
+# an optional Int, Byte or Bool is a `{ i1, T }` whose flag tells whether the value is there.
+import { IrBuilder } from './ir_builder'
+import { ir_type } from './lerta_ir'
+import { is_reference_type, optional_type, OptionalType, Type } from '../types'
+
+# The IR constant for nil of the optional type.
+export const nil_constant = (type: Type) ->
+  return 'null' if is_reference_type(type)
+  const inner = type is OptionalType then type.inner else throw 'expected an optional type'
+  "{ i1 false, #{ir_type(inner)} zeroinitializer }"
+
+# A value of the inner type, made optional.
+export const emit_wrap = (ir: IrBuilder, operand: String, inner: Type) ->
+  return operand if is_reference_type(inner)
+  const type = ir_type(optional_type(inner))
+  const inner_ir = ir_type(inner)
+  const present = "{ i1 true, #{inner_ir} zeroinitializer }"
+  ir.assign("insertvalue #{type} #{present}, #{inner_ir} #{operand}, 1")
+
+# An i1 that is true when the optional value is not nil.
+export const emit_is_present = (ir: IrBuilder, operand: String, type: Type) ->
+  return ir.assign("icmp ne ptr #{operand}, null") if is_reference_type(type)
+  ir.assign("extractvalue #{ir_type(type)} #{operand}, 0")
+
+# The value without nil, which must not be nil.
+export const emit_unwrap = (ir: IrBuilder, operand: String, type: Type) ->
+  is_reference_type(type) then operand else ir.assign("extractvalue #{ir_type(type)} #{operand}, 1")

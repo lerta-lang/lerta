@@ -17,6 +17,9 @@ export class Module
   program: Array<Statement>
   # The indexes of the modules that its imports refer to.
   imported: Map<Import, Int>
+  # The indexes of the modules of the import cycle it is in, itself included; empty if it is in
+  # none.
+  cycle: Array<Int>
 
 # Every module imports std:builtins, as `import 'std:builtins'`, for the builtin functions and the
 # methods of the builtin types that it gives; all but std:builtins itself and the standard modules
@@ -36,6 +39,9 @@ class LoadingModule
   display_path: String?
   program: Array<Statement>
   imported: Map<Import, Int> = Map()
+  # The places of the modules of its import cycle, if it is in one.
+  cycle: Array<Int> = []
+  # Its index, once its imports are loaded.
   index = -1
 
 class Loader
@@ -104,11 +110,24 @@ const visit = (loader: Loader, path: String, statement: Import, location: String
     compile_error(location, line, column, "cannot find module '#{statement.module}'")
   const real = real_path_text(path)
   if const loaded = loader.by_real_path[real]
+    close_cycle(loader, loaded) if loader.loaded[loaded].index == -1
     return loaded
   const is_std = dirname(real) == loader.real_std_dir
   const entry_dir = dirname(loader.entry_path)
   const display_path = is_std then statement.module else relative(loader.cwd, entry_dir, path)
   load(loader, path, display_path)
+
+# An import of a module whose imports are being loaded closes a cycle: that module and those that
+# started loading after it and are still loading, which import each other in turn. Cycles that
+# share a module are one.
+const close_cycle = (loader: Loader, back: Int) ->
+  const members: Array<Int> = []
+  for id in back...loader.loaded.length
+    const module = loader.loaded[id]
+    continue if module.index != -1
+    const ids = module.cycle.length > 0 then module.cycle else [id]
+    members.push(each) for each in ids when not members.any((member) -> member == each)
+  loader.loaded[id].cycle = members for id in members
 
 # The file an import names: a path that starts with `./` or `../` is relative to `from`, the
 # directory of the importing file; `std:name` is a standard module. Other names are reserved.
@@ -136,7 +155,8 @@ const finished_module = (loader: Loader, id: Int) ->
   for statement in loading.imported.keys()
     imported[statement] = index_of(loading.imported[statement]!)
   const { index, display_path, program } = loading
-  Module(index, display_path, program, imported)
+  const cycle = [index_of(place) for place in loading.cycle]
+  Module(index, display_path, program, imported, cycle)
 
 export const is_standard_module = (module: Module) ->
   if const path = module.display_path

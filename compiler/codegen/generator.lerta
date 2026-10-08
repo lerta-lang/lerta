@@ -1,0 +1,113 @@
+# The state of the generation of a module's code, and of one function of it. Objects refer to the
+# checker's results and to the IR being built, never back to the generator, so that they form no
+# cycle.
+import { Extensions } from '../checker/extensions'
+import { ProgramWide, Shared } from '../checker/shared'
+import { IrBuilder, IrModule } from './ir_builder'
+import { Module } from '../loader'
+import { CheckedException } from './throw_blocks'
+import { Type, void_type } from '../types'
+
+# A top-level value: the global that holds it, and the flag that tells whether it is initialized
+# (see top_level).
+export struct TopLevelGlobal
+  name: String
+  type: Type
+  pointer: String
+  flag: String
+
+# What the generation of one module's code shares: the program as checked, the IR module, the
+# top-level values of every module, by module index, and the symbols of the functions the module
+# can call by name, its own and those it imports.
+export class ModuleCode
+  program: ProgramWide
+  ir_module: IrModule
+  globals: Array<Map<String, TopLevelGlobal>>
+  module: Module
+  shared: Shared
+  symbols: Map<String, String>
+
+# A loop variable or a parameter is an SSA value; a `const` or `var` lives in a stack slot.
+export struct ValueLocal
+  operand: String
+  type: Type
+
+# The slot of a top-level value is its global, which `is_checked` checks to be initialized before
+# each use (see top_level).
+export struct TopLevelSlot
+  global: TopLevelGlobal
+  is_checked: Bool
+
+# The cell of a captured var, which the scope that declares it owns; a function literal's scope
+# reads it from its closure, which owns it.
+export struct CellSlot
+  cell: String
+  is_owned: Bool
+
+# A slot of a var that function literals capture points into its cell (see heap_object).
+export struct SlotLocal
+  pointer: String
+  type: Type
+  top_level: TopLevelSlot?
+  cell: CellSlot?
+
+export type CodegenLocal = ValueLocal | SlotLocal
+
+# Nested scopes of locals, innermost last. The names outside every scope are looked up by
+# lookup_local of function.
+export class Locals
+  scopes: Array<Map<String, CodegenLocal>> = []
+
+  depth = () -> @scopes.length
+
+  push = () ->
+    const scope: Map<String, CodegenLocal> = Map()
+    @scopes.push(scope)
+    scope
+
+  pop = (): void -> @scopes.pop()
+
+  # The checker rejects a name declared twice in one scope.
+  define = (name: String, local: CodegenLocal) ->
+    const innermost = @scopes[@scopes.length - 1]
+    throw "'#{name}' is already defined in this scope" if innermost.has(name)
+    innermost[name] = local
+
+  lookup = (name: String) ->
+    var depth = @scopes.length - 1
+    while depth >= 0
+      if const local = @scopes[depth][name]
+        return local
+      depth -= 1
+    nil
+
+  # The scopes from `depth` inward, innermost first.
+  inner_scopes = (depth: Int) ->
+    const innermost = @scopes.length - 1
+    [@scopes[innermost - i] for i in 0...(@scopes.length - depth)]
+
+# Where `break` and `continue` jump, and how many scopes enclose the loop.
+export struct Loop
+  break_label: String
+  continue_label: String
+  scope_depth: Int
+
+# The generation of one function. `top_level_code` tells whether it is the module's top-level code,
+# which declares the top-level values, rather than a function, which uses them once they are
+# initialized; `extensions` are those its body sees (see Instance).
+export class Generator
+  code: ModuleCode
+  extensions: Extensions
+  top_level_code: Bool
+  ir = IrBuilder(module: @code.ir_module)
+  locals = Locals()
+  # The exceptions that the function's checks throw, each from a block of its own (see
+  # throw_blocks).
+  thrown: Array<CheckedException> = []
+  loops: Array<Loop> = []
+  # The result type of the function being generated; the top-level code returns nothing.
+  result_type: Type = void_type
+
+# The generator of a function's body, which is not top-level code.
+export const function_generator = (code: ModuleCode, extensions: Extensions) ->
+  Generator(code, extensions, top_level_code: false)

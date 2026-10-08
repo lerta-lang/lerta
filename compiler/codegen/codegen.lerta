@@ -1,0 +1,105 @@
+# Generates the program: the modules' top-level code, and every function of theirs (see
+# function).
+import { Declaration, FunctionLiteral, Statement, TypeDeclaration } from '../ast'
+import { FunctionExport, imported_export } from '../checker/imports'
+import { ProgramWide } from '../checker/shared'
+import { generate_constructor, generate_function, generate_main } from './function'
+import { function_generator, Generator, ModuleCode, TopLevelGlobal } from './generator'
+import { define_object } from './heap_object'
+import { IrModule } from './ir_builder'
+import {
+  extension_symbol, function_symbol, instance_symbol, method_symbol, module_init_symbol
+} from './lerta_ir'
+import { Module } from '../loader'
+import { define_top_level_globals } from './top_level'
+import { Type } from '../types'
+
+# Emits LLVM IR for the checked program (see check_modules). The entry module's top-level code
+# becomes lerta_main, which first runs that of the other modules, in order; each function, method,
+# constructor and instance of a generic function becomes a function of its own. The instances are
+# generated with their generic function, once all the calls are checked.
+export const generate = (program: ProgramWide) ->
+  const ir_module = IrModule()
+  const modules = program.modules
+  const globals = [
+    define_top_level_globals(ir_module, module, program.shared[module.index]) for module in modules
+  ]
+  for module in modules
+    const shared = program.shared[module.index]
+    const symbols = function_symbols(program, module)
+    generate_module(ModuleCode(program, ir_module, globals, module, shared, symbols))
+  ir_module.render()
+
+# The module's top-level code, functions, instances of generic functions, classes and structs,
+# and methods of extends.
+const generate_module = (code: ModuleCode) ->
+  const { program, module, shared } = code
+  const generate_one = (symbol: String, literal: FunctionLiteral, this_type: Type?) ->
+    generate_function(function_generator(code, shared.extensions), symbol, literal, this_type, nil)
+  const main = Generator(code, extensions: shared.extensions, top_level_code: true)
+  const main_code = [statement for statement in module.program when is_main_code(statement)]
+  const entry_index = program.modules.length - 1
+  if module.index == entry_index
+    const runs_first = [module_init_symbol(i) for i in 0...entry_index]
+    generate_main(main, main_code, 'void @lerta_main()', runs_first, released_globals(code.globals))
+  else
+    generate_main(main, main_code, "void #{module_init_symbol(module.index)}()", [], [])
+  for statement in module.program
+    const declaration = plain_function(statement) ? continue
+    const symbol = function_symbol(module.index, declaration.name.name)
+    generate_one(symbol, literal_of(declaration), nil)
+  for generic in shared.generics
+    for instance in generic.instances
+      const { literal, this_type } = instance.entry
+      const symbol = instance_symbol(program, instance)
+      const instance_generator = function_generator(code, instance.extensions)
+      generate_function(instance_generator, symbol, literal, this_type, nil)
+  for name in shared.objects.keys()
+    const info = shared.objects[name]!
+    define_object(code.ir_module, info)
+    generate_constructor(function_generator(code, shared.extensions), info)
+    for method in info.methods.keys()
+      generate_one(method_symbol(info.type, method), info.methods[method]!, info.type)
+  for method in shared.own_methods
+    continue if method.generic != nil
+    generate_one(extension_symbol(method), method.literal, method.receiver)
+
+# The top-level code: the statements other than the declarations of functions and types.
+const is_main_code = (statement: Statement) ->
+  case statement
+    when Declaration then not (statement.value is FunctionLiteral)
+    when TypeDeclaration then false
+    else true
+
+# A top-level function that is not generic; a generic function is generated per instance instead.
+const plain_function = (statement: Statement) ->
+  return nil if not (statement is Declaration)
+  const value = statement.value
+  return nil if not (value is FunctionLiteral)
+  value.type_params.length == 0 then statement else nil
+
+const literal_of = (declaration: Declaration) ->
+  const value = declaration.value
+  value is FunctionLiteral then value else throw 'a function declaration has a function literal'
+
+# Every module's top-level values, released at the end of the program in the reverse order of
+# their initialization, so that a deinit that runs then may still use those initialized before,
+# as print uses std:io's stdout.
+const released_globals = (globals: Array<Map<String, TopLevelGlobal>>) ->
+  const in_order: Array<TopLevelGlobal> = []
+  for values in globals
+    in_order.push(values[name]!) for name in values.keys()
+  [in_order[in_order.length - 1 - i] for i in 0...in_order.length]
+
+# The symbols of the functions a module can call by name: its own and those it imports.
+const function_symbols = (program: ProgramWide, module: Module) ->
+  const symbols: Map<String, String> = Map()
+  for statement in module.program
+    if const declaration = plain_function(statement)
+      symbols[declaration.name.name] = function_symbol(module.index, declaration.name.name)
+  const names = program.shared[module.index].imports.names
+  for name in names.keys()
+    const exported = imported_export(program, names[name]!)
+    if exported is FunctionExport
+      symbols[name] = function_symbol(exported.module_index, exported.name)
+  symbols

@@ -1,0 +1,46 @@
+# Builds a program: writes the IR that codegen generates for it and has clang compile and link it
+# with the runtime.
+import { stderr, write_file } from 'std:io'
+import { exit, run } from 'std:process'
+import { all_warnings } from './checker/diagnostics'
+import { check_modules } from './checker/modules'
+import { generate } from './codegen/codegen'
+import { load_modules } from './loader'
+import { join } from './paths'
+
+# The C files of the runtime, runtime/<name>.c, listed here, since the compiler cannot list a
+# directory yet.
+const RUNTIME_FILES = [
+  'array', 'binary', 'file', 'io', 'iter', 'lerta', 'map', 'memory', 'process', 'stack', 'string'
+]
+
+# What to build: the IR, written to `ir_path`, and, if there is an `output`, the executable made
+# from it. `root` holds std/ and runtime/.
+export struct BuildRequest
+  source: String
+  root: String
+  ir_path: String
+  output: String?
+  optimize: Bool
+
+# A compile error is thrown; clang's messages go to stderr as clang writes them, and its failure
+# exits with code 1.
+export const build = (request: BuildRequest) ->
+  const { source, root, ir_path, output } = request
+  const program = check_modules(source, load_modules(source, root))
+  stderr.write("#{warning}\n") for warning in all_warnings(program)
+  write_file(ir_path, generate(program).binary)
+  if output
+    exit(1) if run('clang', clang_args(request, ir_path, output)) != 0
+
+# Link-time optimization lets the generated code inline the runtime's C functions; unoptimized
+# builds use the debug runtime, which checks for leaks at exit.
+const clang_args = (request: BuildRequest, ir_path: String, output: String) ->
+  # clang warns that the .ll has no target triple; the host default is intended.
+  const args = ['-Wno-override-module', ir_path]
+  const flags = request.optimize then ['-O2', '-flto'] else ['-D', 'LERTA_DEBUG']
+  args.push(flag) for flag in flags
+  args.push(join(request.root, "runtime/#{name}.c")) for name in RUNTIME_FILES
+  args.push('-o')
+  args.push(output)
+  args

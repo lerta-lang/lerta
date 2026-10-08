@@ -1,0 +1,97 @@
+# `case` and `then`/`else` in the generated code: the tests of their arms, and the values they
+# merge.
+import { Case, CaseArm, Conditional, Expression, Statement } from '../ast'
+import { generate, generate_condition, type_of } from './expression'
+import { generate_block_value, hold } from './function'
+import { Generator } from './generator'
+import { emit_type_test } from './heap_object'
+import { emit_release, ir_type } from './lerta_ir'
+import { emit_string_equals } from './string'
+import { is_kind, is_reference_type, Type, UnionType } from '../types'
+
+# The subject is evaluated once and released at the end. The arms are tested in order; every arm
+# jumps to one end block that merges the values. A case over every type of a union has no else
+# arm, and falling past its last test cannot happen. A subject that is a reference is held (see
+# hold), so that a jump out of an arm releases it too.
+export const generate_case = (g: Generator, case_expression: Case) ->
+  const ir = g.ir
+  const subject = case_expression.subject
+  const subject_operand = subject then generate(g, subject) else ''
+  const subject_type = subject then type_of(g, subject) else nil
+  const holds_subject = subject_type then is_reference_type(subject_type) else false
+  const release_nothing = () -> return
+  const held = holds_subject then hold(g, subject_operand, subject_type!) else nil
+  const release_subject = held ? release_nothing
+  const end_label = ir.fresh_label('case.end')
+  const incoming: Array<String> = []
+  # An arm that ends with a jump gives no operand; it never reaches the end.
+  const generate_arm_value = (body: Array<Statement>) ->
+    const value = generate_block_value(g, body)
+    const operand = value == '' then 'poison' else value
+    incoming.push("[ #{operand}, %#{ir.current_block} ]")
+    ir.emit("br label %#{end_label}")
+  for arm in case_expression.arms
+    const test = generate_test(g, arm, subject_type, subject_operand)
+    const arm_label = ir.fresh_label('case.arm')
+    const next_label = ir.fresh_label('case.next')
+    ir.emit("br i1 #{test}, label %#{arm_label}, label %#{next_label}")
+    ir.start_block(arm_label)
+    generate_arm_value(arm.body)
+    ir.start_block(next_label)
+  if const otherwise = case_expression.otherwise
+    generate_arm_value(otherwise)
+  else
+    ir.emit('unreachable')
+  ir.start_block(end_label)
+  const result = merge(g, type_of(g, case_expression), incoming)
+  release_subject()
+  result
+
+# The condition is tested as an `if` tests it; both values jump to one end block that merges
+# them.
+export const generate_conditional = (g: Generator, conditional: Conditional) ->
+  const ir = g.ir
+  const test = generate_condition(g, conditional.condition)
+  const then_label = ir.fresh_label('then')
+  const else_label = ir.fresh_label('else')
+  const end_label = ir.fresh_label('then.end')
+  ir.emit("br i1 #{test}, label %#{then_label}, label %#{else_label}")
+  const branch = (label: String, value: Expression) ->
+    ir.start_block(label)
+    const operand = generate_block_value(g, [value])
+    const from = ir.current_block
+    ir.emit("br label %#{end_label}")
+    "[ #{operand == '' then 'poison' else operand}, %#{from} ]"
+  const incoming = [
+    branch(then_label, conditional.then_value), branch(else_label, conditional.else_value)
+  ]
+  ir.start_block(end_label)
+  merge(g, type_of(g, conditional), incoming)
+
+# The value of the arms at their end block: none for void, and none that comes for never.
+const merge = (g: Generator, type: Type, incoming: Array<String>) ->
+  case
+    when is_kind(type, 'void') then ''
+    when is_kind(type, 'never') then 'poison'
+    else g.ir.assign("phi #{ir_type(type)} #{incoming.join(', ')}")
+
+# An i1 that holds when any of the arm's patterns matches.
+const generate_test = (g: Generator, arm: CaseArm, subject_type: Type?, operand: String) ->
+  const type = subject_type ? return generate_condition(g, arm.patterns[0])
+  const test_of = (pattern: Expression) ->
+    case type
+      when UnionType then emit_type_test(g.ir, operand, type_of(g, pattern))
+      else value_test(g, operand, type, pattern)
+  const tests = [test_of(pattern) for pattern in arm.patterns]
+  var all = tests[0]
+  all = g.ir.assign("or i1 #{all}, #{tests[i]}") for i in 1...tests.length
+  all
+
+# The subject is borrowed by the comparison, as it is tested again by the next patterns.
+const value_test = (g: Generator, subject: String, type: Type, pattern: Expression) ->
+  const value = generate(g, pattern)
+  if not is_kind(type, 'String')
+    return g.ir.assign("icmp eq #{ir_type(type)} #{subject}, #{value}")
+  const equal = emit_string_equals(g.ir, subject, value)
+  emit_release(g.ir, value)
+  equal

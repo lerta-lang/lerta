@@ -1,8 +1,9 @@
-# The command line of the compiler. So far it only prints tokens, syntax trees or checked syntax
-# trees, as stage0's `dump-tokens`, `dump-ast` and `dump-checked` do.
+# The command line of the compiler: `build`, and `dump-tokens`, `dump-ast` and `dump-checked`,
+# which print what stage0's do.
 import { read_file, stderr, stdout } from 'std:io'
 import { argv, exit } from 'std:process'
 import { dump_ast } from './ast_dump'
+import { build, BuildRequest } from './build'
 import { dump_checked } from './checked_dump'
 import { all_warnings } from './checker/diagnostics'
 import { check_modules } from './checker/modules'
@@ -12,7 +13,9 @@ import { parse } from './parser/statement'
 import { dump_tokens } from './token_dump'
 
 const USAGE = [
-  "usage: lerta dump-tokens <source>\n"
+  "usage: lerta build <source> -o <output> [-O] [--emit-llvm <path>] --root <dir>\n"
+  "       lerta build <source> --emit-llvm <path> --root <dir>\n"
+  "       lerta dump-tokens <source>\n"
   "       lerta dump-ast <source>\n"
   "       lerta dump-checked <source> --root <dir>\n"
 ].join('')
@@ -40,6 +43,44 @@ const run_dump_checked = (args: Array<String>) ->
   stderr.write("#{warning}\n") for warning in all_warnings(program)
   stdout.write(dump_checked(program))
 
+# Each option may be given once, and `--root` names the directory that holds std/ and runtime/
+# (see run_dump_checked). Without `-o`, only the IR is written, so `-O` needs `-o`.
+const parse_build_arguments = (args: Array<String>) ->
+  var source: String? = nil
+  var output: String? = nil
+  var llvm_path: String? = nil
+  var root: String? = nil
+  var optimize = false
+  var i = 0
+  const take_value = (previous: String?) ->
+    i += 1
+    fail_usage() if previous != nil or i >= args.length or not is_value(args[i])
+    args[i]
+  while i < args.length
+    const arg = args[i]
+    case arg
+      when '-O'
+        fail_usage() if optimize
+        optimize = true
+      when '-o'
+        output = take_value(output)
+      when '--emit-llvm'
+        llvm_path = take_value(llvm_path)
+      when '--root'
+        root = take_value(root)
+      else
+        fail_usage() if source != nil or not is_value(arg)
+        source = arg
+    i += 1
+  const executable = output
+  fail_usage() if optimize and executable == nil
+  # Without --emit-llvm, the IR is left beside the executable, as the compiler cannot remove a
+  # file or make a temporary directory yet.
+  const ir_path = llvm_path ? (executable then "#{executable}.ll" else fail_usage())
+  const given_source = source ? fail_usage()
+  const given_root = root ? fail_usage()
+  BuildRequest(ir_path, optimize, output: executable, source: given_source, root: given_root)
+
 const dump_file_tokens = (source: String, path: String) ->
   dump_tokens(tokenize(source, path))
 
@@ -49,6 +90,7 @@ const dump_file_ast = (source: String, path: String) ->
 const command = argv.length > 0 then argv[0] else ''
 const args = [argv[i] for i in 1...argv.length]
 case command
+  when 'build' then build(parse_build_arguments(args))
   when 'dump-tokens' then run_dump(args, dump_file_tokens)
   when 'dump-ast' then run_dump(args, dump_file_ast)
   when 'dump-checked' then run_dump_checked(args)
