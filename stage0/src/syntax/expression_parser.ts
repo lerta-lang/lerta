@@ -142,21 +142,27 @@ export class ExpressionParser {
     return { kind: 'unary', operator: 'not', operand, line: token.line, column: token.column }
   }
 
-  // `a < b < c` is an error: comparisons do not chain.
+  // `a < b < c` is an error: comparisons, `is` included, do not chain.
   private parse_comparison(): Expression {
     const left = this.parse_range()
-    if (this.at_is()) {
-      this.tokens.next()
-      const type = this.types.parse_named_type()
-      return { kind: 'is', value: left, type, line: left.line, column: left.column }
-    }
-    if (!this.at_comparison()) return left
-    const operator = this.tokens.next().kind as ComparisonOperator
-    const right = this.parse_range()
-    if (this.at_comparison()) {
+    if (!this.at_is() && !this.at_comparison()) return left
+    const comparison = this.at_is() ? this.parse_is(left) : this.parse_binary_comparison(left)
+    if (this.at_is() || this.at_comparison()) {
       const token = this.tokens.peek()
       throw new CompileError('comparison operators cannot be chained', token.line, token.column)
     }
+    return comparison
+  }
+
+  private parse_is(value: Expression): Expression {
+    this.tokens.next()
+    const type = this.types.parse_named_type()
+    return { kind: 'is', value, type, line: value.line, column: value.column }
+  }
+
+  private parse_binary_comparison(left: Expression): Expression {
+    const operator = this.tokens.next().kind as ComparisonOperator
+    const right = this.parse_range()
     return { kind: 'binary', operator, left, right, line: left.line, column: left.column }
   }
 
