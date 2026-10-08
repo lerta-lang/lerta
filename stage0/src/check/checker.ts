@@ -7,7 +7,7 @@ import {
   declare_later_extends,
   declare_names,
 } from './declarations.ts'
-import { CompileError, CompileWarning } from '../errors.ts'
+import { CompileError, CompileWarning, module_path_of } from '../errors.ts'
 import { exports_of_module, Imports, type ModuleExports } from './imports.ts'
 import { Extensions } from './extensions.ts'
 import { Functions, method_key } from './functions.ts'
@@ -77,7 +77,7 @@ export const check_modules = (modules: Module[]): Checked[] => {
       .filter((module) => !is_standard_module(module))
       .flatMap((module) => {
         const warnings = in_source_order(warnings_of_modules[module.index])
-        for (const warning of warnings) warning.module_path = module.display_path
+        for (const warning of warnings) warning.module_path = module_path_of(module.display_path)
         return warnings
       })
   }

@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import type { Import, Program } from './syntax/ast.ts'
-import { CompileError } from './errors.ts'
+import { CompileError, module_path_of } from './errors.ts'
 import { tokenize } from './syntax/lexer.ts'
 import { parse } from './syntax/parser.ts'
 
@@ -150,7 +150,8 @@ export const with_module_path = <T>(display_path: string | undefined, f: () => T
     return f()
   } catch (error) {
     if (error instanceof CompileError) {
-      for (const diagnostic of [error, ...error.warnings]) diagnostic.module_path ??= display_path
+      for (const diagnostic of [error, ...error.warnings])
+        diagnostic.module_path ??= module_path_of(display_path)
     }
     throw error
   }
