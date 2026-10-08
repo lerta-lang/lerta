@@ -6,19 +6,15 @@ import {
   type Expression,
   type Identifier,
   type NamedArgument,
-  type Position,
   type RecordLiteral,
   type TypeName,
 } from './ast.ts'
 import { CompileError } from '../errors.ts'
-import { tokenize_fragment } from './lexer.ts'
 import { BlockLiteralParser } from './block_literal_parser.ts'
 import { CompoundParser, type BodyParser } from './compound_parser.ts'
-import { TokenStream } from './token_stream.ts'
+import { integer_value, PrimaryParser } from './primary_parser.ts'
+import type { TokenStream } from './token_stream.ts'
 import { TypeParser } from './type_parser.ts'
-
-const INT_MIN = -(2n ** 63n)
-const INT_MAX = 2n ** 63n - 1n
 
 // Arithmetic operators by precedence, weakest first. Comparisons are weaker than all of them.
 const arithmetic_precedence: ArithmeticOperator[][] = [
@@ -35,12 +31,14 @@ export type LoopHeader = {
   guard: Expression | undefined
 }
 
-// Expressions, from the weakest operators down to primaries; compound expressions are read by the
-// compound parser.
+// Expressions, from the weakest operators down to primaries, which are read by the primary parser,
+// as compound expressions are by the compound parser.
 export class ExpressionParser {
   private readonly tokens: TokenStream
 
   readonly compounds: CompoundParser
+
+  readonly primaries: PrimaryParser
 
   private readonly block_literals: BlockLiteralParser
 
@@ -50,6 +48,7 @@ export class ExpressionParser {
   constructor(tokens: TokenStream, bodies: BodyParser) {
     this.tokens = tokens
     this.compounds = new CompoundParser(tokens, this, bodies)
+    this.primaries = new PrimaryParser(tokens, this, this.compounds)
     this.block_literals = new BlockLiteralParser(tokens, this)
     this.types = new TypeParser(tokens, this)
   }
@@ -198,7 +197,7 @@ export class ExpressionParser {
 
   private parse_unary(): Expression {
     const token = this.tokens.peek()
-    if (token.kind !== '-') return this.parse_postfix(this.parse_primary())
+    if (token.kind !== '-') return this.parse_postfix(this.primaries.parse_primary())
     this.tokens.next()
     // `-1` with no space is a negative literal, so that the minimum Int can be written.
     const literal = this.tokens.peek()
@@ -253,14 +252,6 @@ export class ExpressionParser {
         }
       }
     }
-  }
-
-  // `@` is the object; `@x`, written without a space, is its member x.
-  private parse_this(position: Position): Expression {
-    const object: Expression = { kind: 'this', ...position }
-    const next = this.tokens.peek()
-    if (next.kind !== 'identifier' || next.spaced) return object
-    return { kind: 'member', object, name: this.parse_identifier(), ...position }
   }
 
   // The items of a list after its opening bracket, through `close`. Items are separated by a comma,
@@ -339,51 +330,6 @@ export class ExpressionParser {
     this.tokens.next()
     return { name, value: this.parse_value() }
   }
-
-  // Whether the next token ends the expression, so that `return` there has no value.
-  private ends_expression(): boolean {
-    const ends = [
-      ...['newline', 'dedent', 'eof', 'line_break'],
-      ...['if', 'while', 'then', 'else', ')', ']', '}', ','],
-    ]
-    return ends.includes(this.tokens.peek_continuation())
-  }
-
-  parse_primary(): Expression {
-    if (this.compounds.starts_function_literal()) return this.compounds.parse_function_literal()
-    const token = this.tokens.next()
-    const position = { line: token.line, column: token.column }
-    if (token.kind === 'identifier') return { kind: 'identifier', name: token.text, ...position }
-    if (token.kind === 'string') return { kind: 'string', value: token.text, ...position }
-    if (token.kind === 'interpolated') {
-      const parts = token.parts!.map((part) =>
-        part.kind === 'text'
-          ? part.text
-          : to_string_call(parse_interpolated_code(part.source, token.line, part.column)),
-      )
-      return { kind: 'interpolation', parts, ...position }
-    }
-    if (token.kind === 'nil') return { kind: 'nil', ...position }
-    if (token.kind === 'break' || token.kind === 'continue')
-      return { kind: token.kind, ...position }
-    if (token.kind === 'return') {
-      const value = this.ends_expression() ? undefined : this.parse_expression()
-      return { kind: 'return', value, ...position }
-    }
-    if (token.kind === 'throw')
-      return { kind: 'throw', message: this.parse_expression(), ...position }
-    if (token.kind === '@') return this.parse_this(position)
-    if (token.kind === 'true' || token.kind === 'false') {
-      return { kind: 'boolean', value: token.kind === 'true', ...position }
-    }
-    if (token.kind === 'case') return this.compounds.parse_case(position)
-    if (token.kind === '[') return this.compounds.parse_array_literal(position)
-    if (token.kind === '{') return this.compounds.parse_map_literal(position)
-    if (token.kind === 'integer')
-      return { kind: 'integer', value: integer_value(BigInt(token.text), position), ...position }
-    if (token.kind === '(') return this.compounds.parse_parenthesized(position)
-    throw this.tokens.error_at(token, 'expression')
-  }
 }
 
 type Argument = { name: Identifier | undefined; value: Expression }
@@ -403,34 +349,4 @@ const to_arguments = (items: Argument[]): Arguments => {
     }
   }
   return { args, named_args }
-}
-
-const integer_value = (value: bigint, position: Position): bigint => {
-  if (value < INT_MIN || value > INT_MAX) {
-    throw new CompileError('integer literal does not fit in Int', position.line, position.column)
-  }
-  return value
-}
-
-// Interpolated code is one expression; a function literal, whose body is made of statements,
-// cannot be written there.
-const no_bodies = (line: number, column: number): BodyParser => {
-  const reject = (): never => {
-    throw new CompileError('a function cannot be written in an interpolation', line, column)
-  }
-  return { parse_block: reject, parse_simple_statement: reject }
-}
-
-const to_string_call = (value: Expression): Call => {
-  const position = { line: value.line, column: value.column }
-  const name: Identifier = { kind: 'identifier', name: 'to_string', ...position }
-  const callee: Expression = { kind: 'member', object: value, name, ...position }
-  return { kind: 'call', callee, args: [], named_args: [], type_args: [], ...position }
-}
-
-const parse_interpolated_code = (source: string, line: number, column: number): Expression => {
-  const tokens = new TokenStream(tokenize_fragment(source, line, column))
-  const expression = new ExpressionParser(tokens, no_bodies(line, column)).parse_expression()
-  tokens.expect('newline', 'end of interpolation')
-  return expression
 }

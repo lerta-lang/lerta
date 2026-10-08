@@ -15,7 +15,7 @@ import type { Types } from '../check/shared.ts'
 import type { ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import { emit_release, ir_type } from './lerta_ir.ts'
-import { emit_type_test } from './object_codegen.ts'
+import { emit_type_test } from './heap_object.ts'
 import { is_reference_type, type Type } from '../types.ts'
 
 // Generates a block whose last statement, if an expression, gives its value: the operand, or ''.

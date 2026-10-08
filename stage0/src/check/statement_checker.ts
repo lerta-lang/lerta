@@ -1,15 +1,14 @@
 // Checks statements and blocks, defining the locals they declare; loops are checked by the
 // loop checker.
+import { AssignmentChecker } from './assignment_checker.ts'
 import {
   is_expression,
-  type Assignment,
   type Comprehension,
   type Condition,
   type Declaration,
   type Expression,
   type FunctionLiteral,
   type Identifier,
-  type Index,
   type Jump,
   type If,
   type Return,
@@ -47,11 +46,10 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
   private readonly resolver: TypeResolver
   private readonly scopes: Scopes<CheckerLocal>
   private readonly top_level: TopLevelValues
-  // Whether this checks a function or a method, which sees the top-level values.
-  private readonly scopes_see_top_level: boolean
   private readonly expressions: ExpressionChecker
   private readonly results: ResultChecker
   private readonly loops: LoopChecker
+  private readonly assignments: AssignmentChecker
   private readonly closures: ClosureChecker
 
   // `closure`: see ClosureChecker.
@@ -72,12 +70,12 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
     this.top_level = shared.top_level
     // A function or a method sees the top-level values; the top-level code declares them.
     const is_top_level_code = context === undefined && self === undefined
-    this.scopes_see_top_level = !is_top_level_code
+    const seen_top_level = is_top_level_code ? undefined : this.top_level
     // Outside every scope: the top-level values, for a function or a method, and imported values.
     this.scopes = new Scopes(
       (name) =>
         this.closures.captured(name) ??
-        (is_top_level_code ? undefined : this.top_level.lookup(name)) ??
+        seen_top_level?.lookup(name) ??
         this.imports.value_local(name),
     )
     this.closures = new ClosureChecker(
@@ -87,16 +85,15 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
       (body_context, body_closure) =>
         new StatementChecker(shared, body_context, undefined, body_closure),
     )
-    this.expressions = new ExpressionChecker(
-      shared,
-      this.scopes,
-      self,
-      is_top_level_code ? undefined : this.top_level,
-      this,
-      this,
-    )
+    this.expressions = new ExpressionChecker(shared, this.scopes, self, seen_top_level, this, this)
     this.results = new ResultChecker(this, this.expressions, context)
     this.loops = new LoopChecker(this.expressions, this)
+    this.assignments = new AssignmentChecker(
+      this.types,
+      this.scopes,
+      this.expressions,
+      seen_top_level,
+    )
   }
 
   // Each initializer sees the constructor arguments and the fields initialized before it.
@@ -228,7 +225,7 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
       case 'declaration':
         return this.check_declaration(statement)
       case 'assignment':
-        return this.check_assignment(statement)
+        return this.assignments.check_assignment(statement)
       case 'type_alias':
         return this.require_top_level(statement, 'a type can only be declared at the top level')
       case 'extern':
@@ -325,55 +322,6 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
       const message = `cannot store a value of type ${format_type(type)}`
       throw new CompileError(message, value.line, value.column)
     }
-  }
-
-  // Compound assignments such as `+=` apply to Ints only.
-  private check_assignment(assignment: Assignment): void {
-    const { target } = assignment
-    const target_type =
-      target.kind === 'index'
-        ? this.check_item_target(target, assignment.operator)
-        : target.kind === 'member'
-          ? this.expressions.field_target(target)
-          : this.check_variable_target(target)
-    const is_numeric = target_type.kind === 'Int' || target_type.kind === 'Byte'
-    if (assignment.operator !== '=' && !is_numeric) {
-      const message = `expected Int or Byte, got ${format_type(target_type)}`
-      throw new CompileError(message, target.line, target.column)
-    }
-    this.expressions.expect_type(assignment.value, target_type)
-  }
-
-  // Array items and map values can be replaced; a Binary is immutable. A map's key may be missing,
-  // so its value cannot be combined with `+=` and so on.
-  private check_item_target(target: Index, operator: Assignment['operator']): Type {
-    const type = this.expressions.type_of(target)
-    const object_type = this.types.get(target.object)!
-    if (object_type.kind === 'Map') {
-      if (operator !== '=') {
-        const message = `a map value cannot be updated with '${operator}'; write m[k] = (m[k] ? 0) ${operator.slice(0, -1)} x`
-        throw new CompileError(message, target.line, target.column)
-      }
-      return object_type.value
-    }
-    if (object_type.kind === 'Binary') {
-      const message = 'a Binary cannot be changed'
-      throw new CompileError(message, target.line, target.column)
-    }
-    return type
-  }
-
-  private check_variable_target(target: Identifier): Type {
-    const local = this.scopes.lookup(target.name)
-    const pending = this.scopes_see_top_level ? this.top_level.pending_error(target) : undefined
-    if (pending !== undefined) throw pending
-    if (local === undefined || !local.mutable) {
-      const reason = local === undefined ? 'is not a variable' : 'is not a var'
-      throw new CompileError(`'${target.name}' ${reason}`, target.line, target.column)
-    }
-    // A write is not a use: the target's type is found without reading it.
-    this.types.set(target, local.type)
-    return local.type
   }
 
   private warn_if_unused(local: CheckerLocal): void {

@@ -1,9 +1,15 @@
 import type { Expression, Identifier, Interpolation, Member, Throw } from '../syntax/ast.ts'
 import { emit_length } from './array_codegen.ts'
-import { emit_binary_length } from './binary_codegen.ts'
+import { emit_unreachable } from './runtime_calls.ts'
+import { emit_binary_length, emit_concat } from './string_codegen.ts'
 import { CallGenerator } from './call_codegen.ts'
 import { emit_function_closure } from './closure_codegen.ts'
-import { emit_record, emit_record_field } from './record_codegen.ts'
+import {
+  emit_field_pointer,
+  emit_record,
+  emit_record_field,
+  emit_type_test,
+} from './heap_object.ts'
 import { CaseGenerator, type BlockGenerator } from './case_codegen.ts'
 import { CollectionGenerator } from './collection_codegen.ts'
 import type { Checked } from '../check/checker.ts'
@@ -13,12 +19,9 @@ import { emit_release, emit_retain, ir_type, string_constant } from './lerta_ir.
 import { emit_map_length } from './map_codegen.ts'
 import { emit_is_present, emit_unwrap, emit_wrap, nil_constant } from './optional_codegen.ts'
 import { OperatorGenerator } from './operator_codegen.ts'
-import { emit_field_pointer, emit_type_test } from './object_codegen.ts'
 import type { ObjectTypes } from '../check/object_types.ts'
 import type { Scopes } from '../scopes.ts'
 import type { Conversions, Types } from '../check/shared.ts'
-import { emit_unreachable } from './extern_codegen.ts'
-import { emit_concat } from './string_codegen.ts'
 import type { ThrowBlocks } from './throw_blocks.ts'
 import { emit_initialized_check, type TopLevelGlobal } from './top_level_codegen.ts'
 import { is_reference_type, type Type } from '../types.ts'
@@ -26,7 +29,7 @@ import { is_reference_type, type Type } from '../types.ts'
 // A loop variable or a parameter is an SSA value; a `const` or `var` lives in a stack slot.
 // A slot of a top-level value is its global (see top_level_codegen.ts); outside the top-level code,
 // it is checked to be initialized before it is used. A slot of a var that function literals
-// capture points into its cell (see cell_codegen.ts).
+// capture points into its cell (see heap_object.ts).
 export type CodegenLocal =
   | { kind: 'value'; operand: string; type: Type }
   | { kind: 'slot'; pointer: string; type: Type; top_level?: TopLevelSlot; cell?: CellSlot }

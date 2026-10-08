@@ -5,22 +5,16 @@ import {
   type Condition,
   type Declaration,
   type Destructuring,
-  type Extend,
-  type Extern,
   type Identifier,
-  type MemberDeclaration,
   type Expression,
   type For,
   type If,
-  type Import,
-  type ImportName,
   type Program,
   type Statement,
-  type TypeAlias,
-  type TypeDeclaration,
   type While,
 } from './ast.ts'
 import { CompileError } from '../errors.ts'
+import { DeclarationParser } from './declaration_parser.ts'
 import { ExpressionParser } from './expression_parser.ts'
 import type { Token } from './lexer.ts'
 import { TokenStream } from './token_stream.ts'
@@ -44,17 +38,19 @@ const command_argument_starts = [
   'throw',
 ]
 
-// Statements: the program, blocks, declarations, assignments, control flow and calls without
-// parentheses.
+// Statements: the program, blocks, `const` and `var` declarations, assignments, control flow and
+// calls without parentheses; the other declarations are read by the declaration parser.
 class Parser {
   private readonly tokens: TokenStream
   private readonly expressions: ExpressionParser
   private readonly types: TypeParser
+  private readonly declarations: DeclarationParser
 
   constructor(tokens: TokenStream) {
     this.tokens = tokens
     this.expressions = new ExpressionParser(tokens, this)
     this.types = this.expressions.types
+    this.declarations = new DeclarationParser(tokens, this.expressions, this)
   }
 
   parse_program(): Program {
@@ -80,7 +76,7 @@ class Parser {
     return statements
   }
 
-  private parse_statement(): Statement | Destructuring {
+  parse_statement(): Statement | Destructuring {
     switch (this.tokens.peek().kind) {
       case 'for':
         return this.parse_for()
@@ -90,17 +86,17 @@ class Parser {
         return this.parse_if()
       case 'class':
       case 'struct':
-        return this.parse_type_declaration()
+        return this.declarations.parse_type_declaration()
       case 'import':
-        return this.parse_import()
+        return this.declarations.parse_import()
       case 'export':
-        return this.parse_export()
+        return this.declarations.parse_export()
       case 'extern':
-        return this.parse_extern()
+        return this.declarations.parse_extern()
       case 'extend':
-        return this.parse_extend()
+        return this.declarations.parse_extend()
       default:
-        if (this.at_type_alias()) return this.parse_type_alias()
+        if (this.declarations.starts_type_alias()) return this.declarations.parse_type_alias()
         if (this.at_declaration()) return this.reject_postfix(this.parse_declaration())
         return this.parse_postfix_conditions(this.parse_simple_statement())
     }
@@ -226,141 +222,10 @@ class Parser {
 
   // `f x, y`: the arguments run to the end of the line.
   private parse_command_call(): Call {
-    const callee = this.expressions.parse_primary()
+    const callee = this.expressions.primaries.parse_primary()
     const { args, named_args } = this.expressions.parse_arguments()
     const position = { line: callee.line, column: callee.column }
     return { kind: 'call', callee, args, named_args, type_args: [], ...position }
-  }
-
-  // `type Name = ...`; `type` is not a keyword, so that it stays usable as a name.
-  private at_type_alias(): boolean {
-    const [first, second, third] = [0, 1, 2].map((offset) => this.tokens.peek(offset))
-    const starts_with_type = first.kind === 'identifier' && first.text === 'type'
-    return starts_with_type && second.kind === 'identifier' && third.kind === '='
-  }
-
-  private parse_type_alias(): TypeAlias {
-    const token = this.tokens.next()
-    const name = this.expressions.parse_identifier()
-    this.tokens.expect('=', "'='")
-    const type = this.types.parse_type_name()
-    return { kind: 'type_alias', name, type, line: token.line, column: token.column }
-  }
-
-  // `export` before a `const` (a function or a value) or a type; the checker tells whether it is at
-  // the top level.
-  private parse_export(): Statement {
-    const token = this.tokens.next()
-    const statement = this.parse_statement()
-    const is_const = statement.kind === 'declaration' && !statement.mutable
-    const is_exportable =
-      is_const ||
-      statement.kind === 'type_declaration' ||
-      statement.kind === 'type_alias' ||
-      statement.kind === 'extern'
-    if (is_exportable) return { ...statement, exported: true }
-    const message = 'only a const, a class, a struct, a type alias or an extern can be exported'
-    throw new CompileError(message, token.line, token.column)
-  }
-
-  // `extern symbol as name: (A) -> R`.
-  private parse_extern(): Extern {
-    const token = this.tokens.next()
-    const symbol = this.expressions.parse_identifier()
-    const next = this.tokens.peek()
-    const has_name = next.kind === 'identifier' && next.text === 'as'
-    if (has_name) this.tokens.next()
-    const name = has_name ? this.expressions.parse_identifier() : symbol
-    this.tokens.expect(':', "':'")
-    const type = this.types.parse_type_name()
-    return { kind: 'extern', symbol, name, type, line: token.line, column: token.column }
-  }
-
-  // `import { a, b } from 'module'`, or `import 'module'` for its effects alone. `from` is not a
-  // keyword, so that it stays usable as a name.
-  private parse_import(): Import {
-    const token = this.tokens.next()
-    const position = { line: token.line, column: token.column }
-    if (this.tokens.peek().kind === 'string') {
-      return { kind: 'import', names: [], module: this.parse_module_name(), ...position }
-    }
-    this.tokens.expect('{', "'{' or module name")
-    const first = this.tokens.peek()
-    const names = this.expressions.parse_list('}', () => this.parse_import_name())
-    if (names.length === 0) throw this.tokens.error_at(first, 'a name to import')
-    const from = this.tokens.peek()
-    if (from.kind !== 'identifier' || from.text !== 'from')
-      throw this.tokens.error_at(from, "'from'")
-    this.tokens.next()
-    return { kind: 'import', names, module: this.parse_module_name(), ...position }
-  }
-
-  private parse_module_name(): string {
-    const module = this.tokens.peek()
-    if (module.kind !== 'string') throw this.tokens.error_at(module, 'module name')
-    this.tokens.next()
-    return module.text
-  }
-
-  // `name` or `name as alias`. `as` is not a keyword, so that it stays usable as a name.
-  private parse_import_name(): ImportName {
-    const name = this.expressions.parse_identifier()
-    const next = this.tokens.peek()
-    if (next.kind !== 'identifier' || next.text !== 'as') return { name, alias: undefined }
-    this.tokens.next()
-    return { name, alias: this.expressions.parse_identifier() }
-  }
-
-  // `class Name` or `struct Name` followed by an indented block of members, one per line.
-  private parse_type_declaration(): TypeDeclaration {
-    const token = this.tokens.next()
-    const name = this.expressions.parse_identifier()
-    const members = this.parse_members()
-    const is_struct = token.kind === 'struct'
-    return {
-      kind: 'type_declaration',
-      is_struct,
-      name,
-      members,
-      line: token.line,
-      column: token.column,
-    }
-  }
-
-  // `extend Type`, or `extend <T> Array<T>` for a generic one, followed by an indented block of
-  // methods, one per line.
-  private parse_extend(): Extend {
-    const token = this.tokens.next()
-    const type_params =
-      this.tokens.peek().kind === '<' ? this.expressions.compounds.parse_type_parameters() : []
-    const type = this.types.parse_type_name()
-    const members = this.parse_members()
-    return { kind: 'extend', type_params, type, members, line: token.line, column: token.column }
-  }
-
-  private parse_members(): MemberDeclaration[] {
-    this.tokens.expect('newline', 'end of line')
-    this.tokens.expect('indent', 'indented members')
-    const members: MemberDeclaration[] = []
-    while (this.tokens.peek().kind !== 'dedent') {
-      members.push(this.parse_member())
-      this.tokens.expect_line_end()
-    }
-    this.tokens.next()
-    return members
-  }
-
-  // `[const | var] name[: Type][ = value]`, with a type, a value or both.
-  private parse_member(): MemberDeclaration {
-    const token = this.tokens.peek()
-    const modifier = token.kind === 'const' || token.kind === 'var' ? token.kind : undefined
-    if (modifier !== undefined) this.tokens.next()
-    const name = this.expressions.parse_identifier()
-    const type = this.tokens.accept(':') ? this.types.parse_type_name() : undefined
-    const has_value = type === undefined || this.tokens.peek().kind === '='
-    if (has_value) this.tokens.expect('=', type === undefined ? "':' or '='" : "'='")
-    const value = has_value ? this.expressions.parse_value() : undefined
-    return { name, modifier, type, value, line: token.line, column: token.column }
   }
 
   // `for <name> in <expression>` followed by an indented block.

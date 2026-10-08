@@ -7,7 +7,7 @@ import { slot_pointer, type CodegenLocal, type ExpressionGenerator } from './exp
 import type { IrBuilder } from './ir_builder.ts'
 import { emit_release, ir_type } from './lerta_ir.ts'
 import { emit_map_set } from './map_codegen.ts'
-import { emit_field_pointer } from './object_codegen.ts'
+import { emit_field_pointer } from './heap_object.ts'
 import type { ObjectTypes } from '../check/object_types.ts'
 import type { Scopes } from '../scopes.ts'
 import { is_reference_type, type Type } from '../types.ts'

@@ -1,7 +1,7 @@
 // Arrays and maps in the generated code: their literals, and indexing (of a Binary too).
 import type { ArrayLiteral, Index, MapLiteral } from '../syntax/ast.ts'
 import { emit_array_new, emit_get, emit_push } from './array_codegen.ts'
-import { emit_binary_get } from './binary_codegen.ts'
+import { emit_binary_get } from './string_codegen.ts'
 import type { Types } from '../check/shared.ts'
 import type { ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'

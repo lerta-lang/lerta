@@ -17,15 +17,15 @@ import type { FunctionGenerator } from './function_codegen.ts'
 import type { CodegenLocal, ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import { emit_is_present, emit_unwrap } from './optional_codegen.ts'
-import { emit_sequence_get, emit_sequence_length } from './sequence_codegen.ts'
 import type { Scope, Scopes } from '../scopes.ts'
 import {
   emit_comprehension_iter,
-  emit_iter_loop,
-  emit_iter_start,
   emit_range_iter,
+  emit_sequence_get,
+  emit_sequence_length,
   emit_source_iter,
 } from './iter_codegen.ts'
+import { emit_iter_loop, emit_iter_start } from './iter_protocol.ts'
 import { int_type, iterable_item, type Type } from '../types.ts'
 
 // Where `break` and `continue` jump, and how many scopes enclose the loop.

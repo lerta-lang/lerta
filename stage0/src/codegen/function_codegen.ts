@@ -16,7 +16,7 @@ import { CheckedInt } from './checked_int.ts'
 import { ControlFlowGenerator } from './control_flow_codegen.ts'
 import { ThrowBlocks } from './throw_blocks.ts'
 import type { BlockGenerator } from './case_codegen.ts'
-import { emit_cell, emit_cell_pointer } from './cell_codegen.ts'
+import { emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer } from './heap_object.ts'
 import {
   emit_capture_pointer,
   emit_closure,
@@ -35,7 +35,6 @@ import {
   ir_type,
   method_symbol,
 } from './lerta_ir.ts'
-import { emit_allocate, emit_field_pointer } from './object_codegen.ts'
 import type { FieldInfo, ObjectInfo, ObjectTypes } from '../check/object_types.ts'
 import { Scopes, type Scope } from '../scopes.ts'
 import {

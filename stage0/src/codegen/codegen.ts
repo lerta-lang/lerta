@@ -16,7 +16,7 @@ import {
   module_init_symbol,
   method_symbol,
 } from './lerta_ir.ts'
-import { define_object } from './object_codegen.ts'
+import { define_object } from './heap_object.ts'
 import type { Module } from '../loader.ts'
 import { define_top_level_globals, type TopLevelGlobal } from './top_level_codegen.ts'
 import { is_top_level_value } from '../check/top_level_values.ts'

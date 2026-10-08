@@ -3,7 +3,7 @@
 // first, then the arguments, which are borrowed, and gives an owned result.
 import { IrBuilder } from './ir_builder.ts'
 import { emit_release, ir_return_type, ir_type, LERTA_IMMORTAL } from './lerta_ir.ts'
-import { emit_unreachable } from './extern_codegen.ts'
+import { emit_unreachable } from './runtime_calls.ts'
 import { is_reference_type, type Type } from '../types.ts'
 
 // The code pointer comes after the header.
@@ -68,7 +68,7 @@ export const emit_closure_call = (
 }
 
 // What a closure holds for one capture: a value, or the cell of a captured var (see
-// cell_codegen.ts), which is an owned reference.
+// heap_object.ts), which is an owned reference.
 export type CapturedSlot = { kind: 'value'; type: Type } | { kind: 'cell' }
 
 export const slot_ir_type = (slot: CapturedSlot): string =>
