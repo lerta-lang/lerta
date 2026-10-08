@@ -64,13 +64,13 @@ export class AssignmentChecker {
   }
 
   private check_variable_target(target: Identifier): Type {
+    const reject = (reason: string): CompileError =>
+      new CompileError(`'${target.name}' ${reason}`, target.line, target.column)
     const local = this.scopes.lookup(target.name)
-    const pending = this.top_level?.pending_error(target)
-    if (pending !== undefined) throw pending
-    if (local === undefined || !local.mutable) {
-      const reason = local === undefined ? 'is not a variable' : 'is not a var'
-      throw new CompileError(`'${target.name}' ${reason}`, target.line, target.column)
+    if (local === undefined) {
+      throw this.top_level?.pending_error(target) ?? reject('is not a variable')
     }
+    if (!local.mutable) throw reject('is not a var')
     // A write is not a use: the target's type is found without reading it.
     this.types.set(target, local.type)
     return local.type
