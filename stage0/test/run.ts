@@ -209,7 +209,7 @@ try {
   failed_count = await run_checks(
     'run tests',
     [...stray_checks, ...test_checks],
-    Math.ceil(availableParallelism() / 2),
+    availableParallelism(),
   )
 } finally {
   rmSync(work_dir, { recursive: true, force: true })
