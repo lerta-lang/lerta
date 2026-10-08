@@ -248,13 +248,33 @@ export type TypeAlias = Position &
 export type ImportName = { name: Identifier; alias: Identifier | undefined }
 export type Import = Position & { kind: 'import'; names: ImportName[]; module: string }
 
+// `extern lerta_write as write: (Int, String) -> Int`: a C function, by its symbol, known in the
+// module by the name after `as`, or by its symbol without one.
+export type Extern = Position &
+  Exportable & {
+    kind: 'extern'
+    symbol: Identifier
+    name: Identifier
+    type: TypeName
+  }
+
 export type Statement =
-  Expression | Import | TypeDeclaration | TypeAlias | Declaration | Assignment | If | While | For
+  | Expression
+  | Import
+  | TypeDeclaration
+  | TypeAlias
+  | Extern
+  | Declaration
+  | Assignment
+  | If
+  | While
+  | For
 
 export type Program = Statement[]
 
 const statement_only_kinds = [
   'import',
+  'extern',
   'type_alias',
   'type_declaration',
   'declaration',

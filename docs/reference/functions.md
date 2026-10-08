@@ -44,6 +44,17 @@ print map([1, 2, 3], (x) -> x * x)
 - A function literal sees the locals around it, and captures their values when it is evaluated: `n` above keeps the value it had when `make_adder` was called. It can capture a `const`, a parameter, a loop variable or, in a method, `@`, narrowed as it is there, but not a `var` so far; copy one into a `const` first.
 - `return` in a function literal returns from the literal; `break` and `continue` cannot leave a loop around it.
 
+## C functions
+
+```
+extern lerta_int_to_string as text_of: (Int) -> String
+export extern lerta_write_file as write_file: (String, Binary) -> void
+```
+
+- `extern <symbol> as <name>: <function type>` declares a C function of the runtime, by its C symbol, as `name` in the module; without `as <name>`, its name is the symbol. Its type gives its parameters and result: `Int` is `int64_t`, `UInt8` is `uint8_t`, `Bool` is `bool`, references are pointers (see [internals](../internals.md)); arguments are borrowed and a returned reference is owned. An extern is declared at the top level and can be exported like a function, but, like a standard module's function, it can only be called so far, not used as a value.
+- Its result may be `void`, or `never` for a C function that does not return, such as `exit`.
+- All the externs of one C symbol in the program must have the same type. The compiler does not check that the C function exists or has that type: a wrong declaration fails when the program is linked, or misbehaves. A wrong type for a runtime function that the compiler also calls itself can make the compiler fail with an internal error.
+
 ## Types
 
-Type names: `Int`, `UInt8` (or `Byte`), `Bool`, `String`, `Binary`, `Array<T>`, `Map<K, V>`, function types, the names of classes and structs, and `void` as a return type.
+Type names: `Int`, `UInt8` (or `Byte`), `Bool`, `String`, `Binary`, `Array<T>`, `Map<K, V>`, function types, the names of classes and structs, and `void` and `never` as a return type.

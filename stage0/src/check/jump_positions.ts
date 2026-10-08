@@ -45,6 +45,7 @@ const visit_statement = (statement: Statement, jumps: Jumps): void => {
       return
     case 'import':
     case 'type_alias':
+    case 'extern':
       return
     default:
       return visit(statement, jumps)

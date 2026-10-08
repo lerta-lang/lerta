@@ -36,6 +36,10 @@ export const ir_type = (type: Type): string => {
 export const ir_return_type = (type: Type): string =>
   type.kind === 'void' || type.kind === 'never' ? 'void' : ir_type(type)
 
+// A C function's `bool` and `uint8_t` results come zero-extended, as its parameters go.
+export const ir_c_return_type = (type: Type): string =>
+  type.kind === 'Bool' || type.kind === 'UInt8' ? `zeroext ${ir_type(type)}` : ir_return_type(type)
+
 // Symbols of generated functions; the prefixes keep them apart from the runtime's C symbols.
 // A function is named by its module too, since two modules may declare the same name.
 export const function_symbol = (module_index: number, name: string): string =>

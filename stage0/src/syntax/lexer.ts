@@ -20,7 +20,7 @@ export type TokenKind =
 const keywords = [
   ...['true', 'false', 'nil', 'and', 'or', 'not'],
   ...['const', 'var', 'if', 'else', 'while', 'for', 'in', 'break', 'continue', 'return'],
-  ...['case', 'when', 'then', 'class', 'struct', 'throw', 'import', 'export'],
+  ...['case', 'when', 'then', 'class', 'struct', 'throw', 'import', 'export', 'extern'],
 ] as const
 type Keyword = (typeof keywords)[number]
 

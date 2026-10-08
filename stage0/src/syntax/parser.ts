@@ -5,6 +5,7 @@ import {
   type Condition,
   type Declaration,
   type Destructuring,
+  type Extern,
   type Identifier,
   type MemberDeclaration,
   type Expression,
@@ -93,6 +94,8 @@ class Parser {
         return this.parse_import()
       case 'export':
         return this.parse_export()
+      case 'extern':
+        return this.parse_extern()
       default:
         if (this.at_type_alias()) return this.parse_type_alias()
         if (this.at_declaration()) return this.reject_postfix(this.parse_declaration())
@@ -240,11 +243,27 @@ class Parser {
     const token = this.tokens.next()
     const statement = this.parse_statement()
     const is_const = statement.kind === 'declaration' && !statement.mutable
-    if (is_const || statement.kind === 'type_declaration' || statement.kind === 'type_alias') {
-      return { ...statement, exported: true }
-    }
-    const message = 'only a const, a class, a struct or a type alias can be exported'
+    const is_exportable =
+      is_const ||
+      statement.kind === 'type_declaration' ||
+      statement.kind === 'type_alias' ||
+      statement.kind === 'extern'
+    if (is_exportable) return { ...statement, exported: true }
+    const message = 'only a const, a class, a struct, a type alias or an extern can be exported'
     throw new CompileError(message, token.line, token.column)
+  }
+
+  // `extern symbol as name: (A) -> R`.
+  private parse_extern(): Extern {
+    const token = this.tokens.next()
+    const symbol = this.expressions.parse_identifier()
+    const next = this.tokens.peek()
+    const has_name = next.kind === 'identifier' && next.text === 'as'
+    if (has_name) this.tokens.next()
+    const name = has_name ? this.expressions.parse_identifier() : symbol
+    this.tokens.expect(':', "':'")
+    const type = this.types.parse_type_name()
+    return { kind: 'extern', symbol, name, type, line: token.line, column: token.column }
   }
 
   // `import { a, b } from 'module'`, or `import 'module'` for its effects alone. `from` is not a

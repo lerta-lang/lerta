@@ -14,6 +14,7 @@ import {
   array_type,
   is_map_key_type,
   map_type,
+  never_type,
   record_type,
   format_type,
   is_reference_type,
@@ -40,7 +41,7 @@ const simple_types = new Map<string, Type>([
 
 // Names of builtin types, which a class or struct cannot take.
 export const is_builtin_type_name = (name: string): boolean =>
-  simple_types.has(name) || name === 'Array' || name === 'Map' || name === 'void'
+  simple_types.has(name) || ['Array', 'Map', 'void', 'never'].includes(name)
 
 // Resolves type names, including the classes and structs of the program.
 export class TypeResolver {
@@ -74,18 +75,19 @@ export class TypeResolver {
     return this.aliases.has(name)
   }
 
-  // `void` is only allowed as a return type.
-  resolve(type_name: TypeName, allow_void = false): Type {
+  // `void` and `never` are only allowed as a return type, `is_result`.
+  resolve(type_name: TypeName, is_result = false): Type {
     if (type_name.kind === 'union_type') return this.resolve_union(type_name)
     const type =
       type_name.kind === 'record_type'
         ? this.resolve_record(type_name)
         : type_name.kind === 'function_type'
           ? this.resolve_function(type_name)
-          : this.resolve_name(type_name, allow_void)
+          : this.resolve_name(type_name, is_result)
     if (!type_name.optional) return type
-    if (type.kind === 'void') {
-      throw new CompileError('void cannot be optional', type_name.line, type_name.column)
+    if (type.kind === 'void' || type.kind === 'never') {
+      const message = `${type.kind} cannot be optional`
+      throw new CompileError(message, type_name.line, type_name.column)
     }
     return optional_type(type)
   }
@@ -138,7 +140,7 @@ export class TypeResolver {
     return entry.type
   }
 
-  private resolve_name(type_name: NamedType, allow_void: boolean): Type {
+  private resolve_name(type_name: NamedType, is_result: boolean): Type {
     const { name, args, line, column } = type_name
     if (name === 'Array' && args.length === 1) return array_type(this.resolve_element(args[0]))
     if (name === 'Array') throw new CompileError('Array takes one type argument', line, column)
@@ -147,7 +149,8 @@ export class TypeResolver {
     }
     if (name === 'Map') throw new CompileError('Map takes two type arguments', line, column)
     if (args.length > 0) throw new CompileError(`'${name}' takes no type arguments`, line, column)
-    if (allow_void && name === 'void') return void_type
+    if (is_result && name === 'void') return void_type
+    if (is_result && name === 'never') return never_type
     const type =
       simple_types.get(name) ?? this.object_type(name) ?? this.resolve_alias(name, type_name)
     if (type === undefined) throw new CompileError(`unknown type '${name}'`, line, column)

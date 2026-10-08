@@ -238,6 +238,13 @@ export class StatementChecker implements BlockChecker, JumpChecker {
           statement.line,
           statement.column,
         )
+      case 'extern':
+        if (this.context === undefined && this.scopes.depth === 1) return
+        throw new CompileError(
+          'an extern can only be declared at the top level',
+          statement.line,
+          statement.column,
+        )
       case 'import':
         if (this.context === undefined && this.scopes.depth === 1) return
         throw new CompileError(

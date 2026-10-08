@@ -381,6 +381,7 @@ export class FunctionGenerator implements BlockGenerator {
       case 'type_declaration':
       case 'type_alias':
       case 'import':
+      case 'extern':
         return
       default:
         return this.expressions.release_if_reference(

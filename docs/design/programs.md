@@ -26,7 +26,8 @@ Named imports from the standard modules and from files, and exports of functions
 
 ## C ABI / FFI
 
-- An `extern` declaration refers to a C function or variable. Its type is written as an ordinary function type (`extern lerta_write: (Int, String) -> Int`). The name is used as the C symbol name as is.
+- `extern` declarations of C functions are implemented: see [the reference](../reference/functions.md#c-functions). Planned beyond that:
+- An `extern` declaration may also refer to a C variable.
 - The C side handles Lerta's object representation directly. For the representation passed, the ownership convention and the accessors, see [internals](../internals.md#ffi).
 - FFI is a future extension. Decided points:
   - **C ABI only.** C++ / Rust go through C wrappers.

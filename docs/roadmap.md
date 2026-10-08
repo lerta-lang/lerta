@@ -13,7 +13,7 @@
 - **Strings**: immutable, UTF-8, **flat only**. `Binary`, `Byte`, `s.binary`, `b.decode_utf8()`, `s.parse_int()`, `length`, `equals`, `hash`, `==`, `+` (concatenation), `join`
 - **Memory**: RC (non-atomic), destructors. Immortal static literals
 - **Modules**: `import`/`export` (named only), `import 'module'` for a module's effects, a file is a module
-- **FFI**: hand-written `extern` declarations only (no libclang). Used to call runtime C functions
+- **FFI**: hand-written `extern` declarations only (no libclang), `extern symbol as name: type`. Used to call runtime C functions
 - **I/O**: synchronous file reading and writing, stdout/stderr, argv, exit. This is enough to write the compiler
 - **Safety**: out-of-bounds access, overflow and division by zero throw (which in stage0 prints to stderr and exits, like any `throw`). Panics abort
 - **Exceptions**: `throw` only. The argument is a string; it is printed to stderr and the program exits (there is no `catch`)

@@ -20,7 +20,7 @@ import { StatementChecker } from './statement_checker.ts'
 import { reject_misplaced_jumps } from './jump_positions.ts'
 import { TopLevelValues } from './top_level_values.ts'
 import { TypeResolver } from './type_names.ts'
-import type { Type } from '../types.ts'
+import { format_type, same_type, type Type } from '../types.ts'
 
 // The type of every expression in a checked program, and the type that the name of `x is T`
 // stands for.
@@ -47,6 +47,7 @@ export type Shared = {
   imports: Imports
   top_level: TopLevelValues
   captures: Captures
+  extern_types: Map<string, Type>
 }
 
 // The object that `@` refers to: in a method, or in the initializer of a field, which sees the
@@ -72,12 +73,16 @@ export type Checked = {
   exports: Map<string, Export>
 }
 
+// What the modules share: the classes and structs of every module checked so far, by symbol, and
+// the type each C function was first declared with by an extern.
+type ProgramWide = { infos: Map<string, ObjectInfo>; extern_types: Map<string, Type> }
+
 // Checks the modules in order, each after those it imports (see load_modules). The warnings of
 // all the modules come back with the last one's, or with the error.
 export const check_modules = (modules: Module[]): Checked[] => {
   const checked: Checked[] = []
   const warnings: CompileWarning[] = []
-  const program_infos = new Map<string, ObjectInfo>()
+  const program_wide: ProgramWide = { infos: new Map(), extern_types: new Map() }
   try {
     for (const module of modules) {
       const exports_of = (statement: Import) =>
@@ -85,7 +90,7 @@ export const check_modules = (modules: Module[]): Checked[] => {
           ? checked[module.imported.get(statement)!.index].exports
           : std_modules.get(statement.module)
       const result = with_module_path(module.display_path, () =>
-        check(module, exports_of, program_infos),
+        check(module, exports_of, program_wide),
       )
       for (const warning of result.warnings) warning.module_path = module.display_path
       warnings.push(...result.warnings)
@@ -102,10 +107,10 @@ export const check_modules = (modules: Module[]): Checked[] => {
 const check = (
   module: Module,
   exports_of: (statement: Import) => Map<string, Export> | undefined,
-  program_infos: Map<string, ObjectInfo>,
+  program_wide: ProgramWide,
 ): Checked => {
   const { program } = module
-  const shared = create_shared(module, exports_of, program_infos)
+  const shared = create_shared(module, exports_of, program_wide)
   const { types, conversions, warnings, functions, objects, resolver, imports, captures } = shared
   try {
     reject_misplaced_jumps(program)
@@ -115,7 +120,7 @@ const check = (
     if (error instanceof CompileError) error.warnings = in_source_order(warnings)
     throw error
   }
-  const exports = exports_of_module(module, functions, objects, resolver, types)
+  const exports = exports_of_module(module, functions, objects, resolver, types, shared.imports)
   return {
     types,
     conversions,
@@ -130,7 +135,7 @@ const check = (
 const create_shared = (
   module: Module,
   exports_of: (statement: Import) => Map<string, Export> | undefined,
-  program_infos: Map<string, ObjectInfo>,
+  program_wide: ProgramWide,
 ): Shared => {
   const imports = new Imports(exports_of)
   // An imported type, marking its import as used.
@@ -143,7 +148,7 @@ const create_shared = (
   const objects: ObjectTypes = new ObjectTypes(
     (info) => check_object(shared, info),
     (name) => imported_type(name)?.info,
-    program_infos,
+    program_wide.infos,
     module.index,
     module.display_path ?? 'the entry module',
   )
@@ -161,6 +166,7 @@ const create_shared = (
     imports,
     top_level: new TopLevelValues(module.program),
     captures: new Map(),
+    extern_types: program_wide.extern_types,
   }
   return shared
 }
@@ -178,10 +184,32 @@ const declare_names = (program: Program, shared: Shared): void => {
     if (statement.kind === 'type_alias') resolver.add_alias(statement)
   }
   imports.add(program)
-  reject_types_named_like_imports(program, imports)
   resolver.resolve_aliases()
+  declare_externs(program, shared)
+  reject_types_named_like_imports(program, imports)
   add_top_level_functions(program, functions, objects, resolver, imports)
   objects.add_members(resolver, functions)
+}
+
+// An extern's type is a function type, which gives the C function's parameters and result. A C
+// function has one type, so all the externs of a symbol in the program must agree.
+const declare_externs = (program: Program, { resolver, imports, extern_types }: Shared): void => {
+  for (const statement of program) {
+    if (statement.kind !== 'extern') continue
+    const type = resolver.resolve(statement.type, true)
+    if (type.kind !== 'function') {
+      const { line, column } = statement.type
+      throw new CompileError('an extern is a C function, of a function type', line, column)
+    }
+    const { symbol } = statement
+    const declared = extern_types.get(symbol.name)
+    if (declared !== undefined && !same_type(declared, type)) {
+      const message = `the C function '${symbol.name}' is declared as ${format_type(declared)} elsewhere`
+      throw new CompileError(message, symbol.line, symbol.column)
+    }
+    extern_types.set(symbol.name, type)
+    imports.add_extern(statement.name, type, symbol.name)
+  }
 }
 
 // The top-level code, then the objects and functions, which may use its names.
@@ -212,6 +240,7 @@ const exports_of_module = (
   objects: ObjectTypes,
   resolver: TypeResolver,
   types: Types,
+  imports: Imports,
 ): Map<string, Export> => {
   const exports = new Map<string, Export>()
   for (const statement of module.program) {
@@ -233,6 +262,8 @@ const exports_of_module = (
         module_index: module.index,
         name: name.name,
       })
+    } else if (statement.kind === 'extern') {
+      exports.set(name.name, imports.get(name.name)!.export)
     } else if (statement.kind === 'type_declaration') {
       const type = objects.object_type(name.name)!
       exports.set(name.name, { kind: 'type', type, info: objects.info(type) })

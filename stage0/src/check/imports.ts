@@ -57,6 +57,15 @@ export class Imports {
     }
   }
 
+  // A C function the module declares, which it calls as it calls those it imports from standard
+  // modules; it is never warned about as unused.
+  add_extern(name: Identifier, type: Type, symbol: string): void {
+    if (this.names.has(name.name)) {
+      throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
+    }
+    this.names.set(name.name, { name, export: { kind: 'function', type, symbol }, used: true })
+  }
+
   has(name: string): boolean {
     return this.names.has(name)
   }

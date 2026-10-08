@@ -1,6 +1,6 @@
 // The standard modules in the generated code (see std_modules.ts and runtime/process.c, file.c).
 import type { IrBuilder } from './ir_builder.ts'
-import { ir_param_type, ir_return_type } from './lerta_ir.ts'
+import { ir_c_return_type, ir_param_type } from './lerta_ir.ts'
 import type { StdExport } from '../check/std_modules.ts'
 import type { Type } from '../types.ts'
 
@@ -28,7 +28,7 @@ export const emit_runtime_call = (
 ): string => {
   if (type.kind !== 'function') throw new Error('a runtime function has a function type')
   const params = type.params.map(ir_param_type).join(', ')
-  const result = ir_return_type(type.result)
+  const result = ir_c_return_type(type.result)
   const attributes = type.result.kind === 'never' ? ' noreturn' : ''
   ir.declare(symbol, `declare ${result} @${symbol}(${params})${attributes}`)
   const arg_list = args.map((arg, i) => `${ir_param_type(type.params[i])} ${arg.operand}`)
