@@ -77,8 +77,8 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/builtins.md#methods-of-the-builtin-types)):
 
 - **Built into the compiler**: the operations on the representation of arrays, maps and Iters, whose items are 8 bytes and retained by kind (see [memory management](#memory-management)): `length`, indexing, `push`, `pop`, `remove`, `keys`, and the Iter protocol, `has_next` and `next`; `s.binary`, which passes on the String itself; and `take`, which stops reading its source, which an Iter written in Lerta, a comprehension, cannot. It moves to Lerta once an Iter's `has_next` and `next` can be written in Lerta.
-- **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join` and `slice`; the conversion of a `UInt8` to an `Int`; and `lerta_binary_as_string`, which gives `decode_utf8` its result once Lerta has checked the bytes.
-- The rest is Lerta: `print` writes through `stdout`, `parse_int` and the UTF-8 check of `decode_utf8` read bytes with `b[i]`, `has` reads the map, and `iter` of an array and `map`, `filter` and `to_array` of an Iter are comprehensions, through which those of an array go.
+- **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join` and `slice`; the conversion of a `UInt8` to an `Int`; and `lerta_binary_as_string`, which gives `decode_utf8` and `split` their Strings once Lerta knows the bytes are valid UTF-8.
+- The rest is Lerta: `print` writes through `stdout`, `parse_int`, `split` and the UTF-8 check of `decode_utf8` read bytes with `b[i]`, `has` reads the map, and `iter` of an array and `map`, `filter` and `to_array` of an Iter are comprehensions, through which those of an array go.
 
 ## Lazy iterators
 

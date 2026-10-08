@@ -23,6 +23,7 @@
 ## String
 
 - `+` concatenates two `String`s into a new one.
+- `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws `split by an empty separator`.
 - `==` and `!=` compare two `String`s byte by byte.
 
 ## Binary

@@ -49,6 +49,30 @@ extend String
       value = value * 10 - digit
     return nil if not negative and value == MIN_INT
     negative then value else -value
+  # The pieces between the occurrences of a non-empty separator, empty ones too: 'a,,b'.split(',')
+  # is ['a', '', 'b']. Cutting valid UTF-8 around a valid separator leaves valid UTF-8.
+  split = (separator: String): Array<String> ->
+    throw 'split by an empty separator' if separator == ''
+    const bytes = @.binary
+    const separator_bytes = separator.binary
+    const pieces: Array<String> = []
+    var start = 0
+    var i = 0
+    while i + separator_bytes.length <= bytes.length
+      if occurs_at(bytes, i, separator_bytes)
+        pieces.push(lerta_binary_as_string(bytes.slice(start, i)))
+        i += separator_bytes.length
+        start = i
+      else
+        i += 1
+    pieces.push(lerta_binary_as_string(bytes.slice(start, bytes.length)))
+    pieces
+
+# Whether `part` occurs in `bytes` at `index`, which leaves room for it.
+const occurs_at = (bytes: Binary, index: Int, part: Binary): Bool ->
+  for k in 0...part.length
+    return false if bytes[index + k] != part[k]
+  true
 
 extend Binary
   # The bytes from `start` up to `end`, which is exclusive. Throws if they are out of range.
