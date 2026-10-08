@@ -2,7 +2,7 @@
 import type { ArrayLiteral, Index, MapLiteral } from '../syntax/ast.ts'
 import { emit_array_new, emit_get, emit_push } from './array_codegen.ts'
 import { emit_binary_get } from './binary_codegen.ts'
-import type { Types } from '../check/checker.ts'
+import type { Types } from '../check/shared.ts'
 import type { ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import { emit_release } from './lerta_ir.ts'

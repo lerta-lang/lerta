@@ -1,5 +1,5 @@
 // Classes and structs in the generated code: heap objects (see heap_object.ts) named by their
-// types. Constructors and methods are generated like functions (see codegen.ts).
+// types. Constructors and methods are generated like functions (see function_codegen.ts).
 import { define_heap_object, emit_heap_allocate, emit_heap_field_pointer } from './heap_object.ts'
 import type { IrBuilder, IrModule } from './ir_builder.ts'
 import { drop_symbol, method_symbol, object_ir_type } from './lerta_ir.ts'

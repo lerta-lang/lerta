@@ -34,6 +34,19 @@ export const parameter_types = (
     throw new CompileError(`the type of the parameter '${name}' must be written`, line, column)
   })
 
+// The function's type, if its return type is written; otherwise only its body tells.
+export const annotated_type = (
+  literal: FunctionLiteral,
+  resolver: TypeResolver,
+): Type | undefined =>
+  literal.return_type === undefined
+    ? undefined
+    : {
+        kind: 'function',
+        params: parameter_types(literal, resolver),
+        result: resolver.resolve(literal.return_type, true),
+      }
+
 // A top-level function, which GenericFunction checks, is the only kind that can be generic.
 export const reject_generic = (literal: FunctionLiteral): void => {
   if (!is_generic(literal)) return
@@ -57,14 +70,7 @@ export class Functions {
   add(key: string, name: Identifier, literal: FunctionLiteral, this_type?: Type): void {
     this.reject_defined(key, name)
     reject_generic(literal)
-    const type: Type | undefined =
-      literal.return_type === undefined
-        ? undefined
-        : {
-            kind: 'function',
-            params: parameter_types(literal, this.resolver),
-            result: this.resolver.resolve(literal.return_type, true),
-          }
+    const type = annotated_type(literal, this.resolver)
     this.entries.set(key, { name, literal, type, state: 'unchecked', this_type })
   }
 

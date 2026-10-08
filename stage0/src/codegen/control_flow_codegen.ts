@@ -12,8 +12,8 @@ import type {
   While,
 } from '../syntax/ast.ts'
 import { emit_array_new, emit_get, emit_length, emit_push } from './array_codegen.ts'
-import type { Types } from '../check/checker.ts'
-import type { FunctionGenerator } from './codegen.ts'
+import type { Types } from '../check/shared.ts'
+import type { FunctionGenerator } from './function_codegen.ts'
 import type { CodegenLocal, ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import { emit_is_present, emit_unwrap } from './optional_codegen.ts'

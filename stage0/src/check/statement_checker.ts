@@ -15,7 +15,7 @@ import {
   type Return,
   type Statement,
 } from '../syntax/ast.ts'
-import type { FunctionContext, SelfContext, Shared, Types } from './checker.ts'
+import type { FunctionContext, SelfContext, Shared, Types } from './shared.ts'
 import { ClosureChecker, type ClosureContext } from './closure_checker.ts'
 import { CompileError, CompileWarning } from '../errors.ts'
 import { ExpressionChecker, type CheckerLocal, type JumpChecker } from './expression_checker.ts'

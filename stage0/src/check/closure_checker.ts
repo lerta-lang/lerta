@@ -1,10 +1,10 @@
 // Checks function literals in expressions and finds the names their bodies capture.
 import type { Expression, FunctionLiteral } from '../syntax/ast.ts'
-import type { Capture, FunctionContext, Shared } from './checker.ts'
+import type { Capture, FunctionContext, Shared } from './shared.ts'
 import { CompileError } from '../errors.ts'
 import type { CheckerLocal } from './expression_checker.ts'
 import { parameter_types, reject_generic } from './functions.ts'
-import { has_type_parameters } from './generics.ts'
+import { has_type_parameters } from './type_patterns.ts'
 import { finish_function_type, reject_nil_result } from './result_checker.ts'
 import type { Scopes } from '../scopes.ts'
 import { format_type, type Type } from '../types.ts'

@@ -2,7 +2,7 @@
 // and functions read; a flag, set once it is initialized, lets a function that runs before then
 // throw instead of reading it.
 import type { Declaration } from '../syntax/ast.ts'
-import type { Types } from '../check/checker.ts'
+import type { Types } from '../check/shared.ts'
 import type { IrBuilder, IrModule } from './ir_builder.ts'
 import { emit_release, ir_type, string_constant, top_level_symbol } from './lerta_ir.ts'
 import { is_reference_type, type Type } from '../types.ts'

@@ -1,6 +1,6 @@
 // Types classes and structs: construction, fields, `@` and methods.
 import type { Call, Expression, Identifier, Member, RecordLiteral } from '../syntax/ast.ts'
-import type { SelfContext, Shared, Types } from './checker.ts'
+import type { SelfContext, Shared, Types } from './shared.ts'
 import { CompileError } from '../errors.ts'
 import type { CheckerLocal, ExpressionChecker } from './expression_checker.ts'
 import { method_key, type Functions } from './functions.ts'

@@ -1,27 +1,12 @@
 // The methods that `extend` statements give to types. Those of a module are in effect in it and in
 // the modules that import it directly, so that a module sees only the extends it asks for.
-import {
-  is_generic,
-  type Extend,
-  type FunctionLiteral,
-  type Identifier,
-  type Import,
-  type TypeParameter,
-} from '../syntax/ast.ts'
-import { builtin_method, builtin_property } from './builtins.ts'
+import type { FunctionLiteral, Identifier, Import, Position } from '../syntax/ast.ts'
 import { CompileError } from '../errors.ts'
-import { method_key, type Functions } from './functions.ts'
-import {
-  matches,
-  overlaps,
-  parts_of,
-  type_parameter,
-  type GenericFunction,
-  type Receiver,
-} from './generics.ts'
-import { is_method, type ObjectTypes } from './object_types.ts'
-import type { TypeResolver } from './type_names.ts'
-import { format_type, type Type } from '../types.ts'
+import type { Functions } from './functions.ts'
+import type { GenericFunction } from './generics.ts'
+import type { ObjectTypes } from './object_types.ts'
+import { matches, overlaps, parts_of } from './type_patterns.ts'
+import { format_type, type_key, type Type } from '../types.ts'
 
 // The receiver of a generic extend, `Array<T>`, has type parameters, which stand for any type.
 export type ExtensionMethod = {
@@ -39,32 +24,18 @@ type PlainMethod = { generic: undefined; functions: Functions; key: string }
 // A method of a generic extend, or one with type parameters of its own, has instances.
 type GenericMethod = { generic: GenericFunction }
 
-// Makes a generic method of an extend (see GenericFunction).
-export type MakeGenericMethod = (
-  name: Identifier,
-  literal: FunctionLiteral,
-  receiver: Receiver,
-) => GenericFunction
-
-// Optional values, functions, unions and anonymous structs are left out.
-const extendable_kinds: Type['kind'][] = [
-  'String',
-  'Int',
-  'Bool',
-  'UInt8',
-  'Binary',
-  'Array',
-  'Map',
-  'Iter',
-  'Object',
-]
+// The type of a method that is not generic, checking its body first if needed.
+export const plain_method_type = (
+  method: ExtensionMethod & PlainMethod,
+  at: Position,
+): Type | undefined => method.functions.type_of(method.key, at)
 
 export class Extensions {
   private readonly in_effect: ExtensionMethod[] = []
   // The module's own, which the modules that import it get.
   readonly own: ExtensionMethod[] = []
-  private readonly module_index: number
-  private readonly module_name: string
+  readonly module_index: number
+  readonly module_name: string
 
   constructor(module_index: number, module_name: string) {
     this.module_index = module_index
@@ -86,72 +57,17 @@ export class Extensions {
     }
   }
 
-  // Adds the methods to `functions`, which check their bodies with `@` as the receiver, or makes
-  // them generic methods, whose instances are checked so.
-  declare(
-    statement: Extend,
-    resolver: TypeResolver,
-    objects: ObjectTypes,
-    functions: Functions,
-    make_generic: MakeGenericMethod,
-  ): void {
-    const { type_params } = statement
-    reject_bounds(type_params)
-    const placeholders = new Map(
-      type_params.map(({ name }): [string, Type] => [name.name, type_parameter(name.name)]),
-    )
-    const receiver = resolver.with_type_parameters(placeholders).resolve(statement.type)
-    if (!extendable_kinds.includes(receiver.kind)) {
-      const message = `${format_type(receiver)} cannot be extended; only String, Int, Bool, UInt8, Binary, arrays, maps, Iters, classes and structs can be so far`
-      throw new CompileError(message, statement.type.line, statement.type.column)
+  // A method of an extend of the module (see declare_extend).
+  add_own(method: ExtensionMethod): void {
+    const { receiver, name } = method
+    const other = this.overlapping(receiver, name.name)
+    if (other !== undefined) {
+      const where = other.module_index === this.module_index ? 'the same module' : other.module_name
+      const message = `${format_type(receiver)} already has a method '${name.name}', from an extend in ${where}`
+      throw new CompileError(message, name.line, name.column)
     }
-    reject_unused_type_parameters(type_params, receiver)
-    const extended: Receiver = { type: receiver, type_params }
-    for (const member of statement.members) {
-      const { name } = member
-      if (!is_method(member)) {
-        const message = 'an extend has only methods, as in `name = (x: Int) -> ...`'
-        throw new CompileError(message, member.line, member.column)
-      }
-      if (name.name === 'init' || name.name === 'deinit') {
-        const message = `an extend cannot declare ${name.name}, which only a class or struct runs`
-        throw new CompileError(message, name.line, name.column)
-      }
-      if (has_member(receiver, name.name, objects)) {
-        const message = `${format_type(receiver)} already has a member '${name.name}'`
-        throw new CompileError(message, name.line, name.column)
-      }
-      const literal = member.value as FunctionLiteral
-      const method = this.method(extended, name, literal, functions, make_generic)
-      const other = this.overlapping(receiver, name.name)
-      if (other !== undefined) {
-        const where =
-          other.module_index === this.module_index ? 'the same module' : other.module_name
-        const message = `${format_type(receiver)} already has a method '${name.name}', from an extend in ${where}`
-        throw new CompileError(message, name.line, name.column)
-      }
-      this.in_effect.push(method)
-      this.own.push(method)
-      if (method.generic === undefined) functions.add(method.key, name, literal, receiver)
-    }
-  }
-
-  // A method of an extend of the receiver: generic if the extend or the method has type parameters.
-  private method(
-    receiver: Receiver,
-    name: Identifier,
-    literal: FunctionLiteral,
-    functions: Functions,
-    make_generic: MakeGenericMethod,
-  ): ExtensionMethod {
-    const { type } = receiver
-    const { module_index, module_name } = this
-    const declared = { receiver: type, name, literal, module_index, module_name }
-    if (receiver.type_params.length > 0 || is_generic(literal)) {
-      return { ...declared, generic: make_generic(name, literal, receiver) }
-    }
-    const key = method_key(format_type(type), name.name)
-    return { ...declared, generic: undefined, functions, key }
+    this.in_effect.push(method)
+    this.own.push(method)
   }
 
   // The extends in effect here, with `methods` before them, as an instance of a generic function
@@ -163,9 +79,25 @@ export class Extensions {
     return extensions
   }
 
-  // The methods that extends in effect give the type.
-  methods_of(receiver: Type): ExtensionMethod[] {
-    return this.in_effect.filter((method) => matches(method.receiver, receiver))
+  // The methods that the extends in effect give the types and the types they are made of, fields
+  // included: those that the body of an instance with these type arguments may reach.
+  methods_reachable_from(types: Type[], objects: ObjectTypes): ExtensionMethod[] {
+    const seen = new Map<string, Type>()
+    const visit = (type: Type) => {
+      if (seen.has(type_key(type))) return
+      seen.set(type_key(type), type)
+      for (const part of parts_of(type)) visit(part)
+      if (type.kind !== 'Object') return
+      for (const field of objects.info(type).fields) {
+        if (field.type !== undefined) visit(field.type)
+      }
+    }
+    types.forEach(visit)
+    // A generic extend's methods, as those of Array<T>, may be in effect for several of the types.
+    const methods = [...seen.values()].flatMap((type) =>
+      this.in_effect.filter((method) => matches(method.receiver, type)),
+    )
+    return [...new Set(methods)]
   }
 
   find(receiver: Type, name: string): ExtensionMethod | undefined {
@@ -182,47 +114,8 @@ export class Extensions {
     )
   }
 
-  // The type of the method `name` of the receiver, checking its body first if needed, unless it is
-  // generic, which only a call can give the type arguments of.
-  method_type(receiver: Type, name: Identifier): Type | undefined {
-    const method = this.find(receiver, name.name)
-    if (method?.generic !== undefined) return undefined
-    return method?.functions.type_of(method.key, name)
-  }
-
   // The generic methods that the module's own extends give, whose instances it generates.
   own_generics(): GenericFunction[] {
     return this.own.flatMap((method) => (method.generic === undefined ? [] : [method.generic]))
   }
-}
-
-// The receiver gives an extend's type arguments, whose bounds would go unchecked.
-const reject_bounds = (type_params: TypeParameter[]): void => {
-  const bounded = type_params.find(({ bound }) => bound !== undefined)
-  if (bounded === undefined) return
-  const { line, column } = bounded.bound!
-  throw new CompileError("an extend's type parameter takes no bound", line, column)
-}
-
-// Each type parameter of an extend must be in the extended type, which gives its type argument.
-const reject_unused_type_parameters = (type_params: TypeParameter[], receiver: Type): void => {
-  const used = new Set<string>()
-  const visit = (type: Type) => {
-    if (type.kind === 'TypeParameter') used.add(type.name)
-    parts_of(type).forEach(visit)
-  }
-  visit(receiver)
-  const unused = type_params.find(({ name }) => !used.has(name.name))
-  if (unused === undefined) return
-  const { name, line, column } = unused.name
-  throw new CompileError(`'${name}' is not in the extended type`, line, column)
-}
-const has_member = (receiver: Type, name: string, objects: ObjectTypes): boolean => {
-  if (receiver.kind !== 'Object') {
-    return (
-      builtin_method(receiver, name) !== undefined || builtin_property(receiver, name) !== undefined
-    )
-  }
-  const info = objects.info(receiver)
-  return info.methods.has(name) || info.fields.some((field) => field.name.name === name)
 }

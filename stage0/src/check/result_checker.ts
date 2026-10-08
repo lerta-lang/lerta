@@ -7,7 +7,7 @@ import {
   type Return,
   type Statement,
 } from '../syntax/ast.ts'
-import type { Conversions, FunctionContext } from './checker.ts'
+import type { Conversions, FunctionContext } from './shared.ts'
 import { CompileError } from '../errors.ts'
 import type { ExpressionChecker } from './expression_checker.ts'
 import type { StatementChecker } from './statement_checker.ts'

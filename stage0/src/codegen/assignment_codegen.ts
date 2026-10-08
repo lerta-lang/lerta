@@ -1,7 +1,7 @@
 // Generates assignments to names, fields, array items and map values.
 import type { Assignment, AssignmentOperator, Index, Member } from '../syntax/ast.ts'
 import { emit_get, emit_set } from './array_codegen.ts'
-import type { Types } from '../check/checker.ts'
+import type { Types } from '../check/shared.ts'
 import type { CheckedInt } from './checked_int.ts'
 import { slot_pointer, type CodegenLocal, type ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'

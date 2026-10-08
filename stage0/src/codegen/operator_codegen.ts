@@ -8,7 +8,7 @@ import {
   type Unary,
   type Unwrap,
 } from '../syntax/ast.ts'
-import type { Types } from '../check/checker.ts'
+import type { Types } from '../check/shared.ts'
 import type { CheckedInt } from './checked_int.ts'
 import type { ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'

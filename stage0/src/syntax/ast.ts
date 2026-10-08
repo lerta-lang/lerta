@@ -312,6 +312,11 @@ const statement_only_kinds = [
 export const is_expression = (statement: Statement): statement is Expression =>
   !statement_only_kinds.includes(statement.kind)
 
+export type FunctionDeclaration = Declaration & { value: FunctionLiteral }
+
+export const is_function_declaration = (statement: Statement): statement is FunctionDeclaration =>
+  statement.kind === 'declaration' && statement.value.kind === 'function'
+
 // `x == nil` or `x != nil`, on either side.
 export const is_nil_test = (binary: Binary): boolean =>
   (binary.operator === '==' || binary.operator === '!=') &&
