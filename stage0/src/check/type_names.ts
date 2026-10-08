@@ -13,6 +13,7 @@ import { CompileError } from '../errors.ts'
 import {
   array_type,
   is_map_key_type,
+  iter_type,
   map_type,
   never_type,
   record_type,
@@ -41,7 +42,7 @@ const simple_types = new Map<string, Type>([
 
 // Names of builtin types, which a class or struct cannot take.
 export const is_builtin_type_name = (name: string): boolean =>
-  simple_types.has(name) || ['Array', 'Map', 'void', 'never'].includes(name)
+  simple_types.has(name) || ['Array', 'Iter', 'Map', 'void', 'never'].includes(name)
 
 // Resolves type names, including the classes and structs of the program.
 export class TypeResolver {
@@ -144,6 +145,8 @@ export class TypeResolver {
     const { name, args, line, column } = type_name
     if (name === 'Array' && args.length === 1) return array_type(this.resolve_element(args[0]))
     if (name === 'Array') throw new CompileError('Array takes one type argument', line, column)
+    if (name === 'Iter' && args.length === 1) return iter_type(this.resolve(args[0]))
+    if (name === 'Iter') throw new CompileError('Iter takes one type argument', line, column)
     if (name === 'Map' && args.length === 2) {
       return map_type(this.resolve_key(args[0]), this.resolve_map_value(args[1]))
     }

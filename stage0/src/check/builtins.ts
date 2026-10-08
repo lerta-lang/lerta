@@ -4,6 +4,7 @@ import {
   bool_type,
   int_type,
   is_stringable,
+  iter_type,
   optional_type,
   string_type,
   stringable_type,
@@ -51,6 +52,7 @@ export const builtin_method = (receiver: Type, name: string): Type | undefined =
   }
   if (receiver.kind === 'String' && name === 'parse_int') return method([], optional_type(int_type))
   if (receiver.kind === 'Map') return map_method(receiver.key, name)
+  if (receiver.kind === 'Iter') return iter_method(receiver.item, name)
   if (receiver.kind !== 'Array') return undefined
   const { element } = receiver
   switch (name) {
@@ -61,7 +63,32 @@ export const builtin_method = (receiver: Type, name: string): Type | undefined =
     case 'join':
       return element.kind === 'String' ? method([string_type], string_type) : undefined
     default:
+      return lazy_method(element, name)
+  }
+}
+
+// `map` is one too, but its result's type depends on its argument's (see ExpressionChecker).
+const lazy_method = (item: Type, name: string): Type | undefined => {
+  switch (name) {
+    case 'filter':
+      return method([method([item], bool_type)], iter_type(item))
+    case 'take':
+      return method([int_type], iter_type(item))
+    default:
       return undefined
+  }
+}
+
+const iter_method = (item: Type, name: string): Type | undefined => {
+  switch (name) {
+    case 'has_next':
+      return method([], bool_type)
+    case 'next':
+      return method([], item)
+    case 'to_array':
+      return method([], array_type(item))
+    default:
+      return lazy_method(item, name)
   }
 }
 

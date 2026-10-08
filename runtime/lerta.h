@@ -63,6 +63,16 @@ typedef struct {
   bool owns_values;
 } LertaMap;
 
+// An Iter. Its has_next and next take the Iter itself, whose state follows these fields; next
+// returns the item, owned, in the representation of its type, so the compiler declares its type.
+typedef struct LertaIter {
+  LertaHeader header;
+  bool (*has_next)(struct LertaIter *iter);
+  void *next;
+  // Whether a traversal has started; a second one throws.
+  bool started;
+} LertaIter;
+
 // Memory (memory.c). Release frees an object when its count reaches zero. Both accept NULL,
 // which is how nil is represented.
 void *lerta_alloc(int64_t size, void (*drop)(void *object));
@@ -111,6 +121,11 @@ bool lerta_map_has(const LertaMap *map, int64_t key);
 void lerta_map_set(LertaMap *map, int64_t key, int64_t value);
 void lerta_map_remove(LertaMap *map, int64_t key);
 LertaArray *lerta_map_keys(const LertaMap *map);
+
+// Iters (iter.c). Starting a traversal of an Iter that has started one throws, and so does next
+// past the end.
+void lerta_iter_start(LertaIter *iter);
+_Noreturn void lerta_throw_iter_ended(void);
 
 // Process (process.c). The arguments exclude the program name.
 void lerta_set_arguments(int argc, char **argv);

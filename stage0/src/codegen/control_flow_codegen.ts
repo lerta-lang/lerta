@@ -1,4 +1,5 @@
-// Generates control flow: `if`, `while`, `for` over ranges and arrays, `break` and `continue`.
+// Generates control flow: `if`, `while`, `for` over ranges, arrays and Iters, comprehensions,
+// `break` and `continue`.
 import type {
   Comprehension,
   Condition,
@@ -17,7 +18,14 @@ import type { CodegenLocal, ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import { emit_is_present, emit_unwrap } from './optional_codegen.ts'
 import type { Scope, Scopes } from '../scopes.ts'
-import { int_type } from '../types.ts'
+import {
+  emit_comprehension_iter,
+  emit_iter_loop,
+  emit_iter_start,
+  emit_range_iter,
+  emit_source_iter,
+} from './iter_codegen.ts'
+import { int_type, iterable_item, type Type } from '../types.ts'
 
 // Where `break` and `continue` jump, and how many scopes enclose the loop.
 type Loop = { break_label: string; continue_label: string; scope_depth: number }
@@ -95,8 +103,8 @@ export class ControlFlowGenerator {
     this.ir.start_block(exit_label)
   }
 
-  // A range's bounds are evaluated once. An array is held for the whole loop in a scope of its
-  // own, so a `return` from the body releases it too; its length is read each round.
+  // A range's bounds are evaluated once. An array or an Iter is held for the whole loop in a scope
+  // of its own, so a `return` from the body releases it too; an array's length is read each round.
   generate_for(for_statement: For): void {
     const { iterable, variable, body } = for_statement
     this.generate_iteration(iterable, variable, body)
@@ -105,7 +113,8 @@ export class ControlFlowGenerator {
   // A new array, of the comprehension's elements, which the loop pushes. Its loop can be the target
   // of no `break` or `continue`, which its element and guard cannot hold (see jump_positions.ts).
   generate_comprehension(comprehension: Comprehension): string {
-    const { element, variable, iterable, guard } = comprehension
+    const { element, variable, iterable, guard, lazy } = comprehension
+    if (lazy !== undefined) return this.generate_iter_comprehension(iterable, lazy)
     const type = this.types.get(comprehension)!
     if (type.kind !== 'Array') throw new Error('a comprehension gives an array')
     const result = emit_array_new(this.ir, type.element)
@@ -122,6 +131,28 @@ export class ControlFlowGenerator {
       this.ir.start_block(next_label)
     })
     return result
+  }
+
+  // The source is evaluated first, then the closures, which capture the values they see then.
+  private generate_iter_comprehension(
+    iterable: Expression,
+    lazy: NonNullable<Comprehension['lazy']>,
+  ): string {
+    const source =
+      iterable.kind === 'range'
+        ? emit_range_iter(
+            this.ir,
+            this.expressions.generate(iterable.start),
+            this.expressions.generate(iterable.end),
+          )
+        : emit_source_iter(this.ir, this.expressions.generate(iterable), this.types.get(iterable)!)
+    const item = iterable.kind === 'range' ? int_type : iterable_item(this.types.get(iterable)!)!
+    const guard = lazy.guard && this.blocks.generate_closure(lazy.guard)
+    const element = {
+      closure: this.blocks.generate_closure(lazy.element),
+      type: this.types.get(lazy.element)!,
+    }
+    return emit_comprehension_iter(this.ir, source, item, guard, element)
   }
 
   // The body is a block, or, for a comprehension, a function that generates it in the loop's scope.
@@ -143,7 +174,8 @@ export class ControlFlowGenerator {
       return
     }
     const type = this.types.get(iterable)!
-    if (type.kind !== 'Array') throw new Error('only ranges and arrays can be iterated')
+    if (type.kind === 'Iter') return this.generate_iter_loop(iterable, type, variable, body)
+    if (type.kind !== 'Array') throw new Error('only ranges, arrays and Iters can be iterated')
     const array_scope = this.locals.push()
     const array = this.expressions.generate(iterable)
     array_scope.set(' iterated array', this.blocks.store_in_slot(array, type))
@@ -157,6 +189,26 @@ export class ControlFlowGenerator {
       },
     )
     this.blocks.release_scope(array_scope)
+    this.locals.pop()
+  }
+
+  private generate_iter_loop(
+    iterable: Expression,
+    type: Type,
+    variable: Identifier,
+    body: Statement[] | (() => void),
+  ): void {
+    const item = iterable_item(type)!
+    const iter_scope = this.locals.push()
+    const iter = this.expressions.generate(iterable)
+    iter_scope.set(' iterated Iter', this.blocks.store_in_slot(iter, type))
+    emit_iter_start(this.ir, iter)
+    emit_iter_loop(this.ir, iter, item, (value, exit_label, next_label) =>
+      this.generate_loop_body(body, exit_label, next_label, (scope) =>
+        scope.set(variable.name, this.blocks.store_in_slot(value, item)),
+      ),
+    )
+    this.blocks.release_scope(iter_scope)
     this.locals.pop()
   }
 

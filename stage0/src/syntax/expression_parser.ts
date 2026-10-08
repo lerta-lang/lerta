@@ -232,7 +232,7 @@ export class ExpressionParser {
         const { args, named_args } = this.parse_parenthesized_arguments()
         expression = { kind: 'call', callee: expression, args, named_args, ...position }
       } else if (token.kind === '[') {
-        const index = this.parse_grouped(']')
+        const index = this.parse_index()
         expression = { kind: 'index', object: expression, index, ...position }
       } else {
         expression = {
@@ -287,11 +287,11 @@ export class ExpressionParser {
     return false
   }
 
-  // The contents of a grouping or an index, through `close`; line ends inside are skipped.
-  private parse_grouped(close: ')' | ']'): Expression {
+  // The index after `[`, through `]`; line ends inside are skipped.
+  private parse_index(): Expression {
     return this.tokens.inside('skip', () => {
       const expression = this.parse_expression()
-      this.tokens.expect(close, `'${close}'`)
+      this.tokens.expect(']', "']'")
       return expression
     })
   }
@@ -371,11 +371,7 @@ export class ExpressionParser {
     if (token.kind === '{') return this.compounds.parse_map_literal(position)
     if (token.kind === 'integer')
       return { kind: 'integer', value: integer_value(BigInt(token.text), position), ...position }
-    if (token.kind === '(') {
-      const expression = this.parse_grouped(')')
-      // Diagnostics about the group point at its opening parenthesis.
-      return { ...expression, ...position }
-    }
+    if (token.kind === '(') return this.compounds.parse_parenthesized(position)
     throw this.tokens.error_at(token, 'expression')
   }
 }

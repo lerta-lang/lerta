@@ -12,6 +12,7 @@ These apply when a value in statement position is not captured.
 
 - A literal or an operator expression (`'a'`, `1 + 2`, `x == 1`) → error. An unused comparison often means a mistyped assignment.
 - A function value itself (`print`) → error "to call it, write `print()`".
+- An [`Iter`](types.md#iter) (`xs.map(f)`) → error "an Iter does nothing until it is consumed".
 - A call, or an expression with no value such as a `case` whose arms are calls to `void` functions → allowed.
 
 ## Unused names

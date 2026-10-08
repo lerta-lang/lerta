@@ -74,8 +74,9 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 ## Lazy iterators
 
 - Desugared into "the source iterator + a closure for the body". No coroutines needed (possible in Phase 0).
-- If the consumer is a `for` loop, they are fused, with zero intermediate data structures.
-- A traversed flag is kept, and starting a second traversal throws.
+- An `Iter` is a heap object: the header, the pointers to its `has_next` and `next` code, which take the `Iter` itself, a started flag, then the state of its kind (`LertaIter` in `runtime/lerta.h`). The kinds are the items of an array and the integers of a range, and `map`, `filter` and `take`, which own their source `Iter` and closure; each is generated once per type it depends on. A lazy comprehension is a `map` of its element's closure over its source, through a `filter` of its guard's closure if it has one.
+- No intermediate data structures are made, but each item goes through calls of code pointers. Fusing a chain into the `for` loop that consumes it is left for later.
+- A started flag is kept, and starting a second traversal throws.
 
 ## Interfaces
 

@@ -6,6 +6,8 @@ export type Type =
   | { kind: 'Binary' }
   | { kind: 'Array'; element: Type }
   | { kind: 'Map'; key: Type; value: Type }
+  // A lazy sequence of items, which can be traversed only once.
+  | { kind: 'Iter'; item: Type }
   // An anonymous struct, `{ x: Int, y: String }`; its fields are kept in name order, so that the
   // order they are written in does not matter.
   | { kind: 'Record'; fields: { name: string; type: Type }[] }
@@ -39,6 +41,7 @@ export const stringable_type: Type = { kind: 'Stringable' }
 const compare_text = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
 export const array_type = (element: Type): Type => ({ kind: 'Array', element })
+export const iter_type = (item: Type): Type => ({ kind: 'Iter', item })
 export const map_type = (key: Type, value: Type): Type => ({ kind: 'Map', key, value })
 export const record_type = (fields: { name: string; type: Type }[]): Type => ({
   kind: 'Record',
@@ -59,6 +62,8 @@ export const format_type = (type: Type, qualified = false): string => {
   switch (type.kind) {
     case 'Array':
       return `Array<${format(type.element)}>`
+    case 'Iter':
+      return `Iter<${format(type.item)}>`
     case 'Map':
       return `Map<${format(type.key)}, ${format(type.value)}>`
     case 'Object':
@@ -106,6 +111,8 @@ export const type_key = (type: Type): string => {
       return `{${type.fields.map((field) => `${field.name}: ${type_key(field.type)}`).join(', ')}}`
     case 'Array':
       return `Array<${type_key(type.element)}>`
+    case 'Iter':
+      return `Iter<${type_key(type.item)}>`
     case 'Map':
       return `Map<${type_key(type.key)}, ${type_key(type.value)}>`
     case 'Union':
@@ -123,10 +130,15 @@ export const same_type = (a: Type, b: Type): boolean => type_key(a) === type_key
 
 // Values of these types are reference counted; a function value is a closure (see closure_codegen.ts).
 export const is_reference_type = (type: Type): boolean =>
-  ['String', 'Binary', 'Array', 'Map', 'Object', 'Record', 'Union', 'function'].includes(
+  ['String', 'Binary', 'Array', 'Iter', 'Map', 'Object', 'Record', 'Union', 'function'].includes(
     type.kind,
   ) ||
   (type.kind === 'Optional' && is_reference_type(type.inner))
+
+// The type of the items of an array or an Iter, which `for` and lazy methods such as `map` go
+// through.
+export const iterable_item = (type: Type): Type | undefined =>
+  type.kind === 'Array' ? type.element : type.kind === 'Iter' ? type.item : undefined
 
 // A T or nil also fits where a T? is expected.
 export const is_assignable = (value: Type, target: Type): boolean => {

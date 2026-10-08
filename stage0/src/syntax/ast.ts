@@ -20,13 +20,17 @@ export type MapLiteral = Position & {
   entries: { key: Expression; value: Expression }[]
 }
 // `[f(x) for x in xs when g(x)]`: an array of the values of `element`, for each item for which the
-// guard, if any, holds.
+// guard, if any, holds. In parentheses, `(f(x) for x in xs when g(x))`, it is an Iter of them,
+// which computes them only as it is consumed; for that, `lazy` holds the guard and the element as
+// function literals of the loop variable (the guard's gives a Bool). They share their bodies'
+// expressions with `guard` and `element`, which are checked and generated only through them.
 export type Comprehension = Position & {
   kind: 'comprehension'
   element: Expression
   variable: Identifier
   iterable: Expression
   guard: Expression | undefined
+  lazy: { guard: FunctionLiteral | undefined; element: FunctionLiteral } | undefined
 }
 
 // `{ x: 1, y: 'a' }`, an anonymous struct; `{ x }` is short for `{ x: x }`.

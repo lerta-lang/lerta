@@ -15,7 +15,7 @@ import { Functions, method_key, parameter_types, type FunctionEntry } from './fu
 import { Imports, type Export } from './imports.ts'
 import { with_module_path, type Module } from '../loader.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
-import { finish_function_type } from './result_checker.ts'
+import { finish_function_type, reject_nil_result } from './result_checker.ts'
 import { StatementChecker } from './statement_checker.ts'
 import { reject_misplaced_jumps } from './jump_positions.ts'
 import { TopLevelValues } from './top_level_values.ts'
@@ -349,7 +349,7 @@ const check_function = (shared: Shared, entry: FunctionEntry): void => {
       : { info: shared.objects.info(entry.this_type), initializing: undefined }
   new StatementChecker(shared, context, self).check_function_body(literal, params)
   // The conversions of the results are recorded even if the type was known from its annotation.
-  const type = finish_function_type(context, literal, params, shared.conversions)
+  const type = reject_nil_result(finish_function_type(context, params, shared.conversions), literal)
   entry.type ??= type
   shared.types.set(literal, entry.type)
 }

@@ -17,16 +17,24 @@ import {
   type Type,
 } from '../types.ts'
 
-// The type of an item of a container, such as 'an array', which `at` gives. An item is 8 bytes,
-// which cannot hold an optional Int, UInt8 or Bool.
-export const check_item_type = (type: Type, at: Expression, container: string): Type => {
+// The type of the values of a container, such as 'an Iter', which `at` gives: any type with values.
+export const check_value_type = (type: Type, at: Expression, container: string): Type => {
   if (type.kind === 'nil') {
     const message = `nil alone does not give the type of ${container}; write it in an annotation`
     throw new CompileError(message, at.line, at.column)
   }
-  const is_optional_value = type.kind === 'Optional' && !is_reference_type(type)
-  const has_no_value = type.kind === 'void' || type.kind === 'never'
-  if (has_no_value || is_optional_value) {
+  if (type.kind === 'void' || type.kind === 'never') {
+    const message = `${container} cannot hold values of type ${format_type(type)}`
+    throw new CompileError(message, at.line, at.column)
+  }
+  return type
+}
+
+// The type of an item of a container, such as 'an array', which `at` gives. An item is 8 bytes,
+// which cannot hold an optional Int, UInt8 or Bool.
+export const check_item_type = (type: Type, at: Expression, container: string): Type => {
+  check_value_type(type, at, container)
+  if (type.kind === 'Optional' && !is_reference_type(type)) {
     const message = `${container} cannot hold values of type ${format_type(type)}`
     throw new CompileError(message, at.line, at.column)
   }

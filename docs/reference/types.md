@@ -63,6 +63,7 @@ print xs[0] + xs.length
 - `xs[i]` reads an item and `xs[i] = value` replaces one (`+=` and so on work on `Int` items). An index outside `0 ... xs.length` throws `index out of range`.
 - `xs.length` is the number of items.
 - `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`.
+- `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` give an [`Iter`](#iter) of the items.
 - `strings.join(separator)` joins an `Array<String>` into one `String`.
 - Arrays cannot be compared or printed.
 
@@ -80,6 +81,26 @@ print ages['ann'] ? 0
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there.
 - `m.keys()` is an `Array<K>` of the keys in the order they were first added (a key removed and added again counts as new).
+
+## Iter
+
+```
+const squares = (x * x for x in 0...10 when x % 2 == 0)
+for square in squares.take(3)
+  print square
+const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
+```
+
+- `Iter<T>` is a lazy sequence of items of type `T`, which can be any type with values, an optional one too. It computes an item only when asked for it, so nothing happens until it is consumed; a statement that only makes an `Iter` is an error (see [discarded values](errors.md#discarded-values)).
+- [Lazy comprehensions](control-flow.md#for-and-ranges) make one, and so do these methods of an array or an `Iter`, which take a function of an item:
+  - `xs.map(f)` gives `f(x)` for each item `x`; its items have the type of `f`'s result.
+  - `xs.filter(f)` gives the items for which `f`, which gives a `Bool`, is true.
+  - `xs.take(n)` gives the first `n` items, or all of them if there are fewer (none if `n` is not positive).
+
+  The `Iter` of an array reads the array as it goes, as a `for` does. The functions' parameter types may be left out, as in `(w) -> w + '!'`; `map`'s result type is that of its function.
+- An `Iter` is consumed by `for`, by a comprehension over it, by `it.to_array()`, which gives its items as an array (of a `T` an array can hold), and by `it.map`, `it.filter` and `it.take`, whose `Iter` reads it.
+- `it.has_next()` tells whether there is an item left, and `it.next()` gives it; past the end, `next` throws `next past the end of an Iter`.
+- **An `Iter` can be traversed only once.** Calling `has_next` or `next` traverses it, and so does any consumer above, which throws `an Iter can be traversed only once` if a traversal has started. To go through the items several times, keep them with `to_array()`.
 
 ## Methods
 

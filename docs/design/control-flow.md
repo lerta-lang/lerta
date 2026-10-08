@@ -34,11 +34,8 @@
 
 ## for and comprehensions
 
-- Postfix `for` and `[...]` comprehensions with `when` are implemented: see [the reference](../reference/control-flow.md#for-and-ranges). `Iter<T>` is not yet.
-- **`(f(x) for x in xs)`**: wrapped in parentheses it is an `Iter<T>` (a lazy iterator). It is not evaluated until consumed (the Rust approach; avoids CoffeeScript's implicit arrays and the intermediate-array problem of eager `map` in Ruby/JS).
-- `map`/`filter`/`take` and so on of `Array` also return `Iter<T>` (lazy chains).
-- The `Iter<T>` protocol is `has_next()` / `next()` (with `next(): T?`, the end could not be distinguished when `T` is nilable).
-- **Cannot be traversed again.** A second traversal throws (it does not silently become empty like a Python generator). To use it several times, materialize it with `.to_array()`.
+- Postfix `for`, `[...]` comprehensions with `when`, `(...)` comprehensions and `Iter<T>` with `map`/`filter`/`take` are implemented: see [the reference](../reference/control-flow.md#for-and-ranges) and [Iter](../reference/types.md#iter). Why: an `Iter` is not evaluated until consumed (the Rust approach; avoids CoffeeScript's implicit arrays and the intermediate-array problem of eager `map` in Ruby/JS); its protocol is `has_next()` / `next()`, since with `next(): T?` the end could not be distinguished when `T` is nilable; and a second traversal throws rather than silently becoming empty like a Python generator.
+- Planned: more lazy methods of `Array` and `Iter<T>` besides `map`/`filter`/`take`.
 
 ## case
 

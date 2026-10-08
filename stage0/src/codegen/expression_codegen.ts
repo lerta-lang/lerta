@@ -10,6 +10,7 @@ import { call_array_method, emit_length } from './array_codegen.ts'
 import { emit_binary_length, emit_binary_slice, emit_decode_utf8 } from './binary_codegen.ts'
 import { builtins } from '../check/builtins.ts'
 import { emit_closure_call, emit_function_closure } from './closure_codegen.ts'
+import { call_iter_method, is_iter_method } from './iter_codegen.ts'
 import { emit_record, emit_record_field } from './record_codegen.ts'
 import { CaseGenerator, type BlockGenerator } from './case_codegen.ts'
 import { CollectionGenerator } from './collection_codegen.ts'
@@ -292,8 +293,9 @@ export class ExpressionGenerator {
     return ''
   }
 
-  // `to_string()` passes on the object's ownership (a String returns itself); the other methods
-  // borrow the object and release it after the call, as they do the arguments.
+  // `to_string()` passes on the object's ownership (a String returns itself), and so do the methods
+  // of Iters (see call_iter_method), with the arguments; the other methods borrow the object and
+  // release it after the call, as they do the arguments.
   private generate_method_call(call: Call, member: Member): string {
     const object_type = this.types.get(member.object)!
     const object = this.generate(member.object)
@@ -320,6 +322,11 @@ export class ExpressionGenerator {
       call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
       emit_release(this.ir, object)
       return result
+    }
+    if (is_iter_method(object_type, name)) {
+      const args = call.args.map((arg) => this.generate(arg))
+      const arg_types = call.args.map((arg) => this.type_at_use(arg))
+      return call_iter_method(this.ir, name, object, object_type, args, arg_types)
     }
     if (name === 'to_string') return emit_to_string(this.ir, object, object_type)
     if (name === 'to_int') return this.ir.assign(`zext i8 ${object} to i64`)

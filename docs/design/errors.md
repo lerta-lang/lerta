@@ -14,10 +14,9 @@ The definition of safety is in [philosophy.md](../philosophy.md#safety). Concret
 
 These apply when a value in statement position is not captured.
 
-Literals, arithmetic and comparisons, and function values are implemented: see [the reference](../reference/errors.md#discarded-values). Planned:
+Literals, arithmetic and comparisons, function values and `Iter<T>` values are implemented: see [the reference](../reference/errors.md#discarded-values). Planned:
 
 - Other operator expressions and field access (`obj.x`) → **error** (no side effects; same as Go).
-- A call returning `Iter<T>` (`xs.map f`) → **error** "does nothing until consumed" (equivalent to Rust's `#[must_use]`; an essential diagnostic for laziness).
 - Methods of immutable types (`String`, `Binary`) that return a new value (`s.trim()`) → **error** (since the type is immutable, the type shows that "discarding = doing nothing").
 - Other calls to non-`void` functions → allowed (interpreted as calls for side effects). A `must_use` annotation can make individual ones an error.
 - Unused `import` → warning (for `const`/`var`, see [the reference](../reference/errors.md#unused-names)).

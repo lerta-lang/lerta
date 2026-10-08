@@ -95,20 +95,26 @@ export class ResultChecker {
 }
 
 // The type of a function once its body is checked: its return type is the written one, or the one
-// its results give, to which they are converted.
+// its results give, to which they are converted. Its result may be nil alone, which gives no type:
+// see reject_nil_result.
 export const finish_function_type = (
   context: FunctionContext,
-  literal: FunctionLiteral,
   params: Type[],
   conversions: Conversions,
 ): Type => {
   const result = context.annotated ?? context.inferred ?? void_type
-  if (result.kind === 'nil') {
-    const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
-    throw new CompileError(message, literal.line, literal.column)
-  }
   for (const { value, type } of context.results) {
     if (type.kind !== 'never' && !same_type(type, result)) conversions.set(value, result)
   }
   return { kind: 'function', params, result }
+}
+
+// A function whose results are only nil has no return type: it must be written. A function of an
+// item leaves this to its caller, which tells what would hold its results (see check_value_type).
+export const reject_nil_result = (type: Type, literal: FunctionLiteral): Type => {
+  if (type.kind === 'function' && type.result.kind === 'nil') {
+    const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
+    throw new CompileError(message, literal.line, literal.column)
+  }
+  return type
 }

@@ -3,6 +3,7 @@
 import type {
   Case,
   CaseArm,
+  Comprehension,
   Expression,
   FunctionLiteral,
   Identifier,
@@ -103,19 +104,36 @@ export class CompoundParser {
       const first = this.elements.parse_expression()
       const for_follows = (offset: number) => this.tokens.peek(offset).kind === 'for'
       if (this.tokens.peek().kind === 'line_break' && for_follows(1)) this.tokens.next()
-      if (for_follows(0)) return this.parse_comprehension(first, position)
+      if (for_follows(0)) return this.parse_comprehension(first, position, ']')
       const parse_element = () => this.elements.parse_expression()
       const elements = this.elements.parse_list_rest(']', parse_element, [first])
       return { kind: 'array', elements, ...position }
     })
   }
 
-  // `for x in xs when guard]`, after the element; line ends inside are skipped.
-  private parse_comprehension(element: Expression, position: Position): Expression {
+  // `(a)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends inside are skipped.
+  parse_parenthesized(position: Position): Expression {
+    return this.tokens.inside('skip', () => {
+      const first = this.elements.parse_expression()
+      if (this.tokens.peek().kind === 'for') return this.parse_comprehension(first, position, ')')
+      this.tokens.expect(')', "')'")
+      // Diagnostics about the group point at its opening parenthesis.
+      return { ...first, ...position }
+    })
+  }
+
+  // `for x in xs when guard]`, after the element, or `... guard)` for an Iter; line ends inside
+  // are skipped.
+  private parse_comprehension(
+    element: Expression,
+    position: Position,
+    close: ']' | ')',
+  ): Expression {
     return this.tokens.inside('skip', () => {
       const { variable, iterable, guard } = this.elements.parse_loop_header()
-      this.tokens.expect(']', "']'")
-      return { kind: 'comprehension', element, variable, iterable, guard, ...position }
+      this.tokens.expect(close, `'${close}'`)
+      const lazy = close === ')' ? lazy_functions(element, variable, guard) : undefined
+      return { kind: 'comprehension', element, variable, iterable, guard, lazy, ...position }
     })
   }
 
@@ -201,4 +219,31 @@ export class CompoundParser {
     }
     return this.bodies.parse_block()
   }
+}
+
+// The guard and the element of an Iter comprehension as functions of the loop variable (see
+// Comprehension). The guard's tests its condition as an `if` would: `guard then true else false`.
+const lazy_functions = (
+  element: Expression,
+  variable: Identifier,
+  guard: Expression | undefined,
+): Comprehension['lazy'] => {
+  const function_of = (body: Expression): FunctionLiteral => ({
+    kind: 'function',
+    params: [{ name: { ...variable }, type: undefined }],
+    return_type: undefined,
+    body: [body],
+    line: body.line,
+    column: body.column,
+  })
+  if (guard === undefined) return { guard: undefined, element: function_of(element) }
+  const position = { line: guard.line, column: guard.column }
+  const test: Expression = {
+    kind: 'conditional',
+    condition: guard,
+    then_value: { kind: 'boolean', value: true, ...position },
+    else_value: { kind: 'boolean', value: false, ...position },
+    ...position,
+  }
+  return { guard: function_of(test), element: function_of(element) }
 }

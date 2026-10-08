@@ -96,7 +96,7 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
       this,
     )
     this.results = new ResultChecker(this, this.expressions, context)
-    this.loops = new LoopChecker(this.expressions, this.scopes, this.resolver, this)
+    this.loops = new LoopChecker(this.expressions, this)
   }
 
   // Each initializer sees the constructor arguments and the fields initialized before it.
@@ -118,7 +118,8 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
 
   // The parameters are borrowed locals. The last statement gives the return value.
   // A method's body also has `@`, the object, as a local that cannot be written in the source.
-  check_function_body(literal: FunctionLiteral, params: Type[]): void {
+  // `holds`, a condition known to hold where the body runs, narrows the parameters it tests.
+  check_function_body(literal: FunctionLiteral, params: Type[], holds?: Expression): void {
     const define_params = () => {
       if (this.self !== undefined) {
         const { line, column } = literal
@@ -135,6 +136,7 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
           used: false,
         }),
       )
+      if (holds !== undefined) this.narrow_where_holds(holds)
     }
     const body = literal.body
     const last = body.at(-1)
@@ -160,6 +162,15 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
 
   type_of_function_literal(literal: FunctionLiteral, expected: Type | undefined): Type {
     return this.closures.type_of_function_literal(literal, expected)
+  }
+
+  type_of_item_function(
+    literal: FunctionLiteral,
+    item: Type,
+    result: Type | undefined,
+    holds?: Expression,
+  ): Type {
+    return this.closures.type_of_item_function(literal, item, result, holds)
   }
 
   check_jump(jump: Jump | Return): void {
@@ -288,8 +299,14 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
       })
   }
 
-  narrow({ local, type }: ConditionNarrowing): void {
+  private narrow({ local, type }: ConditionNarrowing): void {
     this.scopes.narrow(local.identifier.name, narrowed_view(local, type))
+  }
+
+  // Narrows, in the current scope, the local that the condition tests, where it holds.
+  narrow_where_holds(condition: Expression): void {
+    const narrowing = narrowing_of(condition, this.scopes, this.resolver)
+    if (narrowing?.when === true) this.narrow(narrowing)
   }
 
   // A top-level function was added to `functions` before checking started.
@@ -401,6 +418,10 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
 
   // See the rules for discarded values in docs/reference/errors.md.
   check_discarded(statement: Expression, type: Type): void {
+    if (type.kind === 'Iter') {
+      const message = 'an Iter does nothing until it is consumed'
+      throw new CompileError(message, statement.line, statement.column)
+    }
     if (statement.kind === 'call' || type.kind === 'void' || type.kind === 'never') return
     // `x ? return` is a guard: its value is the reason to stop, not something to use.
     const is_guard =

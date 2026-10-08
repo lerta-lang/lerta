@@ -12,7 +12,7 @@ import {
 import { builtin_method, builtin_property, builtins } from './builtins.ts'
 import type { Conversions, SelfContext, Shared, Types } from './checker.ts'
 import { CaseChecker, type BlockChecker } from './case_checker.ts'
-import { CollectionChecker } from './collection_checker.ts'
+import { check_item_type, check_value_type, CollectionChecker } from './collection_checker.ts'
 import { CompileError } from '../errors.ts'
 import type { Functions } from './functions.ts'
 import type { Imports } from './imports.ts'
@@ -28,6 +28,8 @@ import {
   format_type,
   format_types,
   int_type,
+  iter_type,
+  iterable_item,
   never_type,
   nil_type,
   is_assignable,
@@ -225,12 +227,21 @@ export class ExpressionChecker {
       return this.collections.type_of_empty_map(call, expected)
     const object_type = this.objects.constructed_type(callee)
     if (object_type !== undefined) return this.objects.type_of_construction(call, object_type)
+    if (callee.kind === 'member') {
+      const receiver_type = this.type_of(callee.object)
+      const mapped_item = callee.name.name === 'map' ? iterable_item(receiver_type) : undefined
+      if (mapped_item !== undefined) return this.type_of_map(call, mapped_item, expected)
+      return this.check_arguments(call, this.type_of_method(callee, receiver_type))
+    }
     const callee_type =
-      callee.kind === 'member'
-        ? this.type_of_method(callee)
-        : callee.kind === 'identifier'
-          ? this.record(callee, this.type_of_identifier(callee, true))
-          : this.type_of(callee)
+      callee.kind === 'identifier'
+        ? this.record(callee, this.type_of_identifier(callee, true))
+        : this.type_of(callee)
+    return this.check_arguments(call, callee_type)
+  }
+
+  // The result of a call of a function of the type, once its arguments are checked.
+  private check_arguments(call: Call, callee_type: Type): Type {
     if (callee_type.kind !== 'function') {
       const message = `cannot call a value of type ${format_type(callee_type)}`
       throw new CompileError(message, call.line, call.column)
@@ -243,6 +254,34 @@ export class ExpressionChecker {
     }
     call.args.forEach((arg, i) => this.expect_type(arg, params[i]))
     return callee_type.result
+  }
+
+  // `xs.map(f)`: an Iter of f's results for the items, whose type f's result gives, unless an
+  // Iter of a type is expected, as for a lazy comprehension.
+  private type_of_map(call: Call, item: Type, expected: Type | undefined): Type {
+    if (call.named_args.length > 0) {
+      const { line, column } = call.named_args[0].name
+      throw new CompileError('map takes no named arguments', line, column)
+    }
+    if (call.args.length !== 1) {
+      const message = `expected 1 argument(s), got ${call.args.length}`
+      throw new CompileError(message, call.line, call.column)
+    }
+    const [mapper] = call.args
+    const type =
+      mapper.kind === 'function'
+        ? this.blocks.type_of_item_function(
+            mapper,
+            item,
+            expected?.kind === 'Iter' ? expected.item : undefined,
+          )
+        : this.type_of(mapper)
+    const fits = type.kind === 'function' && type.params.length === 1
+    if (!fits || !same_type(type.params[0], item)) {
+      const message = `expected a function of ${format_type(item)}, got ${format_type(type)}`
+      throw new CompileError(message, mapper.line, mapper.column)
+    }
+    return iter_type(check_value_type(type.result, mapper, 'an Iter'))
   }
 
   // Named arguments are the fields of an anonymous struct for the last parameter: `draw(x: 1, y: 2)`
@@ -262,8 +301,7 @@ export class ExpressionChecker {
     call.named_args = []
   }
 
-  private type_of_method(member: Member): Type {
-    const object_type = this.type_of(member.object)
+  private type_of_method(member: Member, object_type: Type): Type {
     const { name, line, column } = member.name
     this.reject_deinit(object_type, member)
     const method =
@@ -276,6 +314,9 @@ export class ExpressionChecker {
         line,
         column,
       )
+    }
+    if (object_type.kind === 'Iter' && name === 'to_array') {
+      check_item_type(object_type.item, member, 'an array')
     }
     this.types.set(member, method)
     return method
@@ -304,7 +345,8 @@ export class ExpressionChecker {
     }
     const property = builtin_property(object_type, name)
     if (property !== undefined) return property
-    if (builtin_method(object_type, name) !== undefined) {
+    const is_map = name === 'map' && iterable_item(object_type) !== undefined
+    if (builtin_method(object_type, name) !== undefined || is_map) {
       throw new CompileError(`a method must be called: write \`${name}()\``, line, column)
     }
     const message = `type ${format_type(object_type)} has no property '${name}'`

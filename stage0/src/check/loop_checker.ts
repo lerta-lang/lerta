@@ -1,23 +1,30 @@
-// Checks loops: `for` over a range or an array, `while`, comprehensions, and where `break` and
-// `continue` may be.
+// Checks loops: `for` over a range, an array or an Iter, `while`, comprehensions, and where `break`
+// and `continue` may be.
 import type {
   Comprehension,
   Condition,
   Expression,
   For,
+  FunctionLiteral,
   Identifier,
   Jump,
   Range,
   Statement,
   While,
 } from '../syntax/ast.ts'
-import { check_item_type } from './collection_checker.ts'
+import { check_item_type, check_value_type } from './collection_checker.ts'
 import { CompileError } from '../errors.ts'
 import type { CheckerLocal, ExpressionChecker } from './expression_checker.ts'
-import { narrowing_of, type ConditionNarrowing } from './narrowing.ts'
-import type { Scopes } from '../scopes.ts'
-import type { TypeResolver } from './type_names.ts'
-import { array_type, format_type, int_type, void_type, type Type } from '../types.ts'
+import {
+  array_type,
+  bool_type,
+  format_type,
+  int_type,
+  iter_type,
+  iterable_item,
+  void_type,
+  type Type,
+} from '../types.ts'
 
 // Loop bodies are blocks of statements, which the statement checker checks.
 export type LoopBodyChecker = {
@@ -27,26 +34,24 @@ export type LoopBodyChecker = {
   // Checks the condition, and returns what it defines in the body: `const name = value`'s name.
   check_condition(condition: Condition): () => void
   define_local(local: CheckerLocal): void
-  // Narrows a local in the current scope, where the condition shows it has a narrower type.
-  narrow(narrowing: ConditionNarrowing): void
+  // Narrows, in the current scope, the local that the condition tests, where it holds.
+  narrow_where_holds(condition: Expression): void
+  // A function literal of an item (see ClosureChecker.type_of_item_function).
+  type_of_item_function(
+    literal: FunctionLiteral,
+    item: Type,
+    result: Type | undefined,
+    holds?: Expression,
+  ): Type
 }
 
 export class LoopChecker {
   private readonly expressions: ExpressionChecker
-  private readonly scopes: Scopes<CheckerLocal>
-  private readonly resolver: TypeResolver
   private readonly bodies: LoopBodyChecker
   private loop_depth = 0
 
-  constructor(
-    expressions: ExpressionChecker,
-    scopes: Scopes<CheckerLocal>,
-    resolver: TypeResolver,
-    bodies: LoopBodyChecker,
-  ) {
+  constructor(expressions: ExpressionChecker, bodies: LoopBodyChecker) {
     this.expressions = expressions
-    this.scopes = scopes
-    this.resolver = resolver
     this.bodies = bodies
   }
 
@@ -67,7 +72,7 @@ export class LoopChecker {
     })
   }
 
-  // A range gives Ints; an array gives its items.
+  // A range gives Ints; an array or an Iter gives its items.
   check_for(for_statement: For): void {
     const { iterable, variable } = for_statement
     const item_type = this.type_of_iterated(iterable)
@@ -81,8 +86,10 @@ export class LoopChecker {
 
   // The guard narrows the loop variable in the element as an `if` would.
   type_of_comprehension(comprehension: Comprehension, expected: Type | undefined): Type {
-    const { element, variable, iterable, guard } = comprehension
+    const { element, variable, iterable, guard, lazy } = comprehension
     const item_type = this.type_of_iterated(iterable)
+    if (lazy !== undefined)
+      return this.type_of_iter_comprehension(comprehension, item_type, expected)
     const expected_element = expected?.kind === 'Array' ? expected.element : undefined
     let element_type: Type = void_type
     this.bodies.check_block(
@@ -91,8 +98,7 @@ export class LoopChecker {
         this.define_loop_variable(variable, item_type)
         if (guard === undefined) return
         this.expressions.expect_condition(guard)
-        const narrowing = narrowing_of(guard, this.scopes, this.resolver)
-        if (narrowing?.when === true) this.bodies.narrow(narrowing)
+        this.bodies.narrow_where_holds(guard)
       },
       () => {
         element_type =
@@ -104,6 +110,26 @@ export class LoopChecker {
     return array_type(check_item_type(element_type, element, 'an array'))
   }
 
+  // The guard and the element are functions of the item (see Comprehension); the guard narrows the
+  // item in the element, which runs only where it holds.
+  private type_of_iter_comprehension(
+    comprehension: Comprehension,
+    item_type: Type,
+    expected: Type | undefined,
+  ): Type {
+    const { guard, element } = comprehension.lazy!
+    if (guard !== undefined) this.bodies.type_of_item_function(guard, item_type, bool_type)
+    const expected_item = expected?.kind === 'Iter' ? expected.item : undefined
+    const element_type = this.bodies.type_of_item_function(
+      element,
+      item_type,
+      expected_item,
+      comprehension.guard,
+    )
+    if (element_type.kind !== 'function') throw new Error('an element function has a function type')
+    return iter_type(check_value_type(element_type.result, comprehension.element, 'an Iter'))
+  }
+
   private check_loop_body(body: Statement[], define?: () => void): void {
     this.loop_depth++
     try {
@@ -113,11 +139,9 @@ export class LoopChecker {
     }
   }
 
-  // The type of the items a `for` goes through: Ints for a range, or an array's items.
+  // The type of the items a `for` goes through: Ints for a range, or an array's or an Iter's items.
   private type_of_iterated(iterable: Expression): Type {
-    return iterable.kind === 'range'
-      ? this.check_range(iterable)
-      : this.check_iterated_array(iterable)
+    return iterable.kind === 'range' ? this.check_range(iterable) : this.check_iterated(iterable)
   }
 
   private check_range(range: Range): Type {
@@ -126,12 +150,11 @@ export class LoopChecker {
     return int_type
   }
 
-  private check_iterated_array(iterable: Expression): Type {
+  private check_iterated(iterable: Expression): Type {
     const type = this.expressions.type_of(iterable)
-    if (type.kind !== 'Array') {
-      const message = `expected a range or an array after 'in', got ${format_type(type)}`
-      throw new CompileError(message, iterable.line, iterable.column)
-    }
-    return type.element
+    const item = iterable_item(type)
+    if (item !== undefined) return item
+    const message = `expected a range, an array or an Iter after 'in', got ${format_type(type)}`
+    throw new CompileError(message, iterable.line, iterable.column)
   }
 }
