@@ -34,7 +34,7 @@ Early development: the bootstrap compiler (stage0) is in progress. See `docs/roa
 | `tests/` | Run tests: Lerta source and expected output |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
 | `docs/` | Documentation (see below) |
-| `editors/vscode/` | VS Code extension for syntax highlighting |
+| `editors/` | Editor support for VS Code and Vim; see the README in each subdirectory to install it |
 
 ## Documentation
 
@@ -63,10 +63,3 @@ stage0 runs its TypeScript directly with Node.js (22.18 or later), so there is n
 node stage0/src/main.ts build examples/hello.lerta -o hello [-O] [--emit-llvm hello.ll]
 ```
 
-## Editor support
-
-To install the VS Code extension, link it into the extensions directory and reload VS Code:
-
-```
-ln -s "$PWD/editors/vscode" ~/.vscode/extensions/lerta
-```

@@ -1,0 +1,51 @@
+if exists('b:current_syntax')
+  finish
+endif
+
+" When several matches start at the same position, the one defined last wins,
+" and keywords win over matches.
+
+syn match lertaOperator "\.\.\.\|->\|[=!<>+\-*/%]=\|[-+*/%<>=?!@|]"
+syn match lertaCall "\<[a-z_]\w*\ze("
+syn match lertaType "\<[A-Z]\w*\>"
+syn match lertaConstant "\<[A-Z][A-Z0-9_]\+\>"
+syn match lertaDeclarationName "\%(\<\%(class\|struct\|extend\)\s\+\)\@<=\h\w*"
+
+syn keyword lertaBoolean true false nil
+syn keyword lertaWordOperator and or not is
+syn keyword lertaControl if else then while for in break continue return case when throw import export
+syn keyword lertaStorage const var class struct extern extend
+
+syn match lertaInvalidNumber "\<\d\w*\>"
+syn match lertaNumber "\<\%(0x\x\+\|0\|[1-9]\%(_\=\d\)*\)\>"
+
+syn match lertaInvalidEscape "\\." contained
+syn match lertaEscape "\\\%([ntr0\\\"#]\|u{\x\+}\)" contained
+syn region lertaBraces start="{" end="}" contained transparent contains=@lertaCode,lertaBraces
+syn region lertaInterpolation matchgroup=lertaInterpolationDelimiter start="#{" end="}" contained contains=@lertaCode,lertaBraces
+syn region lertaString start=+"+ end=+"\|$+ contains=lertaEscape,lertaInvalidEscape,lertaInterpolation
+syn match lertaRawString "'[^']*'"
+
+syn match lertaComment "#.*$" contains=@Spell
+
+syn cluster lertaCode contains=lertaComment,lertaRawString,lertaString,lertaNumber,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
+
+hi def link lertaComment Comment
+hi def link lertaRawString String
+hi def link lertaString String
+hi def link lertaEscape SpecialChar
+hi def link lertaInvalidEscape Error
+hi def link lertaInterpolationDelimiter Delimiter
+hi def link lertaNumber Number
+hi def link lertaInvalidNumber Error
+hi def link lertaBoolean Boolean
+hi def link lertaWordOperator Operator
+hi def link lertaControl Statement
+hi def link lertaStorage StorageClass
+hi def link lertaDeclarationName Type
+hi def link lertaType Type
+hi def link lertaConstant Constant
+hi def link lertaCall Function
+hi def link lertaOperator Operator
+
+let b:current_syntax = 'lerta'
