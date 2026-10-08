@@ -29,7 +29,7 @@ Early development. The compiler is written in Lerta (`compiler/`) and builds its
 | Path | Contents |
 |---|---|
 | `stage0/` | Bootstrap compiler in TypeScript: `src/syntax/` reads the source, `src/check/` checks it, `src/codegen/` emits LLVM IR; `test/` runs the tests: `run.ts` the run tests, `cli.ts` the command line, `compiler.ts` the comparison of `compiler/` with stage0, `bootstrap.ts` the bootstrap, `runtime.ts` runtime checks no Lerta program can trigger |
-| `tools/` | `test_in_docker.sh` runs the tests on Linux, in Docker, and on x86-64 the run tests also as 32-bit programs |
+| `tools/` | `test_in_docker.sh` runs the tests on Linux, in Docker, and on x86-64 the run tests also as 32-bit programs, and the bootstrap through a 32-bit compiler |
 | `compiler/` | The compiler written in Lerta, ported from stage0 one layer at a time: so far `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, `checker/`, which checks them, and `codegen/`, which emits LLVM IR, behind `build` (in `build.lerta`), `dump-tokens`, `dump-ast` and `dump-checked`; `build` and `dump-checked` take `--root <dir>`, the directory that holds `std/` and `runtime/`, which the compiler cannot find on its own yet |
 | `runtime/` | C runtime |
 | `tests/` | Run tests: Lerta source and expected output |

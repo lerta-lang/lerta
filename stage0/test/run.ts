@@ -17,23 +17,14 @@ import { availableParallelism, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build, OUTPUT_LIMIT } from '../src/build.ts'
 import { compare_text, run_checks, type Check } from './report.ts'
+import { target_args } from './target.ts'
 
 const root_dir = join(import.meta.dirname, '../..')
 const work_dir = mkdtempSync(join(tmpdir(), 'lerta-test-'))
 // The compiler written in Lerta, which stage0 builds first; the tests check it.
 const compiler = join(work_dir, 'lerta')
 
-// `--target <triple>` builds the tests for another target than the host, such as i686-linux-gnu for
-// the 32-bit programs that an x86-64 host can run.
-const target_args = ((): string[] => {
-  const [option, triple, ...rest] = process.argv.slice(2)
-  if (option === undefined) return []
-  if (option !== '--target' || triple === undefined || rest.length > 0) {
-    console.error('usage: node test/run.ts [--target <triple>]')
-    process.exit(2)
-  }
-  return ['--target', triple]
-})()
+const target = target_args('run.ts')
 
 type TestCase = {
   // Shown in failures, such as `examples/hello`.
@@ -123,16 +114,7 @@ const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outco
   // Not `<executable>.ll`, which the compiler writes when --emit-llvm is not given.
   const llvm_path = `${executable}.emitted.ll`
   const options = optimize ? ['-O'] : ['--emit-llvm', llvm_path]
-  const args = [
-    'build',
-    source_file,
-    '-o',
-    executable,
-    ...options,
-    ...target_args,
-    '--root',
-    root_dir,
-  ]
+  const args = ['build', source_file, '-o', executable, ...options, ...target, '--root', root_dir]
   const cwd = join(root_dir, test.source_dir)
   const { status, failure, stderr } = await run_file(compiler, args, cwd)
   const diagnostics = stderr.split('\n').filter((line) => line !== '')
