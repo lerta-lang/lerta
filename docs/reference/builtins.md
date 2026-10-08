@@ -15,10 +15,10 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | Type | In `std/builtins.lerta` | Built into the compiler |
 |---|---|---|
 | `Int` | `to_string` | |
-| `Byte` | `to_int`, `to_string` | |
+| `Byte` | `to_int`, `to_string`, `is_digit`, `is_letter`, `is_space` | |
 | `Bool` | `to_string` | |
 | `String` | `to_string`, `parse_int`, `split` | `binary` |
-| `Binary` | `slice`, `decode_utf8` | `length` |
+| `Binary` | `slice`, `occurs_at`, `decode_utf8` | `length` |
 | `Array<T>` | `iter`, `map`, `filter`, `any`, `all`, `find`, and `join` of an `Array<String>` | `length`, `push`, `pop`, `take` |
 | `Map<K, V>` | `has` | `length`, `remove`, `keys` |
 | `Iter<T>` | `map`, `filter`, `to_array`, `any`, `all`, `find` | `has_next`, `next`, `take` |

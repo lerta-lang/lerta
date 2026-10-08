@@ -67,9 +67,14 @@ export class OperatorChecker {
       return this.type_of_nil_test(binary)
     }
     if (operator === '==' || operator === '!=') {
-      this.type_of_operands(binary, undefined, ['Int', 'Byte', 'Bool', 'String'], (type) => {
-        return `cannot compare values of type ${format_type(type)}`
-      })
+      this.type_of_operands(
+        binary,
+        undefined,
+        ['Int', 'Byte', 'Bool', 'String', 'Binary'],
+        (type) => {
+          return `cannot compare values of type ${format_type(type)}`
+        },
+      )
       return bool_type
     }
     const allowed = operator === '+' ? [...numeric_kinds, 'String'] : numeric_kinds

@@ -14,8 +14,7 @@ const punctuations = [
   '(', ')', ':', ',', '=', '+', '-', '*', '%', '<', '>'
 ]
 
-const is_digit = (c: Byte): Bool -> c >= '0' and c <= '9'
-const is_letter = (c: Byte): Bool -> (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_'
+const is_name_byte = (c: Byte): Bool -> c.is_letter() or c == '_'
 
 class Lexer
   source: Binary
@@ -62,11 +61,11 @@ class Lexer
     case
       when c == ' '
         @position += 1
-      when is_digit(c)
-        @position += 1 while is_digit(@peek())
+      when c.is_digit()
+        @position += 1 while @peek().is_digit()
         @add('integer', @text(start, @position))
-      when is_letter(c)
-        @position += 1 while is_letter(@peek()) or is_digit(@peek())
+      when is_name_byte(c)
+        @position += 1 while is_name_byte(@peek()) or @peek().is_digit()
         const word = @text(start, @position)
         @add(keywords.has(word) then word else 'name', word)
       when c == "'"
@@ -84,12 +83,7 @@ class Lexer
     @add(punctuation, punctuation)
 
   # Compares bytes, since the next ones may not be a whole character.
-  at = (punctuation: String): Bool ->
-    const bytes = punctuation.binary
-    return false if @position + bytes.length > @source.length
-    for i in 0...bytes.length
-      return false if @source[@position + i] != bytes[i]
-    true
+  at = (punctuation: String): Bool -> @source.occurs_at(@position, punctuation.binary)
 
 const source = [
   '# sums the squares of the even numbers'

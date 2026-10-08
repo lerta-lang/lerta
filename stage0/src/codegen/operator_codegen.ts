@@ -61,8 +61,9 @@ export class OperatorGenerator {
     const left = this.expressions.generate(binary.left)
     const right = this.expressions.generate(binary.right)
     const { operator } = binary
-    if (this.types.get(binary.left)!.kind === 'String') {
-      if (operator === '+') return emit_concat(this.ir, [left, right])
+    const kind = this.types.get(binary.left)!.kind
+    if (kind === 'String' && operator === '+') return emit_concat(this.ir, [left, right])
+    if (kind === 'String' || kind === 'Binary') {
       const equal = emit_equals(this.ir, left, right)
       return operator === '==' ? equal : this.ir.assign(`xor i1 ${equal}, true`)
     }

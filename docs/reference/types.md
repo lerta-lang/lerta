@@ -13,6 +13,7 @@
 - `Byte` is an unsigned 8-bit integer.
 - `+` `-` `*` and prefix `-` wrap around (`250 + 10` is `4`). `/` and `%` throw `division by zero` when the divisor is 0. Comparisons treat values as unsigned.
 - There are no implicit conversions: `Byte` and `Int` cannot be mixed in one operation. `b.to_int()` converts a `Byte` to an `Int`.
+- `b.is_digit()`, `b.is_letter()` and `b.is_space()` tell whether it is an ASCII digit, letter (`a` to `z`, `A` to `Z`) or space (a space, `\t`, `\n` or `\r`).
 - **The type of a literal is decided by context.** Where a `Byte` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a string literal of one byte (`'a'`). The expected type reaches literals inside arithmetic (`c == 1 + 2`), `case` arms, array items and return values. An operand of `+`, `==`, `<` and so on whose type comes from the context is expected to have the type of the other operand, so `c >= '0'` and `'0' <= c` compare two `Byte`s when `c` is one; likewise `[1, c]` is an `Array<Byte>`. Without such a context, `'a'` is a `String` and `1` an `Int`.
 
 ## Bool
@@ -31,6 +32,8 @@
 
 - `Binary` is an immutable sequence of bytes; a mutable one is an `Array<Byte>`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.decode_utf8()` goes back (see [Optional values](#optional-values)).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`.
+- `==` and `!=` compare two `Binary`s byte by byte.
+- `b.occurs_at(index, part)` tells whether the bytes of `part` occur in `b` at `index`; it is false where `part` does not fit.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
 

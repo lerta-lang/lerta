@@ -28,6 +28,10 @@ extend Bool
 extend Byte
   to_int = (): Int -> lerta_byte_to_int(@)
   to_string = (): String -> @to_int().to_string()
+  # ASCII only, as the bytes of other characters are not characters on their own.
+  is_digit = (): Bool -> @ >= '0' and @ <= '9'
+  is_letter = (): Bool -> (@ >= 'a' and @ <= 'z') or (@ >= 'A' and @ <= 'Z')
+  is_space = (): Bool -> @ == ' ' or @ == "\t" or @ == "\n" or @ == "\r"
 
 extend String
   to_string = (): String -> @
@@ -57,7 +61,7 @@ extend String
     var start = 0
     var i = 0
     while i + separator_bytes.length <= bytes.length
-      if occurs_at(bytes, i, separator_bytes)
+      if bytes.occurs_at(i, separator_bytes)
         pieces.push(lerta_binary_as_string(bytes.slice(start, i)))
         i += separator_bytes.length
         start = i
@@ -66,15 +70,15 @@ extend String
     pieces.push(lerta_binary_as_string(bytes.slice(start, bytes.length)))
     pieces
 
-# Whether `part` occurs in `bytes` at `index`, which leaves room for it.
-const occurs_at = (bytes: Binary, index: Int, part: Binary): Bool ->
-  for k in 0...part.length
-    return false if bytes[index + k] != part[k]
-  true
-
 extend Binary
   # The bytes from `start` up to `end`, which is exclusive. Throws if they are out of range.
   slice = (start: Int, end: Int): Binary -> lerta_binary_slice(@, start, end)
+  # Whether `part` occurs at `index`; false if it does not fit there.
+  occurs_at = (index: Int, part: Binary): Bool ->
+    return false if index < 0 or index > @length - part.length
+    for k in 0...part.length
+      return false if @[index + k] != part[k]
+    true
   # The same bytes as a String if they are valid UTF-8, otherwise nil.
   decode_utf8 = (): String? -> is_utf8(@) then lerta_binary_as_string(@) else nil
 
