@@ -247,10 +247,15 @@ class Parser {
     throw new CompileError(message, token.line, token.column)
   }
 
-  // `import { a, b } from 'module'`. `from` is not a keyword, so that it stays usable as a name.
+  // `import { a, b } from 'module'`, or `import 'module'` for its effects alone. `from` is not a
+  // keyword, so that it stays usable as a name.
   private parse_import(): Import {
     const token = this.tokens.next()
-    this.tokens.expect('{', "'{'")
+    const position = { line: token.line, column: token.column }
+    if (this.tokens.peek().kind === 'string') {
+      return { kind: 'import', names: [], module: this.parse_module_name(), ...position }
+    }
+    this.tokens.expect('{', "'{' or module name")
     const first = this.tokens.peek()
     const names = this.expressions.parse_list('}', () => this.parse_import_name())
     if (names.length === 0) throw this.tokens.error_at(first, 'a name to import')
@@ -258,10 +263,14 @@ class Parser {
     if (from.kind !== 'identifier' || from.text !== 'from')
       throw this.tokens.error_at(from, "'from'")
     this.tokens.next()
+    return { kind: 'import', names, module: this.parse_module_name(), ...position }
+  }
+
+  private parse_module_name(): string {
     const module = this.tokens.peek()
     if (module.kind !== 'string') throw this.tokens.error_at(module, 'module name')
     this.tokens.next()
-    return { kind: 'import', names, module: module.text, line: token.line, column: token.column }
+    return module.text
   }
 
   // `name` or `name as alias`. `as` is not a keyword, so that it stays usable as a name.

@@ -21,6 +21,7 @@ Named imports from the standard modules and from files, and exports of functions
 - There is **no** `export default` (named exports only).
 - `import { <exported_name> } from 'module'` gives access to individual names.
 - `import mod from 'module'` gives access as `mod.<exported_name>`.
+- `import 'module'` imports no name, for the module's effects alone: implemented, see [the reference](../reference/modules.md).
 - `import { <exported_name> as <alias> } from 'module'` gives access under an alias.
 
 ## C ABI / FFI

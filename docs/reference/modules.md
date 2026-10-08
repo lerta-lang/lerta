@@ -5,7 +5,8 @@ import { read_file, stdout } from 'std:io'
 import { argv, exit } from 'std:process'
 ```
 
-- A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import { a as c } from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. Imports are written at the top level. An import that is never used is a warning.
+- A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import { a as c } from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. Imports are written at the top level. An imported name that is never used is a warning.
+- `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), as any import of it does.
 - `'std:io'` and `'std:process'` are standard modules (below). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
 
 ## Exports
