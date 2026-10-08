@@ -8,6 +8,7 @@ import {
   type NamedArgument,
   type Position,
   type RecordLiteral,
+  type TypeName,
 } from './ast.ts'
 import { CompileError } from '../errors.ts'
 import { tokenize_fragment } from './lexer.ts'
@@ -74,6 +75,7 @@ export class ExpressionParser {
             callee,
             args: [],
             named_args: [],
+            type_args: [],
             line: callee.line,
             column: callee.column,
           }
@@ -218,19 +220,27 @@ export class ExpressionParser {
   }
 
   // Calls `f(x)`, indexing `xs[i]`, member accesses `x.name` and unwrapping `x!`, written without
-  // a space before `(`, `[`, `.` or `!`.
+  // a space before `(`, `[`, `.` or `!`; and calls with type arguments, `f<Int>(x)`.
   private parse_postfix(primary: Expression): Expression {
     let expression = primary
     for (;;) {
       const token = this.tokens.peek()
+      const position = { line: expression.line, column: expression.column }
+      if (expression.kind === 'identifier' && this.types.starts_type_arguments()) {
+        const type_args = this.types.parse_type_arguments()
+        this.tokens.next()
+        const { args, named_args } = this.parse_parenthesized_arguments()
+        expression = { kind: 'call', callee: expression, args, named_args, type_args, ...position }
+        continue
+      }
       if (token.spaced || !['(', '[', '.', '!'].includes(token.kind)) return expression
       this.tokens.next()
-      const position = { line: expression.line, column: expression.column }
       if (token.kind === '!') {
         expression = { kind: 'unwrap', operand: expression, ...position }
       } else if (token.kind === '(') {
         const { args, named_args } = this.parse_parenthesized_arguments()
-        expression = { kind: 'call', callee: expression, args, named_args, ...position }
+        const type_args: TypeName[] = []
+        expression = { kind: 'call', callee: expression, args, named_args, type_args, ...position }
       } else if (token.kind === '[') {
         const index = this.parse_index()
         expression = { kind: 'index', object: expression, index, ...position }
@@ -349,7 +359,7 @@ export class ExpressionParser {
       const parts = token.parts!.map((part) =>
         part.kind === 'text'
           ? part.text
-          : parse_interpolated_code(part.source, token.line, part.column),
+          : to_string_call(parse_interpolated_code(part.source, token.line, part.column)),
       )
       return { kind: 'interpolation', parts, ...position }
     }
@@ -409,6 +419,13 @@ const no_bodies = (line: number, column: number): BodyParser => {
     throw new CompileError('a function cannot be written in an interpolation', line, column)
   }
   return { parse_block: reject, parse_simple_statement: reject }
+}
+
+const to_string_call = (value: Expression): Call => {
+  const position = { line: value.line, column: value.column }
+  const name: Identifier = { kind: 'identifier', name: 'to_string', ...position }
+  const callee: Expression = { kind: 'member', object: value, name, ...position }
+  return { kind: 'call', callee, args: [], named_args: [], type_args: [], ...position }
 }
 
 const parse_interpolated_code = (source: string, line: number, column: number): Expression => {

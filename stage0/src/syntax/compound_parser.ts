@@ -10,6 +10,7 @@ import type {
   Parameter,
   Position,
   Statement,
+  TypeParameter,
 } from './ast.ts'
 import { CompileError } from '../errors.ts'
 import type { LoopHeader } from './expression_parser.ts'
@@ -50,7 +51,7 @@ export class CompoundParser {
 
   // `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
   // `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
-  // map key: `{ (k): v }`.
+  // map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
   // The lookahead skips line breaks, which may separate the parameters.
   starts_function_literal(): boolean {
     return this.tokens.inside('skip', () => this.looks_like_function_literal())
@@ -58,7 +59,7 @@ export class CompoundParser {
 
   private looks_like_function_literal(): boolean {
     const [first, second, third] = [0, 1, 2].map((offset) => this.tokens.peek(offset).kind)
-    if (first === '->') return true
+    if (first === '->' || first === '<') return true
     if (first !== '(') return false
     if (second === ')') return third === ':' || third === '->'
     if (second === 'identifier' && third === ':') return true
@@ -73,9 +74,11 @@ export class CompoundParser {
   }
 
   // `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted, and so may
-  // the parameters' types, `(a, b) -> body`, where a function type is expected.
+  // the parameters' types, `(a, b) -> body`, where a function type is expected. Type parameters,
+  // `<T, U: Stringable>`, come first.
   parse_function_literal(): FunctionLiteral {
     const token = this.tokens.peek()
+    const type_params = this.tokens.peek().kind === '<' ? this.parse_type_parameters() : []
     const params: Parameter[] = []
     if (this.tokens.accept('(')) {
       const parse_param = () => {
@@ -93,7 +96,20 @@ export class CompoundParser {
       this.tokens.peek().kind === 'newline'
         ? this.bodies.parse_block()
         : [this.bodies.parse_simple_statement()]
-    return { kind: 'function', params, return_type, body, line: token.line, column: token.column }
+    const position = { line: token.line, column: token.column }
+    return { kind: 'function', type_params, params, return_type, body, ...position }
+  }
+
+  private parse_type_parameters(): TypeParameter[] {
+    this.tokens.expect('<', "'<'")
+    const type_params: TypeParameter[] = []
+    do {
+      const name = this.elements.parse_identifier()
+      const bound = this.tokens.accept(':') ? this.elements.parse_identifier() : undefined
+      type_params.push({ name, bound })
+    } while (this.tokens.accept(','))
+    this.tokens.expect('>', "'>'")
+    return type_params
   }
 
   // `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
@@ -230,6 +246,7 @@ const lazy_functions = (
 ): Comprehension['lazy'] => {
   const function_of = (body: Expression): FunctionLiteral => ({
     kind: 'function',
+    type_params: [],
     params: [{ name: { ...variable }, type: undefined }],
     return_type: undefined,
     body: [body],

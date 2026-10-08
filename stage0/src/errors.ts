@@ -38,6 +38,9 @@ export class CompileError extends Error {
   module_path: string | undefined
   // Warnings found before the error, to be reported along with it.
   warnings: CompileWarning[] = []
+  // What was being checked where the error was found, such as `in print<Int>`: the innermost of
+  // what adds it.
+  context: string | undefined
 
   constructor(message: string, line: number, column: number) {
     super(message)
@@ -45,7 +48,12 @@ export class CompileError extends Error {
     this.column = column
   }
 
+  add_context(context: string): void {
+    this.context ??= context
+  }
+
   format(entry_path: string): string {
-    return `${location(entry_path, this)}: ${this.message}`
+    const context = this.context === undefined ? '' : ` (${this.context})`
+    return `${location(entry_path, this)}: ${this.message}${context}`
   }
 }

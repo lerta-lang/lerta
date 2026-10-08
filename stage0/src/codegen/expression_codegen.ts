@@ -8,13 +8,12 @@ import {
 } from '../syntax/ast.ts'
 import { call_array_method, emit_length } from './array_codegen.ts'
 import { emit_binary_length } from './binary_codegen.ts'
-import { builtins } from '../check/builtins.ts'
 import { emit_closure_call, emit_function_closure } from './closure_codegen.ts'
 import { call_iter_method, is_iter_method } from './iter_codegen.ts'
 import { emit_record, emit_record_field } from './record_codegen.ts'
 import { CaseGenerator, type BlockGenerator } from './case_codegen.ts'
 import { CollectionGenerator } from './collection_codegen.ts'
-import type { Conversions, Types } from '../check/checker.ts'
+import type { Checked, Conversions, Types } from '../check/checker.ts'
 import type { CheckedInt } from './checked_int.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import {
@@ -22,8 +21,8 @@ import {
   emit_retain,
   constructor_symbol,
   extension_symbol,
+  instance_symbol,
   method_symbol,
-  ir_param_type,
   ir_return_type,
   ir_type,
   string_constant,
@@ -37,7 +36,7 @@ import type { Imports } from '../check/imports.ts'
 import type { ObjectTypes } from '../check/object_types.ts'
 import type { Scopes } from '../scopes.ts'
 import { emit_runtime_call, emit_unreachable } from './extern_codegen.ts'
-import { emit_concat, emit_to_string } from './string_codegen.ts'
+import { emit_concat } from './string_codegen.ts'
 import type { ThrowBlocks } from './throw_blocks.ts'
 import { emit_initialized_check, type TopLevelGlobal } from './top_level_codegen.ts'
 import { is_reference_type, type Type } from '../types.ts'
@@ -70,14 +69,14 @@ export class ExpressionGenerator {
   private readonly ir: IrBuilder
   private readonly types: Types
   private readonly locals: Scopes<CodegenLocal>
-  // The symbols of top-level functions, own and imported, which a call prefers to a builtin of the
-  // same name.
+  // The symbols of top-level functions, own and imported.
   private readonly function_symbols: Map<string, string>
 
   private readonly conversions: Conversions
   private readonly objects: ObjectTypes
   private readonly imports: Imports
   private readonly extensions: Extensions
+  private readonly instances: Checked['instances']
   private readonly operators: OperatorGenerator
   private readonly cases: CaseGenerator
   private readonly blocks: BlockGenerator
@@ -85,13 +84,10 @@ export class ExpressionGenerator {
 
   constructor(
     ir: IrBuilder,
-    checked: {
-      types: Types
-      conversions: Conversions
-      objects: ObjectTypes
-      imports: Imports
-      extensions: Extensions
-    },
+    checked: Pick<
+      Checked,
+      'types' | 'conversions' | 'objects' | 'imports' | 'extensions' | 'instances'
+    >,
     throws: ThrowBlocks,
     checked_int: CheckedInt,
     locals: Scopes<CodegenLocal>,
@@ -104,6 +100,7 @@ export class ExpressionGenerator {
     this.objects = checked.objects
     this.imports = checked.imports
     this.extensions = checked.extensions
+    this.instances = checked.instances
     this.operators = new OperatorGenerator(this, ir, checked.types, checked_int, throws)
     this.blocks = blocks
     this.cases = new CaseGenerator(this, ir, checked.types, blocks)
@@ -218,6 +215,10 @@ export class ExpressionGenerator {
   private generate_call(call: Call): string {
     const { callee } = call
     if (callee.kind === 'member') return this.generate_method_call(call, callee)
+    const instance = this.instances.get(call)
+    if (instance !== undefined) {
+      return this.call_function(instance_symbol(instance), instance.type!, call.args)
+    }
     const call_type = this.types.get(call)!
     if (callee.kind === 'identifier' && callee.name === 'Map' && this.is_builtin_name('Map')) {
       if (call_type.kind !== 'Map') throw new Error('Map() has a map type')
@@ -238,15 +239,17 @@ export class ExpressionGenerator {
       call.args.forEach((arg, i) => this.release_if_reference(arg, operands[i].operand))
       return result
     }
-    const arg_types = call.args.map((arg) => this.type_at_use(arg))
-    const operands = call.args.map((arg) => this.generate(arg))
-    const args = operands.map((operand, i) => `${ir_type(arg_types[i])} ${operand}`).join(', ')
-    const symbol = this.function_symbols.get(callee.name)
-    const result =
-      symbol !== undefined
-        ? this.call_user_function(symbol, callee_type, args)
-        : this.call_builtin(callee.name, arg_types, args)
-    call.args.forEach((arg, i) => this.release_if_reference(arg, operands[i]))
+    return this.call_function(this.function_symbols.get(callee.name)!, callee_type, call.args)
+  }
+
+  // Calls a function written in Lerta by its symbol.
+  private call_function(symbol: string, type: Type, args: Expression[]): string {
+    const operands = args.map((arg) => this.generate(arg))
+    const typed_args = operands.map(
+      (operand, i) => `${ir_type(this.type_at_use(args[i]))} ${operand}`,
+    )
+    const result = this.call_user_function(symbol, type, typed_args.join(', '))
+    args.forEach((arg, i) => this.release_if_reference(arg, operands[i]))
     return result
   }
 
@@ -291,14 +294,6 @@ export class ExpressionGenerator {
     if (type.result.kind !== 'never') return ''
     emit_unreachable(this.ir)
     return 'poison'
-  }
-
-  private call_builtin(name: string, arg_types: Type[], args: string): string {
-    const symbol = builtins.get(name)!.runtime_symbol(arg_types)
-    const params = arg_types.map(ir_param_type).join(', ')
-    this.ir.declare(symbol, `declare void @${symbol}(${params})`)
-    this.ir.emit(`call void @${symbol}(${args})`)
-    return ''
   }
 
   // The methods of Iters (see call_iter_method) take the object and the arguments; the other
@@ -386,9 +381,7 @@ export class ExpressionGenerator {
 
   private generate_interpolation(interpolation: Interpolation): string {
     const parts = interpolation.parts.map((part) =>
-      typeof part === 'string'
-        ? string_constant(this.ir, part)
-        : emit_to_string(this.ir, this.generate(part), this.types.get(part)!),
+      typeof part === 'string' ? string_constant(this.ir, part) : this.generate(part),
     )
     return emit_concat(this.ir, parts)
   }

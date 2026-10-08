@@ -2,15 +2,18 @@
 import type { Identifier, Import, Program } from '../syntax/ast.ts'
 import { CompileError, CompileWarning } from '../errors.ts'
 import type { CheckerLocal } from './expression_checker.ts'
+import type { GenericFunction } from './generics.ts'
+import { builtins_module } from '../loader.ts'
 import type { ObjectInfo } from './object_types.ts'
 import type { Type } from '../types.ts'
 
 // What a module exports under a name: a C function, by its symbol (see Extern), a function or a
-// `const` of another module (by its index and its name there), or a type (a class or struct, which
-// brings its info, or an alias).
+// `const` of another module (by its index and its name there), a generic function, or a type (a
+// class or struct, which brings its info, or an alias).
 export type Export =
   | { kind: 'function'; type: Type; symbol: string }
   | { kind: 'lerta_function'; type: Type; module_index: number; name: string }
+  | { kind: 'generic_function'; generic: GenericFunction }
   | { kind: 'lerta_value'; type: Type; module_index: number; name: string }
   | { kind: 'type'; type: Type; info: ObjectInfo | undefined }
 
@@ -19,6 +22,9 @@ export type ImportedName = { name: Identifier; export: Export; used: boolean }
 
 export class Imports {
   private readonly names = new Map<string, ImportedName>()
+  // What std:builtins exports, such as `print`, which the module has without naming it in an
+  // import; its own names shadow them.
+  private builtins = new Map<string, Export>()
   // The exports of the module that an import names.
   private readonly exports_of: (statement: Import) => Map<string, Export>
 
@@ -29,7 +35,9 @@ export class Imports {
   // The module's own names that clash with imports are rejected as they are declared.
   add(program: Program): void {
     for (const statement of program) {
-      if (statement.kind === 'import') this.add_import(statement)
+      if (statement.kind !== 'import') continue
+      if (statement.module === builtins_module) this.builtins = this.exports_of(statement)
+      this.add_import(statement)
     }
   }
 
@@ -85,6 +93,10 @@ export class Imports {
 
   get(name: string): ImportedName | undefined {
     return this.names.get(name)
+  }
+
+  builtin(name: string): Export | undefined {
+    return this.builtins.get(name)
   }
 
   unused_warnings(): CompileWarning[] {

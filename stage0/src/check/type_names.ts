@@ -44,15 +44,40 @@ const simple_types = new Map<string, Type>([
 export const is_builtin_type_name = (name: string): boolean =>
   simple_types.has(name) || ['Array', 'Iter', 'Map', 'void', 'never'].includes(name)
 
+type Aliases = Map<string, { alias: TypeAlias; type: Type | undefined }>
+
 // Resolves type names, including the classes and structs of the program.
 export class TypeResolver {
   private readonly object_type: (name: string) => Type | undefined
   // Type aliases, resolved on first use, so that they can refer to each other in any order.
-  private readonly aliases = new Map<string, { alias: TypeAlias; type: Type | undefined }>()
-  private readonly resolving = new Set<string>()
+  private readonly aliases: Aliases
+  private readonly resolving: Set<string>
+  // The types that the type parameters of a generic function stand for (see with_type_parameters).
+  private readonly type_parameters: Map<string, Type>
 
-  constructor(object_type: (name: string) => Type | undefined) {
+  constructor(
+    object_type: (name: string) => Type | undefined,
+    aliases: Aliases = new Map(),
+    resolving = new Set<string>(),
+    type_parameters = new Map<string, Type>(),
+  ) {
     this.object_type = object_type
+    this.aliases = aliases
+    this.resolving = resolving
+    this.type_parameters = type_parameters
+  }
+
+  // A resolver of the same names, in which those of type parameters stand for the given types, as
+  // in the body of a generic function.
+  with_type_parameters(type_parameters: Map<string, Type>): TypeResolver {
+    return new TypeResolver(this.object_type, this.aliases, this.resolving, type_parameters)
+  }
+
+  // Whether the name is that of a type, which a type parameter cannot take.
+  has_type(name: string): boolean {
+    return (
+      is_builtin_type_name(name) || this.object_type(name) !== undefined || this.has_alias(name)
+    )
   }
 
   add_alias(alias: TypeAlias): void {
@@ -155,7 +180,10 @@ export class TypeResolver {
     if (is_result && name === 'void') return void_type
     if (is_result && name === 'never') return never_type
     const type =
-      simple_types.get(name) ?? this.object_type(name) ?? this.resolve_alias(name, type_name)
+      this.type_parameters.get(name) ??
+      simple_types.get(name) ??
+      this.object_type(name) ??
+      this.resolve_alias(name, type_name)
     if (type === undefined) throw new CompileError(`unknown type '${name}'`, line, column)
     return type
   }

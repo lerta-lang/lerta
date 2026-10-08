@@ -1,27 +1,6 @@
 // Operations on Strings in the generated code. Operands are owned Strings unless noted.
 import type { IrBuilder } from './ir_builder.ts'
-import { emit_release, string_constant } from './lerta_ir.ts'
-import { int_type, type Type } from '../types.ts'
-
-// An owned String with the text of a Stringable value; a String is passed on as is.
-export const emit_to_string = (ir: IrBuilder, operand: string, type: Type): string => {
-  switch (type.kind) {
-    case 'String':
-      return operand
-    case 'Int':
-      ir.declare('lerta_int_to_string', 'declare ptr @lerta_int_to_string(i64)')
-      return ir.assign(`call ptr @lerta_int_to_string(i64 ${operand})`)
-    case 'UInt8':
-      return emit_to_string(ir, ir.assign(`zext i8 ${operand} to i64`), int_type)
-    case 'Bool': {
-      const true_text = string_constant(ir, 'true')
-      const false_text = string_constant(ir, 'false')
-      return ir.assign(`select i1 ${operand}, ptr ${true_text}, ptr ${false_text}`)
-    }
-    default:
-      throw new Error(`no to_string for ${type.kind}`)
-  }
-}
+import { emit_release } from './lerta_ir.ts'
 
 // A new String holding the parts one after another; the parts are released.
 export const emit_concat = (ir: IrBuilder, parts: string[]): string => {

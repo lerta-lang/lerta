@@ -90,6 +90,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 ## Generics
 
 - Monomorphized instances are emitted by the using module as `linkonce_odr` and managed by mangled names.
+- stage0 compiles the whole program into one LLVM module, so it emits each instance once, with the module that declares the generic function, under a symbol made of the function's and the type arguments' names (`lerta.fn.0.print<Int>`). An instance is a copy of the function literal, checked with the type parameters standing for its type arguments; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
 
 ## Strings
 

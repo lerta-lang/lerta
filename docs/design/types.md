@@ -14,6 +14,7 @@
 - There is **no** `any`.
 - `interface` uses structural typing (static duck typing). No `implements` declaration is needed.
 - Generics are **monomorphized** (code is generated per type). Constraints are interfaces, as in `T: Comparable`, and are **checked at definition** (avoiding the C++ template "error deep inside").
+  - Generic top-level functions with the bound `Stringable` are implemented, checked per instance instead: see [the reference](../reference/functions.md#generic-functions). Planned: checking their bodies at definition against the bounds, interfaces as bounds, generic classes, structs and methods, and generic literals outside the top level.
 - The checked downcast `x as Point` returns `Point?` (there is no separate form with `?`). There is no unchecked cast. To make failure an exception, write `(x as Point)!`.
   - If `x` has a type that can be nil, nil also counts as failure and returns nil (to distinguish, remove nil first with `if x`).
 - Inside an interface, `Self` means "the type that implements it".

@@ -1,8 +1,10 @@
 // Top-level functions and the methods of classes, structs and extends. They can be used anywhere
 // in the module, before their declaration too, so a body is checked on demand: when its return
-// type is first needed, or at the end.
-import type { FunctionLiteral, Identifier, Position } from '../syntax/ast.ts'
+// type is first needed, or at the end. A generic function's are checked per instance (see
+// GenericFunction).
+import { is_generic, type FunctionLiteral, type Identifier, type Position } from '../syntax/ast.ts'
 import { CompileError } from '../errors.ts'
+import type { GenericFunction } from './generics.ts'
 import type { TypeResolver } from './type_names.ts'
 import type { Type } from '../types.ts'
 
@@ -32,8 +34,16 @@ export const parameter_types = (
     throw new CompileError(`the type of the parameter '${name}' must be written`, line, column)
   })
 
+// A top-level function, which GenericFunction checks, is the only kind that can be generic.
+export const reject_generic = (literal: FunctionLiteral): void => {
+  if (!is_generic(literal)) return
+  const message = 'only a top-level function can be generic so far'
+  throw new CompileError(message, literal.line, literal.column)
+}
+
 export class Functions {
   private readonly entries = new Map<string, FunctionEntry>()
+  private readonly generic_functions = new Map<string, GenericFunction>()
   // Checks a body, setting the entry's type if it was not annotated.
   private readonly check_body: (entry: FunctionEntry) => void
   private readonly resolver: TypeResolver
@@ -45,9 +55,8 @@ export class Functions {
 
   // A method is keyed by its type and name, as `Point.length` (see `method_key`).
   add(key: string, name: Identifier, literal: FunctionLiteral, this_type?: Type): void {
-    if (this.entries.has(key)) {
-      throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
-    }
+    this.reject_defined(key, name)
+    reject_generic(literal)
     const type: Type | undefined =
       literal.return_type === undefined
         ? undefined
@@ -59,8 +68,28 @@ export class Functions {
     this.entries.set(key, { name, literal, type, state: 'unchecked', this_type })
   }
 
+  add_generic(generic: GenericFunction): void {
+    const { name } = generic
+    this.reject_defined(name.name, name)
+    this.generic_functions.set(name.name, generic)
+  }
+
+  private reject_defined(key: string, name: Identifier): void {
+    if (this.has(key)) {
+      throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
+    }
+  }
+
   has(name: string): boolean {
-    return this.entries.has(name)
+    return this.entries.has(name) || this.generic_functions.has(name)
+  }
+
+  generic(name: string): GenericFunction | undefined {
+    return this.generic_functions.get(name)
+  }
+
+  generics(): GenericFunction[] {
+    return [...this.generic_functions.values()]
   }
 
   // The function's type, checking its body first if the return type must be inferred.

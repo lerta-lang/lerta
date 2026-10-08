@@ -8,8 +8,8 @@
 
 - **Syntax**: `#` comments, `'...'`/`"..."` strings, indented blocks, `const`/`var`, implicit return, parenthesis-free calls (at statement start), `then`/`else` expressions, `if`/`else` statements, `case`, `while`, `for x in xs`, `break`/`continue`, `return`, postfix `if`/`while`/`for`, comprehensions (`(...)` for `Iter<T>`, `[...]` for `Array<T>`), ranges `a...b`, `case` without a subject, string interpolation, destructuring, named arguments (omitting `{}` of an anonymous struct), multi-line literals (newline separation inside brackets, bracketless blocks)
 - **Types**: `Int` (Int64), `UInt8` (with `Byte` as its alias), `Bool`, `String`, `void`, `never`, unions and narrowing, `type` aliases, `T?`, `as`, `!`, `is` tests, local inference
-- **Data**: `class`/`struct` (no inheritance, the type body rules, `@`, named constructors, `init`, `deinit`), anonymous structs, `Map` literals, `Array<T>`, `Map<K, V>`, `Iter<T>` (**only built-in types are generic**; user-defined generics come later), `extend` of the types that are not generic
-- **Functions**: first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
+- **Data**: `class`/`struct` (no inheritance, the type body rules, `@`, named constructors, `init`, `deinit`), anonymous structs, `Map` literals, `Array<T>`, `Map<K, V>`, `Iter<T>` (**only built-in types are generic**; user-defined generic types come later), `extend` of the types that are not generic
+- **Functions**: generic top-level functions (monomorphized, checked per instance, with the bound `Stringable`, which is structural), first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
 - **Strings**: immutable, UTF-8, **flat only**. `Binary`, `Byte`, `s.binary`, `b.decode_utf8()`, `s.parse_int()`, `length`, `equals`, `hash`, `==`, `+` (concatenation), `join`
 - **Memory**: RC (non-atomic), destructors. Immortal static literals
 - **Modules**: `import`/`export` (named only), `import 'module'` for a module's effects, a file is a module
@@ -33,9 +33,8 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 | `'std:io'` | `read_file(path: String): Binary`, `write_file`, `Writer`, `stdout`, `stderr` |
 | `'std:process'` | `argv`, `exit(code: Int): never` |
 
-- The builtins written in Lerta, the methods of the types that are not generic, are in `std/builtins.lerta`, which every module imports implicitly.
+- The builtins written in Lerta, `print` and the methods of the types that are not generic, are in `std/builtins.lerta`, which every module imports implicitly.
 - In stage0, writes are synchronous. Making them asynchronous is decided in Phase 2.
-- Until `extern` is implemented, `print` is implemented in the C runtime (`lerta_print_string` and `lerta_print_int`) and called directly by the compiler. It moves to Lerta once `extern` exists.
 
 ### Not included (later)
 
@@ -45,8 +44,8 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 - `catch`/`finally`, exception types, the exception implementation strategy — compile errors are collected as values
 - async/await, the event loop, libuv, workers
 - `weak`
-- User-defined `interface`, itabs, satisfying methods with function-valued fields (`Equatable`/`Hashable`/`Stringable` are handled as built-in rules in stage0)
-- User-defined generics
+- User-defined `interface`, itabs, satisfying methods with function-valued fields (`Equatable`/`Hashable` are handled as built-in rules in stage0, and `Stringable` structurally, by `x.to_string()`)
+- Generic classes and structs, generic methods and extends (`extend Array<T>`), generic function literals outside the top level, interfaces as bounds, and checking a generic function's body once, at its definition, against its bounds
 - Operator overloading, literal construction interfaces, BigInt
 - Regular expressions
 - `Float` (literals are only lexed and kept as strings)

@@ -36,7 +36,7 @@ The basic rules are implemented: see [the reference](../reference/syntax.md#call
 
 - Whitespace after an identifier at the start of a statement also starts the arguments before `[`: `f [1]` is `f([1])`, while `f[1]` is indexing.
 - If the last argument is a closure, it may continue as an indented block.
-- A call with explicit type arguments requires parentheses: `f<T>(x)` (to avoid a clash with `a < b`).
+- A call with explicit type arguments requires parentheses: `f<T>(x)` (to avoid a clash with `a < b`): implemented, see [the reference](../reference/functions.md#generic-functions).
 
 ## Operator precedence
 

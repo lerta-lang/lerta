@@ -228,7 +228,8 @@ class Parser {
   private parse_command_call(): Call {
     const callee = this.expressions.parse_primary()
     const { args, named_args } = this.expressions.parse_arguments()
-    return { kind: 'call', callee, args, named_args, line: callee.line, column: callee.column }
+    const position = { line: callee.line, column: callee.column }
+    return { kind: 'call', callee, args, named_args, type_args: [], ...position }
   }
 
   // `type Name = ...`; `type` is not a keyword, so that it stays usable as a name.

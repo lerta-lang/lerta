@@ -100,6 +100,20 @@ export class Extensions {
     }
   }
 
+  // The extends in effect here, with `methods` before them, as an instance of a generic function
+  // sees them (see GenericFunction).
+  with_methods(methods: ExtensionMethod[]): Extensions {
+    const extensions = new Extensions(this.module_index, this.module_name)
+    const others = this.in_effect.filter((method) => !methods.includes(method))
+    extensions.in_effect.push(...methods, ...others)
+    return extensions
+  }
+
+  // The methods that extends in effect give the type.
+  methods_of(receiver: Type): ExtensionMethod[] {
+    return this.in_effect.filter((method) => same_type(method.receiver, receiver))
+  }
+
   find(receiver: Type, name: string): ExtensionMethod | undefined {
     return this.in_effect.find(
       (method) => method.name.name === name && same_type(method.receiver, receiver),

@@ -1,8 +1,9 @@
 export type Position = { line: number; column: number }
 
 export type StringLiteral = Position & { kind: 'string'; value: string }
-// `"a#{b}c"`: text parts and interpolated expressions, in order.
-export type Interpolation = Position & { kind: 'interpolation'; parts: (string | Expression)[] }
+// `"a#{b}c"`: text parts and interpolated values, in order. A value is read as a call of its
+// `to_string()`, `b.to_string()`, which gives its text.
+export type Interpolation = Position & { kind: 'interpolation'; parts: (string | Call)[] }
 export type NilLiteral = Position & { kind: 'nil' }
 export type BooleanLiteral = Position & { kind: 'boolean'; value: boolean }
 export type IntegerLiteral = Position & { kind: 'integer'; value: bigint }
@@ -41,12 +42,14 @@ export type RecordLiteral = Position & {
 // `object[index]`
 export type Index = Position & { kind: 'index'; object: Expression; index: Expression }
 // `f(a, b)`, or `Point(x: 1, y: 2)` with named arguments, which construct a class or struct.
+// `f<Int>(x)` gives a generic function its type arguments.
 export type NamedArgument = { name: Identifier; value: Expression }
 export type Call = Position & {
   kind: 'call'
   callee: Expression
   args: Expression[]
   named_args: NamedArgument[]
+  type_args: TypeName[]
 }
 // `@` inside a method or a field initializer: the object itself. `@x` is `this.x`.
 export type This = Position & { kind: 'this' }
@@ -108,9 +111,14 @@ export type TypeName = NamedType | UnionTypeName | FunctionTypeName | RecordType
 // A parameter's type may be left out where a function type is expected for the literal.
 export type Parameter = { name: Identifier; type: TypeName | undefined }
 
-// `(x: Int): Int -> body`. The body's last expression is the return value.
+// `T` in `<T>(x: T) -> x`, or `T: Stringable`, whose type arguments must have `to_string()`.
+export type TypeParameter = { name: Identifier; bound: Identifier | undefined }
+
+// `(x: Int): Int -> body`. The body's last expression is the return value. A generic one,
+// `<T>(x: T) -> body`, has type parameters.
 export type FunctionLiteral = Position & {
   kind: 'function'
+  type_params: TypeParameter[]
   params: Parameter[]
   return_type: TypeName | undefined
   body: Statement[]
@@ -166,6 +174,8 @@ export type Expression =
   | Case
   | IsTest
   | FunctionLiteral
+
+export const is_generic = (literal: FunctionLiteral): boolean => literal.type_params.length > 0
 
 export type For = Position & {
   kind: 'for'

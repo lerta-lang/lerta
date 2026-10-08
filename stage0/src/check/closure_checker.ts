@@ -3,7 +3,7 @@ import type { Expression, FunctionLiteral } from '../syntax/ast.ts'
 import type { Capture, FunctionContext, Shared } from './checker.ts'
 import { CompileError } from '../errors.ts'
 import type { CheckerLocal } from './expression_checker.ts'
-import { parameter_types } from './functions.ts'
+import { parameter_types, reject_generic } from './functions.ts'
 import { finish_function_type, reject_nil_result } from './result_checker.ts'
 import type { Scopes } from '../scopes.ts'
 import { format_type, type Type } from '../types.ts'
@@ -75,6 +75,7 @@ export class ClosureChecker {
     expected_result: Type | undefined,
     holds?: Expression,
   ): Type {
+    reject_generic(literal)
     const has_untyped = literal.params.some((param) => param.type === undefined)
     const count = literal.params.length
     if (has_untyped && expected_params !== undefined && expected_params.length !== count) {

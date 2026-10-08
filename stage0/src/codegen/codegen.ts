@@ -2,6 +2,7 @@
 // ControlFlowGenerator generates control flow, and AssignmentGenerator assignments.
 import {
   is_expression,
+  is_generic,
   type Comprehension,
   type Declaration,
   type FunctionLiteral,
@@ -31,6 +32,7 @@ import {
   emit_retain,
   extension_symbol,
   function_symbol,
+  instance_symbol,
   module_init_symbol,
   top_level_symbol,
   ir_return_type,
@@ -55,9 +57,14 @@ type FunctionDeclaration = Declaration & { value: FunctionLiteral }
 const is_function_declaration = (statement: Statement): statement is FunctionDeclaration =>
   statement.kind === 'declaration' && statement.value.kind === 'function'
 
+// A generic function is generated per instance instead.
+const is_plain_function = (statement: Statement): statement is FunctionDeclaration =>
+  is_function_declaration(statement) && !is_generic(statement.value)
+
 // Emits LLVM IR for the checked modules (see check_modules) as one program. The entry module's
 // top-level code becomes lerta_main, which first runs that of the other modules, in order; each
-// function, method and constructor becomes a function of its own.
+// function, method, constructor and instance of a generic function becomes a function of its own.
+// The instances are generated with their generic function, once all the calls are checked.
 export const generate = (modules: Module[], checked: Checked[]): string => {
   const ir_module = new IrModule()
   const entry = modules.at(-1)!
@@ -74,8 +81,10 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
       module === entry
         ? { signature: 'void @lerta_main()', runs_first: modules.slice(0, -1) }
         : { signature: `void ${module_init_symbol(module.index)}()`, runs_first: [] }
-    const generator = (top_level_code = false) =>
-      new FunctionGenerator(ir_module, checked[module.index], function_symbols(module, checked), {
+    const module_checked = checked[module.index]
+    const symbols = function_symbols(module, checked)
+    const generator = (top_level_code = false, extensions = module_checked.extensions) =>
+      new FunctionGenerator(ir_module, { ...module_checked, extensions }, symbols, {
         values: globals[module.index],
         top_level_code,
       })
@@ -87,11 +96,18 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
       main.runs_first.map((other) => module_init_symbol(other.index)),
       module === entry ? globals.flatMap((values) => [...values.values()]) : [],
     )
-    for (const declaration of module.program.filter(is_function_declaration)) {
+    for (const declaration of module.program.filter(is_plain_function)) {
       const symbol = function_symbol(module.index, declaration.name.name)
       generator().generate_function(symbol, declaration.value, undefined)
     }
-    for (const info of checked[module.index].objects.all()) {
+    for (const instance of module_checked.generics.flatMap((generic) => generic.instances)) {
+      generator(false, instance.extensions).generate_function(
+        instance_symbol(instance),
+        instance.literal,
+        undefined,
+      )
+    }
+    for (const info of module_checked.objects.all()) {
       define_object(ir_module, info)
       generator().generate_constructor(info)
       for (const [name, literal] of info.methods) {
@@ -99,7 +115,7 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
         generator().generate_function(symbol, literal, info.type)
       }
     }
-    for (const method of checked[module.index].extensions.own) {
+    for (const method of module_checked.extensions.own) {
       generator().generate_function(extension_symbol(method), method.literal, method.receiver)
     }
   }
@@ -109,7 +125,7 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
 // The symbols of the functions a module can call by name: its own and those it imports.
 const function_symbols = (module: Module, checked: Checked[]): Map<string, string> => {
   const symbols = new Map<string, string>()
-  for (const declaration of module.program.filter(is_function_declaration)) {
+  for (const declaration of module.program.filter(is_plain_function)) {
     symbols.set(declaration.name.name, function_symbol(module.index, declaration.name.name))
   }
   for (const imported of checked[module.index].imports.all()) {
@@ -123,7 +139,14 @@ const function_symbols = (module: Module, checked: Checked[]): Map<string, strin
 
 type CheckedTypes = Pick<
   Checked,
-  'types' | 'conversions' | 'objects' | 'imports' | 'extensions' | 'captures' | 'shared_vars'
+  | 'types'
+  | 'conversions'
+  | 'objects'
+  | 'imports'
+  | 'extensions'
+  | 'captures'
+  | 'shared_vars'
+  | 'instances'
 >
 
 export class FunctionGenerator implements BlockGenerator {

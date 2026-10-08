@@ -1,5 +1,7 @@
 // Checks a program: the types of its expressions, its conversions and its warnings.
 import {
+  is_generic,
+  type Call,
   type Declaration,
   type Expression,
   type NamedType,
@@ -14,6 +16,7 @@ import {
 import { CompileError, CompileWarning } from '../errors.ts'
 import { Extensions } from './extensions.ts'
 import { Functions, method_key, parameter_types, type FunctionEntry } from './functions.ts'
+import { GenericFunction, type Instance } from './generics.ts'
 import { Imports, type Export } from './imports.ts'
 import { with_module_path, type Module } from '../loader.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
@@ -34,9 +37,19 @@ export type Conversions = Map<Expression, Type>
 export type Capture = { name: string; type: Type; is_var: boolean }
 export type Captures = Map<FunctionLiteral, Capture[]>
 
-// Warnings are found as scopes end; they are reported in source order.
-const in_source_order = (warnings: CompileWarning[]): CompileWarning[] =>
-  warnings.toSorted((a, b) => a.line - b.line || a.column - b.column)
+// Warnings are found as scopes end; they are reported in source order, once each, though each
+// instance of a generic function finds those of its body again.
+const in_source_order = (warnings: CompileWarning[]): CompileWarning[] => {
+  const keys = new Set<string>()
+  return warnings
+    .filter((warning) => {
+      const key = `${warning.line}:${warning.column}:${warning.message}`
+      const is_new = !keys.has(key)
+      keys.add(key)
+      return is_new
+    })
+    .toSorted((a, b) => a.line - b.line || a.column - b.column)
+}
 
 // What all the checkers of one program share.
 export type Shared = {
@@ -51,8 +64,13 @@ export type Shared = {
   top_level: TopLevelValues
   captures: Captures
   extern_types: Map<string, ExternType>
-  // How messages name the module.
+  // The module's index, how messages name it, and the path that diagnostics give for it (see
+  // Module).
+  module_index: number
   module_name: string
+  module_path: string | undefined
+  // The instances of generic functions that calls call.
+  instances: Map<Call, Instance>
   // The `var`s that function literals capture, by their declarations' names.
   shared_vars: Set<Identifier>
 }
@@ -80,6 +98,10 @@ export type Checked = {
   shared_vars: Set<Identifier>
   // What the module exports, for the modules that import it, besides its extends.
   exports: Map<string, Export>
+  instances: Map<Call, Instance>
+  generics: GenericFunction[]
+  // Adds the warnings about the names that the module never uses, once every module is checked.
+  warn_unused: () => void
 }
 
 // What the modules share: the classes and structs of every module checked so far, by symbol, and
@@ -90,26 +112,37 @@ type ProgramWide = { infos: Map<string, ObjectInfo>; extern_types: Map<string, E
 type ExternType = { type: Type; module_name: string }
 
 // Checks the modules in order, each after those it imports (see load_modules). The warnings of
-// all the modules come back with the last one's, or with the error.
+// all the modules come back with the last one's, or with the error. They are gathered at the end,
+// since a module that calls a generic function of another checks an instance of it there, which
+// may find warnings and use names of that module.
 export const check_modules = (modules: Module[]): Checked[] => {
   const checked: Checked[] = []
-  const warnings: CompileWarning[] = []
+  const warnings_of_modules = modules.map((): CompileWarning[] => [])
   const program_wide: ProgramWide = { infos: new Map(), extern_types: new Map() }
+  const all_warnings = (): CompileWarning[] => {
+    for (const result of checked) result.warn_unused()
+    return modules.flatMap((module) => {
+      const warnings = in_source_order(warnings_of_modules[module.index])
+      for (const warning of warnings) warning.module_path = module.display_path
+      return warnings
+    })
+  }
   try {
     for (const module of modules) {
       const imported = (statement: Import) => checked[module.imported.get(statement)!.index]
-      const result = with_module_path(module.display_path, () =>
-        check(module, imported, program_wide),
+      const warnings = warnings_of_modules[module.index]
+      checked.push(
+        with_module_path(module.display_path, () =>
+          check(module, imported, program_wide, warnings),
+        ),
       )
-      for (const warning of result.warnings) warning.module_path = module.display_path
-      warnings.push(...result.warnings)
-      checked.push(result)
+      while (checked.some((result) => result.generics.some((generic) => generic.check_pending())));
     }
   } catch (error) {
-    if (error instanceof CompileError) error.warnings = [...warnings, ...error.warnings]
+    if (error instanceof CompileError) error.warnings = all_warnings()
     throw error
   }
-  checked.at(-1)!.warnings = warnings
+  checked.at(-1)!.warnings = all_warnings()
   return checked
 }
 
@@ -118,19 +151,16 @@ const check = (
   module: Module,
   imported: (statement: Import) => Checked,
   program_wide: ProgramWide,
+  warnings: CompileWarning[],
 ): Checked => {
   const { program } = module
-  const shared = create_shared(module, (statement) => imported(statement).exports, program_wide)
-  const { types, conversions, warnings, functions, objects, resolver, imports, captures } = shared
-  try {
-    reject_misplaced_jumps(program)
-    declare_names(program, shared)
-    declare_extends(module, imported, shared)
-    check_code(program, shared)
-  } catch (error) {
-    if (error instanceof CompileError) error.warnings = in_source_order(warnings)
-    throw error
-  }
+  const exports_of = (statement: Import) => imported(statement).exports
+  const shared = create_shared(module, exports_of, program_wide, warnings)
+  const { types, conversions, functions, objects, resolver, imports, captures } = shared
+  reject_misplaced_jumps(program)
+  declare_names(program, shared)
+  declare_extends(module, imported, shared)
+  const warn_unused = check_code(program, shared)
   const exports = exports_of_module(module, functions, objects, resolver, types, shared.imports)
   return {
     types,
@@ -138,10 +168,13 @@ const check = (
     objects,
     imports,
     extensions: shared.extensions,
-    warnings: in_source_order(warnings),
+    warnings,
     captures,
     shared_vars: shared.shared_vars,
     exports,
+    instances: shared.instances,
+    generics: functions.generics(),
+    warn_unused,
   }
 }
 
@@ -149,6 +182,7 @@ const create_shared = (
   module: Module,
   exports_of: (statement: Import) => Map<string, Export>,
   program_wide: ProgramWide,
+  warnings: CompileWarning[],
 ): Shared => {
   const imports = new Imports(exports_of)
   // An imported type, marking its import as used.
@@ -173,7 +207,7 @@ const create_shared = (
   const shared: Shared = {
     types: new Map(),
     conversions: new Map(),
-    warnings: [],
+    warnings,
     functions,
     objects,
     resolver,
@@ -182,7 +216,10 @@ const create_shared = (
     top_level: new TopLevelValues(module.program),
     captures: new Map(),
     extern_types: program_wide.extern_types,
+    module_index: module.index,
     module_name,
+    module_path: module.display_path,
+    instances: new Map(),
     shared_vars: new Set(),
   }
   return shared
@@ -204,7 +241,7 @@ const declare_names = (program: Program, shared: Shared): void => {
   resolver.resolve_aliases()
   declare_externs(program, shared)
   reject_types_named_like_imports(program, imports)
-  add_top_level_functions(program, functions, objects, resolver, imports)
+  add_top_level_functions(program, shared)
   objects.add_members(resolver, functions)
 }
 
@@ -274,16 +311,20 @@ const c_signature = (type: Type): string => {
   return `(${type.params.map(c_type).join(', ')}) -> ${c_type(type.result)}`
 }
 
-// The top-level code, then the objects and functions, which may use its names.
-const check_code = (program: Program, shared: Shared): void => {
+// The top-level code, then the objects and functions, which may use its names. Returns what warns
+// about the names never used, which the instances of its generic functions that other modules
+// call may use still.
+const check_code = (program: Program, shared: Shared): (() => void) => {
   const warn_unused_top_level = new StatementChecker(shared, undefined, undefined).check_top_level(
     program,
   )
   shared.objects.check_all()
   shared.functions.check_all()
   reject_deinit_results(shared)
-  warn_unused_top_level()
-  shared.warnings.push(...shared.imports.unused_warnings())
+  return () => {
+    warn_unused_top_level()
+    shared.warnings.push(...shared.imports.unused_warnings())
+  }
 }
 
 // A deinit runs as part of a release, where nothing could take a value it gave, or handle a throw.
@@ -326,7 +367,10 @@ const exports_of_module = (
   for (const statement of module.program) {
     if (!('exported' in statement && statement.exported)) continue
     const { name } = statement
-    if (statement.kind === 'declaration' && statement.value.kind === 'function') {
+    const generic = functions.generic(name.name)
+    if (generic !== undefined) {
+      exports.set(name.name, { kind: 'generic_function', generic })
+    } else if (statement.kind === 'declaration' && statement.value.kind === 'function') {
       const type = functions.type_of(name.name, name)!
       exports.set(name.name, {
         kind: 'lerta_function',
@@ -357,13 +401,8 @@ const exports_of_module = (
 const is_function_declaration = (statement: Statement): statement is Declaration =>
   statement.kind === 'declaration' && statement.value.kind === 'function'
 
-const add_top_level_functions = (
-  program: Program,
-  functions: Functions,
-  objects: ObjectTypes,
-  resolver: TypeResolver,
-  imports: Imports,
-): void => {
+const add_top_level_functions = (program: Program, shared: Shared): void => {
+  const { functions, objects, resolver, imports } = shared
   for (const statement of program.filter(is_function_declaration)) {
     if (statement.mutable) {
       const message = 'a function must be declared with const'
@@ -377,11 +416,32 @@ const add_top_level_functions = (
     if (is_taken) {
       throw new CompileError(`'${name.name}' is already defined`, name.line, name.column)
     }
-    functions.add(name.name, name, statement.value as FunctionLiteral)
+    const literal = statement.value as FunctionLiteral
+    if (!is_generic(literal)) {
+      functions.add(name.name, name, literal)
+      continue
+    }
+    const { module_index, extensions } = shared
+    const check_body = (instance: Instance) => check_instance(shared, instance)
+    functions.add_generic(
+      new GenericFunction(name, literal, module_index, resolver, extensions, check_body),
+    )
   }
 }
 
-const check_function = (shared: Shared, entry: FunctionEntry): void => {
+// An instance's body sees the names of its module, with the type parameters standing for its type
+// arguments, and the extends of the type arguments where it is called.
+const check_instance = (shared: Shared, instance: Instance): void => {
+  const { resolver, extensions } = instance
+  check_function({ ...shared, resolver, extensions }, instance)
+}
+
+// A body may be checked on demand from another module, such as the method `to_string` that an
+// instance of `print` calls; its diagnostics give its own module.
+const check_function = (shared: Shared, entry: FunctionEntry): void =>
+  with_module_path(shared.module_path, () => check_function_body(shared, entry))
+
+const check_function_body = (shared: Shared, entry: FunctionEntry): void => {
   const { literal } = entry
   const params = parameter_types(literal, shared.resolver)
   const context: FunctionContext = {
@@ -400,5 +460,7 @@ const check_function = (shared: Shared, entry: FunctionEntry): void => {
 
 const check_object = (shared: Shared, info: ObjectInfo): void => {
   const self: SelfContext = { type: info.type, initializing: undefined }
-  new StatementChecker(shared, undefined, self).check_initializers()
+  with_module_path(shared.module_path, () =>
+    new StatementChecker(shared, undefined, self).check_initializers(),
+  )
 }

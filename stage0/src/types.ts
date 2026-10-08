@@ -24,8 +24,9 @@ export type Type =
   | { kind: 'void' }
   // The result of what does not return, such as `throw`; it fits wherever a value is expected.
   | { kind: 'never' }
-  // Built-in rule of stage0: satisfied by String, Int, UInt8 and Bool. Only usable as a parameter type.
-  | { kind: 'Stringable' }
+  // A type parameter of a generic function, `T` in `<T>(x: T) -> x`, in the types of its parameters
+  // before the type arguments replace it (see GenericFunction).
+  | { kind: 'TypeParameter'; name: string }
   | { kind: 'function'; params: Type[]; result: Type }
 
 export const string_type: Type = { kind: 'String' }
@@ -35,7 +36,6 @@ export const uint8_type: Type = { kind: 'UInt8' }
 export const binary_type: Type = { kind: 'Binary' }
 export const void_type: Type = { kind: 'void' }
 export const never_type: Type = { kind: 'never' }
-export const stringable_type: Type = { kind: 'Stringable' }
 
 // An order that does not depend on the locale, for types that must be the same everywhere.
 const compare_text = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
@@ -47,7 +47,9 @@ export const record_type = (fields: { name: string; type: Type }[]): Type => ({
   kind: 'Record',
   fields: fields.toSorted((a, b) => compare_text(a.name, b.name)),
 })
-export const optional_type = (inner: Type): Type => ({ kind: 'Optional', inner })
+// `T?` of a T that may be nil already, as a type argument may be, is T.
+export const optional_type = (inner: Type): Type =>
+  inner.kind === 'Optional' ? inner : { kind: 'Optional', inner }
 // The members are kept in name order, so that `A | B` and `B | A` are the same type.
 export const union_type = (members: Type[]): Type => {
   const sorted = members.toSorted((a, b) => compare_text(type_key(a), type_key(b)))
@@ -80,6 +82,8 @@ export const format_type = (type: Type, qualified = false): string => {
       const params = type.params.map(format).join(', ')
       return `(${params}) -> ${format(type.result)}`
     }
+    case 'TypeParameter':
+      return type.name
     default:
       return type.kind
   }
@@ -121,6 +125,8 @@ export const type_key = (type: Type): string => {
       return `(${type_key(type.inner)})?`
     case 'function':
       return `(${type.params.map(type_key).join(', ')}) -> ${type_key(type.result)}`
+    case 'TypeParameter':
+      return type.name
     default:
       return type.kind
   }
@@ -143,7 +149,6 @@ export const iterable_item = (type: Type): Type | undefined =>
 // A T or nil also fits where a T? is expected.
 export const is_assignable = (value: Type, target: Type): boolean => {
   if (value.kind === 'never') return true
-  if (target.kind === 'Stringable') return is_stringable(value)
   if (target.kind === 'Union') {
     const members = value.kind === 'Union' ? value.members : [value]
     return members.every((member) => target.members.some((type) => same_type(type, member)))
@@ -157,9 +162,6 @@ export const is_assignable = (value: Type, target: Type): boolean => {
 // Maps hash and compare their keys in the runtime, which knows these two kinds.
 export const is_map_key_type = (type: Type): boolean =>
   type.kind === 'String' || type.kind === 'Int'
-
-const is_stringable = (type: Type): boolean =>
-  ['String', 'Int', 'UInt8', 'Bool'].includes(type.kind)
 
 // The type of a value that is either an `a` or a `b`: the same type, or `T?` for a mix of `T`,
 // `T?` and nil; `never`, which gives no value, does not count. Undefined if there is none.

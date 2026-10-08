@@ -1,7 +1,8 @@
 // How Lerta values are represented in LLVM IR.
 import type { ExtensionMethod } from '../check/extensions.ts'
+import type { Instance } from '../check/generics.ts'
 import type { IrBuilder } from './ir_builder.ts'
-import { is_reference_type, type Type } from '../types.ts'
+import { is_reference_type, type_key, type Type } from '../types.ts'
 
 export const LERTA_IMMORTAL = '-9223372036854775808'
 
@@ -43,6 +44,12 @@ export const ir_c_return_type = (type: Type): string =>
 // A function is named by its module too, since two modules may declare the same name.
 export const function_symbol = (module_index: number, name: string): string =>
   `@lerta.fn.${module_index}.${name}`
+// An instance of a generic function is named by its type arguments too, quoted as they have
+// characters such as `<`, and by its variant if there are several (see Instance).
+export const instance_symbol = ({ generic, type_arguments, variant }: Instance): string => {
+  const name = `lerta.fn.${generic.module_index}.${generic.name.name}<${type_arguments.map(type_key).join(', ')}>`
+  return variant === 0 ? `@"${name}"` : `@"${name}.${variant}"`
+}
 // The global that holds a top-level value, and its flag (see top_level_codegen.ts).
 export const top_level_symbol = (module_index: number, name: string): string =>
   `@lerta.value.${module_index}.${name}`

@@ -21,12 +21,13 @@ export type Module = {
 // The standard modules, `std:name`, are the files of this directory.
 const std_dir = join(import.meta.dirname, '../../std')
 
-// Every module but std:builtins itself imports it, as `import 'std:builtins'`, for the methods of
-// the builtin types that it gives.
+// Every module but std:builtins itself imports it, as `import 'std:builtins'`, for the builtin
+// functions and the methods of the builtin types that it gives.
+export const builtins_module = 'std:builtins'
 const builtins_import = (): Import => ({
   kind: 'import',
   names: [],
-  module: 'std:builtins',
+  module: builtins_module,
   line: 1,
   column: 1,
 })

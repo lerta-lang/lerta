@@ -7,16 +7,19 @@ import {
   type IsTest,
   type Jump,
   type Member,
+  type Position,
   type Return,
 } from '../syntax/ast.ts'
-import { builtin_method, builtin_property, builtins } from './builtins.ts'
+import { builtin_method, builtin_property } from './builtins.ts'
 import type { Conversions, SelfContext, Shared, Types } from './checker.ts'
 import { CaseChecker, type BlockChecker } from './case_checker.ts'
 import { check_item_type, check_value_type, CollectionChecker } from './collection_checker.ts'
 import { CompileError } from '../errors.ts'
 import type { Extensions } from './extensions.ts'
 import type { Functions } from './functions.ts'
-import type { Imports } from './imports.ts'
+import { GenericCallChecker } from './generic_call_checker.ts'
+import { stringable, type GenericFunction } from './generics.ts'
+import type { Export, Imports } from './imports.ts'
 import type { TopLevelValues } from './top_level_values.ts'
 import type { ObjectTypes } from './object_types.ts'
 import { byte_literal } from './literals.ts'
@@ -36,7 +39,6 @@ import {
   is_assignable,
   same_type,
   string_type,
-  stringable_type,
   type Type,
 } from '../types.ts'
 
@@ -77,6 +79,7 @@ export class ExpressionChecker {
   private readonly objects: ObjectChecker
   private readonly cases: CaseChecker
   private readonly collections: CollectionChecker
+  private readonly generic_calls: GenericCallChecker
   private readonly resolver: TypeResolver
 
   // `top_level` is given to the checker of a function or a method, which sees the top-level values.
@@ -110,6 +113,7 @@ export class ExpressionChecker {
     )
     this.resolver = shared.resolver
     this.collections = new CollectionChecker(this, scopes, shared.functions)
+    this.generic_calls = new GenericCallChecker(this, shared)
   }
 
   field_target(member: Member): Type {
@@ -128,7 +132,7 @@ export class ExpressionChecker {
         return wants_byte ? byte_literal(expression) : string_type
       case 'interpolation':
         for (const part of expression.parts) {
-          if (typeof part !== 'string') this.expect_type(part, stringable_type)
+          if (typeof part !== 'string') this.check_interpolated(part)
         }
         return string_type
       case 'integer':
@@ -197,26 +201,36 @@ export class ExpressionChecker {
     }
     const function_type = this.functions.type_of(identifier.name, identifier)
     if (function_type !== undefined) return function_type
+    if (this.functions.generic(identifier.name) !== undefined) throw this.only_called(identifier)
     if (this.object_types.object_type(identifier.name) !== undefined) {
       const message = `'${identifier.name}' is a type; construct it as ${identifier.name}(...)`
       throw new CompileError(message, identifier.line, identifier.column)
     }
     const imported = this.imports.use(identifier.name)
-    if (imported?.export.kind === 'type') {
-      throw new CompileError(`'${identifier.name}' is a type`, identifier.line, identifier.column)
-    }
-    const is_runtime_function = imported?.export.kind === 'function'
-    if (is_runtime_function && !is_callee) throw this.only_called(identifier)
-    if (imported !== undefined) return imported.export.type
+    if (imported !== undefined) return this.type_of_export(imported.export, identifier, is_callee)
     const pending = this.top_level?.pending_error(identifier)
     if (pending !== undefined) throw pending
-    const builtin = builtins.get(identifier.name)
+    const builtin = this.imports.builtin(identifier.name)
     if (builtin === undefined) {
       const message = `undefined name '${identifier.name}'`
       throw new CompileError(message, identifier.line, identifier.column)
     }
-    if (!is_callee) throw this.only_called(identifier)
-    return builtin.type
+    return this.type_of_export(builtin, identifier, is_callee)
+  }
+
+  // A generic function is called through generic_callee, so here it is used as a value.
+  private type_of_export(export_: Export, identifier: Identifier, is_callee: boolean): Type {
+    switch (export_.kind) {
+      case 'type':
+        throw new CompileError(`'${identifier.name}' is a type`, identifier.line, identifier.column)
+      case 'generic_function':
+        throw this.only_called(identifier)
+      case 'function':
+        if (!is_callee) throw this.only_called(identifier)
+        return export_.type
+      default:
+        return export_.type
+    }
   }
 
   private only_called(identifier: Identifier): CompileError {
@@ -226,6 +240,12 @@ export class ExpressionChecker {
 
   private type_of_call(call: Call, expected: Type | undefined): Type {
     const { callee } = call
+    const generic = this.generic_callee(callee)
+    if (generic !== undefined) return this.generic_calls.type_of_call(call, generic, expected)
+    if (call.type_args.length > 0) {
+      const message = 'only a generic function takes type arguments'
+      throw new CompileError(message, callee.line, callee.column)
+    }
     if (this.collections.is_empty_map(callee))
       return this.collections.type_of_empty_map(call, expected)
     const object_type = this.objects.constructed_type(callee)
@@ -241,6 +261,19 @@ export class ExpressionChecker {
         ? this.record(callee, this.type_of_identifier(callee, true))
         : this.type_of(callee)
     return this.check_arguments(call, callee_type)
+  }
+
+  // The generic function that the callee names: one of the module, an imported one or a builtin,
+  // unless a local or another name of the module takes the name.
+  private generic_callee(callee: Expression): GenericFunction | undefined {
+    if (callee.kind !== 'identifier') return undefined
+    const { name } = callee
+    if (this.scopes.lookup(name) !== undefined || this.top_level?.has(name)) return undefined
+    if (this.functions.has(name)) return this.functions.generic(name)
+    const export_ = this.imports.get(name)?.export ?? this.imports.builtin(name)
+    if (export_?.kind !== 'generic_function') return undefined
+    this.imports.use(name)
+    return export_.generic
   }
 
   // The result of a call of a function of the type, once its arguments are checked.
@@ -307,11 +340,7 @@ export class ExpressionChecker {
   private type_of_method(member: Member, object_type: Type): Type {
     const { name, line, column } = member.name
     this.reject_deinit(object_type, member)
-    const method =
-      this.objects.method_type(object_type, member.name) ??
-      this.extensions.method_type(object_type, member.name) ??
-      builtin_method(object_type, name) ??
-      this.objects.field_type(object_type, member)
+    const method = this.find_method(object_type, member)
     if (method === undefined) {
       throw new CompileError(
         `type ${format_type(object_type)} has no method '${name}'`,
@@ -324,6 +353,51 @@ export class ExpressionChecker {
     }
     this.types.set(member, method)
     return method
+  }
+
+  // The type of the method that `member` names, if the object's type has it: its own, from an
+  // extend, built in, or a field that holds a function.
+  private find_method(object_type: Type, member: Member): Type | undefined {
+    return (
+      this.objects.method_type(object_type, member.name) ??
+      this.extensions.method_type(object_type, member.name) ??
+      builtin_method(object_type, member.name.name) ??
+      this.objects.field_type(object_type, member)
+    )
+  }
+
+  // The type of `to_string(): String` of the type, if it is Stringable: a method of its own, from an
+  // extend or built in; a field that holds a function does not count.
+  private stringable_method(type: Type, at: Position): Type | undefined {
+    const { line, column } = at
+    const name: Identifier = { kind: 'identifier', name: 'to_string', line, column }
+    const method =
+      this.objects.method_type(type, name) ??
+      this.extensions.method_type(type, name) ??
+      builtin_method(type, name.name)
+    const is_stringable =
+      method?.kind === 'function' &&
+      method.params.length === 0 &&
+      is_assignable(method.result, string_type)
+    return is_stringable ? method : undefined
+  }
+
+  // The error for a type that is not Stringable, or none.
+  stringable_error(type: Type, at: Position): CompileError | undefined {
+    if (this.stringable_method(type, at) !== undefined) return undefined
+    const message = `${format_type(type)} is not ${stringable}: it has no method to_string(): String`
+    return new CompileError(message, at.line, at.column)
+  }
+
+  // `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
+  // is typed once.
+  private check_interpolated(part: Call): void {
+    const member = part.callee as Member
+    const type = this.type_of(member.object)
+    const method = this.stringable_method(type, member)
+    if (method === undefined) throw this.stringable_error(type, member.object)!
+    this.types.set(member, method)
+    this.types.set(part, string_type)
   }
 
   // A class's deinit is only run by a release.
@@ -359,10 +433,8 @@ export class ExpressionChecker {
     throw new CompileError(message, line, column)
   }
 
-  // Stringable is a set of types, not one a value can be given, so it is no hint.
   expect_type(expression: Expression, expected: Type): void {
-    const hint = expected.kind === 'Stringable' ? undefined : expected
-    this.require_type(expression, this.type_of(expression, hint), expected)
+    this.require_type(expression, this.type_of(expression, expected), expected)
   }
 
   // `x is T`: x has a union type, and T is one of its types.
@@ -392,7 +464,7 @@ export class ExpressionChecker {
   }
 
   // A T or nil where a T? is expected is converted, which codegen does where it generates it.
-  private require_type(expression: Expression, type: Type, expected: Type): void {
+  require_type(expression: Expression, type: Type, expected: Type): void {
     if (!is_assignable(type, expected)) {
       const [expected_text, type_text] = format_types(expected, type)
       const message = `expected ${expected_text}, got ${type_text}`

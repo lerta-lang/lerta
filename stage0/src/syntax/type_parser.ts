@@ -1,6 +1,23 @@
 // Type names: named types, unions, function types and anonymous structs.
 import type { Identifier, NamedType, RecordTypeName, TypeName } from './ast.ts'
+import type { TokenKind } from './lexer.ts'
 import type { TokenStream } from './token_stream.ts'
+
+// The tokens that a type name is made of.
+const type_token_kinds: TokenKind[] = [
+  'identifier',
+  '<',
+  '>',
+  ',',
+  '?',
+  '|',
+  '(',
+  ')',
+  '->',
+  '{',
+  '}',
+  ':',
+]
 
 // Names and lists in types are read as in expressions, by the expression parser.
 export type ItemParser = {
@@ -64,13 +81,36 @@ export class TypeParser {
 
   parse_named_type(): NamedType {
     const { name, line, column } = this.items.parse_identifier()
-    const args: TypeName[] = []
-    if (this.tokens.accept('<')) {
-      do args.push(this.parse_type_name())
-      while (this.tokens.accept(','))
-      this.tokens.expect('>', "'>'")
-    }
+    const args = this.tokens.peek().kind === '<' ? this.parse_type_arguments() : []
     const optional = this.tokens.accept('?')
     return { kind: 'type_name', name, args, optional, line, column }
+  }
+
+  // `<A, B>`.
+  parse_type_arguments(): TypeName[] {
+    this.tokens.expect('<', "'<'")
+    const args: TypeName[] = []
+    do args.push(this.parse_type_name())
+    while (this.tokens.accept(','))
+    this.tokens.expect('>', "'>'")
+    return args
+  }
+
+  // Whether type arguments follow, written without a space and followed by `(`, as in `f<Int>(x)`.
+  // Comparisons do not chain, so `a<b>(c)` cannot be read otherwise.
+  starts_type_arguments(): boolean {
+    const open = this.tokens.peek()
+    if (open.kind !== '<' || open.spaced) return false
+    let depth = 0
+    for (let offset = 0; ; offset++) {
+      const { kind } = this.tokens.peek(offset)
+      if (!type_token_kinds.includes(kind)) return false
+      if (kind === '<') depth++
+      if (kind === '>') depth--
+      if (depth === 0) {
+        const next = this.tokens.peek(offset + 1)
+        return next.kind === '(' && !next.spaced
+      }
+    }
   }
 }

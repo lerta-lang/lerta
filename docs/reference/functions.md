@@ -30,7 +30,7 @@ const steps: Array<(Int) -> Int> = [double, square]
 - The name of a top-level function, without a call, is its value. It can be stored, passed, returned and kept in arrays, maps and fields like any value, but not compared or printed.
 - A function value fits only where its type is expected exactly: `(Int) -> Int` does not fit where `(Int) -> Int?` is expected.
 - Calling a value of a function type calls the function it holds: `f(x)`, `make()(x)`, and `button.on_press(x)` for a field that holds a function.
-- Builtins (`print`), standard modules' functions and methods can only be called so far, not used as values.
+- Builtins (`print`), generic functions, standard modules' functions and methods can only be called so far, not used as values.
 
 ## Function literals
 
@@ -43,6 +43,24 @@ print map([1, 2, 3], (x) -> x * x)
 - Where a function type is expected (a parameter, an annotation, a return type), the literal's parameter types and return type may be left out and are taken from it: `(x) -> x * 2`. Otherwise the parameters' types must be written.
 - A function literal sees the locals around it. It captures the value of a `const`, a parameter, a loop variable or, in a method, `@`, narrowed as it is there, when it is evaluated: `n` above keeps the value it had when `make_adder` was called. It shares a `var` with the function that declares it, and with the other literals that capture it: each can read and assign it, and sees the others' assignments, even after that function has returned.
 - `return` in a function literal returns from the literal; `break` and `continue` cannot leave a loop around it.
+
+## Generic functions
+
+```
+const first = <T>(xs: Array<T>): T -> xs[0]
+const show = <T: Stringable>(label: String, x: T) -> print "#{label}: #{x}"
+
+print first(['a', 'b'])
+show('point', Point(x: 1, y: 2))
+const xs = empty<String>()
+```
+
+- A top-level function may declare type parameters before its parameters: `<T, U>`. A function literal elsewhere, a method and a method of an extend cannot be generic so far. A type parameter cannot have the name of a type.
+- `T: Stringable` bounds a type parameter: its type argument must have `to_string(): String`, as a method of its own or from an extend in effect where the function is called (see [Stringable](builtins.md#stringable)). It is the only bound so far.
+- **Type arguments** are inferred from the arguments, matched against the parameters' types: an `Array<Int>` passed as an `Array<T>`, or an `Int?` as a `T?`, gives `T = Int`. They come, in this order, from the arguments that have a type of their own; from the type the call is expected to have (`const xs: Array<String> = copy([])`); from the literals whose type depends on what is expected of them (`[]`, `nil`, `1`, `'a'`, maps and anonymous structs), each checked against its parameter once the type arguments in it are known; and last from function literals, whose parameters may take the types the others give. The first type given decides a type argument, except that `X?` after `X` makes it `X?`; the others are checked against it: `pair(1, 'a')` is an error at `'a'`. `nil`, a `throw` and similar values give no type; a type argument that nothing gives must be written. Written type arguments come between the name and the parentheses, which are then required: `empty<String>()`.
+- The function is **checked per instance**, once for each distinct set of type arguments, with the type parameters standing for them, as C++ templates are: `x * 2` is accepted in `twice<Int>` and an error in `twice<String>`. An error in the body names the instance, as in `(in twice<String>)`. A bound is checked at the call, so an argument that does not satisfy it is an error there. An instance whose return type is written is checked once the calling module is, as a function is, so its body may use a top-level value declared after the call (which throws if it is not initialized when the body runs); one whose return type is inferred is checked at its first call. A generic function that is never called is not checked beyond parsing, so the names that only it uses are warned about as unused.
+- Each instance is compiled once, as a function of its own (monomorphization). In its body, the methods of a type argument, and of the types it is made of (items, fields and so on), include those of the extends in effect where it is called.
+- A type parameter cannot stand for a map key (`Map<K, V>`) or a union member so far. A generic function can be exported and imported. It can only be called so far, not used as a value, and takes no named arguments.
 
 ## C functions
 
@@ -57,4 +75,4 @@ export extern lerta_write_file as write_file: (String, Binary) -> void
 
 ## Types
 
-Type names: `Int`, `UInt8` (or `Byte`), `Bool`, `String`, `Binary`, `Array<T>`, `Map<K, V>`, function types, the names of classes and structs, and `void` and `never` as a return type.
+Type names: `Int`, `UInt8` (or `Byte`), `Bool`, `String`, `Binary`, `Array<T>`, `Map<K, V>`, function types, the names of classes and structs, the type parameters of a generic function in it, and `void` and `never` as a return type.
