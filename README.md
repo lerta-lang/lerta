@@ -62,7 +62,7 @@ pnpm test:compare   # compiler/ against stage0, on every Lerta file of the repos
 
 The run tests build each program with the compiler written in Lerta, which stage0 builds first; stage0 itself is checked by building it and by `pnpm test:compare`.
 
-The tests run at a low priority (`nice`). stage0 runs its TypeScript directly with Node.js (22.18 or later), so there is no build step. To compile a program:
+The tests run at a low priority (`nice`). stage0 runs its TypeScript directly with Node.js (22.18 or later in 22, or 23.6 or later, where type stripping is on by default), so there is no build step. To compile a program:
 
 ```
 node stage0/src/main.ts build examples/hello.lerta -o hello [-O] [--emit-llvm hello.ll]
