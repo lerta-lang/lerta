@@ -186,7 +186,7 @@ export type For = Position & {
 
 // `const name = value` or `var name = value`.
 // What `export` can precede: a top-level function or type. `exported` is set by `export`.
-type Exportable = { exported?: true }
+type Exportable = { exported: boolean }
 
 export type Declaration = Position &
   Exportable & {

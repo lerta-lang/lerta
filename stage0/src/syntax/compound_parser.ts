@@ -239,7 +239,8 @@ export class CompoundParser {
 }
 
 // The guard and the element of an Iter comprehension as functions of the loop variable (see
-// Comprehension). The guard's tests its condition as an `if` would: `guard then true else false`.
+// Comprehension). The guard's function tests its condition as an `if` would:
+// `guard then true else false`.
 const lazy_functions = (
   element: Expression,
   variable: Identifier,

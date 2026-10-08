@@ -81,6 +81,9 @@ Run tests (source → execution result) are shared by all stages. They run with 
 - Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
 - Whether to add enums without payloads (for now, `case` on values substitutes).
 - Statements in `case` arms: whether an assignment may follow `then` (`when c == ' ' then i += 1`), and how to write an arm that does nothing, since a `case` with a subject requires `else` and a value alone may not stand as a statement (`compiler/syntax/` writes `else return`, or repeats a step in each arm).
+- Writing a `type` alias over several lines: a union of many members, such as `Expression` in `compiler/syntax/ast.lerta`, is built from one-line unions for now.
+- Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
+- Generic methods of classes and structs (as `inside<T>` of the token stream would be; `compiler/syntax/` makes them top-level functions).
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).
 - How to handle conversion from an interface value to another interface (the concrete type is unknown until run time, so a static itab is not enough; forbid it or generate at run time).

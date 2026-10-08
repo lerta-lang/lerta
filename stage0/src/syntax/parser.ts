@@ -186,7 +186,7 @@ class Parser {
     const value = this.expressions.parse_value()
     const mutable = token.kind === 'var'
     const position = { line: token.line, column: token.column }
-    return { kind: 'declaration', mutable, name, type, value, ...position }
+    return { kind: 'declaration', mutable, name, type, value, exported: false, ...position }
   }
 
   // `const { a, b } = value`.
@@ -293,6 +293,7 @@ const expand_destructuring = (statement: Statement | Destructuring): Statement[]
   })
   const holder_declaration: Declaration = {
     kind: 'declaration',
+    exported: false,
     mutable: false,
     name: holder,
     type: undefined,
@@ -304,6 +305,7 @@ const expand_destructuring = (statement: Statement | Destructuring): Statement[]
     holder_declaration,
     ...names.map((name): Declaration => ({
       kind: 'declaration',
+      exported: false,
       mutable,
       name,
       type: undefined,

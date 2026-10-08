@@ -46,7 +46,14 @@ export class DeclarationParser {
     const name = this.expressions.parse_identifier()
     this.tokens.expect('=', "'='")
     const type = this.types.parse_type_name()
-    return { kind: 'type_alias', name, type, line: token.line, column: token.column }
+    return {
+      kind: 'type_alias',
+      name,
+      type,
+      exported: false,
+      line: token.line,
+      column: token.column,
+    }
   }
 
   // `export` before a `const` (a function or a value) or a type; the checker tells whether it is at
@@ -75,7 +82,8 @@ export class DeclarationParser {
     const name = has_name ? this.expressions.parse_identifier() : symbol
     this.tokens.expect(':', "':'")
     const type = this.types.parse_type_name()
-    return { kind: 'extern', symbol, name, type, line: token.line, column: token.column }
+    const position = { line: token.line, column: token.column }
+    return { kind: 'extern', symbol, name, type, exported: false, ...position }
   }
 
   // `import { a, b } from 'module'`, or `import 'module'` for its effects alone. `from` is not a
@@ -121,6 +129,7 @@ export class DeclarationParser {
     const is_struct = token.kind === 'struct'
     return {
       kind: 'type_declaration',
+      exported: false,
       is_struct,
       name,
       members,

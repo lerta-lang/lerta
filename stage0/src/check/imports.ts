@@ -157,12 +157,12 @@ export class Imports {
   }
 }
 
-type ExportedStatement = Extract<Program[number], { exported?: true }>
+type ExportableStatement = Extract<Program[number], { exported: boolean }>
 
 // What the module exports, besides its extends.
 export const exports_of_module = (module: Module, shared: Shared): ModuleExports => {
   const { functions, objects, resolver, types, imports } = shared
-  const exported = new Map<string, ExportedStatement>()
+  const exported = new Map<string, ExportableStatement>()
   for (const statement of module.program) {
     if ('exported' in statement && statement.exported) exported.set(statement.name.name, statement)
   }

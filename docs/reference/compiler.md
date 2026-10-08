@@ -16,6 +16,12 @@ lerta dump-tokens <source>
 
 prints the tokens of one file, without reading the modules it imports, one per line: `<line>:<column> <spaced|joined> <kind> "<text>"`, where `spaced` means that whitespace or the start of the line precedes it. An interpolated string is followed by its parts, indented: `text "<text>"` and `code <column> "<source>"`. In the quoted texts, the characters below U+0020, U+007F, `\` and `"` are written as `\xHH`. It exists to compare the lexers of stage0 and of the compiler written in Lerta; a lexical error is reported as a compile error.
 
+```
+lerta dump-ast <source>
+```
+
+prints the syntax tree of one file, likewise, to compare the parsers. A node is a line `<kind> <line>:<column>`, followed by its other fields, one per line and in the order of their names, indented under it: `<name>: <value>` for a value, written as in `dump-tokens` for a string and `-` for none, and `<name>:` followed by the contents on the next lines, indented further, for a node, a group of fields without a kind, or a list, whose items each follow a `-` line (or `- <value>` for a value). An empty list is `[]`. A group of fields without a kind that has a position writes it as its fields `line` and `column`. A syntax error is reported as a compile error.
+
 ## Diagnostics
 
 Diagnostics are printed to stderr, one per line:

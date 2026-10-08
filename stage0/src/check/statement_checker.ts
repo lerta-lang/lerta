@@ -312,7 +312,7 @@ export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChec
       mutable: declaration.mutable,
       declared: true,
       // An exported value is for other modules to use.
-      used: declaration.exported === true,
+      used: declaration.exported,
     })
   }
 

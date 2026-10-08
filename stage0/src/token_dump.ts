@@ -18,7 +18,7 @@ const dump_part = (part: TemplatePart): string =>
 
 // The characters below U+0020, U+007F, `\` and `"` are written as `\xHH`, so that each token
 // stays on its line.
-const quote = (text: string): string => {
+export const quote = (text: string): string => {
   const escaped = Array.from(text, (c) => {
     const code = c.codePointAt(0)!
     const is_plain = code >= 0x20 && code !== 0x7f && c !== '\\' && c !== '"'

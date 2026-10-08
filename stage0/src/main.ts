@@ -4,10 +4,13 @@ import { CompileError } from './errors.ts'
 import { is_file, SourceFileError } from './loader.ts'
 import { tokenize } from './syntax/lexer.ts'
 import { dump_tokens } from './token_dump.ts'
+import { dump_ast } from './ast_dump.ts'
+import { parse } from './syntax/parser.ts'
 
 const usage = [
   'usage: lerta build <source> -o <output> [-O] [--emit-llvm <path>]',
   '       lerta dump-tokens <source>',
+  '       lerta dump-ast <source>',
 ].join('\n')
 
 const fail_usage = (): never => {
@@ -50,13 +53,13 @@ const run_build = async (args: string[]): Promise<void> => {
   })
 }
 
-// Prints the tokens of one file, without reading the modules it imports.
-const run_dump_tokens = async (args: string[]): Promise<void> => {
+// Prints what `dump` makes of one file, without reading the modules it imports.
+const run_dump = async (args: string[], dump: (source: string) => string): Promise<void> => {
   const [source_path] = args
   if (args.length !== 1 || !is_value(source_path)) fail_usage()
   await report_failure(source_path, async () => {
     if (!is_file(source_path)) throw new SourceFileError(`'${source_path}' is not a file`)
-    process.stdout.write(dump_tokens(tokenize(readFileSync(source_path, 'utf8'))))
+    process.stdout.write(dump(readFileSync(source_path, 'utf8')))
   })
 }
 
@@ -82,5 +85,6 @@ const report_failure = async (source_path: string, f: () => Promise<void>): Prom
 
 const [command, ...rest] = process.argv.slice(2)
 if (command === 'build') await run_build(rest)
-else if (command === 'dump-tokens') await run_dump_tokens(rest)
+else if (command === 'dump-tokens') await run_dump(rest, (source) => dump_tokens(tokenize(source)))
+else if (command === 'dump-ast') await run_dump(rest, (source) => dump_ast(parse(tokenize(source))))
 else fail_usage()
