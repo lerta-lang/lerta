@@ -1,19 +1,15 @@
 import {
   comparison_operators,
   type ArithmeticOperator,
-  type Case,
-  type CaseArm,
   type ComparisonOperator,
   type Expression,
-  type FunctionLiteral,
   type Identifier,
   type NamedArgument,
-  type Parameter,
   type Position,
-  type Statement,
 } from './ast.ts'
 import { CompileError } from '../errors.ts'
 import { tokenize_fragment } from './lexer.ts'
+import { CompoundParser, type BodyParser } from './compound_parser.ts'
 import { TokenStream } from './token_stream.ts'
 import { TypeParser } from './type_parser.ts'
 
@@ -28,24 +24,26 @@ const arithmetic_precedence: ArithmeticOperator[][] = [
 
 export type Arguments = { args: Expression[]; named_args: NamedArgument[] }
 
-// Function bodies are statements, which the statement parser reads.
-export type BodyParser = {
-  parse_block(): Statement[]
-  parse_simple_statement(): Statement
+// Expressions, from the weakest operators down to primaries; compound expressions are read by the
+// compound parser.
+// `for x in xs`, with `when guard` after it if there is one.
+export type LoopHeader = {
+  variable: Identifier
+  iterable: Expression
+  guard: Expression | undefined
 }
 
-// Expressions, from the weakest operators down to primaries such as literals and `case`.
 export class ExpressionParser {
   private readonly tokens: TokenStream
 
-  private readonly bodies: BodyParser
+  private readonly compounds: CompoundParser
 
   // Shared with the statement parser, for the types of declarations.
   readonly types: TypeParser
 
   constructor(tokens: TokenStream, bodies: BodyParser) {
     this.tokens = tokens
-    this.bodies = bodies
+    this.compounds = new CompoundParser(tokens, this, bodies)
     this.types = new TypeParser(tokens, this)
   }
 
@@ -67,7 +65,7 @@ export class ExpressionParser {
   }
 
   // `a ? b ? c` is `a ? (b ? c)`.
-  private parse_coalesce(): Expression {
+  parse_coalesce(): Expression {
     const value = this.parse_or()
     if (this.tokens.peek_continuation() !== '?') return value
     this.tokens.next()
@@ -179,51 +177,6 @@ export class ExpressionParser {
     return { kind: 'identifier', name: token.text, line: token.line, column: token.column }
   }
 
-  // `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
-  // `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
-  // map key: `{ (k): v }`.
-  // The lookahead skips line breaks, which may separate the parameters.
-  private starts_function_literal(): boolean {
-    return this.tokens.inside('skip', () => this.looks_like_function_literal())
-  }
-
-  private looks_like_function_literal(): boolean {
-    const [first, second, third] = [0, 1, 2].map((offset) => this.tokens.peek(offset).kind)
-    if (first === '->') return true
-    if (first !== '(') return false
-    if (second === ')') return third === ':' || third === '->'
-    if (second === 'identifier' && third === ':') return true
-    let depth = 0
-    for (let offset = 0; ; offset++) {
-      const kind = this.tokens.peek(offset).kind
-      if (kind === '(') depth++
-      if (kind === ')') depth--
-      if (depth === 0) return this.tokens.peek(offset + 1).kind === '->'
-      if (kind === 'newline' || kind === 'eof') return false
-    }
-  }
-
-  // `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted, and so may
-  // the parameters' types, `(a, b) -> body`, where a function type is expected.
-  private parse_function_literal(): FunctionLiteral {
-    const token = this.tokens.peek()
-    const params: Parameter[] = []
-    if (this.tokens.accept('(')) {
-      const parse_param = () => {
-        const name = this.parse_identifier()
-        return { name, type: this.tokens.accept(':') ? this.types.parse_type_name() : undefined }
-      }
-      params.push(...this.parse_list(')', parse_param))
-    }
-    const return_type = this.tokens.accept(':') ? this.types.parse_type_name() : undefined
-    this.tokens.expect('->', "'->'")
-    const body =
-      this.tokens.peek().kind === 'newline'
-        ? this.bodies.parse_block()
-        : [this.bodies.parse_simple_statement()]
-    return { kind: 'function', params, return_type, body, line: token.line, column: token.column }
-  }
-
   // Calls `f(x)`, indexing `xs[i]`, member accesses `x.name` and unwrapping `x!`, written without
   // a space before `(`, `[`, `.` or `!`.
   private parse_postfix(primary: Expression): Expression {
@@ -270,7 +223,7 @@ export class ExpressionParser {
   }
 
   // The rest of a list whose first items are `items`, through `close`.
-  private parse_list_rest<T>(close: ')' | ']' | '}', parse_item: () => T, items: T[]): T[] {
+  parse_list_rest<T>(close: ')' | ']' | '}', parse_item: () => T, items: T[]): T[] {
     if (items.length > 0 && !this.ends_item(close)) return items
     while (!this.tokens.accept(close)) {
       items.push(parse_item())
@@ -303,84 +256,14 @@ export class ExpressionParser {
     })
   }
 
-  // `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
-  private parse_array_literal(position: Position): Expression {
-    return this.tokens.inside('separate', () => {
-      this.tokens.accept('line_break')
-      if (this.tokens.accept(']')) return { kind: 'array', elements: [], ...position }
-      const first = this.parse_expression()
-      const for_follows = (offset: number) => this.tokens.peek(offset).kind === 'for'
-      if (this.tokens.peek().kind === 'line_break' && for_follows(1)) this.tokens.next()
-      if (for_follows(0)) return this.parse_comprehension(first, position)
-      const parse_element = () => this.parse_expression()
-      const elements = this.parse_list_rest(']', parse_element, [first])
-      return { kind: 'array', elements, ...position }
-    })
-  }
-
-  // `for x in xs when guard]`, after the element; line ends inside are skipped.
-  private parse_comprehension(element: Expression, position: Position): Expression {
-    return this.tokens.inside('skip', () => {
-      const { variable, iterable, guard } = this.parse_loop_header()
-      this.tokens.expect(']', "']'")
-      return { kind: 'comprehension', element, variable, iterable, guard, ...position }
-    })
-  }
-
   // `for x in xs`, with `when guard` after it if there is one.
-  parse_loop_header(): {
-    variable: Identifier
-    iterable: Expression
-    guard: Expression | undefined
-  } {
+  parse_loop_header(): LoopHeader {
     this.tokens.expect('for', "'for'")
     const variable = this.parse_identifier()
     this.tokens.expect('in', "'in'")
     const iterable = this.parse_expression()
     const guard = this.tokens.accept('when') ? this.parse_expression() : undefined
     return { variable, iterable, guard }
-  }
-
-  // `{ k: v, ... }`. A key that is a name would make an anonymous struct, so a name's value is
-  // written as a key in parentheses: `{ (k): v }`.
-  private parse_map_literal(position: Position): Expression {
-    if (this.starts_record_field()) return this.parse_record_literal(position)
-    const entries = this.parse_list('}', () => {
-      if (this.starts_record_field()) {
-        const token = this.tokens.peek()
-        const message = `a map's keys are values: for the value of '${token.text}', write (${token.text})`
-        throw new CompileError(message, token.line, token.column)
-      }
-      const key = this.parse_expression()
-      this.tokens.expect(':', "':'")
-      return { key, value: this.parse_expression() }
-    })
-    if (entries.length === 0) {
-      throw new CompileError('the empty map is written `Map()`', position.line, position.column)
-    }
-    return { kind: 'map', entries, ...position }
-  }
-
-  // A name followed by `:`, `,` or `}` starts a field of an anonymous struct; a map's keys are
-  // other expressions.
-  private starts_record_field(): boolean {
-    const [first, second] = [0, 1].map((offset) => this.tokens.peek(offset).kind)
-    return first === 'identifier' && [':', ',', '}', 'line_break'].includes(second)
-  }
-
-  // `{ x: 1, y }`; a field without a value takes that of the name.
-  private parse_record_literal(position: Position): Expression {
-    const fields = this.parse_list('}', () => {
-      if (!this.starts_record_field()) {
-        const token = this.tokens.peek()
-        const message = 'an anonymous struct and a map cannot be mixed'
-        throw new CompileError(message, token.line, token.column)
-      }
-      const name = this.parse_identifier()
-      const value: Expression = this.tokens.accept(':') ? this.parse_expression() : { ...name }
-      return { name, value }
-    })
-    return { kind: 'record', fields, ...position }
   }
 
   // The arguments after an opening parenthesis, through the closing one.
@@ -417,7 +300,7 @@ export class ExpressionParser {
   }
 
   parse_primary(): Expression {
-    if (this.starts_function_literal()) return this.parse_function_literal()
+    if (this.compounds.starts_function_literal()) return this.compounds.parse_function_literal()
     const token = this.tokens.next()
     const position = { line: token.line, column: token.column }
     if (token.kind === 'identifier') return { kind: 'identifier', name: token.text, ...position }
@@ -443,9 +326,9 @@ export class ExpressionParser {
     if (token.kind === 'true' || token.kind === 'false') {
       return { kind: 'boolean', value: token.kind === 'true', ...position }
     }
-    if (token.kind === 'case') return this.parse_case(position)
-    if (token.kind === '[') return this.parse_array_literal(position)
-    if (token.kind === '{') return this.parse_map_literal(position)
+    if (token.kind === 'case') return this.compounds.parse_case(position)
+    if (token.kind === '[') return this.compounds.parse_array_literal(position)
+    if (token.kind === '{') return this.compounds.parse_map_literal(position)
     if (token.kind === 'integer')
       return { kind: 'integer', value: integer_value(BigInt(token.text), position), ...position }
     if (token.kind === '(') {
@@ -454,43 +337,6 @@ export class ExpressionParser {
       return { ...expression, ...position }
     }
     throw this.tokens.error_at(token, 'expression')
-  }
-
-  // `case` followed by an indented block of `when` arms and a final `else` arm.
-  // With a subject, an arm may list several patterns, and the `else` arm may be left out (whether
-  // it may is checked later).
-  private parse_case(position: Position): Case {
-    const subject = this.tokens.peek().kind === 'newline' ? undefined : this.parse_expression()
-    this.tokens.expect('newline', 'end of line')
-    this.tokens.expect('indent', "indented 'when' arms")
-    const arms: CaseArm[] = []
-    do {
-      this.tokens.expect('when', "'when'")
-      // A pattern stops before `then`, which begins the arm's value.
-      const patterns = [this.parse_coalesce()]
-      while (subject !== undefined && this.tokens.accept(',')) patterns.push(this.parse_coalesce())
-      arms.push({ patterns, body: this.parse_arm_body('then') })
-    } while (this.tokens.peek().kind === 'when')
-    const has_else = subject === undefined || this.tokens.peek().kind === 'else'
-    if (has_else) this.tokens.expect('else', "'when' or 'else'")
-    const otherwise = has_else ? this.parse_arm_body('else') : undefined
-    this.tokens.expect('dedent', 'end of block')
-    return { kind: 'case', subject, arms, otherwise, ...position }
-  }
-
-  // The expression on the same line (`when c then x`, `else x`), or alone in an indented block.
-  private parse_arm_body(arm: 'then' | 'else'): Statement[] {
-    const is_inline =
-      arm === 'then' ? this.tokens.accept('then') : this.tokens.peek().kind !== 'newline'
-    if (is_inline) {
-      const value = this.parse_expression()
-      this.tokens.expect_line_end()
-      return [value]
-    }
-    if (this.tokens.peek().kind !== 'newline') {
-      throw this.tokens.error_at(this.tokens.peek(), "'then' or end of line")
-    }
-    return this.bodies.parse_block()
   }
 }
 

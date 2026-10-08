@@ -1,4 +1,5 @@
-// Checks statements and blocks, defining the locals they declare.
+// Checks statements and blocks, defining the locals they declare; loops are checked by the
+// loop checker.
 import {
   is_expression,
   type Assignment,
@@ -6,16 +7,13 @@ import {
   type Condition,
   type Declaration,
   type Expression,
-  type For,
   type FunctionLiteral,
   type Identifier,
   type Index,
   type Jump,
   type If,
-  type Range,
   type Return,
   type Statement,
-  type While,
 } from '../syntax/ast.ts'
 import type { FunctionContext, SelfContext, Shared, Types } from './checker.ts'
 import { ClosureChecker, type ClosureContext } from './closure_checker.ts'
@@ -28,17 +26,17 @@ import {
   narrowing_of,
   type ConditionNarrowing,
 } from './narrowing.ts'
+import { LoopChecker, type LoopBodyChecker } from './loop_checker.ts'
 import { ResultChecker } from './result_checker.ts'
-import { check_item_type } from './collection_checker.ts'
 import { Scopes } from '../scopes.ts'
 import type { TopLevelValues } from './top_level_values.ts'
 import type { Imports } from './imports.ts'
 import type { ObjectTypes } from './object_types.ts'
 import type { TypeResolver } from './type_names.ts'
-import { array_type, format_type, int_type, never_type, void_type, type Type } from '../types.ts'
+import { format_type, never_type, void_type, type Type } from '../types.ts'
 import type { BlockChecker } from './case_checker.ts'
 
-export class StatementChecker implements BlockChecker, JumpChecker {
+export class StatementChecker implements BlockChecker, JumpChecker, LoopBodyChecker {
   private readonly types: Types
   private readonly warnings: CompileWarning[]
   private readonly functions: Functions
@@ -53,7 +51,7 @@ export class StatementChecker implements BlockChecker, JumpChecker {
   private readonly scopes_see_top_level: boolean
   private readonly expressions: ExpressionChecker
   private readonly results: ResultChecker
-  private loop_depth = 0
+  private readonly loops: LoopChecker
   private readonly closures: ClosureChecker
 
   // `closure`: see ClosureChecker.
@@ -98,6 +96,7 @@ export class StatementChecker implements BlockChecker, JumpChecker {
       this,
     )
     this.results = new ResultChecker(this, this.expressions, context)
+    this.loops = new LoopChecker(this.expressions, this.scopes, this.resolver, this)
   }
 
   // Each initializer sees the constructor arguments and the fields initialized before it.
@@ -155,15 +154,17 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     }
   }
 
+  type_of_comprehension(comprehension: Comprehension, expected: Type | undefined): Type {
+    return this.loops.type_of_comprehension(comprehension, expected)
+  }
+
   type_of_function_literal(literal: FunctionLiteral, expected: Type | undefined): Type {
     return this.closures.type_of_function_literal(literal, expected)
   }
 
   check_jump(jump: Jump | Return): void {
     if (jump.kind === 'return') return this.results.check_return(jump)
-    if (this.loop_depth === 0) {
-      throw new CompileError(`'${jump.kind}' outside a loop`, jump.line, jump.column)
-    }
+    this.loops.check_jump(jump)
   }
 
   // A block that gives a value (see BlockChecker); its last statement is typed in its scope.
@@ -197,15 +198,6 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     for (const local of this.scopes.pop().values()) this.warn_if_unused(local)
   }
 
-  private check_loop_body(body: Statement[], define?: () => void): void {
-    this.loop_depth++
-    try {
-      this.check_block(body, define)
-    } finally {
-      this.loop_depth--
-    }
-  }
-
   check_statement(statement: Statement): void {
     const is_top_level = this.context === undefined && this.scopes.depth === 1
     if ('exported' in statement && statement.exported && !is_top_level) {
@@ -217,9 +209,9 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     }
     switch (statement.kind) {
       case 'for':
-        return this.check_for(statement)
+        return this.loops.check_for(statement)
       case 'while':
-        return this.check_while(statement)
+        return this.loops.check_while(statement)
       case 'if':
         return this.check_if(statement)
       case 'declaration':
@@ -259,64 +251,6 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     }
   }
 
-  // The guard narrows the loop variable in the element as an `if` would.
-  type_of_comprehension(comprehension: Comprehension, expected: Type | undefined): Type {
-    const { element, variable, iterable, guard } = comprehension
-    const item_type = this.type_of_iterated(iterable)
-    const expected_element = expected?.kind === 'Array' ? expected.element : undefined
-    let element_type: Type = void_type
-    this.check_block(
-      [],
-      () => {
-        this.define_local({
-          identifier: variable,
-          type: item_type,
-          mutable: false,
-          declared: false,
-          used: false,
-        })
-        if (guard === undefined) return
-        this.expressions.expect_condition(guard)
-        const narrowing = narrowing_of(guard, this.scopes, this.resolver)
-        if (narrowing?.when === true) this.narrow(narrowing)
-      },
-      () => {
-        element_type =
-          expected_element === undefined
-            ? this.expressions.type_of(element)
-            : (this.expressions.expect_type(element, expected_element), expected_element)
-      },
-    )
-    return array_type(check_item_type(element_type, element, 'an array'))
-  }
-
-  // The type of the items a `for` goes through: Ints for a range, or an array's items.
-  private type_of_iterated(iterable: Expression): Type {
-    return iterable.kind === 'range'
-      ? this.check_range(iterable)
-      : this.check_iterated_array(iterable)
-  }
-
-  private check_range(range: Range): Type {
-    this.expressions.expect_type(range.start, int_type)
-    this.expressions.expect_type(range.end, int_type)
-    return int_type
-  }
-
-  private check_iterated_array(iterable: Expression): Type {
-    const type = this.expressions.type_of(iterable)
-    if (type.kind !== 'Array') {
-      const message = `expected a range or an array after 'in', got ${format_type(type)}`
-      throw new CompileError(message, iterable.line, iterable.column)
-    }
-    return type.element
-  }
-
-  private check_while(while_statement: While): void {
-    const define = this.check_condition(while_statement.condition)
-    this.check_loop_body(while_statement.body, define)
-  }
-
   // An optional name tested in the condition is narrowed where it is known not to be nil: in the
   // then branch of `if x`, in the else branch of `if not x`, and after a guard such as
   // `return if x == nil`.
@@ -338,7 +272,7 @@ export class StatementChecker implements BlockChecker, JumpChecker {
   }
 
   // Returns what the condition defines in the body: the name of `const name = value`.
-  private check_condition(condition: Condition): () => void {
+  check_condition(condition: Condition): () => void {
     if (condition.kind !== 'binding') {
       this.expressions.expect_condition(condition)
       return () => {}
@@ -354,7 +288,7 @@ export class StatementChecker implements BlockChecker, JumpChecker {
       })
   }
 
-  private narrow({ local, type }: ConditionNarrowing): void {
+  narrow({ local, type }: ConditionNarrowing): void {
     this.scopes.narrow(local.identifier.name, narrowed_view(local, type))
   }
 
@@ -441,23 +375,8 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     }
   }
 
-  // A range gives Ints; an array gives its items.
-  private check_for(for_statement: For): void {
-    const { iterable, variable } = for_statement
-    const item_type = this.type_of_iterated(iterable)
-    this.check_loop_body(for_statement.body, () =>
-      this.define_local({
-        identifier: variable,
-        type: item_type,
-        mutable: false,
-        declared: false,
-        used: false,
-      }),
-    )
-  }
-
   // A local may shadow any name of an outer scope, a top-level name or a builtin.
-  private define_local(local: CheckerLocal): void {
+  define_local(local: CheckerLocal): void {
     const { identifier, type } = local
     const { name, line, column } = identifier
     const is_top_level = this.context === undefined && this.scopes.depth === 1
