@@ -22,7 +22,7 @@ print "area: #{Circle(r: 2).area}"
 
 ## Status
 
-Early development: the bootstrap compiler (stage0) is in progress. See `docs/roadmap.md`.
+Early development. The compiler is written in Lerta (`compiler/`) and builds itself; stage0, in TypeScript, builds it first. Next is completing the core of the language. See `docs/roadmap.md`.
 
 ## Repository layout
 

@@ -63,11 +63,11 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 
 Run tests (source → execution result) are shared by all stages. They run with the debug runtime and fail on any leak ([leak checking](internals.md#leak-checking)), from stage0 on.
 
-1. **Phase 0**: implement the subset above in TypeScript (stage0).
+1. **Phase 0** (done): implement the subset above in TypeScript (stage0).
    - stage0 outputs `.ll` (LLVM IR text) and calls `clang` as a child process.
    - From stage0 on, features the language lacks (inheritance, getters, `any`) are sealed off while writing it.
    - Decide the minimal subset needed for self-hosting ([stage0 subset](#stage0-subset-for-self-hosting)) first.
-2. **Phase 1**: rewrite the compiler in the Lerta subset and bootstrap.
+2. **Phase 1** (done): rewrite the compiler in the Lerta subset (`compiler/`) and bootstrap.
    - stage1: compile the compiler's own source with stage0.
    - stage2 / stage3: recompile the same source with stage1, then again with stage2. **stage2 == stage3** means the bootstrap succeeded: the two write the same LLVM IR for the compiler (`stage0/test/bootstrap.ts`, run by `pnpm test`). The executables differ, as the linker writes an identifier of its own into each.
 3. **Phase 2**: complete the core of the language — exceptions and the frame chain, async and the event loop, `weak`, `interface`, user-defined generics, `Float` and all integer types.
