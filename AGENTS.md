@@ -15,6 +15,7 @@ Read these before changing behavior:
 1. **Plan first.** Before implementing, explain the approach and get the user's agreement.
 2. **Implement with tests.** Every language feature gets run tests in `tests/`: a Lerta source file plus its expected output. Write them in the stage0 subset (see `docs/roadmap.md` for why). Programs in `examples/` are run as tests too; their expected output goes in `tests/examples/`.
 3. **Review.** After implementing, run an adversarial review with a subagent that follows `.agents/reviewer.md`.
+   - Run `pnpm check` and `pnpm test` yourself before each review; the reviewer does not.
    - Show the reviewer only the code and the tests. Do not pass the intent, the background or your design decisions.
    - Fix the findings and send the result back to **the same reviewer** for re-review. Repeat until no findings remain.
 4. **Update the docs.** When a feature is implemented, move its description from `docs/design/` to `docs/reference/` as described in `docs/design/README.md`.
