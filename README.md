@@ -55,6 +55,7 @@ cd stage0
 pnpm install
 pnpm check   # type and format checks, and spelling across the repository (cspell.json)
 pnpm test
+pnpm test:compare   # compiler/ against stage0, on every Lerta file of the repository
 ```
 
 The tests run at a low priority (`nice`). stage0 runs its TypeScript directly with Node.js (22.18 or later), so there is no build step. To compile a program:
