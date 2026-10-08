@@ -2,7 +2,7 @@
 # as compound expressions are by the compound parser.
 import {
   BinaryOperation, Call, COMPARISON_OPERATORS, Conditional, Coalesce, Expression, Identifier, Index
-  IntegerLiteral, IsTest, Member, NamedValue, position_of, Range, RecordLiteral
+  IntegerLiteral, IsTest, Member, NamedValue, Range, RecordLiteral
   TypeName, UnaryOperation, Unwrap
 } from './ast'
 import { parse_block_literal, starts_block, starts_field_block } from './block_literal_parser'
@@ -52,7 +52,7 @@ export const call_of = (
   type_args: Array<TypeName>
 ): Call ->
   const { args, named_args } = arguments
-  Call(callee, args, named_args, type_args, position: position_of(callee))
+  Call(callee, args, named_args, type_args, position: callee.position)
 
 # `c then a else b`, which binds weaker than the binary operators; `c then a else d then b else
 # e` is `c then a else (d then b else e)`.
@@ -63,7 +63,7 @@ const parse_conditional = (tokens: TokenStream): Expression ->
   const then_value = parse_conditional(tokens)
   tokens.expect('else', "'else'")
   const else_value = parse_conditional(tokens)
-  Conditional(condition, then_value, else_value, position: position_of(condition))
+  Conditional(condition, then_value, else_value, position: condition.position)
 
 # `a ? b ? c` is `a ? (b ? c)`.
 export const parse_coalesce = (tokens: TokenStream): Expression ->
@@ -71,7 +71,7 @@ export const parse_coalesce = (tokens: TokenStream): Expression ->
   return value if tokens.peek_continuation() != '?'
   tokens.next()
   const fallback = parse_coalesce(tokens)
-  Coalesce(value, fallback, position: position_of(value))
+  Coalesce(value, fallback, position: value.position)
 
 const parse_or = (tokens: TokenStream): Expression ->
   parse_left_associative(tokens, ['or'], () -> parse_and(tokens))
@@ -88,7 +88,7 @@ const parse_left_associative = (
   var left = parse_operand()
   while is_one_of(tokens.peek_continuation(), operators)
     const operator = tokens.next().kind
-    left = BinaryOperation(operator, left, right: parse_operand(), position: position_of(left))
+    left = BinaryOperation(operator, left, right: parse_operand(), position: left.position)
   left
 
 const parse_not = (tokens: TokenStream): Expression ->
@@ -109,11 +109,11 @@ const parse_comparison = (tokens: TokenStream): Expression ->
 
 const parse_is = (tokens: TokenStream, value: Expression): Expression ->
   tokens.next()
-  IsTest(value, type: parse_named_type(tokens), position: position_of(value))
+  IsTest(value, type: parse_named_type(tokens), position: value.position)
 
 const parse_binary_comparison = (tokens: TokenStream, left: Expression): Expression ->
   const operator = tokens.next().kind
-  BinaryOperation(operator, left, right: parse_range(tokens), position: position_of(left))
+  BinaryOperation(operator, left, right: parse_range(tokens), position: left.position)
 
 # Ranges do not chain either: `a...b...c` is an error.
 const parse_range = (tokens: TokenStream): Expression ->
@@ -123,7 +123,7 @@ const parse_range = (tokens: TokenStream): Expression ->
   const end = parse_arithmetic(tokens, 0)
   if tokens.peek_continuation() == '...'
     tokens.fail(token_position(tokens.peek()), 'ranges cannot be chained')
-  Range(start, end, position: position_of(start))
+  Range(start, end, position: start.position)
 
 # `is` is not a keyword, so that it stays usable as a name.
 const at_is = (tokens: TokenStream): Bool ->
@@ -173,7 +173,7 @@ const extend_by_postfix = (tokens: TokenStream, expression: Expression): Express
   const token = tokens.peek()
   return nil if token.spaced or not is_one_of(token.kind, POSTFIX_OPERATORS)
   tokens.next()
-  const position = position_of(expression)
+  const position = expression.position
   case token.kind
     when '!' then Unwrap(position, operand: expression)
     when '(' then call_of(expression, parse_parenthesized_arguments(tokens), [])
@@ -262,7 +262,7 @@ const to_arguments = (tokens: TokenStream, items: Array<Argument>): Arguments ->
     if const name = item.name
       named_args.push(NamedValue(name, value: item.value))
     else if named_args.length > 0
-      tokens.fail(position_of(item.value), 'a positional argument cannot follow a named one')
+      tokens.fail(item.value.position, 'a positional argument cannot follow a named one')
     else
       args.push(item.value)
   Arguments(args, named_args)

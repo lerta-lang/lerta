@@ -130,7 +130,8 @@ export class MemberChecker {
     throw new CompileError(message, line, column)
   }
 
-  // A member that is not called is a field, or a property such as `length`.
+  // A member that is not called is a field, or a property such as `length`. A field read
+  // from a union must be in every member, with the same type.
   type_of_property(member: Member): Type {
     const object_type =
       member.object.kind === 'this' && this.self !== undefined
@@ -138,6 +139,7 @@ export class MemberChecker {
         : this.expressions.type_of(member.object)
     const { name, line, column } = member.name
     this.reject_deinit(object_type, member)
+    if (object_type.kind === 'Union') return this.objects.common_field_type(object_type, member)
     const field_type = this.objects.field_type(object_type, member)
     if (field_type !== undefined) return field_type
     const property = builtin_property(object_type, name)

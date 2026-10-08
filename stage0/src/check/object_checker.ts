@@ -6,7 +6,16 @@ import type { CheckerLocal, ExpressionChecker } from './expression_checker.ts'
 import { method_key, type Functions } from './functions.ts'
 import type { FieldInfo, ObjectTypes } from './object_types.ts'
 import type { Scopes } from '../scopes.ts'
-import { format_type, record_type, type Type } from '../types.ts'
+import {
+  format_member,
+  format_type,
+  format_types,
+  record_type,
+  same_type,
+  type Type,
+} from '../types.ts'
+
+type UnionType = Extract<Type, { kind: 'Union' }>
 
 export class ObjectChecker {
   private readonly expressions: ExpressionChecker
@@ -104,6 +113,30 @@ export class ObjectChecker {
       return object_type.fields.find((field) => field.name === member.name.name)?.type
     }
     return this.field_of(object_type, member)?.type
+  }
+
+  // The type of the field `member` names, read from a union: every member must have the field,
+  // of the same type.
+  common_field_type(union: UnionType, member: Member): Type {
+    const { name, line, column } = member.name
+    const typed_members = union.members.map((type) => {
+      const field_type = this.field_of(type, member)?.type
+      if (field_type === undefined) {
+        const message = `'${name}' is not a field of ${format_member(type, union)}, a member of ${format_type(union)}`
+        throw new CompileError(message, line, column)
+      }
+      return { type, field_type }
+    })
+    const [first, ...rest] = typed_members
+    const differing = rest.find(({ field_type }) => !same_type(field_type, first.field_type))
+    if (differing !== undefined) {
+      const [first_field, differing_field] = format_types(first.field_type, differing.field_type)
+      const first_member = format_member(first.type, union)
+      const differing_member = format_member(differing.type, union)
+      const message = `'${name}' has type ${first_field} in ${first_member} but ${differing_field} in ${differing_member}`
+      throw new CompileError(message, line, column)
+    }
+    return first.field_type
   }
 
   // `{ x: 1, y }`. Its fields take their types from the expected type, if it is an anonymous

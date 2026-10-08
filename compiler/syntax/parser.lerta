@@ -2,7 +2,7 @@
 # calls without parentheses; the other declarations are read by the declaration parser.
 import {
   Assignment, ASSIGNMENT_OPERATORS, AssignmentTarget, Binding, Call, Condition, copy_identifier
-  Declaration, Expression, For, Identifier, If, Index, Member, position_of, Statement, TypeName
+  Declaration, Expression, For, Identifier, If, Index, Member, Statement, TypeName
   While
 } from './ast'
 import {
@@ -115,14 +115,14 @@ const wrap_in_postfix_condition = (tokens: TokenStream, statement: Statement): S
   return nil if kind != 'if' and kind != 'while'
   tokens.next()
   const condition = parse_expression(tokens)
-  const position = position_of(statement)
+  const position = statement.position
   case kind
     when 'if' then If(condition, position, then_body: [statement], else_body: [])
     else While(condition, position, body: [statement])
 
 const wrap_in_for = (tokens: TokenStream, statement: Statement): For ->
   const { variable, iterable, guard } = parse_loop_header(tokens)
-  const position = position_of(statement)
+  const position = statement.position
   const body: Array<Statement> = case
     when guard then [If(position, condition: guard, then_body: [statement], else_body: [])]
     else [statement]
@@ -165,10 +165,10 @@ const parse_destructuring = (tokens: TokenStream): Array<Statement> ->
 
 const parse_assignment = (tokens: TokenStream, target: Expression, operator: String): Statement ->
   const message = 'only a name, an indexed item or a field can be assigned to'
-  const assigned = assignment_target(target) ? tokens.fail(position_of(target), message)
+  const assigned = assignment_target(target) ? tokens.fail(target.position, message)
   tokens.next()
   const value = parse_value(tokens)
-  Assignment(operator, value, target: assigned, position: position_of(target))
+  Assignment(operator, value, target: assigned, position: target.position)
 
 const assignment_target = (expression: Expression): AssignmentTarget? ->
   case expression
@@ -198,7 +198,7 @@ const parse_for = (tokens: TokenStream): For ->
   const { variable, iterable, guard } = parse_loop_header(tokens)
   if guard
     const message = "a for loop with a block has no 'when'; write an if in the block"
-    tokens.fail(position_of(guard), message)
+    tokens.fail(guard.position, message)
   For(variable, iterable, position, body: parse_block(tokens))
 
 # A condition, or `const name = value`, which holds when the value is not nil.
