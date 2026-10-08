@@ -38,7 +38,7 @@ extend String
 extend Point
   sum = (): Int -> @x + @y
 
-extend <T> Array<T>
+extend<T> Array<T>
   second = (): T -> @[1]
 
 print 'hi'.shout()
@@ -47,10 +47,10 @@ print [1, 2].second()
 
 - `extend Type` at the top level, followed by an indented block of methods, written as a class's, gives a type more methods. Inside them, `@` is the receiver. An extend has no fields, and no `init` or `deinit`.
 - Only `String`, `Int`, `Bool`, `Byte`, `Binary`, arrays, maps, `Iter`s, classes and structs can be extended so far. Extending an optional, a function, a union or an anonymous struct type is an error.
-- **Generic extends.** `extend <T> Type` declares type parameters, as a generic function does, which the extended type must use and which take no bound: `extend <T> Array<T>` gives its methods to every array, `extend <V> Map<String, V>` to the maps whose keys are `String`s, and `extend <T> Array<Array<T>>` to the arrays of arrays, while `extend Array<Int>` gives them to `Array<Int>` only. In the methods, the type parameters stand for the receiver's type arguments.
+- **Generic extends.** `extend<T> Type` declares type parameters, as a generic function does, which the extended type must use and which take no bound: `extend<T> Array<T>` gives its methods to every array, `extend<V> Map<String, V>` to the maps whose keys are `String`s, and `extend<T> Array<Array<T>>` to the arrays of arrays, while `extend Array<Int>` gives them to `Array<Int>` only. In the methods, the type parameters stand for the receiver's type arguments.
 - **Generic methods.** The methods of a generic extend, and those that declare type parameters of their own, as `map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)` does, are generic: the receiver gives the extend's type arguments, and the arguments give the method's own, which may have the bound `Stringable`, as those of a generic function are inferred (see [generic functions](functions.md#generic-functions)). Like a generic function, each is checked and compiled per instance, for each receiver type and set of type arguments; an error in its body names the instance, as in `(in Array<String>.total)`. A generic method takes no named arguments so far.
 - An extend is in effect in the module that declares it and in the modules that import that module directly, by any import, `import 'module'` included (see [modules](modules.md)). It is not in effect further: a module that imports one of those does not get it.
-- It is an error, at the extend's method, for the method to have the name of a member that the type has already, builtin or of its class or struct, or of a method that another extend in effect in the module gives the same type; extends of a generic type give the same type a method when some type matches both, as `Array<Int>` matches both `extend <T> Array<T>` and `extend Array<Int>`. When two imported modules' extends conflict, the error is at the second import.
+- It is an error, at the extend's method, for the method to have the name of a member that the type has already, builtin or of its class or struct, or of a method that another extend in effect in the module gives the same type; extends of a generic type give the same type a method when some type matches both, as `Array<Int>` matches both `extend<T> Array<T>` and `extend Array<Int>`. When two imported modules' extends conflict, the error is at the second import.
 
 ## deinit
 

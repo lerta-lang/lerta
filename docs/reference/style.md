@@ -5,6 +5,7 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Naming**: variables, functions, methods, fields and module names are `snake_case`. Types, classes and interfaces are `PascalCase`. A `const` whose value is a literal (such as `MAX_SIZE = 100`) is `SCREAMING_CASE`. A `const` holding a computed result is an ordinary variable and is `snake_case`. This matches C names imported through FFI naturally.
 - **String literals**: use `'...'` whenever it can be written with `'...'`.
 - **Inside `{}`**: put spaces (`{ x: 0, y: 1 }`, `import { a } from './m'`).
+- **Generic extends**: no space between `extend` and its type parameters (`extend<T> Array<T>`), though the syntax allows one.
 - **Empty collections**: `[]` rather than `Array<T>()`.
 - **Multi-line literals**: where it can be written without brackets, write it without brackets.
 - **Line length**: up to 100 columns per line.

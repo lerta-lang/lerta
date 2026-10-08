@@ -129,7 +129,7 @@ export class DeclarationParser {
     }
   }
 
-  // `extend Type`, or `extend <T> Array<T>` for a generic one, followed by an indented block of
+  // `extend Type`, or `extend<T> Array<T>` for a generic one, followed by an indented block of
   // methods, one per line.
   parse_extend(): Extend {
     const token = this.tokens.next()

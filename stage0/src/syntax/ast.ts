@@ -273,7 +273,7 @@ export type Extern = Position &
   }
 
 // `extend String` followed by methods, which the type has where the extend is in effect.
-// `extend <T> Array<T>` declares the type parameters of a generic extend.
+// `extend<T> Array<T>` declares the type parameters of a generic extend.
 export type Extend = Position & {
   kind: 'extend'
   type_params: TypeParameter[]
