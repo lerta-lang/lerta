@@ -1,6 +1,6 @@
 # Classes, structs and interfaces
 
-Classes and structs with fields, initializers, methods, `init` and named construction are implemented: see [the reference](../reference/objects.md). Planned beyond that: `deinit`, `weak`, function fields, `==` and `hash`, the omission of `{}` for anonymous struct arguments and interfaces.
+Classes and structs with fields, initializers, methods, `init` and named construction are implemented: see [the reference](../reference/objects.md). `deinit` is implemented too. Planned beyond that: `weak`, function fields, `==` and `hash`, the omission of `{}` for anonymous struct arguments and interfaces.
 
 - **No inheritance** (`extends`/`super` do not exist).
 - There are no static members (`static`). Functions related to a type are module functions (`import rgb from './rgb'` → `rgb.parse(s)`; the module is the namespace).

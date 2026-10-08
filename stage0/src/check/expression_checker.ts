@@ -252,6 +252,7 @@ export class ExpressionChecker {
   private type_of_method(member: Member): Type {
     const object_type = this.type_of(member.object)
     const { name, line, column } = member.name
+    this.reject_deinit(object_type, member)
     const method =
       this.objects.method_type(object_type, member.name) ??
       builtin_method(object_type, name) ??
@@ -267,6 +268,14 @@ export class ExpressionChecker {
     return method
   }
 
+  // A class's deinit is only run by a release.
+  private reject_deinit(object_type: Type, member: Member): void {
+    const { name, line, column } = member.name
+    if (name !== 'deinit' || !this.objects.has_method(object_type, name)) return
+    const message = 'deinit runs when the object is released; it cannot be called or used'
+    throw new CompileError(message, line, column)
+  }
+
   // A member that is not called is a field, or a property such as `length`.
   private type_of_property(member: Member): Type {
     const object_type =
@@ -274,6 +283,7 @@ export class ExpressionChecker {
         ? this.record(member.object, this.self.info.type)
         : this.type_of(member.object)
     const { name, line, column } = member.name
+    this.reject_deinit(object_type, member)
     const field_type = this.objects.field_type(object_type, member)
     if (field_type !== undefined) return field_type
     if (this.objects.has_method(object_type, name)) {

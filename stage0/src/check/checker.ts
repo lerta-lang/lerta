@@ -11,7 +11,7 @@ import {
   type TypeDeclaration,
 } from '../syntax/ast.ts'
 import { CompileError, CompileWarning } from '../errors.ts'
-import { Functions, parameter_types, type FunctionEntry } from './functions.ts'
+import { Functions, method_key, parameter_types, type FunctionEntry } from './functions.ts'
 import { Imports, type Export } from './imports.ts'
 import { with_module_path, type Module } from '../loader.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
@@ -235,8 +235,26 @@ const check_code = (program: Program, shared: Shared): void => {
   )
   shared.objects.check_all()
   shared.functions.check_all()
+  reject_deinit_results(shared)
   warn_unused_top_level()
   shared.warnings.push(...shared.imports.unused_warnings())
+}
+
+// A deinit runs as part of a release, where nothing could take a value it gave, or handle a throw.
+const reject_deinit_results = ({ objects, functions }: Shared): void => {
+  for (const info of objects.all()) {
+    const literal = info.methods.get('deinit')
+    if (literal === undefined) continue
+    const key = method_key(info.declaration.name.name, 'deinit')
+    const type = functions.type_of(key, literal)
+    const result = type?.kind === 'function' ? type.result : undefined
+    if (result?.kind === 'never') {
+      throw new CompileError('deinit cannot throw', literal.line, literal.column)
+    }
+    if (result !== undefined && result.kind !== 'void') {
+      throw new CompileError('deinit gives no value', literal.line, literal.column)
+    }
+  }
 }
 
 // A class, struct or type alias cannot have the name of an import; the error points at it.

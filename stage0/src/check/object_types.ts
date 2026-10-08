@@ -31,6 +31,8 @@ export type ObjectInfo = {
   // Those of the declaring module, which hold the methods' types; set by add_members.
   functions: Functions | undefined
   has_init: boolean
+  // `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
+  has_deinit: boolean
   state: 'unchecked' | 'checking' | 'checked'
 }
 
@@ -86,6 +88,7 @@ export class ObjectTypes {
         methods: new Map(),
         functions: undefined,
         has_init: false,
+        has_deinit: false,
         state: 'unchecked',
       }
       this.infos.set(name.name, info)
@@ -114,12 +117,17 @@ export class ObjectTypes {
   private add_method(info: ObjectInfo, member: MemberDeclaration, functions: Functions): void {
     const literal = member.value as FunctionLiteral
     const type_name = info.declaration.name.name
-    if (member.name.name === 'init') {
+    const { name } = member.name
+    if (name === 'init' || name === 'deinit') {
       if (literal.params.length > 0) {
-        throw new CompileError('init takes no parameters', literal.line, literal.column)
+        throw new CompileError(`${name} takes no parameters`, literal.line, literal.column)
       }
-      info.has_init = true
     }
+    if (name === 'init') info.has_init = true
+    if (name === 'deinit' && info.declaration.is_struct) {
+      throw new CompileError('a struct has no deinit', member.line, member.column)
+    }
+    if (name === 'deinit') info.has_deinit = true
     info.methods.set(member.name.name, literal)
     functions.add(method_key(type_name, member.name.name), member.name, literal, info.type)
   }

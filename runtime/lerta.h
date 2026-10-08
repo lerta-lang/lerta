@@ -70,6 +70,10 @@ void lerta_retain(void *object);
 void lerta_release(void *object);
 // With LERTA_DEBUG, live objects are counted; returns false after reporting a leak to stderr.
 bool lerta_check_leaks(void);
+// Runs a class's deinit on its object, whose count has reached zero, from its drop function. The
+// object counts as referenced once while deinit runs, so that passing it on and releasing it again
+// does not drop it twice; deinit must not keep it, which would bring a dropped object back.
+void lerta_run_deinit(void *object, void (*deinit)(void *object));
 
 // Strings (string.c)
 LertaString *lerta_int_to_string(int64_t n);

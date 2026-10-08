@@ -2,7 +2,7 @@
 // types. Constructors and methods are generated like functions (see codegen.ts).
 import { define_heap_object, emit_heap_allocate, emit_heap_field_pointer } from './heap_object.ts'
 import type { IrBuilder, IrModule } from './ir_builder.ts'
-import { drop_symbol, object_ir_type } from './lerta_ir.ts'
+import { drop_symbol, method_symbol, object_ir_type } from './lerta_ir.ts'
 import type { FieldInfo, ObjectInfo } from '../check/object_types.ts'
 import type { Type } from '../types.ts'
 
@@ -19,7 +19,8 @@ export const emit_allocate = (ir: IrBuilder, info: ObjectInfo): string =>
 
 export const define_object = (module: IrModule, info: ObjectInfo): void => {
   const field_types = info.fields.map((field) => field.type!)
-  define_heap_object(module, object_ir_type(info.type), drop_symbol(info.type), field_types)
+  const deinit = info.has_deinit ? method_symbol(info.type, 'deinit') : undefined
+  define_heap_object(module, object_ir_type(info.type), drop_symbol(info.type), field_types, deinit)
 }
 
 // An i1: whether the object is of the type. The drop function in the header tells the type, since

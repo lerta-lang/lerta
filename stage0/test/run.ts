@@ -138,7 +138,13 @@ const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outco
 const run_program = (path: string): Promise<{ stdout: string; stderr: string; failed: boolean }> =>
   new Promise((resolve, reject) => {
     execFile(path, { encoding: 'utf8', maxBuffer: OUTPUT_LIMIT }, (error, stdout, stderr) => {
-      if (error !== null && typeof error.code !== 'number') reject(error)
+      // An exit status, or a signal such as a panic's abort, is a failed run; an error with a code
+      // of its own, such as too much output, or none, is a failure to run it.
+      const ended =
+        error === null ||
+        typeof error.code === 'number' ||
+        (error.code == null && error.signal !== null)
+      if (!ended) reject(error)
       else resolve({ stdout, stderr, failed: error !== null })
     })
   })

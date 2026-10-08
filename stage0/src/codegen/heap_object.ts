@@ -8,15 +8,21 @@ import { is_reference_type, type Type } from '../types.ts'
 // The two header fields come before the object's own.
 const HEADER_FIELDS = 2
 
-// Defines the LLVM struct type `layout` and the drop function `drop`.
+// Defines the LLVM struct type `layout` and the drop function `drop`, which first runs `deinit`, the
+// symbol of a class's deinit method, if there is one.
 export const define_heap_object = (
   module: IrModule,
   layout: string,
   drop: string,
   field_types: Type[],
+  deinit?: string,
 ): void => {
   module.add_type(`${layout} = type { ${['i64', 'ptr', ...field_types.map(ir_type)].join(', ')} }`)
   const ir = new IrBuilder(module)
+  if (deinit !== undefined) {
+    ir.declare('lerta_run_deinit', 'declare void @lerta_run_deinit(ptr, ptr)')
+    ir.emit(`call void @lerta_run_deinit(ptr %object, ptr ${deinit})`)
+  }
   for (const [i, type] of field_types.entries()) {
     if (!is_reference_type(type)) continue
     const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
