@@ -57,8 +57,8 @@ type Punctuation = (typeof punctuations)[number]
 
 export type Token = {
   kind: TokenKind
-  // The identifier name, the integer's digits without separators, the string literal's contents
-  // or the punctuation; empty for layout tokens.
+  // The identifier name, the integer's text without separators (with its `0x` prefix if
+  // hexadecimal), the string literal's contents or the punctuation; empty for layout tokens.
   text: string
   // Whether whitespace or the start of the line precedes it: `f (x)` and `f(x)` parse differently.
   spaced: boolean
@@ -217,9 +217,10 @@ const tokenize_line = (chars: Chars, start: number, line: number, column_offset 
 }
 
 // `1_000` is 1000. A separator goes only between digits, and a leading zero is
-// rejected so that `010` is not mistaken for octal.
+// rejected so that `010` is not mistaken for octal. `0xFF` is hexadecimal, kept with its prefix,
+// which BigInt reads.
 const integer_digits = (text: string, line: number, column: number): string => {
-  const is_valid = /^(0|[1-9](_?[0-9])*)$/.test(text)
+  const is_valid = /^(0|[1-9](_?[0-9])*|0x[0-9A-Fa-f]+)$/.test(text)
   if (!is_valid) throw new CompileError(`invalid integer literal '${text}'`, line, column)
   return text.replaceAll('_', '')
 }

@@ -3,7 +3,7 @@
 - Source files use the extension `.lerta`. Lines end with LF or CRLF.
 - Comments run from `#` to the end of the line. There are no block comments.
 - Identifiers are `[A-Za-z_][A-Za-z0-9_]*` (ASCII only).
-- Integer literals are decimal. `_` may separate digits (`1_000_000`). A leading zero is not allowed except in `0` itself, so `010` is not mistaken for octal. Where a prefix `-` may appear, a `-` directly followed by an integer literal is part of the literal (`-1`); otherwise it is the prefix operator. After an operand, `-` is always subtraction (`x-1`, `1 -1`).
+- Integer literals are decimal or hexadecimal. In a decimal one, `_` may separate digits (`1_000_000`), and a leading zero is not allowed except in `0` itself, so `010` is not mistaken for octal. A hexadecimal one is `0x` followed by one or more digits `0-9`, `a-f` or `A-F`, with no `_` (`0xFF`, `0x7fffffffffffffff`). Both have the same types and limits (see [Int](types.md#int)). Where a prefix `-` may appear, a `-` directly followed by an integer literal is part of the literal (`-1`); otherwise it is the prefix operator. After an operand, `-` is always subtraction (`x-1`, `1 -1`).
 - `'...'` string literals have no escapes and no interpolation. They are single line only and cannot contain `'`.
 - `"..."` string literals are single line and have escapes, `\n` `\t` `\r` `\0` `\\` `\"` `\#` and `\u{1F600}` (a code point in hex, not a surrogate), and interpolation `"#{expression}"`, which inserts the value's text, `expression.to_string()` (see [Stringable](builtins.md#stringable)). An interpolated expression cannot contain a function literal.
 
