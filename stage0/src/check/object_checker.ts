@@ -45,11 +45,7 @@ export class ObjectChecker {
   // be left out and is then nil.
   type_of_construction(call: Call, type: Type): Type {
     const info = this.objects.info(type)
-    if (call.args.length > 0) {
-      const [first] = call.args
-      const message = `${format_type(type)} is constructed with named arguments, as in Point(x: 1)`
-      throw new CompileError(message, first.line, first.column)
-    }
+    name_shorthand_args(call, type)
     const given = new Set<string>()
     for (const arg of call.named_args) {
       if (given.has(arg.name.name)) {
@@ -181,4 +177,20 @@ export class ObjectChecker {
     }
     return { info: field, type: this.objects.field_type(object, field, member.name) }
   }
+}
+
+// A name alone, `Point(x)`, is short for `Point(x: x)`, as in `{ x }`; a construction has no
+// positional arguments to confuse it with. The call is rewritten into the named form, which every
+// later pass reads.
+const name_shorthand_args = (call: Call, type: Type): void => {
+  const names = call.args.filter((arg): arg is Identifier => arg.kind === 'identifier')
+  if (names.length < call.args.length) {
+    const not_named = call.args.find((arg) => arg.kind !== 'identifier')!
+    const example = 'Point(x: 1) or Point(x)'
+    const message = `${format_type(type)} is constructed with named arguments, as in ${example}`
+    throw new CompileError(message, not_named.line, not_named.column)
+  }
+  const shorthands = names.map((name) => ({ name: { ...name }, value: name }))
+  call.named_args = [...shorthands, ...call.named_args]
+  call.args = []
 }
