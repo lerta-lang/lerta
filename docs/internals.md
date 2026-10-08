@@ -6,7 +6,7 @@ This describes the implementation design. Unmarked statements describe stage0 as
 
 - stage0 writes `.ll` text and has `clang` compile and link it with the runtime.
 - **Planned:** LLVM emits objects, and `lld` links them (on all platforms).
-- The core of the runtime (RC, the representation and basic operations of strings, arrays and dictionaries) is **written in C** and shared by all stages.
+- The core of the runtime (RC, the representation and basic operations of strings, arrays and maps) is **written in C** and shared by all stages.
   - Builtins and standard modules are written in Lerta where possible (such as `print`). C is limited to the minimal primitives that cannot be written in Lerta (writing to an fd, memory allocation and so on), and the compiler to the operations that need the representation of the builtin types (see [builtins](#builtins)).
 - **Planned:** an event loop, in the C core of the runtime, on libuv, which I/O uses too.
 
@@ -124,7 +124,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
   4. Slices (`StringSlice`)
 - **Planned:** rope rules:
   - Operations that do not flatten: concatenation, length, iteration, output (`writev`), equality comparison.
-  - Operations that flatten: byte indexing (`s.binary[i]`), passing to C, hashing (use as a dictionary key).
+  - Operations that flatten: byte indexing (`s.binary[i]`), passing to C, hashing (use as a map key).
     - So the O(1) of `s.binary` holds for flat strings. For a rope, the first access costs an O(n) flatten.
   - Flattening replaces the node in place. Implemented with an explicit stack (no recursion).
   - A concatenation with a short result copies immediately without creating a node (equivalent to V8's 13 characters).

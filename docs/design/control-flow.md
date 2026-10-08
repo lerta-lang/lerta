@@ -14,7 +14,7 @@
 
 `a...b` in a `for` is implemented: see [the reference](../reference/control-flow.md#for-and-ranges). Planned:
 
-- A range is a value of the built-in type `Range`, which can be traversed any number of times (unlike `Iter<T>`).
+- A range is a value of the builtin type `Range`, which can be traversed any number of times (unlike `Iter<T>`).
 - Whether to also have a range that includes its end (`..`) is an [open question](../roadmap.md#open-questions).
 
 ## for and comprehensions

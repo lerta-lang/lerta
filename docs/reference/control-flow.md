@@ -4,7 +4,7 @@
 
 - An indented block holds statements, one per line.
 - A name declared in a block (such as a loop variable) is visible only inside it. Declaring it again in the same block is an error.
-- A declaration may have the name of one visible from an outer scope, a top-level name or a builtin (shadowing). Inside its block, the name refers to the new declaration. Builtins (standard types, interfaces and built-in functions) live outside every scope: inside `for print in 0...3`, `print` is the loop variable.
+- A declaration may have the name of one visible from an outer scope, a top-level name or a builtin (shadowing). Inside its block, the name refers to the new declaration. [Builtins](builtins.md) live outside every scope: inside `for print in 0...3`, `print` is the loop variable.
 
 ## if and while
 
