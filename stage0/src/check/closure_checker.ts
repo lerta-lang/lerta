@@ -77,14 +77,11 @@ export class ClosureChecker {
     const local = this.closure.enclosing(name)
     if (local === undefined || local === this.shared.top_level.lookup(name)) return undefined
     const { captures } = this.closure
-    if (!captures.some((capture) => capture.name === name))
-      captures.push({ name, type: local.type })
-    return {
-      ...local,
-      mutable: false,
-      declared: false,
-      origin: local.origin ?? local,
-      captured: true,
+    const origin = local.origin ?? local
+    if (origin.mutable) this.shared.shared_vars.add(origin.identifier)
+    if (!captures.some((capture) => capture.name === name)) {
+      captures.push({ name, type: local.type, is_var: origin.mutable })
     }
+    return { ...local, declared: false, origin, captured: true }
   }
 }

@@ -15,7 +15,14 @@ import { CheckedInt } from './checked_int.ts'
 import { ControlFlowGenerator } from './control_flow_codegen.ts'
 import { ThrowBlocks } from './throw_blocks.ts'
 import type { BlockGenerator } from './case_codegen.ts'
-import { emit_capture_pointer, emit_closure, emit_static_closure } from './closure_codegen.ts'
+import { emit_cell, emit_cell_pointer } from './cell_codegen.ts'
+import {
+  emit_capture_pointer,
+  emit_closure,
+  emit_static_closure,
+  slot_ir_type,
+  type CapturedSlot,
+} from './closure_codegen.ts'
 import { ExpressionGenerator, type CodegenLocal } from './expression_codegen.ts'
 import { IrBuilder, IrModule } from './ir_builder.ts'
 import {
@@ -110,7 +117,10 @@ const function_symbols = (module: Module, checked: Checked[]): Map<string, strin
   return symbols
 }
 
-type CheckedTypes = Pick<Checked, 'types' | 'conversions' | 'objects' | 'imports' | 'captures'>
+type CheckedTypes = Pick<
+  Checked,
+  'types' | 'conversions' | 'objects' | 'imports' | 'captures' | 'shared_vars'
+>
 
 export class FunctionGenerator implements BlockGenerator {
   private readonly types: Types
@@ -212,10 +222,17 @@ export class FunctionGenerator implements BlockGenerator {
       top_level_code: false,
     })
     body_generator.generate_function(symbol, literal, undefined, captures)
-    const captured = captures.map(({ name, type }) => ({
-      type,
-      operand: this.expressions.read_local(this.locals.lookup(name)!, type),
-    }))
+    const captured = captures.map(({ name, type, is_var }) => {
+      const local = this.locals.lookup(name)!
+      if (!is_var) {
+        const slot = { kind: 'value', type } as const
+        return { slot, operand: this.expressions.read_local(local, type) }
+      }
+      if (local.kind !== 'slot' || local.cell === undefined)
+        throw new Error(`the captured var '${name}' has no cell`)
+      emit_retain(this.ir, local.cell.cell)
+      return { slot: { kind: 'cell' } as const, operand: local.cell.cell }
+    })
     return captured.length === 0
       ? emit_static_closure(this.ir, symbol)
       : emit_closure(this.ir, symbol, captured)
@@ -243,14 +260,24 @@ export class FunctionGenerator implements BlockGenerator {
     for (const [i, param] of params.entries()) {
       scope.set(param.name, { kind: 'value', operand: `%p${i}`, type: param.type })
     }
-    const captured_types = (captures ?? []).map((capture) => capture.type)
-    for (const [i, { name, type }] of (captures ?? []).entries()) {
-      const pointer = emit_capture_pointer(this.ir, '%closure', captured_types, i)
-      scope.set(name, {
-        kind: 'value',
-        operand: this.ir.assign(`load ${ir_type(type)}, ptr ${pointer}`),
-        type,
-      })
+    // A captured var is its cell, which the closure holds; the literal reads and writes through it.
+    const slots = (captures ?? []).map(({ type, is_var }): CapturedSlot =>
+      is_var ? { kind: 'cell' } : { kind: 'value', type },
+    )
+    for (const [i, { name, type, is_var }] of (captures ?? []).entries()) {
+      const pointer = emit_capture_pointer(this.ir, '%closure', slots, i)
+      const value = this.ir.assign(`load ${slot_ir_type(slots[i])}, ptr ${pointer}`)
+      scope.set(
+        name,
+        is_var
+          ? {
+              kind: 'slot',
+              pointer: emit_cell_pointer(this.ir, type, value),
+              type,
+              cell: { cell: value, is_owned: false },
+            }
+          : { kind: 'value', operand: value, type },
+      )
     }
     const last = literal.body.at(-1)
     for (const statement of literal.body.slice(0, -1)) this.generate_statement(statement)
@@ -360,7 +387,10 @@ export class FunctionGenerator implements BlockGenerator {
 
   release_scope(scope: Scope<CodegenLocal>): void {
     for (const local of scope.values()) {
-      if (local.kind === 'slot' && local.top_level === undefined && is_reference_type(local.type)) {
+      if (local.kind !== 'slot' || local.top_level !== undefined) continue
+      if (local.cell !== undefined) {
+        if (local.cell.is_owned) emit_release(this.ir, local.cell.cell)
+      } else if (is_reference_type(local.type)) {
         emit_release(this.ir, this.ir.assign(`load ptr, ptr ${local.pointer}`))
       }
     }
@@ -397,6 +427,12 @@ export class FunctionGenerator implements BlockGenerator {
     const { name } = declaration.name
     const global = this.top_level.values.get(name)
     const is_top_level = this.top_level.top_level_code && this.locals.depth === 1
+    if (this.checked.shared_vars.has(declaration.name)) {
+      const cell = emit_cell(this.ir, type, value)
+      const pointer = emit_cell_pointer(this.ir, type, cell)
+      this.locals.define(name, { kind: 'slot', pointer, type, cell: { cell, is_owned: true } })
+      return
+    }
     if (!is_top_level || global === undefined) {
       this.locals.define(name, this.store_in_slot(value, type))
       return

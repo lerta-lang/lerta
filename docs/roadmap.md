@@ -57,7 +57,6 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
-- Function literals cannot capture a `var` yet. Capturing a `var` needs the variable in a heap context shared with the closure (see [internals](internals.md#execution-model-frame-chain)).
 - Modules lack, for now: circular imports and `import mod from`.
 
 ## Phases and bootstrap

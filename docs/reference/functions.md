@@ -41,7 +41,7 @@ print map([1, 2, 3], (x) -> x * x)
 
 - A function literal can be written wherever a value is expected; outside the top level, `const f = (x: Int) -> x + 1` declares a local that holds one. Each evaluation gives a function with the values captured then.
 - Where a function type is expected (a parameter, an annotation, a return type), the literal's parameter types and return type may be left out and are taken from it: `(x) -> x * 2`. Otherwise the parameters' types must be written.
-- A function literal sees the locals around it, and captures their values when it is evaluated: `n` above keeps the value it had when `make_adder` was called. It can capture a `const`, a parameter, a loop variable or, in a method, `@`, narrowed as it is there, but not a `var` so far; copy one into a `const` first.
+- A function literal sees the locals around it. It captures the value of a `const`, a parameter, a loop variable or, in a method, `@`, narrowed as it is there, when it is evaluated: `n` above keeps the value it had when `make_adder` was called. It shares a `var` with the function that declares it, and with the other literals that capture it: each can read and assign it, and sees the others' assignments, even after that function has returned.
 - `return` in a function literal returns from the literal; `break` and `continue` cannot leave a loop around it.
 
 ## C functions

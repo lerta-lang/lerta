@@ -67,52 +67,62 @@ export const emit_closure_call = (
   return 'poison'
 }
 
-// The IR type of a closure that captures values of these types.
-const closure_ir_type = (captured: Type[]): string =>
-  `{ ${['i64', 'ptr', 'ptr', ...captured.map(ir_type)].join(', ')} }`
+// What a closure holds for one capture: a value, or the cell of a captured var (see
+// cell_codegen.ts), which is an owned reference.
+export type CapturedSlot = { kind: 'value'; type: Type } | { kind: 'cell' }
 
-// The pointer to the closure's `index`th captured value.
+export const slot_ir_type = (slot: CapturedSlot): string =>
+  slot.kind === 'cell' ? 'ptr' : ir_type(slot.type)
+
+const holds_reference = (slot: CapturedSlot): boolean =>
+  slot.kind === 'cell' || is_reference_type(slot.type)
+
+// The IR type of a closure that holds these captures.
+const closure_ir_type = (slots: CapturedSlot[]): string =>
+  `{ ${['i64', 'ptr', 'ptr', ...slots.map(slot_ir_type)].join(', ')} }`
+
+// The pointer to the closure's `index`th capture.
 export const emit_capture_pointer = (
   ir: IrBuilder,
   closure: string,
-  captured: Type[],
+  slots: CapturedSlot[],
   index: number,
 ): string =>
   ir.assign(
-    `getelementptr ${closure_ir_type(captured)}, ptr ${closure}, i32 0, i32 ${CODE_FIELD + 1 + index}`,
+    `getelementptr ${closure_ir_type(slots)}, ptr ${closure}, i32 0, i32 ${CODE_FIELD + 1 + index}`,
   )
 
-// A new closure of the code `symbol`, which takes over the captured values, owned. Its drop
-// function, defined with it, releases those that are references.
+// A new closure of the code `symbol`, which takes over the captures, owned. Its drop function,
+// defined with it, releases those that are references.
 export const emit_closure = (
   ir: IrBuilder,
   symbol: string,
-  captured: { type: Type; operand: string }[],
+  captured: { slot: CapturedSlot; operand: string }[],
 ): string => {
-  const types = captured.map((capture) => capture.type)
-  const drop = types.some(is_reference_type) ? `${symbol}.drop` : 'null'
-  if (drop !== 'null') define_closure_drop(ir, drop, types)
+  const slots = captured.map((capture) => capture.slot)
+  const drop = slots.some(holds_reference) ? `${symbol}.drop` : 'null'
+  if (drop !== 'null') define_closure_drop(ir, drop, slots)
   ir.declare('lerta_alloc', 'declare ptr @lerta_alloc(i64, ptr)')
-  const end = ir.assign(`getelementptr ${closure_ir_type(types)}, ptr null, i32 1`)
+  const end = ir.assign(`getelementptr ${closure_ir_type(slots)}, ptr null, i32 1`)
   const size = ir.assign(`ptrtoint ptr ${end} to i64`)
   const closure = ir.assign(`call ptr @lerta_alloc(i64 ${size}, ptr ${drop})`)
   const code = ir.assign(
     `getelementptr { i64, ptr, ptr }, ptr ${closure}, i32 0, i32 ${CODE_FIELD}`,
   )
   ir.emit(`store ptr ${symbol}, ptr ${code}`)
-  for (const [i, { type, operand }] of captured.entries()) {
-    const pointer = emit_capture_pointer(ir, closure, types, i)
-    ir.emit(`store ${ir_type(type)} ${operand}, ptr ${pointer}`)
+  for (const [i, { slot, operand }] of captured.entries()) {
+    const pointer = emit_capture_pointer(ir, closure, slots, i)
+    ir.emit(`store ${slot_ir_type(slot)} ${operand}, ptr ${pointer}`)
   }
   return closure
 }
 
-const define_closure_drop = (ir: IrBuilder, drop: string, types: Type[]): void =>
+const define_closure_drop = (ir: IrBuilder, drop: string, slots: CapturedSlot[]): void =>
   ir.define_once(drop, (module) => {
     const body = new IrBuilder(module)
-    for (const [i, type] of types.entries()) {
-      if (!is_reference_type(type)) continue
-      const pointer = emit_capture_pointer(body, '%closure', types, i)
+    for (const [i, slot] of slots.entries()) {
+      if (!holds_reference(slot)) continue
+      const pointer = emit_capture_pointer(body, '%closure', slots, i)
       emit_release(body, body.assign(`load ptr, ptr ${pointer}`))
     }
     body.emit('ret void')

@@ -20,12 +20,7 @@ import {
 import type { FunctionContext, SelfContext, Shared, Types } from './checker.ts'
 import { ClosureChecker, type ClosureContext } from './closure_checker.ts'
 import { CompileError, CompileWarning } from '../errors.ts'
-import {
-  ExpressionChecker,
-  reject_captured_var,
-  type CheckerLocal,
-  type JumpChecker,
-} from './expression_checker.ts'
+import { ExpressionChecker, type CheckerLocal, type JumpChecker } from './expression_checker.ts'
 import type { Functions } from './functions.ts'
 import {
   ends_with_jump,
@@ -430,7 +425,6 @@ export class StatementChecker implements BlockChecker, JumpChecker {
     const local = this.scopes.lookup(target.name)
     const pending = this.scopes_see_top_level ? this.top_level.pending_error(target) : undefined
     if (pending !== undefined) throw pending
-    reject_captured_var(local, target)
     if (local === undefined || !local.mutable) {
       const reason = local === undefined ? 'is not a variable' : 'is not a var'
       throw new CompileError(`'${target.name}' ${reason}`, target.line, target.column)

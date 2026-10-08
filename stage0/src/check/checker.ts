@@ -4,6 +4,7 @@ import {
   type Expression,
   type NamedType,
   type FunctionLiteral,
+  type Identifier,
   type Import,
   type Program,
   type Statement,
@@ -28,7 +29,7 @@ export type Types = Map<Expression | NamedType, Type>
 export type Conversions = Map<Expression, Type>
 // What each function literal that is not a top-level function captures from around it: the names
 // and the types they have there, which may be narrowed.
-export type Capture = { name: string; type: Type }
+export type Capture = { name: string; type: Type; is_var: boolean }
 export type Captures = Map<FunctionLiteral, Capture[]>
 
 // Warnings are found as scopes end; they are reported in source order.
@@ -47,6 +48,8 @@ export type Shared = {
   top_level: TopLevelValues
   captures: Captures
   extern_types: Map<string, Type>
+  // The `var`s that function literals capture, by their declarations' names.
+  shared_vars: Set<Identifier>
 }
 
 // The object that `@` refers to: in a method, or in the initializer of a field, which sees the
@@ -68,6 +71,7 @@ export type Checked = {
   imports: Imports
   warnings: CompileWarning[]
   captures: Captures
+  shared_vars: Set<Identifier>
   // What the module exports, for the modules that import it.
   exports: Map<string, Export>
 }
@@ -125,6 +129,7 @@ const check = (
     imports,
     warnings: in_source_order(warnings),
     captures,
+    shared_vars: shared.shared_vars,
     exports,
   }
 }
@@ -164,6 +169,7 @@ const create_shared = (
     top_level: new TopLevelValues(module.program),
     captures: new Map(),
     extern_types: program_wide.extern_types,
+    shared_vars: new Set(),
   }
   return shared
 }

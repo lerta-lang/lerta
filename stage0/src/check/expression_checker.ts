@@ -42,13 +42,6 @@ export type JumpChecker = {
   check_jump(jump: Jump | Return): void
 }
 
-// A var that a function literal would capture, which it cannot so far, to read it or assign it.
-export const reject_captured_var = (local: CheckerLocal | undefined, at: Identifier): void => {
-  if (!local?.captured || !(local.origin ?? local).mutable) return
-  const message = `a function literal cannot capture the var '${at.name}' yet; copy it into a const`
-  throw new CompileError(message, at.line, at.column)
-}
-
 export type CheckerLocal = {
   identifier: Identifier
   type: Type
@@ -59,7 +52,7 @@ export type CheckerLocal = {
   // For a narrowed view of a local (see Scopes.narrow), or one that a function literal captures,
   // the local itself.
   origin?: CheckerLocal
-  // Seen from a function literal that captures it (see StatementChecker.captured).
+  // Seen from a function literal that captures it (see ClosureChecker.captured).
   captured?: true
 }
 
@@ -193,7 +186,6 @@ export class ExpressionChecker {
   // A builtin or a standard module's function can only be called so far, not used as a value.
   private type_of_identifier(identifier: Identifier, is_callee = false): Type {
     const local = this.scopes.lookup(identifier.name)
-    reject_captured_var(local, identifier)
     if (local !== undefined) {
       ;(local.origin ?? local).used = true
       return local.type

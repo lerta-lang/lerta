@@ -41,10 +41,15 @@ import { is_reference_type, type Type } from '../types.ts'
 
 // A loop variable or a parameter is an SSA value; a `const` or `var` lives in a stack slot.
 // A slot of a top-level value is its global (see top_level_codegen.ts); outside the top-level code,
-// it is checked to be initialized before it is used.
+// it is checked to be initialized before it is used. A slot of a var that function literals
+// capture points into its cell (see cell_codegen.ts).
 export type CodegenLocal =
   | { kind: 'value'; operand: string; type: Type }
-  | { kind: 'slot'; pointer: string; type: Type; top_level?: TopLevelSlot }
+  | { kind: 'slot'; pointer: string; type: Type; top_level?: TopLevelSlot; cell?: CellSlot }
+
+// The cell of a captured var, which the scope that declares it owns; a function literal's scope
+// reads it from its closure, which owns it.
+export type CellSlot = { cell: string; is_owned: boolean }
 
 export type TopLevelSlot = { global: TopLevelGlobal; is_checked: boolean }
 
