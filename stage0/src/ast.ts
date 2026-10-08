@@ -19,6 +19,11 @@ export type MapLiteral = Position & {
   kind: 'map'
   entries: { key: Expression; value: Expression }[]
 }
+// `{ x: 1, y: 'a' }`, an anonymous struct; `{ x }` is short for `{ x: x }`.
+export type RecordLiteral = Position & {
+  kind: 'record'
+  fields: { name: Identifier; value: Expression }[]
+}
 // `object[index]`
 export type Index = Position & { kind: 'index'; object: Expression; index: Expression }
 // `f(a, b)`, or `Point(x: 1, y: 2)` with named arguments, which construct a class or struct.
@@ -63,7 +68,10 @@ export type NamedType = Position & {
 }
 
 // `A | B`: a value of any of the member types.
-export type UnionTypeName = Position & { kind: 'union_type'; members: NamedType[] }
+export type UnionTypeName = Position & {
+  kind: 'union_type'
+  members: (NamedType | RecordTypeName)[]
+}
 
 // `(A, B) -> R`: a function. Written in parentheses with `?` after them, `((A) -> R)?`, it may
 // be nil.
@@ -74,7 +82,14 @@ export type FunctionTypeName = Position & {
   optional: boolean
 }
 
-export type TypeName = NamedType | UnionTypeName | FunctionTypeName
+// `{ x: Int, y: String }`: an anonymous struct.
+export type RecordTypeName = Position & {
+  kind: 'record_type'
+  fields: { name: Identifier; type: TypeName }[]
+  optional: boolean
+}
+
+export type TypeName = NamedType | UnionTypeName | FunctionTypeName | RecordTypeName
 
 // A parameter's type may be left out where a function type is expected for the literal.
 export type Parameter = { name: Identifier; type: TypeName | undefined }
@@ -119,6 +134,7 @@ export type Expression =
   | Identifier
   | ArrayLiteral
   | MapLiteral
+  | RecordLiteral
   | Conditional
   | Index
   | Call
@@ -185,6 +201,15 @@ export type While = Position & { kind: 'while'; condition: Condition; body: Stat
 export type Jump = Position & { kind: 'break' | 'continue' }
 
 export type Return = Position & { kind: 'return'; value: Expression | undefined }
+
+// `const { a, b } = value`, which the parser expands into declarations of its fields (see
+// Parser.parse_statements).
+export type Destructuring = Position & {
+  kind: 'destructuring'
+  mutable: boolean
+  names: Identifier[]
+  value: Expression
+}
 
 // A member of a class or struct body: a field (with a type, an initial value, or both) or, for a
 // function literal value, a method.

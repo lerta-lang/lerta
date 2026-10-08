@@ -7,6 +7,18 @@ export class IrModule {
 
   private readonly defined = new Set<string>()
   private symbol_count = 0
+  private readonly names = new Map<string, string>()
+
+  // The name `<prefix>.<n>` given to `key`, the same for the same key; `define` runs when the name
+  // is first given, to define what it names.
+  named(key: string, prefix: string, define: (name: string, module: IrModule) => void): string {
+    const existing = this.names.get(key)
+    if (existing !== undefined) return existing
+    const name = `${prefix}.${this.names.size}`
+    this.names.set(key, name)
+    define(name, this)
+    return name
+  }
 
   // A new global symbol, `@<prefix>.<n>`.
   fresh_symbol(prefix: string): string {
@@ -84,6 +96,10 @@ export class IrBuilder {
 
   define_once(key: string, define: (module: IrModule) => void): void {
     this.module.define_once(key, define)
+  }
+
+  named(key: string, prefix: string, define: (name: string, module: IrModule) => void): string {
+    return this.module.named(key, prefix, define)
   }
 
   // Emits `%r<n> = <value>` and returns the register.

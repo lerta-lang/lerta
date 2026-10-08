@@ -8,6 +8,7 @@ import {
   type FunctionLiteral,
   type Identifier,
   type NamedType,
+  type RecordTypeName,
   type NamedArgument,
   type Parameter,
   type Position,
@@ -224,10 +225,10 @@ export class ExpressionParser {
   // A named type, or a union of them: `A | B`.
   parse_type_name(): TypeName {
     if (this.tokens.peek().kind === '(') return this.parse_parenthesized_type()
-    const first = this.parse_named_type()
+    const first = this.parse_union_member()
     if (this.tokens.peek().kind !== '|') return first
     const members = [first]
-    while (this.tokens.accept('|')) members.push(this.parse_named_type())
+    while (this.tokens.accept('|')) members.push(this.parse_union_member())
     return { kind: 'union_type', members, line: first.line, column: first.column }
   }
 
@@ -245,6 +246,24 @@ export class ExpressionParser {
       throw this.tokens.error_at(this.tokens.peek(), "'->'")
     }
     return { ...inner, optional: this.tokens.accept('?'), ...position }
+  }
+
+  // A type that `|` can join: a named type or an anonymous struct, which the checker rejects as a
+  // member so far.
+  private parse_union_member(): NamedType | RecordTypeName {
+    return this.tokens.peek().kind === '{' ? this.parse_record_type() : this.parse_named_type()
+  }
+
+  // `{ x: Int, y: String }`, with `?` after it if it may be nil.
+  private parse_record_type(): RecordTypeName {
+    const open = this.tokens.next()
+    const fields = this.parse_list('}', () => {
+      const name = this.parse_identifier()
+      this.tokens.expect(':', "':'")
+      return { name, type: this.parse_type_name() }
+    })
+    const optional = this.tokens.accept('?')
+    return { kind: 'record_type', fields, optional, line: open.line, column: open.column }
   }
 
   private parse_named_type(): NamedType {
@@ -337,10 +356,11 @@ export class ExpressionParser {
   // `{ k: v, ... }`. A key that is a name would make an anonymous struct, so a name's value is
   // written as a key in parentheses: `{ (k): v }`.
   private parse_map_literal(position: Position): Expression {
+    if (this.starts_record_field()) return this.parse_record_literal(position)
     const entries = this.parse_list('}', () => {
-      const token = this.tokens.peek()
-      if (token.kind === 'identifier' && this.tokens.peek(1).kind === ':') {
-        const message = `anonymous structs are not supported yet; for the value of '${token.text}' as a key, write (${token.text})`
+      if (this.starts_record_field()) {
+        const token = this.tokens.peek()
+        const message = `a map's keys are values: for the value of '${token.text}', write (${token.text})`
         throw new CompileError(message, token.line, token.column)
       }
       const key = this.parse_expression()
@@ -351,6 +371,28 @@ export class ExpressionParser {
       throw new CompileError('the empty map is written `Map()`', position.line, position.column)
     }
     return { kind: 'map', entries, ...position }
+  }
+
+  // A name followed by `:`, `,` or `}` starts a field of an anonymous struct; a map's keys are
+  // other expressions.
+  private starts_record_field(): boolean {
+    const [first, second] = [0, 1].map((offset) => this.tokens.peek(offset).kind)
+    return first === 'identifier' && [':', ',', '}', 'line_break'].includes(second)
+  }
+
+  // `{ x: 1, y }`; a field without a value takes that of the name.
+  private parse_record_literal(position: Position): Expression {
+    const fields = this.parse_list('}', () => {
+      if (!this.starts_record_field()) {
+        const token = this.tokens.peek()
+        const message = 'an anonymous struct and a map cannot be mixed'
+        throw new CompileError(message, token.line, token.column)
+      }
+      const name = this.parse_identifier()
+      const value: Expression = this.tokens.accept(':') ? this.parse_expression() : { ...name }
+      return { name, value }
+    })
+    return { kind: 'record', fields, ...position }
   }
 
   // The arguments after an opening parenthesis, through the closing one.

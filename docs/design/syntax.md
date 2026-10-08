@@ -22,7 +22,7 @@ Source files, comments, identifiers, indentation, integer literals and `'...'`/`
 - There is no function declaration (`def`). Only the form `const f = (x) -> ...` (top-level functions are implemented: see [the reference](../reference/functions.md)).
   - With no parameters, `()` may be omitted (`const f = -> ...`). The call `f()` cannot omit them.
   - Variadic parameters are `xs...`. Default parameter values are undecided.
-- Destructuring `const { a, b } = obj` is supported.
+- Destructuring `const { a, b } = obj` is implemented: see [the reference](../reference/types.md#anonymous-structs).
 
 ## Multi-line literals
 

@@ -12,6 +12,7 @@ export const ir_type = (type: Type): string => {
     case 'Map':
     case 'Object':
     case 'Union':
+    case 'Record':
     case 'function':
       return 'ptr'
     case 'Int':

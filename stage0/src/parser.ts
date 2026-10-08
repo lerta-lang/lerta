@@ -4,6 +4,8 @@ import {
   type Call,
   type Condition,
   type Declaration,
+  type Destructuring,
+  type Identifier,
   type MemberDeclaration,
   type Expression,
   type For,
@@ -58,7 +60,7 @@ class Parser {
   private parse_statements(end: 'eof' | 'dedent'): Statement[] {
     const statements: Statement[] = []
     while (this.tokens.peek().kind !== end && this.tokens.peek().kind !== 'eof') {
-      statements.push(this.parse_statement())
+      statements.push(...expand_destructuring(this.parse_statement()))
       this.tokens.expect_line_end()
     }
     return statements
@@ -73,7 +75,7 @@ class Parser {
     return statements
   }
 
-  private parse_statement(): Statement {
+  private parse_statement(): Statement | Destructuring {
     switch (this.tokens.peek().kind) {
       case 'for':
         return this.parse_for()
@@ -90,14 +92,26 @@ class Parser {
         return this.parse_export()
       default:
         if (this.at_type_alias()) return this.parse_type_alias()
+        if (this.at_declaration()) return this.reject_postfix(this.parse_declaration())
         return this.parse_postfix_conditions(this.parse_simple_statement())
     }
   }
 
-  // A statement that fits on one line, which postfix `if` and `while` can follow.
+  private at_declaration(): boolean {
+    const { kind } = this.tokens.peek()
+    return kind === 'const' || kind === 'var'
+  }
+
+  // A statement that fits on one line, which postfix `if` and `while` can follow, unless it is a
+  // declaration.
   parse_simple_statement(): Statement {
+    if (this.at_declaration()) {
+      const declaration = this.parse_declaration()
+      if (declaration.kind === 'declaration') return declaration
+      const message = 'a destructuring declaration must be on a line of its own'
+      throw new CompileError(message, declaration.line, declaration.column)
+    }
     const token = this.tokens.peek()
-    if (token.kind === 'const' || token.kind === 'var') return this.parse_declaration()
     const is_command_call =
       token.kind === 'identifier' && this.starts_command_argument(this.tokens.peek(1))
     if (is_command_call) return this.parse_command_call()
@@ -107,6 +121,19 @@ class Parser {
     return this.parse_assignment(expression, operator as AssignmentOperator)
   }
 
+  // A declaration declares its names for the rest of the block, so no postfix `if` or `while` can
+  // apply to it.
+  private reject_postfix<T extends Statement | Destructuring>(declaration: T): T {
+    const kind = this.tokens.peek_continuation()
+    if (kind !== 'if' && kind !== 'while') return declaration
+    const token = this.tokens.peek()
+    throw new CompileError(
+      `a declaration cannot have a postfix '${kind}'`,
+      token.line,
+      token.column,
+    )
+  }
+
   // `statement if condition` and `statement while condition`, applied from left to right.
   private parse_postfix_conditions(statement: Statement): Statement {
     let result = statement
@@ -114,10 +141,6 @@ class Parser {
       const token = this.tokens.peek()
       const kind = this.tokens.peek_continuation()
       if (kind !== 'if' && kind !== 'while') return result
-      if (result.kind === 'declaration') {
-        const message = `a declaration cannot have a postfix '${token.kind}'`
-        throw new CompileError(message, token.line, token.column)
-      }
       this.tokens.next()
       const condition = this.expressions.parse_expression()
       const position = { line: result.line, column: result.column }
@@ -128,8 +151,9 @@ class Parser {
     }
   }
 
-  private parse_declaration(): Declaration {
+  private parse_declaration(): Declaration | Destructuring {
     const token = this.tokens.next()
+    if (this.tokens.peek().kind === '{') return this.parse_destructuring(token)
     const name = this.expressions.parse_identifier()
     const type = this.tokens.accept(':') ? this.expressions.parse_type_name() : undefined
     this.tokens.expect('=', "'='")
@@ -137,6 +161,17 @@ class Parser {
     const mutable = token.kind === 'var'
     const position = { line: token.line, column: token.column }
     return { kind: 'declaration', mutable, name, type, value, ...position }
+  }
+
+  // `const { a, b } = value`.
+  private parse_destructuring(token: Token): Destructuring {
+    this.tokens.next()
+    const names = this.expressions.parse_list('}', () => this.expressions.parse_identifier())
+    if (names.length === 0) throw this.tokens.error_at(this.tokens.peek(), 'a name')
+    this.tokens.expect('=', "'='")
+    const value = this.expressions.parse_expression()
+    const position = { line: token.line, column: token.column }
+    return { kind: 'destructuring', mutable: token.kind === 'var', names, value, ...position }
   }
 
   private parse_assignment(target: Expression, operator: AssignmentOperator): Statement {
@@ -297,4 +332,45 @@ class Parser {
     const else_body = this.tokens.peek().kind === 'if' ? [this.parse_if()] : this.parse_block()
     return { kind: 'if', condition, then_body, else_body, ...position }
   }
+}
+
+// `const { a, b } = value` declares a const that cannot be named (`.` is not allowed in names),
+// holding the value, then `a` and `b`, each from the field of its name.
+const expand_destructuring = (statement: Statement | Destructuring): Statement[] => {
+  if (statement.kind !== 'destructuring') return [statement]
+  const { mutable, names, value, line, column } = statement
+  const holder: Identifier = {
+    kind: 'identifier',
+    name: `destructured.${line}.${column}`,
+    line,
+    column,
+  }
+  const field = (name: Identifier): Expression => ({
+    kind: 'member',
+    object: { ...holder },
+    name: { ...name },
+    line: name.line,
+    column: name.column,
+  })
+  const holder_declaration: Declaration = {
+    kind: 'declaration',
+    mutable: false,
+    name: holder,
+    type: undefined,
+    value,
+    line,
+    column,
+  }
+  return [
+    holder_declaration,
+    ...names.map((name): Declaration => ({
+      kind: 'declaration',
+      mutable,
+      name,
+      type: undefined,
+      value: field(name),
+      line: name.line,
+      column: name.column,
+    })),
+  ]
 }

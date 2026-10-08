@@ -3,6 +3,7 @@ import type {
   FunctionTypeName,
   Identifier,
   NamedType,
+  RecordTypeName,
   Position,
   TypeAlias,
   TypeName,
@@ -13,6 +14,7 @@ import {
   array_type,
   is_map_key_type,
   map_type,
+  record_type,
   format_type,
   is_reference_type,
   optional_type,
@@ -76,14 +78,31 @@ export class TypeResolver {
   resolve(type_name: TypeName, allow_void = false): Type {
     if (type_name.kind === 'union_type') return this.resolve_union(type_name)
     const type =
-      type_name.kind === 'function_type'
-        ? this.resolve_function(type_name)
-        : this.resolve_name(type_name, allow_void)
+      type_name.kind === 'record_type'
+        ? this.resolve_record(type_name)
+        : type_name.kind === 'function_type'
+          ? this.resolve_function(type_name)
+          : this.resolve_name(type_name, allow_void)
     if (!type_name.optional) return type
     if (type.kind === 'void') {
       throw new CompileError('void cannot be optional', type_name.line, type_name.column)
     }
     return optional_type(type)
+  }
+
+  private resolve_record(type_name: RecordTypeName): Type {
+    const names = new Set<string>()
+    for (const { name } of type_name.fields) {
+      if (names.has(name.name)) {
+        throw new CompileError(`'${name.name}' is already a field`, name.line, name.column)
+      }
+      names.add(name.name)
+    }
+    const fields = type_name.fields.map(({ name, type }) => ({
+      name: name.name,
+      type: this.resolve(type),
+    }))
+    return record_type(fields)
   }
 
   private resolve_function(type_name: FunctionTypeName): Type {

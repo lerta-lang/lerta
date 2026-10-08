@@ -95,6 +95,9 @@ const visit = (expression: Expression, jumps: Jumps): void => {
       return
     case 'array':
       return expression.elements.forEach(operand)
+    case 'record':
+      for (const field of expression.fields) operand(field.value)
+      return
     case 'map':
       for (const entry of expression.entries) {
         operand(entry.key)

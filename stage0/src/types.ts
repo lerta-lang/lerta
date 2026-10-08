@@ -6,6 +6,9 @@ export type Type =
   | { kind: 'Binary' }
   | { kind: 'Array'; element: Type }
   | { kind: 'Map'; key: Type; value: Type }
+  // An anonymous struct, `{ x: Int, y: String }`; its fields are kept in name order, so that the
+  // order they are written in does not matter.
+  | { kind: 'Record'; fields: { name: string; type: Type }[] }
   // A class or struct (see ObjectTypes). Its name is the one it is declared with; its symbol, made
   // of its module's index and its name, tells it apart from another module's type of the same name,
   // and `module` names that module in messages.
@@ -35,12 +38,19 @@ export const never_type: Type = { kind: 'never' }
 export const writer_type: Type = { kind: 'Writer' }
 export const stringable_type: Type = { kind: 'Stringable' }
 
+// An order that does not depend on the locale, for types that must be the same everywhere.
+const compare_text = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
 export const array_type = (element: Type): Type => ({ kind: 'Array', element })
 export const map_type = (key: Type, value: Type): Type => ({ kind: 'Map', key, value })
+export const record_type = (fields: { name: string; type: Type }[]): Type => ({
+  kind: 'Record',
+  fields: fields.toSorted((a, b) => compare_text(a.name, b.name)),
+})
 export const optional_type = (inner: Type): Type => ({ kind: 'Optional', inner })
 // The members are kept in name order, so that `A | B` and `B | A` are the same type.
 export const union_type = (members: Type[]): Type => {
-  const sorted = members.toSorted((a, b) => type_key(a).localeCompare(type_key(b)))
+  const sorted = members.toSorted((a, b) => compare_text(type_key(a), type_key(b)))
   return { kind: 'Union', members: sorted }
 }
 export const nil_type: Type = { kind: 'nil' }
@@ -56,6 +66,8 @@ export const format_type = (type: Type, qualified = false): string => {
       return `Map<${format(type.key)}, ${format(type.value)}>`
     case 'Object':
       return qualified ? `${type.name} (of ${type.module})` : type.name
+    case 'Record':
+      return `{ ${type.fields.map((field) => `${field.name}: ${format(field.type)}`).join(', ')} }`
     case 'Union':
       return type.members.map((member) => format_member(member, type, qualified)).join(' | ')
     case 'Optional':
@@ -93,6 +105,8 @@ export const type_key = (type: Type): string => {
   switch (type.kind) {
     case 'Object':
       return type.symbol
+    case 'Record':
+      return `{${type.fields.map((field) => `${field.name}: ${type_key(field.type)}`).join(', ')}}`
     case 'Array':
       return `Array<${type_key(type.element)}>`
     case 'Map':
@@ -112,7 +126,9 @@ export const same_type = (a: Type, b: Type): boolean => type_key(a) === type_key
 
 // Values of these types are reference counted; a function value is a closure (see closure_codegen.ts).
 export const is_reference_type = (type: Type): boolean =>
-  ['String', 'Binary', 'Array', 'Map', 'Object', 'Union', 'function'].includes(type.kind) ||
+  ['String', 'Binary', 'Array', 'Map', 'Object', 'Record', 'Union', 'function'].includes(
+    type.kind,
+  ) ||
   (type.kind === 'Optional' && is_reference_type(type.inner))
 
 // A T or nil also fits where a T? is expected.

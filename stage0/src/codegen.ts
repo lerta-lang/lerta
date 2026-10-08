@@ -87,7 +87,7 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
       generator().generate_function(symbol, declaration.value, undefined)
     }
     for (const info of checked[module.index].objects.all()) {
-      define_object(ir_module, new IrBuilder(ir_module), info)
+      define_object(ir_module, info)
       generator().generate_constructor(info)
       for (const [name, literal] of info.methods) {
         const symbol = method_symbol(info.type, name)

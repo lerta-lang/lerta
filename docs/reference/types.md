@@ -76,7 +76,7 @@ print ages['ann'] ? 0
 ```
 
 - `Map<K, V>` maps keys of type `K`, a `String` or an `Int`, to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
-- `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. A key that is a name would make an anonymous struct, which is not supported yet: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
+- `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there.
 - `m.keys()` is an `Array<K>` of the keys in the order they were first added (a key removed and added again counts as new).
@@ -95,3 +95,16 @@ type Expr = Num | Add | Mul
 - `type Name = ...` names a type at the top level. Aliases may refer to types and aliases declared later, but not to themselves.
 - A member's value fits where the union is expected. A union's fields and methods cannot be used directly: branch on its type first.
 - `x is T` tells whether a union value holds a `T`. Like nil tests, it narrows a `const`, a parameter or a loop variable to `T` where it holds (see [control flow](control-flow.md#if-and-while)).
+
+## Anonymous structs
+
+```
+const divide = (a: Int, b: Int): { quotient: Int, remainder: Int } ->
+  { quotient: a / b, remainder: a % b }
+const { quotient, remainder } = divide(17, 5)
+```
+
+- `{ x: 1, y: 'a' }` is a value of the anonymous struct type `{ x: Int, y: String }`; `{ x, y }` is short for `{ x: x, y: y }`. Where an anonymous struct type (or an optional one) is expected, each field the type has takes its type from it; the others, and all fields elsewhere, take the types of their values. A field cannot be nil alone. `?` after the type makes it optional: `{ a: Int }?`.
+- Two anonymous struct types are the same if their fields have the same names and types, in any order. An anonymous struct is a different type from any class or struct.
+- Its fields are read with `.` and cannot be changed. It is useful to return several values.
+- `const { a, b } = value` (or `var`) declares `a` and `b` from the fields of those names of an anonymous struct, a class or a struct; the value is evaluated once. It must be on a line of its own.

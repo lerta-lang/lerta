@@ -1,45 +1,25 @@
-// Classes and structs in the generated code: the layout of an object, its fields and its drop
-// function. Constructors and methods are generated like functions (see codegen.ts).
+// Classes and structs in the generated code: heap objects (see heap_object.ts) named by their
+// types. Constructors and methods are generated like functions (see codegen.ts).
+import { define_heap_object, emit_heap_allocate, emit_heap_field_pointer } from './heap_object.ts'
 import type { IrBuilder, IrModule } from './ir_builder.ts'
-import { drop_symbol, emit_release, ir_type, object_ir_type } from './lerta_ir.ts'
+import { drop_symbol, object_ir_type } from './lerta_ir.ts'
 import type { FieldInfo, ObjectInfo } from './object_types.ts'
-import { is_reference_type, type Type } from './types.ts'
-
-// The two header fields come before the object's own.
-const HEADER_FIELDS = 2
+import type { Type } from './types.ts'
 
 export const emit_field_pointer = (
   ir: IrBuilder,
   object: string,
   info: ObjectInfo,
   field: FieldInfo,
-): string => {
-  const index = info.fields.indexOf(field) + HEADER_FIELDS
-  return ir.assign(`getelementptr ${object_ir_type(info.type)}, ptr ${object}, i32 0, i32 ${index}`)
-}
+): string =>
+  emit_heap_field_pointer(ir, object_ir_type(info.type), object, info.fields.indexOf(field))
 
-// A new object with reference count 1 and uninitialized fields.
-export const emit_allocate = (ir: IrBuilder, info: ObjectInfo): string => {
-  ir.declare('lerta_alloc', 'declare ptr @lerta_alloc(i64, ptr)')
-  const type = object_ir_type(info.type)
-  const end = ir.assign(`getelementptr ${type}, ptr null, i32 1`)
-  const size = ir.assign(`ptrtoint ptr ${end} to i64`)
-  return ir.assign(`call ptr @lerta_alloc(i64 ${size}, ptr ${drop_symbol(info.type)})`)
-}
+export const emit_allocate = (ir: IrBuilder, info: ObjectInfo): string =>
+  emit_heap_allocate(ir, object_ir_type(info.type), drop_symbol(info.type))
 
-// The struct type, and the drop function, which releases the references the fields hold.
-export const define_object = (module: IrModule, ir: IrBuilder, info: ObjectInfo): void => {
-  const field_types = info.fields.map((field) => ir_type(field.type!))
-  module.add_type(
-    `${object_ir_type(info.type)} = type { ${['i64', 'ptr', ...field_types].join(', ')} }`,
-  )
-  for (const field of info.fields) {
-    if (!is_reference_type(field.type!)) continue
-    const pointer = emit_field_pointer(ir, '%object', info, field)
-    emit_release(ir, ir.assign(`load ptr, ptr ${pointer}`))
-  }
-  ir.emit('ret void')
-  ir.finish(`void ${drop_symbol(info.type)}(ptr %object)`)
+export const define_object = (module: IrModule, info: ObjectInfo): void => {
+  const field_types = info.fields.map((field) => field.type!)
+  define_heap_object(module, object_ir_type(info.type), drop_symbol(info.type), field_types)
 }
 
 // An i1: whether the object is of the type. The drop function in the header tells the type, since

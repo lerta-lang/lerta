@@ -1,12 +1,12 @@
 // Types classes and structs: construction, fields, `@` and methods.
-import type { Call, Expression, Identifier, Member } from './ast.ts'
+import type { Call, Expression, Identifier, Member, RecordLiteral } from './ast.ts'
 import type { SelfContext, Shared, Types } from './checker.ts'
 import { CompileError } from './errors.ts'
 import type { CheckerLocal, ExpressionChecker } from './expression_checker.ts'
 import { method_key, type Functions } from './functions.ts'
 import type { FieldInfo, ObjectTypes } from './object_types.ts'
 import type { Scopes } from './scopes.ts'
-import { format_type, type Type } from './types.ts'
+import { format_type, record_type, type Type } from './types.ts'
 
 export class ObjectChecker {
   private readonly expressions: ExpressionChecker
@@ -102,9 +102,40 @@ export class ObjectChecker {
     return this.self.info.type
   }
 
-  // The type of the field `member` names, if its object is a class or struct.
+  // The type of the field `member` names, of a class, a struct or an anonymous struct.
   field_type(object_type: Type, member: Member): Type | undefined {
+    if (object_type.kind === 'Record') {
+      return object_type.fields.find((field) => field.name === member.name.name)?.type
+    }
     return this.field_of(object_type, member)?.type
+  }
+
+  // `{ x: 1, y }`. Its fields take their types from the expected type, if it is an anonymous
+  // struct with the same fields, so that `{ x: nil }` can be typed.
+  type_of_record(record: RecordLiteral, expected: Type | undefined): Type {
+    const names = new Set<string>()
+    for (const { name } of record.fields) {
+      if (names.has(name.name)) {
+        throw new CompileError(`'${name.name}' is already a field`, name.line, name.column)
+      }
+      names.add(name.name)
+    }
+    const expected_record = expected?.kind === 'Optional' ? expected.inner : expected
+    const expected_fields = expected_record?.kind === 'Record' ? expected_record.fields : []
+    const fields = record.fields.map(({ name, value }) => {
+      const expected_type = expected_fields.find((field) => field.name === name.name)?.type
+      if (expected_type !== undefined) {
+        this.expressions.expect_type(value, expected_type)
+        return { name: name.name, type: expected_type }
+      }
+      const type = this.expressions.type_of(value)
+      if (['void', 'never', 'nil'].includes(type.kind)) {
+        const message = `a field cannot hold a value of type ${format_type(type)}`
+        throw new CompileError(message, value.line, value.column)
+      }
+      return { name: name.name, type }
+    })
+    return record_type(fields)
   }
 
   // The type of a field that is assigned to, which must be a field that can be changed.
@@ -112,6 +143,9 @@ export class ObjectChecker {
     const object_type = this.expressions.type_of(member.object)
     const field = this.field_of(object_type, member)
     const { name, line, column } = member.name
+    if (object_type.kind === 'Record') {
+      throw new CompileError('a field of an anonymous struct cannot be changed', line, column)
+    }
     if (field === undefined) {
       throw new CompileError(
         `type ${format_type(object_type)} has no field '${name}'`,

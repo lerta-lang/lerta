@@ -1,6 +1,6 @@
 # Classes, structs and interfaces
 
-Classes and structs with fields, initializers, methods, `init` and named construction are implemented: see [the reference](../reference/objects.md). Planned beyond that: `deinit`, `weak`, function fields, `==` and `hash`, anonymous structs and interfaces.
+Classes and structs with fields, initializers, methods, `init` and named construction are implemented: see [the reference](../reference/objects.md). Planned beyond that: `deinit`, `weak`, function fields, `==` and `hash`, the omission of `{}` for anonymous struct arguments and interfaces.
 
 - **No inheritance** (`extends`/`super` do not exist).
 - There are no static members (`static`). Functions related to a type are module functions (`import rgb from './rgb'` → `rgb.parse(s)`; the module is the namespace).
@@ -63,10 +63,8 @@ Circle(r: 1) == Circle(r: 1)   # true
 
 ## Anonymous structs
 
-- The literal `{ x: 0, y: 'a' }` is a value of the anonymous struct type `{ x: Int, y: String }`.
-- It is structurally typed and a different type from a named struct (`Point`). Field order does not affect the type (`{ x, y }` and `{ y, x }` are the same type).
-- The shorthand `{ x, y }` means `{ x: x, y: y }` (symmetric with destructuring).
-- Also used for returning multiple values (there are no tuples).
+Anonymous struct literals and types, the `{ x, y }` shorthand and destructuring are implemented: see [the reference](../reference/types.md#anonymous-structs). Planned beyond that: leaving out `{}` for a last argument.
+
 - If the last argument is an anonymous struct literal, `{}` may be omitted (`draw(x: 1, y: 2)` is `draw({ x: 1, y: 2 })`). This is how named arguments are expressed.
   - Constructing a class or struct, `Circle(r: 1)`, is also a call to a constructor that takes an anonymous struct with the type-only fields.
 

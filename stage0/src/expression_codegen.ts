@@ -10,6 +10,7 @@ import { call_array_method, emit_length } from './array_codegen.ts'
 import { emit_binary_length, emit_binary_slice, emit_decode_utf8 } from './binary_codegen.ts'
 import { builtins } from './builtins.ts'
 import { emit_closure_call, emit_function_closure } from './closure_codegen.ts'
+import { emit_record, emit_record_field } from './record_codegen.ts'
 import { CaseGenerator, type BlockGenerator } from './case_codegen.ts'
 import { CollectionGenerator } from './collection_codegen.ts'
 import type { Conversions, Types } from './checker.ts'
@@ -189,6 +190,12 @@ export class ExpressionGenerator {
         return this.collections.generate_array(expression)
       case 'map':
         return this.collections.generate_map(expression)
+      case 'record': {
+        const values = new Map(
+          expression.fields.map((field) => [field.name.name, this.generate(field.value)]),
+        )
+        return emit_record(this.ir, this.types.get(expression)!, values)
+      }
       case 'index':
         return this.collections.generate_index(expression)
       case 'function':
@@ -295,6 +302,11 @@ export class ExpressionGenerator {
       call.args.forEach((arg, i) => this.release_if_reference(arg, args[i]))
       return ''
     }
+    if (object_type.kind === 'Record') {
+      const closure = emit_record_field(this.ir, object, object_type, name)
+      emit_release(this.ir, object)
+      return this.call_closure(closure, this.types.get(member)!, call.args)
+    }
     if (object_type.kind === 'Object' && !this.objects.info(object_type).methods.has(name)) {
       // A field that holds a function.
       const closure = this.read_field(object, object_type, member)
@@ -350,6 +362,11 @@ export class ExpressionGenerator {
     const object_type = this.types.get(member.object)!
     const object_kind = object_type.kind
     if (object_kind === 'Object') return this.read_field(object, object_type, member)
+    if (object_kind === 'Record') {
+      const value = emit_record_field(this.ir, object, object_type, member.name.name)
+      emit_release(this.ir, object)
+      return value
+    }
     if (object_kind === 'String') return object
     const length =
       object_kind === 'Binary'
