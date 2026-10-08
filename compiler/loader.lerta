@@ -1,11 +1,12 @@
 # Reads the entry module and the modules it imports, directly or not, including std:builtins, which
 # the others import (see builtins_import).
-import { is_file, read_file, real_path } from 'std:io'
+import { is_file, real_path } from 'std:io'
 import { Import, Position, Statement } from './ast'
 import { compile_error, module_location } from './errors'
 import { tokenize } from './lexer/tokens'
 import { parse } from './parser/statement'
 import { dirname, join, relative } from './paths'
+import { read_source } from './source'
 
 export class Module
   # Its position in the list of modules, which keeps its symbols apart from the others', and is
@@ -61,7 +62,6 @@ class Loader
 # The modules, each after those it imports unless they import it back, so the entry module comes
 # last. The standard modules are the files of std/ under `root_dir`.
 export const load_modules = (entry_path: String, root_dir: String) ->
-  throw "'#{entry_path}' is not a file" if not is_file(entry_path)
   const std_dir = join(root_dir, 'std')
   const builtins_and_dependencies = [
     real_path_text(join(std_dir, "#{name}.lerta")) for name in BUILTINS_AND_DEPENDENCIES
@@ -76,9 +76,9 @@ export const load_modules = (entry_path: String, root_dir: String) ->
 # a module's imports are relative to where it really is. Diagnostics name a module by a path from
 # the entry module's directory as given. Returns the module's place in the loading order.
 const load = (loader: Loader, path: String, display_path: String?) ->
+  const source = read_source(path)
   const real = real_path_text(path)
   const location = module_location(loader.entry_path, display_path)
-  const source = read_file(path).decode_utf8() ? throw "'#{path}' is not valid UTF-8"
   const program = parse(tokenize(source, location), location)
   const is_builtins_dependency = loader.builtins_and_dependencies.any((each) -> each == real)
   const with_builtins = is_builtins_dependency then program else prepend(builtins_import(), program)

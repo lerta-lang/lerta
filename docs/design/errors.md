@@ -21,7 +21,7 @@ Literals, arithmetic and comparisons, function values and `Iter<T>` values are i
 
 ## Exceptions
 
-`throw` with a String message, which ends the program in stage0, is implemented: see [the reference](../reference/errors.md#exceptions).
+`throw` with a String message, which ends the program for now, is implemented: see [the reference](../reference/errors.md#exceptions).
 
 - **`throw` and `try`/`catch`/`finally` blocks** (same form as JS).
   ```

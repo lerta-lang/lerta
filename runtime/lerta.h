@@ -200,7 +200,7 @@ void lerta_stdout_init(void);
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
 
-// stage0 has no catch: a throw prints the message to stderr and exits.
+// There is no catch yet: a throw prints the message to stderr and exits.
 _Noreturn void lerta_throw(const LertaString *message);
 _Noreturn void lerta_throw_index_out_of_range(void);
 // Returns false if any output to stdout has failed.

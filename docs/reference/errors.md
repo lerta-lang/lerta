@@ -4,7 +4,7 @@
 
 `throw message` stops the program with a `String` message. It is an expression of type `never`, so it can stand wherever a value is expected (`case` arms, `x ? throw 'missing'`); `never` does not count when the types of arms or returns are combined, and a function may end with it.
 
-An uncaught exception prints its message and a newline to stderr, after flushing stdout, and the program exits with status 1. stage0 has no `catch`, so every exception is uncaught.
+An uncaught exception prints its message and a newline to stderr, after flushing stdout, and the program exits with status 1. There is no `catch` yet, so every exception is uncaught.
 
 ## Panics
 

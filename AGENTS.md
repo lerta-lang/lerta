@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository. For the project overv
 
 Read these before changing behavior:
 
-- `docs/roadmap.md`: the stage0 subset. Do not implement features outside it without asking.
+- `docs/roadmap.md`: the self-hosting subset. Do not implement features outside it without asking.
 - `docs/philosophy.md`: the design principles. When a design question is not covered, apply them in priority order.
 - `docs/design/`: the planned language design. Implement features as specified there.
 - `docs/reference/`: the language as implemented so far, including the coding conventions for Lerta code.
@@ -13,9 +13,9 @@ Read these before changing behavior:
 ## Workflow
 
 1. **Plan first.** Before implementing, explain the approach and get the user's agreement.
-2. **Implement with tests.** Every language feature gets run tests in `tests/`: a Lerta source file plus its expected output (the expected files are described at the top of `stage0/test/run.ts`). Write them in the stage0 subset (see `docs/roadmap.md` for why). Programs in `examples/` are run as tests too; their expected output goes in `tests/examples/`.
+2. **Implement with tests.** Every language feature gets run tests in `tests/`: a Lerta source file plus its expected output (the expected files are described at the top of `test/run.ts`). Programs in `examples/` are run as tests too; their expected output goes in `tests/examples/`.
 3. **Review.** After implementing, run an adversarial review with a subagent that follows `.agents/reviewer.md`.
-   - Run `pnpm check` and `pnpm test` yourself before each review; the reviewer does not.
+   - Run `make test`, and `pnpm check` in `test/`, yourself before each review; the reviewer does not.
    - Show the reviewer only the code and the tests. Do not pass the intent, the background or your design decisions.
    - Fix the findings and send the result back to **the same reviewer** for re-review. Repeat until no findings remain.
 4. **Update the docs.** When a feature is implemented, move its description from `docs/design/` to `docs/reference/` as described in `docs/design/README.md`.
@@ -41,4 +41,4 @@ Let the code speak instead of relying on comments:
 
 Documentation follows the same rules: no redundancy, no duplication, and a clear structure. State each fact in one place and point to it from elsewhere.
 
-Follow the stage0 and runtime rules in `docs/roadmap.md` and `docs/internals.md`.
+Follow the self-hosting subset and the runtime rules in `docs/roadmap.md` and `docs/internals.md`.
