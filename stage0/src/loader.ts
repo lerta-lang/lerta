@@ -1,5 +1,5 @@
 // Reads the entry module and the modules it imports, directly or not, including std:builtins, which
-// every other module imports.
+// the others import (see builtins_module).
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import type { Import, Program } from './syntax/ast.ts'
@@ -21,8 +21,9 @@ export type Module = {
 // The standard modules, `std:name`, are the files of this directory.
 const std_dir = join(import.meta.dirname, '../../std')
 
-// Every module but std:builtins itself imports it, as `import 'std:builtins'`, for the builtin
-// functions and the methods of the builtin types that it gives.
+// Every module imports std:builtins, as `import 'std:builtins'`, for the builtin functions and the
+// methods of the builtin types that it gives; all but std:builtins itself and the standard modules
+// that it imports, directly or not, which cannot use them.
 export const builtins_module = 'std:builtins'
 const builtins_import = (): Import => ({
   kind: 'import',
@@ -31,7 +32,10 @@ const builtins_import = (): Import => ({
   line: 1,
   column: 1,
 })
-const builtins_real_path = realpathSync(join(std_dir, 'builtins.lerta'))
+// std:builtins and the standard modules it imports, which cannot import it back.
+const builtins_and_dependencies = ['builtins', 'io'].map((name) =>
+  realpathSync(join(std_dir, `${name}.lerta`)),
+)
 
 // The file an import names: a path that starts with `./` or `../` is relative to `from`, the
 // directory of the importing file; `std:name` is a standard module. Other names are reserved.
@@ -73,7 +77,7 @@ export const load_modules = (entry_path: string): Module[] => {
     const program = with_module_path(display_path, () =>
       parse(tokenize(readFileSync(path, 'utf8'))),
     )
-    if (real_path !== builtins_real_path) program.unshift(builtins_import())
+    if (!builtins_and_dependencies.includes(real_path)) program.unshift(builtins_import())
     const imported = new Map<Import, Module>()
     loading.add(real_path)
     for (const statement of program) {
@@ -110,6 +114,9 @@ export const load_modules = (entry_path: string): Module[] => {
   load(entry_path, undefined)
   return modules
 }
+
+export const is_standard_module = (module: Module): boolean =>
+  module.display_path?.startsWith('std:') ?? false
 
 const is_file = (path: string): boolean =>
   statSync(path, { throwIfNoEntry: false })?.isFile() ?? false

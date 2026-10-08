@@ -100,7 +100,8 @@ export class CompoundParser {
     return { kind: 'function', type_params, params, return_type, body, ...position }
   }
 
-  private parse_type_parameters(): TypeParameter[] {
+  // `<T, U: Stringable>`.
+  parse_type_parameters(): TypeParameter[] {
     this.tokens.expect('<', "'<'")
     const type_params: TypeParameter[] = []
     do {

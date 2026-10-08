@@ -4,7 +4,7 @@
 
 - LLVM emits objects, and `lld` links them (on all platforms).
 - The core of the runtime (RC, the representation and basic operations of strings, arrays and dictionaries, the event loop) is **written in C** and shared by all stages.
-  - Builtins and standard modules are written in Lerta where possible (such as `print`). C is limited to the minimal primitives that cannot be written in Lerta (writing to an fd, memory allocation and so on).
+  - Builtins and standard modules are written in Lerta where possible (such as `print`). C is limited to the minimal primitives that cannot be written in Lerta (writing to an fd, memory allocation and so on), and the compiler to the operations that need the representation of the builtin types (see [builtins](#builtins)).
 - I/O and the event loop use libuv.
 
 ### Interface with LLVM
@@ -70,11 +70,20 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 ## Modules
 
 - Reading a top-level value through a function before it is initialized is detected with an initialized flag. The check is optimized away where initialization is certain.
+- At the end of the program, the top-level values are released in the reverse order of their initialization, so that a `deinit` that runs then can still use those initialized before, as `print` uses `stdout`.
+
+## Builtins
+
+What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/builtins.md#methods-of-the-builtin-types)):
+
+- **Built into the compiler**: the operations on the representation of arrays, maps and Iters, whose items are 8 bytes and retained by kind (see [memory management](#memory-management)): `length`, indexing, `push`, `pop`, `remove`, `keys`, and the Iter protocol, `has_next` and `next`; `s.binary`, which passes on the String itself; and `take`, which stops reading its source, which an Iter written in Lerta, a comprehension, cannot. It moves to Lerta once an Iter's `has_next` and `next` can be written in Lerta.
+- **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join` and `slice`; the conversion of a `UInt8` to an `Int`; and `lerta_binary_as_string`, which gives `decode_utf8` its result once Lerta has checked the bytes.
+- The rest is Lerta: `print` writes through `stdout`, `parse_int` and the UTF-8 check of `decode_utf8` read bytes with `b[i]`, `has` reads the map, and `iter` of an array and `map`, `filter` and `to_array` of an Iter are comprehensions, through which those of an array go.
 
 ## Lazy iterators
 
 - Desugared into "the source iterator + a closure for the body". No coroutines needed (possible in Phase 0).
-- An `Iter` is a heap object: the header, the pointers to its `has_next` and `next` code, which take the `Iter` itself, a started flag, then the state of its kind (`LertaIter` in `runtime/lerta.h`). The kinds are the items of an array and the integers of a range, and `map`, `filter` and `take`, which own their source `Iter` and closure; each is generated once per type it depends on. A lazy comprehension is a `map` of its element's closure over its source, through a `filter` of its guard's closure if it has one.
+- An `Iter` is a heap object: the header, the pointers to its `has_next` and `next` code, which take the `Iter` itself, a started flag, then the state of its kind (`LertaIter` in `runtime/lerta.h`). The kinds are the items of an array and the integers of a range, and `map`, `filter` and `take`, which own their source `Iter` and closure; each is generated once per type it depends on. A lazy comprehension is a `map` of its element's closure over its source, through a `filter` of its guard's closure if it has one; the methods `map` and `filter` are such comprehensions (see [builtins](#builtins)).
 - No intermediate data structures are made, but each item goes through calls of code pointers. Fusing a chain into the `for` loop that consumes it is left for later.
 - A started flag is kept, and starting a second traversal throws.
 
@@ -90,7 +99,7 @@ Stack overflow is detected by checking the remaining stack at function entry (th
 ## Generics
 
 - Monomorphized instances are emitted by the using module as `linkonce_odr` and managed by mangled names.
-- stage0 compiles the whole program into one LLVM module, so it emits each instance once, with the module that declares the generic function, under a symbol made of the function's and the type arguments' names (`lerta.fn.0.print<Int>`). An instance is a copy of the function literal, checked with the type parameters standing for its type arguments; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
+- stage0 compiles the whole program into one LLVM module, so it emits each instance once, with the module that declares the generic function or method, under a symbol made of the function's and the type arguments' names (`lerta.fn.0.print<Int>`), and for a method, of the receiver's too (`lerta.extend.0.Array<T>.map<Int, String>`). An instance is a copy of the function literal, checked with the type parameters standing for its type arguments; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
 
 ## Strings
 

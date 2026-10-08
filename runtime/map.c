@@ -105,13 +105,6 @@ bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value) {
   return true;
 }
 
-bool lerta_map_has(const LertaMap *map, int64_t key) {
-  int64_t value;
-  bool found = lerta_map_get(map, key, &value);
-  if (found && map->owns_values) lerta_release((void *)(intptr_t)value);
-  return found;
-}
-
 // The new value is retained before the old one is released, in case they are the same object.
 void lerta_map_set(LertaMap *map, int64_t key, int64_t value) {
   if (map->owns_values) lerta_retain((void *)(intptr_t)value);

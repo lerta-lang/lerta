@@ -1,7 +1,8 @@
-// Generic functions, `const first = <T>(xs: Array<T>) -> xs[0]`, declared at the top level. Each
-// distinct set of type arguments makes an instance: a copy of the literal, whose body is checked
-// with the type parameters standing for the type arguments, and generated as a function of its own.
-// A generic function that is never called is not checked.
+// Generic functions, `const first = <T>(xs: Array<T>) -> xs[0]`, declared at the top level, and
+// generic methods of extends: those of a generic type, `extend Array<T>`, and those with type
+// parameters of their own. Each distinct set of type arguments makes an instance: a copy of the
+// literal, whose body is checked with the type parameters standing for the type arguments, and
+// generated as a function of its own. A generic function that is never called is not checked.
 import type { FunctionLiteral, Identifier, Position, TypeParameter } from '../syntax/ast.ts'
 import { CompileError } from '../errors.ts'
 import type { ExtensionMethod, Extensions } from './extensions.ts'
@@ -14,10 +15,15 @@ import {
   map_type,
   optional_type,
   record_type,
+  same_type,
   type_key,
   union_type,
   type Type,
 } from '../types.ts'
+
+// The receiver of a generic method: the extended type, in which the extend's type parameters stand
+// for themselves, as `Array<T>`.
+export type Receiver = { type: Type; type_params: TypeParameter[] }
 
 export type Instance = FunctionEntry & {
   generic: GenericFunction
@@ -40,6 +46,8 @@ const max_type_depth = 32
 
 export class GenericFunction {
   readonly name: Identifier
+  // A method's receiver, whose type parameters come first.
+  readonly receiver: Receiver | undefined
   readonly type_params: TypeParameter[]
   // The parameters' types, and the result's if it is written, in which the type parameters stand
   // for themselves.
@@ -60,10 +68,12 @@ export class GenericFunction {
     resolver: TypeResolver,
     extensions: Extensions,
     check_body: (instance: Instance) => void,
+    receiver?: Receiver,
   ) {
     this.name = name
     this.literal = literal
-    this.type_params = literal.type_params
+    this.receiver = receiver
+    this.type_params = [...(receiver?.type_params ?? []), ...literal.type_params]
     this.module_index = module_index
     this.resolver = resolver
     this.extensions = extensions
@@ -103,7 +113,7 @@ export class GenericFunction {
     if (found === undefined && type_arguments.some((type) => type_depth(type) > max_type_depth)) {
       const message = `'${this.name.name}' needs instances without end, each with type arguments nested deeper`
       const error = new CompileError(message, at.line, at.column)
-      error.add_context(`from ${describe(this.instances[0])}`)
+      error.add_context(`from ${this.describe(this.instances[0])}`)
       throw error
     }
     const instance = found ?? this.add_instance(type_arguments, methods, same_arguments.length)
@@ -137,7 +147,7 @@ export class GenericFunction {
       literal,
       type,
       state: 'unchecked',
-      this_type: undefined,
+      this_type: this.receiver === undefined ? undefined : substitute(this.receiver.type, bindings),
       generic: this,
       type_arguments,
       methods,
@@ -162,21 +172,27 @@ export class GenericFunction {
     try {
       this.check_body(instance)
     } catch (error) {
-      if (error instanceof CompileError) error.add_context(`in ${describe(instance)}`)
+      if (error instanceof CompileError) error.add_context(`in ${this.describe(instance)}`)
       throw error
     }
     instance.state = 'checked'
   }
-}
 
-// `print<Int>`, as messages write an instance.
-const describe = ({ generic, type_arguments }: Instance): string =>
-  `${generic.name.name}<${type_arguments.map((type) => format_type(type)).join(', ')}>`
+  // `print<Int>`, as messages write an instance; a method's, `Array<Int>.map<String>`, by its
+  // receiver and the type arguments of its own.
+  private describe({ type_arguments, this_type }: Instance): string {
+    const own_arguments = type_arguments.slice(this.receiver?.type_params.length ?? 0)
+    const name =
+      this_type === undefined ? this.name.name : `${format_type(this_type)}.${this.name.name}`
+    if (own_arguments.length === 0) return name
+    return `${name}<${own_arguments.map((type) => format_type(type)).join(', ')}>`
+  }
+}
 
 const same_methods = (a: ExtensionMethod[], b: ExtensionMethod[]): boolean =>
   a.length === b.length && a.every((method) => b.includes(method))
 
-const type_parameter = (name: string): Type => ({ kind: 'TypeParameter', name })
+export const type_parameter = (name: string): Type => ({ kind: 'TypeParameter', name })
 
 // The type with each type it is made of replaced by `replace` of it.
 const map_parts = (type: Type, replace: (part: Type) => Type): Type => {
@@ -217,6 +233,30 @@ export const parts_of = (type: Type): Type[] => {
 }
 
 const type_depth = (type: Type): number => 1 + Math.max(0, ...parts_of(type).map(type_depth))
+
+// Whether the type is the pattern with its type parameters replaced, as Array<Int> is Array<T>.
+export const matches = (pattern: Type, type: Type): boolean => {
+  const bindings = new Map<string, Type>()
+  infer(pattern, type, (name, bound) => {
+    if (!bindings.has(name)) bindings.set(name, bound)
+  })
+  return same_type(substitute(pattern, bindings), type)
+}
+
+// Whether some type matches both patterns, as Array<Int> matches Array<T> and Array<Int>. A type
+// parameter stands for any type on either side, even where it is repeated, as in Map<T, T>.
+export const overlaps = (a: Type, b: Type): boolean => {
+  if (a.kind === 'TypeParameter' || b.kind === 'TypeParameter') return true
+  const [a_parts, b_parts] = [parts_of(a), parts_of(b)]
+  return (
+    shape_key(a) === shape_key(b) &&
+    a_parts.length === b_parts.length &&
+    a_parts.every((part, i) => overlaps(part, b_parts[i]))
+  )
+}
+
+// The type without the types it is made of: Array<_> for any array.
+const shape_key = (type: Type): string => type_key(map_parts(type, () => type_parameter('_')))
 
 export const has_type_parameters = (type: Type): boolean =>
   type.kind === 'TypeParameter' || parts_of(type).some(has_type_parameters)

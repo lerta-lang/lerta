@@ -14,11 +14,11 @@ import {
   type TypeDeclaration,
 } from '../syntax/ast.ts'
 import { CompileError, CompileWarning } from '../errors.ts'
-import { Extensions } from './extensions.ts'
+import { Extensions, type MakeGenericMethod } from './extensions.ts'
 import { Functions, method_key, parameter_types, type FunctionEntry } from './functions.ts'
-import { GenericFunction, type Instance } from './generics.ts'
+import { GenericFunction, type Instance, type Receiver } from './generics.ts'
 import { Imports, type Export } from './imports.ts'
-import { with_module_path, type Module } from '../loader.ts'
+import { is_standard_module, with_module_path, type Module } from '../loader.ts'
 import { ObjectTypes, type FieldInfo, type ObjectInfo } from './object_types.ts'
 import { finish_function_type, reject_nil_result } from './result_checker.ts'
 import { StatementChecker } from './statement_checker.ts'
@@ -121,11 +121,15 @@ export const check_modules = (modules: Module[]): Checked[] => {
   const program_wide: ProgramWide = { infos: new Map(), extern_types: new Map() }
   const all_warnings = (): CompileWarning[] => {
     for (const result of checked) result.warn_unused()
-    return modules.flatMap((module) => {
-      const warnings = in_source_order(warnings_of_modules[module.index])
-      for (const warning of warnings) warning.module_path = module.display_path
-      return warnings
-    })
+    // A program's author cannot act on the warnings of the standard modules, which would warn, for
+    // example, about the names that only generic functions the program never calls use.
+    return modules
+      .filter((module) => !is_standard_module(module))
+      .flatMap((module) => {
+        const warnings = in_source_order(warnings_of_modules[module.index])
+        for (const warning of warnings) warning.module_path = module.display_path
+        return warnings
+      })
   }
   try {
     for (const module of modules) {
@@ -173,7 +177,7 @@ const check = (
     shared_vars: shared.shared_vars,
     exports,
     instances: shared.instances,
-    generics: functions.generics(),
+    generics: [...functions.generics(), ...shared.extensions.own_generics()],
     warn_unused,
   }
 }
@@ -250,14 +254,19 @@ const declare_names = (program: Program, shared: Shared): void => {
 const declare_extends = (
   module: Module,
   imported: (statement: Import) => Checked,
-  { extensions, resolver, objects, functions }: Shared,
+  shared: Shared,
 ): void => {
+  const { extensions, resolver, objects, functions } = shared
   for (const statement of module.program) {
     if (statement.kind !== 'import') continue
     extensions.add_imported(imported(statement).extensions.own, statement)
   }
+  const make_generic: MakeGenericMethod = (name, literal, receiver) =>
+    make_generic_function(shared, name, literal, receiver)
   for (const statement of module.program) {
-    if (statement.kind === 'extend') extensions.declare(statement, resolver, objects, functions)
+    if (statement.kind === 'extend') {
+      extensions.declare(statement, resolver, objects, functions, make_generic)
+    }
   }
 }
 
@@ -421,12 +430,28 @@ const add_top_level_functions = (program: Program, shared: Shared): void => {
       functions.add(name.name, name, literal)
       continue
     }
-    const { module_index, extensions } = shared
-    const check_body = (instance: Instance) => check_instance(shared, instance)
-    functions.add_generic(
-      new GenericFunction(name, literal, module_index, resolver, extensions, check_body),
-    )
+    functions.add_generic(make_generic_function(shared, name, literal, undefined))
   }
+}
+
+// A generic function or method of the module, whose instances are checked as its functions are.
+const make_generic_function = (
+  shared: Shared,
+  name: Identifier,
+  literal: FunctionLiteral,
+  receiver: Receiver | undefined,
+): GenericFunction => {
+  const { module_index, resolver, extensions } = shared
+  const check_body = (instance: Instance) => check_instance(shared, instance)
+  return new GenericFunction(
+    name,
+    literal,
+    module_index,
+    resolver,
+    extensions,
+    check_body,
+    receiver,
+  )
 }
 
 // An instance's body sees the names of its module, with the type parameters standing for its type

@@ -63,7 +63,7 @@ print xs[0] + xs.length
 - `xs[i]` reads an item and `xs[i] = value` replaces one (`+=` and so on work on `Int` items). An index outside `0 ... xs.length` throws `index out of range`.
 - `xs.length` is the number of items.
 - `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`.
-- `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` give an [`Iter`](#iter) of the items.
+- `xs.iter()` gives an [`Iter`](#iter) of the items, and `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` one of the items as it maps, filters or takes them.
 - `strings.join(separator)` joins an `Array<String>` into one `String`.
 - Arrays cannot be compared or printed.
 

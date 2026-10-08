@@ -40,7 +40,7 @@ export type LoopHeader = {
 export class ExpressionParser {
   private readonly tokens: TokenStream
 
-  private readonly compounds: CompoundParser
+  readonly compounds: CompoundParser
 
   private readonly block_literals: BlockLiteralParser
 

@@ -94,7 +94,7 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
       module.program.filter(is_main_code),
       main.signature,
       main.runs_first.map((other) => module_init_symbol(other.index)),
-      module === entry ? globals.flatMap((values) => [...values.values()]) : [],
+      module === entry ? released_globals(globals) : [],
     )
     for (const declaration of module.program.filter(is_plain_function)) {
       const symbol = function_symbol(module.index, declaration.name.name)
@@ -104,7 +104,7 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
       generator(false, instance.extensions).generate_function(
         instance_symbol(instance),
         instance.literal,
-        undefined,
+        instance.this_type,
       )
     }
     for (const info of module_checked.objects.all()) {
@@ -116,11 +116,18 @@ export const generate = (modules: Module[], checked: Checked[]): string => {
       }
     }
     for (const method of module_checked.extensions.own) {
+      if (method.generic !== undefined) continue
       generator().generate_function(extension_symbol(method), method.literal, method.receiver)
     }
   }
   return ir_module.render()
 }
+
+// Every module's top-level values, released at the end of the program in the reverse order of
+// their initialization, so that a deinit that runs then may still use those initialized before, as
+// print uses std:io's stdout.
+const released_globals = (globals: Map<string, TopLevelGlobal>[]): TopLevelGlobal[] =>
+  globals.flatMap((values) => [...values.values()]).toReversed()
 
 // The symbols of the functions a module can call by name: its own and those it imports.
 const function_symbols = (module: Module, checked: Checked[]): Map<string, string> => {

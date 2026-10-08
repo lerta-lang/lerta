@@ -4,6 +4,7 @@ import type { Capture, FunctionContext, Shared } from './checker.ts'
 import { CompileError } from '../errors.ts'
 import type { CheckerLocal } from './expression_checker.ts'
 import { parameter_types, reject_generic } from './functions.ts'
+import { has_type_parameters } from './generics.ts'
 import { finish_function_type, reject_nil_result } from './result_checker.ts'
 import type { Scopes } from '../scopes.ts'
 import { format_type, type Type } from '../types.ts'
@@ -68,7 +69,8 @@ export class ClosureChecker {
 
   // The body is checked here, where the names around it are known; those it uses from the
   // enclosing functions are its captures. The expected parameter types stand in for those left
-  // out, and the expected result for one left out.
+  // out, and the expected result for one left out, unless they have type parameters, whose types
+  // are not known yet (see GenericCallChecker).
   private check_literal(
     literal: FunctionLiteral,
     expected_params: Type[] | undefined,
@@ -87,10 +89,12 @@ export class ClosureChecker {
       throw new CompileError(message, literal.line, literal.column)
     }
     const { resolver } = this.shared
-    const params = parameter_types(literal, resolver, expected_params)
+    const known = (type: Type | undefined) =>
+      type === undefined || has_type_parameters(type) ? undefined : type
+    const params = parameter_types(literal, resolver, expected_params?.map(known))
     const annotated =
       literal.return_type === undefined
-        ? expected_result
+        ? known(expected_result)
         : resolver.resolve(literal.return_type, true)
     const context: FunctionContext = { annotated, inferred: undefined, results: [] }
     const captures: Capture[] = []

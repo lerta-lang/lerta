@@ -44,12 +44,19 @@ export const ir_c_return_type = (type: Type): string =>
 // A function is named by its module too, since two modules may declare the same name.
 export const function_symbol = (module_index: number, name: string): string =>
   `@lerta.fn.${module_index}.${name}`
-// An instance of a generic function is named by its type arguments too, quoted as they have
-// characters such as `<`, and by its variant if there are several (see Instance).
+// An instance of a generic function or method is named as the function or method, by its type
+// arguments too, and by its variant if there are several (see Instance).
 export const instance_symbol = ({ generic, type_arguments, variant }: Instance): string => {
-  const name = `lerta.fn.${generic.module_index}.${generic.name.name}<${type_arguments.map(type_key).join(', ')}>`
-  return variant === 0 ? `@"${name}"` : `@"${name}.${variant}"`
+  const { receiver, module_index, name } = generic
+  const prefix =
+    receiver === undefined
+      ? `lerta.fn.${module_index}`
+      : `lerta.extend.${module_index}.${type_key(receiver.type)}`
+  const symbol = `${prefix}.${name.name}<${type_arguments.map(type_key).join(', ')}>`
+  return quoted(variant === 0 ? symbol : `${symbol}.${variant}`)
 }
+// Names with characters such as `<` are quoted.
+const quoted = (name: string): string => `@"${name}"`
 // The global that holds a top-level value, and its flag (see top_level_codegen.ts).
 export const top_level_symbol = (module_index: number, name: string): string =>
   `@lerta.value.${module_index}.${name}`
@@ -62,11 +69,9 @@ const object_symbol = (type: Type): string => {
 export const method_symbol = (type: Type, method: string): string =>
   `@lerta.method.${object_symbol(type)}.${method}`
 // A method of an extend is named by its module, which may extend a type that another module extends
-// too, and by its receiver: a builtin type by its kind, a class or struct by its symbol.
-export const extension_symbol = ({ module_index, receiver, name }: ExtensionMethod): string => {
-  const receiver_symbol = receiver.kind === 'Object' ? receiver.symbol : receiver.kind
-  return `@lerta.extend.${module_index}.${receiver_symbol}.${name.name}`
-}
+// too, and by its receiver (see type_key).
+export const extension_symbol = ({ module_index, receiver, name }: ExtensionMethod): string =>
+  quoted(`lerta.extend.${module_index}.${type_key(receiver)}.${name.name}`)
 export const constructor_symbol = (type: Type): string => `@lerta.new.${object_symbol(type)}`
 export const drop_symbol = (type: Type): string => `@lerta.drop.${object_symbol(type)}`
 // The LLVM struct type of a class or struct: the object header, then the fields in order.

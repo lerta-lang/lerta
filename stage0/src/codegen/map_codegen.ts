@@ -10,7 +10,6 @@ const call = runtime_caller({
   lerta_map_new: 'ptr @lerta_map_new(i1 zeroext, i1 zeroext)',
   lerta_map_length: 'i64 @lerta_map_length(ptr)',
   lerta_map_get: 'i1 @lerta_map_get(ptr, i64, ptr)',
-  lerta_map_has: 'i1 @lerta_map_has(ptr, i64)',
   lerta_map_set: 'void @lerta_map_set(ptr, i64, i64)',
   lerta_map_remove: 'void @lerta_map_remove(ptr, i64)',
   lerta_map_keys: 'ptr @lerta_map_keys(ptr)',
@@ -64,8 +63,6 @@ export const call_map_method = (
 ): string => {
   const key = () => `ptr ${map}, i64 ${to_item(ir, args[0], type.key)}`
   switch (name) {
-    case 'has':
-      return call(ir, 'lerta_map_has', key())
     case 'remove':
       return call(ir, 'lerta_map_remove', key())
     case 'keys':

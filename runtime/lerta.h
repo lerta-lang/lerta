@@ -96,9 +96,6 @@ LertaString *lerta_int_to_string(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
-// Decimal digits with an optional leading `-`. Returns nil if there are none, if anything else is
-// there, or if the value does not fit in an Int.
-LertaOptionalInt lerta_string_parse_int(const LertaString *s);
 
 // Binary (binary.c): the same representation as String, without the UTF-8 guarantee. An index or
 // a slice out of range throws.
@@ -106,8 +103,8 @@ int64_t lerta_binary_length(const LertaString *binary);
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
 int64_t lerta_byte_to_int(uint8_t byte);
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
-// The same object as a String if its bytes are valid UTF-8 (retained), or NULL (nil).
-LertaString *lerta_binary_decode_utf8(LertaString *binary);
+// The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
+LertaString *lerta_binary_as_string(LertaString *binary);
 
 // Arrays (array.c). Items in and out are borrowed, except that get and pop return owned
 // references. An index out of range throws.
@@ -124,7 +121,6 @@ LertaString *lerta_string_join(const LertaArray *strings, const LertaString *sep
 LertaMap *lerta_map_new(bool string_keys, bool owns_values);
 int64_t lerta_map_length(const LertaMap *map);
 bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value);
-bool lerta_map_has(const LertaMap *map, int64_t key);
 void lerta_map_set(LertaMap *map, int64_t key, int64_t value);
 void lerta_map_remove(LertaMap *map, int64_t key);
 LertaArray *lerta_map_keys(const LertaMap *map);
@@ -134,7 +130,8 @@ LertaArray *lerta_map_keys(const LertaMap *map);
 void lerta_iter_start(LertaIter *iter);
 _Noreturn void lerta_throw_iter_ended(void);
 
-// Process (process.c). The arguments exclude the program name.
+// Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
+// makes them UTF-8.
 void lerta_set_arguments(int argc, char **argv);
 LertaArray *lerta_argv(void);
 // Flushes stdout and ends the program; leaks are not checked, as for a throw.
@@ -144,12 +141,7 @@ _Noreturn void lerta_exit(int64_t code);
 LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
 
-// Output (io.c)
-void lerta_print_string(const LertaString *s);
-void lerta_print_int(int64_t n);
-void lerta_print_bool(bool b);
-void lerta_print_byte(uint8_t b);
-// A Writer is a file descriptor: 1 for stdout, which is buffered, or 2 for stderr, which is not.
+// Output (io.c). A Writer is a file descriptor: 1 for stdout, which is buffered, or 2 for stderr, which is not.
 // Writing to stderr flushes stdout first, so that the two keep their order.
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
@@ -166,6 +158,5 @@ enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign
 // Writes the decimal text of n at the end of buffer and returns where it starts.
 int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
 _Noreturn void lerta_panic(const char *message);
-bool lerta_is_valid_utf8(const uint8_t *bytes, int64_t length);
 
 #endif

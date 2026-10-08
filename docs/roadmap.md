@@ -8,8 +8,8 @@
 
 - **Syntax**: `#` comments, `'...'`/`"..."` strings, indented blocks, `const`/`var`, implicit return, parenthesis-free calls (at statement start), `then`/`else` expressions, `if`/`else` statements, `case`, `while`, `for x in xs`, `break`/`continue`, `return`, postfix `if`/`while`/`for`, comprehensions (`(...)` for `Iter<T>`, `[...]` for `Array<T>`), ranges `a...b`, `case` without a subject, string interpolation, destructuring, named arguments (omitting `{}` of an anonymous struct), multi-line literals (newline separation inside brackets, bracketless blocks)
 - **Types**: `Int` (Int64), `UInt8` (with `Byte` as its alias), `Bool`, `String`, `void`, `never`, unions and narrowing, `type` aliases, `T?`, `as`, `!`, `is` tests, local inference
-- **Data**: `class`/`struct` (no inheritance, the type body rules, `@`, named constructors, `init`, `deinit`), anonymous structs, `Map` literals, `Array<T>`, `Map<K, V>`, `Iter<T>` (**only built-in types are generic**; user-defined generic types come later), `extend` of the types that are not generic
-- **Functions**: generic top-level functions (monomorphized, checked per instance, with the bound `Stringable`, which is structural), first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
+- **Data**: `class`/`struct` (no inheritance, the type body rules, `@`, named constructors, `init`, `deinit`), anonymous structs, `Map` literals, `Array<T>`, `Map<K, V>`, `Iter<T>` (**only built-in types are generic**; user-defined generic types come later), `extend`, of the generic builtin types too (`extend <T> Array<T>`)
+- **Functions**: generic top-level functions and methods of extends (monomorphized, checked per instance, with the bound `Stringable`, which is structural), first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
 - **Strings**: immutable, UTF-8, **flat only**. `Binary`, `Byte`, `s.binary`, `b.decode_utf8()`, `s.parse_int()`, `length`, `equals`, `hash`, `==`, `+` (concatenation), `join`
 - **Memory**: RC (non-atomic), destructors. Immortal static literals
 - **Modules**: `import`/`export` (named only), `import 'module'` for a module's effects, a file is a module
@@ -33,7 +33,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 | `'std:io'` | `read_file(path: String): Binary`, `write_file`, `Writer`, `stdout`, `stderr` |
 | `'std:process'` | `argv`, `exit(code: Int): never` |
 
-- The builtins written in Lerta, `print` and the methods of the types that are not generic, are in `std/builtins.lerta`, which every module imports implicitly.
+- The builtins written in Lerta, `print` and most methods of the builtin types (see [builtins](reference/builtins.md)), are in `std/builtins.lerta`, which every module but `std:io`, which it imports, imports implicitly.
 - In stage0, writes are synchronous. Making them asynchronous is decided in Phase 2.
 
 ### Not included (later)
@@ -45,7 +45,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 - async/await, the event loop, libuv, workers
 - `weak`
 - User-defined `interface`, itabs, satisfying methods with function-valued fields (`Equatable`/`Hashable` are handled as built-in rules in stage0, and `Stringable` structurally, by `x.to_string()`)
-- Generic classes and structs, generic methods and extends (`extend Array<T>`), generic function literals outside the top level, interfaces as bounds, and checking a generic function's body once, at its definition, against its bounds
+- Generic classes and structs and their methods, generic function literals outside the top level, interfaces as bounds, and checking a generic function's body once, at its definition, against its bounds
 - Operator overloading, literal construction interfaces, BigInt
 - Regular expressions
 - `Float` (literals are only lexed and kept as strings)
@@ -76,7 +76,8 @@ Run tests (source → execution result) are shared by all stages. They run with 
 ## Open questions
 
 - Whether `-1.abs()` is `(-1).abs()` (the negative literal binds first) or `-(1.abs())` (as in Rust and Python). Decide when methods on literals are implemented.
-- Whether an extend should be in effect beyond the modules that import its module directly, and how to extend a generic type (`extend Array<T>`), once user-defined generics exist.
+- Whether an extend should be in effect beyond the modules that import its module directly.
+- How an `Iter` is written in Lerta (its `has_next` and `next`), which `take` needs to move to `std/builtins.lerta`.
 - Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
 - Whether to add enums without payloads (for now, `case` on values substitutes).
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.

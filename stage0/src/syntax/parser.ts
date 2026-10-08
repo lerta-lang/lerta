@@ -327,12 +327,15 @@ class Parser {
     }
   }
 
-  // `extend Type` followed by an indented block of methods, one per line.
+  // `extend Type`, or `extend <T> Array<T>` for a generic one, followed by an indented block of
+  // methods, one per line.
   private parse_extend(): Extend {
     const token = this.tokens.next()
+    const type_params =
+      this.tokens.peek().kind === '<' ? this.expressions.compounds.parse_type_parameters() : []
     const type = this.types.parse_type_name()
     const members = this.parse_members()
-    return { kind: 'extend', type, members, line: token.line, column: token.column }
+    return { kind: 'extend', type_params, type, members, line: token.line, column: token.column }
   }
 
   private parse_members(): MemberDeclaration[] {

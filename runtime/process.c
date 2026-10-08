@@ -3,7 +3,6 @@
 
 #include "lerta.h"
 
-LERTA_STATIC_STRING(invalid_argument, "a command-line argument is not valid UTF-8");
 LERTA_STATIC_STRING(exit_code_out_of_range, "exit code out of range (0 to 255)");
 
 static int argument_count = 0;
@@ -18,10 +17,6 @@ LertaArray *lerta_argv(void) {
   LertaArray *result = lerta_array_new(true);
   for (int i = 1; i < argument_count; i++) {
     int64_t length = (int64_t)strlen(arguments[i]);
-    // A String must be valid UTF-8.
-    if (!lerta_is_valid_utf8((const uint8_t *)arguments[i], length)) {
-      lerta_throw((const LertaString *)&invalid_argument);
-    }
     LertaString *argument = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
     argument->length = length;
     memcpy(argument->bytes, arguments[i], (size_t)length);

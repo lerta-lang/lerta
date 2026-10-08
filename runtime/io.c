@@ -50,31 +50,6 @@ static void stdout_write(const uint8_t *bytes, int64_t length) {
 
 static const uint8_t newline = '\n';
 
-void lerta_print_string(const LertaString *s) {
-  stdout_write(s->bytes, s->length);
-  stdout_write(&newline, 1);
-}
-
-void lerta_print_int(int64_t n) {
-  uint8_t text[LERTA_INT_TEXT_MAX];
-  int64_t start = lerta_format_int(n, text);
-  stdout_write(text + start, LERTA_INT_TEXT_MAX - start);
-  stdout_write(&newline, 1);
-}
-
-void lerta_print_byte(uint8_t b) { lerta_print_int(b); }
-
-void lerta_print_bool(bool b) {
-  static const uint8_t true_text[] = "true";
-  static const uint8_t false_text[] = "false";
-  if (b) {
-    stdout_write(true_text, sizeof true_text - 1);
-  } else {
-    stdout_write(false_text, sizeof false_text - 1);
-  }
-  stdout_write(&newline, 1);
-}
-
 void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
   // stderr is the last resort for reporting; a failure there cannot be reported.
   write_all(STDERR_FD, bytes, length);

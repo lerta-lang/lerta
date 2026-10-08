@@ -12,7 +12,6 @@ const call = runtime_caller({
   lerta_array_set: 'void @lerta_array_set(ptr, i64, i64)',
   lerta_array_push: 'void @lerta_array_push(ptr, i64)',
   lerta_array_pop: 'i64 @lerta_array_pop(ptr)',
-  lerta_string_join: 'ptr @lerta_string_join(ptr, ptr)',
 })
 
 export const to_item = (ir: IrBuilder, operand: string, type: Type): string => {
@@ -61,9 +60,6 @@ export const emit_push = (ir: IrBuilder, array: string, value: string, element: 
 export const emit_pop = (ir: IrBuilder, array: string, element: Type): string =>
   from_item(ir, call(ir, 'lerta_array_pop', `ptr ${array}`), element)
 
-export const emit_join = (ir: IrBuilder, array: string, separator: string): string =>
-  call(ir, 'lerta_string_join', `ptr ${array}, ptr ${separator}`)
-
 export const call_array_method = (
   ir: IrBuilder,
   name: string,
@@ -77,8 +73,6 @@ export const call_array_method = (
       return ''
     case 'pop':
       return emit_pop(ir, array, element)
-    case 'join':
-      return emit_join(ir, array, args[0])
     default:
       throw new Error(`no array method ${name}`)
   }

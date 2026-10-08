@@ -1,17 +1,25 @@
-# The builtin functions and the methods of the builtin types that are not generic, which every
-# module has: the compiler imports this module into every other (see runtime/string.c,
-# runtime/binary.c and runtime/io.c).
+# The builtin functions and the methods of the builtin types, which every module has: the compiler
+# imports this module into every other but std:io, which it imports. The compiler gives the builtin
+# types the methods that need their representation, and C functions of the runtime build Strings
+# and Binary values (see docs/internals.md#builtins).
+import { stdout } from 'std:io'
 
-# Writes the String and a newline to stdout, through its buffer, as std:io's stdout does.
-extern lerta_print_string as print_line: (String) -> void
 extern lerta_int_to_string: (Int) -> String
-extern lerta_string_parse_int: (String) -> Int?
 extern lerta_byte_to_int: (UInt8) -> Int
 extern lerta_binary_slice: (Binary, Int, Int) -> Binary
-extern lerta_binary_decode_utf8: (Binary) -> String?
+# The same object as a String, for bytes that are valid UTF-8.
+extern lerta_binary_as_string as as_string: (Binary) -> String
+extern lerta_string_join: (Array<String>, String) -> String
+
+const MIN_INT = -9223372036854775808
 
 # Writes the text of x and a newline to stdout.
-export const print = <T: Stringable>(x: T) -> print_line(x.to_string())
+export const print = <T: Stringable>(x: T) -> write_line(x.to_string())
+
+# Not generic, so that it is checked, and its use of stdout counted, even if print is never called.
+const write_line = (text: String) ->
+  stdout.write(text)
+  stdout.write("\n")
 
 extend Int
   to_string = (): String -> lerta_int_to_string(@)
@@ -26,11 +34,73 @@ extend UInt8
 extend String
   to_string = (): String -> @
   # nil unless the String is an integer in decimal, with an optional leading `-`, that fits in an
-  # Int.
-  parse_int = (): Int? -> lerta_string_parse_int(@)
+  # Int. The digits are accumulated as a negative number, which can hold the minimum Int.
+  parse_int = (): Int? ->
+    const bytes = @.binary
+    const negative = bytes.length > 0 and bytes[0] == '-'
+    const start = negative then 1 else 0
+    return nil if start == bytes.length
+    var value = 0
+    for i in start...bytes.length
+      const byte = bytes[i]
+      return nil if byte < '0' or byte > '9'
+      const digit = (byte - '0').to_int()
+      return nil if value < (MIN_INT + digit) / 10
+      value = value * 10 - digit
+    return nil if not negative and value == MIN_INT
+    negative then value else -value
 
 extend Binary
   # The bytes from `start` up to `end`, which is exclusive. Throws if they are out of range.
   slice = (start: Int, end: Int): Binary -> lerta_binary_slice(@, start, end)
   # The same bytes as a String if they are valid UTF-8, otherwise nil.
-  decode_utf8 = (): String? -> lerta_binary_decode_utf8(@)
+  decode_utf8 = (): String? -> is_utf8(@) then as_string(@) else nil
+
+# Whether the bytes are UTF-8. Overlong forms, surrogates and code points above U+10FFFF are not,
+# as the standard requires: the leads 0xE0, 0xED, 0xF0 and 0xF4 (224, 237, 240 and 244) limit the
+# byte after them.
+const is_utf8 = (bytes: Binary): Bool ->
+  var i = 0
+  while i < bytes.length
+    const lead = bytes[i]
+    const length = utf8_sequence_length(lead)
+    return false if length == 0 or i + length > bytes.length
+    for k in 1...length
+      return false if not is_continuation(bytes[i + k])
+    const second: UInt8 = length > 1 then bytes[i + 1] else 0
+    return false if lead == 224 and second < 160
+    return false if lead == 237 and second > 159
+    return false if lead == 240 and second < 144
+    return false if lead == 244 and second > 143
+    i += length
+  true
+
+# The number of bytes of the UTF-8 sequence that `lead` starts, or 0 if it cannot start one.
+const utf8_sequence_length = (lead: UInt8): Int ->
+  case
+    when lead < 128 then 1
+    when lead >= 194 and lead <= 223 then 2
+    when lead >= 224 and lead <= 239 then 3
+    when lead >= 240 and lead <= 244 then 4
+    else 0
+
+# 0x80 to 0xBF.
+const is_continuation = (byte: UInt8): Bool -> byte >= 128 and byte <= 191
+
+extend Array<String>
+  # The Strings one after another, with the separator between each two.
+  join = (separator: String): String -> lerta_string_join(@, separator)
+
+extend <T> Array<T>
+  # The items, read as the Iter is.
+  iter = (): Iter<T> -> (x for x in @)
+  map = <U>(f: (T) -> U): Iter<U> -> @iter().map(f)
+  filter = (keep: (T) -> Bool): Iter<T> -> @iter().filter(keep)
+
+extend <T> Iter<T>
+  map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)
+  filter = (keep: (T) -> Bool): Iter<T> -> (x for x in @ when keep(x))
+  to_array = (): Array<T> -> [x for x in @]
+
+extend <K, V> Map<K, V>
+  has = (key: K): Bool -> @[key] != nil

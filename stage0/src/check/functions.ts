@@ -19,12 +19,12 @@ export type FunctionEntry = {
   this_type: Type | undefined
 }
 
-// The written types of the parameters; `expected`, the types a function type expects, stands in
-// for those left out (the caller checks that there are as many).
+// The written types of the parameters; `expected`, the types a function type expects, where they
+// are known, stands in for those left out (the caller checks that there are as many).
 export const parameter_types = (
   literal: FunctionLiteral,
   resolver: TypeResolver,
-  expected: Type[] = [],
+  expected: (Type | undefined)[] = [],
 ): Type[] =>
   literal.params.map((param, i) => {
     if (param.type !== undefined) return resolver.resolve(param.type)

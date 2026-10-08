@@ -20,6 +20,6 @@ Diagnostics are printed to stderr, one per line:
 ```
 
 - A compile error stops the build, and the exit code is 1. Warnings found before it are printed first.
-- A warning does not stop the build.
+- A warning does not stop the build. Those of the standard modules are not reported, since the program cannot act on them; each standard module builds on its own without warnings.
 
 Lines and columns start at 1, and columns count code points.

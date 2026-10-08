@@ -1,5 +1,5 @@
 // Types arrays and maps: their literals, `Map()`, and indexing (of a Binary too).
-import type { ArrayLiteral, Call, Expression, Index, MapLiteral } from '../syntax/ast.ts'
+import type { ArrayLiteral, Call, Expression, Index, MapLiteral, Position } from '../syntax/ast.ts'
 import { CompileError } from '../errors.ts'
 import type { CheckerLocal, ExpressionChecker } from './expression_checker.ts'
 import type { Functions } from './functions.ts'
@@ -18,7 +18,7 @@ import {
 } from '../types.ts'
 
 // The type of the values of a container, such as 'an Iter', which `at` gives: any type with values.
-export const check_value_type = (type: Type, at: Expression, container: string): Type => {
+export const check_value_type = (type: Type, at: Position, container: string): Type => {
   if (type.kind === 'nil') {
     const message = `nil alone does not give the type of ${container}; write it in an annotation`
     throw new CompileError(message, at.line, at.column)
@@ -32,13 +32,32 @@ export const check_value_type = (type: Type, at: Expression, container: string):
 
 // The type of an item of a container, such as 'an array', which `at` gives. An item is 8 bytes,
 // which cannot hold an optional Int, UInt8 or Bool.
-export const check_item_type = (type: Type, at: Expression, container: string): Type => {
+export const check_item_type = (type: Type, at: Position, container: string): Type => {
   check_value_type(type, at, container)
   if (type.kind === 'Optional' && !is_reference_type(type)) {
     const message = `${container} cannot hold values of type ${format_type(type)}`
     throw new CompileError(message, at.line, at.column)
   }
   return type
+}
+
+// The types of a map's keys and values, which `key_at` and `value_at` give: a key is a String or an
+// Int, and a value is an item that is not optional, since a missing key reads as nil.
+export const check_map_types = (
+  key: Type,
+  value: Type,
+  key_at: Position,
+  value_at: Position,
+): void => {
+  if (!is_map_key_type(key)) {
+    const message = `a map key must be a String or an Int, got ${format_type(key)}`
+    throw new CompileError(message, key_at.line, key_at.column)
+  }
+  check_item_type(value, value_at, 'a map')
+  if (value.kind === 'Optional') {
+    const message = `a map cannot hold values of type ${format_type(value)}`
+    throw new CompileError(message, value_at.line, value_at.column)
+  }
 }
 
 export class CollectionChecker {
@@ -70,15 +89,11 @@ export class CollectionChecker {
         'the type of an empty array must be written, as in `const xs: Array<Int> = []`'
       throw new CompileError(message, array.line, array.column)
     }
-    const element = this.item_type(anchor, 'an array')
+    const element = check_item_type(this.expressions.type_of(anchor), anchor, 'an array')
     for (const item of array.elements) {
       if (item !== anchor) this.expressions.expect_type(item, element)
     }
     return array_type(element)
-  }
-
-  private item_type(item: Expression, container: string): Type {
-    return check_item_type(this.expressions.type_of(item), item, container)
   }
 
   // The types come from the expected type if there is one, otherwise from the first entry.
@@ -94,16 +109,8 @@ export class CollectionChecker {
 
   private map_type_of_entry(entry: MapLiteral['entries'][number]): Type {
     const key = this.expressions.type_of(entry.key)
-    if (!is_map_key_type(key)) {
-      const message = `a map key must be a String or an Int, got ${format_type(key)}`
-      throw new CompileError(message, entry.key.line, entry.key.column)
-    }
-    const value = this.item_type(entry.value, 'a map')
-    // A missing key reads as nil, so a value cannot be nil itself.
-    if (value.kind === 'Optional') {
-      const message = `a map cannot hold values of type ${format_type(value)}`
-      throw new CompileError(message, entry.value.line, entry.value.column)
-    }
+    const value = this.expressions.type_of(entry.value)
+    check_map_types(key, value, entry.key, entry.value)
     return map_type(key, value)
   }
 

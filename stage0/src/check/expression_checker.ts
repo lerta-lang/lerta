@@ -13,7 +13,7 @@ import {
 import { builtin_method, builtin_property } from './builtins.ts'
 import type { Conversions, SelfContext, Shared, Types } from './checker.ts'
 import { CaseChecker, type BlockChecker } from './case_checker.ts'
-import { check_item_type, check_value_type, CollectionChecker } from './collection_checker.ts'
+import { CollectionChecker } from './collection_checker.ts'
 import { CompileError } from '../errors.ts'
 import type { Extensions } from './extensions.ts'
 import type { Functions } from './functions.ts'
@@ -32,8 +32,6 @@ import {
   format_type,
   format_types,
   int_type,
-  iter_type,
-  iterable_item,
   never_type,
   nil_type,
   is_assignable,
@@ -252,9 +250,19 @@ export class ExpressionChecker {
     if (object_type !== undefined) return this.objects.type_of_construction(call, object_type)
     if (callee.kind === 'member') {
       const receiver_type = this.type_of(callee.object)
-      const mapped_item = callee.name.name === 'map' ? iterable_item(receiver_type) : undefined
-      if (mapped_item !== undefined) return this.type_of_map(call, mapped_item, expected)
-      return this.check_arguments(call, this.type_of_method(callee, receiver_type))
+      const generic = this.extensions.find(receiver_type, callee.name.name)?.generic
+      if (generic === undefined) {
+        return this.check_arguments(call, this.type_of_method(callee, receiver_type))
+      }
+      const method = this.generic_calls.type_of_method_call(
+        call,
+        callee,
+        generic,
+        receiver_type,
+        expected,
+      )
+      this.record(callee, method)
+      return method.result
     }
     const callee_type =
       callee.kind === 'identifier'
@@ -292,34 +300,6 @@ export class ExpressionChecker {
     return callee_type.result
   }
 
-  // `xs.map(f)`: an Iter of f's results for the items, whose type f's result gives, unless an
-  // Iter of a type is expected, as for a lazy comprehension.
-  private type_of_map(call: Call, item: Type, expected: Type | undefined): Type {
-    if (call.named_args.length > 0) {
-      const { line, column } = call.named_args[0].name
-      throw new CompileError('map takes no named arguments', line, column)
-    }
-    if (call.args.length !== 1) {
-      const message = `expected 1 argument(s), got ${call.args.length}`
-      throw new CompileError(message, call.line, call.column)
-    }
-    const [mapper] = call.args
-    const type =
-      mapper.kind === 'function'
-        ? this.blocks.type_of_item_function(
-            mapper,
-            item,
-            expected?.kind === 'Iter' ? expected.item : undefined,
-          )
-        : this.type_of(mapper)
-    const fits = type.kind === 'function' && type.params.length === 1
-    if (!fits || !same_type(type.params[0], item)) {
-      const message = `expected a function of ${format_type(item)}, got ${format_type(type)}`
-      throw new CompileError(message, mapper.line, mapper.column)
-    }
-    return iter_type(check_value_type(type.result, mapper, 'an Iter'))
-  }
-
   // Named arguments are the fields of an anonymous struct for the last parameter: `draw(x: 1, y: 2)`
   // is `draw({ x: 1, y: 2 })`. The call is rewritten into that form so that codegen, which reads
   // named arguments only as a construction, generates it as any other call. Every pass reading the
@@ -348,9 +328,6 @@ export class ExpressionChecker {
         column,
       )
     }
-    if (object_type.kind === 'Iter' && name === 'to_array') {
-      check_item_type(object_type.item, member, 'an array')
-    }
     this.types.set(member, method)
     return method
   }
@@ -367,19 +344,28 @@ export class ExpressionChecker {
   }
 
   // The type of `to_string(): String` of the type, if it is Stringable: a method of its own, from an
-  // extend or built in; a field that holds a function does not count.
-  private stringable_method(type: Type, at: Position): Type | undefined {
+  // extend or built in; a field that holds a function does not count. The instance of a generic
+  // one is that which `call`, if given, calls.
+  private stringable_method(type: Type, at: Position, call?: Call): Type | undefined {
     const { line, column } = at
     const name: Identifier = { kind: 'identifier', name: 'to_string', line, column }
     const method =
       this.objects.method_type(type, name) ??
-      this.extensions.method_type(type, name) ??
+      this.extension_method_type(type, name, call) ??
       builtin_method(type, name.name)
     const is_stringable =
       method?.kind === 'function' &&
       method.params.length === 0 &&
       is_assignable(method.result, string_type)
     return is_stringable ? method : undefined
+  }
+
+  // The type of a method that an extend gives the type; a generic one's comes from its instance
+  // for the receiver, if the receiver gives all its type arguments.
+  private extension_method_type(type: Type, name: Identifier, call?: Call): Type | undefined {
+    const generic = this.extensions.find(type, name.name)?.generic
+    if (generic === undefined) return this.extensions.method_type(type, name)
+    return this.generic_calls.receiver_instance(generic, type, name, call)?.type
   }
 
   // The error for a type that is not Stringable, or none.
@@ -394,7 +380,7 @@ export class ExpressionChecker {
   private check_interpolated(part: Call): void {
     const member = part.callee as Member
     const type = this.type_of(member.object)
-    const method = this.stringable_method(type, member)
+    const method = this.stringable_method(type, member, part)
     if (method === undefined) throw this.stringable_error(type, member.object)!
     this.types.set(member, method)
     this.types.set(part, string_type)
@@ -420,12 +406,10 @@ export class ExpressionChecker {
     if (field_type !== undefined) return field_type
     const property = builtin_property(object_type, name)
     if (property !== undefined) return property
-    const is_map = name === 'map' && iterable_item(object_type) !== undefined
     const is_method =
       this.objects.has_method(object_type, name) ||
       this.extensions.find(object_type, name) !== undefined ||
-      builtin_method(object_type, name) !== undefined ||
-      is_map
+      builtin_method(object_type, name) !== undefined
     if (is_method) {
       throw new CompileError(`a method must be called: write \`${name}()\``, line, column)
     }

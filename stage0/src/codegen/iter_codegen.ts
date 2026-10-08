@@ -3,7 +3,7 @@
 // started (LertaIter in runtime/lerta.h); the state of its kind follows. The kinds are an Iter of an
 // array's items, of a range's Ints, and those that map, filter or take the items of another Iter,
 // which they own; each is generated once per type it depends on.
-import { emit_array_new, emit_get, emit_length, emit_push } from './array_codegen.ts'
+import { emit_get, emit_length } from './array_codegen.ts'
 import { emit_closure_call } from './closure_codegen.ts'
 import {
   define_heap_object,
@@ -281,22 +281,12 @@ export const emit_source_iter = (ir: IrBuilder, value: string, type: Type): stri
   return value
 }
 
-const emit_to_array = (ir: IrBuilder, iter: string, item: Type): string => {
-  emit_iter_start(ir, iter)
-  const array = emit_array_new(ir, item)
-  emit_iter_loop(ir, iter, item, (value) => {
-    emit_push(ir, array, value, item)
-    if (is_reference_type(item)) emit_release(ir, value)
-  })
-  return array
-}
-
 // Calling has_next or next traverses the Iter, so that it cannot be traversed again.
 const emit_mark_started = (ir: IrBuilder, iter: string): void =>
   ir.emit(`store i1 true, ptr ${protocol_field(ir, iter, STARTED_FIELD)}`)
 
 export const is_iter_method = (type: Type, name: string): boolean =>
-  type.kind === 'Iter' || (type.kind === 'Array' && ['map', 'filter', 'take'].includes(name))
+  type.kind === 'Iter' || (type.kind === 'Array' && name === 'take')
 
 // A method of an Iter, or one of an array that makes an Iter (see is_iter_method). It takes over
 // the object and the operands of the arguments, owned: an Iter it makes holds them.
@@ -306,7 +296,6 @@ export const call_iter_method = (
   object: string,
   type: Type,
   args: string[],
-  arg_types: Type[],
 ): string => {
   const item = iterable_item(type)!
   const consume = (result: string) => {
@@ -320,12 +309,6 @@ export const call_iter_method = (
     case 'next':
       emit_mark_started(ir, object)
       return consume(emit_checked_next(ir, object, item))
-    case 'to_array':
-      return consume(emit_to_array(ir, object, item))
-    case 'map':
-      return emit_map_iter(ir, emit_source_iter(ir, object, type), args[0], arg_types[0])
-    case 'filter':
-      return emit_filter_iter(ir, emit_source_iter(ir, object, type), args[0], item)
     case 'take':
       return emit_take_iter(ir, emit_source_iter(ir, object, type), args[0], item)
     default:

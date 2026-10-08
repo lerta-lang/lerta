@@ -7,7 +7,7 @@ import { argv, exit } from 'std:process'
 
 - A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import { a as c } from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. Imports are written at the top level. An imported name that is never used is a warning.
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository: `'std:io'` and `'std:process'` so far (below), and `'std:builtins'`, which every other module imports implicitly (see [builtins](builtins.md)). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository: `'std:io'` and `'std:process'` so far (below), and `'std:builtins'`, which every other module but `std:io` imports implicitly (see [builtins](builtins.md)); `std:io`, which `std:builtins` imports, cannot use the builtins. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
 
 ## Exports
 

@@ -302,21 +302,22 @@ export class ExpressionGenerator {
     const object_type = this.types.get(member.object)!
     const object = this.generate(member.object)
     const { name } = member.name
+    const instance = this.instances.get(call)
     if (object_type.kind === 'Record') {
       const closure = emit_record_field(this.ir, object, object_type, name)
       emit_release(this.ir, object)
       return this.call_closure(closure, this.types.get(member)!, call.args)
     }
-    const symbol = this.method_symbol(object_type, name)
+    const symbol =
+      instance === undefined ? this.method_symbol(object_type, name) : instance_symbol(instance)
     if (symbol === undefined && object_type.kind === 'Object') {
       // A field that holds a function.
       const closure = this.read_field(object, object_type, member)
       return this.call_closure(closure, this.types.get(member)!, call.args)
     }
-    if (is_iter_method(object_type, name)) {
+    if (symbol === undefined && is_iter_method(object_type, name)) {
       const args = call.args.map((arg) => this.generate(arg))
-      const arg_types = call.args.map((arg) => this.type_at_use(arg))
-      return call_iter_method(this.ir, name, object, object_type, args, arg_types)
+      return call_iter_method(this.ir, name, object, object_type, args)
     }
     const args = call.args.map((arg) => this.generate(arg))
     const typed_args = args.map((arg, i) => `${ir_type(this.type_at_use(call.args[i]))} ${arg}`)

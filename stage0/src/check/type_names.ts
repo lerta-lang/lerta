@@ -188,9 +188,10 @@ export class TypeResolver {
     return type
   }
 
+  // A type parameter's type argument is checked where it is given (see GenericCallChecker).
   private resolve_key(type_name: TypeName): Type {
     const type = this.resolve(type_name)
-    if (!is_map_key_type(type)) {
+    if (!is_map_key_type(type) && type.kind !== 'TypeParameter') {
       const message = `a map key must be a String or an Int, got ${format_type(type)}`
       throw new CompileError(message, type_name.line, type_name.column)
     }
