@@ -1,0 +1,134 @@
+# Top-level functions and the methods of classes, structs and extends. They can be used anywhere
+# in the module, before their declaration too, so a body is checked on demand: when its return
+# type is first needed, or at the end. A generic function's are checked per instance (see
+# GenericFunction).
+import { FunctionLiteral, Identifier, Position } from '../ast'
+import { check_function } from './bodies'
+import { fail } from './diagnostics'
+import { GenericFunction, GenericRef } from './generics'
+import { ProgramWide, Shared } from './shared'
+import { module_resolver, resolve, resolve_result, Resolver } from './type_names'
+import { FunctionType, Type } from '../types'
+
+export class FunctionEntry
+  name: Identifier
+  literal: FunctionLiteral
+  # Known from the annotations, or once the body is checked when the return type is inferred.
+  type: Type?
+  # The type of a method's object, a class or struct or an extended type, which its body sees as
+  # `@`.
+  this_type: Type?
+  # 'unchecked', 'checking' or 'checked'.
+  state = 'unchecked'
+
+export class Functions
+  # A method is keyed by its type and name, as `Point.length` (see method_key).
+  entries: Map<String, FunctionEntry> = Map()
+  # The generic functions, by name, as their places in the module's generics (see Shared).
+  generics: Map<String, Int> = Map()
+
+# The written types of the parameters; `expected`, the types a function type expects, where they
+# are known, stands in for those left out (the caller checks that there are as many).
+export const parameter_types = (
+  program: ProgramWide
+  resolver: Resolver
+  literal: FunctionLiteral
+  expected: Array<Type?>
+): Array<Type> ->
+  const types: Array<Type> = []
+  for i in 0...literal.params.length
+    const param = literal.params[i]
+    if const type_name = param.type
+      types.push(resolve(program, resolver, type_name))
+      continue
+    const expected_type = i < expected.length then expected[i] else nil
+    const { name, position } = param.name
+    const message = "the type of the parameter '#{name}' must be written"
+    types.push(expected_type ? fail(program, position, message))
+  types
+
+# The function's type, if its return type is written; otherwise only its body tells.
+export const annotated_type = (
+  program: ProgramWide
+  resolver: Resolver
+  literal: FunctionLiteral
+): Type? ->
+  const return_type = literal.return_type ? return nil
+  const params = parameter_types(program, resolver, literal, [])
+  FunctionType(params, result: resolve_result(program, resolver, return_type))
+
+# A top-level function, which GenericFunction checks, is the only kind that can be generic.
+export const reject_generic = (program: ProgramWide, literal: FunctionLiteral): void ->
+  return if literal.type_params.length == 0
+  fail(program, literal.position, 'only a top-level function can be generic so far')
+
+export const add_function = (
+  program: ProgramWide
+  shared: Shared
+  key: String
+  name: Identifier
+  literal: FunctionLiteral
+  this_type: Type?
+): void ->
+  reject_defined(program, shared, key, name)
+  reject_generic(program, literal)
+  const type = annotated_type(program, module_resolver(shared.index), literal)
+  shared.functions.entries[key] = FunctionEntry(name, literal, type, this_type)
+
+# Adds a generic function or method of the module; returns how others refer to it.
+export const add_generic = (shared: Shared, generic: GenericFunction): GenericRef ->
+  const ref = GenericRef(module_index: shared.index, index: shared.generics.length)
+  shared.generics.push(generic)
+  ref
+
+export const add_generic_function = (
+  program: ProgramWide
+  shared: Shared
+  generic: GenericFunction
+): void ->
+  const { name } = generic
+  reject_defined(program, shared, name.name, name)
+  shared.functions.generics[name.name] = add_generic(shared, generic).index
+
+const reject_defined = (
+  program: ProgramWide
+  shared: Shared
+  key: String
+  name: Identifier
+): void ->
+  fail(program, name.position, "'#{name.name}' is already defined") if has_function(shared, key)
+
+export const has_function = (shared: Shared, name: String): Bool ->
+  shared.functions.entries.has(name) or shared.functions.generics.has(name)
+
+export const generic_function = (shared: Shared, name: String): GenericRef? ->
+  const index = shared.functions.generics[name] ? return nil
+  GenericRef(index, module_index: shared.index)
+
+# The type of the function of the module, checking its body first if the return type must be
+# inferred.
+export const function_type_of = (
+  program: ProgramWide
+  module_index: Int
+  name: String
+  at: Position
+): Type? ->
+  const entry = program.shared[module_index].functions.entries[name] ? return nil
+  if const type = entry.type
+    return type
+  if entry.state == 'checking'
+    fail(program, at, "'#{name}' is recursive, so its return type must be written")
+  check_entry(program, module_index, entry)
+  entry.type
+
+export const check_all_functions = (program: ProgramWide, shared: Shared): void ->
+  for key in shared.functions.entries.keys()
+    check_entry(program, shared.index, shared.functions.entries[key]!)
+
+const check_entry = (program: ProgramWide, module_index: Int, entry: FunctionEntry): void ->
+  return if entry.state != 'unchecked'
+  entry.state = 'checking'
+  check_function(program, module_index, entry)
+  entry.state = 'checked'
+
+export const method_key = (type_name: String, method: String): String -> "#{type_name}.#{method}"

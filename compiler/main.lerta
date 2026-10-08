@@ -1,23 +1,55 @@
-# The command line of the compiler. So far it only prints tokens or syntax trees, as stage0's
-# `dump-tokens` and `dump-ast` do.
+# The command line of the compiler. So far it only prints tokens, syntax trees or checked syntax
+# trees, as stage0's `dump-tokens`, `dump-ast` and `dump-checked` do.
 import { read_file, stderr, stdout } from 'std:io'
 import { argv, exit } from 'std:process'
 import { dump_ast } from './ast_dump'
+import { dump_checked } from './checked_dump'
+import { all_warnings } from './checker/diagnostics'
+import { check_modules } from './checker/modules'
 import { tokenize } from './lexer/tokens'
+import { load_modules } from './loader'
 import { parse } from './parser/statement'
 import { dump_tokens } from './token_dump'
 
-const USAGE = "usage: lerta dump-tokens <source>\n       lerta dump-ast <source>\n"
+const USAGE = [
+  "usage: lerta dump-tokens <source>\n"
+  "       lerta dump-ast <source>\n"
+  "       lerta dump-checked <source> --root <dir>\n"
+].join('')
 
-const COMMANDS = ['dump-tokens', 'dump-ast']
+const is_value = (arg: String): Bool -> not arg.binary.occurs_at(0, '-'.binary)
 
-const is_known_command = argv.length > 0 and COMMANDS.any((command) -> command == argv[0])
-if argv.length != 2 or not is_known_command or argv[1].binary.occurs_at(0, '-'.binary)
+const fail_usage = (): never ->
   stderr.write(USAGE)
   exit(2)
 
-const command = argv[0]
-const path = argv[1]
-const source = read_file(path).decode_utf8() ? throw "'#{path}' is not valid UTF-8"
-const tokens = tokenize(source, path)
-stdout.write(command == 'dump-tokens' then dump_tokens(tokens) else dump_ast(parse(tokens, path)))
+# Prints what `dump` makes of one file, without reading the modules it imports.
+const run_dump = (args: Array<String>, dump: (String, String) -> String) ->
+  fail_usage() if args.length != 1 or not is_value(args[0])
+  const path = args[0]
+  const source = read_file(path).decode_utf8() ? throw "'#{path}' is not valid UTF-8"
+  stdout.write(dump(source, path))
+
+# Prints the checked syntax trees of the program. `--root` names the directory that holds std/,
+# the standard modules, which the compiler cannot find on its own yet.
+const run_dump_checked = (args: Array<String>) ->
+  const is_valid = args.length == 3 and args[1] == '--root'
+  fail_usage() if not is_valid or not is_value(args[0]) or not is_value(args[2])
+  const path = args[0]
+  const program = check_modules(path, load_modules(path, args[2]))
+  stderr.write("#{warning}\n") for warning in all_warnings(program)
+  stdout.write(dump_checked(program))
+
+const dump_file_tokens = (source: String, path: String): String ->
+  dump_tokens(tokenize(source, path))
+
+const dump_file_ast = (source: String, path: String): String ->
+  dump_ast(parse(tokenize(source, path), path))
+
+const command = argv.length > 0 then argv[0] else ''
+const args = [argv[i] for i in 1...argv.length]
+case command
+  when 'dump-tokens' then run_dump(args, dump_file_tokens)
+  when 'dump-ast' then run_dump(args, dump_file_ast)
+  when 'dump-checked' then run_dump_checked(args)
+  else fail_usage()

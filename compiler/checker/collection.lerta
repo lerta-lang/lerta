@@ -1,0 +1,125 @@
+# Types arrays and maps: their literals, `Map()`, and indexing (of a Binary too).
+import {
+  ArrayLiteral, Call, Expression, Identifier, Index, MapEntry, MapLiteral, Position, Throw
+} from '../ast'
+import { fail } from './diagnostics'
+import { expect_type, type_of } from './expression'
+import { has_function } from './functions'
+import { is_contextual } from './literals'
+import { lookup } from './name'
+import { Body, ProgramWide } from './shared'
+import {
+  ArrayType, byte_type, format_type, int_type, is_kind, is_map_key_type, is_reference_type
+  MapType, optional_type, OptionalType, Type
+} from '../types'
+
+# The type of the values of a container, such as 'an Iter', which `at` gives: any type with
+# values.
+export const check_value_type = (
+  program: ProgramWide
+  type: Type
+  at: Position
+  container: String
+): Type ->
+  if is_kind(type, 'nil')
+    const message = "nil alone does not give the type of #{container}; write it in an annotation"
+    fail(program, at, message)
+  if is_kind(type, 'void') or is_kind(type, 'never')
+    fail(program, at, "#{container} cannot hold values of type #{format_type(type)}")
+  type
+
+# The type of an item of a container, such as 'an array', which `at` gives. An item is 8 bytes,
+# which cannot hold an optional Int, Byte or Bool.
+export const check_item_type = (
+  program: ProgramWide
+  type: Type
+  at: Position
+  container: String
+): Type ->
+  check_value_type(program, type, at, container)
+  if type is OptionalType and not is_reference_type(type)
+    fail(program, at, "#{container} cannot hold values of type #{format_type(type)}")
+  type
+
+# The types of a map's keys and values, which `key_at` and `value_at` give: a key is a String, an
+# Int or a class, and a value is an item that is not optional, since a missing key reads as nil.
+export const check_map_types = (
+  program: ProgramWide
+  key: Type
+  value: Type
+  key_at: Position
+  value_at: Position
+): void ->
+  if not is_map_key_type(key)
+    const message = "a map key must be a String, an Int or a class, got #{format_type(key)}"
+    fail(program, key_at, message)
+  check_item_type(program, value, value_at, 'a map')
+  if value is OptionalType
+    fail(program, value_at, "a map cannot hold values of type #{format_type(value)}")
+
+# The element type comes from the expected type if there is one, so that `[[], [1]]` can be
+# typed; otherwise from the first element whose type does not come from the context and which
+# gives a value (not a `throw`), so that `[1, c]` holds Bytes when `c` is one.
+export const type_of_array = (body: Body, array: ArrayLiteral, expected: Type?): Type ->
+  if expected
+    if expected is ArrayType
+      expect_type(body, item, expected.element) for item in array.elements
+      return expected
+  const elements = array.elements
+  const gives_value = (item: Expression): Bool -> not (item is Throw)
+  const empty = (): never ->
+    const message = 'the type of an empty array must be written, as in `const xs: Array<Int> = []`'
+    fail(body.program, array.position, message)
+  const first = elements.length > 0 then elements[0] else nil
+  const is_anchor = (item: Expression): Bool -> gives_value(item) and not is_contextual(item)
+  const anchor = elements.find(is_anchor) ? elements.find(gives_value) ? first ? empty()
+  const element_type = type_of(body, anchor, nil)
+  const element = check_item_type(body.program, element_type, anchor.position, 'an array')
+  for item in elements
+    expect_type(body, item, element) if item != anchor
+  ArrayType(element)
+
+# The types come from the expected type if there is one, otherwise from the first entry.
+export const type_of_map = (body: Body, map: MapLiteral, expected: Type?): Type ->
+  const type = expected_map(expected) ? map_type_of_entry(body, map.entries[0])
+  for entry in map.entries
+    expect_type(body, entry.key, type.key)
+    expect_type(body, entry.value, type.value)
+  type
+
+const expected_map = (expected: Type?): MapType? ->
+  const type = expected ? return nil
+  type is MapType then type else nil
+
+const map_type_of_entry = (body: Body, entry: MapEntry): MapType ->
+  const key = type_of(body, entry.key, nil)
+  const value = type_of(body, entry.value, nil)
+  check_map_types(body.program, key, value, entry.key.position, entry.value.position)
+  MapType(key, value)
+
+# `Map()`, unless the name is taken in the program.
+export const is_empty_map = (body: Body, callee: Expression): Bool ->
+  return false if not (callee is Identifier)
+  callee.name == 'Map' and lookup(body, 'Map') == nil and not has_function(body.shared, 'Map')
+
+export const type_of_empty_map = (body: Body, call: Call, expected: Type?): Type ->
+  const program = body.program
+  const missing_type = (): never ->
+    const example = '`const m: Map<String, Int> = Map()`'
+    fail(program, call.position, "the type of an empty map must be written, as in #{example}")
+  const type = expected_map(expected) ? missing_type()
+  if call.args.length > 0 or call.named_args.length > 0
+    fail(program, call.position, 'Map() takes no arguments')
+  type
+
+# An item of an array or a Binary, or the value of a map's key, which may not be there.
+export const type_of_index = (body: Body, index: Index): Type ->
+  const object_type = type_of(body, index.object, nil)
+  if object_type is MapType
+    expect_type(body, index.index, object_type.key)
+    return optional_type(object_type.value)
+  if not (object_type is ArrayType) and not is_kind(object_type, 'Binary')
+    const message = "cannot index a value of type #{format_type(object_type)}"
+    fail(body.program, index.object.position, message)
+  expect_type(body, index.index, int_type)
+  object_type is ArrayType then object_type.element else byte_type

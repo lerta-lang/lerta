@@ -1,0 +1,61 @@
+# The `const`s and `var`s at the top level of a module, which its functions and methods see.
+import { Declaration, FunctionLiteral, Identifier, Statement } from '../ast'
+import { fail } from './diagnostics'
+import { Local } from './scopes'
+import { ProgramWide } from './shared'
+
+export class TopLevelValues
+  names: Map<String, Bool>
+  # A value's local once the top-level code has declared it; until then its type is unknown.
+  locals: Map<String, Local> = Map()
+  # Whether the top-level code is being checked or has been: until then, only the top-level code
+  # of a module that runs before this one, in the same import cycle, can need a value's type.
+  started = false
+
+# A top-level declaration whose value is not a function literal.
+export const top_level_value = (statement: Statement): Declaration? ->
+  return nil if not (statement is Declaration)
+  statement.value is FunctionLiteral then nil else statement
+
+export const top_level_values = (program: Array<Statement>): TopLevelValues ->
+  const names: Map<String, Bool> = Map()
+  for statement in program
+    if const declaration = top_level_value(statement)
+      names[declaration.name.name] = true
+  TopLevelValues(names)
+
+# Called as the top-level code declares the value.
+export const define_top_level = (values: TopLevelValues, local: Local): void ->
+  values.locals[local.identifier.name] = local
+
+# Rejects a use of a value whose type is not known yet: one that the top-level code declares below
+# a call that needs the type of the function using it (whose return type is inferred) or of the
+# object whose field initializer uses it.
+export const reject_pending = (
+  program: ProgramWide
+  values: TopLevelValues
+  identifier: Identifier
+): void ->
+  const { name, position } = identifier
+  return if not values.names.has(name) or values.locals.has(name)
+  fail_runs_later(program, identifier, 'this module', true) if not values.started
+  const reason = 'as it is declared below code that needs it here'
+  const advice = 'declare it before, or write the type of this function or field'
+  const message = "the type of '#{name}' is not known yet, #{reason}; #{advice}"
+  fail(program, position, message)
+
+# Rejects a use of a value of `module` whose type is not known yet, as the top-level code of a
+# module that runs before it, in the same import cycle, needs it: directly, or `in_function`, a
+# function whose return type is inferred or a field initializer.
+export const fail_runs_later = (
+  program: ProgramWide
+  identifier: Identifier
+  module: String
+  in_function: Bool
+): never ->
+  const advice = case
+    when in_function
+      "#{module} runs after the top-level code that needs this function or field; write its type"
+    else "#{module} runs after this module; read it in a function whose return type is written"
+  const message = "the type of '#{identifier.name}' is not known yet, as #{advice}"
+  fail(program, identifier.position, message)

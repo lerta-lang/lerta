@@ -1,0 +1,31 @@
+# Facts about literals: which expressions take their type from the context, and literals as Bytes.
+import { BinaryOperation, Expression, IntegerLiteral, StringLiteral, UnaryOperation } from '../ast'
+import { fail } from './diagnostics'
+import { is_arithmetic } from './operator'
+import { ProgramWide } from './shared'
+import { byte_type, Type } from '../types'
+
+# Whether an expression takes its type from the context: a literal, or arithmetic on such
+# expressions, so that `1 + 2` is a Byte where one is expected.
+export const is_contextual = (expression: Expression): Bool ->
+  case expression
+    when IntegerLiteral then true
+    when StringLiteral then true
+    when UnaryOperation then expression.operator == '-' and is_contextual(expression.operand)
+    when BinaryOperation
+      const { operator, left, right } = expression
+      is_arithmetic(operator) and is_contextual(left) and is_contextual(right)
+    else false
+
+# An integer from 0 to 255, or a string of one byte, can be a Byte.
+export const byte_literal = (program: ProgramWide, literal: Expression): Type ->
+  const message = case literal
+    when IntegerLiteral
+      const fits = literal.value >= 0 and literal.value <= 255
+      fits then nil else 'integer literal does not fit in Byte'
+    when StringLiteral
+      const fits = literal.value.binary.length == 1
+      fits then nil else 'a string literal used as a Byte must be one byte long'
+    else 'a string literal used as a Byte must be one byte long'
+  fail(program, literal.position, message) if message
+  byte_type

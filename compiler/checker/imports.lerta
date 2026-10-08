@@ -1,0 +1,166 @@
+# The names a module imports from other modules, the C functions it declares as externs, and what
+# it exports for the modules that import it.
+import {
+  Declaration, Exportable, exported_declaration, Extern, FunctionLiteral, Identifier, Import
+  Statement, TypeAlias, TypeDeclaration
+} from '../ast'
+import { fail } from './diagnostics'
+import { generic_function } from './functions'
+import { GenericRef } from './generics'
+import { BUILTINS_MODULE } from '../loader'
+import { ObjectInfo, object_type } from './object_types'
+import { Local } from './scopes'
+import { ProgramWide, Shared } from './shared'
+import { alias_type } from './type_names'
+import { Type } from '../types'
+
+# A C function, by its symbol (see Extern).
+export struct ExternExport
+  type: Type
+  symbol: String
+
+# A function of another module, whose type is asked of that module, as it may need its body
+# checked.
+export struct FunctionExport
+  module_index: Int
+  name: String
+
+export struct GenericExport
+  generic: GenericRef
+
+# A `const` of another module; its type is nil until that module's top-level code is checked.
+export struct ValueExport
+  type: Type?
+  module_index: Int
+  name: String
+
+# A class or struct, which brings its info, or an alias.
+export struct TypeExport
+  type: Type
+  info: ObjectInfo?
+
+# What a module exports under a name. The names are known from the syntax, so that the modules of
+# an import cycle can import each other's before any is checked; an export itself is worked out
+# when it is asked for.
+export type Export = ExternExport | FunctionExport | GenericExport | ValueExport | TypeExport
+
+# A name of another module, worked out when it is asked for (see export_of).
+export struct ExportRef
+  module_index: Int
+  name: String
+
+# `name` is the name the module knows it by: its alias, if it has one; `module` is the imported
+# module as the import names it. An extern of the module is its own export.
+export class ImportedName
+  name: Identifier
+  source: ExportRef | ExternExport
+  used: Bool
+  module: String
+
+export class Imports
+  names: Map<String, ImportedName> = Map()
+  # The module that std:builtins is, whose exports, such as `print`, the module has without naming
+  # them in an import; its own names shadow them.
+  builtins: Int? = nil
+
+# The declarations that the module exports, by name.
+export const exported_statements = (program: Array<Statement>): Map<String, Exportable> ->
+  const exported: Map<String, Exportable> = Map()
+  for statement in program
+    if const declaration = exported_declaration(statement)
+      exported[declaration.name.name] = declaration
+  exported
+
+# What the module exports under the name, besides its extends.
+export const export_of = (program: ProgramWide, module_index: Int, name: String): Export ->
+  const shared = program.shared[module_index]
+  const statement = shared.exported[name]!
+  if const generic = generic_function(shared, name)
+    return GenericExport(generic)
+  case statement
+    when Declaration
+      return FunctionExport(module_index, name) if statement.value is FunctionLiteral
+      ValueExport(module_index, name, type: shared.types[statement.name])
+    # An extern's name is its own import, since add_extern rejects an import of the same name.
+    when Extern
+      const source = shared.imports.names[name]!.source
+      source is ExternExport then source else throw 'an extern is its own export'
+    when TypeDeclaration
+      const type = object_type(program, shared, name)!
+      TypeExport(type, info: program.infos[type.symbol])
+    when TypeAlias then TypeExport(type: alias_type(program, shared, statement.name), info: nil)
+
+export const imported_export = (program: ProgramWide, imported: ImportedName): Export ->
+  const source = imported.source
+  case source
+    when ExportRef then export_of(program, source.module_index, source.name)
+    when ExternExport then source
+
+# The module's own names that clash with imports are rejected as they are declared.
+export const add_imports = (
+  program: ProgramWide
+  shared: Shared
+  statements: Array<Statement>
+): void ->
+  for statement in statements
+    if statement is Import
+      const exporter = program.modules[shared.index].imported[statement]!
+      shared.imports.builtins = exporter if statement.module == BUILTINS_MODULE
+      add_import(program, shared, statement, exporter)
+
+const add_import = (program: ProgramWide, shared: Shared, statement: Import, exporter: Int): void ->
+  const names = shared.imports.names
+  for imported in statement.names
+    const { name } = imported
+    if not program.shared[exporter].exported.has(name.name)
+      fail(program, name.position, "'#{statement.module}' has no export '#{name.name}'")
+    const local = imported.alias ? name
+    fail(program, local.position, "'#{local.name}' is already defined") if names.has(local.name)
+    const source = ExportRef(module_index: exporter, name: name.name)
+    names[local.name] = ImportedName(source, name: local, used: false, module: statement.module)
+
+# A C function the module declares, which it calls as it calls those it imports from standard
+# modules; it is never warned about as unused.
+export const add_extern = (
+  program: ProgramWide
+  shared: Shared
+  name: Identifier
+  type: Type
+  symbol: String
+): void ->
+  const names = shared.imports.names
+  fail(program, name.position, "'#{name.name}' is already defined") if names.has(name.name)
+  const source = ExternExport(type, symbol)
+  names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
+
+export const has_import = (shared: Shared, name: String): Bool -> shared.imports.names.has(name)
+
+# The imported name, marked as used.
+export const use_import = (shared: Shared, name: String): ImportedName? ->
+  const imported = shared.imports.names[name] ? return nil
+  imported.used = true
+  imported
+
+# An imported type, marking its import as used.
+export const imported_type = (program: ProgramWide, shared: Shared, name: String): TypeExport? ->
+  const imported = shared.imports.names[name] ? return nil
+  const exported = imported_export(program, imported)
+  return nil if not (exported is TypeExport)
+  imported.used = true
+  exported
+
+# An imported `const` of another file as a local that cannot be assigned, so that it is read and
+# narrowed as one; using it marks the import as used. One whose type is not known yet is left to
+# type_of_export, which reports it where it is used.
+export const value_local = (program: ProgramWide, shared: Shared, name: String): Local? ->
+  const imported = shared.imports.names[name] ? return nil
+  const exported = imported_export(program, imported)
+  return nil if not (exported is ValueExport)
+  const type = exported.type ? return nil
+  imported.used = true
+  Local(type, identifier: imported.name, mutable: false, declared: false, used: true)
+
+export const builtin_export = (program: ProgramWide, shared: Shared, name: String): Export? ->
+  const builtins = shared.imports.builtins ? return nil
+  return nil if not program.shared[builtins].exported.has(name)
+  export_of(program, builtins, name)

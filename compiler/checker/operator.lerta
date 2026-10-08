@@ -1,0 +1,111 @@
+# Types unary and binary operators, nil tests and `?`.
+import { BinaryOperation, Coalesce, Expression, NilLiteral, UnaryOperation } from '../ast'
+import { fail } from './diagnostics'
+import { expect_condition, expect_optional, expect_type, type_of } from './expression'
+import { is_contextual } from './literals'
+import { Body } from './shared'
+import {
+  bool_type, format_type, is_identity_type, is_one_of_kinds, same_type, Type, UnionType
+} from '../types'
+
+const NUMERIC_KINDS = ['Int', 'Byte']
+
+const ARITHMETIC_OPERATORS = ['+', '-', '*', '/', '%']
+
+export const is_arithmetic = (operator: String): Bool ->
+  ARITHMETIC_OPERATORS.any((each) -> each == operator)
+
+# `x == nil` or `x != nil`, on either side.
+const is_nil_test = (binary: BinaryOperation): Bool ->
+  const compares = binary.operator == '==' or binary.operator == '!='
+  compares and (binary.left is NilLiteral or binary.right is NilLiteral)
+
+const classes_of = (type: Type): Array<Type> -> type is UnionType then type.members else [type]
+
+const share_a_class = (a: Type, b: Type): Bool ->
+  const others = classes_of(b)
+  classes_of(a).any((member) -> others.any((other) -> same_type(member, other)))
+
+# Lists kinds for a message, such as "Int or Byte".
+const describe_kinds = (kinds: Array<String>): String ->
+  return kinds[0] if kinds.length == 1
+  const all_but_last = [kinds[i] for i in 0...(kinds.length - 1)]
+  "#{all_but_last.join(', ')} or #{kinds[kinds.length - 1]}"
+
+# The expected type, if it is of one of the kinds, as a hint for the operands.
+const hint_of = (expected: Type?, kinds: Array<String>): Type? ->
+  const type = expected ? return nil
+  is_one_of_kinds(type, kinds) then type else nil
+
+export const type_of_unary = (body: Body, unary: UnaryOperation, expected: Type?): Type ->
+  if unary.operator == 'not'
+    expect_condition(body, unary.operand)
+    return bool_type
+  const type = type_of(body, unary.operand, hint_of(expected, NUMERIC_KINDS))
+  if not is_one_of_kinds(type, NUMERIC_KINDS)
+    const message = "expected #{describe_kinds(NUMERIC_KINDS)}, got #{format_type(type)}"
+    fail(body.program, unary.operand.position, message)
+  type
+
+# `x == nil` and `x != nil` test an optional value.
+const type_of_nil_test = (body: Body, binary: BinaryOperation): Type ->
+  const left_is_nil = binary.left is NilLiteral
+  type_of(body, left_is_nil then binary.left else binary.right, nil)
+  expect_optional(body, left_is_nil then binary.right else binary.left)
+  bool_type
+
+# `x ? fallback` is x without nil; the fallback has that type too.
+export const type_of_coalesce = (body: Body, coalesce: Coalesce): Type ->
+  const inner = expect_optional(body, coalesce.value)
+  expect_type(body, coalesce.fallback, inner)
+  inner
+
+# Arithmetic passes the expected type to its operands; a comparison's operands have their own.
+export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Type?): Type ->
+  const operator = binary.operator
+  if operator == 'and' or operator == 'or'
+    expect_condition(body, binary.left)
+    expect_condition(body, binary.right)
+    return bool_type
+  return type_of_nil_test(body, binary) if is_nil_test(binary)
+  if operator == '==' or operator == '!='
+    const comparable = ['Int', 'Byte', 'Bool', 'String', 'Binary']
+    const reject = (type: Type): String -> "cannot compare values of type #{format_type(type)}"
+    type_of_operands(body, binary, nil, comparable, reject)
+    return bool_type
+  const allowed = operator == '+' then ['Int', 'Byte', 'String'] else NUMERIC_KINDS
+  const reject = (type: Type): String ->
+    "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
+  if not is_arithmetic(operator)
+    type_of_operands(body, binary, nil, NUMERIC_KINDS, reject)
+    return bool_type
+  type_of_operands(body, binary, hint_of(expected, allowed), allowed, reject)
+
+# The type both operands share. An operand whose type comes from the context is checked against
+# the other one, so that `c == 'a'` and `'a' == c` compare Bytes when `c` is one.
+const type_of_operands = (
+  body: Body
+  binary: BinaryOperation
+  expected: Type?
+  allowed_kinds: Array<String>
+  reject: (Type) -> String
+): Type ->
+  const { left, right } = binary
+  const right_first = is_contextual(left) and not is_contextual(right)
+  const first = right_first then right else left
+  const second = right_first then left else right
+  const type = type_of(body, first, expected)
+  const is_equality = binary.operator == '==' or binary.operator == '!='
+  return type_of_identity_operand(body, second, type) if is_equality and is_identity_type(type)
+  fail(body.program, first.position, reject(type)) if not is_one_of_kinds(type, allowed_kinds)
+  expect_type(body, second, type)
+  type
+
+# Objects compared by identity may be of different types, as a class and a union that holds it,
+# as long as both can hold an object of the same class.
+const type_of_identity_operand = (body: Body, second: Expression, first_type: Type): Type ->
+  const type = type_of(body, second, nil)
+  if not (is_identity_type(type) and share_a_class(first_type, type))
+    const message = "cannot compare #{format_type(first_type)} with #{format_type(type)}"
+    fail(body.program, second.position, message)
+  first_type

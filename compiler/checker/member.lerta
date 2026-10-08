@@ -1,0 +1,128 @@
+# Types the members of values: method calls, `x.name(...)`, and properties, `x.name`; and decides
+# which types are Stringable, by their method to_string.
+import { Call, Identifier, Member, Position, This } from '../ast'
+import { builtin_property } from './builtins'
+import { fail } from './diagnostics'
+import { check_arguments, set_type, type_of } from './expression'
+import { plain_method_type } from './extensions'
+import { receiver_instance, type_of_generic_method_call } from './generic_call'
+import { GenericRef, STRINGABLE } from './generics'
+import { BuiltinMethod, ExtensionSource, find_method, MethodSource, OwnMethod } from './methods'
+import { common_field_type, field_type, method_owner, object_method_type } from './object'
+import { Body } from './shared'
+import { format_type, FunctionType, is_assignable, string_type, Type, UnionType } from '../types'
+
+# The result of a call of the method that `member` names: a method of the object's type (see
+# find_method), or a field that holds a function.
+export const type_of_method_call = (
+  body: Body
+  call: Call
+  member: Member
+  expected: Type?
+): Type ->
+  const receiver = type_of(body, member.object, nil)
+  const source = find(body, receiver, member.name.name)
+  const generic = generic_method(source)
+  if generic == nil
+    return check_arguments(body, call, type_of_method(body, member, receiver, source))
+  const method = type_of_generic_method_call(body, call, member, generic, receiver, expected)
+  set_type(body, member, method)
+  method.result
+
+const generic_method = (source: MethodSource?): GenericRef? ->
+  return nil if source == nil
+  source is ExtensionSource then source.method.generic else nil
+
+const type_of_method = (
+  body: Body
+  member: Member
+  receiver: Type
+  source: MethodSource?
+): Type ->
+  const { name, position } = member.name
+  reject_deinit(body, receiver, member)
+  const from_source = source then method_type(body, receiver, source, member.name, nil) else nil
+  const no_method = (): never ->
+    fail(body.program, position, "type #{format_type(receiver)} has no method '#{name}'")
+  const method = from_source ? (field_type(body, receiver, member) ? no_method())
+  set_type(body, member, method)
+
+const find = (body: Body, receiver: Type, name: String): MethodSource? ->
+  find_method(body.program, receiver, name, body.extensions)
+
+# The type of the method, checking its body first if needed. A generic one's comes from its
+# instance for the receiver, if the receiver gives all its type arguments; `call`, if given, calls
+# it.
+const method_type = (
+  body: Body
+  receiver: Type
+  source: MethodSource
+  name: Identifier
+  call: Call?
+): Type? ->
+  case source
+    when OwnMethod then object_method_type(body, source.receiver, name)
+    when BuiltinMethod then source.type
+    when ExtensionSource
+      const method = source.method
+      const generic = method.generic ? return plain_method_type(body.program, method, name.position)
+      const instance = receiver_instance(body, generic, receiver, name.position, call) ? return nil
+      instance.entry.type
+
+# The type of `to_string(): String` of the type, if it is Stringable; a field that holds a
+# function does not count.
+const stringable_method = (body: Body, type: Type, at: Position, call: Call?): Type? ->
+  const name = Identifier(position: at, name: 'to_string')
+  const source = find(body, type, name.name) ? return nil
+  const method = method_type(body, type, source, name, call) ? return nil
+  return nil if not (method is FunctionType)
+  method.params.length == 0 and is_assignable(method.result, string_type) then method else nil
+
+# Rejects a type that is not Stringable.
+export const reject_not_stringable = (body: Body, type: Type, at: Position): void ->
+  fail_not_stringable(body, type, at) if stringable_method(body, type, at, nil) == nil
+
+const fail_not_stringable = (body: Body, type: Type, at: Position): never ->
+  const message = "#{format_type(type)} is not #{STRINGABLE}: it has no method to_string(): String"
+  fail(body.program, at, message)
+
+# `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
+# is typed once.
+export const check_interpolated = (body: Body, part: Call): void ->
+  const member = part.callee
+  throw 'an interpolated value is read by a call of its to_string()' if not (member is Member)
+  const type = type_of(body, member.object, nil)
+  const method = stringable_method(body, type, member.position, part)
+  const stringable = method ? fail_not_stringable(body, type, member.object.position)
+  set_type(body, member, stringable)
+  set_type(body, part, string_type)
+
+# A class's deinit is only run by a release.
+const reject_deinit = (body: Body, object_type: Type, member: Member): void ->
+  const { name, position } = member.name
+  return if name != 'deinit' or method_owner(body, object_type, name) == nil
+  const message = 'deinit runs when the object is released; it cannot be called or used'
+  fail(body.program, position, message)
+
+# A member that is not called is a field, or a property such as `length`. A field read from a union
+# must be in every member, with the same type.
+export const type_of_property = (body: Body, member: Member): Type ->
+  const object_type = type_of_object(body, member)
+  const { name, position } = member.name
+  reject_deinit(body, object_type, member)
+  return common_field_type(body, object_type, member) if object_type is UnionType
+  if const field = field_type(body, object_type, member)
+    return field
+  if const property = builtin_property(object_type, name)
+    return property
+  if find(body, object_type, name) != nil
+    fail(body.program, position, "a method must be called: write `#{name}()`")
+  fail(body.program, position, "type #{format_type(object_type)} has no property '#{name}'")
+
+# `@x` in a method or an initializer reads the object's field.
+const type_of_object = (body: Body, member: Member): Type ->
+  const object = member.object
+  if object is This
+    if const self = body.self
+      return set_type(body, object, self.type)
+  type_of(body, object, nil)

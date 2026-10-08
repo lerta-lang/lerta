@@ -1,0 +1,123 @@
+# Finds the type arguments of a call of a generic function or method: those written, and those
+# inferred from the receiver, the arguments and the type the call is expected to have.
+import {
+  ArrayLiteral, Call, Expression, FunctionLiteral, IntegerLiteral, MapLiteral, NilLiteral
+  Position, RecordLiteral, StringLiteral
+} from '../ast'
+import { fail } from './diagnostics'
+import { expect_type, type_of } from './expression'
+import { GenericFunction } from './generics'
+import { Body } from './shared'
+import { resolve } from './type_names'
+import { has_type_parameters, infer, substitute } from './type_patterns'
+import { is_kind, OptionalType, same_type, Type } from '../types'
+
+# A type argument, and where it was given or inferred from.
+export struct TypeBinding
+  type: Type
+  at: Position
+
+# An argument typed alone, which its parameter must take once the type arguments are known.
+export struct InferredArgument
+  arg: Expression
+  type: Type
+  index: Int
+
+export struct Inference
+  bindings: Map<String, TypeBinding>
+  inferred: Array<InferredArgument>
+
+# The type arguments of a generic method that the receiver gives, if it gives all of them.
+export const receiver_type_arguments = (generic: GenericFunction, receiver: Type): Array<Type>? ->
+  const bindings: Map<String, Type> = Map()
+  infer(generic.receiver!.type, receiver, (name, type) -> bindings[name] = type)
+  return nil if generic.type_params.any((param) -> not bindings.has(param.name.name))
+  [bindings[param.name.name]! for param in generic.type_params]
+
+# The type arguments come, in order, from those written; from the receiver of a method and the
+# arguments that have a type of their own, each typed alone; from the type the call is expected
+# to have; then from the literals, whose type may depend on what is expected of them (`[]`, `nil`,
+# `1` as a Byte), each checked against its parameter's type once it has no type parameter left;
+# and last from the function literals, whose parameters may take their types from all the others.
+# An argument of type X? after one of type X makes the type argument X?. The call has as many
+# arguments as the generic has parameters.
+export const infer_type_arguments = (
+  body: Body
+  call: Call
+  generic: GenericFunction
+  expected: Type?
+  receiver: TypeBinding?
+): Inference ->
+  const params = generic.params
+  const bindings = written_bindings(body, call, generic)
+  const written: Map<String, Bool> = Map()
+  written[name] = true for name in bindings.keys()
+  const inferred: Array<InferredArgument> = []
+  const bind_from = (pattern: Type, type: Type, at: Position) ->
+    const bind = (name: String, bound_type: Type) ->
+      # nil and never tell nothing about the type.
+      return if is_kind(bound_type, 'nil') or is_kind(bound_type, 'never')
+      if const bound = bindings[name]
+        return if written.has(name) or not widens(bound.type, bound_type)
+      bindings[name] = TypeBinding(at, type: bound_type)
+    infer(pattern, type, bind)
+  if receiver
+    bind_from(generic.receiver!.type, receiver.type, receiver.at)
+  const check_argument = (index: Int) ->
+    const arg = call.args[index]
+    const param = substitute(params[index], types_of(bindings))
+    if not has_type_parameters(param) and needs_context(arg)
+      expect_type(body, arg, param)
+      return
+    # A function literal's parameters may take the types that are known already.
+    const type = type_of(body, arg, arg is FunctionLiteral then param else nil)
+    fail(body.program, arg.position, 'expected a value, got void') if is_kind(type, 'void')
+    bind_from(params[index], type, arg.position)
+    inferred.push(InferredArgument(arg, type, index))
+  const is_function = (i: Int): Bool -> call.args[i] is FunctionLiteral
+  const is_literal = (i: Int): Bool -> needs_context(call.args[i]) and not is_function(i)
+  check_argument(i) for i in 0...call.args.length when not needs_context(call.args[i])
+  if const result = generic.result
+    bind_from(result, expected, call.position) if expected
+  check_argument(i) for i in 0...call.args.length when is_literal(i)
+  check_argument(i) for i in 0...call.args.length when is_function(i)
+  Inference(bindings, inferred)
+
+# An X? after an X makes the type argument X?.
+const widens = (bound: Type, type: Type): Bool ->
+  type is OptionalType then same_type(type.inner, bound) else false
+
+# `f<Int>(x)` gives all the type arguments.
+const written_bindings = (
+  body: Body
+  call: Call
+  generic: GenericFunction
+): Map<String, TypeBinding> ->
+  const bindings: Map<String, TypeBinding> = Map()
+  const { type_params, name } = generic
+  return bindings if call.type_args.length == 0
+  if call.type_args.length != type_params.length
+    const counts = "takes #{type_params.length} type argument(s), got #{call.type_args.length}"
+    fail(body.program, call.position, "'#{name.name}' #{counts}")
+  for i in 0...type_params.length
+    const type_name = call.type_args[i]
+    const type = resolve(body.program, body.resolver, type_name)
+    bindings[type_params[i].name.name] = TypeBinding(type, at: type_name.position)
+  bindings
+
+# A literal whose type may depend on what is expected of it.
+const needs_context = (arg: Expression): Bool ->
+  case arg
+    when FunctionLiteral then true
+    when NilLiteral then true
+    when IntegerLiteral then true
+    when StringLiteral then true
+    when ArrayLiteral then true
+    when MapLiteral then true
+    when RecordLiteral then true
+    else false
+
+const types_of = (bindings: Map<String, TypeBinding>): Map<String, Type> ->
+  const types: Map<String, Type> = Map()
+  types[name] = bindings[name]!.type for name in bindings.keys()
+  types

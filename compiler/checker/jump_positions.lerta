@@ -1,0 +1,141 @@
+# Where `break`, `continue` and `return` may be written as expressions: where nothing evaluated
+# before them is still held, so that jumping away leaves nothing to release. That is a statement,
+# the value of a declaration or of an assignment to a variable, and, within those, the fallback of
+# `?` and the values of `then`/`else` and of case arms.
+import {
+  ArrayLiteral, as_expression, Assignment, BinaryOperation, Binding, BooleanLiteral, Call, Case
+  Coalesce, Comprehension, Condition, Conditional, Declaration, Expression, Extend, Extern, For
+  FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral, Interpolation, IsTest, Jump
+  MapLiteral, Member, MemberDeclaration, NilLiteral, Position, Range, RecordLiteral, Return
+  Statement, StringLiteral, This, Throw, TypeAlias, TypeDeclaration, UnaryOperation, Unwrap, While
+} from '../ast'
+import { fail } from './diagnostics'
+import { ProgramWide } from './shared'
+
+# Which jumps the statements of a block may make. Inside an expression that holds values, such as
+# `'a' + case ...`, the statements of an arm may not return, and may only leave or continue a loop
+# that starts among them.
+struct Jumps
+  may_return: Bool
+  may_leave_loop: Bool
+
+const all_jumps = Jumps(may_return: true, may_leave_loop: true)
+const no_jumps = Jumps(may_return: false, may_leave_loop: false)
+
+export const reject_misplaced_jumps = (program: ProgramWide, statements: Array<Statement>): void ->
+  visit_statements(program, statements, all_jumps)
+
+const visit_statements = (program: ProgramWide, statements: Array<Statement>, jumps: Jumps): void ->
+  visit_statement(program, statement, jumps) for statement in statements
+
+const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
+  const in_loop = Jumps(may_return: jumps.may_return, may_leave_loop: true)
+  case statement
+    when Declaration then visit(program, statement.value, jumps)
+    when Assignment
+      const target = statement.target
+      visit(program, target, no_jumps)
+      visit(program, statement.value, target is Identifier then jumps else no_jumps)
+    when If
+      visit_condition(program, statement.condition)
+      visit_statements(program, statement.then_body, jumps)
+      visit_statements(program, statement.else_body, jumps)
+    when While
+      visit_condition(program, statement.condition)
+      visit_statements(program, statement.body, in_loop)
+    when For
+      visit(program, statement.iterable, no_jumps)
+      visit_statements(program, statement.body, in_loop)
+    when TypeDeclaration then visit_members(program, statement.members)
+    when Extend then visit_members(program, statement.members)
+    when Import then return
+    when TypeAlias then return
+    when Extern then return
+    else visit(program, as_expression_statement(statement), jumps)
+
+const as_expression_statement = (statement: Statement): Expression ->
+  as_expression(statement) ? throw 'a statement that is no declaration is an expression'
+
+const visit_members = (program: ProgramWide, members: Array<MemberDeclaration>): void ->
+  for member in members
+    if const value = member.value
+      visit(program, value, all_jumps)
+
+const visit_condition = (program: ProgramWide, condition: Condition): void ->
+  case condition
+    when Binding then visit(program, condition.value, no_jumps)
+    else visit(program, as_expression(condition)!, no_jumps)
+
+# `jumps` says which jumps the expression itself may be; its operands, which are evaluated while
+# others are held, may make none.
+const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void ->
+  const operand = (child: Expression) -> visit(program, child, no_jumps)
+  case expression
+    when Jump then check_jump(program, expression.kind, jumps.may_leave_loop, expression.position)
+    when Return
+      check_jump(program, 'return', jumps.may_return, expression.position)
+      if const value = expression.value
+        visit(program, value, jumps)
+    when Coalesce
+      operand(expression.value)
+      visit(program, expression.fallback, jumps)
+    when Conditional
+      operand(expression.condition)
+      visit(program, expression.then_value, jumps)
+      visit(program, expression.else_value, jumps)
+    when Case
+      if const subject = expression.subject
+        operand(subject)
+      for arm in expression.arms
+        operand(pattern) for pattern in arm.patterns
+        visit_statements(program, arm.body, jumps)
+      if const otherwise = expression.otherwise
+        visit_statements(program, otherwise, jumps)
+    # No loop is outside a function; a jump out of none is an error of its own.
+    when FunctionLiteral then visit_statements(program, expression.body, all_jumps)
+    when Interpolation
+      for part in expression.parts
+        operand(part) if part is Call
+    when ArrayLiteral
+      operand(element) for element in expression.elements
+    when Comprehension
+      operand(expression.element)
+      operand(expression.iterable)
+      if const guard = expression.guard
+        operand(guard)
+    when RecordLiteral
+      operand(field.value) for field in expression.fields
+    when MapLiteral
+      for entry in expression.entries
+        operand(entry.key)
+        operand(entry.value)
+    when Call
+      operand(expression.callee)
+      operand(arg) for arg in expression.args
+      operand(arg.value) for arg in expression.named_args
+    when Index
+      operand(expression.object)
+      operand(expression.index)
+    when Member then operand(expression.object)
+    when UnaryOperation then operand(expression.operand)
+    when Unwrap then operand(expression.operand)
+    when BinaryOperation
+      operand(expression.left)
+      operand(expression.right)
+    when Range
+      operand(expression.start)
+      operand(expression.end)
+    when Throw then operand(expression.message)
+    when IsTest then operand(expression.value)
+    when StringLiteral then return
+    when IntegerLiteral then return
+    when BooleanLiteral then return
+    when NilLiteral then return
+    when Identifier then return
+    when This then return
+
+const check_jump = (program: ProgramWide, kind: String, allowed: Bool, at: Position): void ->
+  return if allowed
+  const statement = 'a statement or as the value of a declaration or of an assignment to a variable'
+  const through = "directly or through '?', then/else or case arms"
+  fail(program, at, "'#{kind}' cannot be used here: only as #{statement}, #{through}")

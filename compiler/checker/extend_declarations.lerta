@@ -1,0 +1,91 @@
+# `extend` statements: which types they may extend, and with what methods.
+import { Extend, FunctionLiteral, Identifier, TypeParameter } from '../ast'
+import { builtin_method, builtin_property } from './builtins'
+import { fail } from './diagnostics'
+import { add_own, ExtensionMethod } from './extensions'
+import { add_function, add_generic, method_key } from './functions'
+import { GenericRef, make_generic_function, Receiver } from './generics'
+import { info_of, method_literal } from './object_types'
+import { ProgramWide, Shared } from './shared'
+import { module_resolver, resolve, with_type_parameters } from './type_names'
+import { parts_of, placeholders } from './type_patterns'
+import { format_type, is_one_of_kinds, ObjectType, Type, TypeParameterType } from '../types'
+
+# Optional values, functions, unions and anonymous structs are left out.
+const EXTENDABLE_KINDS = [
+  'String', 'Int', 'Bool', 'Byte', 'Binary', 'Array', 'Map', 'Iter', 'Object'
+]
+
+# Puts the extend's methods in effect in the module, and adds them to its functions, which check
+# their bodies with `@` as the receiver, or makes them generic methods, whose instances are
+# checked so.
+export const declare_extend = (program: ProgramWide, shared: Shared, statement: Extend): void ->
+  const { type_params } = statement
+  reject_bounds(program, type_params)
+  const resolver = with_type_parameters(module_resolver(shared.index), placeholders(type_params))
+  const receiver = resolve(program, resolver, statement.type)
+  if not is_one_of_kinds(receiver, EXTENDABLE_KINDS)
+    const extendable = 'String, Int, Bool, Byte, Binary, arrays, maps, Iters, classes and structs'
+    const message = "#{format_type(receiver)} cannot be extended; only #{extendable} can be so far"
+    fail(program, statement.type.position, message)
+  reject_unused_type_parameters(program, type_params, receiver)
+  const extended = Receiver(type_params, type: receiver)
+  for member in statement.members
+    const { name } = member
+    const literal = method_literal(member)
+    if literal == nil
+      fail(program, member.position, 'an extend has only methods, as in `name = (x: Int) -> ...`')
+    if name.name == 'init' or name.name == 'deinit'
+      const message = "an extend cannot declare #{name.name}, which only a class or struct runs"
+      fail(program, name.position, message)
+    if has_member(program, receiver, name.name)
+      fail(program, name.position, "#{format_type(receiver)} already has a member '#{name.name}'")
+    const method = extension_method(program, shared, extended, name, literal)
+    add_own(program, shared, method)
+    add_function(program, shared, method.key, name, literal, receiver) if method.generic == nil
+
+# A method of an extend of the receiver: generic if the extend or the method has type parameters.
+const extension_method = (
+  program: ProgramWide
+  shared: Shared
+  receiver: Receiver
+  name: Identifier
+  literal: FunctionLiteral
+): ExtensionMethod ->
+  const type = receiver.type
+  const key = method_key(format_type(type), name.name)
+  const is_generic = receiver.type_params.length > 0 or literal.type_params.length > 0
+  const make_generic = (): GenericRef ->
+    add_generic(shared, make_generic_function(program, shared, name, literal, receiver))
+  const generic = is_generic then make_generic() else nil
+  const module_index = shared.index
+  const module_name = shared.name
+  ExtensionMethod(name, literal, generic, key, module_index, module_name, receiver: type)
+
+# The receiver gives an extend's type arguments, whose bounds would go unchecked.
+const reject_bounds = (program: ProgramWide, type_params: Array<TypeParameter>): void ->
+  for param in type_params
+    if const bound = param.bound
+      fail(program, bound.position, "an extend's type parameter takes no bound")
+
+# Each type parameter of an extend must be in the extended type, which gives its type argument.
+const reject_unused_type_parameters = (
+  program: ProgramWide
+  type_params: Array<TypeParameter>
+  receiver: Type
+): void ->
+  const used: Map<String, Bool> = Map()
+  add_type_parameters(used, receiver)
+  for param in type_params
+    const { name, position } = param.name
+    fail(program, position, "'#{name}' is not in the extended type") if not used.has(name)
+
+const add_type_parameters = (used: Map<String, Bool>, type: Type): void ->
+  used[type.name] = true if type is TypeParameterType
+  add_type_parameters(used, part) for part in parts_of(type)
+
+const has_member = (program: ProgramWide, receiver: Type, name: String): Bool ->
+  if receiver is ObjectType
+    const info = info_of(program, receiver)
+    return info.methods.has(name) or info.fields.any((field) -> field.name.name == name)
+  builtin_method(receiver, name) != nil or builtin_property(receiver, name) != nil

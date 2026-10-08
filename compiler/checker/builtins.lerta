@@ -1,0 +1,46 @@
+# The methods and properties that the compiler gives the builtin types: the operations on their
+# representation that the runtime or the generated code performs. The others, and the builtin
+# functions, such as print, are written in Lerta, in std/builtins.lerta.
+import {
+  ArrayType, binary_type, bool_type, FunctionType, int_type, is_kind, is_one_of_kinds, IterType
+  MapType, Type, void_type
+} from '../types'
+
+const method = (params: Array<Type>, result: Type): Type -> FunctionType(params, result)
+
+# The type of a method of a generic builtin type, if it has one.
+export const builtin_method = (receiver: Type, name: String): Type? ->
+  case receiver
+    when ArrayType then array_method(receiver.element, name)
+    when MapType then map_method(receiver.key, name)
+    when IterType then iter_method(receiver.item, name)
+    else nil
+
+const array_method = (element: Type, name: String): Type? ->
+  case name
+    when 'push' then method([element], void_type)
+    when 'pop' then method([], element)
+    else take_method(element, name)
+
+const iter_method = (item: Type, name: String): Type? ->
+  case name
+    when 'has_next' then method([], bool_type)
+    when 'next' then method([], item)
+    else take_method(item, name)
+
+# `take` stops reading its source after the items it gives, which an Iter written in Lerta, a
+# comprehension, cannot.
+const take_method = (item: Type, name: String): Type? ->
+  name == 'take' then method([int_type], IterType(item)) else nil
+
+const map_method = (key: Type, name: String): Type? ->
+  case name
+    when 'remove' then method([key], void_type)
+    when 'keys' then method([], ArrayType(element: key))
+    else nil
+
+# The type of a property of a builtin type, read without a call, if it has one.
+export const builtin_property = (receiver: Type, name: String): Type? ->
+  return int_type if name == 'length' and is_one_of_kinds(receiver, ['Array', 'Map', 'Binary'])
+  return binary_type if name == 'binary' and is_kind(receiver, 'String')
+  nil

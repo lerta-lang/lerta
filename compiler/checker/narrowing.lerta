@@ -1,0 +1,101 @@
+# Narrowing an optional local where a condition shows it is not nil, or a local of a union type
+# where it shows which type it has, including after a guard `if`.
+import {
+  as_expression, BinaryOperation, Condition, Expression, Identifier, If, IsTest, NamedType
+  NilLiteral, Statement, UnaryOperation
+} from '../ast'
+import { lookup } from './name'
+import { Local } from './scopes'
+import { Body } from './shared'
+import { resolve } from './type_names'
+import { OptionalType, Type, UnionType } from '../types'
+
+# A local, and the narrower type it has.
+export struct Narrowing
+  local: Local
+  type: Type
+
+# The narrowing where the condition has `value`, if it has the narrower type there.
+export const narrowing_where = (narrowing: ConditionNarrowing?, value: Bool): Narrowing? ->
+  const found = narrowing ? return nil
+  found.condition_value == value then Narrowing(local: found.local, type: found.type) else nil
+
+# A local, the narrower type it has, and the value of the condition where it has it.
+export struct ConditionNarrowing
+  local: Local
+  type: Type
+  condition_value: Bool
+
+# `x`, `x != nil`, `not x`, `x == nil` and `x is T` test the name x: it is not nil, or is a T,
+# where the condition has `condition_value`. For `x is T`, `is_type` is T, the type x then has;
+# otherwise x is tested against nil.
+export struct TestedName
+  name: Identifier
+  condition_value: Bool
+  is_type: NamedType?
+
+export const tested_name = (condition: Condition): TestedName? ->
+  case condition
+    when Identifier then TestedName(name: condition, condition_value: true, is_type: nil)
+    when IsTest
+      const value = condition.value
+      return nil if not (value is Identifier)
+      TestedName(name: value, condition_value: true, is_type: condition.type)
+    when UnaryOperation
+      return nil if condition.operator != 'not'
+      const inner = tested_name(condition.operand) ? return nil
+      const { name, is_type } = inner
+      TestedName(name, is_type, condition_value: not inner.condition_value)
+    when BinaryOperation
+      const operator = condition.operator
+      return nil if operator != '==' and operator != '!='
+      const name = nil_tested(condition.left, condition.right) ? return nil
+      TestedName(name, condition_value: operator == '!=', is_type: nil)
+    else nil
+
+# The name that one side compares with nil on the other.
+const nil_tested = (left: Expression, right: Expression): Identifier? ->
+  const tested = case
+    when left is NilLiteral then right
+    when right is NilLiteral then left
+    else nil
+  return nil if tested == nil
+  tested is Identifier then tested else nil
+
+# A body that cannot go on past its end: it ends with an expression that never gives a value,
+# such as `return`, `break`, `continue`, `throw` or a call to `exit`, or an `if` whose branches
+# both end so.
+export const ends_with_jump = (
+  statements: Array<Statement>
+  is_never: (Expression) -> Bool
+): Bool ->
+  return false if statements.length == 0
+  const last = statements[statements.length - 1]
+  case last
+    when If
+      ends_with_jump(last.then_body, is_never) and ends_with_jump(last.else_body, is_never)
+    else
+      const expression = as_expression(last) ? return false
+      is_never(expression)
+
+# A view of a local with a narrower type, which marks the local itself as used.
+export const narrowed_view = (local: Local, type: Type): Local ->
+  const { identifier, mutable, used } = local
+  const view = Local(identifier, type, mutable, used, declared: false, origin: local.origin ? local)
+  view.captured = local.captured
+  view
+
+# The local a condition tests, and the value of the condition when it has the narrower type. Only
+# a local that cannot be reassigned is narrowed.
+export const narrowing_of = (body: Body, condition: Condition): ConditionNarrowing? ->
+  const tested = tested_name(condition) ? return nil
+  const local = lookup(body, tested.name.name) ? return nil
+  return nil if local.mutable
+  const { condition_value } = tested
+  if const is_type = tested.is_type
+    return nil if not (local.type is UnionType)
+    const type = resolve(body.program, body.resolver, is_type)
+    return ConditionNarrowing(local, type, condition_value)
+  const type = local.type
+  return nil if not (type is OptionalType)
+  ConditionNarrowing(local, condition_value, type: type.inner)

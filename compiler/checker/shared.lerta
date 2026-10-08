@@ -1,0 +1,131 @@
+# What the checking of a program keeps: what is found for each module, which the checking of the
+# others may read, and the state of the checking of one body. Objects refer to the modules, and to
+# what each module declares, by index, so that no two of them refer to each other.
+import {
+  Call, Exportable, Expression, FunctionLiteral, Identifier, Node, Position
+} from '../ast'
+import { Extensions, ExtensionMethod } from './extensions'
+import { Functions } from './functions'
+import { GenericFunction, Instance } from './generics'
+import { Imports } from './imports'
+import { Module } from '../loader'
+import { ObjectInfo, FieldInfo } from './object_types'
+import { Local, Scopes } from './scopes'
+import { TopLevelValues } from './top_level_values'
+import { AliasEntry, Resolver } from './type_names'
+import { Type } from '../types'
+
+# What each function literal that is not a top-level function captures from around it: the names
+# and the types they have there, which may be narrowed.
+export struct Capture
+  name: String
+  type: Type
+  is_var: Bool
+
+# The type of a C function, and the module of the extern that first declared it.
+export struct ExternType
+  type: Type
+  module_name: String
+
+# Reported without stopping the compilation.
+export struct Warning
+  message: String
+  line: Int
+  column: Int
+
+# What is found for one module, and what its checkers share.
+export class Shared
+  # The module's index, how messages name it, and the path that diagnostics give for it (see
+  # Module).
+  index: Int
+  name: String
+  path: String?
+  imports: Imports
+  extensions: Extensions
+  top_level: TopLevelValues
+  # What the module exports, besides its extends, by name (see export_of).
+  exported: Map<String, Exportable>
+  # The type of every expression, and the type that the name of `x is T` stands for.
+  types: Map<Node, Type> = Map()
+  # The type an expression is converted to where it is used, such as an Int passed as an Int?.
+  conversions: Map<Node, Type> = Map()
+  warnings: Array<Warning> = []
+  functions = Functions()
+  # The generic functions, then the generic methods of the module's own extends, in the order they
+  # are declared; others refer to them by their places here (see GenericRef).
+  generics: Array<GenericFunction> = []
+  # The classes and structs that the module declares, by name.
+  objects: Map<String, ObjectInfo> = Map()
+  # Type aliases, resolved on first use, so that they can refer to each other in any order.
+  aliases: Map<String, AliasEntry> = Map()
+  resolving: Map<String, Bool> = Map()
+  # The methods of the module's extends, which the modules that import it get.
+  own_methods: Array<ExtensionMethod> = []
+  captures: Map<FunctionLiteral, Array<Capture>> = Map()
+  # The instances of generic functions that calls call.
+  instances: Map<Call, Instance> = Map()
+  # The `var`s that function literals capture, by their declarations' names.
+  shared_vars: Map<Identifier, Bool> = Map()
+  # The names of the top-level code, once it is checked: those never used are warned about once
+  # the functions that may use them are checked (see warn_unused).
+  top_level_scope: Map<String, Local>? = nil
+
+# A call whose instance's written types are being resolved: an error in them is the call's (see
+# resolve_annotation).
+export struct AnnotatedCall
+  at: Position
+  context: String
+
+# What the modules share: what each module's checking finds, the classes and structs of every
+# module, by symbol, the type each C function was first declared with by an extern, and what a
+# compile error reports with it.
+export class ProgramWide
+  entry_path: String
+  modules: Array<Module>
+  shared: Array<Shared> = []
+  infos: Map<String, ObjectInfo> = Map()
+  extern_types: Map<String, ExternType> = Map()
+  # The paths of the modules whose code is being checked, innermost last (see error_module_path).
+  module_paths: Array<String?> = []
+  # The instances of generic functions being checked, as messages describe them, innermost last.
+  contexts: Array<String> = []
+  annotated_call: AnnotatedCall? = nil
+  # The modules whose functions are checked, whose unused names can be told.
+  bodies_checked: Array<Int> = []
+
+# The type of the object that `@` refers to: in a method, the method of an extend, or the
+# initializer of a field, which sees the constructor arguments and the fields initialized before
+# it.
+export class SelfContext
+  type: Type
+  initializing: FieldInfo?
+
+export struct Result
+  value: Expression
+  type: Type
+
+# The function whose body is being checked: its written return type, or the one being inferred.
+export class FunctionContext
+  annotated: Type?
+  inferred: Type? = nil
+  # The returned values, converted to the return type once it is known.
+  results: Array<Result> = []
+
+# The checking of one body: the top-level code, a function's, or the initializers of a class or
+# struct. The body of a generic function's instance resolves its type parameters to its type
+# arguments, and sees the extends where it is called (see Instance).
+export class Body
+  program: ProgramWide
+  shared: Shared
+  resolver: Resolver
+  extensions: Extensions
+  context: FunctionContext?
+  self: SelfContext?
+  # For the body of a function literal: the body it is written in, whose locals it captures.
+  enclosing: Body?
+  # Those it captures, if it is a function literal's.
+  captures: Array<Capture> = []
+  scopes = Scopes()
+  loop_depth = 0
+  # A function or a method sees the top-level values; the top-level code declares them.
+  sees_top_level = @context != nil or @self != nil

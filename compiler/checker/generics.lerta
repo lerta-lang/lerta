@@ -1,0 +1,206 @@
+# Generic functions, `const first = <T>(xs: Array<T>) -> xs[0]`, declared at the top level, and
+# generic methods of extends: those of a generic type, `extend Array<T>`, and those with type
+# parameters of their own. Each distinct set of type arguments makes an instance: a copy of the
+# literal, whose body is checked with the type parameters standing for the type arguments, and
+# generated as a function of its own. A generic function that is never called is not checked.
+import { FunctionLiteral, Identifier, Position, TypeParameter } from '../ast'
+import { clone_function } from '../ast_clone'
+import { check_instance } from './bodies'
+import { fail, fail_in_context } from './diagnostics'
+import { ExtensionMethod, Extensions, with_methods } from './extensions'
+import { annotated_type, FunctionEntry, parameter_types } from './functions'
+import { AnnotatedCall, ProgramWide, Shared } from './shared'
+import {
+  has_type, module_resolver, resolve_result, Resolver, with_type_parameters
+} from './type_names'
+import { placeholders, substitute, type_depth } from './type_patterns'
+import { format_type, Type, type_key } from '../types'
+
+# How a generic function is referred to: by its module and its place in the module's generics.
+export struct GenericRef
+  module_index: Int
+  index: Int
+
+# The receiver of a generic method: the extended type, in which the extend's type parameters stand
+# for themselves, as `Array<T>`.
+export struct Receiver
+  type: Type
+  type_params: Array<TypeParameter>
+
+export class Instance
+  entry: FunctionEntry
+  generic: GenericRef
+  type_arguments: Array<Type>
+  # The extends of the type arguments in effect where it is first called: the body sees them, as
+  # the caller does, before the declaring module's own.
+  methods: Array<ExtensionMethod>
+  extensions: Extensions
+  resolver: Resolver
+  # Tells apart the instances of the same type arguments with different extends.
+  variant: Int
+
+# The only bound so far: a type argument must have `to_string(): String`.
+export const STRINGABLE = 'Stringable'
+
+# Type arguments nested deeper come from instances that would never end, as from `f<T>` calling
+# `f<Array<T>>`.
+const MAX_TYPE_DEPTH = 32
+
+export class GenericFunction
+  name: Identifier
+  literal: FunctionLiteral
+  module_index: Int
+  # A method's receiver, whose type parameters come first.
+  receiver: Receiver?
+  type_params: Array<TypeParameter>
+  # The parameters' types, and the result's if it is written, in which the type parameters stand
+  # for themselves.
+  params: Array<Type>
+  result: Type?
+  instances: Array<Instance> = []
+
+export const make_generic_function = (
+  program: ProgramWide
+  shared: Shared
+  name: Identifier
+  literal: FunctionLiteral
+  receiver: Receiver?
+): GenericFunction ->
+  const type_params: Array<TypeParameter> = []
+  if receiver
+    type_params.push(param) for param in receiver.type_params
+  type_params.push(param) for param in literal.type_params
+  const resolver = module_resolver(shared.index)
+  reject_bad_type_parameters(program, resolver, type_params)
+  const generic_resolver = with_type_parameters(resolver, placeholders(type_params))
+  const params = parameter_types(program, generic_resolver, literal, [])
+  const return_type = literal.return_type
+  const result = return_type then resolve_result(program, generic_resolver, return_type) else nil
+  GenericFunction(name, literal, receiver, type_params, params, result, module_index: shared.index)
+
+const reject_bad_type_parameters = (
+  program: ProgramWide
+  resolver: Resolver
+  type_params: Array<TypeParameter>
+): void ->
+  const seen: Map<String, Bool> = Map()
+  for param in type_params
+    const { name, position } = param.name
+    if seen.has(name) or has_type(program, resolver, name)
+      fail(program, position, "'#{name}' is already defined")
+    seen[name] = true
+    if const bound = param.bound
+      if bound.name != STRINGABLE
+        fail(program, bound.position, "only #{STRINGABLE} can bound a type parameter so far")
+
+export const generic_of = (program: ProgramWide, ref: GenericRef): GenericFunction ->
+  program.shared[ref.module_index].generics[ref.index]
+
+# The instance of the type arguments, whose extends in effect are `methods`, checked if new.
+export const instantiate = (
+  program: ProgramWide
+  ref: GenericRef
+  type_arguments: Array<Type>
+  methods: Array<ExtensionMethod>
+  at: Position
+): Instance ->
+  const generic = generic_of(program, ref)
+  const key = arguments_key(type_arguments)
+  const same_arguments = [
+    instance for instance in generic.instances when arguments_key(instance.type_arguments) == key
+  ]
+  const found = same_arguments.find((instance) -> same_methods(instance.methods, methods))
+  if found == nil and type_arguments.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
+    const name = generic.name.name
+    const message = "'#{name}' needs instances without end, each with type arguments nested deeper"
+    fail_in_context(program, at, message, "from #{describe(generic, generic.instances[0])}")
+  const variant = same_arguments.length
+  const instance = found ? add_instance(program, ref, type_arguments, methods, variant, at)
+  # As for a function that is not generic, a body whose return type is written is checked once the
+  # calling module is, so that it may use what the module declares after the call.
+  check(program, generic, instance) if found == nil and instance.entry.type == nil
+  if instance.entry.type == nil
+    fail(program, at, "'#{generic.name.name}' is recursive, so its return type must be written")
+  instance
+
+const arguments_key = (type_arguments: Array<Type>): String ->
+  [type_key(type) for type in type_arguments].join(', ')
+
+# The type arguments by the names of the type parameters.
+export const bindings = (
+  generic: GenericFunction
+  type_arguments: Array<Type>
+): Map<String, Type> ->
+  const types: Map<String, Type> = Map()
+  const { type_params } = generic
+  types[type_params[i].name.name] = type_arguments[i] for i in 0...type_params.length
+  types
+
+const add_instance = (
+  program: ProgramWide
+  ref: GenericRef
+  type_arguments: Array<Type>
+  methods: Array<ExtensionMethod>
+  variant: Int
+  at: Position
+): Instance ->
+  const generic = generic_of(program, ref)
+  const type_bindings = bindings(generic, type_arguments)
+  const resolver = with_type_parameters(module_resolver(generic.module_index), type_bindings)
+  const receiver = generic.receiver
+  const this_type = receiver then substitute(receiver.type, type_bindings) else nil
+  # Each instance's expressions have types of their own.
+  const literal = clone_function(generic.literal)
+  const entry = FunctionEntry(literal, this_type, name: generic.name, type: nil)
+  const extensions = with_methods(program.shared[generic.module_index].extensions, methods)
+  const instance = Instance(
+    entry, type_arguments, methods, extensions, resolver, variant, generic: ref
+  )
+  entry.type = resolve_annotation(program, generic, instance, at)
+  generic.instances.push(instance)
+  instance
+
+# Checks the instances left unchecked; returns whether there were any.
+export const check_pending = (program: ProgramWide, generic: GenericFunction): Bool ->
+  const is_pending = (instance: Instance): Bool -> instance.entry.state == 'unchecked'
+  const pending = [instance for instance in generic.instances when is_pending(instance)]
+  check(program, generic, instance) for instance in pending
+  pending.length > 0
+
+# An error in the body says which instance it was found in.
+const check = (program: ProgramWide, generic: GenericFunction, instance: Instance): void ->
+  instance.entry.state = 'checking'
+  program.contexts.push("in #{describe(generic, instance)}")
+  check_instance(program, generic.module_index, instance)
+  program.contexts.pop()
+  instance.entry.state = 'checked'
+
+# A written type that the type arguments make wrong, such as `T?` of an optional type, is the
+# call's error, as a type argument that misses its bound is.
+const resolve_annotation = (
+  program: ProgramWide
+  generic: GenericFunction
+  instance: Instance
+  at: Position
+): Type? ->
+  program.annotated_call = AnnotatedCall(at, context: "in #{describe(generic, instance)}")
+  const type = annotated_type(program, instance.resolver, instance.entry.literal)
+  program.annotated_call = nil
+  type
+
+# `print<Int>`, as messages write an instance; a method's, `Array<Int>.map<String>`, by its
+# receiver and the type arguments of its own.
+const describe = (generic: GenericFunction, instance: Instance): String ->
+  const receiver = generic.receiver
+  const receiver_count = receiver then receiver.type_params.length else 0
+  const own_arguments = [
+    instance.type_arguments[i] for i in receiver_count...instance.type_arguments.length
+  ]
+  const this_type = instance.entry.this_type
+  const generic_name = generic.name.name
+  const name = this_type then "#{format_type(this_type)}.#{generic_name}" else generic_name
+  return name if own_arguments.length == 0
+  "#{name}<#{[format_type(type) for type in own_arguments].join(', ')}>"
+
+const same_methods = (a: Array<ExtensionMethod>, b: Array<ExtensionMethod>): Bool ->
+  a.length == b.length and a.all((method) -> b.any((other) -> other == method))

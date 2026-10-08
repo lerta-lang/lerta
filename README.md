@@ -29,7 +29,7 @@ Early development: the bootstrap compiler (stage0) is in progress. See `docs/roa
 | Path | Contents |
 |---|---|
 | `stage0/` | Bootstrap compiler in TypeScript: `src/syntax/` reads the source, `src/check/` checks it, `src/codegen/` emits LLVM IR; `test/` runs the tests: `run.ts` the run tests, `cli.ts` the command line, `compiler.ts` the comparison of `compiler/` with stage0, `runtime.ts` runtime checks no Lerta program can trigger |
-| `compiler/` | The compiler written in Lerta, ported from stage0 one layer at a time: so far `lexer/` and `parser/`, which builds the tree of `ast.lerta`, behind `dump-tokens` and `dump-ast` |
+| `compiler/` | The compiler written in Lerta, ported from stage0 one layer at a time: so far `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, and `checker/`, which checks them, behind `dump-tokens`, `dump-ast` and `dump-checked`; `dump-checked <source> --root <dir>` is told the directory that holds `std/`, which the compiler cannot find on its own yet |
 | `runtime/` | C runtime |
 | `tests/` | Run tests: Lerta source and expected output |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |

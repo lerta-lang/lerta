@@ -1,0 +1,86 @@
+# Checks a program: the types of its expressions, its conversions and its warnings.
+import { check_all_objects } from './object_types'
+import {
+  complete_declarations, declare_extends, declare_later_extends, declare_names
+} from './declarations'
+import { enter_module, fail, leave_module } from './diagnostics'
+import { Extensions } from './extensions'
+import { check_all_functions, function_type_of, method_key } from './functions'
+import { check_pending } from './generics'
+import { exported_statements, Imports } from './imports'
+import { reject_misplaced_jumps } from './jump_positions'
+import { Module } from '../loader'
+import { Body, ProgramWide, Shared } from './shared'
+import { check_top_level_code } from './statement'
+import { top_level_values } from './top_level_values'
+import { module_resolver } from './type_names'
+import { FunctionType, is_kind } from '../types'
+
+# Checks the modules step by step, each step for all of them before the next, so that the modules
+# of an import cycle can use each other's names: the names, the declarations, the extends, the
+# top-level code in the order it runs (see load_modules), then the bodies of the functions and
+# objects. Inferred types are worked out on demand across modules, as within one. The warnings of
+# all the modules are gathered at the end (see all_warnings), or with an error, since a module
+# that calls a generic function of another checks an instance of it there, which may find warnings
+# and use names of that module.
+export const check_modules = (entry_path: String, modules: Array<Module>): ProgramWide ->
+  const program = ProgramWide(entry_path, modules)
+  program.shared.push(create_shared(module)) for module in modules
+  for shared in program.shared
+    enter_module(program, shared)
+    reject_misplaced_jumps(program, modules[shared.index].program)
+    declare_names(program, shared)
+    leave_module(program)
+  for_each_module(program, complete_declarations)
+  for_each_module(program, declare_extends)
+  for_each_module(program, declare_later_extends)
+  for_each_module(program, check_top_level)
+  for_each_module(program, check_bodies)
+  const has_pending = (shared: Shared): Bool ->
+    shared.generics.any((generic) -> check_pending(program, generic))
+  var pending = true
+  pending = program.shared.any(has_pending) while pending
+  program
+
+const for_each_module = (program: ProgramWide, step: (ProgramWide, Shared) -> void): void ->
+  for shared in program.shared
+    enter_module(program, shared)
+    step(program, shared)
+    leave_module(program)
+
+const create_shared = (module: Module): Shared ->
+  const index = module.index
+  const name = module.display_path ? 'the entry module'
+  const path = module.display_path
+  const extensions = Extensions(module_index: index, module_name: name)
+  const top_level = top_level_values(module.program)
+  const exported = exported_statements(module.program)
+  Shared(index, name, path, extensions, top_level, exported, imports: Imports())
+
+# The names of the top-level code are warned about if never used once the functions, checked
+# later, and the instances of generic functions that other modules call, which may use them, are
+# checked (see all_warnings).
+const check_top_level = (program: ProgramWide, shared: Shared): void ->
+  shared.top_level.started = true
+  const resolver = module_resolver(shared.index)
+  const { extensions } = shared
+  const body = Body(program, shared, resolver, extensions, context: nil, self: nil, enclosing: nil)
+  shared.top_level_scope = check_top_level_code(body, program.modules[shared.index].program)
+
+const check_bodies = (program: ProgramWide, shared: Shared): void ->
+  check_all_objects(program, shared)
+  check_all_functions(program, shared)
+  reject_deinit_results(program, shared)
+  program.bodies_checked.push(shared.index)
+
+# A deinit runs as part of a release, where nothing could take a value it gave, or handle a throw.
+const reject_deinit_results = (program: ProgramWide, shared: Shared): void ->
+  for type_name in shared.objects.keys()
+    const info = shared.objects[type_name]!
+    const literal = info.methods['deinit'] ? continue
+    const key = method_key(info.declaration.name.name, 'deinit')
+    const type = function_type_of(program, shared.index, key, literal.position)
+    const result = type then (type is FunctionType then type.result else nil) else nil
+    if result
+      fail(program, literal.position, 'deinit cannot throw') if is_kind(result, 'never')
+      fail(program, literal.position, 'deinit gives no value') if not is_kind(result, 'void')

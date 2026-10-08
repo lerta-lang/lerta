@@ -1,0 +1,224 @@
+# Types classes and structs: construction, fields, `@` and methods.
+import {
+  Call, copy_identifier, Expression, Identifier, Member, NamedValue, RecordLiteral, This
+} from '../ast'
+import { fail } from './diagnostics'
+import { expect_type, type_of } from './expression'
+import { function_type_of, has_function, method_key } from './functions'
+import { lookup } from './name'
+import { FieldInfo, field_type as info_field_type, info_of, object_type } from './object_types'
+import { Body } from './shared'
+import {
+  format_member, format_type, format_types, is_one_of_kinds, ObjectType, OptionalType
+  record_type, RecordField, RecordType, same_type, Type, UnionType
+} from '../types'
+
+# A field of a class or struct, with its type.
+struct FieldOf
+  info: FieldInfo
+  type: Type
+
+# The field of a member of a union.
+struct MemberField
+  member_type: Type
+  info: FieldInfo
+  type: Type
+
+# A call to the name of a class or struct, not shadowed by a local or a function, constructs one.
+# The callee is recorded with the object type, which codegen recognizes.
+export const constructed_type = (body: Body, callee: Expression): ObjectType? ->
+  return nil if not (callee is Identifier)
+  const name = callee.name
+  return nil if lookup(body, name) != nil or has_function(body.shared, name)
+  const type = object_type(body.program, body.shared, name) ? return nil
+  body.shared.types[callee] = type
+  type
+
+# Every argument is named. Fields without an initializer are the arguments; an optional one may
+# be left out and is then nil.
+export const type_of_construction = (body: Body, call: Call, type: ObjectType): Type ->
+  const program = body.program
+  const info = info_of(program, type)
+  name_shorthand_args(body, call, type)
+  const given: Map<String, Bool> = Map()
+  for arg in call.named_args
+    const { name, position } = arg.name
+    fail(program, position, "the argument '#{name}' is given twice") if given.has(name)
+    given[name] = true
+    const no_field = (): never ->
+      fail(program, position, "#{format_type(type)} has no field '#{name}'")
+    const field = info.fields.find((each) -> each.name.name == name) ? no_field()
+    if field.value != nil
+      fail(program, position, "#{format_type(type)} computes its field '#{name}'")
+    expect_type(body, arg.value, field.type!)
+  for field in info.fields
+    const is_required = field.value == nil and not (field.type! is OptionalType)
+    if is_required and not given.has(field.name.name)
+      fail(program, call.position, "missing argument '#{field.name.name}'")
+  type
+
+# The class or struct of the type, if it has a method of the name.
+export const method_owner = (body: Body, object_type: Type, name: String): ObjectType? ->
+  return nil if not (object_type is ObjectType)
+  info_of(body.program, object_type).methods.has(name) then object_type else nil
+
+# The type of the method `name` of an object, or nil if the type is no class or struct with that
+# method.
+export const object_method_type = (body: Body, object_type: Type, name: Identifier): Type? ->
+  const owner = method_owner(body, object_type, name.name) ? return nil
+  const module_index = info_of(body.program, owner).module_index
+  function_type_of(body.program, module_index, method_key(owner.name, name.name), name.position)
+
+# `@` is a local of a method's body (see check_function_body), which a function literal in it
+# captures like any other. An initializer has no such local: there the object is not complete, so
+# `@` can only read the fields set before (see field_of), not be passed on or called, which could
+# reach the others.
+export const type_of_this = (body: Body, at: Expression): Type ->
+  if const local = lookup(body, '@')
+    return local.type
+  const message = case
+    when body.self then 'an initializer can only use `@` to read a field, as in `@name`'
+    else "'@' can only be used in a method, a function literal in a method, or a field initializer"
+  fail(body.program, at.position, message)
+
+# The type of the field `member` names, of a class, a struct or an anonymous struct.
+export const field_type = (body: Body, object_type: Type, member: Member): Type? ->
+  if object_type is RecordType
+    const field = object_type.fields.find((each) -> each.name == member.name.name) ? return nil
+    return field.type
+  const field = field_of(body, object_type, member) ? return nil
+  field.type
+
+# The type of the field `member` names, read from a union: every member must have the field, of
+# the same type.
+export const common_field_type = (body: Body, union: UnionType, member: Member): Type ->
+  common_fields(body, union, member)[0].type
+
+# The field in each member of the union, which must all have it, of the same type.
+const common_fields = (body: Body, union: UnionType, member: Member): Array<MemberField> ->
+  const program = body.program
+  const { name, position } = member.name
+  const fields: Array<MemberField> = []
+  for member_type in union.members
+    const not_field = (): never ->
+      const member_name = format_member(member_type, union)
+      const of_union = "a member of #{format_type(union)}"
+      const message = "'#{name}' is not a field of #{member_name}, #{of_union}"
+      fail(program, position, message)
+    const field = field_of(body, member_type, member) ? not_field()
+    fields.push(MemberField(member_type, info: field.info, type: field.type))
+  const first = fields[0]
+  for i in 1...fields.length
+    const differing = fields[i]
+    continue if same_type(differing.type, first.type)
+    const types = format_types(first.type, differing.type)
+    const first_member = format_member(first.member_type, union)
+    const differing_member = format_member(differing.member_type, union)
+    const in_first = "#{types.first} in #{first_member}"
+    const message = "'#{name}' has type #{in_first} but #{types.second} in #{differing_member}"
+    fail(program, position, message)
+  fields
+
+# The type of a common field assigned through a union: every member must be a class whose field
+# can be changed.
+const common_field_target = (body: Body, union: UnionType, member: Member): Type ->
+  const { name, position } = member.name
+  const fields = common_fields(body, union, member)
+  for field in fields
+    const member_name = format_member(field.member_type, union)
+    const member_type = field.member_type
+    if member_type is ObjectType
+      if member_type.is_struct
+        const reason = "its member #{member_name} is a struct, whose fields cannot change"
+        const message = "'#{name}' cannot be changed through #{format_type(union)}: #{reason}"
+        fail(body.program, position, message)
+    if not field.info.mutable
+      const field_of_member = "a const field of #{member_name}"
+      const message = "'#{name}' is #{field_of_member}, a member of #{format_type(union)}"
+      fail(body.program, position, message)
+  fields[0].type
+
+# `{ x: 1, y }`. Its fields take their types from the expected type, if it is an anonymous struct
+# with the same fields, so that `{ x: nil }` can be typed.
+export const type_of_record = (body: Body, record: RecordLiteral, expected: Type?): Type ->
+  const program = body.program
+  const names: Map<String, Bool> = Map()
+  for field in record.fields
+    const { name, position } = field.name
+    fail(program, position, "'#{name}' is already a field") if names.has(name)
+    names[name] = true
+  const expected_fields = expected_record_fields(expected)
+  const type_of_field = (field: NamedValue): RecordField ->
+    const name = field.name.name
+    const value = field.value
+    if const expected_field = expected_fields.find((each) -> each.name == name)
+      expect_type(body, value, expected_field.type)
+      return RecordField(name, type: expected_field.type)
+    const type = type_of(body, value, nil)
+    if is_one_of_kinds(type, ['void', 'never', 'nil'])
+      fail(program, value.position, "a field cannot hold a value of type #{format_type(type)}")
+    RecordField(name, type)
+  record_type([type_of_field(field) for field in record.fields])
+
+const expected_record_fields = (expected: Type?): Array<RecordField> ->
+  const type = expected ? return []
+  const record = type is OptionalType then type.inner else type
+  record is RecordType then record.fields else []
+
+# The type of a field that is assigned to, which must be a field that can be changed.
+export const field_target = (body: Body, member: Member): Type ->
+  const program = body.program
+  const object_type = type_of(body, member.object, nil)
+  if object_type is UnionType
+    const type = common_field_target(body, object_type, member)
+    body.shared.types[member] = type
+    return type
+  const field = field_of(body, object_type, member)
+  const { name, position } = member.name
+  if object_type is RecordType
+    fail(program, position, 'a field of an anonymous struct cannot be changed')
+  const no_field = (): never ->
+    fail(program, position, "type #{format_type(object_type)} has no field '#{name}'")
+  const found = field ? no_field()
+  if not found.info.mutable
+    const is_struct = object_type is ObjectType then object_type.is_struct else false
+    const const_field = "'#{name}' is a const field"
+    const message = is_struct then 'a struct field cannot be changed' else const_field
+    fail(program, position, message)
+  body.shared.types[member] = found.type
+  found.type
+
+# The field `member` names, with its type, if its object is a class or struct. In a field
+# initializer, `@x` must name an argument or a field initialized before.
+const field_of = (body: Body, object_type: Type, member: Member): FieldOf? ->
+  return nil if not (object_type is ObjectType)
+  const program = body.program
+  const object = info_of(program, object_type)
+  const field = object.fields.find((each) -> each.name.name == member.name.name) ? return nil
+  const self = body.self
+  const initializing = self then self.initializing else nil
+  if member.object is This and field.value != nil
+    if initializing
+      if index_of(object.fields, field) >= index_of(object.fields, initializing)
+        fail(program, member.name.position, "'#{field.name.name}' is not initialized yet")
+  FieldOf(info: field, type: info_field_type(program, object, field, member.name.position))
+
+const index_of = (fields: Array<FieldInfo>, field: FieldInfo): Int ->
+  var index = 0
+  index += 1 while fields[index] != field
+  index
+
+# A name alone, `Point(x)`, is short for `Point(x: x)`, as in `{ x }`; a construction has no
+# positional arguments to confuse it with. The call is rewritten into the named form, which every
+# later pass reads.
+const name_shorthand_args = (body: Body, call: Call, type: ObjectType): void ->
+  const names = [arg for arg in call.args when arg is Identifier]
+  if names.length < call.args.length
+    const not_named = call.args.find((arg) -> not (arg is Identifier))!
+    const example = 'Point(x: 1) or Point(x)'
+    const message = "#{format_type(type)} is constructed with named arguments, as in #{example}"
+    fail(body.program, not_named.position, message)
+  const named_args = [NamedValue(name: copy_identifier(name), value: name) for name in names]
+  named_args.push(arg) for arg in call.named_args
+  call.named_args = named_args
+  call.args = []

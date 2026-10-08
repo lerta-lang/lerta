@@ -1,0 +1,34 @@
+# Where the method that a type has by a name comes from, which the checker types a call by and
+# codegen calls. An extend cannot give a type a method it has already (see declare_extend), so at
+# most one source has it. A field that holds a function is no method.
+import { builtin_method } from './builtins'
+import { ExtensionMethod, Extensions, find_extension } from './extensions'
+import { info_of } from './object_types'
+import { ProgramWide } from './shared'
+import { ObjectType, Type } from '../types'
+
+# A method of the class or struct.
+export struct OwnMethod
+  receiver: ObjectType
+
+export struct ExtensionSource
+  method: ExtensionMethod
+
+# One that the compiler gives (see builtins), of its type.
+export struct BuiltinMethod
+  type: Type
+
+export type MethodSource = OwnMethod | ExtensionSource | BuiltinMethod
+
+export const find_method = (
+  program: ProgramWide
+  receiver: Type
+  name: String
+  extensions: Extensions
+): MethodSource? ->
+  if receiver is ObjectType
+    return OwnMethod(receiver) if info_of(program, receiver).methods.has(name)
+  if const method = find_extension(extensions, receiver, name)
+    return ExtensionSource(method)
+  const type = builtin_method(receiver, name) ? return nil
+  BuiltinMethod(type)

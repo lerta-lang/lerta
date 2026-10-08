@@ -1,0 +1,67 @@
+# Externs: the C functions a module declares, whose types all the modules must agree on.
+import { Extern, Position, Statement } from '../ast'
+import { fail } from './diagnostics'
+import { add_extern } from './imports'
+import { ExternType, ProgramWide, Shared } from './shared'
+import { module_resolver, resolve_result } from './type_names'
+import {
+  format_type, FunctionType, is_kind, is_reference_type, kind_of, OptionalType, Type
+} from '../types'
+
+# An extern's type is a function type, which gives the C function's parameters and result. A C
+# function has one C type, so all the externs of a symbol in the program must agree on it; a
+# String and a Binary, both pointers, can stand for the same parameter.
+export const declare_externs = (
+  program: ProgramWide
+  shared: Shared
+  statements: Array<Statement>
+): void ->
+  for statement in statements
+    if statement is Extern
+      declare_extern(program, shared, statement)
+
+const declare_extern = (program: ProgramWide, shared: Shared, statement: Extern): void ->
+  const type = resolve_result(program, module_resolver(shared.index), statement.type)
+  if not (type is FunctionType)
+    fail(program, statement.type.position, 'an extern is a C function, of a function type')
+  reject_optionals_without_c_type(program, type, statement.type.position)
+  const { symbol } = statement
+  if const declared = program.extern_types[symbol.name]
+    if c_signature(declared.type) != c_signature(type)
+      const declared_as = "#{format_type(declared.type)} in #{declared.module_name}"
+      const message = "the C function '#{symbol.name}' is declared as #{declared_as}"
+      fail(program, symbol.position, message)
+  else
+    program.extern_types[symbol.name] = ExternType(type, module_name: shared.name)
+  add_extern(program, shared, statement.name, type, symbol.name)
+
+# Of the optional values that are not references, only an Int? has a C type, LertaOptionalInt.
+const reject_optionals_without_c_type = (
+  program: ProgramWide
+  type: FunctionType
+  at: Position
+): void ->
+  for value_type in value_types(type)
+    if value_type is OptionalType
+      const has_c_type = is_reference_type(value_type) or is_kind(value_type.inner, 'Int')
+      if not has_c_type
+        const reason = 'of the optional values, only references and Int? have a C type'
+        const message = "a C function cannot take or return a #{format_type(value_type)}; #{reason}"
+        fail(program, at, message)
+
+const value_types = (type: FunctionType): Array<Type> ->
+  const types = [param for param in type.params]
+  types.push(type.result)
+  types
+
+# The C type that a value of the type is passed as: a reference is a pointer, and an Int? a pair
+# of a flag and the value (LertaOptionalInt in runtime/lerta.h).
+const c_type = (type: Type): String ->
+  return 'pointer' if is_reference_type(type)
+  type is OptionalType then "#{c_type(type.inner)}?" else kind_of(type)
+
+const c_signature = (type: Type): String ->
+  case type
+    when FunctionType
+      "(#{[c_type(param) for param in type.params].join(', ')}) -> #{c_type(type.result)}"
+    else throw 'an extern has a function type'

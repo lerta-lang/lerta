@@ -1,0 +1,135 @@
+# Types calls of generic functions and methods: checks their type arguments (see
+# type_argument_inference) against the bounds and the signature, and has the instance checked
+# (see generics).
+import { Call, Member, Position } from '../ast'
+import { check_item_type, check_map_types, check_value_type } from './collection'
+import { fail } from './diagnostics'
+import { require_type } from './expression'
+import { methods_reachable_from } from './extensions'
+import {
+  bindings, generic_of, GenericFunction, GenericRef, Instance, instantiate
+} from './generics'
+import { reject_not_stringable } from './member'
+import { Body } from './shared'
+import {
+  infer_type_arguments, receiver_type_arguments, TypeBinding
+} from './type_argument_inference'
+import { parts_of, substitute } from './type_patterns'
+import { ArrayType, FunctionType, IterType, MapType, Type } from '../types'
+
+# The result of a call of a generic function.
+export const type_of_generic_call = (
+  body: Body
+  call: Call
+  generic: GenericRef
+  expected: Type?
+): Type -> function_type(instance_of_call(body, call, generic, expected, nil)).result
+
+# The type of the generic method that the call's callee names, a function type without the
+# receiver.
+export const type_of_generic_method_call = (
+  body: Body
+  call: Call
+  member: Member
+  generic: GenericRef
+  receiver: Type
+  expected: Type?
+): FunctionType ->
+  const binding = TypeBinding(type: receiver, at: member.object.position)
+  function_type(instance_of_call(body, call, generic, expected, binding))
+
+# The instance of a generic method that the receiver gives all the type arguments of, if it does;
+# `call`, if given, calls it.
+export const receiver_instance = (
+  body: Body
+  generic: GenericRef
+  receiver: Type
+  at: Position
+  call: Call?
+): Instance? ->
+  const type_arguments = receiver_type_arguments(generic_of(body.program, generic), receiver)
+  return nil if type_arguments == nil
+  const instance = instantiate_here(body, generic, type_arguments, at)
+  body.shared.instances[call] = instance if call
+  instance
+
+# Each argument typed alone must fit its parameter once the type arguments are known.
+const instance_of_call = (
+  body: Body
+  call: Call
+  ref: GenericRef
+  expected: Type?
+  receiver: TypeBinding?
+): Instance ->
+  const program = body.program
+  const generic = generic_of(program, ref)
+  if call.named_args.length > 0
+    const kind = generic.receiver == nil then 'function' else 'method'
+    const message = "a generic #{kind} takes no named arguments so far"
+    fail(program, call.named_args[0].name.position, message)
+  const params = generic.params
+  if call.args.length != params.length
+    const message = "expected #{params.length} argument(s), got #{call.args.length}"
+    fail(program, call.position, message)
+  const inference = infer_type_arguments(body, call, generic, expected, receiver)
+  const type_arguments = type_arguments_of(body, call, generic, inference.bindings)
+  reject_invalid_signature(body, generic, type_arguments, call.position)
+  const instance = instantiate_here(body, ref, type_arguments, call.position)
+  const type = function_type(instance)
+  require_type(body, each.arg, each.type, type.params[each.index]) for each in inference.inferred
+  body.shared.instances[call] = instance
+  instance
+
+# The instance's body sees the extends in effect here of the types it may reach.
+const instantiate_here = (
+  body: Body
+  generic: GenericRef
+  type_arguments: Array<Type>
+  at: Position
+): Instance ->
+  const methods = methods_reachable_from(body.program, body.extensions, type_arguments)
+  instantiate(body.program, generic, type_arguments, methods, at)
+
+# The type arguments in order, which must all be known and satisfy their bounds.
+const type_arguments_of = (
+  body: Body
+  call: Call
+  generic: GenericFunction
+  inferred: Map<String, TypeBinding>
+): Array<Type> ->
+  const types: Array<Type> = []
+  for param in generic.type_params
+    const name = param.name.name
+    const callee = generic.name.name
+    const cannot_infer = (): never ->
+      const advice = "write it, as in #{callee}<...>(...)"
+      const message = "cannot infer the type argument #{name} of '#{callee}'; #{advice}"
+      fail(body.program, call.position, message)
+    const binding = inferred[name] ? cannot_infer()
+    reject_not_stringable(body, binding.type, binding.at) if param.bound != nil
+    types.push(binding.type)
+  types
+
+const function_type = (instance: Instance): FunctionType ->
+  const type = instance.entry.type!
+  type is FunctionType then type else throw 'an instance has a function type'
+
+# The type arguments must make types that can be of the parameters and the result, as an
+# Array<T> is not with T = Int?: an array cannot hold one.
+const reject_invalid_signature = (
+  body: Body
+  generic: GenericFunction
+  type_arguments: Array<Type>
+  at: Position
+): void ->
+  const type_bindings = bindings(generic, type_arguments)
+  reject_invalid_parts(body, substitute(param, type_bindings), at) for param in generic.params
+  if const result = generic.result
+    reject_invalid_parts(body, substitute(result, type_bindings), at)
+
+const reject_invalid_parts = (body: Body, type: Type, at: Position): void ->
+  const program = body.program
+  check_item_type(program, type.element, at, 'an array') if type is ArrayType
+  check_value_type(program, type.item, at, 'an Iter') if type is IterType
+  check_map_types(program, type.key, type.value, at, at) if type is MapType
+  reject_invalid_parts(body, part, at) for part in parts_of(type)

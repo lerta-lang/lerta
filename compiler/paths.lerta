@@ -1,0 +1,53 @@
+# File paths, with `/` as the separator, as those of Node's `path` module work them out.
+
+# The directory of the path: `.` for a name alone.
+export const dirname = (path: String): String ->
+  const bytes = path.binary
+  var end = bytes.length
+  end -= 1 while end > 1 and bytes[end - 1] == '/'
+  var slash = end - 1
+  slash -= 1 while slash >= 0 and bytes[slash] != '/'
+  return '.' if slash < 0
+  return '/' if slash == 0
+  var dir_end = slash
+  dir_end -= 1 while dir_end > 1 and bytes[dir_end - 1] == '/'
+  bytes.slice(0, dir_end).decode_utf8()!
+
+export const join = (a: String, b: String): String -> normalize("#{a}/#{b}")
+
+# The path without `.` and empty segments, and with each `..` removing the segment before it.
+const normalize = (path: String): String ->
+  const is_absolute = path.binary.occurs_at(0, '/'.binary)
+  const segments: Array<String> = []
+  for segment in path.split('/')
+    case segment
+      when '', '.' then continue
+      when '..'
+        const can_cancel = segments.length > 0 and segments[segments.length - 1] != '..'
+        if can_cancel
+          segments.pop()
+        else if not is_absolute
+          segments.push(segment)
+      else segments.push(segment)
+  const joined = segments.join('/')
+  case
+    when is_absolute then "/#{joined}"
+    when joined == '' then '.'
+    else joined
+
+# The path from the directory `from` to `to`, both relative to `cwd` unless absolute.
+export const relative = (cwd: String, from: String, to: String): String ->
+  const from_segments = absolute_segments(cwd, from)
+  const to_segments = absolute_segments(cwd, to)
+  var common = 0
+  while common < from_segments.length and common < to_segments.length
+    break if from_segments[common] != to_segments[common]
+    common += 1
+  const segments = ['..' for _ in common...from_segments.length]
+  segments.push(to_segments[i]) for i in common...to_segments.length
+  segments.join('/')
+
+const absolute_segments = (cwd: String, path: String): Array<String> ->
+  const is_absolute = path.binary.occurs_at(0, '/'.binary)
+  const absolute = normalize(is_absolute then path else join(cwd, path))
+  [segment for segment in absolute.split('/') when segment != '']

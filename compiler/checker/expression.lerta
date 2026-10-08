@@ -1,0 +1,172 @@
+# Types expressions; `name` types names, `member` members, `object` classes and structs,
+# `operator` the operators, `case` case, and `collection` arrays and maps. An expected type, where
+# one is known, is passed down so that it can give literals their type.
+import {
+  ArrayLiteral, BinaryOperation, BooleanLiteral, Call, Case, Coalesce, Comprehension, Conditional
+  Expression, FunctionLiteral, Identifier, Index, IntegerLiteral, Interpolation, IsTest, Jump
+  MapLiteral, Member, NamedValue, NilLiteral, Node, Range, RecordLiteral, Return, StringLiteral
+  This, Throw, UnaryOperation, Unwrap
+} from '../ast'
+import { type_of_case, type_of_conditional } from './case'
+import { type_of_function_literal } from './closure'
+import {
+  is_empty_map, type_of_array, type_of_empty_map, type_of_index, type_of_map
+} from './collection'
+import { fail } from './diagnostics'
+import { type_of_generic_call } from './generic_call'
+import { byte_literal } from './literals'
+import { check_loop_jump, type_of_comprehension } from './loop'
+import { check_interpolated, type_of_method_call, type_of_property } from './member'
+import { generic_callee, type_of_identifier } from './name'
+import { constructed_type, type_of_construction, type_of_record, type_of_this } from './object'
+import { type_of_binary, type_of_coalesce, type_of_unary } from './operator'
+import { check_return } from './result'
+import { Body } from './shared'
+import { resolve } from './type_names'
+import {
+  bool_type, format_type, format_types, FunctionType, int_type, is_assignable, is_kind
+  is_one_of_kinds, never_type, nil_type, OptionalType, RecordType, same_type, string_type, Type
+  UnionType
+} from '../types'
+
+export const type_of = (body: Body, expression: Expression, expected: Type?): Type ->
+  set_type(body, expression, compute_type(body, expression, expected))
+
+# `expected` is a hint: the caller still checks that the type fits.
+const compute_type = (body: Body, expression: Expression, expected: Type?): Type ->
+  const wants_byte = expected then is_kind(expected, 'Byte') else false
+  const program = body.program
+  case expression
+    when StringLiteral then wants_byte then byte_literal(program, expression) else string_type
+    when Interpolation
+      for part in expression.parts
+        check_interpolated(body, part) if part is Call
+      string_type
+    when IntegerLiteral then wants_byte then byte_literal(program, expression) else int_type
+    when NilLiteral then nil_type
+    when Throw
+      expect_type(body, expression.message, string_type)
+      never_type
+    when Jump
+      check_loop_jump(body, expression)
+      never_type
+    when Return
+      check_return(body, expression)
+      never_type
+    when IsTest then type_of_is_test(body, expression)
+    when This then type_of_this(body, expression)
+    when Unwrap then expect_optional(body, expression.operand)
+    when Coalesce then type_of_coalesce(body, expression)
+    when BooleanLiteral then bool_type
+    when Identifier then type_of_identifier(body, expression, false)
+    when Call then type_of_call(body, expression, expected)
+    when UnaryOperation then type_of_unary(body, expression, expected)
+    when BinaryOperation then type_of_binary(body, expression, expected)
+    when Case then type_of_case(body, expression, expected)
+    when Conditional then type_of_conditional(body, expression, expected)
+    when Member then type_of_property(body, expression)
+    when ArrayLiteral then type_of_array(body, expression, expected)
+    when MapLiteral then type_of_map(body, expression, expected)
+    when Comprehension then type_of_comprehension(body, expression, expected)
+    when RecordLiteral then type_of_record(body, expression, expected)
+    when Index then type_of_index(body, expression)
+    when FunctionLiteral then type_of_function_literal(body, expression, expected)
+    when Range
+      fail(program, expression.position, "a range can only be used after 'in' of a 'for'")
+
+const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
+  const callee = call.callee
+  if const generic = generic_callee(body, callee)
+    return type_of_generic_call(body, call, generic, expected)
+  if call.type_args.length > 0
+    fail(body.program, callee.position, 'only a generic function takes type arguments')
+  return type_of_empty_map(body, call, expected) if is_empty_map(body, callee)
+  if const object_type = constructed_type(body, callee)
+    return type_of_construction(body, call, object_type)
+  return type_of_method_call(body, call, callee, expected) if callee is Member
+  const callee_type = case callee
+    when Identifier then set_type(body, callee, type_of_identifier(body, callee, true))
+    else type_of(body, callee, nil)
+  check_arguments(body, call, callee_type)
+
+# The result of a call of a function of the type, once its arguments are checked.
+export const check_arguments = (body: Body, call: Call, callee_type: Type): Type ->
+  const program = body.program
+  if not (callee_type is FunctionType)
+    fail(program, call.position, "cannot call a value of type #{format_type(callee_type)}")
+  const params = callee_type.params
+  if call.named_args.length > 0
+    gather_named_args(body, call, params.length > 0 then params[params.length - 1] else nil)
+  if call.args.length != params.length
+    const message = "expected #{params.length} argument(s), got #{call.args.length}"
+    fail(program, call.position, message)
+  expect_type(body, call.args[i], params[i]) for i in 0...params.length
+  callee_type.result
+
+# Named arguments are the fields of an anonymous struct for the last parameter: `draw(x: 1, y: 2)`
+# is `draw({ x: 1, y: 2 })`. The call is rewritten into that form so that codegen, which reads
+# named arguments only as a construction, generates it as any other call. Every pass reading the
+# arguments (jump_positions, codegen) visits the same values in either form.
+const gather_named_args = (body: Body, call: Call, last_param: Type?): void ->
+  const name = call.named_args[0].name
+  if not is_record_parameter(last_param)
+    const uses = 'construct a class or struct, or give a last parameter of an anonymous struct type'
+    fail(body.program, name.position, "named arguments #{uses}")
+  const fields = [NamedValue(name: arg.name, value: arg.value) for arg in call.named_args]
+  call.args.push(RecordLiteral(fields, position: name.position))
+  call.named_args = []
+
+const is_record_parameter = (param: Type?): Bool ->
+  const type = param ? return false
+  const record = type is OptionalType then type.inner else type
+  record is RecordType
+
+export const expect_type = (body: Body, expression: Expression, expected: Type): void ->
+  require_type(body, expression, type_of(body, expression, expected), expected)
+
+# `x is T`: x has a union type, and T is one of its types.
+const type_of_is_test = (body: Body, test: IsTest): Type ->
+  const program = body.program
+  const value_type = type_of(body, test.value, nil)
+  if not (value_type is UnionType)
+    const message = "expected a value of a union type, got #{format_type(value_type)}"
+    fail(program, test.value.position, message)
+  const type = resolve(program, body.resolver, test.type)
+  body.shared.types[test.type] = type
+  if not value_type.members.any((member) -> same_type(member, type))
+    const message = "#{format_type(type)} is not one of the types #{format_type(value_type)}"
+    fail(program, test.type.position, message)
+  bool_type
+
+# Records the type of a node, which type_of may not compute, such as a type pattern.
+export const set_type = (body: Body, node: Node, type: Type): Type ->
+  body.shared.types[node] = type
+  type
+
+# A T or nil where a T? is expected is converted, which codegen does where it generates it.
+export const require_type = (
+  body: Body
+  expression: Expression
+  type: Type
+  expected: Type
+): void ->
+  if not is_assignable(type, expected)
+    const { first, second } = format_types(expected, type)
+    fail(body.program, expression.position, "expected #{first}, got #{second}")
+  const is_converted = not is_kind(type, 'never') and not same_type(type, expected)
+  body.shared.conversions[expression] = expected if expected is OptionalType and is_converted
+
+# A condition is a Bool, or an optional value that holds when it is not nil.
+export const expect_condition = (body: Body, expression: Expression): Type ->
+  const type = type_of(body, expression, nil)
+  if not is_one_of_kinds(type, ['Bool', 'Optional', 'never'])
+    const message = "expected Bool or an optional value, got #{format_type(type)}"
+    fail(body.program, expression.position, message)
+  type
+
+# The type of an optional value without nil.
+export const expect_optional = (body: Body, expression: Expression): Type ->
+  const type = type_of(body, expression, nil)
+  if not (type is OptionalType)
+    fail(body.program, expression.position, "expected an optional value, got #{format_type(type)}")
+  type.inner

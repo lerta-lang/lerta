@@ -1,0 +1,94 @@
+# Errors and warnings found by the checker. An error ends the build, so it is thrown where it is
+# found, after the warnings found so far; it names the module whose code is being checked and, if
+# it is found in an instance of a generic function, the innermost instance being checked.
+import { stderr } from 'std:io'
+import { Position } from '../ast'
+import { compile_error, module_location } from '../errors'
+import { is_standard_module } from '../loader'
+import { ProgramWide, Shared, Warning } from './shared'
+import { Local } from './scopes'
+import { sorted } from '../sort'
+
+export const fail = (program: ProgramWide, at: Position, message: String): never ->
+  if const call = program.annotated_call
+    fail_in_context(program, call.at, message, call.context)
+  const contexts = program.contexts
+  if contexts.length == 0
+    report_error(program, at, message)
+  fail_in_context(program, at, message, contexts[contexts.length - 1])
+
+# An error that says what was being checked, such as `in print<Int>`.
+export const fail_in_context = (
+  program: ProgramWide
+  at: Position
+  message: String
+  context: String
+): never -> report_error(program, at, "#{message} (#{context})")
+
+const report_error = (program: ProgramWide, at: Position, message: String): never ->
+  stderr.write("#{line}\n") for line in all_warnings(program)
+  const location = module_location(program.entry_path, error_module_path(program))
+  compile_error(location, at.line, at.column, message)
+
+# The path of the innermost module being checked that has one. The entry module has none, so an
+# error in its code checked on demand from another module's is reported in that module, as stage0
+# reports it, which names the module of an error as it leaves the code of one that has a path.
+const error_module_path = (program: ProgramWide): String? ->
+  const paths = program.module_paths
+  var index = paths.length - 1
+  while index >= 0
+    if const path = paths[index]
+      return path
+    index -= 1
+  nil
+
+# Diagnostics name the module whose code is checked until `leave_module`.
+export const enter_module = (program: ProgramWide, shared: Shared): void ->
+  program.module_paths.push(shared.path)
+
+export const leave_module = (program: ProgramWide): void -> program.module_paths.pop()
+
+export const warn = (shared: Shared, at: Position, message: String): void ->
+  shared.warnings.push(Warning(message, line: at.line, column: at.column))
+
+# A `const` or `var` that is never read, unless its name starts with `_`.
+export const warn_if_unused = (shared: Shared, local: Local): void ->
+  const { name, position } = local.identifier
+  return if not local.declared or local.used or name.binary.occurs_at(0, '_'.binary)
+  warn(shared, position, "'#{name}' is never used")
+
+# The warnings of the program, as diagnostics print them. A program's author cannot act on the
+# warnings of the standard modules, which would warn, for example, about the names that only
+# generic functions the program never calls use. The unused names of a module are known once its
+# functions are checked, which may use them.
+export const all_warnings = (program: ProgramWide): Array<String> ->
+  warn_unused(program.shared[index]) for index in program.bodies_checked
+  const lines: Array<String> = []
+  for module in program.modules
+    continue if is_standard_module(module)
+    const location = module_location(program.entry_path, module.display_path)
+    for warning in in_source_order(program.shared[module.index].warnings)
+      lines.push("#{location}:#{warning.line}:#{warning.column}: warning: #{warning.message}")
+  lines
+
+# The names of the top-level code and the imports that are never used.
+const warn_unused = (shared: Shared): void ->
+  if const scope = shared.top_level_scope
+    warn_if_unused(shared, scope[name]!) for name in scope.keys()
+  for imported in shared.imports.names.keys()
+    const { name, used } = shared.imports.names[imported]!
+    warn(shared, name.position, "'#{name.name}' is imported but never used") if not used
+
+# Warnings are found as scopes end; they are reported in source order, once each, though each
+# instance of a generic function finds those of its body again.
+const in_source_order = (warnings: Array<Warning>): Array<Warning> ->
+  const seen: Map<String, Bool> = Map()
+  const unique: Array<Warning> = []
+  for warning in warnings
+    const key = "#{warning.line}:#{warning.column}:#{warning.message}"
+    continue if seen.has(key)
+    seen[key] = true
+    unique.push(warning)
+  const compare = (a: Warning, b: Warning): Int ->
+    a.line != b.line then a.line - b.line else a.column - b.column
+  sorted(unique, compare)

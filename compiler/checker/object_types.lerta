@@ -1,0 +1,151 @@
+# The classes and structs of the program: their fields and methods. Like functions, they can be
+# used anywhere in the module, so the types of fields given by an initializer alone are found on
+# demand.
+import {
+  Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration
+} from '../ast'
+import { check_object } from './bodies'
+import { fail } from './diagnostics'
+import { add_function, method_key } from './functions'
+import { imported_type } from './imports'
+import { ProgramWide, Shared } from './shared'
+import { is_builtin_type_name, module_resolver, resolve } from './type_names'
+import { ObjectType, Type } from '../types'
+
+export class FieldInfo
+  name: Identifier
+  # Nil until found, for a field given by an initializer alone.
+  type: Type?
+  mutable: Bool
+  # A field without an initializer is a constructor argument.
+  value: Expression?
+
+export class ObjectInfo
+  declaration: TypeDeclaration
+  type: ObjectType
+  # The declaring module, whose functions hold the methods' types.
+  module_index: Int
+  fields: Array<FieldInfo> = []
+  methods: Map<String, FunctionLiteral> = Map()
+  has_init = false
+  # `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
+  has_deinit = false
+  # 'unchecked', 'checking' or 'checked'.
+  state = 'unchecked'
+
+# The function literal of a member that is a method.
+export const method_literal = (member: MemberDeclaration): FunctionLiteral? ->
+  return nil if modifier_of(member) == 'var'
+  const value = member.value ? return nil
+  value is FunctionLiteral then value else nil
+
+# 'const', 'var' or, if neither is written, ''.
+const modifier_of = (member: MemberDeclaration): String -> member.modifier ? ''
+
+# Registers the names first, so that the members can refer to any of the types.
+export const add_objects = (
+  program: ProgramWide
+  shared: Shared
+  declarations: Array<TypeDeclaration>
+): void ->
+  for declaration in declarations
+    const { name, position } = declaration.name
+    if shared.objects.has(name) or is_builtin_type_name(name)
+      fail(program, position, "'#{name}' is already defined")
+    const symbol = "#{shared.index}.#{name}"
+    const is_struct = declaration.is_struct
+    const type = ObjectType(name, symbol, is_struct, module: shared.name)
+    const info = ObjectInfo(declaration, type, module_index: shared.index)
+    shared.objects[name] = info
+    program.infos[symbol] = info
+
+# Resolves the written field types and adds the methods to the module's functions.
+export const add_members = (program: ProgramWide, shared: Shared): void ->
+  for type_name in shared.objects.keys()
+    const info = shared.objects[type_name]!
+    const seen: Map<String, Bool> = Map()
+    for member in info.declaration.members
+      const { name, position } = member.name
+      if seen.has(name)
+        const message = "'#{name}' is already a member of #{info.declaration.name.name}"
+        fail(program, position, message)
+      seen[name] = true
+      if const literal = method_literal(member)
+        add_method(program, shared, info, member, literal)
+      else
+        info.fields.push(field_of_member(program, shared, info, member))
+
+const add_method = (
+  program: ProgramWide
+  shared: Shared
+  info: ObjectInfo
+  member: MemberDeclaration
+  literal: FunctionLiteral
+): void ->
+  const type_name = info.declaration.name.name
+  const { name } = member.name
+  const runs_alone = name == 'init' or name == 'deinit'
+  if runs_alone and literal.params.length > 0
+    fail(program, literal.position, "#{name} takes no parameters")
+  info.has_init = true if name == 'init'
+  if name == 'deinit' and info.declaration.is_struct
+    fail(program, member.position, 'a struct has no deinit')
+  info.has_deinit = true if name == 'deinit'
+  info.methods[name] = literal
+  add_function(program, shared, method_key(type_name, name), member.name, literal, info.type)
+
+const field_of_member = (
+  program: ProgramWide
+  shared: Shared
+  info: ObjectInfo
+  member: MemberDeclaration
+): FieldInfo ->
+  const is_struct = info.declaration.is_struct
+  const value = member.value
+  if value
+    if value is FunctionLiteral
+      const message = 'a function field is not supported yet; a method is written without var'
+      fail(program, member.position, message)
+  const modifier = modifier_of(member)
+  if is_struct and modifier == 'var'
+    fail(program, member.position, 'a struct field cannot be var')
+  const type_name = member.type
+  const type = type_name then resolve(program, module_resolver(shared.index), type_name) else nil
+  const mutable = not is_struct and modifier != 'const'
+  FieldInfo(type, mutable, value, name: member.name)
+
+# The class or struct of the name, of the module or imported.
+export const object_type = (program: ProgramWide, shared: Shared, name: String): ObjectType? ->
+  if const info = shared.objects[name]
+    return info.type
+  const exported = imported_type(program, shared, name) ? return nil
+  const info = exported.info ? return nil
+  info.type
+
+export const info_of = (program: ProgramWide, type: ObjectType): ObjectInfo ->
+  program.infos[type.symbol]!
+
+# The field's type, checking the initializers first if it is given by one alone.
+export const field_type = (
+  program: ProgramWide
+  info: ObjectInfo
+  field: FieldInfo
+  at: Position
+): Type ->
+  if const type = field.type
+    return type
+  if info.state == 'checking'
+    fail(program, at, "the type of '#{field.name.name}' is not known yet; write it")
+  check_info(program, info)
+  field.type!
+
+export const check_all_objects = (program: ProgramWide, shared: Shared): void ->
+  check_info(program, shared.objects[name]!) for name in shared.objects.keys()
+
+# Checks the initializers of the fields with the declaring module's checker, setting the types
+# that they give.
+const check_info = (program: ProgramWide, info: ObjectInfo): void ->
+  return if info.state != 'unchecked'
+  info.state = 'checking'
+  check_object(program, info)
+  info.state = 'checked'

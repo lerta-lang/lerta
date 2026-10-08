@@ -1,0 +1,99 @@
+# Checks function literals in expressions and finds the names their bodies capture.
+import { Expression, FunctionLiteral } from '../ast'
+import { fail } from './diagnostics'
+import { parameter_types, reject_generic } from './functions'
+import { finish_function_type, reject_nil_result } from './result'
+import { Local } from './scopes'
+import { Body, Capture, FunctionContext } from './shared'
+import { check_function_body } from './statement'
+import { resolve_result } from './type_names'
+import { has_type_parameters } from './type_patterns'
+import { format_type, FunctionType, Type } from '../types'
+
+export const type_of_function_literal = (
+  body: Body
+  literal: FunctionLiteral
+  expected: Type?
+): Type ->
+  const expected_function = expected_function_type(expected)
+  const params = expected_function then expected_function.params else nil
+  const result = expected_function then expected_function.result else nil
+  reject_nil_result(body.program, check_literal(body, literal, params, result, nil), literal)
+
+const expected_function_type = (expected: Type?): FunctionType? ->
+  const type = expected ? return nil
+  type is FunctionType then type else nil
+
+# A function literal of an item, as `map` takes, or as the guard and the element of an Iter
+# comprehension are: its parameter's type may be left out, and its result is inferred unless
+# given. `holds`, a condition known to hold where it runs, narrows the item as an `if` would. Its
+# type is recorded here, since it is not checked as an expression.
+export const type_of_item_function = (
+  body: Body
+  literal: FunctionLiteral
+  item: Type
+  result: Type?
+  holds: Expression?
+): FunctionType ->
+  const type = check_literal(body, literal, [item], result, holds)
+  body.shared.types[literal] = type
+  type
+
+# The body is checked here, where the names around it are known; those it uses from the enclosing
+# functions are its captures. The expected parameter types stand in for those left out, and the
+# expected result for one left out, unless they have type parameters, whose types are not known
+# yet (see generic_call).
+const check_literal = (
+  body: Body
+  literal: FunctionLiteral
+  expected_params: Array<Type>?
+  expected_result: Type?
+  holds: Expression?
+): FunctionType ->
+  const program = body.program
+  reject_generic(program, literal)
+  const has_untyped = literal.params.any((param) -> param.type == nil)
+  const count = literal.params.length
+  if expected_params
+    if has_untyped and expected_params.length != count
+      const expected = case
+        when expected_result
+          format_type(FunctionType(params: expected_params, result: expected_result))
+        else "a function of #{expected_params.length} parameter(s)"
+      const message = "expected #{expected}, got a function of #{count} parameter(s)"
+      fail(program, literal.position, message)
+  const known = (type: Type?): Type? ->
+    const found = type ? return nil
+    has_type_parameters(found) then nil else found
+  const known_params: Array<Type?> = []
+  if expected_params
+    known_params.push(known(type)) for type in expected_params
+  const params = parameter_types(program, body.resolver, literal, known_params)
+  const return_type = literal.return_type
+  const annotated = case
+    when return_type then resolve_result(program, body.resolver, return_type)
+    else known(expected_result)
+  const context = FunctionContext(annotated)
+  const { shared, resolver, extensions } = body
+  const literal_body = Body(
+    program, shared, resolver, extensions, context, self: nil, enclosing: body
+  )
+  check_function_body(literal_body, literal, params, holds)
+  body.shared.captures[literal] = literal_body.captures
+  finish_function_type(context, params, body.shared.conversions)
+
+# A local of an enclosing function, seen from a function literal, which captures its value; a
+# top-level value is not captured but read where it is.
+export const captured = (body: Body, name: String): Local? ->
+  const enclosing = body.enclosing ? return nil
+  const local = enclosing.scopes.lookup_local(name) ? captured(enclosing, name) ? return nil
+  if const top_level = body.shared.top_level.locals[name]
+    return nil if local == top_level
+  const origin = local.origin ? local
+  body.shared.shared_vars[origin.identifier] = true if origin.mutable
+  if not body.captures.any((capture) -> capture.name == name)
+    body.captures.push(Capture(name, type: local.type, is_var: origin.mutable))
+  const { identifier, type, mutable, used } = local
+  const seen = Local(identifier, type, mutable, used, origin, declared: false)
+  seen.captured = true
+  seen

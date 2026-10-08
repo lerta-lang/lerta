@@ -1,0 +1,153 @@
+# Reads the entry module and the modules it imports, directly or not, including std:builtins, which
+# the others import (see builtins_import).
+import { is_file, read_file, real_path } from 'std:io'
+import { Import, Position, Statement } from './ast'
+import { compile_error, module_location } from './errors'
+import { tokenize } from './lexer/tokens'
+import { parse } from './parser/statement'
+import { dirname, join, relative } from './paths'
+
+export class Module
+  # Its position in the list of modules, which keeps its symbols apart from the others', and is
+  # the order in which their top-level code runs.
+  index: Int
+  # For diagnostics: relative to the entry module's directory, or `std:name` for a standard
+  # module; nil for the entry module.
+  display_path: String?
+  program: Array<Statement>
+  # The indexes of the modules that its imports refer to.
+  imported: Map<Import, Int>
+
+# Every module imports std:builtins, as `import 'std:builtins'`, for the builtin functions and the
+# methods of the builtin types that it gives; all but std:builtins itself and the standard modules
+# that it imports, directly or not, which cannot use them.
+export const BUILTINS_MODULE = 'std:builtins'
+
+# std:builtins and the standard modules it imports, which cannot import it back.
+const BUILTINS_AND_DEPENDENCIES = ['builtins', 'io']
+
+# The standard modules, `std:name`, the files of the directory std/, for the message about an
+# unknown one. The compiler cannot list a directory yet; std will be embedded in it later.
+const STANDARD_MODULES = ['builtins', 'io', 'process']
+
+# A module as it is loaded: its imports refer to the modules by their places in the loading order,
+# since a module's index is known only once its imports are loaded.
+class LoadingModule
+  display_path: String?
+  program: Array<Statement>
+  imported: Map<Import, Int> = Map()
+  index = -1
+
+class Loader
+  entry_path: String
+  # The directory of the standard modules, as given and as it really is.
+  std_dir: String
+  real_std_dir: String
+  # The real paths of std:builtins and the modules it imports.
+  builtins_and_dependencies: Array<String>
+  # The directory that relative paths start from.
+  cwd: String
+  loaded: Array<LoadingModule> = []
+  by_real_path: Map<String, Int> = Map()
+  # The modules in the order of their indexes.
+  order: Array<Int> = []
+
+# The modules, each after those it imports unless they import it back, so the entry module comes
+# last. The standard modules are the files of std/ under `root_dir`.
+export const load_modules = (entry_path: String, root_dir: String): Array<Module> ->
+  throw "'#{entry_path}' is not a file" if not is_file(entry_path)
+  const std_dir = join(root_dir, 'std')
+  const builtins_and_dependencies = [
+    real_path_text(join(std_dir, "#{name}.lerta")) for name in BUILTINS_AND_DEPENDENCIES
+  ]
+  const real_std_dir = real_path_text(std_dir)
+  const cwd = real_path_text('.')
+  const loader = Loader(entry_path, std_dir, real_std_dir, builtins_and_dependencies, cwd)
+  load(loader, entry_path, nil)
+  [finished_module(loader, id) for id in loader.order]
+
+# Files are known by their real paths, so that one file reached by different paths loads once, and
+# a module's imports are relative to where it really is. Diagnostics name a module by a path from
+# the entry module's directory as given. Returns the module's place in the loading order.
+const load = (loader: Loader, path: String, display_path: String?): Int ->
+  const real = real_path_text(path)
+  const location = module_location(loader.entry_path, display_path)
+  const source = read_file(path).decode_utf8() ? throw "'#{path}' is not valid UTF-8"
+  const program = parse(tokenize(source, location), location)
+  const is_builtins_dependency = loader.builtins_and_dependencies.any((each) -> each == real)
+  const with_builtins = is_builtins_dependency then program else prepend(builtins_import(), program)
+  const id = loader.loaded.length
+  const module = LoadingModule(display_path, program: with_builtins)
+  loader.loaded.push(module)
+  loader.by_real_path[real] = id
+  for statement in with_builtins
+    if statement is Import
+      const file = imported_file(loader, statement, dirname(real), location)
+      module.imported[statement] = visit(loader, file, statement, location)
+  module.index = loader.order.length
+  loader.order.push(id)
+  id
+
+const builtins_import = (): Import ->
+  Import(names: [], module: BUILTINS_MODULE, position: Position(line: 1, column: 1))
+
+const prepend = (first: Statement, rest: Array<Statement>): Array<Statement> ->
+  const statements = [first]
+  statements.push(statement) for statement in rest
+  statements
+
+# The module that `path` names, loaded if it is not yet. `location` names the importing module in
+# diagnostics.
+const visit = (loader: Loader, path: String, statement: Import, location: String): Int ->
+  if not is_file(path)
+    const { line, column } = statement.position
+    compile_error(location, line, column, "cannot find module '#{statement.module}'")
+  const real = real_path_text(path)
+  if const loaded = loader.by_real_path[real]
+    return loaded
+  const is_std = dirname(real) == loader.real_std_dir
+  const entry_dir = dirname(loader.entry_path)
+  const display_path = is_std then statement.module else relative(loader.cwd, entry_dir, path)
+  load(loader, path, display_path)
+
+# The file an import names: a path that starts with `./` or `../` is relative to `from`, the
+# directory of the importing file; `std:name` is a standard module. Other names are reserved.
+const imported_file = (
+  loader: Loader
+  statement: Import
+  from: String
+  location: String
+): String ->
+  const module = statement.module
+  const bytes = module.binary
+  if bytes.occurs_at(0, './'.binary) or bytes.occurs_at(0, '../'.binary)
+    return join(from, "#{module}.lerta")
+  const is_std = bytes.occurs_at(0, 'std:'.binary)
+  const std_name = is_std then bytes.slice(4, bytes.length).decode_utf8()! else ''
+  const std_file = join(loader.std_dir, "#{std_name}.lerta")
+  const is_std_name = std_name != '' and std_name.split('/').length == 1
+  return std_file if is_std and is_std_name and is_file(std_file)
+  const standard_modules = ["std:#{name}" for name in STANDARD_MODULES].join(', ')
+  const message = case
+    when is_std then "unknown module '#{module}'; the standard modules are #{standard_modules}"
+    else "unknown module '#{module}'; a file is imported by a path that starts with ./ or ../"
+  const { line, column } = statement.position
+  compile_error(location, line, column, message)
+
+const finished_module = (loader: Loader, id: Int): Module ->
+  const loading = loader.loaded[id]
+  const index_of = (place: Int): Int -> loader.loaded[place].index
+  const imported: Map<Import, Int> = Map()
+  for statement in loading.imported.keys()
+    imported[statement] = index_of(loading.imported[statement]!)
+  const { index, display_path, program } = loading
+  Module(index, display_path, program, imported)
+
+export const is_standard_module = (module: Module): Bool ->
+  if const path = module.display_path
+    return path.binary.occurs_at(0, 'std:'.binary)
+  false
+
+# Paths are compared as text, so a real path must be UTF-8.
+const real_path_text = (path: String): String ->
+  real_path(path).decode_utf8() ? throw "the real path of '#{path}' is not valid UTF-8"
