@@ -1,10 +1,10 @@
 // Reads the entry module and the modules it imports, directly or not.
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import type { Import, Program } from './ast.ts'
+import type { Import, Program } from './syntax/ast.ts'
 import { CompileError } from './errors.ts'
-import { tokenize } from './lexer.ts'
-import { parse } from './parser.ts'
+import { tokenize } from './syntax/lexer.ts'
+import { parse } from './syntax/parser.ts'
 
 export type Module = {
   // Its position in the list of modules, which keeps its symbols apart from the others'.

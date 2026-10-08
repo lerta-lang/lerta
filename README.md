@@ -26,7 +26,7 @@ Early development: the bootstrap compiler (stage0) is in progress. See `docs/roa
 
 | Path | Contents |
 |---|---|
-| `stage0/` | Bootstrap compiler in TypeScript |
+| `stage0/` | Bootstrap compiler in TypeScript: `src/syntax/` reads the source, `src/check/` checks it, `src/codegen/` emits LLVM IR; `test/` runs the tests |
 | `runtime/` | C runtime |
 | `tests/` | Run tests: Lerta source and expected output |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
