@@ -35,6 +35,7 @@
 - `==` and `!=` compare two `Binary`s byte by byte.
 - `b.occurs_at(index, part)` tells whether the bytes of `part` occur in `b` at `index`; it is false where `part` does not fit.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
+- `bytes.to_binary()` copies the items of an `Array<Byte>` into a new `Binary`.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
 
 ## Optional values

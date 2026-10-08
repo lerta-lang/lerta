@@ -25,6 +25,14 @@ LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_
   return slice;
 }
 
+// The items of an Array<Byte>, each held in the low 8 bits of its slot.
+LertaString *lerta_binary_from_bytes(const LertaArray *bytes) {
+  LertaString *binary = lerta_alloc((int64_t)sizeof(LertaString) + bytes->length, NULL);
+  binary->length = bytes->length;
+  for (int64_t i = 0; i < bytes->length; i++) binary->bytes[i] = (uint8_t)bytes->items[i];
+  return binary;
+}
+
 LertaString *lerta_binary_as_string(LertaString *binary) {
   lerta_retain(binary);
   return binary;
