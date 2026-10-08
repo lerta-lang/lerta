@@ -1,5 +1,6 @@
 import { build, ClangError, type BuildOptions } from './build.ts'
 import { CompileError } from './errors.ts'
+import { SourceFileError } from './loader.ts'
 
 const usage = 'usage: lerta build <source> -o <output> [-O] [--emit-llvm <path>]'
 
@@ -44,6 +45,10 @@ try {
 } catch (error) {
   if (error instanceof ClangError) {
     process.stderr.write(error.messages)
+    process.exit(1)
+  }
+  if (error instanceof SourceFileError) {
+    console.error(error.message)
     process.exit(1)
   }
   if (!(error instanceof CompileError)) throw error

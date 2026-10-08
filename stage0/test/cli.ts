@@ -10,7 +10,7 @@ const cli_work_dir = mkdtempSync(join(tmpdir(), 'lerta-cli-'))
 const hello = join(root_dir, 'examples/hello.lerta')
 const exe = join(cli_work_dir, 'hello')
 const hello_output = readFileSync(join(root_dir, 'tests/examples/hello.out'), 'utf8')
-type CliCase = { args: string[]; status: number; produced?: () => boolean }
+type CliCase = { args: string[]; status: number; stderr?: string; produced?: () => boolean }
 
 // Runs a built program with arguments of the given bytes. Node passes arguments as UTF-8, so the
 // shell makes them.
@@ -90,7 +90,17 @@ const cli_cases: CliCase[] = [
       return decoded.stdout === utf8_cases.map(([, valid]) => `${valid}\n`).join('')
     },
   },
-  { args: ['build', join(root_dir, 'tests/name/undefined.lerta'), '-o', exe], status: 1 },
+  {
+    args: ['build', join(root_dir, 'tests/name/undefined.lerta'), '-o', exe],
+    status: 1,
+    stderr: `${join(root_dir, 'tests/name/undefined.lerta')}:1:1: undefined name 'say'\n`,
+  },
+  { args: ['build', root_dir, '-o', exe], status: 1, stderr: `'${root_dir}' is not a file\n` },
+  {
+    args: ['build', join(cli_work_dir, 'missing.lerta'), '-o', exe],
+    status: 1,
+    stderr: `'${join(cli_work_dir, 'missing.lerta')}' is not a file\n`,
+  },
   { args: ['build'], status: 2 },
   { args: ['run', hello, '-o', exe], status: 2 },
   { args: ['build', hello, '-o', exe, '-o', exe], status: 2 },
@@ -105,9 +115,11 @@ const main_path = join(import.meta.dirname, '../src/main.ts')
 const shorten_path = (arg: string): string =>
   arg.replace(cli_work_dir, '<tmp>').replace(`${root_dir}/`, '')
 
-const run_cli_case = ({ args, status, produced }: CliCase): string[] => {
-  const actual = spawnSync(process.execPath, [main_path, ...args], { stdio: 'ignore' }).status
-  if (actual !== status) return [`expected exit status ${status}, got ${actual}`]
+const run_cli_case = ({ args, status, stderr, produced }: CliCase): string[] => {
+  const actual = spawnSync(process.execPath, [main_path, ...args], { encoding: 'utf8' })
+  if (actual.status !== status) return [`expected exit status ${status}, got ${actual.status}`]
+  if (stderr !== undefined && actual.stderr !== stderr)
+    return [`unexpected stderr: ${actual.stderr}`]
   if (produced !== undefined && !produced()) return ['the build did not produce what it should']
   return []
 }

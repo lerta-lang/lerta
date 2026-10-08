@@ -62,8 +62,12 @@ const std_modules = (): string[] =>
     .map((file) => file.slice(0, -'.lerta'.length))
     .sort()
 
+// An entry path that names no file, which has no line to report a compile error at.
+export class SourceFileError extends Error {}
+
 // The modules, each after those it imports, so the entry module comes last.
 export const load_modules = (entry_path: string): Module[] => {
+  if (!is_file(entry_path)) throw new SourceFileError(`'${entry_path}' is not a file`)
   const modules: Module[] = []
   const by_real_path = new Map<string, Module>()
   const loading = new Set<string>()

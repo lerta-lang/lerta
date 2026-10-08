@@ -21,6 +21,7 @@ Diagnostics are printed to stderr, one per line:
 
 - A compile error stops the build, and the exit code is 1. Warnings found before it are printed first.
 - A warning does not stop the build. Those of the standard modules are not reported, since the program cannot act on them; each standard module builds on its own without warnings.
+- If `<source>` is not a file, `'<source>' is not a file` is printed, and the exit code is 1.
 - If clang fails, its messages are printed as they are, and the exit code is 1.
 
 Lines and columns start at 1, and columns count code points.
