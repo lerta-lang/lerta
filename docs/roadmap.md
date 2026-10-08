@@ -41,7 +41,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 - Variadic parameters `xs...`
 - Multi-line string literals `"""..."""`
 - Ropes, `StringSlice`, small strings as immediate values, grapheme iterators
-- `catch`/`finally`, exception types, the exception implementation strategy — compile errors are collected as values
+- `catch`/`finally`, exception types, the exception implementation strategy — the compiler throws a compile error where it finds it, since the first one ends the build
 - async/await, the event loop, libuv, workers
 - `weak`
 - User-defined `interface`, itabs, satisfying methods with function-valued fields (`Equatable`/`Hashable` are handled as builtin rules in stage0, and `Stringable` structurally, by `x.to_string()`)

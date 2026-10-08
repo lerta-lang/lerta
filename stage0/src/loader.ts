@@ -122,7 +122,7 @@ export const load_modules = (entry_path: string): Module[] => {
 export const is_standard_module = (module: Module): boolean =>
   module.display_path?.startsWith('std:') ?? false
 
-const is_file = (path: string): boolean =>
+export const is_file = (path: string): boolean =>
   statSync(path, { throwIfNoEntry: false })?.isFile() ?? false
 
 // Runs `f`, giving a compile error that it throws, and the warnings that come with it, the

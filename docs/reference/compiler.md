@@ -10,6 +10,12 @@ builds an executable. In stage0, `lerta` is `node stage0/src/main.ts` (see the [
 - `-O` optimizes, including across the generated code and the runtime (link-time optimization).
 - `--emit-llvm <path>` also writes the generated LLVM IR, before optimization, to `<path>`.
 
+```
+lerta dump-tokens <source>
+```
+
+prints the tokens of one file, without reading the modules it imports, one per line: `<line>:<column> <spaced|joined> <kind> "<text>"`, where `spaced` means that whitespace or the start of the line precedes it. An interpolated string is followed by its parts, indented: `text "<text>"` and `code <column> "<source>"`. In the quoted texts, the characters below U+0020, U+007F, `\` and `"` are written as `\xHH`. It exists to compare the lexers of stage0 and of the compiler written in Lerta; a lexical error is reported as a compile error.
+
 ## Diagnostics
 
 Diagnostics are printed to stderr, one per line:

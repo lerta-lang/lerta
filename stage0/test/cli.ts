@@ -10,7 +10,13 @@ const cli_work_dir = mkdtempSync(join(tmpdir(), 'lerta-cli-'))
 const hello = join(root_dir, 'examples/hello.lerta')
 const exe = join(cli_work_dir, 'hello')
 const hello_output = readFileSync(join(root_dir, 'tests/examples/hello.out'), 'utf8')
-type CliCase = { args: string[]; status: number; stderr?: string; produced?: () => boolean }
+type CliCase = {
+  args: string[]
+  status: number
+  stdout?: string
+  stderr?: string
+  produced?: () => boolean
+}
 
 // Runs a built program with arguments of the given bytes. Node passes arguments as UTF-8, so the
 // shell makes them.
@@ -109,15 +115,37 @@ const cli_cases: CliCase[] = [
   { args: ['build', hello, '-o', exe, '--emit-llvm'], status: 2 },
   { args: ['build', hello, hello, '-o', exe], status: 2 },
   { args: ['build', hello, '-o', exe, '--unknown'], status: 2 },
+  {
+    args: ['dump-tokens', hello],
+    status: 0,
+    stdout: [
+      '1:1 spaced identifier "print"',
+      '1:7 spaced string "hello, world"',
+      '1:21 spaced newline ""',
+      '2:1 spaced eof ""',
+    ]
+      .map((line) => `${line}\n`)
+      .join(''),
+  },
+  {
+    args: ['dump-tokens', join(root_dir, 'tests/lex/column_code_points.lerta')],
+    status: 1,
+    stderr: `${join(root_dir, 'tests/lex/column_code_points.lerta')}:1:8: unexpected character '$'\n`,
+  },
+  { args: ['dump-tokens', root_dir], status: 1, stderr: `'${root_dir}' is not a file\n` },
+  { args: ['dump-tokens'], status: 2 },
+  { args: ['dump-tokens', hello, hello], status: 2 },
 ]
 const main_path = join(import.meta.dirname, '../src/main.ts')
 // Paths are shown relative to the repository, and the work directory as <tmp>.
 const shorten_path = (arg: string): string =>
   arg.replace(cli_work_dir, '<tmp>').replace(`${root_dir}/`, '')
 
-const run_cli_case = ({ args, status, stderr, produced }: CliCase): string[] => {
+const run_cli_case = ({ args, status, stdout, stderr, produced }: CliCase): string[] => {
   const actual = spawnSync(process.execPath, [main_path, ...args], { encoding: 'utf8' })
   if (actual.status !== status) return [`expected exit status ${status}, got ${actual.status}`]
+  if (stdout !== undefined && actual.stdout !== stdout)
+    return [`unexpected stdout: ${actual.stdout}`]
   if (stderr !== undefined && actual.stderr !== stderr)
     return [`unexpected stderr: ${actual.stderr}`]
   if (produced !== undefined && !produced()) return ['the build did not produce what it should']
