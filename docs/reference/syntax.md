@@ -70,7 +70,7 @@ draw 'p'
   5. **A call with zero arguments requires parentheses**: `f()`. A bare `f` is the function value.
 - Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
 - `(x)` groups an expression.
-- Arguments may be named, `f(name: value)`, after the positional ones; so far only constructors take them.
+- Arguments may be named, `f(name: value)`, after the positional ones: those of a constructor and the fields of an [anonymous struct](types.md#anonymous-structs) parameter.
 - `x.name()` calls a method of `x`, `x.name` reads a property and `xs[i]` indexes. As with `(`, no space is allowed before `.` or `[`. At the start of a statement, `f [1]` is the call `f([1])`.
 - Types are written as names, with type arguments in `<>` and `?` for an optional type: `Int`, `Array<String>`, `String?`.
 - `x!` unwraps an optional value; no space is allowed before `!`.

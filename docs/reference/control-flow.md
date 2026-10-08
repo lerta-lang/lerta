@@ -25,7 +25,7 @@ while n > 0
 - `break` leaves the innermost `while` or `for`, and `continue` goes on to its next round. Either is an error outside a loop.
 - `break`, `continue` and `return` are expressions of type `never`, like `throw` (see [errors](errors.md)): `const age = ages[name] ? return -1`, `when 'stop' then break`. Unlike `throw`, they may only be written where nothing evaluated before them is still held: as a statement, as the value of a declaration or of an assignment to a variable, and, within those, as the fallback of `?` or a value of `then`/`else` or of a `case` arm. Elsewhere, as in `f(x ? return 0)`, they are an error; so is a `return` inside an arm of a `case` that is itself such an operand, or a `break` or `continue` there that leaves a loop outside the arm. As a statement, `x ? return` is a guard, whose value is not used.
 - **Postfix forms** `<statement> if <condition>` and `<statement> while <condition>` apply to one statement other than a declaration (`break if done`, `x *= 2 while x < 100`). The condition of a postfix `while` is evaluated first.
-- `and` and `or` evaluate their right operand only when the left one does not decide the result. Their operands and `not`'s are `Bool`s.
+- `and` and `or` evaluate their right operand only when the left one does not decide the result.
 
 ## then and else
 
