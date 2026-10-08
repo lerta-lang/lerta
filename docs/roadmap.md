@@ -33,7 +33,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 | `'std:io'` | `read_file(path: String): Binary`, `write_file`, `Writer`, `stdout`, `stderr` |
 | `'std:process'` | `argv`, `exit(code: Int): never` |
 
-- The builtins written in Lerta, `print` and most methods of the builtin types (see [builtins](reference/builtins.md)), are in `std/builtins.lerta`, which every module but `std:io`, which it imports, imports implicitly.
+- The builtins written in Lerta, `print` and most methods of the builtin types (see [builtins](reference/builtins.md)), are in `std/builtins.lerta`.
 - In stage0, writes are synchronous. Making them asynchronous is decided in Phase 2.
 
 ### Not included (later)

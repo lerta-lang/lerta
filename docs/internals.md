@@ -89,7 +89,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 ## Output
 
-- stdout is buffered as C stdio buffers it. On a terminal, which the runtime checks with `isatty` at start, it is not buffered, so that each write shows at once. On a pipe or a file, it is fully buffered, so that few system calls carry the output: the buffer is flushed when it is full, before each write to stderr, which is never buffered, so that the two keep their order, and at exit.
+- stdout follows the buffering that [the reference](reference/modules.md#stdio) states, as C stdio does, in a buffer of the runtime's own (`runtime/io.c`). The runtime checks for a terminal with `isatty` at start and leaves stdout unbuffered on one, so that each write shows at once. Elsewhere it flushes the buffer before a write that would overflow it and writes one larger than the buffer directly, so that few system calls carry the output.
 - `print` makes one write of its text and the newline, which copies the text into a new String in either mode: unbuffered, that copy is cheaper than a second system call; buffered, it adds an allocation and a copy of the text per line, which is small next to producing the text.
 
 ## Lazy iterators

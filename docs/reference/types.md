@@ -110,7 +110,7 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 
 ## Methods
 
-`String`, `Int`, `Byte` and `Bool` have `to_string(): String` (for arrays, see [Array](#array)), which gives the text that `print` writes and interpolation inserts; so may a class or struct (see [Stringable](builtins.md#stringable)). A method must be called: `x.to_string` without `()` is an error.
+The methods of the builtin types are listed in [builtins](builtins.md#methods-of-the-builtin-types). A method must be called: `x.to_string` without `()` is an error.
 
 ## Unions
 
