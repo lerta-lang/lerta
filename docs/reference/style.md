@@ -12,6 +12,8 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Modules**: a library module contains only code that builds the exported values. Put code to run in a separate entry file.
 - **Postfix forms**: if the body of `while`/`for` is one statement, use the postfix form. If it exceeds 100 columns, use the block form even for one statement. Do not stack postfix forms (`x += 1 for x in xs while ok`).
 - **Type bodies**: write type-only fields (constructor arguments) first. Do not write `const`/`var` when it equals the default.
+- **Return types**: omit a return type that can be inferred. Write it where the language requires it (recursion, `nil` alone), and on generic functions and methods, whose bodies are checked only per instance.
+- **Top-level order**: declare a top-level value above the code that uses it, wherever the order allows.
 - **Unused names**: name an unused variable `_`.
 - **Ranges**: parenthesize an end that is an operation (`0...(n - 1)`) for readability; `...` binds weaker than arithmetic, so the parentheses do not change the meaning.
 - **Integer types**: quantities (counters, sizes, indexes, `length`) are `Int`. Unsigned types are only for bit operations, FFI and `Byte` (because `0 - 1` on a `UInt` passes silently).
