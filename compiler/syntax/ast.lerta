@@ -1,0 +1,448 @@
+# The syntax tree. Nodes are classes, so that later passes can key maps by them, and so that the
+# parser can adjust some after making them. The groups of fields without a kind of their own are
+# structs: they are parts of a node, neither told apart nor changed.
+import { TextPart } from './string_literal'
+
+export struct Position
+  line: Int
+  column: Int
+
+export class StringLiteral
+  value: String
+  position: Position
+
+# `"a#{b}c"`: text parts and interpolated values, in order. A value is read as a call of its
+# `to_string()`, `b.to_string()`, which gives its text.
+export type InterpolationPart = TextPart | Call
+
+export class Interpolation
+  parts: Array<InterpolationPart>
+  position: Position
+
+export class NilLiteral
+  position: Position
+
+export class BooleanLiteral
+  value: Bool
+  position: Position
+
+export class IntegerLiteral
+  value: Int
+  position: Position
+
+export class Identifier
+  name: String
+  position: Position
+
+# `throw message`: stops with the message, a String. It never gives a value.
+export class Throw
+  message: Expression
+  position: Position
+
+# `x!`: x without nil; it throws if x is nil.
+export class Unwrap
+  operand: Expression
+  position: Position
+
+# `x ? fallback`: x without nil, or the fallback if x is nil.
+export class Coalesce
+  value: Expression
+  fallback: Expression
+  position: Position
+
+# `[a, b]`
+export class ArrayLiteral
+  elements: Array<Expression>
+  position: Position
+
+export struct MapEntry
+  key: Expression
+  value: Expression
+
+export class MapLiteral
+  entries: Array<MapEntry>
+  position: Position
+
+# The guard and the element of an Iter comprehension as function literals of the loop variable
+# (see Comprehension).
+export struct LazyFunctions
+  guard: FunctionLiteral?
+  element: FunctionLiteral
+
+# `[f(x) for x in xs when g(x)]`: an array of the values of `element`, for each item for which the
+# guard, if any, holds. In parentheses, `(f(x) for x in xs when g(x))`, it is an Iter of them,
+# which computes them only as it is consumed; for that, `lazy` holds the guard and the element as
+# function literals of the loop variable (the guard's gives a Bool). They share their bodies'
+# expressions with `guard` and `element`, which are checked and generated only through them.
+export class Comprehension
+  element: Expression
+  variable: Identifier
+  iterable: Expression
+  guard: Expression?
+  lazy: LazyFunctions?
+  position: Position
+
+# A field of an anonymous struct, or a named argument of a call, which gives such a field or
+# constructs a class or struct.
+export struct NamedValue
+  name: Identifier
+  value: Expression
+
+# `{ x: 1, y: 'a' }`, an anonymous struct; `{ x }` is short for `{ x: x }`.
+export class RecordLiteral
+  fields: Array<NamedValue>
+  position: Position
+
+# `object[index]`
+export class Index
+  object: Expression
+  index: Expression
+  position: Position
+
+# `f(a, b)`, or `Point(x: 1, y: 2)` with named arguments, which construct a class or struct.
+# `f<Int>(x)` gives a generic function its type arguments.
+export class Call
+  callee: Expression
+  args: Array<Expression>
+  named_args: Array<NamedValue>
+  type_args: Array<TypeName>
+  position: Position
+
+# `@` inside a method or a field initializer: the object itself. `@x` is `this.x`.
+export class This
+  position: Position
+
+# `object.name`
+export class Member
+  object: Expression
+  name: Identifier
+  position: Position
+
+# `-` or `not`.
+export class UnaryOperation
+  operator: String
+  operand: Expression
+  position: Position
+
+export const COMPARISON_OPERATORS = ['==', '!=', '<', '<=', '>', '>=']
+
+# An arithmetic or comparison operator, `and` or `or`.
+export class BinaryOperation
+  operator: String
+  left: Expression
+  right: Expression
+  position: Position
+
+# `start...end`: the integers from start up to, but not including, end.
+export class Range
+  start: Expression
+  end: Expression
+  position: Position
+
+# A type written in the source, such as `Int` in a parameter.
+export class NamedType
+  name: String
+  args: Array<TypeName>
+  # Written with `?`: the type or nil.
+  optional: Bool
+  position: Position
+
+export type UnionMember = NamedType | RecordTypeName
+
+# `A | B`: a value of any of the member types.
+export class UnionTypeName
+  members: Array<UnionMember>
+  position: Position
+
+# `(A, B) -> R`: a function. Written in parentheses with `?` after them, `((A) -> R)?`, it may
+# be nil.
+export class FunctionTypeName
+  params: Array<TypeName>
+  result: TypeName
+  optional: Bool
+  position: Position
+
+export struct RecordTypeField
+  name: Identifier
+  type: TypeName
+
+# `{ x: Int, y: String }`: an anonymous struct.
+export class RecordTypeName
+  fields: Array<RecordTypeField>
+  optional: Bool
+  position: Position
+
+export type TypeName = NamedType | UnionTypeName | FunctionTypeName | RecordTypeName
+
+# A parameter's type may be left out where a function type is expected for the literal.
+export struct Parameter
+  name: Identifier
+  type: TypeName?
+
+# `T` in `<T>(x: T) -> x`, or `T: Stringable`, whose type arguments must have `to_string()`.
+export struct TypeParameter
+  name: Identifier
+  bound: Identifier?
+
+# `(x: Int): Int -> body`. The body's last expression is the return value. A generic one,
+# `<T>(x: T) -> body`, has type parameters.
+export class FunctionLiteral
+  type_params: Array<TypeParameter>
+  params: Array<Parameter>
+  return_type: TypeName?
+  body: Array<Statement>
+  position: Position
+
+# `case` without a subject takes the first arm whose condition (its one pattern) is true. With a
+# subject, a pattern is a type, which the subject must have, or a value, which it must equal; an
+# arm may list several. `otherwise` is the `else` arm, which a case over every type of a union may
+# leave out. An arm's body is its value after `then`, or a block whose last statement gives it.
+export struct CaseArm
+  patterns: Array<Expression>
+  body: Array<Statement>
+
+export class Case
+  subject: Expression?
+  arms: Array<CaseArm>
+  otherwise: Array<Statement>?
+  position: Position
+
+# `x is T`: whether x, of a union type, holds a T.
+export class IsTest
+  value: Expression
+  type: NamedType
+  position: Position
+
+# `condition then a else b`.
+export class Conditional
+  condition: Expression
+  then_value: Expression
+  else_value: Expression
+  position: Position
+
+# `break` or `continue`, which, like `return`, are expressions that never give a value, as `throw`.
+export class Jump
+  # 'break' or 'continue'.
+  kind: String
+  position: Position
+
+export class Return
+  value: Expression?
+  position: Position
+
+type Literal = StringLiteral | Interpolation | BooleanLiteral | NilLiteral | IntegerLiteral
+type CompoundLiteral = ArrayLiteral | Comprehension | MapLiteral | RecordLiteral | FunctionLiteral
+type Operation = UnaryOperation | BinaryOperation | Range | IsTest | Conditional | Unwrap
+type Access = Identifier | This | Member | Index | Call
+type Control = Case | Coalesce | Throw | Jump | Return
+
+export type Expression = Literal | CompoundLiteral | Operation | Access | Control
+
+export class For
+  variable: Identifier
+  iterable: Expression
+  body: Array<Statement>
+  position: Position
+
+# `const name = value` or `var name = value`. `exported` is set by `export`, as on the other
+# declarations that it can precede.
+export class Declaration
+  mutable: Bool
+  name: Identifier
+  type: TypeName?
+  value: Expression
+  position: Position
+  exported = false
+
+export const ASSIGNMENT_OPERATORS = ['=', '+=', '-=', '*=', '/=', '%=']
+
+export type AssignmentTarget = Identifier | Index | Member
+
+export class Assignment
+  operator: String
+  target: AssignmentTarget
+  value: Expression
+  position: Position
+
+# `if const name = value`: the condition holds when value is not nil, and name is the value
+# without nil inside the body.
+export class Binding
+  name: Identifier
+  value: Expression
+  position: Position
+
+export type Condition = Expression | Binding
+
+# `else if` is an `if` alone in the else branch.
+export class If
+  condition: Condition
+  then_body: Array<Statement>
+  else_body: Array<Statement>
+  position: Position
+
+export class While
+  condition: Condition
+  body: Array<Statement>
+  position: Position
+
+# A member of a class or struct body: a field (with a type, an initial value, or both) or, for a
+# function literal value, a method. `modifier` is 'const' or 'var', if written.
+export struct MemberDeclaration
+  name: Identifier
+  modifier: String?
+  type: TypeName?
+  value: Expression?
+  position: Position
+
+export class TypeDeclaration
+  is_struct: Bool
+  name: Identifier
+  members: Array<MemberDeclaration>
+  position: Position
+  exported = false
+
+# `type Name = A | B`: another name for a type.
+export class TypeAlias
+  name: Identifier
+  type: TypeName
+  position: Position
+  exported = false
+
+# `import { a, b as c } from 'std:io'`, or from another file, `'./util'`. An imported name is
+# known in the module by its alias, if it has one.
+export struct ImportName
+  name: Identifier
+  alias: Identifier?
+
+export class Import
+  names: Array<ImportName>
+  module: String
+  position: Position
+
+# `extern lerta_write as write: (Int, String) -> Int`: a C function, by its symbol, known in the
+# module by the name after `as`, or by its symbol without one.
+export class Extern
+  symbol: Identifier
+  name: Identifier
+  type: TypeName
+  position: Position
+  exported = false
+
+# `extend String` followed by methods, which the type has where the extend is in effect.
+# `extend<T> Array<T>` declares the type parameters of a generic extend.
+export class Extend
+  type_params: Array<TypeParameter>
+  type: TypeName
+  members: Array<MemberDeclaration>
+  position: Position
+
+# The declarations other than `const` and `var`, which the checker allows only at the top level.
+type ModuleDeclaration = Import | TypeDeclaration | TypeAlias | Extern | Extend
+
+export type Statement = Expression | ModuleDeclaration | Declaration | Assignment | If | While | For
+
+export type Node = Statement | Binding | TypeName
+
+export const position_of = (node: Node): Position ->
+  case node
+    when StringLiteral then node.position
+    when Interpolation then node.position
+    when BooleanLiteral then node.position
+    when NilLiteral then node.position
+    when IntegerLiteral then node.position
+    when Identifier then node.position
+    when ArrayLiteral then node.position
+    when Comprehension then node.position
+    when MapLiteral then node.position
+    when RecordLiteral then node.position
+    when Conditional then node.position
+    when Index then node.position
+    when Call then node.position
+    when This then node.position
+    when Member then node.position
+    when UnaryOperation then node.position
+    when BinaryOperation then node.position
+    when Unwrap then node.position
+    when Coalesce then node.position
+    when Throw then node.position
+    when Jump then node.position
+    when Return then node.position
+    when Range then node.position
+    when Case then node.position
+    when IsTest then node.position
+    when FunctionLiteral then node.position
+    when Import then node.position
+    when TypeDeclaration then node.position
+    when TypeAlias then node.position
+    when Extern then node.position
+    when Extend then node.position
+    when Declaration then node.position
+    when Assignment then node.position
+    when If then node.position
+    when While then node.position
+    when For then node.position
+    when Binding then node.position
+    when NamedType then node.position
+    when UnionTypeName then node.position
+    when FunctionTypeName then node.position
+    when RecordTypeName then node.position
+
+# Moves an expression to `position`, as the parentheses around it do.
+export const move_to = (expression: Expression, position: Position) ->
+  case expression
+    when StringLiteral
+      expression.position = position
+    when Interpolation
+      expression.position = position
+    when BooleanLiteral
+      expression.position = position
+    when NilLiteral
+      expression.position = position
+    when IntegerLiteral
+      expression.position = position
+    when Identifier
+      expression.position = position
+    when ArrayLiteral
+      expression.position = position
+    when Comprehension
+      expression.position = position
+    when MapLiteral
+      expression.position = position
+    when RecordLiteral
+      expression.position = position
+    when Conditional
+      expression.position = position
+    when Index
+      expression.position = position
+    when Call
+      expression.position = position
+    when This
+      expression.position = position
+    when Member
+      expression.position = position
+    when UnaryOperation
+      expression.position = position
+    when BinaryOperation
+      expression.position = position
+    when Unwrap
+      expression.position = position
+    when Coalesce
+      expression.position = position
+    when Throw
+      expression.position = position
+    when Jump
+      expression.position = position
+    when Return
+      expression.position = position
+    when Range
+      expression.position = position
+    when Case
+      expression.position = position
+    when IsTest
+      expression.position = position
+    when FunctionLiteral
+      expression.position = position
+
+# A new node of the same name, so that each place where a name is used has a node of its own.
+export const copy_identifier = (identifier: Identifier): Identifier ->
+  Identifier(name: identifier.name, position: identifier.position)

@@ -46,7 +46,7 @@ export const tokenize = (source: String, path: String): Array<Token> ->
   for index in 0...lines.length
     const ends_with_lf = index + 1 < lines.length
     const bytes = ends_with_lf then without_carriage_return(lines[index]) else lines[index].binary
-    const line = SourceLine(path, bytes, number: index + 1)
+    const line = SourceLine(path, bytes, number: index + 1, column_offset: 0)
     const indent = line.scan_while(0, is_space)
     const is_blank = indent == line.length or line.bytes[indent] == '#'
     continue if is_blank
@@ -63,6 +63,20 @@ export const tokenize = (source: String, path: String): Array<Token> ->
     indents.pop()
     tokens.push(layout_token('dedent', eof_line, 1))
   tokens.push(layout_token('eof', eof_line, 1))
+  tokens
+
+# The tokens of an interpolated expression, placed where it is in the source line.
+export const tokenize_fragment = (
+  source: String
+  path: String
+  line: Int
+  column: Int
+): Array<Token> ->
+  const fragment = SourceLine(path, bytes: source.binary, number: line, column_offset: column - 1)
+  const tokens = LineScanner(line: fragment, position: 0).run()
+  const end = fragment.column(fragment.length)
+  tokens.push(layout_token('newline', line, end))
+  tokens.push(layout_token('eof', line, end))
   tokens
 
 # A line that LF ends may end with CRLF.

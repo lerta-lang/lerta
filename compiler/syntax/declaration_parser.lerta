@@ -1,0 +1,125 @@
+# Declarations other than `const` and `var`: type aliases, classes, structs, extends, imports,
+# externs and exports.
+import {
+  Declaration, Extend, Extern, Import, ImportName, MemberDeclaration, Statement, TypeAlias
+  TypeDeclaration, TypeName, TypeParameter
+} from './ast'
+import { parse_type_parameters } from './compound_parser'
+import { parse_identifier, parse_list, parse_value } from './expression_parser'
+import { at_destructuring, parse_destructuring_statement, parse_statement } from './parser'
+import { token_position, TokenStream } from './token_stream'
+import { parse_type_name } from './type_parser'
+
+# `type Name = ...`; `type` is not a keyword, so that it stays usable as a name.
+export const starts_type_alias = (tokens: TokenStream): Bool ->
+  const name_follows = tokens.peek_at(1).kind == 'identifier'
+  tokens.at_word('type') and name_follows and tokens.peek_at(2).kind == '='
+
+export const parse_type_alias = (tokens: TokenStream): TypeAlias ->
+  const position = token_position(tokens.next())
+  const name = parse_identifier(tokens)
+  tokens.expect('=', "'='")
+  TypeAlias(name, position, type: parse_type_name(tokens))
+
+# `export` before a `const` (a function or a value) or a type; the checker tells whether it is at
+# the top level.
+export const parse_export = (tokens: TokenStream): Statement ->
+  const token = tokens.next()
+  const fail = (): never ->
+    const message = 'only a const, a class, a struct, a type alias or an extern can be exported'
+    tokens.fail(token_position(token), message)
+  if at_destructuring(tokens)
+    parse_destructuring_statement(tokens)
+    fail()
+  const statement = parse_statement(tokens)
+  case statement
+    when Declaration
+      fail() if statement.mutable
+      statement.exported = true
+      statement
+    when TypeDeclaration
+      statement.exported = true
+      statement
+    when TypeAlias
+      statement.exported = true
+      statement
+    when Extern
+      statement.exported = true
+      statement
+    else fail()
+
+# `extern symbol as name: (A) -> R`.
+export const parse_extern = (tokens: TokenStream): Extern ->
+  const position = token_position(tokens.next())
+  const symbol = parse_identifier(tokens)
+  const has_name = tokens.at_word('as')
+  tokens.next() if has_name
+  const name = has_name then parse_identifier(tokens) else symbol
+  tokens.expect(':', "':'")
+  Extern(symbol, name, position, type: parse_type_name(tokens))
+
+# `import { a, b } from 'module'`, or `import 'module'` for its effects alone. `from` is not a
+# keyword, so that it stays usable as a name.
+export const parse_import = (tokens: TokenStream): Import ->
+  const position = token_position(tokens.next())
+  if tokens.peek().kind == 'string'
+    return Import(position, names: [], module: parse_module_name(tokens))
+  tokens.expect('{', "'{' or module name")
+  const first = tokens.peek()
+  const names = parse_list(tokens, '}', () -> parse_import_name(tokens))
+  tokens.fail_expecting(first, 'a name to import') if names.length == 0
+  tokens.fail_expecting(tokens.peek(), "'from'") if not tokens.at_word('from')
+  tokens.next()
+  Import(names, position, module: parse_module_name(tokens))
+
+const parse_module_name = (tokens: TokenStream): String ->
+  const module = tokens.peek()
+  tokens.fail_expecting(module, 'module name') if module.kind != 'string'
+  tokens.next()
+  module.text
+
+# `name` or `name as alias`. `as` is not a keyword, so that it stays usable as a name.
+const parse_import_name = (tokens: TokenStream): ImportName ->
+  const name = parse_identifier(tokens)
+  return ImportName(name) if not tokens.at_word('as')
+  tokens.next()
+  ImportName(name, alias: parse_identifier(tokens))
+
+# `class Name` or `struct Name` followed by an indented block of members, one per line.
+export const parse_type_declaration = (tokens: TokenStream): TypeDeclaration ->
+  const token = tokens.next()
+  const name = parse_identifier(tokens)
+  const members = parse_members(tokens)
+  TypeDeclaration(name, members, is_struct: token.kind == 'struct', position: token_position(token))
+
+# `extend Type`, or `extend<T> Array<T>` for a generic one, followed by an indented block of
+# methods, one per line.
+export const parse_extend = (tokens: TokenStream): Extend ->
+  const position = token_position(tokens.next())
+  const is_generic = tokens.peek().kind == '<'
+  const type_params: Array<TypeParameter> = is_generic then parse_type_parameters(tokens) else []
+  const type = parse_type_name(tokens)
+  Extend(type_params, type, position, members: parse_members(tokens))
+
+const parse_members = (tokens: TokenStream): Array<MemberDeclaration> ->
+  tokens.expect('newline', 'end of line')
+  tokens.expect('indent', 'indented members')
+  const members: Array<MemberDeclaration> = []
+  while tokens.peek().kind != 'dedent'
+    members.push(parse_member(tokens))
+    tokens.expect_line_end()
+  tokens.next()
+  members
+
+# `[const | var] name[: Type][ = value]`, with a type, a value or both.
+const parse_member = (tokens: TokenStream): MemberDeclaration ->
+  const token = tokens.peek()
+  const has_modifier = token.kind == 'const' or token.kind == 'var'
+  tokens.next() if has_modifier
+  const modifier = has_modifier then token.kind else nil
+  const name = parse_identifier(tokens)
+  const type: TypeName? = tokens.accept(':') then parse_type_name(tokens) else nil
+  const has_value = type == nil or tokens.peek().kind == '='
+  tokens.expect('=', type == nil then "':' or '='" else "'='") if has_value
+  const value = has_value then parse_value(tokens) else nil
+  MemberDeclaration(name, modifier, type, value, position: token_position(token))

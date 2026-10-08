@@ -1,0 +1,61 @@
+# A literal written as an indented block instead of in brackets, after a trailing `=` or `key:`.
+# Its lines decide its kind: all `name: value` make an anonymous struct, all `key: value` a map,
+# and plain values an array, one element per line.
+import {
+  ArrayLiteral, Expression, MapEntry, MapLiteral, NamedValue, Position, RecordLiteral
+} from './ast'
+import { parse_expression, parse_identifier, parse_value } from './expression_parser'
+import { token_position, TokenStream } from './token_stream'
+
+struct ElementLine
+  value: Expression
+
+type Line = NamedValue | MapEntry | ElementLine
+
+# Whether the line ends here and an indented block follows.
+export const starts_block = (tokens: TokenStream): Bool ->
+  tokens.peek().kind == 'newline' and tokens.peek_at(1).kind == 'indent'
+
+# Whether the block that follows starts with a `name:` line, as a call's named arguments do.
+export const starts_field_block = (tokens: TokenStream): Bool ->
+  const starts_with_name = tokens.peek_at(2).kind == 'identifier'
+  starts_block(tokens) and starts_with_name and tokens.peek_at(3).kind == ':'
+
+export const parse_block_literal = (tokens: TokenStream): Expression ->
+  tokens.expect('newline', 'end of line')
+  tokens.expect('indent', 'indented block')
+  # Diagnostics about the literal point at its first line.
+  const position = token_position(tokens.peek())
+  const lines: Array<Line> = []
+  while tokens.peek().kind != 'dedent'
+    const line_start = token_position(tokens.peek())
+    const line = parse_line(tokens)
+    if lines.length > 0 and kind_of(line) != kind_of(lines[0])
+      const message = "the lines of this block are #{kind_of(lines[0])}, so this one must be too"
+      tokens.fail(line_start, message)
+    lines.push(line)
+    tokens.expect_line_end()
+  tokens.next()
+  to_literal(lines, position)
+
+const parse_line = (tokens: TokenStream): Line ->
+  if tokens.peek().kind == 'identifier' and tokens.peek_at(1).kind == ':'
+    const name = parse_identifier(tokens)
+    tokens.next()
+    return NamedValue(name, value: parse_value(tokens))
+  const value = parse_expression(tokens)
+  return ElementLine(value) if not tokens.accept(':')
+  MapEntry(key: value, value: parse_value(tokens))
+
+const kind_of = (line: Line): String ->
+  case line
+    when NamedValue then 'fields'
+    when MapEntry then 'map entries'
+    when ElementLine then 'array elements'
+
+const to_literal = (lines: Array<Line>, position: Position): Expression ->
+  const fields = [line for line in lines when line is NamedValue]
+  const entries = [line for line in lines when line is MapEntry]
+  return RecordLiteral(fields, position) if fields.length > 0
+  return MapLiteral(entries, position) if entries.length > 0
+  ArrayLiteral(position, elements: [line.value for line in lines when line is ElementLine])

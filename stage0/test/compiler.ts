@@ -1,6 +1,6 @@
 // Compiler checks: the compiler written in Lerta (compiler/), built with stage0, must agree with
-// stage0 on every Lerta file of the repository; so far, on the tokens that `dump-tokens` prints,
-// or the error it reports.
+// stage0 on every Lerta file of the repository; so far, on the tokens that `dump-tokens` prints and
+// the syntax tree that `dump-ast` prints, or the error each reports.
 import { execFile } from 'node:child_process'
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
@@ -14,6 +14,7 @@ const compiler = join(work_dir, 'lerta')
 const stage0_main = join(import.meta.dirname, '../src/main.ts')
 
 const source_dirs = ['compiler', 'examples', 'std', 'tests']
+const commands = ['dump-tokens', 'dump-ast']
 
 // The Lerta files under `dir`, relative to the root.
 const lerta_files = (dir: string): string[] =>
@@ -34,10 +35,10 @@ const run = (file: string, args: string[]): Promise<Outcome> =>
     })
   })
 
-const compare = async (path: string): Promise<string[]> => {
+const compare = async (command: string, path: string): Promise<string[]> => {
   const [expected, actual] = await Promise.all([
-    run(process.execPath, [stage0_main, 'dump-tokens', path]),
-    run(compiler, ['dump-tokens', path]),
+    run(process.execPath, [stage0_main, command, path]),
+    run(compiler, [command, path]),
   ])
   const status_reasons =
     expected.status === actual.status
@@ -53,10 +54,12 @@ const compare = async (path: string): Promise<string[]> => {
 let failed_count: number
 try {
   await build(join(root_dir, 'compiler/main.lerta'), compiler, { optimize: false })
-  const checks = source_dirs.flatMap(lerta_files).map((path) => ({
-    name: `dump-tokens ${path}`,
-    run: () => compare(path),
-  }))
+  const checks = commands.flatMap((command) =>
+    source_dirs.flatMap(lerta_files).map((path) => ({
+      name: `${command} ${path}`,
+      run: () => compare(command, path),
+    })),
+  )
   failed_count = await run_checks('compiler checks', checks, availableParallelism())
 } finally {
   rmSync(work_dir, { recursive: true, force: true })

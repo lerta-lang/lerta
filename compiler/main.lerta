@@ -1,15 +1,23 @@
-# The command line of the compiler. So far it only prints tokens, as stage0's `dump-tokens` does.
+# The command line of the compiler. So far it only prints tokens or syntax trees, as stage0's
+# `dump-tokens` and `dump-ast` do.
 import { read_file, stderr, stdout } from 'std:io'
 import { argv, exit } from 'std:process'
+import { dump_ast } from './ast_dump'
 import { tokenize } from './syntax/lexer'
+import { parse } from './syntax/parser'
 import { dump_tokens } from './token_dump'
 
-const USAGE = "usage: lerta dump-tokens <source>\n"
+const USAGE = "usage: lerta dump-tokens <source>\n       lerta dump-ast <source>\n"
 
-if argv.length != 2 or argv[0] != 'dump-tokens' or argv[1].binary.occurs_at(0, '-'.binary)
+const COMMANDS = ['dump-tokens', 'dump-ast']
+
+const is_known_command = argv.length > 0 and COMMANDS.any((command) -> command == argv[0])
+if argv.length != 2 or not is_known_command or argv[1].binary.occurs_at(0, '-'.binary)
   stderr.write(USAGE)
   exit(2)
 
+const command = argv[0]
 const path = argv[1]
 const source = read_file(path).decode_utf8() ? throw "'#{path}' is not valid UTF-8"
-stdout.write(dump_tokens(tokenize(source, path)))
+const tokens = tokenize(source, path)
+stdout.write(command == 'dump-tokens' then dump_tokens(tokens) else dump_ast(parse(tokens, path)))
