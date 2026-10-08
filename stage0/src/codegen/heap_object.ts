@@ -95,6 +95,33 @@ export const emit_type_test = (ir: IrBuilder, object: string, type: Type): strin
   return ir.assign(`icmp eq ptr ${drop}, ${drop_symbol(type)}`)
 }
 
+// A value of the IR type, computed by `of_member` for the member of the union that the object is:
+// each member but the last is tested in turn.
+export const emit_member_dispatch = (
+  ir: IrBuilder,
+  object: string,
+  members: Type[],
+  result_type: string,
+  of_member: (member: Type) => string,
+): string => {
+  const done = ir.fresh_label('member.done')
+  const incoming = members.map((member, i) => {
+    const next = i === members.length - 1 ? undefined : ir.fresh_label('member.next')
+    if (next !== undefined) {
+      const matched = ir.fresh_label('member.matched')
+      ir.emit(`br i1 ${emit_type_test(ir, object, member)}, label %${matched}, label %${next}`)
+      ir.start_block(matched)
+    }
+    const value = of_member(member)
+    const block = ir.current_block
+    ir.emit(`br label %${done}`)
+    if (next !== undefined) ir.start_block(next)
+    return `[ ${value}, %${block} ]`
+  })
+  ir.start_block(done)
+  return ir.assign(`phi ${result_type} ${incoming.join(', ')}`)
+}
+
 // Anonymous structs: their fields are in name order. Each structural type has its own LLVM type and
 // drop function, defined once.
 

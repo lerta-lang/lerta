@@ -118,25 +118,52 @@ export class ObjectChecker {
   // The type of the field `member` names, read from a union: every member must have the field,
   // of the same type.
   common_field_type(union: UnionType, member: Member): Type {
+    return this.common_field(union, member).type
+  }
+
+  // The field in each member of the union, which must all have it, of the same type.
+  private common_field(
+    union: UnionType,
+    member: Member,
+  ): { type: Type; fields: { member_type: Type; info: FieldInfo }[] } {
     const { name, line, column } = member.name
-    const typed_members = union.members.map((type) => {
-      const field_type = this.field_of(type, member)?.type
-      if (field_type === undefined) {
-        const message = `'${name}' is not a field of ${format_member(type, union)}, a member of ${format_type(union)}`
+    const typed_fields = union.members.map((member_type) => {
+      const field = this.field_of(member_type, member)
+      if (field === undefined) {
+        const message = `'${name}' is not a field of ${format_member(member_type, union)}, a member of ${format_type(union)}`
         throw new CompileError(message, line, column)
       }
-      return { type, field_type }
+      return { member_type, ...field }
     })
-    const [first, ...rest] = typed_members
-    const differing = rest.find(({ field_type }) => !same_type(field_type, first.field_type))
+    const [first, ...rest] = typed_fields
+    const differing = rest.find(({ type }) => !same_type(type, first.type))
     if (differing !== undefined) {
-      const [first_field, differing_field] = format_types(first.field_type, differing.field_type)
-      const first_member = format_member(first.type, union)
-      const differing_member = format_member(differing.type, union)
+      const [first_field, differing_field] = format_types(first.type, differing.type)
+      const first_member = format_member(first.member_type, union)
+      const differing_member = format_member(differing.member_type, union)
       const message = `'${name}' has type ${first_field} in ${first_member} but ${differing_field} in ${differing_member}`
       throw new CompileError(message, line, column)
     }
-    return first.field_type
+    return { type: first.type, fields: typed_fields }
+  }
+
+  // The type of a common field assigned through a union: every member must be a class whose field
+  // can be changed.
+  private common_field_target(union: UnionType, member: Member): Type {
+    const { name, line, column } = member.name
+    const { type, fields } = this.common_field(union, member)
+    for (const { member_type, info } of fields) {
+      const member_name = format_member(member_type, union)
+      if (member_type.kind === 'Object' && member_type.is_struct) {
+        const message = `'${name}' cannot be changed through ${format_type(union)}: its member ${member_name} is a struct, whose fields cannot change`
+        throw new CompileError(message, line, column)
+      }
+      if (!info.mutable) {
+        const message = `'${name}' is a const field of ${member_name}, a member of ${format_type(union)}`
+        throw new CompileError(message, line, column)
+      }
+    }
+    return type
   }
 
   // `{ x: 1, y }`. Its fields take their types from the expected type, if it is an anonymous
@@ -170,6 +197,11 @@ export class ObjectChecker {
   // The type of a field that is assigned to, which must be a field that can be changed.
   field_target(member: Member): Type {
     const object_type = this.expressions.type_of(member.object)
+    if (object_type.kind === 'Union') {
+      const type = this.common_field_target(object_type, member)
+      this.types.set(member, type)
+      return type
+    }
     const field = this.field_of(object_type, member)
     const { name, line, column } = member.name
     if (object_type.kind === 'Record') {

@@ -63,7 +63,7 @@ Implemented: see [the reference](../reference/types.md#map).
 - A structural type of behavior. It may have default implementations (replacing code reuse through inheritance).
 - It may also declare fields (`x: Int`). A class or struct with a field of the same name and type satisfies it structurally.
   - Fields accessed through an interface are **read-only** (write through the concrete type). There are no getters.
-  - A field common to every member of a union can already be read without an interface (see [unions](../reference/types.md#unions)).
+  - A field common to every member of a union can already be read, and assigned when every member is a class, without an interface (see [unions](../reference/types.md#unions)).
 - A method `area(): Float` can also be satisfied by a function-valued field of the same type (`{ area: -> 3.0 }`).
 
 ## Equality

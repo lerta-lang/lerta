@@ -8,7 +8,7 @@ import type { IrBuilder } from './ir_builder.ts'
 import { emit_release, emit_retain, ir_type } from './lerta_ir.ts'
 import { emit_map_set } from './map_codegen.ts'
 import { emit_concat } from './string_codegen.ts'
-import { emit_field_pointer } from './heap_object.ts'
+import { emit_field_pointer, emit_member_dispatch } from './heap_object.ts'
 import type { ObjectTypes } from '../check/object_types.ts'
 import type { Scopes } from '../scopes.ts'
 import { is_reference_type, type Type } from '../types.ts'
@@ -49,15 +49,25 @@ export class AssignmentGenerator {
     this.assign_through(assignment, pointer, local.type)
   }
 
-  // The field takes the new value's reference and releases the old one.
+  // The field takes the new value's reference and releases the old one. Through a union, the
+  // field is that of the member the object is.
   private generate_field_assignment(assignment: Assignment, target: Member): void {
     const object_type = this.types.get(target.object)!
-    const info = this.objects.info(object_type)
-    const field = info.fields.find((field) => field.name.name === target.name.name)!
     const object = this.expressions.generate(target.object)
-    const pointer = emit_field_pointer(this.ir, object, info, field)
-    this.assign_through(assignment, pointer, field.type!)
+    const pointer =
+      object_type.kind === 'Union'
+        ? emit_member_dispatch(this.ir, object, object_type.members, 'ptr', (type) =>
+            this.field_pointer(object, type, target),
+          )
+        : this.field_pointer(object, object_type, target)
+    this.assign_through(assignment, pointer, this.types.get(target)!)
     emit_release(this.ir, object)
+  }
+
+  private field_pointer(object: string, type: Type, target: Member): string {
+    const info = this.objects.info(type)
+    const field = info.fields.find((field) => field.name.name === target.name.name)!
+    return emit_field_pointer(this.ir, object, info, field)
   }
 
   // The array or map retains the new item and releases the old one.

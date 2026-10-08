@@ -8,6 +8,7 @@ import {
   emit_field_pointer,
   emit_record,
   emit_record_field,
+  emit_member_dispatch,
   emit_type_test,
 } from './heap_object.ts'
 import { CaseGenerator, type BlockGenerator } from './case_codegen.ts'
@@ -209,31 +210,6 @@ export class ExpressionGenerator {
     return value
   }
 
-  // A field that every member of the union has, read from the member the object is: each member
-  // but the last is tested in turn.
-  private read_common_field(object: string, union: Type, member: Member): string {
-    if (union.kind !== 'Union') throw new Error('expected a union type')
-    const done = this.ir.fresh_label('field.done')
-    const incoming = union.members.map((type, i) => {
-      const is_last = i === union.members.length - 1
-      const next = is_last ? undefined : this.ir.fresh_label('field.next')
-      if (next !== undefined) {
-        const read = this.ir.fresh_label('field.read')
-        this.ir.emit(
-          `br i1 ${emit_type_test(this.ir, object, type)}, label %${read}, label %${next}`,
-        )
-        this.ir.start_block(read)
-      }
-      const value = this.read_field(object, type, member.name.name)
-      const block = this.ir.current_block
-      this.ir.emit(`br label %${done}`)
-      if (next !== undefined) this.ir.start_block(next)
-      return `[ ${value}, %${block} ]`
-    })
-    this.ir.start_block(done)
-    return this.ir.assign(`phi ${ir_type(this.types.get(member)!)} ${incoming.join(', ')}`)
-  }
-
   // `s.binary` is the string itself, passing on its ownership; `length` borrows its object.
   private generate_property(member: Member): string {
     const object = this.generate(member.object)
@@ -242,7 +218,15 @@ export class ExpressionGenerator {
     if (object_kind === 'Object' || object_kind === 'Record') {
       return this.read_field(object, object_type, member.name.name)
     }
-    if (object_kind === 'Union') return this.read_common_field(object, object_type, member)
+    if (object_kind === 'Union') {
+      return emit_member_dispatch(
+        this.ir,
+        object,
+        object_type.members,
+        ir_type(this.types.get(member)!),
+        (type) => this.read_field(object, type, member.name.name),
+      )
+    }
     if (object_kind === 'String') return object
     const length =
       object_kind === 'Binary'

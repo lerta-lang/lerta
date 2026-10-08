@@ -124,7 +124,7 @@ type Expr = Num | Add | Mul
 
 - `A | B` is a value of any of the member types, which are classes and structs so far. A discriminated union needs no tag: the member's type itself tells the members apart, with no `kind` field or enum (branch with `is` or `case`). A union whose member is itself a union is flattened, and the order of the members does not matter.
 - `type Name = ...` names a type at the top level. Aliases may refer to types and aliases declared later, but not to themselves.
-- A member's value fits where the union is expected. A field that every member declares, with the same type in each, can be read from the union: `shape.name` reads the field of whichever member the value is. It cannot be assigned through the union. Other fields and methods cannot be used directly: branch on its type first.
+- A member's value fits where the union is expected. A field that every member declares, with the same type in each, can be read from the union: `shape.name` reads the field of whichever member the value is. It can be assigned through the union, `shape.name = n` (and `+=` and so on), when every member is a class whose field is not `const`. Other fields and methods cannot be used directly: branch on its type first.
 - `x is T` tells whether a union value holds a `T`. Like nil tests, it narrows a `const`, a parameter or a loop variable to `T` where it holds (see [control flow](control-flow.md#if-and-while)).
 
 ## Anonymous structs
