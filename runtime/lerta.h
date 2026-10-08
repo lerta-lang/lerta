@@ -102,6 +102,7 @@ bool lerta_string_equals(const LertaString *a, const LertaString *b);
 int64_t lerta_binary_length(const LertaString *binary);
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
 int64_t lerta_byte_to_int(uint8_t byte);
+uint8_t lerta_int_to_byte(int64_t n);
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
 LertaString *lerta_binary_from_bytes(const LertaArray *bytes);
 // The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
