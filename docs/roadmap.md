@@ -14,7 +14,7 @@
 - **Memory**: RC (non-atomic), destructors. Immortal static literals
 - **Modules**: `import`/`export` (named only), `import 'module'` for a module's effects, a file is a module
 - **FFI**: hand-written `extern` declarations only (no libclang), `extern symbol as name: type`. Used to call runtime C functions
-- **I/O**: synchronous file reading and writing, stdout/stderr, argv, exit. This is enough to write the compiler
+- **I/O**: synchronous file reading and writing, stdout/stderr, argv, exit, running other programs (the compiler runs `clang`). This is enough to write the compiler
 - **Safety**: out-of-bounds access, overflow and division by zero throw (which in stage0 prints to stderr and exits, like any `throw`). Panics abort
 - **Exceptions**: `throw` only. The argument is a string; it is printed to stderr and the program exits (there is no `catch`)
 - **Platforms**: Linux / macOS
@@ -31,7 +31,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 |---|---|
 | builtins | `print`, basic types (`Int`, `String`, `Array` and so on), standard interfaces |
 | `'std:io'` | `read_file(path: String): Binary`, `write_file`, `Writer`, `stdout`, `stderr` |
-| `'std:process'` | `argv`, `exit(code: Int): never` |
+| `'std:process'` | `argv`, `exit(code: Int): never`, `run(command: String, args: Array<String>): Int` |
 
 - The builtins written in Lerta, `print` and most methods of the builtin types (see [builtins](reference/builtins.md)), are in `std/builtins.lerta`.
 - In stage0, writes are synchronous. Making them asynchronous is decided in Phase 2.
@@ -51,7 +51,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 - `Float` (literals are only lexed and kept as strings)
 - `Int8/16/32`, `UInt16/32/64`
 - Importing C headers with libclang
-- Windows
+- Windows (the tests of `run` in `tests/process/` run `sh`)
 - Formatter, LSP, package management
 
 ## Follow-ups

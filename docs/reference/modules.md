@@ -42,3 +42,4 @@ export const unit = 1
 |---|---|
 | `argv: Array<String>` | The command-line arguments, without the program name, read when the module runs. A program that imports `std:process` throws at its start if an argument is not valid UTF-8. |
 | `exit(code: Int): never` | Flushes `stdout` and ends the program with the exit code, from 0 to 255; another code throws. If the flush fails, a code of 0 becomes 1. |
+| `run(command: String, args: Array<String>): Int` | Runs a program, found on `PATH`, with the arguments, and waits for it to end. The program shares the standard streams; `stdout` is flushed first, so that output keeps its order. Returns its exit code, or 128 plus the signal number if a signal killed it, as shells do. Throws `cannot run: <command>` if it cannot start, including when the command or an argument holds a NUL byte. |

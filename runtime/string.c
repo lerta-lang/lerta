@@ -1,4 +1,5 @@
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "lerta.h"
@@ -50,4 +51,13 @@ LertaString *lerta_string_concat(int64_t count, ...) {
 
 bool lerta_string_equals(const LertaString *a, const LertaString *b) {
   return a->length == b->length && memcmp(a->bytes, b->bytes, (size_t)a->length) == 0;
+}
+
+char *lerta_c_string(const LertaString *s) {
+  if (memchr(s->bytes, '\0', (size_t)s->length) != NULL) return NULL;
+  char *result = malloc((size_t)s->length + 1);
+  if (result == NULL) lerta_panic("out of memory");
+  memcpy(result, s->bytes, (size_t)s->length);
+  result[s->length] = '\0';
+  return result;
 }

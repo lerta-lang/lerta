@@ -9,24 +9,13 @@
 LERTA_STATIC_STRING(cannot_read, "cannot read file: ");
 LERTA_STATIC_STRING(cannot_write, "cannot write file: ");
 
-// The path as a NUL-terminated C string, which the caller frees; NULL if the path holds a NUL
-// byte, which C would take as its end, naming a different file.
-static char *c_path(const LertaString *path) {
-  if (memchr(path->bytes, '\0', (size_t)path->length) != NULL) return NULL;
-  char *result = malloc((size_t)path->length + 1);
-  if (result == NULL) lerta_panic("out of memory");
-  memcpy(result, path->bytes, (size_t)path->length);
-  result[path->length] = '\0';
-  return result;
-}
-
 _Noreturn static void throw_file_error(const void *prefix, const LertaString *path) {
   lerta_throw(lerta_string_concat(2, prefix, path));
 }
 
 // Reads in chunks, so that files whose size is not known in advance work too.
 LertaString *lerta_read_file(const LertaString *path) {
-  char *name = c_path(path);
+  char *name = lerta_c_string(path);
   int fd = name == NULL ? -1 : open(name, O_RDONLY);
   free(name);
   if (fd < 0) throw_file_error(&cannot_read, path);
@@ -58,7 +47,7 @@ LertaString *lerta_read_file(const LertaString *path) {
 }
 
 void lerta_write_file(const LertaString *path, const LertaString *data) {
-  char *name = c_path(path);
+  char *name = lerta_c_string(path);
   int fd = name == NULL ? -1 : open(name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   free(name);
   if (fd < 0) throw_file_error(&cannot_write, path);

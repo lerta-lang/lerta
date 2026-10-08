@@ -115,6 +115,9 @@ void lerta_array_set(LertaArray *array, int64_t index, int64_t item);
 void lerta_array_push(LertaArray *array, int64_t item);
 int64_t lerta_array_pop(LertaArray *array);
 LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator);
+// The string as a NUL-terminated C string, which the caller frees; NULL if it holds a NUL byte,
+// which C would take as its end.
+char *lerta_c_string(const LertaString *s);
 
 // Maps (map.c). Keys and values in are borrowed. get returns whether the key is there, and its
 // value owned through `value` (0 otherwise); keys returns them in insertion order.
@@ -136,6 +139,7 @@ void lerta_set_arguments(int argc, char **argv);
 LertaArray *lerta_argv(void);
 // Flushes stdout and ends the program; leaks are not checked, as for a throw.
 _Noreturn void lerta_exit(int64_t code);
+int64_t lerta_run(const LertaString *command, const LertaArray *args);
 
 // Files (file.c). A failure throws.
 LertaString *lerta_read_file(const LertaString *path);
