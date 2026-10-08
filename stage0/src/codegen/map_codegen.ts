@@ -4,10 +4,10 @@ import { from_item, to_item } from './array_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
 import { ir_type } from './lerta_ir.ts'
 import { runtime_caller } from './runtime_calls.ts'
-import { is_reference_type, optional_type, type Type } from '../types.ts'
+import { is_identity_type, is_reference_type, optional_type, type Type } from '../types.ts'
 
 const call = runtime_caller({
-  lerta_map_new: 'ptr @lerta_map_new(i1 zeroext, i1 zeroext)',
+  lerta_map_new: 'ptr @lerta_map_new(i32, i1 zeroext)',
   lerta_map_length: 'i64 @lerta_map_length(ptr)',
   lerta_map_get: 'i1 @lerta_map_get(ptr, i64, ptr)',
   lerta_map_set: 'void @lerta_map_set(ptr, i64, i64)',
@@ -17,11 +17,19 @@ const call = runtime_caller({
 
 type MapType = Extract<Type, { kind: 'Map' }>
 
+// The values of LertaKeyKind in runtime/lerta.h.
+const key_kind = (key: Type): number => {
+  if (key.kind === 'Int') return 0
+  if (key.kind === 'String') return 1
+  if (is_identity_type(key)) return 2
+  throw new Error(`no map key kind for ${key.kind}`)
+}
+
 export const emit_map_new = (ir: IrBuilder, type: MapType): string =>
   call(
     ir,
     'lerta_map_new',
-    `i1 zeroext ${type.key.kind === 'String'}, i1 zeroext ${is_reference_type(type.value)}`,
+    `i32 ${key_kind(type.key)}, i1 zeroext ${is_reference_type(type.value)}`,
   )
 
 export const emit_map_length = (ir: IrBuilder, map: string): string =>

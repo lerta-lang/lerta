@@ -162,9 +162,16 @@ export const is_assignable = (value: Type, target: Type): boolean => {
   return same_type(value, target)
 }
 
-// Maps hash and compare their keys in the runtime, which knows these two kinds.
+// A class, or a union of classes, compares by identity. A struct will compare by its fields, so it
+// does not compare yet.
+export const is_identity_type = (type: Type): boolean =>
+  type.kind === 'Object'
+    ? !type.is_struct
+    : type.kind === 'Union' && type.members.every(is_identity_type)
+
+// Maps hash and compare their keys in the runtime, which knows these kinds.
 export const is_map_key_type = (type: Type): boolean =>
-  type.kind === 'String' || type.kind === 'Int'
+  type.kind === 'String' || type.kind === 'Int' || is_identity_type(type)
 
 // The type of a value that is either an `a` or a `b`: the same type, or `T?` for a mix of `T`,
 // `T?` and nil; `never`, which gives no value, does not count. Undefined if there is none.

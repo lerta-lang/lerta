@@ -9,7 +9,7 @@
 
 static uint64_t hash_key(const LertaMap *map, int64_t key) {
   // The splitmix64 finalizer, so that the low bits, which pick the slot, depend on every bit.
-  if (!map->string_keys) {
+  if (map->key_kind != LERTA_STRING_KEYS) {
     uint64_t hash = (uint64_t)key;
     hash = (hash ^ (hash >> 30)) * 0xBF58476D1CE4E5B9u;
     hash = (hash ^ (hash >> 27)) * 0x94D049BB133111EBu;
@@ -22,12 +22,14 @@ static uint64_t hash_key(const LertaMap *map, int64_t key) {
 }
 
 static bool same_key(const LertaMap *map, int64_t a, int64_t b) {
-  if (!map->string_keys) return a == b;
+  if (map->key_kind != LERTA_STRING_KEYS) return a == b;
   return lerta_string_equals((const LertaString *)(intptr_t)a, (const LertaString *)(intptr_t)b);
 }
 
+static bool keys_are_references(const LertaMap *map) { return map->key_kind != LERTA_INT_KEYS; }
+
 static void release_entry(const LertaMap *map, const LertaMapEntry *entry) {
-  if (map->string_keys) lerta_release((void *)(intptr_t)entry->key);
+  if (keys_are_references(map)) lerta_release((void *)(intptr_t)entry->key);
   if (map->owns_values) lerta_release((void *)(intptr_t)entry->value);
 }
 
@@ -40,7 +42,7 @@ static void drop_map(void *object) {
   free(map->slots);
 }
 
-LertaMap *lerta_map_new(bool string_keys, bool owns_values) {
+LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values) {
   LertaMap *map = lerta_alloc((int64_t)sizeof(LertaMap), drop_map);
   map->length = 0;
   map->entry_count = 0;
@@ -48,7 +50,7 @@ LertaMap *lerta_map_new(bool string_keys, bool owns_values) {
   map->entries = NULL;
   map->slot_count = 0;
   map->slots = NULL;
-  map->string_keys = string_keys;
+  map->key_kind = key_kind;
   map->owns_values = owns_values;
   return map;
 }
@@ -120,7 +122,7 @@ void lerta_map_set(LertaMap *map, int64_t key, int64_t value) {
     }
   }
   if (map->entry_count == map->entry_capacity) grow(map);
-  if (map->string_keys) lerta_retain((void *)(intptr_t)key);
+  if (keys_are_references(map)) lerta_retain((void *)(intptr_t)key);
   int64_t position = map->entry_count++;
   map->entries[position] = (LertaMapEntry){key, value, hash, true};
   map->slots[find_slot(map, key, hash)] = position;
@@ -138,7 +140,7 @@ void lerta_map_remove(LertaMap *map, int64_t key) {
 }
 
 LertaArray *lerta_map_keys(const LertaMap *map) {
-  LertaArray *keys = lerta_array_new(map->string_keys);
+  LertaArray *keys = lerta_array_new(keys_are_references(map));
   for (int64_t i = 0; i < map->entry_count; i++) {
     if (map->entries[i].live) lerta_array_push(keys, map->entries[i].key);
   }

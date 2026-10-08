@@ -9,9 +9,14 @@ import {
 import { CompileError } from '../errors.ts'
 import { is_contextual } from './literals.ts'
 import type { ExpressionChecker } from './expression_checker.ts'
-import { bool_type, format_type, type Type } from '../types.ts'
+import { bool_type, format_type, is_identity_type, same_type, type Type } from '../types.ts'
 
 const numeric_kinds = ['Int', 'Byte']
+
+const classes_of = (type: Type): Type[] => (type.kind === 'Union' ? type.members : [type])
+
+const share_a_class = (a: Type, b: Type): boolean =>
+  classes_of(a).some((member) => classes_of(b).some((other) => same_type(member, other)))
 
 // Lists kinds for a message, such as "Int or Byte".
 const describe_kinds = (kinds: string[]): string =>
@@ -71,9 +76,7 @@ export class OperatorChecker {
         binary,
         undefined,
         ['Int', 'Byte', 'Bool', 'String', 'Binary'],
-        (type) => {
-          return `cannot compare values of type ${format_type(type)}`
-        },
+        (type) => `cannot compare values of type ${format_type(type)}`,
       )
       return bool_type
     }
@@ -99,10 +102,25 @@ export class OperatorChecker {
     const right_first = is_contextual(left) && !is_contextual(right)
     const [first, second] = right_first ? [right, left] : [left, right]
     const type = this.expressions.type_of(first, expected)
+    if (binary.operator === '==' || binary.operator === '!=') {
+      if (is_identity_type(type)) return this.type_of_identity_operand(second, type)
+    }
     if (!allowed_kinds.includes(type.kind)) {
       throw new CompileError(reject(type), first.line, first.column)
     }
     this.expressions.expect_type(second, type)
     return type
+  }
+
+  // Objects compared by identity may be of different types, as a class and a union that holds it,
+  // as long as both can hold an object of the same class.
+  private type_of_identity_operand(second: Binary['right'], first_type: Type): Type {
+    const type = this.expressions.type_of(second, undefined)
+    const may_be_same = is_identity_type(type) && share_a_class(first_type, type)
+    if (!may_be_same) {
+      const message = `cannot compare ${format_type(first_type)} with ${format_type(type)}`
+      throw new CompileError(message, second.line, second.column)
+    }
+    return first_type
   }
 }

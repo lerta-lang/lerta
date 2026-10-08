@@ -12,10 +12,11 @@ import type { Types } from '../check/shared.ts'
 import type { CheckedInt } from './checked_int.ts'
 import type { ExpressionGenerator } from './expression_codegen.ts'
 import type { IrBuilder } from './ir_builder.ts'
-import { ir_type } from './lerta_ir.ts'
+import { emit_release, ir_type } from './lerta_ir.ts'
 import { emit_is_present, emit_unwrap } from './optional_codegen.ts'
 import { emit_concat, emit_equals } from './string_codegen.ts'
 import type { ThrowBlocks } from './throw_blocks.ts'
+import { is_identity_type } from '../types.ts'
 
 const comparison_predicates: Record<ComparisonOperator, string> = {
   '==': 'eq',
@@ -61,18 +62,33 @@ export class OperatorGenerator {
     const left = this.expressions.generate(binary.left)
     const right = this.expressions.generate(binary.right)
     const { operator } = binary
-    const kind = this.types.get(binary.left)!.kind
-    if (kind === 'String' && operator === '+') return emit_concat(this.ir, [left, right])
-    if (kind === 'String' || kind === 'Binary') {
-      const equal = emit_equals(this.ir, left, right)
-      return operator === '==' ? equal : this.ir.assign(`xor i1 ${equal}, true`)
-    }
     const operand_type = this.types.get(binary.left)!
+    const { kind } = operand_type
+    if (kind === 'String' && operator === '+') return emit_concat(this.ir, [left, right])
+    if (is_identity_type(operand_type)) {
+      return this.negate_if_unequal(operator, this.generate_same_object(left, right))
+    }
+    if (kind === 'String' || kind === 'Binary') {
+      return this.negate_if_unequal(operator, emit_equals(this.ir, left, right))
+    }
     if (is_arithmetic(operator)) return this.checked_int.apply(operator, left, right, operand_type)
     const is_byte = operand_type.kind === 'Byte'
     // Byte is ordered as unsigned.
     const predicate = comparison_predicates[operator].replace(/^s/, is_byte ? 'u' : 's')
     return this.ir.assign(`icmp ${predicate} ${ir_type(operand_type)} ${left}, ${right}`)
+  }
+
+  // `!=` is the negation of the equality.
+  private negate_if_unequal(operator: string, equal: string): string {
+    return operator === '!=' ? this.ir.assign(`xor i1 ${equal}, true`) : equal
+  }
+
+  // Whether two references are to one object; releases them.
+  private generate_same_object(left: string, right: string): string {
+    const same = this.ir.assign(`icmp eq ptr ${left}, ${right}`)
+    emit_release(this.ir, left)
+    emit_release(this.ir, right)
+    return same
   }
 
   // `x == nil` or `x != nil`.

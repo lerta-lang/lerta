@@ -195,7 +195,7 @@ export class TypeResolver {
   private resolve_key(type_name: TypeName): Type {
     const type = this.resolve(type_name)
     if (!is_map_key_type(type) && type.kind !== 'TypeParameter') {
-      const message = `a map key must be a String or an Int, got ${format_type(type)}`
+      const message = `a map key must be a String, an Int or a class, got ${format_type(type)}`
       throw new CompileError(message, type_name.line, type_name.column)
     }
     return type

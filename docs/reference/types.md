@@ -83,7 +83,7 @@ squares[3] = 9
 print ages['ann'] ? 0
 ```
 
-- `Map<K, V>` maps keys of type `K`, a `String` or an `Int`, to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
+- `Map<K, V>` maps keys of type `K`, a `String`, an `Int`, a class or a union of classes (compared by identity: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
 - `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there.

@@ -1,6 +1,6 @@
 # Classes, structs and interfaces
 
-Classes and structs with fields, initializers, methods, `init`, `deinit` and named construction are implemented: see [the reference](../reference/objects.md). Planned beyond that: `weak`, replaceable (`var`) function fields, `==` and `hash`, and interfaces.
+Classes and structs with fields, initializers, methods, `init`, `deinit` and named construction are implemented: see [the reference](../reference/objects.md). Planned beyond that: `weak`, replaceable (`var`) function fields, `equals` and `hash` (classes compare by identity already), and interfaces.
 
 - There are no static members (`static`). Functions related to a type are module functions (`import rgb from './rgb'` → `rgb.parse(s)`; the module is the namespace). Methods can be added to an existing type by `extend` (see [the reference](../reference/objects.md#extend)), but not functions without a receiver.
 
@@ -68,5 +68,5 @@ Implemented: see [the reference](../reference/types.md#map).
 ## Equality
 
 - `==` is `equals`.
-- A class that does not define `equals` is implicitly `Equatable` and `Hashable` by identity (`equals` compares pointers, `hash` comes from the address; with RC, objects do not move, so it is stable). It can be used as a `Map` key as is.
+- A class that does not define `equals` is implicitly `Equatable` and `Hashable` by identity: implemented, see [the reference](../reference/objects.md#classes-and-structs).
 - A class that defines `equals` is `Hashable` only if it also defines `hash` (preventing the mistake of equal values with different hashes).

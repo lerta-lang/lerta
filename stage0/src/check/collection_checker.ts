@@ -50,7 +50,7 @@ export const check_map_types = (
   value_at: Position,
 ): void => {
   if (!is_map_key_type(key)) {
-    const message = `a map key must be a String or an Int, got ${format_type(key)}`
+    const message = `a map key must be a String, an Int or a class, got ${format_type(key)}`
     throw new CompileError(message, key_at.line, key_at.column)
   }
   check_item_type(value, value_at, 'a map')

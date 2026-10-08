@@ -48,6 +48,10 @@ typedef struct {
   bool live;
 } LertaMapEntry;
 
+// How a map treats its keys: Ints are compared as they are, Strings by their bytes and objects by
+// identity; Strings and objects are retained while the map holds them.
+typedef enum { LERTA_INT_KEYS, LERTA_STRING_KEYS, LERTA_OBJECT_KEYS } LertaKeyKind;
+
 // Keys and values are 8 bytes each, as array items are. Entries are kept in insertion order, and
 // `slots` is an open-addressing index into them.
 typedef struct {
@@ -58,8 +62,7 @@ typedef struct {
   LertaMapEntry *entries;
   int64_t slot_count;  // a power of two
   int64_t *slots;
-  // String keys are compared by their bytes and retained; other keys are Ints.
-  bool string_keys;
+  LertaKeyKind key_kind;
   bool owns_values;
 } LertaMap;
 
@@ -123,7 +126,7 @@ char *lerta_c_string(const LertaString *s);
 
 // Maps (map.c). Keys and values in are borrowed. get returns whether the key is there, and its
 // value owned through `value` (0 otherwise); keys returns them in insertion order.
-LertaMap *lerta_map_new(bool string_keys, bool owns_values);
+LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values);
 int64_t lerta_map_length(const LertaMap *map);
 bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value);
 void lerta_map_set(LertaMap *map, int64_t key, int64_t value);

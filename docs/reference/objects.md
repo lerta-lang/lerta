@@ -27,7 +27,7 @@ print c.count
 - `p.x` reads a field and `p.m(...)` calls a method.
 - **Mutability.** A class field can be assigned (`c.count = 1`) unless it is declared `const`. A struct field cannot be changed, and cannot be declared `var`.
 - Objects are reference counted. Assigning or passing an object shares it.
-- Objects cannot be compared with `==` yet.
+- **Equality.** Objects of a class compare by identity: `a == b` tells whether `a` and `b` are the same object, whatever their fields hold, and `!=` the opposite. The two sides may have different types, a class and a union or two unions, as long as both can hold objects of some class. Classes, and unions of classes, can also be [`Map`](types.md#map) keys, by identity. Structs cannot be compared yet, nor unions with a struct among their members, nor optional values.
 
 ## extend
 
