@@ -63,10 +63,12 @@ export class PrimaryParser {
     throw this.tokens.error_at(token, 'expression')
   }
 
-  // `@` is the object; `@x`, written without a space, is its member x.
+  // `@` is the object; `@x`, written without a space, is its member x. `@.x` would be a second
+  // way to write it for no gain, so it is an error.
   private parse_this(position: Position): Expression {
     const object: Expression = { kind: 'this', ...position }
     const next = this.tokens.peek()
+    if (next.kind === '.') throw new CompileError('write @x, not @.x', next.line, next.column)
     if (next.kind !== 'identifier' || next.spaced) return object
     return { kind: 'member', object, name: this.operands.parse_identifier(), ...position }
   }
