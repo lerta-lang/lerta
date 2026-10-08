@@ -2,12 +2,14 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "lerta.h"
 
 LERTA_STATIC_STRING(cannot_read, "cannot read file: ");
 LERTA_STATIC_STRING(cannot_write, "cannot write file: ");
+LERTA_STATIC_STRING(cannot_resolve, "cannot resolve path: ");
 
 _Noreturn static void throw_file_error(const void *prefix, const LertaString *path) {
   lerta_throw(lerta_string_concat(2, prefix, path));
@@ -62,4 +64,25 @@ void lerta_write_file(const LertaString *path, const LertaString *data) {
     written += count;
   }
   close(fd);
+}
+
+bool lerta_is_file(const LertaString *path) {
+  char *name = lerta_c_string(path);
+  struct stat status;
+  bool is_file = name != NULL && stat(name, &status) == 0 && S_ISREG(status.st_mode);
+  free(name);
+  return is_file;
+}
+
+LertaString *lerta_real_path(const LertaString *path) {
+  char *name = lerta_c_string(path);
+  char *resolved = name == NULL ? NULL : realpath(name, NULL);
+  free(name);
+  if (resolved == NULL) throw_file_error(&cannot_resolve, path);
+  int64_t length = (int64_t)strlen(resolved);
+  LertaString *result = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
+  result->length = length;
+  memcpy(result->bytes, resolved, (size_t)length);
+  free(resolved);
+  return result;
 }

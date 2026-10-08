@@ -149,6 +149,8 @@ int64_t lerta_run(const LertaString *command, const LertaArray *args);
 // Files (file.c). A failure throws.
 LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
+bool lerta_is_file(const LertaString *path);
+LertaString *lerta_real_path(const LertaString *path);
 
 // Stack overflow (stack.c): reported as a panic. Called first thing in main.
 void lerta_stack_init(void);
