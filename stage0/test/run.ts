@@ -2,7 +2,8 @@
 // <name>.out (stdout), <name>.err (stderr: a compile error or an uncaught
 // throw) and <name>.warn (compile warnings). A missing file means empty output,
 // but at least one must exist. The run must fail exactly when <name>.err exists.
-// Tests run in parallel, up to the number of cores, and are reported in order.
+// Tests run in parallel, up to the number of cores, and are reported in order;
+// each program runs in an empty directory of its own, where it may write files.
 // Every test that compiles runs twice, without and with optimization, to catch
 // code whose behavior changes when optimized. The unoptimized build goes through
 // --emit-llvm, so every test also checks that the emitted IR builds.
@@ -134,10 +135,12 @@ const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outco
   return { ...run, warnings, compile_error: false }
 }
 
-// Runs a built program, whose exit status tells whether it failed.
+// Runs a built program, whose exit status tells whether it failed, in a directory of its own, so
+// that files it writes do not meet those of the other runs.
 const run_program = (path: string): Promise<{ stdout: string; stderr: string; failed: boolean }> =>
   new Promise((resolve, reject) => {
-    execFile(path, { encoding: 'utf8', maxBuffer: OUTPUT_LIMIT }, (error, stdout, stderr) => {
+    const cwd = mkdtempSync(join(work_dir, 'run-'))
+    execFile(path, { cwd, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT }, (error, stdout, stderr) => {
       // An exit status, or a signal such as a panic's abort, is a failed run; an error with a code
       // of its own, such as too much output, or none, is a failure to run it.
       const ended =
