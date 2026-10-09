@@ -88,7 +88,10 @@ Run tests (source → execution result) run `bin/lerta`, the compiler written in
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).
 - The type of asynchronous results (its name, and the type of async functions that return no value).
 - The name of the type common to all exceptions (the type caught by an untyped `catch`).
-- Default parameter values.
+- Default values of parameters and of constructor arguments. In the compiler, some 37 constructions pass a field's usual value, as `Local(..., mutable: false, declared: false, used: false)`. A field with an initializer is not an argument now (see [objects](reference/objects.md)), so a default needs a way to tell such a field from an argument. Candidates:
+  - Every field with an initializer, other than a method, is an argument with that default. One rule fewer, but a value computed in the body can then be overridden from outside.
+  - The arguments are written after the type's name, `class Local(identifier: Identifier, mutable = false)`, with defaults as a function's parameters would have them, and the body holds the computed fields. Every class and struct is rewritten.
+  - A field with an initializer is marked as an argument (`arg mutable = false`). Nothing else changes, but there is one more keyword.
 - Notation for writing an array inside an array without brackets (CoffeeScript can).
 - The type of a character (code point) (the element of `s.chars()`; `Int` or a `Char` type).
 - `Binary` literals (`'...'.binary` can substitute).
