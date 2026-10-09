@@ -3,7 +3,7 @@
 ## Memory management
 
 - **Reference counting only** (the same policy as Swift's ARC). There is no cycle collector in production.
-- `weak parent: Node?` (field), `weak var p: Node?` (local). A weak reference always has type `T | nil`. At the moment it is read, it is promoted to a strong local, and narrowing is limited to local variables (TOCTOU is prevented by the type checker).
+- `weak!` fields, which throw when read after their object is freed, are implemented: see [the reference](../reference/objects.md#classes-and-structs). Planned: `weak var p: Node?` locals, and a `weak` field of type `T?` that reads as nil once its object is freed, promoted to a strong local when read.
 - The specification states that retain/release "may happen on assignment and argument passing". Whatever optimization can remove is removed.
 - Immutable data (structs) is recommended (it cannot form cycles).
 - The language does not prevent cycles through closures (`@button.listen -> @count += 1`). There are no capture lists. To break a cycle, put the value in a `weak var` local and capture that.

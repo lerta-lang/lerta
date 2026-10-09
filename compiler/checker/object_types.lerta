@@ -20,6 +20,8 @@ export class FieldInfo
   mutable: Bool
   # A field without an initializer is a constructor argument.
   value: Expression?
+  # A `weak!` field holds its object without keeping it alive (see codegen weak).
+  weak: Bool
 
 export class ObjectInfo
   declaration: TypeDeclaration
@@ -106,8 +108,20 @@ const field_of_member = (
     fail program, member.position, 'a struct field cannot be var'
   const type_name = member.type
   const type = type_name then resolve(program, module_resolver(shared.index), type_name) else nil
-  const mutable = not is_struct and member.modifier != 'const'
-  FieldInfo type, mutable, value, name: member.name
+  const weak = member.modifier == 'weak!'
+  reject_invalid_weak program, member, is_struct, type if weak
+  const mutable = not is_struct and member.modifier != 'const' and not weak
+  FieldInfo type, mutable, value, weak, name: member.name
+
+# A `weak!` field is a constructor argument of a class, which holds an object of a class.
+const reject_invalid_weak = (
+  program: ProgramWide, member: MemberDeclaration, is_struct: Bool, type: Type?
+) ->
+  const fail_weak = (message: String) -> fail(program, member.position, message)
+  fail_weak 'a struct field cannot be weak' if is_struct
+  fail_weak 'a weak field is a constructor argument, without an initializer' if member.value
+  const object = type as ObjectType?
+  fail_weak 'a weak field holds an object of a class' if not object or object.is_struct
 
 # The class or struct of the name, of the module or imported.
 export const object_type = (program: ProgramWide, shared: Shared, name: String) ->

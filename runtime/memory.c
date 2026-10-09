@@ -74,6 +74,44 @@ void lerta_run_deinit(void *object, void (*deinit)(void *object)) {
   if (header->ref_count != 1) lerta_panic("deinit kept a reference to its object");
 }
 
+typedef struct {
+  LertaHeader header;
+  void *object;
+  void **slot;
+} LertaWeakBox;
+
+static void drop_weak_box(void *box) {
+  LertaWeakBox *weak = box;
+  if (weak->object != NULL) *weak->slot = NULL;
+}
+
+// The slot of an object being dropped: its box, if it had one, no longer points at it, and a new
+// one would not either.
+static char dropping;
+#define DROPPING ((void *)&dropping)
+
+void *lerta_weak_box(void *object, void **slot) {
+  if (*slot != NULL && *slot != DROPPING) {
+    lerta_retain(*slot);
+    return *slot;
+  }
+  LertaWeakBox *box = lerta_alloc(sizeof(LertaWeakBox), drop_weak_box);
+  box->object = *slot == DROPPING ? NULL : object;
+  box->slot = slot;
+  if (*slot == NULL) *slot = box;
+  return box;
+}
+
+void *lerta_weak_object(void *box) {
+  return ((LertaWeakBox *)box)->object;
+}
+
+void lerta_weak_detach(void **slot) {
+  LertaWeakBox *box = *slot;
+  if (box != NULL) box->object = NULL;
+  *slot = DROPPING;
+}
+
 bool lerta_check_leaks(void) {
 #ifdef LERTA_DEBUG
   if (live_objects == 0) return true;

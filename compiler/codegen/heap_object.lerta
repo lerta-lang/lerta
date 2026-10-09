@@ -29,13 +29,19 @@ export const heap_object_type = (fields: Array<HeapField>) ->
   types.push field.ir_type for field in fields
   "{ #{types.join(', ')} }"
 
-# Defines the LLVM struct type `layout` and the drop function `drop`, which first runs `deinit`,
-# the symbol of a class's deinit method, if there is one.
+# Defines the LLVM struct type `layout` and the drop function `drop`. For a class's object, it
+# first lets go of the object's weak box, held in the field at `weak_slot` (see weak_box), and
+# runs `deinit`, the symbol of the class's deinit method, if there is one.
 export const define_heap_object = (
   module: IrModule, layout: String, drop: String, fields: Array<HeapField>, deinit: String?
+  weak_slot: Int?
 ) ->
   module.add_type "#{layout} = type #{heap_object_type(fields)}"
   const ir = IrBuilder(module)
+  if weak_slot
+    module.declare 'lerta_weak_detach', 'declare void @lerta_weak_detach(ptr)'
+    const slot = emit_heap_field_pointer(ir, layout, '%object', weak_slot)
+    ir.emit "call void @lerta_weak_detach(ptr #{slot})"
   if deinit
     module.declare 'lerta_run_deinit', 'declare void @lerta_run_deinit(ptr, ptr)'
     ir.emit "call void @lerta_run_deinit(ptr %object, ptr #{deinit})"
@@ -65,13 +71,37 @@ export const emit_field_pointer = (ir: IrBuilder, object: String, info: ObjectIn
   const index = info.fields.find_index((field) -> field.name.name == name)!
   emit_heap_field_pointer ir, object_ir_type(info.type), object, index
 
+# A class's object starts without a weak box.
 export const emit_allocate = (ir: IrBuilder, info: ObjectInfo) ->
-  emit_heap_allocate ir, object_ir_type(info.type), drop_symbol(info.type)
+  const object = emit_heap_allocate(ir, object_ir_type(info.type), drop_symbol(info.type))
+  ir.emit "store ptr null, ptr #{emit_weak_slot_pointer(ir, object, info)}" if is_class(info)
+  object
 
+# A class's object keeps its weak box after its fields.
 export const define_object = (module: IrModule, info: ObjectInfo) ->
   const fields = [value_field(field.type!) for field in info.fields]
+  const weak_slot = is_class(info) then fields.length else nil
+  fields.push plain_field('ptr') if is_class(info)
   const deinit = info.has_deinit then method_symbol(info.type, 'deinit') else nil
-  define_heap_object module, object_ir_type(info.type), drop_symbol(info.type), fields, deinit
+  const layout = object_ir_type(info.type)
+  define_heap_object module, layout, drop_symbol(info.type), fields, deinit, weak_slot
+
+const is_class = (info: ObjectInfo) -> not info.type.is_struct
+
+const emit_weak_slot_pointer = (ir: IrBuilder, object: String, info: ObjectInfo) ->
+  emit_heap_field_pointer ir, object_ir_type(info.type), object, info.fields.length
+
+# The weak box of a class's object, which a `weak!` field holds instead of the object, owned; the
+# object is borrowed.
+export const emit_weak_box = (ir: IrBuilder, object: String, info: ObjectInfo) ->
+  ir.module.declare 'lerta_weak_box', 'declare ptr @lerta_weak_box(ptr, ptr)'
+  const slot = emit_weak_slot_pointer(ir, object, info)
+  ir.assign "call ptr @lerta_weak_box(ptr #{object}, ptr #{slot})"
+
+# The object of a weak box, borrowed, or null if it is gone.
+export const emit_weak_object = (ir: IrBuilder, box: String) ->
+  ir.module.declare 'lerta_weak_object', 'declare ptr @lerta_weak_object(ptr)'
+  ir.assign "call ptr @lerta_weak_object(ptr #{box})"
 
 # An i1: whether the object is of the type, or of a member of the union.
 export const emit_type_test = (ir: IrBuilder, object: String, type: Type) ->
@@ -118,7 +148,7 @@ export const emit_member_dispatch = (
 const record_layout = (ir: IrBuilder, type: RecordType) ->
   const fields = [value_field(field.type) for field in type.fields]
   const define = (name: String, module: IrModule) ->
-    define_heap_object module, name, drop_name(name), fields, nil
+    define_heap_object module, name, drop_name(name), fields, nil, nil
   ir.module.named "record #{type_key(type)}", '%lerta.record', define
 
 const drop_name = (layout: String) -> "@#{without_sigil(layout)}.drop"
@@ -156,7 +186,7 @@ export const emit_record_field = (ir: IrBuilder, record: String, type: Type, nam
 # types of the same representation share them.
 const cell_layout = (ir: IrBuilder, type: Type) ->
   const define = (name: String, module: IrModule) ->
-    define_heap_object module, name, drop_name(name), [value_field(type)], nil
+    define_heap_object module, name, drop_name(name), [value_field(type)], nil, nil
   const key = "cell #{ir_type(type)} #{is_reference_type(type)}"
   ir.module.named key, '%lerta.cell', define
 

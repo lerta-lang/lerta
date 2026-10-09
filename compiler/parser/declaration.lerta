@@ -114,6 +114,17 @@ export const parse_extend = (tokens: TokenStream) ->
 const parse_members = (tokens: TokenStream) ->
   parse_member_lines tokens, () -> parse_member(tokens)
 
+# `weak` is not a keyword, so that it stays usable as a name; `weak!` is a modifier.
+const parse_member_modifier = (tokens: TokenStream): MemberModifier? ->
+  const token = tokens.peek()
+  const bang = tokens.peek_at(1)
+  const is_weak = tokens.at_word('weak') and bang.kind == '!' and not bang.spaced
+  const text = is_weak then 'weak!' else token.kind.to_string()
+  const modifier = MemberModifier.parse(text)
+  tokens.next() if modifier
+  tokens.next() if is_weak
+  modifier
+
 # A newline and an indented block of members, one per line.
 const parse_member_lines = <T>(tokens: TokenStream, parse_line: () -> T) ->
   tokens.expect NEWLINE, 'end of line'
@@ -125,11 +136,10 @@ const parse_member_lines = <T>(tokens: TokenStream, parse_line: () -> T) ->
   tokens.next()
   members
 
-# `[const | var] name[: Type][ = value]`, with a type, a value or both.
+# `[const | var | weak!] name[: Type][ = value]`, with a type, a value or both.
 const parse_member = (tokens: TokenStream) ->
   const token = tokens.peek()
-  const modifier = MemberModifier.parse(token.kind.to_string())
-  tokens.next() if modifier
+  const modifier = parse_member_modifier(tokens)
   const name = parse_identifier(tokens)
   const type: TypeName? = tokens.accept(':') then parse_type_name(tokens) else nil
   const has_value = type == nil or tokens.peek().kind == '='

@@ -5,7 +5,7 @@ import {
   Import, Jump, Pass, Return, Statement, TypeAlias, TypeDeclaration, While
 } from '../ast'
 import { imported_export, ValueExport } from '../checker/imports'
-import { FieldInfo, ObjectInfo } from '../checker/object_types'
+import { FieldInfo, info_of, ObjectInfo } from '../checker/object_types'
 import { Capture } from '../checker/shared'
 import { all_but_last } from '../checker/statement'
 import { generate_assignment } from './assignment'
@@ -19,7 +19,8 @@ import {
   ValueLocal
 } from './generator'
 import {
-  emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, HeapField, value_field
+  emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box, HeapField
+  value_field
 } from './heap_object'
 import {
   constructor_symbol, emit_release, emit_retain, ir_return_type, ir_type, method_symbol
@@ -27,7 +28,7 @@ import {
 } from './lerta_ir'
 import { emit_throw_blocks } from './throw_blocks'
 import { emit_mark_initialized, emit_release_globals } from './top_level'
-import { is_kind, is_reference_type, Type } from '../types'
+import { is_kind, is_reference_type, ObjectType, Type } from '../types'
 
 # The local of the name: in the scopes or, outside them, a top-level value of the module, which a
 # function checks to be initialized, or an imported value. Those of the modules of its import
@@ -145,7 +146,7 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   const arguments = [field for field in info.fields when field.value == nil]
   for i in 0...arguments.length
     const field = arguments[i]
-    emit_retain ir, "%p#{i}" if is_reference_type(field.type!)
+    emit_retain ir, "%p#{i}" if is_reference_type(field.type!) and not field.weak
     store_field g, object, info, field, "%p#{i}"
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
@@ -161,7 +162,12 @@ const store_field = (
   g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String
 ) ->
   const pointer = emit_field_pointer(g.ir, object, info, field.name.name)
-  g.ir.emit "store #{ir_type(field.type!)} #{value}, ptr #{pointer}"
+  const stored = field.weak then weak_box_of(g, value, field.type!) else value
+  g.ir.emit "store #{ir_type(field.type!)} #{stored}, ptr #{pointer}"
+
+# A `weak!` field holds the box of its object, which stays borrowed.
+const weak_box_of = (g: Generator, object: String, type: Type) ->
+  emit_weak_box g.ir, object, info_of(g.code.program, type as ObjectType!)
 
 const finish = (g: Generator, signature: String) ->
   emit_throw_blocks g

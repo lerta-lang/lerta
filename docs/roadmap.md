@@ -43,7 +43,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 - Ropes, `StringSlice`, small strings as immediate values, grapheme iterators
 - `catch`/`finally`, exception types, the exception implementation strategy — the compiler throws a compile error where it finds it, since the first one ends the build
 - async/await, the event loop, libuv, workers
-- `weak`
+- `weak` (`weak!` fields are implemented)
 - User-defined `interface`, itabs, satisfying methods with function-valued fields (`Equatable`/`Hashable` are handled as builtin rules for now, and `Stringable` structurally, by `x.to_string()`)
 - Generic classes and structs, generic function literals outside the top level, interfaces as bounds, and checking a generic function's body once, at its definition, against its bounds
 - Operator overloading, literal construction interfaces, BigInt

@@ -16,6 +16,7 @@ import { generate_closure, generate_jump, lookup_local } from './function'
 import { CodegenLocal, Generator, SlotLocal, ValueLocal } from './generator'
 import {
   emit_field_pointer, emit_member_dispatch, emit_record, emit_record_field, emit_type_test
+  emit_weak_object
 } from './heap_object'
 import { info_of } from '../checker/object_types'
 import { IrBuilder } from './ir_builder'
@@ -27,7 +28,7 @@ import {
 } from './optional'
 import { emit_throw, emit_unreachable } from './runtime_calls'
 import { emit_binary_length, emit_concat } from './string'
-import { FAILED_CAST, throw_if } from './throw_blocks'
+import { DEAD_OBJECT, FAILED_CAST, throw_if } from './throw_blocks'
 import { emit_initialized_check } from './top_level'
 import {
   is_kind, is_reference_type, kind_of, ObjectType, OptionalType, RecordType, Type, UnionType
@@ -142,12 +143,20 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
     return value
   const object_type = type as ObjectType!
   const info = info_of(g.code.program, object_type)
-  const field_type = info.fields.find((field) -> field.name.name == name)!.type!
+  const field = info.fields.find((each) -> each.name.name == name)!
+  const field_type = field.type!
   const pointer = emit_field_pointer(ir, object, info, name)
-  const value = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
+  const loaded = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
+  const value = field.weak then weak_object(g, loaded) else loaded
   emit_retain ir, value if is_reference_type(field_type)
   emit_release ir, object
   value
+
+# The object that a `weak!` field's box holds, borrowed; it throws if the object is gone.
+const weak_object = (g: Generator, box: String) ->
+  const object = emit_weak_object(g.ir, box)
+  throw_if g, g.ir.assign("icmp eq ptr #{object}, null"), DEAD_OBJECT
+  object
 
 # `s.binary` is the string itself, passing on its ownership; `length` borrows its object. `E.MEMBER`
 # is a member of an enum.

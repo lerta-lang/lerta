@@ -104,6 +104,16 @@ bool lerta_check_leaks(void);
 // object counts as referenced once while deinit runs, so that passing it on and releasing it again
 // does not drop it twice; deinit must not keep it, which would bring a dropped object back.
 void lerta_run_deinit(void *object, void (*deinit)(void *object));
+// A `weak!` field holds a box of its object instead of the object, shared by every such field of
+// it. The object and its box point at each other without counting: `slot` is where the object
+// keeps its box. Whichever goes first clears the other's pointer, so that the object is freed as
+// soon as nothing else holds it.
+void *lerta_weak_box(void *object, void **slot);
+// The object of the box, borrowed, or NULL if it is gone.
+void *lerta_weak_object(void *box);
+// Called first by the drop function of a class's object, with the place of its box. A box made
+// for the object after that, as by its deinit, holds no object.
+void lerta_weak_detach(void **slot);
 
 // Strings (string.c). Also the constructors of Binary values, which share the representation:
 // `lerta_string_new` leaves the bytes for the caller to fill.
