@@ -6,8 +6,9 @@ import { hex } from '../hex'
 import { SourceLine } from './source_line'
 import { scan_double_quoted, TemplatePart, TextPart } from './string_literal'
 
-# A keyword or a punctuation is its own kind, whose text is its own. LINE_BREAK is a line end
-# inside brackets (see Brackets).
+# A keyword or a punctuation is its own kind, whose text is its own. The others are named:
+# INTERPOLATED is a string with interpolations, LINE_BREAK a line end inside brackets (see
+# Brackets), and INDENT and DEDENT the start and the end of an indented block.
 export enum TokenKind
   IDENTIFIER
   INTEGER
@@ -90,21 +91,6 @@ export struct Token
   column: Int
   # The parts of an interpolated string.
   parts: Array<TemplatePart>?
-
-const KEYWORDS: Array<TokenKind> = [
-  'true', 'false', 'nil', 'and', 'or', 'not'
-  'const', 'var', 'if', 'else', 'while', 'for', 'in', 'break', 'continue', 'return'
-  'case', 'when', 'then', 'class', 'struct', 'throw', 'import', 'export', 'extern'
-  'extend', 'enum'
-]
-
-# Longer punctuations come first so that `<=` is not read as `<` and `=`.
-const PUNCTUATIONS: Array<TokenKind> = [
-  '...'
-  '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '->'
-  '(', ')', '[', ']', '{', '}', ',', '.', ':', '+', '-', '*', '/', '%', '<', '>', '=', '?', '!'
-  '@', '|'
-]
 
 # `path` names the source in diagnostics.
 export const tokenize = (source: String, path: String) ->
@@ -222,8 +208,7 @@ class LineScanner
   scan_word = ->
     const end = @line.scan_while(@position, is_identifier_part)
     const word = @line.text(@position, end)
-    const keyword = KEYWORDS.find((each) -> each.to_string() == word)
-    @add keyword ? IDENTIFIER, word, end, nil
+    @add keyword_kind(word) ? IDENTIFIER, word, end, nil
 
   scan_raw_string = ->
     const start = @position
@@ -244,13 +229,18 @@ class LineScanner
     @line.fail "invalid integer literal '#{text}'", @position if not is_valid
     @add INTEGER, text.split('_').join(''), end, nil
 
+  # The longest punctuation that starts here; `...` is the longest of all. What follows may not be
+  # a whole character, so a slice that is not valid UTF-8 is skipped. No word starts here, so no
+  # keyword or named kind can match.
   scan_punctuation = ->
-    const punctuation = PUNCTUATIONS.find((p) -> @at(p)) ? @fail_unexpected_character()
-    const text = punctuation.to_string()
-    @add punctuation, text, @position + text.binary.length, nil
-
-  # Compares bytes, since the next ones may not be a whole character.
-  at = (punctuation: TokenKind) -> @line.bytes.occurs_at(@position, punctuation.to_string().binary)
+    for length in [3, 2, 1]
+      const end = @position + length
+      continue if end > @line.length
+      const text = @line.bytes.slice(@position, end).decode_utf8() ? continue
+      if const kind = TokenKind.parse(text)
+        @add kind, text, end, nil
+        return
+    @fail_unexpected_character()
 
   # Control characters such as '\r' would garble the error line if printed raw.
   fail_unexpected_character = () ->
@@ -266,6 +256,14 @@ const plain_text = (parts: Array<TemplatePart>) ->
   return nil if parts.length != 1
   const part = parts[0]
   part is TextPart then part.text else nil
+
+# The kind of a keyword; the named kinds are no keywords, so that a name such as EOF stays a name.
+const keyword_kind = (word: String): TokenKind? ->
+  const kind = TokenKind.parse(word) ? return nil
+  case kind
+    when IDENTIFIER, INTEGER, STRING, INTERPOLATED, NEWLINE then nil
+    when LINE_BREAK, INDENT, DEDENT, EOF then nil
+    else kind
 
 const is_space = (c: Byte) -> c == ' '
 const is_identifier_start = (c: Byte) -> c.is_letter() or c == '_'
