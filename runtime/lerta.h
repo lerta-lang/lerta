@@ -113,6 +113,8 @@ LertaString *lerta_int_to_string(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
+// The place of `text` among an enum's `count` member texts, or -1 if none has it (`E.parse`).
+int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);
 
 // Binary (binary.c): the same representation as String, without the UTF-8 guarantee. An index or
 // a slice out of range throws.

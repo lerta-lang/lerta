@@ -139,15 +139,17 @@ type Expr = Num | Add | Mul
 enum TokenKind
   IDENTIFIER
   INTEGER
-  STRING
+  '('
+  '->'
 
 const kind: TokenKind = INTEGER
-print kind == TokenKind.STRING
+print kind == TokenKind.IDENTIFIER
+print kind == '('
 ```
 
-- `enum Name` declares, at the top level, a type whose values are its members, listed one per line in the indented block below: at least one, each once. The members carry no data.
-- `Name.MEMBER` is a member. Where an enum is expected, the member alone stands for it: `INTEGER` above. That is wherever an expected type reaches a literal (see [Byte](#byte)), and the other operand of `==` and `!=`, and the patterns of a [`case`](control-flow.md#case-with-a-subject) on an enum. A member alone cannot take the place of another name in scope, such as a local, a function or an import of the same name; it must be qualified there. Without an expected enum, a member alone is an undefined name.
-- `==` and `!=` compare two values of the same enum. There is no ordering. An enum can be a [`Map`](#map) key, and is `Stringable`: `kind.to_string()` gives the member's name, `'INTEGER'`. It cannot be a member of a union so far.
+- `enum Name` declares, at the top level, a type whose values are its members, listed one per line in the indented block below: at least one. A member is a name, `INTEGER`, or a string literal without interpolation, `'('`. Its text is the name, or the literal's value; no two members have the same text, so `IDENTIFIER` and `'IDENTIFIER'` cannot both be members. A name member cannot be `parse`, which `Name.parse` takes (`'parse'` can be). The members carry no data.
+- `Name.MEMBER` is a member named by its name. Where an enum is expected, a member stands alone: its name, `INTEGER` above, or, for a member declared as a string literal, that literal, `'('`; each member has that one spelling. That is wherever an expected type reaches a literal (see [Byte](#byte)), and the other operand of `==` and `!=`, and the patterns of a [`case`](control-flow.md#case-with-a-subject) on an enum. A string literal there that is no such member is an error, `'INTEGER'` included; where no enum is expected, it is a `String`. A member name alone cannot take the place of another name in scope, such as a local, a function or an import of the same name; it must be qualified there. Without an expected enum, a member name alone is an undefined name.
+- `==` and `!=` compare two values of the same enum. There is no ordering. An enum can be a [`Map`](#map) key, and is `Stringable`: `kind.to_string()` gives the member's text, `'INTEGER'` or `'('`. `Name.parse(text)` gives the member whose text is the `String` `text`, or `nil`; it must be called. An enum cannot be a member of a union so far.
 
 ## Anonymous structs
 

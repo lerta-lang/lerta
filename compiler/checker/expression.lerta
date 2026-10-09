@@ -13,7 +13,9 @@ import {
   is_empty_map, type_of_array, type_of_empty_map, type_of_index, type_of_map
 } from './collection'
 import { fail } from './diagnostics'
-import { type_of_elided_member, type_of_qualified_member } from './enums'
+import {
+  enum_parse_type, type_of_elided_member, type_of_literal_member, type_of_qualified_member
+} from './enums'
 import { type_of_generic_call } from './generic_call'
 import { byte_literal } from './literals'
 import { check_loop_jump, type_of_comprehension } from './loop'
@@ -38,7 +40,9 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
   const wants_byte = expected then is_kind(expected, BYTE) else false
   const program = body.program
   case expression
-    when StringLiteral then wants_byte then byte_literal(program, expression) else string_type
+    when StringLiteral
+      return byte_literal(program, expression) if wants_byte
+      type_of_literal_member(body, expression, expected) ? string_type
     when Interpolation
       for part in expression.parts
         check_interpolated body, part if part is Call
@@ -85,7 +89,11 @@ const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
   return type_of_empty_map(body, call, expected) if is_empty_map(body, callee)
   if const object_type = constructed_type(body, callee)
     return type_of_construction(body, call, object_type)
-  return type_of_method_call(body, call, callee, expected) if callee is Member
+  if callee is Member
+    if const parse = enum_parse_type(body, callee)
+      reject_type_arguments body, call
+      return check_arguments(body, call, set_type(body, callee, parse))
+    return type_of_method_call(body, call, callee, expected)
   const callee_type = case callee
     when Identifier then set_type(body, callee, type_of_identifier(body, callee, true))
     else type_of(body, callee, nil)

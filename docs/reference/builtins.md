@@ -22,6 +22,6 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | `Array<T>` | `iter`, `map`, `filter`, `any`, `all`, `find`, `join` of an `Array<String>` and `to_binary` of an `Array<Byte>` | `length`, `push`, `pop`, `take` |
 | `Map<K, V>` | `has` | `length`, `remove`, `keys` |
 | `Iter<T>` | `map`, `filter`, `to_array`, `any`, `all`, `find` | `has_next`, `next`, `take` |
-| An [enum](types.md#enums) | | `to_string` |
+| An [enum](types.md#enums) | | `to_string`, and the static `E.parse` |
 
 A `Bool` gives `true` or `false` as its text, and a `Byte` a number. Why each of the others is built in is in [internals](../internals.md#builtins).

@@ -1,8 +1,8 @@
 # Declarations other than `const` and `var`: type aliases, classes, structs, enums, extends,
 # imports, externs and exports.
 import {
-  Declaration, EnumDeclaration, Extend, Extern, Import, ImportName, MemberDeclaration
-  Statement, TypeAlias, TypeDeclaration, TypeName, TypeParameter
+  Declaration, EnumDeclaration, Extend, Extern, Identifier, Import, ImportName, MemberDeclaration
+  Statement, StringLiteral, TypeAlias, TypeDeclaration, TypeName, TypeParameter
 } from '../ast'
 import { parse_type_parameters } from './compound'
 import { parse_identifier, parse_value } from './expression'
@@ -95,14 +95,25 @@ export const parse_type_declaration = (tokens: TokenStream) ->
   const members = parse_members(tokens)
   TypeDeclaration name, members, is_struct: token.kind == 'struct', position: token_position(token)
 
-# `enum Name` followed by an indented block of its members' names, one per line.
+# `enum Name` followed by an indented block of its members, one per line.
 export const parse_enum = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const name = parse_identifier(tokens)
   const has_members = tokens.peek().kind != 'newline' or tokens.peek_at(1).kind == 'indent'
   tokens.fail position, 'an enum needs at least one member' if not has_members
-  const members = parse_member_lines(tokens, () -> parse_identifier(tokens))
+  const members = parse_member_lines(tokens, () -> parse_enum_member(tokens))
   EnumDeclaration name, members, position
+
+# A name, or a string literal, whose text must be known without running the program.
+const parse_enum_member = (tokens: TokenStream): Identifier | StringLiteral ->
+  const token = tokens.peek()
+  const position = token_position(token)
+  case token.kind
+    when 'string'
+      tokens.next()
+      StringLiteral position, value: token.text
+    when 'interpolated' then tokens.fail(position, 'an enum member cannot be interpolated')
+    else parse_identifier(tokens)
 
 # `extend Type`, or `extend<T> Array<T>` for a generic one, followed by an indented block of
 # methods, one per line.
