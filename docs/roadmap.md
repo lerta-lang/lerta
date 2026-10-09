@@ -82,7 +82,6 @@ Run tests (source → execution result) run `bin/lerta`, the compiler written in
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
 - Renaming in destructuring (`const { a: x } = value`).
 - Sorting arrays (`compiler/sort.lerta` sorts by hand for now).
-- A type alias of a union as a pattern of `case`, standing for all its members.
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).
 - How to handle conversion from an interface value to another interface (the concrete type is unknown until run time, so a static itab is not enough; forbid it or generate at run time).

@@ -1,17 +1,18 @@
 # Types `case` (its conditions or patterns, and the values of its arms) and `then`/`else`.
 import {
-  as_expression, Case, CaseArm, Conditional, Expression, Identifier, NilLiteral, Statement
+  as_expression, Case, CaseArm, Conditional, Expression, Identifier, NamedType, NilLiteral
+  Statement
 } from '../ast'
 import { fail } from './diagnostics'
 import { expect_condition, expect_type, set_type, type_of } from './expression'
 import { lookup } from './name'
 import { narrow, Narrowing, narrowings_of } from './narrowing'
-import { object_type } from './object_types'
 import { Body } from './shared'
 import { type_of_block } from './statement'
+import { has_type, resolve } from './type_names'
 import {
-  EnumType, format_enum_member, format_member, format_type, inner_of, is_kind, is_one_of_kinds
-  OptionalType, same_type, Type, type_key, TypeKind, unify, UnionType
+  EnumType, format_enum_member, format_member, format_type, inner_of, is_assignable, is_kind
+  is_one_of_kinds, members_of, OptionalType, same_type, Type, type_key, TypeKind, unify, UnionType
 } from '../types'
 
 const VALUE_KINDS: Array<TypeKind> = ['Int', 'Byte', 'Bool', 'String', ENUM]
@@ -162,9 +163,10 @@ const check_type_patterns = (
       continue
     const types = [type_pattern(body, pattern, union) for pattern in arm.patterns]
     for i in 0...types.length
-      const key = type_key(types[i])
-      fail_handled_twice body, arm.patterns[i], format_member(types[i], union) if handled.has(key)
-      handled.add key
+      for member in members_of(types[i])
+        const key = type_key(member)
+        fail_handled_twice body, arm.patterns[i], format_member(member, union) if handled.has(key)
+        handled.add key
     arm_narrowings.push types.length == 1 then subject_narrowings(body, subject, types[0]) else []
   const missing = [
     format_member(member, union) for member in union.members when not handled.has(type_key(member))
@@ -201,14 +203,18 @@ const fail_unhandled = (body: Body, case_expression: Case, missing: Array<String
   const message = "case does not handle #{missing.join(', ')}; add them or an else arm"
   fail body.program, case_expression.position, message
 
-# The pattern's type, recorded on the pattern for codegen.
+# The pattern's type, recorded on the pattern for codegen: a member of the union, or a union of some
+# of its members, which a type alias names.
 const type_pattern = (body: Body, pattern: Expression, union: UnionType) ->
   const fail_pattern = () ->
-    fail body.program, pattern.position, "expected one of the types #{format_type(union)}"
-  const { program, shared } = body
-  const named = pattern is Identifier then object_type(program, shared, pattern.name) else nil
-  const type = named ? fail_pattern()
-  fail_pattern() if not union.members.any((member) -> same_type(member, type))
+    const types = "the types #{format_type(union)} or a union of them"
+    fail body.program, pattern.position, "expected one of #{types}"
+  const { program, resolver } = body
+  const name = pattern is Identifier then pattern.name else fail_pattern()
+  fail_pattern() if not has_type(program, resolver, name)
+  const type_name = NamedType(name, args: [], position: pattern.position, optional: false)
+  const type = resolve(program, resolver, type_name)
+  fail_pattern() if not is_assignable(type, union) or is_kind(type, 'never')
   set_type body, pattern, type
 
 const subject_narrowings = (body: Body, subject: Expression, type: Type): Array<Narrowing> ->

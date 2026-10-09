@@ -6,7 +6,7 @@ import { IrBuilder, IrModule } from './ir_builder'
 import {
   drop_symbol, emit_release, emit_retain, ir_type, method_symbol, object_ir_type, without_sigil
 } from './lerta_ir'
-import { is_reference_type, ObjectType, RecordType, Type, type_key } from '../types'
+import { is_reference_type, members_of, ObjectType, RecordType, Type, type_key } from '../types'
 
 # The two header fields come before the object's own.
 const HEADER_FIELDS = 2
@@ -73,9 +73,15 @@ export const define_object = (module: IrModule, info: ObjectInfo) ->
   const deinit = info.has_deinit then method_symbol(info.type, 'deinit') else nil
   define_heap_object module, object_ir_type(info.type), drop_symbol(info.type), fields, deinit
 
-# An i1: whether the object is of the type. The drop function in the header tells the type, since
-# every type has its own.
+# An i1: whether the object is of the type, or of a member of the union.
 export const emit_type_test = (ir: IrBuilder, object: String, type: Type) ->
+  const tests = [emit_object_test(ir, object, member) for member in members_of(type)]
+  var result = tests[0]
+  result = ir.assign("or i1 #{result}, #{tests[i]}") for i in 1...tests.length
+  result
+
+# The drop function in the header tells the type, since every type has its own.
+const emit_object_test = (ir: IrBuilder, object: String, type: Type) ->
   const object_type = type is ObjectType then type else throw 'is tests a class or struct'
   const pointer = ir.assign("getelementptr { i64, ptr }, ptr #{object}, i32 0, i32 1")
   const drop = ir.assign("load ptr, ptr #{pointer}")

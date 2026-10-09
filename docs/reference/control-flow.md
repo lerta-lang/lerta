@@ -70,7 +70,7 @@ case c
 ```
 
 - The subject is evaluated once, and the first arm whose pattern matches is taken. An arm may list several patterns, separated by commas.
-- **Type patterns.** For a subject of a union type, a pattern names one of its types. In an arm with one pattern, a subject that is a `const`, a parameter or a loop variable is narrowed to that type. Without an `else` arm, every type of the union must be handled.
+- **Type patterns.** For a subject of a union type, a pattern names one of its types, or a [type alias](types.md#unions) of a union of some of them, which stands for each of those. In an arm with one pattern, a subject that is a `const`, a parameter or a loop variable is narrowed to that type. Without an `else` arm, every type of the union must be handled.
 - **Value patterns.** For a subject of type `Int`, `Byte`, `Bool`, `String` or an [enum](types.md#enums), a pattern is a value, compared with `==`. The `else` arm is required, except for an enum when the patterns name every member; a member named twice is an error.
 - **Optional subjects.** For a subject of type `T?`, the patterns are those for a `T`, and `nil`, which must be the only pattern of its arm. Without an `else` arm, `nil` must be handled too, and handling it twice is an error. In an arm of value patterns, the subject is narrowed to `T` as with type patterns; in the `nil` arm and the `else` arm, it is not.
 - The arms' values follow the same rules as below.

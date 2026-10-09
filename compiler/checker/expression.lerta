@@ -152,7 +152,8 @@ const type_of_cast = (body: Body, cast: Cast) ->
   const type = check_member_type(body, cast.value, cast.type, inner_of(written))
   cast.throws then type else optional_type(type)
 
-# The type, which the value's union type, optional or not, must have as a member.
+# The type, which must be a member of the value's union type, optional or not, or a union of
+# some of its members.
 const check_member_type = (body: Body, value: Expression, type_name: NamedType, type: Type) ->
   const program = body.program
   const value_type = type_of(body, value, nil)
@@ -161,8 +162,9 @@ const check_member_type = (body: Body, value: Expression, type_name: NamedType, 
     const message = "expected a value of a union type, got #{format_type(value_type)}"
     fail program, value.position, message
   body.facts.types[type_name] = type
-  if not union.members.any((member) -> same_type(member, type))
-    const message = "#{format_type(type)} is not one of the types #{format_type(union)}"
+  if not is_assignable(type, union)
+    const types = "the types #{format_type(union)} or a union of them"
+    const message = "#{format_type(type)} is not one of #{types}"
     fail program, type_name.position, message
   type
 
