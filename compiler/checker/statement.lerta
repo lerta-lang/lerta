@@ -30,10 +30,10 @@ export const check_initializers = (body: Body, info: ObjectInfo, self: SelfConte
     const value = field.value ? continue
     self.initializing = field
     if const field_type = field.type
-      expect_type(body, value, field_type)
+      expect_type body, value, field_type
       continue
     const type = type_of(body, value, nil)
-    reject_if_not_storable(body, type, value)
+    reject_if_not_storable body, type, value
     field.type = type
   self.initializing = nil
 
@@ -54,18 +54,18 @@ export const check_function_body = (
     for i in 0...literal.params.length
       const identifier = literal.params[i].name
       const param = Local(identifier, type: params[i], mutable: false, declared: false, used: false)
-      define_local(body, param)
-    narrow_where_holds(body, holds) if holds
+      define_local body, param
+    narrow_where_holds body, holds if holds
   const statements = literal.body
   const finish = ->
-    check_last_statement(body, statements[statements.length - 1]) if statements.length > 0
-  check_block(body, all_but_last(statements), define_params, finish)
+    check_last_statement body, statements[statements.length - 1] if statements.length > 0
+  check_block body, all_but_last(statements), define_params, finish
 
 # The top-level code. Its names may be used by the functions, which are checked later, so its
 # scope is kept to warn about those never used once they are.
 export const check_top_level_code = (body: Body, statements: Array<Statement>) ->
   body.scopes.push()
-  check_statement(body, statement) for statement in statements
+  check_statement body, statement for statement in statements
   body.scopes.pop()
 
 # A block that gives a value: its last statement, typed in its scope by `type_of_last` if it is an
@@ -82,9 +82,9 @@ export const type_of_block = (
     if const value = as_expression(last)
       type = type_of_last(value)
       return
-    check_statement(body, last)
+    check_statement body, last
     type = never_type if ends_with_jump([last], (expression) -> is_never_typed(body, expression))
-  check_block(body, all_but_last(statements), define, finish)
+  check_block body, all_but_last(statements), define, finish
   type
 
 export const all_but_last = (statements: Array<Statement>) ->
@@ -93,7 +93,7 @@ export const all_but_last = (statements: Array<Statement>) ->
 # Whether the expression was typed `never`.
 const is_never_typed = (body: Body, expression: Expression) ->
   const type = body.shared.types[expression] ? return false
-  is_kind(type, 'never')
+  is_kind type, 'never'
 
 # A block is a scope; `define` declares the names that belong to it besides its statements, and
 # `finish` checks more before the scope ends. A compile error stops checking for good, so the
@@ -106,17 +106,17 @@ export const check_block = (
 ) ->
   body.scopes.push()
   define()
-  check_statement(body, statement) for statement in statements
+  check_statement body, statement for statement in statements
   finish()
   const scope = body.scopes.pop()
-  warn_if_unused(body.shared, scope[name]!) for name in scope.keys()
+  warn_if_unused body.shared, scope[name]! for name in scope.keys()
 
 export const check_statement = (body: Body, statement: Statement): void ->
   const is_top_level = body.context == nil and body.scopes.depth() == 1
   if is_exported(statement) and not is_top_level
-    fail(body.program, statement.position, 'export can only be at the top level')
+    fail body.program, statement.position, 'export can only be at the top level'
   const require_top_level = (message: String) ->
-    fail(body.program, statement.position, message) if not is_top_level
+    fail body.program, statement.position, message if not is_top_level
   case statement
     when For then check_for(body, statement)
     when While then check_while(body, statement)
@@ -128,7 +128,7 @@ export const check_statement = (body: Body, statement: Statement): void ->
     when Extend then require_top_level('an extend can only be at the top level')
     when Import then require_top_level('an import can only be at the top level')
     when TypeDeclaration
-      require_top_level('a class or struct can only be declared at the top level')
+      require_top_level 'a class or struct can only be declared at the top level'
     else check_expression_statement(body, as_expression(statement)!)
 
 # An optional name tested in the condition is narrowed where it is known not to be nil: in the
@@ -140,14 +140,14 @@ const check_if = (body: Body, if_statement: If) ->
   const narrowing = narrowing_of(body, condition)
   const narrow_where = (value: Bool) ->
     if narrowing
-      narrow(body, narrowing.local, narrowing.type) if narrowing.condition_value == value
+      narrow body, narrowing.local, narrowing.type if narrowing.condition_value == value
   const define_then = ->
     define()
-    narrow_where(true)
-  check_block(body, then_body, define_then, nothing)
-  check_block(body, else_body, () -> narrow_where(false), nothing)
+    narrow_where true
+  check_block body, then_body, define_then, nothing
+  check_block body, else_body, () -> narrow_where(false), nothing
   const is_never = (expression: Expression) -> is_never_typed(body, expression)
-  narrow_where(false) if else_body.length == 0 and ends_with_jump(then_body, is_never)
+  narrow_where false if else_body.length == 0 and ends_with_jump(then_body, is_never)
 
 # Checks the condition, and returns what it defines in the body: the name of `const name = value`.
 export const check_condition = (body: Body, condition: Condition): () -> void ->
@@ -158,7 +158,7 @@ export const check_condition = (body: Body, condition: Condition): () -> void ->
       const local = Local(identifier, type: inner, mutable: false, declared: true, used: false)
       () -> define_local(body, local)
     else
-      expect_condition(body, as_expression(condition)!)
+      expect_condition body, as_expression(condition)!
       nothing
 
 # Until the innermost scope ends, the local is seen with the narrower type.
@@ -168,7 +168,7 @@ const narrow = (body: Body, local: Local, type: Type) ->
 # Narrows, in the current scope, the local that the condition tests, where it holds.
 export const narrow_where_holds = (body: Body, condition: Expression) ->
   const narrowing = narrowing_of(body, condition) ? return
-  narrow(body, narrowing.local, narrowing.type) if narrowing.condition_value
+  narrow body, narrowing.local, narrowing.type if narrowing.condition_value
 
 # A top-level function was added to the module's functions before checking started.
 const check_declaration = (body: Body, declaration: Declaration) ->
@@ -177,17 +177,17 @@ const check_declaration = (body: Body, declaration: Declaration) ->
   return if value is FunctionLiteral and is_top_level and body.scopes.depth() == 1
   const type_name = declaration.type
   const annotated = type_name then resolve(body.program, body.resolver, type_name) else nil
-  expect_type(body, value, annotated) if annotated
+  expect_type body, value, annotated if annotated
   const type = annotated ? type_of(body, value, nil)
-  reject_if_not_storable(body, type, value)
+  reject_if_not_storable body, type, value
   # An exported value is for other modules to use.
   const { name, mutable, exported } = declaration
-  define_local(body, Local(type, mutable, identifier: name, declared: true, used: exported))
+  define_local body, Local(type, mutable, identifier: name, declared: true, used: exported)
 
 # nil alone gives no type, and void and never give no value.
 const reject_if_not_storable = (body: Body, type: Type, value: Expression) ->
   if is_one_of_kinds(type, ['void', 'never', 'nil'])
-    fail(body.program, value.position, "cannot store a value of type #{format_type(type)}")
+    fail body.program, value.position, "cannot store a value of type #{format_type(type)}"
 
 # A local may shadow any name of an outer scope, a top-level name or a builtin.
 export const define_local = (body: Body, local: Local) ->
@@ -198,20 +198,20 @@ export const define_local = (body: Body, local: Local) ->
     when has_function(shared, name) then true
     when object_type(program, shared, name) != nil then true
     else has_import(shared, name) or has_alias(shared, name)
-  fail(program, position, "'#{name}' is already defined") if is_top_level and is_taken
+  fail program, position, "'#{name}' is already defined" if is_top_level and is_taken
   if not body.scopes.define(name, local)
-    fail(program, position, "'#{name}' is already defined in this scope")
-  define_top_level(shared.top_level, local) if is_top_level
+    fail program, position, "'#{name}' is already defined in this scope"
+  define_top_level shared.top_level, local if is_top_level
   shared.types[local.identifier] = local.type
 
 const check_expression_statement = (body: Body, statement: Expression) ->
-  check_discarded(body, statement, type_of(body, statement, nil))
+  check_discarded body, statement, type_of(body, statement, nil)
 
 # See the rules for discarded values in docs/reference/errors.md.
 export const check_discarded = (body: Body, statement: Expression, type: Type) ->
   const program = body.program
   const at = statement.position
-  fail(program, at, 'an Iter does nothing until it is consumed') if type is IterType
+  fail program, at, 'an Iter does nothing until it is consumed' if type is IterType
   return if statement is Call or is_one_of_kinds(type, ['void', 'never'])
   # `x ? return` is a guard: its value is the reason to stop, not something to use.
   if statement is Coalesce
@@ -219,5 +219,5 @@ export const check_discarded = (body: Body, statement: Expression, type: Type) -
   if statement is Identifier
     if type is FunctionType
       const message = "function value is unused; to call it, write `#{statement.name}()`"
-      fail(program, at, message)
-  fail(program, at, 'value is unused')
+      fail program, at, message
+  fail program, at, 'value is unused'

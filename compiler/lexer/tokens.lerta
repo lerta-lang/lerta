@@ -51,7 +51,7 @@ export const tokenize = (source: String, path: String) ->
     const is_blank = indent == line.length or line.bytes[indent] == '#'
     continue if is_blank
     line.fail('tabs are not allowed in indentation', indent) if line.bytes[indent] == "\t"
-    emit_indentation(tokens, indents, line, indent) if not brackets.are_open()
+    emit_indentation tokens, indents, line, indent if not brackets.are_open()
     for token in LineScanner(line, position: indent).run()
       brackets.update(token)
       tokens.push(token)
@@ -81,7 +81,7 @@ const without_carriage_return = (line: String) ->
   ends_with_cr then bytes.slice(0, bytes.length - 1) else bytes
 
 const layout_token = (kind: String, line: Int, column: Int) ->
-  Token(kind, line, column, text: '', spaced: true)
+  Token kind, line, column, text: '', spaced: true
 
 # Lines inside brackets continue the line that opened them, whatever their indentation, and end
 # with a line_break, which the parser reads as it reads the brackets: a separator in a list, and
@@ -103,7 +103,7 @@ class Brackets
   check_closed = ->
     return if @open.length == 0
     const unclosed = @open[@open.length - 1]
-    compile_error(@path, unclosed.line, unclosed.column, "'#{unclosed.kind}' is never closed")
+    compile_error @path, unclosed.line, unclosed.column, "'#{unclosed.kind}' is never closed"
 
 const emit_indentation = (
   tokens: Array<Token>
@@ -183,7 +183,7 @@ class LineScanner
   at = (punctuation: String) -> @line.bytes.occurs_at(@position, punctuation.binary)
 
   # Control characters such as '\r' would garble the error line if printed raw.
-  fail_unexpected_character = (): never ->
+  fail_unexpected_character = () ->
     const code_point = @line.code_point_at(@position)
     const is_printable_ascii = code_point >= 0x20 and code_point <= 0x7E
     const shown = case

@@ -22,7 +22,7 @@ export const generate_assignment = (g: Generator, assignment: Assignment) ->
     when Identifier
       const local = lookup_local(g, target.name)!
       const slot = local is SlotLocal then local else throw 'only slots can be assigned'
-      assign_through(g, assignment, slot_pointer(g.ir, slot), slot.type)
+      assign_through g, assignment, slot_pointer(g.ir, slot), slot.type
 
 # The field takes the new value's reference and releases the old one. Through a union, the field
 # is that of the member the object is.
@@ -34,12 +34,12 @@ const generate_field_assignment = (g: Generator, assignment: Assignment, target:
   const pointer = case object_type
     when UnionType then emit_member_dispatch(g.ir, object, object_type.members, 'ptr', pointer_of)
     else pointer_of(object_type)
-  assign_through(g, assignment, pointer, type_of(g, target))
-  emit_release(g.ir, object)
+  assign_through g, assignment, pointer, type_of(g, target)
+  emit_release g.ir, object
 
 const field_pointer = (g: Generator, object: String, type: Type, name: String) ->
   const object_type = type is ObjectType then type else throw 'expected a class or struct type'
-  emit_field_pointer(g.ir, object, info_of(g.code.program, object_type), name)
+  emit_field_pointer g.ir, object, info_of(g.code.program, object_type), name
 
 # The array or map retains the new item and releases the old one.
 const generate_index_assignment = (g: Generator, assignment: Assignment, target: Index) ->
@@ -52,9 +52,9 @@ const generate_index_assignment = (g: Generator, assignment: Assignment, target:
   const old = assignment.operator == '=' then '' else emit_get(ir, array, index, element)
   const value = generate(g, assignment.value)
   const result = combine(g, assignment.operator, old, value, element)
-  emit_set(ir, array, index, result, element)
-  emit_release(ir, result) if is_reference_type(element)
-  emit_release(ir, array)
+  emit_set ir, array, index, result, element
+  emit_release ir, result if is_reference_type(element)
+  emit_release ir, array
 
 # Only `=` applies to a map value. The key, like an index, is evaluated before the value.
 const generate_map_assignment = (
@@ -66,10 +66,10 @@ const generate_map_assignment = (
   const map = generate(g, target.object)
   const key = generate(g, target.index)
   const value = generate(g, assignment.value)
-  emit_map_set(g.ir, map, key, value, type)
-  release_if_reference(g, target.index, key)
-  release_if_reference(g, assignment.value, value)
-  emit_release(g.ir, map)
+  emit_map_set g.ir, map, key, value, type
+  release_if_reference g, target.index, key
+  release_if_reference g, assignment.value, value
+  emit_release g.ir, map
 
 # For `+=` and so on, the old value is loaded, and owned, before the value is evaluated, as it is
 # combined. Evaluating the value may change the target (a method that assigns the same field, for
@@ -82,12 +82,12 @@ const assign_through = (g: Generator, assignment: Assignment, pointer: String, t
   var old = ''
   if assignment.operator != '='
     old = load()
-    emit_retain(ir, old) if is_reference
+    emit_retain ir, old if is_reference
   const value = generate(g, assignment.value)
   const result = combine(g, assignment.operator, old, value, type)
   const replaced = is_reference then load() else ''
   ir.emit("store #{ir_type(type)} #{result}, ptr #{pointer}")
-  emit_release(ir, replaced) if is_reference
+  emit_release ir, replaced if is_reference
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
 # Both are owned.

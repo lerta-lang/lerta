@@ -30,20 +30,20 @@ export const type_of_case = (body: Body, case_expression: Case, expected: Type?)
   const arm_narrowing = check_patterns(body, case_expression)
   const { arms } = case_expression
   const arm_branch = (i: Int) ->
-    Branch(statements: arms[i].body, narrowing: arm_narrowing[i])
+    Branch statements: arms[i].body, narrowing: arm_narrowing[i]
   const branches = [arm_branch(i) for i in 0...arms.length]
   if const otherwise = case_expression.otherwise
     branches.push(Branch(statements: otherwise, narrowing: nil))
-  type_of_branches(body, branches, expected, case_expression, 'case arms', nil)
+  type_of_branches body, branches, expected, case_expression, 'case arms', nil
 
 # A condition of a case without a subject is one of an `if`, which narrows a local in its arm.
 const check_condition = (body: Body, condition: Expression) ->
-  expect_condition(body, condition)
-  narrowing_where(narrowing_of(body, condition), true)
+  expect_condition body, condition
+  narrowing_where narrowing_of(body, condition), true
 
 # The condition narrows a local as `if` does: in the value for when it holds, or the other.
 export const type_of_conditional = (body: Body, conditional: Conditional, expected: Type?) ->
-  expect_condition(body, conditional.condition)
+  expect_condition body, conditional.condition
   const narrowing = narrowing_of(body, conditional.condition)
   const then_body: Array<Statement> = [conditional.then_value]
   const else_body: Array<Statement> = [conditional.else_value]
@@ -53,7 +53,7 @@ export const type_of_conditional = (body: Body, conditional: Conditional, expect
   ]
   const description = 'the values of then and else'
   const void_message = 'then and else must give values; to run statements, write an if'
-  type_of_branches(body, branches, expected, conditional, description, void_message)
+  type_of_branches body, branches, expected, conditional, description, void_message
 
 # The type of the values the branches give: the expected type, or else one that they unify to (see
 # unify), to which they are converted. Each value is typed with a local narrowed, if its branch
@@ -73,24 +73,24 @@ const type_of_branches = (
       if const narrowing = branch.narrowing
         const { local, type } = narrowing
         body.scopes.narrow(local.identifier.name, narrowed_view(local, type))
-    type_of_block(body, branch.statements, define, type_of_last)
+    type_of_block body, branch.statements, define, type_of_last
   if expected
     const check_value = (value: Expression) ->
-      expect_type(body, value, expected)
+      expect_type body, value, expected
       expected
     for branch in branches
       const type = type_of_body(branch, check_value)
       if is_kind(type, 'void')
-        fail(body.program, last_of(branch).position, "expected #{format_type(expected)}, got void")
+        fail body.program, last_of(branch).position, "expected #{format_type(expected)}, got void"
     return expected
   const type_of_value = (value: Expression) -> type_of(body, value, nil)
   const value_of = (branch: Branch) ->
-    BranchValue(last: last_of(branch), type: type_of_body(branch, type_of_value))
+    BranchValue last: last_of(branch), type: type_of_body(branch, type_of_value)
   const values = [value_of(branch) for branch in branches]
   if const message = void_message
     if const valueless = values.find((value) -> is_kind(value.type, 'void'))
-      fail(body.program, valueless.last.position, message)
-  unify_values(body, values, at, description)
+      fail body.program, valueless.last.position, message
+  unify_values body, values, at, description
 
 const last_of = (branch: Branch) -> branch.statements[branch.statements.length - 1]
 
@@ -104,13 +104,13 @@ const unify_values = (
 ) ->
   var type = values[0].type
   for value in values
-    const mismatch = (): never ->
+    const mismatch = () ->
       const types = "expected #{format_type(type)}, got #{format_type(value.type)}"
-      fail(body.program, value.last.position, "#{description} must have the same type: #{types}")
+      fail body.program, value.last.position, "#{description} must have the same type: #{types}"
     type = unify(type, value.type) ? mismatch()
   if is_kind(type, 'nil')
     const message = "nil alone does not give the type of #{description}; write it in an annotation"
-    fail(body.program, at.position, message)
+    fail body.program, at.position, message
   for value in values
     const is_converted = not is_kind(value.type, 'never') and not same_type(value.type, type)
     body.shared.conversions[value.last] = type if is_converted and as_expression(value.last) != nil
@@ -127,11 +127,11 @@ const check_patterns = (body: Body, case_expression: Case) ->
     return check_type_patterns(body, case_expression, subject, subject_type)
   if not is_one_of_kinds(subject_type, VALUE_KINDS)
     const message = "cannot branch on a value of type #{format_type(subject_type)}"
-    fail(body.program, subject.position, message)
+    fail body.program, subject.position, message
   for arm in arms
-    expect_type(body, pattern, subject_type) for pattern in arm.patterns
+    expect_type body, pattern, subject_type for pattern in arm.patterns
   if case_expression.otherwise == nil
-    fail(body.program, case_expression.position, 'a case on values needs an else arm')
+    fail body.program, case_expression.position, 'a case on values needs an else arm'
   const no_narrowing: Array<Narrowing?> = []
   no_narrowing.push(nil) for _ in arms
   no_narrowing
@@ -152,28 +152,28 @@ const check_type_patterns = (
       const key = type_key(types[i])
       if handled.has(key)
         const message = "#{format_member(types[i], union)} is already handled by an earlier arm"
-        fail(body.program, arm.patterns[i].position, message)
+        fail body.program, arm.patterns[i].position, message
       handled[key] = true
     arm_narrowing.push(types.length == 1 then subject_narrowing(body, subject, types[0]) else nil)
   const missing = [member for member in union.members when not handled.has(type_key(member))]
   if case_expression.otherwise == nil and missing.length > 0
     const missing_types = [format_member(member, union) for member in missing].join(', ')
     const message = "case does not handle #{missing_types}; add them or an else arm"
-    fail(body.program, case_expression.position, message)
+    fail body.program, case_expression.position, message
   arm_narrowing
 
 # The pattern's type, recorded on the pattern for codegen.
 const type_pattern = (body: Body, pattern: Expression, union: UnionType) ->
-  const fail_pattern = (): never ->
-    fail(body.program, pattern.position, "expected one of the types #{format_type(union)}")
+  const fail_pattern = () ->
+    fail body.program, pattern.position, "expected one of the types #{format_type(union)}"
   const { program, shared } = body
   const named = pattern is Identifier then object_type(program, shared, pattern.name) else nil
   const type = named ? fail_pattern()
   fail_pattern() if not union.members.any((member) -> same_type(member, type))
-  set_type(body, pattern, type)
+  set_type body, pattern, type
 
 const subject_narrowing = (body: Body, subject: Expression, type: Type) ->
   return nil if not (subject is Identifier)
   const local = lookup(body, subject.name) ? return nil
   return nil if local.mutable
-  Narrowing(local, type)
+  Narrowing local, type

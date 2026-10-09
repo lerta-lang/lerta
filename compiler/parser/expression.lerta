@@ -48,7 +48,7 @@ export const starts_block_arguments = (tokens: TokenStream) -> starts_field_bloc
 
 export const call_of = (callee: Expression, arguments: Arguments, type_args: Array<TypeName>) ->
   const { args, named_args } = arguments
-  Call(callee, args, named_args, type_args, position: callee.position)
+  Call callee, args, named_args, type_args, position: callee.position
 
 # `c then a else b`, which binds weaker than the binary operators; `c then a else d then b else
 # e` is `c then a else (d then b else e)`.
@@ -59,7 +59,7 @@ const parse_conditional = (tokens: TokenStream): Expression ->
   const then_value = parse_conditional(tokens)
   tokens.expect('else', "'else'")
   const else_value = parse_conditional(tokens)
-  Conditional(condition, then_value, else_value, position: condition.position)
+  Conditional condition, then_value, else_value, position: condition.position
 
 # `a ? b ? c` is `a ? (b ? c)`.
 export const parse_coalesce = (tokens: TokenStream): Expression ->
@@ -67,13 +67,13 @@ export const parse_coalesce = (tokens: TokenStream): Expression ->
   return value if tokens.peek_continuation() != '?'
   tokens.next()
   const fallback = parse_coalesce(tokens)
-  Coalesce(value, fallback, position: value.position)
+  Coalesce value, fallback, position: value.position
 
 const parse_or = (tokens: TokenStream) ->
-  parse_left_associative(tokens, ['or'], () -> parse_and(tokens))
+  parse_left_associative tokens, ['or'], () -> parse_and(tokens)
 
 const parse_and = (tokens: TokenStream) ->
-  parse_left_associative(tokens, ['and'], () -> parse_not(tokens))
+  parse_left_associative tokens, ['and'], () -> parse_not(tokens)
 
 # Operands that `parse_operand` reads, joined by any of `operators`, from left to right.
 const parse_left_associative = (
@@ -91,7 +91,7 @@ const parse_not = (tokens: TokenStream): Expression ->
   const token = tokens.peek()
   return parse_comparison(tokens) if token.kind != 'not'
   tokens.next()
-  UnaryOperation(operator: 'not', operand: parse_not(tokens), position: token_position(token))
+  UnaryOperation operator: 'not', operand: parse_not(tokens), position: token_position(token)
 
 # `a < b < c` is an error: comparisons, `is` included, do not chain.
 const parse_comparison = (tokens: TokenStream) ->
@@ -105,11 +105,11 @@ const parse_comparison = (tokens: TokenStream) ->
 
 const parse_is = (tokens: TokenStream, value: Expression): Expression ->
   tokens.next()
-  IsTest(value, type: parse_named_type(tokens), position: value.position)
+  IsTest value, type: parse_named_type(tokens), position: value.position
 
 const parse_binary_comparison = (tokens: TokenStream, left: Expression): Expression ->
   const operator = tokens.next().kind
-  BinaryOperation(operator, left, right: parse_range(tokens), position: left.position)
+  BinaryOperation operator, left, right: parse_range(tokens), position: left.position
 
 # Ranges do not chain either: `a...b...c` is an error.
 const parse_range = (tokens: TokenStream): Expression ->
@@ -119,19 +119,19 @@ const parse_range = (tokens: TokenStream): Expression ->
   const end = parse_arithmetic(tokens, 0)
   if tokens.peek_continuation() == '...'
     tokens.fail(token_position(tokens.peek()), 'ranges cannot be chained')
-  Range(start, end, position: start.position)
+  Range start, end, position: start.position
 
 # `is` is not a keyword, so that it stays usable as a name.
 const at_is = (tokens: TokenStream) ->
   tokens.peek_continuation() == 'identifier' and tokens.peek().text == 'is'
 
 const at_comparison = (tokens: TokenStream) ->
-  is_one_of(tokens.peek_continuation(), COMPARISON_OPERATORS)
+  is_one_of tokens.peek_continuation(), COMPARISON_OPERATORS
 
 const parse_arithmetic = (tokens: TokenStream, level: Int): Expression ->
   return parse_unary(tokens) if level == ARITHMETIC_PRECEDENCE.length
   const operators = ARITHMETIC_PRECEDENCE[level]
-  parse_left_associative(tokens, operators, () -> parse_arithmetic(tokens, level + 1))
+  parse_left_associative tokens, operators, () -> parse_arithmetic(tokens, level + 1)
 
 const parse_unary = (tokens: TokenStream): Expression ->
   const token = tokens.peek()
@@ -144,13 +144,13 @@ const parse_unary = (tokens: TokenStream): Expression ->
     tokens.next()
     const value = integer_value(tokens, literal.text, true, position)
     return parse_postfix(tokens, IntegerLiteral(value, position))
-  UnaryOperation(position, operator: '-', operand: parse_unary(tokens))
+  UnaryOperation position, operator: '-', operand: parse_unary(tokens)
 
 export const parse_identifier = (tokens: TokenStream) ->
   const token = tokens.peek()
   tokens.fail_expecting(token, 'name') if token.kind != 'identifier'
   tokens.next()
-  Identifier(name: token.text, position: token_position(token))
+  Identifier name: token.text, position: token_position(token)
 
 const parse_postfix = (tokens: TokenStream, primary: Expression) ->
   var expression = primary
@@ -181,8 +181,8 @@ const extend_by_postfix = (tokens: TokenStream, expression: Expression): Express
 export const parse_list = <T>(tokens: TokenStream, close: String, parse_item: () -> T): Array<T> ->
   const parse_items = () ->
     tokens.accept('line_break')
-    parse_list_rest(tokens, close, parse_item, [])
-  inside(tokens, 'separate', parse_items)
+    parse_list_rest tokens, close, parse_item, []
+  inside tokens, 'separate', parse_items
 
 # The rest of a list whose first items are `items`, through `close`.
 export const parse_list_rest = <T>(
@@ -215,7 +215,7 @@ const parse_index = (tokens: TokenStream) ->
     const expression = parse_expression(tokens)
     tokens.expect(']', "']'")
     expression
-  inside(tokens, 'skip', parse_contents)
+  inside tokens, 'skip', parse_contents
 
 export const parse_loop_header = (tokens: TokenStream) ->
   tokens.expect('for', "'for'")
@@ -223,11 +223,11 @@ export const parse_loop_header = (tokens: TokenStream) ->
   tokens.expect('in', "'in'")
   const iterable = parse_expression(tokens)
   const guard = tokens.accept('when') then parse_expression(tokens) else nil
-  LoopHeader(variable, iterable, guard)
+  LoopHeader variable, iterable, guard
 
 # The arguments after an opening parenthesis, through the closing one.
 const parse_parenthesized_arguments = (tokens: TokenStream) ->
-  to_arguments(tokens, parse_list(tokens, ')', () -> parse_argument(tokens)))
+  to_arguments tokens, parse_list(tokens, ')', () -> parse_argument(tokens))
 
 # Arguments separated by commas, to the end of the line, as a call without parentheses has.
 export const parse_arguments = (tokens: TokenStream) ->
@@ -237,7 +237,7 @@ export const parse_arguments = (tokens: TokenStream) ->
     const next = tokens.peek()
     tokens.fail_expecting(next, "an item after ','") if next.kind == 'newline'
     items.push(parse_argument(tokens))
-  to_arguments(tokens, items)
+  to_arguments tokens, items
 
 struct Argument
   name: Identifier?
@@ -248,7 +248,7 @@ const parse_argument = (tokens: TokenStream) ->
   return Argument(value: parse_expression(tokens)) if not is_named
   const name = parse_identifier(tokens)
   tokens.next()
-  Argument(name, value: parse_value(tokens))
+  Argument name, value: parse_value(tokens)
 
 # Named arguments come last.
 const to_arguments = (tokens: TokenStream, items: Array<Argument>) ->
@@ -261,4 +261,4 @@ const to_arguments = (tokens: TokenStream, items: Array<Argument>) ->
       tokens.fail(item.value.position, 'a positional argument cannot follow a named one')
     else
       args.push(item.value)
-  Arguments(args, named_args)
+  Arguments args, named_args

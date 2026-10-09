@@ -16,7 +16,7 @@ export const parse_type_name = (tokens: TokenStream): TypeName ->
   return first if tokens.peek().kind != '|'
   const members = [first]
   members.push(parse_union_member(tokens)) while tokens.accept('|')
-  UnionTypeName(members, position: first.position)
+  UnionTypeName members, position: first.position
 
 # `(A, B) -> R`, or a function type in parentheses, `((A) -> R)?`, to make it optional.
 const parse_parenthesized_type = (tokens: TokenStream) ->
@@ -25,13 +25,13 @@ const parse_parenthesized_type = (tokens: TokenStream) ->
   if tokens.accept('->')
     const result = parse_type_name(tokens)
     return FunctionTypeName(result, position, params: types, optional: false)
-  const fail = (): never -> tokens.fail_expecting(tokens.peek(), "'->'")
+  const fail = () -> tokens.fail_expecting(tokens.peek(), "'->'")
   fail() if types.length != 1
   const inner = types[0]
   case inner
     when FunctionTypeName
       const { params, result } = inner
-      FunctionTypeName(params, result, position, optional: tokens.accept('?'))
+      FunctionTypeName params, result, position, optional: tokens.accept('?')
     else fail()
 
 # A type that `|` can join: a named type or an anonymous struct, which the checker rejects as a
@@ -43,17 +43,17 @@ const parse_union_member = (tokens: TokenStream): UnionMember ->
 const parse_record_type = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const fields = parse_list(tokens, '}', () -> parse_record_type_field(tokens))
-  RecordTypeName(fields, position, optional: tokens.accept('?'))
+  RecordTypeName fields, position, optional: tokens.accept('?')
 
 const parse_record_type_field = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   tokens.expect(':', "':'")
-  RecordTypeField(name, type: parse_type_name(tokens))
+  RecordTypeField name, type: parse_type_name(tokens)
 
 export const parse_named_type = (tokens: TokenStream) ->
   const { name, position } = parse_identifier(tokens)
   const args: Array<TypeName> = tokens.peek().kind == '<' then parse_type_arguments(tokens) else []
-  NamedType(name, args, position, optional: tokens.accept('?'))
+  NamedType name, args, position, optional: tokens.accept('?')
 
 # `<A, B>`.
 export const parse_type_arguments = (tokens: TokenStream) ->

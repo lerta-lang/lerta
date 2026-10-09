@@ -18,7 +18,7 @@ export struct HeapField
 
 # A field that holds a value of the type.
 export const value_field = (type: Type) ->
-  HeapField(ir_type: ir_type(type), holds_reference: is_reference_type(type))
+  HeapField ir_type: ir_type(type), holds_reference: is_reference_type(type)
 
 # A field that holds no reference, such as a pointer to code, of the IR type.
 export const plain_field = (ir: String) -> HeapField(ir_type: ir, holds_reference: false)
@@ -46,7 +46,7 @@ export const define_heap_object = (
   for i in 0...fields.length
     continue if not fields[i].holds_reference
     const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
-    emit_release(ir, ir.assign("load ptr, ptr #{pointer}"))
+    emit_release ir, ir.assign("load ptr, ptr #{pointer}")
   ir.emit('ret void')
   ir.finish("void #{drop}(ptr %object)")
 
@@ -71,15 +71,15 @@ export const emit_heap_allocate = (ir: IrBuilder, layout: String, drop: String) 
 export const emit_field_pointer = (ir: IrBuilder, object: String, info: ObjectInfo, name: String) ->
   var index = 0
   index += 1 while info.fields[index].name.name != name
-  emit_heap_field_pointer(ir, object_ir_type(info.type), object, index)
+  emit_heap_field_pointer ir, object_ir_type(info.type), object, index
 
 export const emit_allocate = (ir: IrBuilder, info: ObjectInfo) ->
-  emit_heap_allocate(ir, object_ir_type(info.type), drop_symbol(info.type))
+  emit_heap_allocate ir, object_ir_type(info.type), drop_symbol(info.type)
 
 export const define_object = (module: IrModule, info: ObjectInfo) ->
   const fields = [value_field(field.type!) for field in info.fields]
   const deinit = info.has_deinit then method_symbol(info.type, 'deinit') else nil
-  define_heap_object(module, object_ir_type(info.type), drop_symbol(info.type), fields, deinit)
+  define_heap_object module, object_ir_type(info.type), drop_symbol(info.type), fields, deinit
 
 # An i1: whether the object is of the type. The drop function in the header tells the type, since
 # every type has its own.
@@ -123,7 +123,7 @@ export const emit_member_dispatch = (
 const record_layout = (ir: IrBuilder, type: RecordType) ->
   const fields = [value_field(field.type) for field in type.fields]
   const define = (name: String, module: IrModule) ->
-    define_heap_object(module, name, drop_name(name), fields, nil)
+    define_heap_object module, name, drop_name(name), fields, nil
   ir.module.named("record #{type_key(type)}", '%lerta.record', define)
 
 const drop_name = (layout: String) -> "@#{without_sigil(layout)}.drop"
@@ -151,7 +151,7 @@ export const emit_record_field = (ir: IrBuilder, record: String, type: Type, nam
   const field_type = record_type.fields[index].type
   const pointer = emit_heap_field_pointer(ir, layout, record, index)
   const value = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
-  emit_retain(ir, value) if is_reference_type(field_type)
+  emit_retain ir, value if is_reference_type(field_type)
   value
 
 # Cells: each holds one `var` that function literals capture, so that the function that declares
@@ -162,7 +162,7 @@ export const emit_record_field = (ir: IrBuilder, record: String, type: Type, nam
 # types of the same representation share them.
 const cell_layout = (ir: IrBuilder, type: Type) ->
   const define = (name: String, module: IrModule) ->
-    define_heap_object(module, name, drop_name(name), [value_field(type)], nil)
+    define_heap_object module, name, drop_name(name), [value_field(type)], nil
   const key = "cell #{ir_type(type)} #{is_reference_type(type)}"
   ir.module.named(key, '%lerta.cell', define)
 
@@ -175,4 +175,4 @@ export const emit_cell = (ir: IrBuilder, type: Type, value: String) ->
 
 # The pointer to the cell's value, which a var's reads and writes go through.
 export const emit_cell_pointer = (ir: IrBuilder, type: Type, cell: String) ->
-  emit_heap_field_pointer(ir, cell_layout(ir, type), cell, 0)
+  emit_heap_field_pointer ir, cell_layout(ir, type), cell, 0

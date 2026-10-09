@@ -22,7 +22,7 @@ import { nil_constant } from './optional'
 import { emit_runtime_call, emit_unreachable } from './runtime_calls'
 import { ArrayType, is_kind, kind_of, MapType, ObjectType, Type } from '../types'
 
-export const generate_call = (g: Generator, call: Call): String ->
+export const generate_call = (g: Generator, call: Call) ->
   const callee = call.callee
   return generate_method_call(g, call, callee) if callee is Member
   if const instance = g.code.shared.instances[call]
@@ -30,7 +30,7 @@ export const generate_call = (g: Generator, call: Call): String ->
     return call_function(g, symbol, instance.entry.type!, call.args, nil)
   if callee is Identifier
     return generate_named_call(g, call, callee.name) if lookup_local(g, callee.name) == nil
-  call_closure(g, generate(g, callee), type_of(g, callee), call.args)
+  call_closure g, generate(g, callee), type_of(g, callee), call.args
 
 # A call of a name that no local takes: of the builtin Map, a constructor, a C function or a
 # function written in Lerta.
@@ -45,9 +45,9 @@ const generate_named_call = (g: Generator, call: Call, name: String) ->
     const exported = imported_export(g.code.program, imported)
     if exported is ExternExport
       const emit_call = (operands: Array<String>) ->
-        emit_runtime_call(g.ir, exported.symbol, function_type_of(callee_type), operands)
+        emit_runtime_call g.ir, exported.symbol, function_type_of(callee_type), operands
       return with_arguments(g, call.args, emit_call)
-  call_function(g, g.code.symbols[name]!, callee_type, call.args, nil)
+  call_function g, g.code.symbols[name]!, callee_type, call.args, nil
 
 # The methods of Iters (see call_iter_method) take the object and the arguments; the other
 # methods borrow them, and the object is released after the call. A member that is no method
@@ -68,13 +68,13 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
   const result = case source
     when BuiltinMethod
       const emit_call = (args: Array<String>) ->
-        call_collection_method(g.ir, name, object, object_type, args)
-      with_arguments(g, call.args, emit_call)
+        call_collection_method g.ir, name, object, object_type, args
+      with_arguments g, call.args, emit_call
     else
       const symbol = lerta_method_symbol(g, source, name, call)
       const receiver = "#{ir_type(object_type)} #{object}"
-      call_function(g, symbol, type_of(g, member), call.args, receiver)
-  release_if_reference(g, member.object, object)
+      call_function g, symbol, type_of(g, member), call.args, receiver
+  release_if_reference g, member.object, object
   result
 
 # The symbol of a method written in Lerta: of a class or struct, of an extend, or of the instance
@@ -85,7 +85,7 @@ const lerta_method_symbol = (g: Generator, source: MethodSource, name: String, c
     when ExtensionSource
       const method = source.method
       return extension_symbol(method) if method.generic == nil
-      instance_symbol(g.code.program, g.code.shared.instances[call]!)
+      instance_symbol g.code.program, g.code.shared.instances[call]!
     else throw 'a builtin method is not written in Lerta'
 
 # Calls a function written in Lerta by its symbol; a method gets `receiver`, its object as an IR
@@ -101,8 +101,8 @@ const call_function = (
     const all_args: Array<String> = []
     all_args.push(receiver) if receiver
     all_args.push("#{ir_type(type_at_use(g, args[i]))} #{operands[i]}") for i in 0...args.length
-    call_user_function(g.ir, symbol, type, all_args.join(', '))
-  with_arguments(g, args, emit_call)
+    call_user_function g.ir, symbol, type, all_args.join(', ')
+  with_arguments g, args, emit_call
 
 const call_user_function = (ir: IrBuilder, symbol: String, type: Type, args: String) ->
   const result = function_type_of(type).result
@@ -110,7 +110,7 @@ const call_user_function = (ir: IrBuilder, symbol: String, type: Type, args: Str
   return ir.assign(call) if not returns_nothing(result)
   ir.emit(call)
   return '' if not is_kind(result, 'never')
-  emit_unreachable(ir)
+  emit_unreachable ir
   'poison'
 
 # Calls a function value, a closure, which the call owns and releases; it is evaluated before
@@ -118,7 +118,7 @@ const call_user_function = (ir: IrBuilder, symbol: String, type: Type, args: Str
 const call_closure = (g: Generator, closure: String, type: Type, args: Array<Expression>) ->
   const emit_call = (operands: Array<String>) -> emit_closure_call(g.ir, closure, type, operands)
   const result = with_arguments(g, args, emit_call)
-  emit_release(g.ir, closure)
+  emit_release g.ir, closure
   result
 
 # Generates the arguments, which `emit_call` borrows, and releases them after the call.
@@ -129,7 +129,7 @@ const with_arguments = (
 ) ->
   const operands = [generate(g, arg) for arg in args]
   const result = emit_call(operands)
-  release_if_reference(g, args[i], operands[i]) for i in 0...args.length
+  release_if_reference g, args[i], operands[i] for i in 0...args.length
   result
 
 # The named arguments are evaluated in the order they are written, then passed in the order of
@@ -145,8 +145,7 @@ const generate_construction = (g: Generator, call: Call, type: ObjectType) ->
     const value = given[field.name.name] ? nil_constant(field_type)
     args.push("#{ir_type(field_type)} #{value}")
   const object = g.ir.assign("call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})")
-  for arg in call.named_args
-    release_if_reference(g, arg.value, given[arg.name.name]!)
+  release_if_reference g, arg.value, given[arg.name.name]! for arg in call.named_args
   object
 
 const call_collection_method = (

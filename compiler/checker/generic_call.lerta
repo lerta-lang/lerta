@@ -36,7 +36,7 @@ export const type_of_generic_method_call = (
   expected: Type?
 ) ->
   const binding = TypeBinding(type: receiver, at: member.object.position)
-  function_type(instance_of_call(body, call, generic, expected, binding))
+  function_type instance_of_call(body, call, generic, expected, binding)
 
 # The instance of a generic method that the receiver gives all the type arguments of, if it does;
 # `call`, if given, calls it.
@@ -66,17 +66,17 @@ const instance_of_call = (
   if call.named_args.length > 0
     const kind = generic.receiver == nil then 'function' else 'method'
     const message = "a generic #{kind} takes no named arguments so far"
-    fail(program, call.named_args[0].name.position, message)
+    fail program, call.named_args[0].name.position, message
   const params = generic.params
   if call.args.length != params.length
     const message = "expected #{params.length} argument(s), got #{call.args.length}"
-    fail(program, call.position, message)
+    fail program, call.position, message
   const inference = infer_type_arguments(body, call, generic, expected, receiver)
   const type_arguments = type_arguments_of(body, call, generic, inference.bindings)
-  reject_invalid_signature(body, generic, type_arguments, call.position)
+  reject_invalid_signature body, generic, type_arguments, call.position
   const instance = instantiate_here(body, ref, type_arguments, call.position)
   const type = function_type(instance)
-  require_type(body, each.arg, each.type, type.params[each.index]) for each in inference.inferred
+  require_type body, each.arg, each.type, type.params[each.index] for each in inference.inferred
   body.shared.instances[call] = instance
   instance
 
@@ -88,7 +88,7 @@ const instantiate_here = (
   at: Position
 ) ->
   const methods = methods_reachable_from(body.program, body.extensions, type_arguments)
-  instantiate(body.program, generic, type_arguments, methods, at)
+  instantiate body.program, generic, type_arguments, methods, at
 
 # The type arguments in order, which must all be known and satisfy their bounds.
 const type_arguments_of = (
@@ -101,12 +101,12 @@ const type_arguments_of = (
   for param in generic.type_params
     const name = param.name.name
     const callee = generic.name.name
-    const cannot_infer = (): never ->
+    const cannot_infer = () ->
       const advice = "write it, as in #{callee}<...>(...)"
       const message = "cannot infer the type argument #{name} of '#{callee}'; #{advice}"
-      fail(body.program, call.position, message)
+      fail body.program, call.position, message
     const binding = inferred[name] ? cannot_infer()
-    reject_not_stringable(body, binding.type, binding.at) if param.bound != nil
+    reject_not_stringable body, binding.type, binding.at if param.bound != nil
     types.push(binding.type)
   types
 
@@ -123,13 +123,13 @@ const reject_invalid_signature = (
   at: Position
 ) ->
   const type_bindings = bindings(generic, type_arguments)
-  reject_invalid_parts(body, substitute(param, type_bindings), at) for param in generic.params
+  reject_invalid_parts body, substitute(param, type_bindings), at for param in generic.params
   if const result = generic.result
-    reject_invalid_parts(body, substitute(result, type_bindings), at)
+    reject_invalid_parts body, substitute(result, type_bindings), at
 
 const reject_invalid_parts = (body: Body, type: Type, at: Position): void ->
   const program = body.program
-  check_item_type(program, type.element, at, 'an array') if type is ArrayType
-  check_value_type(program, type.item, at, 'an Iter') if type is IterType
-  check_map_types(program, type.key, type.value, at, at) if type is MapType
-  reject_invalid_parts(body, part, at) for part in parts_of(type)
+  check_item_type program, type.element, at, 'an array' if type is ArrayType
+  check_value_type program, type.item, at, 'an Iter' if type is IterType
+  check_map_types program, type.key, type.value, at, at if type is MapType
+  reject_invalid_parts body, part, at for part in parts_of(type)

@@ -18,7 +18,7 @@ import { parse_type_name } from './type'
 # map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
 # The lookahead skips line breaks, which may separate the parameters.
 export const starts_function_literal = (tokens: TokenStream) ->
-  inside(tokens, 'skip', () -> looks_like_function_literal(tokens))
+  inside tokens, 'skip', () -> looks_like_function_literal(tokens)
 
 const looks_like_function_literal = (tokens: TokenStream) ->
   const first = tokens.peek().kind
@@ -56,11 +56,11 @@ export const parse_function_literal = (tokens: TokenStream) ->
   if const start = tokens.interpolation
     tokens.fail(start, 'a function cannot be written in an interpolation')
   const body = is_block then parse_block(tokens) else [parse_simple_statement(tokens)]
-  FunctionLiteral(type_params, params, return_type, body, position: token_position(token))
+  FunctionLiteral type_params, params, return_type, body, position: token_position(token)
 
 const parse_parameter = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
-  Parameter(name, type: parse_type_annotation(tokens))
+  Parameter name, type: parse_type_annotation(tokens)
 
 # `: Type`, if it follows.
 const parse_type_annotation = (tokens: TokenStream) ->
@@ -77,7 +77,7 @@ export const parse_type_parameters = (tokens: TokenStream) ->
 const parse_type_parameter = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   const bound = tokens.accept(':') then parse_identifier(tokens) else nil
-  TypeParameter(name, bound)
+  TypeParameter name, bound
 
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
 export const parse_array_literal = (tokens: TokenStream, position: Position) ->
@@ -88,8 +88,8 @@ export const parse_array_literal = (tokens: TokenStream, position: Position) ->
     tokens.next() if tokens.peek().kind == 'line_break' and tokens.peek_at(1).kind == 'for'
     return parse_comprehension(tokens, first, position, ']') if tokens.peek().kind == 'for'
     const elements = parse_list_rest(tokens, ']', () -> parse_expression(tokens), [first])
-    ArrayLiteral(elements, position)
-  inside(tokens, 'separate', parse_contents)
+    ArrayLiteral elements, position
+  inside tokens, 'separate', parse_contents
 
 # `(a)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends inside are skipped.
 export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
@@ -100,7 +100,7 @@ export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
     # Diagnostics about the group point at its opening parenthesis.
     first.position = position
     first
-  inside(tokens, 'skip', parse_contents)
+  inside tokens, 'skip', parse_contents
 
 # `for x in xs when guard]`, after the element, or `... guard)` for an Iter; line ends inside
 # are skipped.
@@ -116,7 +116,7 @@ const parse_comprehension = (
     header
   const { variable, iterable, guard } = inside(tokens, 'skip', parse_header)
   const lazy = close == ')' then lazy_functions(element, variable, guard) else nil
-  Comprehension(element, variable, iterable, guard, lazy, position)
+  Comprehension element, variable, iterable, guard, lazy, position
 
 # `{ k: v, ... }`. A key that is a name would make an anonymous struct, so a name's value is
 # written as a key in parentheses: `{ (k): v }`.
@@ -124,7 +124,7 @@ export const parse_map_literal = (tokens: TokenStream, position: Position): Expr
   return parse_record_literal(tokens, position) if starts_record_field(tokens)
   const entries = parse_list(tokens, '}', () -> parse_map_entry(tokens))
   tokens.fail(position, 'the empty map is written `Map()`') if entries.length == 0
-  MapLiteral(entries, position)
+  MapLiteral entries, position
 
 const parse_map_entry = (tokens: TokenStream) ->
   if starts_record_field(tokens)
@@ -134,7 +134,7 @@ const parse_map_entry = (tokens: TokenStream) ->
     tokens.fail(token_position(token), message)
   const key = parse_expression(tokens)
   tokens.expect(':', "':'")
-  MapEntry(key, value: parse_expression(tokens))
+  MapEntry key, value: parse_expression(tokens)
 
 # A name followed by `:`, `,` or `}` starts a field of an anonymous struct; a map's keys are
 # other expressions.
@@ -144,7 +144,7 @@ const starts_record_field = (tokens: TokenStream) ->
 
 # `{ x: 1, y }`; a field without a value takes that of the name.
 const parse_record_literal = (tokens: TokenStream, position: Position) ->
-  RecordLiteral(position, fields: parse_list(tokens, '}', () -> parse_record_field(tokens)))
+  RecordLiteral position, fields: parse_list(tokens, '}', () -> parse_record_field(tokens))
 
 const parse_record_field = (tokens: TokenStream) ->
   if not starts_record_field(tokens)
@@ -153,7 +153,7 @@ const parse_record_field = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   const has_value = tokens.accept(':')
   const value: Expression = has_value then parse_expression(tokens) else copy_identifier(name)
-  NamedValue(name, value)
+  NamedValue name, value
 
 # `case` followed by an indented block of `when` arms and a final `else` arm.
 # With a subject, an arm may list several patterns, and the `else` arm may be left out (whether
@@ -169,14 +169,14 @@ export const parse_case = (tokens: TokenStream, position: Position) ->
   tokens.expect('else', "'when' or 'else'") if has_else
   const otherwise = has_else then parse_arm_body(tokens, 'else') else nil
   tokens.expect('dedent', 'end of block')
-  Case(subject, arms, otherwise, position)
+  Case subject, arms, otherwise, position
 
 const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
   tokens.expect('when', "'when'")
   # A pattern stops before `then`, which begins the arm's value.
   const patterns = [parse_coalesce(tokens)]
   patterns.push(parse_coalesce(tokens)) while has_subject and tokens.accept(',')
-  CaseArm(patterns, body: parse_arm_body(tokens, 'then'))
+  CaseArm patterns, body: parse_arm_body(tokens, 'then')
 
 # The expression on the same line (`when c then x`, `else x`), or alone in an indented block.
 # `arm` is 'then' or 'else'.
@@ -188,21 +188,21 @@ const parse_arm_body = (tokens: TokenStream, arm: String): Array<Statement> ->
     return [value]
   const next = tokens.peek()
   tokens.fail_expecting(next, "'then' or end of line") if next.kind != 'newline'
-  parse_block(tokens)
+  parse_block tokens
 
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
 # Comprehension). The guard's function tests its condition as an `if` would:
 # `guard then true else false`.
 const lazy_functions = (element: Expression, variable: Identifier, guard: Expression?) ->
   const guard_function = guard then function_of(as_test(guard), variable) else nil
-  LazyFunctions(guard: guard_function, element: function_of(element, variable))
+  LazyFunctions guard: guard_function, element: function_of(element, variable)
 
 const function_of = (body: Expression, variable: Identifier) ->
   const params = [Parameter(name: copy_identifier(variable))]
-  FunctionLiteral(params, type_params: [], body: [body], position: body.position)
+  FunctionLiteral params, type_params: [], body: [body], position: body.position
 
 const as_test = (guard: Expression) ->
   const position = guard.position
   const then_value = BooleanLiteral(position, value: true)
   const else_value = BooleanLiteral(position, value: false)
-  Conditional(then_value, else_value, position, condition: guard)
+  Conditional then_value, else_value, position, condition: guard

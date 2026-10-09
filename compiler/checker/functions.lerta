@@ -55,12 +55,12 @@ export const annotated_type = (
 ): Type? ->
   const return_type = literal.return_type ? return nil
   const params = parameter_types(program, resolver, literal, [])
-  FunctionType(params, result: resolve_result(program, resolver, return_type))
+  FunctionType params, result: resolve_result(program, resolver, return_type)
 
 # A top-level function, which GenericFunction checks, is the only kind that can be generic.
 export const reject_generic = (program: ProgramWide, literal: FunctionLiteral) ->
   return if literal.type_params.length == 0
-  fail(program, literal.position, 'only a top-level function can be generic so far')
+  fail program, literal.position, 'only a top-level function can be generic so far'
 
 export const add_function = (
   program: ProgramWide
@@ -70,8 +70,8 @@ export const add_function = (
   literal: FunctionLiteral
   this_type: Type?
 ) ->
-  reject_defined(program, shared, key, name)
-  reject_generic(program, literal)
+  reject_defined program, shared, key, name
+  reject_generic program, literal
   const type = annotated_type(program, module_resolver(shared.index), literal)
   shared.functions.entries[key] = FunctionEntry(name, literal, type, this_type)
 
@@ -87,18 +87,18 @@ export const add_generic_function = (
   generic: GenericFunction
 ) ->
   const { name } = generic
-  reject_defined(program, shared, name.name, name)
+  reject_defined program, shared, name.name, name
   shared.functions.generics[name.name] = add_generic(shared, generic).index
 
 const reject_defined = (program: ProgramWide, shared: Shared, key: String, name: Identifier) ->
-  fail(program, name.position, "'#{name.name}' is already defined") if has_function(shared, key)
+  fail program, name.position, "'#{name.name}' is already defined" if has_function(shared, key)
 
 export const has_function = (shared: Shared, name: String) ->
   shared.functions.entries.has(name) or shared.functions.generics.has(name)
 
 export const generic_function = (shared: Shared, name: String) ->
   const index = shared.functions.generics[name] ? return nil
-  GenericRef(index, module_index: shared.index)
+  GenericRef index, module_index: shared.index
 
 # The type of the function of the module, checking its body first if the return type must be
 # inferred.
@@ -112,18 +112,18 @@ export const function_type_of = (
   if const type = entry.type
     return type
   if entry.state == 'checking'
-    fail(program, at, "'#{name}' is recursive, so its return type must be written")
-  check_entry(program, module_index, entry)
+    fail program, at, "'#{name}' is recursive, so its return type must be written"
+  check_entry program, module_index, entry
   entry.type
 
 export const check_all_functions = (program: ProgramWide, shared: Shared) ->
   for key in shared.functions.entries.keys()
-    check_entry(program, shared.index, shared.functions.entries[key]!)
+    check_entry program, shared.index, shared.functions.entries[key]!
 
 const check_entry = (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
   return if entry.state != 'unchecked'
   entry.state = 'checking'
-  check_function(program, module_index, entry)
+  check_function program, module_index, entry
   entry.state = 'checked'
 
 export const method_key = (type_name: String, method: String) -> "#{type_name}.#{method}"

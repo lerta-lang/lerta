@@ -36,47 +36,47 @@ const hint_of = (expected: Type?, kinds: Array<String>) ->
 
 export const type_of_unary = (body: Body, unary: UnaryOperation, expected: Type?): Type ->
   if unary.operator == 'not'
-    expect_condition(body, unary.operand)
+    expect_condition body, unary.operand
     return bool_type
   const type = type_of(body, unary.operand, hint_of(expected, NUMERIC_KINDS))
   if not is_one_of_kinds(type, NUMERIC_KINDS)
     const message = "expected #{describe_kinds(NUMERIC_KINDS)}, got #{format_type(type)}"
-    fail(body.program, unary.operand.position, message)
+    fail body.program, unary.operand.position, message
   type
 
 # `x == nil` and `x != nil` test an optional value.
 const type_of_nil_test = (body: Body, binary: BinaryOperation) ->
   const left_is_nil = binary.left is NilLiteral
-  type_of(body, left_is_nil then binary.left else binary.right, nil)
-  expect_optional(body, left_is_nil then binary.right else binary.left)
+  type_of body, left_is_nil then binary.left else binary.right, nil
+  expect_optional body, left_is_nil then binary.right else binary.left
   bool_type
 
 # `x ? fallback` is x without nil; the fallback has that type too.
 export const type_of_coalesce = (body: Body, coalesce: Coalesce) ->
   const inner = expect_optional(body, coalesce.value)
-  expect_type(body, coalesce.fallback, inner)
+  expect_type body, coalesce.fallback, inner
   inner
 
 # Arithmetic passes the expected type to its operands; a comparison's operands have their own.
 export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Type?): Type ->
   const operator = binary.operator
   if operator == 'and' or operator == 'or'
-    expect_condition(body, binary.left)
-    expect_condition(body, binary.right)
+    expect_condition body, binary.left
+    expect_condition body, binary.right
     return bool_type
   return type_of_nil_test(body, binary) if is_nil_test(binary)
   if operator == '==' or operator == '!='
     const comparable = ['Int', 'Byte', 'Bool', 'String', 'Binary']
     const reject = (type: Type) -> "cannot compare values of type #{format_type(type)}"
-    type_of_operands(body, binary, nil, comparable, reject)
+    type_of_operands body, binary, nil, comparable, reject
     return bool_type
   const allowed = operator == '+' then ['Int', 'Byte', 'String'] else NUMERIC_KINDS
   const reject = (type: Type) ->
     "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if not is_arithmetic(operator)
-    type_of_operands(body, binary, nil, NUMERIC_KINDS, reject)
+    type_of_operands body, binary, nil, NUMERIC_KINDS, reject
     return bool_type
-  type_of_operands(body, binary, hint_of(expected, allowed), allowed, reject)
+  type_of_operands body, binary, hint_of(expected, allowed), allowed, reject
 
 # The type both operands share. An operand whose type comes from the context is checked against
 # the other one, so that `c == 'a'` and `'a' == c` compare Bytes when `c` is one.
@@ -94,8 +94,8 @@ const type_of_operands = (
   const type = type_of(body, first, expected)
   const is_equality = binary.operator == '==' or binary.operator == '!='
   return type_of_identity_operand(body, second, type) if is_equality and is_identity_type(type)
-  fail(body.program, first.position, reject(type)) if not is_one_of_kinds(type, allowed_kinds)
-  expect_type(body, second, type)
+  fail body.program, first.position, reject(type) if not is_one_of_kinds(type, allowed_kinds)
+  expect_type body, second, type
   type
 
 # Objects compared by identity may be of different types, as a class and a union that holds it,
@@ -104,5 +104,5 @@ const type_of_identity_operand = (body: Body, second: Expression, first_type: Ty
   const type = type_of(body, second, nil)
   if not (is_identity_type(type) and share_a_class(first_type, type))
     const message = "cannot compare #{format_type(first_type)} with #{format_type(type)}"
-    fail(body.program, second.position, message)
+    fail body.program, second.position, message
   first_type

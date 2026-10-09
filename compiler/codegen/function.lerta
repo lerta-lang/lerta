@@ -45,11 +45,11 @@ export const lookup_local = (g: Generator, name: String): CodegenLocal? ->
   const global = code.globals[exported.module_index][exported.name]!
   const is_in_cycle = code.module.cycle.any((index) -> index == exported.module_index)
   return top_level_slot(global, true) if is_in_cycle
-  SlotLocal(pointer: global.pointer, type: global.type, top_level: nil, cell: nil)
+  SlotLocal pointer: global.pointer, type: global.type, top_level: nil, cell: nil
 
 const top_level_slot = (global: TopLevelGlobal, is_checked: Bool) ->
   const top_level = TopLevelSlot(global, is_checked)
-  SlotLocal(top_level, pointer: global.pointer, type: global.type, cell: nil)
+  SlotLocal top_level, pointer: global.pointer, type: global.type, cell: nil
 
 # `runs_first` are the symbols of the top-level code of the imported modules; the values of all
 # modules are released at the end of the entry module's.
@@ -61,21 +61,21 @@ export const generate_main = (
   releases: Array<TopLevelGlobal>
 ) ->
   g.ir.emit("call void #{symbol}()") for symbol in runs_first
-  generate_block(g, statements, no_locals)
-  emit_release_globals(g.ir, releases)
+  generate_block g, statements, no_locals
+  emit_release_globals g.ir, releases
   g.ir.emit('ret void')
-  finish(g, signature)
+  finish g, signature
 
 # Defines nothing, for a block that declares no locals besides its statements'.
 export const no_locals = (_scope: Map<String, CodegenLocal>) -> return
 
 # A function literal in an expression: its code, generated as a function of its own, and a new
 # closure of it with the values it captures.
-export const generate_closure = (g: Generator, literal: FunctionLiteral): String ->
+export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
   const captures = g.code.shared.captures[literal]!
   const symbol = g.code.ir_module.fresh_symbol('lerta.lambda')
   const body_generator = function_generator(g.code, g.extensions)
-  generate_function(body_generator, symbol, literal, nil, captures)
+  generate_function body_generator, symbol, literal, nil, captures
   const slots: Array<HeapField> = []
   const operands: Array<String> = []
   for capture in captures
@@ -86,11 +86,11 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral): String
       continue
     const cell = local is SlotLocal then local.cell else nil
     const owned = cell ? throw "the captured var '#{capture.name}' has no cell"
-    emit_retain(g.ir, owned.cell)
+    emit_retain g.ir, owned.cell
     slots.push(CELL_SLOT)
     operands.push(owned.cell)
   return emit_static_closure(g.ir, symbol) if captures.length == 0
-  emit_closure(g.ir, symbol, slots, operands)
+  emit_closure g.ir, symbol, slots, operands
 
 # Parameters are borrowed SSA values; a method gets its object first, as `@`, and a function
 # literal its closure, from which it reads the values it captures. The last statement, if an
@@ -120,16 +120,16 @@ export const generate_function = (
     const cell = CellSlot(cell: value, is_owned: false)
     scope[name] = case
       when is_var
-        SlotLocal(type, cell, pointer: emit_cell_pointer(ir, type, value), top_level: nil)
+        SlotLocal type, cell, pointer: emit_cell_pointer(ir, type, value), top_level: nil
       else ValueLocal(type, operand: value)
-  generate_statement(g, statement) for statement in all_but_last(literal.body)
-  generate_last_statement(g, literal.body, type.result)
+  generate_statement g, statement for statement in all_but_last(literal.body)
+  generate_last_statement g, literal.body, type.result
   g.locals.pop()
   const param_list: Array<String> = []
   param_list.push('ptr %closure') if captures != nil
   param_list.push("#{ir_type(this_type)} %this") if this_type
   param_list.push("#{ir_type(type.params[i])} %p#{i}") for i in 0...type.params.length
-  finish(g, "#{ir_return_type(type.result)} #{symbol}(#{param_list.join(', ')})")
+  finish g, "#{ir_return_type(type.result)} #{symbol}(#{param_list.join(', ')})"
 
 # The last statement returns its value, if it is an expression and the function has a result.
 const generate_last_statement = (g: Generator, body: Array<Statement>, result: Type) ->
@@ -139,11 +139,11 @@ const generate_last_statement = (g: Generator, body: Array<Statement>, result: T
     const value = as_expression(last)
     if value
       return emit_return(g, generate(g, value)) if has_result
-    generate_statement(g, last)
+    generate_statement g, last
   if has_result
     g.ir.emit('unreachable')
   else
-    emit_return(g, '')
+    emit_return g, ''
 
 # Takes the constructor arguments (the fields without an initializer, in order) borrowed, as
 # for any call; then computes the other fields in order, and runs `init` last.
@@ -153,18 +153,18 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   const arguments = [field for field in info.fields when field.value == nil]
   for i in 0...arguments.length
     const field = arguments[i]
-    emit_retain(ir, "%p#{i}") if is_reference_type(field.type!)
-    store_field(g, object, info, field, "%p#{i}")
+    emit_retain ir, "%p#{i}" if is_reference_type(field.type!)
+    store_field g, object, info, field, "%p#{i}"
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
     if const value = field.value
-      store_field(g, object, info, field, generate(g, value))
+      store_field g, object, info, field, generate(g, value)
   g.locals.pop()
   ir.emit("call void #{method_symbol(info.type, 'init')}(ptr #{object})") if info.has_init
   ir.emit("ret ptr #{object}")
   const params = ["#{ir_type(arguments[i].type!)} %p#{i}" for i in 0...arguments.length]
-  finish(g, "ptr #{constructor_symbol(info.type)}(#{params.join(', ')})")
+  finish g, "ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
 
 const store_field = (
   g: Generator
@@ -177,13 +177,13 @@ const store_field = (
   g.ir.emit("store #{ir_type(field.type!)} #{value}, ptr #{pointer}")
 
 const finish = (g: Generator, signature: String) ->
-  emit_throw_blocks(g)
+  emit_throw_blocks g
   g.ir.finish(signature)
 
 # Releases every scope of the function before returning the owned value. The function's result
 # type decides the instruction: a returned value that never comes (`return throw ...`) is poison.
 const emit_return = (g: Generator, value: String) ->
-  release_scope(g, scope) for scope in g.locals.inner_scopes(0)
+  release_scope g, scope for scope in g.locals.inner_scopes(0)
   const result = g.result_type
   g.ir.emit(returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}")
 
@@ -194,7 +194,7 @@ export const hold = (g: Generator, value: String, type: Type) ->
   # The name cannot be written in the source, so no code can read it.
   scope['(held)'] = store_in_slot(g, value, type)
   () ->
-    release_scope(g, scope)
+    release_scope g, scope
     g.locals.pop()
 
 # A jump ends the block; the code after it, until the next label, is unreachable.
@@ -203,19 +203,19 @@ export const generate_jump = (g: Generator, jump: Jump | Return) ->
     when Jump then generate_control_jump(g, jump)
     when Return
       const value = jump.value
-      emit_return(g, value then generate(g, value) else '')
+      emit_return g, value then generate(g, value) else ''
       g.ir.start_block(g.ir.fresh_label('unreachable'))
 
 # A block that gives a value: its last statement, if an expression, gives it, or ''. The value is
 # computed before the locals are released, as it may be one of them.
-export const generate_block_value = (g: Generator, body: Array<Statement>): String ->
+export const generate_block_value = (g: Generator, body: Array<Statement>) ->
   const scope = g.locals.push()
-  generate_statement(g, statement) for statement in all_but_last(body)
+  generate_statement g, statement for statement in all_but_last(body)
   const last = body[body.length - 1]
   const expression = as_expression(last)
   const value = expression then generate(g, expression) else ''
-  generate_statement(g, last) if expression == nil
-  release_scope(g, scope)
+  generate_statement g, last if expression == nil
+  release_scope g, scope
   g.locals.pop()
   value
 
@@ -230,7 +230,7 @@ export const generate_block = (
 # What generates the statements, for a block whose code is given that way.
 export const statements_code = (g: Generator, statements: Array<Statement>) ->
   const generate_all = ->
-    generate_statement(g, statement) for statement in statements
+    generate_statement g, statement for statement in statements
   generate_all
 
 # A block whose code `generate` generates in its scope.
@@ -240,9 +240,9 @@ export const generate_block_with = (
   define: (Map<String, CodegenLocal>) -> void
 ) ->
   const scope = g.locals.push()
-  define(scope)
+  define scope
   generate_body()
-  release_scope(g, scope)
+  release_scope g, scope
   g.locals.pop()
 
 export const release_scope = (g: Generator, scope: Map<String, CodegenLocal>) ->
@@ -252,9 +252,9 @@ export const release_scope = (g: Generator, scope: Map<String, CodegenLocal>) ->
     continue if not (local is SlotLocal)
     continue if local.top_level != nil
     if const cell = local.cell
-      emit_release(ir, cell.cell) if cell.is_owned
+      emit_release ir, cell.cell if cell.is_owned
     else if is_reference_type(local.type)
-      emit_release(ir, ir.assign("load ptr, ptr #{local.pointer}"))
+      emit_release ir, ir.assign("load ptr, ptr #{local.pointer}")
 
 export const generate_statement = (g: Generator, statement: Statement): void ->
   case statement
@@ -266,7 +266,7 @@ export const generate_statement = (g: Generator, statement: Statement): void ->
     when TypeDeclaration, TypeAlias, Import, Extern, Extend then return
     else
       const expression = as_expression(statement)!
-      release_if_reference(g, expression, generate(g, expression))
+      release_if_reference g, expression, generate(g, expression)
 
 const generate_declaration = (g: Generator, declaration: Declaration) ->
   const ir = g.ir
@@ -286,10 +286,10 @@ const generate_declaration = (g: Generator, declaration: Declaration) ->
     g.locals.define(name, store_in_slot(g, value, type))
     return
   ir.emit("store #{ir_type(type)} #{value}, ptr #{global.pointer}")
-  emit_mark_initialized(ir, global)
+  emit_mark_initialized ir, global
   g.locals.define(name, top_level_slot(global, false))
 
 export const store_in_slot = (g: Generator, value: String, type: Type) ->
   const pointer = g.ir.alloca(ir_type(type))
   g.ir.emit("store #{ir_type(type)} #{value}, ptr #{pointer}")
-  SlotLocal(pointer, type, top_level: nil, cell: nil)
+  SlotLocal pointer, type, top_level: nil, cell: nil

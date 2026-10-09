@@ -36,10 +36,10 @@ export const generate_case = (g: Generator, case_expression: Case) ->
     const next_label = ir.fresh_label('case.next')
     ir.emit("br i1 #{test}, label %#{arm_label}, label %#{next_label}")
     ir.start_block(arm_label)
-    generate_arm_value(arm.body)
+    generate_arm_value arm.body
     ir.start_block(next_label)
   if const otherwise = case_expression.otherwise
-    generate_arm_value(otherwise)
+    generate_arm_value otherwise
   else
     ir.emit('unreachable')
   ir.start_block(end_label)
@@ -66,7 +66,7 @@ export const generate_conditional = (g: Generator, conditional: Conditional) ->
     branch(then_label, conditional.then_value), branch(else_label, conditional.else_value)
   ]
   ir.start_block(end_label)
-  merge(g, type_of(g, conditional), incoming)
+  merge g, type_of(g, conditional), incoming
 
 # The value of the arms at their end block: none for void, and none that comes for never.
 const merge = (g: Generator, type: Type, incoming: Array<String>) ->
@@ -93,5 +93,5 @@ const value_test = (g: Generator, subject: String, type: Type, pattern: Expressi
   if not is_kind(type, 'String')
     return g.ir.assign("icmp eq #{ir_type(type)} #{subject}, #{value}")
   const equal = emit_string_equals(g.ir, subject, value)
-  emit_release(g.ir, value)
+  emit_release g.ir, value
   equal

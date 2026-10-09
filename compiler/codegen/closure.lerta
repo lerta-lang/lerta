@@ -38,7 +38,7 @@ export const emit_function_closure = (ir: IrBuilder, symbol: String, type: Type)
     lines.push('}')
     module.add_function(lines.join("\n"))
   ir.module.define_once(thunk, define)
-  emit_static_closure(ir, thunk)
+  emit_static_closure ir, thunk
 
 # A closure of `code` that captures nothing: an immortal constant, defined once, which is never
 # allocated or freed.
@@ -69,7 +69,7 @@ export const emit_closure_call = (
   return ir.assign(call) if return_type != 'void'
   ir.emit(call)
   return '' if not is_kind(result, 'never')
-  emit_unreachable(ir)
+  emit_unreachable ir
   'poison'
 
 # What a closure holds for each capture is a field (see HeapField): a value, or the cell of a
@@ -80,7 +80,7 @@ export const CELL_SLOT = HeapField(ir_type: 'ptr', holds_reference: true)
 const closure_ir_type = (slots: Array<HeapField>) ->
   const fields = [plain_field('ptr')]
   fields.push(slot) for slot in slots
-  heap_object_type(fields)
+  heap_object_type fields
 
 # The pointer to the closure's `index`th capture.
 export const emit_capture_pointer = (
@@ -100,7 +100,7 @@ export const emit_closure = (
 ) ->
   const holds_reference = slots.any((slot) -> slot.holds_reference)
   const drop = holds_reference then "#{symbol}.drop" else 'null'
-  define_closure_drop(ir, drop, slots) if holds_reference
+  define_closure_drop ir, drop, slots if holds_reference
   const closure = emit_heap_allocate(ir, closure_ir_type(slots), drop)
   const code = ir.assign(
     "getelementptr { i64, ptr, ptr }, ptr #{closure}, i32 0, i32 #{CODE_FIELD}"
@@ -117,7 +117,7 @@ const define_closure_drop = (ir: IrBuilder, drop: String, slots: Array<HeapField
     for i in 0...slots.length
       continue if not slots[i].holds_reference
       const pointer = emit_capture_pointer(body, '%closure', slots, i)
-      emit_release(body, body.assign("load ptr, ptr #{pointer}"))
+      emit_release body, body.assign("load ptr, ptr #{pointer}")
     body.emit('ret void')
     body.finish("void #{drop}(ptr %closure)")
   ir.module.define_once(drop, define)

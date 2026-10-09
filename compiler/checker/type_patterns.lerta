@@ -21,18 +21,18 @@ const map_parts = (type: Type, replace: (Type) -> Type): Type ->
     when OptionalType then optional_type(replace(type.inner))
     when RecordType
       const replace_field = (field: RecordField) ->
-        RecordField(name: field.name, type: replace(field.type))
-      record_type([replace_field(field) for field in type.fields])
+        RecordField name: field.name, type: replace(field.type)
+      record_type [replace_field(field) for field in type.fields]
     when UnionType then union_type([replace(member) for member in type.members])
     when FunctionType
-      FunctionType(params: [replace(param) for param in type.params], result: replace(type.result))
+      FunctionType params: [replace(param) for param in type.params], result: replace(type.result)
     else type
 
 # The type with the type parameters that `bindings` has replaced by their types.
 export const substitute = (type: Type, bindings: Map<String, Type>): Type ->
   if type is TypeParameterType
     return bindings[type.name] ? type
-  map_parts(type, (part) -> substitute(part, bindings))
+  map_parts type, (part) -> substitute(part, bindings)
 
 # The types that the type is made of, such as the items of an array.
 export const parts_of = (type: Type) ->
@@ -40,7 +40,7 @@ export const parts_of = (type: Type) ->
   const collect = (part: Type) ->
     parts.push(part)
     part
-  map_parts(type, collect)
+  map_parts type, collect
   parts
 
 export const type_depth = (type: Type): Int ->
@@ -55,8 +55,8 @@ export const matches = (pattern: Type, type: Type) ->
   const bindings: Map<String, Type> = Map()
   const bind = (name: String, bound: Type) ->
     bindings[name] = bound if not bindings.has(name)
-  infer(pattern, type, bind)
-  same_type(substitute(pattern, bindings), type)
+  infer pattern, type, bind
+  same_type substitute(pattern, bindings), type
 
 # Whether some type matches both patterns, as Array<Int> matches Array<T> and Array<Int>. A type
 # parameter stands for any type on either side, even where it is repeated, as in Map<T, T>.
@@ -71,7 +71,7 @@ export const overlaps = (a: Type, b: Type): Bool ->
 
 # The type without the types it is made of: Array<_> for any array.
 const shape_key = (type: Type) ->
-  type_key(map_parts(type, (_) -> TypeParameterType(name: '_')))
+  type_key map_parts(type, (_) -> TypeParameterType(name: '_'))
 
 export const has_type_parameters = (type: Type): Bool ->
   type is TypeParameterType or parts_of(type).any(has_type_parameters)
@@ -81,7 +81,7 @@ export const has_type_parameters = (type: Type): Bool ->
 # the caller then checks that the type fits.
 export const infer = (pattern: Type, type: Type, bind: (String, Type) -> void): void ->
   const match = (part: Type, type_part: Type?) ->
-    infer(part, type_part, bind) if type_part
+    infer part, type_part, bind if type_part
   case pattern
     when TypeParameterType then bind(pattern.name, type)
     when OptionalType then match(pattern.inner, type is OptionalType then type.inner else type)
@@ -89,16 +89,16 @@ export const infer = (pattern: Type, type: Type, bind: (String, Type) -> void): 
     when IterType then match(pattern.item, type is IterType then type.item else nil)
     when MapType
       if type is MapType
-        match(pattern.key, type.key)
-        match(pattern.value, type.value)
+        match pattern.key, type.key
+        match pattern.value, type.value
     when RecordType
       if type is RecordType
         for field in pattern.fields
           const found = type.fields.find((each) -> each.name == field.name)
-          match(field.type, found then found.type else nil)
+          match field.type, found then found.type else nil
     when FunctionType
       if type is FunctionType
         return if type.params.length != pattern.params.length
-        match(pattern.params[i], type.params[i]) for i in 0...pattern.params.length
-        match(pattern.result, type.result)
+        match pattern.params[i], type.params[i] for i in 0...pattern.params.length
+        match pattern.result, type.result
     else return

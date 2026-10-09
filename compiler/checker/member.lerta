@@ -21,7 +21,7 @@ export const type_of_method_call = (body: Body, call: Call, member: Member, expe
   if generic == nil
     return check_arguments(body, call, type_of_method(body, member, receiver, source))
   const method = type_of_generic_method_call(body, call, member, generic, receiver, expected)
-  set_type(body, member, method)
+  set_type body, member, method
   method.result
 
 const generic_method = (source: MethodSource?) ->
@@ -30,15 +30,15 @@ const generic_method = (source: MethodSource?) ->
 
 const type_of_method = (body: Body, member: Member, receiver: Type, source: MethodSource?) ->
   const { name, position } = member.name
-  reject_deinit(body, receiver, member)
+  reject_deinit body, receiver, member
   const from_source = source then method_type(body, receiver, source, member.name, nil) else nil
-  const no_method = (): never ->
-    fail(body.program, position, "type #{format_type(receiver)} has no method '#{name}'")
-  const method = from_source ? (field_type(body, receiver, member) ? no_method())
-  set_type(body, member, method)
+  const no_method = () ->
+    fail body.program, position, "type #{format_type(receiver)} has no method '#{name}'"
+  const method = from_source ? field_type(body, receiver, member) ? no_method()
+  set_type body, member, method
 
 const find = (body: Body, receiver: Type, name: String) ->
-  find_method(body.program, receiver, name, body.extensions)
+  find_method body.program, receiver, name, body.extensions
 
 # The type of the method, checking its body first if needed. A generic one's comes from its
 # instance for the receiver, if the receiver gives all its type arguments; `call`, if given, calls
@@ -70,11 +70,11 @@ const stringable_method = (body: Body, type: Type, at: Position, call: Call?) ->
 
 # Rejects a type that is not Stringable.
 export const reject_not_stringable = (body: Body, type: Type, at: Position) ->
-  fail_not_stringable(body, type, at) if stringable_method(body, type, at, nil) == nil
+  fail_not_stringable body, type, at if stringable_method(body, type, at, nil) == nil
 
-const fail_not_stringable = (body: Body, type: Type, at: Position): never ->
+const fail_not_stringable = (body: Body, type: Type, at: Position) ->
   const message = "#{format_type(type)} is not #{STRINGABLE}: it has no method to_string(): String"
-  fail(body.program, at, message)
+  fail body.program, at, message
 
 # `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
 # is typed once.
@@ -84,30 +84,30 @@ export const check_interpolated = (body: Body, part: Call) ->
   const type = type_of(body, member.object, nil)
   const method = stringable_method(body, type, member.position, part)
   const stringable = method ? fail_not_stringable(body, type, member.object.position)
-  set_type(body, member, stringable)
-  set_type(body, part, string_type)
+  set_type body, member, stringable
+  set_type body, part, string_type
 
 # A class's deinit is only run by a release.
 const reject_deinit = (body: Body, object_type: Type, member: Member) ->
   const { name, position } = member.name
   return if name != 'deinit' or method_owner(body, object_type, name) == nil
   const message = 'deinit runs when the object is released; it cannot be called or used'
-  fail(body.program, position, message)
+  fail body.program, position, message
 
 # A member that is not called is a field, or a property such as `length`. A field read from a union
 # must be in every member, with the same type.
 export const type_of_property = (body: Body, member: Member): Type ->
   const object_type = type_of_object(body, member)
   const { name, position } = member.name
-  reject_deinit(body, object_type, member)
+  reject_deinit body, object_type, member
   return common_field_type(body, object_type, member) if object_type is UnionType
   if const field = field_type(body, object_type, member)
     return field
   if const property = builtin_property(object_type, name)
     return property
   if find(body, object_type, name) != nil
-    fail(body.program, position, "a method must be called: write `#{name}()`")
-  fail(body.program, position, "type #{format_type(object_type)} has no property '#{name}'")
+    fail body.program, position, "a method must be called: write `#{name}()`"
+  fail body.program, position, "type #{format_type(object_type)} has no property '#{name}'"
 
 # `@x` in a method or an initializer reads the object's field.
 const type_of_object = (body: Body, member: Member) ->
@@ -115,4 +115,4 @@ const type_of_object = (body: Body, member: Member) ->
   if object is This
     if const self = body.self
       return set_type(body, object, self.type)
-  type_of(body, object, nil)
+  type_of body, object, nil

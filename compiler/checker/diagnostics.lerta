@@ -9,13 +9,13 @@ import { ProgramWide, Shared, Warning } from './shared'
 import { Local } from './scopes'
 import { sorted } from '../sort'
 
-export const fail = (program: ProgramWide, at: Position, message: String): never ->
+export const fail = (program: ProgramWide, at: Position, message: String) ->
   if const call = program.annotated_call
-    fail_in_context(program, call.at, message, call.context)
+    fail_in_context program, call.at, message, call.context
   const contexts = program.contexts
   if contexts.length == 0
-    report_error(program, at, message)
-  fail_in_context(program, at, message, contexts[contexts.length - 1])
+    report_error program, at, message
+  fail_in_context program, at, message, contexts[contexts.length - 1]
 
 # An error that says what was being checked, such as `in print<Int>`.
 export const fail_in_context = (
@@ -23,12 +23,12 @@ export const fail_in_context = (
   at: Position
   message: String
   context: String
-): never -> report_error(program, at, "#{message} (#{context})")
+) -> report_error(program, at, "#{message} (#{context})")
 
 const report_error = (program: ProgramWide, at: Position, message: String): never ->
   stderr.write("#{line}\n") for line in all_warnings(program)
   const location = module_location(program.entry_path, error_module_path(program))
-  compile_error(location, at.line, at.column, message)
+  compile_error location, at.line, at.column, message
 
 # The path of the innermost module being checked; nil for the entry module.
 const error_module_path = (program: ProgramWide) ->
@@ -48,14 +48,14 @@ export const warn = (shared: Shared, at: Position, message: String) ->
 export const warn_if_unused = (shared: Shared, local: Local) ->
   const { name, position } = local.identifier
   return if not local.declared or local.used or name.binary.occurs_at(0, '_'.binary)
-  warn(shared, position, "'#{name}' is never used")
+  warn shared, position, "'#{name}' is never used"
 
 # The warnings of the program, as diagnostics print them. A program's author cannot act on the
 # warnings of the standard modules, which would warn, for example, about the names that only
 # generic functions the program never calls use. The unused names of a module are known once its
 # functions are checked, which may use them.
 export const all_warnings = (program: ProgramWide) ->
-  warn_unused(program.shared[index]) for index in program.bodies_checked
+  warn_unused program.shared[index] for index in program.bodies_checked
   const lines: Array<String> = []
   for module in program.modules
     continue if is_standard_module(module)
@@ -67,10 +67,10 @@ export const all_warnings = (program: ProgramWide) ->
 # The names of the top-level code and the imports that are never used.
 const warn_unused = (shared: Shared) ->
   if const scope = shared.top_level_scope
-    warn_if_unused(shared, scope[name]!) for name in scope.keys()
+    warn_if_unused shared, scope[name]! for name in scope.keys()
   for imported in shared.imports.names.keys()
     const { name, used } = shared.imports.names[imported]!
-    warn(shared, name.position, "'#{name.name}' is imported but never used") if not used
+    warn shared, name.position, "'#{name.name}' is imported but never used" if not used
 
 # Warnings are found as scopes end; they are reported in source order, once each, though each
 # instance of a generic function finds those of its body again.
@@ -84,4 +84,4 @@ const in_source_order = (warnings: Array<Warning>) ->
     unique.push(warning)
   const compare = (a: Warning, b: Warning) ->
     a.line != b.line then a.line - b.line else a.column - b.column
-  sorted(unique, compare)
+  sorted unique, compare

@@ -80,14 +80,14 @@ export const export_of = (program: ProgramWide, module_index: Int, name: String)
   case statement
     when Declaration
       return FunctionExport(module_index, name) if statement.value is FunctionLiteral
-      ValueExport(module_index, name, type: shared.types[statement.name])
+      ValueExport module_index, name, type: shared.types[statement.name]
     # An extern's name is its own import, since add_extern rejects an import of the same name.
     when Extern
       const source = shared.imports.names[name]!.source
       source is ExternExport then source else throw 'an extern is its own export'
     when TypeDeclaration
       const type = object_type(program, shared, name)!
-      TypeExport(type, info: program.infos[type.symbol])
+      TypeExport type, info: program.infos[type.symbol]
     when TypeAlias then TypeExport(type: alias_type(program, shared, statement.name), info: nil)
 
 export const imported_export = (program: ProgramWide, imported: ImportedName): Export ->
@@ -102,16 +102,16 @@ export const add_imports = (program: ProgramWide, shared: Shared, statements: Ar
     if statement is Import
       const exporter = program.modules[shared.index].imported[statement]!
       shared.imports.builtins = exporter if statement.module == BUILTINS_MODULE
-      add_import(program, shared, statement, exporter)
+      add_import program, shared, statement, exporter
 
 const add_import = (program: ProgramWide, shared: Shared, statement: Import, exporter: Int) ->
   const names = shared.imports.names
   for imported in statement.names
     const { name } = imported
     if not program.shared[exporter].exported.has(name.name)
-      fail(program, name.position, "'#{statement.module}' has no export '#{name.name}'")
+      fail program, name.position, "'#{statement.module}' has no export '#{name.name}'"
     const local = imported.alias ? name
-    fail(program, local.position, "'#{local.name}' is already defined") if names.has(local.name)
+    fail program, local.position, "'#{local.name}' is already defined" if names.has(local.name)
     const source = ExportRef(module_index: exporter, name: name.name)
     names[local.name] = ImportedName(source, name: local, used: false, module: statement.module)
 
@@ -125,7 +125,7 @@ export const add_extern = (
   symbol: String
 ) ->
   const names = shared.imports.names
-  fail(program, name.position, "'#{name.name}' is already defined") if names.has(name.name)
+  fail program, name.position, "'#{name.name}' is already defined" if names.has(name.name)
   const source = ExternExport(type, symbol)
   names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
 
@@ -154,9 +154,9 @@ export const value_local = (program: ProgramWide, shared: Shared, name: String) 
   return nil if not (exported is ValueExport)
   const type = exported.type ? return nil
   imported.used = true
-  Local(type, identifier: imported.name, mutable: false, declared: false, used: true)
+  Local type, identifier: imported.name, mutable: false, declared: false, used: true
 
 export const builtin_export = (program: ProgramWide, shared: Shared, name: String) ->
   const builtins = shared.imports.builtins ? return nil
   return nil if not program.shared[builtins].exported.has(name)
-  export_of(program, builtins, name)
+  export_of program, builtins, name

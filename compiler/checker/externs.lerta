@@ -18,22 +18,22 @@ export const declare_externs = (
 ) ->
   for statement in statements
     if statement is Extern
-      declare_extern(program, shared, statement)
+      declare_extern program, shared, statement
 
 const declare_extern = (program: ProgramWide, shared: Shared, statement: Extern) ->
   const type = resolve_result(program, module_resolver(shared.index), statement.type)
   if not (type is FunctionType)
-    fail(program, statement.type.position, 'an extern is a C function, of a function type')
-  reject_optionals_without_c_type(program, type, statement.type.position)
+    fail program, statement.type.position, 'an extern is a C function, of a function type'
+  reject_optionals_without_c_type program, type, statement.type.position
   const { symbol } = statement
   if const declared = program.extern_types[symbol.name]
     if c_signature(declared.type) != c_signature(type)
       const declared_as = "#{format_type(declared.type)} in #{declared.module_name}"
       const message = "the C function '#{symbol.name}' is declared as #{declared_as}"
-      fail(program, symbol.position, message)
+      fail program, symbol.position, message
   else
     program.extern_types[symbol.name] = ExternType(type, module_name: shared.name)
-  add_extern(program, shared, statement.name, type, symbol.name)
+  add_extern program, shared, statement.name, type, symbol.name
 
 # Of the optional values that are not references, only an Int? has a C type, LertaOptionalInt.
 const reject_optionals_without_c_type = (program: ProgramWide, type: FunctionType, at: Position) ->
@@ -43,7 +43,7 @@ const reject_optionals_without_c_type = (program: ProgramWide, type: FunctionTyp
       if not has_c_type
         const reason = 'of the optional values, only references and Int? have a C type'
         const message = "a C function cannot take or return a #{format_type(value_type)}; #{reason}"
-        fail(program, at, message)
+        fail program, at, message
 
 const value_types = (type: FunctionType) ->
   const types = [param for param in type.params]

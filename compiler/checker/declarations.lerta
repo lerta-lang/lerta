@@ -19,31 +19,31 @@ import { add_alias, has_alias, resolve_aliases } from './type_names'
 export const declare_names = (program: ProgramWide, shared: Shared) ->
   const statements = program.modules[shared.index].program
   const declarations = [statement for statement in statements when statement is TypeDeclaration]
-  add_objects(program, shared, declarations)
+  add_objects program, shared, declarations
   for statement in statements
-    add_alias(program, shared, statement) if statement is TypeAlias
-  add_imports(program, shared, statements)
+    add_alias program, shared, statement if statement is TypeAlias
+  add_imports program, shared, statements
 
 # The types of the aliases, the externs, the functions and the members, which the code may use
 # before their declarations.
 export const complete_declarations = (program: ProgramWide, shared: Shared) ->
   const statements = program.modules[shared.index].program
-  resolve_aliases(program, shared)
-  declare_externs(program, shared, statements)
-  reject_types_named_like_imports(program, shared, statements)
-  add_top_level_functions(program, shared, statements)
-  add_members(program, shared)
+  resolve_aliases program, shared
+  declare_externs program, shared, statements
+  reject_types_named_like_imports program, shared, statements
+  add_top_level_functions program, shared, statements
+  add_members program, shared
 
 # The extends in effect in the module, once the types they extend are complete: those of the
 # modules it imports that run before it, then its own. Those of the modules of its import cycle
 # that run after it come later (see declare_later_extends), once theirs are declared.
 export const declare_extends = (program: ProgramWide, shared: Shared) ->
-  add_imported_extends(program, shared, true)
+  add_imported_extends program, shared, true
   for statement in program.modules[shared.index].program
-    declare_extend(program, shared, statement) if statement is Extend
+    declare_extend program, shared, statement if statement is Extend
 
 export const declare_later_extends = (program: ProgramWide, shared: Shared) ->
-  add_imported_extends(program, shared, false)
+  add_imported_extends program, shared, false
 
 # The extends of the imported modules that run before the module, or of those that run after it.
 const add_imported_extends = (program: ProgramWide, shared: Shared, run_before: Bool) ->
@@ -53,7 +53,7 @@ const add_imported_extends = (program: ProgramWide, shared: Shared, run_before: 
       const imported = module.imported[statement]!
       const is_added = run_before then imported < module.index else imported > module.index
       if is_added
-        add_imported(program, shared.extensions, program.shared[imported].own_methods, statement)
+        add_imported program, shared.extensions, program.shared[imported].own_methods, statement
 
 # A class, struct or type alias cannot have the name of an import; the error points at it.
 const reject_types_named_like_imports = (
@@ -67,7 +67,7 @@ const reject_types_named_like_imports = (
       when TypeAlias then statement.name
       else continue
     if has_import(shared, name.name)
-      fail(program, name.position, "'#{name.name}' is already defined")
+      fail program, name.position, "'#{name.name}' is already defined"
 
 const add_top_level_functions = (
   program: ProgramWide
@@ -78,13 +78,13 @@ const add_top_level_functions = (
     continue if not (statement is Declaration)
     const literal = statement.value
     continue if not (literal is FunctionLiteral)
-    fail(program, statement.position, 'a function must be declared with const') if statement.mutable
+    fail program, statement.position, 'a function must be declared with const' if statement.mutable
     const name = statement.name
     const is_taken = object_type(program, shared, name.name) != nil or has_alias(shared, name.name)
     if is_taken or has_import(shared, name.name)
-      fail(program, name.position, "'#{name.name}' is already defined")
+      fail program, name.position, "'#{name.name}' is already defined"
     if literal.type_params.length == 0
-      add_function(program, shared, name.name, name, literal, nil)
+      add_function program, shared, name.name, name, literal, nil
       continue
     const generic = make_generic_function(program, shared, name, literal, nil)
-    add_generic_function(program, shared, generic)
+    add_generic_function program, shared, generic

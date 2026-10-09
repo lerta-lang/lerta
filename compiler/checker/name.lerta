@@ -22,7 +22,7 @@ export const lookup = (body: Body, name: String) ->
   if body.sees_top_level
     if const top_level = body.shared.top_level.locals[name]
       return top_level
-  value_local(body.program, body.shared, name)
+  value_local body.program, body.shared, name
 
 # A builtin or a standard module's function can only be called so far, not used as a value.
 export const type_of_identifier = (body: Body, identifier: Identifier, is_callee: Bool) ->
@@ -34,19 +34,19 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
     return local.type
   if const function_type = function_type_of(program, shared.index, name, position)
     return function_type
-  fail_only_called(body, identifier) if generic_function(shared, name) != nil
+  fail_only_called body, identifier if generic_function(shared, name) != nil
   if object_type(program, shared, name) != nil
-    fail(program, position, "'#{name}' is a type; construct it as #{name}(...)")
+    fail program, position, "'#{name}' is a type; construct it as #{name}(...)"
   if const imported = use_import(shared, name)
     const exported = imported_export(program, imported)
     if exported is ValueExport
       if exported.type == nil
-        fail_runs_later(program, identifier, "'#{imported.module}'", body.sees_top_level)
+        fail_runs_later program, identifier, "'#{imported.module}'", body.sees_top_level
     return type_of_export(body, exported, identifier, is_callee)
-  reject_pending(program, shared.top_level, identifier) if body.sees_top_level
-  const undefined_name = (): never -> fail(program, position, "undefined name '#{name}'")
+  reject_pending program, shared.top_level, identifier if body.sees_top_level
+  const undefined_name = () -> fail(program, position, "undefined name '#{name}'")
   const builtin = builtin_export(program, shared, name) ? undefined_name()
-  type_of_export(body, builtin, identifier, is_callee)
+  type_of_export body, builtin, identifier, is_callee
 
 # The generic function that the callee names: one of the module, an imported one or a builtin,
 # unless a local or another name of the module takes the name.
@@ -63,7 +63,7 @@ export const generic_callee = (body: Body, callee: Expression) ->
     else builtin_export(program, shared, name) ? return nil
   case exported
     when GenericExport
-      use_import(shared, name)
+      use_import shared, name
       exported.generic
     else nil
 
@@ -75,12 +75,12 @@ const type_of_export = (body: Body, exported: Export, identifier: Identifier, is
     when TypeExport then fail(body.program, position, "'#{name}' is a type")
     when GenericExport then fail_only_called(body, identifier)
     when ExternExport
-      fail_only_called(body, identifier) if not is_callee
+      fail_only_called body, identifier if not is_callee
       exported.type
     when FunctionExport
       function_type_of(body.program, exported.module_index, exported.name, position)!
     when ValueExport then exported.type ? throw 'the type of an imported value is not known'
 
-const fail_only_called = (body: Body, identifier: Identifier): never ->
+const fail_only_called = (body: Body, identifier: Identifier) ->
   const message = "'#{identifier.name}' can only be called so far, not used as a value"
-  fail(body.program, identifier.position, message)
+  fail body.program, identifier.position, message

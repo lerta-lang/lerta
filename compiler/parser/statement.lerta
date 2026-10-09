@@ -25,7 +25,7 @@ const COMMAND_ARGUMENT_STARTS = [
 
 # `path` names the source in diagnostics.
 export const parse = (tokens: Array<Token>, path: String) ->
-  parse_statements(TokenStream(tokens, path), 'eof')
+  parse_statements TokenStream(tokens, path), 'eof'
 
 # Statements, one per line, up to the token that ends the block.
 const parse_statements = (tokens: TokenStream, end: String) ->
@@ -62,12 +62,12 @@ export const parse_statement = (tokens: TokenStream): Statement ->
         when starts_type_alias(tokens) then parse_type_alias(tokens)
         when at_declaration(tokens)
           const declaration = parse_declaration(tokens)
-          reject_postfix(tokens)
+          reject_postfix tokens
           declaration
         else parse_postfix_conditions(tokens, parse_simple_statement(tokens))
 
 const at_declaration = (tokens: TokenStream) ->
-  is_one_of(tokens.peek().kind, ['const', 'var'])
+  is_one_of tokens.peek().kind, ['const', 'var']
 
 export const at_destructuring = (tokens: TokenStream) ->
   at_declaration(tokens) and tokens.peek_at(1).kind == '{'
@@ -77,7 +77,7 @@ export const at_destructuring = (tokens: TokenStream) ->
 export const parse_simple_statement = (tokens: TokenStream): Statement ->
   if at_destructuring(tokens)
     const position = token_position(tokens.peek())
-    parse_destructuring(tokens)
+    parse_destructuring tokens
     tokens.fail(position, 'a destructuring declaration must be on a line of its own')
   return parse_declaration(tokens) if at_declaration(tokens)
   const is_command_call = tokens.peek().kind == 'identifier' and starts_command_argument(tokens)
@@ -91,7 +91,7 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
   return expression if is_command_call
   const operator = tokens.peek_continuation()
   return expression if not is_one_of(operator, ASSIGNMENT_OPERATORS)
-  parse_assignment(tokens, expression, operator)
+  parse_assignment tokens, expression, operator
 
 # A declaration declares its names for the rest of the block, so no postfix `if` or `while` can
 # apply to it.
@@ -126,7 +126,7 @@ const wrap_in_for = (tokens: TokenStream, statement: Statement) ->
   const body: Array<Statement> = case
     when guard then [If(position, condition: guard, then_body: [statement], else_body: [])]
     else [statement]
-  For(variable, iterable, body, position)
+  For variable, iterable, body, position
 
 const parse_declaration = (tokens: TokenStream) ->
   const token = tokens.next()
@@ -134,12 +134,12 @@ const parse_declaration = (tokens: TokenStream) ->
   const type: TypeName? = tokens.accept(':') then parse_type_name(tokens) else nil
   tokens.expect('=', "'='")
   const value = parse_value(tokens)
-  Declaration(name, type, value, mutable: token.kind == 'var', position: token_position(token))
+  Declaration name, type, value, mutable: token.kind == 'var', position: token_position(token)
 
 # `const { a, b } = value`, as the declarations it stands for.
 export const parse_destructuring_statement = (tokens: TokenStream) ->
   const declarations = parse_destructuring(tokens)
-  reject_postfix(tokens)
+  reject_postfix tokens
   declarations
 
 # `const { a, b } = value` declares a const that cannot be named (`.` is not allowed in names),
@@ -168,7 +168,7 @@ const parse_assignment = (tokens: TokenStream, target: Expression, operator: Str
   const assigned = assignment_target(target) ? tokens.fail(target.position, message)
   tokens.next()
   const value = parse_value(tokens)
-  Assignment(operator, value, target: assigned, position: target.position)
+  Assignment operator, value, target: assigned, position: target.position
 
 const assignment_target = (expression: Expression): AssignmentTarget? ->
   case expression
@@ -185,12 +185,12 @@ const starts_command_argument = (tokens: TokenStream) ->
   return not tokens.peek_at(2).spaced if token.kind == '-'
   # `is` is not a keyword, but `x is T` is a test, not a call of x.
   return false if token.kind == 'identifier' and token.text == 'is'
-  is_one_of(token.kind, COMMAND_ARGUMENT_STARTS)
+  is_one_of token.kind, COMMAND_ARGUMENT_STARTS
 
 # `f x, y`: the arguments run to the end of the line.
 const parse_command_call = (tokens: TokenStream) ->
   const callee = parse_primary(tokens)
-  call_of(callee, parse_arguments(tokens), [])
+  call_of callee, parse_arguments(tokens), []
 
 # `for <name> in <expression>` followed by an indented block.
 const parse_for = (tokens: TokenStream) ->
@@ -199,7 +199,7 @@ const parse_for = (tokens: TokenStream) ->
   if guard
     const message = "a for loop with a block has no 'when'; write an if in the block"
     tokens.fail(guard.position, message)
-  For(variable, iterable, position, body: parse_block(tokens))
+  For variable, iterable, position, body: parse_block(tokens)
 
 # A condition, or `const name = value`, which holds when the value is not nil.
 const parse_condition = (tokens: TokenStream): Condition ->
@@ -208,12 +208,12 @@ const parse_condition = (tokens: TokenStream): Condition ->
   tokens.next()
   const name = parse_identifier(tokens)
   tokens.expect('=', "'='")
-  Binding(name, value: parse_expression(tokens), position: token_position(token))
+  Binding name, value: parse_expression(tokens), position: token_position(token)
 
 const parse_while = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const condition = parse_condition(tokens)
-  While(condition, position, body: parse_block(tokens))
+  While condition, position, body: parse_block(tokens)
 
 # `if` with an optional `else` block; `else if` chains further.
 const parse_if = (tokens: TokenStream): If ->
@@ -225,4 +225,4 @@ const parse_if = (tokens: TokenStream): If ->
   const else_body: Array<Statement> = case
     when tokens.peek().kind == 'if' then [parse_if(tokens)]
     else parse_block(tokens)
-  If(condition, then_body, else_body, position)
+  If condition, then_body, else_body, position

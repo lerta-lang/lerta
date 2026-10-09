@@ -23,10 +23,10 @@ const all_jumps = Jumps(may_return: true, may_leave_loop: true)
 const no_jumps = Jumps(may_return: false, may_leave_loop: false)
 
 export const reject_misplaced_jumps = (program: ProgramWide, statements: Array<Statement>) ->
-  visit_statements(program, statements, all_jumps)
+  visit_statements program, statements, all_jumps
 
 const visit_statements = (program: ProgramWide, statements: Array<Statement>, jumps: Jumps) ->
-  visit_statement(program, statement, jumps) for statement in statements
+  visit_statement program, statement, jumps for statement in statements
 
 const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
   const in_loop = Jumps(may_return: jumps.may_return, may_leave_loop: true)
@@ -34,18 +34,18 @@ const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jump
     when Declaration then visit(program, statement.value, jumps)
     when Assignment
       const target = statement.target
-      visit(program, target, no_jumps)
-      visit(program, statement.value, target is Identifier then jumps else no_jumps)
+      visit program, target, no_jumps
+      visit program, statement.value, target is Identifier then jumps else no_jumps
     when If
-      visit_condition(program, statement.condition)
-      visit_statements(program, statement.then_body, jumps)
-      visit_statements(program, statement.else_body, jumps)
+      visit_condition program, statement.condition
+      visit_statements program, statement.then_body, jumps
+      visit_statements program, statement.else_body, jumps
     when While
-      visit_condition(program, statement.condition)
-      visit_statements(program, statement.body, in_loop)
+      visit_condition program, statement.condition
+      visit_statements program, statement.body, in_loop
     when For
-      visit(program, statement.iterable, no_jumps)
-      visit_statements(program, statement.body, in_loop)
+      visit program, statement.iterable, no_jumps
+      visit_statements program, statement.body, in_loop
     when TypeDeclaration then visit_members(program, statement.members)
     when Extend then visit_members(program, statement.members)
     when Import then return
@@ -59,7 +59,7 @@ const as_expression_statement = (statement: Statement) ->
 const visit_members = (program: ProgramWide, members: Array<MemberDeclaration>) ->
   for member in members
     if const value = member.value
-      visit(program, value, all_jumps)
+      visit program, value, all_jumps
 
 const visit_condition = (program: ProgramWide, condition: Condition) ->
   case condition
@@ -73,58 +73,58 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
   case expression
     when Jump then check_jump(program, expression.kind, jumps.may_leave_loop, expression.position)
     when Return
-      check_jump(program, 'return', jumps.may_return, expression.position)
+      check_jump program, 'return', jumps.may_return, expression.position
       if const value = expression.value
-        visit(program, value, jumps)
+        visit program, value, jumps
     when Coalesce
-      operand(expression.value)
-      visit(program, expression.fallback, jumps)
+      operand expression.value
+      visit program, expression.fallback, jumps
     when Conditional
-      operand(expression.condition)
-      visit(program, expression.then_value, jumps)
-      visit(program, expression.else_value, jumps)
+      operand expression.condition
+      visit program, expression.then_value, jumps
+      visit program, expression.else_value, jumps
     when Case
       if const subject = expression.subject
-        operand(subject)
+        operand subject
       for arm in expression.arms
-        operand(pattern) for pattern in arm.patterns
-        visit_statements(program, arm.body, jumps)
+        operand pattern for pattern in arm.patterns
+        visit_statements program, arm.body, jumps
       if const otherwise = expression.otherwise
-        visit_statements(program, otherwise, jumps)
+        visit_statements program, otherwise, jumps
     # No loop is outside a function; a jump out of none is an error of its own.
     when FunctionLiteral then visit_statements(program, expression.body, all_jumps)
     when Interpolation
       for part in expression.parts
-        operand(part) if part is Call
+        operand part if part is Call
     when ArrayLiteral
-      operand(element) for element in expression.elements
+      operand element for element in expression.elements
     when Comprehension
-      operand(expression.element)
-      operand(expression.iterable)
+      operand expression.element
+      operand expression.iterable
       if const guard = expression.guard
-        operand(guard)
+        operand guard
     when RecordLiteral
-      operand(field.value) for field in expression.fields
+      operand field.value for field in expression.fields
     when MapLiteral
       for entry in expression.entries
-        operand(entry.key)
-        operand(entry.value)
+        operand entry.key
+        operand entry.value
     when Call
-      operand(expression.callee)
-      operand(arg) for arg in expression.args
-      operand(arg.value) for arg in expression.named_args
+      operand expression.callee
+      operand arg for arg in expression.args
+      operand arg.value for arg in expression.named_args
     when Index
-      operand(expression.object)
-      operand(expression.index)
+      operand expression.object
+      operand expression.index
     when Member then operand(expression.object)
     when UnaryOperation then operand(expression.operand)
     when Unwrap then operand(expression.operand)
     when BinaryOperation
-      operand(expression.left)
-      operand(expression.right)
+      operand expression.left
+      operand expression.right
     when Range
-      operand(expression.start)
-      operand(expression.end)
+      operand expression.start
+      operand expression.end
     when Throw then operand(expression.message)
     when IsTest then operand(expression.value)
     when StringLiteral then return
@@ -138,4 +138,4 @@ const check_jump = (program: ProgramWide, kind: String, allowed: Bool, at: Posit
   return if allowed
   const statement = 'a statement or as the value of a declaration or of an assignment to a variable'
   const through = "directly or through '?', then/else or case arms"
-  fail(program, at, "'#{kind}' cannot be used here: only as #{statement}, #{through}")
+  fail program, at, "'#{kind}' cannot be used here: only as #{statement}, #{through}"

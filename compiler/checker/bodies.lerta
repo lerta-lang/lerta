@@ -16,13 +16,13 @@ import { FunctionType, Type } from '../types'
 export const check_function = (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
   const shared = program.shared[module_index]
   const resolver = module_resolver(module_index)
-  check_function_with(program, shared, entry, resolver, shared.extensions)
+  check_function_with program, shared, entry, resolver, shared.extensions
 
 # An instance's body sees the names of its module, with the type parameters standing for its type
 # arguments, and the extends of the type arguments where it is called.
 export const check_instance = (program: ProgramWide, module_index: Int, instance: Instance) ->
   const { entry, resolver, extensions } = instance
-  check_function_with(program, program.shared[module_index], entry, resolver, extensions)
+  check_function_with program, program.shared[module_index], entry, resolver, extensions
 
 const check_function_with = (
   program: ProgramWide
@@ -31,20 +31,20 @@ const check_function_with = (
   resolver: Resolver
   extensions: Extensions
 ) ->
-  enter_module(program, shared)
+  enter_module program, shared
   const { literal, this_type } = entry
   const params = parameter_types(program, resolver, literal, [])
   const context = FunctionContext(annotated: annotated_result(entry.type))
   const self = this_type then SelfContext(type: this_type, initializing: nil) else nil
   const body = Body(program, shared, resolver, extensions, context, self, enclosing: nil)
-  check_function_body(body, literal, params, nil)
+  check_function_body body, literal, params, nil
   # The conversions of the results are recorded even if the type was known from its annotation.
   const finished = finish_function_type(context, params, shared.conversions)
   const checked_type = reject_nil_result(program, finished, literal)
   const type = entry.type ? checked_type
   entry.type = type
   shared.types[literal] = type
-  leave_module(program)
+  leave_module program
 
 const annotated_result = (type: Type?) ->
   return nil if type == nil
@@ -52,10 +52,10 @@ const annotated_result = (type: Type?) ->
 
 export const check_object = (program: ProgramWide, info: ObjectInfo) ->
   const shared = program.shared[info.module_index]
-  enter_module(program, shared)
+  enter_module program, shared
   const self = SelfContext(type: info.type, initializing: nil)
   const resolver = module_resolver(shared.index)
   const { extensions } = shared
   const body = Body(program, shared, resolver, extensions, self, context: nil, enclosing: nil)
-  check_initializers(body, info, self)
-  leave_module(program)
+  check_initializers body, info, self
+  leave_module program

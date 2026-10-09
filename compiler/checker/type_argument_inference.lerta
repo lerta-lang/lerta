@@ -30,7 +30,7 @@ export struct Inference
 # The type arguments of a generic method that the receiver gives, if it gives all of them.
 export const receiver_type_arguments = (generic: GenericFunction, receiver: Type) ->
   const bindings: Map<String, Type> = Map()
-  infer(generic.receiver!.type, receiver, (name, type) -> bindings[name] = type)
+  infer generic.receiver!.type, receiver, (name, type) -> bindings[name] = type
   return nil if generic.type_params.any((param) -> not bindings.has(param.name.name))
   [bindings[param.name.name]! for param in generic.type_params]
 
@@ -60,28 +60,28 @@ export const infer_type_arguments = (
       if const bound = bindings[name]
         return if written.has(name) or not widens(bound.type, bound_type)
       bindings[name] = TypeBinding(at, type: bound_type)
-    infer(pattern, type, bind)
+    infer pattern, type, bind
   if receiver
-    bind_from(generic.receiver!.type, receiver.type, receiver.at)
+    bind_from generic.receiver!.type, receiver.type, receiver.at
   const check_argument = (index: Int) ->
     const arg = call.args[index]
     const param = substitute(params[index], types_of(bindings))
     if not has_type_parameters(param) and needs_context(arg)
-      expect_type(body, arg, param)
+      expect_type body, arg, param
       return
     # A function literal's parameters may take the types that are known already.
     const type = type_of(body, arg, arg is FunctionLiteral then param else nil)
-    fail(body.program, arg.position, 'expected a value, got void') if is_kind(type, 'void')
-    bind_from(params[index], type, arg.position)
+    fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
+    bind_from params[index], type, arg.position
     inferred.push(InferredArgument(arg, type, index))
   const is_function = (i: Int) -> call.args[i] is FunctionLiteral
   const is_literal = (i: Int) -> needs_context(call.args[i]) and not is_function(i)
-  check_argument(i) for i in 0...call.args.length when not needs_context(call.args[i])
+  check_argument i for i in 0...call.args.length when not needs_context(call.args[i])
   if const result = generic.result
-    bind_from(result, expected, call.position) if expected
-  check_argument(i) for i in 0...call.args.length when is_literal(i)
-  check_argument(i) for i in 0...call.args.length when is_function(i)
-  Inference(bindings, inferred)
+    bind_from result, expected, call.position if expected
+  check_argument i for i in 0...call.args.length when is_literal(i)
+  check_argument i for i in 0...call.args.length when is_function(i)
+  Inference bindings, inferred
 
 # An X? after an X makes the type argument X?.
 const widens = (bound: Type, type: Type) ->
@@ -94,7 +94,7 @@ const written_bindings = (body: Body, call: Call, generic: GenericFunction) ->
   return bindings if call.type_args.length == 0
   if call.type_args.length != type_params.length
     const counts = "takes #{type_params.length} type argument(s), got #{call.type_args.length}"
-    fail(body.program, call.position, "'#{name.name}' #{counts}")
+    fail body.program, call.position, "'#{name.name}' #{counts}"
   for i in 0...type_params.length
     const type_name = call.type_args[i]
     const type = resolve(body.program, body.resolver, type_name)

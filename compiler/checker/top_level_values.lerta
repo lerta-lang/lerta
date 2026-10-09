@@ -22,7 +22,7 @@ export const top_level_values = (program: Array<Statement>) ->
   for statement in program
     if const declaration = top_level_value(statement)
       names[declaration.name.name] = true
-  TopLevelValues(names)
+  TopLevelValues names
 
 # Called as the top-level code declares the value.
 export const define_top_level = (values: TopLevelValues, local: Local) ->
@@ -38,11 +38,11 @@ export const reject_pending = (
 ) ->
   const { name, position } = identifier
   return if not values.names.has(name) or values.locals.has(name)
-  fail_runs_later(program, identifier, 'this module', true) if not values.started
+  fail_runs_later program, identifier, 'this module', true if not values.started
   const reason = 'as it is declared below code that needs it here'
   const advice = 'declare it before, or write the type of this function or field'
   const message = "the type of '#{name}' is not known yet, #{reason}; #{advice}"
-  fail(program, position, message)
+  fail program, position, message
 
 # Rejects a use of a value of `module` whose type is not known yet, as the top-level code of a
 # module that runs before it, in the same import cycle, needs it: directly, or `in_function`, a
@@ -52,10 +52,10 @@ export const fail_runs_later = (
   identifier: Identifier
   module: String
   in_function: Bool
-): never ->
+) ->
   const advice = case
     when in_function
       "#{module} runs after the top-level code that needs this function or field; write its type"
     else "#{module} runs after this module; read it in a function whose return type is written"
   const message = "the type of '#{identifier.name}' is not known yet, as #{advice}"
-  fail(program, identifier.position, message)
+  fail program, identifier.position, message

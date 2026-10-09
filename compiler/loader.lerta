@@ -69,7 +69,7 @@ export const load_modules = (entry_path: String, root_dir: String) ->
   const real_std_dir = real_path_text(std_dir)
   const cwd = real_path_text('.')
   const loader = Loader(entry_path, std_dir, real_std_dir, builtins_and_dependencies, cwd)
-  load(loader, entry_path, nil)
+  load loader, entry_path, nil
   [finished_module(loader, id) for id in loader.order]
 
 # Files are known by their real paths, so that one file reached by different paths loads once, and
@@ -95,7 +95,7 @@ const load = (loader: Loader, path: String, display_path: String?) ->
   id
 
 const builtins_import = () ->
-  Import(names: [], module: BUILTINS_MODULE, position: Position(line: 1, column: 1))
+  Import names: [], module: BUILTINS_MODULE, position: Position(line: 1, column: 1)
 
 const prepend = (first: Statement, rest: Array<Statement>) ->
   const statements = [first]
@@ -107,15 +107,15 @@ const prepend = (first: Statement, rest: Array<Statement>) ->
 const visit = (loader: Loader, path: String, statement: Import, location: String): Int ->
   if not is_file(path)
     const { line, column } = statement.position
-    compile_error(location, line, column, "cannot find module '#{statement.module}'")
+    compile_error location, line, column, "cannot find module '#{statement.module}'"
   const real = real_path_text(path)
   if const loaded = loader.by_real_path[real]
-    close_cycle(loader, loaded) if loader.loaded[loaded].index == -1
+    close_cycle loader, loaded if loader.loaded[loaded].index == -1
     return loaded
   const is_std = dirname(real) == loader.real_std_dir
   const entry_dir = dirname(loader.entry_path)
   const display_path = is_std then statement.module else relative(loader.cwd, entry_dir, path)
-  load(loader, path, display_path)
+  load loader, path, display_path
 
 # An import of a module whose imports are being loaded closes a cycle: that module and those that
 # started loading after it and are still loading, which import each other in turn. Cycles that
@@ -146,7 +146,7 @@ const imported_file = (loader: Loader, statement: Import, from: String, location
     when is_std then "unknown module '#{module}'; the standard modules are #{standard_modules}"
     else "unknown module '#{module}'; a file is imported by a path that starts with ./ or ../"
   const { line, column } = statement.position
-  compile_error(location, line, column, message)
+  compile_error location, line, column, message
 
 const finished_module = (loader: Loader, id: Int) ->
   const loading = loader.loaded[id]
@@ -156,7 +156,7 @@ const finished_module = (loader: Loader, id: Int) ->
     imported[statement] = index_of(loading.imported[statement]!)
   const { index, display_path, program } = loading
   const cycle = [index_of(place) for place in loading.cycle]
-  Module(index, display_path, program, imported, cycle)
+  Module index, display_path, program, imported, cycle
 
 export const is_standard_module = (module: Module) ->
   if const path = module.display_path

@@ -18,22 +18,22 @@ class Copies
   expressions: Map<Expression, Expression> = Map()
 
 export const clone_function = (literal: FunctionLiteral) ->
-  clone_literal(Copies(), literal)
+  clone_literal Copies(), literal
 
 const clone_literal = (copies: Copies, literal: FunctionLiteral) ->
   const type_params = [clone_type_parameter(param) for param in literal.type_params]
   const params = [clone_parameter(param) for param in literal.params]
   const return_type = clone_optional_type(literal.return_type)
   const body = clone_statements(copies, literal.body)
-  FunctionLiteral(type_params, params, return_type, body, position: literal.position)
+  FunctionLiteral type_params, params, return_type, body, position: literal.position
 
 const clone_type_parameter = (param: TypeParameter) ->
   const bound = param.bound
   const name = copy_identifier(param.name)
-  TypeParameter(name, bound: bound then copy_identifier(bound) else nil)
+  TypeParameter name, bound: bound then copy_identifier(bound) else nil
 
 const clone_parameter = (param: Parameter) ->
-  Parameter(name: copy_identifier(param.name), type: clone_optional_type(param.type))
+  Parameter name: copy_identifier(param.name), type: clone_optional_type(param.type)
 
 const clone_statements = (copies: Copies, statements: Array<Statement>) ->
   [clone_statement(copies, statement) for statement in statements]
@@ -57,19 +57,19 @@ const clone_statement = (copies: Copies, statement: Statement): Statement ->
         when Member then target
         else throw 'an assignment target is copied as one'
       const value = clone(copies, statement.value)
-      Assignment(value, position, operator: statement.operator, target: assigned)
+      Assignment value, position, operator: statement.operator, target: assigned
     when If
       const condition = clone_condition(copies, statement.condition)
       const then_body = clone_statements(copies, statement.then_body)
       const else_body = clone_statements(copies, statement.else_body)
-      If(condition, then_body, else_body, position)
+      If condition, then_body, else_body, position
     when While
       const condition = clone_condition(copies, statement.condition)
-      While(condition, position, body: clone_statements(copies, statement.body))
+      While condition, position, body: clone_statements(copies, statement.body)
     when For
       const variable = copy_identifier(statement.variable)
       const iterable = clone(copies, statement.iterable)
-      For(variable, iterable, position, body: clone_statements(copies, statement.body))
+      For variable, iterable, position, body: clone_statements(copies, statement.body)
     when TypeDeclaration
       const name = copy_identifier(statement.name)
       const members = [clone_member(copies, member) for member in statement.members]
@@ -90,15 +90,15 @@ const clone_statement = (copies: Copies, statement: Statement): Statement ->
     when Extend
       const type_params = [clone_type_parameter(param) for param in statement.type_params]
       const members = [clone_member(copies, member) for member in statement.members]
-      Extend(type_params, members, position, type: clone_type(statement.type))
+      Extend type_params, members, position, type: clone_type(statement.type)
     when Import
       const names = [clone_import_name(name) for name in statement.names]
-      Import(names, position, module: statement.module)
+      Import names, position, module: statement.module
     else clone(copies, as_expression(statement)!)
 
 const clone_import_name = (name: ImportName) ->
   const alias = name.alias
-  ImportName(name: copy_identifier(name.name), alias: alias then copy_identifier(alias) else nil)
+  ImportName name: copy_identifier(name.name), alias: alias then copy_identifier(alias) else nil
 
 const clone_member = (copies: Copies, member: MemberDeclaration) ->
   const value = member.value
@@ -111,7 +111,7 @@ const clone_condition = (copies: Copies, condition: Condition): Condition ->
   case condition
     when Binding
       const name = copy_identifier(condition.name)
-      Binding(name, value: clone(copies, condition.value), position: condition.position)
+      Binding name, value: clone(copies, condition.value), position: condition.position
     else clone(copies, as_expression(condition)!)
 
 const clone = (copies: Copies, expression: Expression) ->
@@ -131,7 +131,7 @@ const copy_expression = (copies: Copies, expression: Expression): Expression ->
   case expression
     when StringLiteral then StringLiteral(position, value: expression.value)
     when Interpolation
-      Interpolation(position, parts: [clone_part(copies, part) for part in expression.parts])
+      Interpolation position, parts: [clone_part(copies, part) for part in expression.parts]
     when BooleanLiteral then BooleanLiteral(position, value: expression.value)
     when NilLiteral then NilLiteral(position)
     when IntegerLiteral then IntegerLiteral(position, value: expression.value)
@@ -140,45 +140,45 @@ const copy_expression = (copies: Copies, expression: Expression): Expression ->
     when Comprehension then clone_comprehension(copies, expression)
     when MapLiteral
       const entries = [clone_entry(copies, entry) for entry in expression.entries]
-      MapLiteral(entries, position)
+      MapLiteral entries, position
     when RecordLiteral
-      RecordLiteral(position, fields: clone_named_values(copies, expression.fields))
+      RecordLiteral position, fields: clone_named_values(copies, expression.fields)
     when FunctionLiteral then clone_literal(copies, expression)
     when UnaryOperation
       const operand = clone(copies, expression.operand)
-      UnaryOperation(operand, position, operator: expression.operator)
+      UnaryOperation operand, position, operator: expression.operator
     when BinaryOperation
       const left = clone(copies, expression.left)
       const right = clone(copies, expression.right)
-      BinaryOperation(left, right, position, operator: expression.operator)
+      BinaryOperation left, right, position, operator: expression.operator
     when Range
-      Range(position, start: clone(copies, expression.start), end: clone(copies, expression.end))
+      Range position, start: clone(copies, expression.start), end: clone(copies, expression.end)
     when IsTest
       const value = clone(copies, expression.value)
-      IsTest(value, position, type: clone_named_type(expression.type))
+      IsTest value, position, type: clone_named_type(expression.type)
     when Conditional
       const condition = clone(copies, expression.condition)
       const then_value = clone(copies, expression.then_value)
       const else_value = clone(copies, expression.else_value)
-      Conditional(condition, then_value, else_value, position)
+      Conditional condition, then_value, else_value, position
     when Unwrap then Unwrap(position, operand: clone(copies, expression.operand))
     when This then This(position)
     when Member
       const object = clone(copies, expression.object)
-      Member(object, position, name: copy_identifier(expression.name))
+      Member object, position, name: copy_identifier(expression.name)
     when Index
       const object = clone(copies, expression.object)
-      Index(object, position, index: clone(copies, expression.index))
+      Index object, position, index: clone(copies, expression.index)
     when Call then clone_call(copies, expression)
     when Case
       const subject = clone_optional(copies, expression.subject)
       const arms = [clone_arm(copies, arm) for arm in expression.arms]
       const otherwise = expression.otherwise
       const otherwise_copy = otherwise then clone_statements(copies, otherwise) else nil
-      Case(subject, arms, position, otherwise: otherwise_copy)
+      Case subject, arms, position, otherwise: otherwise_copy
     when Coalesce
       const value = clone(copies, expression.value)
-      Coalesce(value, position, fallback: clone(copies, expression.fallback))
+      Coalesce value, position, fallback: clone(copies, expression.fallback)
     when Throw then Throw(position, message: clone(copies, expression.message))
     when Jump then Jump(position, kind: expression.kind)
     when Return then Return(position, value: clone_optional(copies, expression.value))
@@ -193,19 +193,19 @@ const clone_call = (copies: Copies, call: Call) ->
   const args = [clone(copies, arg) for arg in call.args]
   const named_args = clone_named_values(copies, call.named_args)
   const type_args = [clone_type(type) for type in call.type_args]
-  Call(callee, args, named_args, type_args, position: call.position)
+  Call callee, args, named_args, type_args, position: call.position
 
 const clone_named_values = (copies: Copies, values: Array<NamedValue>) ->
   const clone_value = (value: NamedValue) ->
-    NamedValue(name: copy_identifier(value.name), value: clone(copies, value.value))
+    NamedValue name: copy_identifier(value.name), value: clone(copies, value.value)
   [clone_value(value) for value in values]
 
 const clone_entry = (copies: Copies, entry: MapEntry) ->
-  MapEntry(key: clone(copies, entry.key), value: clone(copies, entry.value))
+  MapEntry key: clone(copies, entry.key), value: clone(copies, entry.value)
 
 const clone_arm = (copies: Copies, arm: CaseArm) ->
   const patterns = [clone(copies, pattern) for pattern in arm.patterns]
-  CaseArm(patterns, body: clone_statements(copies, arm.body))
+  CaseArm patterns, body: clone_statements(copies, arm.body)
 
 # The lazy functions share the element and the guard, which are copied once.
 const clone_comprehension = (copies: Copies, comprehension: Comprehension) ->
@@ -216,12 +216,12 @@ const clone_comprehension = (copies: Copies, comprehension: Comprehension) ->
   const lazy = comprehension.lazy
   const lazy_copy = lazy then clone_lazy(copies, lazy) else nil
   const position = comprehension.position
-  Comprehension(element, variable, iterable, guard, position, lazy: lazy_copy)
+  Comprehension element, variable, iterable, guard, position, lazy: lazy_copy
 
 const clone_lazy = (copies: Copies, lazy: LazyFunctions) ->
   const guard = lazy.guard
   const guard_copy = guard then clone_literal(copies, guard) else nil
-  LazyFunctions(guard: guard_copy, element: clone_literal(copies, lazy.element))
+  LazyFunctions guard: guard_copy, element: clone_literal(copies, lazy.element)
 
 const clone_optional_type = (type: TypeName?) -> type then clone_type(type) else nil
 
@@ -230,11 +230,11 @@ const clone_type = (type: TypeName): TypeName ->
     when NamedType then clone_named_type(type)
     when UnionTypeName
       const members = [clone_union_member(member) for member in type.members]
-      UnionTypeName(members, position: type.position)
+      UnionTypeName members, position: type.position
     when FunctionTypeName
       const params = [clone_type(param) for param in type.params]
       const { optional, position } = type
-      FunctionTypeName(params, optional, position, result: clone_type(type.result))
+      FunctionTypeName params, optional, position, result: clone_type(type.result)
     when RecordTypeName then clone_record_type(type)
 
 const clone_union_member = (member: UnionMember): UnionMember ->
@@ -244,10 +244,10 @@ const clone_union_member = (member: UnionMember): UnionMember ->
 
 const clone_named_type = (type: NamedType) ->
   const args = [clone_type(arg) for arg in type.args]
-  NamedType(args, name: type.name, optional: type.optional, position: type.position)
+  NamedType args, name: type.name, optional: type.optional, position: type.position
 
 const clone_record_type = (type: RecordTypeName) ->
   const clone_field = (field: RecordTypeField) ->
-    RecordTypeField(name: copy_identifier(field.name), type: clone_type(field.type))
+    RecordTypeField name: copy_identifier(field.name), type: clone_type(field.type)
   const fields = [clone_field(field) for field in type.fields]
-  RecordTypeName(fields, optional: type.optional, position: type.position)
+  RecordTypeName fields, optional: type.optional, position: type.position

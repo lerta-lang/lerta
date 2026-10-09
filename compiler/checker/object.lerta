@@ -39,22 +39,22 @@ export const constructed_type = (body: Body, callee: Expression) ->
 export const type_of_construction = (body: Body, call: Call, type: ObjectType) ->
   const program = body.program
   const info = info_of(program, type)
-  name_shorthand_args(body, call, type)
+  name_shorthand_args body, call, type
   const given: Map<String, Bool> = Map()
   for arg in call.named_args
     const { name, position } = arg.name
-    fail(program, position, "the argument '#{name}' is given twice") if given.has(name)
+    fail program, position, "the argument '#{name}' is given twice" if given.has(name)
     given[name] = true
-    const no_field = (): never ->
-      fail(program, position, "#{format_type(type)} has no field '#{name}'")
+    const no_field = () ->
+      fail program, position, "#{format_type(type)} has no field '#{name}'"
     const field = info.fields.find((each) -> each.name.name == name) ? no_field()
     if field.value != nil
-      fail(program, position, "#{format_type(type)} computes its field '#{name}'")
-    expect_type(body, arg.value, field.type!)
+      fail program, position, "#{format_type(type)} computes its field '#{name}'"
+    expect_type body, arg.value, field.type!
   for field in info.fields
     const is_required = field.value == nil and not (field.type! is OptionalType)
     if is_required and not given.has(field.name.name)
-      fail(program, call.position, "missing argument '#{field.name.name}'")
+      fail program, call.position, "missing argument '#{field.name.name}'"
   type
 
 # The class or struct of the type, if it has a method of the name.
@@ -67,7 +67,7 @@ export const method_owner = (body: Body, object_type: Type, name: String) ->
 export const object_method_type = (body: Body, object_type: Type, name: Identifier) ->
   const owner = method_owner(body, object_type, name.name) ? return nil
   const module_index = info_of(body.program, owner).module_index
-  function_type_of(body.program, module_index, method_key(owner.name, name.name), name.position)
+  function_type_of body.program, module_index, method_key(owner.name, name.name), name.position
 
 # `@` is a local of a method's body (see check_function_body), which a function literal in it
 # captures like any other. An initializer has no such local: there the object is not complete, so
@@ -79,7 +79,7 @@ export const type_of_this = (body: Body, at: Expression) ->
   const message = case
     when body.self then 'an initializer can only use `@` to read a field, as in `@name`'
     else "'@' can only be used in a method, a function literal in a method, or a field initializer"
-  fail(body.program, at.position, message)
+  fail body.program, at.position, message
 
 # The type of the field `member` names, of a class, a struct or an anonymous struct.
 export const field_type = (body: Body, object_type: Type, member: Member) ->
@@ -100,11 +100,11 @@ const common_fields = (body: Body, union: UnionType, member: Member) ->
   const { name, position } = member.name
   const fields: Array<MemberField> = []
   for member_type in union.members
-    const not_field = (): never ->
+    const not_field = () ->
       const member_name = format_member(member_type, union)
       const of_union = "a member of #{format_type(union)}"
       const message = "'#{name}' is not a field of #{member_name}, #{of_union}"
-      fail(program, position, message)
+      fail program, position, message
     const field = field_of(body, member_type, member) ? not_field()
     fields.push(MemberField(member_type, info: field.info, type: field.type))
   const first = fields[0]
@@ -116,7 +116,7 @@ const common_fields = (body: Body, union: UnionType, member: Member) ->
     const differing_member = format_member(differing.member_type, union)
     const in_first = "#{types.first} in #{first_member}"
     const message = "'#{name}' has type #{in_first} but #{types.second} in #{differing_member}"
-    fail(program, position, message)
+    fail program, position, message
   fields
 
 # The type of a common field assigned through a union: every member must be a class whose field
@@ -131,11 +131,11 @@ const common_field_target = (body: Body, union: UnionType, member: Member) ->
       if member_type.is_struct
         const reason = "its member #{member_name} is a struct, whose fields cannot change"
         const message = "'#{name}' cannot be changed through #{format_type(union)}: #{reason}"
-        fail(body.program, position, message)
+        fail body.program, position, message
     if not field.info.mutable
       const field_of_member = "a const field of #{member_name}"
       const message = "'#{name}' is #{field_of_member}, a member of #{format_type(union)}"
-      fail(body.program, position, message)
+      fail body.program, position, message
   fields[0].type
 
 # `{ x: 1, y }`. Its fields take their types from the expected type, if it is an anonymous struct
@@ -145,20 +145,20 @@ export const type_of_record = (body: Body, record: RecordLiteral, expected: Type
   const names: Map<String, Bool> = Map()
   for field in record.fields
     const { name, position } = field.name
-    fail(program, position, "'#{name}' is already a field") if names.has(name)
+    fail program, position, "'#{name}' is already a field" if names.has(name)
     names[name] = true
   const expected_fields = expected_record_fields(expected)
   const type_of_field = (field: NamedValue) ->
     const name = field.name.name
     const value = field.value
     if const expected_field = expected_fields.find((each) -> each.name == name)
-      expect_type(body, value, expected_field.type)
+      expect_type body, value, expected_field.type
       return RecordField(name, type: expected_field.type)
     const type = type_of(body, value, nil)
     if is_one_of_kinds(type, ['void', 'never', 'nil'])
-      fail(program, value.position, "a field cannot hold a value of type #{format_type(type)}")
-    RecordField(name, type)
-  record_type([type_of_field(field) for field in record.fields])
+      fail program, value.position, "a field cannot hold a value of type #{format_type(type)}"
+    RecordField name, type
+  record_type [type_of_field(field) for field in record.fields]
 
 const expected_record_fields = (expected: Type?): Array<RecordField> ->
   const type = expected ? return []
@@ -176,15 +176,15 @@ export const field_target = (body: Body, member: Member) ->
   const field = field_of(body, object_type, member)
   const { name, position } = member.name
   if object_type is RecordType
-    fail(program, position, 'a field of an anonymous struct cannot be changed')
-  const no_field = (): never ->
-    fail(program, position, "type #{format_type(object_type)} has no field '#{name}'")
+    fail program, position, 'a field of an anonymous struct cannot be changed'
+  const no_field = () ->
+    fail program, position, "type #{format_type(object_type)} has no field '#{name}'"
   const found = field ? no_field()
   if not found.info.mutable
     const is_struct = object_type is ObjectType then object_type.is_struct else false
     const const_field = "'#{name}' is a const field"
     const message = is_struct then 'a struct field cannot be changed' else const_field
-    fail(program, position, message)
+    fail program, position, message
   body.shared.types[member] = found.type
   found.type
 
@@ -200,8 +200,8 @@ const field_of = (body: Body, object_type: Type, member: Member) ->
   if member.object is This and field.value != nil
     if initializing
       if index_of(object.fields, field) >= index_of(object.fields, initializing)
-        fail(program, member.name.position, "'#{field.name.name}' is not initialized yet")
-  FieldOf(info: field, type: info_field_type(program, object, field, member.name.position))
+        fail program, member.name.position, "'#{field.name.name}' is not initialized yet"
+  FieldOf info: field, type: info_field_type(program, object, field, member.name.position)
 
 const index_of = (fields: Array<FieldInfo>, field: FieldInfo) ->
   var index = 0
@@ -217,7 +217,7 @@ const name_shorthand_args = (body: Body, call: Call, type: ObjectType) ->
     const not_named = call.args.find((arg) -> not (arg is Identifier))!
     const example = 'Point(x: 1) or Point(x)'
     const message = "#{format_type(type)} is constructed with named arguments, as in #{example}"
-    fail(body.program, not_named.position, message)
+    fail body.program, not_named.position, message
   const named_args = [NamedValue(name: copy_identifier(name), value: name) for name in names]
   named_args.push(arg) for arg in call.named_args
   call.named_args = named_args
