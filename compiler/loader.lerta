@@ -92,7 +92,7 @@ const builtins_import = () ->
 
 const prepend = (first: Statement, rest: Array<Statement>) ->
   const statements = [first]
-  statements.push statement for statement in rest
+  statements.append rest
   statements
 
 # The module that an import names, loaded if it is not yet: `std:name` is a standard module, and a
@@ -127,17 +127,16 @@ const close_cycle = (loader: Loader, back: Int) ->
     members.push each for each in ids when not members.any((member) -> member == each)
   loader.loaded[id].cycle = members for id in members
 
-const STD_DIR = 'std/'.binary
+const STD_DIR = 'std/'
 
 # The embedded paths of the standard modules, std/<name>.lerta.
 const standard_paths = () ->
-  [path for path in EMBEDDED_PATHS when path.binary.occurs_at(0, STD_DIR)]
+  [path for path in EMBEDDED_PATHS when path.starts_with(STD_DIR)]
 
 # The name of a standard module, `std:name`, from its embedded path.
 const standard_name = (path: String) ->
   const bytes = path.binary
-  const name = bytes.slice(STD_DIR.length, bytes.length - '.lerta'.binary.length)
-  "std:#{name.decode_utf8()!}"
+  "std:#{bytes.text(STD_DIR.binary.length, bytes.length - '.lerta'.binary.length)}"
 
 const imported_standard_source = (statement: Import, location: String) ->
   if const source = standard_source(statement.module)
@@ -148,8 +147,7 @@ const imported_standard_source = (statement: Import, location: String) ->
 
 const imported_file = (statement: Import, from: String, location: String) ->
   const module = statement.module
-  const bytes = module.binary
-  if not bytes.occurs_at(0, './'.binary) and not bytes.occurs_at(0, '../'.binary)
+  if not module.starts_with('./') and not module.starts_with('../')
     const rule = 'a file is imported by a path that starts with ./ or ../'
     import_error statement, location, "unknown module '#{module}'; #{rule}"
   const path = join(from, "#{module}.lerta")
@@ -172,7 +170,7 @@ const finished_module = (loader: Loader, id: Int) ->
 
 export const is_standard_module = (module: Module) ->
   if const path = module.display_path
-    return path.binary.occurs_at(0, 'std:'.binary)
+    return path.starts_with('std:')
   false
 
 # Paths are compared as text, so a real path must be UTF-8.

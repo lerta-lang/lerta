@@ -26,6 +26,7 @@
 - A `String` is immutable text in UTF-8.
 - `+` concatenates two `String`s into a new one.
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws `split by an empty separator`.
+- `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`.
 - `==` and `!=` compare two `String`s byte by byte.
 
 ## Binary
@@ -37,6 +38,7 @@
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `bytes.to_binary()` copies the items of an `Array<Byte>` into a new `Binary`.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
+- `b.text(start, end)` gives the bytes from `start` up to `end` as a `String`, as `b.slice(start, end).decode_utf8()` but throwing `invalid UTF-8` where that gives nil.
 
 ## Optional values
 
@@ -69,7 +71,7 @@ print xs[0] + xs.length
 - `[a, b, c]` makes an array (over several lines too: see [lines inside brackets](syntax.md#lines-inside-brackets)). Its item type comes from the expected type if there is one (a type annotation, a parameter, a return type), otherwise from the first item. `[]` needs an expected type.
 - `xs[i]` reads an item and `xs[i] = value` replaces one (`+=` and so on work on `Int` items). An index outside `0 ... xs.length` throws `index out of range`.
 - `xs.length` is the number of items.
-- `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`.
+- `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`. `xs.last()` returns the last item without removing it, and throws `last of an empty array` likewise. `xs.append(ys)` pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`.
 - `xs.iter()` gives an [`Iter`](#iter) of the items, and `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` one of the items as it maps, filters or takes them.
 - `strings.join(separator)` joins an `Array<String>` into one `String`.
 - Arrays cannot be compared or printed.
@@ -86,7 +88,7 @@ print ages['ann'] ? 0
 - `Map<K, V>` maps keys of type `K`, a `String`, an `Int`, an [enum](#enums), a class or a union of classes (compared by identity: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
 - `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
-- `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there.
+- `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there. `m.get_or_put(k, make)` gives the value of `k`, setting it to `make()` first if `k` is not there. A `Map<K, Bool>` serves as a set: `m.add(k)` sets `k` to `true`.
 - `m.keys()` is an `Array<K>` of the keys in the order they were first added (a key removed and added again counts as new).
 
 ## Iter

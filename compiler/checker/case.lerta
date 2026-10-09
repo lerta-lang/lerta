@@ -77,18 +77,17 @@ const type_of_branches = (
     for branch in branches
       const type = type_of_body(branch, check_value)
       if is_kind(type, 'void')
-        fail body.program, last_of(branch).position, "expected #{format_type(expected)}, got void"
+        const message = "expected #{format_type(expected)}, got void"
+        fail body.program, branch.statements.last().position, message
     return expected
   const type_of_value = (value: Expression) -> type_of(body, value, nil)
   const value_of = (branch: Branch) ->
-    BranchValue last: last_of(branch), type: type_of_body(branch, type_of_value)
+    BranchValue last: branch.statements.last(), type: type_of_body(branch, type_of_value)
   const values = [value_of(branch) for branch in branches]
   if const message = void_message
     if const valueless = values.find((value) -> is_kind(value.type, 'void'))
       fail body.program, valueless.last.position, message
   unify_values body, values, at, description
-
-const last_of = (branch: Branch) -> branch.statements[branch.statements.length - 1]
 
 # A mix of T, T? and nil gives T?, to which the values (the last statements of the bodies) are
 # converted.
@@ -176,12 +175,12 @@ const check_type_patterns = (
     for i in 0...types.length
       const key = type_key(types[i])
       fail_handled_twice body, arm.patterns[i], format_member(types[i], union) if handled.has(key)
-      handled[key] = true
+      handled.add key
     arm_narrowings.push types.length == 1 then subject_narrowings(body, subject, types[0]) else []
   const missing = [
     format_member(member, union) for member in union.members when not handled.has(type_key(member))
   ]
-  missing.push name for name in missing_nil
+  missing.append missing_nil
   fail_unhandled body, case_expression, missing
   arm_narrowings
 
@@ -199,12 +198,12 @@ const check_member_patterns = (
       const index = body.shared.enum_values[pattern] ? continue
       if handled.has(index)
         fail_handled_twice body, pattern, format_enum_member(type.members[index])
-      handled[index] = true
+      handled.add index
   const members = type.members
   const missing = [
     format_enum_member(members[i]) for i in 0...members.length when not handled.has(i)
   ]
-  missing.push name for name in missing_nil
+  missing.append missing_nil
   fail_unhandled body, case_expression, missing
 
 const fail_handled_twice = (body: Body, pattern: Expression, handled: String) ->

@@ -15,7 +15,7 @@ export const fail = (program: ProgramWide, at: Position, message: String) ->
   const contexts = program.contexts
   if contexts.length == 0
     report_error program, at, message
-  fail_in_context program, at, message, contexts[contexts.length - 1]
+  fail_in_context program, at, message, contexts.last()
 
 # An error that says what was being checked, such as `in print<Int>`.
 export const fail_in_context = (
@@ -33,7 +33,7 @@ const report_error = (program: ProgramWide, at: Position, message: String): neve
 # The path of the innermost module being checked; nil for the entry module.
 const error_module_path = (program: ProgramWide) ->
   const paths = program.module_paths
-  paths.length > 0 then paths[paths.length - 1] else nil
+  paths.length > 0 then paths.last() else nil
 
 # Diagnostics name the module whose code is checked until `leave_module`.
 export const enter_module = (program: ProgramWide, shared: Shared) ->
@@ -47,7 +47,7 @@ export const warn = (shared: Shared, at: Position, message: String) ->
 # A `const` or `var` that is never read, unless its name starts with `_`.
 export const warn_if_unused = (shared: Shared, local: Local) ->
   const { name, position } = local.identifier
-  return if not local.declared or local.used or name.binary.occurs_at(0, '_'.binary)
+  return if not local.declared or local.used or name.starts_with('_')
   warn shared, position, "'#{name}' is never used"
 
 # The warnings of the program, as diagnostics print them. A program's author cannot act on the
@@ -80,7 +80,7 @@ const in_source_order = (warnings: Array<Warning>) ->
   for warning in warnings
     const key = "#{warning.line}:#{warning.column}:#{warning.message}"
     continue if seen.has(key)
-    seen[key] = true
+    seen.add key
     unique.push warning
   const compare = (a: Warning, b: Warning) ->
     a.line != b.line then a.line - b.line else a.column - b.column

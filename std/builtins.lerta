@@ -74,6 +74,7 @@ extend String
         i += 1
     pieces.push(lerta_binary_as_string(bytes.slice(start, bytes.length)))
     pieces
+  starts_with = (prefix: String) -> @binary.occurs_at(0, prefix.binary)
 
 extend Binary
   # The bytes from `start` up to `end`, which is exclusive. Throws if they are out of range.
@@ -86,6 +87,8 @@ extend Binary
     true
   # The same bytes as a String if they are valid UTF-8, otherwise nil.
   decode_utf8 = () -> is_utf8(@) then lerta_binary_as_string(@) else nil
+  # The bytes from `start` up to `end` as a String. Throws if they are out of range or not UTF-8.
+  text = (start: Int, end: Int) -> @slice(start, end).decode_utf8() ? throw 'invalid UTF-8'
 
 # Whether the bytes are UTF-8. Overlong forms, surrogates and code points above U+10FFFF are not,
 # as the standard requires: the leads 0xE0, 0xED, 0xF0 and 0xF4 limit the byte after them.
@@ -132,6 +135,13 @@ extend<T> Array<T>
   any = (test: (T) -> Bool): Bool -> @iter().any(test)
   all = (test: (T) -> Bool): Bool -> @iter().all(test)
   find = (test: (T) -> Bool): T? -> @iter().find(test)
+  last = (): T ->
+    throw 'last of an empty array' if @length == 0
+    @[@length - 1]
+  # Pushes the items of another array, one by one; those of the array itself, if it is that, once.
+  append = (items: Array<T>) ->
+    const count = items.length
+    @push items[i] for i in 0...count
 
 extend<T> Iter<T>
   map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)
@@ -149,3 +159,14 @@ extend<T> Iter<T>
 
 extend<K, V> Map<K, V>
   has = (key: K): Bool -> @[key] != nil
+  # The value of `key`, which is first set to `make()` if the key is not there.
+  get_or_put = (key: K, make: () -> V): V ->
+    if const found = @[key]
+      return found
+    const made = make()
+    @[key] = made
+    made
+
+# A Map<K, Bool> serves as a set of its keys.
+extend<K> Map<K, Bool>
+  add = (key: K) -> @[key] = true
