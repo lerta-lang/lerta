@@ -32,7 +32,7 @@ const visit_statements = (program: ProgramWide, statements: Array<Statement>, ju
 const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
   const in_loop = Jumps(may_return: jumps.may_return, may_leave_loop: true)
   case statement
-    when Declaration then visit(program, statement.value, jumps)
+    when Declaration then visit program, statement.value, jumps
     when Assignment
       const target = statement.target
       visit program, target, no_jumps
@@ -47,10 +47,10 @@ const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jump
     when For
       visit program, statement.iterable, no_jumps
       visit_statements program, statement.body, in_loop
-    when TypeDeclaration then visit_members(program, statement.members)
-    when Extend then visit_members(program, statement.members)
+    when TypeDeclaration then visit_members program, statement.members
+    when Extend then visit_members program, statement.members
     when Import, Pass, EnumDeclaration, TypeAlias, Extern then pass
-    else visit(program, as_expression_statement(statement), jumps)
+    else visit program, as_expression_statement(statement), jumps
 
 const as_expression_statement = (statement: Statement) ->
   as_expression(statement) ? throw 'a statement that is no declaration is an expression'
@@ -62,15 +62,15 @@ const visit_members = (program: ProgramWide, members: Array<MemberDeclaration>) 
 
 const visit_condition = (program: ProgramWide, condition: Condition) ->
   case condition
-    when Binding then visit(program, condition.value, no_jumps)
-    else visit(program, as_expression(condition)!, no_jumps)
+    when Binding then visit program, condition.value, no_jumps
+    else visit program, as_expression(condition)!, no_jumps
 
 # `jumps` says which jumps the expression itself may be; its operands, which are evaluated while
 # others are held, may make none.
 const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void ->
   const operand = (child: Expression) -> visit(program, child, no_jumps)
   case expression
-    when Jump then check_jump(program, expression.kind, jumps.may_leave_loop, expression.position)
+    when Jump then check_jump program, expression.kind, jumps.may_leave_loop, expression.position
     when Return
       check_jump program, 'return', jumps.may_return, expression.position
       if const value = expression.value
@@ -91,7 +91,7 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
       if const otherwise = expression.otherwise
         visit_statements program, otherwise, jumps
     # No loop is outside a function; a jump out of none is an error of its own.
-    when FunctionLiteral then visit_statements(program, expression.body, all_jumps)
+    when FunctionLiteral then visit_statements program, expression.body, all_jumps
     when Interpolation
       for part in expression.parts
         operand part if part is Call
@@ -115,17 +115,17 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
     when Index
       operand expression.object
       operand expression.index
-    when Member then operand(expression.object)
-    when UnaryOperation then operand(expression.operand)
-    when Unwrap then operand(expression.operand)
+    when Member then operand expression.object
+    when UnaryOperation then operand expression.operand
+    when Unwrap then operand expression.operand
     when BinaryOperation
       operand expression.left
       operand expression.right
     when Range
       operand expression.start
       operand expression.end
-    when Throw then operand(expression.message)
-    when IsTest then operand(expression.value)
+    when Throw then operand expression.message
+    when IsTest then operand expression.value
     when StringLiteral, IntegerLiteral, BooleanLiteral, NilLiteral, Identifier, This then pass
 
 const check_jump = (program: ProgramWide, kind: String, allowed: Bool, at: Position) ->
