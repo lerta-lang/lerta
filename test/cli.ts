@@ -1,9 +1,17 @@
 // CLI checks: each invocation of the compiler's command line (see lerta.ts) and its expected exit
 // status.
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { spawnSync, type StdioOptions } from 'node:child_process'
+import {
+  closeSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { compiler, root_dir } from './lerta.ts'
 import { compare_text, run_checks } from './report.ts'
 
@@ -593,11 +601,18 @@ const build_and_run_checks = [[], ['-O'], ['--target', host_triple]].map((flags)
 
 // Runs the compiler in a new directory, with another new one as the system's directory for
 // temporary files, and returns what it left in each.
+// stdin is a file of `input`: on Linux, Node gives a child a socket for a pipe, which
+// /dev/stdin cannot open.
 const build_in_new_dir = (args: string[], input = '') => {
   const cwd = mkdtempSync(join(cli_work_dir, 'cwd-'))
   const temp = mkdtempSync(join(cli_work_dir, 'temp-'))
+  const input_path = join(cli_work_dir, `${basename(cwd)}.in`)
+  writeFileSync(input_path, input)
+  const stdin = openSync(input_path, 'r')
   const env = { ...process.env, TMPDIR: temp }
-  const built = spawnSync(compiler, args, { cwd, env, input, encoding: 'utf8' })
+  const stdio: StdioOptions = [stdin, 'pipe', 'pipe']
+  const built = spawnSync(compiler, args, { cwd, env, stdio, encoding: 'utf8' })
+  closeSync(stdin)
   return { ...built, cwd, left: readdirSync(cwd), left_in_temp: readdirSync(temp) }
 }
 
