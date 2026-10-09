@@ -3,7 +3,7 @@
 import { Call, Identifier, Member, Position, This } from '../ast'
 import { builtin_property } from './builtins'
 import { fail } from './diagnostics'
-import { check_arguments, set_type, type_of } from './expression'
+import { check_arguments, reject_type_arguments, set_type, type_of } from './expression'
 import { plain_method_type } from './extensions'
 import { receiver_instance, type_of_generic_method_call } from './generic_call'
 import { STRINGABLE } from './generics'
@@ -19,6 +19,7 @@ export const type_of_method_call = (body: Body, call: Call, member: Member, expe
   const source = find(body, receiver, member.name.name)
   const generic = generic_method(source)
   if generic == nil
+    reject_type_arguments body, call
     return check_arguments(body, call, type_of_method(body, member, receiver, source))
   const method = type_of_generic_method_call(body, call, member, generic, receiver, expected)
   set_type body, member, method
@@ -26,7 +27,10 @@ export const type_of_method_call = (body: Body, call: Call, member: Member, expe
 
 const generic_method = (source: MethodSource?) ->
   return nil if source == nil
-  source is ExtensionSource then source.method.generic else nil
+  case source
+    when OwnMethod then source.generic
+    when ExtensionSource then source.method.generic
+    else nil
 
 const type_of_method = (body: Body, member: Member, receiver: Type, source: MethodSource?) ->
   const { name, position } = member.name

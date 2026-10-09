@@ -78,8 +78,7 @@ const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
   const callee = call.callee
   if const generic = generic_callee(body, callee)
     return type_of_generic_call(body, call, generic, expected)
-  if call.type_args.length > 0
-    fail body.program, callee.position, 'only a generic function takes type arguments'
+  reject_type_arguments body, call if not (callee is Member)
   return type_of_empty_map(body, call, expected) if is_empty_map(body, callee)
   if const object_type = constructed_type(body, callee)
     return type_of_construction(body, call, object_type)
@@ -88,6 +87,10 @@ const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
     when Identifier then set_type(body, callee, type_of_identifier(body, callee, true))
     else type_of(body, callee, nil)
   check_arguments body, call, callee_type
+
+export const reject_type_arguments = (body: Body, call: Call) ->
+  return if call.type_args.length == 0
+  fail body.program, call.callee.position, 'only a generic function or method takes type arguments'
 
 # The result of a call of a function of the type, once its arguments are checked.
 export const check_arguments = (body: Body, call: Call, callee_type: Type) ->

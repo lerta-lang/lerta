@@ -3,13 +3,15 @@
 # most one source has it. A field that holds a function is no method.
 import { builtin_method } from './builtins'
 import { ExtensionMethod, Extensions, find_extension } from './extensions'
+import { GenericRef } from './generics'
 import { info_of } from './object_types'
 import { ProgramWide } from './shared'
 import { ObjectType, Type } from '../types'
 
-# A method of the class or struct.
+# A method of the class or struct, which has instances if it is generic.
 export struct OwnMethod
   receiver: ObjectType
+  generic: GenericRef?
 
 export struct ExtensionSource
   method: ExtensionMethod
@@ -27,7 +29,8 @@ export const find_method = (
   extensions: Extensions
 ): MethodSource? ->
   if receiver is ObjectType
-    return OwnMethod(receiver) if info_of(program, receiver).methods.has(name)
+    const info = info_of(program, receiver)
+    return OwnMethod(receiver, generic: info.generics[name]) if info.methods.has(name)
   if const method = find_extension(extensions, receiver, name)
     return ExtensionSource(method)
   const type = builtin_method(receiver, name) ? return nil

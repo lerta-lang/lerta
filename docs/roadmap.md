@@ -9,7 +9,7 @@
 - **Syntax**: `#` comments, `'...'`/`"..."` strings, indented blocks, `const`/`var`, implicit return, parenthesis-free calls (at statement start), `then`/`else` expressions, `if`/`else` statements, `case`, `while`, `for x in xs`, `break`/`continue`, `return`, postfix `if`/`while`/`for`, comprehensions (`(...)` for `Iter<T>`, `[...]` for `Array<T>`), ranges `a...b`, `case` without a subject, string interpolation, destructuring, named arguments (omitting `{}` of an anonymous struct), multi-line literals (newline separation inside brackets, bracketless blocks)
 - **Types**: `Int` (64-bit), `Byte` (unsigned 8-bit), `Bool`, `String`, `void`, `never`, unions and narrowing, `type` aliases, `T?`, `as`, `!`, `is` tests, local inference
 - **Data**: `class`/`struct` (no inheritance, the type body rules, `@`, named constructors, `init`, `deinit`), anonymous structs, `Map` literals, `Array<T>`, `Map<K, V>`, `Iter<T>` (**only builtin types are generic**; user-defined generic types come later), `extend`, of the generic builtin types too (`extend<T> Array<T>`)
-- **Functions**: generic top-level functions and methods of extends (monomorphized, checked per instance, with the bound `Stringable`, which is structural), first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
+- **Functions**: generic top-level functions and methods (monomorphized, checked per instance, with the bound `Stringable`, which is structural), first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
 - **Strings**: immutable, UTF-8, **flat only**. `Binary`, `Byte`, `s.binary`, `b.decode_utf8()`, `s.parse_int()`, `length`, `equals`, `hash`, `==`, `+` (concatenation), `join`
 - **Memory**: RC (non-atomic), destructors. Immortal static literals
 - **Modules**: `import`/`export` (named only), `import 'module'` for a module's effects, a file is a module
@@ -45,7 +45,7 @@ The standard modules are Lerta files in `std/`, which call the C runtime through
 - async/await, the event loop, libuv, workers
 - `weak`
 - User-defined `interface`, itabs, satisfying methods with function-valued fields (`Equatable`/`Hashable` are handled as builtin rules for now, and `Stringable` structurally, by `x.to_string()`)
-- Generic classes and structs and their methods, generic function literals outside the top level, interfaces as bounds, and checking a generic function's body once, at its definition, against its bounds
+- Generic classes and structs, generic function literals outside the top level, interfaces as bounds, and checking a generic function's body once, at its definition, against its bounds
 - Operator overloading, literal construction interfaces, BigInt
 - Regular expressions
 - `Float` (literals are only lexed and kept as strings)
@@ -82,7 +82,6 @@ Run tests (source → execution result) run `bin/lerta`, the compiler written in
 - Whether to add enums without payloads (for now, `case` on values substitutes).
 - Symbols, `:name`: interned names compared by identity, for kinds such as the token kinds of `compiler/lexer/tokens.lerta`, which are `String`s for now. Decide together with enums without payloads, which cover the same need; the two may combine, an enum being a type made of symbols (`type Kind = :identifier | :integer | ...`), which a `case` could check for exhaustiveness.
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
-- Generic methods of classes and structs (as `inside<T>` of the token stream would be; `compiler/parser/` makes them top-level functions).
 - Renaming in destructuring (`const { a: x } = value`).
 - Sorting arrays (`compiler/sort.lerta` sorts by hand for now).
 - A type alias of a union as a pattern of `case`, standing for all its members.

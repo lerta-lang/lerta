@@ -6,7 +6,8 @@ import {
 } from '../ast'
 import { check_object } from './bodies'
 import { fail } from './diagnostics'
-import { add_function, method_key } from './functions'
+import { add_function, add_generic, method_key } from './functions'
+import { GenericRef, make_generic_function, Receiver } from './generics'
 import { imported_type } from './imports'
 import { ProgramWide, Shared } from './shared'
 import { is_builtin_type_name, module_resolver, resolve } from './type_names'
@@ -27,6 +28,8 @@ export class ObjectInfo
   module_index: Int
   fields: Array<FieldInfo> = []
   methods: Map<String, FunctionLiteral> = Map()
+  # The generic methods, those with type parameters, which have instances instead of a function.
+  generics: Map<String, GenericRef> = Map()
   has_init = false
   # `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
   has_deinit = false
@@ -87,12 +90,19 @@ const add_method = (
   const runs_alone = name == 'init' or name == 'deinit'
   if runs_alone and literal.params.length > 0
     fail program, literal.position, "#{name} takes no parameters"
+  if runs_alone and literal.type_params.length > 0
+    fail program, literal.position, "#{name} takes no type parameters"
   info.has_init = true if name == 'init'
   if name == 'deinit' and info.declaration.is_struct
     fail program, member.position, 'a struct has no deinit'
   info.has_deinit = true if name == 'deinit'
   info.methods[name] = literal
-  add_function program, shared, method_key(type_name, name), member.name, literal, info.type
+  if literal.type_params.length == 0
+    add_function program, shared, method_key(type_name, name), member.name, literal, info.type
+    return
+  const receiver = Receiver(type: info.type, type_params: [])
+  const generic = make_generic_function(program, shared, member.name, literal, receiver)
+  info.generics[name] = add_generic(shared, generic)
 
 const field_of_member = (
   program: ProgramWide
