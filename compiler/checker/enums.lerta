@@ -1,0 +1,87 @@
+# Enums: their declarations, and the expressions that name their members, `E.MEMBER`, or `MEMBER`
+# alone where an E is expected.
+import { EnumDeclaration, Expression, Identifier, Member } from '../ast'
+import { fail } from './diagnostics'
+import { has_function } from './functions'
+import { builtin_export, has_import, imported_type } from './imports'
+import { lookup } from './name'
+import { Body, ProgramWide, Shared } from './shared'
+import { is_builtin_type_name } from './type_names'
+import { EnumType, OptionalType, Type } from '../types'
+
+# Registers the module's enums, after its classes and structs (see add_objects).
+export const add_enums = (
+  program: ProgramWide
+  shared: Shared
+  declarations: Array<EnumDeclaration>
+) ->
+  for declaration in declarations
+    const { name, position } = declaration.name
+    const is_taken = shared.objects.has(name) or shared.enums.has(name)
+    fail program, position, "'#{name}' is already defined" if is_taken or is_builtin_type_name(name)
+    const members: Array<String> = []
+    for member in declaration.members
+      if members.any((each) -> each == member.name)
+        fail program, member.position, "'#{member.name}' is already a member of #{name}"
+      members.push member.name
+    const symbol = "#{shared.index}.#{name}"
+    shared.enums[name] = EnumType(name, symbol, members, module: shared.name)
+
+# The enum of the name, of the module or imported.
+export const enum_type = (program: ProgramWide, shared: Shared, name: String): EnumType? ->
+  if const own = shared.enums[name]
+    return own
+  const exported = imported_type(program, shared, name) ? return nil
+  const type = exported.type
+  type is EnumType then type else nil
+
+# `E.MEMBER`, where no local takes the name of the enum E.
+export const type_of_qualified_member = (body: Body, member: Member): Type? ->
+  const object = member.object
+  return nil if not (object is Identifier)
+  const { program, shared } = body
+  return nil if lookup(body, object.name) != nil
+  const type = enum_type(program, shared, object.name) ? return nil
+  const { name, position } = member.name
+  const no_member = () -> fail(program, position, "#{type.name} has no member '#{name}'")
+  name_member body, member, type, member_index(type, name) ? no_member()
+
+# `MEMBER` alone, where an E (or an E?) is expected and E has that member. It cannot take the place
+# of another name in scope, which it would hide.
+export const type_of_elided_member = (
+  body: Body
+  identifier: Identifier
+  expected: Type?
+): Type? ->
+  const wanted = expected ? return nil
+  const type = wanted is OptionalType then wanted.inner else wanted
+  return nil if not (type is EnumType)
+  const name = identifier.name
+  const index = member_index(type, name) ? return nil
+  if is_name_taken(body, name)
+    const message = "'#{name}' names something else here; write #{type.name}.#{name}"
+    fail body.program, identifier.position, message
+  name_member body, identifier, type, index
+
+# An identifier that may stand for a member of an enum that the context expects: a name that
+# nothing takes. Such an operand of `==` is typed after the other one, which tells the enum.
+export const may_name_member = (body: Body, expression: Expression) ->
+  return false if not (expression is Identifier)
+  not is_name_taken(body, expression.name)
+
+# Whether a name in scope takes the name: a local, a top-level name or a builtin.
+const is_name_taken = (body: Body, name: String) ->
+  const { program, shared } = body
+  return true if lookup(body, name) != nil or has_function(shared, name)
+  return true if has_import(shared, name) or shared.top_level.names.has(name)
+  builtin_export(program, shared, name) != nil
+
+const member_index = (type: EnumType, name: String) ->
+  for i in 0...type.members.length
+    return i if type.members[i] == name
+  nil
+
+# Records the member's place, which codegen gives as the value.
+const name_member = (body: Body, expression: Expression, type: EnumType, index: Int) ->
+  body.shared.enum_values[expression] = index
+  type

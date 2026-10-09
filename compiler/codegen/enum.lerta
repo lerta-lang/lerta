@@ -1,0 +1,15 @@
+# Enums in the generated code. A value is the place of its member among the enum's members, as an
+# i64 (see EnumType).
+import { IrBuilder, IrModule } from './ir_builder'
+import { string_constant } from './lerta_ir'
+import { EnumType } from '../types'
+
+# The member's name, an immortal String, read from a constant array of the enum's member names.
+export const emit_member_name = (ir: IrBuilder, value: String, type: EnumType) ->
+  const array_type = "[#{type.members.length} x ptr]"
+  const define = (name: String, module: IrModule) ->
+    const names = ["ptr #{string_constant(ir, member)}" for member in type.members].join(', ')
+    module.define_global name, "private unnamed_addr constant #{array_type} [#{names}]"
+  const names = ir.module.named("enum names #{type.symbol}", '@lerta.enum_names', define)
+  const pointer = ir.assign("getelementptr #{array_type}, ptr #{names}, i64 0, i64 #{value}")
+  ir.assign "load ptr, ptr #{pointer}"

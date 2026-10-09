@@ -41,8 +41,14 @@ export const check_item_type = (
     fail program, at, "#{container} cannot hold values of type #{format_type(type)}"
   type
 
-# The types of a map's keys and values, which `key_at` and `value_at` give: a key is a String, an
-# Int or a class, and a value is an item that is not optional, since a missing key reads as nil.
+export const reject_map_key = (program: ProgramWide, key: Type, at: Position) ->
+  if not is_map_key_type(key)
+    const kinds = 'a String, an Int, an enum or a class'
+    fail program, at, "a map key must be #{kinds}, got #{format_type(key)}"
+
+# The types of a map's keys and values, which `key_at` and `value_at` give: a key is one that
+# reject_map_key accepts, and a value is an item that is not optional, since a missing key reads as
+# nil.
 export const check_map_types = (
   program: ProgramWide
   key: Type
@@ -50,9 +56,7 @@ export const check_map_types = (
   key_at: Position
   value_at: Position
 ) ->
-  if not is_map_key_type(key)
-    const message = "a map key must be a String, an Int or a class, got #{format_type(key)}"
-    fail program, key_at, message
+  reject_map_key program, key, key_at
   check_item_type program, value, value_at, 'a map'
   if value is OptionalType
     fail program, value_at, "a map cannot hold values of type #{format_type(value)}"

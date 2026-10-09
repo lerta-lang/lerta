@@ -1,19 +1,21 @@
 # Operations on arrays in the generated code, through the runtime (runtime/array.c). An item is
-# 8 bytes: an Int as is, a Bool or a Byte zero-extended and a reference as its address.
+# 8 bytes: an Int or an enum as is, a Bool or a Byte zero-extended and a reference as its address.
 import { IrBuilder } from './ir_builder'
 import { ir_type } from './lerta_ir'
 import { call_runtime } from './runtime_calls'
-import { is_kind, is_one_of_kinds, is_reference_type, Type } from '../types'
+import { is_one_of_kinds, is_reference_type, Type } from '../types'
+
+# The kinds whose values are already 8 bytes.
+const WORD_KINDS = ['Int', 'Enum']
 
 export const to_item = (ir: IrBuilder, operand: String, type: Type) ->
-  # An Int is already 8 bytes.
-  return operand if is_kind(type, 'Int')
+  return operand if is_one_of_kinds(type, WORD_KINDS)
   if is_one_of_kinds(type, ['Bool', 'Byte'])
     return ir.assign("zext #{ir_type(type)} #{operand} to i64")
   ir.assign "ptrtoint ptr #{operand} to i64"
 
 export const from_item = (ir: IrBuilder, item: String, type: Type) ->
-  return item if is_kind(type, 'Int')
+  return item if is_one_of_kinds(type, WORD_KINDS)
   if is_one_of_kinds(type, ['Bool', 'Byte'])
     return ir.assign("trunc i64 #{item} to #{ir_type(type)}")
   ir.assign "inttoptr i64 #{item} to ptr"

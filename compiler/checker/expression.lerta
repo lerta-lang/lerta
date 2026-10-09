@@ -13,6 +13,7 @@ import {
   is_empty_map, type_of_array, type_of_empty_map, type_of_index, type_of_map
 } from './collection'
 import { fail } from './diagnostics'
+import { type_of_elided_member, type_of_qualified_member } from './enums'
 import { type_of_generic_call } from './generic_call'
 import { byte_literal } from './literals'
 import { check_loop_jump, type_of_comprehension } from './loop'
@@ -58,13 +59,15 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
     when Unwrap then expect_optional(body, expression.operand)
     when Coalesce then type_of_coalesce(body, expression)
     when BooleanLiteral then bool_type
-    when Identifier then type_of_identifier(body, expression, false)
+    when Identifier
+      const member = type_of_elided_member(body, expression, expected)
+      member ? type_of_identifier(body, expression, false)
     when Call then type_of_call(body, expression, expected)
     when UnaryOperation then type_of_unary(body, expression, expected)
     when BinaryOperation then type_of_binary(body, expression, expected)
     when Case then type_of_case(body, expression, expected)
     when Conditional then type_of_conditional(body, expression, expected)
-    when Member then type_of_property(body, expression)
+    when Member then type_of_qualified_member(body, expression) ? type_of_property(body, expression)
     when ArrayLiteral then type_of_array(body, expression, expected)
     when MapLiteral then type_of_map(body, expression, expected)
     when Comprehension then type_of_comprehension(body, expression, expected)

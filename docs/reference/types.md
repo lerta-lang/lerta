@@ -83,7 +83,7 @@ squares[3] = 9
 print ages['ann'] ? 0
 ```
 
-- `Map<K, V>` maps keys of type `K`, a `String`, an `Int`, a class or a union of classes (compared by identity: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
+- `Map<K, V>` maps keys of type `K`, a `String`, an `Int`, an [enum](#enums), a class or a union of classes (compared by identity: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
 - `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there.
@@ -132,6 +132,22 @@ type Expr = Num | Add | Mul
   ```
 - A member's value fits where the union is expected. A field that every member declares, with the same type in each, can be read from the union: `shape.name` reads the field of whichever member the value is. It can be assigned through the union, `shape.name = n` (and `+=` and so on), when every member is a class whose field is not `const`. Other fields and methods cannot be used directly: branch on its type first.
 - `x is T` tells whether a union value holds a `T`. Like nil tests, it narrows a `const`, a parameter or a loop variable to `T` where it holds (see [control flow](control-flow.md#if-and-while)).
+
+## Enums
+
+```
+enum TokenKind
+  IDENTIFIER
+  INTEGER
+  STRING
+
+const kind: TokenKind = INTEGER
+print kind == TokenKind.STRING
+```
+
+- `enum Name` declares, at the top level, a type whose values are its members, listed one per line in the indented block below: at least one, each once. The members carry no data.
+- `Name.MEMBER` is a member. Where an enum is expected, the member alone stands for it: `INTEGER` above. That is wherever an expected type reaches a literal (see [Byte](#byte)), and the other operand of `==` and `!=`, and the patterns of a [`case`](control-flow.md#case-with-a-subject) on an enum. A member alone cannot take the place of another name in scope, such as a local, a function or an import of the same name; it must be qualified there. Without an expected enum, a member alone is an undefined name.
+- `==` and `!=` compare two values of the same enum. There is no ordering. An enum can be a [`Map`](#map) key, and is `Stringable`: `kind.to_string()` gives the member's name, `'INTEGER'`. It cannot be a member of a union so far.
 
 ## Anonymous structs
 

@@ -37,6 +37,14 @@ export struct ObjectType
   module: String
   is_struct: Bool
 
+# An enum: its values are its members, held as their places among them (see EnumDeclaration). Its
+# name, symbol and module are as those of an ObjectType.
+export struct EnumType
+  name: String
+  symbol: String
+  module: String
+  members: Array<String>
+
 # `A | B`: classes and structs, by name; the object carries which one it is. The members are kept
 # in order (see union_type).
 export struct UnionType
@@ -55,7 +63,7 @@ export struct FunctionType
   params: Array<Type>
   result: Type
 
-type ValueType = SimpleType | ArrayType | MapType | IterType | RecordType | ObjectType
+type ValueType = SimpleType | ArrayType | MapType | IterType | RecordType | ObjectType | EnumType
 type CompositeType = UnionType | OptionalType | TypeParameterType | FunctionType
 
 export type Type = ValueType | CompositeType
@@ -69,8 +77,8 @@ export const void_type = SimpleType(kind: 'void')
 export const never_type = SimpleType(kind: 'never')
 export const nil_type = SimpleType(kind: 'nil')
 
-# The kind of a type: that of a simple type, `Array`, `Map`, `Iter`, `Record`, `Object`, `Union`,
-# `Optional`, `TypeParameter` or `function`.
+# The kind of a type: that of a simple type, `Array`, `Map`, `Iter`, `Record`, `Object`, `Enum`,
+# `Union`, `Optional`, `TypeParameter` or `function`.
 export const kind_of = (type: Type) ->
   case type
     when SimpleType then type.kind
@@ -79,6 +87,7 @@ export const kind_of = (type: Type) ->
     when IterType then 'Iter'
     when RecordType then 'Record'
     when ObjectType then 'Object'
+    when EnumType then 'Enum'
     when UnionType then 'Union'
     when OptionalType then 'Optional'
     when TypeParameterType then 'TypeParameter'
@@ -101,8 +110,8 @@ export const optional_type = (inner: Type): Type ->
 export const union_type = (members: Array<Type>) ->
   UnionType members: sorted(members, (a, b) -> compare_text(type_key(a), type_key(b)))
 
-# How a type is written in messages. A class or struct is written by its name, and with its module
-# where `qualified` says so, or where a union holds another of the same name.
+# How a type is written in messages. A class, struct or enum is written by its name, and with its
+# module where `qualified` says so, or where a union holds another of the same name.
 export const format_type = (type: Type) -> format_qualified(type, false)
 
 export const format_qualified = (type: Type, qualified: Bool): String ->
@@ -113,6 +122,7 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when IterType then "Iter<#{format(type.item)}>"
     when MapType then "Map<#{format(type.key)}, #{format(type.value)}>"
     when ObjectType then qualified then "#{type.name} (of #{type.module})" else type.name
+    when EnumType then qualified then "#{type.name} (of #{type.module})" else type.name
     when RecordType
       const fields = ["#{field.name}: #{format(field.type)}" for field in type.fields]
       "{ #{fields.join(', ')} }"
@@ -151,6 +161,7 @@ export const type_key = (type: Type): String ->
   case type
     when SimpleType then type.kind
     when ObjectType then type.symbol
+    when EnumType then type.symbol
     when RecordType
       "{#{["#{field.name}: #{type_key(field.type)}" for field in type.fields].join(', ')}}"
     when ArrayType then "Array<#{type_key(type.element)}>"
@@ -170,6 +181,7 @@ export const is_reference_type = (type: Type): Bool ->
     when SimpleType then type.kind == 'String' or type.kind == 'Binary'
     when OptionalType then is_reference_type(type.inner)
     when TypeParameterType then false
+    when EnumType then false
     else true
 
 # The type of the items of an array, a Binary or an Iter, which `for` and lazy methods such as
@@ -199,9 +211,10 @@ export const is_identity_type = (type: Type): Bool ->
     when UnionType then type.members.all(is_identity_type)
     else false
 
-# Maps hash and compare their keys in the runtime, which knows these kinds.
+# Maps hash and compare their keys in the runtime, which knows these kinds; an enum's value is an
+# Int there.
 export const is_map_key_type = (type: Type) ->
-  is_one_of_kinds(type, ['String', 'Int']) or is_identity_type(type)
+  is_one_of_kinds(type, ['String', 'Int', 'Enum']) or is_identity_type(type)
 
 # The type of a value that is either an `a` or a `b`: the same type, or `T?` for a mix of `T`,
 # `T?` and nil; `never`, which gives no value, does not count. Nil if there is none.

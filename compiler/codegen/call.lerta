@@ -8,6 +8,7 @@ import {
 import { info_of } from '../checker/object_types'
 import { call_array_method } from './array'
 import { emit_closure_call, function_type_of } from './closure'
+import { emit_member_name } from './enum'
 import { generate, read_field, release_if_reference, type_at_use, type_of } from './expression'
 import { lookup_local } from './function'
 import { Generator } from './generator'
@@ -20,7 +21,7 @@ import {
 import { call_map_method, emit_map_new } from './map'
 import { nil_constant } from './optional'
 import { emit_runtime_call, emit_unreachable } from './runtime_calls'
-import { ArrayType, is_kind, kind_of, MapType, ObjectType, Type } from '../types'
+import { ArrayType, EnumType, is_kind, kind_of, MapType, ObjectType, Type } from '../types'
 
 export const generate_call = (g: Generator, call: Call) ->
   const callee = call.callee
@@ -68,7 +69,7 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
   const result = case source
     when BuiltinMethod
       const emit_call = (args: Array<String>) ->
-        call_collection_method g.ir, name, object, object_type, args
+        call_builtin_method g.ir, name, object, object_type, args
       with_arguments g, call.args, emit_call
     else
       const symbol = lerta_method_symbol(g, source, name, call)
@@ -150,7 +151,7 @@ const generate_construction = (g: Generator, call: Call, type: ObjectType) ->
   release_if_reference g, arg.value, given[arg.name.name]! for arg in call.named_args
   object
 
-const call_collection_method = (
+const call_builtin_method = (
   ir: IrBuilder
   name: String
   object: String
@@ -160,4 +161,5 @@ const call_collection_method = (
   case type
     when ArrayType then call_array_method(ir, name, object, type.element, args)
     when MapType then call_map_method(ir, name, object, args, type)
+    when EnumType then emit_member_name(ir, object, type)
     else throw "no method '#{name}' of #{kind_of(type)}"

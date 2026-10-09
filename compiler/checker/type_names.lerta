@@ -3,12 +3,13 @@ import {
   FunctionTypeName, Identifier, NamedType, Position, RecordTypeField, RecordTypeName, TypeAlias
   TypeName, UnionTypeName
 } from '../ast'
+import { reject_map_key } from './collection'
 import { fail } from './diagnostics'
 import { imported_type } from './imports'
 import { ProgramWide, Shared } from './shared'
 import {
   ArrayType, binary_type, bool_type, byte_type, format_type, FunctionType, int_type, IterType
-  is_kind, is_map_key_type, is_reference_type, MapType, never_type, ObjectType, optional_type
+  is_kind, is_reference_type, MapType, never_type, ObjectType, optional_type
   OptionalType, record_type, RecordField, same_type, string_type, Type, union_type, UnionType
   void_type
 } from '../types'
@@ -44,10 +45,12 @@ export const with_type_parameters = (
   type_parameters: Map<String, Type>
 ) -> Resolver(type_parameters, module_index: resolver.module_index)
 
-# A class, struct or imported type of the name, marking its import as used.
+# A class, struct, enum or imported type of the name, marking its import as used.
 const named_type = (program: ProgramWide, shared: Shared, name: String): Type? ->
   if const info = shared.objects[name]
     return info.type
+  if const own = shared.enums[name]
+    return own
   if const exported = imported_type(program, shared, name)
     return exported.type
   nil
@@ -201,9 +204,7 @@ const resolve_name = (
 # A type parameter's type argument is checked where it is given (see generic_call).
 const resolve_key = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
   const type = resolve(program, resolver, type_name)
-  if not is_map_key_type(type) and not is_kind(type, 'TypeParameter')
-    const message = "a map key must be a String, an Int or a class, got #{format_type(type)}"
-    fail program, type_name.position, message
+  reject_map_key program, type, type_name.position if not is_kind(type, 'TypeParameter')
   type
 
 # A missing key reads as nil, so a value cannot be nil itself.

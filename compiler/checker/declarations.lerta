@@ -1,10 +1,12 @@
 # Declares the module's names, which its code may use before their declarations, and puts the
 # extends in effect. Each step is taken for all the modules before the next (see check_modules).
 import {
-  Declaration, Extend, FunctionLiteral, Import, Statement, TypeAlias, TypeDeclaration
+  Declaration, EnumDeclaration, Extend, FunctionLiteral, Import, Statement, TypeAlias
+  TypeDeclaration
 } from '../ast'
 import { fail } from './diagnostics'
 import { declare_extend } from './extend_declarations'
+import { add_enums } from './enums'
 import { add_imported } from './extensions'
 import { declare_externs } from './externs'
 import { add_function, add_generic_function } from './functions'
@@ -14,12 +16,14 @@ import { add_members, add_objects, object_type } from './object_types'
 import { ProgramWide, Shared } from './shared'
 import { add_alias, has_alias, resolve_aliases } from './type_names'
 
-# The module's types, aliases and imports, which the declarations of the modules in its import
-# cycle may use before their own are complete.
+# The module's types (classes, structs and enums), aliases and imports, which the declarations of
+# the modules in its import cycle may use before their own are complete.
 export const declare_names = (program: ProgramWide, shared: Shared) ->
   const statements = program.modules[shared.index].program
   const declarations = [statement for statement in statements when statement is TypeDeclaration]
   add_objects program, shared, declarations
+  const enums = [statement for statement in statements when statement is EnumDeclaration]
+  add_enums program, shared, enums
   for statement in statements
     add_alias program, shared, statement if statement is TypeAlias
   add_imports program, shared, statements
@@ -55,7 +59,7 @@ const add_imported_extends = (program: ProgramWide, shared: Shared, run_before: 
       if is_added
         add_imported program, shared.extensions, program.shared[imported].own_methods, statement
 
-# A class, struct or type alias cannot have the name of an import; the error points at it.
+# A class, struct, enum or type alias cannot have the name of an import; the error points at it.
 const reject_types_named_like_imports = (
   program: ProgramWide
   shared: Shared
@@ -64,6 +68,7 @@ const reject_types_named_like_imports = (
   for statement in statements
     const name = case statement
       when TypeDeclaration then statement.name
+      when EnumDeclaration then statement.name
       when TypeAlias then statement.name
       else continue
     if has_import(shared, name.name)
@@ -80,8 +85,8 @@ const add_top_level_functions = (
     continue if not (literal is FunctionLiteral)
     fail program, statement.position, 'a function must be declared with const' if statement.mutable
     const name = statement.name
-    const is_taken = object_type(program, shared, name.name) != nil or has_alias(shared, name.name)
-    if is_taken or has_import(shared, name.name)
+    const is_type = object_type(program, shared, name.name) != nil or shared.enums.has(name.name)
+    if is_type or has_alias(shared, name.name) or has_import(shared, name.name)
       fail program, name.position, "'#{name.name}' is already defined"
     if literal.type_params.length == 0
       add_function program, shared, name.name, name, literal, nil

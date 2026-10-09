@@ -3,6 +3,7 @@ import {
   BinaryOperation, Coalesce, Expression, is_nil_test, NilLiteral, UnaryOperation
 } from '../ast'
 import { fail } from './diagnostics'
+import { may_name_member } from './enums'
 import { expect_condition, expect_optional, expect_type, type_of } from './expression'
 import { is_contextual } from './literals'
 import { where_right_operand } from './narrowing'
@@ -67,7 +68,7 @@ export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Ty
     return bool_type
   return type_of_nil_test(body, binary) if is_nil_test(binary)
   if operator == '==' or operator == '!='
-    const comparable = ['Int', 'Byte', 'Bool', 'String', 'Binary']
+    const comparable = ['Int', 'Byte', 'Bool', 'String', 'Binary', 'Enum']
     const reject = (type: Type) -> "cannot compare values of type #{format_type(type)}"
     type_of_operands body, binary, nil, comparable, reject
     return bool_type
@@ -80,7 +81,8 @@ export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Ty
   type_of_operands body, binary, hint_of(expected, allowed), allowed, reject
 
 # The type both operands share. An operand whose type comes from the context is checked against
-# the other one, so that `c == 'a'` and `'a' == c` compare Bytes when `c` is one.
+# the other one, so that `c == 'a'` and `'a' == c` compare Bytes when `c` is one, and `k == A` and
+# `A == k` compare members of an enum when `k` is one.
 const type_of_operands = (
   body: Body
   binary: BinaryOperation
@@ -89,7 +91,9 @@ const type_of_operands = (
   reject: (Type) -> String
 ) ->
   const { left, right } = binary
-  const right_first = is_contextual(left) and not is_contextual(right)
+  const takes_context = (operand: Expression) ->
+    is_contextual(operand) or may_name_member(body, operand)
+  const right_first = takes_context(left) and not takes_context(right)
   const first = right_first then right else left
   const second = right_first then left else right
   const type = type_of(body, first, expected)

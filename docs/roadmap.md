@@ -79,8 +79,6 @@ Run tests (source → execution result) run `bin/lerta`, the compiler written in
 - Whether an extend should be in effect beyond the modules that import its module directly.
 - How an `Iter` is written in Lerta (its `has_next` and `next`), which `take` needs to move to `std/builtins.lerta`.
 - Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
-- Whether to add enums without payloads (for now, `case` on values substitutes).
-- Symbols, `:name`: interned names compared by identity, for kinds such as the token kinds of `compiler/lexer/tokens.lerta`, which are `String`s for now. Decide together with enums without payloads, which cover the same need; the two may combine, an enum being a type made of symbols (`type Kind = :identifier | :integer | ...`), which a `case` could check for exhaustiveness.
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
 - Renaming in destructuring (`const { a: x } = value`).
 - Sorting arrays (`compiler/sort.lerta` sorts by hand for now).

@@ -10,11 +10,11 @@ import { object_type } from './object_types'
 import { Body } from './shared'
 import { type_of_block } from './statement'
 import {
-  format_member, format_type, is_kind, is_one_of_kinds, same_type, Type, type_key, unify
+  EnumType, format_member, format_type, is_kind, is_one_of_kinds, same_type, Type, type_key, unify
   UnionType
 } from '../types'
 
-const VALUE_KINDS = ['Int', 'Byte', 'Bool', 'String']
+const VALUE_KINDS = ['Int', 'Byte', 'Bool', 'String', 'Enum']
 
 # The body of a case arm or of then/else, and the locals narrowed in it.
 struct Branch
@@ -126,7 +126,9 @@ const check_patterns = (body: Body, case_expression: Case) ->
     fail body.program, subject.position, message
   for arm in arms
     expect_type body, pattern, subject_type for pattern in arm.patterns
-  if case_expression.otherwise == nil
+  if subject_type is EnumType
+    check_member_patterns body, case_expression, subject_type
+  else if case_expression.otherwise == nil
     fail body.program, case_expression.position, 'a case on values needs an else arm'
   const no_narrowings: Array<Narrowing> = []
   [no_narrowings for _ in arms]
@@ -145,17 +147,34 @@ const check_type_patterns = (
     const types = [type_pattern(body, pattern, union) for pattern in arm.patterns]
     for i in 0...types.length
       const key = type_key(types[i])
-      if handled.has(key)
-        const message = "#{format_member(types[i], union)} is already handled by an earlier arm"
-        fail body.program, arm.patterns[i].position, message
+      fail_handled_twice body, arm.patterns[i], format_member(types[i], union) if handled.has(key)
       handled[key] = true
     arm_narrowings.push types.length == 1 then subject_narrowings(body, subject, types[0]) else []
   const missing = [member for member in union.members when not handled.has(type_key(member))]
-  if case_expression.otherwise == nil and missing.length > 0
-    const missing_types = [format_member(member, union) for member in missing].join(', ')
-    const message = "case does not handle #{missing_types}; add them or an else arm"
-    fail body.program, case_expression.position, message
+  fail_unhandled body, case_expression, [format_member(member, union) for member in missing]
   arm_narrowings
+
+# Each pattern that names a member of the enum handles it; without an else arm, every member must
+# be handled.
+const check_member_patterns = (body: Body, case_expression: Case, type: EnumType) ->
+  const handled: Map<Int, Bool> = Map()
+  for arm in case_expression.arms
+    for pattern in arm.patterns
+      const index = body.shared.enum_values[pattern] ? continue
+      fail_handled_twice body, pattern, type.members[index] if handled.has(index)
+      handled[index] = true
+  const members = type.members
+  const missing = [members[i] for i in 0...members.length when not handled.has(i)]
+  fail_unhandled body, case_expression, missing
+
+const fail_handled_twice = (body: Body, pattern: Expression, handled: String) ->
+  fail body.program, pattern.position, "#{handled} is already handled by an earlier arm"
+
+# Without an else arm, a case must handle each of the `missing`.
+const fail_unhandled = (body: Body, case_expression: Case, missing: Array<String>) ->
+  return if case_expression.otherwise != nil or missing.length == 0
+  const message = "case does not handle #{missing.join(', ')}; add them or an else arm"
+  fail body.program, case_expression.position, message
 
 # The pattern's type, recorded on the pattern for codegen.
 const type_pattern = (body: Body, pattern: Expression, union: UnionType) ->

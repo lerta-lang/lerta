@@ -6,7 +6,7 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 
 ## Stringable
 
-`Stringable` is the bound of a type parameter (see [generic functions](functions.md#generic-functions)) satisfied by the types that have a method `to_string(): String`: `String`, `Int`, `Byte` and `Bool`, and any type that declares one or gets one from an extend in effect. A field that holds a function does not count, nor does a `to_string` with parameters or another result. `Int?`, unions and arrays are not `Stringable`, unless an extend gives them `to_string`. String interpolation, `"#{x}"`, requires a `Stringable` value and inserts `x.to_string()` (see [syntax](syntax.md)).
+`Stringable` is the bound of a type parameter (see [generic functions](functions.md#generic-functions)) satisfied by the types that have a method `to_string(): String`: `String`, `Int`, `Byte`, `Bool` and enums, and any type that declares one or gets one from an extend in effect. A field that holds a function does not count, nor does a `to_string` with parameters or another result. `Int?`, unions and arrays are not `Stringable`, unless an extend gives them `to_string`. String interpolation, `"#{x}"`, requires a `Stringable` value and inserts `x.to_string()` (see [syntax](syntax.md)).
 
 ## Methods of the builtin types
 
@@ -22,5 +22,6 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | `Array<T>` | `iter`, `map`, `filter`, `any`, `all`, `find`, `join` of an `Array<String>` and `to_binary` of an `Array<Byte>` | `length`, `push`, `pop`, `take` |
 | `Map<K, V>` | `has` | `length`, `remove`, `keys` |
 | `Iter<T>` | `map`, `filter`, `to_array`, `any`, `all`, `find` | `has_next`, `next`, `take` |
+| An [enum](types.md#enums) | | `to_string` |
 
 A `Bool` gives `true` or `false` as its text, and a `Byte` a number. Why each of the others is built in is in [internals](../internals.md#builtins).
