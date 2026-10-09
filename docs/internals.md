@@ -25,7 +25,7 @@ This describes the implementation design. Unmarked statements describe the compi
 
 ## Bootstrap
 
-- The compiler is written in Lerta (in the [self-hosting subset](roadmap.md#self-hosting-subset)), so building it takes a Lerta compiler: the seed, `seed/lerta.ll`. It is the compiler's own LLVM IR, as `dump-llvm` prints it, in seed mode (below). The IR names no target (clang is given it), so the one seed builds on every platform.
+- The compiler was first written in TypeScript (stage0), which built its rewrite in Lerta, and has been built by itself since; stage0 is gone. So building it takes a Lerta compiler: the seed, `seed/lerta.ll`. It is the compiler's own LLVM IR, as `dump-llvm` prints it, in seed mode (below). The IR names no target (clang is given it), so the one seed builds on every platform.
 - `make` has clang build the seed with the runtime into `build/minilerta`, which builds `compiler/` into `bin/lerta`. Only make and clang are needed. That the seed builds the current source is thus checked by every build.
 - The compiler carries the standard modules and the runtime, `std/*.lerta`, `runtime/*.c` and `runtime/*.h`, as the string constants of the generated module `compiler/embedded.lerta`, which git ignores. minilerta builds `tools/embed.lerta`, which writes it from the files that the Makefile lists, so no list of them is written by hand. The loader reads a standard module from it, and `build` writes the runtime from it to a temporary directory, beside the IR, for clang, then removes the directory.
 - The seed is built in seed mode (`embed --seed`): its `embedded.lerta` holds only the paths, and reads each file when the compiler runs, relative to the current directory, so minilerta must run from the repository's root, as the Makefile runs it. So minilerta builds `bin/lerta` in one step with the working tree's std and runtime, and the seed does not hold them. `make seed` writes such a module into a copy of `compiler/`, in `build/seed-source/`, so that the build's own one stays as it is.
@@ -76,7 +76,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 - A debug runtime counts live objects (allocations minus releases, excluding immortal static objects).
 - At exit, a non-zero count is reported as a leak. **Planned:** the remaining objects are traversed to report cycles (by type).
-- Release builds do not count. A build without `-O` uses the debug runtime.
+- Release builds do not count. A build without `-O` uses the debug runtime. The run tests build so, and fail on any leak.
 - An exit through an uncaught `throw` is not checked, since it ends the program in the middle of its work.
 
 ## Objects
@@ -111,7 +111,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 ## Lazy iterators
 
-- Desugared into "the source iterator + a closure for the body". No coroutines needed (possible in Phase 0).
+- Desugared into "the source iterator + a closure for the body". No coroutines needed.
 - An `Iter` is a heap object: the header, the pointers to its `has_next` and `next` code, which take the `Iter` itself, a started flag, then the state of its kind (`LertaIter` in `runtime/lerta.h`). The kinds are the items of an array or a `Binary` and the integers of a range, and `map`, `filter` and `take`, which own their source `Iter` and closure; each is generated once per type it depends on. A lazy comprehension is a `map` of its element's closure over its source, through a `filter` of its guard's closure if it has one; the methods `map` and `filter` are such comprehensions (see [builtins](#builtins)).
 - No intermediate data structures are made, but each item goes through calls of code pointers. Fusing a chain into the `for` loop that consumes it is left for later.
 - A started flag is kept, and starting a second traversal throws.
@@ -153,7 +153,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 ## FFI
 
-- C receives pointers to heap representations such as `LertaString*`. **Planned:** the ABI after small strings become immediate values is undecided.
+- C receives `Int` as `int64_t`, `Byte` as `uint8_t`, and pointers to heap representations such as `LertaString*`. **Planned:** the ABI after small strings become immediate values is undecided.
   - Arguments are borrowed (the C side does not release them). Return values carry ownership (returned with reference count 1).
   - **Planned:** avoid direct access to the representation; use the accessors in the runtime header (`lerta_string_bytes(s, &len)` and so on). This survives changes to the representation. Ropes are flattened here.
 - **Planned:** headers are parsed with **libclang** (no custom parser; the same approach as Zig's `@cImport` and Swift's clang importer).
@@ -168,6 +168,6 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 - **Planned:** libuv absorbs platform differences.
 - **Future target: microcontrollers** (STM32 / Cortex-M, ESP32-C3/C6 / RISC-V; Xtensa-based chips after upstream LLVM support matures).
   - `Int` stays fixed at 64 bits (TinyGo's environment-dependent `int` is not adopted). Hot spots use `Int32` explicitly.
-  - The event loop is not tied to libuv; **the backend is replaceable** (libuv on PCs; an interrupt-driven scheduler or FreeRTOS/Zephyr on microcontrollers). The boundary is decided during the Phase 2 design.
+  - The event loop is not tied to libuv; **the backend is replaceable** (libuv on PCs; an interrupt-driven scheduler or FreeRTOS/Zephyr on microcontrollers). The boundary is decided with the event loop.
   - The runtime C code **does not depend on libc** (only about malloc / memcpy). The allocator is replaceable (TLSF and so on).
   - Beware of code bloat from monomorphization. Remedies when needed: merging instances with identical machine code at link time (LLVM mergefunc, lld ICF), and a build option to switch to dispatch through interfaces.

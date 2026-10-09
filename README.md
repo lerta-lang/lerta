@@ -22,7 +22,7 @@ print "area: #{Circle(r: 2).area}"
 
 ## Status
 
-Early development. The compiler is written in Lerta (`compiler/`) and builds itself, starting from a seed, its own LLVM IR. Next is completing the core of the language. See `docs/roadmap.md`.
+Early development. The compiler is written in Lerta (`compiler/`) and builds itself, starting from a seed, its own LLVM IR. What is left is in `docs/roadmap.md`.
 
 ## Repository layout
 
@@ -46,7 +46,7 @@ Early development. The compiler is written in Lerta (`compiler/`) and builds its
 | `docs/design/` | Planned language design that is not implemented yet |
 | `docs/reference/` | Language reference. It covers only what is implemented and grows with the implementation |
 | `docs/internals.md` | Implementation design: execution model, memory management, the LLVM interface |
-| `docs/roadmap.md` | Phases, the self-hosting subset and open questions |
+| `docs/roadmap.md` | What is left to implement, and open questions |
 
 ## Building
 

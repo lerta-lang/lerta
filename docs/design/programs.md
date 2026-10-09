@@ -17,6 +17,19 @@ Named imports, with `as`, from the standard modules and from files, `import 'mod
   - Passing structs by value: initially limited to passing by pointer (ABI classification is postponed).
   - Function-like macros and inline functions cannot be called. Writing a C wrapper function is the escape hatch.
 
+## Standard library
+
+The standard modules are Lerta files in `std/`, which call the C runtime through `extern`, and which the compiler carries in it.
+
+| Location | Contents |
+|---|---|
+| builtins | `print`, basic types (`Int`, `String`, `Array` and so on), standard interfaces |
+| `'std:io'` | `read_file(path: String): Binary`, `write_file`, `is_file`, `real_path`, `make_temp_dir`, `remove_tree`, `Writer`, `stdout`, `stderr` |
+| `'std:process'` | `argv`, `exit(code: Int): never`, `run(command: String, args: Array<String>): Int` |
+
+- The builtins written in Lerta, `print` and most methods of the builtin types (see [builtins](../reference/builtins.md)), are in `std/builtins.lerta`.
+- Writes are synchronous for now; whether they become asynchronous is decided with the event loop.
+
 ## Tools
 
 - `lerta build`, and a provisional `lerta run` that builds and then runs the executable, are implemented: see [the reference](../reference/compiler.md). Planned: bitcode output, `lerta run` running directly with JIT, and `lerta repl`.

@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository. For the project overv
 
 Read these before changing behavior:
 
-- `docs/roadmap.md`: the self-hosting subset. Do not implement features outside it without asking.
+- `docs/roadmap.md`: what is left to implement, and the open questions. Ask before implementing a feature that neither it nor `docs/design/` describes.
 - `docs/philosophy.md`: the design principles. When a design question is not covered, apply them in priority order.
 - `docs/design/`: the planned language design. Implement features as specified there.
 - `docs/reference/`: the language as implemented so far, including the coding conventions for Lerta code.
@@ -41,4 +41,4 @@ Let the code speak instead of relying on comments:
 
 Documentation follows the same rules: no redundancy, no duplication, and a clear structure. State each fact in one place and point to it from elsewhere.
 
-Follow the self-hosting subset and the runtime rules in `docs/roadmap.md` and `docs/internals.md`.
+Follow the runtime rules in `docs/internals.md`, and its bootstrap section (`docs/internals.md#bootstrap`) for which features the compiler may use.

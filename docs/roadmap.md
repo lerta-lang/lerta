@@ -1,77 +1,21 @@
 # Roadmap
 
-## Self-hosting subset
+What the language has is in [the reference](reference/README.md), and what it is planned to have in [the design](design/README.md). This page lists what is left, by area and in no order: each is taken up when it is chosen.
 
-"The minimal language needed to write the compiler itself." The compiler in `compiler/` is written in this alone, so that the [seed](internals.md#bootstrap) builds it.
+## Not implemented yet
 
-### Included
-
-- **Syntax**: `#` comments, `'...'`/`"..."` strings, indented blocks, `const`/`var`, implicit return, parenthesis-free calls (at statement start), `then`/`else` expressions, `if`/`else` statements, `case` (a simple statement after `then`/`else` on the arm's line, `else pass` for an arm that does nothing), `while`, `for x in xs`, `break`/`continue`, `return`, postfix `if`/`while`/`for`, comprehensions (`(...)` for `Iter<T>`, `[...]` for `Array<T>`), ranges `a...b`, `case` without a subject, string interpolation, destructuring, named arguments (omitting `{}` of an anonymous struct), multi-line literals (newline separation inside brackets, bracketless blocks)
-- **Types**: `Int` (64-bit), `Byte` (unsigned 8-bit), `Bool`, `String`, `void`, `never`, unions and narrowing (through `and`, `or` and `not` too), `type` aliases (a union over several lines as an indented block), `T?`, `as`, `!`, `is` tests (on optional unions too), local inference
-- **Data**: `class`/`struct` (no inheritance, the type body rules, `@`, named constructors, `init`, `deinit`), enums without payloads (members may be string literals), anonymous structs, `Map` literals, `Array<T>`, `Map<K, V>`, `Iter<T>` (**only builtin types are generic**; user-defined generic types come later), `extend`, of the generic builtin types too (`extend<T> Array<T>`)
-- **Functions**: generic top-level functions and methods, of classes and structs too (monomorphized, checked per instance, with the bound `Stringable`, which is structural), first-class functions, type inference for lambda parameters, closures (only captured variables go into the context)
-- **Strings**: immutable, UTF-8, **flat only**. `Binary`, `Byte`, `s.binary`, `b.decode_utf8()`, `s.parse_int()`, `length`, `equals`, `hash`, `==`, `+` (concatenation), `join`
-- **Memory**: RC (non-atomic), destructors. Immortal static literals
-- **Modules**: `import`/`export` (named only), `import 'module'` for a module's effects, a file is a module
-- **FFI**: hand-written `extern` declarations only (no libclang), `extern symbol as name: type`. Used to call runtime C functions, and C functions of files that `lerta build` links
-- **I/O**: synchronous file reading and writing, temporary directories, stdout/stderr, argv, exit, running other programs (the compiler runs `clang`). This is enough to write the compiler
-- **Safety**: out-of-bounds access, overflow and division by zero throw (which, for now, prints to stderr and exits, like any `throw`). Panics abort
-- **Exceptions**: `throw` only. The argument is a string; it is printed to stderr and the program exits (there is no `catch`)
-- **Platforms**: Linux / macOS
-
-### Runtime C functions
-
-- In the subset, the only integer types are `Int` (64-bit) and `Byte`, so runtime C functions are written with `int64_t` / `uint8_t`.
-
-### Standard library layout
-
-The standard modules are Lerta files in `std/`, which call the C runtime through `extern`, and which the compiler carries in it.
-
-| Location | Contents |
-|---|---|
-| builtins | `print`, basic types (`Int`, `String`, `Array` and so on), standard interfaces |
-| `'std:io'` | `read_file(path: String): Binary`, `write_file`, `is_file`, `real_path`, `make_temp_dir`, `remove_tree`, `Writer`, `stdout`, `stderr` |
-| `'std:process'` | `argv`, `exit(code: Int): never`, `run(command: String, args: Array<String>): Int` |
-
-- The builtins written in Lerta, `print` and most methods of the builtin types (see [builtins](reference/builtins.md)), are in `std/builtins.lerta`.
-- For now, writes are synchronous. Making them asynchronous is decided in Phase 2.
-
-### Not included (later)
-
-- Variadic parameters `xs...`
-- Multi-line string literals `"""..."""`
-- Ropes, `StringSlice`, small strings as immediate values, grapheme iterators
-- `catch`/`finally`, exception types, the exception implementation strategy — the compiler throws a compile error where it finds it, since the first one ends the build
-- async/await, the event loop, libuv, workers
-- `weak` (`weak!` fields are implemented)
-- User-defined `interface`, itabs, satisfying methods with function-valued fields (`Equatable`/`Hashable` are handled as builtin rules for now, and `Stringable` structurally, by `x.to_string()`)
-- Generic classes and structs, generic function literals outside the top level, interfaces as bounds, and checking a generic function's body once, at its definition, against its bounds
-- Operator overloading, literal construction interfaces, BigInt
-- Regular expressions
-- `Float` (literals are only lexed and kept as strings)
-- `Int8/16/32`, `UInt16/32/64`
-- Importing C headers with libclang
-- Formatter, LSP, package management
+- **Syntax**: variadic parameters `xs...`, multi-line string literals `"""..."""`
+- **Types**: `Float` (literals are only lexed and kept as strings), `Int8/16/32`, `UInt16/32/64`, BigInt
+- **Objects and generics**: user-defined `interface`, itabs, methods satisfied by function-valued fields (`Stringable` is structural for now, by `x.to_string()`); generic classes and structs, generic function literals outside the top level, interfaces as bounds, and checking a generic function's body once, at its definition, against its bounds; `weak` fields that read as nil and `weak var` locals; user-defined `equals` and `hash`; operator overloading and literal construction interfaces
+- **Errors**: `catch`/`finally`, exception types and their implementation strategy, the frame chain
+- **Concurrency**: async/await, the event loop on libuv, asynchronous writes, workers
+- **Strings**: ropes, `StringSlice`, small strings as immediate values, grapheme iterators, regular expressions
+- **Programs and tools**: importing C headers with libclang, `.ll`/bitcode output from `lerta build`, `lerta run` with a JIT and `lerta repl` ([tools](design/programs.md#tools)), a formatter, an LSP, package management, testing the compiler itself on Windows (its programs are built and run there already: see [platforms](internals.md#platforms))
 
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
 - Modules lack, for now: `import mod from`.
-
-## Phases and bootstrap
-
-Run tests (source → execution result) run `bin/lerta`, the compiler written in Lerta (they ran stage0 in Phase 0). They run with the debug runtime and fail on any leak ([leak checking](internals.md#leak-checking)).
-
-1. **Phase 0** (done): implement the subset above in TypeScript (stage0).
-   - stage0 outputs `.ll` (LLVM IR text) and calls `clang` as a child process.
-   - From stage0 on, features the language lacks (inheritance, getters, `any`) are sealed off while writing it.
-   - Decide the minimal subset needed for self-hosting ([self-hosting subset](#self-hosting-subset)) first.
-2. **Phase 1** (done): rewrite the compiler in the Lerta subset (`compiler/`) and bootstrap.
-   - stage1: compile the compiler's own source with stage0.
-   - stage2 / stage3: recompile the same source with stage1, then again with stage2. **stage2 == stage3** (the same LLVM IR) means the bootstrap succeeded.
-   - Then stage0 was removed; for how the compiler is built now, see [bootstrap](internals.md#bootstrap).
-3. **Phase 2**: complete the core of the language — exceptions and the frame chain, async and the event loop, `weak`, `interface`, user-defined generics, `Float` and all integer types.
-4. **Phase 3**: the surroundings — `lerta repl` (a provisional `lerta run`, without JIT, is done), `.ll`/bitcode output from `lerta build` ([tools](design/programs.md#tools)), advanced string representations, operator overloading, regular expressions, libclang FFI, tooling. Windows programs can already be built and run (see [platforms](internals.md#platforms)); the compiler itself is not tested there yet.
 
 ## Open questions
 
