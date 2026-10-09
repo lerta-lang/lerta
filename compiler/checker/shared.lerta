@@ -33,6 +33,22 @@ export struct Warning
   line: Int
   column: Int
 
+# What the checking finds of each node of a body, which codegen reads.
+export class NodeFacts
+  # The type of every expression, and the type that the name of `x is T` stands for.
+  types: Map<Node, Type> = Map()
+  # The type an expression is converted to where it is used, such as an Int passed as an Int?.
+  conversions: Map<Node, Type> = Map()
+  # The members of enums that expressions name, `E.MEMBER` or `MEMBER`, as their places in them.
+  enum_values: Map<Expression, Int> = Map()
+  # Each `E.parse` that is called, with its enum E.
+  enum_parses: Map<Expression, EnumType> = Map()
+  captures: Map<FunctionLiteral, Array<Capture>> = Map()
+  # The instances of generic functions that calls call.
+  instances: Map<Call, Instance> = Map()
+  # The `var`s that function literals capture, by their declarations' names.
+  shared_vars: Map<Identifier, Bool> = Map()
+
 # What is found for one module, and what its checkers share.
 export class Shared
   # The module's index, how messages name it, and the path that diagnostics give for it (see
@@ -45,10 +61,8 @@ export class Shared
   top_level: TopLevelValues
   # What the module exports, besides its extends, by name (see export_of).
   exported: Map<String, Exportable>
-  # The type of every expression, and the type that the name of `x is T` stands for.
-  types: Map<Node, Type> = Map()
-  # The type an expression is converted to where it is used, such as an Int passed as an Int?.
-  conversions: Map<Node, Type> = Map()
+  # What is found of the nodes of the module's code; an instance of a generic function has its own.
+  facts = NodeFacts()
   warnings: Array<Warning> = []
   functions = Functions()
   # The generic functions, then the generic methods of the module's own extends, in the order they
@@ -58,20 +72,11 @@ export class Shared
   objects: Map<String, ObjectInfo> = Map()
   # The enums that the module declares, by name.
   enums: Map<String, EnumType> = Map()
-  # The members of enums that expressions name, `E.MEMBER` or `MEMBER`, as their places in them.
-  enum_values: Map<Expression, Int> = Map()
-  # Each `E.parse` that is called, with its enum E.
-  enum_parses: Map<Expression, EnumType> = Map()
   # Type aliases, resolved on first use, so that they can refer to each other in any order.
   aliases: Map<String, AliasEntry> = Map()
   resolving: Map<String, Bool> = Map()
   # The methods of the module's extends, which the modules that import it get.
   own_methods: Array<ExtensionMethod> = []
-  captures: Map<FunctionLiteral, Array<Capture>> = Map()
-  # The instances of generic functions that calls call.
-  instances: Map<Call, Instance> = Map()
-  # The `var`s that function literals capture, by their declarations' names.
-  shared_vars: Map<Identifier, Bool> = Map()
   # The names of the top-level code, once it is checked: those never used are warned about once
   # the functions that may use them are checked (see warn_unused).
   top_level_scope: Map<String, Local>? = nil
@@ -126,6 +131,7 @@ export class Body
   shared: Shared
   resolver: Resolver
   extensions: Extensions
+  facts: NodeFacts
   context: FunctionContext?
   self: SelfContext?
   # For the body of a function literal: the body it is written in, whose locals it captures.

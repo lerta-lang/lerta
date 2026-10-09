@@ -31,7 +31,7 @@ export const constructed_type = (body: Body, callee: Expression) ->
   const name = callee.name
   return nil if lookup(body, name) != nil or has_function(body.shared, name)
   const type = object_type(body.program, body.shared, name) ? return nil
-  body.shared.types[callee] = type
+  body.facts.types[callee] = type
   type
 
 # Every argument is named. Fields without an initializer are the arguments; an optional one may
@@ -170,7 +170,7 @@ export const field_target = (body: Body, member: Member) ->
   const object_type = type_of(body, member.object, nil)
   if object_type is UnionType
     const type = common_field_target(body, object_type, member)
-    body.shared.types[member] = type
+    body.facts.types[member] = type
     return type
   const field = field_of(body, object_type, member)
   const { name, position } = member.name
@@ -184,7 +184,7 @@ export const field_target = (body: Body, member: Member) ->
     const const_field = "'#{name}' is a const field"
     const message = is_struct then 'a struct field cannot be changed' else const_field
     fail program, position, message
-  body.shared.types[member] = found.type
+  body.facts.types[member] = found.type
   found.type
 
 # The field `member` names, with its type, if its object is a class or struct. In a field
@@ -208,7 +208,7 @@ const index_of = (fields: Array<FieldInfo>, field: FieldInfo) ->
 
 # A name alone, `Point(x)`, is short for `Point(x: x)`, as in `{ x }`; a construction has no
 # positional arguments to confuse it with. The call is rewritten into the named form, which every
-# later pass reads.
+# later pass reads, as do the later instances of a generic function that holds the call.
 const name_shorthand_args = (body: Body, call: Call, type: ObjectType) ->
   const names = [arg for arg in call.args when arg is Identifier]
   if names.length < call.args.length

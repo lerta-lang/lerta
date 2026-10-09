@@ -1,16 +1,15 @@
 # Generic functions, `const first = <T>(xs: Array<T>) -> xs[0]`, declared at the top level, and
 # generic methods: those of a generic extend, `extend Array<T>`, and those of extends, classes and
 # structs with type parameters of their own. Each distinct set of type arguments makes an
-# instance: a copy of the literal, whose body is checked with the type parameters standing for the
-# type arguments, and generated as a function of its own. A generic function that is never called
-# is not checked.
+# instance, which checks the literal's body with the type parameters standing for the type
+# arguments, keeping what it finds of the nodes in facts of its own, and is generated as a function
+# of its own. A generic function that is never called is not checked.
 import { FunctionLiteral, Identifier, Position, TypeParameter } from '../ast'
-import { clone_function } from '../ast_clone'
 import { check_instance } from './bodies'
 import { fail, fail_in_context } from './diagnostics'
 import { ExtensionMethod, Extensions, with_methods } from './extensions'
 import { annotated_type, FunctionEntry, parameter_types } from './functions'
-import { AnnotatedCall, ProgramWide, Shared } from './shared'
+import { AnnotatedCall, NodeFacts, ProgramWide, Shared } from './shared'
 import {
   has_type, module_resolver, resolve_result, Resolver, with_type_parameters
 } from './type_names'
@@ -39,6 +38,8 @@ export class Instance
   resolver: Resolver
   # Tells apart the instances of the same type arguments with different extends.
   variant: Int
+  # What is found of the nodes of its body, which it shares with the other instances.
+  facts = NodeFacts()
 
 # The only bound so far: a type argument must have `to_string(): String`.
 export const STRINGABLE = 'Stringable'
@@ -147,9 +148,7 @@ const add_instance = (
   const resolver = with_type_parameters(module_resolver(generic.module_index), type_bindings)
   const receiver = generic.receiver
   const this_type = receiver then substitute(receiver.type, type_bindings) else nil
-  # Each instance's expressions have types of their own.
-  const literal = clone_function(generic.literal)
-  const entry = FunctionEntry(literal, this_type, name: generic.name)
+  const entry = FunctionEntry(this_type, literal: generic.literal, name: generic.name)
   const extensions = with_methods(program.shared[generic.module_index].extensions, methods)
   const instance = Instance(
     entry, type_arguments, methods, extensions, resolver, variant, generic: ref

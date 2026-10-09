@@ -36,12 +36,12 @@ import {
 } from '../types'
 
 # The type that the checker gave the node.
-export const type_of = (g: Generator, node: Node) -> g.code.shared.types[node] ? throw 'no type'
+export const type_of = (g: Generator, node: Node) -> g.facts.types[node] ? throw 'no type'
 
 # Returns the IR operand holding the value, converted where it is used (an Int as an Int?, for
 # example); void calls return ''.
 export const generate = (g: Generator, expression: Expression) ->
-  const target = g.code.shared.conversions[expression]
+  const target = g.facts.conversions[expression]
   return nil_constant(target!) if expression is NilLiteral
   const operand = generate_value(g, expression)
   return operand if target == nil
@@ -50,7 +50,7 @@ export const generate = (g: Generator, expression: Expression) ->
 # The type of the operand that `generate` returns: the type the expression is converted to, if
 # it is.
 export const type_at_use = (g: Generator, expression: Expression) ->
-  g.code.shared.conversions[expression] ? type_of(g, expression)
+  g.facts.conversions[expression] ? type_of(g, expression)
 
 # An i1 for a condition: a Bool, or an optional value that holds when not nil (a Bool? holds
 # when it is true).
@@ -81,7 +81,7 @@ const generate_value = (g: Generator, expression: Expression): String ->
     when Unwrap then generate_unwrap(g, expression)
     when Coalesce then generate_coalesce(g, expression)
     when StringLiteral
-      if const index = g.code.shared.enum_values[expression]
+      if const index = g.facts.enum_values[expression]
         return "#{index}"
       return "#{expression.value.binary[0]}" if is_kind(type_of(g, expression), 'Byte')
       string_constant g.ir, expression.value
@@ -136,7 +136,7 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
 # `s.binary` is the string itself, passing on its ownership; `length` borrows its object. `E.MEMBER`
 # is a member of an enum.
 const generate_property = (g: Generator, member: Member) ->
-  if const index = g.code.shared.enum_values[member]
+  if const index = g.facts.enum_values[member]
     return "#{index}"
   const ir = g.ir
   const object = generate(g, member.object)
@@ -171,7 +171,7 @@ export const release_if_reference = (g: Generator, expression: Expression, opera
 # A local's value, a member of an enum, or a top-level function's closure (see
 # emit_function_closure).
 const generate_identifier = (g: Generator, identifier: Identifier) ->
-  if const index = g.code.shared.enum_values[identifier]
+  if const index = g.facts.enum_values[identifier]
     return "#{index}"
   const name = identifier.name
   const local = lookup_local(g, name)

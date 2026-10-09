@@ -34,9 +34,10 @@ export const generate = (program: ProgramWide) ->
 # and methods of extends.
 const generate_module = (code: ModuleCode) ->
   const { program, module, shared } = code
+  const { extensions, facts } = shared
   const generate_one = (symbol: String, literal: FunctionLiteral, this_type: Type?) ->
-    generate_function function_generator(code, shared.extensions), symbol, literal, this_type, nil
-  const main = Generator(code, extensions: shared.extensions, top_level_code: true)
+    generate_function function_generator(code, extensions, facts), symbol, literal, this_type, nil
+  const main = Generator(code, extensions, facts, top_level_code: true)
   const main_code = [statement for statement in module.program when is_main_code(statement)]
   const entry_index = program.modules.length - 1
   if module.index == entry_index
@@ -52,12 +53,12 @@ const generate_module = (code: ModuleCode) ->
     for instance in generic.instances
       const { literal, this_type } = instance.entry
       const symbol = instance_symbol(program, instance)
-      const instance_generator = function_generator(code, instance.extensions)
+      const instance_generator = function_generator(code, instance.extensions, instance.facts)
       generate_function instance_generator, symbol, literal, this_type, nil
   for name in shared.objects.keys()
     const info = shared.objects[name]!
     define_object code.ir_module, info
-    generate_constructor function_generator(code, shared.extensions), info
+    generate_constructor function_generator(code, extensions, facts), info
     for method in info.methods.keys()
       continue if info.generics.has(method)
       generate_one method_symbol(info.type, method), info.methods[method]!, info.type

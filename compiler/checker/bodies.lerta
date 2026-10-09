@@ -6,7 +6,7 @@ import { FunctionEntry, parameter_types } from './functions'
 import { Instance } from './generics'
 import { ObjectInfo } from './object_types'
 import { finish_function_type, reject_nil_result } from './result'
-import { Body, FunctionContext, ProgramWide, SelfContext, Shared } from './shared'
+import { Body, FunctionContext, NodeFacts, ProgramWide, SelfContext, Shared } from './shared'
 import { check_function_body, check_initializers } from './statement'
 import { module_resolver, Resolver } from './type_names'
 import { FunctionType, Type } from '../types'
@@ -16,17 +16,18 @@ import { FunctionType, Type } from '../types'
 export const check_function = (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
   const shared = program.shared[module_index]
   const resolver = module_resolver(module_index)
-  check_function_with program, shared, entry, resolver, shared.extensions
+  check_function_with program, shared, shared.facts, entry, resolver, shared.extensions
 
 # An instance's body sees the names of its module, with the type parameters standing for its type
 # arguments, and the extends of the type arguments where it is called.
 export const check_instance = (program: ProgramWide, module_index: Int, instance: Instance) ->
-  const { entry, resolver, extensions } = instance
-  check_function_with program, program.shared[module_index], entry, resolver, extensions
+  const { entry, resolver, extensions, facts } = instance
+  check_function_with program, program.shared[module_index], facts, entry, resolver, extensions
 
 const check_function_with = (
   program: ProgramWide
   shared: Shared
+  facts: NodeFacts
   entry: FunctionEntry
   resolver: Resolver
   extensions: Extensions
@@ -36,14 +37,14 @@ const check_function_with = (
   const params = parameter_types(program, resolver, literal, [])
   const context = FunctionContext(annotated: annotated_result(entry.type))
   const self = this_type then SelfContext(type: this_type) else nil
-  const body = Body(program, shared, resolver, extensions, context, self)
+  const body = Body(program, shared, resolver, extensions, facts, context, self)
   check_function_body body, literal, params, nil
   # The conversions of the results are recorded even if the type was known from its annotation.
-  const finished = finish_function_type(context, params, shared.conversions)
+  const finished = finish_function_type(context, params, facts.conversions)
   const checked_type = reject_nil_result(program, finished, literal)
   const type = entry.type ? checked_type
   entry.type = type
-  shared.types[literal] = type
+  facts.types[literal] = type
   leave_module program
 
 const annotated_result = (type: Type?) ->
@@ -55,6 +56,6 @@ export const check_object = (program: ProgramWide, info: ObjectInfo) ->
   const self = SelfContext(type: info.type)
   const resolver = module_resolver(shared.index)
   const { extensions } = shared
-  const body = Body(program, shared, resolver, extensions, self)
+  const body = Body(program, shared, resolver, extensions, self, facts: shared.facts)
   check_initializers body, info, self
   leave_module program

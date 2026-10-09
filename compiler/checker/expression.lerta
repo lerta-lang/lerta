@@ -120,7 +120,9 @@ export const check_arguments = (body: Body, call: Call, callee_type: Type) ->
 # Named arguments are the fields of an anonymous struct for the last parameter: `draw(x: 1, y: 2)`
 # is `draw({ x: 1, y: 2 })`. The call is rewritten into that form so that codegen, which reads
 # named arguments only as a construction, generates it as any other call. Every pass reading the
-# arguments (jump_positions, codegen) visits the same values in either form.
+# arguments (jump_positions, codegen) visits the same values in either form. The instances of a
+# generic function share its literal, so later ones see the rewritten form, which checks as the
+# named one does.
 const gather_named_args = (body: Body, call: Call, last_param: Type?) ->
   const name = call.named_args[0].name
   if not is_record_parameter(last_param)
@@ -147,7 +149,7 @@ const type_of_is_test = (body: Body, test: IsTest) ->
     const message = "expected a value of a union type, got #{format_type(value_type)}"
     fail program, test.value.position, message
   const type = resolve(program, body.resolver, test.type)
-  body.shared.types[test.type] = type
+  body.facts.types[test.type] = type
   if not union.members.any((member) -> same_type(member, type))
     const message = "#{format_type(type)} is not one of the types #{format_type(union)}"
     fail program, test.type.position, message
@@ -155,7 +157,7 @@ const type_of_is_test = (body: Body, test: IsTest) ->
 
 # Records the type of a node, which type_of may not compute, such as a type pattern.
 export const set_type = (body: Body, node: Node, type: Type) ->
-  body.shared.types[node] = type
+  body.facts.types[node] = type
   type
 
 # A T or nil where a T? is expected is converted, which codegen does where it generates it.
@@ -164,7 +166,7 @@ export const require_type = (body: Body, expression: Expression, type: Type, exp
     const { first, second } = format_types(expected, type)
     fail body.program, expression.position, "expected #{first}, got #{second}"
   const is_converted = not is_kind(type, 'never') and not same_type(type, expected)
-  body.shared.conversions[expression] = expected if expected is OptionalType and is_converted
+  body.facts.conversions[expression] = expected if expected is OptionalType and is_converted
 
 # A condition is a Bool, or an optional value that holds when it is not nil.
 export const expect_condition = (body: Body, expression: Expression) ->

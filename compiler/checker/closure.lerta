@@ -32,7 +32,7 @@ export const type_of_item_function = (
   holds: Expression?
 ) ->
   const type = check_literal(body, literal, [item], result, holds)
-  body.shared.types[literal] = type
+  body.facts.types[literal] = type
   type
 
 # The body is checked here, where the names around it are known; those it uses from the enclosing
@@ -69,11 +69,11 @@ const check_literal = (
     when return_type then resolve_result(program, body.resolver, return_type)
     else known(expected_result)
   const context = FunctionContext(annotated)
-  const { shared, resolver, extensions } = body
-  const literal_body = Body(program, shared, resolver, extensions, context, enclosing: body)
+  const { shared, resolver, extensions, facts } = body
+  const literal_body = Body(program, shared, resolver, extensions, facts, context, enclosing: body)
   check_function_body literal_body, literal, params, holds
-  body.shared.captures[literal] = literal_body.captures
-  finish_function_type context, params, body.shared.conversions
+  body.facts.captures[literal] = literal_body.captures
+  finish_function_type context, params, body.facts.conversions
 
 # A local of an enclosing function, seen from a function literal, which captures its value; a
 # top-level value is not captured but read where it is.
@@ -83,7 +83,7 @@ export const captured = (body: Body, name: String): Local? ->
   if const top_level = body.shared.top_level.locals[name]
     return nil if local == top_level
   const origin = local.origin ? local
-  body.shared.shared_vars.add origin.identifier if origin.mutable
+  body.facts.shared_vars.add origin.identifier if origin.mutable
   if not body.captures.any((capture) -> capture.name == name)
     body.captures.push Capture(name, type: local.type, is_var: origin.mutable)
   const { identifier, type, mutable, used } = local
