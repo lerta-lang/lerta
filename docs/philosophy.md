@@ -22,7 +22,7 @@ In priority order:
 
 ## Safety
 
-Safety means **zero undefined behavior**: every operation returns a defined value or fails in a defined way. The concrete rules are in [design/errors.md](design/errors.md#safety).
+Safety means **zero undefined behavior**: every operation returns a defined value or fails in a defined way. Nil safety comes from [optional types](reference/types.md#optional-values) and weak safety from [`weak!` fields](reference/objects.md#classes-and-structs), which throw once their object is gone; there are no data races because programs are single-threaded. Planned rules are in [the roadmap](roadmap/runtime.md#safety).
 
 ## Non-goals
 

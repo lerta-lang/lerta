@@ -7,6 +7,7 @@
 - Comparisons (`==` `!=` `<` `<=` `>` `>=`) between `Int`s give a `Bool`.
 - `+` `-` `*` and prefix `-` throw `integer overflow` when the result does not fit.
 - `/` is the quotient, truncated toward zero, and `%` is the remainder (`-7 / 2 == -3`, `-7 % 2 == -1`). Both throw `division by zero` when the divisor is 0, and `integer overflow` for the minimum value divided by `-1`.
+- Why one name each for `Int` and `Byte`, rather than also `Int64` and `UInt8`: the common types have no second name to choose between. Why overflow depends on signedness (signed types throw, unsigned ones wrap around, the Ada modular type approach): since there are no implicit conversions, both operands have the same type, so each operation has one rule, and no dedicated operators like `&+` are needed.
 
 ## Byte
 
@@ -28,6 +29,7 @@
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`.
 - `==` and `!=` compare two `String`s byte by byte.
+- Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `push` onto an `Array<String>` and `join` is O(n) (the Python approach), an idiom that stays valid once ropes make `+` O(1).
 
 ## Binary
 
@@ -38,6 +40,7 @@
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `bytes.to_binary()` copies the items of an `Array<Byte>` into a new `Binary`.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
+- Why `Binary` is separate from `String`: a `String` only adds the invariant "valid UTF-8", rather than "a string is any byte sequence" as in Python 2 and Go.
 - `b.text(start, end)` gives the bytes from `start` up to `end` as a `String`, as `b.slice(start, end).decode_utf8()` but throwing `invalid UTF-8` where that gives nil.
 
 ## Optional values
@@ -115,6 +118,7 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 - An `Iter` is consumed by `for`, by a comprehension over it, by `it.to_array()`, which gives its items as an array (of a `T` an array can hold), by `it.any`, `it.all` and `it.find`, and by `it.map`, `it.filter` and `it.take`, whose `Iter` reads it.
 - `it.has_next()` tells whether there is an item left, and `it.next()` gives it; past the end, `next` throws `next past the end of an Iter`.
 - **An `Iter` can be traversed only once.** Calling `has_next` or `next` traverses it, and so does any consumer above, which throws `an Iter can be traversed only once` if a traversal has started. To go through the items several times, keep them with `to_array()`.
+- Why: an `Iter` is not evaluated until consumed (the Rust approach), which avoids CoffeeScript's implicit arrays and the intermediate arrays of an eager `map` in Ruby and JS. Its protocol is `has_next()` / `next()` because with `next(): T?` the end could not be told apart when `T` is optional. A second traversal throws rather than silently giving nothing, as a Python generator does.
 
 ## Methods
 
@@ -137,6 +141,7 @@ type Expr = Num | Add | Mul
 - A member's value fits where the union is expected. A field that every member declares, with the same type in each, can be read from the union: `shape.name` reads the field of whichever member the value is. It can be assigned through the union, `shape.name = n` (and `+=` and so on), when every member is a class whose field is not `const`. Other fields and methods cannot be used directly: branch on its type first.
 - `x is T` tells whether a union value holds a `T`; for an optional union value, whether it is not nil and holds a `T`. Like nil tests, it narrows a `const`, a parameter or a loop variable to `T` where it holds (see [control flow](control-flow.md#if-and-while)).
 - `x as T?` gives a union value as a `T` if it holds one, and nil otherwise; for an optional union value, nil gives nil. `x as T!` gives it as a `T`, and throws `failed cast` otherwise. `x as T` alone is an error, so that a cast shows where it is written whether it fails into nil or throws. To take a narrowed value under another name, write `if const c = x as Circle?`. Like `is`, `as` is not a keyword and does not chain with comparisons.
+- There is no unchecked cast.
 - In `x is T`, `x as T?`, `x as T!` and the patterns of a `case`, `T` may also be a type alias of a union of some of the members: `x is T` then tells whether `x` holds one of them.
 
 ## Enums

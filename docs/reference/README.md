@@ -1,6 +1,6 @@
 # Language reference
 
-This reference documents only implemented behavior. The planned design is in [../design/](../design/README.md).
+This reference documents only implemented behavior. The planned design of what is not implemented yet is in [the roadmap](../roadmap/README.md).
 
 | File | Topic |
 |---|---|

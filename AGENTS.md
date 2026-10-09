@@ -4,9 +4,8 @@ Instructions for coding agents working in this repository. For the project overv
 
 Read these before changing behavior:
 
-- `docs/roadmap.md`: what is left to implement, and the open questions. Ask before implementing a feature that neither it nor `docs/design/` describes.
+- `docs/roadmap/`: the planned design of what is not implemented yet, and the open questions. Implement features as specified there. Ask before implementing a feature it does not describe.
 - `docs/philosophy.md`: the design principles. When a design question is not covered, apply them in priority order.
-- `docs/design/`: the planned language design. Implement features as specified there.
 - `docs/reference/`: the language as implemented so far, including the coding conventions for Lerta code.
 - `docs/internals.md`: the implementation design, including the constraints on the C runtime.
 
@@ -18,7 +17,7 @@ Read these before changing behavior:
    - Run `make test`, and `pnpm check` in `test/`, yourself before each review; the reviewer does not.
    - Show the reviewer only the code and the tests. Do not pass the intent, the background or your design decisions.
    - Fix the findings and send the result back to **the same reviewer** for re-review. Repeat until no findings remain.
-4. **Update the docs.** When a feature is implemented, move its description from `docs/design/` to `docs/reference/` as described in `docs/design/README.md`.
+4. **Update the docs.** When a feature is implemented, move its description from `docs/roadmap/` to `docs/reference/` as described in `docs/roadmap/README.md`.
 5. **Commit only with approval.** Show the change to the user and get approval before committing.
 6. **Consider refactoring.** Look at the functions, classes, files and directories the change touched. If any has grown long through repeated additions, consider whether it should be split or restructured. If it should, propose the refactoring to the user as the next task; do not mix it into the current change.
 

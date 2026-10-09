@@ -54,6 +54,7 @@ draw 'p'
 - `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Array<Int> = []`).
 - `name = value` assigns to a `var`, and `xs[i] = value` to an item of an array. `+=` `-=` `*=` `/=` `%=` combine an `Int` `var` with an `Int` value, and `+=` also appends a `String` to a `String`.
 - An assignment is a statement, not an expression.
+- Why: there is no `let` and no function declaration (`def`), so that declarations look the same at the top level, inside functions and in type bodies, for values and for functions, which avoids the CoffeeScript ambiguity between declaration and assignment. `const` only makes the binding immutable, since immutability of the contents is handled by types.
 
 ## Statements
 

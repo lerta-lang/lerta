@@ -8,7 +8,7 @@ An uncaught exception prints its message and a newline to stderr, after flushing
 
 ## Panics
 
-A panic prints its message and a newline to stderr, after flushing stdout, and aborts the program; it cannot be caught. Running out of memory panics with `out of memory`, and recursing too deep with `stack overflow`.
+A panic prints its message and a newline to stderr, after flushing stdout, and aborts the program; it cannot be caught. Running out of memory panics with `out of memory`, and recursing too deep with `stack overflow`. The runtime also panics when its internal invariants are violated or a system call it cannot do without fails, such as `deinit kept a reference to its object` or `cannot wait for a child process`.
 
 ## Discarded values
 

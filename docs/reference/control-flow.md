@@ -27,6 +27,8 @@ while n > 0
 - `break`, `continue` and `return` are expressions of type `never`, like `throw` (see [errors](errors.md)): `const age = ages[name] ? return -1`, `when 'stop' then break`. Unlike `throw`, they may only be written where nothing evaluated before them is still held: as a statement, as the value of a declaration or of an assignment to a variable, and, within those, as the fallback of `?` or a value of `then`/`else` or of a `case` arm. Elsewhere, as in `f(x ? return 0)`, they are an error; so is a `return` inside an arm of a `case` that is itself such an operand, or a `break` or `continue` there that leaves a loop outside the arm. As a statement, `x ? return` is a guard, whose value is not used.
 - **Postfix forms** `<statement> if <condition>` and `<statement> while <condition>` apply to one statement other than a declaration (`break if done`, `x *= 2 while x < 100`). The condition of a postfix `while` is evaluated first. A postfix condition may bind a name as `if const` and `while const` do, for the statement before it: `return local if const local = lookup(name)`. A postfix form also follows a body on the same line as `->`, outside brackets (inside them, as in `[(x) -> x for x in xs]`, it belongs to the brackets' contents), and an arm's body on the same line.
 - `and` and `or` evaluate their right operand only when the left one does not decide the result.
+- Why the condition rules: the Ruby approach, constrained by types. There is no hook like `is_true`, so a type that is always true, such as `Int`, `String` or an array, is rejected rather than true (0 and the empty string are not false).
+- Why there is no `unless`, no `&&`/`||`/`!`, no `then` statement without `else` and no `defer`: no forms that say the same thing two ways. Destructors and `try`/`finally` replace `defer`; it may be considered if it becomes necessary.
 
 ## then and else
 
@@ -88,6 +90,7 @@ print case
 - `case` is an expression. Its arms are in an indented block: one or more `when` arms, then an `else` arm, which is required.
 - Each `when` is followed by a condition, as an `if`'s (a `Bool` or an optional value, which narrows a local in the arm's value). The conditions are evaluated from the top, and the first that holds is taken; if none does, the `else` arm is.
 - An arm's body follows `then` on the same line (`when c then x`; for `else`, directly: `else x`), or is an indented block on the next lines. On the same line, it is an expression, an assignment or a call without parentheses (`when '(' then depth += 1`), with the postfix forms of a statement (`when c then n += 1 if d`). `pass` alone on the same line is an arm that does nothing, which is `void`: `else pass`. It is not a keyword. A block is a scope; its last statement gives the arm's value if it is an expression.
+- Why `when`: with it, patterns and `else` do not look alike. A `when` without a subject takes one condition, since several would read like `and`/`or` (write `or`).
   ```
   when n < 0
     const magnitude = -n
