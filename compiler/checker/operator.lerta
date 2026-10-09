@@ -4,16 +4,20 @@ import {
 } from '../ast'
 import { fail } from './diagnostics'
 import { may_name_member } from './enums'
-import { expect_condition, expect_optional, expect_type, type_of } from './expression'
+import {
+  expect_condition, expect_optional, expect_type, require_type, type_of
+} from './expression'
 import { is_contextual } from './literals'
 import { where_right_operand } from './narrowing'
 import { Body } from './shared'
 import {
-  bool_type, format_type, is_identity_type, is_one_of_kinds, same_type, Type
-  TypeKind, UnionType
+  bool_type, format_type, inner_of, is_identity_type, is_one_of_kinds, OptionalType, same_type
+  Type, TypeKind, UnionType
 } from '../types'
 
 const NUMERIC_KINDS: Array<TypeKind> = ['Int', 'Byte']
+
+const EQUALITY_KINDS: Array<TypeKind> = ['Int', 'Byte', 'Bool', 'String', 'Binary', ENUM]
 
 const ARITHMETIC_OPERATORS = ['+', '-', '*', '/', '%']
 
@@ -70,9 +74,8 @@ export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Ty
     return bool_type
   return type_of_nil_test(body, binary) if is_nil_test(binary)
   if operator == '==' or operator == '!='
-    const comparable: Array<TypeKind> = ['Int', 'Byte', 'Bool', 'String', 'Binary', ENUM]
     const reject = (type: Type) -> "cannot compare values of type #{format_type(type)}"
-    type_of_operands body, binary, nil, comparable, reject
+    type_of_operands body, binary, nil, EQUALITY_KINDS, reject
     return bool_type
   const allowed: Array<TypeKind> = operator == '+' then ['Int', 'Byte', 'String'] else NUMERIC_KINDS
   const reject = (type: Type) ->
@@ -101,9 +104,26 @@ const type_of_operands = (
   const type = type_of(body, first, expected)
   const is_equality = binary.operator == '==' or binary.operator == '!='
   return type_of_identity_operand(body, second, type) if is_equality and is_identity_type(type)
-  fail body.program, first.position, reject(type) if not is_one_of_kinds(type, allowed_kinds)
+  const inner = is_equality then inner_of(type) else type
+  fail body.program, first.position, reject(type) if not is_one_of_kinds(inner, allowed_kinds)
+  return type_of_equality_operand(body, first, second, type) if is_equality
   expect_type body, second, type
   type
+
+# Either operand of `==` may be optional: a T is then compared as a T?. The second operand is
+# typed with T as the hint, so that `c == 'a'` takes 'a' as a Byte when c is a Byte?.
+const type_of_equality_operand = (
+  body: Body
+  first: Expression
+  second: Expression
+  first_type: Type
+): Type ->
+  const second_type = type_of(body, second, inner_of(first_type))
+  if second_type is OptionalType and same_type(second_type.inner, first_type)
+    require_type body, first, first_type, second_type
+    return second_type
+  require_type body, second, second_type, first_type
+  first_type
 
 # Objects compared by identity may be of different types, as a class and a union that holds it,
 # as long as both can hold an object of the same class.

@@ -4,13 +4,17 @@ import {
 } from '../ast'
 import { is_arithmetic } from '../checker/operator'
 import { apply_arithmetic } from './checked_int'
-import { generate, generate_condition, release_if_reference, type_of } from './expression'
+import {
+  generate, generate_condition, release_if_reference, type_at_use, type_of
+} from './expression'
 import { Generator } from './generator'
 import { emit_release, ir_type } from './lerta_ir'
-import { emit_is_present, emit_unwrap } from './optional'
-import { emit_concat, emit_equals } from './string'
+import { emit_is_nil, emit_is_present, emit_unwrap } from './optional'
+import { emit_concat, emit_equals, emit_string_equals } from './string'
 import { throw_if, UNWRAPPED_NIL } from './throw_blocks'
-import { is_identity_type, is_kind, is_one_of_kinds } from '../types'
+import {
+  is_identity_type, is_kind, is_one_of_kinds, is_reference_type, OptionalType
+} from '../types'
 
 # The predicates of `icmp` for the comparisons of signed integers; Byte is ordered as unsigned.
 const SIGNED_PREDICATES = {
@@ -32,9 +36,11 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   return generate_nil_test(g, binary) if is_nil_test(binary)
   const left = generate(g, binary.left)
   const right = generate(g, binary.right)
-  const operand_type = type_of(g, binary.left)
+  const operand_type = type_at_use(g, binary.left)
   const is_string = is_kind(operand_type, 'String')
   return emit_concat(g.ir, [left, right]) if is_string and operator == '+'
+  if operand_type is OptionalType
+    return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
   if is_identity_type(operand_type)
     return negate_if_unequal(g, operator, generate_same_object(g, left, right))
   if is_one_of_kinds(operand_type, ['String', 'Binary'])
@@ -47,6 +53,41 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
 # `!=` is the negation of the equality.
 const negate_if_unequal = (g: Generator, operator: String, equal: String) ->
   operator == '!=' then g.ir.assign("xor i1 #{equal}, true") else equal
+
+# Whether two optional values are both nil, or hold equal values; releases them. Strings and
+# Binaries, which are null for nil, are compared only where both are present.
+const generate_optional_equals = (
+  g: Generator
+  left: String
+  right: String
+  type: OptionalType
+) ->
+  const ir = g.ir
+  const inner = type.inner
+  const left_present = emit_is_present(ir, left, type)
+  const right_present = emit_is_present(ir, right, type)
+  const same_presence = ir.assign("icmp eq i1 #{left_present}, #{right_present}")
+  if not is_reference_type(inner)
+    # nil holds a zero value, so two nils compare equal.
+    const left_value = emit_unwrap(ir, left, type)
+    const right_value = emit_unwrap(ir, right, type)
+    const same_value = ir.assign("icmp eq #{ir_type(inner)} #{left_value}, #{right_value}")
+    return ir.assign("and i1 #{same_presence}, #{same_value}")
+  const both_present = ir.assign("and i1 #{left_present}, #{right_present}")
+  const presence_block = ir.current_block
+  const compare_label = ir.fresh_label('optional.compare')
+  const end_label = ir.fresh_label('optional.end')
+  ir.emit "br i1 #{both_present}, label %#{compare_label}, label %#{end_label}"
+  ir.start_block compare_label
+  const same_bytes = emit_string_equals(ir, left, right)
+  const compare_block = ir.current_block
+  ir.emit "br label %#{end_label}"
+  ir.start_block end_label
+  const incoming = "[ #{same_presence}, %#{presence_block} ], [ #{same_bytes}, %#{compare_block} ]"
+  const equal = ir.assign("phi i1 #{incoming}")
+  emit_release ir, left
+  emit_release ir, right
+  equal
 
 # Whether two references are to one object; releases them.
 const generate_same_object = (g: Generator, left: String, right: String) ->
@@ -86,8 +127,7 @@ const generate_logical = (g: Generator, binary: BinaryOperation) ->
 export const generate_unwrap = (g: Generator, unwrap: Unwrap) ->
   const operand = generate(g, unwrap.operand)
   const type = type_of(g, unwrap.operand)
-  const absent = g.ir.assign("xor i1 #{emit_is_present(g.ir, operand, type)}, true")
-  throw_if g, absent, UNWRAPPED_NIL
+  throw_if g, emit_is_nil(g.ir, operand, type), UNWRAPPED_NIL
   emit_unwrap g.ir, operand, type
 
 # The fallback is only evaluated when the value is nil.

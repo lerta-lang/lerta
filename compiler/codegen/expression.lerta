@@ -15,7 +15,7 @@ import { generate_comprehension } from './control_flow'
 import { generate_closure, generate_jump, lookup_local } from './function'
 import { CodegenLocal, Generator, SlotLocal, ValueLocal } from './generator'
 import {
-  emit_field_pointer, emit_member_dispatch, emit_present_type_test, emit_record, emit_record_field
+  emit_field_pointer, emit_member_dispatch, emit_record, emit_record_field
   emit_type_test
 } from './heap_object'
 import { info_of } from '../checker/object_types'
@@ -25,7 +25,9 @@ import { emit_map_length } from './map'
 import {
   generate_binary, generate_coalesce, generate_unary, generate_unwrap
 } from './operator'
-import { emit_is_present, emit_unwrap, emit_wrap, nil_constant } from './optional'
+import {
+  emit_is_present, emit_present_test, emit_unwrap, emit_wrap, nil_constant
+} from './optional'
 import { emit_throw, emit_unreachable } from './runtime_calls'
 import { emit_binary_length, emit_concat } from './string'
 import { emit_initialized_check } from './top_level'
@@ -106,9 +108,11 @@ const generate_value = (g: Generator, expression: Expression): String ->
 
 const generate_is_test = (g: Generator, test: IsTest) ->
   const object = generate(g, test.value)
-  const is_optional = type_of(g, test.value) is OptionalType
-  const test_of = is_optional then emit_present_type_test else emit_type_test
-  const result = test_of(g.ir, object, type_of(g, test.type))
+  const value_type = type_of(g, test.value)
+  const type = type_of(g, test.type)
+  const test_of = (value: String) -> emit_type_test(g.ir, value, type)
+  const present_test = () -> emit_present_test(g.ir, object, value_type, test_of)
+  const result = value_type is OptionalType then present_test() else test_of(object)
   emit_release g.ir, object
   result
 

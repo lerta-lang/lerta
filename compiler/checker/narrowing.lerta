@@ -8,7 +8,7 @@ import { lookup } from './name'
 import { Local } from './scopes'
 import { Body } from './shared'
 import { resolve } from './type_names'
-import { inner_of, OptionalType, Type, UnionType } from '../types'
+import { inner_of, is_kind, OptionalType, Type, UnionType } from '../types'
 
 # A local, and the narrower type it has.
 export struct Narrowing
@@ -23,15 +23,16 @@ export struct ConditionNarrowings
 export const narrowings_where = (narrowings: ConditionNarrowings, value: Bool) ->
   value then narrowings.where_true else narrowings.where_false
 
-# `x`, `x != nil`, `x == nil` and `x is T` test the name x: it is not nil, or is a T, where the
-# condition has `condition_value`. For `x is T`, `is_type` is T, the type x then has; otherwise x
-# is tested against nil.
+# `x`, `x != nil`, `x == nil`, `x == v`, `x != v` and `x is T` test the name x: it is not nil, or
+# is a T, where the condition has `condition_value`. For `x is T`, `is_type` is T, the type x then
+# has; otherwise x is tested against nil. In `x == v`, v cannot be nil, so x is not nil where they
+# are equal.
 export struct TestedName
   name: Identifier
   condition_value: Bool
   is_type: NamedType?
 
-export const tested_name = (condition: Condition): TestedName? ->
+export const tested_name = (body: Body, condition: Condition): TestedName? ->
   case condition
     when Identifier then TestedName(name: condition, condition_value: true, is_type: nil)
     when IsTest
@@ -41,8 +42,20 @@ export const tested_name = (condition: Condition): TestedName? ->
     when BinaryOperation
       const operator = condition.operator
       return nil if operator != '==' and operator != '!='
-      const name = nil_tested(condition.left, condition.right) ? return nil
-      TestedName name, condition_value: operator == '!=', is_type: nil
+      if const name = nil_tested(condition.left, condition.right)
+        return TestedName(name, condition_value: operator == '!=', is_type: nil)
+      const name = value_tested(body, condition.left, condition.right) ? return nil
+      TestedName name, condition_value: operator == '==', is_type: nil
+    else nil
+
+# The name that one side compares with a value on the other that cannot be nil.
+const value_tested = (body: Body, left: Expression, right: Expression) ->
+  const cannot_be_nil = (operand: Expression) ->
+    const type = body.shared.types[operand] ? return false
+    not (type is OptionalType or is_kind(type, 'nil'))
+  case
+    when left is Identifier and cannot_be_nil(right) then left
+    when right is Identifier and cannot_be_nil(left) then right
     else nil
 
 # The name that one side compares with nil on the other.
@@ -126,7 +139,7 @@ struct TestedNarrowing
 # The local a test such as `x != nil` narrows, and the value of the condition where it does. Only
 # a local that cannot be reassigned is narrowed.
 const tested_narrowing = (body: Body, condition: Condition): TestedNarrowing? ->
-  const tested = tested_name(condition) ? return nil
+  const tested = tested_name(body, condition) ? return nil
   const local = lookup(body, tested.name.name) ? return nil
   return nil if local.mutable
   const { condition_value } = tested
