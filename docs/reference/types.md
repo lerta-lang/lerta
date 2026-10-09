@@ -134,6 +134,7 @@ type Expr = Num | Add | Mul
   ```
 - A member's value fits where the union is expected. A field that every member declares, with the same type in each, can be read from the union: `shape.name` reads the field of whichever member the value is. It can be assigned through the union, `shape.name = n` (and `+=` and so on), when every member is a class whose field is not `const`. Other fields and methods cannot be used directly: branch on its type first.
 - `x is T` tells whether a union value holds a `T`; for an optional union value, whether it is not nil and holds a `T`. Like nil tests, it narrows a `const`, a parameter or a loop variable to `T` where it holds (see [control flow](control-flow.md#if-and-while)).
+- `x as T?` gives a union value as a `T` if it holds one, and nil otherwise; for an optional union value, nil gives nil. `x as T!` gives it as a `T`, and throws `failed cast` otherwise. `x as T` alone is an error, so that a cast shows where it is written whether it fails into nil or throws. To take a narrowed value under another name, write `if const c = x as Circle?`. Like `is`, `as` is not a keyword and does not chain with comparisons.
 
 ## Enums
 

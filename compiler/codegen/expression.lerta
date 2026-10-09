@@ -1,9 +1,9 @@
 # Expressions. Each yields an IR operand; a reference-typed one is owned by the consumer.
 import {
-  ArrayLiteral, BinaryOperation, BooleanLiteral, Call, Case, Coalesce, Comprehension, Conditional
-  Expression, FunctionLiteral, Identifier, Index, IntegerLiteral, Interpolation, IsTest, Jump
-  MapLiteral, Member, NilLiteral, Node, Range, RecordLiteral, Return, StringLiteral, This, Throw
-  UnaryOperation, Unwrap
+  ArrayLiteral, BinaryOperation, BooleanLiteral, Call, Case, Cast, Coalesce, Comprehension
+  Conditional, Expression, FunctionLiteral, Identifier, Index, IntegerLiteral, Interpolation, IsTest
+  Jump, MapLiteral, Member, NamedType, NilLiteral, Node, Range, RecordLiteral, Return, StringLiteral
+  This, Throw, UnaryOperation, Unwrap
 } from '../ast'
 import { TextPart } from '../lexer/string_literal'
 import { emit_length } from './array'
@@ -27,6 +27,7 @@ import {
 } from './optional'
 import { emit_throw, emit_unreachable } from './runtime_calls'
 import { emit_binary_length, emit_concat } from './string'
+import { FAILED_CAST, throw_if } from './throw_blocks'
 import { emit_initialized_check } from './top_level'
 import {
   is_kind, is_reference_type, kind_of, ObjectType, OptionalType, RecordType, Type, UnionType
@@ -72,6 +73,7 @@ const generate_value = (g: Generator, expression: Expression): String ->
       generate_jump g, expression
       'poison'
     when IsTest then generate_is_test(g, expression)
+    when Cast then generate_cast(g, expression)
     when This
       const object = lookup_local(g, '@')!
       read_local g, object, object.type
@@ -105,13 +107,30 @@ const generate_value = (g: Generator, expression: Expression): String ->
 
 const generate_is_test = (g: Generator, test: IsTest) ->
   const object = generate(g, test.value)
-  const value_type = type_of(g, test.value)
-  const type = type_of(g, test.type)
-  const test_of = (value: String) -> emit_type_test(g.ir, value, type)
-  const present_test = () -> emit_present_test(g.ir, object, value_type, test_of)
-  const result = value_type is OptionalType then present_test() else test_of(object)
+  const result = emit_member_test(g, object, test.value, test.type)
   emit_release g.ir, object
   result
+
+# The object if it holds the type, and otherwise nil, or a throw.
+const generate_cast = (g: Generator, cast: Cast) ->
+  const ir = g.ir
+  const object = generate(g, cast.value)
+  const holds = emit_member_test(g, object, cast.value, cast.type)
+  if cast.throws
+    throw_if g, ir.assign("xor i1 #{holds}, true"), FAILED_CAST
+    return object
+  const result = ir.assign("select i1 #{holds}, ptr #{object}, ptr null")
+  emit_retain ir, result
+  emit_release ir, object
+  result
+
+# An i1: whether the object, the value of a union type, optional or not, holds the type.
+const emit_member_test = (g: Generator, object: String, value: Expression, type_name: NamedType) ->
+  const value_type = type_of(g, value)
+  const type = type_of(g, type_name)
+  const test_of = (each: String) -> emit_type_test(g.ir, each, type)
+  return test_of(object) if not (value_type is OptionalType)
+  emit_present_test g.ir, object, value_type, test_of
 
 # A field's value, of a class, a struct or an anonymous struct; the object is released, and the
 # value retained, since every expression yields an owned reference.

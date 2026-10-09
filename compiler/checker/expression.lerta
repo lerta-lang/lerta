@@ -2,10 +2,10 @@
 # `operator` the operators, `case` case, and `collection` arrays and maps. An expected type, where
 # one is known, is passed down so that it can give literals their type.
 import {
-  ArrayLiteral, BinaryOperation, BooleanLiteral, Call, Case, Coalesce, Comprehension, Conditional
-  Expression, FunctionLiteral, Identifier, Index, IntegerLiteral, Interpolation, IsTest, Jump
-  MapLiteral, Member, NamedValue, NilLiteral, Node, Range, RecordLiteral, Return, StringLiteral
-  This, Throw, UnaryOperation, Unwrap
+  ArrayLiteral, BinaryOperation, BooleanLiteral, Call, Case, Cast, Coalesce, Comprehension
+  Conditional, Expression, FunctionLiteral, Identifier, Index, IntegerLiteral, Interpolation, IsTest
+  Jump, MapLiteral, Member, NamedType, NamedValue, NilLiteral, Node, Range, RecordLiteral, Return
+  StringLiteral, This, Throw, UnaryOperation, Unwrap
 } from '../ast'
 import { type_of_case, type_of_conditional } from './case'
 import { type_of_function_literal } from './closure'
@@ -28,8 +28,8 @@ import { Body } from './shared'
 import { resolve } from './type_names'
 import {
   bool_type, format_type, format_types, FunctionType, inner_of, int_type, is_assignable, is_kind
-  is_one_of_kinds, never_type, nil_type, OptionalType, RecordType, same_type, string_type, Type
-  UnionType
+  is_one_of_kinds, never_type, nil_type, optional_type, OptionalType, RecordType, same_type
+  string_type, Type, UnionType
 } from '../types'
 
 export const type_of = (body: Body, expression: Expression, expected: Type?) ->
@@ -59,6 +59,7 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
       check_return body, expression
       never_type
     when IsTest then type_of_is_test(body, expression)
+    when Cast then type_of_cast(body, expression)
     when This then type_of_this(body, expression)
     when Unwrap then expect_optional(body, expression.operand)
     when Coalesce then type_of_coalesce(body, expression)
@@ -142,18 +143,28 @@ export const expect_type = (body: Body, expression: Expression, expected: Type) 
 
 # `x is T`: x has a union type, or an optional one, and T is one of its types.
 const type_of_is_test = (body: Body, test: IsTest) ->
+  check_member_type body, test.value, test.type, resolve(body.program, body.resolver, test.type)
+  bool_type
+
+# `x as T?` or `x as T!`: as for `x is T`, with the type written without its `?`.
+const type_of_cast = (body: Body, cast: Cast) ->
+  const written = resolve(body.program, body.resolver, cast.type)
+  const type = check_member_type(body, cast.value, cast.type, inner_of(written))
+  cast.throws then type else optional_type(type)
+
+# The type, which the value's union type, optional or not, must have as a member.
+const check_member_type = (body: Body, value: Expression, type_name: NamedType, type: Type) ->
   const program = body.program
-  const value_type = type_of(body, test.value, nil)
+  const value_type = type_of(body, value, nil)
   const union = inner_of(value_type)
   if not (union is UnionType)
     const message = "expected a value of a union type, got #{format_type(value_type)}"
-    fail program, test.value.position, message
-  const type = resolve(program, body.resolver, test.type)
-  body.facts.types[test.type] = type
+    fail program, value.position, message
+  body.facts.types[type_name] = type
   if not union.members.any((member) -> same_type(member, type))
     const message = "#{format_type(type)} is not one of the types #{format_type(union)}"
-    fail program, test.type.position, message
-  bool_type
+    fail program, type_name.position, message
+  type
 
 # Records the type of a node, which type_of may not compute, such as a type pattern.
 export const set_type = (body: Body, node: Node, type: Type) ->

@@ -1,7 +1,7 @@
 # Expressions, from the weakest operators down to primaries, which `primary` reads, as `compound`
 # reads compound expressions.
 import {
-  BinaryOperation, Call, Conditional, Coalesce, Expression, Identifier, Index, IntegerLiteral
+  BinaryOperation, Call, Cast, Conditional, Coalesce, Expression, Identifier, Index, IntegerLiteral
   IsTest, Member, NamedValue, Range, RecordLiteral, TypeName, UnaryOperation, Unwrap
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
@@ -96,16 +96,29 @@ const parse_not = (tokens: TokenStream): Expression ->
 # `a < b < c` is an error: comparisons, `is` included, do not chain.
 const parse_comparison = (tokens: TokenStream) ->
   const left = parse_range(tokens)
-  return left if not at_is(tokens) and not at_comparison(tokens)
-  const is_test = at_is(tokens)
-  const comparison = is_test then parse_is(tokens, left) else parse_binary_comparison(tokens, left)
-  if at_is(tokens) or at_comparison(tokens)
-    tokens.fail token_position(tokens.peek()), 'comparison operators cannot be chained'
+  const comparison = case
+    when at_word(tokens, 'is') then parse_is(tokens, left)
+    when at_word(tokens, 'as') then parse_cast(tokens, left)
+    when at_comparison(tokens) then parse_binary_comparison(tokens, left)
+    else return left
+  if at_word(tokens, 'is') or at_word(tokens, 'as') or at_comparison(tokens)
+    tokens.fail token_position(tokens.peek()), 'comparisons, is tests and casts cannot be chained'
   comparison
 
 const parse_is = (tokens: TokenStream, value: Expression): Expression ->
   tokens.next()
   IsTest value, type: parse_named_type(tokens), position: value.position
+
+# The `?` is read as the type's, which the checker takes as the form instead.
+const parse_cast = (tokens: TokenStream, value: Expression): Expression ->
+  const as_token = tokens.next()
+  const type = parse_named_type(tokens)
+  const throws = not type.optional and tokens.peek().kind == '!' and not tokens.peek().spaced
+  tokens.next() if throws
+  if not type.optional and not throws
+    const forms = "'as T?' for nil where it is no T, or 'as T!' to throw"
+    tokens.fail token_position(as_token), "write #{forms}"
+  Cast value, type, throws, position: value.position
 
 const parse_binary_comparison = (tokens: TokenStream, left: Expression): Expression ->
   const operator = tokens.next().kind.to_string()
@@ -121,9 +134,9 @@ const parse_range = (tokens: TokenStream): Expression ->
     tokens.fail token_position(tokens.peek()), 'ranges cannot be chained'
   Range start, end, position: start.position
 
-# `is` is not a keyword, so that it stays usable as a name.
-const at_is = (tokens: TokenStream) ->
-  tokens.peek_continuation() == IDENTIFIER and tokens.peek().text == 'is'
+# `is` and `as` are not keywords, so that they stay usable as names.
+const at_word = (tokens: TokenStream, word: String) ->
+  tokens.peek_continuation() == IDENTIFIER and tokens.peek().text == word
 
 const at_comparison = (tokens: TokenStream) ->
   is_one_of tokens.peek_continuation(), COMPARISON_OPERATORS
