@@ -2,8 +2,7 @@
 # used anywhere in the module, so the types of fields given by an initializer alone are found on
 # demand.
 import {
-  Expression, FunctionLiteral, Identifier, MemberDeclaration, MemberModifier, Position
-  TypeDeclaration
+  Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration
 } from '../ast'
 import { check_object } from './bodies'
 import { fail } from './diagnostics'
@@ -38,13 +37,9 @@ export class ObjectInfo
 
 # The function literal of a member that is a method.
 export const method_literal = (member: MemberDeclaration) ->
-  return nil if has_modifier(member, 'var')
+  return nil if member.modifier == 'var'
   const value = member.value ? return nil
   value is FunctionLiteral then value else nil
-
-const has_modifier = (member: MemberDeclaration, modifier: MemberModifier) ->
-  const written = member.modifier ? return false
-  written == modifier
 
 # Registers the names first, so that the members can refer to any of the types.
 export const add_objects = (
@@ -116,11 +111,11 @@ const field_of_member = (
   if value is FunctionLiteral
     const message = 'a function field is not supported yet; a method is written without var'
     fail program, member.position, message
-  if is_struct and has_modifier(member, 'var')
+  if is_struct and member.modifier == 'var'
     fail program, member.position, 'a struct field cannot be var'
   const type_name = member.type
   const type = type_name then resolve(program, module_resolver(shared.index), type_name) else nil
-  const mutable = not is_struct and not has_modifier(member, 'const')
+  const mutable = not is_struct and member.modifier != 'const'
   FieldInfo type, mutable, value, name: member.name
 
 # The class or struct of the name, of the module or imported.
