@@ -80,8 +80,7 @@ const generate_value = (g: Generator, expression: Expression): String ->
     when Unwrap then generate_unwrap(g, expression)
     when Coalesce then generate_coalesce(g, expression)
     when StringLiteral
-      if const index = g.facts.enum_values[expression]
-        return "#{index}"
+      return "#{index}" if const index = g.facts.enum_values[expression]
       return "#{expression.value.binary[0]}" if is_kind(type_of(g, expression), 'Byte')
       string_constant g.ir, expression.value
     when Interpolation then generate_interpolation(g, expression)
@@ -140,7 +139,7 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
     const value = emit_record_field(ir, object, type, name)
     emit_release ir, object
     return value
-  const object_type = type is ObjectType then type else throw 'expected a class or struct type'
+  const object_type = type as ObjectType!
   const info = info_of(g.code.program, object_type)
   const field_type = info.fields.find((field) -> field.name.name == name)!.type!
   const pointer = emit_field_pointer(ir, object, info, name)
@@ -152,8 +151,7 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
 # `s.binary` is the string itself, passing on its ownership; `length` borrows its object. `E.MEMBER`
 # is a member of an enum.
 const generate_property = (g: Generator, member: Member) ->
-  if const index = g.facts.enum_values[member]
-    return "#{index}"
+  return "#{index}" if const index = g.facts.enum_values[member]
   const ir = g.ir
   const object = generate(g, member.object)
   const object_type = type_of(g, member.object)
@@ -187,8 +185,7 @@ export const release_if_reference = (g: Generator, expression: Expression, opera
 # A local's value, a member of an enum, or a top-level function's closure (see
 # emit_function_closure).
 const generate_identifier = (g: Generator, identifier: Identifier) ->
-  if const index = g.facts.enum_values[identifier]
-    return "#{index}"
+  return "#{index}" if const index = g.facts.enum_values[identifier]
   const name = identifier.name
   const local = lookup_local(g, name)
   if local == nil

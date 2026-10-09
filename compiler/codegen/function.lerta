@@ -1,7 +1,7 @@
 # Generates a function of a program: its blocks, declarations, returns and constructors;
 # control_flow generates control flow, and assignment assignments.
 import {
-  as_expression, Assignment, Declaration, EnumDeclaration, Extend, Extern, For, FunctionLiteral, If
+  Assignment, Declaration, EnumDeclaration, Expression, Extend, Extern, For, FunctionLiteral, If
   Import, Jump, Pass, Return, Statement, TypeAlias, TypeDeclaration, While
 } from '../ast'
 import { imported_export, ValueExport } from '../checker/imports'
@@ -33,12 +33,10 @@ import { is_kind, is_reference_type, Type } from '../types'
 # function checks to be initialized, or an imported value. Those of the modules of its import
 # cycle are checked too; the other modules have initialized theirs.
 export const lookup_local = (g: Generator, name: String): CodegenLocal? ->
-  if const local = g.locals.lookup(name)
-    return local
+  return local if const local = g.locals.lookup(name)
   const code = g.code
   if not g.top_level_code
-    if const own = code.globals[code.module.index][name]
-      return top_level_slot(own, true)
+    return top_level_slot(own, true) if const own = code.globals[code.module.index][name]
   const imported = code.shared.imports.names[name] ? return nil
   const exported = imported_export(code.program, imported)
   return nil if not (exported is ValueExport)
@@ -130,7 +128,7 @@ const generate_last_statement = (g: Generator, body: Array<Statement>, result: T
   const has_result = not is_kind(result, 'void')
   const last = body.length > 0 then body.last() else nil
   if last
-    const value = as_expression(last)
+    const value = last as Expression?
     if value
       return emit_return(g, generate(g, value)) if has_result
     generate_statement g, last
@@ -152,8 +150,7 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
-    if const value = field.value
-      store_field g, object, info, field, generate(g, value)
+    store_field g, object, info, field, generate(g, value) if const value = field.value
   g.locals.pop()
   ir.emit "call void #{method_symbol(info.type, 'init')}(ptr #{object})" if info.has_init
   ir.emit "ret ptr #{object}"
@@ -202,7 +199,7 @@ export const generate_block_value = (g: Generator, body: Array<Statement>) ->
   const scope = g.locals.push()
   generate_statement g, statement for statement in all_but_last(body)
   const last = body.last()
-  const expression = as_expression(last)
+  const expression = last as Expression?
   const value = expression then generate(g, expression) else ''
   generate_statement g, last if expression == nil
   release_scope g, scope
@@ -217,8 +214,7 @@ export const generate_block = (
 
 # What generates the statements, for a block whose code is given that way.
 export const statements_code = (g: Generator, statements: Array<Statement>) ->
-  const generate_all = ->
-    generate_statement g, statement for statement in statements
+  const generate_all = -> generate_statement g, statement for statement in statements
   generate_all
 
 # A block whose code `generate` generates in its scope.
@@ -251,7 +247,7 @@ export const generate_statement = (g: Generator, statement: Statement): void ->
     when Assignment then generate_assignment g, statement
     when TypeDeclaration, EnumDeclaration, TypeAlias, Import, Extern, Extend, Pass then pass
     else
-      const expression = as_expression(statement)!
+      const expression = statement as Expression!
       release_if_reference g, expression, generate(g, expression)
 
 const generate_declaration = (g: Generator, declaration: Declaration) ->

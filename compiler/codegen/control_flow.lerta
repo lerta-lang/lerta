@@ -1,7 +1,7 @@
 # Generates control flow: `if`, `while`, `for` over ranges, arrays, Binary values and Iters,
 # comprehensions, `break` and `continue`.
 import {
-  as_expression, Binding, Comprehension, Condition, Expression, For, Identifier, If, Jump
+  Binding, Comprehension, Condition, Expression, For, Identifier, If, Jump
   LazyFunctions, Range, While
 } from '../ast'
 import { emit_array_new, emit_push } from './array'
@@ -40,13 +40,12 @@ const generate_condition_of = (g: Generator, condition: Condition) ->
   case condition
     when Binding
       const value = generate(g, condition.value)
-      const type = type_of(g, condition.value)
-      const optional = type is OptionalType then type else throw 'a binding has an optional value'
+      const optional = type_of(g, condition.value) as OptionalType!
       const define = (scope: Map<String, CodegenLocal>) ->
         const unwrapped = emit_unwrap(g.ir, value, optional)
         scope[condition.name.name] = store_in_slot(g, unwrapped, optional.inner)
       { test: emit_is_present(g.ir, value, optional), define }
-    else { test: generate_condition(g, as_expression(condition)!), define: no_locals }
+    else { test: generate_condition(g, condition as Expression!), define: no_locals }
 
 export const generate_while = (g: Generator, while_statement: While) ->
   const ir = g.ir
@@ -74,10 +73,8 @@ export const generate_for = (g: Generator, for_statement: For) ->
 # of no `break` or `continue`, which its element and guard cannot hold (see jump_positions).
 export const generate_comprehension = (g: Generator, comprehension: Comprehension) ->
   const { element, variable, iterable, guard } = comprehension
-  if const lazy = comprehension.lazy
-    return generate_iter_comprehension(g, iterable, lazy)
-  const type = type_of(g, comprehension)
-  const array_type = type is ArrayType then type else throw 'a comprehension gives an array'
+  return generate_iter_comprehension(g, iterable, lazy) if const lazy = comprehension.lazy
+  const array_type = type_of(g, comprehension) as ArrayType!
   const element_type = array_type.element
   const ir = g.ir
   const result = emit_array_new(ir, element_type)

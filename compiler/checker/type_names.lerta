@@ -45,12 +45,9 @@ export const with_type_parameters = (
 
 # A class, struct, enum or imported type of the name, marking its import as used.
 const named_type = (program: ProgramWide, shared: Shared, name: String): Type? ->
-  if const info = shared.objects[name]
-    return info.type
-  if const own = shared.enums[name]
-    return own
-  if const exported = imported_type(program, shared, name)
-    return exported.type
+  return info.type if const info = shared.objects[name]
+  return own if const own = shared.enums[name]
+  return exported.type if const exported = imported_type(program, shared, name)
   nil
 
 # Whether the name is that of a type, which a type parameter cannot take.
@@ -146,8 +143,7 @@ const resolve_union = (program: ProgramWide, resolver: Resolver, type_name: Unio
 const resolve_alias = (program: ProgramWide, resolver: Resolver, name: String, at: Position) ->
   const shared = program.shared[resolver.module_index]
   const entry = shared.aliases[name] ? return nil
-  if const type = entry.type
-    return type
+  return type if const type = entry.type
   fail program, at, "the type '#{name}' refers to itself" if shared.resolving.has(name)
   shared.resolving.add name
   const type = resolve(program, resolver, entry.alias.type)
@@ -175,12 +171,9 @@ const resolve_name = (
       fail_here "'#{name}' takes no type arguments" if args.length > 0
   return void_type if is_result and name == 'void'
   return never_type if is_result and name == 'never'
-  if const parameter = resolver.type_parameters[name]
-    return parameter
-  if const simple = simple_type(name)
-    return simple
-  if const named = named_type(program, program.shared[resolver.module_index], name)
-    return named
+  return parameter if const parameter = resolver.type_parameters[name]
+  return simple if const simple = simple_type(name)
+  return named if const named = named_type(program, program.shared[resolver.module_index], name)
   resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
 
 # A type parameter's type argument is checked where it is given (see generic_call).

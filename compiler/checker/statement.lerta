@@ -1,6 +1,6 @@
 # Checks statements and blocks, defining the locals they declare; loops are checked by `loop`.
 import {
-  as_expression, Assignment, Binding, Call, Coalesce, Condition, Declaration, EnumDeclaration
+  Assignment, Binding, Call, Coalesce, Condition, Declaration, EnumDeclaration
   Expression, Extend, Extern, For, FunctionLiteral, Identifier, If, Import, is_exported, Pass
   Statement, TypeAlias, TypeDeclaration, While
 } from '../ast'
@@ -54,8 +54,7 @@ export const check_function_body = (
       define_local body, param
     narrow_where_holds body, holds if holds
   const statements = literal.body
-  const finish = ->
-    check_last_statement body, statements.last() if statements.length > 0
+  const finish = -> check_last_statement body, statements.last() if statements.length > 0
   check_block body, all_but_last(statements), define_params, finish
 
 # The top-level code. Its names may be used by the functions, which are checked later, so its
@@ -73,7 +72,7 @@ export const type_of_block = (
   const last = statements.last()
   var type: Type = void_type
   const finish = ->
-    if const value = as_expression(last)
+    if const value = last as Expression?
       type = type_of_last(value)
       return
     check_statement body, last
@@ -122,7 +121,7 @@ export const check_statement = (body: Body, statement: Statement): void ->
     when Pass then pass
     when TypeDeclaration
       require_top_level 'a class or struct can only be declared at the top level'
-    else check_expression_statement body, as_expression(statement)!
+    else check_expression_statement body, statement as Expression!
 
 # An optional name tested in the condition is narrowed where it is known not to be nil: in the
 # then branch of `if x`, in the else branch of `if not x`, and after a guard such as
@@ -149,7 +148,7 @@ export const check_condition = (body: Body, condition: Condition): () -> void ->
       const local = Local(identifier, type: inner, mutable: false, declared: true, used: false)
       () -> define_local(body, local)
     else
-      expect_condition body, as_expression(condition)!
+      expect_condition body, condition as Expression!
       nothing
 
 # Narrows, in the current scope, the locals that the condition tests, where it holds.
