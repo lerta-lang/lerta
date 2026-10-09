@@ -21,6 +21,7 @@
 
 - Postfix `for`, `[...]` comprehensions with `when`, `(...)` comprehensions and `Iter<T>` with `map`/`filter`/`take` are implemented: see [the reference](../reference/control-flow.md#for-and-ranges) and [Iter](../reference/types.md#iter). Why: an `Iter` is not evaluated until consumed (the Rust approach; avoids CoffeeScript's implicit arrays and the intermediate-array problem of eager `map` in Ruby/JS); its protocol is `has_next()` / `next()`, since with `next(): T?` the end could not be distinguished when `T` is nilable; and a second traversal throws rather than silently becoming empty like a Python generator.
 - Planned: more lazy methods of `Array` and `Iter<T>` besides `map`/`filter`/`take`.
+- Planned, with [interfaces](objects.md#interface): `for` and comprehensions traverse an `Iterable<T>`, an interface with `iter(): Iter<T>`, through its `iter()`, as Python's `for` does through `__iter__`. Being structural, it is satisfied by `Array<T>`, by `Iter<T>` (whose `iter` gives itself), by `Range` and by any user type with that method. The lazy methods (`map`, `filter`, `any` and so on) are default implementations of `Iterable<T>`, written once, as Rust's `Iterator` provides its methods, instead of each `Array` method delegating to `@iter()`. Why not `xs.iter().map(f)` alone: it removes the delegation only by making every caller write `iter()`.
 
 ## case
 
