@@ -127,11 +127,10 @@ const common_field_target = (body: Body, union: UnionType, member: Member) ->
   for field in fields
     const member_name = format_member(field.member_type, union)
     const member_type = field.member_type
-    if member_type is ObjectType
-      if member_type.is_struct
-        const reason = "its member #{member_name} is a struct, whose fields cannot change"
-        const message = "'#{name}' cannot be changed through #{format_type(union)}: #{reason}"
-        fail body.program, position, message
+    if member_type is ObjectType and member_type.is_struct
+      const reason = "its member #{member_name} is a struct, whose fields cannot change"
+      const message = "'#{name}' cannot be changed through #{format_type(union)}: #{reason}"
+      fail body.program, position, message
     if not field.info.mutable
       const field_of_member = "a const field of #{member_name}"
       const message = "'#{name}' is #{field_of_member}, a member of #{format_type(union)}"
@@ -197,10 +196,9 @@ const field_of = (body: Body, object_type: Type, member: Member) ->
   const field = object.fields.find((each) -> each.name.name == member.name.name) ? return nil
   const self = body.self
   const initializing = self then self.initializing else nil
-  if member.object is This and field.value != nil
-    if initializing
-      if index_of(object.fields, field) >= index_of(object.fields, initializing)
-        fail program, member.name.position, "'#{field.name.name}' is not initialized yet"
+  if member.object is This and field.value != nil and initializing
+    if index_of(object.fields, field) >= index_of(object.fields, initializing)
+      fail program, member.name.position, "'#{field.name.name}' is not initialized yet"
   FieldOf info: field, type: info_field_type(program, object, field, member.name.position)
 
 const index_of = (fields: Array<FieldInfo>, field: FieldInfo) ->
