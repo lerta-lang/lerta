@@ -15,7 +15,7 @@ import { parse_type_name } from './type'
 # map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
 # The lookahead skips line breaks, which may separate the parameters.
 export const starts_function_literal = (tokens: TokenStream) ->
-  tokens.inside 'skip', () -> looks_like_function_literal(tokens)
+  tokens.inside SKIP, () -> looks_like_function_literal(tokens)
 
 const looks_like_function_literal = (tokens: TokenStream) ->
   const first = tokens.peek().kind
@@ -86,7 +86,7 @@ export const parse_array_literal = (tokens: TokenStream, position: Position) ->
     return parse_comprehension(tokens, first, position, ']') if tokens.peek().kind == 'for'
     const elements = tokens.parse_list_rest(']', () -> parse_expression(tokens), [first])
     ArrayLiteral elements, position
-  tokens.inside 'separate', parse_contents
+  tokens.inside SEPARATE, parse_contents
 
 # `(a)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends inside are skipped.
 export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
@@ -97,7 +97,7 @@ export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
     # Diagnostics about the group point at its opening parenthesis.
     first.position = position
     first
-  tokens.inside 'skip', parse_contents
+  tokens.inside SKIP, parse_contents
 
 # `for x in xs when guard]`, after the element, or `... guard)` for an Iter; line ends inside
 # are skipped.
@@ -111,7 +111,7 @@ const parse_comprehension = (
     const header = parse_loop_header(tokens)
     tokens.expect close, "'#{close}'"
     header
-  const { variable, iterable, guard } = tokens.inside('skip', parse_header)
+  const { variable, iterable, guard } = tokens.inside(SKIP, parse_header)
   const lazy = close == ')' then lazy_functions(element, variable, guard) else nil
   Comprehension element, variable, iterable, guard, lazy, position
 

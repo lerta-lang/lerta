@@ -3,6 +3,12 @@ import { compile_error } from '../errors'
 import { Position } from '../ast'
 import { Token } from '../lexer/tokens'
 
+# How line breaks are read inside the brackets being parsed: as separators of a list's items, or
+# skipped, as in a grouping.
+export enum LineBreaks
+  SEPARATE
+  SKIP
+
 export class TokenStream
   tokens: Array<Token>
   # Names the source in diagnostics.
@@ -11,9 +17,9 @@ export class TokenStream
   # cannot be written there (see parse_function_literal).
   interpolation: Position?
   index = 0
-  # How line breaks are read inside the brackets being parsed: 'separate', as separators of a
-  # list's items, or 'skip', as in a grouping. Outside brackets there are none.
-  line_breaks: Array<String> = []
+  # How line breaks are read inside each of the brackets being parsed; outside brackets there are
+  # none.
+  line_breaks: Array<LineBreaks> = []
 
   # The kind of the next token if it continues the current expression. After an indented block
   # (such as a `case`) the line has ended, so `-1` on the next line is not a subtraction.
@@ -46,7 +52,7 @@ export class TokenStream
     index
 
   is_skipped = (index: Int) ->
-    const skips = @line_breaks.length == 0 or @line_breaks[@line_breaks.length - 1] != 'separate'
+    const skips = @line_breaks.length == 0 or @line_breaks[@line_breaks.length - 1] != SEPARATE
     skips and @tokens[index].kind == 'line_break'
 
   # Whether the next token is the identifier `word`, which is not a keyword, so that it stays
@@ -68,7 +74,7 @@ export class TokenStream
 
   # Runs `parse` on the contents of brackets, whose line breaks it reads as `mode` says. A compile
   # error ends the program, so the mode needs no restoring on one.
-  inside = <T>(mode: String, parse: () -> T): T ->
+  inside = <T>(mode: LineBreaks, parse: () -> T): T ->
     @line_breaks.push mode
     const result = parse()
     @line_breaks.pop()
@@ -80,7 +86,7 @@ export class TokenStream
     const parse_items = () ->
       @accept 'line_break'
       @parse_list_rest close, parse_item, []
-    @inside 'separate', parse_items
+    @inside SEPARATE, parse_items
 
   # The rest of a list whose first items are `items`, through `close`.
   parse_list_rest = <T>(close: String, parse_item: () -> T, items: Array<T>): Array<T> ->
