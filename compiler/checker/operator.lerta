@@ -103,7 +103,8 @@ const type_of_operands = (
   const second = right_first then left else right
   const type = type_of(body, first, expected)
   const is_equality = binary.operator == '==' or binary.operator == '!='
-  return type_of_identity_operand(body, second, type) if is_equality and is_identity_type(type)
+  const is_identity = is_equality and is_identity_type(inner_of(type))
+  return type_of_identity_operand(body, second, type) if is_identity
   const inner = is_equality then inner_of(type) else type
   fail body.program, first.position, reject(type) if not is_one_of_kinds(inner, allowed_kinds)
   return type_of_equality_operand(body, first, second, type) if is_equality
@@ -126,10 +127,12 @@ const type_of_equality_operand = (
   first_type
 
 # Objects compared by identity may be of different types, as a class and a union that holds it,
-# as long as both can hold an object of the same class.
+# as long as both can hold an object of the same class. Either may be optional.
 const type_of_identity_operand = (body: Body, second: Expression, first_type: Type) ->
   const type = type_of(body, second, nil)
-  if not (is_identity_type(type) and share_a_class(first_type, type))
+  const first_inner = inner_of(first_type)
+  const inner = inner_of(type)
+  if not (is_identity_type(inner) and share_a_class(first_inner, inner))
     const message = "cannot compare #{format_type(first_type)} with #{format_type(type)}"
     fail body.program, second.position, message
   first_type

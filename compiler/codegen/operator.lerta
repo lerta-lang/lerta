@@ -13,7 +13,7 @@ import { emit_is_nil, emit_is_present, emit_unwrap } from './optional'
 import { emit_concat, emit_equals, emit_string_equals } from './string'
 import { throw_if, UNWRAPPED_NIL } from './throw_blocks'
 import {
-  is_identity_type, is_kind, is_one_of_kinds, is_reference_type, OptionalType
+  inner_of, is_identity_type, is_kind, is_one_of_kinds, is_reference_type, OptionalType
 } from '../types'
 
 # The predicates of `icmp` for the comparisons of signed integers; Byte is ordered as unsigned.
@@ -39,10 +39,11 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   const operand_type = type_at_use(g, binary.left)
   const is_string = is_kind(operand_type, 'String')
   return emit_concat(g.ir, [left, right]) if is_string and operator == '+'
+  # nil is the null pointer, so optional objects compare as pointers too.
+  if is_identity_type(inner_of(operand_type))
+    return negate_if_unequal(g, operator, generate_same_object(g, left, right))
   if operand_type is OptionalType
     return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
-  if is_identity_type(operand_type)
-    return negate_if_unequal(g, operator, generate_same_object(g, left, right))
   if is_one_of_kinds(operand_type, ['String', 'Binary'])
     return negate_if_unequal(g, operator, emit_equals(g.ir, left, right))
   return apply_arithmetic(g, operator, left, right, operand_type) if is_arithmetic(operator)
