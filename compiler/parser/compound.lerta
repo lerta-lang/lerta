@@ -3,7 +3,7 @@
 import {
   ArrayLiteral, BooleanLiteral, Case, CaseArm, Comprehension, Conditional, copy_identifier
   Expression, FunctionLiteral, Identifier, LazyFunctions, MapEntry, MapLiteral
-  NamedValue, Parameter, Position, RecordLiteral, Statement, TypeParameter
+  NamedValue, Parameter, Pass, Position, RecordLiteral, Statement, TypeParameter
 } from '../ast'
 import {
   parse_coalesce, parse_expression, parse_identifier, parse_list, parse_list_rest
@@ -183,12 +183,18 @@ const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
 const parse_arm_body = (tokens: TokenStream, arm: String): Array<Statement> ->
   const is_inline = arm == 'then' then tokens.accept('then') else tokens.peek().kind != 'newline'
   if is_inline
-    const statement = parse_inline_arm(tokens)
+    const statement = parse_pass(tokens) ? parse_inline_arm(tokens)
     tokens.expect_line_end()
     return [statement]
   const next = tokens.peek()
   tokens.fail_expecting next, "'then' or end of line" if next.kind != 'newline'
   parse_block tokens
+
+# `pass`, alone after `then` or `else`, is an arm that does nothing. It is not a keyword, so that
+# it stays usable as a name; a name alone there would be an unused value anyway.
+const parse_pass = (tokens: TokenStream): Statement? ->
+  return nil if not tokens.at_word('pass') or tokens.peek_at(1).kind != 'newline'
+  Pass position: token_position(tokens.next())
 
 # A declaration's scope would end with the line, so none may follow `then` or `else`.
 const parse_inline_arm = (tokens: TokenStream) ->

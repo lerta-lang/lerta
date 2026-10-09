@@ -85,7 +85,7 @@ print case
 
 - `case` is an expression. Its arms are in an indented block: one or more `when` arms, then an `else` arm, which is required.
 - Each `when` is followed by a condition, as an `if`'s (a `Bool` or an optional value, which narrows a local in the arm's value). The conditions are evaluated from the top, and the first that holds is taken; if none does, the `else` arm is.
-- An arm's body follows `then` on the same line (`when c then x`; for `else`, directly: `else x`), or is an indented block on the next lines. On the same line, it is an expression, an assignment or a call without parentheses (`when '(' then depth += 1`), with no postfix `if`, `while` or `for`. A block is a scope; its last statement gives the arm's value if it is an expression.
+- An arm's body follows `then` on the same line (`when c then x`; for `else`, directly: `else x`), or is an indented block on the next lines. On the same line, it is an expression, an assignment or a call without parentheses (`when '(' then depth += 1`), with no postfix `if`, `while` or `for`. `pass` alone on the same line is an arm that does nothing, which is `void`: `else pass`. It is not a keyword. A block is a scope; its last statement gives the arm's value if it is an expression.
   ```
   when n < 0
     const magnitude = -n
