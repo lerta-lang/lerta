@@ -74,7 +74,7 @@ draw 'p'
 - Arguments may be named, `f(name: value)`, after the positional ones: those of a constructor and the fields of an [anonymous struct](types.md#anonymous-structs) parameter.
 - `x.name()` calls a method of `x`, `x.name` reads a property and `xs[i]` indexes. As with `(`, no space is allowed before `.` or `[`. At the start of a statement, `f [1]` is the call `f([1])`.
 - Types are written as names, with type arguments in `<>` and `?` for an optional type: `Int`, `Array<String>`, `String?`.
-- `x!` unwraps an optional value; no space is allowed before `!`.
+- `x!` unwraps an optional value; no space is allowed before `!`. `x?.name` reads a member of an optional value (see [optional values](types.md#optional-values)); no space is allowed before `?` or `.`.
 
 ## Operators
 

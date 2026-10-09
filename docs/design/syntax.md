@@ -25,6 +25,5 @@ The rules, and a last argument that is a function literal continuing as an inden
 
 ## Operator precedence
 
-The precedence and associativity of the implemented operators are in [the reference](../reference/syntax.md#operators). Planned:
+The precedence and associativity of the implemented operators are in [the reference](../reference/syntax.md#operators).
 
-- `?.` (see [control flow](control-flow.md)) binds as `.` does.

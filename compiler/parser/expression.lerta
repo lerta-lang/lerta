@@ -1,8 +1,9 @@
 # Expressions, from the weakest operators down to primaries, which `primary` reads, as `compound`
 # reads compound expressions.
 import {
-  BinaryOperation, Call, Cast, Conditional, Coalesce, Expression, Identifier, Index, IntegerLiteral
-  IsTest, Member, NamedValue, Range, RecordLiteral, TypeName, UnaryOperation, Unwrap
+  BinaryOperation, Binding, Call, Cast, Conditional, Coalesce, copy_identifier, Expression
+  Identifier, If, Index, IntegerLiteral, IsTest, Member, NamedValue, NilLiteral, Range
+  RecordLiteral, TypeName, UnaryOperation, Unwrap
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
 import { parse_block_literal, starts_block, starts_field_block } from './block_literal'
@@ -176,10 +177,26 @@ export const parse_identifier = (tokens: TokenStream) ->
   tokens.next()
   Identifier name: token.text, position: token_position(token)
 
-const parse_postfix = (tokens: TokenStream, primary: Expression) ->
+const parse_postfix = (tokens: TokenStream, primary: Expression): Expression ->
   var expression = primary
   expression = extended while const extended = extend_by_postfix(tokens, expression)
-  expression
+  at_nil_safe(tokens) then parse_nil_safe(tokens, expression) else expression
+
+const at_nil_safe = (tokens: TokenStream) ->
+  const question = tokens.peek()
+  const dot = tokens.peek_at(1)
+  question.kind == '?' and not question.spaced and dot.kind == '.' and not dot.spaced
+
+# `x?.rest`, nil if x is nil and otherwise x with the rest of the postfix chain: an `if` that binds
+# x to a name of its position, which no source can write.
+const parse_nil_safe = (tokens: TokenStream, object: Expression) ->
+  const position = token_position(tokens.next())
+  const name = Identifier(position, name: "?#{position.line}:#{position.column}")
+  const rest = parse_postfix(tokens, copy_identifier(name))
+  const condition = Binding(name, position, value: object)
+  const nil_safe = If(condition, position, then_body: [rest], else_body: [NilLiteral(position)])
+  nil_safe.nil_safe = true
+  nil_safe
 
 # The expression with the call `f(x)`, indexing `xs[i]`, member access `x.name` or unwrapping `x!`
 # that follows it, written without a space before `(`, `[`, `.` or `!`, or the call with type

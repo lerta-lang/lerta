@@ -6,8 +6,8 @@ When a feature is implemented, its description moves to [../reference/](../refer
 
 | File | Topic |
 |---|---|
-| [syntax.md](syntax.md) | Multi-line strings, declarations, multi-line literals, calls without parentheses, `?.` |
-| [control-flow.md](control-flow.md) | `?.`, narrowing a `var`, `never`, `Range`, lazy methods, `Iterable<T>` |
+| [syntax.md](syntax.md) | Multi-line strings, declarations, multi-line literals, calls without parentheses |
+| [control-flow.md](control-flow.md) | narrowing a `var`, `never`, `Range`, lazy methods, `Iterable<T>` |
 | [types.md](types.md) | Type system and numeric types |
 | [strings.md](strings.md) | Strings, `Binary`, regular expressions |
 | [objects.md](objects.md) | Classes, structs, interfaces |

@@ -4,7 +4,6 @@
 
 `void` and `never`, `then`/`else`, `if`/`else` (with a value too) and `while` statements, the postfix forms, `break`/`continue`, `and`/`or`/`not`, nil tests, `?`, postfix `!` and declarations in conditions are implemented: see [the reference](../reference/control-flow.md). Why: no other forms that say the same thing two ways, so there is no `unless`, no `&&`/`||`/`!`, no `then` statement without `else`, and no `defer` (destructors and `try`/`finally` replace it; it may be considered if it becomes necessary). Planned:
 
-- `?.` is nil-safe access: `a?.b` (nil if `a` is nil, otherwise `a.b`).
 - Narrowing a `var`.
 - Code after a call to a function returning `never` (`exit`) is unreachable.
 - Because `void` is not a type, generics cannot treat "returns a value / returns nothing" uniformly, and the standard library splits such functions, like `map` / `for_each`.
