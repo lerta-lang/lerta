@@ -8,12 +8,6 @@ SOURCES := $(shell find compiler -name '*.lerta') compiler/embedded.lerta
 RUNTIME_C := $(wildcard runtime/*.c)
 RUNTIME := $(RUNTIME_C) $(wildcard runtime/*.h)
 MAIN := compiler/main.lerta
-# Only because the seed has an older command line: minilerta reads std/ and runtime/ from the
-# directory given as --root, and leaves the IR beside the executable unless --emit-llvm, which the
-# rules below that run minilerta give, puts it elsewhere. Once the seed is refreshed, this and
-# those --emit-llvm options go, and minilerta builds as bin/lerta does.
-MINILERTA_BUILD := build/minilerta build --root .
-
 ifdef TARGET
 TARGET_FLAGS := --target $(TARGET)
 EXE := $(if $(filter %-w64-mingw32,$(TARGET)),.exe)
@@ -34,15 +28,15 @@ build/seed.ll: seed/lerta.ll
 build/minilerta: build/seed.ll $(RUNTIME)
 	clang -Wno-override-module build/seed.ll -D LERTA_DEBUG $(RUNTIME_C) -o $@
 
-build/embed: build/minilerta tools/embed.lerta $(EMBEDDED)
-	$(MINILERTA_BUILD) tools/embed.lerta -o $@ --emit-llvm $@.ll
+build/embed: build/minilerta tools/embed.lerta
+	build/minilerta build tools/embed.lerta -o $@
 
 compiler/embedded.lerta: build/embed $(EMBEDDED)
 	build/embed $@ $(EMBEDDED)
 
 bin/lerta: build/minilerta $(SOURCES)
 	@mkdir -p bin
-	$(MINILERTA_BUILD) $(MAIN) -o $@ -O --emit-llvm build/lerta.ll
+	build/minilerta build $(MAIN) -o $@ -O
 
 ifdef TARGET
 $(COMPILER): bin/lerta
@@ -85,8 +79,14 @@ ifdef TARGET
 seed:
 	@echo 'make seed does not take TARGET' >&2; exit 2
 else
+# The seed's compiler embeds std/ and runtime/ in seed mode, in a copy of compiler/, so that the
+# build's own compiler/embedded.lerta stays as it is.
 seed: check-bootstrap
-	cp $(BOOTSTRAP)/stage2.ll seed/lerta.ll
+	rm -rf build/seed-source
+	cp -R compiler build/seed-source
+	build/embed --seed build/seed-source/embedded.lerta $(EMBEDDED)
+	bin/lerta dump-llvm build/seed-source/main.lerta > build/seed-source/lerta.ll
+	cp build/seed-source/lerta.ll seed/lerta.ll
 endif
 
 # The tests run on the host only: tools/test_in_docker.sh runs them for other targets.
