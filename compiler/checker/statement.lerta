@@ -10,7 +10,7 @@ import { expect_condition, expect_optional, expect_type, type_of } from './expre
 import { has_function } from './functions'
 import { has_import } from './imports'
 import { check_for, check_while } from './loop'
-import { ends_with_jump, narrowed_view, narrowing_of } from './narrowing'
+import { ends_with_jump, narrow, narrowings_of, narrowings_where } from './narrowing'
 import { object_type, ObjectInfo } from './object_types'
 import { check_last_statement } from './result'
 import { Local } from './scopes'
@@ -138,10 +138,8 @@ export const check_statement = (body: Body, statement: Statement): void ->
 const check_if = (body: Body, if_statement: If) ->
   const { condition, then_body, else_body } = if_statement
   const define = check_condition(body, condition)
-  const narrowing = narrowing_of(body, condition)
-  const narrow_where = (value: Bool) ->
-    if narrowing
-      narrow body, narrowing.local, narrowing.type if narrowing.condition_value == value
+  const narrowings = narrowings_of(body, condition)
+  const narrow_where = (value: Bool) -> narrow(body, narrowings_where(narrowings, value))
   const define_then = ->
     define()
     narrow_where true
@@ -162,14 +160,9 @@ export const check_condition = (body: Body, condition: Condition): () -> void ->
       expect_condition body, as_expression(condition)!
       nothing
 
-# Until the innermost scope ends, the local is seen with the narrower type.
-const narrow = (body: Body, local: Local, type: Type) ->
-  body.scopes.narrow local.identifier.name, narrowed_view(local, type)
-
-# Narrows, in the current scope, the local that the condition tests, where it holds.
+# Narrows, in the current scope, the locals that the condition tests, where it holds.
 export const narrow_where_holds = (body: Body, condition: Expression) ->
-  const narrowing = narrowing_of(body, condition) ? return
-  narrow body, narrowing.local, narrowing.type if narrowing.condition_value
+  narrow body, narrowings_of(body, condition).where_true
 
 # A top-level function was added to the module's functions before checking started.
 const check_declaration = (body: Body, declaration: Declaration) ->

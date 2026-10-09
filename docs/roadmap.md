@@ -84,7 +84,6 @@ Run tests (source → execution result) run `bin/lerta`, the compiler written in
 - Writing a `type` alias over several lines: a union of many members, such as `Expression` in `compiler/ast.lerta`, is built from one-line unions for now.
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
 - Generic methods of classes and structs (as `inside<T>` of the token stream would be; `compiler/parser/` makes them top-level functions).
-- Narrowing through `and` and `or` (`if x is A and x.ready`), which `compiler/checker/` writes as nested `if`s for now.
 - Renaming in destructuring (`const { a: x } = value`).
 - Sorting arrays (`compiler/sort.lerta` sorts by hand for now).
 - A type alias of a union as a pattern of `case`, standing for all its members.
