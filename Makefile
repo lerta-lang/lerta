@@ -28,13 +28,15 @@ build/seed.ll: seed/lerta.ll
 build/minilerta: build/seed.ll $(RUNTIME)
 	clang -Wno-override-module build/seed.ll -D LERTA_DEBUG $(RUNTIME_C) -o $@
 
-build/embed: build/minilerta tools/embed.lerta
+# Each rule that runs minilerta depends on std/ and runtime/ too, which it reads (see
+# docs/internals.md#bootstrap).
+build/embed: build/minilerta tools/embed.lerta $(EMBEDDED)
 	build/minilerta build tools/embed.lerta -o $@
 
 compiler/embedded.lerta: build/embed $(EMBEDDED)
 	build/embed $@ $(EMBEDDED)
 
-bin/lerta: build/minilerta $(SOURCES)
+bin/lerta: build/minilerta $(SOURCES) $(EMBEDDED)
 	@mkdir -p bin
 	build/minilerta build $(MAIN) -o $@ -O
 

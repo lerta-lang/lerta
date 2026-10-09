@@ -740,6 +740,19 @@ const run_cases: RunCase[] = [
   { name: 'runs the program', args: ['run', hello], status: 0, stdout: hello_output },
   { name: 'optimizes', args: ['run', hello, '-O'], status: 0, stdout: hello_output },
   {
+    name: 'passes no arguments after a lone --',
+    args: ['run', join(commands_dir, 'count args.lerta'), '--'],
+    status: 0,
+    stdout: '0\n',
+  },
+  {
+    name: 'gives the exit code of a leak, which the unoptimized program reports',
+    args: ['run', join(twice_dir, 'leak.lerta'), join(twice_dir, 'leak.c')],
+    status: 1,
+    stdout: '',
+    stderr: 'leak: 1 object(s)\n',
+  },
+  {
     name: 'passes the exit code',
     args: ['run', join(commands_dir, 'exit_with.lerta'), '--', '3'],
     status: 3,

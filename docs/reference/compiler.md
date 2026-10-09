@@ -18,7 +18,7 @@ builds an executable. `lerta` is `bin/lerta`, which `make` builds (see the [READ
 lerta run <source> [<file>...] [-O] [-- <arg>...]
 ```
 
-builds the program as `build` does, from the same source and files, in the temporary directory, and runs it there, with the arguments after `--`, which go to the program as they are, even those that look like options; the program shares the standard streams. It then removes the directory, unless a throw left it (see above), and exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](modules.md#stdprocess)). `-o` and `--target` are usage errors, and so is an argument for the program without `--`. A compile error or a failure of clang is reported as by `build`, and nothing runs.
+builds the program as `build` does, from the same source and files, in the temporary directory, and runs it, in the current directory, with the arguments after `--`, which go to the program as they are, even those that look like options; the program shares the standard streams. It then removes the directory, unless a throw left it (see above), and exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](modules.md#stdprocess)). `-o` and `--target` are usage errors, and so is an argument for the program without `--`. A compile error or a failure of clang is reported as by `build`, and nothing runs.
 
 The commands below print what the lexer, the parser, the checker and codegen make of the source. They are there for debugging the compiler.
 
