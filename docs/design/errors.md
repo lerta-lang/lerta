@@ -13,9 +13,8 @@ The definition of safety is in [philosophy.md](../philosophy.md#safety). Bounds 
 
 These apply when a value in statement position is not captured.
 
-Literals, arithmetic and comparisons, function values and `Iter<T>` values are implemented: see [the reference](../reference/errors.md#discarded-values). Planned:
+Everything but calls and expressions without a value is an error, as in Go, since it has no side effects: see [the reference](../reference/errors.md#discarded-values). Planned:
 
-- Other operator expressions and field access (`obj.x`) → **error** (no side effects; same as Go).
 - Methods of immutable types (`String`, `Binary`) that return a new value (`s.trim()`) → **error** (since the type is immutable, the type shows that "discarding = doing nothing").
 - Other calls to non-`void` functions → allowed (interpreted as calls for side effects). A `must_use` annotation can make individual ones an error.
 

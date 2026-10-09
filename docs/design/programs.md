@@ -19,5 +19,5 @@ Named imports, with `as`, from the standard modules and from files, `import 'mod
 
 ## Tools
 
-- `lerta build` is implemented: see [the reference](../reference/compiler.md). Planned: bitcode output, `lerta run` (runs directly with JIT) and `lerta repl`.
+- `lerta build`, and a provisional `lerta run` that builds and then runs the executable, are implemented: see [the reference](../reference/compiler.md). Planned: bitcode output, `lerta run` running directly with JIT, and `lerta repl`.
 - A formatter (like gofmt) is provided from day one.

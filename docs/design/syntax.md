@@ -21,9 +21,7 @@ Newlines inside brackets and bracketless blocks are implemented: see [the refere
 
 ## Calls without parentheses
 
-The rules are implemented: see [the reference](../reference/syntax.md#calls). Planned:
-
-- If the last argument is a closure, it may continue as an indented block.
+The rules, and a last argument that is a function literal continuing as an indented block, are implemented: see [the reference](../reference/syntax.md#calls).
 
 ## Operator precedence
 
