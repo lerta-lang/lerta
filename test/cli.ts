@@ -753,6 +753,12 @@ const run_cases: RunCase[] = [
     stderr: 'leak: 1 object(s)\n',
   },
   {
+    name: 'compares nils from C as equal, whatever value they hold',
+    args: ['run', join(twice_dir, 'dirty_nil.lerta'), join(twice_dir, 'dirty_nil.c')],
+    status: 0,
+    stdout: 'true true true\nfalse false\n',
+  },
+  {
     name: 'passes the exit code',
     args: ['run', join(commands_dir, 'exit_with.lerta'), '--', '3'],
     status: 3,
