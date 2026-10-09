@@ -95,6 +95,14 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
   return expression if not is_one_of(operator, ASSIGNMENT_OPERATORS)
   parse_assignment tokens, expression, operator
 
+# A simple statement with the postfix `if`, `while` and `for` that follow it, as on a line of its
+# own; a declaration can have none.
+export const parse_line_statement = (tokens: TokenStream): Statement ->
+  const statement = parse_simple_statement(tokens)
+  return parse_postfix_conditions(tokens, statement) if not (statement is Declaration)
+  reject_postfix tokens
+  statement
+
 # A declaration declares its names for the rest of the block, so no postfix `if` or `while` can
 # apply to it.
 const reject_postfix = (tokens: TokenStream) ->
@@ -116,7 +124,7 @@ const wrap_in_postfix_condition = (tokens: TokenStream, statement: Statement): S
   return wrap_in_for(tokens, statement) if kind == 'for'
   return nil if kind != 'if' and kind != 'while'
   tokens.next()
-  const condition = parse_expression(tokens)
+  const condition = parse_condition(tokens)
   const position = statement.position
   case kind
     when 'if' then If(condition, position, then_body: [statement], else_body: [])

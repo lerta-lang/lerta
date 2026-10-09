@@ -7,7 +7,9 @@ import {
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
 import { parse_coalesce, parse_expression, parse_identifier, parse_loop_header } from './expression'
-import { at_declaration, parse_block, parse_simple_statement } from './statement'
+import {
+  at_declaration, parse_block, parse_line_statement, parse_simple_statement
+} from './statement'
 import { is_one_of, token_position, TokenStream } from './token_stream'
 import { parse_type_name } from './type'
 
@@ -53,7 +55,12 @@ export const parse_function_literal = (tokens: TokenStream) ->
   # cannot be written there.
   if const start = tokens.interpolation
     tokens.fail start, 'a function cannot be written in an interpolation'
-  const body = is_block then parse_block(tokens) else [parse_simple_statement(tokens)]
+  const body = case
+    when is_block then parse_block(tokens)
+    # Inside brackets, a postfix `for` or `if` after the body belongs to them, as in
+    # `[(x) -> x for x in xs]`.
+    when tokens.in_brackets() then [parse_simple_statement(tokens)]
+    else [parse_line_statement(tokens)]
   FunctionLiteral type_params, params, return_type, body, position: token_position(token)
 
 const parse_parameter = (tokens: TokenStream) ->
@@ -195,7 +202,7 @@ const parse_pass = (tokens: TokenStream): Statement? ->
 const parse_inline_arm = (tokens: TokenStream) ->
   const message = 'a declaration in an arm must be in an indented block'
   tokens.fail token_position(tokens.peek()), message if at_declaration(tokens)
-  parse_simple_statement tokens
+  parse_line_statement tokens
 
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
 # Comprehension). The guard's function tests its condition as an `if` would:

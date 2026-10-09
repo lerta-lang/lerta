@@ -11,7 +11,7 @@ const greet = -> print 'hello'
 
 - A function is declared as a top-level `const` whose value is a function literal `(<parameters>): <return type> -> <body>`. A function literal held by a local `const` is a [function value](#function-values) instead: unlike a top-level function, it cannot be used before its declaration, call itself or be generic.
 - Parameters are `name: Type`. With no parameters, `()` may be omitted.
-- The body follows `->` on the same line, or as an indented block. Its last statement, if an expression, is the return value; `return <value>` returns early, and `return` alone returns from a function without a value.
+- The body follows `->` on the same line, a statement with its postfix forms (see [control flow](control-flow.md#if-and-while)), or as an indented block. Its last statement, if an expression, is the return value; `return <value>` returns early, and `return` alone returns from a function without a value.
 - The return type may be omitted; it is then the type of the returned values, which must all agree, or `void` if there are none. A mix of `T`, `T?` and `nil` gives `T?`; `nil` alone does not give a type, so the return type must then be written. A recursive function must write its return type.
 - A function whose return type is not `void` must end with its return value or a `return`. This is decided by the last statement alone: a body ending in `while true` or in an `if` whose branches all return still needs a final value.
 - Top-level functions can be used anywhere in the module, before their declaration too, so they can call each other recursively.
