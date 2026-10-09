@@ -21,7 +21,8 @@ const EXTENDABLE_KINDS: Array<TypeKind> = [
 # Puts the extend's methods in effect in the module, and adds them to its functions, which check
 # their bodies with `@` as the receiver, or makes them generic methods, whose instances are
 # checked so.
-export const declare_extend = (program: ProgramWide, shared: Shared, statement: Extend) ->
+export const declare_extend = (shared: Shared, statement: Extend) ->
+  const program = shared.program
   const { type_params } = statement
   reject_bounds program, type_params
   const resolver = with_type_parameters(module_resolver(shared.index), placeholders(type_params))
@@ -42,20 +43,19 @@ export const declare_extend = (program: ProgramWide, shared: Shared, statement: 
       fail program, name.position, message
     if has_member(program, receiver, name.name)
       fail program, name.position, "#{format_type(receiver)} already has a member '#{name.name}'"
-    const method = extension_method(program, shared, extended, name, literal)
-    add_own program, shared, method
-    add_function program, shared, method.key, name, literal, receiver if method.generic == nil
+    const method = extension_method(shared, extended, name, literal)
+    add_own shared, method
+    add_function shared, method.key, name, literal, receiver if method.generic == nil
 
 # A method of an extend of the receiver: generic if the extend or the method has type parameters.
 const extension_method = (
-  program: ProgramWide, shared: Shared, receiver: Receiver, name: Identifier
-  literal: FunctionLiteral
+  shared: Shared, receiver: Receiver, name: Identifier, literal: FunctionLiteral
 ) ->
   const type = receiver.type
   const key = method_key(format_type(type), name.name)
   const is_generic = receiver.type_params.length > 0 or literal.type_params.length > 0
   const make_generic = () ->
-    add_generic shared, make_generic_function(program, shared, name, literal, receiver)
+    add_generic shared, make_generic_function(shared, name, literal, receiver)
   const generic = is_generic then make_generic() else nil
   const module_index = shared.index
   const module_name = shared.name

@@ -19,7 +19,7 @@ export const lookup = (body: Body, name: String) ->
   return outer if const outer = captured(body, name)
   if body.sees_top_level
     return top_level if const top_level = body.shared.top_level.locals[name]
-  value_local body.program, body.shared, name
+  value_local body.shared, name
 
 # A builtin or a standard module's function can only be called so far, not used as a value.
 export const type_of_identifier = (body: Body, identifier: Identifier, is_callee: Bool) ->
@@ -32,7 +32,7 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
   if const function_type = function_type_of(program, shared.index, name, position)
     return function_type
   fail_only_called body, identifier if generic_function(shared, name) != nil
-  if object_type(program, shared, name) != nil
+  if object_type(shared, name) != nil
     fail program, position, "'#{name}' is a type; construct it as #{name}(...)"
   fail program, position, "'#{name}' is a type" if shared.enums.has(name)
   if const imported = use_import(shared, name)
@@ -42,7 +42,7 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
     return type_of_export(body, exported, identifier, is_callee)
   reject_pending program, shared.top_level, identifier if body.sees_top_level
   const undefined_name = () -> fail(program, position, "undefined name '#{name}'")
-  const builtin = builtin_export(program, shared, name) ? undefined_name()
+  const builtin = builtin_export(shared, name) ? undefined_name()
   type_of_export body, builtin, identifier, is_callee
 
 # The generic function that the callee names: one of the module, an imported one or a builtin,
@@ -57,7 +57,7 @@ export const generic_callee = (body: Body, callee: Expression) ->
   const imported = shared.imports.names[name]
   const exported = case
     when imported then imported_export(program, imported)
-    else builtin_export(program, shared, name) ? return nil
+    else builtin_export(shared, name) ? return nil
   case exported
     when GenericExport
       use_import shared, name

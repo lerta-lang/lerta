@@ -44,33 +44,34 @@ export const with_type_parameters = (
 ) -> Resolver(type_parameters, module_index: resolver.module_index)
 
 # A class, struct, enum or imported type of the name, marking its import as used.
-const named_type = (program: ProgramWide, shared: Shared, name: String): Type? ->
+const named_type = (shared: Shared, name: String): Type? ->
   return info.type if const info = shared.objects[name]
   return own if const own = shared.enums[name]
-  return exported.type if const exported = imported_type(program, shared, name)
+  return exported.type if const exported = imported_type(shared, name)
   nil
 
 # Whether the name is that of a type, which a type parameter cannot take.
 export const has_type = (program: ProgramWide, resolver: Resolver, name: String) ->
   const shared = program.shared[resolver.module_index]
-  return true if is_builtin_type_name(name) or named_type(program, shared, name) != nil
+  return true if is_builtin_type_name(name) or named_type(shared, name) != nil
   has_alias shared, name
 
-export const add_alias = (program: ProgramWide, shared: Shared, alias: TypeAlias) ->
+export const add_alias = (shared: Shared, alias: TypeAlias) ->
+  const program = shared.program
   const { name, position } = alias.name
   const is_taken = shared.aliases.has(name) or is_builtin_type_name(name)
-  if is_taken or named_type(program, shared, name) != nil
+  if is_taken or named_type(shared, name) != nil
     fail program, position, "'#{name}' is already defined"
   shared.aliases[name] = AliasEntry(alias)
 
 # Resolves every alias, so that an alias that is never used is checked too.
-export const resolve_aliases = (program: ProgramWide, shared: Shared) ->
+export const resolve_aliases = (shared: Shared) ->
   const resolver = module_resolver(shared.index)
   for name in shared.aliases.keys()
-    resolve_alias program, resolver, name, shared.aliases[name]!.alias.name.position
+    resolve_alias shared.program, resolver, name, shared.aliases[name]!.alias.name.position
 
-export const alias_type = (program: ProgramWide, shared: Shared, name: Identifier) ->
-  resolve_alias(program, module_resolver(shared.index), name.name, name.position)!
+export const alias_type = (shared: Shared, name: Identifier) ->
+  resolve_alias(shared.program, module_resolver(shared.index), name.name, name.position)!
 
 export const has_alias = (shared: Shared, name: String) -> shared.aliases.has(name)
 
@@ -173,7 +174,7 @@ const resolve_name = (
   return never_type if is_result and name == 'never'
   return parameter if const parameter = resolver.type_parameters[name]
   return simple if const simple = simple_type(name)
-  return named if const named = named_type(program, program.shared[resolver.module_index], name)
+  return named if const named = named_type(program.shared[resolver.module_index], name)
   resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
 
 # A type parameter's type argument is checked where it is given (see generic_call).

@@ -43,9 +43,8 @@ export const method_literal = (member: MemberDeclaration) ->
   member.value as FunctionLiteral?
 
 # Registers the names first, so that the members can refer to any of the types.
-export const add_objects = (
-  program: ProgramWide, shared: Shared, declarations: Array<TypeDeclaration>
-) ->
+export const add_objects = (shared: Shared, declarations: Array<TypeDeclaration>) ->
+  const program = shared.program
   for declaration in declarations
     const { name, position } = declaration.name
     if shared.objects.has(name) or is_builtin_type_name(name)
@@ -58,7 +57,8 @@ export const add_objects = (
     program.infos[symbol] = info
 
 # Resolves the written field types and adds the methods to the module's functions.
-export const add_members = (program: ProgramWide, shared: Shared) ->
+export const add_members = (shared: Shared) ->
+  const program = shared.program
   for type_name in shared.objects.keys()
     const info = shared.objects[type_name]!
     const seen: Map<String, Bool> = Map()
@@ -69,14 +69,14 @@ export const add_members = (program: ProgramWide, shared: Shared) ->
         fail program, position, message
       seen.add name
       if const literal = method_literal(member)
-        add_method program, shared, info, member, literal
+        add_method shared, info, member, literal
       else
-        info.fields.push field_of_member(program, shared, info, member)
+        info.fields.push field_of_member(shared, info, member)
 
 const add_method = (
-  program: ProgramWide, shared: Shared, info: ObjectInfo, member: MemberDeclaration
-  literal: FunctionLiteral
+  shared: Shared, info: ObjectInfo, member: MemberDeclaration, literal: FunctionLiteral
 ) ->
+  const program = shared.program
   const type_name = info.declaration.name.name
   const { name } = member.name
   const runs_alone = name == 'init' or name == 'deinit'
@@ -90,15 +90,14 @@ const add_method = (
   info.has_deinit = true if name == 'deinit'
   info.methods[name] = literal
   if literal.type_params.length == 0
-    add_function program, shared, method_key(type_name, name), member.name, literal, info.type
+    add_function shared, method_key(type_name, name), member.name, literal, info.type
     return
   const receiver = Receiver(type: info.type, type_params: [])
-  const generic = make_generic_function(program, shared, member.name, literal, receiver)
+  const generic = make_generic_function(shared, member.name, literal, receiver)
   info.generics[name] = add_generic(shared, generic)
 
-const field_of_member = (
-  program: ProgramWide, shared: Shared, info: ObjectInfo, member: MemberDeclaration
-) ->
+const field_of_member = (shared: Shared, info: ObjectInfo, member: MemberDeclaration) ->
+  const program = shared.program
   const is_struct = info.declaration.is_struct
   const value = member.value
   if value is FunctionLiteral
@@ -124,9 +123,9 @@ const reject_invalid_weak = (
   fail_weak 'a weak field holds an object of a class' if not object or object.is_struct
 
 # The class or struct of the name, of the module or imported.
-export const object_type = (program: ProgramWide, shared: Shared, name: String) ->
+export const object_type = (shared: Shared, name: String) ->
   return info.type if const info = shared.objects[name]
-  const exported = imported_type(program, shared, name) ? return nil
+  const exported = imported_type(shared, name) ? return nil
   const info = exported.info ? return nil
   info.type
 
@@ -143,8 +142,8 @@ export const field_type = (
   check_info program, info
   field.type!
 
-export const check_all_objects = (program: ProgramWide, shared: Shared) ->
-  check_info program, shared.objects[name]! for name in shared.objects.keys()
+export const check_all_objects = (shared: Shared) ->
+  check_info shared.program, shared.objects[name]! for name in shared.objects.keys()
 
 # Checks the initializers of the fields with the declaring module's checker, setting the types
 # that they give.

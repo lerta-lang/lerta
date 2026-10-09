@@ -5,16 +5,15 @@ import { fail } from './diagnostics'
 import { has_function } from './functions'
 import { builtin_export, has_import, imported_type } from './imports'
 import { lookup } from './name'
-import { Body, ProgramWide, Shared } from './shared'
+import { Body, Shared } from './shared'
 import { is_builtin_type_name } from './type_names'
 import {
   EnumMember, EnumType, FunctionType, optional_type, OptionalType, string_type, Type
 } from '../types'
 
 # Registers the module's enums, after its classes and structs (see add_objects).
-export const add_enums = (
-  program: ProgramWide, shared: Shared, declarations: Array<EnumDeclaration>
-) ->
+export const add_enums = (shared: Shared, declarations: Array<EnumDeclaration>) ->
+  const program = shared.program
   for declaration in declarations
     const { name, position } = declaration.name
     const is_taken = shared.objects.has(name) or shared.enums.has(name)
@@ -34,9 +33,9 @@ export const add_enums = (
     shared.enums[name] = EnumType(name, symbol, members, module: shared.name)
 
 # The enum of the name, of the module or imported.
-export const enum_type = (program: ProgramWide, shared: Shared, name: String): EnumType? ->
+export const enum_type = (shared: Shared, name: String): EnumType? ->
   return own if const own = shared.enums[name]
-  const exported = imported_type(program, shared, name) ? return nil
+  const exported = imported_type(shared, name) ? return nil
   const type = exported.type
   type as EnumType?
 
@@ -61,7 +60,7 @@ const qualifying_enum = (body: Body, member: Member) ->
   const object = member.object
   return nil if not (object is Identifier)
   return nil if lookup(body, object.name) != nil
-  enum_type body.program, body.shared, object.name
+  enum_type body.shared, object.name
 
 # `MEMBER` alone, where an E (or an E?) is expected and E has that member. It cannot take the place
 # of another name in scope, which it would hide.
@@ -101,10 +100,10 @@ export const may_name_member = (body: Body, expression: Expression) ->
 
 # Whether a name in scope takes the name: a local, a top-level name or a builtin.
 const is_name_taken = (body: Body, name: String) ->
-  const { program, shared } = body
+  const { shared } = body
   return true if lookup(body, name) != nil or has_function(shared, name)
   return true if has_import(shared, name) or shared.top_level.names.has(name)
-  builtin_export(program, shared, name) != nil
+  builtin_export(shared, name) != nil
 
 const name_index = (type: EnumType, name: String) ->
   member_index type, (member) -> member.is_name and member.text == name
