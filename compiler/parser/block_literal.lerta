@@ -1,16 +1,17 @@
 # A literal written as an indented block instead of in brackets, after a trailing `=` or `key:`.
-# Its lines decide its kind: all `name: value` make an anonymous struct, all `key: value` a map,
-# and plain values an array, one element per line.
+# Its items, one or more on each line separated by commas, decide its kind: all `name: value` make
+# an anonymous struct, all `key: value` a map, and plain values an array, or the value itself if
+# there is one.
 import {
   ArrayLiteral, Expression, MapEntry, MapLiteral, NamedValue, Position, RecordLiteral
 } from '../ast'
-import { parse_expression, parse_identifier, parse_value } from './expression'
+import { parse_identifier, parse_value } from './expression'
 import { token_position, TokenStream } from './token_stream'
 
-struct ElementLine
+struct Element
   value: Expression
 
-type Line = NamedValue | MapEntry | ElementLine
+type Item = NamedValue | MapEntry | Element
 
 # Whether the line ends here and an indented block follows.
 export const starts_block = (tokens: TokenStream) ->
@@ -21,41 +22,47 @@ export const starts_field_block = (tokens: TokenStream) ->
   const starts_with_name = tokens.peek_at(2).kind == IDENTIFIER
   starts_block(tokens) and starts_with_name and tokens.peek_at(3).kind == ':'
 
-export const parse_block_literal = (tokens: TokenStream) ->
+export const parse_block_literal = (tokens: TokenStream): Expression ->
   tokens.expect NEWLINE, 'end of line'
   tokens.expect INDENT, 'indented block'
   # Diagnostics about the literal point at its first line.
   const position = token_position(tokens.peek())
-  const lines: Array<Line> = []
+  const items: Array<Item> = []
   while tokens.peek().kind != DEDENT
-    const line_start = token_position(tokens.peek())
-    const line = parse_line(tokens)
-    if lines.length > 0 and kind_of(line) != kind_of(lines[0])
-      const message = "the lines of this block are #{kind_of(lines[0])}, so this one must be too"
-      tokens.fail line_start, message
-    lines.push line
+    add_item tokens, items
+    add_item tokens, items while tokens.accept(',')
     tokens.expect_line_end()
   tokens.next()
-  to_literal lines, position
+  to_literal items, position
 
-const parse_line = (tokens: TokenStream): Line ->
+const add_item = (tokens: TokenStream, items: Array<Item>) ->
+  const start = token_position(tokens.peek())
+  const item = parse_item(tokens)
+  if items.length > 0 and kind_of(item) != kind_of(items[0])
+    tokens.fail start, "the items of this block are #{kind_of(items[0])}, so this one must be too"
+  items.push item
+
+# A value may take the lines below, as an `if` does.
+const parse_item = (tokens: TokenStream): Item ->
   if tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':'
     const name = parse_identifier(tokens)
     tokens.next()
     return NamedValue(name, value: parse_value(tokens))
-  const value = parse_expression(tokens)
-  return ElementLine(value) if not tokens.accept(':')
+  const value = parse_value(tokens)
+  return Element(value) if not tokens.accept(':')
   MapEntry key: value, value: parse_value(tokens)
 
-const kind_of = (line: Line) ->
-  case line
+const kind_of = (item: Item) ->
+  case item
     when NamedValue then 'fields'
     when MapEntry then 'map entries'
-    when ElementLine then 'array elements'
+    when Element then 'array elements'
 
-const to_literal = (lines: Array<Line>, position: Position): Expression ->
-  const fields = [line for line in lines when line is NamedValue]
-  const entries = [line for line in lines when line is MapEntry]
+const to_literal = (items: Array<Item>, position: Position): Expression ->
+  const fields = [item for item in items when item is NamedValue]
+  const entries = [item for item in items when item is MapEntry]
   return RecordLiteral(fields, position) if fields.length > 0
   return MapLiteral(entries, position) if entries.length > 0
-  ArrayLiteral position, elements: [line.value for line in lines when line is ElementLine]
+  const elements = [item.value for item in items when item is Element]
+  return elements[0] if elements.length == 1
+  ArrayLiteral position, elements

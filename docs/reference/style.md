@@ -9,7 +9,7 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Empty collections**: `[]` rather than `Array<T>()`.
 - **Multi-line literals**: where it can be written without brackets, write it without brackets.
 - **Line length**: up to 100 columns per line.
-- **Long lists**: a list that does not fit on one line (parameters, arguments, the items of an array or a map, the names of an import) goes on lines of its own inside the brackets, each holding as many items as fit, except items that stand for lines of text, one per line (see [lines inside brackets](syntax.md#lines-inside-brackets)).
+- **Long lists**: a list that does not fit on one line (parameters, arguments, the items of an array or a map, the names of an import) goes on lines of its own inside the brackets, or in a bracketless block, each holding as many items as fit, except items that stand for lines of text, one per line (see [lines inside brackets](syntax.md#lines-inside-brackets)).
 - **Modules**: a library module contains only code that builds the exported values. Put code to run in a separate entry file.
 - **Calls without parentheses**: call a function or a method without parentheses at the start of a statement, the last expression of a body included (`write_group writer, item, indent`, `xs.push x`), wherever the language allows it (see [calls](syntax.md#calls)).
 - **Implicit return**: end a function with its value (`x`), not `return x`; do not end a function returning nothing with a bare `return`.
