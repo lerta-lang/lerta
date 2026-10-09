@@ -1,8 +1,9 @@
 # Declarations other than `const` and `var`: type aliases, classes, structs, enums, extends,
 # imports, externs and exports.
 import {
-  Declaration, EnumDeclaration, Extend, Extern, Identifier, Import, ImportName, MemberDeclaration
-  MemberModifier, Statement, StringLiteral, TypeAlias, TypeDeclaration, TypeName, TypeParameter
+  as_exportable, Declaration, EnumDeclaration, Extend, Extern, Identifier, Import, ImportName
+  MemberDeclaration, MemberModifier, Statement, StringLiteral, TypeAlias, TypeDeclaration, TypeName
+  TypeParameter
 } from '../ast'
 import { parse_type_parameters } from './compound'
 import { parse_identifier, parse_value } from './expression'
@@ -32,24 +33,10 @@ export const parse_export = (tokens: TokenStream): Statement ->
     parse_destructuring_statement tokens
     fail()
   const statement = parse_statement(tokens)
-  case statement
-    when Declaration
-      fail() if statement.mutable
-      statement.exported = true
-      statement
-    when TypeDeclaration
-      statement.exported = true
-      statement
-    when EnumDeclaration
-      statement.exported = true
-      statement
-    when TypeAlias
-      statement.exported = true
-      statement
-    when Extern
-      statement.exported = true
-      statement
-    else fail()
+  const declaration = as_exportable(statement) ? fail()
+  fail() if declaration is Declaration and declaration.mutable
+  declaration.exported = true
+  statement
 
 # `extern symbol as name: (A) -> R`.
 export const parse_extern = (tokens: TokenStream) ->

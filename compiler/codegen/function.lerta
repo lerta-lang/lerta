@@ -45,11 +45,11 @@ export const lookup_local = (g: Generator, name: String): CodegenLocal? ->
   const global = code.globals[exported.module_index][exported.name]!
   const is_in_cycle = code.module.cycle.any((index) -> index == exported.module_index)
   return top_level_slot(global, true) if is_in_cycle
-  SlotLocal pointer: global.pointer, type: global.type, top_level: nil, cell: nil
+  SlotLocal pointer: global.pointer, type: global.type
 
 const top_level_slot = (global: TopLevelGlobal, is_checked: Bool) ->
   const top_level = TopLevelSlot(global, is_checked)
-  SlotLocal top_level, pointer: global.pointer, type: global.type, cell: nil
+  SlotLocal top_level, pointer: global.pointer, type: global.type
 
 # `runs_first` are the symbols of the top-level code of the imported modules; the values of all
 # modules are released at the end of the entry module's.
@@ -120,7 +120,7 @@ export const generate_function = (
     const cell = CellSlot(cell: value, is_owned: false)
     scope[name] = case
       when is_var
-        SlotLocal type, cell, pointer: emit_cell_pointer(ir, type, value), top_level: nil
+        SlotLocal type, cell, pointer: emit_cell_pointer(ir, type, value)
       else ValueLocal(type, operand: value)
   generate_statement g, statement for statement in all_but_last(literal.body)
   generate_last_statement g, literal.body, type.result
@@ -280,7 +280,7 @@ const generate_declaration = (g: Generator, declaration: Declaration) ->
     const cell = emit_cell(ir, type, value)
     const pointer = emit_cell_pointer(ir, type, cell)
     const owned = CellSlot(cell, is_owned: true)
-    g.locals.define name, SlotLocal(type, pointer, top_level: nil, cell: owned)
+    g.locals.define name, SlotLocal(type, pointer, cell: owned)
     return
   if global == nil
     g.locals.define name, store_in_slot(g, value, type)
@@ -292,4 +292,4 @@ const generate_declaration = (g: Generator, declaration: Declaration) ->
 export const store_in_slot = (g: Generator, value: String, type: Type) ->
   const pointer = g.ir.alloca(ir_type(type))
   g.ir.emit "store #{ir_type(type)} #{value}, ptr #{pointer}"
-  SlotLocal pointer, type, top_level: nil, cell: nil
+  SlotLocal pointer, type
