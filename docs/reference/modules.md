@@ -7,7 +7,7 @@ import { argv, exit } from 'std:process'
 
 - A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import { a as c } from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. Imports are written at the top level. An imported name that is never used is a warning.
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository: `'std:io'` and `'std:process'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)); `std:io`, which `std:builtins` imports, cannot use the builtins. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'` and `'std:process'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)); `std:io`, which `std:builtins` imports, cannot use the builtins. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
 
 ## Exports
 
@@ -34,6 +34,8 @@ export const unit = 1
 | `write_file(path: String, data: Binary)` | Replaces the contents of a file, creating it if needed. Throws `cannot write file: <path>` on failure. |
 | `is_file(path: String): Bool` | Whether the path names a regular file (through symbolic links); false for a directory, a missing file or a path that holds a NUL byte. |
 | `real_path(path: String): Binary` | The absolute path of what the path names, without `.`, `..` or symbolic links. It is a `Binary`, as nothing makes it UTF-8. Throws `cannot resolve path: <path>` if it names nothing, or holds a NUL byte. |
+| `make_temp_dir(): Binary` | Makes a new, empty directory in the system's directory for temporary files (`TMPDIR`, or else `/tmp`, on POSIX systems; `GetTempPathW` on Windows), and returns its path, as a `Binary`, as `real_path` does. Throws `cannot make a temporary directory` on failure. |
+| `remove_tree(path: String)` | Removes a file, or a directory with everything in it. A symbolic link is removed, not what it links to. Throws `cannot remove: <path>` on failure, including for a path that names nothing or holds a NUL byte. |
 | `stdout`, `stderr` | `Writer`s. `stderr` is not buffered, and neither is `stdout` when it is a terminal. Otherwise `stdout` is buffered, and flushed at exit and before each write to `stderr`, so that the two keep their order. |
 
 `Writer`, exported too, is a struct of a file descriptor with the methods `write(s: String)`, `write_binary(b: Binary)` and `flush()`; a `Writer` of a file descriptor other than 1 (stdout) or 2 (stderr) throws when it is used. `print` writes to `stdout` too.

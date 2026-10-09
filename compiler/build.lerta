@@ -1,40 +1,51 @@
-# Builds a program: writes the IR that codegen generates for it and has clang compile and link it
-# with the runtime.
-import { stderr, write_file } from 'std:io'
+# Builds a program: has clang compile the IR that codegen generates for it and link it with the
+# runtime, both written to a temporary directory, which is removed afterwards.
+import { make_temp_dir, remove_tree, stderr, write_file } from 'std:io'
 import { exit, run } from 'std:process'
 import { all_warnings } from './checker/diagnostics'
 import { check_modules } from './checker/modules'
 import { generate } from './codegen/codegen'
+import { EMBEDDED_FILES } from './embedded'
 import { load_modules } from './loader'
-import { join } from './paths'
+import { basename, has_extension, join } from './paths'
 
-# The C files of the runtime, runtime/<name>.c, listed here, since the compiler cannot list a
-# directory yet; test/runtime.ts checks that the list is complete.
-const RUNTIME_FILES = [
-  'array', 'binary', 'file', 'io', 'iter', 'lerta', 'map', 'memory', 'platform_posix'
-  'platform_windows', 'process', 'string'
-]
-
-# What to build: the IR, written to `ir_path`, and, if there is an `output`, the executable made
-# from it, for `target` (a triple such as i686-linux-gnu) or else for the host. `root` holds std/
-# and runtime/.
+# What to build: the executable `output`, for `target` (a triple such as i686-linux-gnu) or else
+# for the host.
 export struct BuildRequest
   source: String
-  root: String
-  ir_path: String
-  output: String?
+  output: String
   optimize: Bool
   target: String?
 
-# A compile error is thrown; clang's messages go to stderr as clang writes them, and its failure
-# exits with code 1.
-export const build = (request: BuildRequest) ->
-  const { source, root, ir_path, output } = request
-  const program = check_modules(source, load_modules(source, root))
+# The checked program of the entry module `source`, whose warnings are printed. A compile error is
+# thrown.
+export const check_program = (source: String) ->
+  const program = check_modules(source, load_modules(source))
   stderr.write "#{warning}\n" for warning in all_warnings(program)
-  write_file ir_path, generate(program).binary
-  if output
-    exit 1 if run('clang', clang_args(request, ir_path, output)) != 0
+  program
+
+export const generate_ir = (source: String) -> generate(check_program(source))
+
+# clang's messages go to stderr as clang writes them, and its failure exits with code 1.
+export const build = (request: BuildRequest) ->
+  const ir = generate_ir(request.source)
+  const dir = make_temp_dir().decode_utf8() ? throw 'the temporary directory is not valid UTF-8'
+  const ir_path = join(dir, 'program.ll')
+  write_file ir_path, ir.binary
+  const status = run('clang', clang_args(request, ir_path, write_runtime(dir)))
+  remove_tree dir
+  exit 1 if status != 0
+
+# Writes the embedded runtime, runtime/*.c and runtime/*.h, to `dir`, and returns the paths of
+# the C files.
+const write_runtime = (dir: String) ->
+  const c_files: Array<String> = []
+  for path in EMBEDDED_FILES.keys()
+    continue if not path.binary.occurs_at(0, 'runtime/'.binary)
+    const file = join(dir, basename(path))
+    write_file file, EMBEDDED_FILES[path]!.binary
+    c_files.push file if has_extension(file, '.c')
+  c_files
 
 const MINGW_SUFFIX = '-w64-mingw32'.binary
 
@@ -42,10 +53,15 @@ const is_mingw = (target: String) ->
   const triple = target.binary
   triple.occurs_at triple.length - MINGW_SUFFIX.length, MINGW_SUFFIX
 
-# The Makefile and test/runtime.ts build the runtime with the same flags.
+# What the name of an executable for the target ends with: `.exe` for Windows. Without a target,
+# it is for the host, which is not Windows, as the compiler does not run there yet.
+export const executable_suffix = (target: String?) ->
+  target and is_mingw(target) then '.exe' else ''
+
+# test/runtime.ts builds the runtime with the same flags.
 # Link-time optimization lets the generated code inline the runtime's C functions; unoptimized
 # builds use the debug runtime, which checks for leaks at exit.
-const clang_args = (request: BuildRequest, ir_path: String, output: String) ->
+const clang_args = (request: BuildRequest, ir_path: String, runtime_c_files: Array<String>) ->
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
   const args = ['-Wno-override-module', ir_path]
   if const target = request.target
@@ -54,7 +70,7 @@ const clang_args = (request: BuildRequest, ir_path: String, output: String) ->
     args.push '-fuse-ld=lld' if is_mingw(target)
   const flags = request.optimize then ['-O2', '-flto'] else ['-D', 'LERTA_DEBUG']
   args.push flag for flag in flags
-  args.push join(request.root, "runtime/#{name}.c") for name in RUNTIME_FILES
+  args.push file for file in runtime_c_files
   args.push '-o'
-  args.push output
+  args.push request.output
   args

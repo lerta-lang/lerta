@@ -2,11 +2,12 @@
 # the others import (see builtins_import).
 import { is_file, real_path } from 'std:io'
 import { Import, Position, Statement } from './ast'
+import { EMBEDDED_FILES } from './embedded'
 import { compile_error, module_location } from './errors'
 import { tokenize } from './lexer/tokens'
 import { parse } from './parser/statement'
 import { dirname, join, relative } from './paths'
-import { read_source } from './source'
+import { is_standard_name, read_entry_source, read_source, standard_source } from './source'
 
 export class Module
   # Its position in the list of modules, which keeps its symbols apart from the others', and is
@@ -28,11 +29,7 @@ export class Module
 export const BUILTINS_MODULE = 'std:builtins'
 
 # std:builtins and the standard modules it imports, which cannot import it back.
-const BUILTINS_AND_DEPENDENCIES = ['builtins', 'io']
-
-# The standard modules, `std:name`, the files of the directory std/, for the message about an
-# unknown one. The compiler cannot list a directory yet; std will be embedded in it later.
-const STANDARD_MODULES = ['builtins', 'io', 'process']
+const BUILTINS_AND_DEPENDENCIES = [BUILTINS_MODULE, 'std:io']
 
 # A module as it is loaded: its imports refer to the modules by their places in the loading order,
 # since a module's index is known only once its imports are loaded.
@@ -47,52 +44,48 @@ class LoadingModule
 
 class Loader
   entry_path: String
-  # The directory of the standard modules, as given and as it really is.
-  std_dir: String
-  real_std_dir: String
-  # The real paths of std:builtins and the modules it imports.
-  builtins_and_dependencies: Array<String>
   # The directory that relative paths start from.
   cwd: String
   loaded: Array<LoadingModule> = []
-  by_real_path: Map<String, Int> = Map()
+  # The places of the modules by their keys (see load).
+  by_key: Map<String, Int> = Map()
   # The modules in the order of their indexes.
   order: Array<Int> = []
 
 # The modules, each after those it imports unless they import it back, so the entry module comes
-# last. The standard modules are the files of std/ under `root_dir`.
-export const load_modules = (entry_path: String, root_dir: String) ->
-  const std_dir = join(root_dir, 'std')
-  const builtins_and_dependencies = [
-    real_path_text(join(std_dir, "#{name}.lerta")) for name in BUILTINS_AND_DEPENDENCIES
-  ]
-  const real_std_dir = real_path_text(std_dir)
-  const cwd = real_path_text('.')
-  const loader = Loader(entry_path, std_dir, real_std_dir, builtins_and_dependencies, cwd)
-  load loader, entry_path, nil
+# last. The standard modules are those embedded in the compiler.
+export const load_modules = (entry_path: String) ->
+  const loader = Loader(entry_path, cwd: real_path_text('.'))
+  const source = read_entry_source(entry_path)
+  const key = is_standard_name(entry_path) then entry_path else real_path_text(entry_path)
+  load loader, key, source, nil
   [finished_module(loader, id) for id in loader.order]
 
-# Files are known by their real paths, so that one file reached by different paths loads once, and
-# a module's imports are relative to where it really is. Diagnostics name a module by a path from
-# the entry module's directory as given. Returns the module's place in the loading order.
-const load = (loader: Loader, path: String, display_path: String?) ->
-  const source = read_source(path)
-  const real = real_path_text(path)
+# A module is known by its key: a standard module by its name, `std:name`, and a file by its real
+# path, so that one file reached by different paths loads once, and its imports are relative to
+# where it really is. Diagnostics name a file by a path from the entry module's directory as
+# given. Returns the module's place in the loading order.
+const load = (loader: Loader, key: String, source: String, display_path: String?) ->
   const location = module_location(loader.entry_path, display_path)
   const program = parse(tokenize(source, location), location)
-  const is_builtins_dependency = loader.builtins_and_dependencies.any((each) -> each == real)
+  const is_builtins_dependency = BUILTINS_AND_DEPENDENCIES.any((each) -> each == key)
   const with_builtins = is_builtins_dependency then program else prepend(builtins_import(), program)
   const id = loader.loaded.length
   const module = LoadingModule(display_path, program: with_builtins)
   loader.loaded.push module
-  loader.by_real_path[real] = id
+  loader.by_key[key] = id
   for statement in with_builtins
     if statement is Import
-      const file = imported_file(loader, statement, dirname(real), location)
-      module.imported[statement] = visit(loader, file, statement, location)
+      check_standard_import statement, key, location
+      module.imported[statement] = visit(loader, statement, dirname(key), location)
   module.index = loader.order.length
   loader.order.push id
   id
+
+# A standard module has no directory for a relative import to start from.
+const check_standard_import = (statement: Import, key: String, location: String) ->
+  return if not is_standard_name(key) or is_standard_name(statement.module)
+  import_error statement, location, "a standard module imports only standard modules"
 
 const builtins_import = () ->
   Import names: [], module: BUILTINS_MODULE, position: Position(line: 1, column: 1)
@@ -102,20 +95,25 @@ const prepend = (first: Statement, rest: Array<Statement>) ->
   statements.push statement for statement in rest
   statements
 
-# The module that `path` names, loaded if it is not yet. `location` names the importing module in
-# diagnostics.
-const visit = (loader: Loader, path: String, statement: Import, location: String): Int ->
-  if not is_file(path)
-    const { line, column } = statement.position
-    compile_error location, line, column, "cannot find module '#{statement.module}'"
+# The module that an import names, loaded if it is not yet: `std:name` is a standard module, and a
+# path that starts with `./` or `../` is a file relative to `from`, the directory of the importing
+# file. Other names are reserved. `location` names the importing module in diagnostics.
+const visit = (loader: Loader, statement: Import, from: String, location: String): Int ->
+  const module = statement.module
+  if is_standard_name(module)
+    const source = imported_standard_source(statement, location)
+    return loaded(loader, module) ? load(loader, module, source, module)
+  const path = imported_file(statement, from, location)
   const real = real_path_text(path)
-  if const loaded = loader.by_real_path[real]
-    close_cycle loader, loaded if loader.loaded[loaded].index == -1
-    return loaded
-  const is_std = dirname(real) == loader.real_std_dir
-  const entry_dir = dirname(loader.entry_path)
-  const display_path = is_std then statement.module else relative(loader.cwd, entry_dir, path)
-  load loader, path, display_path
+  const display_path = relative(loader.cwd, dirname(loader.entry_path), path)
+  loaded(loader, real) ? load(loader, real, read_source(path), display_path)
+
+# The place of the module of `key` if it is loaded. An import of a module whose imports are being
+# loaded closes a cycle (see close_cycle).
+const loaded = (loader: Loader, key: String) ->
+  const id = loader.by_key[key] ? return nil
+  close_cycle loader, id if loader.loaded[id].index == -1
+  id
 
 # An import of a module whose imports are being loaded closes a cycle: that module and those that
 # started loading after it and are still loading, which import each other in turn. Cycles that
@@ -129,22 +127,36 @@ const close_cycle = (loader: Loader, back: Int) ->
     members.push each for each in ids when not members.any((member) -> member == each)
   loader.loaded[id].cycle = members for id in members
 
-# The file an import names: a path that starts with `./` or `../` is relative to `from`, the
-# directory of the importing file; `std:name` is a standard module. Other names are reserved.
-const imported_file = (loader: Loader, statement: Import, from: String, location: String) ->
+const STD_DIR = 'std/'.binary
+
+# The embedded paths of the standard modules, std/<name>.lerta.
+const standard_paths = () ->
+  [path for path in EMBEDDED_FILES.keys() when path.binary.occurs_at(0, STD_DIR)]
+
+# The name of a standard module, `std:name`, from its embedded path.
+const standard_name = (path: String) ->
+  const bytes = path.binary
+  const name = bytes.slice(STD_DIR.length, bytes.length - '.lerta'.binary.length)
+  "std:#{name.decode_utf8()!}"
+
+const imported_standard_source = (statement: Import, location: String) ->
+  if const source = standard_source(statement.module)
+    return source
+  const list = [standard_name(path) for path in standard_paths()].join(', ')
+  const message = "unknown module '#{statement.module}'; the standard modules are #{list}"
+  import_error statement, location, message
+
+const imported_file = (statement: Import, from: String, location: String) ->
   const module = statement.module
   const bytes = module.binary
-  if bytes.occurs_at(0, './'.binary) or bytes.occurs_at(0, '../'.binary)
-    return join(from, "#{module}.lerta")
-  const is_std = bytes.occurs_at(0, 'std:'.binary)
-  const std_name = is_std then bytes.slice(4, bytes.length).decode_utf8()! else ''
-  const std_file = join(loader.std_dir, "#{std_name}.lerta")
-  const is_std_name = std_name != '' and std_name.split('/').length == 1
-  return std_file if is_std and is_std_name and is_file(std_file)
-  const standard_modules = ["std:#{name}" for name in STANDARD_MODULES].join(', ')
-  const message = case
-    when is_std then "unknown module '#{module}'; the standard modules are #{standard_modules}"
-    else "unknown module '#{module}'; a file is imported by a path that starts with ./ or ../"
+  if not bytes.occurs_at(0, './'.binary) and not bytes.occurs_at(0, '../'.binary)
+    const rule = 'a file is imported by a path that starts with ./ or ../'
+    import_error statement, location, "unknown module '#{module}'; #{rule}"
+  const path = join(from, "#{module}.lerta")
+  import_error statement, location, "cannot find module '#{module}'" if not is_file(path)
+  path
+
+const import_error = (statement: Import, location: String, message: String) ->
   const { line, column } = statement.position
   compile_error location, line, column, message
 

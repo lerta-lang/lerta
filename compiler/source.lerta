@@ -1,6 +1,23 @@
-# Reads a source file, whose text must be valid UTF-8.
+# Reads source text, which must be valid UTF-8: of a file, or of a standard module, `std:name`,
+# which the compiler carries (see compiler/embedded.lerta).
 import { is_file, read_file } from 'std:io'
+import { EMBEDDED_FILES } from './embedded'
 
 export const read_source = (path: String) ->
   throw "'#{path}' is not a file" if not is_file(path)
   read_file(path).decode_utf8() ? throw "'#{path}' is not valid UTF-8"
+
+const STD_PREFIX = 'std:'.binary
+
+export const is_standard_name = (module: String) -> module.binary.occurs_at(0, STD_PREFIX)
+
+# The source of the standard module `std:name`, std/<name>.lerta, or nil if there is none.
+export const standard_source = (module: String) ->
+  const bytes = module.binary
+  const name = bytes.slice(STD_PREFIX.length, bytes.length).decode_utf8()!
+  EMBEDDED_FILES["std/#{name}.lerta"]
+
+# The source that the command line names: a file, or a standard module as `std:name`.
+export const read_entry_source = (path: String) ->
+  return read_source(path) if not is_standard_name(path)
+  standard_source(path) ? throw "unknown standard module '#{path}'"

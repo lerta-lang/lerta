@@ -2,12 +2,17 @@
 # README.md for the targets and docs/internals.md#bootstrap for the bootstrap. Written for GNU make
 # 3.81, the one macOS has.
 
-SOURCES := $(shell find compiler -name '*.lerta') $(wildcard std/*.lerta)
-# The runtime and its flags as clang_args in compiler/build.lerta gives them, which test/runtime.ts
-# checks.
+# The files that the compiler carries in compiler/embedded.lerta, which tools/embed.lerta writes.
+EMBEDDED := $(sort $(wildcard std/*.lerta runtime/*.c runtime/*.h))
+SOURCES := $(shell find compiler -name '*.lerta') compiler/embedded.lerta
 RUNTIME_C := $(wildcard runtime/*.c)
 RUNTIME := $(RUNTIME_C) $(wildcard runtime/*.h)
-BUILD_COMPILER := build compiler/main.lerta --root .
+MAIN := compiler/main.lerta
+# Only because the seed has an older command line: minilerta reads std/ and runtime/ from the
+# directory given as --root, and leaves the IR beside the executable unless --emit-llvm, which the
+# rules below that run minilerta give, puts it elsewhere. Once the seed is refreshed, this and
+# those --emit-llvm options go, and minilerta builds as bin/lerta does.
+MINILERTA_BUILD := build/minilerta build --root .
 
 ifdef TARGET
 TARGET_FLAGS := --target $(TARGET)
@@ -25,39 +30,52 @@ build/seed.ll: seed/lerta.ll
 	cp seed/lerta.ll $@
 
 # Linked with the debug runtime, as the compiler's own unoptimized build does: clang compiles the
-# IR far faster without optimization than stage1 loses running unoptimized, and stage1 runs once.
-build/stage1: build/seed.ll $(RUNTIME)
+# IR far faster without optimization than minilerta loses running unoptimized, and it runs little.
+build/minilerta: build/seed.ll $(RUNTIME)
 	clang -Wno-override-module build/seed.ll -D LERTA_DEBUG $(RUNTIME_C) -o $@
 
-# --emit-llvm puts the IR in build/; the compiler would otherwise leave it beside the executable.
-bin/lerta: build/stage1 $(SOURCES) $(RUNTIME)
+build/embed: build/minilerta tools/embed.lerta $(EMBEDDED)
+	$(MINILERTA_BUILD) tools/embed.lerta -o $@ --emit-llvm $@.ll
+
+compiler/embedded.lerta: build/embed $(EMBEDDED)
+	build/embed $@ $(EMBEDDED)
+
+bin/lerta: build/minilerta $(SOURCES)
 	@mkdir -p bin
-	build/stage1 $(BUILD_COMPILER) -o $@ -O --emit-llvm build/lerta.ll
+	$(MINILERTA_BUILD) $(MAIN) -o $@ -O --emit-llvm build/lerta.ll
 
 ifdef TARGET
 $(COMPILER): bin/lerta
-	bin/lerta $(BUILD_COMPILER) -o $@ -O --emit-llvm build/lerta-$(TARGET).ll $(TARGET_FLAGS)
+	bin/lerta build $(MAIN) -o $@ -O $(TARGET_FLAGS)
 endif
 
-# stage2 is unoptimized, so that its run, which builds stage3, checks for leaks.
+# stage2 is unoptimized, so that its runs, which build stage3 and print its IR, check for leaks.
 $(BOOTSTRAP)/stage2: bin/lerta
 	@mkdir -p $(BOOTSTRAP)
-	bin/lerta $(BUILD_COMPILER) -o $@ --emit-llvm $@.ll $(TARGET_FLAGS)
+	bin/lerta build $(MAIN) -o $@ $(TARGET_FLAGS)
+
+$(BOOTSTRAP)/stage2.ll: bin/lerta
+	@mkdir -p $(BOOTSTRAP)
+	bin/lerta dump-llvm $(MAIN) > $@
 
 $(BOOTSTRAP)/stage3: $(BOOTSTRAP)/stage2
-	$(BOOTSTRAP)/stage2 $(BUILD_COMPILER) -o $@ --emit-llvm $@.ll $(TARGET_FLAGS)
+	$(BOOTSTRAP)/stage2 build $(MAIN) -o $@ $(TARGET_FLAGS)
 
-# Only the IR is compared (see docs/internals.md#bootstrap).
+$(BOOTSTRAP)/stage3.ll: $(BOOTSTRAP)/stage2
+	$(BOOTSTRAP)/stage2 dump-llvm $(MAIN) > $@
+
+# Only the IR is compared (see docs/internals.md#bootstrap): that of stage2, which bin/lerta
+# prints, and that of stage3, which stage2 prints.
 ifneq ($(EXE),)
 # Its stages would be Windows programs, which need Wine to run and a clang for Windows to build
 # the next stage.
 check-bootstrap:
 	@echo 'check-bootstrap does not support Windows targets yet' >&2; exit 2
 else
-check-bootstrap: $(BOOTSTRAP)/stage3
+check-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3
 	@cmp -s $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll \
-	  || { echo 'bootstrap: stage2 and stage3 write different IR' >&2; exit 1; }
-	@echo 'bootstrap: stage2 and stage3 write the same IR'
+	  || { echo 'bootstrap: stage2 and stage3 have different IR' >&2; exit 1; }
+	@echo 'bootstrap: stage2 and stage3 have the same IR'
 endif
 
 # Written only from IR that check-bootstrap has found to be a fixed point.
@@ -87,6 +105,9 @@ test: bin/lerta
 endif
 
 clean:
-	rm -rf build bin
+	rm -rf build bin compiler/embedded.lerta
+
+# A command that fails leaves no file, such as half of an IR printed to a redirection.
+.DELETE_ON_ERROR:
 
 .PHONY: all check-bootstrap seed test clean

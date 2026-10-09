@@ -167,6 +167,8 @@ LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
 bool lerta_is_file(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);
+LertaString *lerta_make_temp_dir(void);
+void lerta_remove_tree(const LertaString *path);
 // Reads a file to its end through `read`, which returns how many bytes it put in `buffer`, 0 at
 // the end, or -1 on failure; returns NULL on failure.
 LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size),
@@ -192,6 +194,11 @@ bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length)
 bool lerta_os_is_file(const char *path);
 // The absolute path with no links, which the caller frees.
 char *lerta_os_real_path(const char *path);
+// A new, empty directory in the system's directory for temporary files, whose path the caller
+// frees.
+char *lerta_os_make_temp_dir(void);
+// Removes a file, or a directory with everything in it; a symbolic link is removed, not followed.
+bool lerta_os_remove_tree(const char *path);
 // Runs the command `args[0]`, found as the system finds commands, with `args`, which end with
 // NULL, and waits for it to end.
 bool lerta_os_run(char **args, int64_t *exit_code);

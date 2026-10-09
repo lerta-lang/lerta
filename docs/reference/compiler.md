@@ -1,19 +1,19 @@
 # Compiler
 
 ```
-lerta build <source> -o <output> [-O] [--target <triple>] [--emit-llvm <path>] --root <dir>
-lerta build <source> --emit-llvm <path> --root <dir>
+lerta build <source> [-o <output>] [-O] [--target <triple>]
 ```
 
-builds an executable, or, without `-o`, only writes the generated LLVM IR. `lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)). Arguments that do not fit this usage (an unknown or repeated option, a missing source or `--root`, neither `-o` nor `--emit-llvm`, `-O` or `--target` without `-o`, or a value that starts with `-`) print the usage to stderr and exit with code 2.
+builds an executable. `lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)); it carries the standard modules and the runtime in it, so it needs no other file of the repository. Arguments that do not fit this usage (an unknown or repeated option, a missing source, a value that starts with `-`, or, without `-o`, a source whose name does not end with `.lerta`) print the usage to stderr and exit with code 2.
 
-- `--root <dir>` names the directory that holds `std/` and `runtime/`, which the compiler cannot find on its own yet: the root of the repository.
+- `<source>` is a file, or a standard module as `std:<name>`, such as `std:io`, which is then the program, read from those the compiler carries; an unknown one prints `unknown standard module 'std:<name>'` and exits with code 1. The same holds for the commands below. A file of `std/` given by its path is an ordinary module, which imports the carried `std:builtins` as any other does: `std/process.lerta` builds, while `std/builtins.lerta` fails, as its extends repeat those of the carried `std:builtins`.
+- `-o <output>` names the executable. Without it, the executable is the source's name without `.lerta`, in the current directory, as `go build` names it: `lerta build examples/hello.lerta` writes `hello`, or `hello.exe` for a Windows target.
 - Without `-O`, the program checks for leaked memory when it exits: a leak is reported to stderr as `leak: <n> object(s)`, and the exit code is 1.
 - `-O` optimizes, including across the generated code and the runtime (link-time optimization).
 - `--target <triple>` has clang build the executable for that target, such as `i686-linux-gnu` or `x86_64-w64-mingw32`; without it, the executable is for the host. A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it.
-- `--emit-llvm <path>` writes the generated LLVM IR, before optimization, to `<path>`; with `-o`, it does so besides building the executable. Without it, `-o` writes the IR to `<output>.ll` and leaves it there, since the compiler cannot remove a file or make a temporary directory yet.
+- The build leaves no other file: it writes the LLVM IR and the runtime's C files to a temporary directory, which it removes after clang has built the executable from them, or failed to. A throw in between, such as one for a file that cannot be written or for clang that cannot be run, leaves it, as there is no `catch` yet.
 
-The commands below print what the lexer, the parser and the checker make of the source. They are there for debugging the compiler.
+The commands below print what the lexer, the parser, the checker and codegen make of the source. They are there for debugging the compiler.
 
 ```
 lerta dump-tokens <source>
@@ -28,10 +28,16 @@ lerta dump-ast <source>
 prints the syntax tree of one file, likewise. A node is a line `<kind> <line>:<column>`, followed by its other fields, one per line and in the order of their names, indented under it: `<name>: <value>` for a value, written as in `dump-tokens` for a string and `-` for none, and `<name>:` followed by the contents on the next lines, indented further, for a node, a group of fields without a kind, or a list, whose items each follow a `-` line (or `- <value>` for a value). An empty list is `[]`. A group of fields without a kind that has a position writes it as its fields `line` and `column`. A syntax error is reported as a compile error.
 
 ```
-lerta dump-checked <source> --root <dir>
+lerta dump-checked <source>
 ```
 
 loads and checks the program as `build` does, without generating code. For each module that is not a standard module, in the order they are loaded, it prints a line `module <path>`, with the path as given for the entry module and as diagnostics write it for the others, then the module's syntax tree as `dump-ast` prints it, as loaded, with the implicit import of `std:builtins`. The header line of each node that the checker gave a type is followed by ` : <type>`, and by ` => <type>` if the node is converted where it is used, such as an `Int` passed as an `Int?`; types are written as in messages. The bodies of generic functions, which are checked only for each use, have no types. Warnings and errors are reported as by `build`. The rest of what the checker works out (the captures of closures, the shared variables, the instances of generic functions and their checked bodies, the exports, the extensions and the objects) is not printed.
+
+```
+lerta dump-llvm <source>
+```
+
+prints the LLVM IR that `build` has clang compile, before optimization. It names no target, so it is the same for every one. Warnings and errors are reported as by `build`.
 
 ## Diagnostics
 

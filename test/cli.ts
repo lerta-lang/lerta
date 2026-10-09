@@ -1,7 +1,7 @@
 // CLI checks: each invocation of the compiler's command line (see lerta.ts) and its expected exit
 // status.
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compiler, root_dir } from './lerta.ts'
@@ -12,7 +12,6 @@ const hello = join(root_dir, 'examples/hello.lerta')
 const exe = join(cli_work_dir, 'hello')
 const dump_checked_source = join(root_dir, 'tests/module/dump_checked.lerta')
 const hello_output = readFileSync(join(root_dir, 'tests/examples/hello.out'), 'utf8')
-const root = ['--root', root_dir]
 const host_triple = spawnSync('clang', ['-print-target-triple'], { encoding: 'utf8' }).stdout.trim()
 type CliCase = {
   args: string[]
@@ -59,15 +58,8 @@ const utf8_cases: [number[], boolean][] = [
 
 const cli_cases: CliCase[] = [
   {
-    args: ['build', hello, '-o', `${exe}_O`, '-O', '--emit-llvm', `${exe}_O.ll`, ...root],
-    status: 0,
-    produced: () =>
-      spawnSync(`${exe}_O`, { encoding: 'utf8' }).stdout === hello_output &&
-      existsSync(`${exe}_O.ll`),
-  },
-  {
     // A built program gets its command-line arguments, which must be valid UTF-8.
-    args: ['build', join(root_dir, 'examples/wc.lerta'), '-o', `${exe}_wc`, ...root],
+    args: ['build', join(root_dir, 'examples/wc.lerta'), '-o', `${exe}_wc`],
     status: 0,
     produced: () => {
       const counted = spawnSync(`${exe}_wc`, [hello], { encoding: 'utf8' })
@@ -81,7 +73,7 @@ const cli_cases: CliCase[] = [
   },
   {
     // std:process reads the arguments as it runs, even for a program that only uses `exit`.
-    args: ['build', join(root_dir, 'tests/io/lib/exit_only.lerta'), '-o', `${exe}_exit`, ...root],
+    args: ['build', join(root_dir, 'tests/io/lib/exit_only.lerta'), '-o', `${exe}_exit`],
     status: 0,
     produced: () => {
       const invalid = run_with_bytes(`${exe}_exit`, [[0xff]])
@@ -90,13 +82,7 @@ const cli_cases: CliCase[] = [
   },
   {
     // decode_utf8 of each argument, which the program reads without decoding it.
-    args: [
-      'build',
-      join(root_dir, 'tests/binary/lib/decode_arguments.lerta'),
-      '-o',
-      `${exe}_utf8`,
-      ...root,
-    ],
+    args: ['build', join(root_dir, 'tests/binary/lib/decode_arguments.lerta'), '-o', `${exe}_utf8`],
     status: 0,
     produced: () => {
       const decoded = run_with_bytes(
@@ -107,47 +93,58 @@ const cli_cases: CliCase[] = [
     },
   },
   {
-    args: ['build', join(root_dir, 'tests/name/undefined.lerta'), '-o', exe, ...root],
+    args: ['build', join(root_dir, 'tests/name/undefined.lerta'), '-o', exe],
     status: 1,
     stderr: `${join(root_dir, 'tests/name/undefined.lerta')}:1:1: undefined name 'say'\n`,
   },
   {
-    args: ['build', root_dir, '-o', exe, ...root],
+    args: ['build', root_dir, '-o', exe],
     status: 1,
     stderr: `'${root_dir}' is not a file\n`,
   },
   {
-    args: ['build', join(cli_work_dir, 'missing.lerta'), '-o', exe, ...root],
+    args: ['build', join(cli_work_dir, 'missing.lerta'), '-o', exe],
     status: 1,
     stderr: `'${join(cli_work_dir, 'missing.lerta')}' is not a file\n`,
   },
-  {
-    // Without -o, only the IR is written.
-    args: ['build', hello, '--emit-llvm', `${exe}_ir.ll`, ...root],
-    status: 0,
-    produced: () => readFileSync(`${exe}_ir.ll`, 'utf8').includes('define void @lerta_main()'),
-  },
-  { args: ['build', ...root], status: 2 },
-  { args: ['build', hello, ...root], status: 2 },
-  { args: ['build', hello, '-O', '--emit-llvm', `${exe}_ir.ll`, ...root], status: 2 },
+  { args: ['build'], status: 2 },
   { args: ['run', hello, '-o', exe], status: 2 },
-  { args: ['build', hello, '-o', exe, '-o', exe, ...root], status: 2 },
-  { args: ['build', hello, '-o', exe, '-O', '-O', ...root], status: 2 },
-  { args: ['build', hello, '-o', '-O', ...root], status: 2 },
-  { args: ['build', hello, '-o', exe, '--emit-llvm', ...root], status: 2 },
-  { args: ['build', hello, hello, '-o', exe, ...root], status: 2 },
-  { args: ['build', hello, '-o', exe, '--unknown', ...root], status: 2 },
-  { args: ['build', hello, '--emit-llvm', `${exe}_ir.ll`], status: 2 },
-  { args: ['build', hello, '-o', exe, ...root, ...root], status: 2 },
+  { args: ['build', hello, '-o', exe, '-o', exe], status: 2 },
+  { args: ['build', hello, '-o', exe, '-O', '-O'], status: 2 },
+  { args: ['build', hello, '-o', '-O'], status: 2 },
+  { args: ['build', hello, '-o'], status: 2 },
+  { args: ['build', hello, hello, '-o', exe], status: 2 },
+  { args: ['build', hello, '-o', exe, '--unknown'], status: 2 },
   {
-    args: ['build', hello, '--target', host_triple, '--emit-llvm', `${exe}_ir.ll`, ...root],
+    args: ['build', hello, '-o', exe, '--target', host_triple, '--target', host_triple],
     status: 2,
   },
+  // Options that the compiler no longer has.
+  { args: ['build', hello, '-o', exe, '--root', root_dir], status: 2 },
+  { args: ['build', hello, '-o', exe, '--emit-llvm', `${exe}.ll`], status: 2 },
+  // Without -o, the output is named after the source, which must end with .lerta.
+  { args: ['build', join(root_dir, 'README.md')], status: 2 },
+  { args: ['build', join(root_dir, 'tests/.lerta')], status: 2 },
+  { args: ['dump-llvm'], status: 2 },
+  // A standard module is a source too, as the compiler carries it.
   {
-    args: ['build', hello, '-o', exe, '--target', host_triple, '--target', host_triple, ...root],
-    status: 2,
+    args: ['dump-tokens', 'std:process'],
+    status: 0,
   },
-  { args: ['dump-checked', hello], status: 2 },
+  {
+    args: ['dump-ast', 'std:nothing'],
+    status: 1,
+    stderr: "unknown standard module 'std:nothing'\n",
+  },
+  { args: ['build', 'std:process'], status: 2 },
+  { args: ['dump-llvm', hello, hello], status: 2 },
+  { args: ['dump-llvm', hello, '-O'], status: 2 },
+  {
+    args: ['dump-llvm', join(root_dir, 'tests/name/undefined.lerta')],
+    status: 1,
+    stderr: `${join(root_dir, 'tests/name/undefined.lerta')}:1:1: undefined name 'say'\n`,
+  },
+  { args: ['dump-checked', hello, '--root', root_dir], status: 2 },
   {
     args: ['dump-tokens', hello],
     status: 0,
@@ -342,7 +339,7 @@ const cli_cases: CliCase[] = [
   {
     // Modules in an import cycle, in the order they load; a warning; a conversion, of the Int passed
     // as an Int?; a method of an extend; and a generic function, whose body has no types.
-    args: ['dump-checked', dump_checked_source, ...root],
+    args: ['dump-checked', dump_checked_source],
     status: 0,
     stdout: [
       'module lib/given_back.lerta',
@@ -536,11 +533,11 @@ const cli_cases: CliCase[] = [
     stderr: `${dump_checked_source}:2:7: warning: 'unused' is never used\n`,
   },
   {
-    args: ['dump-checked', join(root_dir, 'tests/name/undefined.lerta'), ...root],
+    args: ['dump-checked', join(root_dir, 'tests/name/undefined.lerta')],
     status: 1,
     stderr: `${join(root_dir, 'tests/name/undefined.lerta')}:1:1: undefined name 'say'\n`,
   },
-  { args: ['dump-checked', hello, hello, ...root], status: 2 },
+  { args: ['dump-checked', hello, hello], status: 2 },
 ]
 // Paths are shown relative to the repository, and the work directory as <tmp>.
 const shorten_path = (arg: string): string =>
@@ -560,10 +557,11 @@ const run_cli_case = ({ args, status, stdout, stderr, produced }: CliCase): stri
 // A program does not report the warnings of the standard modules, so each is built on its own,
 // where they are its warnings, and must have none.
 const std_dir = join(root_dir, 'std')
-const std_checks = readdirSync(std_dir).map((file) => ({
-  name: `std/${file} builds without warnings`,
+const std_modules = readdirSync(std_dir).map((file) => `std:${file.replace(/\.lerta$/, '')}`)
+const std_checks = std_modules.map((module) => ({
+  name: `${module} builds without warnings`,
   run: () => {
-    const args = ['build', join(std_dir, file), '-o', join(cli_work_dir, file), ...root]
+    const args = ['build', module, '-o', join(cli_work_dir, module.replace(':', '_'))]
     const { status, stderr } = spawnSync(compiler, args, { encoding: 'utf8' })
     return status === 0 && stderr === '' ? [] : [`exit status ${status}, stderr:\n${stderr}`]
   },
@@ -575,7 +573,7 @@ const build_and_run_checks = [[], ['-O'], ['--target', host_triple]].map((flags)
   name: `lerta build examples/hello.lerta ${[...flags, ''].join(' ')}and run it`,
   run: () => {
     const executable = join(cli_work_dir, `compiled${flags.join('')}`)
-    const args = ['build', hello, '-o', executable, ...flags, ...root]
+    const args = ['build', hello, '-o', executable, ...flags]
     const built = spawnSync(compiler, args, { encoding: 'utf8' })
     if (built.status !== 0) return [`build exit status ${built.status}, stderr:\n${built.stderr}`]
     const ran = spawnSync(executable, { encoding: 'utf8' })
@@ -584,6 +582,61 @@ const build_and_run_checks = [[], ['-O'], ['--target', host_triple]].map((flags)
     return [...compare_text('stdout', hello_output, ran.stdout), ...status_reasons]
   },
 }))
+
+// Runs the compiler in a new directory, with another new one as the system's directory for
+// temporary files, and returns what it left in each.
+const build_in_new_dir = (args: string[]) => {
+  const cwd = mkdtempSync(join(cli_work_dir, 'cwd-'))
+  const temp = mkdtempSync(join(cli_work_dir, 'temp-'))
+  const env = { ...process.env, TMPDIR: temp }
+  const built = spawnSync(compiler, args, { cwd, env, encoding: 'utf8' })
+  return { ...built, cwd, left: readdirSync(cwd), left_in_temp: readdirSync(temp) }
+}
+
+const expect_left = (what: string, expected: string[], actual: string[]): string[] =>
+  compare_text(what, lines(expected), lines(actual.toSorted()))
+
+const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join('')
+
+const output_checks = [
+  {
+    name: 'lerta build <source> writes the executable to the current directory, and nothing else',
+    run: () => {
+      const { status, stderr, cwd, left, left_in_temp } = build_in_new_dir(['build', hello])
+      if (status !== 0) return [`build exit status ${status}, stderr:\n${stderr}`]
+      const ran = spawnSync(join(cwd, 'hello'), { encoding: 'utf8' })
+      return [
+        ...expect_left('files left', ['hello'], left),
+        ...expect_left('files left in the temporary directory', [], left_in_temp),
+        ...compare_text('stdout', hello_output, ran.stdout),
+      ]
+    },
+  },
+  {
+    name: 'lerta build removes its temporary directory when clang fails',
+    run: () => {
+      const args = ['build', hello, '-o', 'hello', '--target', 'no-such-target']
+      const { status, left, left_in_temp } = build_in_new_dir(args)
+      return [
+        ...(status === 1 ? [] : [`expected exit status 1, got ${status}`]),
+        ...expect_left('files left', [], left),
+        ...expect_left('files left in the temporary directory', [], left_in_temp),
+      ]
+    },
+  },
+  {
+    name: 'lerta dump-llvm <source> prints the IR, and writes no file',
+    run: () => {
+      const { status, stdout, left, left_in_temp } = build_in_new_dir(['dump-llvm', hello])
+      return [
+        ...(status === 0 ? [] : [`expected exit status 0, got ${status}`]),
+        ...(stdout.includes('define void @lerta_main()') ? [] : [`no lerta_main in:\n${stdout}`]),
+        ...expect_left('files left', [], left),
+        ...expect_left('files left in the temporary directory', [], left_in_temp),
+      ]
+    },
+  },
+]
 
 let failed_count: number
 try {
@@ -594,6 +647,7 @@ try {
     })),
     ...std_checks,
     ...build_and_run_checks,
+    ...output_checks,
   ])
 } finally {
   rmSync(cli_work_dir, { recursive: true, force: true })

@@ -6,8 +6,7 @@
 // Tests run in parallel, up to the number of cores, and are reported in order;
 // each program runs in an empty directory of its own, where it may write files.
 // Every test that compiles runs twice, without and with optimization, to catch
-// code whose behavior changes when optimized. The unoptimized build goes through
-// --emit-llvm, so every test also checks that the emitted IR builds.
+// code whose behavior changes when optimized.
 //   tests/**/<name>.lerta  expected files next to it; a lib/ directory holds
 //                          modules that tests import, which are checked only
 //                          through those tests
@@ -122,19 +121,7 @@ const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outco
   const source_file = `${test.name}.lerta`
   const name = `${test.label.replaceAll('/', '_')}${optimize ? '_O' : ''}`
   const executable = join(work_dir, `${name}${executable_suffix}`)
-  // Not `<executable>.ll`, which the compiler writes when --emit-llvm is not given.
-  const llvm_path = `${executable}.emitted.ll`
-  const options = optimize ? ['-O'] : ['--emit-llvm', llvm_path]
-  const args = [
-    'build',
-    source_file,
-    '-o',
-    executable,
-    ...options,
-    ...target.args,
-    '--root',
-    root_dir,
-  ]
+  const args = ['build', source_file, '-o', executable, ...(optimize ? ['-O'] : []), ...target.args]
   const cwd = join(root_dir, test.source_dir)
   const { status, failure, stderr } = await run_file(compiler, args, cwd)
   const diagnostics = stderr.split('\n').filter((line) => line !== '')
@@ -152,7 +139,6 @@ const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outco
   }
   if (status !== 0 || others.length > 0)
     throw new Error(`the build failed (${failure}):\n${stderr}`)
-  if (!optimize && !existsSync(llvm_path)) throw new Error(`--emit-llvm did not leave ${llvm_path}`)
   const run = await run_program(executable)
   return { ...run, warnings: lines(warnings), compile_error: false }
 }
@@ -192,7 +178,7 @@ const build_commands = async (): Promise<void> => {
   for (const name of names_with_extension(commands_dir, 'lerta')) {
     const executable = join(work_dir, `${name}${executable_suffix}`)
     const args = ['build', `${name}.lerta`, '-o', executable, '-O', ...target.args]
-    const { status, failure, stderr } = await run_file(compiler, [...args, '--root', root_dir], cwd)
+    const { status, failure, stderr } = await run_file(compiler, args, cwd)
     if (status !== 0)
       throw new Error(`the build of ${commands_dir}/${name} failed (${failure}):\n${stderr}`)
   }

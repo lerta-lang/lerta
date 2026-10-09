@@ -1,6 +1,7 @@
 #ifdef _WIN32
 
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
@@ -223,6 +224,83 @@ char *lerta_os_real_path(const char *path) {
   char *result = resolved ? to_utf8(usual_form(final_path)) : NULL;
   free(final_path);
   return result;
+}
+
+// The path of `name` in the directory `dir`, which the caller frees.
+static wchar_t *join_path(const wchar_t *dir, const wchar_t *name) {
+  size_t dir_length = wcslen(dir);
+  size_t name_length = wcslen(name);
+  wchar_t *path = malloc((dir_length + name_length + 2) * sizeof(wchar_t));
+  if (path == NULL) lerta_panic("out of memory");
+  memcpy(path, dir, dir_length * sizeof(wchar_t));
+  path[dir_length] = L'\\';
+  memcpy(path + dir_length + 1, name, (name_length + 1) * sizeof(wchar_t));
+  return path;
+}
+
+// Windows has no mkdtemp: names are tried until one is new. The process ID and the time make a
+// clash with another process unlikely.
+char *lerta_os_make_temp_dir(void) {
+  wchar_t dir[MAX_PATH + 1];
+  DWORD length = GetTempPathW(MAX_PATH + 1, dir);
+  if (length == 0 || length > MAX_PATH) return NULL;
+  // The path ends with a backslash, which join_path adds.
+  dir[length - 1] = L'\0';
+  unsigned long seed = GetCurrentProcessId() * 0x10000UL + GetTickCount();
+  for (unsigned long attempt = 0; attempt < 100; attempt++) {
+    wchar_t name[sizeof "lerta-ffffffff"];
+    unsigned long number = (seed + attempt) & 0xFFFFFFFFUL;
+    _snwprintf(name, sizeof name / sizeof *name, L"lerta-%08lx", number);
+    wchar_t *path = join_path(dir, name);
+    if (CreateDirectoryW(path, NULL)) {
+      char *result = to_utf8(path);
+      free(path);
+      return result;
+    }
+    free(path);
+    if (GetLastError() != ERROR_ALREADY_EXISTS) return NULL;
+  }
+  return NULL;
+}
+
+static bool is_dot_or_dot_dot(const wchar_t *name) {
+  return wcscmp(name, L".") == 0 || wcscmp(name, L"..") == 0;
+}
+
+static bool remove_tree(const wchar_t *path);
+
+static bool remove_entries(const wchar_t *path) {
+  wchar_t *pattern = join_path(path, L"*");
+  WIN32_FIND_DATAW entry;
+  HANDLE find = FindFirstFileW(pattern, &entry);
+  free(pattern);
+  if (find == INVALID_HANDLE_VALUE) return false;
+  bool removed = true;
+  do {
+    if (is_dot_or_dot_dot(entry.cFileName)) continue;
+    wchar_t *child = join_path(path, entry.cFileName);
+    removed = remove_tree(child);
+    free(child);
+  } while (removed && FindNextFileW(find, &entry));
+  FindClose(find);
+  return removed;
+}
+
+// A link to a directory (a reparse point) is removed itself, not what it links to. A read-only file
+// is not removed, which fails.
+static bool remove_tree(const wchar_t *path) {
+  DWORD attributes = GetFileAttributesW(path);
+  if (attributes == INVALID_FILE_ATTRIBUTES) return false;
+  if (!(attributes & FILE_ATTRIBUTE_DIRECTORY)) return DeleteFileW(path);
+  bool is_link = attributes & FILE_ATTRIBUTE_REPARSE_POINT;
+  return (is_link || remove_entries(path)) && RemoveDirectoryW(path);
+}
+
+bool lerta_os_remove_tree(const char *path) {
+  wchar_t *name = to_utf16(path);
+  bool removed = name != NULL && remove_tree(name);
+  free(name);
+  return removed;
 }
 
 // Writes the argument so that CommandLineToArgvW, and the C runtimes that follow the same rules,

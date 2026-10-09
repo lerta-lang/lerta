@@ -1,7 +1,15 @@
 // Runtime checks that no Lerta program can trigger: a C program stands in for
 // the generated code and is linked with the runtime as `build` links it.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { root_dir } from './lerta.ts'
@@ -17,14 +25,6 @@ const runtime_clang_args = (optimize: boolean): string[] => [
   ...(optimize ? ['-O2', '-flto'] : ['-D', 'LERTA_DEBUG']),
   ...runtime_c_files.map((file) => join(runtime_dir, file)),
 ]
-
-// The names in RUNTIME_FILES of compiler/build.lerta, which programs are linked with.
-const compiler_runtime_files = (): string[] => {
-  const source = readFileSync(join(root_dir, 'compiler/build.lerta'), 'utf8')
-  const list = source.match(/^const RUNTIME_FILES = \[([^\]]*)\]/m)
-  if (list === null) throw new Error('compiler/build.lerta has no RUNTIME_FILES')
-  return [...list[1].matchAll(/'(\w+)'/g)].map((match) => `${match[1]}.c`)
-}
 
 type Outcome = { stdout: string; stderr: string; status: number | null }
 
@@ -72,21 +72,37 @@ const interleaved_writes = [
   '  _exit(0);',
 ].join('\n')
 
-const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join('')
-
 const expect_status = (expected: number, actual: number | null): string[] =>
   expected === actual ? [] : [`expected exit status ${expected}, got ${actual}`]
 
 const leak = '  lerta_alloc(16, NULL);'
 const checks: Check[] = [
   {
-    name: 'RUNTIME_FILES of compiler/build.lerta lists every runtime/*.c',
-    run: () =>
-      compare_text(
-        'files',
-        lines(runtime_c_files.toSorted()),
-        lines(compiler_runtime_files().toSorted()),
-      ),
+    // A Lerta program cannot make a directory, so the tree is made here.
+    name: 'remove_tree removes a directory with everything in it',
+    run: () => {
+      const tree = join(work_dir, 'tree')
+      const linked = join(work_dir, 'linked')
+      mkdirSync(join(tree, 'inner/empty'), { recursive: true })
+      mkdirSync(linked)
+      writeFileSync(join(tree, 'inner/file'), '')
+      writeFileSync(join(linked, 'file'), '')
+      symlinkSync(linked, join(tree, 'link'))
+      const removal = [
+        `  LertaString *path = lerta_string_from_bytes("${tree}", ${Buffer.byteLength(tree)});`,
+        '  lerta_remove_tree(path);',
+        '  lerta_release(path);',
+      ].join('\n')
+      const { stderr, status } = run_main('remove_tree', removal, false)
+      const reasons = existsSync(tree) ? [`${tree} is still there`] : []
+      const kept = existsSync(join(linked, 'file')) ? [] : ['the link was followed']
+      return [
+        ...compare_text('stderr', '', stderr),
+        ...expect_status(0, status),
+        ...reasons,
+        ...kept,
+      ]
+    },
   },
   {
     name: 'the debug runtime reports a leak',

@@ -6,6 +6,8 @@
 LERTA_STATIC_STRING(cannot_read, "cannot read file: ");
 LERTA_STATIC_STRING(cannot_write, "cannot write file: ");
 LERTA_STATIC_STRING(cannot_resolve, "cannot resolve path: ");
+LERTA_STATIC_STRING(cannot_make_temp_dir, "cannot make a temporary directory");
+LERTA_STATIC_STRING(cannot_remove, "cannot remove: ");
 
 _Noreturn static void throw_file_error(const void *prefix, const LertaString *path) {
   lerta_throw(lerta_string_concat(2, prefix, path));
@@ -33,14 +35,32 @@ bool lerta_is_file(const LertaString *path) {
   return is_file;
 }
 
+// Takes a C string that the platform allocated.
+static LertaString *string_from_os(char *text) {
+  LertaString *result = lerta_string_from_bytes(text, (int64_t)strlen(text));
+  free(text);
+  return result;
+}
+
 LertaString *lerta_real_path(const LertaString *path) {
   char *name = lerta_c_string(path);
   char *resolved = name == NULL ? NULL : lerta_os_real_path(name);
   free(name);
   if (resolved == NULL) throw_file_error(&cannot_resolve, path);
-  LertaString *result = lerta_string_from_bytes(resolved, (int64_t)strlen(resolved));
-  free(resolved);
-  return result;
+  return string_from_os(resolved);
+}
+
+LertaString *lerta_make_temp_dir(void) {
+  char *path = lerta_os_make_temp_dir();
+  if (path == NULL) lerta_throw((const LertaString *)&cannot_make_temp_dir);
+  return string_from_os(path);
+}
+
+void lerta_remove_tree(const LertaString *path) {
+  char *name = lerta_c_string(path);
+  bool removed = name != NULL && lerta_os_remove_tree(name);
+  free(name);
+  if (!removed) throw_file_error(&cannot_remove, path);
 }
 
 // Reads in chunks, so that files whose size is not known in advance work too.

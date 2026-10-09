@@ -1,10 +1,12 @@
 #ifndef _WIN32
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -105,6 +107,61 @@ bool lerta_os_is_file(const char *path) {
 
 char *lerta_os_real_path(const char *path) {
   return realpath(path, NULL);
+}
+
+// The path of `name` in the directory `dir`, which the caller frees.
+static char *join_path(const char *dir, const char *name) {
+  size_t dir_length = strlen(dir);
+  size_t name_length = strlen(name);
+  char *path = malloc(dir_length + name_length + 2);
+  if (path == NULL) lerta_panic("out of memory");
+  memcpy(path, dir, dir_length);
+  path[dir_length] = '/';
+  memcpy(path + dir_length + 1, name, name_length + 1);
+  return path;
+}
+
+char *lerta_os_make_temp_dir(void) {
+  const char *dir = getenv("TMPDIR");
+  char *path = join_path(dir == NULL || *dir == '\0' ? "/tmp" : dir, "lerta-XXXXXX");
+  if (mkdtemp(path) != NULL) return path;
+  free(path);
+  return NULL;
+}
+
+static bool is_dot_or_dot_dot(const char *name) {
+  return strcmp(name, ".") == 0 || strcmp(name, "..") == 0;
+}
+
+// readdir may miss entries when the directory changes while it is read, so the directory is read
+// again until a reading finds nothing to remove.
+static bool remove_entries(const char *path) {
+  DIR *dir = opendir(path);
+  if (dir == NULL) return false;
+  bool removed = true;
+  bool found = true;
+  while (removed && found) {
+    found = false;
+    rewinddir(dir);
+    struct dirent *entry;
+    while (removed && (entry = readdir(dir)) != NULL) {
+      if (is_dot_or_dot_dot(entry->d_name)) continue;
+      found = true;
+      char *child = join_path(path, entry->d_name);
+      removed = lerta_os_remove_tree(child);
+      free(child);
+    }
+  }
+  closedir(dir);
+  return removed;
+}
+
+// Each level of nesting holds a directory open, so a tree deeper than the limit on open files fails.
+bool lerta_os_remove_tree(const char *path) {
+  struct stat status;
+  if (lstat(path, &status) != 0) return false;
+  if (!S_ISDIR(status.st_mode)) return unlink(path) == 0;
+  return remove_entries(path) && rmdir(path) == 0;
 }
 
 extern char **environ;

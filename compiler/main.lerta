@@ -1,25 +1,23 @@
-# The command line of the compiler: `build`, and `dump-tokens`, `dump-ast` and `dump-checked`,
-# which print what the lexer, the parser and the checker make of the source, for debugging.
+# The command line of the compiler: `build`, and `dump-tokens`, `dump-ast`, `dump-checked` and
+# `dump-llvm`, which print what the lexer, the parser, the checker and codegen make of the source,
+# for debugging.
 import { stderr, stdout } from 'std:io'
 import { argv, exit } from 'std:process'
 import { dump_ast } from './ast_dump'
-import { build, BuildRequest } from './build'
+import { build, BuildRequest, check_program, executable_suffix, generate_ir } from './build'
 import { dump_checked } from './checked_dump'
-import { all_warnings } from './checker/diagnostics'
-import { check_modules } from './checker/modules'
 import { tokenize } from './lexer/tokens'
-import { load_modules } from './loader'
 import { parse } from './parser/statement'
-import { read_source } from './source'
+import { basename, has_extension } from './paths'
+import { read_entry_source } from './source'
 import { dump_tokens } from './token_dump'
 
 const USAGE = [
-  "usage: lerta build <source> -o <output> [-O] [--target <triple>] [--emit-llvm <path>]\n"
-  "                   --root <dir>\n"
-  "       lerta build <source> --emit-llvm <path> --root <dir>\n"
+  "usage: lerta build <source> [-o <output>] [-O] [--target <triple>]\n"
   "       lerta dump-tokens <source>\n"
   "       lerta dump-ast <source>\n"
-  "       lerta dump-checked <source> --root <dir>\n"
+  "       lerta dump-checked <source>\n"
+  "       lerta dump-llvm <source>\n"
 ].join('')
 
 const is_value = (arg: String) -> not arg.binary.occurs_at(0, '-'.binary)
@@ -28,30 +26,15 @@ const fail_usage = () ->
   stderr.write USAGE
   exit 2
 
-# Prints what `dump` makes of one file, without reading the modules it imports.
-const run_dump = (args: Array<String>, dump: (String, String) -> String) ->
+# Prints what `dump` makes of the source file.
+const run_dump = (args: Array<String>, dump: (String) -> String) ->
   fail_usage() if args.length != 1 or not is_value(args[0])
-  const path = args[0]
-  stdout.write dump(read_source(path), path)
+  stdout.write dump(args[0])
 
-# Prints the checked syntax trees of the program. `--root` names the directory that holds std/,
-# the standard modules, which the compiler cannot find on its own yet.
-const run_dump_checked = (args: Array<String>) ->
-  const is_valid = args.length == 3 and args[1] == '--root'
-  fail_usage() if not is_valid or not is_value(args[0]) or not is_value(args[2])
-  const path = args[0]
-  const program = check_modules(path, load_modules(path, args[2]))
-  stderr.write "#{warning}\n" for warning in all_warnings(program)
-  stdout.write dump_checked(program)
-
-# Each option may be given once, and `--root` names the directory that holds std/ and runtime/
-# (see run_dump_checked). Without `-o`, only the IR is written, so `-O` and `--target`, which
-# concern the executable, need `-o`.
+# Each option may be given once.
 const parse_build_arguments = (args: Array<String>) ->
   var source: String? = nil
   var output: String? = nil
-  var llvm_path: String? = nil
-  var root: String? = nil
   var target: String? = nil
   var optimize = false
   var i = 0
@@ -66,29 +49,33 @@ const parse_build_arguments = (args: Array<String>) ->
         fail_usage() if optimize
         optimize = true
       when '-o' then output = take_value(output)
-      when '--emit-llvm' then llvm_path = take_value(llvm_path)
-      when '--root' then root = take_value(root)
       when '--target' then target = take_value(target)
       else
         fail_usage() if source != nil or not is_value(arg)
         source = arg
     i += 1
-  const executable = output
-  fail_usage() if (optimize or target != nil) and executable == nil
-  # Without --emit-llvm, the IR is left beside the executable, as the compiler cannot remove a
-  # file or make a temporary directory yet.
-  const ir_path = llvm_path ? (executable then "#{executable}.ll" else fail_usage())
   const given_source = source ? fail_usage()
-  const given_root = root ? fail_usage()
-  BuildRequest(
-    ir_path, optimize, target, output: executable, source: given_source, root: given_root
-  )
+  const executable = output ? default_output(given_source, target)
+  BuildRequest(optimize, target, source: given_source, output: executable)
 
-const dump_file_tokens = (source: String, path: String) ->
-  dump_tokens tokenize(source, path)
+const SOURCE_EXTENSION = '.lerta'
 
-const dump_file_ast = (source: String, path: String) ->
-  dump_ast parse(tokenize(source, path), path)
+# The name of the source without `.lerta`, in the current directory, as `go build` names its
+# output, and with `.exe` for Windows.
+const default_output = (source: String, target: String?) ->
+  const name = basename(source)
+  fail_usage() if name == SOURCE_EXTENSION or not has_extension(name, SOURCE_EXTENSION)
+  const stem = name.binary.slice(0, name.binary.length - SOURCE_EXTENSION.binary.length)
+  "#{stem.decode_utf8()!}#{executable_suffix(target)}"
+
+# The dumps of one module read no module that it imports.
+const dump_file_tokens = (path: String) ->
+  dump_tokens tokenize(read_entry_source(path), path)
+
+const dump_file_ast = (path: String) ->
+  dump_ast parse(tokenize(read_entry_source(path), path), path)
+
+const dump_program_checked = (path: String) -> dump_checked(check_program(path))
 
 const command = argv.length > 0 then argv[0] else ''
 const args = [argv[i] for i in 1...argv.length]
@@ -96,5 +83,6 @@ case command
   when 'build' then build(parse_build_arguments(args))
   when 'dump-tokens' then run_dump(args, dump_file_tokens)
   when 'dump-ast' then run_dump(args, dump_file_ast)
-  when 'dump-checked' then run_dump_checked(args)
+  when 'dump-checked' then run_dump(args, dump_program_checked)
+  when 'dump-llvm' then run_dump(args, generate_ir)
   else fail_usage()

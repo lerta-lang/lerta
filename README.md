@@ -63,8 +63,8 @@ tools/test_in_docker.sh
 cd test && pnpm install && pnpm check   # type and format checks of test/, and spelling across the repository (cspell.json)
 ```
 
-`make` rebuilds only when the seed, `compiler/`, `std/` or `runtime/` change. The bootstrap and the seed are described in [docs/internals.md](docs/internals.md#bootstrap). The tests run at a low priority (`nice`), with Node.js running the TypeScript directly, so there is no build step. To compile a program (see [the compiler](docs/reference/compiler.md)):
+`make` rebuilds only when the seed, `compiler/`, `std/`, `runtime/` or `tools/embed.lerta` change. The bootstrap and the seed are described in [docs/internals.md](docs/internals.md#bootstrap). The tests run at a low priority (`nice`), with Node.js running the TypeScript directly, so there is no build step. To compile a program (see [the compiler](docs/reference/compiler.md)):
 
 ```
-bin/lerta build examples/hello.lerta -o hello --root . [-O] [--emit-llvm hello.ll]
+bin/lerta build examples/hello.lerta [-o hello] [-O]
 ```
