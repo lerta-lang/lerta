@@ -80,7 +80,7 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
     parse_destructuring tokens
     tokens.fail(position, 'a destructuring declaration must be on a line of its own')
   return parse_declaration(tokens) if at_declaration(tokens)
-  const is_command_call = tokens.peek().kind == 'identifier' and starts_command_argument(tokens)
+  const is_command_call = starts_command_argument(tokens)
   const expression: Expression = case
     when is_command_call then parse_command_call(tokens)
     else parse_expression(tokens)
@@ -177,19 +177,39 @@ const assignment_target = (expression: Expression): AssignmentTarget? ->
     when Member then expression
     else nil
 
-# A call without parentheses, allowed only at the start of a statement.
+# A call without parentheses, allowed only at the start of a statement: `f x`, `xs.push x`.
 # `f -1` is `f(-1)`, but `f - 1` is a subtraction.
 const starts_command_argument = (tokens: TokenStream) ->
-  const token = tokens.peek_at(1)
+  const callee_length = command_callee_length(tokens)
+  return false if callee_length == 0
+  const token = tokens.peek_at(callee_length)
   return false if not token.spaced
-  return not tokens.peek_at(2).spaced if token.kind == '-'
+  return not tokens.peek_at(callee_length + 1).spaced if token.kind == '-'
   # `is` is not a keyword, but `x is T` is a test, not a call of x.
   return false if token.kind == 'identifier' and token.text == 'is'
   is_one_of token.kind, COMMAND_ARGUMENT_STARTS
 
+# The number of tokens of the callee of a call without parentheses at the next token: a name or
+# `@name`, followed by any number of `.name`, all without spaces; 0 if there is none.
+const command_callee_length = (tokens: TokenStream) ->
+  const first = tokens.peek().kind
+  var length = case
+    when first == 'identifier' then 1
+    when first == '@' and is_attached_name(tokens.peek_at(1)) then 2
+    else 0
+  return 0 if length == 0
+  while tokens.peek_at(length).kind == '.' and not tokens.peek_at(length).spaced
+    return 0 if not is_attached_name(tokens.peek_at(length + 1))
+    length += 2
+  length
+
+const is_attached_name = (token: Token) -> token.kind == 'identifier' and not token.spaced
+
 # `f x, y`: the arguments run to the end of the line.
 const parse_command_call = (tokens: TokenStream) ->
-  const callee = parse_primary(tokens)
+  var callee = parse_primary(tokens)
+  const position = callee.position
+  callee = Member(position, object: callee, name: parse_identifier(tokens)) while tokens.accept('.')
   call_of callee, parse_arguments(tokens), []
 
 # `for <name> in <expression>` followed by an indented block.

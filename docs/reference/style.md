@@ -10,7 +10,7 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Multi-line literals**: where it can be written without brackets, write it without brackets.
 - **Line length**: up to 100 columns per line.
 - **Modules**: a library module contains only code that builds the exported values. Put code to run in a separate entry file.
-- **Calls without parentheses**: call a function by its name without parentheses at the start of a statement, the last expression of a body included (`write_group writer, item, indent`), wherever the language allows it (see [calls](syntax.md#calls)).
+- **Calls without parentheses**: call a function or a method without parentheses at the start of a statement, the last expression of a body included (`write_group writer, item, indent`, `xs.push x`), wherever the language allows it (see [calls](syntax.md#calls)).
 - **Implicit return**: end a function with its value (`x`), not `return x`; do not end a function returning nothing with a bare `return`.
 - **Shorthand**: when the value of a named argument or a field is a variable of the same name, write the name alone: `Point(x, y: 2)`, `{ a }`.
 - **Parentheses**: do not write parentheses that change nothing, except where another rule asks for them (Ranges, below), to clarify `and` mixed with `or`, around an `is` test under `not` (`not (x is T)`, which could be misread as `(not x) is T`), and around a `then`/`else` inside the `then` value of another (`a then (b then x else y) else z`), whose `else`s are hard to pair otherwise.
