@@ -15,7 +15,8 @@ import { generate_comprehension } from './control_flow'
 import { generate_closure, generate_jump, lookup_local } from './function'
 import { CodegenLocal, Generator, SlotLocal, ValueLocal } from './generator'
 import {
-  emit_field_pointer, emit_member_dispatch, emit_record, emit_record_field, emit_type_test
+  emit_field_pointer, emit_member_dispatch, emit_present_type_test, emit_record, emit_record_field
+  emit_type_test
 } from './heap_object'
 import { info_of } from '../checker/object_types'
 import { IrBuilder } from './ir_builder'
@@ -71,11 +72,7 @@ const generate_value = (g: Generator, expression: Expression): String ->
     when Return
       generate_jump g, expression
       'poison'
-    when IsTest
-      const object = generate(g, expression.value)
-      const test = emit_type_test(g.ir, object, type_of(g, expression.type))
-      emit_release g.ir, object
-      test
+    when IsTest then generate_is_test(g, expression)
     when This
       const object = lookup_local(g, '@')!
       read_local g, object, object.type
@@ -104,6 +101,14 @@ const generate_value = (g: Generator, expression: Expression): String ->
       emit_record g.ir, type_of(g, expression), values
     when Index then generate_index(g, expression)
     when FunctionLiteral then generate_closure(g, expression)
+
+const generate_is_test = (g: Generator, test: IsTest) ->
+  const object = generate(g, test.value)
+  const is_optional = type_of(g, test.value) is OptionalType
+  const test_of = is_optional then emit_present_type_test else emit_type_test
+  const result = test_of(g.ir, object, type_of(g, test.type))
+  emit_release g.ir, object
+  result
 
 # A field's value, of a class, a struct or an anonymous struct; the object is released, and the
 # value retained, since every expression yields an owned reference.
