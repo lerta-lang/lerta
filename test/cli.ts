@@ -114,6 +114,8 @@ const cli_cases: CliCase[] = [
   { args: ['build', hello, '-o', '-O'], status: 2 },
   { args: ['build', hello, '-o'], status: 2 },
   { args: ['build', hello, hello, '-o', exe], status: 2 },
+  { args: ['build', hello, join(root_dir, 'README.md'), '-o', exe], status: 2 },
+  { args: ['dump-llvm', hello, join(root_dir, 'tests/extern/lib/twice.c')], status: 2 },
   { args: ['build', hello, '-o', exe, '--unknown'], status: 2 },
   {
     args: ['build', hello, '-o', exe, '--target', host_triple, '--target', host_triple],
@@ -638,6 +640,68 @@ const output_checks = [
   },
 ]
 
+// A program with an extern of its own, linked with its C function in each form that clang takes,
+// unoptimized and optimized, which compiles C with -flto too. The object and the archive are
+// built without -flto, which the optimized build must link as well.
+const twice_dir = join(root_dir, 'tests/extern/lib')
+const twice_source = join(twice_dir, 'twice.lerta')
+const twice_c = join(twice_dir, 'twice.c')
+// Each check makes its inputs under names of its own, `name`, since the checks may run at once.
+const twice_inputs: [string, (name: string) => string][] = [
+  ['.c', () => twice_c],
+  ['.o', (name) => compile_c(['-c'], `${name}.o`)],
+  ['.ll', (name) => compile_c(['-S', '-emit-llvm'], `${name}.ll`)],
+  ['.a', (name) => archive(compile_c(['-c'], `${name}.o`), `${name}.a`)],
+]
+
+// Runs a tool that makes an input, and throws, which fails the check, if it fails.
+const run_tool = (command: string, args: string[]): void => {
+  const ran = spawnSync(command, args, { encoding: 'utf8' })
+  if (ran.status !== 0)
+    throw new Error(
+      `${command} failed (${ran.error?.message ?? `exit status ${ran.status}`}):\n${ran.stderr}`,
+    )
+}
+
+const compile_c = (flags: string[], name: string): string => {
+  const output = join(cli_work_dir, name)
+  run_tool('clang', [...flags, twice_c, '-o', output])
+  return output
+}
+
+const archive = (object: string, name: string): string => {
+  const output = join(cli_work_dir, name)
+  run_tool('ar', ['rcs', output, object])
+  return output
+}
+
+// Builds twice.lerta with `file` linked, from `cwd`, and runs it.
+const build_twice = (file: string, flags: string[], cwd: string, name: string): string[] => {
+  const executable = join(cli_work_dir, name)
+  const args = ['build', twice_source, file, '-o', executable, ...flags]
+  const built = spawnSync(compiler, args, { cwd, encoding: 'utf8' })
+  if (built.status !== 0) return [`build exit status ${built.status}, stderr:\n${built.stderr}`]
+  const ran = spawnSync(executable, { encoding: 'utf8' })
+  const status = ran.status === 0 ? [] : [`exit status ${ran.status}, stderr:\n${ran.stderr}`]
+  return [...compare_text('stdout', '42\n', ran.stdout), ...status]
+}
+
+const linked_file_checks = [
+  ...twice_inputs.flatMap(([extension, make_input]) =>
+    [[], ['-O']].map((flags) => ({
+      name: `lerta build <source> <file${extension}> ${[...flags, ''].join(' ')}links the file`,
+      run: () => {
+        const name = `twice${extension}${flags.join('')}`
+        return build_twice(make_input(`${name}_input`), flags, cli_work_dir, name)
+      },
+    })),
+  ),
+  {
+    name: 'lerta build <source> <file> links a file given by a path relative to the current directory',
+    run: () => build_twice('twice.c', [], twice_dir, 'twice_relative'),
+  },
+]
+
 let failed_count: number
 try {
   failed_count = await run_checks('CLI checks', [
@@ -648,6 +712,7 @@ try {
     ...std_checks,
     ...build_and_run_checks,
     ...output_checks,
+    ...linked_file_checks,
   ])
 } finally {
   rmSync(cli_work_dir, { recursive: true, force: true })

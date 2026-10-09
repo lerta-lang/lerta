@@ -1,12 +1,13 @@
 # Compiler
 
 ```
-lerta build <source> [-o <output>] [-O] [--target <triple>]
+lerta build <source> [<file>...] [-o <output>] [-O] [--target <triple>]
 ```
 
-builds an executable. `lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)); it carries the standard modules and the runtime in it, so it needs no other file of the repository. Arguments that do not fit this usage (an unknown or repeated option, a missing source, a value that starts with `-`, or, without `-o`, a source whose name does not end with `.lerta`) print the usage to stderr and exit with code 2.
+builds an executable. `lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)); it carries the standard modules and the runtime in it, so it needs no other file of the repository. Arguments that do not fit this usage (an unknown or repeated option, a missing source, a file after it of another kind than below, a value that starts with `-`, or, without `-o`, a source whose name does not end with `.lerta`) print the usage to stderr and exit with code 2.
 
 - `<source>` is a file, or a standard module as `std:<name>`, such as `std:io`, which is then the program, read from those the compiler carries; an unknown one prints `unknown standard module 'std:<name>'` and exits with code 1. The same holds for the commands below. A file of `std/` given by its path is an ordinary module, which imports the carried `std:builtins` as any other does: `std/process.lerta` builds, while `std/builtins.lerta` fails, as its extends repeat those of the carried `std:builtins`.
+- `<file>...`, after the source, are files that clang links with the program as it is given them: C (`.c`), LLVM IR (`.ll`), objects (`.o`, `.obj`) and archives (`.a`, `.lib`), such as those that define the C functions of the program's own [externs](functions.md#c-functions). With `-O`, clang compiles `.c` and `.ll` files with `-O2 -flto` as it does the program; objects and archives built without `-flto` link too.
 - `-o <output>` names the executable. Without it, the executable is the source's name without `.lerta`, in the current directory, as `go build` names it: `lerta build examples/hello.lerta` writes `hello`, or `hello.exe` for a Windows target.
 - Without `-O`, the program checks for leaked memory when it exits: a leak is reported to stderr as `leak: <n> object(s)`, and the exit code is 1.
 - `-O` optimizes, including across the generated code and the runtime (link-time optimization).

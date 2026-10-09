@@ -13,7 +13,7 @@ import { read_entry_source } from './source'
 import { dump_tokens } from './token_dump'
 
 const USAGE = [
-  "usage: lerta build <source> [-o <output>] [-O] [--target <triple>]\n"
+  "usage: lerta build <source> [<file>...] [-o <output>] [-O] [--target <triple>]\n"
   "       lerta dump-tokens <source>\n"
   "       lerta dump-ast <source>\n"
   "       lerta dump-checked <source>\n"
@@ -31,9 +31,16 @@ const run_dump = (args: Array<String>, dump: (String) -> String) ->
   fail_usage() if args.length != 1 or not is_value(args[0])
   stdout.write dump(args[0])
 
-# Each option may be given once.
+# The files that clang links with the program, as it takes them.
+const LINKED_EXTENSIONS = ['.c', '.o', '.ll', '.a', '.obj', '.lib']
+
+const is_linked_file = (path: String) ->
+  LINKED_EXTENSIONS.any((extension) -> has_extension(path, extension))
+
+# Each option may be given once. The source comes first, followed by the files to link.
 const parse_build_arguments = (args: Array<String>) ->
   var source: String? = nil
+  const linked_files: Array<String> = []
   var output: String? = nil
   var target: String? = nil
   var optimize = false
@@ -51,12 +58,16 @@ const parse_build_arguments = (args: Array<String>) ->
       when '-o' then output = take_value(output)
       when '--target' then target = take_value(target)
       else
-        fail_usage() if source != nil or not is_value(arg)
-        source = arg
+        fail_usage() if not is_value(arg)
+        if source == nil
+          source = arg
+        else
+          fail_usage() if not is_linked_file(arg)
+          linked_files.push arg
     i += 1
   const given_source = source ? fail_usage()
   const executable = output ? default_output(given_source, target)
-  BuildRequest(optimize, target, source: given_source, output: executable)
+  BuildRequest(optimize, target, linked_files, source: given_source, output: executable)
 
 const SOURCE_EXTENSION = '.lerta'
 
