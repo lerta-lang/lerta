@@ -7,6 +7,7 @@ import {
 import { TokenKind } from '../lexer/tokens'
 import { parse_block_literal, starts_block, starts_field_block } from './block_literal'
 import { integer_value, parse_primary } from './primary'
+import { parse_if } from './statement'
 import { is_one_of, token_position, TokenStream } from './token_stream'
 import { parse_named_type, parse_type_arguments, starts_type_arguments } from './type'
 
@@ -30,8 +31,18 @@ export struct LoopHeader
 export const parse_expression = (tokens: TokenStream) -> parse_conditional(tokens)
 
 # The value after `=` or `key:`, which may be a literal in an indented block on the next lines.
-export const parse_value = (tokens: TokenStream) ->
-  starts_block(tokens) then parse_block_literal(tokens) else parse_expression(tokens)
+const parse_if_value = (tokens: TokenStream) ->
+  const if_expression = parse_if(tokens)
+  if if_expression.else_body.length == 0
+    tokens.fail if_expression.position, 'an if without an else gives no value'
+  if_expression
+
+# A value that may take lines: a block literal, an `if` (see if_value) or an expression.
+export const parse_value = (tokens: TokenStream): Expression ->
+  case
+    when starts_block(tokens) then parse_block_literal(tokens)
+    when tokens.peek().kind == 'if' then parse_if_value(tokens)
+    else parse_expression(tokens)
 
 # `f`, or `f x`, followed by an indented block of `name: value` lines: its named arguments.
 export const parse_block_arguments = (tokens: TokenStream, callee: Expression) ->
