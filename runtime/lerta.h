@@ -56,9 +56,19 @@ typedef struct {
   bool live;
 } LertaMapEntry;
 
-// How a map treats its keys: Ints are compared as they are, Strings by their bytes and objects by
-// identity; Strings and objects are retained while the map holds them.
-typedef enum { LERTA_INT_KEYS, LERTA_STRING_KEYS, LERTA_OBJECT_KEYS } LertaKeyKind;
+// How a map treats its keys: Ints are compared as they are, Strings by their bytes, objects by
+// identity, and values, such as structs and arrays, by the map's `hash` and `equals`; all but Ints
+// are retained while the map holds them.
+typedef enum {
+  LERTA_INT_KEYS,
+  LERTA_STRING_KEYS,
+  LERTA_OBJECT_KEYS,
+  LERTA_VALUE_KEYS
+} LertaKeyKind;
+
+// The hash and the equality of two items of a type that compares by its contents.
+typedef uint64_t (*LertaHash)(int64_t item);
+typedef bool (*LertaEquals)(int64_t a, int64_t b);
 
 // Keys and values are 8 bytes each, as array items are. Entries are kept in insertion order, and
 // `slots` is an open-addressing index into them.
@@ -72,6 +82,9 @@ typedef struct {
   int64_t *slots;
   LertaKeyKind key_kind;
   bool owns_values;
+  // For LERTA_VALUE_KEYS only.
+  LertaHash hash;
+  LertaEquals equals;
 } LertaMap;
 
 // An Iter. Its has_next and next take the Iter itself, whose state follows these fields; next
@@ -123,6 +136,7 @@ LertaString *lerta_int_to_string(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
+uint64_t lerta_string_hash(const LertaString *s);
 // The place of `text` among an enum's `count` member texts, or -1 if none has it (`E.parse`).
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);
 
@@ -145,6 +159,9 @@ int64_t lerta_array_get(const LertaArray *array, int64_t index);
 void lerta_array_set(LertaArray *array, int64_t index, int64_t item);
 void lerta_array_push(LertaArray *array, int64_t item);
 int64_t lerta_array_pop(LertaArray *array);
+// Whether two arrays hold equal items in the same order, and a hash of the items in order.
+bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals);
+uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
 LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator);
 // The string as a NUL-terminated C string, which the caller frees; NULL if it holds a NUL byte,
 // which C would take as its end.
@@ -152,7 +169,9 @@ char *lerta_c_string(const LertaString *s);
 
 // Maps (map.c). Keys and values in are borrowed. get returns whether the key is there, and its
 // value owned through `value` (0 otherwise); keys returns them in insertion order.
-LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values);
+// `hash` and `equals` are NULL but for LERTA_VALUE_KEYS.
+LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values, LertaHash hash,
+                        LertaEquals equals);
 int64_t lerta_map_length(const LertaMap *map);
 bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value);
 void lerta_map_set(LertaMap *map, int64_t key, int64_t value);

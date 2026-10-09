@@ -7,23 +7,29 @@
 // (not live) until the entries are compacted, so probes pass over it.
 #define EMPTY (-1)
 
+// The splitmix64 finalizer, so that the low bits, which pick the slot, depend on every bit.
+static uint64_t mix(uint64_t hash) {
+  hash = (hash ^ (hash >> 30)) * 0xBF58476D1CE4E5B9u;
+  hash = (hash ^ (hash >> 27)) * 0x94D049BB133111EBu;
+  return hash ^ (hash >> 31);
+}
+
 static uint64_t hash_key(const LertaMap *map, int64_t key) {
-  // The splitmix64 finalizer, so that the low bits, which pick the slot, depend on every bit.
-  if (map->key_kind != LERTA_STRING_KEYS) {
-    uint64_t hash = (uint64_t)key;
-    hash = (hash ^ (hash >> 30)) * 0xBF58476D1CE4E5B9u;
-    hash = (hash ^ (hash >> 27)) * 0x94D049BB133111EBu;
-    return hash ^ (hash >> 31);
+  switch (map->key_kind) {
+    case LERTA_STRING_KEYS: return lerta_string_hash((const LertaString *)(intptr_t)key);
+    case LERTA_VALUE_KEYS: return mix(map->hash(key));
+    default: return mix((uint64_t)key);
   }
-  const LertaString *s = (const LertaString *)(intptr_t)key;
-  uint64_t hash = 0xCBF29CE484222325u;
-  for (int64_t i = 0; i < s->length; i++) hash = (hash ^ s->bytes[i]) * 0x100000001B3u;
-  return hash;
 }
 
 static bool same_key(const LertaMap *map, int64_t a, int64_t b) {
-  if (map->key_kind != LERTA_STRING_KEYS) return a == b;
-  return lerta_string_equals((const LertaString *)(intptr_t)a, (const LertaString *)(intptr_t)b);
+  switch (map->key_kind) {
+    case LERTA_STRING_KEYS:
+      return lerta_string_equals((const LertaString *)(intptr_t)a,
+                                 (const LertaString *)(intptr_t)b);
+    case LERTA_VALUE_KEYS: return map->equals(a, b);
+    default: return a == b;
+  }
 }
 
 static bool keys_are_references(const LertaMap *map) { return map->key_kind != LERTA_INT_KEYS; }
@@ -42,7 +48,8 @@ static void drop_map(void *object) {
   free(map->slots);
 }
 
-LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values) {
+LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values, LertaHash hash,
+                        LertaEquals equals) {
   LertaMap *map = lerta_alloc((int64_t)sizeof(LertaMap), drop_map);
   map->length = 0;
   map->entry_count = 0;
@@ -52,6 +59,8 @@ LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values) {
   map->slots = NULL;
   map->key_kind = key_kind;
   map->owns_values = owns_values;
+  map->hash = hash;
+  map->equals = equals;
   return map;
 }
 

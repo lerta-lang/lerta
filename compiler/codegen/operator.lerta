@@ -1,10 +1,12 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import { BinaryOperation, Coalesce, is_nil_test, NilLiteral, UnaryOperation, Unwrap } from '../ast'
+import { compares_by_contents } from '../checker/equality'
 import { is_arithmetic } from '../checker/operator'
 import { apply_arithmetic } from './checked_int'
 import {
   generate, generate_condition, release_if_reference, type_at_use, type_of
 } from './expression'
+import { emit_equals_by_contents } from './equality'
 import { Generator } from './generator'
 import { emit_release, ir_type } from './lerta_ir'
 import { emit_is_nil, emit_is_present, emit_unwrap } from './optional'
@@ -40,6 +42,12 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   # nil is the null pointer, so optional objects compare as pointers too.
   if is_identity_type(inner_of(operand_type))
     return negate_if_unequal(g, operator, generate_same_object(g, left, right))
+  if compares_by_contents(inner_of(operand_type))
+    const program = g.code.program
+    const equal = emit_equals_by_contents(g.ir, program, left, right, operand_type)
+    emit_release g.ir, left
+    emit_release g.ir, right
+    return negate_if_unequal(g, operator, equal)
   if operand_type is OptionalType
     return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
   if is_one_of_kinds(operand_type, ['String', 'Binary'])

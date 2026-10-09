@@ -85,3 +85,17 @@ LertaString *lerta_string_join(const LertaArray *strings, const LertaString *sep
   }
   return result;
 }
+
+bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals) {
+  if (a->length != b->length) return false;
+  for (int64_t i = 0; i < a->length; i++) {
+    if (!equals(a->items[i], b->items[i])) return false;
+  }
+  return true;
+}
+
+uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash) {
+  uint64_t result = (uint64_t)array->length;
+  for (int64_t i = 0; i < array->length; i++) result = result * 31 + hash(array->items[i]);
+  return result;
+}

@@ -72,6 +72,7 @@ print xs[0] + xs.length
 - `[a, b, c]` makes an array (over several lines too: see [lines inside brackets](syntax.md#lines-inside-brackets)). Its item type comes from the expected type if there is one (a type annotation, a parameter, a return type), otherwise from the first item. `[]` needs an expected type.
 - `xs[i]` reads an item and `xs[i] = value` replaces one (`+=` and so on work on `Int` items). An index outside `0 ... xs.length` throws `index out of range`.
 - `xs.length` is the number of items.
+- `==` and `!=` compare two arrays by their items, in order (see [equality](objects.md#classes-and-structs)).
 - `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`. `xs.contains(x)` tells whether an item is `==` to `x`, for items that `==` compares (other items are an error), and `xs.find_index(f)` gives the place of the first item for which `f` is true, or nil. `xs.last()` returns the last item without removing it, and throws `last of an empty array` likewise. `xs.append(ys)` pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`.
 - `xs.iter()` gives an [`Iter`](#iter) of the items, and `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` one of the items as it maps, filters or takes them.
 - `strings.join(separator)` joins an `Array<String>` into one `String`.
@@ -86,7 +87,7 @@ squares[3] = 9
 print ages['ann'] ? 0
 ```
 
-- `Map<K, V>` maps keys of type `K`, a `String`, an `Int`, an [enum](#enums), a class or a union of classes (compared by identity: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
+- `Map<K, V>` maps keys of type `K`, any type of values that `==` compares but an optional one (classes by identity, and structs, anonymous structs and arrays by their contents: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
 - `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there. `m.get_or_put(k, make)` gives the value of `k`, setting it to `make()` first if `k` is not there. A `Map<K, Bool>` serves as a set: `m.add(k)` sets `k` to `true`.

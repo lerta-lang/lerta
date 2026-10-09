@@ -53,6 +53,13 @@ LertaString *lerta_string_concat(int64_t count, ...) {
   return result;
 }
 
+// FNV-1a over the bytes.
+uint64_t lerta_string_hash(const LertaString *s) {
+  uint64_t hash = 0xCBF29CE484222325u;
+  for (int64_t i = 0; i < s->length; i++) hash = (hash ^ s->bytes[i]) * 0x100000001B3u;
+  return hash;
+}
+
 bool lerta_string_equals(const LertaString *a, const LertaString *b) {
   return a->length == b->length && memcmp(a->bytes, b->bytes, (size_t)a->length) == 0;
 }

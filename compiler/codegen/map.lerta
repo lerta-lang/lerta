@@ -1,24 +1,32 @@
 # Operations on maps in the generated code, through the runtime (runtime/map.c). Keys and values
 # are 8 bytes, as array items are.
+import { ProgramWide } from '../checker/shared'
 import { from_item, to_item } from './array'
+import { item_functions } from './equality'
 import { IrBuilder } from './ir_builder'
 import { ir_type } from './lerta_ir'
 import { call_runtime } from './runtime_calls'
 import {
-  is_identity_type, is_kind, is_one_of_kinds, is_reference_type, MapType, optional_type, Type
+  is_identity_type, is_one_of_kinds, is_reference_type, MapType, optional_type, Type
 } from '../types'
 
 # The values of LertaKeyKind in runtime/lerta.h; an enum's value is an Int.
 const key_kind = (key: Type) ->
   case
-    when is_one_of_kinds(key, ['Int', ENUM]) then 0
-    when is_kind(key, 'String') then 1
+    when is_one_of_kinds(key, ['Int', 'Byte', 'Bool', ENUM]) then 0
+    when is_one_of_kinds(key, ['String', 'Binary']) then 1
     when is_identity_type(key) then 2
-    else throw 'no map key kind'
+    else 3
 
-export const emit_map_new = (ir: IrBuilder, type: MapType) ->
-  const args = "i32 #{key_kind(type.key)}, i1 zeroext #{is_reference_type(type.value)}"
-  call_runtime ir, 'ptr @lerta_map_new(i32, i1 zeroext)', args
+# Keys that compare by their contents come with the functions that hash and compare them.
+export const emit_map_new = (ir: IrBuilder, program: ProgramWide, type: MapType) ->
+  const kind = key_kind(type.key)
+  const functions = kind == 3 then item_functions(ir.module, program, type.key) else nil
+  const hash = functions?.hash ? 'null'
+  const equals = functions?.equals ? 'null'
+  const owns_values = is_reference_type(type.value)
+  const args = "i32 #{kind}, i1 zeroext #{owns_values}, ptr #{hash}, ptr #{equals}"
+  call_runtime ir, 'ptr @lerta_map_new(i32, i1 zeroext, ptr, ptr)', args
 
 export const emit_map_length = (ir: IrBuilder, map: String) ->
   call_runtime ir, 'i64 @lerta_map_length(ptr)', "ptr #{map}"

@@ -1,0 +1,39 @@
+# Which values `==` compares, and which can be map keys. Structs, anonymous structs and arrays
+# compare by their contents, whose parts compare likewise; so do unions that hold them.
+import { Position } from '../ast'
+import { field_type, info_of } from './object_types'
+import { ProgramWide } from './shared'
+import {
+  ArrayType, EnumType, is_identity_type, is_one_of_kinds, ObjectType, OptionalType, RecordType
+  SimpleType, Type, UnionType
+} from '../types'
+
+# Whether the type compares by its contents rather than as a number, a text or an object.
+export const compares_by_contents = (type: Type): Bool ->
+  case type
+    when ObjectType then type.is_struct
+    when RecordType, ArrayType then true
+    when UnionType then not is_identity_type(type)
+    else false
+
+# Whether `==` compares values of the type. `at` is where a struct's field types are needed.
+export const is_equatable = (program: ProgramWide, type: Type, at: Position) ->
+  const seen: Map<String, Bool> = Map()
+  equatable program, type, at, seen
+
+const equatable = (program: ProgramWide, type: Type, at: Position, seen: Map<String, Bool>): Bool ->
+  const all = (parts: Array<Type>) -> parts.all((part) -> equatable(program, part, at, seen))
+  case type
+    when SimpleType then is_one_of_kinds(type, ['Int', 'Byte', 'Bool', 'String', 'Binary'])
+    when EnumType then true
+    when ObjectType
+      # A struct that holds itself, through an array, compares as far as its other parts do.
+      return true if not type.is_struct or seen.has(type.symbol)
+      seen.add type.symbol
+      const info = info_of(program, type)
+      all [field_type(program, info, field, at) for field in info.fields]
+    when RecordType then all([field.type for field in type.fields])
+    when ArrayType then all([type.element])
+    when OptionalType then all([type.inner])
+    when UnionType then all(type.members)
+    else false

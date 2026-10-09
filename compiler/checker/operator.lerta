@@ -3,6 +3,7 @@ import {
   BinaryOperation, Coalesce, Expression, is_nil_test, NilLiteral, UnaryOperation
 } from '../ast'
 import { fail } from './diagnostics'
+import { compares_by_contents, is_equatable } from './equality'
 import { may_name_member } from './enums'
 import { expect_condition, expect_optional, expect_type, require_type, type_of } from './expression'
 import { is_contextual } from './literals'
@@ -100,7 +101,12 @@ const type_of_operands = (
   const is_identity = is_equality and is_identity_type(inner_of(type))
   return type_of_identity_operand(body, second, type) if is_identity
   const inner = is_equality then inner_of(type) else type
-  fail body.program, first.position, reject(type) if not is_one_of_kinds(inner, allowed_kinds)
+  const by_contents = is_equality and compares_by_contents(inner)
+  const is_allowed = if by_contents
+    is_equatable(body.program, inner, first.position)
+  else
+    is_one_of_kinds(inner, allowed_kinds)
+  fail body.program, first.position, reject(type) if not is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
   expect_type body, second, type
   type

@@ -112,10 +112,12 @@ export const emit_type_test = (ir: IrBuilder, object: String, type: Type) ->
 
 # The drop function in the header tells the type, since every type has its own.
 const emit_object_test = (ir: IrBuilder, object: String, type: Type) ->
-  const object_type = type as ObjectType!
+  ir.assign "icmp eq ptr #{emit_drop_function(ir, object)}, #{drop_symbol(type as ObjectType!)}"
+
+# The drop function in the object's header, which tells its type.
+export const emit_drop_function = (ir: IrBuilder, object: String) ->
   const pointer = ir.assign("getelementptr { i64, ptr }, ptr #{object}, i32 0, i32 1")
-  const drop = ir.assign("load ptr, ptr #{pointer}")
-  ir.assign "icmp eq ptr #{drop}, #{drop_symbol(object_type)}"
+  ir.assign "load ptr, ptr #{pointer}"
 
 # A value of the IR type, computed by `of_member` for the member of the union that the object is:
 # each member but the last is tested in turn.
@@ -166,6 +168,11 @@ export const emit_record = (ir: IrBuilder, type: Type, values: Map<String, Strin
     const pointer = emit_heap_field_pointer(ir, layout, record, i)
     ir.emit "store #{ir_type(field.type)} #{values[field.name]!}, ptr #{pointer}"
   record
+
+# The pointer to the field at the index, in name order.
+export const emit_record_field_pointer = (
+  ir: IrBuilder, record: String, type: RecordType, index: Int
+) -> emit_heap_field_pointer(ir, record_layout(ir, type), record, index)
 
 # The value of a field, retained if a reference; the record is borrowed.
 export const emit_record_field = (ir: IrBuilder, record: String, type: Type, name: String) ->
