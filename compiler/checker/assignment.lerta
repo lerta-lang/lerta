@@ -6,7 +6,7 @@ import { lookup } from './name'
 import { field_target } from './object'
 import { Body } from './shared'
 import { reject_pending } from './top_level_values'
-import { format_type, is_kind, is_one_of_kinds, MapType } from '../types'
+import { format_type, is_kind, is_one_of_kinds, MapType, TypeKind } from '../types'
 
 # Compound assignments such as `+=` apply to an Int or a Byte, and `+=` to a String too.
 export const check_assignment = (body: Body, assignment: Assignment) ->
@@ -16,7 +16,7 @@ export const check_assignment = (body: Body, assignment: Assignment) ->
     when Member then field_target(body, target)
     when Identifier then check_variable_target(body, target)
   const is_append = operator == '+='
-  const kinds = is_append then ['Int', 'Byte', 'String'] else ['Int', 'Byte']
+  const kinds: Array<TypeKind> = is_append then [INT, BYTE, STRING] else [INT, BYTE]
   if operator != '=' and not is_one_of_kinds(target_type, kinds)
     const expected = is_append then 'Int, Byte or String' else 'Int or Byte'
     const message = "expected #{expected}, got #{format_type(target_type)}"
@@ -35,7 +35,7 @@ const check_item_target = (body: Body, target: Index, operator: String) ->
       const message = "a map value cannot be updated with '#{operator}'; #{advice}"
       fail body.program, target.position, message
     return object_type.value
-  if is_kind(object_type, 'Binary')
+  if is_kind(object_type, BINARY)
     fail body.program, target.position, 'a Binary cannot be changed'
   type
 

@@ -10,11 +10,11 @@ import { object_type } from './object_types'
 import { Body } from './shared'
 import { type_of_block } from './statement'
 import {
-  EnumType, format_member, format_type, is_kind, is_one_of_kinds, same_type, Type, type_key, unify
-  UnionType
+  EnumType, format_member, format_type, is_kind, is_one_of_kinds, same_type, Type, type_key
+  TypeKind, unify, UnionType
 } from '../types'
 
-const VALUE_KINDS = ['Int', 'Byte', 'Bool', 'String', 'Enum']
+const VALUE_KINDS: Array<TypeKind> = [INT, BYTE, BOOL, STRING, ENUM]
 
 # The body of a case arm or of then/else, and the locals narrowed in it.
 struct Branch
@@ -76,7 +76,7 @@ const type_of_branches = (
       expected
     for branch in branches
       const type = type_of_body(branch, check_value)
-      if is_kind(type, 'void')
+      if is_kind(type, VOID)
         fail body.program, last_of(branch).position, "expected #{format_type(expected)}, got void"
     return expected
   const type_of_value = (value: Expression) -> type_of(body, value, nil)
@@ -84,7 +84,7 @@ const type_of_branches = (
     BranchValue last: last_of(branch), type: type_of_body(branch, type_of_value)
   const values = [value_of(branch) for branch in branches]
   if const message = void_message
-    if const valueless = values.find((value) -> is_kind(value.type, 'void'))
+    if const valueless = values.find((value) -> is_kind(value.type, VOID))
       fail body.program, valueless.last.position, message
   unify_values body, values, at, description
 
@@ -104,11 +104,11 @@ const unify_values = (
       const types = "expected #{format_type(type)}, got #{format_type(value.type)}"
       fail body.program, value.last.position, "#{description} must have the same type: #{types}"
     type = unify(type, value.type) ? mismatch()
-  if is_kind(type, 'nil')
+  if is_kind(type, NIL)
     const message = "nil alone does not give the type of #{description}; write it in an annotation"
     fail body.program, at.position, message
   for value in values
-    const is_converted = not is_kind(value.type, 'never') and not same_type(value.type, type)
+    const is_converted = not is_kind(value.type, NEVER) and not same_type(value.type, type)
     body.shared.conversions[value.last] = type if is_converted and as_expression(value.last) != nil
   type
 
