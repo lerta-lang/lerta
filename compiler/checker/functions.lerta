@@ -10,6 +10,13 @@ import { ProgramWide, Shared } from './shared'
 import { module_resolver, resolve, resolve_result, Resolver } from './type_names'
 import { FunctionType, Type } from '../types'
 
+# Where the checking of a function or a type is, so that a cycle is found when it reaches one
+# that is still being checked.
+export enum CheckState
+  UNCHECKED
+  CHECKING
+  CHECKED
+
 export class FunctionEntry
   name: Identifier
   literal: FunctionLiteral
@@ -18,8 +25,7 @@ export class FunctionEntry
   # The type of a method's object, a class or struct or an extended type, which its body sees as
   # `@`.
   this_type: Type?
-  # 'unchecked', 'checking' or 'checked'.
-  state = 'unchecked'
+  state: CheckState = UNCHECKED
 
 export class Functions
   # A method is keyed by its type and name, as `Point.length` (see method_key).
@@ -111,7 +117,7 @@ export const function_type_of = (
   const entry = program.shared[module_index].functions.entries[name] ? return nil
   if const type = entry.type
     return type
-  if entry.state == 'checking'
+  if entry.state == CHECKING
     fail program, at, "'#{name}' is recursive, so its return type must be written"
   check_entry program, module_index, entry
   entry.type
@@ -121,9 +127,9 @@ export const check_all_functions = (program: ProgramWide, shared: Shared) ->
     check_entry program, shared.index, shared.functions.entries[key]!
 
 const check_entry = (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
-  return if entry.state != 'unchecked'
-  entry.state = 'checking'
+  return if entry.state != UNCHECKED
+  entry.state = CHECKING
   check_function program, module_index, entry
-  entry.state = 'checked'
+  entry.state = CHECKED
 
 export const method_key = (type_name: String, method: String) -> "#{type_name}.#{method}"

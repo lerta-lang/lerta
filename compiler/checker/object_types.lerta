@@ -2,11 +2,12 @@
 # used anywhere in the module, so the types of fields given by an initializer alone are found on
 # demand.
 import {
-  Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration
+  Expression, FunctionLiteral, Identifier, MemberDeclaration, MemberModifier, Position
+  TypeDeclaration
 } from '../ast'
 import { check_object } from './bodies'
 import { fail } from './diagnostics'
-import { add_function, add_generic, method_key } from './functions'
+import { add_function, add_generic, CheckState, method_key } from './functions'
 import { GenericRef, make_generic_function, Receiver } from './generics'
 import { imported_type } from './imports'
 import { ProgramWide, Shared } from './shared'
@@ -33,17 +34,17 @@ export class ObjectInfo
   has_init = false
   # `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
   has_deinit = false
-  # 'unchecked', 'checking' or 'checked'.
-  state = 'unchecked'
+  state: CheckState = UNCHECKED
 
 # The function literal of a member that is a method.
 export const method_literal = (member: MemberDeclaration) ->
-  return nil if modifier_of(member) == 'var'
+  return nil if has_modifier(member, 'var')
   const value = member.value ? return nil
   value is FunctionLiteral then value else nil
 
-# 'const', 'var' or, if neither is written, ''.
-const modifier_of = (member: MemberDeclaration) -> member.modifier ? ''
+const has_modifier = (member: MemberDeclaration, modifier: MemberModifier) ->
+  const written = member.modifier ? return false
+  written == modifier
 
 # Registers the names first, so that the members can refer to any of the types.
 export const add_objects = (
@@ -115,12 +116,11 @@ const field_of_member = (
   if value is FunctionLiteral
     const message = 'a function field is not supported yet; a method is written without var'
     fail program, member.position, message
-  const modifier = modifier_of(member)
-  if is_struct and modifier == 'var'
+  if is_struct and has_modifier(member, 'var')
     fail program, member.position, 'a struct field cannot be var'
   const type_name = member.type
   const type = type_name then resolve(program, module_resolver(shared.index), type_name) else nil
-  const mutable = not is_struct and modifier != 'const'
+  const mutable = not is_struct and not has_modifier(member, 'const')
   FieldInfo type, mutable, value, name: member.name
 
 # The class or struct of the name, of the module or imported.
@@ -143,7 +143,7 @@ export const field_type = (
 ) ->
   if const type = field.type
     return type
-  if info.state == 'checking'
+  if info.state == CHECKING
     fail program, at, "the type of '#{field.name.name}' is not known yet; write it"
   check_info program, info
   field.type!
@@ -154,7 +154,7 @@ export const check_all_objects = (program: ProgramWide, shared: Shared) ->
 # Checks the initializers of the fields with the declaring module's checker, setting the types
 # that they give.
 const check_info = (program: ProgramWide, info: ObjectInfo) ->
-  return if info.state != 'unchecked'
-  info.state = 'checking'
+  return if info.state != UNCHECKED
+  info.state = CHECKING
   check_object program, info
-  info.state = 'checked'
+  info.state = CHECKED

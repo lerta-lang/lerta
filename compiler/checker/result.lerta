@@ -15,7 +15,7 @@ import {
 export const check_last_statement = (body: Body, statement: Statement) ->
   const context = body.context!
   const annotated = context.annotated
-  const expects_value = annotated then not is_kind(annotated, VOID) else false
+  const expects_value = annotated then not is_kind(annotated, 'void') else false
   var gives_value = false
   if const value = as_expression(statement)
     if expects_value
@@ -23,8 +23,8 @@ export const check_last_statement = (body: Body, statement: Statement) ->
       gives_value = true
     else
       const type = type_of(body, value, nil)
-      const annotated_void = annotated then is_kind(annotated, VOID) else false
-      gives_value = not is_kind(type, VOID) and not annotated_void
+      const annotated_void = annotated then is_kind(annotated, 'void') else false
+      gives_value = not is_kind(type, 'void') and not annotated_void
       if gives_value
         record_result body, type, value
       else
@@ -32,7 +32,7 @@ export const check_last_statement = (body: Body, statement: Statement) ->
   else
     check_statement body, statement
   const result = context.annotated ? context.inferred ? void_type
-  if not is_kind(result, VOID) and not gives_value and not (statement is Return)
+  if not is_kind(result, 'void') and not gives_value and not (statement is Return)
     const value = "its return value of type #{format_type(result)}"
     const message = "the function must end with #{value} or a return"
     fail body.program, statement.position, message
@@ -67,7 +67,7 @@ export const check_return = (body: Body, return_expression: Return) ->
 # value is then checked as a return value, for a message that says so.
 const type_of_result = (body: Body, value: Expression) ->
   const annotated = body.context!.annotated
-  const hint = annotated then (is_kind(annotated, VOID) then nil else annotated) else nil
+  const hint = annotated then (is_kind(annotated, 'void') then nil else annotated) else nil
   type_of body, value, hint
 
 # The type of a function once its body is checked: its return type is the written one, or the one
@@ -80,7 +80,7 @@ export const finish_function_type = (
 ) ->
   const result = context.annotated ? context.inferred ? void_type
   for each in context.results
-    const is_converted = not is_kind(each.type, NEVER) and not same_type(each.type, result)
+    const is_converted = not is_kind(each.type, 'never') and not same_type(each.type, result)
     conversions[each.value] = result if is_converted
   FunctionType params, result
 
@@ -91,7 +91,7 @@ export const reject_nil_result = (
   type: FunctionType
   literal: FunctionLiteral
 ) ->
-  if is_kind(type.result, NIL)
+  if is_kind(type.result, 'nil')
     const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
     fail program, literal.position, message
   type

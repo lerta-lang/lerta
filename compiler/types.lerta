@@ -10,14 +10,14 @@ export struct SimpleType
 
 # The kind of a type: that of a simple type, or the sort of type it is (see kind_of).
 export enum TypeKind
-  STRING
-  INT
-  BOOL
-  BYTE
-  BINARY
-  VOID
-  NEVER
-  NIL
+  'String'
+  'Int'
+  'Bool'
+  'Byte'
+  'Binary'
+  'void'
+  'never'
+  'nil'
   ARRAY
   MAP
   ITER
@@ -98,14 +98,14 @@ export type Type =
   SimpleType | ArrayType | MapType | IterType | RecordType | ObjectType | EnumType
   UnionType | OptionalType | TypeParameterType | FunctionType
 
-export const string_type = SimpleType(kind: STRING)
-export const int_type = SimpleType(kind: INT)
-export const bool_type = SimpleType(kind: BOOL)
-export const byte_type = SimpleType(kind: BYTE)
-export const binary_type = SimpleType(kind: BINARY)
-export const void_type = SimpleType(kind: VOID)
-export const never_type = SimpleType(kind: NEVER)
-export const nil_type = SimpleType(kind: NIL)
+export const string_type = SimpleType(kind: 'String')
+export const int_type = SimpleType(kind: 'Int')
+export const bool_type = SimpleType(kind: 'Bool')
+export const byte_type = SimpleType(kind: 'Byte')
+export const binary_type = SimpleType(kind: 'Binary')
+export const void_type = SimpleType(kind: 'void')
+export const never_type = SimpleType(kind: 'never')
+export const nil_type = SimpleType(kind: 'nil')
 
 export const kind_of = (type: Type): TypeKind ->
   case type
@@ -120,19 +120,6 @@ export const kind_of = (type: Type): TypeKind ->
     when OptionalType then OPTIONAL
     when TypeParameterType then TYPE_PARAMETER
     when FunctionType then FUNCTION
-
-# How a simple type is written.
-export const simple_type_name = (kind: TypeKind) ->
-  case kind
-    when STRING then 'String'
-    when INT then 'Int'
-    when BOOL then 'Bool'
-    when BYTE then 'Byte'
-    when BINARY then 'Binary'
-    when VOID then 'void'
-    when NEVER then 'never'
-    when NIL then 'nil'
-    else throw "#{kind} is not the kind of a simple type"
 
 export const is_kind = (type: Type, kind: TypeKind) -> kind_of(type) == kind
 
@@ -158,7 +145,7 @@ export const format_type = (type: Type) -> format_qualified(type, false)
 export const format_qualified = (type: Type, qualified: Bool): String ->
   const format = (inner: Type) -> format_qualified(inner, qualified)
   case type
-    when SimpleType then simple_type_name(type.kind)
+    when SimpleType then type.kind.to_string()
     when ArrayType then "Array<#{format(type.element)}>"
     when IterType then "Iter<#{format(type.item)}>"
     when MapType then "Map<#{format(type.key)}, #{format(type.value)}>"
@@ -200,7 +187,7 @@ export const format_types = (a: Type, b: Type) ->
 # Identifies a type: as format_type writes it, with classes and structs by their symbols.
 export const type_key = (type: Type): String ->
   case type
-    when SimpleType then simple_type_name(type.kind)
+    when SimpleType then type.kind.to_string()
     when ObjectType then type.symbol
     when EnumType then type.symbol
     when RecordType
@@ -219,7 +206,7 @@ export const same_type = (a: Type, b: Type) -> type_key(a) == type_key(b)
 # Values of these types are reference counted; a function value is a closure.
 export const is_reference_type = (type: Type): Bool ->
   case type
-    when SimpleType then type.kind == STRING or type.kind == BINARY
+    when SimpleType then type.kind == 'String' or type.kind == 'Binary'
     when OptionalType then is_reference_type(type.inner)
     when TypeParameterType then false
     when EnumType then false
@@ -231,17 +218,17 @@ export const iterable_item = (type: Type): Type? ->
   case type
     when ArrayType then type.element
     when IterType then type.item
-    else is_kind(type, BINARY) then byte_type else nil
+    else is_kind(type, 'Binary') then byte_type else nil
 
 # A T or nil also fits where a T? is expected.
 export const is_assignable = (value: Type, target: Type): Bool ->
-  return true if is_kind(value, NEVER)
+  return true if is_kind(value, 'never')
   if target is UnionType
     const members = value is UnionType then value.members else [value]
     const is_member = (member: Type) -> target.members.any((type) -> same_type(type, member))
     return members.all(is_member)
   if target is OptionalType
-    return true if is_kind(value, NIL) or is_assignable(value, target.inner)
+    return true if is_kind(value, 'nil') or is_assignable(value, target.inner)
   same_type value, target
 
 # A class, or a union of classes, compares by identity. A struct will compare by its fields, so it
@@ -255,16 +242,16 @@ export const is_identity_type = (type: Type): Bool ->
 # Maps hash and compare their keys in the runtime, which knows these kinds; an enum's value is an
 # Int there.
 export const is_map_key_type = (type: Type) ->
-  is_one_of_kinds(type, [STRING, INT, ENUM]) or is_identity_type(type)
+  is_one_of_kinds(type, ['String', 'Int', ENUM]) or is_identity_type(type)
 
 # The type of a value that is either an `a` or a `b`: the same type, or `T?` for a mix of `T`,
 # `T?` and nil; `never`, which gives no value, does not count. Nil if there is none.
 export const unify = (a: Type, b: Type) ->
-  return a if same_type(a, b) or is_kind(b, NEVER)
-  return b if is_kind(a, NEVER)
-  return a if is_kind(a, NIL) and is_kind(b, NIL)
-  return optional_type(inner_of(b)) if is_kind(a, NIL)
-  return optional_type(inner_of(a)) if is_kind(b, NIL)
+  return a if same_type(a, b) or is_kind(b, 'never')
+  return b if is_kind(a, 'never')
+  return a if is_kind(a, 'nil') and is_kind(b, 'nil')
+  return optional_type(inner_of(b)) if is_kind(a, 'nil')
+  return optional_type(inner_of(a)) if is_kind(b, 'nil')
   const is_optional = a is OptionalType or b is OptionalType
   is_optional and same_type(inner_of(a), inner_of(b)) then optional_type(inner_of(a)) else nil
 
