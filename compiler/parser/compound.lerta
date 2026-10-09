@@ -9,7 +9,7 @@ import {
   parse_coalesce, parse_expression, parse_identifier, parse_list, parse_list_rest
   parse_loop_header
 } from './expression'
-import { parse_block, parse_simple_statement } from './statement'
+import { at_declaration, parse_block, parse_simple_statement } from './statement'
 import { inside, is_one_of, token_position, TokenStream } from './token_stream'
 import { parse_type_name } from './type'
 
@@ -178,17 +178,23 @@ const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
   patterns.push parse_coalesce(tokens) while has_subject and tokens.accept(',')
   CaseArm patterns, body: parse_arm_body(tokens, 'then')
 
-# The expression on the same line (`when c then x`, `else x`), or alone in an indented block.
+# A simple statement on the same line (`when c then x`, `else i += 1`), or an indented block.
 # `arm` is 'then' or 'else'.
 const parse_arm_body = (tokens: TokenStream, arm: String): Array<Statement> ->
   const is_inline = arm == 'then' then tokens.accept('then') else tokens.peek().kind != 'newline'
   if is_inline
-    const value = parse_expression(tokens)
+    const statement = parse_inline_arm(tokens)
     tokens.expect_line_end()
-    return [value]
+    return [statement]
   const next = tokens.peek()
   tokens.fail_expecting next, "'then' or end of line" if next.kind != 'newline'
   parse_block tokens
+
+# A declaration's scope would end with the line, so none may follow `then` or `else`.
+const parse_inline_arm = (tokens: TokenStream) ->
+  const message = 'a declaration in an arm must be in an indented block'
+  tokens.fail token_position(tokens.peek()), message if at_declaration(tokens)
+  parse_simple_statement tokens
 
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
 # Comprehension). The guard's function tests its condition as an `if` would:

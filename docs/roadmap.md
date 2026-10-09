@@ -81,7 +81,7 @@ Run tests (source → execution result) run `bin/lerta`, the compiler written in
 - Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
 - Whether to add enums without payloads (for now, `case` on values substitutes).
 - Symbols, `:name`: interned names compared by identity, for kinds such as the token kinds of `compiler/lexer/tokens.lerta`, which are `String`s for now. Decide together with enums without payloads, which cover the same need; the two may combine, an enum being a type made of symbols (`type Kind = :identifier | :integer | ...`), which a `case` could check for exhaustiveness.
-- Statements in `case` arms: whether an assignment may follow `then` (`when c == ' ' then i += 1`), and how to write an arm that does nothing, since a `case` with a subject requires `else` and a value alone may not stand as a statement (`compiler/lexer/` writes `else return`, or repeats a step in each arm).
+- How to write a `case` arm that does nothing, since a `case` with a subject requires `else` and a value alone may not stand as a statement (`compiler/lexer/` writes `else return`, or repeats a step in each arm).
 - Writing a `type` alias over several lines: a union of many members, such as `Expression` in `compiler/ast.lerta`, is built from one-line unions for now.
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
 - Generic methods of classes and structs (as `inside<T>` of the token stream would be; `compiler/parser/` makes them top-level functions).
