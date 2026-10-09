@@ -91,10 +91,10 @@ seed: check-bootstrap
 	cp build/seed-source/lerta.ll seed/lerta.ll
 endif
 
-# The tests run on the host only: tools/test_in_docker.sh runs them for other targets.
+# test runs the tests on the host only, and test-cross for every other environment it can reach.
 ifdef TARGET
-test:
-	@echo 'make test does not take TARGET: run node test/run.ts --target <triple>' >&2; exit 2
+test test-cross:
+	@echo 'make $@ does not take TARGET: run node test/run.ts --target <triple>' >&2; exit 2
 else
 # Every suite runs even if one before it fails.
 test: bin/lerta
@@ -104,6 +104,9 @@ test: bin/lerta
 	nice node test/runtime.ts || status=1; \
 	nice $(MAKE) --no-print-directory check-bootstrap || status=1; \
 	exit $$status
+
+test-cross:
+	@tools/test_cross.sh
 endif
 
 clean:
@@ -112,4 +115,4 @@ clean:
 # A command that fails leaves no file, such as half of an IR printed to a redirection.
 .DELETE_ON_ERROR:
 
-.PHONY: all check-bootstrap seed test clean
+.PHONY: all check-bootstrap seed test test-cross clean

@@ -30,7 +30,7 @@ Early development. The compiler is written in Lerta (`compiler/`) and builds its
 |---|---|
 | `seed/` | The seed, the compiler's own LLVM IR, from which `make` builds it (see `docs/internals.md`) |
 | `test/` | Test scripts in TypeScript, for Node.js: `run.ts` the run tests (`node test/run.ts --target <triple>` builds them for another target), `cli.ts` the command line, `runtime.ts` runtime checks no Lerta program can trigger; `lerta.ts` (where the repository and the compiler are), `report.ts` (running and reporting checks) and `target.ts` (`--target`) are shared by them |
-| `tools/` | `test_in_docker.sh` runs the tests on Linux, in Docker, and on x86-64 the run tests also as 32-bit programs and as 64-bit and 32-bit Windows programs (mingw-w64 and Wine), and the bootstrap through a 32-bit compiler |
+| `tools/` | `test_cross.sh`, which `make test-cross` runs, and the Docker images it uses in `docker/` |
 | `compiler/` | The compiler: `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, `checker/`, which checks them, and `codegen/`, which emits LLVM IR, behind the commands of `main.lerta` |
 | `runtime/` | C runtime |
 | `tests/` | Run tests: Lerta source and expected output |
@@ -58,12 +58,12 @@ make TARGET=<triple>   # bin/lerta-<triple>, the compiler for another target
 make check-bootstrap   # the compiler builds itself to the same IR (TARGET builds the stages for it)
 make seed              # rewrites the seed, only when needed (see docs/internals.md)
 make test              # builds bin/lerta, then runs the tests and check-bootstrap, on the host only
+make test-cross        # the tests for every environment but the host's own (see below)
 make clean
-tools/test_in_docker.sh
 cd test && pnpm install && pnpm check   # type and format checks of test/, and spelling across the repository (cspell.json)
 ```
 
-`make` rebuilds only when the seed, `compiler/`, `std/`, `runtime/` or `tools/embed.lerta` change. The bootstrap and the seed are described in [docs/internals.md](docs/internals.md#bootstrap). The tests run at a low priority (`nice`), with Node.js running the TypeScript directly, so there is no build step. To compile a program (see [the compiler](docs/reference/compiler.md)):
+`make` rebuilds only when the seed, `compiler/`, `std/`, `runtime/` or `tools/embed.lerta` change. The bootstrap and the seed are described in [docs/internals.md](docs/internals.md#bootstrap). The tests run at a low priority (`nice`), with Node.js running the TypeScript directly, so there is no build step. `make test-cross` runs the tests as 32-bit Linux programs (and the bootstrap through a 32-bit compiler) and as 64-bit and 32-bit Windows programs (mingw-w64 and Wine), each on the host if it can run them; on a host other than Linux, it runs `make test` on Linux in Docker too. What the host cannot run goes to Docker when Docker runs it without emulation, which for the 32-bit and the Windows programs takes an x86-64 host. It ends with what ran and what was skipped, and why: on an Apple silicon Mac, for instance, it runs Linux in Docker, and Windows only with mingw-w64, lld and Wine installed, and skips 32-bit Linux. To compile a program (see [the compiler](docs/reference/compiler.md)):
 
 ```
 bin/lerta build examples/hello.lerta [-o hello] [-O]
