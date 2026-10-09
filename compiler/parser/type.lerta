@@ -12,11 +12,31 @@ const TYPE_TOKEN_KINDS = ['identifier', '<', '>', ',', '?', '|', '(', ')', '->',
 # A named type, or a union of them: `A | B`.
 export const parse_type_name = (tokens: TokenStream): TypeName ->
   return parse_parenthesized_type(tokens) if tokens.peek().kind == '('
-  const first = parse_union_member(tokens)
-  return first if tokens.peek().kind != '|'
-  const members = [first]
+  union_of parse_union_members(tokens)
+
+# The type of `type Name =`: a type on the same line, or a union whose members are on the indented
+# lines below, one or more on each line.
+export const parse_aliased_type = (tokens: TokenStream): TypeName ->
+  return parse_type_name(tokens) if tokens.peek().kind != 'newline'
+  tokens.next()
+  tokens.expect 'indent', 'indented union members'
+  const members: Array<UnionMember> = []
+  while tokens.peek().kind != 'dedent'
+    members.push member for member in parse_union_members(tokens)
+    tokens.expect_line_end()
+  tokens.next()
+  union_of members
+
+# `A | B | ...`, or one member alone.
+const parse_union_members = (tokens: TokenStream) ->
+  const members = [parse_union_member(tokens)]
   members.push parse_union_member(tokens) while tokens.accept('|')
-  UnionTypeName members, position: first.position
+  members
+
+# The union of the members, or the member alone.
+const union_of = (members: Array<UnionMember>): TypeName ->
+  return members[0] if members.length == 1
+  UnionTypeName members, position: members[0].position
 
 # `(A, B) -> R`, or a function type in parentheses, `((A) -> R)?`, to make it optional.
 const parse_parenthesized_type = (tokens: TokenStream) ->
