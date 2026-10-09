@@ -1,9 +1,8 @@
 # Statements: the program, blocks, `const` and `var` declarations, assignments, control flow and
 # calls without parentheses; `declaration` reads the other declarations.
 import {
-  Assignment, ASSIGNMENT_OPERATORS, AssignmentTarget, Binding, Call, Condition, copy_identifier
-  Declaration, Expression, For, Identifier, If, Index, Member, Statement, TypeName
-  While
+  Assignment, AssignmentTarget, Binding, Call, Condition, copy_identifier, Declaration, Expression
+  For, Identifier, If, Index, Member, Statement, TypeName, While
 } from '../ast'
 import {
   parse_enum, parse_export, parse_extend, parse_extern, parse_import, parse_type_alias
@@ -13,24 +12,26 @@ import {
   call_of, parse_arguments, parse_block_arguments, parse_expression, parse_identifier
   parse_loop_header, parse_value, starts_block_arguments
 } from './expression'
-import { Token } from '../lexer/tokens'
+import { Token, TokenKind } from '../lexer/tokens'
 import { parse_primary } from './primary'
 import { is_one_of, token_position, TokenStream } from './token_stream'
 import { parse_type_name } from './type'
 
-const COMMAND_ARGUMENT_STARTS = [
-  '(', '[', '{', 'identifier', 'integer', 'string', 'interpolated', 'true', 'false', 'nil', 'not'
+const ASSIGNMENT_OPERATORS: Array<TokenKind> = ['=', '+=', '-=', '*=', '/=', '%=']
+
+const COMMAND_ARGUMENT_STARTS: Array<TokenKind> = [
+  '(', '[', '{', IDENTIFIER, INTEGER, STRING, INTERPOLATED, 'true', 'false', 'nil', 'not'
   'case', '->', '@', 'throw'
 ]
 
 # `path` names the source in diagnostics.
 export const parse = (tokens: Array<Token>, path: String) ->
-  parse_statements TokenStream(tokens, path), 'eof'
+  parse_statements TokenStream(tokens, path), EOF
 
 # Statements, one per line, up to the token that ends the block.
-const parse_statements = (tokens: TokenStream, end: String) ->
+const parse_statements = (tokens: TokenStream, end: TokenKind) ->
   const statements: Array<Statement> = []
-  while tokens.peek().kind != end and tokens.peek().kind != 'eof'
+  while tokens.peek().kind != end and tokens.peek().kind != EOF
     if at_destructuring(tokens)
       statements.push statement for statement in parse_destructuring_statement(tokens)
     else
@@ -40,10 +41,10 @@ const parse_statements = (tokens: TokenStream, end: String) ->
 
 # A newline and an indented block of statements.
 export const parse_block = (tokens: TokenStream) ->
-  tokens.expect 'newline', 'end of line'
-  tokens.expect 'indent', 'indented block'
-  const statements = parse_statements(tokens, 'dedent')
-  tokens.expect 'dedent', 'end of block'
+  tokens.expect NEWLINE, 'end of line'
+  tokens.expect INDENT, 'indented block'
+  const statements = parse_statements(tokens, DEDENT)
+  tokens.expect DEDENT, 'end of block'
   statements
 
 # A statement other than a destructuring declaration (see parse_destructuring_statement).
@@ -164,12 +165,12 @@ const parse_destructuring = (tokens: TokenStream) ->
     declarations.push Declaration(mutable, name, value: field, position: name.position)
   declarations
 
-const parse_assignment = (tokens: TokenStream, target: Expression, operator: String) ->
+const parse_assignment = (tokens: TokenStream, target: Expression, operator: TokenKind) ->
   const message = 'only a name, an indexed item or a field can be assigned to'
   const assigned = assignment_target(target) ? tokens.fail(target.position, message)
   tokens.next()
   const value = parse_value(tokens)
-  Assignment operator, value, target: assigned, position: target.position
+  Assignment value, operator: operator.to_string(), target: assigned, position: target.position
 
 const assignment_target = (expression: Expression): AssignmentTarget? ->
   case expression
@@ -187,7 +188,7 @@ const starts_command_argument = (tokens: TokenStream) ->
   return false if not token.spaced
   return not tokens.peek_at(callee_length + 1).spaced if token.kind == '-'
   # `is` is not a keyword, but `x is T` is a test, not a call of x.
-  return false if token.kind == 'identifier' and token.text == 'is'
+  return false if token.kind == IDENTIFIER and token.text == 'is'
   is_one_of token.kind, COMMAND_ARGUMENT_STARTS
 
 # The number of tokens of the callee of a call without parentheses at the next token: a name or
@@ -195,7 +196,7 @@ const starts_command_argument = (tokens: TokenStream) ->
 const command_callee_length = (tokens: TokenStream) ->
   const first = tokens.peek().kind
   var length = case
-    when first == 'identifier' then 1
+    when first == IDENTIFIER then 1
     when first == '@' and is_attached_name(tokens.peek_at(1)) then 2
     else 0
   return 0 if length == 0
@@ -204,7 +205,7 @@ const command_callee_length = (tokens: TokenStream) ->
     length += 2
   length
 
-const is_attached_name = (token: Token) -> token.kind == 'identifier' and not token.spaced
+const is_attached_name = (token: Token) -> token.kind == IDENTIFIER and not token.spaced
 
 # `f x, y`: the arguments run to the end of the line.
 const parse_command_call = (tokens: TokenStream) ->

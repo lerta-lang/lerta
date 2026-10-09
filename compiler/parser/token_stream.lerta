@@ -1,7 +1,7 @@
 # A cursor over the tokens, shared by the modules of the parser.
 import { compile_error } from '../errors'
 import { Position } from '../ast'
-import { Token } from '../lexer/tokens'
+import { Token, TokenKind } from '../lexer/tokens'
 
 # How line breaks are read inside the brackets being parsed: as separators of a list's items, or
 # skipped, as in a grouping.
@@ -23,13 +23,13 @@ export class TokenStream
 
   # The kind of the next token if it continues the current expression. After an indented block
   # (such as a `case`) the line has ended, so `-1` on the next line is not a subtraction.
-  peek_continuation = () -> @ended_with_block() then 'newline' else @peek().kind
+  peek_continuation = (): TokenKind -> @ended_with_block() then NEWLINE else @peek().kind
 
-  ended_with_block = () -> @index > 0 and @tokens[@index - 1].kind == 'dedent'
+  ended_with_block = () -> @index > 0 and @tokens[@index - 1].kind == DEDENT
 
   # A line that ends with an indented block (such as a `case`) has already consumed its line end.
   expect_line_end = ->
-    @expect 'newline', 'end of line' if not @ended_with_block()
+    @expect NEWLINE, 'end of line' if not @ended_with_block()
 
   peek = () -> @peek_at(0)
 
@@ -38,7 +38,7 @@ export class TokenStream
   next = () ->
     const index = @index_at(0)
     const token = @tokens[index]
-    @index = index + 1 if token.kind != 'eof'
+    @index = index + 1 if token.kind != EOF
     token
 
   # The index of the token `offset` tokens ahead, past the line breaks that are skipped.
@@ -53,20 +53,20 @@ export class TokenStream
 
   is_skipped = (index: Int) ->
     const skips = @line_breaks.length == 0 or @line_breaks[@line_breaks.length - 1] != SEPARATE
-    skips and @tokens[index].kind == 'line_break'
+    skips and @tokens[index].kind == LINE_BREAK
 
   # Whether the next token is the identifier `word`, which is not a keyword, so that it stays
   # usable as a name.
   at_word = (word: String) ->
     const token = @peek()
-    token.kind == 'identifier' and token.text == word
+    token.kind == IDENTIFIER and token.text == word
 
-  accept = (kind: String) ->
+  accept = (kind: TokenKind) ->
     return false if @peek().kind != kind
     @next()
     true
 
-  expect = (kind: String, description: String) ->
+  expect = (kind: TokenKind, description: String) ->
     @fail_expecting @peek(), description if not @accept(kind)
 
   fail_expecting = (token: Token, expected: String) ->
@@ -82,14 +82,14 @@ export class TokenStream
 
   # The items of a list after its opening bracket, through `close`. Items are separated by a
   # comma, which the next item follows on the same line, or by a line end.
-  parse_list = <T>(close: String, parse_item: () -> T): Array<T> ->
+  parse_list = <T>(close: TokenKind, parse_item: () -> T): Array<T> ->
     const parse_items = () ->
-      @accept 'line_break'
+      @accept LINE_BREAK
       @parse_list_rest close, parse_item, []
     @inside SEPARATE, parse_items
 
   # The rest of a list whose first items are `items`, through `close`.
-  parse_list_rest = <T>(close: String, parse_item: () -> T, items: Array<T>): Array<T> ->
+  parse_list_rest = <T>(close: TokenKind, parse_item: () -> T, items: Array<T>): Array<T> ->
     return items if items.length > 0 and not @ends_item(close)
     while not @accept(close)
       items.push parse_item()
@@ -98,13 +98,13 @@ export class TokenStream
 
   # After an item: whether a separator, which is consumed, follows it; otherwise the closing
   # bracket must, and is consumed.
-  ends_item = (close: String) ->
+  ends_item = (close: TokenKind) ->
     if @accept(',')
       const next = @peek()
-      const ends_line = next.kind == 'line_break' or next.kind == close
+      const ends_line = next.kind == LINE_BREAK or next.kind == close
       @fail_expecting next, "an item after ','" if ends_line
       return true
-    return true if @accept('line_break')
+    return true if @accept(LINE_BREAK)
     @expect close, "'#{close}'"
     false
 
@@ -114,16 +114,16 @@ export class TokenStream
 export const token_position = (token: Token) ->
   Position line: token.line, column: token.column
 
-export const is_one_of = (kind: String, kinds: Array<String>) ->
+export const is_one_of = (kind: TokenKind, kinds: Array<TokenKind>) ->
   kinds.any (each) -> each == kind
 
 const describe_token = (token: Token) ->
   case token.kind
-    when 'integer' then 'integer literal'
-    when 'string', 'interpolated' then 'string literal'
-    when 'newline' then 'end of line'
-    when 'line_break' then 'end of line inside brackets'
-    when 'indent' then 'indentation'
-    when 'dedent' then 'end of block'
-    when 'eof' then 'end of file'
+    when INTEGER then 'integer literal'
+    when STRING, INTERPOLATED then 'string literal'
+    when NEWLINE then 'end of line'
+    when LINE_BREAK then 'end of line inside brackets'
+    when INDENT then 'indentation'
+    when DEDENT then 'end of block'
+    when EOF then 'end of file'
     else "'#{token.text}'"

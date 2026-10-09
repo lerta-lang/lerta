@@ -6,11 +6,80 @@ import { hex } from '../hex'
 import { SourceLine } from './source_line'
 import { scan_double_quoted, TemplatePart, TextPart } from './string_literal'
 
+# A keyword or a punctuation is its own kind, whose text is its own. LINE_BREAK is a line end
+# inside brackets (see Brackets).
+export enum TokenKind
+  IDENTIFIER
+  INTEGER
+  STRING
+  INTERPOLATED
+  NEWLINE
+  LINE_BREAK
+  INDENT
+  DEDENT
+  EOF
+  'true'
+  'false'
+  'nil'
+  'and'
+  'or'
+  'not'
+  'const'
+  'var'
+  'if'
+  'else'
+  'while'
+  'for'
+  'in'
+  'break'
+  'continue'
+  'return'
+  'case'
+  'when'
+  'then'
+  'class'
+  'struct'
+  'throw'
+  'import'
+  'export'
+  'extern'
+  'extend'
+  'enum'
+  '...'
+  '=='
+  '!='
+  '<='
+  '>='
+  '+='
+  '-='
+  '*='
+  '/='
+  '%='
+  '->'
+  '('
+  ')'
+  '['
+  ']'
+  '{'
+  '}'
+  ','
+  '.'
+  ':'
+  '+'
+  '-'
+  '*'
+  '/'
+  '%'
+  '<'
+  '>'
+  '='
+  '?'
+  '!'
+  '@'
+  '|'
+
 export struct Token
-  # A keyword or a punctuation is its own kind; the others are 'identifier', 'integer', 'string',
-  # 'interpolated', 'newline', 'line_break' (a line end inside brackets, see Brackets), 'indent',
-  # 'dedent' and 'eof'.
-  kind: String
+  kind: TokenKind
   # The identifier name, the integer's text without separators (with its `0x` prefix if
   # hexadecimal), the string literal's contents or the punctuation; empty for layout tokens.
   text: String
@@ -19,10 +88,10 @@ export struct Token
   line: Int
   # Counted in code points, starting at 1.
   column: Int
-  # The parts of an 'interpolated' string.
+  # The parts of an interpolated string.
   parts: Array<TemplatePart>?
 
-const KEYWORDS = [
+const KEYWORDS: Array<TokenKind> = [
   'true', 'false', 'nil', 'and', 'or', 'not'
   'const', 'var', 'if', 'else', 'while', 'for', 'in', 'break', 'continue', 'return'
   'case', 'when', 'then', 'class', 'struct', 'throw', 'import', 'export', 'extern'
@@ -30,7 +99,7 @@ const KEYWORDS = [
 ]
 
 # Longer punctuations come first so that `<=` is not read as `<` and `=`.
-const PUNCTUATIONS = [
+const PUNCTUATIONS: Array<TokenKind> = [
   '...'
   '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '->'
   '(', ')', '[', ']', '{', '}', ',', '.', ':', '+', '-', '*', '/', '%', '<', '>', '=', '?', '!'
@@ -55,14 +124,14 @@ export const tokenize = (source: String, path: String) ->
     for token in LineScanner(line, position: indent).run()
       brackets.update token
       tokens.push token
-    const kind = brackets.are_open() then 'line_break' else 'newline'
+    const kind: TokenKind = brackets.are_open() then LINE_BREAK else NEWLINE
     tokens.push layout_token(kind, line.number, line.column(line.length))
   brackets.check_closed()
   const eof_line = lines.length
   while indents.length > 1
     indents.pop()
-    tokens.push layout_token('dedent', eof_line, 1)
-  tokens.push layout_token('eof', eof_line, 1)
+    tokens.push layout_token(DEDENT, eof_line, 1)
+  tokens.push layout_token(EOF, eof_line, 1)
   tokens
 
 # The tokens of an interpolated expression, placed where it is in the source line.
@@ -70,8 +139,8 @@ export const tokenize_fragment = (source: String, path: String, line: Int, colum
   const fragment = SourceLine(path, bytes: source.binary, number: line, column_offset: column - 1)
   const tokens = LineScanner(line: fragment, position: 0).run()
   const end = fragment.column(fragment.length)
-  tokens.push layout_token('newline', line, end)
-  tokens.push layout_token('eof', line, end)
+  tokens.push layout_token(NEWLINE, line, end)
+  tokens.push layout_token(EOF, line, end)
   tokens
 
 # A line that LF ends may end with CRLF.
@@ -80,11 +149,11 @@ const without_carriage_return = (line: String) ->
   const ends_with_cr = bytes.length > 0 and bytes[bytes.length - 1] == "\r"
   ends_with_cr then bytes.slice(0, bytes.length - 1) else bytes
 
-const layout_token = (kind: String, line: Int, column: Int) ->
+const layout_token = (kind: TokenKind, line: Int, column: Int) ->
   Token kind, line, column, text: '', spaced: true
 
 # Lines inside brackets continue the line that opened them, whatever their indentation, and end
-# with a line_break, which the parser reads as it reads the brackets: a separator in a list, and
+# with a LINE_BREAK, which the parser reads as it reads the brackets: a separator in a list, and
 # nothing in a grouping.
 class Brackets
   path: String
@@ -114,11 +183,11 @@ const emit_indentation = (
   const column = line.column(indent)
   if indent > top(indents)
     indents.push indent
-    tokens.push layout_token('indent', line.number, column)
+    tokens.push layout_token(INDENT, line.number, column)
     return
   while indent < top(indents)
     indents.pop()
-    tokens.push layout_token('dedent', line.number, column)
+    tokens.push layout_token(DEDENT, line.number, column)
   line.fail 'indentation does not match any outer block', indent if indent != top(indents)
 
 const top = (indents: Array<Int>) -> indents[indents.length - 1]
@@ -143,7 +212,7 @@ class LineScanner
     @tokens
 
   # Adds the token that starts at the position, and moves to `end`, after it.
-  add = (kind: String, text: String, end: Int, parts: Array<TemplatePart>?) ->
+  add = (kind: TokenKind, text: String, end: Int, parts: Array<TemplatePart>?) ->
     const start = @position
     const spaced = start == 0 or @line.bytes[start - 1] == ' '
     const column = @line.column(start)
@@ -153,33 +222,35 @@ class LineScanner
   scan_word = ->
     const end = @line.scan_while(@position, is_identifier_part)
     const word = @line.text(@position, end)
-    @add is_keyword(word) then word else 'identifier', word, end, nil
+    const keyword = KEYWORDS.find((each) -> each.to_string() == word)
+    @add keyword ? IDENTIFIER, word, end, nil
 
   scan_raw_string = ->
     const start = @position
     const close = @line.index_of("'", start + 1) ? @line.fail('unterminated string literal', start)
-    @add 'string', @line.text(start + 1, close), close + 1, nil
+    @add STRING, @line.text(start + 1, close), close + 1, nil
 
   scan_double_quoted = ->
     const { parts, end } = scan_double_quoted(@line, @position)
     if const text = plain_text(parts)
-      @add 'string', text, end, nil
+      @add STRING, text, end, nil
     else
-      @add 'interpolated', '', end, parts
+      @add INTERPOLATED, '', end, parts
 
   scan_integer = ->
     const end = @line.scan_while(@position, is_identifier_part)
     const text = @line.text(@position, end)
     const is_valid = is_integer_literal(text.binary)
     @line.fail "invalid integer literal '#{text}'", @position if not is_valid
-    @add 'integer', text.split('_').join(''), end, nil
+    @add INTEGER, text.split('_').join(''), end, nil
 
   scan_punctuation = ->
     const punctuation = PUNCTUATIONS.find((p) -> @at(p)) ? @fail_unexpected_character()
-    @add punctuation, punctuation, @position + punctuation.binary.length, nil
+    const text = punctuation.to_string()
+    @add punctuation, text, @position + text.binary.length, nil
 
   # Compares bytes, since the next ones may not be a whole character.
-  at = (punctuation: String) -> @line.bytes.occurs_at(@position, punctuation.binary)
+  at = (punctuation: TokenKind) -> @line.bytes.occurs_at(@position, punctuation.to_string().binary)
 
   # Control characters such as '\r' would garble the error line if printed raw.
   fail_unexpected_character = () ->
@@ -199,7 +270,6 @@ const plain_text = (parts: Array<TemplatePart>) ->
 const is_space = (c: Byte) -> c == ' '
 const is_identifier_start = (c: Byte) -> c.is_letter() or c == '_'
 const is_identifier_part = (c: Byte) -> is_identifier_start(c) or c.is_digit()
-const is_keyword = (word: String) -> KEYWORDS.any((keyword) -> keyword == word)
 const is_hex_digit = (c: Byte) ->
   c.is_digit() or (c >= 'a' and c <= 'f') or (c >= 'A' and c <= 'F')
 

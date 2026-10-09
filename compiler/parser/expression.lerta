@@ -1,19 +1,21 @@
 # Expressions, from the weakest operators down to primaries, which `primary` reads, as `compound`
 # reads compound expressions.
 import {
-  BinaryOperation, Call, COMPARISON_OPERATORS, Conditional, Coalesce, Expression, Identifier, Index
-  IntegerLiteral, IsTest, Member, NamedValue, Range, RecordLiteral
-  TypeName, UnaryOperation, Unwrap
+  BinaryOperation, Call, Conditional, Coalesce, Expression, Identifier, Index, IntegerLiteral
+  IsTest, Member, NamedValue, Range, RecordLiteral, TypeName, UnaryOperation, Unwrap
 } from '../ast'
+import { TokenKind } from '../lexer/tokens'
 import { parse_block_literal, starts_block, starts_field_block } from './block_literal'
 import { integer_value, parse_primary } from './primary'
 import { is_one_of, token_position, TokenStream } from './token_stream'
 import { parse_named_type, parse_type_arguments, starts_type_arguments } from './type'
 
 # Arithmetic operators by precedence, weakest first. Comparisons are weaker than all of them.
-const ARITHMETIC_PRECEDENCE = [['+', '-'], ['*', '/', '%']]
+const ARITHMETIC_PRECEDENCE: Array<Array<TokenKind>> = [['+', '-'], ['*', '/', '%']]
 
-const POSTFIX_OPERATORS = ['(', '[', '.', '!']
+const POSTFIX_OPERATORS: Array<TokenKind> = ['(', '[', '.', '!']
+
+const COMPARISON_OPERATORS: Array<TokenKind> = ['==', '!=', '<', '<=', '>', '>=']
 
 export struct Arguments
   args: Array<Expression>
@@ -78,12 +80,12 @@ const parse_and = (tokens: TokenStream) ->
 # Operands that `parse_operand` reads, joined by any of `operators`, from left to right.
 const parse_left_associative = (
   tokens: TokenStream
-  operators: Array<String>
+  operators: Array<TokenKind>
   parse_operand: () -> Expression
 ) ->
   var left = parse_operand()
   while is_one_of(tokens.peek_continuation(), operators)
-    const operator = tokens.next().kind
+    const operator = tokens.next().text
     left = BinaryOperation(operator, left, right: parse_operand(), position: left.position)
   left
 
@@ -108,7 +110,7 @@ const parse_is = (tokens: TokenStream, value: Expression): Expression ->
   IsTest value, type: parse_named_type(tokens), position: value.position
 
 const parse_binary_comparison = (tokens: TokenStream, left: Expression): Expression ->
-  const operator = tokens.next().kind
+  const operator = tokens.next().text
   BinaryOperation operator, left, right: parse_range(tokens), position: left.position
 
 # Ranges do not chain either: `a...b...c` is an error.
@@ -123,7 +125,7 @@ const parse_range = (tokens: TokenStream): Expression ->
 
 # `is` is not a keyword, so that it stays usable as a name.
 const at_is = (tokens: TokenStream) ->
-  tokens.peek_continuation() == 'identifier' and tokens.peek().text == 'is'
+  tokens.peek_continuation() == IDENTIFIER and tokens.peek().text == 'is'
 
 const at_comparison = (tokens: TokenStream) ->
   is_one_of tokens.peek_continuation(), COMPARISON_OPERATORS
@@ -140,7 +142,7 @@ const parse_unary = (tokens: TokenStream): Expression ->
   const position = token_position(token)
   # `-1` with no space is a negative literal, so that the minimum Int can be written.
   const literal = tokens.peek()
-  if literal.kind == 'integer' and not literal.spaced
+  if literal.kind == INTEGER and not literal.spaced
     tokens.next()
     const value = integer_value(tokens, literal.text, true, position)
     return parse_postfix(tokens, IntegerLiteral(value, position))
@@ -148,7 +150,7 @@ const parse_unary = (tokens: TokenStream): Expression ->
 
 export const parse_identifier = (tokens: TokenStream) ->
   const token = tokens.peek()
-  tokens.fail_expecting token, 'name' if token.kind != 'identifier'
+  tokens.fail_expecting token, 'name' if token.kind != IDENTIFIER
   tokens.next()
   Identifier name: token.text, position: token_position(token)
 
@@ -203,7 +205,7 @@ export const parse_arguments = (tokens: TokenStream) ->
   while tokens.peek_continuation() == ','
     tokens.next()
     const next = tokens.peek()
-    tokens.fail_expecting next, "an item after ','" if next.kind == 'newline'
+    tokens.fail_expecting next, "an item after ','" if next.kind == NEWLINE
     items.push parse_argument(tokens)
   to_arguments tokens, items
 
@@ -212,7 +214,7 @@ struct Argument
   value: Expression
 
 const parse_argument = (tokens: TokenStream) ->
-  const is_named = tokens.peek().kind == 'identifier' and tokens.peek_at(1).kind == ':'
+  const is_named = tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':'
   return Argument(value: parse_expression(tokens)) if not is_named
   const name = parse_identifier(tokens)
   tokens.next()

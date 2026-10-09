@@ -12,7 +12,7 @@ import { parse_aliased_type, parse_type_name } from './type'
 
 # `type Name = ...`; `type` is not a keyword, so that it stays usable as a name.
 export const starts_type_alias = (tokens: TokenStream) ->
-  const name_follows = tokens.peek_at(1).kind == 'identifier'
+  const name_follows = tokens.peek_at(1).kind == IDENTIFIER
   tokens.at_word('type') and name_follows and tokens.peek_at(2).kind == '='
 
 export const parse_type_alias = (tokens: TokenStream) ->
@@ -65,7 +65,7 @@ export const parse_extern = (tokens: TokenStream) ->
 # keyword, so that it stays usable as a name.
 export const parse_import = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
-  if tokens.peek().kind == 'string'
+  if tokens.peek().kind == STRING
     return Import(position, names: [], module: parse_module_name(tokens))
   tokens.expect '{', "'{' or module name"
   const first = tokens.peek()
@@ -77,7 +77,7 @@ export const parse_import = (tokens: TokenStream) ->
 
 const parse_module_name = (tokens: TokenStream) ->
   const module = tokens.peek()
-  tokens.fail_expecting module, 'module name' if module.kind != 'string'
+  tokens.fail_expecting module, 'module name' if module.kind != STRING
   tokens.next()
   module.text
 
@@ -99,7 +99,7 @@ export const parse_type_declaration = (tokens: TokenStream) ->
 export const parse_enum = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const name = parse_identifier(tokens)
-  const has_members = tokens.peek().kind != 'newline' or tokens.peek_at(1).kind == 'indent'
+  const has_members = tokens.peek().kind != NEWLINE or tokens.peek_at(1).kind == INDENT
   tokens.fail position, 'an enum needs at least one member' if not has_members
   const members = parse_member_lines(tokens, () -> parse_enum_member(tokens))
   EnumDeclaration name, members, position
@@ -109,10 +109,10 @@ const parse_enum_member = (tokens: TokenStream): Identifier | StringLiteral ->
   const token = tokens.peek()
   const position = token_position(token)
   case token.kind
-    when 'string'
+    when STRING
       tokens.next()
       StringLiteral position, value: token.text
-    when 'interpolated' then tokens.fail(position, 'an enum member cannot be interpolated')
+    when INTERPOLATED then tokens.fail(position, 'an enum member cannot be interpolated')
     else parse_identifier(tokens)
 
 # `extend Type`, or `extend<T> Array<T>` for a generic one, followed by an indented block of
@@ -129,10 +129,10 @@ const parse_members = (tokens: TokenStream) ->
 
 # A newline and an indented block of members, one per line.
 const parse_member_lines = <T>(tokens: TokenStream, parse_line: () -> T) ->
-  tokens.expect 'newline', 'end of line'
-  tokens.expect 'indent', 'indented members'
+  tokens.expect NEWLINE, 'end of line'
+  tokens.expect INDENT, 'indented members'
   const members: Array<T> = []
-  while tokens.peek().kind != 'dedent'
+  while tokens.peek().kind != DEDENT
     members.push parse_line()
     tokens.expect_line_end()
   tokens.next()
@@ -143,7 +143,7 @@ const parse_member = (tokens: TokenStream) ->
   const token = tokens.peek()
   const has_modifier = token.kind == 'const' or token.kind == 'var'
   tokens.next() if has_modifier
-  const modifier = has_modifier then token.kind else nil
+  const modifier = has_modifier then token.text else nil
   const name = parse_identifier(tokens)
   const type: TypeName? = tokens.accept(':') then parse_type_name(tokens) else nil
   const has_value = type == nil or tokens.peek().kind == '='

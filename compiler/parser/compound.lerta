@@ -5,6 +5,7 @@ import {
   Expression, FunctionLiteral, Identifier, LazyFunctions, MapEntry, MapLiteral
   NamedValue, Parameter, Pass, Position, RecordLiteral, Statement, TypeParameter
 } from '../ast'
+import { TokenKind } from '../lexer/tokens'
 import { parse_coalesce, parse_expression, parse_identifier, parse_loop_header } from './expression'
 import { at_declaration, parse_block, parse_simple_statement } from './statement'
 import { is_one_of, token_position, TokenStream } from './token_stream'
@@ -24,14 +25,14 @@ const looks_like_function_literal = (tokens: TokenStream) ->
   return true if first == '->' or first == '<'
   return false if first != '('
   return third == ':' or third == '->' if second == ')'
-  return true if second == 'identifier' and third == ':'
+  return true if second == IDENTIFIER and third == ':'
   var depth = 0
   var offset = 0
   while true
     const kind = tokens.peek_at(offset).kind
     depth += 1 if kind == '('
     depth -= 1 if kind == ')'
-    break if depth == 0 or kind == 'newline' or kind == 'eof'
+    break if depth == 0 or kind == NEWLINE or kind == EOF
     offset += 1
   depth == 0 and tokens.peek_at(offset + 1).kind == '->'
 
@@ -47,7 +48,7 @@ export const parse_function_literal = (tokens: TokenStream) ->
     else []
   const return_type = parse_type_annotation(tokens)
   tokens.expect '->', "'->'"
-  const is_block = tokens.peek().kind == 'newline'
+  const is_block = tokens.peek().kind == NEWLINE
   # Interpolated code is one expression; a function literal, whose body is made of statements,
   # cannot be written there.
   if const start = tokens.interpolation
@@ -79,10 +80,10 @@ const parse_type_parameter = (tokens: TokenStream) ->
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
 export const parse_array_literal = (tokens: TokenStream, position: Position) ->
   const parse_contents = (): Expression ->
-    tokens.accept 'line_break'
+    tokens.accept LINE_BREAK
     return ArrayLiteral(position, elements: []) if tokens.accept(']')
     const first = parse_expression(tokens)
-    tokens.next() if tokens.peek().kind == 'line_break' and tokens.peek_at(1).kind == 'for'
+    tokens.next() if tokens.peek().kind == LINE_BREAK and tokens.peek_at(1).kind == 'for'
     return parse_comprehension(tokens, first, position, ']') if tokens.peek().kind == 'for'
     const elements = tokens.parse_list_rest(']', () -> parse_expression(tokens), [first])
     ArrayLiteral elements, position
@@ -105,7 +106,7 @@ const parse_comprehension = (
   tokens: TokenStream
   element: Expression
   position: Position
-  close: String
+  close: TokenKind
 ): Expression ->
   const parse_header = () ->
     const header = parse_loop_header(tokens)
@@ -136,8 +137,8 @@ const parse_map_entry = (tokens: TokenStream) ->
 # A name followed by `:`, `,` or `}` starts a field of an anonymous struct; a map's keys are
 # other expressions.
 const starts_record_field = (tokens: TokenStream) ->
-  const follows_name = is_one_of(tokens.peek_at(1).kind, [':', ',', '}', 'line_break'])
-  tokens.peek().kind == 'identifier' and follows_name
+  const follows_name = is_one_of(tokens.peek_at(1).kind, [':', ',', '}', LINE_BREAK])
+  tokens.peek().kind == IDENTIFIER and follows_name
 
 # `{ x: 1, y }`; a field without a value takes that of the name.
 const parse_record_literal = (tokens: TokenStream, position: Position) ->
@@ -156,16 +157,16 @@ const parse_record_field = (tokens: TokenStream) ->
 # With a subject, an arm may list several patterns, and the `else` arm may be left out (whether
 # it may is checked later).
 export const parse_case = (tokens: TokenStream, position: Position) ->
-  const subject = tokens.peek().kind == 'newline' then nil else parse_expression(tokens)
-  tokens.expect 'newline', 'end of line'
-  tokens.expect 'indent', "indented 'when' arms"
+  const subject = tokens.peek().kind == NEWLINE then nil else parse_expression(tokens)
+  tokens.expect NEWLINE, 'end of line'
+  tokens.expect INDENT, "indented 'when' arms"
   const has_subject = subject != nil
   const arms = [parse_case_arm(tokens, has_subject)]
   arms.push parse_case_arm(tokens, has_subject) while tokens.peek().kind == 'when'
   const has_else = not has_subject or tokens.peek().kind == 'else'
   tokens.expect 'else', "'when' or 'else'" if has_else
   const otherwise = has_else then parse_arm_body(tokens, 'else') else nil
-  tokens.expect 'dedent', 'end of block'
+  tokens.expect DEDENT, 'end of block'
   Case subject, arms, otherwise, position
 
 const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
@@ -177,20 +178,20 @@ const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
 
 # A simple statement on the same line (`when c then x`, `else i += 1`), or an indented block.
 # `arm` is 'then' or 'else'.
-const parse_arm_body = (tokens: TokenStream, arm: String): Array<Statement> ->
-  const is_inline = arm == 'then' then tokens.accept('then') else tokens.peek().kind != 'newline'
+const parse_arm_body = (tokens: TokenStream, arm: TokenKind): Array<Statement> ->
+  const is_inline = arm == 'then' then tokens.accept('then') else tokens.peek().kind != NEWLINE
   if is_inline
     const statement = parse_pass(tokens) ? parse_inline_arm(tokens)
     tokens.expect_line_end()
     return [statement]
   const next = tokens.peek()
-  tokens.fail_expecting next, "'then' or end of line" if next.kind != 'newline'
+  tokens.fail_expecting next, "'then' or end of line" if next.kind != NEWLINE
   parse_block tokens
 
 # `pass`, alone after `then` or `else`, is an arm that does nothing. It is not a keyword, so that
 # it stays usable as a name; a name alone there would be an unused value anyway.
 const parse_pass = (tokens: TokenStream): Statement? ->
-  return nil if not tokens.at_word('pass') or tokens.peek_at(1).kind != 'newline'
+  return nil if not tokens.at_word('pass') or tokens.peek_at(1).kind != NEWLINE
   Pass position: token_position(tokens.next())
 
 # A declaration's scope would end with the line, so none may follow `then` or `else`.

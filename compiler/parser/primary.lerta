@@ -10,14 +10,14 @@ import {
   starts_function_literal
 } from './compound'
 import { parse_expression, parse_identifier } from './expression'
-import { Token, tokenize_fragment } from '../lexer/tokens'
+import { Token, TokenKind, tokenize_fragment } from '../lexer/tokens'
 import { CodePart, TemplatePart, TextPart } from '../lexer/string_literal'
 import { is_one_of, token_position, TokenStream } from './token_stream'
 
 const INT_MIN = -9223372036854775808
 
-const EXPRESSION_ENDS = [
-  'newline', 'dedent', 'eof', 'line_break'
+const EXPRESSION_ENDS: Array<TokenKind> = [
+  NEWLINE, DEDENT, EOF, LINE_BREAK
   'if', 'while', 'then', 'else', ')', ']', '}', ','
 ]
 
@@ -26,9 +26,9 @@ export const parse_primary = (tokens: TokenStream): Expression ->
   const token = tokens.next()
   const position = token_position(token)
   case token.kind
-    when 'identifier' then Identifier(position, name: token.text)
-    when 'string' then StringLiteral(position, value: token.text)
-    when 'interpolated' then parse_interpolation(tokens, token)
+    when IDENTIFIER then Identifier(position, name: token.text)
+    when STRING then StringLiteral(position, value: token.text)
+    when INTERPOLATED then parse_interpolation(tokens, token)
     when 'nil' then NilLiteral(position)
     when 'break' then Jump(position, kind: BREAK)
     when 'continue' then Jump(position, kind: CONTINUE)
@@ -41,7 +41,7 @@ export const parse_primary = (tokens: TokenStream): Expression ->
     when 'case' then parse_case(tokens, position)
     when '[' then parse_array_literal(tokens, position)
     when '{' then parse_map_literal(tokens, position)
-    when 'integer'
+    when INTEGER
       IntegerLiteral position, value: integer_value(tokens, token.text, false, position)
     when '(' then parse_parenthesized(tokens, position)
     else tokens.fail_expecting(token, 'expression')
@@ -52,7 +52,7 @@ const parse_this = (tokens: TokenStream, position: Position): Expression ->
   const object = This(position)
   const next = tokens.peek()
   tokens.fail token_position(next), 'write @x, not @.x' if next.kind == '.'
-  return object if next.kind != 'identifier' or next.spaced
+  return object if next.kind != IDENTIFIER or next.spaced
   Member object, position, name: parse_identifier(tokens)
 
 # Whether the next token ends the expression, so that `return` there has no value.
@@ -104,5 +104,5 @@ const parse_interpolated_code = (path: String, source: String, line: Int, column
   const fragment = tokenize_fragment(source, path, line, column)
   const tokens = TokenStream(path, tokens: fragment, interpolation: Position(line, column))
   const expression = parse_expression(tokens)
-  tokens.expect 'newline', 'end of interpolation'
+  tokens.expect NEWLINE, 'end of interpolation'
   expression
