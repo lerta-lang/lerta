@@ -31,13 +31,13 @@ export const emit_function_closure = (ir: IrBuilder, symbol: String, type: Type)
       when return_type == 'void' then ["  #{call}", end]
       else ["  %result = #{call}", "  ret #{return_type} %result"]
     const all_params = ['ptr %closure']
-    all_params.push(param) for param in typed_params
+    all_params.push param for param in typed_params
     const signature = "#{return_type} #{thunk}(#{all_params.join(', ')})"
     const lines = ["define private #{signature} {"]
-    lines.push(line) for line in body
-    lines.push('}')
-    module.add_function(lines.join("\n"))
-  ir.module.define_once(thunk, define)
+    lines.push line for line in body
+    lines.push '}'
+    module.add_function lines.join("\n")
+  ir.module.define_once thunk, define
   emit_static_closure ir, thunk
 
 # A closure of `code` that captures nothing: an immortal constant, defined once, which is never
@@ -46,8 +46,8 @@ export const emit_static_closure = (ir: IrBuilder, code: String) ->
   const closure = "@lerta.closure.#{without_sigil(code)}"
   const define = (module: IrModule) ->
     const header = "i64 #{LERTA_IMMORTAL}, ptr null, ptr #{code}"
-    module.define_global(closure, "private constant { i64, ptr, ptr } { #{header} }")
-  ir.module.define_once(closure, define)
+    module.define_global closure, "private constant { i64, ptr, ptr } { #{header} }"
+  ir.module.define_once closure, define
   closure
 
 # Calls a closure with the operands of its arguments; the closure is borrowed.
@@ -63,11 +63,11 @@ export const emit_closure_call = (
   )
   const code = ir.assign("load ptr, ptr #{pointer}")
   const all_args = ["ptr #{closure}"]
-  all_args.push("#{ir_type(params[i])} #{args[i]}") for i in 0...args.length
+  all_args.push "#{ir_type(params[i])} #{args[i]}" for i in 0...args.length
   const return_type = ir_return_type(result)
   const call = "call #{return_type} #{code}(#{all_args.join(', ')})"
   return ir.assign(call) if return_type != 'void'
-  ir.emit(call)
+  ir.emit call
   return '' if not is_kind(result, 'never')
   emit_unreachable ir
   'poison'
@@ -79,7 +79,7 @@ export const CELL_SLOT = HeapField(ir_type: 'ptr', holds_reference: true)
 # The IR type of a closure that holds these captures.
 const closure_ir_type = (slots: Array<HeapField>) ->
   const fields = [plain_field('ptr')]
-  fields.push(slot) for slot in slots
+  fields.push slot for slot in slots
   heap_object_type fields
 
 # The pointer to the closure's `index`th capture.
@@ -105,10 +105,10 @@ export const emit_closure = (
   const code = ir.assign(
     "getelementptr { i64, ptr, ptr }, ptr #{closure}, i32 0, i32 #{CODE_FIELD}"
   )
-  ir.emit("store ptr #{symbol}, ptr #{code}")
+  ir.emit "store ptr #{symbol}, ptr #{code}"
   for i in 0...slots.length
     const pointer = emit_capture_pointer(ir, closure, slots, i)
-    ir.emit("store #{slots[i].ir_type} #{operands[i]}, ptr #{pointer}")
+    ir.emit "store #{slots[i].ir_type} #{operands[i]}, ptr #{pointer}"
   closure
 
 const define_closure_drop = (ir: IrBuilder, drop: String, slots: Array<HeapField>) ->
@@ -118,6 +118,6 @@ const define_closure_drop = (ir: IrBuilder, drop: String, slots: Array<HeapField
       continue if not slots[i].holds_reference
       const pointer = emit_capture_pointer(body, '%closure', slots, i)
       emit_release body, body.assign("load ptr, ptr #{pointer}")
-    body.emit('ret void')
-    body.finish("void #{drop}(ptr %closure)")
-  ir.module.define_once(drop, define)
+    body.emit 'ret void'
+    body.finish "void #{drop}(ptr %closure)"
+  ir.module.define_once drop, define

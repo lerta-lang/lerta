@@ -88,7 +88,6 @@ Run tests (source → execution result) run `bin/lerta`, the compiler written in
 - Narrowing through `and` and `or` (`if x is A and x.ready`), which `compiler/checker/` writes as nested `if`s for now.
 - Renaming in destructuring (`const { a: x } = value`).
 - Sorting arrays (`compiler/sort.lerta` sorts by hand for now).
-- Calling a method without parentheses at the start of a statement (`xs.push item`), as a function can be called; method calls keep their parentheses for now.
 - A type alias of a union as a pattern of `case`, standing for all its members.
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).

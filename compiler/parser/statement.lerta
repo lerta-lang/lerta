@@ -32,18 +32,18 @@ const parse_statements = (tokens: TokenStream, end: String) ->
   const statements: Array<Statement> = []
   while tokens.peek().kind != end and tokens.peek().kind != 'eof'
     if at_destructuring(tokens)
-      statements.push(statement) for statement in parse_destructuring_statement(tokens)
+      statements.push statement for statement in parse_destructuring_statement(tokens)
     else
-      statements.push(parse_statement(tokens))
+      statements.push parse_statement(tokens)
     tokens.expect_line_end()
   statements
 
 # A newline and an indented block of statements.
 export const parse_block = (tokens: TokenStream) ->
-  tokens.expect('newline', 'end of line')
-  tokens.expect('indent', 'indented block')
+  tokens.expect 'newline', 'end of line'
+  tokens.expect 'indent', 'indented block'
   const statements = parse_statements(tokens, 'dedent')
-  tokens.expect('dedent', 'end of block')
+  tokens.expect 'dedent', 'end of block'
   statements
 
 # A statement other than a destructuring declaration (see parse_destructuring_statement).
@@ -78,7 +78,7 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
   if at_destructuring(tokens)
     const position = token_position(tokens.peek())
     parse_destructuring tokens
-    tokens.fail(position, 'a destructuring declaration must be on a line of its own')
+    tokens.fail position, 'a destructuring declaration must be on a line of its own'
   return parse_declaration(tokens) if at_declaration(tokens)
   const is_command_call = starts_command_argument(tokens)
   const expression: Expression = case
@@ -98,7 +98,7 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
 const reject_postfix = (tokens: TokenStream) ->
   const kind = tokens.peek_continuation()
   return if kind != 'if' and kind != 'while'
-  tokens.fail(token_position(tokens.peek()), "a declaration cannot have a postfix '#{kind}'")
+  tokens.fail token_position(tokens.peek()), "a declaration cannot have a postfix '#{kind}'"
 
 # `statement if condition`, `statement while condition` and `statement for x in xs when guard`,
 # applied from left to right.
@@ -132,7 +132,7 @@ const parse_declaration = (tokens: TokenStream) ->
   const token = tokens.next()
   const name = parse_identifier(tokens)
   const type: TypeName? = tokens.accept(':') then parse_type_name(tokens) else nil
-  tokens.expect('=', "'='")
+  tokens.expect '=', "'='"
   const value = parse_value(tokens)
   Declaration name, type, value, mutable: token.kind == 'var', position: token_position(token)
 
@@ -148,8 +148,8 @@ const parse_destructuring = (tokens: TokenStream) ->
   const token = tokens.next()
   tokens.next()
   const names = parse_list(tokens, '}', () -> parse_identifier(tokens))
-  tokens.fail_expecting(tokens.peek(), 'a name') if names.length == 0
-  tokens.expect('=', "'='")
+  tokens.fail_expecting tokens.peek(), 'a name' if names.length == 0
+  tokens.expect '=', "'='"
   const value = parse_expression(tokens)
   const position = token_position(token)
   const holder_name = "destructured.#{position.line}.#{position.column}"
@@ -160,7 +160,7 @@ const parse_destructuring = (tokens: TokenStream) ->
   for name in names
     const object = copy_identifier(holder)
     const field = Member(object, name: copy_identifier(name), position: name.position)
-    declarations.push(Declaration(mutable, name, value: field, position: name.position))
+    declarations.push Declaration(mutable, name, value: field, position: name.position)
   declarations
 
 const parse_assignment = (tokens: TokenStream, target: Expression, operator: String) ->
@@ -218,7 +218,7 @@ const parse_for = (tokens: TokenStream) ->
   const { variable, iterable, guard } = parse_loop_header(tokens)
   if guard
     const message = "a for loop with a block has no 'when'; write an if in the block"
-    tokens.fail(guard.position, message)
+    tokens.fail guard.position, message
   For variable, iterable, position, body: parse_block(tokens)
 
 # A condition, or `const name = value`, which holds when the value is not nil.
@@ -227,7 +227,7 @@ const parse_condition = (tokens: TokenStream): Condition ->
   return parse_expression(tokens) if token.kind != 'const'
   tokens.next()
   const name = parse_identifier(tokens)
-  tokens.expect('=', "'='")
+  tokens.expect '=', "'='"
   Binding name, value: parse_expression(tokens), position: token_position(token)
 
 const parse_while = (tokens: TokenStream) ->

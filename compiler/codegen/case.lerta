@@ -28,21 +28,21 @@ export const generate_case = (g: Generator, case_expression: Case) ->
   const generate_arm_value = (body: Array<Statement>) ->
     const value = generate_block_value(g, body)
     const operand = value == '' then 'poison' else value
-    incoming.push("[ #{operand}, %#{ir.current_block} ]")
-    ir.emit("br label %#{end_label}")
+    incoming.push "[ #{operand}, %#{ir.current_block} ]"
+    ir.emit "br label %#{end_label}"
   for arm in case_expression.arms
     const test = generate_test(g, arm, subject_type, subject_operand)
     const arm_label = ir.fresh_label('case.arm')
     const next_label = ir.fresh_label('case.next')
-    ir.emit("br i1 #{test}, label %#{arm_label}, label %#{next_label}")
-    ir.start_block(arm_label)
+    ir.emit "br i1 #{test}, label %#{arm_label}, label %#{next_label}"
+    ir.start_block arm_label
     generate_arm_value arm.body
-    ir.start_block(next_label)
+    ir.start_block next_label
   if const otherwise = case_expression.otherwise
     generate_arm_value otherwise
   else
-    ir.emit('unreachable')
-  ir.start_block(end_label)
+    ir.emit 'unreachable'
+  ir.start_block end_label
   const result = merge(g, type_of(g, case_expression), incoming)
   release_subject()
   result
@@ -55,17 +55,17 @@ export const generate_conditional = (g: Generator, conditional: Conditional) ->
   const then_label = ir.fresh_label('then')
   const else_label = ir.fresh_label('else')
   const end_label = ir.fresh_label('then.end')
-  ir.emit("br i1 #{test}, label %#{then_label}, label %#{else_label}")
+  ir.emit "br i1 #{test}, label %#{then_label}, label %#{else_label}"
   const branch = (label: String, value: Expression) ->
-    ir.start_block(label)
+    ir.start_block label
     const operand = generate_block_value(g, [value])
     const from = ir.current_block
-    ir.emit("br label %#{end_label}")
+    ir.emit "br label %#{end_label}"
     "[ #{operand == '' then 'poison' else operand}, %#{from} ]"
   const incoming = [
     branch(then_label, conditional.then_value), branch(else_label, conditional.else_value)
   ]
-  ir.start_block(end_label)
+  ir.start_block end_label
   merge g, type_of(g, conditional), incoming
 
 # The value of the arms at their end block: none for void, and none that comes for never.

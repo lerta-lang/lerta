@@ -40,7 +40,7 @@ export const parse_block_arguments = (tokens: TokenStream, callee: Expression) -
   const record = block is RecordLiteral then block else throw 'named arguments are not a struct'
   if call.named_args.length > 0
     const message = 'named arguments are all on the line or all in the indented block'
-    tokens.fail(record.position, message)
+    tokens.fail record.position, message
   call.named_args = record.fields
   call
 
@@ -57,7 +57,7 @@ const parse_conditional = (tokens: TokenStream): Expression ->
   return condition if tokens.peek_continuation() != 'then'
   tokens.next()
   const then_value = parse_conditional(tokens)
-  tokens.expect('else', "'else'")
+  tokens.expect 'else', "'else'"
   const else_value = parse_conditional(tokens)
   Conditional condition, then_value, else_value, position: condition.position
 
@@ -100,7 +100,7 @@ const parse_comparison = (tokens: TokenStream) ->
   const is_test = at_is(tokens)
   const comparison = is_test then parse_is(tokens, left) else parse_binary_comparison(tokens, left)
   if at_is(tokens) or at_comparison(tokens)
-    tokens.fail(token_position(tokens.peek()), 'comparison operators cannot be chained')
+    tokens.fail token_position(tokens.peek()), 'comparison operators cannot be chained'
   comparison
 
 const parse_is = (tokens: TokenStream, value: Expression): Expression ->
@@ -118,7 +118,7 @@ const parse_range = (tokens: TokenStream): Expression ->
   tokens.next()
   const end = parse_arithmetic(tokens, 0)
   if tokens.peek_continuation() == '...'
-    tokens.fail(token_position(tokens.peek()), 'ranges cannot be chained')
+    tokens.fail token_position(tokens.peek()), 'ranges cannot be chained'
   Range start, end, position: start.position
 
 # `is` is not a keyword, so that it stays usable as a name.
@@ -148,7 +148,7 @@ const parse_unary = (tokens: TokenStream): Expression ->
 
 export const parse_identifier = (tokens: TokenStream) ->
   const token = tokens.peek()
-  tokens.fail_expecting(token, 'name') if token.kind != 'identifier'
+  tokens.fail_expecting token, 'name' if token.kind != 'identifier'
   tokens.next()
   Identifier name: token.text, position: token_position(token)
 
@@ -180,7 +180,7 @@ const extend_by_postfix = (tokens: TokenStream, expression: Expression): Express
 # which the next item follows on the same line, or by a line end.
 export const parse_list = <T>(tokens: TokenStream, close: String, parse_item: () -> T): Array<T> ->
   const parse_items = () ->
-    tokens.accept('line_break')
+    tokens.accept 'line_break'
     parse_list_rest tokens, close, parse_item, []
   inside tokens, 'separate', parse_items
 
@@ -193,7 +193,7 @@ export const parse_list_rest = <T>(
 ): Array<T> ->
   return items if items.length > 0 and not ends_item(tokens, close)
   while not tokens.accept(close)
-    items.push(parse_item())
+    items.push parse_item()
     break if not ends_item(tokens, close)
   items
 
@@ -203,24 +203,24 @@ const ends_item = (tokens: TokenStream, close: String) ->
   if tokens.accept(',')
     const next = tokens.peek()
     const ends_line = next.kind == 'line_break' or next.kind == close
-    tokens.fail_expecting(next, "an item after ','") if ends_line
+    tokens.fail_expecting next, "an item after ','" if ends_line
     return true
   return true if tokens.accept('line_break')
-  tokens.expect(close, "'#{close}'")
+  tokens.expect close, "'#{close}'"
   false
 
 # The index after `[`, through `]`; line ends inside are skipped.
 const parse_index = (tokens: TokenStream) ->
   const parse_contents = () ->
     const expression = parse_expression(tokens)
-    tokens.expect(']', "']'")
+    tokens.expect ']', "']'"
     expression
   inside tokens, 'skip', parse_contents
 
 export const parse_loop_header = (tokens: TokenStream) ->
-  tokens.expect('for', "'for'")
+  tokens.expect 'for', "'for'"
   const variable = parse_identifier(tokens)
-  tokens.expect('in', "'in'")
+  tokens.expect 'in', "'in'"
   const iterable = parse_expression(tokens)
   const guard = tokens.accept('when') then parse_expression(tokens) else nil
   LoopHeader variable, iterable, guard
@@ -235,8 +235,8 @@ export const parse_arguments = (tokens: TokenStream) ->
   while tokens.peek_continuation() == ','
     tokens.next()
     const next = tokens.peek()
-    tokens.fail_expecting(next, "an item after ','") if next.kind == 'newline'
-    items.push(parse_argument(tokens))
+    tokens.fail_expecting next, "an item after ','" if next.kind == 'newline'
+    items.push parse_argument(tokens)
   to_arguments tokens, items
 
 struct Argument
@@ -256,9 +256,9 @@ const to_arguments = (tokens: TokenStream, items: Array<Argument>) ->
   const named_args: Array<NamedValue> = []
   for item in items
     if const name = item.name
-      named_args.push(NamedValue(name, value: item.value))
+      named_args.push NamedValue(name, value: item.value)
     else if named_args.length > 0
-      tokens.fail(item.value.position, 'a positional argument cannot follow a named one')
+      tokens.fail item.value.position, 'a positional argument cannot follow a named one'
     else
-      args.push(item.value)
+      args.push item.value
   Arguments args, named_args

@@ -20,25 +20,25 @@ export const scan_double_quoted = (line: SourceLine, start: Int) ->
   var text: Array<Byte> = []
   var i = start + 1
   while true
-    line.fail('unterminated string literal', start) if i == line.length
+    line.fail 'unterminated string literal', start if i == line.length
     const c = line.bytes[i]
     case
       when c == '"' then break
       when c == '\'
         const escape = read_escape(line, i)
-        text.push(byte) for byte in escape.value
+        text.push byte for byte in escape.value
         i = escape.end
       when c == '#' and line.bytes.occurs_at(i + 1, '{'.binary)
         const brace = find_interpolation_end(line, i + 2)
         const close = brace ? line.fail('unterminated interpolation', i)
-        parts.push(TextPart(text: decode(text))) if text.length > 0
+        parts.push TextPart(text: decode(text)) if text.length > 0
         text = []
-        parts.push(CodePart(source: line.text(i + 2, close), column: line.column(i + 2)))
+        parts.push CodePart(source: line.text(i + 2, close), column: line.column(i + 2))
         i = close + 1
       else
-        text.push(c)
+        text.push c
         i += 1
-  parts.push(TextPart(text: decode(text))) if text.length > 0 or parts.length == 0
+  parts.push TextPart(text: decode(text)) if text.length > 0 or parts.length == 0
   { parts, end: i + 1 }
 
 # Escapes and interpolations split the text only between whole characters.
@@ -48,7 +48,7 @@ const read_escape = (line: SourceLine, start: Int) ->
   const kind: Byte = start + 1 < line.length then line.bytes[start + 1] else 0
   const simple = simple_escape(kind)
   return { value: simple.binary, end: start + 2 } if simple
-  line.fail('invalid escape sequence', start) if not line.bytes.occurs_at(start + 1, 'u{'.binary)
+  line.fail 'invalid escape sequence', start if not line.bytes.occurs_at(start + 1, 'u{'.binary)
   const close = line.index_of('}', start + 3) ? line.fail('invalid unicode escape', start)
   const digits = line.bytes.slice(start + 3, close)
   const code_point = parse_code_point(digits) ? line.fail('invalid unicode escape', start)

@@ -16,25 +16,25 @@ export const emit_runtime_call = (
   const result = ir_c_return_type(type.result)
   const is_never = is_kind(type.result, 'never')
   const attributes = is_never then ' noreturn' else ''
-  ir.module.declare(symbol, "declare #{result} @#{symbol}(#{params})#{attributes}")
+  ir.module.declare symbol, "declare #{result} @#{symbol}(#{params})#{attributes}"
   const arg_list = ["#{ir_param_type(type.params[i])} #{args[i]}" for i in 0...args.length]
   const call = "call #{result} @#{symbol}(#{arg_list.join(', ')})"
   return ir.assign(call) if result != 'void'
-  ir.emit(call)
+  ir.emit call
   return '' if not is_never
   emit_unreachable ir
   'poison'
 
 # Throws the message, a String, which is not released, since the program ends here.
 export const emit_throw = (ir: IrBuilder, message: String) ->
-  ir.module.declare('lerta_throw', 'declare void @lerta_throw(ptr) noreturn')
-  ir.emit("call void @lerta_throw(ptr #{message})")
+  ir.module.declare 'lerta_throw', 'declare void @lerta_throw(ptr) noreturn'
+  ir.emit "call void @lerta_throw(ptr #{message})"
 
 # Ends the current block after something that does not return, and starts a block for any code
 # that follows, which is unreachable.
 export const emit_unreachable = (ir: IrBuilder) ->
-  ir.emit('unreachable')
-  ir.start_block(ir.fresh_label('unreachable'))
+  ir.emit 'unreachable'
+  ir.start_block ir.fresh_label('unreachable')
 
 # Declares and calls the function of the signature, as in `i64 @f(ptr, i64)`, giving its result,
 # or '' for void.
@@ -42,8 +42,8 @@ export const call_runtime = (ir: IrBuilder, signature: String, args: String) ->
   const parts = signature.split(' @')
   const result_type = parts[0]
   const name = parts[1].split('(')[0]
-  ir.module.declare(name, "declare #{signature}")
+  ir.module.declare name, "declare #{signature}"
   const instruction = "call #{result_type} @#{name}(#{args})"
   return ir.assign(instruction) if result_type != 'void'
-  ir.emit(instruction)
+  ir.emit instruction
   ''

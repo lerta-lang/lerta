@@ -42,7 +42,7 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   return apply_arithmetic(g, operator, left, right, operand_type) if is_arithmetic(operator)
   const is_byte = is_kind(operand_type, 'Byte')
   const predicate = (is_byte then UNSIGNED_PREDICATES else SIGNED_PREDICATES)[operator]!
-  g.ir.assign("icmp #{predicate} #{ir_type(operand_type)} #{left}, #{right}")
+  g.ir.assign "icmp #{predicate} #{ir_type(operand_type)} #{left}, #{right}"
 
 # `!=` is the negation of the equality.
 const negate_if_unequal = (g: Generator, operator: String, equal: String) ->
@@ -73,14 +73,14 @@ const generate_logical = (g: Generator, binary: BinaryOperation) ->
   const is_and = binary.operator == 'and'
   const if_true = is_and then right_label else end_label
   const if_false = is_and then end_label else right_label
-  ir.emit("br i1 #{left}, label %#{if_true}, label %#{if_false}")
-  ir.start_block(right_label)
+  ir.emit "br i1 #{left}, label %#{if_true}, label %#{if_false}"
+  ir.start_block right_label
   const right = generate_condition(g, binary.right)
   const right_block = ir.current_block
-  ir.emit("br label %#{end_label}")
-  ir.start_block(end_label)
+  ir.emit "br label %#{end_label}"
+  ir.start_block end_label
   const decided = is_and then 'false' else 'true'
-  ir.assign("phi i1 [ #{decided}, %#{left_block} ], [ #{right}, %#{right_block} ]")
+  ir.assign "phi i1 [ #{decided}, %#{left_block} ], [ #{right}, %#{right_block} ]"
 
 # `x!` throws if x is nil.
 export const generate_unwrap = (g: Generator, unwrap: Unwrap) ->
@@ -100,11 +100,11 @@ export const generate_coalesce = (g: Generator, coalesce: Coalesce) ->
   const value_block = ir.current_block
   const fallback_label = ir.fresh_label('coalesce.fallback')
   const end_label = ir.fresh_label('coalesce.end')
-  ir.emit("br i1 #{present}, label %#{end_label}, label %#{fallback_label}")
-  ir.start_block(fallback_label)
+  ir.emit "br i1 #{present}, label %#{end_label}, label %#{fallback_label}"
+  ir.start_block fallback_label
   const fallback = generate(g, coalesce.fallback)
   const fallback_block = ir.current_block
-  ir.emit("br label %#{end_label}")
-  ir.start_block(end_label)
+  ir.emit "br label %#{end_label}"
+  ir.start_block end_label
   const incoming = "[ #{unwrapped}, %#{value_block} ], [ #{fallback}, %#{fallback_block} ]"
-  ir.assign("phi #{ir_type(type_of(g, coalesce))} #{incoming}")
+  ir.assign "phi #{ir_type(type_of(g, coalesce))} #{incoming}"

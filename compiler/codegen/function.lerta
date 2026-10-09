@@ -60,10 +60,10 @@ export const generate_main = (
   runs_first: Array<String>
   releases: Array<TopLevelGlobal>
 ) ->
-  g.ir.emit("call void #{symbol}()") for symbol in runs_first
+  g.ir.emit "call void #{symbol}()" for symbol in runs_first
   generate_block g, statements, no_locals
   emit_release_globals g.ir, releases
-  g.ir.emit('ret void')
+  g.ir.emit 'ret void'
   finish g, signature
 
 # Defines nothing, for a block that declares no locals besides its statements'.
@@ -81,14 +81,14 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
   for capture in captures
     const local = lookup_local(g, capture.name)!
     if not capture.is_var
-      slots.push(value_field(capture.type))
-      operands.push(read_local(g, local, capture.type))
+      slots.push value_field(capture.type)
+      operands.push read_local(g, local, capture.type)
       continue
     const cell = local is SlotLocal then local.cell else nil
     const owned = cell ? throw "the captured var '#{capture.name}' has no cell"
     emit_retain g.ir, owned.cell
-    slots.push(CELL_SLOT)
-    operands.push(owned.cell)
+    slots.push CELL_SLOT
+    operands.push owned.cell
   return emit_static_closure(g.ir, symbol) if captures.length == 0
   emit_closure g.ir, symbol, slots, operands
 
@@ -126,9 +126,9 @@ export const generate_function = (
   generate_last_statement g, literal.body, type.result
   g.locals.pop()
   const param_list: Array<String> = []
-  param_list.push('ptr %closure') if captures != nil
-  param_list.push("#{ir_type(this_type)} %this") if this_type
-  param_list.push("#{ir_type(type.params[i])} %p#{i}") for i in 0...type.params.length
+  param_list.push 'ptr %closure' if captures != nil
+  param_list.push "#{ir_type(this_type)} %this" if this_type
+  param_list.push "#{ir_type(type.params[i])} %p#{i}" for i in 0...type.params.length
   finish g, "#{ir_return_type(type.result)} #{symbol}(#{param_list.join(', ')})"
 
 # The last statement returns its value, if it is an expression and the function has a result.
@@ -141,7 +141,7 @@ const generate_last_statement = (g: Generator, body: Array<Statement>, result: T
       return emit_return(g, generate(g, value)) if has_result
     generate_statement g, last
   if has_result
-    g.ir.emit('unreachable')
+    g.ir.emit 'unreachable'
   else
     emit_return g, ''
 
@@ -161,8 +161,8 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
     if const value = field.value
       store_field g, object, info, field, generate(g, value)
   g.locals.pop()
-  ir.emit("call void #{method_symbol(info.type, 'init')}(ptr #{object})") if info.has_init
-  ir.emit("ret ptr #{object}")
+  ir.emit "call void #{method_symbol(info.type, 'init')}(ptr #{object})" if info.has_init
+  ir.emit "ret ptr #{object}"
   const params = ["#{ir_type(arguments[i].type!)} %p#{i}" for i in 0...arguments.length]
   finish g, "ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
 
@@ -174,18 +174,18 @@ const store_field = (
   value: String
 ) ->
   const pointer = emit_field_pointer(g.ir, object, info, field.name.name)
-  g.ir.emit("store #{ir_type(field.type!)} #{value}, ptr #{pointer}")
+  g.ir.emit "store #{ir_type(field.type!)} #{value}, ptr #{pointer}"
 
 const finish = (g: Generator, signature: String) ->
   emit_throw_blocks g
-  g.ir.finish(signature)
+  g.ir.finish signature
 
 # Releases every scope of the function before returning the owned value. The function's result
 # type decides the instruction: a returned value that never comes (`return throw ...`) is poison.
 const emit_return = (g: Generator, value: String) ->
   release_scope g, scope for scope in g.locals.inner_scopes(0)
   const result = g.result_type
-  g.ir.emit(returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}")
+  g.ir.emit returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}"
 
 # Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
 # function releases it where the code goes on.
@@ -204,7 +204,7 @@ export const generate_jump = (g: Generator, jump: Jump | Return) ->
     when Return
       const value = jump.value
       emit_return g, value then generate(g, value) else ''
-      g.ir.start_block(g.ir.fresh_label('unreachable'))
+      g.ir.start_block g.ir.fresh_label('unreachable')
 
 # A block that gives a value: its last statement, if an expression, gives it, or ''. The value is
 # computed before the locals are released, as it may be one of them.
@@ -280,16 +280,16 @@ const generate_declaration = (g: Generator, declaration: Declaration) ->
     const cell = emit_cell(ir, type, value)
     const pointer = emit_cell_pointer(ir, type, cell)
     const owned = CellSlot(cell, is_owned: true)
-    g.locals.define(name, SlotLocal(type, pointer, top_level: nil, cell: owned))
+    g.locals.define name, SlotLocal(type, pointer, top_level: nil, cell: owned)
     return
   if global == nil
-    g.locals.define(name, store_in_slot(g, value, type))
+    g.locals.define name, store_in_slot(g, value, type)
     return
-  ir.emit("store #{ir_type(type)} #{value}, ptr #{global.pointer}")
+  ir.emit "store #{ir_type(type)} #{value}, ptr #{global.pointer}"
   emit_mark_initialized ir, global
-  g.locals.define(name, top_level_slot(global, false))
+  g.locals.define name, top_level_slot(global, false)
 
 export const store_in_slot = (g: Generator, value: String, type: Type) ->
   const pointer = g.ir.alloca(ir_type(type))
-  g.ir.emit("store #{ir_type(type)} #{value}, ptr #{pointer}")
+  g.ir.emit "store #{ir_type(type)} #{value}, ptr #{pointer}"
   SlotLocal pointer, type, top_level: nil, cell: nil

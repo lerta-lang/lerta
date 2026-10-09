@@ -34,12 +34,12 @@ const emit_sequence_iter = (ir: IrBuilder, sequence: String, type: Type) ->
     const length = emit_sequence_length(body, load_state(body, kind, 0), type)
     const index = load_state(body, kind, 1)
     const is_below = body.assign("icmp slt i64 #{index}, #{length}")
-    body.emit("ret i1 #{is_below}")
+    body.emit "ret i1 #{is_below}"
   const next = (body: IrBuilder, kind: IterKind) ->
     const index = load_state(body, kind, 1)
     const item = emit_sequence_get(body, load_state(body, kind, 0), index, type)
     store_state body, kind, 1, body.assign("add nsw i64 #{index}, 1")
-    body.emit("ret #{ir_type(element)} #{item}")
+    body.emit "ret #{ir_type(element)} #{item}"
   const state = [value_field(type), value_field(int_type)]
   const kind = define_kind(ir, "sequence #{type_key(type)}", state, element, has_next, next)
   emit_iter ir, kind, [sequence, '0']
@@ -50,12 +50,12 @@ export const emit_range_iter = (ir: IrBuilder, start: String, end: String) ->
     const current = load_state(body, kind, 0)
     const last = load_state(body, kind, 1)
     const is_below = body.assign("icmp slt i64 #{current}, #{last}")
-    body.emit("ret i1 #{is_below}")
+    body.emit "ret i1 #{is_below}"
   # The current Int is below the end, so the next one cannot overflow.
   const next = (body: IrBuilder, kind: IterKind) ->
     const current = load_state(body, kind, 0)
     store_state body, kind, 0, body.assign("add nsw i64 #{current}, 1")
-    body.emit("ret i64 #{current}")
+    body.emit "ret i64 #{current}"
   const state = [value_field(int_type), value_field(int_type)]
   emit_iter ir, define_kind(ir, 'range', state, int_type, has_next, next), [start, end]
 
@@ -64,12 +64,12 @@ const emit_map_iter = (ir: IrBuilder, source: String, mapper: String, type: Type
   const function_type = function_type_of(type)
   const item = function_type.params[0]
   const has_next = (body: IrBuilder, kind: IterKind) ->
-    body.emit("ret i1 #{emit_has_next(body, load_state(body, kind, 0))}")
+    body.emit "ret i1 #{emit_has_next(body, load_state(body, kind, 0))}"
   const next = (body: IrBuilder, kind: IterKind) ->
     const value = emit_next(body, load_state(body, kind, 0), item)
     const result = emit_closure_call(body, load_state(body, kind, 1), type, [value])
     emit_release body, value if is_reference_type(item)
-    body.emit("ret #{ir_type(function_type.result)} #{result}")
+    body.emit "ret #{ir_type(function_type.result)} #{result}"
   const state = [value_field(IterType(item)), value_field(type)]
   const key = "map #{type_key(type)}"
   const kind = define_kind(ir, key, state, function_type.result, has_next, next)
@@ -88,33 +88,33 @@ const emit_filter_iter = (ir: IrBuilder, source: String, test: String, item: Typ
     const found_label = body.fresh_label('filter.found')
     const end_label = body.fresh_label('filter.end')
     const is_held = load_state(body, kind, 2)
-    body.emit("br i1 #{is_held}, label %#{found_label}, label %#{search_label}")
-    body.start_block(search_label)
+    body.emit "br i1 #{is_held}, label %#{found_label}, label %#{search_label}"
+    body.start_block search_label
     const source_iter = load_state(body, kind, 0)
     const has_more = emit_has_next(body, source_iter)
-    body.emit("br i1 #{has_more}, label %#{test_label}, label %#{end_label}")
-    body.start_block(test_label)
+    body.emit "br i1 #{has_more}, label %#{test_label}, label %#{end_label}"
+    body.start_block test_label
     const value = emit_next(body, source_iter, item)
     const keep = emit_closure_call(body, load_state(body, kind, 1), test_type, [value])
-    body.emit("br i1 #{keep}, label %#{keep_label}, label %#{skip_label}")
-    body.start_block(keep_label)
+    body.emit "br i1 #{keep}, label %#{keep_label}, label %#{skip_label}"
+    body.start_block keep_label
     store_state body, kind, 3, value
     store_state body, kind, 2, 'true'
-    body.emit("br label %#{found_label}")
-    body.start_block(skip_label)
+    body.emit "br label %#{found_label}"
+    body.start_block skip_label
     emit_release body, value if is_reference_type(item)
-    body.emit("br label %#{search_label}")
-    body.start_block(found_label)
-    body.emit('ret i1 true')
-    body.start_block(end_label)
-    body.emit('ret i1 false')
+    body.emit "br label %#{search_label}"
+    body.start_block found_label
+    body.emit 'ret i1 true'
+    body.start_block end_label
+    body.emit 'ret i1 false'
   # The held item passes to the caller; a reference is cleared, so that the drop does not release
   # it.
   const next = (body: IrBuilder, kind: IterKind) ->
     store_state body, kind, 2, 'false'
     const value = load_state(body, kind, 3)
     store_state body, kind, 3, 'null' if is_reference_type(item)
-    body.emit("ret #{ir_type(item)} #{value}")
+    body.emit "ret #{ir_type(item)} #{value}"
   const state = [
     value_field(IterType(item)), value_field(test_type), value_field(bool_type), value_field(item)
   ]
@@ -128,16 +128,16 @@ const emit_take_iter = (ir: IrBuilder, source: String, count: String, item: Type
     const end_label = body.fresh_label('take.end')
     const remaining = load_state(body, kind, 1)
     const is_positive = body.assign("icmp sgt i64 #{remaining}, 0")
-    body.emit("br i1 #{is_positive}, label %#{ask_label}, label %#{end_label}")
-    body.start_block(ask_label)
-    body.emit("ret i1 #{emit_has_next(body, load_state(body, kind, 0))}")
-    body.start_block(end_label)
-    body.emit('ret i1 false')
+    body.emit "br i1 #{is_positive}, label %#{ask_label}, label %#{end_label}"
+    body.start_block ask_label
+    body.emit "ret i1 #{emit_has_next(body, load_state(body, kind, 0))}"
+    body.start_block end_label
+    body.emit 'ret i1 false'
   const next = (body: IrBuilder, kind: IterKind) ->
     const remaining = load_state(body, kind, 1)
     store_state body, kind, 1, body.assign("sub nsw i64 #{remaining}, 1")
     const value = emit_next(body, load_state(body, kind, 0), item)
-    body.emit("ret #{ir_type(item)} #{value}")
+    body.emit "ret #{ir_type(item)} #{value}"
   const state = [value_field(IterType(item)), value_field(int_type)]
   const kind = define_kind(ir, "take #{type_key(item)}", state, item, has_next, next)
   emit_iter ir, kind, [source, count]

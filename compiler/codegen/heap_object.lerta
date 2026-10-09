@@ -26,7 +26,7 @@ export const plain_field = (ir: String) -> HeapField(ir_type: ir, holds_referenc
 # The LLVM struct type of a heap object with the fields: the header, then the fields.
 export const heap_object_type = (fields: Array<HeapField>) ->
   const types = ['i64', 'ptr']
-  types.push(field.ir_type) for field in fields
+  types.push field.ir_type for field in fields
   "{ #{types.join(', ')} }"
 
 # Defines the LLVM struct type `layout` and the drop function `drop`, which first runs `deinit`,
@@ -38,17 +38,17 @@ export const define_heap_object = (
   fields: Array<HeapField>
   deinit: String?
 ) ->
-  module.add_type("#{layout} = type #{heap_object_type(fields)}")
+  module.add_type "#{layout} = type #{heap_object_type(fields)}"
   const ir = IrBuilder(module)
   if deinit
-    module.declare('lerta_run_deinit', 'declare void @lerta_run_deinit(ptr, ptr)')
-    ir.emit("call void @lerta_run_deinit(ptr %object, ptr #{deinit})")
+    module.declare 'lerta_run_deinit', 'declare void @lerta_run_deinit(ptr, ptr)'
+    ir.emit "call void @lerta_run_deinit(ptr %object, ptr #{deinit})"
   for i in 0...fields.length
     continue if not fields[i].holds_reference
     const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
     emit_release ir, ir.assign("load ptr, ptr #{pointer}")
-  ir.emit('ret void')
-  ir.finish("void #{drop}(ptr %object)")
+  ir.emit 'ret void'
+  ir.finish "void #{drop}(ptr %object)"
 
 export const emit_heap_field_pointer = (
   ir: IrBuilder
@@ -59,10 +59,10 @@ export const emit_heap_field_pointer = (
 
 # A new object with reference count 1 and uninitialized fields.
 export const emit_heap_allocate = (ir: IrBuilder, layout: String, drop: String) ->
-  ir.module.declare('lerta_alloc', 'declare ptr @lerta_alloc(i64, ptr)')
+  ir.module.declare 'lerta_alloc', 'declare ptr @lerta_alloc(i64, ptr)'
   const end = ir.assign("getelementptr #{layout}, ptr null, i32 1")
   const size = ir.assign("ptrtoint ptr #{end} to i64")
-  ir.assign("call ptr @lerta_alloc(i64 #{size}, ptr #{drop})")
+  ir.assign "call ptr @lerta_alloc(i64 #{size}, ptr #{drop})"
 
 # Classes and structs: named by their types. Constructors and methods are generated like
 # functions (see function).
@@ -87,7 +87,7 @@ export const emit_type_test = (ir: IrBuilder, object: String, type: Type) ->
   const object_type = type is ObjectType then type else throw 'is tests a class or struct'
   const pointer = ir.assign("getelementptr { i64, ptr }, ptr #{object}, i32 0, i32 1")
   const drop = ir.assign("load ptr, ptr #{pointer}")
-  ir.assign("icmp eq ptr #{drop}, #{drop_symbol(object_type)}")
+  ir.assign "icmp eq ptr #{drop}, #{drop_symbol(object_type)}"
 
 # A value of the IR type, computed by `of_member` for the member of the union that the object is:
 # each member but the last is tested in turn.
@@ -106,15 +106,15 @@ export const emit_member_dispatch = (
     if not is_last
       const matched = ir.fresh_label('member.matched')
       const test = emit_type_test(ir, object, members[i])
-      ir.emit("br i1 #{test}, label %#{matched}, label %#{next}")
-      ir.start_block(matched)
+      ir.emit "br i1 #{test}, label %#{matched}, label %#{next}"
+      ir.start_block matched
     const value = of_member(members[i])
     const block = ir.current_block
-    ir.emit("br label %#{done}")
-    ir.start_block(next) if not is_last
-    incoming.push("[ #{value}, %#{block} ]")
-  ir.start_block(done)
-  ir.assign("phi #{result_type} #{incoming.join(', ')}")
+    ir.emit "br label %#{done}"
+    ir.start_block next if not is_last
+    incoming.push "[ #{value}, %#{block} ]"
+  ir.start_block done
+  ir.assign "phi #{result_type} #{incoming.join(', ')}"
 
 # Anonymous structs: their fields are in name order. Each structural type has its own LLVM type
 # and drop function, defined once.
@@ -124,7 +124,7 @@ const record_layout = (ir: IrBuilder, type: RecordType) ->
   const fields = [value_field(field.type) for field in type.fields]
   const define = (name: String, module: IrModule) ->
     define_heap_object module, name, drop_name(name), fields, nil
-  ir.module.named("record #{type_key(type)}", '%lerta.record', define)
+  ir.module.named "record #{type_key(type)}", '%lerta.record', define
 
 const drop_name = (layout: String) -> "@#{without_sigil(layout)}.drop"
 
@@ -139,7 +139,7 @@ export const emit_record = (ir: IrBuilder, type: Type, values: Map<String, Strin
   for i in 0...record_type.fields.length
     const field = record_type.fields[i]
     const pointer = emit_heap_field_pointer(ir, layout, record, i)
-    ir.emit("store #{ir_type(field.type)} #{values[field.name]!}, ptr #{pointer}")
+    ir.emit "store #{ir_type(field.type)} #{values[field.name]!}, ptr #{pointer}"
   record
 
 # The value of a field, retained if a reference; the record is borrowed.
@@ -164,13 +164,13 @@ const cell_layout = (ir: IrBuilder, type: Type) ->
   const define = (name: String, module: IrModule) ->
     define_heap_object module, name, drop_name(name), [value_field(type)], nil
   const key = "cell #{ir_type(type)} #{is_reference_type(type)}"
-  ir.module.named(key, '%lerta.cell', define)
+  ir.module.named key, '%lerta.cell', define
 
 # A new cell, which takes over the value, owned.
 export const emit_cell = (ir: IrBuilder, type: Type, value: String) ->
   const layout = cell_layout(ir, type)
   const cell = emit_heap_allocate(ir, layout, drop_name(layout))
-  ir.emit("store #{ir_type(type)} #{value}, ptr #{emit_cell_pointer(ir, type, cell)}")
+  ir.emit "store #{ir_type(type)} #{value}, ptr #{emit_cell_pointer(ir, type, cell)}"
   cell
 
 # The pointer to the cell's value, which a var's reads and writes go through.

@@ -49,12 +49,12 @@ export const parse_function_literal = (tokens: TokenStream) ->
     when tokens.accept('(') then parse_list(tokens, ')', () -> parse_parameter(tokens))
     else []
   const return_type = parse_type_annotation(tokens)
-  tokens.expect('->', "'->'")
+  tokens.expect '->', "'->'"
   const is_block = tokens.peek().kind == 'newline'
   # Interpolated code is one expression; a function literal, whose body is made of statements,
   # cannot be written there.
   if const start = tokens.interpolation
-    tokens.fail(start, 'a function cannot be written in an interpolation')
+    tokens.fail start, 'a function cannot be written in an interpolation'
   const body = is_block then parse_block(tokens) else [parse_simple_statement(tokens)]
   FunctionLiteral type_params, params, return_type, body, position: token_position(token)
 
@@ -68,10 +68,10 @@ const parse_type_annotation = (tokens: TokenStream) ->
 
 # `<T, U: Stringable>`.
 export const parse_type_parameters = (tokens: TokenStream) ->
-  tokens.expect('<', "'<'")
+  tokens.expect '<', "'<'"
   const type_params = [parse_type_parameter(tokens)]
-  type_params.push(parse_type_parameter(tokens)) while tokens.accept(',')
-  tokens.expect('>', "'>'")
+  type_params.push parse_type_parameter(tokens) while tokens.accept(',')
+  tokens.expect '>', "'>'"
   type_params
 
 const parse_type_parameter = (tokens: TokenStream) ->
@@ -82,7 +82,7 @@ const parse_type_parameter = (tokens: TokenStream) ->
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
 export const parse_array_literal = (tokens: TokenStream, position: Position) ->
   const parse_contents = (): Expression ->
-    tokens.accept('line_break')
+    tokens.accept 'line_break'
     return ArrayLiteral(position, elements: []) if tokens.accept(']')
     const first = parse_expression(tokens)
     tokens.next() if tokens.peek().kind == 'line_break' and tokens.peek_at(1).kind == 'for'
@@ -96,7 +96,7 @@ export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
   const parse_contents = () ->
     const first = parse_expression(tokens)
     return parse_comprehension(tokens, first, position, ')') if tokens.peek().kind == 'for'
-    tokens.expect(')', "')'")
+    tokens.expect ')', "')'"
     # Diagnostics about the group point at its opening parenthesis.
     first.position = position
     first
@@ -112,7 +112,7 @@ const parse_comprehension = (
 ): Expression ->
   const parse_header = () ->
     const header = parse_loop_header(tokens)
-    tokens.expect(close, "'#{close}'")
+    tokens.expect close, "'#{close}'"
     header
   const { variable, iterable, guard } = inside(tokens, 'skip', parse_header)
   const lazy = close == ')' then lazy_functions(element, variable, guard) else nil
@@ -123,7 +123,7 @@ const parse_comprehension = (
 export const parse_map_literal = (tokens: TokenStream, position: Position): Expression ->
   return parse_record_literal(tokens, position) if starts_record_field(tokens)
   const entries = parse_list(tokens, '}', () -> parse_map_entry(tokens))
-  tokens.fail(position, 'the empty map is written `Map()`') if entries.length == 0
+  tokens.fail position, 'the empty map is written `Map()`' if entries.length == 0
   MapLiteral entries, position
 
 const parse_map_entry = (tokens: TokenStream) ->
@@ -131,9 +131,9 @@ const parse_map_entry = (tokens: TokenStream) ->
     const token = tokens.peek()
     const name = token.text
     const message = "a map's keys are values: for the value of '#{name}', write (#{name})"
-    tokens.fail(token_position(token), message)
+    tokens.fail token_position(token), message
   const key = parse_expression(tokens)
-  tokens.expect(':', "':'")
+  tokens.expect ':', "':'"
   MapEntry key, value: parse_expression(tokens)
 
 # A name followed by `:`, `,` or `}` starts a field of an anonymous struct; a map's keys are
@@ -149,7 +149,7 @@ const parse_record_literal = (tokens: TokenStream, position: Position) ->
 const parse_record_field = (tokens: TokenStream) ->
   if not starts_record_field(tokens)
     const message = 'an anonymous struct and a map cannot be mixed'
-    tokens.fail(token_position(tokens.peek()), message)
+    tokens.fail token_position(tokens.peek()), message
   const name = parse_identifier(tokens)
   const has_value = tokens.accept(':')
   const value: Expression = has_value then parse_expression(tokens) else copy_identifier(name)
@@ -160,22 +160,22 @@ const parse_record_field = (tokens: TokenStream) ->
 # it may is checked later).
 export const parse_case = (tokens: TokenStream, position: Position) ->
   const subject = tokens.peek().kind == 'newline' then nil else parse_expression(tokens)
-  tokens.expect('newline', 'end of line')
-  tokens.expect('indent', "indented 'when' arms")
+  tokens.expect 'newline', 'end of line'
+  tokens.expect 'indent', "indented 'when' arms"
   const has_subject = subject != nil
   const arms = [parse_case_arm(tokens, has_subject)]
-  arms.push(parse_case_arm(tokens, has_subject)) while tokens.peek().kind == 'when'
+  arms.push parse_case_arm(tokens, has_subject) while tokens.peek().kind == 'when'
   const has_else = not has_subject or tokens.peek().kind == 'else'
-  tokens.expect('else', "'when' or 'else'") if has_else
+  tokens.expect 'else', "'when' or 'else'" if has_else
   const otherwise = has_else then parse_arm_body(tokens, 'else') else nil
-  tokens.expect('dedent', 'end of block')
+  tokens.expect 'dedent', 'end of block'
   Case subject, arms, otherwise, position
 
 const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
-  tokens.expect('when', "'when'")
+  tokens.expect 'when', "'when'"
   # A pattern stops before `then`, which begins the arm's value.
   const patterns = [parse_coalesce(tokens)]
-  patterns.push(parse_coalesce(tokens)) while has_subject and tokens.accept(',')
+  patterns.push parse_coalesce(tokens) while has_subject and tokens.accept(',')
   CaseArm patterns, body: parse_arm_body(tokens, 'then')
 
 # The expression on the same line (`when c then x`, `else x`), or alone in an indented block.
@@ -187,7 +187,7 @@ const parse_arm_body = (tokens: TokenStream, arm: String): Array<Statement> ->
     tokens.expect_line_end()
     return [value]
   const next = tokens.peek()
-  tokens.fail_expecting(next, "'then' or end of line") if next.kind != 'newline'
+  tokens.fail_expecting next, "'then' or end of line" if next.kind != 'newline'
   parse_block tokens
 
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
