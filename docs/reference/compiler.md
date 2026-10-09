@@ -12,7 +12,13 @@ builds an executable. `lerta` is `bin/lerta`, which `make` builds (see the [READ
 - Without `-O`, the program checks for leaked memory when it exits: a leak is reported to stderr as `leak: <n> object(s)`, and the exit code is 1.
 - `-O` optimizes, including across the generated code and the runtime (link-time optimization).
 - `--target <triple>` has clang build the executable for that target, such as `i686-linux-gnu` or `x86_64-w64-mingw32`; without it, the executable is for the host. A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it.
-- The build leaves no other file: it writes the LLVM IR and the runtime's C files to a temporary directory, which it removes after clang has built the executable from them, or failed to. A throw in between, such as one for a file that cannot be written or for clang that cannot be run, leaves it, as there is no `catch` yet.
+- The build leaves no other file: it writes the LLVM IR and the runtime's C files to a temporary directory, which it removes after clang has built the executable from them, or failed to. A throw while the directory is there leaves it, as there is no `catch` yet: for a file that cannot be written, or for a program that cannot be started, clang or the one that `run` runs.
+
+```
+lerta run <source> [<file>...] [-O] [-- <arg>...]
+```
+
+builds the program as `build` does, from the same source and files, in the temporary directory, and runs it there, with the arguments after `--`, which go to the program as they are, even those that look like options; the program shares the standard streams. It then removes the directory, unless a throw left it (see above), and exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](modules.md#stdprocess)). `-o` and `--target` are usage errors, and so is an argument for the program without `--`. A compile error or a failure of clang is reported as by `build`, and nothing runs.
 
 The commands below print what the lexer, the parser, the checker and codegen make of the source. They are there for debugging the compiler.
 

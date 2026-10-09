@@ -9,12 +9,13 @@ import { EMBEDDED_FILES } from './embedded'
 import { load_modules } from './loader'
 import { basename, has_extension, join } from './paths'
 
-# What to build: the executable `output`, for `target` (a triple such as i686-linux-gnu) or else
-# for the host, linked with `linked_files`, such as C files that define the program's externs.
+# What to build: the executable `output`, or one in the temporary directory if nil, for `target`
+# (a triple such as i686-linux-gnu) or else for the host, linked with `linked_files`, such as C
+# files that define the program's externs.
 export struct BuildRequest
   source: String
   linked_files: Array<String>
-  output: String
+  output: String?
   optimize: Bool
   target: String?
 
@@ -27,15 +28,27 @@ export const check_program = (source: String) ->
 
 export const generate_ir = (source: String) -> generate(check_program(source))
 
-# clang's messages go to stderr as clang writes them, and its failure exits with code 1.
-export const build = (request: BuildRequest) ->
+export const build = (request: BuildRequest) -> build_then(request, (_executable) -> 0)
+
+# Builds the program in the temporary directory and runs it there with `args`, exiting with its
+# exit code.
+export const build_and_run = (request: BuildRequest, args: Array<String>) ->
+  build_then request, (executable) -> run(executable, args)
+
+# Builds the executable, then has `use` take it while the temporary directory, which holds the
+# IR, the runtime and, without an output, the executable, is still there. Exits with the code that
+# `use` returns. clang's messages go to stderr as clang writes them, and its failure exits with
+# code 1.
+const build_then = (request: BuildRequest, use: (String) -> Int) ->
   const ir = generate_ir(request.source)
   const dir = make_temp_dir().decode_utf8() ? throw 'the temporary directory is not valid UTF-8'
   const ir_path = join(dir, 'program.ll')
   write_file ir_path, ir.binary
-  const status = run('clang', clang_args(request, ir_path, write_runtime(dir)))
+  const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
+  const clang_status = run('clang', clang_args(request, ir_path, write_runtime(dir), executable))
+  const code = clang_status == 0 then use(executable) else 1
   remove_tree dir
-  exit 1 if status != 0
+  exit code
 
 # Writes the embedded runtime, runtime/*.c and runtime/*.h, to `dir`, and returns the paths of
 # the C files.
@@ -62,7 +75,9 @@ export const executable_suffix = (target: String?) ->
 # test/runtime.ts builds the runtime with the same flags.
 # Link-time optimization lets the generated code inline the runtime's C functions; unoptimized
 # builds use the debug runtime, which checks for leaks at exit.
-const clang_args = (request: BuildRequest, ir_path: String, runtime_c_files: Array<String>) ->
+const clang_args = (
+  request: BuildRequest, ir_path: String, runtime_c_files: Array<String>, output: String
+) ->
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
   const args = ['-Wno-override-module', ir_path]
   if const target = request.target
@@ -74,5 +89,5 @@ const clang_args = (request: BuildRequest, ir_path: String, runtime_c_files: Arr
   args.push file for file in runtime_c_files
   args.push file for file in request.linked_files
   args.push '-o'
-  args.push request.output
+  args.push output
   args

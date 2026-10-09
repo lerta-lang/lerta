@@ -108,7 +108,6 @@ const cli_cases: CliCase[] = [
     stderr: `'${join(cli_work_dir, 'missing.lerta')}' is not a file\n`,
   },
   { args: ['build'], status: 2 },
-  { args: ['run', hello, '-o', exe], status: 2 },
   { args: ['build', hello, '-o', exe, '-o', exe], status: 2 },
   { args: ['build', hello, '-o', exe, '-O', '-O'], status: 2 },
   { args: ['build', hello, '-o', '-O'], status: 2 },
@@ -128,6 +127,13 @@ const cli_cases: CliCase[] = [
   { args: ['build', join(root_dir, 'README.md')], status: 2 },
   { args: ['build', join(root_dir, 'tests/.lerta')], status: 2 },
   { args: ['dump-llvm'], status: 2 },
+  { args: ['run'], status: 2 },
+  { args: ['run', '--', 'a'], status: 2 },
+  { args: ['run', hello, '-o', exe], status: 2 },
+  { args: ['run', hello, '--target', host_triple], status: 2 },
+  { args: ['run', hello, join(root_dir, 'README.md')], status: 2 },
+  { args: ['run', hello, 'a'], status: 2 },
+  { args: ['build', hello, '-o', exe, '--', 'a'], status: 2 },
   // A standard module is a source too, as the compiler carries it.
   {
     args: ['dump-tokens', 'std:process'],
@@ -587,11 +593,11 @@ const build_and_run_checks = [[], ['-O'], ['--target', host_triple]].map((flags)
 
 // Runs the compiler in a new directory, with another new one as the system's directory for
 // temporary files, and returns what it left in each.
-const build_in_new_dir = (args: string[]) => {
+const build_in_new_dir = (args: string[], input = '') => {
   const cwd = mkdtempSync(join(cli_work_dir, 'cwd-'))
   const temp = mkdtempSync(join(cli_work_dir, 'temp-'))
   const env = { ...process.env, TMPDIR: temp }
-  const built = spawnSync(compiler, args, { cwd, env, encoding: 'utf8' })
+  const built = spawnSync(compiler, args, { cwd, env, input, encoding: 'utf8' })
   return { ...built, cwd, left: readdirSync(cwd), left_in_temp: readdirSync(temp) }
 }
 
@@ -702,6 +708,78 @@ const linked_file_checks = [
   },
 ]
 
+type RunCase = {
+  name: string
+  args: string[]
+  input?: string
+  status: number
+  stdout: string
+  stderr?: string
+}
+
+const commands_dir = join(root_dir, 'tests/bin')
+
+// `lerta run`, which builds the program in a temporary directory, runs it and removes the
+// directory, so that it leaves no file, whether the program succeeds or not.
+const run_cases: RunCase[] = [
+  { name: 'runs the program', args: ['run', hello], status: 0, stdout: hello_output },
+  { name: 'optimizes', args: ['run', hello, '-O'], status: 0, stdout: hello_output },
+  {
+    name: 'passes the exit code',
+    args: ['run', join(commands_dir, 'exit_with.lerta'), '--', '3'],
+    status: 3,
+    stdout: '',
+  },
+  {
+    name: 'passes the arguments after --, options included',
+    args: ['run', join(commands_dir, 'print_args.lerta'), '-O', '--', '-O', '--', 'a b', '-o'],
+    status: 0,
+    stdout: '[-O]\n[--]\n[a b]\n[-o]\n',
+  },
+  {
+    name: 'passes stdin',
+    args: ['run', join(commands_dir, 'echo_stdin.lerta')],
+    input: 'piped\n',
+    status: 0,
+    stdout: 'piped\n',
+  },
+  {
+    // The panic aborts, so SIGABRT (6) ends the program.
+    name: 'gives 128 plus the number of the signal that ended the program',
+    args: ['run', join(root_dir, 'tests/panic/stack_overflow.lerta')],
+    status: 134,
+    stdout: '',
+    stderr: 'stack overflow\n',
+  },
+  {
+    name: 'links the files after the source',
+    args: ['run', twice_source, twice_c],
+    status: 0,
+    stdout: '42\n',
+  },
+  {
+    name: 'runs nothing after a compile error',
+    args: ['run', join(root_dir, 'tests/name/undefined.lerta')],
+    status: 1,
+    stdout: '',
+    stderr: `${join(root_dir, 'tests/name/undefined.lerta')}:1:1: undefined name 'say'\n`,
+  },
+]
+
+const run_checks_of_run = run_cases.map(({ name, args, input, status, stdout, stderr }) => ({
+  name: `lerta run ${name}`,
+  run: () => {
+    const ran = build_in_new_dir(args, input)
+    return [
+      ...(ran.status === status ? [] : [`expected exit status ${status}, got ${ran.status}`]),
+      ...compare_text('stdout', stdout, ran.stdout),
+      ...(stderr === undefined ? [] : compare_text('stderr', stderr, ran.stderr)),
+      ...expect_left('files left', [], ran.left),
+      ...expect_left('files left in the temporary directory', [], ran.left_in_temp),
+    ]
+  },
+}))
+
 let failed_count: number
 try {
   failed_count = await run_checks('CLI checks', [
@@ -713,6 +791,7 @@ try {
     ...build_and_run_checks,
     ...output_checks,
     ...linked_file_checks,
+    ...run_checks_of_run,
   ])
 } finally {
   rmSync(cli_work_dir, { recursive: true, force: true })

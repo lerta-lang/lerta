@@ -71,7 +71,7 @@ Run tests (source → execution result) run `bin/lerta`, the compiler written in
    - stage2 / stage3: recompile the same source with stage1, then again with stage2. **stage2 == stage3** (the same LLVM IR) means the bootstrap succeeded.
    - Then stage0 was removed; for how the compiler is built now, see [bootstrap](internals.md#bootstrap).
 3. **Phase 2**: complete the core of the language — exceptions and the frame chain, async and the event loop, `weak`, `interface`, user-defined generics, `Float` and all integer types.
-4. **Phase 3**: the surroundings — `lerta run`/`lerta repl`, `.ll`/bitcode output from `lerta build` ([tools](design/programs.md#tools)), advanced string representations, operator overloading, regular expressions, libclang FFI, tooling. Windows programs can already be built and run (see [platforms](internals.md#platforms)); the compiler itself is not tested there yet.
+4. **Phase 3**: the surroundings — `lerta repl` (`lerta run` is done), `.ll`/bitcode output from `lerta build` ([tools](design/programs.md#tools)), advanced string representations, operator overloading, regular expressions, libclang FFI, tooling. Windows programs can already be built and run (see [platforms](internals.md#platforms)); the compiler itself is not tested there yet.
 
 ## Open questions
 
