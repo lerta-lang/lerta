@@ -66,16 +66,44 @@ export class TokenStream
   fail_expecting = (token: Token, expected: String) ->
     @fail token_position(token), "expected #{expected}, found #{describe_token(token)}"
 
+  # Runs `parse` on the contents of brackets, whose line breaks it reads as `mode` says. A compile
+  # error ends the program, so the mode needs no restoring on one.
+  inside = <T>(mode: String, parse: () -> T): T ->
+    @line_breaks.push mode
+    const result = parse()
+    @line_breaks.pop()
+    result
+
+  # The items of a list after its opening bracket, through `close`. Items are separated by a
+  # comma, which the next item follows on the same line, or by a line end.
+  parse_list = <T>(close: String, parse_item: () -> T): Array<T> ->
+    const parse_items = () ->
+      @accept 'line_break'
+      @parse_list_rest close, parse_item, []
+    @inside 'separate', parse_items
+
+  # The rest of a list whose first items are `items`, through `close`.
+  parse_list_rest = <T>(close: String, parse_item: () -> T, items: Array<T>): Array<T> ->
+    return items if items.length > 0 and not @ends_item(close)
+    while not @accept(close)
+      items.push parse_item()
+      break if not @ends_item(close)
+    items
+
+  # After an item: whether a separator, which is consumed, follows it; otherwise the closing
+  # bracket must, and is consumed.
+  ends_item = (close: String) ->
+    if @accept(',')
+      const next = @peek()
+      const ends_line = next.kind == 'line_break' or next.kind == close
+      @fail_expecting next, "an item after ','" if ends_line
+      return true
+    return true if @accept('line_break')
+    @expect close, "'#{close}'"
+    false
+
   fail = (position: Position, message: String) ->
     compile_error @path, position.line, position.column, message
-
-# Runs `parse` on the contents of brackets, whose line breaks it reads as `mode` says. A compile
-# error ends the program, so the mode needs no restoring on one.
-export const inside = <T>(tokens: TokenStream, mode: String, parse: () -> T): T ->
-  tokens.line_breaks.push mode
-  const result = parse()
-  tokens.line_breaks.pop()
-  result
 
 export const token_position = (token: Token) ->
   Position line: token.line, column: token.column

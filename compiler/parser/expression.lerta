@@ -7,7 +7,7 @@ import {
 } from '../ast'
 import { parse_block_literal, starts_block, starts_field_block } from './block_literal'
 import { integer_value, parse_primary } from './primary'
-import { inside, is_one_of, token_position, TokenStream } from './token_stream'
+import { is_one_of, token_position, TokenStream } from './token_stream'
 import { parse_named_type, parse_type_arguments, starts_type_arguments } from './type'
 
 # Arithmetic operators by precedence, weakest first. Comparisons are weaker than all of them.
@@ -177,46 +177,13 @@ const extend_by_postfix = (tokens: TokenStream, expression: Expression): Express
     when '[' then Index(position, object: expression, index: parse_index(tokens))
     else Member(position, object: expression, name: parse_identifier(tokens))
 
-# The items of a list after its opening bracket, through `close`. Items are separated by a comma,
-# which the next item follows on the same line, or by a line end.
-export const parse_list = <T>(tokens: TokenStream, close: String, parse_item: () -> T): Array<T> ->
-  const parse_items = () ->
-    tokens.accept 'line_break'
-    parse_list_rest tokens, close, parse_item, []
-  inside tokens, 'separate', parse_items
-
-# The rest of a list whose first items are `items`, through `close`.
-export const parse_list_rest = <T>(
-  tokens: TokenStream
-  close: String
-  parse_item: () -> T
-  items: Array<T>
-): Array<T> ->
-  return items if items.length > 0 and not ends_item(tokens, close)
-  while not tokens.accept(close)
-    items.push parse_item()
-    break if not ends_item(tokens, close)
-  items
-
-# After an item: whether a separator, which is consumed, follows it; otherwise the closing
-# bracket must, and is consumed.
-const ends_item = (tokens: TokenStream, close: String) ->
-  if tokens.accept(',')
-    const next = tokens.peek()
-    const ends_line = next.kind == 'line_break' or next.kind == close
-    tokens.fail_expecting next, "an item after ','" if ends_line
-    return true
-  return true if tokens.accept('line_break')
-  tokens.expect close, "'#{close}'"
-  false
-
 # The index after `[`, through `]`; line ends inside are skipped.
 const parse_index = (tokens: TokenStream) ->
   const parse_contents = () ->
     const expression = parse_expression(tokens)
     tokens.expect ']', "']'"
     expression
-  inside tokens, 'skip', parse_contents
+  tokens.inside 'skip', parse_contents
 
 export const parse_loop_header = (tokens: TokenStream) ->
   tokens.expect 'for', "'for'"
@@ -228,7 +195,7 @@ export const parse_loop_header = (tokens: TokenStream) ->
 
 # The arguments after an opening parenthesis, through the closing one.
 const parse_parenthesized_arguments = (tokens: TokenStream) ->
-  to_arguments tokens, parse_list(tokens, ')', () -> parse_argument(tokens))
+  to_arguments tokens, tokens.parse_list(')', () -> parse_argument(tokens))
 
 # Arguments separated by commas, to the end of the line, as a call without parentheses has.
 export const parse_arguments = (tokens: TokenStream) ->

@@ -5,12 +5,9 @@ import {
   Expression, FunctionLiteral, Identifier, LazyFunctions, MapEntry, MapLiteral
   NamedValue, Parameter, Pass, Position, RecordLiteral, Statement, TypeParameter
 } from '../ast'
-import {
-  parse_coalesce, parse_expression, parse_identifier, parse_list, parse_list_rest
-  parse_loop_header
-} from './expression'
+import { parse_coalesce, parse_expression, parse_identifier, parse_loop_header } from './expression'
 import { at_declaration, parse_block, parse_simple_statement } from './statement'
-import { inside, is_one_of, token_position, TokenStream } from './token_stream'
+import { is_one_of, token_position, TokenStream } from './token_stream'
 import { parse_type_name } from './type'
 
 # `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
@@ -18,7 +15,7 @@ import { parse_type_name } from './type'
 # map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
 # The lookahead skips line breaks, which may separate the parameters.
 export const starts_function_literal = (tokens: TokenStream) ->
-  inside tokens, 'skip', () -> looks_like_function_literal(tokens)
+  tokens.inside 'skip', () -> looks_like_function_literal(tokens)
 
 const looks_like_function_literal = (tokens: TokenStream) ->
   const first = tokens.peek().kind
@@ -46,7 +43,7 @@ export const parse_function_literal = (tokens: TokenStream) ->
   const is_generic = token.kind == '<'
   const type_params: Array<TypeParameter> = is_generic then parse_type_parameters(tokens) else []
   const params: Array<Parameter> = case
-    when tokens.accept('(') then parse_list(tokens, ')', () -> parse_parameter(tokens))
+    when tokens.accept('(') then tokens.parse_list(')', () -> parse_parameter(tokens))
     else []
   const return_type = parse_type_annotation(tokens)
   tokens.expect '->', "'->'"
@@ -87,9 +84,9 @@ export const parse_array_literal = (tokens: TokenStream, position: Position) ->
     const first = parse_expression(tokens)
     tokens.next() if tokens.peek().kind == 'line_break' and tokens.peek_at(1).kind == 'for'
     return parse_comprehension(tokens, first, position, ']') if tokens.peek().kind == 'for'
-    const elements = parse_list_rest(tokens, ']', () -> parse_expression(tokens), [first])
+    const elements = tokens.parse_list_rest(']', () -> parse_expression(tokens), [first])
     ArrayLiteral elements, position
-  inside tokens, 'separate', parse_contents
+  tokens.inside 'separate', parse_contents
 
 # `(a)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends inside are skipped.
 export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
@@ -100,7 +97,7 @@ export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
     # Diagnostics about the group point at its opening parenthesis.
     first.position = position
     first
-  inside tokens, 'skip', parse_contents
+  tokens.inside 'skip', parse_contents
 
 # `for x in xs when guard]`, after the element, or `... guard)` for an Iter; line ends inside
 # are skipped.
@@ -114,7 +111,7 @@ const parse_comprehension = (
     const header = parse_loop_header(tokens)
     tokens.expect close, "'#{close}'"
     header
-  const { variable, iterable, guard } = inside(tokens, 'skip', parse_header)
+  const { variable, iterable, guard } = tokens.inside('skip', parse_header)
   const lazy = close == ')' then lazy_functions(element, variable, guard) else nil
   Comprehension element, variable, iterable, guard, lazy, position
 
@@ -122,7 +119,7 @@ const parse_comprehension = (
 # written as a key in parentheses: `{ (k): v }`.
 export const parse_map_literal = (tokens: TokenStream, position: Position): Expression ->
   return parse_record_literal(tokens, position) if starts_record_field(tokens)
-  const entries = parse_list(tokens, '}', () -> parse_map_entry(tokens))
+  const entries = tokens.parse_list('}', () -> parse_map_entry(tokens))
   tokens.fail position, 'the empty map is written `Map()`' if entries.length == 0
   MapLiteral entries, position
 
@@ -144,7 +141,7 @@ const starts_record_field = (tokens: TokenStream) ->
 
 # `{ x: 1, y }`; a field without a value takes that of the name.
 const parse_record_literal = (tokens: TokenStream, position: Position) ->
-  RecordLiteral position, fields: parse_list(tokens, '}', () -> parse_record_field(tokens))
+  RecordLiteral position, fields: tokens.parse_list('}', () -> parse_record_field(tokens))
 
 const parse_record_field = (tokens: TokenStream) ->
   if not starts_record_field(tokens)
