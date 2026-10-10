@@ -18,15 +18,20 @@ export struct BuildRequest
   output: String?
   optimize: Bool
   target: String?
+  # `-Werror`: a warning stops the build, as an error does.
+  warnings_as_errors: Bool
 
-# The checked program of the entry module `source`, whose warnings are printed. A compile error is
-# thrown.
-export const check_program = (source: String) ->
+# The checked program of the entry module `source`, whose warnings are printed; with
+# `warnings_as_errors`, a warning exits with code 1, as an error does. A compile error is thrown.
+export const check_program = (source: String, warnings_as_errors: Bool) ->
   const program = check_modules(source, load_modules(source))
-  stderr.write "#{warning}\n" for warning in all_warnings(program)
+  const warnings = all_warnings(program)
+  stderr.write "#{warning}\n" for warning in warnings
+  exit 1 if warnings_as_errors and warnings.length > 0
   program
 
-export const generate_ir = (source: String) -> generate(check_program(source))
+export const generate_ir = (source: String, warnings_as_errors: Bool) ->
+  generate check_program(source, warnings_as_errors)
 
 export const build = (request: BuildRequest) -> build_then(request, (_executable) -> 0)
 
@@ -40,7 +45,7 @@ export const build_and_run = (request: BuildRequest, args: Array<String>) ->
 # `use` returns. clang's messages go to stderr as clang writes them, and its failure exits with
 # code 1.
 const build_then = (request: BuildRequest, use: (String) -> Int) ->
-  const ir = generate_ir(request.source)
+  const ir = generate_ir(request.source, request.warnings_as_errors)
   const dir = make_temp_dir().decode_utf8() ? throw 'the temporary directory is not valid UTF-8'
   const ir_path = join(dir, 'program.ll')
   write_file ir_path, ir.binary

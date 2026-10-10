@@ -115,7 +115,31 @@ const cli_cases: CliCase[] = [
     status: 1,
     stderr: `'${join(cli_work_dir, 'missing.lerta')}' is not a file\n`,
   },
+  {
+    // -Werror stops the build at a warning, as at an error, after printing the warnings.
+    args: ['build', join(root_dir, 'tests/variable/unused.lerta'), '-o', exe, '-Werror'],
+    status: 1,
+    stderr: [
+      `${join(root_dir, 'tests/variable/unused.lerta')}:1:7: warning: 'unused' is never used`,
+      `${join(root_dir, 'tests/variable/unused.lerta')}:6:7: warning: 'inner' is never used`,
+    ]
+      .map((line) => `${line}\n`)
+      .join(''),
+  },
+  {
+    // lerta run with -Werror runs nothing after the warnings.
+    args: ['run', join(root_dir, 'tests/variable/unused.lerta'), '-Werror'],
+    status: 1,
+    stdout: '',
+    stderr: [
+      `${join(root_dir, 'tests/variable/unused.lerta')}:1:7: warning: 'unused' is never used`,
+      `${join(root_dir, 'tests/variable/unused.lerta')}:6:7: warning: 'inner' is never used`,
+    ]
+      .map((line) => `${line}\n`)
+      .join(''),
+  },
   { args: ['build'], status: 2 },
+  { args: ['build', hello, '-o', exe, '-Werror', '-Werror'], status: 2 },
   { args: ['build', hello, '-o', exe, '-o', exe], status: 2 },
   { args: ['build', hello, '-o', exe, '-O', '-O'], status: 2 },
   { args: ['build', hello, '-o', '-O'], status: 2 },
@@ -661,7 +685,7 @@ const std_modules = readdirSync(std_dir).map((file) => `std:${file.replace(/\.le
 const std_checks = std_modules.map((module) => ({
   name: `${module} builds without warnings`,
   run: () => {
-    const args = ['build', module, '-o', join(cli_work_dir, module.replace(':', '_'))]
+    const args = ['build', module, '-o', join(cli_work_dir, module.replace(':', '_')), '-Werror']
     const { status, stderr } = spawnSync(compiler, args, { encoding: 'utf8' })
     return status === 0 && stderr === '' ? [] : [`exit status ${status}, stderr:\n${stderr}`]
   },

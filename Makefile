@@ -40,22 +40,23 @@ bin/lerta: build/minilerta $(SOURCES) $(EMBEDDED)
 	@mkdir -p bin
 	build/minilerta build $(MAIN) -o $@ -O
 
+# The compiler builds itself without warnings; minilerta, which the seed is, may not know -Werror.
 ifdef TARGET
 $(COMPILER): bin/lerta
-	bin/lerta build $(MAIN) -o $@ -O $(TARGET_FLAGS)
+	bin/lerta build $(MAIN) -o $@ -O -Werror $(TARGET_FLAGS)
 endif
 
 # stage2 is unoptimized, so that its runs, which build stage3 and print its IR, check for leaks.
 $(BOOTSTRAP)/stage2: bin/lerta
 	@mkdir -p $(BOOTSTRAP)
-	bin/lerta build $(MAIN) -o $@ $(TARGET_FLAGS)
+	bin/lerta build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
 
 $(BOOTSTRAP)/stage2.ll: bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta dump-llvm $(MAIN) > $@
 
 $(BOOTSTRAP)/stage3: $(BOOTSTRAP)/stage2
-	$(BOOTSTRAP)/stage2 build $(MAIN) -o $@ $(TARGET_FLAGS)
+	$(BOOTSTRAP)/stage2 build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
 
 $(BOOTSTRAP)/stage3.ll: $(BOOTSTRAP)/stage2
 	$(BOOTSTRAP)/stage2 dump-llvm $(MAIN) > $@

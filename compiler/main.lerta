@@ -15,8 +15,8 @@ import { read_entry_source } from './source'
 import { dump_tokens } from './token_dump'
 
 const USAGE = [
-  "usage: lerta build <source> [<file>...] [-o <output>] [-O] [--target <triple>]\n"
-  "       lerta run <source> [<file>...] [-O] [-- <arg>...]\n"
+  "usage: lerta build <source> [<file>...] [-o <output>] [-O] [-Werror] [--target <triple>]\n"
+  "       lerta run <source> [<file>...] [-O] [-Werror] [-- <arg>...]\n"
   "       lerta dump-tokens <source>\n"
   "       lerta dump-ast <source>\n"
   "       lerta dump-checked <source>\n"
@@ -49,6 +49,7 @@ const parse_build_arguments = (args: Array<String>) ->
   var output: String? = nil
   var target: String? = nil
   var optimize = false
+  var warnings_as_errors = false
   var program_args: Array<String>? = nil
   var i = 0
   const take_value = (previous: String?) ->
@@ -61,6 +62,9 @@ const parse_build_arguments = (args: Array<String>) ->
       when '-O'
         fail_usage() if optimize
         optimize = true
+      when '-Werror'
+        fail_usage() if warnings_as_errors
+        warnings_as_errors = true
       when '-o' then output = take_value(output)
       when '--target' then target = take_value(target)
       when '--'
@@ -75,21 +79,22 @@ const parse_build_arguments = (args: Array<String>) ->
           linked_files.push arg
     i += 1
   const given_source = source ? fail_usage()
-  { source: given_source, linked_files, output, target, optimize, program_args }
+  { source: given_source, linked_files, output, target, optimize, warnings_as_errors, program_args }
 
 const build_command = (args: Array<String>) ->
   const parsed = parse_build_arguments(args)
-  const { source, linked_files, output, target, optimize, program_args } = parsed
-  fail_usage() if program_args != nil
+  const { source, linked_files, output, target, optimize, warnings_as_errors } = parsed
+  fail_usage() if parsed.program_args != nil
   const executable = output ? default_output(source, target)
-  build BuildRequest(source, linked_files, optimize, target, output: executable)
+  build BuildRequest(source, linked_files, optimize, target, warnings_as_errors, output: executable)
 
 # The program is built in the temporary directory, for the host.
 const run_command = (args: Array<String>) ->
   const parsed = parse_build_arguments(args)
-  const { source, linked_files, output, target, optimize, program_args } = parsed
+  const { source, linked_files, output, target, optimize, warnings_as_errors } = parsed
   fail_usage() if output != nil or target != nil
-  build_and_run BuildRequest(source, linked_files, optimize, target, output), program_args ? []
+  const request = BuildRequest(source, linked_files, optimize, target, output, warnings_as_errors)
+  build_and_run request, parsed.program_args ? []
 
 const SOURCE_EXTENSION = '.lerta'
 
@@ -108,7 +113,7 @@ const dump_file_tokens = (path: String) ->
 const dump_file_ast = (path: String) ->
   dump_ast parse(tokenize(read_entry_source(path), path), path)
 
-const dump_program_checked = (path: String) -> dump_checked(check_program(path))
+const dump_program_checked = (path: String) -> dump_checked(check_program(path, false))
 
 const command = argv.length > 0 then argv[0] else ''
 const args = [argv[i] for i in 1...argv.length]
@@ -118,5 +123,5 @@ case command
   when 'dump-tokens' then run_dump(args, dump_file_tokens)
   when 'dump-ast' then run_dump(args, dump_file_ast)
   when 'dump-checked' then run_dump(args, dump_program_checked)
-  when 'dump-llvm' then run_dump(args, generate_ir)
+  when 'dump-llvm' then run_dump(args, (path) -> generate_ir(path, false))
   else fail_usage()
