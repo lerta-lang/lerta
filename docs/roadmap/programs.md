@@ -9,7 +9,7 @@ The planned design of modules, FFI, the standard library and tools.
 ## C ABI / FFI
 
 - An `extern` declaration may also refer to a C variable.
-- Generic externs, `extern lerta_array_length: <T>(Array<T>) -> Int`, for C functions that take a value of any type as a pointer, as an array, a map or a String is. With them, `length`, `keys`, `remove` and `s.binary`, built into the compiler now (see [internals](../internals.md#builtins)), move to `std/builtins.lerta`; `push`, `pop` and indexing stay built in, since their code depends on the items' kind. Using them in std needs a seed refresh, best taken with generic classes, which move `Iter<T>` there too (see [Iterables](language.md#iterables)).
+- Generic externs, `extern lerta_map_keys: <K, V>(Map<K, V>) -> Array<K>`, for C functions that take a value of any type as a pointer, as an array, a map or a String is. With them, the methods `keys` and `remove`, built into the compiler now (see [internals](../internals.md#builtins)), move to `std/builtins.lerta`, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)); `push`, `pop` and indexing stay built in, since their code depends on the items' kind. Using them in std needs a seed refresh.
 - C headers are imported with libclang.
 - The C side reaches Lerta's objects through accessors (see [internals](../internals.md#ffi)).
 - Decided points:
@@ -34,6 +34,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Open questions
 
+- Extern properties, `extern lerta_array_length as length: Int` in an extend, which read a property by calling a C function with the receiver. They would move `length` and `s.binary` to std, but they are getters written in C, which [philosophy](../philosophy.md#non-goals) leaves out; allowing them only in `std:` modules, as a builtin special case, keeps that for users.
 - Sorting arrays (`compiler/sort.lerta` sorts by hand for now).
 - The ABI of `String` at the FFI boundary (pass as a 16-byte value, or box it in the heap representation; decide when small strings become immediate values).
 - How to trigger serialization code generation (an annotation on the type, or automatic generation from calls such as `json.decode<T>`).

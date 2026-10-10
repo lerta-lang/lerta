@@ -24,15 +24,18 @@ These apply when a value in statement position is not captured, beyond [the refe
   try
     risky()
   catch e: IOError
-    log e
+    log e.message
+  catch e: IndexError | ArithmeticError
+    log e.message
   finally
     cleanup()
   ```
-  - `catch e: T` catches only exceptions of type `T`; others propagate unchanged (preventing unrelated exceptions from being swallowed). Several `catch` clauses may be listed. Omitting the type catches all exceptions (the name of the common type is undecided).
+  - `throw` takes a value of a type that satisfies `interface Error` of `std:builtins`, whose one member is `message: String`: a class or struct, as an interface value holds (see [interfaces](../reference/objects.md#interfaces)), which a program declares for its own errors. A `String` cannot be thrown.
+  - `catch e: T` catches only exceptions whose type is `T`, or a member of the union `T`, telling it by the thrown object's type, as `is` does; `e` then has that type. Others propagate unchanged (preventing unrelated exceptions from being swallowed). Several `catch` clauses may be listed, tried in order. `catch e` alone catches all, `e` being an `Error`.
   - `try`/`catch` is an expression with a value. If any arm is `void`, the whole is `void`. The value of `finally` is discarded.
   - No `throws` annotation is needed (if written, it is type-checked). There is no `try` attached to calls (as in Swift).
-- Exception types, which `throw` takes instead of only a `String` message.
-- The frame chain (see [internals](../internals.md#frame-chain-planned)); the implementation strategy is an [open question](#open-questions).
+- The runtime's errors are of types of `std:builtins`, one for each kind: `IndexError` (an index or a slice out of range, `pop` and `last` of an empty array), `ArithmeticError` (overflow, division by zero), `NilError` (`x!` of nil), `CastError` (`as T!`), `IterError` (a second traversal, `next` past the end), `WeakError` (a `weak!` field whose object is gone), and `IOError` and others of the standard modules.
+- How exceptions propagate (see [internals](../internals.md#exceptions-planned)): a throw sets the pending exception and leaves the function as a return does, releasing what its scopes hold, and each call is followed by a check of it.
 - Only throws can be caught; a [panic](../reference/errors.md#panics) cannot.
 - Exceptions inside async functions are carried as the failure value of the asynchronous result.
 - For servers, exceptions are caught at the task boundary of the event loop and only that task is discarded.
@@ -51,9 +54,7 @@ These apply when a value in statement position is not captured, beyond [the refe
 
 ## Open questions
 
-- The name of the type common to all exceptions (the type caught by an untyped `catch`).
 - Whether stack overflow should be an exception that can be caught instead of a panic. That needs the check at function entry described in [internals](../internals.md#stack-overflow).
-- The exception implementation strategy (choose from [the candidates](../internals.md#exception-implementation-planned-undecided-candidates)).
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - The type of asynchronous results (its name, and the type of async functions that return no value).
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).

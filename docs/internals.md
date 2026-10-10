@@ -39,22 +39,21 @@ This describes the implementation design. Unmarked statements describe the compi
 
 - There is no frame chain yet. A closure copies the values that cannot change (`const`s, parameters, loop variables) in (see [objects](#objects)), and each captured `var` lives in a heap cell of its own, which the closure holds.
 
-### Frame chain (planned)
+### Frames and contexts (planned)
 
 The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
-- At the start of each function, a **frame record** is `alloca`ed (a parent pointer plus slots for locals holding RC references) and linked to the global variable `current_frame` (the LLVM shadow stack approach). There are no threads, so a global variable is fine.
-- **Non-RC values (Int, Float, Bool) stay as SSA values** in registers. They are not put in the frame record.
-- RC references that are temporaries not living across a function call are not put there either.
+- A function's frame is on the machine stack. **Non-RC values (Int, Float, Bool) stay as SSA values** in registers.
 - Only variables captured by closures and variables living across `await` are placed in a heap **context object** (the V8 approach). Only the captured variables, not the whole frame.
-- For an async function, the context is the coroutine frame itself.
-- The cost per function call is a few stores.
+- For an async function, the context is the coroutine frame itself, which outlives the call that made it; suspended functions are linked by which one awaits which, a spaghetti stack on the heap.
+- A **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach), which would let a panic print a stack trace, is not needed for exceptions (see below); it may come for stack traces.
 
-### Exception implementation (planned; undecided candidates)
+### Exceptions (planned)
 
-- **Frame chain + `longjmp`**: `throw` walks the chain to find a handler, releasing the RC references in the records along the way, then `longjmp`s. No tables needed; suited to microcontrollers.
-- **LLVM zero-cost unwinding (Itanium ABI)**: zero cost on the normal path, throw is heavy. Needs per-platform unwind tables.
-- **Error return values (the Swift approach)**: a branch on every call, but no unwinding mechanism needed.
+- **Error return values (the Swift approach)**: a throw sets the global pending exception, an interface value of `Error` (there are no threads, so a global is fine), and leaves the function as a `return` does, releasing what its scopes hold. Each call that may throw, of a Lerta function, a closure, an itab's entry or a C function of the runtime, is followed by a check of the pending exception, which leaves the caller so in turn, up to a `try` whose `catch` takes the exception, or to the program's end, which reports it as uncaught.
+- The runtime's C functions that throw set the pending exception and return; the error objects are of types of `std:builtins`, whose constructors the compiler gives C-callable names.
+- Why: unwinding reuses the release on `return` and `break`, needs no tables or `longjmp`, and works alike on every platform. A throw across an `await` cannot unwind the machine stack anyway, since the awaiting function's frame is no longer on it: it is carried as the failure of the asynchronous result, which this approach does within synchronous code too. The cost is a load and a branch after each call.
+- Considered: a frame chain with `longjmp` (needs a frame record listing the references in every function) and LLVM's zero-cost unwinding (needs landing pads, unwind tables for the runtime's C code, and Windows' SEH apart).
 
 ### Stack overflow
 
