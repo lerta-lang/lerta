@@ -1,17 +1,18 @@
 # Values of interface types. A value of a type that satisfies an interface converts to it where the
 # interface is expected; the conversion records the plan of the itab through which the interface
 # value reads the type's members (see codegen interface).
-import { Expression } from '../ast'
+import { Expression, Identifier } from '../ast'
 import { fail } from './diagnostics'
 import { receiver_instance } from './generic_call'
 import { Instance } from './generics'
-import { InterfaceMember, members_for } from './interfaces'
-import { generic_method } from './member'
+import { InterfaceMember, iter_source_type, members_for } from './interfaces'
+import { generic_method, member_type_by_name } from './member'
 import { find_method, MethodSource } from './methods'
 import { reject_unsatisfied } from './satisfaction'
 import { Body } from './shared'
 import {
-  format_type, inner_of, InterfaceType, is_one_of_kinds, is_reference_type, Type, UnionType
+  format_type, inner_of, InterfaceType, is_one_of_kinds, is_reference_type, IterType, Type
+  UnionType
 } from '../types'
 
 # How the type gives a member of the interface: by a method, as find_method finds it, with the
@@ -28,14 +29,40 @@ export struct Itab
   target: InterfaceType
   entries: Array<ItabEntry>
 
+# Whether the expression's value, which is not of the expected type, converts to it through an itab:
+# to an interface type, or to an Iter.
+export const converts_through_itab = (
+  body: Body, expression: Expression, type: Type, expected: Type
+) ->
+  return true if converts_to_interface(body, expression, type, expected)
+  converts_to_iter body, expression, type, expected
+
 # Whether the expression's value, which is not of the expected type, converts to it: to an
 # interface type, or to one optional, which its type must satisfy. Records the itab's plan.
-export const converts_to_interface = (
+const converts_to_interface = (
   body: Body, expression: Expression, type: Type, expected: Type
 ) ->
   const target = inner_of(expected)
   return false if not (target is InterfaceType)
   return false if is_one_of_kinds(type, ['nil', 'never', OPTIONAL, INTERFACE])
+  record_itab body, expression, type, target
+  true
+
+# Whether the expression's value, which is not of the expected type, converts to it: to an Iter, or
+# to one optional, which an Iter makes of a value that has `has_next(): Bool` and `next(): T` (see
+# iter_source_type). The Iter holds the value as an interface value, whose itab's plan is recorded.
+const converts_to_iter = (body: Body, expression: Expression, type: Type, expected: Type) ->
+  const target = inner_of(expected)
+  return false if not (target is IterType)
+  return false if is_one_of_kinds(type, ['nil', 'never', OPTIONAL, ITER])
+  const has_next = Identifier(name: 'has_next', position: expression.position)
+  return false if member_type_by_name(body, type, has_next, nil) == nil
+  record_itab body, expression, type, iter_source_type(target.item)
+  true
+
+# Records the plan of the itab of the value converted to the interface type, which its type must
+# satisfy.
+const record_itab = (body: Body, expression: Expression, type: Type, target: InterfaceType) ->
   const at = expression.position
   const to_target = "to #{format_type(target)}"
   # Each member of a union would need an itab of its own, chosen when the value is converted.
@@ -47,7 +74,6 @@ export const converts_to_interface = (
   const members = members_for(body.program, target, type)
   const entries = [itab_entry(body, type, member, expression) for member in members]
   body.facts.itabs[expression] = Itab(type, target, entries)
-  true
 
 const itab_entry = (body: Body, type: Type, member: InterfaceMember, at: Expression) ->
   const method = find_method(body.program, type, member.name, body.extensions)

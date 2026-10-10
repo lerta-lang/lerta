@@ -66,13 +66,15 @@ export const generate_while = (g: Generator, while_statement: While) ->
 # in a scope of its own, so a `return` from the body releases it too; an array's length is read
 # each round.
 export const generate_for = (g: Generator, for_statement: For) ->
-  const { iterable, variable } = for_statement
+  const { variable } = for_statement
+  const iterable = iterated(g, for_statement.iterable)
   generate_iteration g, iterable, variable, statements_code(g, for_statement.body)
 
 # A new array, of the comprehension's elements, which the loop pushes. Its loop can be the target
 # of no `break` or `continue`, which its element and guard cannot hold (see jump_positions).
 export const generate_comprehension = (g: Generator, comprehension: Comprehension) ->
-  const { element, variable, iterable, guard } = comprehension
+  const { element, variable, guard } = comprehension
+  const iterable = iterated(g, comprehension.iterable)
   return generate_iter_comprehension(g, iterable, lazy) if const lazy = comprehension.lazy
   const array_type = type_of(g, comprehension) as ArrayType!
   const element_type = array_type.element
@@ -91,6 +93,12 @@ export const generate_comprehension = (g: Generator, comprehension: Comprehensio
     ir.start_block next_label
   generate_iteration g, iterable, variable, body
   result
+
+# What a `for` or a comprehension goes through: the iterable, or the call of its `iter()` that
+# the checker made (see type_of_iterated).
+const iterated = (g: Generator, iterable: Expression): Expression ->
+  return call if const call = g.facts.iter_calls[iterable]
+  iterable
 
 # The source is evaluated first, then the closures, which capture the values they see then.
 const generate_iter_comprehension = (g: Generator, iterable: Expression, lazy: LazyFunctions) ->

@@ -17,7 +17,7 @@ import {
   enum_parse_type, type_of_elided_member, type_of_literal_member, type_of_qualified_member
 } from './enums'
 import { type_of_generic_call } from './generic_call'
-import { converts_to_interface } from './interface_values'
+import { converts_through_itab } from './interface_values'
 import { byte_literal } from './literals'
 import { check_loop_jump, type_of_comprehension } from './loop'
 import { type_of_method_call, type_of_property } from './member'
@@ -176,17 +176,17 @@ export const set_type = (body: Body, node: Node, type: Type) ->
   body.facts.types[node] = type
   type
 
-# A T or nil where a T? is expected is converted, and so is a value where an interface is
-# expected, which codegen does where it generates it.
+# A T or nil where a T? is expected is converted, and so is a value where an interface or an Iter
+# is expected (see interface_values), which codegen does where it generates it.
 export const require_type = (body: Body, expression: Expression, type: Type, expected: Type) ->
   const assignable = is_assignable(type, expected)
-  const to_interface = not assignable and converts_to_interface(body, expression, type, expected)
-  if not assignable and not to_interface
+  const through_itab = not assignable and converts_through_itab(body, expression, type, expected)
+  if not assignable and not through_itab
     const { first, second } = format_types(expected, type)
     fail body.program, expression.position, "expected #{first}, got #{second}"
   const is_converted = not is_kind(type, 'never') and not same_type(type, expected)
   const to_optional = expected is OptionalType and is_converted
-  body.facts.conversions[expression] = expected if to_optional or to_interface
+  body.facts.conversions[expression] = expected if to_optional or through_itab
 
 # A condition is a Bool, or an optional value that holds when it is not nil.
 export const expect_condition = (body: Body, expression: Expression) ->

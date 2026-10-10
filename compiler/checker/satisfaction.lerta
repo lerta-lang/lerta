@@ -8,7 +8,7 @@ import { set_type, type_of } from './expression'
 import { ExtensionMethod } from './extensions'
 import { common_field_problem } from './fields'
 import {
-  interface_members, interface_of, InterfaceMember, members_for, SELF, stringable
+  interface_members, interface_of, InterfaceMember, iterable, members_for, SELF, stringable
 } from './interfaces'
 import { member_type_by_name } from './member'
 import { find_method } from './methods'
@@ -79,17 +79,35 @@ export const check_interpolated = (body: Body, part: Call) ->
 export const find_interface_extension = (body: Body, type: Type, name: Identifier) ->
   const is_found = (method: ExtensionMethod) ->
     const bound = method.bound ? return false
-    method.name.name == name.name and satisfies_pattern(body, type, bound, name.position)
+    method.name.name == name.name and satisfied_bindings(body, type, bound, name.position) != nil
   body.extensions.in_effect.find is_found
 
-# Whether the type satisfies the interface type, whose type parameters its members give.
-const satisfies_pattern = (body: Body, type: Type, pattern: InterfaceType, at: Position) ->
+# The type arguments that the type gives the type parameters in the interface type if it
+# satisfies it, or nil.
+const satisfied_bindings = (body: Body, type: Type, pattern: InterfaceType, at: Position) ->
   const bindings: Map<String, Type> = Map()
   const bind = (name: String, bound: Type) -> bindings[name] = bound if not bindings.has(name)
   infer_through_members body, pattern, type, at, bind
   const bound = substitute(pattern, bindings)
-  return false if has_type_parameters(bound)
+  return nil if has_type_parameters(bound)
   const satisfies_member = (member: InterfaceMember) ->
     const name = Identifier(position: at, name: member.name)
     unsatisfied_reason(body, type, member, name, member_type_by_name(body, type, name, nil)) == nil
-  members_for(body.program, bound as InterfaceType!, type).all(satisfies_member)
+  const members = members_for(body.program, bound as InterfaceType!, type)
+  members.all(satisfies_member) then bindings else nil
+
+# The type of the items of a type that satisfies Iterable, which its iter gives.
+export const iterable_item_of = (body: Body, type: Type, at: Position) ->
+  const bindings = satisfied_bindings(body, type, iterable.type, at) ? return nil
+  bindings['T']
+
+# Fails with the message, or, for a type that has a member `iter` of another type, with why it is
+# not Iterable.
+export const reject_not_iterable = (body: Body, type: Type, at: Position, message: String) ->
+  const name = Identifier(position: at, name: 'iter')
+  const found = member_type_by_name(body, type, name, nil)
+  fail body.program, at, message if found == nil
+  const member = interface_members(body.program, iterable)[0]
+  const reason = unsatisfied_reason(body, type, member, name, found)!
+  const unsatisfied = "#{format_type(type)} does not satisfy #{format_type(iterable.type)}"
+  fail body.program, at, "#{unsatisfied}: #{reason}"

@@ -8,6 +8,10 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 
 `Stringable` is a builtin [interface](objects.md#interfaces) with one member, `to_string: () -> String`. `String`, `Int`, `Byte`, `Bool` and enums satisfy it, and so does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect; a `to_string` with parameters or another result does not. A module's own name `Stringable` shadows it. `Int?`, unions and arrays are not `Stringable`, unless an extend gives them `to_string`. String interpolation, `"#{x}"`, requires a `Stringable` value and inserts `x.to_string()` (see [syntax](syntax.md)).
 
+## Iterable
+
+`Iterable<T>` is a builtin [interface](objects.md#interfaces) with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). Arrays, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
+
 ## Methods of the builtin types
 
 The methods of the builtin types (see [types](types.md)) are written in Lerta, as extends of `std/builtins.lerta` (see [objects](objects.md#extend)), except those that the compiler gives them:

@@ -1,10 +1,13 @@
 # Checks loops: `for` over a range, an array, a Binary or an Iter, `while`, comprehensions, and
 # where `break` and `continue` may be.
-import { Comprehension, Expression, For, Identifier, Jump, Range, Statement, While } from '../ast'
+import {
+  Call, Comprehension, Expression, For, Identifier, Jump, Member, Range, Statement, While
+} from '../ast'
 import { check_item_type, check_value_type } from './collection'
 import { fail } from './diagnostics'
 import { expect_condition, expect_type, type_of } from './expression'
 import { type_of_item_function } from './closure'
+import { iterable_item_of, reject_not_iterable } from './satisfaction'
 import { Local } from './scopes'
 import { Body } from './shared'
 import {
@@ -24,7 +27,8 @@ const define_loop_variable = (body: Body, variable: Identifier, type: Type) ->
   const local = Local(type, identifier: variable, mutable: false, declared: false, used: false)
   define_local body, local
 
-# A range gives Int values; an array, a Binary or an Iter gives its items.
+# A range gives Int values; an array, a Binary or an Iter gives its items, and so does what
+# Iterable gives its Iter (see iterated).
 export const check_for = (body: Body, for_statement: For) ->
   const { iterable, variable } = for_statement
   const item_type = type_of_iterated(body, iterable)
@@ -85,15 +89,22 @@ const check_loop_body = (body: Body, statements: Array<Statement>, define: () ->
   check_block body, statements, define, nothing
   body.loop_depth -= 1
 
-# The type of the items a `for` goes through: Int values for a range, or the items of anything else.
+# The type of the items a `for` goes through: Int values for a range, or the items of an array, a
+# Binary or an Iter. A value of another type that satisfies Iterable is gone through by the Iter
+# of its `iter()`, a call recorded in the facts, which codegen generates instead (see
+# iter_calls).
 const type_of_iterated = (body: Body, iterable: Expression): Type ->
-  case iterable
-    when Range
-      expect_type body, iterable.start, int_type
-      expect_type body, iterable.end, int_type
-      int_type
-    else
-      const type = type_of(body, iterable, nil)
-      const iterables = 'a range, an array, a Binary or an Iter'
-      const message = "expected #{iterables} after 'in', got #{format_type(type)}"
-      iterable_item(type) ? fail(body.program, iterable.position, message)
+  if iterable is Range
+    expect_type body, iterable.start, int_type
+    expect_type body, iterable.end, int_type
+    return int_type
+  const type = type_of(body, iterable, nil)
+  return item if const item = iterable_item(type)
+  const at = iterable.position
+  if iterable_item_of(body, type, at) == nil
+    const iterables = 'a range, an array, a Binary, an Iter or an Iterable'
+    reject_not_iterable body, type, at, "expected #{iterables} after 'in', got #{format_type(type)}"
+  const iter = Member(object: iterable, name: Identifier(name: 'iter', position: at), position: at)
+  const call = Call(callee: iter, args: [], named_args: [], type_args: [], position: at)
+  body.facts.iter_calls[iterable] = call
+  iterable_item(type_of(body, call, nil))!

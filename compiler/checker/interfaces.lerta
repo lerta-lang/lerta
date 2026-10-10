@@ -11,7 +11,9 @@ import { has_import, imported_export, InterfaceExport } from './imports'
 import { ProgramWide, Shared } from './shared'
 import { has_type, module_resolver, resolve, Resolver, with_type_parameters } from './type_names'
 import { placeholders, substitute } from './type_patterns'
-import { FunctionType, InterfaceType, string_type, Type, TypeParameterType } from '../types'
+import {
+  bool_type, FunctionType, InterfaceType, IterType, string_type, Type, TypeParameterType
+} from '../types'
 
 # A type satisfies the member if it has a method, field or property of the name and the type.
 export struct InterfaceMember
@@ -35,22 +37,47 @@ export class InterfaceInfo
   module_index: Int?
   declaration: InterfaceDeclaration?
 
-# The builtin interface of the types that have `to_string(): String`, which print and
-# interpolation require.
-export const STRINGABLE = 'Stringable'
+# The builtin interfaces, which the compiler declares until the seed can read interfaces in
+# std/builtins.lerta (see docs/internals.md#bootstrap). Stringable is that of the types that have
+# `to_string(): String`, which print and interpolation require; Iterable, that of the types that
+# `for` and comprehensions go through with `iter(): Iter<T>`.
+const builtin_interface = (
+  name: String, symbol: String, type_params: Array<String>, members: Array<InterfaceMember>
+) ->
+  const args: Array<Type> = [TypeParameterType(name: param) for param in type_params]
+  const type = InterfaceType(name, symbol, args, module: 'std:builtins')
+  InterfaceInfo(
+    name, type, type_params, members, names_self: false, module_index: nil, declaration: nil
+  )
 
-const to_string_member = InterfaceMember(
-  name: 'to_string', type: FunctionType(params: [], result: string_type)
+const to_string = FunctionType(params: [], result: string_type)
+
+export const stringable = builtin_interface(
+  'Stringable', 'Stringable', [], [InterfaceMember(name: 'to_string', type: to_string)]
 )
 
-const stringable_type = InterfaceType(
-  name: STRINGABLE, symbol: STRINGABLE, module: 'std:builtins', args: []
+const iter = FunctionType(params: [], result: IterType(item: TypeParameterType(name: 'T')))
+
+export const iterable = builtin_interface(
+  'Iterable', 'Iterable', ['T'], [InterfaceMember(name: 'iter', type: iter)]
 )
 
-export const stringable = InterfaceInfo(
-  name: STRINGABLE, type: stringable_type, type_params: [], names_self: false
-  members: [to_string_member], module_index: nil, declaration: nil
+const builtin_interfaces = [stringable, iterable]
+
+const has_next = FunctionType(params: [], result: bool_type)
+const next = FunctionType(params: [], result: TypeParameterType(name: 'T'))
+
+# What a value must have to convert to an Iter<T>, as an `Iter<T>` in messages (see
+# converts_to_iter); it cannot be named.
+const iter_source = builtin_interface(
+  'Iter', 'IterSource', ['T']
+  [InterfaceMember(name: 'has_next', type: has_next), InterfaceMember(name: 'next', type: next)]
 )
+
+# The interface type that a value must satisfy to convert to an Iter of the items.
+export const iter_source_type = (item: Type) ->
+  const { name, symbol, module } = iter_source.type
+  InterfaceType name, symbol, module, args: [item]
 
 # Registers the module's interfaces, after its classes, structs and enums (see add_enums).
 export const add_interfaces = (shared: Shared, declarations: Array<InterfaceDeclaration>) ->
@@ -123,10 +150,13 @@ export const named_interface = (program: ProgramWide, resolver: Resolver, name: 
   return own if const own = shared.interfaces[name]
   return imported if const imported = imported_interface(shared, name)
   const is_other_name = has_type(program, resolver, name) or has_import(shared, name)
-  name == STRINGABLE and not is_other_name then stringable else nil
+  return nil if is_other_name
+  builtin_interfaces.find((builtin) -> builtin.name == name)
 
 export const interface_of = (program: ProgramWide, type: InterfaceType) ->
-  return stringable if type.symbol == STRINGABLE
+  const is_builtin = (each: InterfaceInfo) -> each.type.symbol == type.symbol
+  return builtin if const builtin = builtin_interfaces.find(is_builtin)
+  return iter_source if type.symbol == iter_source.type.symbol
   program.interfaces[type.symbol] ? throw "no interface #{type.symbol}"
 
 # The written interface type, with its type arguments, as a type of values: one whose members name

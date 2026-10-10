@@ -4,6 +4,7 @@
 import { emit_get, emit_length } from './array'
 import { emit_closure_call, function_type_of } from './closure'
 import { value_field } from './heap_object'
+import { emit_interface_call } from './interface'
 import { IrBuilder } from './ir_builder'
 import {
   define_kind, emit_checked_next, emit_has_next, emit_iter, emit_iter_start, emit_mark_started
@@ -43,6 +44,20 @@ const emit_sequence_iter = (ir: IrBuilder, sequence: String, type: Type) ->
   const state = [value_field(type), value_field(int_type)]
   const kind = define_kind(ir, "sequence #{type_key(type)}", state, element, has_next, next)
   emit_iter ir, kind, [sequence, '0']
+
+# The items that a value with has_next and next gives, which the Iter holds as an interface value
+# of the type `source_type` (see iter_source_type), and calls through its itab.
+export const emit_adapter_iter = (ir: IrBuilder, source: String, source_type: Type, item: Type) ->
+  const has_next = (body: IrBuilder, kind: IterKind) ->
+    const type = FunctionType(params: [], result: bool_type)
+    body.emit "ret i1 #{emit_interface_call(body, load_state(body, kind, 0), 0, type, [])}"
+  const next = (body: IrBuilder, kind: IterKind) ->
+    const type = FunctionType(params: [], result: item)
+    const value = emit_interface_call(body, load_state(body, kind, 0), 1, type, [])
+    body.emit "ret #{ir_type(item)} #{value}"
+  const state = [value_field(source_type)]
+  const kind = define_kind(ir, "adapter #{type_key(source_type)}", state, item, has_next, next)
+  emit_iter ir, kind, [source]
 
 # The Ints from start up to, but not including, end.
 export const emit_range_iter = (ir: IrBuilder, start: String, end: String) ->

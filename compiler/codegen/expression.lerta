@@ -20,6 +20,7 @@ import {
 } from './heap_object'
 import { info_of } from '../checker/object_types'
 import { emit_interface_read, emit_interface_value } from './interface'
+import { emit_adapter_iter } from './iter'
 import { IrBuilder } from './ir_builder'
 import {
   emit_release, emit_release_value, emit_retain, emit_retain_value, ir_type, string_constant
@@ -34,7 +35,8 @@ import { emit_binary_length, emit_concat } from './string'
 import { DEAD_OBJECT, FAILED_CAST, throw_if } from './throw_blocks'
 import { emit_initialized_check } from './top_level'
 import {
-  InterfaceType, is_kind, kind_of, ObjectType, OptionalType, RecordType, Type, UnionType
+  inner_of, InterfaceType, is_kind, IterType, kind_of, ObjectType, OptionalType, RecordType, Type
+  UnionType
 } from '../types'
 
 # The type that the checker gave the node.
@@ -47,8 +49,11 @@ export const generate = (g: Generator, expression: Expression) ->
   return nil_constant(target!) if expression is NilLiteral
   const operand = generate_value(g, expression)
   return operand if target == nil
-  return emit_interface_value(g, operand, itab) if const itab = g.facts.itabs[expression]
-  emit_wrap g.ir, operand, type_of(g, expression)
+  const itab = g.facts.itabs[expression] ? return emit_wrap(g.ir, operand, type_of(g, expression))
+  const value = emit_interface_value(g, operand, itab)
+  const converted = inner_of(target)
+  return value if not (converted is IterType)
+  emit_adapter_iter g.ir, value, itab.target, converted.item
 
 # The type of the operand that `generate` returns: the type the expression is converted to, if
 # it is.
