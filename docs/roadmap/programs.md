@@ -9,6 +9,7 @@ The planned design of modules, FFI, the standard library and tools.
 ## C ABI / FFI
 
 - An `extern` declaration may also refer to a C variable.
+- Generic externs, `extern lerta_array_length: <T>(Array<T>) -> Int`, for C functions that take a value of any type as a pointer, as an array, a map or a String is. With them, `length`, `keys`, `remove` and `s.binary`, built into the compiler now (see [internals](../internals.md#builtins)), move to `std/builtins.lerta`; `push`, `pop` and indexing stay built in, since their code depends on the items' kind. Using them in std needs a seed refresh, best taken with generic classes, which move `Iter<T>` there too (see [Iterables](language.md#iterables)).
 - C headers are imported with libclang.
 - The C side reaches Lerta's objects through accessors (see [internals](../internals.md#ffi)).
 - Decided points:
