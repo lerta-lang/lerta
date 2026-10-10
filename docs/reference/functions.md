@@ -76,4 +76,4 @@ export extern lerta_write_file as write_file: (String, Binary) -> void
 
 ## Types
 
-Type names: `Int`, `Byte`, `Bool`, `String`, `Binary`, `Array<T>`, `Map<K, V>`, `Iter<T>`, `T?`, function types, anonymous struct types such as `{ x: Int }`, the names of classes, structs, enums and `type` aliases, the type parameters of a generic function or extend in it, and `void` and `never` as a return type.
+Type names: `Int`, `Byte`, `Bool`, `String`, `Binary`, `Array<T>`, `Map<K, V>`, `Iter<T>`, `T?`, function types, anonymous struct types such as `{ x: Int }`, the names of classes, structs, enums, interfaces and `type` aliases, the type parameters of a generic function or extend in it, and `void` and `never` as a return type.

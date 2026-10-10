@@ -2,10 +2,12 @@
 # object `{ i64 ref_count, ptr drop, ptr code, captured values... }`. Its code takes the closure
 # first, then the arguments, which are borrowed, and gives an owned result.
 import {
-  emit_heap_allocate, emit_heap_field_pointer, HeapField, heap_object_type, plain_field
+  emit_heap_allocate, emit_heap_field_pointer, heap_object_type, HeapField, plain_field
 } from './heap_object'
 import { IrBuilder, IrModule } from './ir_builder'
-import { emit_release, ir_return_type, ir_type, LERTA_IMMORTAL, without_sigil } from './lerta_ir'
+import {
+  emit_release_stored, ir_return_type, ir_type, LERTA_IMMORTAL, without_sigil
+} from './lerta_ir'
 import { emit_unreachable } from './runtime_calls'
 import { FunctionType, is_kind, Type } from '../types'
 
@@ -69,7 +71,7 @@ export const emit_closure_call = (
 
 # What a closure holds for each capture is a field (see HeapField): a value, or the cell of a
 # captured var (see heap_object), which is an owned reference.
-export const CELL_SLOT = HeapField(ir_type: 'ptr', holds_reference: true)
+export const CELL_SLOT = HeapField(ir_type: 'ptr', owned: REFERENCE)
 
 # The IR type of a closure that holds these captures.
 const closure_ir_type = (slots: Array<HeapField>) ->
@@ -87,7 +89,7 @@ export const emit_capture_pointer = (
 export const emit_closure = (
   ir: IrBuilder, symbol: String, slots: Array<HeapField>, operands: Array<String>
 ) ->
-  const holds_reference = slots.any((slot) -> slot.holds_reference)
+  const holds_reference = slots.any((slot) -> slot.owned != NONE)
   const drop = holds_reference then "#{symbol}.drop" else 'null'
   define_closure_drop ir, drop, slots if holds_reference
   const closure = emit_heap_allocate(ir, closure_ir_type(slots), drop)
@@ -104,9 +106,10 @@ const define_closure_drop = (ir: IrBuilder, drop: String, slots: Array<HeapField
   const define = (module: IrModule) ->
     const body = IrBuilder(module)
     for i in 0...slots.length
-      continue if not slots[i].holds_reference
+      const slot = slots[i]
+      continue if slot.owned == NONE
       const pointer = emit_capture_pointer(body, '%closure', slots, i)
-      emit_release body, body.assign("load ptr, ptr #{pointer}")
+      emit_release_stored body, pointer, slot.ir_type, slot.owned
     body.emit 'ret void'
     body.finish "void #{drop}(ptr %closure)"
   ir.module.define_once drop, define

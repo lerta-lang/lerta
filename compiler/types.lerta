@@ -23,6 +23,7 @@ export enum TypeKind
   ITER
   RECORD
   OBJECT
+  INTERFACE
   ENUM
   UNION
   OPTIONAL
@@ -57,6 +58,13 @@ export struct ObjectType
   symbol: String
   module: String
   is_struct: Bool
+
+# An interface (see InterfaceInfo), named as an ObjectType is. Its value holds a value of a type
+# that satisfies it, with the itab that reads that type's members.
+export struct InterfaceType
+  name: String
+  symbol: String
+  module: String
 
 # An enum: its values are its members, held as their places among them (see EnumDeclaration). Its
 # name, symbol and module are as those of an ObjectType.
@@ -95,7 +103,7 @@ export struct FunctionType
   result: Type
 
 export type Type =
-  SimpleType | ArrayType | MapType | IterType | RecordType | ObjectType | EnumType
+  SimpleType | ArrayType | MapType | IterType | RecordType | ObjectType | InterfaceType | EnumType
   UnionType | OptionalType | TypeParameterType | FunctionType
 
 export const string_type = SimpleType(kind: 'String')
@@ -115,6 +123,7 @@ export const kind_of = (type: Type): TypeKind ->
     when IterType then ITER
     when RecordType then RECORD
     when ObjectType then OBJECT
+    when InterfaceType then INTERFACE
     when EnumType then ENUM
     when UnionType then UNION
     when OptionalType then OPTIONAL
@@ -149,6 +158,7 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when IterType then "Iter<#{format(type.item)}>"
     when MapType then "Map<#{format(type.key)}, #{format(type.value)}>"
     when ObjectType then qualified then "#{type.name} (of #{type.module})" else type.name
+    when InterfaceType then qualified then "#{type.name} (of #{type.module})" else type.name
     when EnumType then qualified then "#{type.name} (of #{type.module})" else type.name
     when RecordType
       const fields = ["#{field.name}: #{format(field.type)}" for field in type.fields]
@@ -188,6 +198,7 @@ export const type_key = (type: Type): String ->
   case type
     when SimpleType then type.kind.to_string()
     when ObjectType then type.symbol
+    when InterfaceType then type.symbol
     when EnumType then type.symbol
     when RecordType
       "{#{["#{field.name}: #{type_key(field.type)}" for field in type.fields].join(', ')}}"
@@ -202,13 +213,15 @@ export const type_key = (type: Type): String ->
 
 export const same_type = (a: Type, b: Type) -> type_key(a) == type_key(b)
 
-# Values of these types are reference counted; a function value is a closure.
+# Values of these types are references to objects that are reference counted; a function value
+# is a closure. An interface value holds one, besides its itab.
 export const is_reference_type = (type: Type): Bool ->
   case type
     when SimpleType then type.kind == 'String' or type.kind == 'Binary'
     when OptionalType then is_reference_type(type.inner)
     when TypeParameterType then false
     when EnumType then false
+    when InterfaceType then false
     else true
 
 # The type of the items of an array, a Binary or an Iter, which `for` and lazy methods such as

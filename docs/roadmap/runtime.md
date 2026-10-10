@@ -42,6 +42,7 @@ These apply when a value in statement position is not captured, beyond [the refe
 - To break a cycle through a closure, put the value in a [`weak var`](objects.md#weak-references) local and capture that.
 - Cycles across libraries are left to the leak check of the debug runtime ([internals](../internals.md#leak-checking)).
 - The typical cycle (a closure that captures `@`, held through a field of `@`) gets a compiler warning.
+- Items of `Array<Byte>` and `Array<Bool>` take one byte each, instead of the 8 bytes of every other item but interface values.
 
 ## Concurrency
 

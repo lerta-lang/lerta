@@ -6,7 +6,7 @@ import {
 import { reject_map_key } from './collection'
 import { fail } from './diagnostics'
 import { imported_type } from './imports'
-import { is_interface_name } from './interfaces'
+import { imported_interface, STRINGABLE, stringable } from './interfaces'
 import { ProgramWide, Shared } from './shared'
 import {
   ArrayType, binary_type, bool_type, byte_type, format_type, FunctionType, int_type, IterType
@@ -48,20 +48,22 @@ export const with_type_parameters = (
 const named_type = (shared: Shared, name: String): Type? ->
   return info.type if const info = shared.objects[name]
   return own if const own = shared.enums[name]
+  return declared.type if const declared = shared.interfaces[name]
   return exported.type if const exported = imported_type(shared, name)
+  return imported.type if const imported = imported_interface(shared, name)
   nil
 
 # Whether the name is that of a type, which a type parameter cannot take.
 export const has_type = (program: ProgramWide, resolver: Resolver, name: String) ->
   const shared = program.shared[resolver.module_index]
   return true if is_builtin_type_name(name) or named_type(shared, name) != nil
-  has_alias(shared, name) or shared.interfaces.has(name)
+  has_alias shared, name
 
 export const add_alias = (shared: Shared, alias: TypeAlias) ->
   const program = shared.program
   const { name, position } = alias.name
   const is_taken = shared.aliases.has(name) or is_builtin_type_name(name)
-  if is_taken or named_type(shared, name) != nil or shared.interfaces.has(name)
+  if is_taken or named_type(shared, name) != nil
     fail program, position, "'#{name}' is already defined"
   shared.aliases[name] = AliasEntry(alias)
 
@@ -177,9 +179,9 @@ const resolve_name = (
   return simple if const simple = simple_type(name)
   const shared = program.shared[resolver.module_index]
   return named if const named = named_type(shared, name)
-  if is_interface_name(shared, name)
-    fail_here "'#{name}' is an interface, which can only bound a type parameter so far"
-  resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
+  return aliased if const aliased = resolve_alias(program, resolver, name, position)
+  return stringable.type if name == STRINGABLE
+  fail_here "unknown type '#{name}'"
 
 # A type parameter's type argument is checked where it is given (see generic_call).
 const resolve_key = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->

@@ -3,11 +3,12 @@
 import { Identifier, Member, This } from '../ast'
 import { fail } from './diagnostics'
 import { type_of } from './expression'
-import { FieldInfo, field_type as info_field_type, info_of } from './object_types'
+import { field_type as info_field_type, FieldInfo, info_of } from './object_types'
 import { method_owner } from './object'
 import { Body } from './shared'
 import {
-  format_member, format_type, format_types, ObjectType, RecordType, same_type, Type, UnionType
+  format_member, format_type, format_types, InterfaceType, ObjectType, RecordType, same_type, Type
+  UnionType
 } from '../types'
 
 # A field of a class or struct, with its type.
@@ -125,6 +126,11 @@ export const field_target = (body: Body, member: Member) ->
     const type = common_field_target(body, object_type, member)
     body.facts.types[member] = type
     return type
+  if object_type is InterfaceType
+    const { name, position } = member.name
+    const reason = 'the members of an interface value are read-only'
+    const through = "through #{format_type(object_type)}"
+    fail program, position, "'#{name}' cannot be changed #{through}: #{reason}"
   const field = field_of(body, object_type, member)
   const { name, position } = member.name
   if object_type is RecordType

@@ -7,10 +7,10 @@ import { generate, release_if_reference, slot_pointer, type_of } from './express
 import { lookup_local } from './function'
 import { Generator, SlotLocal } from './generator'
 import { emit_field_pointer, emit_member_dispatch } from './heap_object'
-import { emit_release, emit_retain, ir_type } from './lerta_ir'
+import { emit_release, emit_release_value, emit_retain_value, ir_type, ownership } from './lerta_ir'
 import { emit_map_set } from './map'
 import { emit_concat } from './string'
-import { is_kind, is_reference_type, MapType, ObjectType, Type, UnionType } from '../types'
+import { is_kind, MapType, ObjectType, Type, UnionType } from '../types'
 
 # The new value is stored before the old one is released, which is safe even if they are the
 # same object.
@@ -53,7 +53,7 @@ const generate_index_assignment = (g: Generator, assignment: Assignment, target:
   const value = generate(g, assignment.value)
   const result = combine(g, assignment.operator, old, value, element)
   emit_set ir, array, index, result, element
-  emit_release ir, result if is_reference_type(element)
+  emit_release_value ir, result, element
   emit_release ir, array
 
 # Only `=` applies to a map value. The key, like an index, is evaluated before the value.
@@ -75,16 +75,16 @@ const generate_map_assignment = (
 const assign_through = (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
   const ir = g.ir
   const load = () -> ir.assign("load #{ir_type(type)}, ptr #{pointer}")
-  const is_reference = is_reference_type(type)
+  const holds_reference = ownership(type) != NONE
   var old = ''
   if assignment.operator != '='
     old = load()
-    emit_retain ir, old if is_reference
+    emit_retain_value ir, old, type
   const value = generate(g, assignment.value)
   const result = combine(g, assignment.operator, old, value, type)
-  const replaced = is_reference then load() else ''
+  const replaced = holds_reference then load() else ''
   ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}"
-  emit_release ir, replaced if is_reference
+  emit_release_value ir, replaced, type
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
 # Both are owned.

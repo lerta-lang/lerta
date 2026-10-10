@@ -100,7 +100,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/builtins.md#methods-of-the-builtin-types)):
 
-- **Built into the compiler**: the operations on the representation of arrays, maps and Iters, whose items are 8 bytes and retained by kind (see [memory management](#memory-management)): `length`, indexing, `push`, `pop`, `remove`, `keys`, and the Iter protocol, `has_next` and `next`; `s.binary`, which passes on the String itself; an enum's `to_string`, which indexes by the value, the member's place among the members as an `i64`, a constant array of the members' texts that the compiler generates for the enum, which cannot be extended, and `E.parse`, which has the runtime's `lerta_enum_parse` compare its argument with each text in turn, allocating nothing; and `take`, which stops reading its source, which an Iter written in Lerta, a comprehension, cannot. It moves to Lerta once an Iter's `has_next` and `next` can be written in Lerta.
+- **Built into the compiler**: the operations on the representation of arrays, maps and Iters, whose items are 8 bytes, or 16 for interface values, and retained by kind (see [memory management](#memory-management)): `length`, indexing, `push`, `pop`, `remove`, `keys`, and the Iter protocol, `has_next` and `next`; `s.binary`, which passes on the String itself; an enum's `to_string`, which indexes by the value, the member's place among the members as an `i64`, a constant array of the members' texts that the compiler generates for the enum, which cannot be extended, and `E.parse`, which has the runtime's `lerta_enum_parse` compare its argument with each text in turn, allocating nothing; and `take`, which stops reading its source, which an Iter written in Lerta, a comprehension, cannot. It moves to Lerta once an Iter's `has_next` and `next` can be written in Lerta.
 - **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join`, `slice` and `to_binary`; the conversions between `Byte` and `Int`; and `lerta_binary_as_string`, which gives `decode_utf8` and `split` their Strings once Lerta knows the bytes are valid UTF-8.
 - The rest is Lerta: `print` writes through `stdout`, `parse_int`, `split` and the UTF-8 check of `decode_utf8` read bytes with `b[i]`, `has` reads the map, `iter` of an array and `map`, `filter` and `to_array` of an Iter are comprehensions, and `any`, `all` and `find` of an Iter are `for` loops; those of an array go through its `iter`.
 
@@ -116,14 +116,14 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 - No intermediate data structures are made, but each item goes through calls of code pointers. Fusing a chain into the `for` loop that consumes it is left for later.
 - A started flag is kept, and starting a second traversal throws.
 
-## Interfaces (planned)
+## Interfaces
 
-- The Go approach: assigning a concrete type to an interface produces a fat pointer (object pointer, itab).
-- There is no `any`, so the source concrete type of a conversion to an interface is known at compile time, and itabs are generated statically.
-- When an interface method is satisfied by a function-valued field, the itab holds a relay function that "reads the field and calls it".
+- The Go approach: an interface value is a fat pointer, `{ ptr data, ptr itab }`, 16 bytes, whose data is an owned reference. Its optional type has the same representation, nil when the data is null. Arrays and maps hold interface values as 16-byte items (`LertaItemKind` in `runtime/lerta.h`).
+- There is no `any`, so the concrete type of a conversion to an interface is known at compile time, and itabs are generated statically. The checker records each conversion's plan, how the type gives each member; each module defines the itabs it converts with as private constants.
+- The itab is an array of function pointers, one for each member in order, which take the data, borrowed, and the member's arguments. A method written in Lerta is its own entry. A member given otherwise, by a field, a property, a field that holds a function or a builtin method, has a reader function that reads it, or reads and calls it.
+- Why readers rather than field offsets: a member may be a property of a builtin type, such as `length`, which has no offset, and a single kind of entry keeps the call through an interface one indirect call.
 - Constrained generics (`T: I`) become direct calls through monomorphization and do not use itabs.
-- Besides method pointers, the itab holds **field offsets**.
-- Cost: concrete-type field = 1 load; field through an interface = 2 loads; method through an interface = indirect call.
+- Cost: concrete-type field = 1 load; member through an interface = 2 loads and an indirect call.
 
 ## Generics
 

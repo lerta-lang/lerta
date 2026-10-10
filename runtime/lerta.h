@@ -39,19 +39,31 @@ typedef struct {
     uint8_t bytes[sizeof(text) - 1] LERTA_NONSTRING;         \
   } name = {{LERTA_IMMORTAL, NULL}, sizeof(text) - 1, text}
 
-// Items are 8 bytes each: an Int as is, a Bool zero-extended and a reference as its address.
+// How arrays and maps hold their items. A plain item is 8 bytes, an Int as is and a Bool or a Byte
+// zero-extended; a reference is 8 bytes too, its address, and is retained while it is held. An
+// interface value is 16 bytes, its data, a reference, then its itab.
+typedef enum { LERTA_PLAIN_ITEMS, LERTA_REFERENCE_ITEMS, LERTA_INTERFACE_ITEMS } LertaItemKind;
+
+// Room for an item of any kind.
+typedef struct {
+  int64_t words[2];
+} LertaItem;
+
 typedef struct {
   LertaHeader header;
   int64_t length;
   int64_t capacity;
-  int64_t *items;
-  // Whether the items are references, which the array retains while it holds them.
-  bool owns_references;
+  // Each item takes the size of its kind (see lerta_item_size).
+  uint8_t *items;
+  LertaItemKind item_kind;
 } LertaArray;
 
+// The item at the index of an array of plain items or references, as 8 bytes.
+#define LERTA_WORD_ITEM(array, index) (((const int64_t *)(array)->items)[index])
+
+// An entry of a map, followed by its value, an item of the map's kind.
 typedef struct {
   int64_t key;
-  int64_t value;
   uint64_t hash;
   bool live;
 } LertaMapEntry;
@@ -70,18 +82,19 @@ typedef enum {
 typedef uint64_t (*LertaHash)(int64_t item);
 typedef bool (*LertaEquals)(int64_t a, int64_t b);
 
-// Keys and values are 8 bytes each, as array items are. Entries are kept in insertion order, and
-// `slots` is an open-addressing index into them.
+// Keys are 8 bytes each, plain items or references, and values are items of the map's kind.
+// Entries are kept in insertion order, and `slots` is an open-addressing index into them.
 typedef struct {
   LertaHeader header;
   int64_t length;  // live entries
   int64_t entry_count;
   int64_t entry_capacity;
-  LertaMapEntry *entries;
+  // Each entry takes the size of an entry and a value (see entry_at in map.c).
+  uint8_t *entries;
   int64_t slot_count;  // a power of two
   int64_t *slots;
   LertaKeyKind key_kind;
-  bool owns_values;
+  LertaItemKind value_kind;
   // For LERTA_VALUE_KEYS only.
   LertaHash hash;
   LertaEquals equals;
@@ -151,10 +164,21 @@ LertaString *lerta_binary_from_bytes(const LertaArray *bytes);
 // The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
 LertaString *lerta_binary_as_string(LertaString *binary);
 
-// Arrays (array.c). Items in and out are borrowed, except that get and pop return owned
-// references. An index out of range throws.
-LertaArray *lerta_array_new(bool owns_references);
+// Items (array.c): the size of an item of the kind, and the counting of the reference it holds.
+int64_t lerta_item_size(LertaItemKind kind);
+void lerta_retain_item(LertaItemKind kind, const void *item);
+void lerta_release_item(LertaItemKind kind, const void *item);
+
+// Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; get and pop
+// write the item owned. An index out of range throws.
+LertaArray *lerta_array_create(LertaItemKind item_kind);
 int64_t lerta_array_length(const LertaArray *array);
+void lerta_array_read(const LertaArray *array, int64_t index, void *item);
+void lerta_array_write(LertaArray *array, int64_t index, const void *item);
+void lerta_array_append(LertaArray *array, const void *item);
+void lerta_array_take_last(LertaArray *array, void *item);
+// The same for 8-byte items, which the seed's generated code calls until the seed is refreshed.
+LertaArray *lerta_array_new(bool owns_references);
 int64_t lerta_array_get(const LertaArray *array, int64_t index);
 void lerta_array_set(LertaArray *array, int64_t index, int64_t item);
 void lerta_array_push(LertaArray *array, int64_t item);
@@ -167,12 +191,17 @@ LertaString *lerta_string_join(const LertaArray *strings, const LertaString *sep
 // which C would take as its end.
 char *lerta_c_string(const LertaString *s);
 
-// Maps (map.c). Keys and values in are borrowed. get returns whether the key is there, and its
-// value owned through `value` (0 otherwise); keys returns them in insertion order.
-// `hash` and `equals` are NULL but for LERTA_VALUE_KEYS.
+// Maps (map.c). Keys and values in are borrowed; values are passed through pointers to them. get
+// returns whether the key is there, and writes its value owned (zeros otherwise); keys returns
+// them in insertion order. `hash` and `equals` are NULL but for LERTA_VALUE_KEYS.
+LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, LertaHash hash,
+                           LertaEquals equals);
+int64_t lerta_map_length(const LertaMap *map);
+bool lerta_map_read(const LertaMap *map, int64_t key, void *value);
+void lerta_map_write(LertaMap *map, int64_t key, const void *value);
+// The same for 8-byte values, which the seed's generated code calls until the seed is refreshed.
 LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values, LertaHash hash,
                         LertaEquals equals);
-int64_t lerta_map_length(const LertaMap *map);
 bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value);
 void lerta_map_set(LertaMap *map, int64_t key, int64_t value);
 void lerta_map_remove(LertaMap *map, int64_t key);

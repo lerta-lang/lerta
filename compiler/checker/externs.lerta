@@ -5,7 +5,7 @@ import { add_extern } from './imports'
 import { ExternType, ProgramWide, Shared } from './shared'
 import { module_resolver, resolve_result } from './type_names'
 import {
-  format_type, FunctionType, is_kind, is_reference_type, kind_of, OptionalType, Type
+  format_type, FunctionType, inner_of, is_kind, is_reference_type, kind_of, OptionalType, Type
 } from '../types'
 
 # An extern's type is a function type, which gives the C function's parameters and result. A C
@@ -21,7 +21,7 @@ const declare_extern = (shared: Shared, statement: Extern) ->
   const type = resolve_result(program, module_resolver(shared.index), statement.type)
   if not (type is FunctionType)
     fail program, statement.type.position, 'an extern is a C function, of a function type'
-  reject_optionals_without_c_type program, type, statement.type.position
+  reject_types_without_c_type program, type, statement.type.position
   const { symbol } = statement
   if const declared = program.extern_types[symbol.name]
     if c_signature(declared.type) != c_signature(type)
@@ -32,9 +32,13 @@ const declare_extern = (shared: Shared, statement: Extern) ->
     program.extern_types[symbol.name] = ExternType(type, module_name: shared.name)
   add_extern shared, statement.name, type, symbol.name
 
-# Of the optional values that are not references, only an Int? has a C type, LertaOptionalInt.
-const reject_optionals_without_c_type = (program: ProgramWide, type: FunctionType, at: Position) ->
+# An interface value has no C type, and of the optional values that are not references, only an
+# Int? has one, LertaOptionalInt.
+const reject_types_without_c_type = (program: ProgramWide, type: FunctionType, at: Position) ->
   for value_type in value_types(type)
+    if is_kind(inner_of(value_type), INTERFACE)
+      const message = "a C function cannot take or return a #{format_type(value_type)}"
+      fail program, at, "#{message}: an interface value has no C type"
     if value_type is OptionalType
       const has_c_type = is_reference_type(value_type) or is_kind(value_type.inner, 'Int')
       if not has_c_type

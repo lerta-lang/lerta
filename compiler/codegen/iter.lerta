@@ -9,11 +9,11 @@ import {
   define_kind, emit_checked_next, emit_has_next, emit_iter, emit_iter_start, emit_mark_started
   emit_next, IterKind, load_state, store_state
 } from './iter_protocol'
-import { emit_release, ir_type } from './lerta_ir'
+import { emit_release, emit_release_value, ir_type, ownership } from './lerta_ir'
 import { emit_binary_get, emit_binary_length } from './string'
 import {
-  bool_type, FunctionType, int_type, is_kind, is_one_of_kinds, is_reference_type, iterable_item
-  IterType, Type, type_key
+  bool_type, FunctionType, int_type, is_kind, is_one_of_kinds, iterable_item, IterType, Type
+  type_key
 } from '../types'
 
 # The length and the items of an array or a Binary, which for loops and their Iters read by index.
@@ -68,7 +68,7 @@ const emit_map_iter = (ir: IrBuilder, source: String, mapper: String, type: Type
   const next = (body: IrBuilder, kind: IterKind) ->
     const value = emit_next(body, load_state(body, kind, 0), item)
     const result = emit_closure_call(body, load_state(body, kind, 1), type, [value])
-    emit_release body, value if is_reference_type(item)
+    emit_release_value body, value, item
     body.emit "ret #{ir_type(function_type.result)} #{result}"
   const state = [value_field(IterType(item)), value_field(type)]
   const key = "map #{type_key(type)}"
@@ -102,7 +102,7 @@ const emit_filter_iter = (ir: IrBuilder, source: String, test: String, item: Typ
     store_state body, kind, 2, 'true'
     body.emit "br label %#{found_label}"
     body.start_block skip_label
-    emit_release body, value if is_reference_type(item)
+    emit_release_value body, value, item
     body.emit "br label %#{search_label}"
     body.start_block found_label
     body.emit 'ret i1 true'
@@ -113,7 +113,7 @@ const emit_filter_iter = (ir: IrBuilder, source: String, test: String, item: Typ
   const next = (body: IrBuilder, kind: IterKind) ->
     store_state body, kind, 2, 'false'
     const value = load_state(body, kind, 3)
-    store_state body, kind, 3, 'null' if is_reference_type(item)
+    store_state body, kind, 3, 'zeroinitializer' if ownership(item) != NONE
     body.emit "ret #{ir_type(item)} #{value}"
   const state = [
     value_field(IterType(item)), value_field(test_type), value_field(bool_type), value_field(item)

@@ -1,52 +1,77 @@
-# Operations on arrays in the generated code, through the runtime (runtime/array.c). An item is
-# 8 bytes: an Int or an enum as is, a Bool or a Byte zero-extended and a reference as its address.
+# Operations on arrays in the generated code, through the runtime (runtime/array.c), which takes
+# and gives items through pointers to them. An item is 8 bytes, an Int or an enum as is, a Bool or
+# a Byte zero-extended and a reference as its address, or an interface value as it is.
 import { IrBuilder } from './ir_builder'
-import { ir_type } from './lerta_ir'
+import { ir_type, ownership } from './lerta_ir'
 import { call_runtime } from './runtime_calls'
-import { is_one_of_kinds, is_reference_type, Type, TypeKind } from '../types'
+import { is_kind, is_one_of_kinds, Type, TypeKind } from '../types'
 
 # The kinds whose values are already 8 bytes.
 const WORD_KINDS: Array<TypeKind> = ['Int', ENUM]
 
 export const to_item = (ir: IrBuilder, operand: String, type: Type) ->
-  return operand if is_one_of_kinds(type, WORD_KINDS)
+  return operand if is_one_of_kinds(type, WORD_KINDS) or is_kind(type, INTERFACE)
   if is_one_of_kinds(type, ['Bool', 'Byte'])
     return ir.assign("zext #{ir_type(type)} #{operand} to i64")
   ir.assign "ptrtoint ptr #{operand} to i64"
 
 export const from_item = (ir: IrBuilder, item: String, type: Type) ->
-  return item if is_one_of_kinds(type, WORD_KINDS)
+  return item if is_one_of_kinds(type, WORD_KINDS) or is_kind(type, INTERFACE)
   if is_one_of_kinds(type, ['Bool', 'Byte'])
     return ir.assign("trunc i64 #{item} to #{ir_type(type)}")
   ir.assign "inttoptr i64 #{item} to ptr"
 
+# The value of LertaItemKind in runtime/lerta.h that holds values of the type.
+export const item_kind = (type: Type) ->
+  case ownership(type)
+    when NONE then 0
+    when REFERENCE then 1
+    when INTERFACE then 2
+
+const item_ir_type = (type: Type) -> is_kind(type, INTERFACE) then ir_type(type) else 'i64'
+
+# Room for an item of the type, which the runtime writes.
+export const emit_item_slot = (ir: IrBuilder, type: Type) -> ir.alloca(item_ir_type(type))
+
+# A pointer to the value as an item, which stays owned by the caller.
+export const emit_item_pointer = (ir: IrBuilder, value: String, type: Type) ->
+  const pointer = emit_item_slot(ir, type)
+  ir.emit "store #{item_ir_type(type)} #{to_item(ir, value, type)}, ptr #{pointer}"
+  pointer
+
+# The value of the item at the pointer.
+export const emit_load_item = (ir: IrBuilder, pointer: String, type: Type) ->
+  from_item ir, ir.assign("load #{item_ir_type(type)}, ptr #{pointer}"), type
+
 export const emit_array_new = (ir: IrBuilder, element: Type) ->
-  const holds_references = is_reference_type(element)
-  call_runtime ir, 'ptr @lerta_array_new(i1 zeroext)', "i1 zeroext #{holds_references}"
+  call_runtime ir, 'ptr @lerta_array_create(i32)', "i32 #{item_kind(element)}"
 
 export const emit_length = (ir: IrBuilder, array: String) ->
   call_runtime ir, 'i64 @lerta_array_length(ptr)', "ptr #{array}"
 
-# The item is owned when it is a reference.
+# The item is owned.
 export const emit_get = (ir: IrBuilder, array: String, index: String, element: Type) ->
-  const signature = 'i64 @lerta_array_get(ptr, i64)'
-  from_item ir, call_runtime(ir, signature, "ptr #{array}, i64 #{index}"), element
+  const pointer = emit_item_slot(ir, element)
+  const args = "ptr #{array}, i64 #{index}, ptr #{pointer}"
+  call_runtime ir, 'void @lerta_array_read(ptr, i64, ptr)', args
+  emit_load_item ir, pointer, element
 
 # The array retains the item, which stays owned by the caller.
 export const emit_set = (
   ir: IrBuilder, array: String, index: String, value: String, element: Type
 ) ->
-  const item = to_item(ir, value, element)
-  const args = "ptr #{array}, i64 #{index}, i64 #{item}"
-  call_runtime ir, 'void @lerta_array_set(ptr, i64, i64)', args
+  const args = "ptr #{array}, i64 #{index}, ptr #{emit_item_pointer(ir, value, element)}"
+  call_runtime ir, 'void @lerta_array_write(ptr, i64, ptr)', args
 
 export const emit_push = (ir: IrBuilder, array: String, value: String, element: Type) ->
-  const item = to_item(ir, value, element)
-  call_runtime ir, 'void @lerta_array_push(ptr, i64)', "ptr #{array}, i64 #{item}"
+  const args = "ptr #{array}, ptr #{emit_item_pointer(ir, value, element)}"
+  call_runtime ir, 'void @lerta_array_append(ptr, ptr)', args
 
-# The item is owned when it is a reference.
+# The item is owned.
 export const emit_pop = (ir: IrBuilder, array: String, element: Type) ->
-  from_item ir, call_runtime(ir, 'i64 @lerta_array_pop(ptr)', "ptr #{array}"), element
+  const pointer = emit_item_slot(ir, element)
+  call_runtime ir, 'void @lerta_array_take_last(ptr, ptr)', "ptr #{array}, ptr #{pointer}"
+  emit_load_item ir, pointer, element
 
 export const call_array_method = (
   ir: IrBuilder, name: String, array: String, element: Type, args: Array<String>

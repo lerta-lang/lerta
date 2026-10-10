@@ -5,21 +5,33 @@ import { ProgramWide } from '../checker/shared'
 import { hex } from '../hex'
 import { IrBuilder } from './ir_builder'
 import {
-  is_one_of_kinds, is_reference_type, kind_of, ObjectType, OptionalType, Type, type_key
+  inner_of, is_kind, is_one_of_kinds, is_reference_type, kind_of, ObjectType, OptionalType, Type
+  type_key
 } from '../types'
 
 export const LERTA_IMMORTAL = '-9223372036854775808'
 
+export const INTERFACE_IR_TYPE = '{ ptr, ptr }'
+
+# Whether nil of the optional type is a null pointer: that of a reference, or the data of an
+# interface value.
+export const is_nil_by_null = (type: Type) ->
+  is_reference_type(type) or is_kind(inner_of(type), INTERFACE)
+
 export const ir_type = (type: Type): String ->
-  # A reference is nil when null; a value carries a flag that tells whether it is there.
+  # A reference is nil when null, and so is an interface value when its data is; a value carries a
+  # flag that tells whether it is there.
   if type is OptionalType
-    return is_reference_type(type) then 'ptr' else "{ i1, #{ir_type(type.inner)} }"
+    return ir_type(type.inner) if is_nil_by_null(type)
+    return "{ i1, #{ir_type(type.inner)} }"
   case kind_of(type)
     when 'Int', ENUM then 'i64'
     when 'Bool' then 'i1'
     when 'Byte' then 'i8'
     when 'String', 'Binary', ARRAY, ITER, MAP, OBJECT, UNION, RECORD then 'ptr'
     when FUNCTION then 'ptr'
+    # The data, a reference, and the itab (see interface).
+    when INTERFACE then INTERFACE_IR_TYPE
     else throw "no IR type for #{kind_of(type)}"
 
 # A function that never returns is declared as returning nothing.
@@ -109,6 +121,49 @@ export const string_constant = (ir: IrBuilder, value: String) ->
   const bytes_init = "#{bytes_type} c\"#{ir_string_bytes(bytes)}\""
   const init = "{ i64 #{LERTA_IMMORTAL}, ptr null, i64 #{bytes.length}, #{bytes_init} }"
   ir.module.global 'lerta.string', "private unnamed_addr constant #{type} #{init}"
+
+# How a value holds references, which retaining and releasing it count: not at all, as one, or as
+# the data of an interface value.
+export enum Ownership
+  NONE
+  REFERENCE
+  INTERFACE
+
+export const ownership = (type: Type) ->
+  case
+    when is_reference_type(type) then Ownership.REFERENCE
+    when is_kind(inner_of(type), INTERFACE) then Ownership.INTERFACE
+    else Ownership.NONE
+
+# Reference counting of a value of the type: of the references it holds, if any.
+export const emit_retain_value = (ir: IrBuilder, operand: String, type: Type) ->
+  emit_retain_as ir, operand, ownership(type)
+
+export const emit_release_value = (ir: IrBuilder, operand: String, type: Type) ->
+  emit_release_as ir, operand, ownership(type)
+
+const emit_retain_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
+  emit_retain ir, reference if const reference = reference_of(ir, operand, owned)
+
+const emit_release_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
+  emit_release ir, reference if const reference = reference_of(ir, operand, owned)
+
+const reference_of = (ir: IrBuilder, operand: String, owned: Ownership) ->
+  case owned
+    when NONE then nil
+    when REFERENCE then operand
+    when INTERFACE then emit_interface_data(ir, operand)
+
+# The data of an interface value, null for nil.
+export const emit_interface_data = (ir: IrBuilder, value: String) ->
+  ir.assign "extractvalue #{INTERFACE_IR_TYPE} #{value}, 0"
+
+# Releases what the value of the IR type at the pointer holds.
+export const emit_release_stored = (
+  ir: IrBuilder, pointer: String, value_type: String, owned: Ownership
+) ->
+  return if owned == NONE
+  emit_release_as ir, ir.assign("load #{value_type}, ptr #{pointer}"), owned
 
 # Reference counting of an object operand (see runtime/memory.c).
 export const emit_retain = (ir: IrBuilder, operand: String) ->

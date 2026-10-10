@@ -73,12 +73,16 @@ const describe = <T: Shape>(shape: T) -> print "#{shape.name}: #{shape.area()}"
 
 describe Square(side: 3)
 describe { name: 'dot', area: -> 0 }
+
+const shapes: Array<Shape> = [Square(side: 2), { name: 'dot', area: -> 0 }]
+print shape.area() for shape in shapes
 ```
 
 - `interface Name` at the top level, followed by an indented block of members, `name: Type`, one per line, declares what a type must have to satisfy it. Its name is in the namespace of types and values, as a class's is.
 - A type **satisfies** an interface when it has, for each member, a method, a field or a property of the member's name and of exactly its type. Nothing declares that it does (structural typing). A method may come from an extend in effect where it is checked; one with type parameters of its own has no one type, and satisfies no member. A function member, such as `area: () -> Int`, is satisfied alike by a method and by a field that holds a function. A union satisfies a member by a field that every member of it has, of the member's type, as it is read through the union (see [unions](types.md#unions)).
-- So far an interface only bounds type parameters (see [generic functions](functions.md#generic-functions)). It is not a type of values: `Array<Shape>` is an error.
-- Members are read-only: an interface has no member that must be assignable, so its members are written without `const` or `var`, and have no value.
+- An interface bounds type parameters (see [generic functions](functions.md#generic-functions)), and is also a type of values: an **interface value** holds a value of a type that satisfies it, through which `shape.area()` and `shape.name` read the members. A value converts to an interface type, or to one optional, where one is expected, as a value converts to an optional type, provided that its type satisfies the interface where it is converted; the extends in effect there give the members. An interface type satisfies itself, so an interface value can be given to a type parameter that the interface bounds.
+- So far only references convert to interface values, not `Int`, `Bool`, `Byte` or enum values, and a union does not convert, nor does an interface value to another interface. Interface values cannot be compared with `==`, nor be map keys, and C functions cannot take or return them.
+- Members are read-only: an interface has no member that must be assignable, so its members are written without `const` or `var`, and have no value, and an interface value's members cannot be assigned. A function member is called, as a method is, not read as a value.
 - Why read-only: a struct's field, a `const` field and a method cannot be assigned, so an assignable member would leave them out, and an assignment whose meaning depended on how the member is satisfied would be a setter.
 - Why exactly the member's type, not one assignable to it: the generic code is checked with the type the member has (see [generic functions](functions.md#generic-functions)), so a `String` field for a member `name: String?` would fail in that code rather than where the type is given.
 

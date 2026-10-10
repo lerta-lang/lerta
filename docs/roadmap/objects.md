@@ -12,9 +12,10 @@ The planned design of classes and structs, interfaces, generics, weak references
 
 ## Interfaces
 
-What is implemented, interfaces as bounds of type parameters, is in [the reference](../reference/objects.md#interfaces). Planned:
+What is implemented, interfaces as bounds and as types of values, is in [the reference](../reference/objects.md#interfaces). Planned:
 
-- Interface types of values, as `Array<Shape>`, dispatched through itabs (see [internals](../internals.md#interfaces-planned)). Their members are read through the interface, as the bounds' are; a write goes through the concrete type.
+- Unions converted to interface values, each member with its itab, chosen when the value is converted.
+- Values of `Int`, `Bool`, `Byte` and enums in interface values, which are not references: the itab then tells whether the data is one.
 - Default implementations (replacing code reuse through inheritance).
 - Inside an interface, `Self` means "the type that implements it".
 - Type parameters of interfaces, as `Div<Rhs, Out>` (see [operator overloading](language.md#operator-overloading)).
@@ -32,6 +33,7 @@ What is implemented, interfaces as bounds of type parameters, is in [the referen
 ## Equality
 
 - User-defined `equals` and `hash`, which `==` and maps use. A class that defines `equals` is `Hashable` only if it also defines `hash` (preventing the mistake of equal values with different hashes).
+- `==` on interface values, and interface values as `Map` keys, by the equality of the values they hold.
 
 ## Open questions
 

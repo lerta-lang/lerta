@@ -1,0 +1,56 @@
+# Values of interface types. A value of a type that satisfies an interface converts to it where the
+# interface is expected; the conversion records the plan of the itab through which the interface
+# value reads the type's members (see codegen interface).
+import { Expression } from '../ast'
+import { fail } from './diagnostics'
+import { receiver_instance } from './generic_call'
+import { Instance } from './generics'
+import { interface_members, interface_of, InterfaceMember, reject_unsatisfied } from './interfaces'
+import { generic_method } from './member'
+import { find_method, MethodSource } from './methods'
+import { Body } from './shared'
+import {
+  format_type, inner_of, InterfaceType, is_one_of_kinds, is_reference_type, Type, UnionType
+} from '../types'
+
+# How the type gives a member of the interface: by a method, as find_method finds it, with the
+# instance of a generic one; or, without a method, by a field or a property.
+export struct ItabEntry
+  member: InterfaceMember
+  method: MethodSource?
+  instance: Instance?
+
+# What converting a value of the type to the interface needs: the entries of the itab, in the
+# order of the interface's members.
+export struct Itab
+  type: Type
+  target: InterfaceType
+  entries: Array<ItabEntry>
+
+# Whether the expression's value, which is not of the expected type, converts to it: to an
+# interface type, or to one optional, which its type must satisfy. Records the itab's plan.
+export const converts_to_interface = (
+  body: Body, expression: Expression, type: Type, expected: Type
+) ->
+  const target = inner_of(expected)
+  return false if not (target is InterfaceType)
+  return false if is_one_of_kinds(type, ['nil', 'never', OPTIONAL, INTERFACE])
+  const at = expression.position
+  const to_target = "to #{format_type(target)}"
+  # Each member of a union would need an itab of its own, chosen when the value is converted.
+  fail body.program, at, "a union cannot be converted #{to_target} yet" if type is UnionType
+  if not is_reference_type(type)
+    const reason = 'only references can be held by interface values so far'
+    fail body.program, at, "#{format_type(type)} cannot be converted #{to_target}: #{reason}"
+  const info = interface_of(body.program, target)
+  reject_unsatisfied body, type, info, at
+  const members = interface_members(body.program, info)
+  const entries = [itab_entry(body, type, member, expression) for member in members]
+  body.facts.itabs[expression] = Itab(type, target, entries)
+  true
+
+const itab_entry = (body: Body, type: Type, member: InterfaceMember, at: Expression) ->
+  const method = find_method(body.program, type, member.name, body.extensions)
+  const generic = generic_method(method)
+  const instance = generic then receiver_instance(body, generic, type, at.position, nil) else nil
+  ItabEntry member, method, instance

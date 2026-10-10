@@ -1,0 +1,106 @@
+# Interface values in the generated code: `{ ptr data, ptr itab }`, the data an owned reference to
+# a value of a type that satisfies the interface. The itab is an array of pointers to functions,
+# one for each member of the interface in order, which take the data, borrowed, then the member's
+# arguments, borrowed, and give the member's value, owned, as a method does. Each module defines
+# the itabs it converts values with, privately (see Itab).
+import { interface_member } from '../checker/interfaces'
+import { Itab, ItabEntry } from '../checker/interface_values'
+import { BuiltinMethod, ExtensionSource, OwnMethod } from '../checker/methods'
+import { call_builtin_method, call_user_function } from './call'
+import { emit_closure_call } from './closure'
+import { read_any_field, read_property } from './expression'
+import { finish } from './function'
+import { function_generator, Generator } from './generator'
+import { IrBuilder } from './ir_builder'
+import { call_iter_method, is_iter_method } from './iter'
+import {
+  emit_interface_data, emit_release, emit_release_value, emit_retain, extension_symbol
+  instance_symbol, INTERFACE_IR_TYPE, ir_return_type, ir_type, method_symbol
+} from './lerta_ir'
+import { FunctionType, InterfaceType, Type, type_key } from '../types'
+
+# The value converted to the interface value that the itab gives; the value's reference passes to
+# it.
+export const emit_interface_value = (g: Generator, value: String, itab: Itab) ->
+  const ir = g.ir
+  const with_data = ir.assign("insertvalue #{INTERFACE_IR_TYPE} undef, ptr #{value}, 0")
+  ir.assign "insertvalue #{INTERFACE_IR_TYPE} #{with_data}, ptr #{define_itab(g, itab)}, 1"
+
+# Calls the member at the index through the interface value's itab, with the arguments, typed IR
+# operands, which stay owned by the caller, as the value does.
+export const emit_interface_call = (
+  ir: IrBuilder, value: String, index: Int, type: Type, args: Array<String>
+) ->
+  const itab = ir.assign("extractvalue #{INTERFACE_IR_TYPE} #{value}, 1")
+  const slot = ir.assign("getelementptr ptr, ptr #{itab}, i64 #{index}")
+  const entry = ir.assign("load ptr, ptr #{slot}")
+  const all_args = ["ptr #{emit_interface_data(ir, value)}"]
+  all_args.append args
+  call_user_function ir, entry, type, all_args.join(', ')
+
+# The member of the interface value that is no method, which is released.
+export const emit_interface_read = (
+  g: Generator, value: String, type: InterfaceType, name: String, member_type: Type
+) ->
+  const index = interface_member(g.code.program, type, name)!.index
+  const getter = FunctionType(params: [], result: member_type)
+  const result = emit_interface_call(g.ir, value, index, getter, [])
+  emit_release_value g.ir, value, type
+  result
+
+# The itab's global, defined in the module at its first use.
+const define_itab = (g: Generator, itab: Itab) ->
+  const entries = [entry_function(g, itab, entry) for entry in itab.entries]
+  const key = "itab #{type_key(itab.type)} #{type_key(itab.target)} #{entries.join(' ')}"
+  const define = (name: String) ->
+    const array_type = "[#{entries.length} x ptr]"
+    const init = ["ptr #{entry}" for entry in entries].join(', ')
+    g.ir.module.define_global name, "private unnamed_addr constant #{array_type} [#{init}]"
+  g.ir.module.named key, '@lerta.itab', (name, module) -> define(name)
+
+# The function of the entry: the method that gives the member, if it is written in Lerta, which
+# takes its object first; otherwise a function that reads the member, defined once.
+const entry_function = (g: Generator, itab: Itab, entry: ItabEntry) ->
+  const method = entry.method
+  if const instance = entry.instance
+    return instance_symbol(g.code.program, instance)
+  case method
+    when OwnMethod then method_symbol(method.receiver, entry.member.name)
+    when ExtensionSource then extension_symbol(method.method)
+    else define_reader(g, itab.type, entry)
+
+# A function that gives the member of a value of the type: calls a builtin method or a field that
+# holds a function, or reads a field or a property.
+const define_reader = (g: Generator, type: Type, entry: ItabEntry) ->
+  const { name } = entry.member
+  const member_type = entry.member.type
+  const key = "reader #{type_key(type)} #{name}"
+  const define = (symbol: String) ->
+    const reader = function_generator(g.code, g.extensions, g.facts)
+    const ir = reader.ir
+    const function_type = member_type is FunctionType then member_type else nil
+    const params = function_type?.params ? []
+    const args = ["#{ir_type(params[i])} %p#{i}" for i in 0...params.length]
+    const operands = ["%p#{i}" for i in 0...params.length]
+    # The data is borrowed, while reading a field or a property, or an Iter's method, takes the
+    # object over.
+    const take_data = () ->
+      emit_retain ir, '%data'
+      '%data'
+    const is_builtin = entry.method is BuiltinMethod
+    const result = case
+      when function_type == nil then read_property(reader, take_data(), type, name, member_type)
+      when is_builtin and is_iter_method(type, name)
+        call_iter_method ir, name, take_data(), type, operands
+      when is_builtin then call_builtin_method(ir, name, '%data', type, operands)
+      else
+        const closure = read_any_field(reader, take_data(), type, name, member_type)
+        const value = emit_closure_call(ir, closure, member_type, operands)
+        emit_release ir, closure
+        value
+    const return_type = ir_return_type(function_type?.result ? member_type)
+    ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
+    const params_list = ['ptr %data']
+    params_list.append args
+    finish reader, "private #{return_type} #{symbol}(#{params_list.join(', ')})"
+  g.ir.module.named key, '@lerta.reader', (symbol, module) -> define(symbol)

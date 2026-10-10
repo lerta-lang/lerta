@@ -1,16 +1,19 @@
 # Interfaces, `interface Shape` with members such as `area: () -> Int`: their declarations, and
 # what a type must have to satisfy one (see reject_unsatisfied), as the builtin Stringable requires
-# of an interpolated value. An interface only bounds type parameters so far.
+# of an interpolated value. An interface bounds type parameters, and is the type of values that hold
+# a value of a type that satisfies it (see interface_values).
 import { Call, Identifier, InterfaceDeclaration, Member, Position } from '../ast'
 import { fail } from './diagnostics'
 import { set_type, type_of } from './expression'
 import { common_field_problem } from './fields'
-import { has_import, imported_export, InterfaceExport, use_import } from './imports'
+import { has_import, imported_export, InterfaceExport } from './imports'
 import { member_type_by_name } from './member'
 import { find_method } from './methods'
 import { Body, ProgramWide, Shared } from './shared'
 import { has_type, module_resolver, resolve, Resolver } from './type_names'
-import { format_type, FunctionType, same_type, string_type, Type, UnionType } from '../types'
+import {
+  format_type, FunctionType, InterfaceType, same_type, string_type, Type, UnionType
+} from '../types'
 
 # A type satisfies the member if it has a method, field or property of the name and the type.
 export struct InterfaceMember
@@ -19,6 +22,7 @@ export struct InterfaceMember
 
 export class InterfaceInfo
   name: String
+  type: InterfaceType
   # Nil until resolved (see interface_members), as the types may name those declared later.
   members: Array<InterfaceMember>?
   # The declaring module, which resolves the members' types; nil for a builtin interface.
@@ -33,8 +37,11 @@ const to_string_member = InterfaceMember(
   name: 'to_string', type: FunctionType(params: [], result: string_type)
 )
 
+const stringable_type = InterfaceType(name: STRINGABLE, symbol: STRINGABLE, module: 'std:builtins')
+
 export const stringable = InterfaceInfo(
-  name: STRINGABLE, members: [to_string_member], module_index: nil, declaration: nil
+  name: STRINGABLE, type: stringable_type, members: [to_string_member], module_index: nil
+  declaration: nil
 )
 
 # Registers the module's interfaces, after its classes, structs and enums (see add_enums).
@@ -45,7 +52,10 @@ export const add_interfaces = (shared: Shared, declarations: Array<InterfaceDecl
     fail program, position, "'#{name}' is already defined" if has_declared_type(shared, name)
     reject_invalid_members program, declaration
     const module_index = shared.index
-    shared.interfaces[name] = InterfaceInfo(name, declaration, module_index, members: nil)
+    const type = InterfaceType(name, symbol: "#{module_index}.#{name}", module: shared.name)
+    const info = InterfaceInfo(name, type, declaration, module_index, members: nil)
+    shared.interfaces[name] = info
+    program.interfaces[type.symbol] = info
 
 # A member is `name: Type`; default implementations are planned.
 const reject_invalid_members = (program: ProgramWide, declaration: InterfaceDeclaration) ->
@@ -64,11 +74,35 @@ const reject_invalid_members = (program: ProgramWide, declaration: InterfaceDecl
 export const has_declared_type = (shared: Shared, name: String) ->
   shared.objects.has(name) or shared.enums.has(name) or shared.interfaces.has(name)
 
-# Whether the name is that of an interface of the module or an imported one.
-export const is_interface_name = (shared: Shared, name: String) ->
-  return true if shared.interfaces.has(name)
-  const imported = shared.imports.names[name] ? return false
-  imported_export(shared.program, imported) is InterfaceExport
+# The interface that the module imports by the name, marking its import as used.
+export const imported_interface = (shared: Shared, name: String) ->
+  const imported = shared.imports.names[name] ? return nil
+  const exported = imported_export(shared.program, imported)
+  return nil if not (exported is InterfaceExport)
+  imported.used = true
+  exported.info
+
+export const interface_of = (program: ProgramWide, type: InterfaceType) ->
+  return stringable if type.symbol == STRINGABLE
+  program.interfaces[type.symbol] ? throw "no interface #{type.symbol}"
+
+# The member of the interface type by the name, and its place among the members, which is its
+# place in an itab.
+export const interface_member = (program: ProgramWide, type: InterfaceType, name: String) ->
+  const members = interface_members(program, interface_of(program, type))
+  const index = members.find_index((member) -> member.name == name) ? return nil
+  IndexedMember index, member: members[index]
+
+# The type of a member of the interface type that is no method, which is read as a property.
+export const interface_property = (program: ProgramWide, type: Type, name: String): Type? ->
+  return nil if not (type is InterfaceType)
+  const found = interface_member(program, type, name) ? return nil
+  const member_type = found.member.type
+  member_type is FunctionType then nil else member_type
+
+export struct IndexedMember
+  index: Int
+  member: InterfaceMember
 
 # Resolves the members of every interface of the module, so that one that is never used is checked
 # too.
@@ -93,9 +127,7 @@ export const bound_interface = (
 ): InterfaceInfo ->
   const shared = program.shared[resolver.module_index]
   return own if const own = shared.interfaces[name.name]
-  if const imported = use_import(shared, name.name)
-    const exported = imported_export(program, imported)
-    return exported.info if exported is InterfaceExport
+  return imported if const imported = imported_interface(shared, name.name)
   const name_text = name.name
   const is_other_name = has_type(program, resolver, name_text) or has_import(shared, name_text)
   return stringable if name_text == STRINGABLE and not is_other_name

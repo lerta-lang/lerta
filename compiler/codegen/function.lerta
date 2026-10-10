@@ -23,12 +23,12 @@ import {
   value_field
 } from './heap_object'
 import {
-  constructor_symbol, emit_release, emit_retain, ir_return_type, ir_type, method_symbol
-  returns_nothing
+  constructor_symbol, emit_release, emit_release_stored, emit_retain, emit_retain_value
+  ir_return_type, ir_type, method_symbol, ownership, returns_nothing
 } from './lerta_ir'
 import { emit_throw_blocks } from './throw_blocks'
 import { emit_mark_initialized, emit_release_globals } from './top_level'
-import { is_kind, is_reference_type, ObjectType, Type } from '../types'
+import { is_kind, ObjectType, Type } from '../types'
 
 # The local of the name: in the scopes or, outside them, a top-level value of the module, which a
 # function checks to be initialized, or an imported value. Those of the modules of its import
@@ -146,7 +146,7 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   const arguments = [field for field in info.fields when field.value == nil]
   for i in 0...arguments.length
     const field = arguments[i]
-    emit_retain ir, "%p#{i}" if is_reference_type(field.type!) and not field.weak
+    emit_retain_value ir, "%p#{i}", field.type! if not field.weak
     store_field g, object, info, field, "%p#{i}"
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
@@ -169,7 +169,7 @@ const store_field = (
 const weak_box_of = (g: Generator, object: String, type: Type) ->
   emit_weak_box g.ir, object, info_of(g.code.program, type as ObjectType!)
 
-const finish = (g: Generator, signature: String) ->
+export const finish = (g: Generator, signature: String) ->
   emit_throw_blocks g
   g.ir.finish signature
 
@@ -244,8 +244,8 @@ export const release_scope = (g: Generator, scope: Map<String, CodegenLocal>) ->
     continue if local.top_level != nil
     if const cell = local.cell
       emit_release ir, cell.cell if cell.is_owned
-    else if is_reference_type(local.type)
-      emit_release ir, ir.assign("load ptr, ptr #{local.pointer}")
+    else
+      emit_release_stored ir, local.pointer, ir_type(local.type), ownership(local.type)
 
 export const generate_statement = (g: Generator, statement: Statement): void ->
   case statement

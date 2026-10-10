@@ -4,9 +4,10 @@
 import { builtin_method } from './builtins'
 import { ExtensionMethod, Extensions, find_extension } from './extensions'
 import { GenericRef } from './generics'
+import { interface_member } from './interfaces'
 import { info_of } from './object_types'
 import { ProgramWide } from './shared'
-import { ObjectType, Type } from '../types'
+import { FunctionType, InterfaceType, ObjectType, Type } from '../types'
 
 # A method of the class or struct, which has instances if it is generic.
 export struct OwnMethod
@@ -20,7 +21,12 @@ export struct ExtensionSource
 export struct BuiltinMethod
   type: Type
 
-export type MethodSource = OwnMethod | ExtensionSource | BuiltinMethod
+# A member of an interface type of a function type, called through the itab at the place.
+export struct InterfaceMethod
+  type: Type
+  index: Int
+
+export type MethodSource = OwnMethod | ExtensionSource | BuiltinMethod | InterfaceMethod
 
 export const find_method = (
   program: ProgramWide, receiver: Type, name: String, extensions: Extensions
@@ -28,6 +34,10 @@ export const find_method = (
   if receiver is ObjectType
     const info = info_of(program, receiver)
     return OwnMethod(receiver, generic: info.generics[name]) if info.methods.has(name)
+  if receiver is InterfaceType
+    const found = interface_member(program, receiver, name) ? return nil
+    const type = found.member.type
+    return type is FunctionType then InterfaceMethod(type, index: found.index) else nil
   return ExtensionSource(method) if const method = find_extension(extensions, receiver, name)
   const type = builtin_method(receiver, name) ? return nil
   BuiltinMethod type
