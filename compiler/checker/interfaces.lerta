@@ -1,11 +1,16 @@
-# Interfaces, `interface Shape` with members such as `area: () -> Int`: what a type must have to
-# satisfy one (see reject_unsatisfied). An interface only bounds type parameters so far.
-import { Identifier, InterfaceDeclaration } from '../ast'
+# Interfaces, `interface Shape` with members such as `area: () -> Int`: their declarations, and
+# what a type must have to satisfy one (see reject_unsatisfied), as the builtin Stringable requires
+# of an interpolated value. An interface only bounds type parameters so far.
+import { Call, Identifier, InterfaceDeclaration, Member, Position } from '../ast'
 import { fail } from './diagnostics'
+import { set_type, type_of } from './expression'
+import { common_field_problem } from './fields'
 import { has_import, imported_export, InterfaceExport, use_import } from './imports'
-import { ProgramWide, Shared } from './shared'
+import { member_type_by_name } from './member'
+import { find_method } from './methods'
+import { Body, ProgramWide, Shared } from './shared'
 import { has_type, module_resolver, resolve, Resolver } from './type_names'
-import { FunctionType, string_type, Type } from '../types'
+import { format_type, FunctionType, same_type, string_type, Type, UnionType } from '../types'
 
 # A type satisfies the member if it has a method, field or property of the name and the type.
 export struct InterfaceMember
@@ -98,3 +103,38 @@ export const bound_interface = (
     when is_other_name then "'#{name_text}' is not an interface"
     else "unknown interface '#{name_text}'"
   fail program, name.position, message
+
+# Rejects a type that does not satisfy the interface.
+export const reject_unsatisfied = (body: Body, type: Type, bound: InterfaceInfo, at: Position) ->
+  for member in interface_members(body.program, bound)
+    satisfying_type body, type, bound, member, Identifier(position: at, name: member.name), nil
+
+# The type of the type's member that satisfies the interface's member, which must be of exactly
+# the member's type. Not merely of a type assignable to it: the generic code is checked with the
+# type it has.
+const satisfying_type = (
+  body: Body, type: Type, bound: InterfaceInfo, member: InterfaceMember, name: Identifier
+  call: Call?
+) ->
+  const found = member_type_by_name(body, type, name, call)
+  return found if found and same_type(found, member.type)
+  const expected = format_type(member.type)
+  const reason = case
+    when found then "its #{member.name} is of type #{format_type(found)}, not #{expected}"
+    # Only a generic method has no type without a call.
+    when find_method(body.program, type, name.name, body.extensions)
+      "its #{member.name} has type parameters of its own"
+    when type is UnionType then common_field_problem(body, type, name)!
+    else "it has no #{member.name} of type #{expected}"
+  fail body.program, name.position, "#{format_type(type)} does not satisfy #{bound.name}: #{reason}"
+
+# `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
+# is typed once. x must be Stringable.
+export const check_interpolated = (body: Body, part: Call) ->
+  const member = part.callee
+  throw 'an interpolated value is read by a call of its to_string()' if not (member is Member)
+  const type = type_of(body, member.object, nil)
+  const to_string = interface_members(body.program, stringable)[0]
+  const name = Identifier(position: member.object.position, name: member.name.name)
+  set_type body, member, satisfying_type(body, type, stringable, to_string, name, part)
+  set_type body, part, string_type
