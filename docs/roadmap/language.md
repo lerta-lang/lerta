@@ -22,7 +22,19 @@ The planned syntax, control flow, types, operators and strings.
 ### Iterables
 
 - More methods of `Array` and `Iter<T>` besides `map`/`filter`/`take`/`any`/`all`/`find`.
-- With [interfaces](objects.md#interfaces), `for` and comprehensions traverse an `Iterable<T>`, an interface with `iter(): Iter<T>`, through its `iter()`, as Python's `for` does through `__iter__`. Being structural, it is satisfied by `Array<T>`, by `Iter<T>` (whose `iter` gives itself), by `Range` and by any user type with that method. The methods (`map`, `filter`, `any` and so on) are default implementations of `Iterable<T>`, written once, as Rust's `Iterator` provides its methods, instead of each `Array` method delegating to `@iter()`. Why not `xs.iter().map(f)` alone: it removes the delegation only by making every caller write `iter()`.
+- **Iters written in Lerta.** A value of a type with `has_next(): Bool` and `next(): T` converts to an `Iter<T>` where one is expected, as a value converts to an interface type: the `Iter` holds it as an interface value, with the started flag of every `Iter`, so that it too can be traversed only once. The state is typically a `var` that the two functions capture:
+  ```
+  const countdown = (n: Int): Iter<Int> ->
+    var i = n
+    const has_next = () -> i > 0
+    const next = () ->
+      i -= 1
+      i + 1
+    { has_next, next }
+  ```
+  Why a conversion into the builtin `Iter<T>`, rather than `Iter<T>` as an interface: the single-traversal rule then holds for every `Iter`, and neither type parameters of interfaces nor generic classes are needed.
+- Later, `Iter<T>` moves to `std/builtins.lerta` as a generic class that holds such a value and the started flag, once generic classes and type parameters of interfaces exist, so that the compiler no longer builds `Iter`s in itself (see [internals](../internals.md#lazy-iterators)) and `take` is written in Lerta. Code that uses `Iter`s does not change.
+- With [interfaces](objects.md#interfaces), `for` and comprehensions traverse an `Iterable<T>`, an interface with `iter(): Iter<T>`, through its `iter()`, as Python's `for` does through `__iter__`. Being structural, it is satisfied by `Array<T>`, by `Iter<T>` (whose `iter` gives itself), by `Range` and by any user type with that method. The methods (`map`, `filter`, `any` and so on) are written once, in an [extend of `Iterable<T>`](objects.md#interfaces), as Rust's `Iterator` provides its methods, instead of each `Array` method delegating to `@iter()`. It needs type parameters of interfaces, and so does `Iterable<T>` itself. Why not `xs.iter().map(f)` alone: it removes the delegation only by making every caller write `iter()`.
 
 ## Types
 
@@ -75,7 +87,6 @@ Interfaces and generics are in [objects](objects.md).
 - Notation for writing an array inside an array without brackets (CoffeeScript can).
 - Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
-- How an `Iter` is written in Lerta (its `has_next` and `next`), which `take` needs to move to `std/builtins.lerta`.
 - The type of a character (code point) (the element of `s.chars()`; `Int` or a `Char` type).
 - `Binary` literals (`'...'.binary` can substitute).
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).
