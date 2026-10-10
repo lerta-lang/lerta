@@ -12,7 +12,9 @@ import { infer_through_members } from './satisfaction'
 import { Body } from './shared'
 import { resolve } from './type_names'
 import { has_type_parameters, infer, substitute } from './type_patterns'
-import { inner_of, InterfaceType, is_kind, OptionalType, same_type, Type } from '../types'
+import {
+  inner_of, InterfaceType, is_kind, OptionalType, same_type, Type, TypeParameterType
+} from '../types'
 
 # A type argument, and where it was given or inferred from.
 export struct TypeBinding
@@ -29,10 +31,19 @@ export struct Inference
   bindings: Map<String, TypeBinding>
   inferred: Array<InferredArgument>
 
-# The type arguments of a generic method that the receiver gives, if it gives all of them.
-export const receiver_type_arguments = (generic: GenericFunction, receiver: Type) ->
+# The type arguments of a generic method that the receiver gives, if it gives all of them: those
+# of an extend of a type match its type, and those of an extend of an interface come from how the
+# receiver satisfies it (see declare_interface_extend).
+export const receiver_type_arguments = (
+  body: Body, generic: GenericFunction, receiver: Type, at: Position
+) ->
   const bindings: Map<String, Type> = Map()
-  infer generic.receiver!.type, receiver, (name, type) -> bindings[name] = type
+  const bind = (name: String, type: Type) -> bindings[name] = type if not bindings.has(name)
+  const pattern = generic.receiver!.type
+  infer pattern, receiver, bind
+  # The receiver of an extend of an interface is Self, the first type parameter.
+  if pattern is TypeParameterType
+    infer_through_members body, generic.bounds[0]!, receiver, at, bind
   return nil if generic.type_params.any((param) -> not bindings.has(param.name.name))
   [bindings[param.name.name]! for param in generic.type_params]
 
@@ -84,13 +95,15 @@ export const infer_type_arguments = (
   if const result = generic.result
     bind_from result, expected, call.position if expected
   check_argument i for i in 0...call.args.length when is_literal(i)
-  check_argument i for i in 0...call.args.length when is_function(i)
   # The type argument of a bounded type parameter gives those that its bound names, as `X:
-  # Iterable<T>` gives T.
-  for i in 0...generic.type_params.length
-    const bound = generic.bounds[i] ? continue
-    const known = bindings[generic.type_params[i].name.name] ? continue
-    infer_through_members body, bound, known.type, known.at, bind_at(known.at)
+  # Iterable<T>` gives T, before function literals take their parameters' types.
+  const bind_from_bounds = () ->
+    for i in 0...generic.type_params.length
+      const bound = generic.bounds[i] ? continue
+      const known = bindings[generic.type_params[i].name.name] ? continue
+      infer_through_members body, bound, known.type, known.at, bind_at(known.at)
+  bind_from_bounds()
+  check_argument i for i in 0...call.args.length when is_function(i)
   Inference bindings, inferred
 
 # An X? after an X makes the type argument X?.

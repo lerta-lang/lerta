@@ -16,8 +16,6 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 - Unions converted to interface values, each member with its itab, chosen when the value is converted.
 - Values of `Int`, `Bool`, `Byte` and enums in interface values, which are not references: the itab then tells whether the data is one.
-- **Extends of interfaces** (replacing code reuse through inheritance). `extend<T> Iterable<T>` gives its methods to every type that satisfies the interface, where the extend is in effect, as an extend of a type does; in them, `@` is the receiver, of its own type, and each is compiled per receiver type, as a generic extend's method is. A type that has a member of a method's name already is an error, as for any extend.
-  - Why not default implementations in the interface: the interface says only what a type must have, and a method of an extend cannot be overridden, so which code runs never depends on whether the type declares the member.
 
 ## Generics
 

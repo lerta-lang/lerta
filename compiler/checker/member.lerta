@@ -14,6 +14,7 @@ import {
   BuiltinMethod, ExtensionSource, find_method, InterfaceMethod, MethodSource, OwnMethod
 } from './methods'
 import { method_owner, object_method_type } from './object'
+import { find_interface_extension } from './satisfaction'
 import { Body } from './shared'
 import { format_type, Type, UnionType } from '../types'
 
@@ -21,7 +22,7 @@ import { format_type, Type, UnionType } from '../types'
 # find_method), or a field that holds a function.
 export const type_of_method_call = (body: Body, call: Call, member: Member, expected: Type?) ->
   const receiver = type_of(body, member.object, nil)
-  const source = find(body, receiver, member.name.name)
+  const source = find_callable(body, receiver, member.name)
   const generic = generic_method(source)
   if generic == nil
     reject_type_arguments body, call
@@ -51,6 +52,19 @@ const type_of_method = (body: Body, member: Member, receiver: Type, source: Meth
 
 const find = (body: Body, receiver: Type, name: String) ->
   find_method body.program, receiver, name, body.extensions
+
+# The method that a call of the name calls: one of the receiver's type (see find_method), or one
+# that an extend of an interface it satisfies gives it, which codegen reads from the facts. A
+# member of the type of the same name would make the call ambiguous.
+const find_callable = (body: Body, receiver: Type, name: Identifier): MethodSource? ->
+  const own = find(body, receiver, name.name)
+  const extended = find_interface_extension(body, receiver, name) ? return own
+  if own != nil or field_type_by_name(body, receiver, name) != nil
+    const from = "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
+    const gets = "has a member '#{name.name}', and gets a method of that name #{from}"
+    fail body.program, name.position, "#{format_type(receiver)} #{gets}"
+  body.facts.interface_extends[name] = extended
+  ExtensionSource method: extended
 
 # The type of the method, checking its body first if needed. A generic one's comes from its
 # instance for the receiver, if the receiver gives all its type arguments; `call`, if given, calls
@@ -96,7 +110,8 @@ export const type_of_property = (body: Body, member: Member): Type ->
   return field if const field = field_type(body, object_type, member)
   return property if const property = builtin_property(object_type, name)
   return member_type if const member_type = interface_property(body.program, object_type, name)
-  if find(body, object_type, name) != nil
+  const extended = find_interface_extension(body, object_type, member.name)
+  if find(body, object_type, name) != nil or extended != nil
     fail body.program, position, "a method must be called: write `#{name}()`"
   fail body.program, position, "type #{format_type(object_type)} has no property '#{name}'"
 

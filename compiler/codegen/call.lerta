@@ -60,8 +60,7 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
   const object_type = type_of(g, member.object)
   const object = generate(g, member.object)
   const name = member.name.name
-  const program = g.code.program
-  const source = find_method(program, object_type, name, g.extensions)
+  const source = method_source(g, object_type, member)
   if source == nil
     const closure = read_any_field(g, object, object_type, name, type_of(g, member))
     return call_closure(g, closure, type_of(g, member), call.args)
@@ -84,6 +83,14 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
       call_function g, symbol, type_of(g, member), call.args, receiver
   release_if_reference g, member.object, object
   result
+
+# The method that the member names: one of the object's type, or one that an extend of an
+# interface gives it, as the checker found it.
+const method_source = (g: Generator, object_type: Type, member: Member): MethodSource? ->
+  const found = find_method(g.code.program, object_type, member.name.name, g.extensions)
+  return found if found
+  const method = g.facts.interface_extends[member.name] ? return nil
+  ExtensionSource method
 
 # The symbol of a method written in Lerta: of a class or struct, of an extend, or of the instance
 # of a generic method that the call calls.

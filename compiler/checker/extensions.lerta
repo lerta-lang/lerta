@@ -7,11 +7,13 @@ import { GenericRef } from './generics'
 import { info_of } from './object_types'
 import { ProgramWide, Shared } from './shared'
 import { matches, overlaps, parts_of } from './type_patterns'
-import { format_type, ObjectType, Type, type_key } from '../types'
+import { format_type, InterfaceType, ObjectType, Type, type_key } from '../types'
 
 # The receiver of a generic extend, `Array<T>`, has type parameters, which stand for any type.
 export class ExtensionMethod
+  # Self, for a method of an extend of an interface, which `bound` is.
   receiver: Type
+  bound: InterfaceType?
   name: Identifier
   literal: FunctionLiteral
   # The declaring module: its index, and how messages name it.
@@ -39,24 +41,37 @@ export const add_imported = (
 ) ->
   for method in methods
     continue if extensions.in_effect.contains(method)
-    const { receiver, name } = method
-    if const other = overlapping(extensions, receiver, name.name)
+    if const other = overlapping(extensions, method)
       const modules = "#{other.module_name} and #{method.module_name}"
-      const method_name = "a method '#{name.name}'"
-      const message = "#{format_type(receiver)} gets #{method_name} from extends in both #{modules}"
+      const method_name = "a method '#{method.name.name}'"
+      const gets = "gets #{method_name} from extends in both #{modules}"
+      const message = "#{format_type(extended_type(method))} #{gets}"
       fail program, statement.position, message
     extensions.in_effect.push method
 
+# The type that the method's extend extends: an interface, or a type, which may be a pattern.
+export const extended_type = (method: ExtensionMethod): Type ->
+  return bound if const bound = method.bound
+  method.receiver
+
 # A method of an extend of the module (see declare_extend).
 export const add_own = (shared: Shared, method: ExtensionMethod) ->
-  const { receiver, name } = method
+  const { name } = method
   const extensions = shared.extensions
-  if const other = overlapping(extensions, receiver, name.name)
+  if const other = overlapping(extensions, method)
     const is_same_module = other.module_index == extensions.module_index
     const where = is_same_module then 'the same module' else other.module_name
     const method_name = "a method '#{name.name}'"
-    const from = "from an extend in #{where}"
-    const message = "#{format_type(receiver)} already has #{method_name}, #{from}"
+    const extended = format_type(extended_type(method))
+    const other_extended = format_type(extended_type(other))
+    const message = case
+      when method.bound == nil or extended == other_extended
+        "#{extended} already has #{method_name}, from an extend in #{where}"
+      # Extends of two interfaces, which a type may satisfy both.
+      else
+        const also = "which a type may satisfy too"
+        const gives = "an extend in #{where} gives one to #{other_extended}, #{also}"
+        "#{extended} cannot get #{method_name}: #{gives}"
     fail shared.program, name.position, message
   extensions.in_effect.push method
   shared.own_methods.push method
@@ -96,14 +111,21 @@ const visit_reachable = (program: ProgramWide, seen: Map<String, Type>, type: Ty
     for field in info_of(program, type).fields
       visit_reachable program, seen, field_type if const field_type = field.type
 
+# The method of the name that an extend of a type in effect gives the receiver; those of the
+# extends of interfaces are found by the interfaces it satisfies (see find_interface_extension).
 export const find_extension = (extensions: Extensions, receiver: Type, name: String) ->
   const is_found = (method: ExtensionMethod) ->
-    method.name.name == name and matches(method.receiver, receiver)
+    method.bound == nil and method.name.name == name and matches(method.receiver, receiver)
   extensions.in_effect.find is_found
 
-# A method of the name that an extend in effect gives some type that `receiver`, a pattern, also
-# matches, which another extend cannot give it too.
-const overlapping = (extensions: Extensions, receiver: Type, name: String) ->
-  const is_found = (method: ExtensionMethod) ->
-    method.name.name == name and overlaps(method.receiver, receiver)
+# A method of the name that an extend in effect gives some type that `method`'s receiver, a
+# pattern, also matches, which another extend cannot give it too. Two extends of interfaces may
+# both be of a type, which is known only where their method is called (see
+# find_interface_extension), so they clash by name; an extend of a type and one of an interface
+# clash only there.
+const overlapping = (extensions: Extensions, method: ExtensionMethod) ->
+  const name = method.name.name
+  const is_found = (other: ExtensionMethod) ->
+    return false if other.name.name != name or (other.bound == nil) != (method.bound == nil)
+    other.bound != nil or overlaps(other.receiver, method.receiver)
   extensions.in_effect.find is_found

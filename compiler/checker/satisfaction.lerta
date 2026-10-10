@@ -5,6 +5,7 @@
 import { Call, Identifier, Member, Position } from '../ast'
 import { fail } from './diagnostics'
 import { set_type, type_of } from './expression'
+import { ExtensionMethod } from './extensions'
 import { common_field_problem } from './fields'
 import {
   interface_members, interface_of, InterfaceMember, members_for, SELF, stringable
@@ -12,7 +13,7 @@ import {
 import { member_type_by_name } from './member'
 import { find_method } from './methods'
 import { Body } from './shared'
-import { infer, substitute } from './type_patterns'
+import { has_type_parameters, infer, substitute } from './type_patterns'
 import { format_type, InterfaceType, same_type, string_type, Type, UnionType } from '../types'
 
 # Rejects a type that does not satisfy the interface type.
@@ -20,25 +21,31 @@ export const reject_unsatisfied = (body: Body, type: Type, bound: InterfaceType,
   for member in members_for(body.program, bound, type)
     satisfying_type body, type, bound, member, Identifier(position: at, name: member.name), nil
 
-# The type of the type's member that satisfies the interface's member, which must be of exactly
-# the member's type. Not merely of a type assignable to it: the generic code is checked with the
-# type it has.
+# The type of the type's member that satisfies the interface's member.
 const satisfying_type = (
   body: Body, type: Type, bound: InterfaceType, member: InterfaceMember, name: Identifier
   call: Call?
 ) ->
   const found = member_type_by_name(body, type, name, call)
-  return found if found and same_type(found, member.type)
+  const reason = unsatisfied_reason(body, type, member, name, found) ? return found!
+  const bound_name = format_type(bound)
+  fail body.program, name.position, "#{format_type(type)} does not satisfy #{bound_name}: #{reason}"
+
+# Why the type's member, of the type found, does not satisfy the interface's member, or nil if it
+# does: it must be of exactly the member's type. Not merely of a type assignable to it: the
+# generic code is checked with the type it has.
+const unsatisfied_reason = (
+  body: Body, type: Type, member: InterfaceMember, name: Identifier, found: Type?
+): String? ->
+  return nil if found and same_type(found, member.type)
   const expected = format_type(member.type)
-  const reason = case
+  case
     when found then "its #{member.name} is of type #{format_type(found)}, not #{expected}"
     # Only a generic method has no type without a call.
     when find_method(body.program, type, name.name, body.extensions)
       "its #{member.name} has type parameters of its own"
     when type is UnionType then common_field_problem(body, type, name)!
     else "it has no #{member.name} of type #{expected}"
-  const bound_name = format_type(bound)
-  fail body.program, name.position, "#{format_type(type)} does not satisfy #{bound_name}: #{reason}"
 
 # Binds the type parameters in the type arguments of `pattern`, an interface type, to the types
 # that the type's members give them, as Array<Int>, whose iter gives an Iter<Int>, binds T of
@@ -66,3 +73,23 @@ export const check_interpolated = (body: Body, part: Call) ->
   const name = Identifier(position: member.object.position, name: member.name.name)
   set_type body, member, satisfying_type(body, type, bound, to_string, name, part)
   set_type body, part, string_type
+
+# The method of the name that an extend of an interface in effect gives the type, by an interface
+# that the type satisfies; the methods of such extends do not count for satisfying one.
+export const find_interface_extension = (body: Body, type: Type, name: Identifier) ->
+  const is_found = (method: ExtensionMethod) ->
+    const bound = method.bound ? return false
+    method.name.name == name.name and satisfies_pattern(body, type, bound, name.position)
+  body.extensions.in_effect.find is_found
+
+# Whether the type satisfies the interface type, whose type parameters its members give.
+const satisfies_pattern = (body: Body, type: Type, pattern: InterfaceType, at: Position) ->
+  const bindings: Map<String, Type> = Map()
+  const bind = (name: String, bound: Type) -> bindings[name] = bound if not bindings.has(name)
+  infer_through_members body, pattern, type, at, bind
+  const bound = substitute(pattern, bindings)
+  return false if has_type_parameters(bound)
+  const satisfies_member = (member: InterfaceMember) ->
+    const name = Identifier(position: at, name: member.name)
+    unsatisfied_reason(body, type, member, name, member_type_by_name(body, type, name, nil)) == nil
+  members_for(body.program, bound as InterfaceType!, type).all(satisfies_member)

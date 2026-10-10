@@ -1,5 +1,5 @@
 # `extend` statements: which types they may extend, and with what methods.
-import { Extend, FunctionLiteral, Identifier, TypeParameter } from '../ast'
+import { Extend, FunctionLiteral, Identifier, NamedType, TypeParameter } from '../ast'
 import { builtin_method, builtin_property } from './builtins'
 import { fail } from './diagnostics'
 import { add_own, ExtensionMethod } from './extensions'
@@ -7,11 +7,14 @@ import { add_function, add_generic, method_key } from './functions'
 import { make_generic_function, Receiver } from './generics'
 import { info_of, method_literal } from './object_types'
 import { ProgramWide, Shared } from './shared'
-import { module_resolver, resolve, with_type_parameters } from './type_names'
+import { module_resolver, resolve, Resolver, with_type_parameters } from './type_names'
 import { parts_of, placeholders } from './type_patterns'
 import {
-  format_type, is_one_of_kinds, ObjectType, Type, TypeKind, TypeParameterType
+  format_type, InterfaceType, is_one_of_kinds, ObjectType, Type, TypeKind, TypeParameterType
 } from '../types'
+import {
+  bound_interface, interface_members, interface_of, named_interface, SELF
+} from './interfaces'
 
 # Optional values, functions, unions and anonymous structs are left out.
 const EXTENDABLE_KINDS: Array<TypeKind> = [
@@ -26,13 +29,43 @@ export const declare_extend = (shared: Shared, statement: Extend) ->
   const { type_params } = statement
   reject_bounds program, type_params
   const resolver = with_type_parameters(module_resolver(shared.index), placeholders(type_params))
-  const receiver = resolve(program, resolver, statement.type)
+  const written = statement.type
+  if written is NamedType and named_interface(program, resolver, written.name) != nil
+    return declare_interface_extend(shared, statement, written, resolver)
+  const receiver = resolve(program, resolver, written)
   if not is_one_of_kinds(receiver, EXTENDABLE_KINDS)
-    const extendable = 'String, Int, Bool, Byte, Binary, arrays, maps, Iters, classes and structs'
-    const message = "#{format_type(receiver)} cannot be extended; only #{extendable} can be so far"
-    fail program, statement.type.position, message
+    const extendable = 'String, Int, Bool, Byte, Binary, arrays, maps, Iters, classes, structs'
+    const so_far = "only #{extendable} and interfaces can be so far"
+    const message = "#{format_type(receiver)} cannot be extended; #{so_far}"
+    fail program, written.position, message
   reject_unused_type_parameters program, type_params, receiver
-  const extended = Receiver(type_params, type: receiver)
+  const has_already = (name: String) -> has_member(program, receiver, name)
+  declare_methods shared, statement, Receiver(type_params, type: receiver), nil, has_already
+
+# The methods of an extend of an interface are those of the types that satisfy it: each is
+# generic, with a type parameter Self, the type of `@`, which the interface bounds, before the
+# extend's own (see find_interface_extension).
+const declare_interface_extend = (
+  shared: Shared, statement: Extend, written: NamedType, resolver: Resolver
+) ->
+  const program = shared.program
+  const bound = bound_interface(program, resolver, written)
+  reject_unused_type_parameters program, statement.type_params, bound
+  const self_name = Identifier(name: SELF, position: written.position)
+  const type_params = [TypeParameter(name: self_name, bound: written)]
+  type_params.append statement.type_params
+  const receiver = Receiver(type_params, type: TypeParameterType(name: SELF))
+  # Satisfying the interface does not depend on its extends.
+  const members = interface_members(program, interface_of(program, bound))
+  const has_already = (name: String) -> members.any((member) -> member.name == name)
+  declare_methods shared, statement, receiver, bound, has_already
+
+const declare_methods = (
+  shared: Shared, statement: Extend, extended: Receiver, bound: InterfaceType?
+  has_already: (String) -> Bool
+) ->
+  const program = shared.program
+  const receiver = extended.type
   for member in statement.members
     const { name } = member
     const literal = method_literal(member)
@@ -41,25 +74,27 @@ export const declare_extend = (shared: Shared, statement: Extend) ->
     if name.name == 'init' or name.name == 'deinit'
       const message = "an extend cannot declare #{name.name}, which only a class or struct runs"
       fail program, name.position, message
-    if has_member(program, receiver, name.name)
-      fail program, name.position, "#{format_type(receiver)} already has a member '#{name.name}'"
-    const method = extension_method(shared, extended, name, literal)
+    if has_already(name.name)
+      const extended_type = bound then format_type(bound) else format_type(receiver)
+      fail program, name.position, "#{extended_type} already has a member '#{name.name}'"
+    const method = extension_method(shared, extended, bound, name, literal)
     add_own shared, method
     add_function shared, method.key, name, literal, receiver if method.generic == nil
 
 # A method of an extend of the receiver: generic if the extend or the method has type parameters.
 const extension_method = (
-  shared: Shared, receiver: Receiver, name: Identifier, literal: FunctionLiteral
+  shared: Shared, receiver: Receiver, bound: InterfaceType?, name: Identifier
+  literal: FunctionLiteral
 ) ->
   const type = receiver.type
-  const key = method_key(format_type(type), name.name)
+  const key = method_key(bound then format_type(bound) else format_type(type), name.name)
   const is_generic = receiver.type_params.length > 0 or literal.type_params.length > 0
   const make_generic = () ->
     add_generic shared, make_generic_function(shared, name, literal, receiver)
   const generic = is_generic then make_generic() else nil
   const module_index = shared.index
   const module_name = shared.name
-  ExtensionMethod name, literal, generic, key, module_index, module_name, receiver: type
+  ExtensionMethod name, literal, generic, key, module_index, module_name, bound, receiver: type
 
 # The receiver gives an extend's type arguments, whose bounds would go unchecked.
 const reject_bounds = (program: ProgramWide, type_params: Array<TypeParameter>) ->
