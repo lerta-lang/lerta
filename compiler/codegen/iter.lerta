@@ -1,6 +1,7 @@
 # The kinds of Iter in the generated code (see iter_protocol): an Iter of the items of an array or
-# a Binary, of a range's Ints, and those that map, filter or take the items of another Iter, which
-# they own; each is generated once per type it depends on. Also the methods of Iters.
+# a Binary, of a range's Ints, those that map or filter the items of another Iter, which they own,
+# and those of values with has_next and next; each is generated once per type it depends on. Also
+# the methods of Iters.
 import { emit_get, emit_length } from './array'
 import { emit_closure_call, function_type_of } from './closure'
 import { value_field } from './heap_object'
@@ -136,27 +137,6 @@ const emit_filter_iter = (ir: IrBuilder, source: String, test: String, item: Typ
   const kind = define_kind(ir, "filter #{type_key(item)}", state, item, has_next, next)
   emit_iter ir, kind, [source, test, 'false', 'zeroinitializer']
 
-# At most `count` items of the source: none if it is not positive.
-const emit_take_iter = (ir: IrBuilder, source: String, count: String, item: Type) ->
-  const has_next = (body: IrBuilder, kind: IterKind) ->
-    const ask_label = body.fresh_label('take.ask')
-    const end_label = body.fresh_label('take.end')
-    const remaining = load_state(body, kind, 1)
-    const is_positive = body.assign("icmp sgt i64 #{remaining}, 0")
-    body.emit "br i1 #{is_positive}, label %#{ask_label}, label %#{end_label}"
-    body.start_block ask_label
-    body.emit "ret i1 #{emit_has_next(body, load_state(body, kind, 0))}"
-    body.start_block end_label
-    body.emit 'ret i1 false'
-  const next = (body: IrBuilder, kind: IterKind) ->
-    const remaining = load_state(body, kind, 1)
-    store_state body, kind, 1, body.assign("sub nsw i64 #{remaining}, 1")
-    const value = emit_next(body, load_state(body, kind, 0), item)
-    body.emit "ret #{ir_type(item)} #{value}"
-  const state = [value_field(IterType(item)), value_field(int_type)]
-  const kind = define_kind(ir, "take #{type_key(item)}", state, item, has_next, next)
-  emit_iter ir, kind, [source, count]
-
 # An owned array, Binary or Iter as an Iter to read from: an Iter of the array's or the Binary's
 # items, or the Iter itself, whose traversal starts here.
 export const emit_source_iter = (ir: IrBuilder, value: String, type: Type) ->
@@ -164,11 +144,9 @@ export const emit_source_iter = (ir: IrBuilder, value: String, type: Type) ->
   emit_iter_start ir, value
   value
 
-export const is_iter_method = (type: Type, name: String) ->
-  is_kind(type, ITER) or (is_kind(type, ARRAY) and name == 'take')
+export const is_iter_method = (type: Type) -> is_kind(type, ITER)
 
-# A method of an Iter, or one of an array that makes an Iter (see is_iter_method). It takes over
-# the object and the operands of the arguments, owned: an Iter it makes holds them.
+# A method of an Iter, has_next or next, which takes over the object.
 export const call_iter_method = (
   ir: IrBuilder, name: String, object: String, type: Type, args: Array<String>
 ) ->
@@ -183,7 +161,6 @@ export const call_iter_method = (
     when 'next'
       emit_mark_started ir, object
       consume emit_checked_next(ir, object, item)
-    when 'take' then emit_take_iter(ir, emit_source_iter(ir, object, type), args[0], item)
     else throw "no Iter method #{name}"
 
 # A comprehension's Iter: the items of the source for which the guard, if any, gives true, mapped

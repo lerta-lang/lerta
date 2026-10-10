@@ -15,6 +15,14 @@ extern lerta_string_join: (Array<String>, String) -> String
 
 const MIN_INT = -9223372036854775808
 
+# The types that have `to_string()`, which print and interpolation require.
+export interface Stringable
+  to_string: () -> String
+
+# The types that `for` and comprehensions go through, by the Iter of `iter()`.
+export interface Iterable<T>
+  iter: () -> Iter<T>
+
 # Writes the text of x and a newline to stdout.
 export const print = <T: Stringable>(x: T) -> write_line(x.to_string())
 
@@ -132,11 +140,6 @@ extend Array<Byte>
 extend<T> Array<T>
   # The items, read as the Iter is.
   iter = (): Iter<T> -> (x for x in @)
-  map = <U>(f: (T) -> U): Iter<U> -> @iter().map(f)
-  filter = (keep: (T) -> Bool): Iter<T> -> @iter().filter(keep)
-  any = (test: (T) -> Bool): Bool -> @iter().any(test)
-  all = (test: (T) -> Bool): Bool -> @iter().all(test)
-  find = (test: (T) -> Bool): T? -> @iter().find(test)
   contains = (item: T): Bool -> @any((each) -> each == item)
   # The place of the first item for which `test` is true, or nil if there is none.
   find_index = (test: (T) -> Bool): Int? ->
@@ -154,6 +157,9 @@ extend<T> Array<T>
 extend<T> Iter<T>
   # Itself, so that an Iter is Iterable.
   iter = (): Iter<T> -> @
+
+# The methods of whatever `for` goes through: they read its items as it does, through `iter()`.
+extend<T> Iterable<T>
   map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)
   filter = (keep: (T) -> Bool): Iter<T> -> (x for x in @ when keep(x))
   to_array = (): Array<T> -> [x for x in @]
@@ -166,6 +172,16 @@ extend<T> Iter<T>
     for x in @
       return x if test(x)
     nil
+  # The first `n` items, or all of them if there are fewer; it stops reading its source after them,
+  # which a comprehension could not.
+  take = (n: Int): Iter<T> ->
+    const source = @iter()
+    var left = n
+    const has_next = () -> left > 0 and source.has_next()
+    const next = (): T ->
+      left -= 1
+      source.next()
+    { has_next, next }
 
 extend<K, V> Map<K, V>
   has = (key: K): Bool -> @[key] != nil

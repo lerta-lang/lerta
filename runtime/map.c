@@ -182,17 +182,3 @@ LertaArray *lerta_map_keys(const LertaMap *map) {
   }
   return keys;
 }
-
-// The 8-byte value API that the seed's generated code calls, over the one above, until the seed
-// is refreshed (see docs/internals.md#bootstrap).
-LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values, LertaHash hash,
-                        LertaEquals equals) {
-  LertaItemKind kind = owns_values ? LERTA_REFERENCE_ITEMS : LERTA_PLAIN_ITEMS;
-  return lerta_map_create(key_kind, kind, hash, equals);
-}
-
-bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value) {
-  return lerta_map_read(map, key, value);
-}
-
-void lerta_map_set(LertaMap *map, int64_t key, int64_t value) { lerta_map_write(map, key, &value); }

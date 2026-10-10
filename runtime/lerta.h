@@ -186,12 +186,6 @@ void lerta_array_append(LertaArray *array, const void *item);
 void lerta_array_take_last(LertaArray *array, void *item);
 // Appends an item of any kind but interface values, given as 8 bytes (see lerta_word_item).
 void lerta_array_append_word(LertaArray *array, int64_t word);
-// The same for 8-byte items, which the seed's generated code calls until the seed is refreshed.
-LertaArray *lerta_array_new(bool owns_references);
-int64_t lerta_array_get(const LertaArray *array, int64_t index);
-void lerta_array_set(LertaArray *array, int64_t index, int64_t item);
-void lerta_array_push(LertaArray *array, int64_t item);
-int64_t lerta_array_pop(LertaArray *array);
 // Whether two arrays hold equal items in the same order, and a hash of the items in order.
 bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals);
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
@@ -210,11 +204,6 @@ bool lerta_map_read(const LertaMap *map, int64_t key, void *value);
 void lerta_map_write(LertaMap *map, int64_t key, const void *value);
 void lerta_map_remove(LertaMap *map, int64_t key);
 LertaArray *lerta_map_keys(const LertaMap *map);
-// The same for 8-byte values, which the seed's generated code calls until the seed is refreshed.
-LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values, LertaHash hash,
-                        LertaEquals equals);
-bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value);
-void lerta_map_set(LertaMap *map, int64_t key, int64_t value);
 
 // Iters (iter.c). Starting a traversal of an Iter that has started one throws, and so does next
 // past the end.

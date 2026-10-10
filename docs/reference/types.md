@@ -106,16 +106,16 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 ```
 
 - `Iter<T>` is a lazy sequence of items of type `T`, which can be any type with values, an optional one too. It computes an item only when asked for it, so nothing happens until it is consumed; a statement that only makes an `Iter` is an error (see [discarded values](errors.md#discarded-values)).
-- [Lazy comprehensions](control-flow.md#for-and-ranges) make one, and so do these methods of an array or an `Iter`, which take a function of an item:
+- [Lazy comprehensions](control-flow.md#for-and-ranges) make one, and so do these methods of an array, a `Binary`, an `Iter` or any [Iterable](builtins.md#iterable), which take a function of an item:
   - `xs.map(f)` gives `f(x)` for each item `x`; its items have the type of `f`'s result.
   - `xs.filter(f)` gives the items for which `f`, which gives a `Bool`, is true.
   - `xs.take(n)` gives the first `n` items, or all of them if there are fewer (none if `n` is not positive).
 
   The `Iter` of an array reads the array as it goes, as a `for` does. The functions' parameter types may be left out, as in `(w) -> w + '!'`; `map`'s result type is that of its function.
-- These methods of an array or an `Iter` search the items with a function of an item that gives a `Bool`, and stop reading at the first item that decides the result:
+- These methods of an Iterable search the items with a function of an item that gives a `Bool`, and stop reading at the first item that decides the result:
   - `xs.any(f)` tells whether `f` is true for some item, and `xs.all(f)` whether it is for every item (so `all` of no items is true).
   - `xs.find(f)` gives the first item for which `f` is true, or nil if there is none. Its type is `T?`, so for items of an optional type it is an error (see [optional values](#optional-values)).
-- An `Iter` is consumed by `for`, by a comprehension over it, by `it.to_array()`, which gives its items as an array (of a `T` an array can hold), by `it.any`, `it.all` and `it.find`, and by `it.map`, `it.filter` and `it.take`, whose `Iter` reads it.
+- An `Iter` is consumed by `for`, by a comprehension over it, by `it.to_array()`, which gives its items as an array (of a `T` an array can hold), as `xs.to_array()` does those of any Iterable, by `it.any`, `it.all` and `it.find`, and by `it.map`, `it.filter` and `it.take`, whose `Iter` reads it.
 - `it.has_next()` tells whether there is an item left, and `it.next()` gives it; past the end, `next` throws `next past the end of an Iter`. `it.iter()` gives the `Iter` itself, so that it is [Iterable](builtins.md#iterable).
 - **Iters written in Lerta.** A value of a type with `has_next(): Bool` and `next(): T` converts to an `Iter<T>` where one is expected, as a value converts to an [interface type](objects.md#interfaces) (so it must be a reference): the `Iter` gives the items that its `has_next` and `next` give. The state is typically a `var` that the two functions capture:
   ```

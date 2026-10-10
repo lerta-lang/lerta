@@ -8,7 +8,7 @@ import { set_type, type_of } from './expression'
 import { ExtensionMethod } from './extensions'
 import { common_field_problem } from './fields'
 import {
-  interface_members, interface_of, InterfaceMember, iterable, members_for, SELF, stringable
+  interface_members, interface_of, InterfaceMember, members_for, SELF, std_interface
 } from './interfaces'
 import { member_type_by_name } from './member'
 import { find_method } from './methods'
@@ -68,7 +68,7 @@ export const check_interpolated = (body: Body, part: Call) ->
   const member = part.callee
   throw 'an interpolated value is read by a call of its to_string()' if not (member is Member)
   const type = type_of(body, member.object, nil)
-  const bound = stringable.type
+  const bound = std_interface(body.shared, 'Stringable', member.object.position).type
   const to_string = members_for(body.program, bound, type)[0]
   const name = Identifier(position: member.object.position, name: member.name.name)
   set_type body, member, satisfying_type(body, type, bound, to_string, name, part)
@@ -98,8 +98,9 @@ const satisfied_bindings = (body: Body, type: Type, pattern: InterfaceType, at: 
 
 # The type of the items of a type that satisfies Iterable, which its iter gives.
 export const iterable_item_of = (body: Body, type: Type, at: Position) ->
+  const iterable = std_interface(body.shared, 'Iterable', at)
   const bindings = satisfied_bindings(body, type, iterable.type, at) ? return nil
-  bindings['T']
+  bindings[iterable.type_params[0]]
 
 # Fails with the message, or, for a type that has a member `iter` of another type, with why it is
 # not Iterable.
@@ -107,6 +108,7 @@ export const reject_not_iterable = (body: Body, type: Type, at: Position, messag
   const name = Identifier(position: at, name: 'iter')
   const found = member_type_by_name(body, type, name, nil)
   fail body.program, at, message if found == nil
+  const iterable = std_interface(body.shared, 'Iterable', at)
   const member = interface_members(body.program, iterable)[0]
   const reason = unsatisfied_reason(body, type, member, name, found)!
   const unsatisfied = "#{format_type(type)} does not satisfy #{format_type(iterable.type)}"

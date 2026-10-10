@@ -105,30 +105,6 @@ void lerta_array_take_last(LertaArray *array, void *item) {
   memcpy(item, item_at(array, array->length), (size_t)lerta_item_size(array->item_kind));
 }
 
-// The 8-byte item API that the seed's generated code calls, over the one above, until the seed is
-// refreshed (see docs/internals.md#bootstrap).
-LertaArray *lerta_array_new(bool owns_references) {
-  return lerta_array_create(owns_references ? LERTA_REFERENCE_ITEMS : LERTA_PLAIN_ITEMS);
-}
-
-int64_t lerta_array_get(const LertaArray *array, int64_t index) {
-  int64_t item;
-  lerta_array_read(array, index, &item);
-  return item;
-}
-
-void lerta_array_set(LertaArray *array, int64_t index, int64_t item) {
-  lerta_array_write(array, index, &item);
-}
-
-void lerta_array_push(LertaArray *array, int64_t item) { lerta_array_append(array, &item); }
-
-int64_t lerta_array_pop(LertaArray *array) {
-  int64_t item;
-  lerta_array_take_last(array, &item);
-  return item;
-}
-
 LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator) {
   int64_t length = 0;
   for (int64_t i = 0; i < strings->length; i++) {

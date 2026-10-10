@@ -23,7 +23,6 @@ The planned syntax, control flow, types, operators and strings.
 
 - More methods of `Array` and `Iter<T>` besides `map`/`filter`/`take`/`any`/`all`/`find`.
 - Later, `Iter<T>` moves to `std/builtins.lerta` as a generic class that holds such a value and the started flag, once generic classes exist, so that the compiler no longer builds `Iter`s in itself (see [internals](../internals.md#lazy-iterators)) and `take` is written in Lerta. Code that uses `Iter`s does not change.
-- The methods of [`Iterable<T>`](../reference/builtins.md#iterable) (`map`, `filter`, `any` and so on) are written once, in an [extend of `Iterable<T>`](objects.md#interfaces), as Rust's `Iterator` provides its methods, instead of each `Array` method delegating to `@iter()`, once the seed reads interfaces in `std/builtins.lerta`. Why not `xs.iter().map(f)` alone: it removes the delegation only by making every caller write `iter()`.
 
 ## Types
 
