@@ -7,7 +7,7 @@ LERTA_STATIC_STRING(pop_from_empty, "pop from an empty array");
 
 int64_t lerta_item_size(LertaItemKind kind) {
   switch (kind) {
-    case LERTA_INTERFACE_ITEMS: return 16;
+    case LERTA_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
     case LERTA_BYTE_ITEMS: return 1;
     default: return 8;
   }
