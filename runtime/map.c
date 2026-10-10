@@ -32,11 +32,16 @@ static bool same_key(const LertaMap *map, int64_t a, int64_t b) {
   }
 }
 
-static bool keys_are_references(const LertaMap *map) { return map->key_kind != LERTA_INT_KEYS; }
+static bool keys_are_references(const LertaMap *map) {
+  return map->key_kind != LERTA_INT_KEYS && map->key_kind != LERTA_BYTE_KEYS;
+}
 
 static size_t value_size(const LertaMap *map) { return (size_t)lerta_item_size(map->value_kind); }
 
-static size_t entry_size(const LertaMap *map) { return sizeof(LertaMapEntry) + value_size(map); }
+// Rounded up to 8 bytes, so that each entry's key stays aligned after a value of one byte.
+static size_t entry_size(const LertaMap *map) {
+  return (sizeof(LertaMapEntry) + value_size(map) + 7) & ~(size_t)7;
+}
 
 static LertaMapEntry *entry_at(const LertaMap *map, int64_t position) {
   return (LertaMapEntry *)(map->entries + (size_t)position * entry_size(map));
@@ -164,12 +169,16 @@ void lerta_map_remove(LertaMap *map, int64_t key) {
   release_entry(map, entry);
 }
 
+static LertaItemKind key_item_kind(const LertaMap *map) {
+  if (keys_are_references(map)) return LERTA_REFERENCE_ITEMS;
+  return map->key_kind == LERTA_BYTE_KEYS ? LERTA_BYTE_ITEMS : LERTA_PLAIN_ITEMS;
+}
+
 LertaArray *lerta_map_keys(const LertaMap *map) {
-  LertaItemKind kind = keys_are_references(map) ? LERTA_REFERENCE_ITEMS : LERTA_PLAIN_ITEMS;
-  LertaArray *keys = lerta_array_create(kind);
+  LertaArray *keys = lerta_array_create(key_item_kind(map));
   for (int64_t i = 0; i < map->entry_count; i++) {
     const LertaMapEntry *entry = entry_at(map, i);
-    if (entry->live) lerta_array_append(keys, &entry->key);
+    if (entry->live) lerta_array_append_word(keys, entry->key);
   }
   return keys;
 }

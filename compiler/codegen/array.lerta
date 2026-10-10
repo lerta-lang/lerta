@@ -1,6 +1,8 @@
 # Operations on arrays in the generated code, through the runtime (runtime/array.c), which takes
-# and gives items through pointers to them. An item is 8 bytes, an Int or an enum as is, a Bool or
-# a Byte zero-extended and a reference as its address, or an interface value as it is.
+# and gives items through pointers to them. An item is a byte, a Byte or a Bool; or 8 bytes, an
+# Int or an enum as is and a reference as its address; or an interface value as it is. Map keys,
+# and the items that the runtime hashes and compares, are words: 8 bytes, a Byte or a Bool
+# zero-extended (see to_item).
 import { IrBuilder } from './ir_builder'
 import { ir_type, ownership } from './lerta_ir'
 import { call_runtime } from './runtime_calls'
@@ -9,26 +11,52 @@ import { is_kind, is_one_of_kinds, Type, TypeKind } from '../types'
 # The kinds whose values are already 8 bytes.
 const WORD_KINDS: Array<TypeKind> = ['Int', ENUM]
 
+# The value as a word.
 export const to_item = (ir: IrBuilder, operand: String, type: Type) ->
-  return operand if is_one_of_kinds(type, WORD_KINDS) or is_kind(type, INTERFACE)
-  if is_one_of_kinds(type, ['Bool', 'Byte'])
+  return operand if is_one_of_kinds(type, WORD_KINDS)
+  if is_byte_item(type)
     return ir.assign("zext #{ir_type(type)} #{operand} to i64")
   ir.assign "ptrtoint ptr #{operand} to i64"
 
+# The value of a word.
 export const from_item = (ir: IrBuilder, item: String, type: Type) ->
-  return item if is_one_of_kinds(type, WORD_KINDS) or is_kind(type, INTERFACE)
-  if is_one_of_kinds(type, ['Bool', 'Byte'])
+  return item if is_one_of_kinds(type, WORD_KINDS)
+  if is_byte_item(type)
     return ir.assign("trunc i64 #{item} to #{ir_type(type)}")
   ir.assign "inttoptr i64 #{item} to ptr"
 
+const is_byte_item = (type: Type) -> is_one_of_kinds(type, ['Bool', 'Byte'])
+
 # The value of LertaItemKind in runtime/lerta.h that holds values of the type.
 export const item_kind = (type: Type) ->
+  return 3 if is_byte_item(type)
   case ownership(type)
     when NONE then 0
     when REFERENCE then 1
     when INTERFACE then 2
 
-const item_ir_type = (type: Type) -> is_kind(type, INTERFACE) then ir_type(type) else 'i64'
+# The IR type of an item of the type.
+const item_ir_type = (type: Type) ->
+  case
+    when is_kind(type, INTERFACE) then ir_type(type)
+    when is_byte_item(type) then 'i8'
+    else 'i64'
+
+# Items are held as the runtime stores them (see item_ir_type), while it hashes and compares words
+# (see to_item). A Bool is held as a byte, a Byte and an interface value as they are, and any other
+# value as a word.
+const to_held_item = (ir: IrBuilder, operand: String, type: Type) ->
+  case
+    when is_kind(type, 'Bool') then ir.assign("zext i1 #{operand} to i8")
+    when item_ir_type(type) == 'i64' then to_item(ir, operand, type)
+    else operand
+
+# The value of an item as it is held.
+const from_held_item = (ir: IrBuilder, item: String, type: Type) ->
+  case
+    when is_kind(type, 'Bool') then ir.assign("trunc i8 #{item} to i1")
+    when item_ir_type(type) == 'i64' then from_item(ir, item, type)
+    else item
 
 # Room for an item of the type, which the runtime writes.
 export const emit_item_slot = (ir: IrBuilder, type: Type) -> ir.alloca(item_ir_type(type))
@@ -36,12 +64,12 @@ export const emit_item_slot = (ir: IrBuilder, type: Type) -> ir.alloca(item_ir_t
 # A pointer to the value as an item, which stays owned by the caller.
 export const emit_item_pointer = (ir: IrBuilder, value: String, type: Type) ->
   const pointer = emit_item_slot(ir, type)
-  ir.emit "store #{item_ir_type(type)} #{to_item(ir, value, type)}, ptr #{pointer}"
+  ir.emit "store #{item_ir_type(type)} #{to_held_item(ir, value, type)}, ptr #{pointer}"
   pointer
 
 # The value of the item at the pointer.
 export const emit_load_item = (ir: IrBuilder, pointer: String, type: Type) ->
-  from_item ir, ir.assign("load #{item_ir_type(type)}, ptr #{pointer}"), type
+  from_held_item ir, ir.assign("load #{item_ir_type(type)}, ptr #{pointer}"), type
 
 export const emit_array_new = (ir: IrBuilder, element: Type) ->
   call_runtime ir, 'ptr @lerta_array_create(i32)', "i32 #{item_kind(element)}"

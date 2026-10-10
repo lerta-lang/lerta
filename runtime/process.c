@@ -39,7 +39,7 @@ int64_t lerta_run(const LertaString *command, const LertaArray *args) {
   c_args[0] = lerta_c_string(command);
   bool valid = c_args[0] != NULL;
   for (int64_t i = 1; i < count; i++) {
-    c_args[i] = lerta_c_string((const LertaString *)(intptr_t)LERTA_WORD_ITEM(args, i - 1));
+    c_args[i] = lerta_c_string((const LertaString *)(intptr_t)lerta_word_item(args, i - 1));
     valid = valid && c_args[i] != NULL;
   }
   // Without this, the child's output could come before what this program printed first. A failed

@@ -39,10 +39,15 @@ typedef struct {
     uint8_t bytes[sizeof(text) - 1] LERTA_NONSTRING;         \
   } name = {{LERTA_IMMORTAL, NULL}, sizeof(text) - 1, text}
 
-// How arrays and maps hold their items. A plain item is 8 bytes, an Int as is and a Bool or a Byte
-// zero-extended; a reference is 8 bytes too, its address, and is retained while it is held. An
+// How arrays and maps hold their items. A plain item is 8 bytes, an Int as is; a byte item is one
+// byte, a Byte or a Bool; a reference is 8 bytes, its address, and is retained while it is held. An
 // interface value is 16 bytes, its data, a reference, then its itab.
-typedef enum { LERTA_PLAIN_ITEMS, LERTA_REFERENCE_ITEMS, LERTA_INTERFACE_ITEMS } LertaItemKind;
+typedef enum {
+  LERTA_PLAIN_ITEMS,
+  LERTA_REFERENCE_ITEMS,
+  LERTA_INTERFACE_ITEMS,
+  LERTA_BYTE_ITEMS
+} LertaItemKind;
 
 // Room for an item of any kind.
 typedef struct {
@@ -58,9 +63,6 @@ typedef struct {
   LertaItemKind item_kind;
 } LertaArray;
 
-// The item at the index of an array of plain items or references, as 8 bytes.
-#define LERTA_WORD_ITEM(array, index) (((const int64_t *)(array)->items)[index])
-
 // An entry of a map, followed by its value, an item of the map's kind.
 typedef struct {
   int64_t key;
@@ -68,14 +70,16 @@ typedef struct {
   bool live;
 } LertaMapEntry;
 
-// How a map treats its keys: Ints are compared as they are, Strings by their bytes, objects by
-// identity, and values, such as structs and arrays, by the map's `hash` and `equals`; all but Ints
-// are retained while the map holds them.
+// How a map treats its keys: Ints, and Bytes and Bools, are compared as they are, Strings by their
+// bytes, objects by identity, and values, such as structs and arrays, by the map's `hash` and
+// `equals`; all but Ints, Bytes and Bools are retained while the map holds them. The keys of byte
+// keys are byte items (see LertaItemKind).
 typedef enum {
   LERTA_INT_KEYS,
   LERTA_STRING_KEYS,
   LERTA_OBJECT_KEYS,
-  LERTA_VALUE_KEYS
+  LERTA_VALUE_KEYS,
+  LERTA_BYTE_KEYS
 } LertaKeyKind;
 
 // The hash and the equality of two items of a type that compares by its contents.
@@ -168,6 +172,9 @@ LertaString *lerta_binary_as_string(LertaString *binary);
 int64_t lerta_item_size(LertaItemKind kind);
 void lerta_retain_item(LertaItemKind kind, const void *item);
 void lerta_release_item(LertaItemKind kind, const void *item);
+// The item at the index of an array of any kind but interface values, as 8 bytes: a byte item is
+// zero-extended.
+int64_t lerta_word_item(const LertaArray *array, int64_t index);
 
 // Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; get and pop
 // write the item owned. An index out of range throws.
@@ -177,6 +184,8 @@ void lerta_array_read(const LertaArray *array, int64_t index, void *item);
 void lerta_array_write(LertaArray *array, int64_t index, const void *item);
 void lerta_array_append(LertaArray *array, const void *item);
 void lerta_array_take_last(LertaArray *array, void *item);
+// Appends an item of any kind but interface values, given as 8 bytes (see lerta_word_item).
+void lerta_array_append_word(LertaArray *array, int64_t word);
 // The same for 8-byte items, which the seed's generated code calls until the seed is refreshed.
 LertaArray *lerta_array_new(bool owns_references);
 int64_t lerta_array_get(const LertaArray *array, int64_t index);
@@ -199,13 +208,13 @@ LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, Lert
 int64_t lerta_map_length(const LertaMap *map);
 bool lerta_map_read(const LertaMap *map, int64_t key, void *value);
 void lerta_map_write(LertaMap *map, int64_t key, const void *value);
+void lerta_map_remove(LertaMap *map, int64_t key);
+LertaArray *lerta_map_keys(const LertaMap *map);
 // The same for 8-byte values, which the seed's generated code calls until the seed is refreshed.
 LertaMap *lerta_map_new(LertaKeyKind key_kind, bool owns_values, LertaHash hash,
                         LertaEquals equals);
 bool lerta_map_get(const LertaMap *map, int64_t key, int64_t *value);
 void lerta_map_set(LertaMap *map, int64_t key, int64_t value);
-void lerta_map_remove(LertaMap *map, int64_t key);
-LertaArray *lerta_map_keys(const LertaMap *map);
 
 // Iters (iter.c). Starting a traversal of an Iter that has started one throws, and so does next
 // past the end.

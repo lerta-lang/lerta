@@ -22,10 +22,9 @@ LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_
   return lerta_string_from_bytes(binary->bytes + start, end - start);
 }
 
-// The items of an Array<Byte>, each held in the low 8 bits of its slot.
 LertaString *lerta_binary_from_bytes(const LertaArray *bytes) {
   LertaString *binary = lerta_string_new(bytes->length);
-  for (int64_t i = 0; i < bytes->length; i++) binary->bytes[i] = (uint8_t)LERTA_WORD_ITEM(bytes, i);
+  for (int64_t i = 0; i < bytes->length; i++) binary->bytes[i] = (uint8_t)lerta_word_item(bytes, i);
   return binary;
 }
 

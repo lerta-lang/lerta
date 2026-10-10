@@ -33,7 +33,7 @@ Interfaces and generics are in [objects](objects.md).
 
 ## Numeric types
 
-- `Int8/16/32`, `UInt16/32/64` and `Float`. Float literals are only lexed and kept as strings for now.
+- `Int8/16/32`, `UInt16/32/64` and `Float`. Float literals are only lexed and kept as strings for now. Arrays and maps hold each at its own size, as they hold a `Byte` in one byte (`LertaItemKind` in `runtime/lerta.h`).
 - The new integer types follow the overflow rule of `Int` and `Byte` (see [the reference](../reference/types.md#int)): signed types throw and unsigned types wrap around. For the rare case of wanting signed wraparound, use a method such as `x.wrapping_add(y)`.
 - `Int: Div<Int, Int>` (see [operator overloading](#operator-overloading)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
 
