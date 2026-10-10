@@ -9,6 +9,3 @@ void lerta_iter_start(LertaIter *iter) {
 }
 
 void lerta_raise_iter_ended(void) { lerta_raise(LERTA_ITER_ERROR, (const LertaString *)&ended); }
-
-// What the seed's generated code calls instead, until the seed is refreshed.
-_Noreturn void lerta_throw_iter_ended(void) { lerta_throw((const LertaString *)&ended); }

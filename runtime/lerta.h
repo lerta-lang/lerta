@@ -209,8 +209,6 @@ LertaArray *lerta_map_keys(const LertaMap *map);
 // past the end.
 void lerta_iter_start(LertaIter *iter);
 void lerta_raise_iter_ended(void);
-// What the seed's generated code calls instead, until the seed is refreshed.
-_Noreturn void lerta_throw_iter_ended(void);
 
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.
@@ -299,7 +297,8 @@ typedef enum {
 // Throws an error of the kind with the message, borrowed: sets the pending exception, which the
 // generated code checks after the call, and the caller returns at once. The program registers
 // the function that makes the error (see lerta_register_raise); without one, as in a program
-// built by an older seed, it stops the program as lerta_throw does.
+// that is std:builtins or one of the modules it imports, which have no error types to make, it
+// stops the program as lerta_throw does.
 void lerta_raise(LertaErrorKind kind, const LertaString *message);
 void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
 
