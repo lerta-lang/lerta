@@ -48,10 +48,11 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - For an async function, the context is the coroutine frame itself, which outlives the call that made it; suspended functions are linked by which one awaits which, a spaghetti stack on the heap.
 - A **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach), which would let a panic print a stack trace, is not needed for exceptions (see below); it may come for stack traces.
 
-### Exceptions (planned)
+### Exceptions
 
 - **Error return values (the Swift approach)**: a throw sets the global pending exception, an interface value of `Error` (there are no threads, so a global is fine), and leaves the function as a `return` does, releasing what its scopes hold. Each call that may throw, of a Lerta function, a closure, an itab's entry or a C function of the runtime, is followed by a check of the pending exception, which leaves the caller so in turn, up to a `try` whose `catch` takes the exception, or to the program's end, which reports it as uncaught.
-- The runtime's C functions that throw set the pending exception and return; the error objects are of types of `std:builtins`, whose constructors the compiler gives C-callable names.
+- An expression that holds an owned value while it evaluates others, as a call holds its arguments, registers it as a temporary, which an exception releases on its way, as it does the scopes it leaves. A `finally` block, whose calls are checked, runs with the exception set aside, and so does a `deinit` that a release runs (`lerta_run_deinit`), which may not throw one of its own.
+- **Planned:** the runtime's C functions that throw set the pending exception and return; the error objects are of types of `std:builtins`, whose constructors the compiler gives C-callable names. Until then they stop the program.
 - Why: unwinding reuses the release on `return` and `break`, needs no tables or `longjmp`, and works alike on every platform. A throw across an `await` cannot unwind the machine stack anyway, since the awaiting function's frame is no longer on it: it is carried as the failure of the asynchronous result, which this approach does within synchronous code too. The cost is a load and a branch after each call.
 - Considered: a frame chain with `longjmp` (needs a frame record listing the references in every function) and LLVM's zero-cost unwinding (needs landing pads, unwind tables for the runtime's C code, and Windows' SEH apart).
 

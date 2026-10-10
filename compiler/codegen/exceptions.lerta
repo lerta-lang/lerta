@@ -1,0 +1,162 @@
+# Exceptions in the generated code (see docs/internals.md#exceptions). A throw sets the
+# global lerta_exception, an Error interface value, and unwinds: it releases the temporaries and
+# the scopes of the function, or of the `try` block it is in, and returns, or goes to the block's
+# catches. Each call that may throw is followed by a check of lerta_exception, which unwinds so.
+import { Statement, Try } from '../ast'
+import { merge } from './case'
+import { type_of } from './expression'
+import {
+  generate_block_value, generate_statement, no_locals, release_scope, store_in_slot
+} from './function'
+import { CodegenLocal, Generator, Handler, Temporary } from './generator'
+import { IrBuilder } from './ir_builder'
+import { emit_type_test } from './heap_object'
+import {
+  emit_interface_data, emit_release_as, INTERFACE_IR_TYPE, ir_type, Ownership, ownership
+  returns_nothing
+} from './lerta_ir'
+import { is_kind, Type } from '../types'
+
+const EXCEPTION = '@lerta_exception'
+
+const declare_exception = (g: Generator) ->
+  g.ir.module.declare 'lerta_exception', "#{EXCEPTION} = external global #{INTERFACE_IR_TYPE}"
+
+# Returns, from code that is no function of the program, a value that the caller never reads,
+# since it finds the exception first.
+export const emit_return_thrown = (ir: IrBuilder, type: Type) ->
+  ir.emit returns_nothing(type) then 'ret void' else "ret #{ir_type(type)} poison"
+
+# Holds an owned value while the expression evaluates others, until pop_temporaries.
+export const push_temporary = (g: Generator, operand: String, type: Type) ->
+  const owned = ownership(type)
+  g.temporaries.push Temporary(operand, owned) if owned != Ownership.NONE
+
+# Lets go of the temporaries held since there were `depth` of them, which their consumer releases.
+export const pop_temporaries = (g: Generator, depth: Int) ->
+  g.temporaries.pop() while g.temporaries.length > depth
+
+# Generates `rest` while the owned operand of the type is held.
+export const while_holding = (g: Generator, operand: String, type: Type, rest: () -> void) ->
+  const depth = g.temporaries.length
+  push_temporary g, operand, type
+  rest()
+  pop_temporaries g, depth
+
+# The operand that `rest` generates while the owned operand of the type is held.
+export const holding = (g: Generator, operand: String, type: Type, rest: () -> String) ->
+  var result = ''
+  const generate_rest = () ->
+    result = rest()
+  while_holding g, operand, type, generate_rest
+  result
+
+# Unwinds if the call before it has thrown.
+export const emit_exception_check = (g: Generator) -> emit_check_with(g.ir, () -> emit_unwind(g))
+
+# Runs `unwind` if the call before it has thrown, in code that is no function of the program, as an
+# Iter's has_next and next are: it releases what that code holds and returns.
+export const emit_check_with = (ir: IrBuilder, unwind: () -> void) ->
+  ir.module.declare 'lerta_exception', "#{EXCEPTION} = external global #{INTERFACE_IR_TYPE}"
+  const data = ir.assign("load ptr, ptr #{EXCEPTION}")
+  const thrown = ir.assign("icmp ne ptr #{data}, null")
+  const unwind_label = ir.fresh_label('unwind')
+  const next_label = ir.fresh_label('no.exception')
+  ir.emit "br i1 #{thrown}, label %#{unwind_label}, label %#{next_label}"
+  ir.start_block unwind_label
+  unwind()
+  ir.start_block next_label
+
+# Releases what the code holds up to the innermost `try`, and goes to its catches; outside every
+# `try`, releases what the function holds and returns a value that the caller never reads. A
+# deinit that a release runs does not see the exception (see lerta_run_deinit).
+const emit_unwind = (g: Generator) ->
+  const ir = g.ir
+  const handler = g.handlers.length > 0 then g.handlers.last() else nil
+  const temporary_depth = handler?.temporary_depth ? 0
+  var i = g.temporaries.length - 1
+  while i >= temporary_depth
+    const temporary = g.temporaries[i]
+    emit_release_as ir, temporary.operand, temporary.owned
+    i -= 1
+  release_scope g, scope for scope in g.locals.inner_scopes(handler?.scope_depth ? 0)
+  if handler == nil
+    cleanup() if const cleanup = g.unwind_cleanup
+  if handler
+    ir.emit "br label %#{handler.label}"
+    return
+  emit_return_thrown ir, g.result_type
+
+# The value, an Error, becomes the exception, owned.
+export const emit_throw_error = (g: Generator, value: String) ->
+  declare_exception g
+  g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr #{EXCEPTION}"
+  emit_unwind g
+  g.ir.start_block g.ir.fresh_label('after.throw')
+  'poison'
+
+# The try block's value, or that of the catch that takes its exception; the finally block runs
+# after either. An exception that no catch takes, or that a catch throws, runs the finally block
+# too, then unwinds further, while the finally block runs with it set aside.
+export const generate_try = (g: Generator, try_expression: Try) ->
+  const ir = g.ir
+  const type = type_of(g, try_expression)
+  const catches_label = ir.fresh_label('try.catch')
+  const done_label = ir.fresh_label('try.done')
+  const rethrow_label = ir.fresh_label('try.rethrow')
+  const finally_body = try_expression.finally_body
+  const incoming: Array<String> = []
+  const generate_value = (body: Array<Statement>, define: (Map<String, CodegenLocal>) -> void) ->
+    const value = generate_block_value(g, body, define)
+    incoming.push "[ #{value == '' then 'poison' else value}, %#{ir.current_block} ]"
+    ir.emit "br label %#{done_label}"
+  with_handler g, catches_label, () -> generate_value(try_expression.body, no_locals)
+  ir.start_block catches_label
+  # A catch's own exception goes through the finally block, if there is one.
+  const catch_handler = finally_body then rethrow_label else nil
+  for clause in try_expression.catches
+    const exception = ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{EXCEPTION}")
+    const caught_type = type_of(g, clause.name)
+    const data = emit_interface_data(ir, exception)
+    const takes_any = is_kind(caught_type, INTERFACE)
+    const matched = takes_any then 'true' else emit_type_test(ir, data, caught_type)
+    const clause_label = ir.fresh_label('catch')
+    const next_label = ir.fresh_label('catch.next')
+    ir.emit "br i1 #{matched}, label %#{clause_label}, label %#{next_label}"
+    ir.start_block clause_label
+    ir.emit "store #{INTERFACE_IR_TYPE} zeroinitializer, ptr #{EXCEPTION}"
+    const caught = takes_any then exception else data
+    const define = (scope: Map<String, CodegenLocal>) ->
+      scope[clause.name.name] = store_in_slot(g, caught, caught_type)
+    const generate_clause = () -> generate_value(clause.body, define)
+    if const label = catch_handler
+      with_handler g, label, generate_clause
+    else
+      generate_clause()
+    ir.start_block next_label
+  # No catch takes the exception.
+  ir.emit "br label %#{rethrow_label}"
+  ir.start_block rethrow_label
+  if finally_body
+    const set_aside = ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{EXCEPTION}")
+    ir.emit "store #{INTERFACE_IR_TYPE} zeroinitializer, ptr #{EXCEPTION}"
+    const depth = g.temporaries.length
+    g.temporaries.push Temporary(operand: set_aside, owned: Ownership.INTERFACE)
+    generate_statement g, statement for statement in finally_body
+    pop_temporaries g, depth
+    ir.emit "store #{INTERFACE_IR_TYPE} #{set_aside}, ptr #{EXCEPTION}"
+  emit_unwind g
+  ir.start_block done_label
+  const result = merge(g, type, incoming)
+  # The value is held while the finally block runs, which may throw.
+  const run_finally = () -> generate_statement(g, statement) for statement in finally_body ? []
+  while_holding g, result, type, run_finally
+  result
+
+const with_handler = (g: Generator, label: String, generate_body: () -> void) ->
+  const handler = Handler(
+    label, scope_depth: g.locals.depth(), temporary_depth: g.temporaries.length
+  )
+  g.handlers.push handler
+  generate_body()
+  g.handlers.pop()

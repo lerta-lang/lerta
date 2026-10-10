@@ -1,7 +1,8 @@
 # Arrays and maps in the generated code: their literals, and indexing (of a Binary too).
 import { ArrayLiteral, Index, MapLiteral } from '../ast'
 import { emit_array_new, emit_get, emit_push } from './array'
-import { generate, release_if_reference, type_of } from './expression'
+import { holding, while_holding } from './exceptions'
+import { generate, release_if_reference, type_at_use, type_of } from './expression'
 import { Generator } from './generator'
 import { emit_release } from './lerta_ir'
 import { emit_map_get, emit_map_new, emit_map_set } from './map'
@@ -12,10 +13,12 @@ import { ArrayType, is_kind, MapType } from '../types'
 export const generate_array = (g: Generator, array: ArrayLiteral) ->
   const array_type = type_of(g, array) as ArrayType!
   const result = emit_array_new(g.ir, array_type.element)
-  for element in array.elements
-    const value = generate(g, element)
-    emit_push g.ir, result, value, array_type.element
-    release_if_reference g, element, value
+  const push_all = () ->
+    for element in array.elements
+      const value = generate(g, element)
+      emit_push g.ir, result, value, array_type.element
+      release_if_reference g, element, value
+  while_holding g, result, array_type, push_all
   result
 
 # Each entry is set, so the map retains its key and value, whose own references are then
@@ -23,18 +26,20 @@ export const generate_array = (g: Generator, array: ArrayLiteral) ->
 export const generate_map = (g: Generator, map: MapLiteral) ->
   const map_type = type_of(g, map) as MapType!
   const result = emit_map_new(g.ir, g.code.program, map_type)
-  for entry in map.entries
-    const key = generate(g, entry.key)
-    const value = generate(g, entry.value)
-    emit_map_set g.ir, result, key, value, map_type
-    release_if_reference g, entry.key, key
-    release_if_reference g, entry.value, value
+  const set_all = () ->
+    for entry in map.entries
+      const key = generate(g, entry.key)
+      const value = holding(g, key, type_at_use(g, entry.key), () -> generate(g, entry.value))
+      emit_map_set g.ir, result, key, value, map_type
+      release_if_reference g, entry.key, key
+      release_if_reference g, entry.value, value
+  while_holding g, result, map_type, set_all
   result
 
 export const generate_index = (g: Generator, index: Index) ->
   const object = generate(g, index.object)
   const object_type = type_of(g, index.object)
-  const position = generate(g, index.index)
+  const position = holding(g, object, object_type, () -> generate(g, index.index))
   const item = case
     when object_type is MapType then emit_map_get(g.ir, object, position, object_type)
     when is_kind(object_type, 'Binary') then emit_binary_get(g.ir, object, position)

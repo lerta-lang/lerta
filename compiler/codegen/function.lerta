@@ -13,6 +13,7 @@ import {
   CELL_SLOT, emit_capture_pointer, emit_closure, emit_static_closure, function_type_of
 } from './closure'
 import { generate_control_jump, generate_for, generate_if, generate_while } from './control_flow'
+import { emit_exception_check } from './exceptions'
 import { generate, read_local, release_if_reference, type_of } from './expression'
 import {
   CellSlot, CodegenLocal, function_generator, Generator, SlotLocal, TopLevelGlobal, TopLevelSlot
@@ -56,7 +57,9 @@ export const generate_main = (
   g: Generator, statements: Array<Statement>, signature: String, runs_first: Array<String>
   releases: Array<TopLevelGlobal>
 ) ->
-  g.ir.emit "call void #{symbol}()" for symbol in runs_first
+  for symbol in runs_first
+    g.ir.emit "call void #{symbol}()"
+    emit_exception_check g
   generate_block g, statements, no_locals
   emit_release_globals g.ir, releases
   g.ir.emit 'ret void'
@@ -139,10 +142,21 @@ const generate_last_statement = (g: Generator, body: Array<Statement>, result: T
     emit_return g, ''
 
 # Takes the constructor arguments (the fields without an initializer, in order) borrowed, as
-# for any call; then computes the other fields in order, and runs `init` last.
+# for any call; then computes the other fields in order, and runs `init` last. An exception on the
+# way releases the fields, which start as nil, and frees the object without running its deinit.
 export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   const ir = g.ir
+  g.result_type = info.type
   const object = emit_allocate(ir, info)
+  const field_pointer = (field: FieldInfo) -> emit_field_pointer(ir, object, info, field.name.name)
+  for field in info.fields
+    ir.emit "store #{ir_type(field.type!)} zeroinitializer, ptr #{field_pointer(field)}"
+  g.unwind_cleanup = () ->
+    for field in info.fields
+      const type = field.type!
+      emit_release_stored ir, field_pointer(field), ir_type(type), ownership(type)
+    ir.module.declare 'lerta_free_unfinished', 'declare void @lerta_free_unfinished(ptr)'
+    ir.emit "call void @lerta_free_unfinished(ptr #{object})"
   const arguments = [field for field in info.fields when field.value == nil]
   for i in 0...arguments.length
     const field = arguments[i]
@@ -154,7 +168,9 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
     store_field g, object, info, field, generate(g, value) if const value = field.value
   g.locals.pop()
   const init = special_method_symbol(g.code.program, info, 'init')
-  ir.emit "call void #{init}(ptr #{object})" if info.has_init
+  if info.has_init
+    ir.emit "call void #{init}(ptr #{object})"
+    emit_exception_check g
   ir.emit "ret ptr #{object}"
   const params = ["#{ir_type(arguments[i].type!)} %p#{i}" for i in 0...arguments.length]
   finish g, "ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"

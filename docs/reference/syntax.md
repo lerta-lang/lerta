@@ -84,4 +84,4 @@ From weakest: `then`/`else` < `?` (nil coalescing) < `or` < `and` < prefix `not`
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`). `then`/`else` and `?` are right-associative: `a then x else b then y else z` is `a then x else (b then y else z)`.
 - Comparisons, `is` and `as` included, cannot be chained: `a < b < c` is a syntax error; use parentheses, as in `(x as T?) == nil`.
 - `as` binds as comparisons do, weaker than `.`: a member of a cast is read as `(x as T!).name`.
-- `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `return` `case` `when` `then` `class` `struct` `throw` `import` `export` `extern` `extend` `enum` `interface` are keywords (`from` and `pass` are not) and cannot be used as names.
+- `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `in` `break` `continue` `return` `case` `when` `then` `class` `struct` `throw` `import` `export` `extern` `extend` `enum` `interface` `try` `catch` `finally` are keywords (`from` and `pass` are not) and cannot be used as names.

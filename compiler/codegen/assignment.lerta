@@ -3,7 +3,8 @@ import { Assignment, combining_operator, Identifier, Index, Member } from '../as
 import { info_of } from '../checker/object_types'
 import { emit_get, emit_set } from './array'
 import { apply_arithmetic } from './checked_int'
-import { generate, release_if_reference, slot_pointer, type_of } from './expression'
+import { holding, pop_temporaries, push_temporary, while_holding } from './exceptions'
+import { generate, release_if_reference, slot_pointer, type_at_use, type_of } from './expression'
 import { lookup_local } from './function'
 import { Generator, SlotLocal } from './generator'
 import { emit_field_pointer, emit_member_dispatch } from './heap_object'
@@ -34,7 +35,8 @@ const generate_field_assignment = (g: Generator, assignment: Assignment, target:
   const pointer = case object_type
     when UnionType then emit_member_dispatch(g.ir, object, object_type.members, 'ptr', pointer_of)
     else pointer_of(object_type)
-  assign_through g, assignment, pointer, type_of(g, target)
+  const assign = () -> assign_through(g, assignment, pointer, type_of(g, target))
+  while_holding g, object, object_type, assign
   emit_release g.ir, object
 
 const field_pointer = (g: Generator, object: String, type: Type, name: String) ->
@@ -48,9 +50,13 @@ const generate_index_assignment = (g: Generator, assignment: Assignment, target:
   const ir = g.ir
   const element = type_of(g, target)
   const array = generate(g, target.object)
+  const depth = g.temporaries.length
+  push_temporary g, array, object_type
   const index = generate(g, target.index)
   const old = assignment.operator == '=' then '' else emit_get(ir, array, index, element)
+  push_temporary g, old, element if old != ''
   const value = generate(g, assignment.value)
+  pop_temporaries g, depth
   const result = combine(g, assignment.operator, old, value, element)
   emit_set ir, array, index, result, element
   emit_release_value ir, result, element
@@ -61,8 +67,12 @@ const generate_map_assignment = (
   g: Generator, assignment: Assignment, target: Index, type: MapType
 ) ->
   const map = generate(g, target.object)
+  const depth = g.temporaries.length
+  push_temporary g, map, type
   const key = generate(g, target.index)
+  push_temporary g, key, type_at_use(g, target.index)
   const value = generate(g, assignment.value)
+  pop_temporaries g, depth
   emit_map_set g.ir, map, key, value, type
   release_if_reference g, target.index, key
   release_if_reference g, assignment.value, value
@@ -80,7 +90,8 @@ const assign_through = (g: Generator, assignment: Assignment, pointer: String, t
   if assignment.operator != '='
     old = load()
     emit_retain_value ir, old, type
-  const value = generate(g, assignment.value)
+  const generate_value = () -> generate(g, assignment.value)
+  const value = old == '' then generate_value() else holding(g, old, type, generate_value)
   const result = combine(g, assignment.operator, old, value, type)
   const replaced = holds_reference then load() else ''
   ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}"

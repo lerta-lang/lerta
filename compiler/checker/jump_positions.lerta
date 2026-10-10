@@ -7,8 +7,8 @@ import {
   Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern
   For, FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral, InterfaceDeclaration
   Interpolation, IsTest, Jump, MapLiteral, Member, MemberDeclaration, NilLiteral, Pass, Position
-  Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw, TypeAlias, TypeDeclaration
-  UnaryOperation, Unwrap, While
+  Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw, Try, TypeAlias
+  TypeDeclaration, UnaryOperation, Unwrap, While
 } from '../ast'
 import { fail } from './diagnostics'
 import { ProgramWide } from './shared'
@@ -19,9 +19,17 @@ import { ProgramWide } from './shared'
 struct Jumps
   may_return: Bool
   may_leave_loop: Bool
+  # Why the jumps that are not allowed are not, if not for the held values.
+  reason: String?
 
 const all_jumps = Jumps(may_return: true, may_leave_loop: true)
 const no_jumps = Jumps(may_return: false, may_leave_loop: false)
+
+# Leaving a try that has a finally would have to run the finally on the way, which is not
+# supported yet.
+const within_finally = Jumps(
+  may_return: false, may_leave_loop: false, reason: 'cannot leave a try that has a finally yet'
+)
 
 export const reject_misplaced_jumps = (program: ProgramWide, statements: Array<Statement>) ->
   visit_statements program, statements, all_jumps
@@ -30,7 +38,7 @@ const visit_statements = (program: ProgramWide, statements: Array<Statement>, ju
   visit_statement program, statement, jumps for statement in statements
 
 const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
-  const in_loop = Jumps(may_return: jumps.may_return, may_leave_loop: true)
+  const in_loop = Jumps(may_return: jumps.may_return, may_leave_loop: true, reason: jumps.reason)
   case statement
     when Declaration then visit program, statement.value, jumps
     when Assignment
@@ -63,9 +71,10 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
   const operand = (child: Expression) -> visit(program, child, no_jumps)
   case expression
     when Jump
-      check_jump program, expression.kind.to_string(), jumps.may_leave_loop, expression.position
+      const kind = expression.kind.to_string()
+      check_jump program, kind, jumps.may_leave_loop, jumps.reason, expression.position
     when Return
-      check_jump program, 'return', jumps.may_return, expression.position
+      check_jump program, 'return', jumps.may_return, jumps.reason, expression.position
       visit program, value, jumps if const value = expression.value
     when Coalesce
       operand expression.value
@@ -84,6 +93,12 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
         operand pattern for pattern in arm.patterns
         visit_statements program, arm.body, jumps
       visit_statements program, otherwise, jumps if const otherwise = expression.otherwise
+    when Try
+      const inside = expression.finally_body then within_finally else jumps
+      visit_statements program, expression.body, inside
+      visit_statements program, clause.body, inside for clause in expression.catches
+      if const finally_body = expression.finally_body
+        visit_statements program, finally_body, within_finally
     # No loop is outside a function; a jump out of none is an error of its own.
     when FunctionLiteral then visit_statements program, expression.body, all_jumps
     when Interpolation
@@ -122,8 +137,11 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
     when Cast then operand expression.value
     when StringLiteral, IntegerLiteral, BooleanLiteral, NilLiteral, Identifier, This then pass
 
-const check_jump = (program: ProgramWide, keyword: String, allowed: Bool, at: Position) ->
+const check_jump = (
+  program: ProgramWide, keyword: String, allowed: Bool, reason: String?, at: Position
+) ->
   return if allowed
+  fail program, at, "'#{keyword}' #{reason}" if reason
   const statement = 'a statement or as the value of a declaration or of an assignment to a variable'
   const through = "directly or through '?', then/else or case arms"
   fail program, at, "'#{keyword}' cannot be used here: only as #{statement}, #{through}"

@@ -5,6 +5,7 @@ import { Extensions } from '../checker/extensions'
 import { NodeFacts, ProgramWide, Shared } from '../checker/shared'
 import { IrBuilder, IrModule } from './ir_builder'
 import { Module } from '../loader'
+import { Ownership } from './lerta_ir'
 import { CheckedException } from './throw_blocks'
 import { Type, void_type } from '../types'
 
@@ -85,6 +86,18 @@ export class Locals
     const innermost = @scopes.length - 1
     [@scopes[innermost - i] for i in 0...(@scopes.length - depth)]
 
+# An owned value that an expression holds, by how it holds references.
+export struct Temporary
+  operand: String
+  owned: Ownership
+
+# Where an exception thrown in a `try` block goes, its catches, and how many scopes and temporaries
+# are outside the block.
+export struct Handler
+  label: String
+  scope_depth: Int
+  temporary_depth: Int
+
 # Where `break` and `continue` jump, and how many scopes enclose the loop.
 export struct Loop
   break_label: String
@@ -107,6 +120,14 @@ export class Generator
   loops: Array<Loop> = []
   # The result type of the function being generated; the top-level code returns nothing.
   result_type: Type = void_type
+  # The owned values that an expression holds while it evaluates others, which an exception
+  # releases (see exceptions), innermost last.
+  temporaries: Array<Temporary> = []
+  # The `try` blocks around the code, innermost last.
+  handlers: Array<Handler> = []
+  # What an exception that leaves the function releases besides its scopes, as a constructor
+  # releases the object it was making.
+  unwind_cleanup: (() -> void)? = nil
 
 # The generator of a function's body, which is not top-level code.
 export const function_generator = (code: ModuleCode, extensions: Extensions, facts: NodeFacts) ->

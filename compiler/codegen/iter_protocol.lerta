@@ -97,8 +97,11 @@ export const emit_next = (ir: IrBuilder, iter: String, item: Type) ->
 
 # The next item, owned, of a borrowed Iter, which code outside the Iters asks for without knowing
 # that there is one: past the end, it throws.
-export const emit_checked_next = (ir: IrBuilder, iter: String, item: Type) ->
-  emit_throw_unless ir, emit_has_next(ir, iter)
+# `check` runs after each call, which may throw.
+export const emit_checked_next = (ir: IrBuilder, iter: String, item: Type, check: () -> void) ->
+  const more = emit_has_next(ir, iter)
+  check()
+  emit_throw_unless ir, more
   emit_next ir, iter, item
 
 # Starts a traversal, which throws if the Iter has started one.
@@ -109,15 +112,20 @@ export const emit_iter_start = (ir: IrBuilder, iter: String) ->
 # item and the labels that leave the loop and go on to the next item.
 export const emit_iter_loop = (
   ir: IrBuilder, iter: String, item: Type, body: (String, String, String) -> void
+  check: () -> void
 ) ->
   const header_label = ir.fresh_label('iter.header')
   const body_label = ir.fresh_label('iter.body')
   const exit_label = ir.fresh_label('iter.exit')
   ir.emit "br label %#{header_label}"
   ir.start_block header_label
-  ir.emit "br i1 #{emit_has_next(ir, iter)}, label %#{body_label}, label %#{exit_label}"
+  const more = emit_has_next(ir, iter)
+  check()
+  ir.emit "br i1 #{more}, label %#{body_label}, label %#{exit_label}"
   ir.start_block body_label
-  body emit_next(ir, iter, item), exit_label, header_label
+  const value = emit_next(ir, iter, item)
+  check()
+  body value, exit_label, header_label
   ir.emit "br label %#{header_label}"
   ir.start_block exit_label
 

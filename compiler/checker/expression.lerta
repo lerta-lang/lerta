@@ -5,9 +5,9 @@ import {
   ArrayLiteral, BinaryOperation, BooleanLiteral, Call, Case, Cast, Coalesce, Comprehension
   Conditional, Expression, FunctionLiteral, Identifier, If, Index, IntegerLiteral, Interpolation
   IsTest, Jump, MapLiteral, Member, NamedType, NamedValue, NilLiteral, Node, Range, RecordLiteral
-  Return, StringLiteral, This, Throw, UnaryOperation, Unwrap
+  Return, StringLiteral, This, Throw, Try, UnaryOperation, Unwrap
 } from '../ast'
-import { type_of_case, type_of_conditional, type_of_if } from './case'
+import { type_of_case, type_of_conditional, type_of_if, type_of_try } from './case'
 import { type_of_function_literal } from './closure'
 import {
   is_empty_map, type_of_array, type_of_empty_map, type_of_index, type_of_map
@@ -18,6 +18,7 @@ import {
 } from './enums'
 import { type_of_generic_call } from './generic_call'
 import { converts_through_itab } from './interface_values'
+import { std_interface } from './interfaces'
 import { byte_literal } from './literals'
 import { check_loop_jump, type_of_comprehension } from './loop'
 import { type_of_method_call, type_of_property } from './member'
@@ -52,7 +53,7 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
     when IntegerLiteral then wants_byte then byte_literal(program, expression) else int_type
     when NilLiteral then nil_type
     when Throw
-      expect_type body, expression.message, string_type
+      check_throw body, expression
       never_type
     when Jump
       check_loop_jump body, expression
@@ -73,6 +74,7 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
     when UnaryOperation then type_of_unary(body, expression, expected)
     when BinaryOperation then type_of_binary(body, expression, expected)
     when Case then type_of_case(body, expression, expected)
+    when Try then type_of_try(body, expression, expected)
     when If then type_of_if(body, expression, expected)
     when Conditional then type_of_conditional(body, expression, expected)
     when Member then type_of_qualified_member(body, expression) ? type_of_property(body, expression)
@@ -176,6 +178,15 @@ const check_member_type = (body: Body, value: Expression, type_name: NamedType, 
 export const set_type = (body: Body, node: Node, type: Type) ->
   body.facts.types[node] = type
   type
+
+# A throw takes a value of a type that satisfies Error, which it converts to an Error. A String
+# stops the program as before, until the seed knows Error and the code that throws them is
+# rewritten (see docs/internals.md#bootstrap).
+const check_throw = (body: Body, throw_expression: Throw) ->
+  const value = throw_expression.message
+  const type = type_of(body, value, nil)
+  return if is_kind(type, 'String')
+  require_type body, value, type, std_interface(body.shared, 'Error', value.position).type
 
 # A T or nil where a T? is expected is converted, and so is a value where an interface or an Iter
 # is expected (see interface_values), which codegen does where it generates it.

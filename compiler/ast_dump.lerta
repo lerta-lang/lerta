@@ -5,13 +5,13 @@
 # kind writes its position, if it has one, as ordinary fields.
 import {
   ArrayLiteral, Assignment, BinaryOperation, Binding, BooleanLiteral, Call, Case, CaseArm, Cast
-  Coalesce, Comprehension, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern
-  For, FunctionLiteral, FunctionTypeName, Identifier, If, Import, ImportName, Index, IntegerLiteral
-  InterfaceDeclaration, Interpolation, InterpolationPart, IsTest, Jump, LazyFunctions, MapEntry
-  MapLiteral, Member, MemberDeclaration, NamedType, NamedValue, NilLiteral, Node, Parameter, Pass
-  Range, RecordLiteral, RecordTypeField, RecordTypeName, Return, Statement, StringLiteral, This
-  Throw, TypeAlias, TypeDeclaration, TypeName, TypeParameter, UnaryOperation, UnionTypeName, Unwrap
-  While
+  Catch, Coalesce, Comprehension, Conditional, Declaration, EnumDeclaration, Expression, Extend
+  Extern, For, FunctionLiteral, FunctionTypeName, Identifier, If, Import, ImportName, Index
+  IntegerLiteral, InterfaceDeclaration, Interpolation, InterpolationPart, IsTest, Jump
+  LazyFunctions, MapEntry, MapLiteral, Member, MemberDeclaration, NamedType, NamedValue, NilLiteral
+  Node, Parameter, Pass, Range, RecordLiteral, RecordTypeField, RecordTypeName, Return, Statement
+  StringLiteral, This, Throw, Try, TypeAlias, TypeDeclaration, TypeName, TypeParameter
+  UnaryOperation, UnionTypeName, Unwrap, While
 } from './ast'
 import { TextPart } from './lexer/string_literal'
 import { quote } from './token_dump'
@@ -147,6 +147,7 @@ const dump_node = (node: Node) ->
     when Return then dump_return(node)
     when Range then dump_range(node)
     when Case then dump_case(node)
+    when Try then dump_try(node)
     when IsTest then dump_is(node)
     when Cast then dump_cast(node)
     when FunctionLiteral then dump_function(node)
@@ -290,6 +291,21 @@ const dump_case = (expression: Case) ->
 
 const dump_case_arm = (arm: CaseArm): Group ->
   group [field('body', statements(arm.body)), field('patterns', expressions(arm.patterns))]
+
+const dump_try = (expression: Try): Group ->
+  node 'try', expression, [
+    field('body', statements(expression.body))
+    field('catches', List(items: [dump_catch(each) for each in expression.catches]))
+    field('finally_body', optional_statements(expression.finally_body))
+  ]
+
+# A catch clause has a position but no kind, so its position is written as fields.
+const dump_catch = (clause: Catch): Group ->
+  group [
+    field('body', statements(clause.body)), field('column', number(clause.position.column))
+    field('line', number(clause.position.line)), field('name', dump_node(clause.name))
+    field('type', optional_node(clause.type))
+  ]
 
 const dump_is = (test: IsTest): Group ->
   node 'is', test, [field('type', dump_node(test.type)), field('value', dump_node(test.value))]

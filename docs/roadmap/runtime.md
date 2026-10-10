@@ -19,23 +19,12 @@ These apply when a value in statement position is not captured, beyond [the refe
 
 ## Exceptions
 
-- **`throw` and `try`/`catch`/`finally` blocks** (same form as JS).
-  ```
-  try
-    risky()
-  catch e: IOError
-    log e.message
-  catch e: IndexError | ArithmeticError
-    log e.message
-  finally
-    cleanup()
-  ```
-  - `throw` takes a value of a type that satisfies `interface Error` of `std:builtins`, whose one member is `message: String`: a class or struct, as an interface value holds (see [interfaces](../reference/objects.md#interfaces)), which a program declares for its own errors. A `String` cannot be thrown.
-  - `catch e: T` catches only exceptions whose type is `T`, or a member of the union `T`, telling it by the thrown object's type, as `is` does; `e` then has that type. Others propagate unchanged (preventing unrelated exceptions from being swallowed). Several `catch` clauses may be listed, tried in order. `catch e` alone catches all, `e` being an `Error`.
-  - `try`/`catch` is an expression with a value. If any arm is `void`, the whole is `void`. The value of `finally` is discarded.
-  - No `throws` annotation is needed (if written, it is type-checked). There is no `try` attached to calls (as in Swift).
-- The runtime's errors are of types of `std:builtins`, one for each kind: `IndexError` (an index or a slice out of range, `pop` and `last` of an empty array), `ArithmeticError` (overflow, division by zero), `NilError` (`x!` of nil), `CastError` (`as T!`), `IterError` (a second traversal, `next` past the end), `WeakError` (a `weak!` field whose object is gone), and `IOError` and others of the standard modules.
-- How exceptions propagate (see [internals](../internals.md#exceptions-planned)): a throw sets the pending exception and leaves the function as a return does, releasing what its scopes hold, and each call is followed by a check of it.
+What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is in [the reference](../reference/errors.md#exceptions). Planned:
+
+- A `String` cannot be thrown, once the code that throws them, of the compiler and `std:builtins`, throws types of errors of its own: until the seed knows `Error`, a thrown `String` stops the program as before.
+- `return`, `break` and `continue` that leave a `try` that has a `finally`, which then runs on the way.
+- No `throws` annotation is needed (if written, it is type-checked). There is no `try` attached to calls (as in Swift).
+- The runtime's errors, which stop the program now, can be caught, and are of types of `std:builtins`, one for each kind: `IndexError` (an index or a slice out of range, `pop` and `last` of an empty array), `ArithmeticError` (overflow, division by zero), `NilError` (`x!` of nil), `CastError` (`as T!`), `IterError` (a second traversal, `next` past the end), `WeakError` (a `weak!` field whose object is gone), and `IOError` and others of the standard modules.
 - Only throws can be caught; a [panic](../reference/errors.md#panics) cannot.
 - Exceptions inside async functions are carried as the failure value of the asynchronous result.
 - For servers, exceptions are caught at the task boundary of the event loop and only that task is discarded.

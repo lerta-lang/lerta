@@ -17,6 +17,13 @@ void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
   return object;
 }
 
+void lerta_free_unfinished(void *object) {
+  free(object);
+#ifdef LERTA_DEBUG
+  live_objects--;
+#endif
+}
+
 // NULL is nil, which holds no object.
 void lerta_retain(void *object) {
   LertaHeader *header = object;
@@ -67,7 +74,13 @@ void lerta_run_deinit(void *object, void (*deinit)(void *object)) {
   LertaHeader *header = object;
   header->ref_count = 1;
   int64_t queued_before = pending_length;
+  // An exception may be on its way while the object is released; the deinit's code runs without
+  // it, and cannot throw one of its own: no code that releases the object could take it.
+  LertaException set_aside = lerta_exception;
+  lerta_exception = (LertaException){NULL, NULL};
   deinit(object);
+  if (lerta_exception.data != NULL) lerta_panic("deinit threw an exception");
+  lerta_exception = set_aside;
   // What deinit released is dropped now, not after it: a temporary that holds the object, such as a
   // closure of a function literal that uses `@`, must have let it go before the check.
   drain_to(queued_before);

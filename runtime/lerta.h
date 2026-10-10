@@ -265,7 +265,20 @@ void lerta_stdout_init(void);
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
 
-// There is no catch yet: a throw prints the message to stderr and exits.
+// The exception being thrown, an Error interface value, from its throw until a catch takes it; its
+// data is null while there is none. The generated code checks it after each call (see
+// docs/internals.md#exceptions). The first entry of an Error's itab gives its message.
+typedef struct {
+  void *data;
+  void *const *itab;
+} LertaException;
+extern LertaException lerta_exception;
+
+// Frees an object whose construction threw, once the caller has released its fields; its deinit
+// does not run.
+void lerta_free_unfinished(void *object);
+
+// A throw of a String, and the runtime's own, print the message to stderr and exit.
 _Noreturn void lerta_throw(const LertaString *message);
 _Noreturn void lerta_throw_index_out_of_range(void);
 // Returns false if any output to stdout has failed.

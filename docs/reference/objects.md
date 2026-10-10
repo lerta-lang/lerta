@@ -99,7 +99,7 @@ class File
   deinit = -> print "closing #{@path}"
 ```
 
-- A class's `deinit` runs when its object is released, when the last reference to it goes, before the references its fields hold are released. It cannot be called otherwise, and cannot throw (`deinit cannot throw`). A struct has no `deinit`.
+- A class's `deinit` runs when its object is released, when the last reference to it goes, before the references its fields hold are released. It cannot be called otherwise, and cannot throw (`deinit cannot throw`); an exception that a call in it throws makes a panic, `deinit threw an exception`, since no code that releases the object could take it. A struct has no `deinit`.
 - Why a struct has no `deinit` and no `weak!` fields: if the time of its release were observable, the implementation could no longer choose between copying and sharing it. Breaking cycles is not needed for structs either.
 - `deinit` is for cleanup: it may use `@` and call its methods, but must not keep a reference to the object, as in a field of another object; that stops the program with `deinit kept a reference to its object`.
 - Objects still referenced when the program ends through `exit` or an uncaught `throw` are not released, so their `deinit` does not run.

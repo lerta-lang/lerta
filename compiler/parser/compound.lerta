@@ -1,9 +1,9 @@
 # Compound expressions, made of other expressions or of blocks: arrays and comprehensions, maps and
 # anonymous structs, function literals, and `case`.
 import {
-  ArrayLiteral, BooleanLiteral, Case, CaseArm, Comprehension, Conditional, copy_identifier
+  ArrayLiteral, BooleanLiteral, Case, CaseArm, Catch, Comprehension, Conditional, copy_identifier
   Expression, FunctionLiteral, Identifier, LazyFunctions, MapEntry, MapLiteral, NamedValue
-  Parameter, Pass, Position, RecordLiteral, Statement, TypeParameter
+  Parameter, Pass, Position, RecordLiteral, Statement, Try, TypeName, TypeParameter
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
 import { parse_coalesce, parse_expression, parse_identifier, parse_loop_header } from './expression'
@@ -172,6 +172,23 @@ export const parse_case = (tokens: TokenStream, position: Position) ->
   const otherwise = has_else then parse_arm_body(tokens, 'else') else nil
   tokens.expect DEDENT, 'end of block'
   Case subject, arms, otherwise, position
+
+# `try` and an indented block, then `catch` clauses and a `finally` clause, each with its block.
+export const parse_try = (tokens: TokenStream, position: Position) ->
+  const body = parse_block(tokens)
+  const catches: Array<Catch> = []
+  catches.push parse_catch(tokens) while tokens.peek().kind == 'catch'
+  const has_finally = tokens.accept('finally')
+  const finally_body = has_finally then parse_block(tokens) else nil
+  if catches.length == 0 and finally_body == nil
+    tokens.fail_expecting tokens.peek(), "'catch' or 'finally'"
+  Try body, catches, finally_body, position
+
+const parse_catch = (tokens: TokenStream) ->
+  const position = token_position(tokens.next())
+  const name = parse_identifier(tokens)
+  const type: TypeName? = tokens.accept(':') then parse_type_name(tokens) else nil
+  Catch name, type, position, body: parse_block(tokens)
 
 const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
   tokens.expect 'when', "'when'"

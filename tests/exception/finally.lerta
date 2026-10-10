@@ -1,0 +1,52 @@
+# finally runs after the try block, after a catch, and before an exception that no catch takes goes
+# on, as it does after one that a catch throws.
+struct Oops
+  message: String
+struct Other
+  message: String
+
+const run = (label: String, body: () -> void) ->
+  try
+    body()
+  catch e
+    print "#{label} outside: #{e.message}"
+
+run 'plain', ->
+  try
+    print 'body'
+  finally
+    print 'finally'
+run 'caught', ->
+  try
+    throw Oops(message: 'a')
+  catch e: Oops
+    print "caught #{e.message}"
+  finally
+    print 'finally'
+run 'not caught', ->
+  try
+    throw Other(message: 'b')
+  catch e: Oops
+    print 'never'
+  finally
+    print 'finally'
+run 'from catch', ->
+  try
+    throw Oops(message: 'c')
+  catch e: Oops
+    throw Other(message: "again #{e.message}")
+  finally
+    print 'finally'
+run 'nested', ->
+  try
+    try
+      throw Oops(message: 'd')
+    finally
+      print 'inner finally'
+  catch e: Oops
+    print "outer caught #{e.message}"
+run 'rethrow', ->
+  try
+    throw Oops(message: 'e')
+  catch e
+    throw e

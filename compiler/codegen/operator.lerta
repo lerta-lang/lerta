@@ -3,6 +3,7 @@ import { BinaryOperation, Coalesce, is_nil_test, NilLiteral, UnaryOperation, Unw
 import { compares_by_contents } from '../checker/equality'
 import { is_arithmetic } from '../checker/operator'
 import { apply_arithmetic } from './checked_int'
+import { holding } from './exceptions'
 import {
   generate, generate_condition, release_if_reference, type_at_use, type_of
 } from './expression'
@@ -35,8 +36,8 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   return generate_logical(g, binary) if operator == 'and' or operator == 'or'
   return generate_nil_test(g, binary) if is_nil_test(binary)
   const left = generate(g, binary.left)
-  const right = generate(g, binary.right)
   const operand_type = type_at_use(g, binary.left)
+  const right = holding(g, left, operand_type, () -> generate(g, binary.right))
   const is_string = is_kind(operand_type, 'String')
   return emit_concat(g.ir, [left, right]) if is_string and operator == '+'
   # nil is the null pointer, so optional objects compare as pointers too.

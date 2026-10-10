@@ -11,6 +11,7 @@ import { emit_closure_call, function_type_of } from './closure'
 import { emit_member_name, emit_parse } from './enum'
 import { generate, read_any_field, release_if_reference, type_at_use, type_of } from './expression'
 import { lookup_local } from './function'
+import { emit_exception_check, pop_temporaries, push_temporary } from './exceptions'
 import { Generator } from './generator'
 import { emit_interface_call } from './interface'
 import { IrBuilder } from './ir_builder'
@@ -64,9 +65,17 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
   if source == nil
     const closure = read_any_field(g, object, object_type, name, type_of(g, member))
     return call_closure(g, closure, type_of(g, member), call.args)
+  # An Iter's has_next and next run the code of its kind, which may throw.
   if source is BuiltinMethod and is_iter_method(object_type)
-    const args = [generate(g, arg) for arg in call.args]
-    return call_iter_method(g.ir, name, object, object_type, args)
+    # The object is held until the Iter's method takes it over.
+    const depth = g.temporaries.length
+    push_temporary g, object, object_type
+    const result = call_iter_method(g.ir, name, object, object_type, () -> emit_exception_check(g))
+    pop_temporaries g, depth
+    emit_exception_check g
+    return result
+  const depth = g.temporaries.length
+  push_temporary g, object, object_type
   const result = case source
     when BuiltinMethod
       const emit_call = (args: Array<String>) ->
@@ -81,7 +90,9 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
       const symbol = lerta_method_symbol(g, source, name, call)
       const receiver = "#{ir_type(object_type)} #{object}"
       call_function g, symbol, type_of(g, member), call.args, receiver
+  pop_temporaries g, depth
   release_if_reference g, member.object, object
+  emit_exception_check g if not (source is BuiltinMethod)
   result
 
 # The method that the member names: one of the object's type, or one that an extend of an
@@ -115,7 +126,10 @@ const call_function = (
     all_args.push receiver if receiver
     all_args.append typed_arguments(g, args, operands)
     call_user_function g.ir, symbol, type, all_args.join(', ')
-  with_arguments g, args, emit_call
+  const result = with_arguments(g, args, emit_call)
+  # A method's receiver is released after the check.
+  emit_exception_check g if receiver == nil
+  result
 
 # The arguments' operands with their IR types.
 const typed_arguments = (g: Generator, args: Array<Expression>, operands: Array<String>) ->
@@ -134,16 +148,27 @@ export const call_user_function = (ir: IrBuilder, symbol: String, type: Type, ar
 # the arguments, as a named function is known before them.
 const call_closure = (g: Generator, closure: String, type: Type, args: Array<Expression>) ->
   const emit_call = (operands: Array<String>) -> emit_closure_call(g.ir, closure, type, operands)
+  const depth = g.temporaries.length
+  push_temporary g, closure, type
   const result = with_arguments(g, args, emit_call)
+  pop_temporaries g, depth
   emit_release g.ir, closure
+  emit_exception_check g
   result
 
-# Generates the arguments, which `emit_call` borrows, and releases them after the call.
+# Generates the arguments, which `emit_call` borrows, and releases them after the call. Each is
+# held while the next ones are evaluated, which may throw.
 const with_arguments = (
   g: Generator, args: Array<Expression>, emit_call: (Array<String>) -> String
 ) ->
-  const operands = [generate(g, arg) for arg in args]
+  const depth = g.temporaries.length
+  const operands: Array<String> = []
+  for arg in args
+    const operand = generate(g, arg)
+    push_temporary g, operand, type_at_use(g, arg)
+    operands.push operand
   const result = emit_call(operands)
+  pop_temporaries g, depth
   release_if_reference g, args[i], operands[i] for i in 0...args.length
   result
 
@@ -152,7 +177,11 @@ const with_arguments = (
 const generate_construction = (g: Generator, call: Call, type: ObjectType) ->
   const info = info_of(g.code.program, type)
   const given: Map<String, String> = Map()
-  given[arg.name.name] = generate(g, arg.value) for arg in call.named_args
+  const depth = g.temporaries.length
+  for arg in call.named_args
+    const value = generate(g, arg.value)
+    push_temporary g, value, type_at_use(g, arg.value)
+    given[arg.name.name] = value
   const args: Array<String> = []
   for field in info.fields
     continue if field.value != nil
@@ -160,7 +189,9 @@ const generate_construction = (g: Generator, call: Call, type: ObjectType) ->
     const value = given[field.name.name] ? nil_constant(field_type)
     args.push "#{ir_type(field_type)} #{value}"
   const object = g.ir.assign("call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})")
+  pop_temporaries g, depth
   release_if_reference g, arg.value, given[arg.name.name]! for arg in call.named_args
+  emit_exception_check g
   object
 
 export const call_builtin_method = (
