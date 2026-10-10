@@ -1,0 +1,43 @@
+# Instances of generic classes and structs run init and deinit, may refer to themselves, satisfy
+# interfaces, compare by contents and are members of unions.
+class Node<T>
+  value: T
+  next: Node<T>?
+  init = -> print "made #{@value}"
+  deinit = -> print "freed #{@value}"
+  describe = (): String -> "node #{@value}"
+
+struct Box<T>
+  value: T
+
+extend<T> Box<T>
+  get = (): T -> @value
+
+interface Describable
+  describe: () -> String
+
+const show = <X: Describable>(x: X) -> print x.describe()
+const wrap = <T>(value: T): Box<T> -> Box(value)
+
+const n = Node(value: 1, next: Node(value: 2, next: nil))
+show n
+print wrap('x').get()
+print Box(value: 1) == Box(value: 1)
+const counts: Map<Box<Int>, Int> = { Box(value: 3): 1 }
+print counts[Box(value: 3)] ? 0
+const d: Describable = Node(value: 'v', next: nil)
+print d.describe()
+const either: Box<Int> | Box<String> = Box(value: 'b')
+print either is Box<String>
+
+# A generic method of a generic class takes the class's type arguments and its own.
+class Stack<T>
+  items: Array<T> = []
+  push = (item: T) -> @items.push(item)
+  map = <R>(f: (T) -> R): Stack<R> ->
+    const mapped = Stack<R>()
+    mapped.push f(item) for item in @items
+    mapped
+const numbers = Stack<Int>()
+numbers.push 4
+print numbers.map((x) -> "#{x}!").items[0]

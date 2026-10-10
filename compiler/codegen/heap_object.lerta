@@ -2,10 +2,11 @@
 # with the header `{ i64 ref_count, ptr drop }`, then holds its fields in order; its drop function
 # releases the references the fields hold.
 import { ObjectInfo } from '../checker/object_types'
+import { ProgramWide } from '../checker/shared'
 import { IrBuilder, IrModule } from './ir_builder'
 import {
-  drop_symbol, emit_release_stored, emit_retain_value, ir_type, method_symbol, object_ir_type
-  ownership, Ownership, without_sigil
+  drop_symbol, emit_release_stored, emit_retain_value, ir_type, object_ir_type, Ownership, ownership
+  special_method_symbol, without_sigil
 } from './lerta_ir'
 import { members_of, ObjectType, RecordType, Type, type_key } from '../types'
 
@@ -79,11 +80,11 @@ export const emit_allocate = (ir: IrBuilder, info: ObjectInfo) ->
   object
 
 # A class's object keeps its weak box after its fields.
-export const define_object = (module: IrModule, info: ObjectInfo) ->
+export const define_object = (module: IrModule, program: ProgramWide, info: ObjectInfo) ->
   const fields = [value_field(field.type!) for field in info.fields]
   const weak_slot = is_class(info) then fields.length else nil
   fields.push plain_field('ptr') if is_class(info)
-  const deinit = info.has_deinit then method_symbol(info.type, 'deinit') else nil
+  const deinit = info.has_deinit then special_method_symbol(program, info, 'deinit') else nil
   const layout = object_ir_type(info.type)
   define_heap_object module, layout, drop_symbol(info.type), fields, deinit, weak_slot
 

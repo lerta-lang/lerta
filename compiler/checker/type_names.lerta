@@ -172,17 +172,33 @@ const resolve_name = (
       const key = resolve_key(program, resolver, args[0])
       return MapType(key, value: resolve_map_value(program, resolver, args[1]))
     else pass
+  const shared = program.shared[resolver.module_index]
   const interface_info = named_interface(program, resolver, name)
-  fail_here "'#{name}' takes no type arguments" if args.length > 0 and interface_info == nil
+  const named = named_type(shared, name)
+  const generic_object = named is ObjectType and named.args.length > 0
+  const takes_arguments = interface_info != nil or generic_object
+  fail_here "'#{name}' takes no type arguments" if args.length > 0 and not takes_arguments
   return void_type if is_result and name == 'void'
   return never_type if is_result and name == 'never'
   return parameter if const parameter = resolver.type_parameters[name]
   return simple if const simple = simple_type(name)
   if interface_info
     return value_interface_type(program, resolver, interface_info, type_name)
-  const shared = program.shared[resolver.module_index]
-  return named if const named = named_type(shared, name)
+  return instantiate_object(program, resolver, named as ObjectType!, type_name) if generic_object
+  return named if named
   resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
+
+# The written generic class or struct, with its type arguments.
+export const instantiate_object = (
+  program: ProgramWide, resolver: Resolver, generic: ObjectType, type_name: NamedType
+) ->
+  const { args, position } = type_name
+  const count = generic.args.length
+  if args.length != count
+    fail program, position, "'#{generic.name}' takes #{count} type argument(s), got #{args.length}"
+  const resolved = [resolve(program, resolver, arg) for arg in args]
+  const { name, symbol, module, is_struct } = generic
+  ObjectType name, symbol, module, is_struct, args: resolved
 
 # A type parameter's type argument is checked where it is given (see generic_call).
 const resolve_key = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->

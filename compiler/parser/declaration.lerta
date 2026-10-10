@@ -76,12 +76,16 @@ const parse_import_name = (tokens: TokenStream) ->
   tokens.next()
   ImportName name, alias: parse_identifier(tokens)
 
-# `class Name` or `struct Name` followed by an indented block of members, one per line.
+# `class Name` or `struct Name`, or `class Name<T>` with type parameters, followed by an indented
+# block of members, one per line.
 export const parse_type_declaration = (tokens: TokenStream) ->
   const token = tokens.next()
   const name = parse_identifier(tokens)
+  const is_generic = tokens.peek().kind == '<'
+  const type_params: Array<TypeParameter> = is_generic then parse_type_parameters(tokens) else []
   const members = parse_members(tokens)
-  TypeDeclaration name, members, is_struct: token.kind == 'struct', position: token_position(token)
+  const is_struct = token.kind == 'struct'
+  TypeDeclaration name, type_params, members, is_struct, position: token_position(token)
 
 # `interface Name`, or `interface Name<T>`, followed by an indented block of members, one per line,
 # written as a class's; the checker tells which an interface can have.

@@ -20,7 +20,8 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 ## Generics
 
 - The body of a generic function or method is **checked at definition** against its bounds, instead of per instance (avoiding the C++ template "error deep inside").
-- Generic classes and structs, and generic function literals outside the top level.
+- Generic function literals outside the top level.
+- Bounds on the type parameters of generic classes and structs, `class Sorted<T: Comparable>`, checked wherever the type is written.
 
 ## Weak references
 

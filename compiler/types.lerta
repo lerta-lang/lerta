@@ -58,6 +58,8 @@ export struct ObjectType
   symbol: String
   module: String
   is_struct: Bool
+  # The type arguments of a generic class or struct, as `Int` of `Stack<Int>`.
+  args: Array<Type>
 
 # An interface (see InterfaceInfo), named as an ObjectType is. Its value holds a value of a type
 # that satisfies it, with the itab that reads that type's members.
@@ -159,11 +161,8 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when ArrayType then "Array<#{format(type.element)}>"
     when IterType then "Iter<#{format(type.item)}>"
     when MapType then "Map<#{format(type.key)}, #{format(type.value)}>"
-    when ObjectType then qualified then "#{type.name} (of #{type.module})" else type.name
-    when InterfaceType
-      const args = [format(arg) for arg in type.args]
-      const name = args.length == 0 then type.name else "#{type.name}<#{args.join(', ')}>"
-      qualified then "#{name} (of #{type.module})" else name
+    when ObjectType then format_named(type.name, type.module, type.args, format, qualified)
+    when InterfaceType then format_named(type.name, type.module, type.args, format, qualified)
     when EnumType then qualified then "#{type.name} (of #{type.module})" else type.name
     when RecordType
       const fields = ["#{field.name}: #{format(field.type)}" for field in type.fields]
@@ -177,6 +176,14 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when TypeParameterType then type.name
     when FunctionType
       "(#{[format(param) for param in type.params].join(', ')}) -> #{format(type.result)}"
+
+# A class, struct or interface, with its type arguments, and its module where `qualified` says so.
+const format_named = (
+  name: String, module: String, args: Array<Type>, format: (Type) -> String, qualified: Bool
+) ->
+  const written_args = [format(arg) for arg in args].join(', ')
+  const written = args.length == 0 then name else "#{name}<#{written_args}>"
+  qualified then "#{written} (of #{module})" else written
 
 # A member of a union, with its module if another member has the same name.
 export const format_member = (member: Type, union: Type) ->
@@ -202,10 +209,8 @@ export const format_types = (a: Type, b: Type) ->
 export const type_key = (type: Type): String ->
   case type
     when SimpleType then type.kind.to_string()
-    when ObjectType then type.symbol
-    when InterfaceType
-      return type.symbol if type.args.length == 0
-      "#{type.symbol}<#{[type_key(arg) for arg in type.args].join(', ')}>"
+    when ObjectType then named_key(type.symbol, type.args)
+    when InterfaceType then named_key(type.symbol, type.args)
     when EnumType then type.symbol
     when RecordType
       "{#{["#{field.name}: #{type_key(field.type)}" for field in type.fields].join(', ')}}"
@@ -217,6 +222,10 @@ export const type_key = (type: Type): String ->
     when FunctionType
       "(#{[type_key(param) for param in type.params].join(', ')}) -> #{type_key(type.result)}"
     when TypeParameterType then type.name
+
+const named_key = (symbol: String, args: Array<Type>) ->
+  return symbol if args.length == 0
+  "#{symbol}<#{[type_key(arg) for arg in args].join(', ')}>"
 
 export const same_type = (a: Type, b: Type) -> type_key(a) == type_key(b)
 

@@ -1,17 +1,24 @@
 # The classes and structs of the program: their fields and methods. Like functions, they can be
 # used anywhere in the module, so the types of fields given by an initializer alone are found on
-# demand.
+# demand. A generic class or struct has an instance for each set of type arguments, whose fields
+# have the types they give, made on demand (see info_of).
 import {
   Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration
+  TypeParameter
 } from '../ast'
 import { check_object } from './bodies'
 import { fail } from './diagnostics'
 import { add_function, add_generic, CheckState, method_key } from './functions'
-import { GenericRef, make_generic_function, Receiver } from './generics'
+import {
+  GenericRef, Instance, instantiate, make_generic_function, Receiver, reject_bad_type_parameters
+} from './generics'
 import { imported_type } from './imports'
-import { ProgramWide, Shared } from './shared'
-import { is_builtin_type_name, module_resolver, resolve } from './type_names'
-import { ObjectType, Type } from '../types'
+import { NodeFacts, ProgramWide, Shared } from './shared'
+import {
+  is_builtin_type_name, module_resolver, resolve, Resolver, with_type_parameters
+} from './type_names'
+import { has_type_parameters, placeholders, substitute } from './type_patterns'
+import { ObjectType, same_type, Type } from '../types'
 
 export class FieldInfo
   name: Identifier
@@ -25,9 +32,19 @@ export class FieldInfo
 
 export class ObjectInfo
   declaration: TypeDeclaration
+  # A generic one's type parameters stand for themselves as its type arguments.
   type: ObjectType
   # The declaring module, whose functions hold the methods' types.
   module_index: Int
+  # Resolves the fields' types and checks the initializers: the module's, with the type parameters
+  # standing for themselves, or for an instance's type arguments.
+  resolver: Resolver
+  # What is found of the initializers' nodes: the module's, or an instance's own.
+  facts: NodeFacts
+  # Of an instance: the generic class or struct, and the instances of its init and deinit.
+  generic: ObjectInfo?
+  init: Instance?
+  deinit: Instance?
   fields: Array<FieldInfo> = []
   methods: Map<String, FunctionLiteral> = Map()
   # The generic methods, those with type parameters, which have instances instead of a function.
@@ -36,6 +53,10 @@ export class ObjectInfo
   # `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
   has_deinit = false
   state: CheckState = UNCHECKED
+  # Of a generic class or struct, whose type arguments make them.
+  instances: Array<ObjectInfo> = []
+
+export const is_generic_object = (info: ObjectInfo) -> info.declaration.type_params.length > 0
 
 # The function literal of a member that is a method.
 export const method_literal = (member: MemberDeclaration) ->
@@ -51,16 +72,31 @@ export const add_objects = (shared: Shared, declarations: Array<TypeDeclaration>
       fail program, position, "'#{name}' is already defined"
     const symbol = "#{shared.index}.#{name}"
     const is_struct = declaration.is_struct
-    const type = ObjectType(name, symbol, is_struct, module: shared.name)
-    const info = ObjectInfo(declaration, type, module_index: shared.index)
+    const { type_params } = declaration
+    reject_bounds program, type_params
+    const own = placeholders(type_params)
+    const args = [own[param.name.name]! for param in type_params]
+    const type = ObjectType(name, symbol, is_struct, args, module: shared.name)
+    const resolver = with_type_parameters(module_resolver(shared.index), own)
+    const info = ObjectInfo(
+      declaration, type, resolver, facts: shared.facts, module_index: shared.index
+    )
     shared.objects[name] = info
     program.infos[symbol] = info
+
+# A type argument of a generic class or struct is checked against no bound where the type is
+# written, so it takes none so far.
+const reject_bounds = (program: ProgramWide, type_params: Array<TypeParameter>) ->
+  for param in type_params
+    if const bound = param.bound
+      fail program, bound.position, "a class's or struct's type parameter takes no bound so far"
 
 # Resolves the written field types and adds the methods to the module's functions.
 export const add_members = (shared: Shared) ->
   const program = shared.program
   for type_name in shared.objects.keys()
     const info = shared.objects[type_name]!
+    reject_bad_type_parameters program, module_resolver(shared.index), info.declaration.type_params
     const seen: Map<String, Bool> = Map()
     for member in info.declaration.members
       const { name, position } = member.name
@@ -89,10 +125,11 @@ const add_method = (
     fail program, member.position, 'a struct has no deinit'
   info.has_deinit = true if name == 'deinit'
   info.methods[name] = literal
-  if literal.type_params.length == 0
+  # Those of a generic class or struct are generic, as those of an extend of a generic type are.
+  if literal.type_params.length == 0 and not is_generic_object(info)
     add_function shared, method_key(type_name, name), member.name, literal, info.type
     return
-  const receiver = Receiver(type: info.type, type_params: [])
+  const receiver = Receiver(type: info.type, type_params: info.declaration.type_params)
   const generic = make_generic_function(shared, member.name, literal, receiver)
   info.generics[name] = add_generic(shared, generic)
 
@@ -106,7 +143,7 @@ const field_of_member = (shared: Shared, info: ObjectInfo, member: MemberDeclara
   if is_struct and member.modifier == 'var'
     fail program, member.position, 'a struct field cannot be var'
   const type_name = member.type
-  const type = type_name then resolve(program, module_resolver(shared.index), type_name) else nil
+  const type = type_name then resolve(program, info.resolver, type_name) else nil
   const weak = member.modifier == 'weak!'
   reject_invalid_weak program, member, is_struct, type if weak
   const mutable = not is_struct and member.modifier != 'const' and not weak
@@ -129,8 +166,34 @@ export const object_type = (shared: Shared, name: String) ->
   const info = exported.info ? return nil
   info.type
 
+# The class or struct of the type: an instance of a generic one for its type arguments, made on
+# demand, once the generic one's members are known.
 export const info_of = (program: ProgramWide, type: ObjectType) ->
-  program.infos[type.symbol]!
+  const declared = program.infos[type.symbol]!
+  # A pattern, as the receiver of `extend<T> Stack<T>`, stands for any instance.
+  return declared if same_type(type, declared.type) or type.args.any(has_type_parameters)
+  const is_same = (instance: ObjectInfo) -> same_type(instance.type, type)
+  declared.instances.find(is_same) ? add_instance(declared, type)
+
+const add_instance = (generic: ObjectInfo, type: ObjectType) ->
+  const { declaration, module_index } = generic
+  const type_bindings: Map<String, Type> = Map()
+  const type_params = declaration.type_params
+  type_bindings[type_params[i].name.name] = type.args[i] for i in 0...type_params.length
+  const resolver = with_type_parameters(module_resolver(module_index), type_bindings)
+  const info = ObjectInfo(declaration, type, module_index, resolver, generic, facts: NodeFacts())
+  const instance_field = (field: FieldInfo) ->
+    const { name, mutable, value, weak } = field
+    const field_type = field.type
+    const type = field_type then substitute(field_type, type_bindings) else nil
+    FieldInfo name, type, mutable, value, weak
+  info.fields = [instance_field(field) for field in generic.fields]
+  info.methods = generic.methods
+  info.generics = generic.generics
+  info.has_init = generic.has_init
+  info.has_deinit = generic.has_deinit
+  generic.instances.push info
+  info
 
 # The field's type, checking the initializers first if it is given by one alone.
 export const field_type = (
@@ -142,13 +205,31 @@ export const field_type = (
   check_info program, info
   field.type!
 
+# A generic class or struct is checked by its instances (see check_pending_objects).
 export const check_all_objects = (shared: Shared) ->
-  check_info shared.program, shared.objects[name]! for name in shared.objects.keys()
+  for name in shared.objects.keys()
+    const info = shared.objects[name]!
+    check_info shared.program, info if not is_generic_object(info)
+
+# Checks the instances of the module's generic classes and structs left unchecked, which checking
+# others may make; returns whether there were any.
+export const check_pending_objects = (shared: Shared) ->
+  const pending: Array<ObjectInfo> = []
+  for name in shared.objects.keys()
+    pending.append [each for each in shared.objects[name]!.instances when each.state == UNCHECKED]
+  check_info shared.program, info for info in pending
+  pending.length > 0
 
 # Checks the initializers of the fields with the declaring module's checker, setting the types
-# that they give.
+# that they give. An instance gets the instances of its generic's init and deinit.
 const check_info = (program: ProgramWide, info: ObjectInfo): void ->
   return if info.state != UNCHECKED
   info.state = CHECKING
   check_object program, info
   info.state = CHECKED
+  const generic = info.generic ? return
+  const at = info.declaration.name.position
+  const instance_of = (name: String) ->
+    instantiate program, generic.generics[name]!, info.type.args, [], at
+  info.init = instance_of('init') if info.has_init
+  info.deinit = instance_of('deinit') if info.has_deinit

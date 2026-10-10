@@ -1,5 +1,5 @@
 # Checks a program: the types of its expressions, its conversions and its warnings.
-import { check_all_objects } from './object_types'
+import { check_all_objects, check_pending_objects } from './object_types'
 import {
   complete_declarations, declare_extends, declare_later_extends, declare_names
 } from './declarations'
@@ -36,8 +36,10 @@ export const check_modules = (entry_path: String, modules: Array<Module>) ->
   for_each_module program, declare_later_extends
   for_each_module program, check_top_level
   for_each_module program, check_bodies
+  # Instances of generic functions and of generic classes and structs may make others.
   const has_pending = (shared: Shared) ->
-    shared.generics.any (generic) -> check_pending(program, generic)
+    const functions = shared.generics.any((generic) -> check_pending(program, generic))
+    check_pending_objects(shared) or functions
   var pending = true
   pending = program.shared.any(has_pending) while pending
   program

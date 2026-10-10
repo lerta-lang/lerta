@@ -1,6 +1,7 @@
 # How Lerta values are represented in LLVM IR.
 import { ExtensionMethod } from '../checker/extensions'
 import { generic_of, Instance } from '../checker/generics'
+import { ObjectInfo } from '../checker/object_types'
 import { ProgramWide } from '../checker/shared'
 import { hex } from '../hex'
 import { IrBuilder } from './ir_builder'
@@ -89,12 +90,19 @@ export const extension_symbol = (method: ExtensionMethod) ->
   const receiver = type_key(method.receiver)
   quoted "lerta.extend.#{method.module_index}.#{receiver}.#{method.name.name}"
 
-export const constructor_symbol = (type: ObjectType) -> "@lerta.new.#{type.symbol}"
+# The init or deinit of a class or struct: the instance of its generic one's, for an instance of a
+# generic one.
+export const special_method_symbol = (program: ProgramWide, info: ObjectInfo, name: String) ->
+  const instance = name == 'init' then info.init else info.deinit
+  instance then instance_symbol(program, instance) else method_symbol(info.type, name)
 
-export const drop_symbol = (type: ObjectType) -> "@lerta.drop.#{type.symbol}"
+# An instance of a generic class or struct is named by its type arguments too (see type_key).
+export const constructor_symbol = (type: ObjectType) -> quoted("lerta.new.#{type_key(type)}")
+
+export const drop_symbol = (type: ObjectType) -> quoted("lerta.drop.#{type_key(type)}")
 
 # The LLVM struct type of a class or struct: the object header, then the fields in order.
-export const object_ir_type = (type: ObjectType) -> "%lerta.object.#{type.symbol}"
+export const object_ir_type = (type: ObjectType) -> "%\"lerta.object.#{type_key(type)}\""
 
 # The name without its first character, the sigil `@` or `%`, to build other names from it.
 export const without_sigil = (name: String) ->

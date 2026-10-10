@@ -24,7 +24,7 @@ import {
 } from './heap_object'
 import {
   constructor_symbol, emit_release, emit_release_stored, emit_retain, emit_retain_value
-  ir_return_type, ir_type, method_symbol, ownership, returns_nothing
+  ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol
 } from './lerta_ir'
 import { emit_throw_blocks } from './throw_blocks'
 import { emit_mark_initialized, emit_release_globals } from './top_level'
@@ -153,7 +153,8 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   for field in info.fields
     store_field g, object, info, field, generate(g, value) if const value = field.value
   g.locals.pop()
-  ir.emit "call void #{method_symbol(info.type, 'init')}(ptr #{object})" if info.has_init
+  const init = special_method_symbol(g.code.program, info, 'init')
+  ir.emit "call void #{init}(ptr #{object})" if info.has_init
   ir.emit "ret ptr #{object}"
   const params = ["#{ir_type(arguments[i].type!)} %p#{i}" for i in 0...arguments.length]
   finish g, "ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"

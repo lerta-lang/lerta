@@ -2,7 +2,7 @@
 # extends match, substitute and infer their type parameters with these.
 import { TypeParameter } from '../ast'
 import {
-  ArrayType, FunctionType, InterfaceType, IterType, MapType, optional_type, OptionalType
+  ArrayType, FunctionType, InterfaceType, IterType, MapType, ObjectType, optional_type, OptionalType
   record_type, RecordField, RecordType, same_type, Type, type_key, TypeParameterType, union_type
   UnionType
 } from '../types'
@@ -28,6 +28,11 @@ const map_parts = (type: Type, replace: (Type) -> Type): Type ->
     when InterfaceType
       const args = [replace(arg) for arg in type.args]
       InterfaceType args, name: type.name, symbol: type.symbol, module: type.module
+    when ObjectType
+      return type if type.args.length == 0
+      const args = [replace(arg) for arg in type.args]
+      const { name, symbol, module, is_struct } = type
+      ObjectType name, symbol, module, is_struct, args
     when FunctionType
       FunctionType params: [replace(param) for param in type.params], result: replace(type.result)
     else type
@@ -105,5 +110,8 @@ export const infer = (pattern: Type, type: Type, bind: (String, Type) -> void): 
         match pattern.result, type.result
     when InterfaceType
       if type is InterfaceType and type.symbol == pattern.symbol
+        match pattern.args[i], type.args[i] for i in 0...pattern.args.length
+    when ObjectType
+      if type is ObjectType and type.symbol == pattern.symbol
         match pattern.args[i], type.args[i] for i in 0...pattern.args.length
     else pass
