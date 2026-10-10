@@ -59,7 +59,7 @@ export const infer_through_members = (
   bindings[SELF] = type
   for member in interface_members(body.program, info)
     const name = Identifier(position: at, name: member.name)
-    const found = member_type_by_name(body, type, name, nil) ? continue
+    const found = member_type_by_name(body, type, name) ? continue
     infer substitute(member.type, bindings), found, bind
 
 # `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
@@ -67,7 +67,7 @@ export const infer_through_members = (
 export const check_interpolated = (body: Body, part: Call) ->
   const member = part.callee
   throw 'an interpolated value is read by a call of its to_string()' if not (member is Member)
-  const type = type_of(body, member.object, nil)
+  const type = type_of(body, member.object)
   const bound = std_interface(body.shared, 'Stringable', member.object.position).type
   const to_string = members_for(body.program, bound, type)[0]
   const name = Identifier(position: member.object.position, name: member.name.name)
@@ -92,7 +92,7 @@ const satisfied_bindings = (body: Body, type: Type, pattern: InterfaceType, at: 
   return nil if has_type_parameters(bound)
   const satisfies_member = (member: InterfaceMember) ->
     const name = Identifier(position: at, name: member.name)
-    unsatisfied_reason(body, type, member, name, member_type_by_name(body, type, name, nil)) == nil
+    unsatisfied_reason(body, type, member, name, member_type_by_name(body, type, name)) == nil
   const members = members_for(body.program, bound as InterfaceType!, type)
   members.all(satisfies_member) then bindings else nil
 
@@ -106,7 +106,7 @@ export const iterable_item_of = (body: Body, type: Type, at: Position) ->
 # not Iterable.
 export const reject_not_iterable = (body: Body, type: Type, at: Position, message: String) ->
   const name = Identifier(position: at, name: 'iter')
-  const found = member_type_by_name(body, type, name, nil)
+  const found = member_type_by_name(body, type, name)
   fail body.program, at, message if found == nil
   const iterable = std_interface(body.shared, 'Iterable', at)
   const member = interface_members(body.program, iterable)[0]

@@ -17,7 +17,7 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Parentheses**: do not write parentheses that change nothing, except where another rule asks for them (Ranges, below), to clarify `and` mixed with `or`, around an `is` test under `not` (`not (x is T)`, which could be misread as `(not x) is T`), and around a `then`/`else` inside the `then` value of another (`a then (b then x else y) else z`), whose `else`s are hard to pair otherwise.
 - **Postfix forms**: if the body of `while`/`for` is one statement, use the postfix form. If it exceeds 100 columns, use the block form even for one statement. Do not stack postfix forms (`x += 1 for x in xs while ok`).
 - **Branches**: branch two ways with `if`/`else`, including for a value (`const x = if c` and its branches below), and three or more ways, or on a subject, with `case`. A two-way value that fits on one line is `c then a else b`.
-- **Type bodies**: write type-only fields (constructor arguments) first. Do not write `const`/`var` when it equals the default.
+- **Type bodies**: write type-only fields (constructor arguments) first, then those with a `default`. Do not write `const`/`var` when it equals the default.
 - **Return types**: omit a return type that can be inferred. Write it where the language requires it (recursion, `nil` alone), and on generic functions and methods, whose bodies are checked only per instance.
 - **Top-level order**: declare a top-level value above the code that uses it, wherever the order allows.
 - **Unused names**: name an unused variable `_`.

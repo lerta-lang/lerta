@@ -71,10 +71,7 @@ export const type_of_try = (body: Body, try_expression: Try, expected: Type?): T
   for clause in try_expression.catches
     const caught = caught_type(body, clause)
     const define = () ->
-      const local = Local(
-        identifier: clause.name, type: caught, mutable: false, declared: false, used: false
-      )
-      define_local body, local
+      define_local body, Local(identifier: clause.name, type: caught)
     branches.push Branch(statements: clause.body, enter: define)
   const unify_branches = (values: Array<BranchValue>): Type ->
     return void_type if values.any((value) -> is_kind(value.type, 'void'))
@@ -141,7 +138,7 @@ const type_of_branches = (
         const message = "expected #{format_type(expected)}, got void"
         fail body.program, branch.statements.last().position, message
     return expected
-  const type_of_value = (value: Expression) -> type_of(body, value, nil)
+  const type_of_value = (value: Expression) -> type_of(body, value)
   const value_of = (branch: Branch) ->
     BranchValue last: branch.statements.last(), type: type_of_body(branch, type_of_value)
   unify_all [value_of(branch) for branch in branches]
@@ -172,7 +169,7 @@ const check_patterns = (body: Body, case_expression: Case) ->
   const subject = case_expression.subject
   if subject == nil
     return [check_condition(body, arm.patterns[0]) for arm in arms]
-  const subject_type = type_of(body, subject, nil)
+  const subject_type = type_of(body, subject)
   const is_optional = subject_type is OptionalType
   const is_nil_arm = (arm: CaseArm) -> is_optional and arm.patterns.any(is_nil_pattern)
   const unhandled_nil = is_optional and not check_nil_arms(body, arms)
@@ -205,7 +202,7 @@ const check_nil_arms = (body: Body, arms: Array<CaseArm>) ->
       if arm.patterns.length > 1
         fail body.program, pattern.position, 'nil must be the only pattern of its arm'
       fail_handled_twice body, pattern, 'nil' if handled
-      type_of body, pattern, nil
+      type_of body, pattern
       handled = true
   handled
 
@@ -272,7 +269,7 @@ const type_pattern = (body: Body, pattern: Expression, union: UnionType) ->
   const { program, resolver } = body
   const name = pattern is Identifier then pattern.name else fail_pattern()
   fail_pattern() if not has_type(program, resolver, name)
-  const type_name = NamedType(name, args: [], position: pattern.position, optional: false)
+  const type_name = NamedType(name, args: [], position: pattern.position)
   const type = resolve(program, resolver, type_name)
   fail_pattern() if not is_assignable(type, union) or is_kind(type, 'never')
   set_type body, pattern, type

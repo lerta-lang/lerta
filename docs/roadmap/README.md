@@ -14,7 +14,6 @@ When a feature is implemented, its description moves to [the reference](../refer
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
-- In the compiler, some 37 constructions pass a field's usual value, as `Local(..., mutable: false, declared: false, used: false)`. After the next seed refresh, give those fields [defaults](../reference/objects.md) and leave the values out.
 
 ## Open questions
 

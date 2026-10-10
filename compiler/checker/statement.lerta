@@ -33,7 +33,7 @@ export const check_initializers = (body: Body, info: ObjectInfo, self: SelfConte
     if const field_type = field.type
       expect_type body, value, field_type
       continue
-    const type = type_of(body, value, nil)
+    const type = type_of(body, value)
     reject_if_not_storable body, type, value
     field.type = type
   self.initializing = nil
@@ -48,7 +48,7 @@ export const check_function_body = (
   const define_params = ->
     if const self = body.self
       const identifier = Identifier(name: '@', position: literal.position)
-      const object = Local(identifier, type: self.type, mutable: false, declared: false, used: true)
+      const object = Local(identifier, type: self.type, used: true)
       body.scopes.define '@', object
     const required = required_params(literal)
     for i in 0...literal.params.length
@@ -59,7 +59,7 @@ export const check_function_body = (
         const reason = 'as those before it have'
         const message = "the parameter '#{identifier.name}' needs a default, #{reason}"
         fail body.program, identifier.position, message
-      const param = Local(identifier, type: params[i], mutable: false, declared: false, used: false)
+      const param = Local(identifier, type: params[i])
       define_local body, param
     narrow_where_holds body, holds if holds
   const statements = literal.body
@@ -164,7 +164,7 @@ export const check_condition = (body: Body, condition: Condition): () -> void ->
     when Binding
       const inner = expect_optional(body, condition.value)
       const identifier = condition.name
-      const local = Local(identifier, type: inner, mutable: false, declared: true, used: false)
+      const local = Local(identifier, type: inner, declared: true)
       () -> define_local(body, local)
     else
       expect_condition body, condition as Expression!
@@ -182,7 +182,7 @@ const check_declaration = (body: Body, declaration: Declaration) ->
   const type_name = declaration.type
   const annotated = type_name then resolve(body.program, body.resolver, type_name) else nil
   expect_type body, value, annotated if annotated
-  const type = annotated ? type_of(body, value, nil)
+  const type = annotated ? type_of(body, value)
   reject_if_not_storable body, type, value
   # An exported value is for other modules to use.
   const { name, mutable, exported } = declaration
@@ -209,7 +209,7 @@ export const define_local = (body: Body, local: Local) ->
   body.facts.types[local.identifier] = local.type
 
 const check_expression_statement = (body: Body, statement: Expression) ->
-  check_discarded body, statement, type_of(body, statement, nil)
+  check_discarded body, statement, type_of(body, statement)
 
 # See the rules for discarded values in docs/reference/errors.md.
 export const check_discarded = (body: Body, statement: Expression, type: Type) ->

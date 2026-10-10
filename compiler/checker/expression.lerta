@@ -36,7 +36,7 @@ import {
   string_type, Type, UnionType
 } from '../types'
 
-export const type_of = (body: Body, expression: Expression, expected: Type?) ->
+export const type_of = (body: Body, expression: Expression, expected: Type? = nil) ->
   set_type body, expression, compute_type(body, expression, expected)
 
 # `expected` is a hint: the caller still checks that the type fits.
@@ -103,7 +103,7 @@ const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
     return type_of_method_call(body, call, callee, expected)
   const callee_type = case callee
     when Identifier then set_type(body, callee, type_of_identifier(body, callee, true))
-    else type_of(body, callee, nil)
+    else type_of(body, callee)
   check_arguments body, call, callee_type, named_function_literal(body, callee)
 
 export const reject_type_arguments = (body: Body, call: Call) ->
@@ -175,7 +175,7 @@ const type_of_cast = (body: Body, cast: Cast) ->
 # some of its members.
 const check_member_type = (body: Body, value: Expression, type_name: NamedType, type: Type) ->
   const program = body.program
-  const value_type = type_of(body, value, nil)
+  const value_type = type_of(body, value)
   const union = inner_of(value_type)
   if not (union is UnionType)
     const message = "expected a value of a union type, got #{format_type(value_type)}"
@@ -197,7 +197,7 @@ export const set_type = (body: Body, node: Node, type: Type) ->
 # rewritten (see docs/internals.md#bootstrap).
 const check_throw = (body: Body, throw_expression: Throw) ->
   const value = throw_expression.message
-  const type = type_of(body, value, nil)
+  const type = type_of(body, value)
   return if is_kind(type, 'String')
   require_type body, value, type, std_interface(body.shared, 'Error', value.position).type
 
@@ -215,7 +215,7 @@ export const require_type = (body: Body, expression: Expression, type: Type, exp
 
 # A condition is a Bool, or an optional value that holds when it is not nil.
 export const expect_condition = (body: Body, expression: Expression) ->
-  const type = type_of(body, expression, nil)
+  const type = type_of(body, expression)
   if not is_one_of_kinds(type, ['Bool', OPTIONAL, 'never'])
     const message = "expected Bool or an optional value, got #{format_type(type)}"
     fail body.program, expression.position, message
@@ -223,7 +223,7 @@ export const expect_condition = (body: Body, expression: Expression) ->
 
 # The type of an optional value without nil.
 export const expect_optional = (body: Body, expression: Expression) ->
-  const type = type_of(body, expression, nil)
+  const type = type_of(body, expression)
   if not (type is OptionalType)
     fail body.program, expression.position, "expected an optional value, got #{format_type(type)}"
   type.inner
