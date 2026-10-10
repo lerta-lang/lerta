@@ -57,7 +57,8 @@ Interfaces and generics are in [objects](objects.md).
 
 ## Strings
 
-- `s.chars()` for characters (their type is an [open question](#open-questions)), and a separate iterator for graphemes.
+- A separate iterator for graphemes, besides the code points that a `String` gives (see [the reference](../reference/types.md#string)).
+- The code points are `UInt32` values instead of `Int`s once that type exists (see [numeric types](#numeric-types)).
 - Slicing uses a separate type `StringSlice`, as in Swift. Converting to `String` is an explicit copy.
 - Ropes, so that `+` is O(1).
 - Small strings as immediate values.
@@ -75,6 +76,5 @@ Interfaces and generics are in [objects](objects.md).
 - Notation for writing an array inside an array without brackets (CoffeeScript can).
 - Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
-- The type of a character (code point) (the element of `s.chars()`; `Int` or a `Char` type).
 - `Binary` literals (`'...'.binary` can substitute).
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).

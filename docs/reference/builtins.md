@@ -10,7 +10,7 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 
 ## Iterable
 
-`Iterable<T>` is a builtin [interface](objects.md#interfaces), declared in `std/builtins.lerta`, with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). An extend of it gives every Iterable the methods `map`, `filter`, `take`, `any`, `all`, `find` and `to_array` (see [Iter](types.md#iter)). Arrays, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
+`Iterable<T>` is a builtin [interface](objects.md#interfaces), declared in `std/builtins.lerta`, with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). An extend of it gives every Iterable the methods `map`, `filter`, `take`, `any`, `all`, `find` and `to_array` (see [Iter](types.md#iter)). Arrays, `String`s, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
 
 ## Methods of the builtin types
 
@@ -21,7 +21,7 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | `Int` | `to_string`, `to_byte` | |
 | `Byte` | `to_int`, `to_string`, `is_digit`, `is_letter`, `is_space` | |
 | `Bool` | `to_string` | |
-| `String` | `to_string`, `parse_int`, `split`, `starts_with` | `binary` |
+| `String` | `to_string`, `iter`, `parse_int`, `split`, `starts_with` | `binary` |
 | `Binary` | `iter`, `slice`, `occurs_at`, `decode_utf8`, `text` | `length` |
 | `Array<T>` | `iter`, `contains`, `find_index`, `last`, `append`, `join` of an `Array<String>` and `to_binary` of an `Array<Byte>` | `length`, `push`, `pop` |
 | `Map<K, V>` | `has`, `get_or_put`, and `add` of a `Map<K, Bool>` | `length`, `remove`, `keys` |

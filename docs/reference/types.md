@@ -29,6 +29,8 @@
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`.
 - `==` and `!=` compare two `String`s byte by byte.
+- A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as `Int`s, in order, so `'é'` gives 233; its bytes are `s.binary`.
+- Why code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
 - Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `push` onto an `Array<String>` and `join` is O(n) (the Python approach), an idiom that stays valid once ropes make `+` O(1).
 
 ## Binary

@@ -48,6 +48,18 @@ extend Byte
 
 extend String
   to_string = () -> @
+  # The code points, as Ints. A String is always valid UTF-8, so its sequences need no checks.
+  iter = (): Iter<Int> ->
+    const bytes = @binary
+    var i = 0
+    const has_next = () -> i < bytes.length
+    const next = () ->
+      const length = utf8_sequence_length(bytes[i])
+      var code = bytes[i].to_int() - UTF8_LEAD_OFFSETS[length - 1]
+      code = code * 64 + bytes[i + k].to_int() - 0x80 for k in 1...length
+      i += length
+      code
+    { has_next, next }
   # nil unless the String is an integer in decimal, with an optional leading `-`, that fits in an
   # Int. The digits are accumulated as a negative number, which can hold the minimum Int.
   parse_int = () ->
@@ -128,6 +140,9 @@ const utf8_sequence_length = (lead: Byte) ->
     else 0
 
 const is_continuation = (byte: Byte) -> byte >= 0x80 and byte <= 0xBF
+
+# What a lead byte of a sequence of 1 to 4 bytes adds to the bits of the code point it holds.
+const UTF8_LEAD_OFFSETS = [0, 0xC0, 0xE0, 0xF0]
 
 extend Array<String>
   # The Strings one after another, with the separator between each two.
