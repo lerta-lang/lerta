@@ -14,6 +14,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
+- `runtime/iter.c` keeps `lerta_throw_iter_ended`, which the seed's generated code calls, and code of the programs that the seed builds stops at any error of the runtime (see [internals](../internals.md#exceptions)). Remove the function at the next seed refresh.
 
 ## Open questions
 

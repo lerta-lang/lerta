@@ -59,19 +59,23 @@ LertaArray *lerta_array_create(LertaItemKind item_kind) {
 
 int64_t lerta_array_length(const LertaArray *array) { return array->length; }
 
-static void check_index(const LertaArray *array, int64_t index) {
-  if (index < 0 || index >= array->length) lerta_throw_index_out_of_range();
+LERTA_STATIC_STRING(index_out_of_range, "index out of range");
+
+static bool check_index(const LertaArray *array, int64_t index) {
+  if (index >= 0 && index < array->length) return true;
+  lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&index_out_of_range);
+  return false;
 }
 
 void lerta_array_read(const LertaArray *array, int64_t index, void *item) {
-  check_index(array, index);
+  if (!check_index(array, index)) return;
   memcpy(item, item_at(array, index), (size_t)lerta_item_size(array->item_kind));
   lerta_retain_item(array->item_kind, item);
 }
 
 // The new item is retained before the old one is released, in case they are the same object.
 void lerta_array_write(LertaArray *array, int64_t index, const void *item) {
-  check_index(array, index);
+  if (!check_index(array, index)) return;
   lerta_retain_item(array->item_kind, item);
   LertaItem old;
   size_t size = (size_t)lerta_item_size(array->item_kind);
@@ -100,7 +104,10 @@ void lerta_array_append_word(LertaArray *array, int64_t word) {
 
 // The array's reference to the item passes to the caller.
 void lerta_array_take_last(LertaArray *array, void *item) {
-  if (array->length == 0) lerta_throw((const LertaString *)&pop_from_empty);
+  if (array->length == 0) {
+    lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&pop_from_empty);
+    return;
+  }
   array->length--;
   memcpy(item, item_at(array, array->length), (size_t)lerta_item_size(array->item_kind));
 }

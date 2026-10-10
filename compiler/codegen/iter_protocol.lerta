@@ -51,12 +51,14 @@ export const define_kind = (
     next_body.finish "#{ir_type(item)} #{symbol_of(kind, 'next')}(ptr %iter)"
   IterKind state, layout: ir.module.named("iter #{key}", '%lerta.iter', define)
 
-const emit_throw_unless = (ir: IrBuilder, condition: String) ->
+# Throws an IterError unless the condition holds, which `check` then finds.
+const emit_throw_unless = (ir: IrBuilder, condition: String, check: () -> void) ->
   const ended_label = ir.fresh_label('iter.ended')
   const go_label = ir.fresh_label('iter.go')
   ir.emit "br i1 #{condition}, label %#{go_label}, label %#{ended_label}"
   ir.start_block ended_label
-  call_runtime ir, 'void @lerta_throw_iter_ended()', ''
+  call_runtime ir, 'void @lerta_raise_iter_ended()', ''
+  check()
   ir.emit 'unreachable'
   ir.start_block go_label
 
@@ -101,7 +103,7 @@ export const emit_next = (ir: IrBuilder, iter: String, item: Type) ->
 export const emit_checked_next = (ir: IrBuilder, iter: String, item: Type, check: () -> void) ->
   const more = emit_has_next(ir, iter)
   check()
-  emit_throw_unless ir, more
+  emit_throw_unless ir, more, check
   emit_next ir, iter, item
 
 # Starts a traversal, which throws if the Iter has started one.

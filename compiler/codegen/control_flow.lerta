@@ -106,7 +106,12 @@ const generate_iter_comprehension = (g: Generator, iterable: Expression, lazy: L
   const ir = g.ir
   const source = case iterable
     when Range then emit_range_iter(ir, generate(g, iterable.start), generate(g, iterable.end))
-    else emit_source_iter(ir, generate(g, iterable), type_of(g, iterable))
+    else
+      const type = type_of(g, iterable)
+      const iter = emit_source_iter(ir, generate(g, iterable), type)
+      # An Iter's traversal starts here, which throws if one has.
+      while_holding g, iter, type, () -> emit_exception_check(g)
+      iter
   const item: Type = iterable is Range then int_type else iterable_item(type_of(g, iterable))!
   const lazy_guard = lazy.guard
   const guard = lazy_guard then generate_closure(g, lazy_guard) else nil
@@ -146,6 +151,7 @@ const generate_iter_loop = (
   const iter = generate(g, iterable)
   iter_scope[' iterated Iter'] = store_in_slot(g, iter, type)
   emit_iter_start g.ir, iter
+  emit_exception_check g
   const loop_body = (value: String, exit_label: String, next_label: String) ->
     const define = (scope: Map<String, CodegenLocal>) ->
       scope[variable.name] = store_in_slot(g, value, item)

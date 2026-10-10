@@ -4,9 +4,12 @@ LERTA_STATIC_STRING(slice_out_of_range, "slice out of range");
 
 int64_t lerta_binary_length(const LertaString *binary) { return binary->length; }
 
+LERTA_STATIC_STRING(index_out_of_range, "index out of range");
+
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index) {
-  if (index < 0 || index >= binary->length) lerta_throw_index_out_of_range();
-  return binary->bytes[index];
+  if (index >= 0 && index < binary->length) return binary->bytes[index];
+  lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&index_out_of_range);
+  return 0;
 }
 
 int64_t lerta_byte_to_int(uint8_t byte) { return byte; }
@@ -17,7 +20,8 @@ uint8_t lerta_int_to_byte(int64_t n) { return (uint8_t)n; }
 // `end` is exclusive.
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end) {
   if (start < 0 || start > end || end > binary->length) {
-    lerta_throw((const LertaString *)&slice_out_of_range);
+    lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&slice_out_of_range);
+    return NULL;
   }
   return lerta_string_from_bytes(binary->bytes + start, end - start);
 }

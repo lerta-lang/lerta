@@ -51,7 +51,10 @@ const generate_named_call = (g: Generator, call: Call, name: String) ->
     if exported is ExternExport
       const emit_call = (operands: Array<String>) ->
         emit_runtime_call g.ir, exported.symbol, function_type_of(callee_type), operands
-      return with_arguments(g, call.args, emit_call)
+      const result = with_arguments(g, call.args, emit_call)
+      # A C function of the runtime may throw (see lerta_raise).
+      emit_exception_check g
+      return result
   call_function g, g.code.symbols[name]!, callee_type, call.args, nil
 
 # The methods of Iters (see call_iter_method) take the object and the arguments; the other
@@ -92,7 +95,7 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
       call_function g, symbol, type_of(g, member), call.args, receiver
   pop_temporaries g, depth
   release_if_reference g, member.object, object
-  emit_exception_check g if not (source is BuiltinMethod)
+  emit_exception_check g
   result
 
 # The method that the member names: one of the object's type, or one that an extend of an

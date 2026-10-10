@@ -8,8 +8,9 @@ import { Extensions } from './extensions'
 import { check_all_functions, function_type_of, method_key } from './functions'
 import { check_pending } from './generics'
 import { exported_statements, Imports } from './imports'
+import { plan_runtime_errors } from './interface_values'
 import { reject_misplaced_jumps } from './jump_positions'
-import { Module } from '../loader'
+import { BUILTINS_MODULE, Module } from '../loader'
 import { Body, ProgramWide, Shared } from './shared'
 import { check_top_level_code } from './statement'
 import { top_level_values } from './top_level_values'
@@ -36,6 +37,8 @@ export const check_modules = (entry_path: String, modules: Array<Module>) ->
   for_each_module program, declare_later_extends
   for_each_module program, check_top_level
   for_each_module program, check_bodies
+  program.builtins = builtins_module(program)
+  plan_runtime_errors program.shared[builtins] if const builtins = program.builtins
   # Instances of generic functions and of generic classes and structs may make others.
   const has_pending = (shared: Shared) ->
     const functions = shared.generics.any((generic) -> check_pending(program, generic))
@@ -43,6 +46,12 @@ export const check_modules = (entry_path: String, modules: Array<Module>) ->
   var pending = true
   pending = program.shared.any(has_pending) while pending
   program
+
+# The module that std:builtins is, which every module but std:io imports, unless the program is
+# std:io alone; std:builtins itself may be the entry module.
+const builtins_module = (program: ProgramWide): Int? ->
+  return index if const index = program.shared.last().imports.builtins
+  program.entry_path == BUILTINS_MODULE then program.shared.length - 1 else nil
 
 const for_each_module = (program: ProgramWide, step: (Shared) -> void) ->
   for shared in program.shared

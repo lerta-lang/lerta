@@ -12,6 +12,7 @@ import {
   extension_symbol, function_symbol, instance_symbol, method_symbol, module_init_symbol
 } from './lerta_ir'
 import { Module } from '../loader'
+import { define_raise_error, emit_register_raise } from './runtime_errors'
 import { define_top_level_globals } from './top_level'
 import { Type } from '../types'
 
@@ -42,10 +43,13 @@ const generate_module = (code: ModuleCode) ->
   const main_code = [statement for statement in module.program when is_main_code(statement)]
   const entry_index = program.modules.length - 1
   if module.index == entry_index
+    emit_register_raise main if program.builtins != nil
     const runs_first = [module_init_symbol(i) for i in 0...entry_index]
     generate_main main, main_code, 'void @lerta_main()', runs_first, released_globals(code.globals)
   else
     generate_main main, main_code, "void #{module_init_symbol(module.index)}()", [], []
+  if module.index == program.builtins
+    define_raise_error function_generator(code, extensions, facts)
   for statement in module.program
     const declaration = plain_function(statement) ? continue
     const symbol = function_symbol(module.index, declaration.name.name)

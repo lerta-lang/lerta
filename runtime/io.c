@@ -2,7 +2,6 @@
 
 #include "lerta.h"
 
-LERTA_STATIC_STRING(index_out_of_range, "index out of range");
 LERTA_STATIC_STRING(unknown_writer, "a Writer writes to stdout (1) or stderr (2) only");
 
 enum { STDOUT_FD = 1, STDERR_FD = 2, STDOUT_BUFFER_SIZE = 4096 };
@@ -48,12 +47,14 @@ void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
   lerta_os_write(STDERR_FD, bytes, length);
 }
 
-static void check_writer(int64_t fd) {
-  if (fd != STDOUT_FD && fd != STDERR_FD) lerta_throw((const LertaString *)&unknown_writer);
+static bool check_writer(int64_t fd) {
+  if (fd == STDOUT_FD || fd == STDERR_FD) return true;
+  lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&unknown_writer);
+  return false;
 }
 
 void lerta_writer_write(int64_t fd, const LertaString *bytes) {
-  check_writer(fd);
+  if (!check_writer(fd)) return;
   if (fd == STDOUT_FD) {
     stdout_write(bytes->bytes, bytes->length);
     return;
@@ -63,7 +64,7 @@ void lerta_writer_write(int64_t fd, const LertaString *bytes) {
 }
 
 void lerta_writer_flush(int64_t fd) {
-  check_writer(fd);
+  if (!check_writer(fd)) return;
   if (fd == STDOUT_FD) lerta_stdout_flush();
 }
 
@@ -75,13 +76,28 @@ void lerta_throw(const LertaString *message) {
   lerta_os_exit(1);
 }
 
-void lerta_throw_index_out_of_range(void) {
-  lerta_throw((const LertaString *)&index_out_of_range);
+static void (*registered_raise)(int32_t kind, const LertaString *message) = NULL;
+
+void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message)) {
+  registered_raise = raise;
+}
+
+void lerta_raise(LertaErrorKind kind, const LertaString *message) {
+  if (registered_raise == NULL) lerta_throw(message);
+  registered_raise((int32_t)kind, message);
 }
 
 void lerta_panic(const char *message) {
   lerta_stdout_flush();
   lerta_stderr_write((const uint8_t *)message, (int64_t)strlen(message));
+  lerta_stderr_write(&newline, 1);
+  lerta_os_abort();
+}
+
+void lerta_panic_with(const char *prefix, const LertaString *message) {
+  lerta_stdout_flush();
+  lerta_stderr_write((const uint8_t *)prefix, (int64_t)strlen(prefix));
+  lerta_stderr_write(message->bytes, message->length);
   lerta_stderr_write(&newline, 1);
   lerta_os_abort();
 }

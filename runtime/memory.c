@@ -79,7 +79,9 @@ void lerta_run_deinit(void *object, void (*deinit)(void *object)) {
   LertaException set_aside = lerta_exception;
   lerta_exception = (LertaException){NULL, NULL};
   deinit(object);
-  if (lerta_exception.data != NULL) lerta_panic("deinit threw an exception");
+  if (lerta_exception.data != NULL) {
+    lerta_panic_with("deinit threw an exception: ", lerta_exception_message());
+  }
   lerta_exception = set_aside;
   // What deinit released is dropped now, not after it: a temporary that holds the object, such as a
   // closure of a function literal that uses `@`, must have let it go before the check.

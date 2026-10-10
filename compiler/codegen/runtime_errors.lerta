@@ -1,0 +1,66 @@
+# The runtime's errors (see LertaErrorKind in runtime/lerta.h): a function of std:builtins makes
+# one of the kind, of the type that std:builtins declares, with a message, and sets it as the
+# pending exception. The program registers it with the runtime first thing, so that the runtime's
+# C functions throw through it (see lerta_raise), and so do the checks of the generated code.
+import { Itab, RUNTIME_ERRORS } from '../checker/interface_values'
+import { emit_unwind } from './exceptions'
+import { emit_interface_value } from './interface'
+import { Generator } from './generator'
+import { constructor_symbol, INTERFACE_IR_TYPE, string_constant } from './lerta_ir'
+import { ObjectType } from '../types'
+
+export const RAISE_ERROR = '@lerta.raise_error'
+
+# Defines the function, in the module that std:builtins is.
+export const define_raise_error = (g: Generator) ->
+  const ir = g.ir
+  const itabs = g.code.program.runtime_errors
+  const cases = ["i32 #{i}, label %kind.#{i}" for i in 0...itabs.length].join(' ')
+  ir.emit "switch i32 %kind, label %done [ #{cases} ]"
+  for i in 0...itabs.length
+    ir.start_block "kind.#{i}"
+    emit_set_error g, itabs[i]
+    ir.emit 'br label %done'
+  ir.start_block 'done'
+  ir.emit 'ret void'
+  ir.finish "void #{RAISE_ERROR}(i32 %kind, ptr %message)"
+
+# The constructor takes the message borrowed, as any call does.
+const emit_set_error = (g: Generator, itab: Itab) ->
+  const type = itab.type as ObjectType!
+  const error = g.ir.assign("call ptr #{constructor_symbol(type)}(ptr %message)")
+  const value = emit_interface_value(g, error, itab)
+  g.ir.module.declare 'lerta_exception', "@lerta_exception = external global #{INTERFACE_IR_TYPE}"
+  g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr @lerta_exception"
+
+# Registers the function with the runtime, as the program starts.
+export const emit_register_raise = (g: Generator) ->
+  g.ir.module.declare 'lerta_register_raise', 'declare void @lerta_register_raise(ptr)'
+  g.ir.emit "call void @lerta_register_raise(ptr #{RAISE_ERROR})"
+
+# An error that a check of the generated code throws, by the name of its type, and its message.
+export struct CheckedError
+  type_name: String
+  message: String
+
+export const OVERFLOW = CheckedError(type_name: 'ArithmeticError', message: 'integer overflow')
+export const DIVISION_BY_ZERO = CheckedError(
+  type_name: 'ArithmeticError', message: 'division by zero'
+)
+export const UNWRAPPED_NIL = CheckedError(type_name: 'NilError', message: 'unwrapped nil')
+export const FAILED_CAST = CheckedError(type_name: 'CastError', message: 'failed cast')
+export const DEAD_OBJECT = CheckedError(type_name: 'WeakError', message: 'weak object is gone')
+
+# Throws the error where the condition holds, and unwinds from there.
+export const throw_if = (g: Generator, condition: String, error: CheckedError) ->
+  const ir = g.ir
+  const raise_label = ir.fresh_label('raise')
+  const continue_label = ir.fresh_label('continue')
+  ir.emit "br i1 #{condition}, label %#{raise_label}, label %#{continue_label}"
+  ir.start_block raise_label
+  const message = string_constant(ir, error.message)
+  const kind = RUNTIME_ERRORS.find_index((name) -> name == error.type_name)!
+  ir.module.declare 'lerta_raise', 'declare void @lerta_raise(i32, ptr)'
+  ir.emit "call void @lerta_raise(i32 #{kind}, ptr #{message})"
+  emit_unwind g
+  ir.start_block continue_label

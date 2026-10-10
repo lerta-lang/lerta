@@ -19,7 +19,9 @@ import {
   emit_weak_object
 } from './heap_object'
 import { info_of } from '../checker/object_types'
-import { emit_throw_error, generate_try, pop_temporaries, push_temporary } from './exceptions'
+import {
+  emit_throw_error, generate_try, holding, pop_temporaries, push_temporary, while_holding
+} from './exceptions'
 import { emit_interface_read, emit_interface_value } from './interface'
 import { emit_adapter_iter } from './iter'
 import { IrBuilder } from './ir_builder'
@@ -33,7 +35,7 @@ import {
 } from './optional'
 import { emit_throw, emit_unreachable } from './runtime_calls'
 import { emit_binary_length, emit_concat } from './string'
-import { DEAD_OBJECT, FAILED_CAST, throw_if } from './throw_blocks'
+import { DEAD_OBJECT, FAILED_CAST, throw_if } from './runtime_errors'
 import { emit_initialized_check } from './top_level'
 import {
   inner_of, InterfaceType, is_kind, IterType, kind_of, ObjectType, OptionalType, RecordType
@@ -134,7 +136,8 @@ const generate_cast = (g: Generator, cast: Cast) ->
   const object = generate(g, cast.value)
   const holds = emit_member_test(g, object, cast.value, cast.type)
   if cast.throws
-    throw_if g, ir.assign("xor i1 #{holds}, true"), FAILED_CAST
+    const fails = ir.assign("xor i1 #{holds}, true")
+    while_holding g, object, type_of(g, cast.value), () -> throw_if(g, fails, FAILED_CAST)
     return object
   const result = ir.assign("select i1 #{holds}, ptr #{object}, ptr null")
   emit_retain ir, result
@@ -163,7 +166,9 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
   const field_type = field.type!
   const pointer = emit_field_pointer(ir, object, info, name)
   const loaded = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
-  const value = field.weak then weak_object(g, loaded) else loaded
+  # The object is held while its weak field is checked.
+  const read_weak = () -> weak_object(g, loaded)
+  const value = field.weak then holding(g, object, object_type, read_weak) else loaded
   emit_retain_value ir, value, field_type
   emit_release ir, object
   value

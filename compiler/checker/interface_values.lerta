@@ -1,15 +1,16 @@
 # Values of interface types. A value of a type that satisfies an interface converts to it where the
 # interface is expected; the conversion records the plan of the itab through which the interface
 # value reads the type's members (see codegen interface).
-import { Expression, Identifier } from '../ast'
+import { Expression, Identifier, Position } from '../ast'
 import { fail } from './diagnostics'
 import { receiver_instance } from './generic_call'
 import { Instance } from './generics'
-import { InterfaceMember, iter_source_type, members_for } from './interfaces'
+import { InterfaceMember, iter_source_type, members_for, std_interface } from './interfaces'
 import { generic_method, member_type_by_name } from './member'
 import { find_method, MethodSource } from './methods'
 import { reject_unsatisfied } from './satisfaction'
-import { Body } from './shared'
+import { Body, Shared } from './shared'
+import { module_resolver } from './type_names'
 import {
   format_type, inner_of, InterfaceType, is_one_of_kinds, is_reference_type, IterType, Type
   UnionType
@@ -63,7 +64,9 @@ const converts_to_iter = (body: Body, expression: Expression, type: Type, expect
 # Records the plan of the itab of the value converted to the interface type, which its type must
 # satisfy.
 const record_itab = (body: Body, expression: Expression, type: Type, target: InterfaceType) ->
-  const at = expression.position
+  body.facts.itabs[expression] = itab_of(body, expression.position, type, target)
+
+const itab_of = (body: Body, at: Position, type: Type, target: InterfaceType) ->
   const to_target = "to #{format_type(target)}"
   # Each member of a union would need an itab of its own, chosen when the value is converted.
   fail body.program, at, "a union cannot be converted #{to_target} yet" if type is UnionType
@@ -72,11 +75,28 @@ const record_itab = (body: Body, expression: Expression, type: Type, target: Int
     fail body.program, at, "#{format_type(type)} cannot be converted #{to_target}: #{reason}"
   reject_unsatisfied body, type, target, at
   const members = members_for(body.program, target, type)
-  const entries = [itab_entry(body, type, member, expression) for member in members]
-  body.facts.itabs[expression] = Itab(type, target, entries)
+  const entries = [itab_entry(body, type, member, at) for member in members]
+  Itab type, target, entries
 
-const itab_entry = (body: Body, type: Type, member: InterfaceMember, at: Expression) ->
+const itab_entry = (body: Body, type: Type, member: InterfaceMember, at: Position) ->
   const method = find_method(body.program, type, member.name, body.extensions)
   const generic = generic_method(method)
-  const instance = generic then receiver_instance(body, generic, type, at.position, nil) else nil
+  const instance = generic then receiver_instance(body, generic, type, at, nil) else nil
   ItabEntry member, method, instance
+
+# The types of the runtime's errors, which std:builtins declares, in the order of LertaErrorKind
+# in runtime/lerta.h.
+export const RUNTIME_ERRORS = [
+  'IndexError', 'ArithmeticError', 'NilError', 'CastError', 'IterError', 'WeakError', 'IOError'
+  'ValueError'
+]
+
+# The plans of the itabs of the runtime's errors, from which codegen makes them (see
+# runtime_errors), by std:builtins, the module that `shared` is.
+export const plan_runtime_errors = (shared: Shared) ->
+  const resolver = module_resolver(shared.index)
+  const body = Body(shared, resolver, extensions: shared.extensions, facts: shared.facts)
+  const at = Position(line: 1, column: 1)
+  const error = std_interface(shared, 'Error', at).type
+  const itab = (name: String) -> itab_of(body, at, shared.objects[name]!.type, error)
+  shared.program.runtime_errors = RUNTIME_ERRORS.map(itab).to_array()

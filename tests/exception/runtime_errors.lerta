@@ -1,0 +1,61 @@
+# The runtime's errors are of types of std:builtins, one for each kind, which catch takes.
+import { read_file, write_file } from 'std:io'
+
+const attempt = (label: String, run: () -> void) ->
+  try
+    run()
+  catch e: IndexError
+    print "#{label}: IndexError #{e.message}"
+  catch e: ArithmeticError
+    print "#{label}: ArithmeticError #{e.message}"
+  catch e: NilError
+    print "#{label}: NilError #{e.message}"
+  catch e: CastError
+    print "#{label}: CastError #{e.message}"
+  catch e: IterError
+    print "#{label}: IterError #{e.message}"
+  catch e: WeakError
+    print "#{label}: WeakError #{e.message}"
+  catch e: IOError
+    print "#{label}: IOError #{e.message}"
+
+const xs = [1, 2]
+attempt 'index', -> print xs[5]
+attempt 'index assignment', -> xs[4] = 1
+attempt 'compound assignment', -> xs[4] += 1
+attempt 'binary index', -> print 'ab'.binary[7]
+attempt 'slice', -> print 'abc'.binary.slice(2, 9).length
+attempt 'pop', ->
+  const empty: Array<Int> = []
+  print empty.pop()
+attempt 'overflow', -> print 9223372036854775807 + xs[0]
+attempt 'zero', -> print 1 / (xs[0] - 1)
+attempt 'nil', ->
+  const n: Int? = nil
+  print n!
+struct A
+  name: String
+struct B
+  name: String
+attempt 'cast', ->
+  const value: A | B = A(name: 'a')
+  print (value as B!).name
+attempt 'second traversal', ->
+  const it = (x for x in xs)
+  print x for x in it
+  print x for x in it
+attempt 'next past the end', ->
+  const it = (x for x in xs)
+  it.next()
+  it.next()
+  print it.next()
+class Node
+  next: Node?
+class Holder
+  weak! node: Node
+const holder = () ->
+  const node = Node(next: nil)
+  Holder(node)
+attempt 'weak', -> print holder().node.next == nil
+attempt 'read', -> print read_file('/no/such/file').length
+attempt 'write', -> write_file '/no/such/dir/file', 'x'.binary

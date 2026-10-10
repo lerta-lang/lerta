@@ -208,6 +208,8 @@ LertaArray *lerta_map_keys(const LertaMap *map);
 // Iters (iter.c). Starting a traversal of an Iter that has started one throws, and so does next
 // past the end.
 void lerta_iter_start(LertaIter *iter);
+void lerta_raise_iter_ended(void);
+// What the seed's generated code calls instead, until the seed is refreshed.
 _Noreturn void lerta_throw_iter_ended(void);
 
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
@@ -274,13 +276,35 @@ typedef struct {
 } LertaException;
 extern LertaException lerta_exception;
 
+// The message of the pending exception, owned, which the first entry of an Error's itab gives.
+LertaString *lerta_exception_message(void);
+
 // Frees an object whose construction threw, once the caller has released its fields; its deinit
 // does not run.
 void lerta_free_unfinished(void *object);
 
-// A throw of a String, and the runtime's own, print the message to stderr and exit.
+// The kinds of the runtime's errors, by their types in std:builtins, in the order of
+// RUNTIME_ERRORS in compiler/checker/interface_values.lerta.
+typedef enum {
+  LERTA_INDEX_ERROR,
+  LERTA_ARITHMETIC_ERROR,
+  LERTA_NIL_ERROR,
+  LERTA_CAST_ERROR,
+  LERTA_ITER_ERROR,
+  LERTA_WEAK_ERROR,
+  LERTA_IO_ERROR,
+  LERTA_VALUE_ERROR
+} LertaErrorKind;
+
+// Throws an error of the kind with the message, borrowed: sets the pending exception, which the
+// generated code checks after the call, and the caller returns at once. The program registers
+// the function that makes the error (see lerta_register_raise); without one, as in a program
+// built by an older seed, it stops the program as lerta_throw does.
+void lerta_raise(LertaErrorKind kind, const LertaString *message);
+void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
+
+// A throw of a String prints the message to stderr and exits.
 _Noreturn void lerta_throw(const LertaString *message);
-_Noreturn void lerta_throw_index_out_of_range(void);
 // Returns false if any output to stdout has failed.
 bool lerta_stdout_flush(void);
 void lerta_stderr_write(const uint8_t *bytes, int64_t length);
@@ -290,5 +314,6 @@ enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign
 // Writes the decimal text of n at the end of buffer and returns where it starts.
 int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
 _Noreturn void lerta_panic(const char *message);
+_Noreturn void lerta_panic_with(const char *prefix, const LertaString *message);
 
 #endif

@@ -49,6 +49,11 @@ int64_t lerta_run(const LertaString *command, const LertaArray *args) {
   bool ran = valid && lerta_os_run(c_args, &exit_code);
   for (int64_t i = 0; i < count; i++) free(c_args[i]);
   free(c_args);
-  if (!ran) lerta_throw(lerta_string_concat(2, &cannot_run, command));
+  if (!ran) {
+    LertaString *message = lerta_string_concat(2, &cannot_run, command);
+    lerta_raise(LERTA_IO_ERROR, message);
+    lerta_release(message);
+    return 0;
+  }
   return exit_code;
 }
