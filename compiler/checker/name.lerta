@@ -1,6 +1,6 @@
 # Types the names that expressions use: locals, the module's functions, the names it imports and
 # the builtins, in that order.
-import { Expression, Identifier } from '../ast'
+import { Expression, FunctionLiteral, Identifier } from '../ast'
 import { captured } from './closure'
 import { fail } from './diagnostics'
 import { function_type_of, generic_function, has_function } from './functions'
@@ -20,6 +20,20 @@ export const lookup = (body: Body, name: String) ->
   if body.sees_top_level
     return top_level if const top_level = body.shared.top_level.locals[name]
   value_local body.shared, name
+
+# The declaration of the top-level function written in Lerta that the callee names, if it does, as
+# type_of_identifier finds it.
+export const named_function_literal = (body: Body, callee: Expression): FunctionLiteral? ->
+  return nil if not (callee is Identifier)
+  const { program, shared } = body
+  const name = callee.name
+  return nil if lookup(body, name) != nil
+  return entry.literal if const entry = shared.functions.entries[name]
+  const imported = shared.imports.names[name]
+  const builtin = () -> builtin_export(shared, name)
+  const exported = imported then imported_export(program, imported) else builtin()
+  return nil if not (exported is FunctionExport)
+  program.shared[exported.module_index].functions.entries[exported.name]!.literal
 
 # A builtin or a standard module's function can only be called so far, not used as a value.
 export const type_of_identifier = (body: Body, identifier: Identifier, is_callee: Bool) ->

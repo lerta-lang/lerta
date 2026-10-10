@@ -13,6 +13,7 @@ import {
   is_empty_map, type_of_array, type_of_empty_map, type_of_index, type_of_map
 } from './collection'
 import { fail } from './diagnostics'
+import { required_params } from './functions'
 import {
   enum_parse_type, type_of_elided_member, type_of_literal_member, type_of_qualified_member
 } from './enums'
@@ -22,7 +23,7 @@ import { std_interface } from './interfaces'
 import { byte_literal } from './literals'
 import { check_loop_jump, type_of_comprehension } from './loop'
 import { type_of_method_call, type_of_property } from './member'
-import { generic_callee, type_of_identifier } from './name'
+import { generic_callee, named_function_literal, type_of_identifier } from './name'
 import { constructed_type, type_of_construction, type_of_record, type_of_this } from './object'
 import { type_of_binary, type_of_coalesce, type_of_unary } from './operator'
 import { check_return } from './result'
@@ -98,31 +99,43 @@ const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
   if callee is Member
     if const parse = enum_parse_type(body, callee)
       reject_type_arguments body, call
-      return check_arguments(body, call, set_type(body, callee, parse))
+      return check_arguments(body, call, set_type(body, callee, parse), nil)
     return type_of_method_call(body, call, callee, expected)
   const callee_type = case callee
     when Identifier then set_type(body, callee, type_of_identifier(body, callee, true))
     else type_of(body, callee, nil)
-  check_arguments body, call, callee_type
+  check_arguments body, call, callee_type, named_function_literal(body, callee)
 
 export const reject_type_arguments = (body: Body, call: Call) ->
   return if call.type_args.length == 0
   const generics = 'a generic function, method, class or struct'
   fail body.program, call.callee.position, "only #{generics} takes type arguments"
 
-# The result of a call of a function of the type, once its arguments are checked.
-export const check_arguments = (body: Body, call: Call, callee_type: Type) ->
+# The result of a call of a function of the type, once its arguments are checked. `declaration`,
+# the function's literal if the call knows it, tells the parameters that may be left out.
+export const check_arguments = (
+  body: Body, call: Call, callee_type: Type, declaration: FunctionLiteral?
+) ->
   const program = body.program
   if not (callee_type is FunctionType)
     fail program, call.position, "cannot call a value of type #{format_type(callee_type)}"
   const params = callee_type.params
   if call.named_args.length > 0
     gather_named_args body, call, params.length > 0 then params.last() else nil
-  if call.args.length != params.length
-    const message = "expected #{params.length} argument(s), got #{call.args.length}"
-    fail program, call.position, message
-  expect_type body, call.args[i], params[i] for i in 0...params.length
+  check_argument_count body, call, params.length, declaration
+  expect_type body, call.args[i], params[i] for i in 0...call.args.length
   callee_type.result
+
+# A call gives every parameter, or leaves out some of those with defaults, from the last.
+export const check_argument_count = (
+  body: Body, call: Call, param_count: Int, declaration: FunctionLiteral?
+) ->
+  const required = declaration then required_params(declaration) else param_count
+  const count = call.args.length
+  return if count >= required and count <= param_count
+  const range = required == param_count then '' else "#{required} to "
+  const expected = "#{range}#{param_count}"
+  fail body.program, call.position, "expected #{expected} argument(s), got #{count}"
 
 # Named arguments are the fields of an anonymous struct for the last parameter: `draw(x: 1, y: 2)`
 # is `draw({ x: 1, y: 2 })`. The call is rewritten into that form so that codegen, which reads

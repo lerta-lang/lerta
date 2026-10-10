@@ -31,6 +31,9 @@ const within_finally = Jumps(
   may_return: false, may_leave_loop: false, reason: 'cannot leave a try that has a finally yet'
 )
 
+# A default is computed by an entry of its own (see generate_default_entry), before the body.
+const in_default = Jumps(may_return: false, may_leave_loop: false, reason: 'cannot be in a default')
+
 export const reject_misplaced_jumps = (program: ProgramWide, statements: Array<Statement>) ->
   visit_statements program, statements, all_jumps
 
@@ -100,7 +103,10 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
       if const finally_body = expression.finally_body
         visit_statements program, finally_body, within_finally
     # No loop is outside a function; a jump out of none is an error of its own.
-    when FunctionLiteral then visit_statements program, expression.body, all_jumps
+    when FunctionLiteral
+      for param in expression.params
+        visit program, default, in_default if const default = param.default
+      visit_statements program, expression.body, all_jumps
     when Interpolation
       for part in expression.parts
         operand part if part is Call

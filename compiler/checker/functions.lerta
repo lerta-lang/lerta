@@ -2,13 +2,15 @@
 # in the module, before their declaration too, so a body is checked on demand: when its return
 # type is first needed, or at the end. A generic function's are checked per instance (see
 # GenericFunction).
-import { FunctionLiteral, Identifier, Position } from '../ast'
+import {
+  BooleanLiteral, Expression, FunctionLiteral, Identifier, IntegerLiteral, Position, StringLiteral
+} from '../ast'
 import { check_function } from './bodies'
 import { fail } from './diagnostics'
 import { GenericFunction, GenericRef } from './generics'
 import { ProgramWide, Shared } from './shared'
 import { module_resolver, resolve, resolve_result, Resolver } from './type_names'
-import { FunctionType, Type } from '../types'
+import { bool_type, FunctionType, int_type, string_type, Type } from '../types'
 
 # Where the checking of a function or a type is, so that a cycle is found when it reaches one
 # that is still being checked.
@@ -47,8 +49,20 @@ export const parameter_types = (
     const expected_type = i < expected.length then expected[i] else nil
     const { name, position } = param.name
     const message = "the type of the parameter '#{name}' must be written"
-    types.push expected_type ? fail(program, position, message)
+    types.push expected_type ? literal_type(param.default) ? fail(program, position, message)
   types
+
+# The type of a default that is a literal of one type alone.
+const literal_type = (value: Expression?): Type? ->
+  case value
+    when IntegerLiteral then int_type
+    when StringLiteral then string_type
+    when BooleanLiteral then bool_type
+    else nil
+
+# The number of parameters that a call must give: those before the first with a default.
+export const required_params = (literal: FunctionLiteral) ->
+  literal.params.find_index((param) -> param.default != nil) ? literal.params.length
 
 # The function's type, if its return type is written; otherwise only its body tells.
 export const annotated_type = (
@@ -62,6 +76,13 @@ export const annotated_type = (
 export const reject_generic = (program: ProgramWide, literal: FunctionLiteral) ->
   return if literal.type_params.length == 0
   fail program, literal.position, 'only a top-level function or a method can be generic so far'
+
+# Only top-level functions and methods, whose calls know their declarations, take defaults: a
+# function value's type does not tell them.
+export const reject_defaults = (program: ProgramWide, literal: FunctionLiteral) ->
+  const param = literal.params.find((each) -> each.default != nil) ? return
+  const message = 'only a top-level function or a method can have a default so far'
+  fail program, param.default!.position, message
 
 export const add_function = (
   shared: Shared, key: String, name: Identifier, literal: FunctionLiteral, this_type: Type?

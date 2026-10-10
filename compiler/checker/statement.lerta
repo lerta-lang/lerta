@@ -7,7 +7,7 @@ import {
 import { check_assignment } from './assignment'
 import { fail, warn_if_unused } from './diagnostics'
 import { expect_condition, expect_optional, expect_type, type_of } from './expression'
-import { has_function } from './functions'
+import { has_function, required_params } from './functions'
 import { has_import } from './imports'
 import { has_declared_type } from './interfaces'
 import { check_for, check_while } from './loop'
@@ -40,7 +40,8 @@ export const check_initializers = (body: Body, info: ObjectInfo, self: SelfConte
 
 # The parameters are borrowed locals. The last statement gives the return value. A method's body
 # also has `@`, the object, as a local that cannot be written in the source. `holds`, a condition
-# known to hold where the body runs, narrows the parameters it tests.
+# known to hold where the body runs, narrows the parameters it tests. A parameter's default sees
+# `@` and the parameters before it, which are computed before it (see generate_default_entry).
 export const check_function_body = (
   body: Body, literal: FunctionLiteral, params: Array<Type>, holds: Expression?
 ) ->
@@ -49,8 +50,15 @@ export const check_function_body = (
       const identifier = Identifier(name: '@', position: literal.position)
       const object = Local(identifier, type: self.type, mutable: false, declared: false, used: true)
       body.scopes.define '@', object
+    const required = required_params(literal)
     for i in 0...literal.params.length
       const identifier = literal.params[i].name
+      if const default = literal.params[i].default
+        expect_type body, default, params[i]
+      else if i > required
+        const reason = 'as those before it have'
+        const message = "the parameter '#{identifier.name}' needs a default, #{reason}"
+        fail body.program, identifier.position, message
       const param = Local(identifier, type: params[i], mutable: false, declared: false, used: false)
       define_local body, param
     narrow_where_holds body, holds if holds

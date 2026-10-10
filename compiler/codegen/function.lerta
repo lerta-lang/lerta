@@ -5,10 +5,12 @@ import {
   Import, InterfaceDeclaration, Jump, Pass, Return, Statement, TypeAlias, TypeDeclaration, While
 } from '../ast'
 import { imported_export, ValueExport } from '../checker/imports'
+import { required_params } from '../checker/functions'
 import { FieldInfo, info_of, is_argument, ObjectInfo } from '../checker/object_types'
 import { Capture } from '../checker/shared'
 import { all_but_last } from '../checker/statement'
 import { generate_assignment } from './assignment'
+import { call_user_function } from './call'
 import {
   CELL_SLOT, emit_capture_pointer, emit_closure, emit_static_closure, function_type_of
 } from './closure'
@@ -24,8 +26,8 @@ import {
   value_field
 } from './heap_object'
 import {
-  constructor_symbol, emit_release, emit_release_stored, emit_retain, emit_retain_value
-  ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol
+  constructor_symbol, default_entry_symbol, emit_release, emit_release_stored, emit_retain
+  emit_retain_value, ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol
 } from './lerta_ir'
 import { emit_mark_initialized, emit_release_globals } from './top_level'
 import { is_kind, ObjectType, Type } from '../types'
@@ -125,6 +127,43 @@ export const generate_function = (
   param_list.push "#{ir_type(this_type)} %this" if this_type
   param_list.push "#{ir_type(type.params[i])} %p#{i}" for i in 0...type.params.length
   finish g, "#{ir_return_type(type.result)} #{symbol}(#{param_list.join(', ')})"
+  for given in required_params(literal)...literal.params.length
+    const entry_generator = function_generator(g.code, g.extensions, g.facts)
+    generate_default_entry entry_generator, symbol, literal, this_type, given
+
+# The entry that takes the first `given` arguments, borrowed, and the object of a method; computes
+# the defaults of the others in order, each seeing `@` and the parameters before it; and calls the
+# function with them all.
+const generate_default_entry = (
+  g: Generator, symbol: String, literal: FunctionLiteral, this_type: Type?, given: Int
+) ->
+  const type = function_type_of(type_of(g, literal))
+  g.result_type = type.result
+  const scope = g.locals.push()
+  scope['@'] = ValueLocal(operand: '%this', type: this_type) if this_type
+  const operands: Array<String> = []
+  for i in 0...literal.params.length
+    const param = literal.params[i]
+    const param_type = type.params[i]
+    if i < given
+      scope[param.name.name] = ValueLocal(operand: "%p#{i}", type: param_type)
+      operands.push "%p#{i}"
+    else
+      const value = generate(g, param.default!)
+      scope[param.name.name] = store_in_slot(g, value, param_type)
+      operands.push value
+  const args: Array<String> = []
+  args.push "#{ir_type(this_type)} %this" if this_type
+  args.push "#{ir_type(type.params[i])} #{operands[i]}" for i in 0...operands.length
+  const result = call_user_function(g.ir, symbol, type, args.join(', '))
+  emit_exception_check g
+  emit_return g, result
+  g.locals.pop()
+  const params: Array<String> = []
+  params.push "#{ir_type(this_type)} %this" if this_type
+  params.push "#{ir_type(type.params[i])} %p#{i}" for i in 0...given
+  const entry = default_entry_symbol(symbol, given)
+  finish g, "#{ir_return_type(type.result)} #{entry}(#{params.join(', ')})"
 
 # The last statement returns its value, if it is an expression and the function has a result.
 const generate_last_statement = (g: Generator, body: Array<Statement>, result: Type) ->

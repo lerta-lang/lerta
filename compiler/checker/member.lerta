@@ -1,6 +1,6 @@
 # Types the members of values: method calls, `x.name(...)`, and properties, `x.name`; and finds
 # the member of a name that an interface reads.
-import { Call, Identifier, Member, This } from '../ast'
+import { Call, FunctionLiteral, Identifier, Member, This } from '../ast'
 import { builtin_property } from './builtins'
 import { fail } from './diagnostics'
 import { check_arguments, reject_type_arguments, set_type, type_of } from './expression'
@@ -14,6 +14,7 @@ import {
   BuiltinMethod, ExtensionSource, find_method, InterfaceMethod, MethodSource, OwnMethod
 } from './methods'
 import { method_owner, object_method_type } from './object'
+import { info_of } from './object_types'
 import { find_interface_extension } from './satisfaction'
 import { Body } from './shared'
 import { format_type, Type, UnionType } from '../types'
@@ -26,10 +27,18 @@ export const type_of_method_call = (body: Body, call: Call, member: Member, expe
   const generic = generic_method(source)
   if generic == nil
     reject_type_arguments body, call
-    return check_arguments(body, call, type_of_method(body, member, receiver, source))
+    const method = type_of_method(body, member, receiver, source)
+    return check_arguments(body, call, method, method_literal_of(body, source, member))
   const method = type_of_generic_method_call(body, call, member, generic, receiver, expected)
   set_type body, member, method
   method.result
+
+# The declaration of a method written in Lerta.
+const method_literal_of = (body: Body, source: MethodSource?, member: Member): FunctionLiteral? ->
+  case source
+    when OwnMethod then info_of(body.program, source.receiver).methods[member.name.name]
+    when ExtensionSource then source.method.literal
+    else nil
 
 export const generic_method = (source: MethodSource?) ->
   return nil if source == nil

@@ -17,7 +17,8 @@ import { emit_interface_call } from './interface'
 import { IrBuilder } from './ir_builder'
 import { call_iter_method, is_iter_method } from './iter'
 import {
-  constructor_symbol, emit_release, extension_symbol, instance_symbol, ir_return_type, ir_type
+  constructor_symbol, default_entry_symbol, emit_release, extension_symbol, instance_symbol
+  ir_return_type, ir_type
   method_symbol, returns_nothing
 } from './lerta_ir'
 import { call_map_method, emit_map_new } from './map'
@@ -119,16 +120,18 @@ const lerta_method_symbol = (g: Generator, source: MethodSource, name: String, c
       instance_symbol g.code.program, g.facts.instances[call]!
     else throw 'a builtin method is not written in Lerta'
 
-# Calls a function written in Lerta by its symbol; a method gets `receiver`, its object as an IR
-# argument, first.
+# Calls a function written in Lerta by its symbol, or by the entry that computes the defaults of
+# the arguments left out; a method gets `receiver`, its object as an IR argument, first.
 const call_function = (
   g: Generator, symbol: String, type: Type, args: Array<Expression>, receiver: String?
 ) ->
+  const left_out = args.length < function_type_of(type).params.length
+  const target = left_out then default_entry_symbol(symbol, args.length) else symbol
   const emit_call = (operands: Array<String>) ->
     const all_args: Array<String> = []
     all_args.push receiver if receiver
     all_args.append typed_arguments(g, args, operands)
-    call_user_function g.ir, symbol, type, all_args.join(', ')
+    call_user_function g.ir, target, type, all_args.join(', ')
   const result = with_arguments(g, args, emit_call)
   # A method's receiver is released after the check.
   emit_exception_check g if receiver == nil
