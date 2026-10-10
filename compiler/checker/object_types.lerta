@@ -25,8 +25,9 @@ export class FieldInfo
   # Nil until found, for a field given by an initializer alone.
   type: Type?
   mutable: Bool
-  # A field without an initializer is a constructor argument.
+  # The initializer, or the default of a constructor argument (see is_argument).
   value: Expression?
+  has_default: Bool
   # A `weak!` field holds its object without keeping it alive (see codegen weak).
   weak: Bool
 
@@ -55,6 +56,9 @@ export class ObjectInfo
   state: CheckState = UNCHECKED
   # Of a generic class or struct, whose type arguments make them.
   instances: Array<ObjectInfo> = []
+
+# A field without an initializer, or with a default, is a constructor argument.
+export const is_argument = (field: FieldInfo) -> field.value == nil or field.has_default
 
 export const is_generic_object = (info: ObjectInfo) -> info.declaration.type_params.length > 0
 
@@ -147,7 +151,7 @@ const field_of_member = (shared: Shared, info: ObjectInfo, member: MemberDeclara
   const weak = member.modifier == 'weak!'
   reject_invalid_weak program, member, is_struct, type if weak
   const mutable = not is_struct and member.modifier != 'const' and not weak
-  FieldInfo type, mutable, value, weak, name: member.name
+  FieldInfo type, mutable, value, weak, name: member.name, has_default: member.has_default
 
 # A `weak!` field is a constructor argument of a class, which holds an object of a class.
 const reject_invalid_weak = (
@@ -183,10 +187,10 @@ const add_instance = (generic: ObjectInfo, type: ObjectType) ->
   const resolver = with_type_parameters(module_resolver(module_index), type_bindings)
   const info = ObjectInfo(declaration, type, module_index, resolver, generic, facts: NodeFacts())
   const instance_field = (field: FieldInfo) ->
-    const { name, mutable, value, weak } = field
+    const { name, mutable, value, has_default, weak } = field
     const field_type = field.type
     const type = field_type then substitute(field_type, type_bindings) else nil
-    FieldInfo name, type, mutable, value, weak
+    FieldInfo name, type, mutable, value, has_default, weak
   info.fields = [instance_field(field) for field in generic.fields]
   info.methods = generic.methods
   info.generics = generic.generics

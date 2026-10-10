@@ -15,13 +15,10 @@ When a feature is implemented, its description moves to [the reference](../refer
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
 - `runtime/iter.c` keeps `lerta_throw_iter_ended`, which the seed's generated code calls, and code of the programs that the seed builds stops at any error of the runtime (see [internals](../internals.md#exceptions)). Remove the function at the next seed refresh.
+- In the compiler, some 37 constructions pass a field's usual value, as `Local(..., mutable: false, declared: false, used: false)`. After the next seed refresh, give those fields [defaults](../reference/objects.md) and leave the values out.
 
 ## Open questions
 
 Questions of one area are in its file. These span areas:
 
-- Default values of parameters and of constructor arguments. In the compiler, some 37 constructions pass a field's usual value, as `Local(..., mutable: false, declared: false, used: false)`. A field with an initializer is not an argument now (see [objects](../reference/objects.md)), so a default needs a way to tell such a field from an argument. Candidates:
-  - Every field with an initializer, other than a method, is an argument with that default. One rule fewer, but a value computed in the body can then be overridden from outside.
-  - The arguments are written after the type's name, `class Local(identifier: Identifier, mutable = false)`, with defaults as a function's parameters would have them, and the body holds the computed fields. Every class and struct is rewritten.
-  - A field with an initializer is marked as an argument (`arg mutable = false`). Nothing else changes, but there is one more keyword.
 - The scope of runtime type information (whether to keep field names).

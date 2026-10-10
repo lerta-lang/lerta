@@ -5,7 +5,7 @@ import {
   Import, InterfaceDeclaration, Jump, Pass, Return, Statement, TypeAlias, TypeDeclaration, While
 } from '../ast'
 import { imported_export, ValueExport } from '../checker/imports'
-import { FieldInfo, info_of, ObjectInfo } from '../checker/object_types'
+import { FieldInfo, info_of, is_argument, ObjectInfo } from '../checker/object_types'
 import { Capture } from '../checker/shared'
 import { all_but_last } from '../checker/statement'
 import { generate_assignment } from './assignment'
@@ -140,9 +140,10 @@ const generate_last_statement = (g: Generator, body: Array<Statement>, result: T
   else
     emit_return g, ''
 
-# Takes the constructor arguments (the fields without an initializer, in order) borrowed, as
-# for any call; then computes the other fields in order, and runs `init` last. An exception on the
-# way releases the fields, which start as nil, and frees the object without running its deinit.
+# Takes the constructor arguments (see is_argument, in order) borrowed, as for any call; then
+# computes the other fields, and the defaults of the arguments not given, in order, and runs `init`
+# last. An exception on the way releases the fields, which start as nil, and frees the object
+# without running its deinit.
 export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   const ir = g.ir
   g.result_type = info.type
@@ -156,23 +157,55 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
       emit_release_stored ir, field_pointer(field), ir_type(type), ownership(type)
     ir.module.declare 'lerta_free_unfinished', 'declare void @lerta_free_unfinished(ptr)'
     ir.emit "call void @lerta_free_unfinished(ptr #{object})"
-  const arguments = [field for field in info.fields when field.value == nil]
-  for i in 0...arguments.length
-    const field = arguments[i]
-    emit_retain_value ir, "%p#{i}", field.type! if not field.weak
-    store_field g, object, info, field, "%p#{i}"
+  const arguments = [field for field in info.fields when is_argument(field)]
+  const store_argument = (field: FieldInfo) ->
+    const param = "%p#{argument_index(arguments, field)}"
+    emit_retain_value ir, param, field.type! if not field.weak
+    store_field g, object, info, field, param
+  store_argument field for field in arguments when not field.has_default
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
-    store_field g, object, info, field, generate(g, value) if const value = field.value
+    const value = field.value ? continue
+    const compute = () -> store_field(g, object, info, field, generate(g, value))
+    if field.has_default
+      emit_default_or_argument g, arguments, field, compute, () -> store_argument(field)
+    else
+      compute()
   g.locals.pop()
   const init = special_method_symbol(g.code.program, info, 'init')
   if info.has_init
     ir.emit "call void #{init}(ptr #{object})"
     emit_exception_check g
   ir.emit "ret ptr #{object}"
-  const params = ["#{ir_type(arguments[i].type!)} %p#{i}" for i in 0...arguments.length]
+  const params: Array<String> = []
+  for i in 0...arguments.length
+    params.push "#{ir_type(arguments[i].type!)} %p#{i}"
+    params.push "i1 %given#{i}" if arguments[i].has_default
   finish g, "ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
+
+const argument_index = (arguments: Array<FieldInfo>, field: FieldInfo) ->
+  arguments.find_index((each) -> each == field)!
+
+# An argument with a default comes with whether it is given (see generate_construction); if it is
+# not, its default is computed in its place among the initializers.
+const emit_default_or_argument = (
+  g: Generator, arguments: Array<FieldInfo>, field: FieldInfo, compute: () -> void
+  store_argument: () -> void
+) ->
+  const ir = g.ir
+  const given = "%given#{argument_index(arguments, field)}"
+  const given_label = ir.fresh_label('argument.given')
+  const default_label = ir.fresh_label('argument.default')
+  const end_label = ir.fresh_label('argument.end')
+  ir.emit "br i1 #{given}, label %#{given_label}, label %#{default_label}"
+  ir.start_block given_label
+  store_argument()
+  ir.emit "br label %#{end_label}"
+  ir.start_block default_label
+  compute()
+  ir.emit "br label %#{end_label}"
+  ir.start_block end_label
 
 const store_field = (
   g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String

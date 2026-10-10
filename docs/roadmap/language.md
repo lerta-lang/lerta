@@ -6,7 +6,7 @@ The planned syntax, control flow, types, operators and strings.
 
 - Multi-line strings use `"""..."""`. The common leading indentation is removed, measured from the position of the closing `"""` (the Swift approach).
 - For `var x: T?` the initial value may be omitted; it defaults to nil.
-- Variadic parameters are `xs...`. Default parameter values are an [open question](README.md#open-questions).
+- Variadic parameters are `xs...`. A parameter may have a default value, `(x: Int, y = 0)`, which a call may leave out; a constructor argument has one by `default` (see [objects](../reference/objects.md)).
 - An item inside brackets may open an indented block (a `case`, a function body).
 
 ## Control flow

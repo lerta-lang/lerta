@@ -8,7 +8,7 @@ import { fail } from './diagnostics'
 import { expect_type, reject_type_arguments, require_type, type_of } from './expression'
 import { function_type_of, has_function, method_key } from './functions'
 import { lookup } from './name'
-import { info_of, object_type, ObjectInfo } from './object_types'
+import { field_type, info_of, is_argument, object_type, ObjectInfo } from './object_types'
 import { Body } from './shared'
 import { instantiate_object } from './type_names'
 import { needs_context } from './type_argument_inference'
@@ -28,9 +28,10 @@ export const constructed_type = (body: Body, callee: Expression) ->
   body.facts.types[callee] = type
   type
 
-# Every argument is named. Fields without an initializer are the arguments; an optional one may
-# be left out and is then nil. A generic class or struct takes its type arguments as written, or
-# as the expected type and the arguments give them (see constructed_instance).
+# Every argument is named. The arguments are the fields without an initializer or with a default
+# (see is_argument). One with a default may be left out, and then has its default; so may an
+# optional one, which is then nil. A generic class or struct takes its type arguments as written,
+# or as the expected type and the arguments give them (see constructed_instance).
 export const type_of_construction = (
   body: Body, call: Call, declared: ObjectType, expected: Type?
 ) ->
@@ -45,26 +46,30 @@ export const type_of_construction = (
     const { name, position } = arg.name
     fail program, position, "the argument '#{name}' is given twice" if given.has(name)
     given.add name
-    const field = argument_field(body, info, arg)
+    const field_type = argument_type(body, info, arg)
     const value = arg.value
     if const value_type = typed[value]
-      require_type body, value, value_type, field.type!
+      require_type body, value, value_type, field_type
     else
-      expect_type body, value, field.type!
+      expect_type body, value, field_type
   for field in info.fields
     const is_required = field.value == nil and not (field.type! is OptionalType)
     if is_required and not given.has(field.name.name)
       fail program, call.position, "missing argument '#{field.name.name}'"
   type
 
-# The field that a named argument gives, which must be one without an initializer.
+# The field that a named argument gives, which must be an argument (see is_argument).
 const argument_field = (body: Body, info: ObjectInfo, arg: NamedValue) ->
   const { name, position } = arg.name
   const type = format_type(info.type)
   const no_field = () -> fail(body.program, position, "#{type} has no field '#{name}'")
   const field = info.fields.find((each) -> each.name.name == name) ? no_field()
-  fail body.program, position, "#{type} computes its field '#{name}'" if field.value != nil
+  fail body.program, position, "#{type} computes its field '#{name}'" if not is_argument(field)
   field
+
+# The type of the field that a named argument gives, which its default alone may give.
+const argument_type = (body: Body, info: ObjectInfo, arg: NamedValue) ->
+  field_type body.program, info, argument_field(body, info, arg), arg.name.position
 
 # The type that the call constructs: the declared class or struct, or an instance of a generic
 # one. Its type arguments are those written, or else those that the expected type gives, then the
@@ -91,13 +96,13 @@ const constructed_instance = (
   const infer_from = (arg: NamedValue, expected_type: Type?) ->
     const type = type_of(body, arg.value, expected_type)
     typed[arg.value] = type
-    infer argument_field(body, info, arg).type!, type, bind
+    infer argument_type(body, info, arg), type, bind
   const is_literal = (arg: NamedValue) -> needs_context(body, arg.value)
   infer_from arg, nil for arg in call.named_args when not is_literal(arg)
   # A literal whose field's type is still unknown gives its own type, as `1` an Int.
   for arg in call.named_args
     continue if not is_literal(arg)
-    const pattern = substitute(argument_field(body, info, arg).type!, type_bindings)
+    const pattern = substitute(argument_type(body, info, arg), type_bindings)
     continue if not has_type_parameters(pattern)
     infer_from arg, arg.value is FunctionLiteral then pattern else nil
   const args: Array<Type> = []
