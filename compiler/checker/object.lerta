@@ -82,29 +82,62 @@ export const type_of_this = (body: Body, at: Expression) ->
 
 # The type of the field `member` names, of a class, a struct or an anonymous struct.
 export const field_type = (body: Body, object_type: Type, member: Member) ->
-  if object_type is RecordType
-    const field = object_type.fields.find((each) -> each.name == member.name.name) ? return nil
-    return field.type
+  return field_type_by_name(body, object_type, member.name) if object_type is RecordType
   const field = field_of(body, object_type, member) ? return nil
   field.type
+
+# The type of the field of the name, of a class, a struct or an anonymous struct, read from outside
+# its initializers.
+export const field_type_by_name = (body: Body, object_type: Type, name: Identifier): Type? ->
+  if object_type is RecordType
+    return object_type.fields.find((each) -> each.name == name.name)?.type
+  field_by_name(body, object_type, name)?.type
+
+# The field of the name, with its type, if the object is a class or struct.
+const field_by_name = (body: Body, object_type: Type, name: Identifier) ->
+  return nil if not (object_type is ObjectType)
+  const program = body.program
+  const object = info_of(program, object_type)
+  const field = object.fields.find((each) -> each.name.name == name.name) ? return nil
+  FieldOf info: field, type: info_field_type(program, object, field, name.position)
 
 # The type of the field `member` names, read from a union: every member must have the field, of
 # the same type.
 export const common_field_type = (body: Body, union: UnionType, member: Member) ->
   common_fields(body, union, member)[0].type
 
-# The field in each member of the union, which must all have it, of the same type.
+# The type of the field of the name that can be read from the union, or nil if there is none.
+export const common_field_type_by_name = (body: Body, union: UnionType, name: Identifier) ->
+  const found = find_common_fields(body, union, name)
+  found.problem == nil then found.fields[0].type else nil
+
+# Why the field of the name cannot be read from the union, or nil if it can.
+export const common_field_problem = (body: Body, union: UnionType, name: Identifier) ->
+  find_common_fields(body, union, name).problem
+
 const common_fields = (body: Body, union: UnionType, member: Member) ->
-  const program = body.program
-  const { name, position } = member.name
+  const found = find_common_fields(body, union, member.name)
+  fail body.program, member.name.position, problem if const problem = found.problem
+  found.fields
+
+struct CommonFields
+  fields: Array<MemberField>
+  # Why the field cannot be read from the union, if it cannot.
+  problem: String?
+
+# The field in each member of the union, which must all have it, of the same type.
+const find_common_fields = (body: Body, union: UnionType, name: Identifier) ->
   const fields: Array<MemberField> = []
   for member_type in union.members
-    const not_field = () ->
+    const field = field_by_name(body, member_type, name)
+    if field == nil
       const member_name = format_member(member_type, union)
       const of_union = "a member of #{format_type(union)}"
-      const message = "'#{name}' is not a field of #{member_name}, #{of_union}"
-      fail program, position, message
-    const field = field_of(body, member_type, member) ? not_field()
+      # A union reads only fields; its members' methods are used after branching on the type.
+      const is_method = method_owner(body, member_type, name.name) != nil
+      const kind = is_method then 'a method, not a field,' else 'not a field'
+      const problem = "'#{name.name}' is #{kind} of #{member_name}, #{of_union}"
+      return CommonFields(fields, problem)
     fields.push MemberField(member_type, info: field.info, type: field.type)
   const first = fields[0]
   for i in 1...fields.length
@@ -114,9 +147,9 @@ const common_fields = (body: Body, union: UnionType, member: Member) ->
     const first_member = format_member(first.member_type, union)
     const differing_member = format_member(differing.member_type, union)
     const in_first = "#{types.first} in #{first_member}"
-    const message = "'#{name}' has type #{in_first} but #{types.second} in #{differing_member}"
-    fail program, position, message
-  fields
+    const problem = "'#{name.name}' has type #{in_first} but #{types.second} in #{differing_member}"
+    return CommonFields(fields, problem)
+  CommonFields fields, problem: nil
 
 # The type of a common field assigned through a union: every member must be a class whose field
 # can be changed.
@@ -190,15 +223,14 @@ export const field_target = (body: Body, member: Member) ->
 # initializer, `@x` must name an argument or a field initialized before.
 const field_of = (body: Body, object_type: Type, member: Member) ->
   return nil if not (object_type is ObjectType)
-  const program = body.program
-  const object = info_of(program, object_type)
+  const object = info_of(body.program, object_type)
   const field = object.fields.find((each) -> each.name.name == member.name.name) ? return nil
   const initializing = body.self?.initializing
   if member.object is This and field.value != nil and initializing
     const place = (each: FieldInfo) -> object.fields.find_index((other) -> other == each)!
     if place(field) >= place(initializing)
-      fail program, member.name.position, "'#{field.name.name}' is not initialized yet"
-  FieldOf info: field, type: info_field_type(program, object, field, member.name.position)
+      fail body.program, member.name.position, "'#{field.name.name}' is not initialized yet"
+  field_by_name body, object_type, member.name
 
 # A name alone, `Point(x)`, is short for `Point(x: x)`, as in `{ x }`; a construction has no
 # positional arguments to confuse it with. The call is rewritten into the named form, which every

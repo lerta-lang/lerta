@@ -2,11 +2,12 @@
 # it exports for the modules that import it.
 import {
   Declaration, EnumDeclaration, Exportable, exported_declaration, Extern, FunctionLiteral
-  Identifier, Import, Statement, TypeAlias, TypeDeclaration
+  Identifier, Import, InterfaceDeclaration, Statement, TypeAlias, TypeDeclaration
 } from '../ast'
 import { fail } from './diagnostics'
 import { generic_function } from './functions'
 import { GenericRef } from './generics'
+import { InterfaceInfo } from './interfaces'
 import { BUILTINS_MODULE } from '../loader'
 import { ObjectInfo, object_type } from './object_types'
 import { Local } from './scopes'
@@ -39,10 +40,14 @@ export struct TypeExport
   type: Type
   info: ObjectInfo?
 
+export struct InterfaceExport
+  info: InterfaceInfo
+
 # What a module exports under a name. The names are known from the syntax, so that the modules of
 # an import cycle can import each other's before any is checked; an export itself is worked out
 # when it is asked for.
-export type Export = ExternExport | FunctionExport | GenericExport | ValueExport | TypeExport
+export type Export =
+  ExternExport | FunctionExport | GenericExport | ValueExport | TypeExport | InterfaceExport
 
 # A name of another module, worked out when it is asked for (see export_of).
 export struct ExportRef
@@ -88,6 +93,7 @@ export const export_of = (program: ProgramWide, module_index: Int, name: String)
       const type = object_type(shared, name)!
       TypeExport type, info: program.infos[type.symbol]
     when EnumDeclaration then TypeExport(type: shared.enums[name]!)
+    when InterfaceDeclaration then InterfaceExport(info: shared.interfaces[name]!)
     when TypeAlias then TypeExport(type: alias_type(shared, statement.name))
 
 export const imported_export = (program: ProgramWide, imported: ImportedName): Export ->

@@ -12,15 +12,15 @@ The planned design of classes and structs, interfaces, generics, weak references
 
 ## Interfaces
 
-- User-defined `interface`, a structural type of behavior (static duck typing), dispatched through itabs. No `implements` declaration is needed. It may have default implementations (replacing code reuse through inheritance).
+What is implemented, interfaces as bounds of type parameters, is in [the reference](../reference/objects.md#interfaces). Planned:
+
+- Interface types of values, as `Array<Shape>`, dispatched through itabs (see [internals](../internals.md#interfaces-planned)). Their members are read through the interface, as the bounds' are; a write goes through the concrete type.
+- Default implementations (replacing code reuse through inheritance).
 - Inside an interface, `Self` means "the type that implements it".
-- It may also declare fields (`x: Int`). A class or struct with a field of the same name and type satisfies it structurally.
-  - Fields accessed through an interface are **read-only** (write through the concrete type). There are no getters.
-- A method `area(): Float` can also be satisfied by a function-valued field of the same type (`{ area: -> 3.0 }`).
+- Type parameters of interfaces, as `Div<Rhs, Out>` (see [operator overloading](language.md#operator-overloading)).
 
 ## Generics
 
-- Interfaces as bounds, as in `T: Comparable`.
 - The body of a generic function or method is **checked at definition** against its bounds, instead of per instance (avoiding the C++ template "error deep inside").
 - Generic classes and structs, and generic function literals outside the top level.
 
@@ -36,4 +36,5 @@ The planned design of classes and structs, interfaces, generics, weak references
 ## Open questions
 
 - Whether an extend should be in effect beyond the modules that import its module directly.
+- Whether an interface may declare a writable member (`var count: Int`, satisfied only by a class's `var` field). Its members are read-only for now (see [the reference](../reference/objects.md#interfaces) for why); reconsider if that proves limiting.
 - How to handle conversion from an interface value to another interface (the concrete type is unknown until run time, so a static itab is not enough; forbid it or generate at run time).

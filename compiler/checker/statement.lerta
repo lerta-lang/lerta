@@ -1,17 +1,18 @@
 # Checks statements and blocks, defining the locals they declare; loops are checked by `loop`.
 import {
   Assignment, Binding, Call, Coalesce, Condition, Declaration, EnumDeclaration, Expression, Extend
-  Extern, For, FunctionLiteral, Identifier, If, Import, is_exported, Pass, Statement
-  statement_else_body, TypeAlias, TypeDeclaration, While
+  Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration, is_exported, Pass
+  Statement, statement_else_body, TypeAlias, TypeDeclaration, While
 } from '../ast'
 import { check_assignment } from './assignment'
 import { fail, warn_if_unused } from './diagnostics'
 import { expect_condition, expect_optional, expect_type, type_of } from './expression'
 import { has_function } from './functions'
 import { has_import } from './imports'
+import { has_declared_type } from './interfaces'
 import { check_for, check_while } from './loop'
 import { ends_with_jump, narrow, narrowings_of, narrowings_where } from './narrowing'
-import { object_type, ObjectInfo } from './object_types'
+import { ObjectInfo } from './object_types'
 import { check_last_statement } from './result'
 import { Local } from './scopes'
 import { Body, SelfContext } from './shared'
@@ -115,6 +116,8 @@ export const check_statement = (body: Body, statement: Statement): void ->
     when Assignment then check_assignment body, statement
     when TypeAlias then require_top_level 'a type can only be declared at the top level'
     when EnumDeclaration then require_top_level 'an enum can only be declared at the top level'
+    when InterfaceDeclaration
+      require_top_level 'an interface can only be declared at the top level'
     when Extern then require_top_level 'an extern can only be declared at the top level'
     when Extend then require_top_level 'an extend can only be at the top level'
     when Import then require_top_level 'an import can only be at the top level'
@@ -189,7 +192,7 @@ export const define_local = (body: Body, local: Local) ->
   const is_top_level = body.context == nil and body.scopes.depth() == 1
   const is_taken = case
     when has_function(shared, name) then true
-    when object_type(shared, name) != nil or shared.enums.has(name) then true
+    when has_declared_type(shared, name) then true
     else has_import(shared, name) or has_alias(shared, name)
   fail program, position, "'#{name}' is already defined" if is_top_level and is_taken
   if not body.scopes.define(name, local)

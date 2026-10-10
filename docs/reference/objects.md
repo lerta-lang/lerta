@@ -57,6 +57,31 @@ print [1, 2].second()
 - An extend is in effect in the module that declares it and in the modules that import that module directly, by any import, `import 'module'` included (see [modules](modules.md)). It is not in effect further: a module that imports one of those does not get it.
 - It is an error, at the extend's method, for the method to have the name of a member that the type has already, builtin or of its class or struct, or of a method that another extend in effect in the module gives the same type; extends of a generic type give the same type a method when some type matches both, as `Array<Int>` matches both `extend<T> Array<T>` and `extend Array<Int>`. When two imported modules' extends conflict, the error is at the second import.
 
+## Interfaces
+
+```
+interface Shape
+  area: () -> Int
+  name: String
+
+struct Square
+  side: Int
+  name = 'square'
+  area = (): Int -> @side * @side
+
+const describe = <T: Shape>(shape: T) -> print "#{shape.name}: #{shape.area()}"
+
+describe Square(side: 3)
+describe { name: 'dot', area: -> 0 }
+```
+
+- `interface Name` at the top level, followed by an indented block of members, `name: Type`, one per line, declares what a type must have to satisfy it. Its name is in the namespace of types and values, as a class's is.
+- A type **satisfies** an interface when it has, for each member, a method, a field or a property of the member's name and of exactly its type. Nothing declares that it does (structural typing). A method may come from an extend in effect where it is checked; one with type parameters of its own has no one type, and satisfies no member. A function member, such as `area: () -> Int`, is satisfied alike by a method and by a field that holds a function. A union satisfies a member by a field that every member of it has, of the member's type, as it is read through the union (see [unions](types.md#unions)).
+- So far an interface only bounds type parameters (see [generic functions](functions.md#generic-functions)). It is not a type of values: `Array<Shape>` is an error.
+- Members are read-only: an interface has no member that must be assignable, so its members are written without `const` or `var`, and have no value.
+- Why read-only: a struct's field, a `const` field and a method cannot be assigned, so an assignable member would leave them out, and an assignment whose meaning depended on how the member is satisfied would be a setter.
+- Why exactly the member's type, not one assignable to it: the generic code is checked with the type the member has (see [generic functions](functions.md#generic-functions)), so a `String` field for a member `name: String?` would fail in that code rather than where the type is given.
+
 ## deinit
 
 ```

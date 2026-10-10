@@ -182,7 +182,7 @@ export struct Parameter
   name: Identifier
   type: TypeName?
 
-# `T` in `<T>(x: T) -> x`, or `T: Stringable`, whose type arguments must have `to_string()`.
+# `T` in `<T>(x: T) -> x`, or `T: Shape`, whose type arguments must satisfy the interface Shape.
 export struct TypeParameter
   name: Identifier
   bound: Identifier?
@@ -336,6 +336,14 @@ export class EnumDeclaration
   position: Position
   exported = false
 
+# `interface Name` followed by its members, one per line, each `name: Type`: what a type must have
+# to satisfy it.
+export class InterfaceDeclaration
+  name: Identifier
+  members: Array<MemberDeclaration>
+  position: Position
+  exported = false
+
 # `type Name = A | B`: another name for a type.
 export class TypeAlias
   name: Identifier
@@ -374,7 +382,7 @@ export class Extend
 # The declarations on the second line are those the checker allows only at the top level.
 export type Statement =
   Expression | Declaration | Assignment | If | While | For | Pass
-  Import | TypeDeclaration | EnumDeclaration | TypeAlias | Extern | Extend
+  Import | TypeDeclaration | EnumDeclaration | InterfaceDeclaration | TypeAlias | Extern | Extend
 
 export type Node = Statement | Binding | TypeName
 
@@ -391,7 +399,8 @@ export const statement_else_body = (if_statement: If): Array<Statement> ->
 export const is_exported = (statement: Statement) -> exported_declaration(statement) != nil
 
 # A declaration that `export` can precede.
-export type Exportable = Declaration | TypeDeclaration | EnumDeclaration | TypeAlias | Extern
+export type Exportable =
+  Declaration | TypeDeclaration | EnumDeclaration | InterfaceDeclaration | TypeAlias | Extern
 
 # The statement, if `export` can precede it.
 export const as_exportable = (statement: Statement): Exportable? ->
@@ -399,6 +408,7 @@ export const as_exportable = (statement: Statement): Exportable? ->
     when Declaration then statement
     when TypeDeclaration then statement
     when EnumDeclaration then statement
+    when InterfaceDeclaration then statement
     when TypeAlias then statement
     when Extern then statement
     else nil

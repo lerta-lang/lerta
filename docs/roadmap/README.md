@@ -14,6 +14,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
+- `Stringable` is declared in the compiler (`compiler/checker/interfaces.lerta`), since the seed reads `std/` and cannot parse `interface`. At the next seed refresh, declare it in `std/builtins.lerta` as `export interface Stringable` and remove the compiler's.
 
 ## Open questions
 

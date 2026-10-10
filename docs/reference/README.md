@@ -6,7 +6,7 @@ This reference documents only implemented behavior. The planned design of what i
 |---|---|
 | [syntax.md](syntax.md) | Lexical rules, indentation, declarations, statements and calls |
 | [control-flow.md](control-flow.md) | Blocks, `if`, `while`, `for`, ranges, `case` on conditions, types and values |
-| [objects.md](objects.md) | Classes, structs and `extend` |
+| [objects.md](objects.md) | Classes, structs, `extend` and interfaces |
 | [functions.md](functions.md) | Function declarations, parameters and return values |
 | [types.md](types.md) | Types and their operations |
 | [errors.md](errors.md) | Exceptions and discarded values |

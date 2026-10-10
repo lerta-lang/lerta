@@ -1,16 +1,19 @@
 # Types the members of values: method calls, `x.name(...)`, and properties, `x.name`; and decides
-# which types are Stringable, by their method to_string.
+# which types satisfy interfaces, by their members.
 import { Call, Identifier, Member, Position, This } from '../ast'
 import { builtin_property } from './builtins'
 import { fail } from './diagnostics'
 import { check_arguments, reject_type_arguments, set_type, type_of } from './expression'
 import { plain_method_type } from './extensions'
 import { receiver_instance, type_of_generic_method_call } from './generic_call'
-import { STRINGABLE } from './generics'
+import { InterfaceInfo, InterfaceMember, interface_members, stringable } from './interfaces'
 import { BuiltinMethod, ExtensionSource, find_method, MethodSource, OwnMethod } from './methods'
-import { common_field_type, field_type, method_owner, object_method_type } from './object'
+import {
+  common_field_problem, common_field_type, common_field_type_by_name, field_type, field_type_by_name
+  method_owner, object_method_type
+} from './object'
 import { Body } from './shared'
-import { format_type, FunctionType, is_assignable, string_type, Type, UnionType } from '../types'
+import { format_type, same_type, string_type, Type, UnionType } from '../types'
 
 # The result of a call of the method that `member` names: a method of the object's type (see
 # find_method), or a field that holds a function.
@@ -38,7 +41,10 @@ const type_of_method = (body: Body, member: Member, receiver: Type, source: Meth
   const from_source = source then method_type(body, receiver, source, member.name, nil) else nil
   const no_method = () ->
     fail body.program, position, "type #{format_type(receiver)} has no method '#{name}'"
-  const method = from_source ? field_type(body, receiver, member) ? no_method()
+  const field = case
+    when receiver is UnionType then common_field_type(body, receiver, member)
+    else field_type(body, receiver, member)
+  const method = from_source ? field ? no_method()
   set_type body, member, method
 
 const find = (body: Body, receiver: Type, name: String) ->
@@ -59,32 +65,49 @@ const method_type = (
       const instance = receiver_instance(body, generic, receiver, name.position, call) ? return nil
       instance.entry.type
 
-# The type of `to_string(): String` of the type, if it is Stringable; a field that holds a
-# function does not count.
-const stringable_method = (body: Body, type: Type, at: Position, call: Call?) ->
-  const name = Identifier(position: at, name: 'to_string')
-  const source = find(body, type, name.name) ? return nil
-  const method = method_type(body, type, source, name, call) ? return nil
-  return nil if not (method is FunctionType)
-  method.params.length == 0 and is_assignable(method.result, string_type) then method else nil
+# The type of the member of the type that an interface reads by the name: of a method, or of a
+# field or a property, or of a field of every member of a union, as `x.name` reads it; nil if it
+# has none. `call`, if given, calls a generic method.
+const member_type_by_name = (body: Body, type: Type, name: Identifier, call: Call?): Type? ->
+  if const source = find(body, type, name.name)
+    return method_type(body, type, source, name, call)
+  return common_field_type_by_name(body, type, name) if type is UnionType
+  return field if const field = field_type_by_name(body, type, name)
+  return property if const property = builtin_property(type, name.name)
+  nil
 
-# Rejects a type that is not Stringable.
-export const reject_not_stringable = (body: Body, type: Type, at: Position) ->
-  fail_not_stringable body, type, at if stringable_method(body, type, at, nil) == nil
+# Rejects a type that does not satisfy the interface.
+export const reject_unsatisfied = (body: Body, type: Type, bound: InterfaceInfo, at: Position) ->
+  for member in interface_members(body.program, bound)
+    satisfying_type body, type, bound, member, Identifier(position: at, name: member.name), nil
 
-const fail_not_stringable = (body: Body, type: Type, at: Position) ->
-  const message = "#{format_type(type)} is not #{STRINGABLE}: it has no method to_string(): String"
-  fail body.program, at, message
+# The type of the type's member that satisfies the interface's member, which must be of exactly
+# the member's type. Not merely of a type assignable to it: the generic code is checked with the
+# type it has.
+const satisfying_type = (
+  body: Body, type: Type, bound: InterfaceInfo, member: InterfaceMember, name: Identifier
+  call: Call?
+) ->
+  const found = member_type_by_name(body, type, name, call)
+  return found if found and same_type(found, member.type)
+  const expected = format_type(member.type)
+  const reason = case
+    when found then "its #{member.name} is of type #{format_type(found)}, not #{expected}"
+    # Only a generic method has no type without a call.
+    when find(body, type, name.name) then "its #{member.name} has type parameters of its own"
+    when type is UnionType then common_field_problem(body, type, name)!
+    else "it has no #{member.name} of type #{expected}"
+  fail body.program, name.position, "#{format_type(type)} does not satisfy #{bound.name}: #{reason}"
 
 # `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
-# is typed once.
+# is typed once. x must be Stringable.
 export const check_interpolated = (body: Body, part: Call) ->
   const member = part.callee
   throw 'an interpolated value is read by a call of its to_string()' if not (member is Member)
   const type = type_of(body, member.object, nil)
-  const method = stringable_method(body, type, member.position, part)
-  const stringable = method ? fail_not_stringable(body, type, member.object.position)
-  set_type body, member, stringable
+  const to_string = interface_members(body.program, stringable)[0]
+  const name = Identifier(position: member.object.position, name: member.name.name)
+  set_type body, member, satisfying_type(body, type, stringable, to_string, name, part)
   set_type body, part, string_type
 
 # A class's deinit is only run by a release.

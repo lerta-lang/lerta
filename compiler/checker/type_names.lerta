@@ -6,6 +6,7 @@ import {
 import { reject_map_key } from './collection'
 import { fail } from './diagnostics'
 import { imported_type } from './imports'
+import { is_interface_name } from './interfaces'
 import { ProgramWide, Shared } from './shared'
 import {
   ArrayType, binary_type, bool_type, byte_type, format_type, FunctionType, int_type, IterType
@@ -54,13 +55,13 @@ const named_type = (shared: Shared, name: String): Type? ->
 export const has_type = (program: ProgramWide, resolver: Resolver, name: String) ->
   const shared = program.shared[resolver.module_index]
   return true if is_builtin_type_name(name) or named_type(shared, name) != nil
-  has_alias shared, name
+  has_alias(shared, name) or shared.interfaces.has(name)
 
 export const add_alias = (shared: Shared, alias: TypeAlias) ->
   const program = shared.program
   const { name, position } = alias.name
   const is_taken = shared.aliases.has(name) or is_builtin_type_name(name)
-  if is_taken or named_type(shared, name) != nil
+  if is_taken or named_type(shared, name) != nil or shared.interfaces.has(name)
     fail program, position, "'#{name}' is already defined"
   shared.aliases[name] = AliasEntry(alias)
 
@@ -174,7 +175,10 @@ const resolve_name = (
   return never_type if is_result and name == 'never'
   return parameter if const parameter = resolver.type_parameters[name]
   return simple if const simple = simple_type(name)
-  return named if const named = named_type(program.shared[resolver.module_index], name)
+  const shared = program.shared[resolver.module_index]
+  return named if const named = named_type(shared, name)
+  if is_interface_name(shared, name)
+    fail_here "'#{name}' is an interface, which can only bound a type parameter so far"
   resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
 
 # A type parameter's type argument is checked where it is given (see generic_call).

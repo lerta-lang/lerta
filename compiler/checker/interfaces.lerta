@@ -1,0 +1,100 @@
+# Interfaces, `interface Shape` with members such as `area: () -> Int`: what a type must have to
+# satisfy one (see reject_unsatisfied). An interface only bounds type parameters so far.
+import { Identifier, InterfaceDeclaration } from '../ast'
+import { fail } from './diagnostics'
+import { has_import, imported_export, InterfaceExport, use_import } from './imports'
+import { ProgramWide, Shared } from './shared'
+import { has_type, module_resolver, resolve, Resolver } from './type_names'
+import { FunctionType, string_type, Type } from '../types'
+
+# A type satisfies the member if it has a method, field or property of the name and the type.
+export struct InterfaceMember
+  name: String
+  type: Type
+
+export class InterfaceInfo
+  name: String
+  # Nil until resolved (see interface_members), as the types may name those declared later.
+  members: Array<InterfaceMember>?
+  # The declaring module, which resolves the members' types; nil for a builtin interface.
+  module_index: Int?
+  declaration: InterfaceDeclaration?
+
+# The builtin interface of the types that have `to_string(): String`, which print and
+# interpolation require.
+export const STRINGABLE = 'Stringable'
+
+const to_string_member = InterfaceMember(
+  name: 'to_string', type: FunctionType(params: [], result: string_type)
+)
+
+export const stringable = InterfaceInfo(
+  name: STRINGABLE, members: [to_string_member], module_index: nil, declaration: nil
+)
+
+# Registers the module's interfaces, after its classes, structs and enums (see add_enums).
+export const add_interfaces = (shared: Shared, declarations: Array<InterfaceDeclaration>) ->
+  const program = shared.program
+  for declaration in declarations
+    const { name, position } = declaration.name
+    fail program, position, "'#{name}' is already defined" if has_declared_type(shared, name)
+    reject_invalid_members program, declaration
+    const module_index = shared.index
+    shared.interfaces[name] = InterfaceInfo(name, declaration, module_index, members: nil)
+
+# A member is `name: Type`; default implementations are planned.
+const reject_invalid_members = (program: ProgramWide, declaration: InterfaceDeclaration) ->
+  const seen: Map<String, Bool> = Map()
+  for member in declaration.members
+    const { name, position } = member.name
+    if seen.has(name)
+      fail program, position, "'#{name}' is already a member of #{declaration.name.name}"
+    seen.add name
+    if const modifier = member.modifier
+      fail program, member.position, "an interface member cannot be #{modifier}"
+    if member.value != nil
+      fail program, member.position, 'an interface member has a type and no value'
+
+# Whether the module declares a class, struct, enum or interface of the name.
+export const has_declared_type = (shared: Shared, name: String) ->
+  shared.objects.has(name) or shared.enums.has(name) or shared.interfaces.has(name)
+
+# Whether the name is that of an interface of the module or an imported one.
+export const is_interface_name = (shared: Shared, name: String) ->
+  return true if shared.interfaces.has(name)
+  const imported = shared.imports.names[name] ? return false
+  imported_export(shared.program, imported) is InterfaceExport
+
+# Resolves the members of every interface of the module, so that one that is never used is checked
+# too.
+export const resolve_interfaces = (shared: Shared) ->
+  const program = shared.program
+  interface_members program, shared.interfaces[name]! for name in shared.interfaces.keys()
+
+export const interface_members = (program: ProgramWide, info: InterfaceInfo) ->
+  return members if const members = info.members
+  const declaration = info.declaration!
+  const resolver = module_resolver(info.module_index!)
+  const members = [
+    InterfaceMember(name: member.name.name, type: resolve(program, resolver, member.type!))
+    for member in declaration.members
+  ]
+  info.members = members
+  members
+
+# The interface that bounds a type parameter: one of the module, an imported one, or a builtin.
+export const bound_interface = (
+  program: ProgramWide, resolver: Resolver, name: Identifier
+): InterfaceInfo ->
+  const shared = program.shared[resolver.module_index]
+  return own if const own = shared.interfaces[name.name]
+  if const imported = use_import(shared, name.name)
+    const exported = imported_export(program, imported)
+    return exported.info if exported is InterfaceExport
+  const name_text = name.name
+  const is_other_name = has_type(program, resolver, name_text) or has_import(shared, name_text)
+  return stringable if name_text == STRINGABLE and not is_other_name
+  const message = case
+    when is_other_name then "'#{name_text}' is not an interface"
+    else "unknown interface '#{name_text}'"
+  fail program, name.position, message

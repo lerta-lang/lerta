@@ -5,8 +5,8 @@ import { captured } from './closure'
 import { fail } from './diagnostics'
 import { function_type_of, generic_function, has_function } from './functions'
 import {
-  builtin_export, Export, ExternExport, FunctionExport, GenericExport, imported_export, TypeExport
-  use_import, value_local, ValueExport
+  builtin_export, Export, ExternExport, FunctionExport, GenericExport, imported_export
+  InterfaceExport, TypeExport, use_import, value_local, ValueExport
 } from './imports'
 import { object_type } from './object_types'
 import { Body } from './shared'
@@ -35,6 +35,7 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
   if object_type(shared, name) != nil
     fail program, position, "'#{name}' is a type; construct it as #{name}(...)"
   fail program, position, "'#{name}' is a type" if shared.enums.has(name)
+  fail program, position, "'#{name}' is an interface" if shared.interfaces.has(name)
   if const imported = use_import(shared, name)
     const exported = imported_export(program, imported)
     if exported is ValueExport and exported.type == nil
@@ -70,6 +71,7 @@ const type_of_export = (body: Body, exported: Export, identifier: Identifier, is
   const { name, position } = identifier
   case exported
     when TypeExport then fail(body.program, position, "'#{name}' is a type")
+    when InterfaceExport then fail(body.program, position, "'#{name}' is an interface")
     when GenericExport then fail_only_called(body, identifier)
     when ExternExport
       fail_only_called body, identifier if not is_callee

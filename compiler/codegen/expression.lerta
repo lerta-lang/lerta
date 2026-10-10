@@ -152,6 +152,14 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
   emit_release ir, object
   value
 
+# A field of a class, a struct or an anonymous struct, or one that every member of a union has.
+export const read_any_field = (
+  g: Generator, object: String, object_type: Type, name: String, field_type: Type
+) ->
+  return read_field(g, object, object_type, name) if not (object_type is UnionType)
+  const of_member = (type: Type) -> read_field(g, object, type, name)
+  emit_member_dispatch g.ir, object, object_type.members, ir_type(field_type), of_member
+
 # The object that a `weak!` field's box holds, borrowed; it throws if the object is gone.
 const weak_object = (g: Generator, box: String) ->
   const object = emit_weak_object(g.ir, box)
@@ -167,9 +175,7 @@ const generate_property = (g: Generator, member: Member) ->
   const object_type = type_of(g, member.object)
   const name = member.name.name
   if object_type is UnionType
-    const of_member = (type: Type) -> read_field(g, object, type, name)
-    const result_type = ir_type(type_of(g, member))
-    return emit_member_dispatch(ir, object, object_type.members, result_type, of_member)
+    return read_any_field(g, object, object_type, name, type_of(g, member))
   const length = case kind_of(object_type)
     when OBJECT, RECORD then return read_field(g, object, object_type, name)
     when 'String' then return object
