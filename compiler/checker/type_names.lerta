@@ -6,11 +6,11 @@ import {
 import { reject_map_key } from './collection'
 import { fail } from './diagnostics'
 import { imported_type } from './imports'
-import { imported_interface, STRINGABLE, stringable } from './interfaces'
+import { imported_interface, named_interface, value_interface_type } from './interfaces'
 import { ProgramWide, Shared } from './shared'
 import {
-  ArrayType, binary_type, bool_type, byte_type, format_type, FunctionType, int_type, IterType
-  is_kind, is_reference_type, MapType, never_type, ObjectType, optional_type, OptionalType
+  ArrayType, binary_type, bool_type, byte_type, format_type, FunctionType, int_type, is_kind
+  is_reference_type, IterType, MapType, never_type, ObjectType, optional_type, OptionalType
   record_type, RecordField, same_type, string_type, Type, union_type, UnionType, void_type
 } from '../types'
 
@@ -171,17 +171,18 @@ const resolve_name = (
       fail_here 'Map takes two type arguments' if args.length != 2
       const key = resolve_key(program, resolver, args[0])
       return MapType(key, value: resolve_map_value(program, resolver, args[1]))
-    else
-      fail_here "'#{name}' takes no type arguments" if args.length > 0
+    else pass
+  const interface_info = named_interface(program, resolver, name)
+  fail_here "'#{name}' takes no type arguments" if args.length > 0 and interface_info == nil
   return void_type if is_result and name == 'void'
   return never_type if is_result and name == 'never'
   return parameter if const parameter = resolver.type_parameters[name]
   return simple if const simple = simple_type(name)
+  if interface_info
+    return value_interface_type(program, resolver, interface_info, type_name)
   const shared = program.shared[resolver.module_index]
   return named if const named = named_type(shared, name)
-  return aliased if const aliased = resolve_alias(program, resolver, name, position)
-  return stringable.type if name == STRINGABLE
-  fail_here "unknown type '#{name}'"
+  resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
 
 # A type parameter's type argument is checked where it is given (see generic_call).
 const resolve_key = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->

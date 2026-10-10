@@ -1,0 +1,68 @@
+# Whether a type satisfies an interface: it must have each member of the interface type, with the
+# type arguments and the type itself, which Self stands for, in the members' types (see
+# members_for). The type arguments of a generic interface may be inferred from how a type
+# satisfies it.
+import { Call, Identifier, Member, Position } from '../ast'
+import { fail } from './diagnostics'
+import { set_type, type_of } from './expression'
+import { common_field_problem } from './fields'
+import {
+  interface_members, interface_of, InterfaceMember, members_for, SELF, stringable
+} from './interfaces'
+import { member_type_by_name } from './member'
+import { find_method } from './methods'
+import { Body } from './shared'
+import { infer, substitute } from './type_patterns'
+import { format_type, InterfaceType, same_type, string_type, Type, UnionType } from '../types'
+
+# Rejects a type that does not satisfy the interface type.
+export const reject_unsatisfied = (body: Body, type: Type, bound: InterfaceType, at: Position) ->
+  for member in members_for(body.program, bound, type)
+    satisfying_type body, type, bound, member, Identifier(position: at, name: member.name), nil
+
+# The type of the type's member that satisfies the interface's member, which must be of exactly
+# the member's type. Not merely of a type assignable to it: the generic code is checked with the
+# type it has.
+const satisfying_type = (
+  body: Body, type: Type, bound: InterfaceType, member: InterfaceMember, name: Identifier
+  call: Call?
+) ->
+  const found = member_type_by_name(body, type, name, call)
+  return found if found and same_type(found, member.type)
+  const expected = format_type(member.type)
+  const reason = case
+    when found then "its #{member.name} is of type #{format_type(found)}, not #{expected}"
+    # Only a generic method has no type without a call.
+    when find_method(body.program, type, name.name, body.extensions)
+      "its #{member.name} has type parameters of its own"
+    when type is UnionType then common_field_problem(body, type, name)!
+    else "it has no #{member.name} of type #{expected}"
+  const bound_name = format_type(bound)
+  fail body.program, name.position, "#{format_type(type)} does not satisfy #{bound_name}: #{reason}"
+
+# Binds the type parameters in the type arguments of `pattern`, an interface type, to the types
+# that the type's members give them, as Array<Int>, whose iter gives an Iter<Int>, binds T of
+# Iterable<T> to Int.
+export const infer_through_members = (
+  body: Body, pattern: InterfaceType, type: Type, at: Position, bind: (String, Type) -> void
+) ->
+  const info = interface_of(body.program, pattern)
+  const bindings: Map<String, Type> = Map()
+  bindings[info.type_params[i]] = pattern.args[i] for i in 0...pattern.args.length
+  bindings[SELF] = type
+  for member in interface_members(body.program, info)
+    const name = Identifier(position: at, name: member.name)
+    const found = member_type_by_name(body, type, name, nil) ? continue
+    infer substitute(member.type, bindings), found, bind
+
+# `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
+# is typed once. x must be Stringable.
+export const check_interpolated = (body: Body, part: Call) ->
+  const member = part.callee
+  throw 'an interpolated value is read by a call of its to_string()' if not (member is Member)
+  const type = type_of(body, member.object, nil)
+  const bound = stringable.type
+  const to_string = members_for(body.program, bound, type)[0]
+  const name = Identifier(position: member.object.position, name: member.name.name)
+  set_type body, member, satisfying_type(body, type, bound, to_string, name, part)
+  set_type body, part, string_type

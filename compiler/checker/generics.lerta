@@ -9,13 +9,13 @@ import { check_instance } from './bodies'
 import { fail, fail_in_context } from './diagnostics'
 import { ExtensionMethod, Extensions, with_methods } from './extensions'
 import { annotated_type, FunctionEntry, parameter_types } from './functions'
-import { bound_interface, InterfaceInfo } from './interfaces'
+import { bound_interface } from './interfaces'
 import { AnnotatedCall, NodeFacts, ProgramWide, Shared } from './shared'
 import {
   has_type, module_resolver, resolve_result, Resolver, with_type_parameters
 } from './type_names'
 import { placeholders, substitute, type_depth } from './type_patterns'
-import { format_type, Type, type_key } from '../types'
+import { format_type, InterfaceType, Type, type_key } from '../types'
 
 # How a generic function is referred to: by its module and its place in the module's generics.
 export struct GenericRef
@@ -53,8 +53,9 @@ export class GenericFunction
   # A method's receiver, whose type parameters come first.
   receiver: Receiver?
   type_params: Array<TypeParameter>
-  # The interfaces that bound the type parameters, in their order.
-  bounds: Array<InterfaceInfo?>
+  # The interface types that bound the type parameters, in their order, in which the type
+  # parameters stand for themselves.
+  bounds: Array<InterfaceType?>
   # The parameters' types, and the result's if it is written, in which the type parameters stand
   # for themselves.
   params: Array<Type>
@@ -71,11 +72,12 @@ export const make_generic_function = (
   type_params.append literal.type_params
   const resolver = module_resolver(shared.index)
   reject_bad_type_parameters program, resolver, type_params
+  const generic_resolver = with_type_parameters(resolver, placeholders(type_params))
+  # A bound may name the type parameters, as in `X: Iterable<T>`.
   const bound_of = (param: TypeParameter) ->
     const bound = param.bound ? return nil
-    bound_interface program, resolver, bound
+    bound_interface program, generic_resolver, bound
   const bounds = [bound_of(param) for param in type_params]
-  const generic_resolver = with_type_parameters(resolver, placeholders(type_params))
   const params = parameter_types(program, generic_resolver, literal, [])
   const return_type = literal.return_type
   const result = return_type then resolve_result(program, generic_resolver, return_type) else nil
@@ -83,7 +85,7 @@ export const make_generic_function = (
     name, literal, receiver, type_params, bounds, params, result, module_index: shared.index
   )
 
-const reject_bad_type_parameters = (
+export const reject_bad_type_parameters = (
   program: ProgramWide, resolver: Resolver, type_params: Array<TypeParameter>
 ) ->
   const seen: Map<String, Bool> = Map()

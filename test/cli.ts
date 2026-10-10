@@ -391,7 +391,7 @@ const cli_cases: CliCase[] = [
       .join(''),
   },
   {
-    // An interface, whose members are written as a class's.
+    // An interface with a type parameter, whose members are written as a class's.
     args: ['dump-ast', join(root_dir, 'tests/parse/interface_dump.lerta')],
     status: 0,
     stdout: [
@@ -413,12 +413,18 @@ const cli_cases: CliCase[] = [
       '            result:',
       '              type_name 2:15',
       '                args: []',
-      '                name: "Int"',
+      '                name: "T"',
       '                optional: false',
       '        value: -',
       '    name:',
       '      identifier 1:18',
       '        name: "Shape"',
+      '    type_params:',
+      '      -',
+      '        bound: -',
+      '        name:',
+      '          identifier 1:24',
+      '            name: "T"',
     ]
       .map((line) => `${line}\n`)
       .join(''),

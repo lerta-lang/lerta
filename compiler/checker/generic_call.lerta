@@ -1,7 +1,7 @@
 # Types calls of generic functions and methods: checks their type arguments (see
 # type_argument_inference) against the bounds and the signature, and has the instance checked
 # (see generics).
-import { Call, Member, Position } from '../ast'
+import { Call, Member, Position, TypeParameter } from '../ast'
 import { check_item_type, check_map_types, check_value_type } from './collection'
 import { fail } from './diagnostics'
 import { require_type } from './expression'
@@ -9,13 +9,13 @@ import { methods_reachable_from } from './extensions'
 import {
   bindings, generic_of, GenericFunction, GenericRef, Instance, instantiate
 } from './generics'
-import { reject_unsatisfied } from './interfaces'
+import { reject_unsatisfied } from './satisfaction'
 import { Body } from './shared'
 import {
   infer_type_arguments, receiver_type_arguments, TypeBinding
 } from './type_argument_inference'
 import { parts_of, substitute } from './type_patterns'
-import { ArrayType, FunctionType, IterType, MapType, Type } from '../types'
+import { ArrayType, FunctionType, InterfaceType, IterType, MapType, Type } from '../types'
 
 # The result of a call of a generic function.
 export const type_of_generic_call = (
@@ -75,18 +75,23 @@ const instantiate_here = (
 const type_arguments_of = (
   body: Body, call: Call, generic: GenericFunction, inferred: Map<String, TypeBinding>
 ) ->
-  const types: Array<Type> = []
-  for i in 0...generic.type_params.length
-    const name = generic.type_params[i].name.name
-    const callee = generic.name.name
+  const callee = generic.name.name
+  const binding_of = (param: TypeParameter) ->
+    const name = param.name.name
     const cannot_infer = () ->
       const written = generic.receiver then "x.#{callee}" else callee
       const advice = "write it, as in #{written}<...>(...)"
       const message = "cannot infer the type argument #{name} of '#{callee}'; #{advice}"
       fail body.program, call.position, message
-    const binding = inferred[name] ? cannot_infer()
-    reject_unsatisfied body, binding.type, bound, binding.at if const bound = generic.bounds[i]
-    types.push binding.type
+    inferred[name] ? cannot_infer()
+  const given = [binding_of(param) for param in generic.type_params]
+  const types = [each.type for each in given]
+  # A bound may name the type parameters, as in `X: Iterable<T>`.
+  const type_bindings = bindings(generic, types)
+  for i in 0...given.length
+    if const bound = generic.bounds[i]
+      const bound_type = substitute(bound, type_bindings) as InterfaceType!
+      reject_unsatisfied body, types[i], bound_type, given[i].at
   types
 
 const function_type = (instance: Instance) -> instance.entry.type as FunctionType!
