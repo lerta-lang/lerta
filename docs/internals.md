@@ -101,8 +101,8 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/builtins.md#methods-of-the-builtin-types)):
 
 - **Built into the compiler**: the operations on the representation of arrays, maps and Iters, whose items are one byte for a `Byte` or a `Bool`, two pointers for an interface value and 8 bytes otherwise, and retained by kind (see [memory management](#memory-management)): `length`, indexing, `push`, `pop`, `remove`, `keys`, and the Iter protocol, `has_next` and `next`; `s.binary`, which passes on the String itself; an enum's `to_string`, which indexes by the value, the member's place among the members as an `i64`, a constant array of the members' texts that the compiler generates for the enum, which cannot be extended, and `E.parse`, which has the runtime's `lerta_enum_parse` compare its argument with each text in turn, allocating nothing.
-- **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join`, `slice` and `to_binary`; the conversions between `Byte` and `Int`; and `lerta_binary_as_string`, which gives `decode_utf8` and `split` their Strings once Lerta knows the bytes are valid UTF-8.
-- The rest is Lerta: `print` writes through `stdout`, `parse_int`, `split` and the UTF-8 check of `decode_utf8` read bytes with `b[i]`, `has` reads the map, and `iter` of an array or a `Binary` is a comprehension. The methods of an extend of `Iterable<T>`, which `Stringable` and `Iterable` are declared beside, are written once for all: `map`, `filter` and `to_array` are comprehensions, `any`, `all` and `find` are `for` loops, and `take` is an Iter written in Lerta, which stops reading its source after its items.
+- **C functions that extends call**: those that build a String or a Binary, which Lerta has no way to fill byte by byte: `Int.to_string`, which the runtime also needs for its leak report, `join`, `slice` and `to_binary`; the conversions between `Byte` and `Int`; and `lerta_binary_as_string`, which gives `text` and `split` their Strings once Lerta knows the bytes are valid UTF-8.
+- The rest is Lerta: `print` writes through `stdout`, `parse_int`, `split` and the UTF-8 check of `text` read bytes with `b[i]`, `has` reads the map, and `iter` of an array or a `Binary` is a comprehension. The methods of an extend of `Iterable<T>`, which `Stringable` and `Iterable` are declared beside, are written once for all: `map`, `filter` and `to_array` are comprehensions, `any`, `all` and `find` are `for` loops, and `take` is an Iter written in Lerta, which stops reading its source after its items.
 
 ## Output
 
@@ -137,7 +137,7 @@ A function with [defaults](reference/functions.md) takes every argument. For eac
 ## Strings
 
 - String interpolation is expanded at compile time into a call to the runtime variadic function `lerta_string_concat(a, b, ...)` (this expansion is internal to the compiler, so user-facing variadic parameters are not needed). The total length is computed and allocated once.
-- Strings are flat only, for now. A `Binary` has the representation of a `String` (`LertaString` in `runtime/lerta.h`) without the UTF-8 guarantee, so `s.binary` and `decode_utf8` pass the object on.
+- Strings are flat only, for now. A `Binary` has the representation of a `String` (`LertaString` in `runtime/lerta.h`) without the UTF-8 guarantee, so `s.binary` and `b.text()` pass the object on.
 - **Planned:** the set of representations (in priority order):
   1. Small strings as immediate values (String is a 16-byte value with 15 bytes inline)
   2. Flat strings

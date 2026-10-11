@@ -89,7 +89,7 @@ const cli_cases: CliCase[] = [
     },
   },
   {
-    // decode_utf8 of each argument, which the program reads without decoding it.
+    // text() of each argument, which the program reads without decoding it.
     args: ['build', join(root_dir, 'tests/binary/lib/decode_arguments.lerta'), '-o', `${exe}_utf8`],
     status: 0,
     produced: () => {

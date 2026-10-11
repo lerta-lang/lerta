@@ -35,7 +35,7 @@
 
 ## Binary
 
-- `Binary` is an immutable sequence of bytes; a mutable one is an `Array<Byte>`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.decode_utf8()` goes back (see [Optional values](#optional-values)).
+- `Binary` is an immutable sequence of bytes; a mutable one is an `Array<Byte>`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.text()` goes back (see below).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`.
 - `==` and `!=` compare two `Binary`s byte by byte.
 - `b.occurs_at(index, part)` tells whether the bytes of `part` occur in `b` at `index`; it is false where `part` does not fit.
@@ -43,7 +43,7 @@
 - `bytes.to_binary()` copies the items of an `Array<Byte>` into a new `Binary`.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
 - Why `Binary` is separate from `String`: a `String` only adds the invariant "valid UTF-8", rather than "a string is any byte sequence" as in Python 2 and Go.
-- `b.text(start, end)` gives the bytes from `start` up to `end` as a `String`, as `b.slice(start, end).decode_utf8()` but throwing `invalid UTF-8` where that gives nil.
+- `b.text(start, end)` gives the bytes from `start` up to `end` as a `String` if they are valid UTF-8, or nil otherwise; it throws an `IndexError` if they are out of range. `start` is 0 and `end` is `b.length` by default, and `b.text()` gives the whole `Binary` without copying its bytes. `b.text()!` or `b.text() ? throw ...` takes a String where the bytes must be UTF-8.
 
 ## Optional values
 
@@ -62,7 +62,6 @@ if const n = '42'.parse_int()
 - An optional value can be a condition (see [control flow](control-flow.md#if-and-while)).
 - An array cannot hold optional `Int`, `Byte` or `Bool` values yet; optional references are fine (`Array<String?>`).
 - `s.parse_int()` gives the `Int` that a `String` of decimal digits, with an optional leading `-`, stands for, or nil if it is anything else or does not fit in an `Int`.
-- `b.decode_utf8()` gives the `Binary` as a `String` if its bytes are valid UTF-8, without copying them, or nil otherwise.
 
 ## Array
 

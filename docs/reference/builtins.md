@@ -23,7 +23,7 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | `Byte` | `to_int`, `to_string`, `is_digit`, `is_letter`, `is_space` | |
 | `Bool` | `to_string` | |
 | `String` | `to_string`, `iter`, `parse_int`, `split`, `starts_with` | `binary` |
-| `Binary` | `iter`, `slice`, `occurs_at`, `decode_utf8`, `text` | `length` |
+| `Binary` | `iter`, `slice`, `occurs_at`, `text` | `length` |
 | `Array<T>` | `iter`, `contains`, `find_index`, `last`, `append`, `join` of an `Array<String>` and `to_binary` of an `Array<Byte>` | `length`, `push`, `pop` |
 | `Map<K, V>` | `has`, `get_or_put`, and `add` of a `Map<K, Bool>` | `length`, `remove`, `keys` |
 | `Iter<T>` | `iter` | `has_next`, `next` |
