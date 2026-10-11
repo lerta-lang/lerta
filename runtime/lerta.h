@@ -302,7 +302,7 @@ typedef enum {
 // generated code checks after the call, and the caller returns at once. The program registers
 // the function that makes the error (see lerta_register_raise); without one, as in a program
 // that is std:builtins or one of the modules it imports, which have no error types to make, it
-// stops the program with lerta_throw.
+// stops the program with lerta_exit_with_error.
 void lerta_raise(LertaErrorKind kind, const LertaString *message);
 // As lerta_raise, with the message made of a prefix, a LertaString such as a LERTA_STATIC_STRING,
 // and the detail.
@@ -312,9 +312,8 @@ void lerta_raise_index_out_of_range(void);
 void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
 
 // Prints the message to stderr and exits with status 1: for an uncaught exception, and for an
-// error raised without a raise function. Code that the seed generates calls it too, for a throw of
-// a String, which the language had before.
-_Noreturn void lerta_throw(const LertaString *message);
+// error raised without a raise function.
+_Noreturn void lerta_exit_with_error(const LertaString *message);
 
 // Runtime-internal helpers.
 enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign

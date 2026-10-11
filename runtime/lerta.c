@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
   lerta_set_arguments(argc, argv);
   lerta_stdout_init();
   lerta_main();
-  if (lerta_exception.data != NULL) lerta_throw(lerta_exception_message());
+  if (lerta_exception.data != NULL) lerta_exit_with_error(lerta_exception_message());
   bool flushed = lerta_stdout_flush();
   bool leak_free = lerta_check_leaks();
   return flushed && leak_free ? 0 : 1;

@@ -77,7 +77,7 @@ static void write_error_line(const char *prefix, const uint8_t *bytes, int64_t l
   lerta_stderr_write(&newline, 1);
 }
 
-void lerta_throw(const LertaString *message) {
+void lerta_exit_with_error(const LertaString *message) {
   write_error_line("", message->bytes, message->length);
   lerta_os_exit(1);
 }
@@ -89,7 +89,7 @@ void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message
 }
 
 void lerta_raise(LertaErrorKind kind, const LertaString *message) {
-  if (registered_raise == NULL) lerta_throw(message);
+  if (registered_raise == NULL) lerta_exit_with_error(message);
   registered_raise((int32_t)kind, message);
 }
 
