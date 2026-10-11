@@ -42,7 +42,7 @@ export const enter_module = (shared: Shared) ->
 export const leave_module = (shared: Shared) -> shared.program.module_paths.pop()
 
 export const warn = (shared: Shared, at: Position, message: String) ->
-  shared.warnings.push Warning(message, line: at.line, column: at.column)
+  shared.warnings.push Warning(message, at)
 
 # A `const` or `var` that is never read, unless its name starts with `_`.
 export const warn_if_unused = (shared: Shared, local: Local) ->
@@ -61,7 +61,7 @@ export const all_warnings = (program: ProgramWide) ->
     continue if is_standard_module(module)
     const location = module_location(program.entry_path, module.display_path)
     for warning in in_source_order(program.shared[module.index].warnings)
-      lines.push "#{location}:#{warning.line}:#{warning.column}: warning: #{warning.message}"
+      lines.push "#{location}:#{warning.at.line}:#{warning.at.column}: warning: #{warning.message}"
   lines
 
 # The names of the top-level code and the imports that are never used.
@@ -78,10 +78,10 @@ const in_source_order = (warnings: Array<Warning>) ->
   const seen: Map<String, Bool> = Map()
   const unique: Array<Warning> = []
   for warning in warnings
-    const key = "#{warning.line}:#{warning.column}:#{warning.message}"
+    const key = "#{warning.at.line}:#{warning.at.column}:#{warning.message}"
     continue if seen.has(key)
     seen.add key
     unique.push warning
   const compare = (a: Warning, b: Warning) ->
-    a.line != b.line then a.line - b.line else a.column - b.column
+    a.at.line != b.at.line then a.at.line - b.at.line else a.at.column - b.at.column
   sorted unique, compare

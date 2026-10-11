@@ -265,6 +265,9 @@ bool lerta_os_run(char **args, int64_t *exit_code);
 void lerta_stdout_init(void);
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
+// Returns false if any output to stdout has failed.
+bool lerta_stdout_flush(void);
+void lerta_stderr_write(const uint8_t *bytes, int64_t length);
 
 // The exception being thrown, an Error interface value, from its throw until a catch takes it; its
 // data is null while there is none. The generated code checks it after each call (see
@@ -312,9 +315,6 @@ void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message
 // error raised without a raise function. Code that the seed generates calls it too, for a throw of
 // a String, which the language had before.
 _Noreturn void lerta_throw(const LertaString *message);
-// Returns false if any output to stdout has failed.
-bool lerta_stdout_flush(void);
-void lerta_stderr_write(const uint8_t *bytes, int64_t length);
 
 // Runtime-internal helpers.
 enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign

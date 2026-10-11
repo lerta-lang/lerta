@@ -57,11 +57,8 @@ export const type_of_if = (body: Body, if_expression: If, expected: Type?): Type
     Branch(statements: then_body, enter: entries.enter_then)
     Branch(statements: else_body, enter: entries.enter_else)
   ]
-  # Statements give no value, so neither does an `if` with one among its branches.
-  const unify_branches = (values: Array<BranchValue>): Type ->
-    return void_type if values.any((value) -> is_kind(value.type, 'void'))
-    unify_values body, values, if_expression, 'the branches of if'
-  type_of_branches body, branches, expected, unify_branches
+  const unify = unify_unless_void(body, if_expression, 'the branches of if')
+  type_of_branches body, branches, expected, unify
 
 # A `try` gives the value of its block, or of the catch that takes an exception, as an `if` gives
 # its branches'; its `finally` runs after them, and gives none. A catch defines its name, as the
@@ -73,10 +70,8 @@ export const type_of_try = (body: Body, try_expression: Try, expected: Type?): T
     const define = () ->
       define_local body, Local(identifier: clause.name, type: caught)
     branches.push Branch(statements: clause.body, enter: define)
-  const unify_branches = (values: Array<BranchValue>): Type ->
-    return void_type if values.any((value) -> is_kind(value.type, 'void'))
-    unify_values body, values, try_expression, 'the values of try and catch'
-  const type = type_of_branches(body, branches, expected, unify_branches)
+  const unify = unify_unless_void(body, try_expression, 'the values of try and catch')
+  const type = type_of_branches(body, branches, expected, unify)
   if const finally_body = try_expression.finally_body
     check_block body, finally_body, nothing, nothing
   type
@@ -142,6 +137,13 @@ const type_of_branches = (
   const value_of = (branch: Branch) ->
     BranchValue last: branch.statements.last(), type: type_of_body(branch, type_of_value)
   unify_all [value_of(branch) for branch in branches]
+
+# Unifies the values of branches, as unify_values does. Statements give no value, so neither do
+# branches with one among them.
+const unify_unless_void = (body: Body, at: Expression, description: String) ->
+  (values: Array<BranchValue>): Type ->
+    return void_type if values.any((value) -> is_kind(value.type, 'void'))
+    unify_values body, values, at, description
 
 # A mix of T, T? and nil gives T?, to which the values (the last statements of the bodies) are
 # converted.
