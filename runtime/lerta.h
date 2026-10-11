@@ -214,8 +214,9 @@ void lerta_raise_iter_ended(void);
 // makes them UTF-8.
 void lerta_set_arguments(int argc, char **argv);
 LertaArray *lerta_argv(void);
-// Flushes stdout and ends the program; leaks are not checked, as for a throw.
-_Noreturn void lerta_exit(int64_t code);
+// Flushes stdout and ends the program; leaks are not checked, as for a throw. A code out of 0 to
+// 255 throws a ValueError instead, and the call returns.
+void lerta_exit(int64_t code);
 int64_t lerta_run(const LertaString *command, const LertaArray *args);
 
 // Files (file.c). A failure throws.

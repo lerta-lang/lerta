@@ -46,5 +46,5 @@ export const unit = 1
 | Name | |
 |---|---|
 | `argv: Array<String>` | The command-line arguments, without the program name, read when the module runs. A program that imports `std:process` throws at its start if an argument is not valid UTF-8. |
-| `exit(code: Int): never` | Flushes `stdout` and ends the program with the exit code, from 0 to 255; another code throws. If the flush fails, a code of 0 becomes 1. |
+| `exit(code: Int): never` | Flushes `stdout` and ends the program with the exit code, from 0 to 255; another code throws a `ValueError`. If the flush fails, a code of 0 becomes 1. |
 | `run(command: String, args: Array<String>): Int` | Runs a program, found on `PATH` on every platform (adding `.exe` on Windows if it has no extension) unless the command holds a directory, with the arguments, and waits for it to end. The program shares the standard streams; `stdout` is flushed first, so that output keeps its order. Returns its exit code. On POSIX systems, a program killed by a signal gives 128 plus the signal number, as shells do; on Windows, the code of a program that an exception or `TerminateProcess` ended is returned as a non-negative 32-bit value, such as 3221225477 (0xC0000005) for an access violation; this case is not tested yet. Throws `cannot run: <command>` if it cannot start, including when the command or an argument holds a NUL byte. |

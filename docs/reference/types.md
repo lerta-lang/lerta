@@ -26,7 +26,7 @@
 
 - A `String` is immutable text in UTF-8.
 - `+` concatenates two `String`s into a new one.
-- `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws `split by an empty separator`.
+- `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`.
 - `==` and `!=` compare two `String`s byte by byte.
 - A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as `Int`s, in order, so `'é'` gives 233; its bytes are `s.binary`.

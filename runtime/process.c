@@ -27,7 +27,10 @@ LertaArray *lerta_argv(void) {
 
 // POSIX systems keep only 8 bits of an exit code, so a code outside 0 to 255 would be misread.
 void lerta_exit(int64_t code) {
-  if (code < 0 || code > 255) lerta_throw((const LertaString *)&exit_code_out_of_range);
+  if (code < 0 || code > 255) {
+    lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&exit_code_out_of_range);
+    return;
+  }
   bool flushed = lerta_stdout_flush();
   lerta_os_exit(flushed || code != 0 ? (int)code : 1);
 }

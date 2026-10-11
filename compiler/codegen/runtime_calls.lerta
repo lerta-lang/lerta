@@ -2,25 +2,27 @@
 # signature.
 import { IrBuilder } from './ir_builder'
 import { ir_c_return_type, ir_param_type } from './lerta_ir'
-import { FunctionType, is_kind } from '../types'
+import { FunctionType, is_kind, Type } from '../types'
 
-# Calls a runtime function; one that never returns ends the block, code after it is unreachable,
-# and its value, which never comes, is poison.
+# Calls a runtime function; the value of one that never returns is poison (see
+# emit_valueless_call).
 export const emit_runtime_call = (
   ir: IrBuilder, symbol: String, type: FunctionType, args: Array<String>
 ) ->
   const params = [ir_param_type(param) for param in type.params].join(', ')
   const result = ir_c_return_type(type.result)
-  const is_never = is_kind(type.result, 'never')
-  const attributes = is_never then ' noreturn' else ''
-  ir.module.declare symbol, "declare #{result} @#{symbol}(#{params})#{attributes}"
+  ir.module.declare symbol, "declare #{result} @#{symbol}(#{params})"
   const arg_list = ["#{ir_param_type(type.params[i])} #{args[i]}" for i in 0...args.length]
   const call = "call #{result} @#{symbol}(#{arg_list.join(', ')})"
   return ir.assign(call) if result != 'void'
+  emit_valueless_call ir, call, type.result
+
+# Emits a call that gives no value, of a void function, or of a never one, which returns only
+# with an exception pending, for the caller's check to take: its value is poison, which nothing
+# reads.
+export const emit_valueless_call = (ir: IrBuilder, call: String, result: Type) ->
   ir.emit call
-  return '' if not is_never
-  emit_unreachable ir
-  'poison'
+  is_kind(result, 'never') then 'poison' else ''
 
 # Throws the message, a String, which is not released, since the program ends here.
 export const emit_throw = (ir: IrBuilder, message: String) ->
