@@ -7,6 +7,7 @@ import { Instance } from './generics'
 import { ObjectInfo } from './object_types'
 import { finish_function_type, reject_nil_result } from './result'
 import { Body, FunctionContext, NodeFacts, ProgramWide, SelfContext, Shared } from './shared'
+import { reject_unsatisfied } from './satisfaction'
 import { check_function_body, check_initializers } from './statement'
 import { module_resolver, Resolver } from './type_names'
 import { FunctionType, Type } from '../types'
@@ -53,4 +54,14 @@ export const check_object = (program: ProgramWide, info: ObjectInfo) ->
   const { extensions } = shared
   const body = Body(shared, extensions, self, resolver: info.resolver, facts: info.facts)
   check_initializers body, info, self
+  leave_module shared
+
+# Once the type is checked, as its methods' types may need its fields'.
+export const check_satisfies = (program: ProgramWide, info: ObjectInfo): void ->
+  const satisfies = info.satisfies ? return
+  const shared = program.shared[info.module_index]
+  enter_module shared
+  const { extensions } = shared
+  const body = Body(shared, extensions, resolver: info.resolver, facts: info.facts)
+  reject_unsatisfied body, info.type, satisfies, info.declaration.satisfies!.position
   leave_module shared

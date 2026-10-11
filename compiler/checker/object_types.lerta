@@ -6,19 +6,20 @@ import {
   Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration
   TypeParameter
 } from '../ast'
-import { check_object } from './bodies'
+import { check_object, check_satisfies } from './bodies'
 import { fail } from './diagnostics'
 import { add_function, add_generic, CheckState, method_key } from './functions'
 import {
   GenericRef, Instance, instantiate, make_generic_function, Receiver, reject_bad_type_parameters
 } from './generics'
 import { builtin_type, imported_type } from './imports'
+import { bound_interface, InterfaceMember, members_for } from './interfaces'
 import { NodeFacts, ProgramWide, Shared } from './shared'
 import {
   is_builtin_type_name, module_resolver, resolve, Resolver, with_type_parameters
 } from './type_names'
 import { has_type_parameters, placeholders, substitute } from './type_patterns'
-import { ObjectType, same_type, Type } from '../types'
+import { InterfaceType, ObjectType, same_type, Type } from '../types'
 
 export class FieldInfo
   name: Identifier
@@ -47,6 +48,8 @@ export class ObjectInfo
   init: Instance?
   deinit: Instance?
   fields: Array<FieldInfo> = []
+  # The interface that the declaration says it satisfies, with the type arguments of an instance.
+  satisfies: InterfaceType? = nil
   methods: Map<String, FunctionLiteral> = Map()
   # The generic methods, those with type parameters, which have instances instead of a function.
   generics: Map<String, GenericRef> = Map()
@@ -112,6 +115,25 @@ export const add_members = (shared: Shared) ->
         add_method shared, info, member, literal
       else
         info.fields.push field_of_member(shared, info, member)
+    add_interface_fields shared, info, seen if info.declaration.satisfies != nil
+
+# The fields of the members of the interface that the type says it satisfies, which its own members
+# do not declare, come first; the type is checked to satisfy it (see check_satisfies). A method of
+# an extend of the type cannot stand for one: the member is a field of the type already.
+const add_interface_fields = (shared: Shared, info: ObjectInfo, declared: Map<String, Bool>) ->
+  const program = shared.program
+  const written = info.declaration.satisfies!
+  # As a bound, an interface whose members name Self can be named.
+  const interface_type = bound_interface(program, info.resolver, written)
+  info.satisfies = interface_type
+  const is_struct = info.declaration.is_struct
+  const field_of = (member: InterfaceMember) ->
+    const name = Identifier(name: member.name, position: written.position)
+    FieldInfo name, type: member.type, mutable: not is_struct, value: nil, has_default: false, weak: false
+  const members = members_for(program, interface_type, info.type)
+  const fields = [field_of(member) for member in members when not declared.has(member.name)]
+  fields.append info.fields
+  info.fields = fields
 
 const add_method = (
   shared: Shared, info: ObjectInfo, member: MemberDeclaration, literal: FunctionLiteral
@@ -192,6 +214,8 @@ const add_instance = (generic: ObjectInfo, type: ObjectType) ->
     const type = field_type then substitute(field_type, type_bindings) else nil
     FieldInfo name, type, mutable, value, has_default, weak
   info.fields = [instance_field(field) for field in generic.fields]
+  if const satisfies = generic.satisfies
+    info.satisfies = substitute(satisfies, type_bindings) as InterfaceType!
   info.methods = generic.methods
   info.generics = generic.generics
   info.has_init = generic.has_init
@@ -209,11 +233,17 @@ export const field_type = (
   check_info program, info
   field.type!
 
-# A generic class or struct is checked by its instances (see check_pending_objects).
+# A generic class or struct is checked by its instances (see check_pending_objects). Whether a
+# type satisfies the interface it names is checked once all are, as its methods may need the
+# fields of any.
 export const check_all_objects = (shared: Shared) ->
+  const checked: Array<ObjectInfo> = []
   for name in shared.objects.keys()
     const info = shared.objects[name]!
-    check_info shared.program, info if not is_generic_object(info)
+    continue if is_generic_object(info)
+    check_info shared.program, info
+    checked.push info
+  check_satisfies shared.program, info for info in checked
 
 # Checks the instances of the module's generic classes and structs left unchecked, which checking
 # others may make; returns whether there were any.
@@ -222,6 +252,7 @@ export const check_pending_objects = (shared: Shared) ->
   for name in shared.objects.keys()
     pending.append [each for each in shared.objects[name]!.instances when each.state == UNCHECKED]
   check_info shared.program, info for info in pending
+  check_satisfies shared.program, info for info in pending
   pending.length > 0
 
 # Checks the initializers of the fields with the declaring module's checker, setting the types

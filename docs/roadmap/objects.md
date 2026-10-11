@@ -36,5 +36,6 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 ## Open questions
 
 - Whether an extend should be in effect beyond the modules that import its module directly.
+- Whether a class or struct may name several interfaces it satisfies (`struct S: A, B`), and what it does when two give a field of the same name.
 - Whether an interface may declare a writable member (`var count: Int`, satisfied only by a class's `var` field). Its members are read-only for now (see [the reference](../reference/objects.md#interfaces) for why); reconsider if that proves limiting.
 - How to handle conversion from an interface value to another interface (the concrete type is unknown until run time, so a static itab is not enough; forbid it or generate at run time).
