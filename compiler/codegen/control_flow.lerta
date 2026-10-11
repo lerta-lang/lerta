@@ -67,14 +67,14 @@ export const generate_while = (g: Generator, while_statement: While) ->
 # in a scope of its own, so a `return` from the body releases it too; an array's length is read
 # each round.
 export const generate_for = (g: Generator, for_statement: For) ->
-  const { variable } = for_statement
+  const { variable, index } = for_statement
   const iterable = iterated(g, for_statement.iterable)
-  generate_iteration g, iterable, variable, statements_code(g, for_statement.body)
+  generate_iteration g, iterable, variable, index, statements_code(g, for_statement.body)
 
 # A new array, of the comprehension's elements, which the loop pushes. Its loop can be the target
 # of no `break` or `continue`, which its element and guard cannot hold (see jump_positions).
 export const generate_comprehension = (g: Generator, comprehension: Comprehension) ->
-  const { element, variable, guard } = comprehension
+  const { element, variable, index, guard } = comprehension
   const iterable = iterated(g, comprehension.iterable)
   return generate_iter_comprehension(g, iterable, lazy) if const lazy = comprehension.lazy
   const array_type = type_of(g, comprehension) as ArrayType!
@@ -92,7 +92,8 @@ export const generate_comprehension = (g: Generator, comprehension: Comprehensio
     release_if_reference g, element, value
     ir.emit "br label %#{next_label}"
     ir.start_block next_label
-  while_holding g, result, array_type, () -> generate_iteration(g, iterable, variable, body)
+  const iterate = () -> generate_iteration(g, iterable, variable, index, body)
+  while_holding g, result, array_type, iterate
   result
 
 # What a `for` or a comprehension goes through: the iterable, or the call of its `iter()` that
@@ -118,19 +119,24 @@ const generate_iter_comprehension = (g: Generator, iterable: Expression, lazy: L
   const element = generate_closure(g, lazy.element)
   emit_comprehension_iter ir, source, item, guard, element, type_of(g, lazy.element)
 
-# The body generates the loop's code in its scope, where the loop variable is defined.
+# The body generates the loop's code in its scope, where the loop variable, and the index if the
+# loop names it, are defined.
 const generate_iteration = (
-  g: Generator, iterable: Expression, variable: Identifier, body: () -> void
+  g: Generator, iterable: Expression, variable: Identifier, index: Identifier?, body: () -> void
 ) ->
+  const define_index = (scope: Map<String, CodegenLocal>, place: String) ->
+    scope[index.name] = ValueLocal(operand: place, type: int_type) if index
   if iterable is Range
     const start = generate(g, iterable.start)
     const end = generate(g, iterable.end)
     const define = (scope: Map<String, CodegenLocal>, current: String) ->
       scope[variable.name] = ValueLocal(operand: current, type: int_type)
+      define_index scope, g.ir.assign("sub i64 #{current}, #{start}") if index
     generate_counting_loop g, start, () -> end, body, define
     return
   const type = type_of(g, iterable)
-  return generate_iter_loop(g, iterable, type, variable, body) if type is IterType
+  if type is IterType
+    return generate_iter_loop(g, iterable, type, variable, define_index, body)
   const item_type = iterable_item(type)!
   const sequence_scope = g.locals.push()
   const sequence = generate(g, iterable)
@@ -138,13 +144,16 @@ const generate_iteration = (
   const define = (scope: Map<String, CodegenLocal>, current: String) ->
     const item = emit_sequence_get(g.ir, sequence, current, type)
     scope[variable.name] = store_in_slot(g, item, item_type)
+    define_index scope, current
   const end = () -> emit_sequence_length(g.ir, sequence, type)
   generate_counting_loop g, '0', end, body, define
   release_scope g, sequence_scope
   g.locals.pop()
 
+# The items' places are counted in a slot, which each round reads and increments first.
 const generate_iter_loop = (
-  g: Generator, iterable: Expression, type: Type, variable: Identifier, body: () -> void
+  g: Generator, iterable: Expression, type: Type, variable: Identifier
+  define_index: (Map<String, CodegenLocal>, String) -> void, body: () -> void
 ) ->
   const item = iterable_item(type)!
   const iter_scope = g.locals.push()
@@ -152,9 +161,15 @@ const generate_iter_loop = (
   iter_scope[' iterated Iter'] = store_in_slot(g, iter, type)
   emit_iter_start g.ir, iter
   emit_exception_check g
+  const counter = g.ir.alloca('i64')
+  g.ir.emit "store i64 0, ptr #{counter}"
   const loop_body = (value: String, exit_label: String, next_label: String) ->
+    const place = g.ir.assign("load i64, ptr #{counter}")
+    const next_place = g.ir.assign("add i64 #{place}, 1")
+    g.ir.emit "store i64 #{next_place}, ptr #{counter}"
     const define = (scope: Map<String, CodegenLocal>) ->
       scope[variable.name] = store_in_slot(g, value, item)
+      define_index scope, place
     generate_loop_body g, body, exit_label, next_label, define
   emit_iter_loop g.ir, iter, item, loop_body, () -> emit_exception_check(g)
   release_scope g, iter_scope

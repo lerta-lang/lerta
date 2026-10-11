@@ -23,7 +23,6 @@ The planned syntax, control flow, types, operators and strings.
 ### Iterables
 
 - More methods of `Array` and `Iter<T>` besides `map`/`filter`/`take`/`any`/`all`/`find`.
-- `for` takes its item apart as a destructuring declaration does: `for { index, item } in xs.with_index()`, so that pairs and indexed items read without a name for the pair.
 - A comprehension may have several `for`s, the later ones nested in the earlier: `[f(x, y) for x in xs for y in ys]`.
 - Later, `Iter<T>` moves to `std/builtins.lerta` as a generic class that holds such a value and the started flag, once generic classes exist, so that the compiler no longer builds `Iter`s in itself (see [internals](../internals.md#lazy-iterators)) and `take` is written in Lerta. Code that uses `Iter`s does not change.
 
@@ -81,5 +80,7 @@ Interfaces and generics are in [objects](objects.md).
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
 - `Binary` literals (`'...'.binary` can substitute).
 - How a range counts down or by a step (`for i in n...0`, `by 2`): `for` over a range only counts up by 1 now, so a reversed loop takes a `while`.
+- Tuples, as `zip` would give, `for (a, b) in zip(xs, ys)`: their type `(A, B)`, which only `->` tells from a function type's parameters, their values `(a, b)`, how they are taken apart and whether their items can be read by position. Most loops over two arrays read the other by the index (`for x, i in xs`) for now.
+- An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
 - How to apply a function to an optional value, giving nil for nil (`x then f(x) else nil` now), as Swift's `map` on an optional or Kotlin's `?.let`.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).

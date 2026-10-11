@@ -131,12 +131,12 @@ const wrap_in_postfix_condition = (tokens: TokenStream, statement: Statement): S
     else While(condition, position, body: [statement])
 
 const wrap_in_for = (tokens: TokenStream, statement: Statement) ->
-  const { variable, iterable, guard } = parse_loop_header(tokens)
+  const { variable, index, iterable, guard } = parse_loop_header(tokens)
   const position = statement.position
   const body: Array<Statement> = case
     when guard then [If(position, condition: guard, then_body: [statement], else_body: [])]
     else [statement]
-  For variable, iterable, body, position
+  For variable, iterable, body, position, index
 
 const parse_declaration = (tokens: TokenStream) ->
   const token = tokens.next()
@@ -226,14 +226,14 @@ const parse_command_call = (tokens: TokenStream) ->
   callee = Member(position, object: callee, name: parse_identifier(tokens)) while tokens.accept('.')
   call_of callee, parse_arguments(tokens), []
 
-# `for <name> in <expression>` followed by an indented block.
+# `for <name>[, <index>] in <expression>` followed by an indented block.
 const parse_for = (tokens: TokenStream) ->
   const position = token_position(tokens.peek())
-  const { variable, iterable, guard } = parse_loop_header(tokens)
+  const { variable, index, iterable, guard } = parse_loop_header(tokens)
   if guard
     const message = "a for loop with a block has no 'when'; write an if in the block"
     tokens.fail guard.position, message
-  For variable, iterable, position, body: parse_block(tokens)
+  For variable, iterable, position, index, body: parse_block(tokens)
 
 # A condition, or `const name = value`, which holds when the value is not nil.
 const parse_condition = (tokens: TokenStream): Condition ->

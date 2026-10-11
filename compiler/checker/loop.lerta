@@ -27,12 +27,18 @@ const define_loop_variable = (body: Body, variable: Identifier, type: Type) ->
   const local = Local(type, identifier: variable)
   define_local body, local
 
+# The item, and its place, an Int, if the loop names it.
+const define_loop_variables = (body: Body, variable: Identifier, index: Identifier?, type: Type) ->
+  define_loop_variable body, variable, type
+  define_loop_variable body, index, int_type if index
+
 # A range gives Int values; an array, a Binary or an Iter gives its items, and so does what
 # Iterable gives its Iter (see iterated).
 export const check_for = (body: Body, for_statement: For) ->
-  const { iterable, variable } = for_statement
+  const { iterable, variable, index } = for_statement
   const item_type = type_of_iterated(body, iterable)
-  check_loop_body body, for_statement.body, () -> define_loop_variable(body, variable, item_type)
+  const define = () -> define_loop_variables(body, variable, index, item_type)
+  check_loop_body body, for_statement.body, define
 
 export const check_while = (body: Body, while_statement: While) ->
   const define = check_condition(body, while_statement.condition)
@@ -42,14 +48,14 @@ export const check_while = (body: Body, while_statement: While) ->
 export const type_of_comprehension = (
   body: Body, comprehension: Comprehension, expected: Type?
 ): Type ->
-  const { element, variable, iterable, guard } = comprehension
+  const { element, variable, index, iterable, guard } = comprehension
   const item_type = type_of_iterated(body, iterable)
   if comprehension.lazy != nil
     return type_of_iter_comprehension(body, comprehension, item_type, expected)
   const expected_element = expected_array_element(expected)
   var element_type: Type = void_type
   const define = ->
-    define_loop_variable body, variable, item_type
+    define_loop_variables body, variable, index, item_type
     if guard
       expect_condition body, guard
       narrow_where_holds body, guard
