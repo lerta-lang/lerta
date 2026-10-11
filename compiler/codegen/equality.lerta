@@ -7,7 +7,7 @@ import { from_item } from './array'
 import {
   emit_drop_function, emit_field_pointer, emit_member_dispatch, emit_record_field_pointer
 } from './heap_object'
-import { IrBuilder, IrModule } from './ir_builder'
+import { emit_branch, IrBuilder, IrModule } from './ir_builder'
 import { ir_type } from './lerta_ir'
 import { emit_is_present, emit_unwrap } from './optional'
 import { call_runtime } from './runtime_calls'
@@ -131,22 +131,6 @@ const emit_union_equals = (
     const of_member = (member: Type) -> emit_equals_by_contents(ir, program, left, right, member)
     emit_member_dispatch ir, left, type.members, 'i1', of_member
   emit_branch ir, 'i1', same_type, compare_members, 'false'
-
-# A value of the IR type: `then_value` where the condition holds, computed only there, and
-# `otherwise` elsewhere.
-const emit_branch = (
-  ir: IrBuilder, type: String, condition: String, then_value: () -> String, otherwise: String
-) ->
-  const from = ir.current_block
-  const then_label = ir.fresh_label('equals.then')
-  const end_label = ir.fresh_label('equals.end')
-  ir.emit "br i1 #{condition}, label %#{then_label}, label %#{end_label}"
-  ir.start_block then_label
-  const value = then_value()
-  const value_block = ir.current_block
-  ir.emit "br label %#{end_label}"
-  ir.start_block end_label
-  ir.assign "phi #{type} [ #{otherwise}, %#{from} ], [ #{value}, %#{value_block} ]"
 
 const all_of = (ir: IrBuilder, tests: Array<String>) ->
   var all = 'true'

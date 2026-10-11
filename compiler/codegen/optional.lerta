@@ -1,7 +1,7 @@
 # Optional values in the generated code. An optional reference is a pointer that is null for nil,
 # and an optional interface value is one whose data is (see is_nil_by_null); an optional Int, Byte
 # or Bool is a `{ i1, T }` whose flag tells whether the value is there.
-import { IrBuilder } from './ir_builder'
+import { emit_branch, IrBuilder } from './ir_builder'
 import { emit_interface_data, ir_type, is_nil_by_null } from './lerta_ir'
 import { is_reference_type, optional_type, OptionalType, Type } from '../types'
 
@@ -39,13 +39,4 @@ export const emit_present_test = (
   ir: IrBuilder, operand: String, type: Type, test: (String) -> String
 ) ->
   const present = emit_is_present(ir, operand, type)
-  const entry = ir.current_block
-  const present_label = ir.fresh_label('present')
-  const end_label = ir.fresh_label('present.end')
-  ir.emit "br i1 #{present}, label %#{present_label}, label %#{end_label}"
-  ir.start_block present_label
-  const matched = test(emit_unwrap(ir, operand, type))
-  const matched_block = ir.current_block
-  ir.emit "br label %#{end_label}"
-  ir.start_block end_label
-  ir.assign "phi i1 [ false, %#{entry} ], [ #{matched}, %#{matched_block} ]"
+  emit_branch ir, 'i1', present, () -> test(emit_unwrap(ir, operand, type)), 'false'

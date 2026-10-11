@@ -20,20 +20,14 @@ export const parse_type_name = (tokens: TokenStream): TypeName ->
 # lines below, one or more on each line.
 export const parse_aliased_type = (tokens: TokenStream): TypeName ->
   return parse_type_name(tokens) if tokens.peek().kind != NEWLINE
-  tokens.next()
-  tokens.expect INDENT, 'indented union members'
+  const lines = tokens.parse_lines('indented union members', () -> parse_union_members(tokens))
   const members: Array<UnionMember> = []
-  while tokens.peek().kind != DEDENT
-    members.append parse_union_members(tokens)
-    tokens.expect_line_end()
-  tokens.next()
+  members.append line for line in lines
   union_of members
 
 # `A | B | ...`, or one member alone.
 const parse_union_members = (tokens: TokenStream) ->
-  const members = [parse_union_member(tokens)]
-  members.push parse_union_member(tokens) while tokens.accept('|')
-  members
+  tokens.parse_separated '|', () -> parse_union_member(tokens)
 
 # The union of the members, or the member alone.
 const union_of = (members: Array<UnionMember>): TypeName ->
@@ -80,8 +74,7 @@ export const parse_named_type = (tokens: TokenStream) ->
 # `<A, B>`.
 export const parse_type_arguments = (tokens: TokenStream) ->
   tokens.expect '<', "'<'"
-  const args = [parse_type_name(tokens)]
-  args.push parse_type_name(tokens) while tokens.accept(',')
+  const args = tokens.parse_separated(',', () -> parse_type_name(tokens))
   tokens.expect '>', "'>'"
   args
 
@@ -90,14 +83,7 @@ export const parse_type_arguments = (tokens: TokenStream) ->
 export const starts_type_arguments = (tokens: TokenStream) ->
   const open = tokens.peek()
   return false if open.kind != '<' or open.spaced
-  var depth = 0
-  var offset = 0
-  while true
-    const kind = tokens.peek_at(offset).kind
-    return false if not is_one_of(kind, TYPE_TOKEN_KINDS)
-    depth += 1 if kind == '<'
-    depth -= 1 if kind == '>'
-    break if depth == 0
-    offset += 1
-  const next = tokens.peek_at(offset + 1)
+  const is_type_token = (kind: TokenKind) -> is_one_of(kind, TYPE_TOKEN_KINDS)
+  const close = tokens.closing_offset('<', '>', is_type_token) ? return false
+  const next = tokens.peek_at(close + 1)
   next.kind == '(' and not next.spaced

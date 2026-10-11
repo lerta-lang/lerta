@@ -29,15 +29,9 @@ const looks_like_function_literal = (tokens: TokenStream) ->
   return third == ':' or third == '->' if second == ')'
   # `(x = 1)` is no expression, as an assignment is a statement.
   return true if second == IDENTIFIER and (third == ':' or third == '=')
-  var depth = 0
-  var offset = 0
-  while true
-    const kind = tokens.peek_at(offset).kind
-    depth += 1 if kind == '('
-    depth -= 1 if kind == ')'
-    break if depth == 0 or kind == NEWLINE or kind == EOF
-    offset += 1
-  depth == 0 and tokens.peek_at(offset + 1).kind == '->'
+  const on_line = (kind: TokenKind) -> kind != NEWLINE and kind != EOF
+  const close = tokens.closing_offset('(', ')', on_line) ? return false
+  tokens.peek_at(close + 1).kind == '->'
 
 # `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted, and so may
 # the parameters' types, `(a, b) -> body`, where a function type is expected. Type parameters,
@@ -77,8 +71,7 @@ const parse_type_annotation = (tokens: TokenStream) ->
 # `<T, U: Stringable, X: Iterable<T>>`.
 export const parse_type_parameters = (tokens: TokenStream) ->
   tokens.expect '<', "'<'"
-  const type_params = [parse_type_parameter(tokens)]
-  type_params.push parse_type_parameter(tokens) while tokens.accept(',')
+  const type_params = tokens.parse_separated(',', () -> parse_type_parameter(tokens))
   tokens.expect '>', "'>'"
   type_params
 
@@ -196,8 +189,10 @@ const parse_catch = (tokens: TokenStream) ->
 const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
   tokens.expect 'when', "'when'"
   # A pattern stops before `then`, which begins the arm's value.
-  const patterns = [parse_coalesce(tokens)]
-  patterns.push parse_coalesce(tokens) while has_subject and tokens.accept(',')
+  const parse_pattern = () -> parse_coalesce(tokens)
+  const patterns = case
+    when has_subject then tokens.parse_separated(',', parse_pattern)
+    else [parse_pattern()]
   CaseArm patterns, body: parse_arm_body(tokens, 'then')
 
 # A simple statement on the same line (`when c then x`, `else i += 1`), or an indented block.

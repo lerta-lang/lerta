@@ -108,7 +108,7 @@ export const parse_enum = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   const has_members = tokens.peek().kind != NEWLINE or tokens.peek_at(1).kind == INDENT
   tokens.fail position, 'an enum needs at least one member' if not has_members
-  const members = parse_member_lines(tokens, () -> parse_enum_member(tokens))
+  const members = tokens.parse_lines('indented members', () -> parse_enum_member(tokens))
   EnumDeclaration name, members, position
 
 # A name, or a string literal, whose text must be known without running the program.
@@ -132,7 +132,7 @@ export const parse_extend = (tokens: TokenStream) ->
   Extend type_params, type, position, members: parse_members(tokens)
 
 const parse_members = (tokens: TokenStream) ->
-  parse_member_lines tokens, () -> parse_member(tokens)
+  tokens.parse_lines 'indented members', () -> parse_member(tokens)
 
 # `weak` is not a keyword, so that it stays usable as a name; `weak!` is a modifier.
 const parse_member_modifier = (tokens: TokenStream): MemberModifier? ->
@@ -144,17 +144,6 @@ const parse_member_modifier = (tokens: TokenStream): MemberModifier? ->
   tokens.next() if modifier
   tokens.next() if is_weak
   modifier
-
-# A newline and an indented block of members, one per line.
-const parse_member_lines = <T>(tokens: TokenStream, parse_line: () -> T) ->
-  tokens.expect NEWLINE, 'end of line'
-  tokens.expect INDENT, 'indented members'
-  const members: Array<T> = []
-  while tokens.peek().kind != DEDENT
-    members.push parse_line()
-    tokens.expect_line_end()
-  tokens.next()
-  members
 
 # `[const | var | weak!] name[: Type][ = [default] value]`, with a type, a value or both.
 const parse_member = (tokens: TokenStream) ->
