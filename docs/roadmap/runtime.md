@@ -33,6 +33,7 @@ For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-
 
 - To break a cycle through a closure, put the value in a [`weak var`](objects.md#weak-references) local and capture that.
 - Cycles across libraries are left to the leak check of the debug runtime ([internals](../internals.md#leak-checking)).
+- A leak that the debug runtime reports becomes a warning, not a failure: the program exits with 0, rather than 1 as now ([compiler](../reference/compiler.md)), so that one cycle does not fail a program whose output is right. The run tests still catch it, as an unexpected line in stderr.
 - The typical cycle (a closure that captures `@`, held through a field of `@`) gets a compiler warning. It comes before async/await, which makes such closures common.
 
 ## Concurrency

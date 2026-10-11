@@ -9,11 +9,13 @@ The planned syntax, control flow, types, operators and strings.
 - Variadic parameters are `xs...`.
 - A function literal held by a local `const` may have [defaults](../reference/functions.md), as a top-level function does. Its defaults may use the locals it captures, so each is computed by a closure.
 - An item inside brackets may open an indented block (a `case`, a function body).
+- An error in a [call without parentheses](../reference/syntax.md#calls) suggests the fix: `f g x` suggests `f g(x)`, and a callee that is not a name with `.name`s, as `xs[i].push x`, suggests `xs[i].push(x)`. An undefined name that is a word only in its place, as `default` in `default - 1`, says so.
 - An `if` or a `case` value may start on the next line, one level deeper, also as the argument of a call without brackets (`print`, then `case` on the next line) and after the `then` of a `case` arm, as it may after `=`, so that the [style](../reference/style.md) can always put it there.
 
 ## Control flow
 
 - Narrowing a `var`.
+- A `Bool?` is not a condition, nor an operand of `and`, `or` and `not`: write `b == true` or `b != nil`. Now it holds when it is `true` ([the reference](../reference/control-flow.md)), so nil and `false` read alike.
 - Code after a call to a function returning `never` (`exit`) is unreachable.
 - Because `void` is not a type, generics cannot treat "returns a value / returns nothing" uniformly, and the standard library splits such functions, like `map` / `for_each`.
 
@@ -63,7 +65,7 @@ Interfaces and generics are in [objects](objects.md).
 
 - A separate iterator for graphemes, besides the code points that a `String` gives (see [the reference](../reference/types.md#string)).
 - The code points are `UInt32` values instead of `Int`s once that type exists (see [numeric types](#numeric-types)).
-- Slicing uses a separate type `StringSlice`, as in Swift. Converting to `String` is an explicit copy.
+- `s.trim()` drops the whitespace at both ends, and `s.replace(part, by)` replaces each occurrence of `part`.
 - Ropes, so that `+` is O(1).
 - Small strings as immediate values.
 - For I/O, sockets and FFI, `void*` is `Binary` and `char*` is `String`. Encoding conversions are provided as functions between `Binary` and `String`.
@@ -86,4 +88,5 @@ Interfaces and generics are in [objects](objects.md).
 - Tuples, as `zip` would give, `for (a, b) in zip(xs, ys)`: their type `(A, B)`, which only `->` tells from a function type's parameters, their values `(a, b)`, how they are taken apart and whether their items can be read by position. Most loops over two arrays read the other by the index (`for x, i in xs`) for now.
 - An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
 - How to apply a function to an optional value, giving nil for nil (`x then f(x) else nil` now), as Swift's `map` on an optional or Kotlin's `?.let`.
+- How to take part of a `String`: a separate type `StringSlice`, as in Swift, whose conversion to `String` is an explicit copy, or a `String` method. With it, how to find a part (an `s.index_of(part)` giving a byte offset or a slice), since a `String` has no integer index (see [the reference](../reference/types.md#string)). `s.binary.text(i, j)!` serves for now.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).

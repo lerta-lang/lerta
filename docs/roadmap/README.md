@@ -11,6 +11,14 @@ When a feature is implemented, its description moves to [the reference](../refer
 | [runtime.md](runtime.md) | Safety, errors and exceptions, memory management, concurrency |
 | [programs.md](programs.md) | Modules, FFI, the standard library, tools |
 
+## Dependencies
+
+Where one part needs another first, across areas:
+
+- Checking a generic body at definition ([objects](objects.md#generics)) needs the [operator interfaces](language.md#operator-overloading), since a bound must then allow every operator the body uses, as `x * 2`.
+
+An order within one area is stated in its file.
+
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
