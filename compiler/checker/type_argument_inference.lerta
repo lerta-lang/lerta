@@ -91,16 +91,16 @@ export const infer_type_arguments = (
     inferred.push InferredArgument(arg, type, index)
   const is_function = (i: Int) -> call.args[i] is FunctionLiteral
   const is_literal = (i: Int) -> needs_context(body, call.args[i]) and not is_function(i)
-  check_argument i for i in 0...call.args.length when not needs_context(body, call.args[i])
+  check_argument i for arg, i in call.args when not needs_context(body, arg)
   if const result = generic.result
     bind_from result, expected, call.position if expected
   check_argument i for i in 0...call.args.length when is_literal(i)
   # The type argument of a bounded type parameter gives those that its bound names, as `X:
   # Iterable<T>` gives T, before function literals take their parameters' types.
   const bind_from_bounds = () ->
-    for i in 0...generic.type_params.length
+    for type_param, i in generic.type_params
       const bound = generic.bounds[i] ? continue
-      const known = bindings[generic.type_params[i].name.name] ? continue
+      const known = bindings[type_param.name.name] ? continue
       infer_through_members body, bound, known.type, known.at, bind_at(known.at)
   bind_from_bounds()
   check_argument i for i in 0...call.args.length when is_function(i)
@@ -120,10 +120,10 @@ const written_bindings = (body: Body, call: Call, generic: GenericFunction) ->
   if call.type_args.length != type_params.length
     const counts = "takes #{type_params.length} type argument(s), got #{call.type_args.length}"
     fail body.program, call.position, "'#{name.name}' #{counts}"
-  for i in 0...type_params.length
+  for type_param, i in type_params
     const type_name = call.type_args[i]
     const type = resolve(body.program, body.resolver, type_name)
-    bindings[type_params[i].name.name] = TypeBinding(type, at: type_name.position)
+    bindings[type_param.name.name] = TypeBinding(type, at: type_name.position)
   bindings
 
 # A literal whose type may depend on what is expected of it, or a name that may stand for a

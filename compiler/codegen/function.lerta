@@ -104,14 +104,14 @@ export const generate_function = (
   g.result_type = type.result
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: '%this', type: this_type) if this_type
-  for i in 0...literal.params.length
-    scope[literal.params[i].name.name] = ValueLocal(operand: "%p#{i}", type: type.params[i])
+  for param, i in literal.params
+    scope[param.name.name] = ValueLocal(operand: "%p#{i}", type: type.params[i])
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
   const captured = captures ? []
   const slot_of = (capture: Capture) -> capture.is_var then CELL_SLOT else value_field(capture.type)
   const slots = [slot_of(capture) for capture in captured]
-  for i in 0...captured.length
-    const { name, type, is_var } = captured[i]
+  for capture, i in captured
+    const { name, type, is_var } = capture
     const pointer = emit_capture_pointer(ir, '%closure', slots, i)
     const value = ir.assign("load #{slots[i].ir_type}, ptr #{pointer}")
     const cell = CellSlot(cell: value, is_owned: false)
@@ -125,7 +125,7 @@ export const generate_function = (
   const param_list: Array<String> = []
   param_list.push 'ptr %closure' if captures != nil
   param_list.push "#{ir_type(this_type)} %this" if this_type
-  param_list.push "#{ir_type(type.params[i])} %p#{i}" for i in 0...type.params.length
+  param_list.push "#{ir_type(param)} %p#{i}" for param, i in type.params
   finish g, "#{ir_return_type(type.result)} #{symbol}(#{param_list.join(', ')})"
   for given in required_params(literal)...literal.params.length
     const entry_generator = function_generator(g.code, g.extensions, g.facts)
@@ -142,8 +142,7 @@ const generate_default_entry = (
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: '%this', type: this_type) if this_type
   const operands: Array<String> = []
-  for i in 0...literal.params.length
-    const param = literal.params[i]
+  for param, i in literal.params
     const param_type = type.params[i]
     if i < given
       scope[param.name.name] = ValueLocal(operand: "%p#{i}", type: param_type)
@@ -154,7 +153,7 @@ const generate_default_entry = (
       operands.push value
   const args: Array<String> = []
   args.push "#{ir_type(this_type)} %this" if this_type
-  args.push "#{ir_type(type.params[i])} #{operands[i]}" for i in 0...operands.length
+  args.push "#{ir_type(type.params[i])} #{operand}" for operand, i in operands
   const result = call_user_function(g.ir, symbol, type, args.join(', '))
   emit_exception_check g
   emit_return g, result
@@ -218,9 +217,9 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
     emit_exception_check g
   ir.emit "ret ptr #{object}"
   const params: Array<String> = []
-  for i in 0...arguments.length
-    params.push "#{ir_type(arguments[i].type!)} %p#{i}"
-    params.push "i1 %given#{i}" if arguments[i].has_default
+  for argument, i in arguments
+    params.push "#{ir_type(argument.type!)} %p#{i}"
+    params.push "i1 %given#{i}" if argument.has_default
   finish g, "ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
 
 const argument_index = (arguments: Array<FieldInfo>, field: FieldInfo) ->

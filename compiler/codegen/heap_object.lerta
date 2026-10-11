@@ -46,8 +46,7 @@ export const define_heap_object = (
   if deinit
     module.declare 'lerta_run_deinit', 'declare void @lerta_run_deinit(ptr, ptr)'
     ir.emit "call void @lerta_run_deinit(ptr %object, ptr #{deinit})"
-  for i in 0...fields.length
-    const field = fields[i]
+  for field, i in fields
     continue if field.owned == NONE
     const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
     emit_release_stored ir, pointer, field.ir_type, field.owned
@@ -129,15 +128,15 @@ export const emit_member_dispatch = (
 ) ->
   const done = ir.fresh_label('member.done')
   const incoming: Array<String> = []
-  for i in 0...members.length
+  for member, i in members
     const is_last = i == members.length - 1
     const next = is_last then '' else ir.fresh_label('member.next')
     if not is_last
       const matched = ir.fresh_label('member.matched')
-      const test = emit_type_test(ir, object, members[i])
+      const test = emit_type_test(ir, object, member)
       ir.emit "br i1 #{test}, label %#{matched}, label %#{next}"
       ir.start_block matched
-    const value = of_member(members[i])
+    const value = of_member(member)
     const block = ir.current_block
     ir.emit "br label %#{done}"
     ir.start_block next if not is_last
@@ -165,8 +164,7 @@ export const emit_record = (ir: IrBuilder, type: Type, values: Map<String, Strin
   const record_type = record_type_of(type)
   const layout = record_layout(ir, record_type)
   const record = emit_heap_allocate(ir, layout, drop_name(layout))
-  for i in 0...record_type.fields.length
-    const field = record_type.fields[i]
+  for field, i in record_type.fields
     const pointer = emit_heap_field_pointer(ir, layout, record, i)
     ir.emit "store #{ir_type(field.type)} #{values[field.name]!}, ptr #{pointer}"
   record
