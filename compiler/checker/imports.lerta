@@ -4,7 +4,7 @@ import {
   Declaration, EnumDeclaration, Exportable, exported_declaration, Extern, FunctionLiteral
   Identifier, Import, InterfaceDeclaration, Statement, TypeAlias, TypeDeclaration
 } from '../ast'
-import { fail } from './diagnostics'
+import { fail, fail_already_defined } from './diagnostics'
 import { generic_function } from './functions'
 import { GenericRef } from './generics'
 import { InterfaceInfo } from './interfaces'
@@ -119,7 +119,7 @@ const add_import = (shared: Shared, statement: Import, exporter: Int) ->
     if not program.shared[exporter].exported.has(name.name)
       fail program, name.position, "'#{statement.module}' has no export '#{name.name}'"
     const local = imported.alias ? name
-    fail program, local.position, "'#{local.name}' is already defined" if names.has(local.name)
+    fail_already_defined program, local if names.has(local.name)
     const source = ExportRef(module_index: exporter, name: name.name)
     names[local.name] = ImportedName(source, name: local, used: false, module: statement.module)
 
@@ -127,7 +127,7 @@ const add_import = (shared: Shared, statement: Import, exporter: Int) ->
 # modules; it is never warned about as unused.
 export const add_extern = (shared: Shared, name: Identifier, type: Type, symbol: String) ->
   const names = shared.imports.names
-  fail shared.program, name.position, "'#{name.name}' is already defined" if names.has(name.name)
+  fail_already_defined shared.program, name if names.has(name.name)
   const source = ExternExport(type, symbol)
   names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
 

@@ -6,7 +6,7 @@ import {
   FunctionTypeName, InterfaceDeclaration, NamedType, Position, RecordTypeName, TypeName
   UnionTypeName
 } from '../ast'
-import { fail } from './diagnostics'
+import { fail, fail_already_defined } from './diagnostics'
 import { reject_bad_type_parameters } from './generics'
 import { builtin_export, has_import, imported_export, InterfaceExport } from './imports'
 import { ProgramWide, Shared } from './shared'
@@ -70,8 +70,8 @@ export const std_interface = (shared: Shared, name: String, at: Position): Inter
 export const add_interfaces = (shared: Shared, declarations: Array<InterfaceDeclaration>) ->
   const program = shared.program
   for declaration in declarations
-    const { name, position } = declaration.name
-    fail program, position, "'#{name}' is already defined" if has_declared_type(shared, name)
+    const { name } = declaration.name
+    fail_already_defined program, declaration.name if has_declared_type(shared, name)
     reject_invalid_members program, declaration
     const module_index = shared.index
     const type_params = [param.name.name for param in declaration.type_params]
@@ -103,8 +103,8 @@ const reject_invalid_type_parameters = (program: ProgramWide, info: InterfaceInf
   const type_params = info.declaration!.type_params
   reject_bad_type_parameters program, module_resolver(info.module_index!), type_params
   for param in type_params
-    const { name, position } = param.name
-    fail program, position, "'#{name}' is already defined" if name == SELF
+    const { name } = param.name
+    fail_already_defined program, param.name if name == SELF
     if const bound = param.bound
       fail program, bound.position, "an interface's type parameter takes no bound"
 

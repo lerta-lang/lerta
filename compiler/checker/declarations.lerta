@@ -4,7 +4,7 @@ import {
   Declaration, EnumDeclaration, Extend, FunctionLiteral, Import, InterfaceDeclaration, Statement
   TypeAlias, TypeDeclaration
 } from '../ast'
-import { fail } from './diagnostics'
+import { fail, fail_already_defined } from './diagnostics'
 import { declare_extend } from './extend_declarations'
 import { add_enums } from './enums'
 import { add_imported } from './extensions'
@@ -12,10 +12,10 @@ import { declare_externs } from './externs'
 import { add_function, add_generic_function } from './functions'
 import { make_generic_function } from './generics'
 import { add_imports, has_import } from './imports'
-import { add_interfaces, has_declared_type, resolve_interfaces } from './interfaces'
+import { add_interfaces, resolve_interfaces } from './interfaces'
 import { add_members, add_objects } from './object_types'
 import { Shared } from './shared'
-import { add_alias, has_alias, resolve_aliases } from './type_names'
+import { add_alias, names_type_or_import, resolve_aliases } from './type_names'
 
 # The module's types (classes, structs and enums), interfaces, aliases and imports, which the
 # declarations of the modules in its import cycle may use before their own are complete.
@@ -80,8 +80,7 @@ const reject_types_named_like_imports = (shared: Shared, statements: Array<State
         when InterfaceDeclaration then statement.name
         when TypeAlias then statement.name
         else continue
-    if has_import(shared, name.name)
-      fail shared.program, name.position, "'#{name.name}' is already defined"
+    fail_already_defined shared.program, name if has_import(shared, name.name)
 
 const add_top_level_functions = (shared: Shared, statements: Array<Statement>) ->
   const program = shared.program
@@ -91,9 +90,7 @@ const add_top_level_functions = (shared: Shared, statements: Array<Statement>) -
     continue if not (literal is FunctionLiteral)
     fail program, statement.position, 'a function must be declared with const' if statement.mutable
     const name = statement.name
-    const is_type = has_declared_type(shared, name.name) or has_alias(shared, name.name)
-    if is_type or has_import(shared, name.name)
-      fail program, name.position, "'#{name.name}' is already defined"
+    fail_already_defined program, name if names_type_or_import(shared, name.name)
     if literal.type_params.length == 0
       add_function shared, name.name, name, literal, nil
       continue

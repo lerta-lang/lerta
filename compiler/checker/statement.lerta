@@ -5,11 +5,9 @@ import {
   Statement, statement_else_body, TypeAlias, TypeDeclaration, While
 } from '../ast'
 import { check_assignment } from './assignment'
-import { fail, warn_if_unused } from './diagnostics'
+import { fail, fail_already_defined, warn_if_unused } from './diagnostics'
 import { expect_condition, expect_optional, expect_type, type_of } from './expression'
 import { has_function, required_params } from './functions'
-import { has_import } from './imports'
-import { has_declared_type } from './interfaces'
 import { check_for, check_while } from './loop'
 import { ends_with_jump, narrow, narrowings_of, narrowings_where } from './narrowing'
 import { ObjectInfo } from './object_types'
@@ -17,7 +15,7 @@ import { check_last_statement } from './result'
 import { Local } from './scopes'
 import { Body, SelfContext } from './shared'
 import { define_top_level } from './top_level_values'
-import { has_alias, resolve } from './type_names'
+import { names_type_or_import, resolve } from './type_names'
 import {
   format_type, FunctionType, is_kind, is_one_of_kinds, IterType, never_type, Type, void_type
 } from '../types'
@@ -197,9 +195,8 @@ export const define_local = (body: Body, local: Local) ->
   const { name, position } = local.identifier
   const { program, shared } = body
   const is_top_level = body.context == nil and body.scopes.depth() == 1
-  const is_declared = has_function(shared, name) or has_declared_type(shared, name)
-  const is_taken = is_declared or has_import(shared, name) or has_alias(shared, name)
-  fail program, position, "'#{name}' is already defined" if is_top_level and is_taken
+  const is_taken = has_function(shared, name) or names_type_or_import(shared, name)
+  fail_already_defined program, local.identifier if is_top_level and is_taken
   if not body.scopes.define(name, local)
     fail program, position, "'#{name}' is already defined in this scope"
   define_top_level shared.top_level, local if is_top_level
