@@ -8,12 +8,13 @@ import { Instance } from './generics'
 import { InterfaceMember, iter_source_type, members_for, std_interface } from './interfaces'
 import { generic_method, member_type_by_name } from './member'
 import { find_method, MethodSource } from './methods'
+import { ObjectInfo } from './object_types'
 import { reject_unsatisfied } from './satisfaction'
 import { Body, Shared } from './shared'
 import { module_resolver } from './type_names'
 import {
-  format_type, inner_of, InterfaceType, is_one_of_kinds, is_reference_type, IterType, Type
-  UnionType
+  format_type, inner_of, InterfaceType, is_one_of_kinds, is_reference_type, IterType, same_type
+  Type, UnionType
 } from '../types'
 
 # How the type gives a member of the interface: by a method, as find_method finds it, with the
@@ -84,19 +85,14 @@ const itab_entry = (body: Body, type: Type, member: InterfaceMember, at: Positio
   const instance = generic then receiver_instance(body, generic, type, at, nil) else nil
   ItabEntry member, method, instance
 
-# The types of the runtime's errors, which std:builtins declares, in the order of LertaErrorKind
-# in runtime/lerta.h.
-export const RUNTIME_ERRORS = [
-  'IndexError', 'ArithmeticError', 'NilError', 'CastError', 'IterError', 'WeakError', 'IOError'
-  'ValueError', 'InitError'
-]
-
 # The plans of the itabs of the runtime's errors, from which codegen makes them (see
-# runtime_errors), by std:builtins, the module that `shared` is.
+# runtime_errors), by std:builtins, the module that `shared` is: its structs that declare Error, in
+# the order they are declared there.
 export const plan_runtime_errors = (shared: Shared) ->
   const resolver = module_resolver(shared.index)
   const body = Body(shared, resolver, extensions: shared.extensions, facts: shared.facts)
   const at = Position(line: 1, column: 1)
   const error = std_interface(shared, 'Error', at).type
-  const itab = (name: String) -> itab_of(body, at, shared.objects[name]!.type, error)
-  shared.program.runtime_errors = RUNTIME_ERRORS.map(itab).to_array()
+  const declares_error = (info: ObjectInfo) -> info.satisfies and same_type(info.satisfies!, error)
+  const errors = (info for info in shared.objects.values() when declares_error(info))
+  shared.program.runtime_errors = [itab_of(body, at, info.type, error) for info in errors]

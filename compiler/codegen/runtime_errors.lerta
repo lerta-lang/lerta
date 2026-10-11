@@ -2,7 +2,7 @@
 # one of the kind, of the type that std:builtins declares, with a message, and sets it as the
 # pending exception. The program registers it with the runtime first thing, so that the runtime's
 # C functions throw through it (see lerta_raise), and so do the checks of the generated code.
-import { Itab, RUNTIME_ERRORS } from '../checker/interface_values'
+import { Itab } from '../checker/interface_values'
 import { emit_unwind } from './exceptions'
 import { emit_interface_value } from './interface'
 import { Generator } from './generator'
@@ -51,6 +51,8 @@ export const UNWRAPPED_NIL = CheckedError(type_name: 'NilError', message: 'unwra
 export const FAILED_CAST = CheckedError(type_name: 'CastError', message: 'failed cast')
 export const DEAD_OBJECT = CheckedError(type_name: 'WeakError', message: 'weak object is gone')
 
+const type_name = (itab: Itab) -> (itab.type as ObjectType!).name
+
 # Throws the error where the condition holds, and unwinds from there.
 export const throw_if = (g: Generator, condition: String, error: CheckedError) ->
   const ir = g.ir
@@ -59,7 +61,8 @@ export const throw_if = (g: Generator, condition: String, error: CheckedError) -
   ir.emit "br i1 #{condition}, label %#{raise_label}, label %#{continue_label}"
   ir.start_block raise_label
   const message = string_constant(ir, error.message)
-  const kind = RUNTIME_ERRORS.find_index((name) -> name == error.type_name)!
+  const errors = g.code.program.runtime_errors
+  const kind = errors.find_index((itab) -> type_name(itab) == error.type_name)!
   ir.module.declare 'lerta_raise', 'declare void @lerta_raise(i32, ptr)'
   ir.emit "call void @lerta_raise(i32 #{kind}, ptr #{message})"
   emit_unwind g

@@ -282,8 +282,7 @@ LertaString *lerta_exception_message(void);
 // does not run.
 void lerta_free_unfinished(void *object);
 
-// The kinds of the runtime's errors, by their types in std:builtins, in the order of
-// RUNTIME_ERRORS in compiler/checker/interface_values.lerta.
+// The kinds of the runtime's errors, by their types, in the order std:builtins declares them.
 typedef enum {
   LERTA_INDEX_ERROR,
   LERTA_ARITHMETIC_ERROR,
