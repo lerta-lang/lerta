@@ -292,18 +292,21 @@ typedef enum {
   LERTA_ITER_ERROR,
   LERTA_WEAK_ERROR,
   LERTA_IO_ERROR,
-  LERTA_VALUE_ERROR
+  LERTA_VALUE_ERROR,
+  LERTA_INIT_ERROR
 } LertaErrorKind;
 
 // Throws an error of the kind with the message, borrowed: sets the pending exception, which the
 // generated code checks after the call, and the caller returns at once. The program registers
 // the function that makes the error (see lerta_register_raise); without one, as in a program
 // that is std:builtins or one of the modules it imports, which have no error types to make, it
-// stops the program as lerta_throw does.
+// stops the program with lerta_throw.
 void lerta_raise(LertaErrorKind kind, const LertaString *message);
 void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
 
-// A throw of a String prints the message to stderr and exits.
+// Prints the message to stderr and exits with status 1: for an uncaught exception, and for an
+// error raised without a raise function. Code that the seed generates calls it too, for a throw of
+// a String, which the language had before.
 _Noreturn void lerta_throw(const LertaString *message);
 // Returns false if any output to stdout has failed.
 bool lerta_stdout_flush(void);

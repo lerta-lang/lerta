@@ -1,7 +1,7 @@
 # Compiles the calculator language to LLVM IR, which clang turns into a program.
 import { tokenize } from './calc/lexer'
 import { Parser } from './calc/parser'
-import { Expr, Let, Number, Operation, Print, Statement, Variable } from './calc/syntax'
+import { CalcError, Expr, Let, Number, Operation, Print, Statement, Variable } from './calc/syntax'
 
 class Emitter
   lines: Array<String> = []
@@ -18,7 +18,7 @@ class Emitter
     case e
       when Number then e.value.to_string()
       when Variable
-        const slot = @slots[e.name] ? throw "undefined name '#{e.name}'"
+        const slot = @slots[e.name] ? throw CalcError(message: "undefined name '#{e.name}'")
         const register = @fresh()
         @emit("#{register} = load i64, ptr #{slot}")
         register
@@ -48,7 +48,7 @@ const instruction = (operator: String) ->
     when '-' then 'sub'
     when '*' then 'mul'
     when '/' then 'sdiv'
-    else throw "unknown operator '#{operator}'"
+    else throw CalcError(message: "unknown operator '#{operator}'")
 
 const compile = (source: String) ->
   const emitter = Emitter()

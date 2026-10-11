@@ -2,6 +2,10 @@
 # indentation as indent and dedent tokens, and prints them. It covers a subset of Lerta: names,
 # keywords, integers, '...' strings and some punctuation, but not "..." strings or tabs.
 
+# An error in the source, with its line.
+struct LexError
+  message: String
+
 struct Token
   kind: String
   text: String
@@ -26,6 +30,7 @@ class Lexer
   peek = (): Byte -> @position < @source.length then @source[@position] else "\n"
   text = (start: Int, end: Int) -> @source.text(start, end)
   top_indent = () -> @indents.last()
+  fail = (problem: String): never -> throw LexError(message: "#{@line}: #{problem}")
 
   run = () ->
     @scan_line() while @position < @source.length
@@ -52,7 +57,7 @@ class Lexer
     while width < @top_indent()
       @indents.pop()
       @add('dedent', '')
-    throw "#{@line}: the indentation matches no outer block" if width != @top_indent()
+    @fail('the indentation matches no outer block') if width != @top_indent()
 
   scan_token = ->
     const start = @position
@@ -70,14 +75,14 @@ class Lexer
       when c == "'"
         @position += 1
         @position += 1 while @peek() != "'" and @peek() != "\n"
-        throw "#{@line}: the string is not closed" if @peek() != "'"
+        @fail('the string is not closed') if @peek() != "'"
         @position += 1
         @add('string', @text(start + 1, @position - 1))
       else
         @scan_punctuation()
 
   scan_punctuation = ->
-    const punctuation = PUNCTUATIONS.find((p) -> @at(p)) ? throw "#{@line}: unexpected character"
+    const punctuation = PUNCTUATIONS.find((p) -> @at(p)) ? @fail('unexpected character')
     @position += punctuation.binary.length
     @add(punctuation, punctuation)
 

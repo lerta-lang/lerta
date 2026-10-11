@@ -32,7 +32,8 @@ finally
   | `WeakError` | a `weak!` field whose object is gone |
   | `IOError` | a file that cannot be read or written, a command that cannot be run |
   | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, or bytes that `text` finds not UTF-8 |
-- `throw` of a `String` stops the program with the String as its message, and so does reading a top-level value before it is initialized: they cannot be caught yet (see [the roadmap](../roadmap/runtime.md#exceptions)).
+  | `InitError` | a top-level value used before it is initialized (see [functions](functions.md)) |
+- A `String` cannot be thrown: `throw` takes an `Error`, so that a `catch` can tell errors apart by type.
 - `try` runs its block. An exception thrown there, in it or in a function it calls, goes to its `catch` clauses, tried in order: `catch e: T` takes an exception whose type is `T`, or a member of the union `T`, as `is` tells, and its block sees it as `e`, of that type; `catch e` takes any, `e` being an `Error`. A type that a catch names must be a class or struct, or a union of them, that satisfies `Error`. An exception that no catch takes goes on, as from where the `try` is.
 - `finally` and its block, after the catches, run after the try block or the catch that ran, and before an exception goes on, the one that no catch takes or that a catch throws. A `try` has at least one `catch` or a `finally`. `return`, `break` and `continue` cannot leave a `try` that has a `finally` yet.
 - `try` is an expression: its value is that of its block, or of the catch that ran, which must have one type, as the arms of a `case` must (see [control flow](control-flow.md)); if one of them gives none, it gives none. The value of `finally` is discarded.

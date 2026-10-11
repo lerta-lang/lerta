@@ -4,11 +4,11 @@
 import { Shared } from '../checker/shared'
 import { top_level_value } from '../checker/top_level_values'
 import { Module } from '../loader'
-import { TopLevelGlobal } from './generator'
-import { emit_throw } from './runtime_calls'
+import { Generator, TopLevelGlobal } from './generator'
+import { CheckedError, throw_if } from './runtime_errors'
 import { IrBuilder, IrModule } from './ir_builder'
 import {
-  emit_release_stored, ir_type, ownership, string_constant, top_level_symbol
+  emit_release_stored, ir_type, ownership, top_level_symbol
 } from './lerta_ir'
 
 export const define_top_level_globals = (ir_module: IrModule, module: Module, shared: Shared) ->
@@ -27,17 +27,12 @@ export const define_top_level_globals = (ir_module: IrModule, module: Module, sh
 export const emit_mark_initialized = (ir: IrBuilder, global: TopLevelGlobal) ->
   ir.emit "store i1 true, ptr #{global.flag}"
 
-# Throws unless the value has been initialized.
-export const emit_initialized_check = (ir: IrBuilder, global: TopLevelGlobal) ->
-  const is_set = ir.assign("load i1, ptr #{global.flag}")
-  const set_label = ir.fresh_label('value.set')
-  const unset_label = ir.fresh_label('value.unset')
-  ir.emit "br i1 #{is_set}, label %#{set_label}, label %#{unset_label}"
-  ir.start_block unset_label
-  const message = string_constant(ir, "'#{global.name}' is used before it is initialized")
-  emit_throw ir, message
-  ir.emit 'unreachable'
-  ir.start_block set_label
+# Throws an InitError unless the value has been initialized.
+export const emit_initialized_check = (g: Generator, global: TopLevelGlobal) ->
+  const is_set = g.ir.assign("load i1, ptr #{global.flag}")
+  const is_unset = g.ir.assign("xor i1 #{is_set}, true")
+  const message = "'#{global.name}' is used before it is initialized"
+  throw_if g, is_unset, CheckedError(message, type_name: 'InitError')
 
 # At the end of the program, the references the values hold.
 export const emit_release_globals = (ir: IrBuilder, globals: Array<TopLevelGlobal>) ->

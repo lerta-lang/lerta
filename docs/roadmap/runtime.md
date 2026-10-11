@@ -21,7 +21,6 @@ These apply when a value in statement position is not captured, beyond [the refe
 
 What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is in [the reference](../reference/errors.md#exceptions). Planned:
 
-- A `String` cannot be thrown, once the compiler's code that throws them throws types of errors of its own. Reading a top-level value before it is initialized, which the generated code throws as a String, throws an error of a type of its own then.
 - `return`, `break` and `continue` that leave a `try` that has a `finally`, which then runs on the way.
 - No `throws` annotation is needed (if written, it is type-checked). There is no `try` attached to calls (as in Swift).
 - Only throws can be caught; a [panic](../reference/errors.md#panics) cannot.
