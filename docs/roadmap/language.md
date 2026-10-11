@@ -79,6 +79,7 @@ Interfaces and generics are in [objects](objects.md).
 - Renaming in destructuring (`const { a: x } = value`).
 - Notation for writing an array inside an array without brackets (CoffeeScript can).
 - Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
+- How a union holds a member that is not a heap object, as `Int` or `Bool`, or `String` if it becomes an immediate value (see [internals](../internals.md#strings)): a union value is now a pointer to an object, whose member's type the drop function in its header tells (see `emit_type_test` in `compiler/codegen/heap_object.lerta`), and nil a null pointer. A tag beside a word that holds the value or the pointer keeps `Int` unboxed; boxing it into an object with a header keeps the test as it is but allocates.
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
 - `Binary` literals (`'...'.binary` can substitute).
 - How a range counts down or by a step (`for i in n...0`, `by 2`): `for` over a range only counts up by 1 now, so a reversed loop takes a `while`.
