@@ -26,8 +26,8 @@ export const check_value_type = (
     fail program, at, "#{container} cannot hold values of type #{format_type(type)}"
   type
 
-# The type of an item of a container, such as 'an array', which `at` gives. An item is 8 bytes,
-# which cannot hold an optional Int, Byte or Bool.
+# The type of an item of a container, such as 'an array', which `at` gives. An optional Int, Byte
+# or Bool has no item kind yet (see LertaItemKind in runtime/lerta.h).
 export const check_item_type = (
   program: ProgramWide, type: Type, at: Position, container: String
 ) ->
@@ -42,16 +42,19 @@ export const reject_map_key = (program: ProgramWide, key: Type, at: Position) ->
     const message = "a map key must be a value that == compares, not optional"
     fail program, at, "#{message}, got #{format_type(key)}"
 
-# The types of a map's keys and values, which `key_at` and `value_at` give: a key is one that
-# reject_map_key accepts, and a value is an item that is not optional, since a missing key reads as
-# nil.
+# The types of a map's keys and values, which `key_at` and `value_at` give (see reject_map_key and
+# check_map_value).
 export const check_map_types = (
   program: ProgramWide, key: Type, value: Type, key_at: Position, value_at: Position
 ) ->
   reject_map_key program, key, key_at
-  check_item_type program, value, value_at, 'a map'
+  check_map_value program, value, value_at
+
+# A map's value is not optional, since a missing key reads as nil.
+export const check_map_value = (program: ProgramWide, value: Type, at: Position) ->
+  check_value_type program, value, at, 'a map'
   if value is OptionalType
-    fail program, value_at, "a map cannot hold values of type #{format_type(value)}"
+    fail program, at, "a map cannot hold values of type #{format_type(value)}"
 
 # The element type comes from the expected type if there is one, so that `[[], [1]]` can be
 # typed; otherwise from the first element whose type does not come from the context and which

@@ -3,7 +3,7 @@ import {
   FunctionTypeName, Identifier, NamedType, Position, RecordTypeField, RecordTypeName, TypeAlias
   TypeName, UnionTypeName
 } from '../ast'
-import { reject_map_key } from './collection'
+import { check_item_type, check_map_value, reject_map_key } from './collection'
 import { fail, fail_already_defined } from './diagnostics'
 import { builtin_type, has_import, imported_type } from './imports'
 import {
@@ -12,7 +12,7 @@ import {
 import { ProgramWide, Shared } from './shared'
 import {
   ArrayType, binary_type, bool_type, byte_type, format_type, FunctionType, int_type, is_kind
-  is_reference_type, IterType, MapType, never_type, ObjectType, optional_type, OptionalType
+  IterType, MapType, never_type, ObjectType, optional_type, OptionalType
   record_type, RecordField, same_type, string_type, Type, union_type, UnionType, void_type
 } from '../types'
 
@@ -213,17 +213,10 @@ const resolve_key = (program: ProgramWide, resolver: Resolver, type_name: TypeNa
   reject_map_key program, type, type_name.position if not is_kind(type, TYPE_PARAMETER)
   type
 
-# A missing key reads as nil, so a value cannot be nil itself.
 const resolve_map_value = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
   const type = resolve(program, resolver, type_name)
-  if type is OptionalType
-    fail program, type_name.position, "a map cannot hold values of type #{format_type(type)}"
+  check_map_value program, type, type_name.position
   type
 
-# An array item is 8 bytes, which cannot hold an optional Int, Byte or Bool.
 const resolve_element = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
-  const type = resolve(program, resolver, type_name)
-  if type is OptionalType and not is_reference_type(type)
-    const message = "an array cannot hold values of type #{format_type(type)} yet"
-    fail program, type_name.position, message
-  type
+  check_item_type program, resolve(program, resolver, type_name), type_name.position, 'an array'

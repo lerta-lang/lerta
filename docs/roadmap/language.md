@@ -31,6 +31,7 @@ The planned syntax, control flow, types, operators and strings.
 
 - Union members other than classes and structs, where `?` binds tighter than `|` (`Int | String?` is `Int | (String?)`). `T?` is then shorthand for `T | nil`; unions remain the general form.
 - The downcast of an interface value.
+- Arrays of optional `Int`, `Byte` and `Bool` values (`Array<Int?>`), which have no item kind yet: an item kind for `{ i1, T }`, which fits in the room of an item (`LertaItem` in `runtime/lerta.h`). A map's value stays not optional, since a missing key reads as nil.
 
 Interfaces and generics are in [objects](objects.md).
 
