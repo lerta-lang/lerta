@@ -13,8 +13,7 @@
 static wchar_t *to_utf16(const char *utf8) {
   int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8, -1, NULL, 0);
   if (length == 0) return NULL;
-  wchar_t *utf16 = malloc((size_t)length * sizeof(wchar_t));
-  if (utf16 == NULL) lerta_panic("out of memory");
+  wchar_t *utf16 = lerta_checked_malloc((size_t)length * sizeof(wchar_t));
   MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8, -1, utf16, length);
   return utf16;
 }
@@ -22,8 +21,7 @@ static wchar_t *to_utf16(const char *utf8) {
 static char *to_utf8(const wchar_t *utf16) {
   int length = WideCharToMultiByte(CP_UTF8, 0, utf16, -1, NULL, 0, NULL, NULL);
   if (length == 0) return NULL;
-  char *utf8 = malloc((size_t)length);
-  if (utf8 == NULL) lerta_panic("out of memory");
+  char *utf8 = lerta_checked_malloc((size_t)length);
   WideCharToMultiByte(CP_UTF8, 0, utf16, -1, utf8, length, NULL, NULL);
   return utf8;
 }
@@ -51,8 +49,7 @@ void lerta_stack_init(void) {
 void lerta_os_arguments(int *argc, char ***argv) {
   wchar_t **wide_arguments = CommandLineToArgvW(GetCommandLineW(), argc);
   if (wide_arguments == NULL) lerta_panic("cannot read the arguments");
-  char **arguments = calloc((size_t)*argc + 1, sizeof(char *));
-  if (arguments == NULL) lerta_panic("out of memory");
+  char **arguments = lerta_checked_calloc((size_t)*argc + 1, sizeof(char *));
   for (int i = 0; i < *argc; i++) {
     arguments[i] = to_utf8(wide_arguments[i]);
     if (arguments[i] == NULL) lerta_panic("cannot read the arguments");
@@ -107,16 +104,14 @@ static bool write_console(int fd, HANDLE console, const uint8_t *bytes, int64_t 
   int tail_length = console_tail_lengths[fd];
   if (length > INT_MAX - tail_length) return false;
   int total = tail_length + (int)length;
-  char *text = malloc((size_t)total + 1);
-  if (text == NULL) lerta_panic("out of memory");
+  char *text = lerta_checked_malloc((size_t)total + 1);
   memcpy(text, console_tails[fd], (size_t)tail_length);
   memcpy(text + tail_length, bytes, (size_t)length);
   int complete = total - incomplete_tail((const uint8_t *)text, total);
   console_tail_lengths[fd] = total - complete;
   memcpy(console_tails[fd], text + complete, (size_t)(total - complete));
   int wide_length = MultiByteToWideChar(CP_UTF8, 0, text, complete, NULL, 0);
-  wchar_t *wide = malloc(((size_t)wide_length + 1) * sizeof(wchar_t));
-  if (wide == NULL) lerta_panic("out of memory");
+  wchar_t *wide = lerta_checked_malloc(((size_t)wide_length + 1) * sizeof(wchar_t));
   MultiByteToWideChar(CP_UTF8, 0, text, complete, wide, wide_length);
   free(text);
   const wchar_t *rest = wide;
@@ -216,7 +211,7 @@ char *lerta_os_real_path(const char *path) {
   HANDLE file = open_file(path, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
   if (file == INVALID_HANDLE_VALUE) return NULL;
   DWORD length = GetFinalPathNameByHandleW(file, NULL, 0, FILE_NAME_NORMALIZED);
-  wchar_t *final_path = length == 0 ? NULL : malloc(length * sizeof(wchar_t));
+  wchar_t *final_path = length == 0 ? NULL : lerta_checked_malloc(length * sizeof(wchar_t));
   bool resolved =
       final_path != NULL &&
       GetFinalPathNameByHandleW(file, final_path, length, FILE_NAME_NORMALIZED) < length;
@@ -230,8 +225,7 @@ char *lerta_os_real_path(const char *path) {
 static wchar_t *join_path(const wchar_t *dir, const wchar_t *name) {
   size_t dir_length = wcslen(dir);
   size_t name_length = wcslen(name);
-  wchar_t *path = malloc((dir_length + name_length + 2) * sizeof(wchar_t));
-  if (path == NULL) lerta_panic("out of memory");
+  wchar_t *path = lerta_checked_malloc((dir_length + name_length + 2) * sizeof(wchar_t));
   memcpy(path, dir, dir_length * sizeof(wchar_t));
   path[dir_length] = L'\\';
   memcpy(path + dir_length + 1, name, (name_length + 1) * sizeof(wchar_t));
@@ -332,8 +326,7 @@ static char *write_quoted(char *out, const char *argument) {
 static char *command_line(char **args) {
   size_t size = 1;
   for (char **arg = args; *arg != NULL; arg++) size += 2 * strlen(*arg) + 3;
-  char *line = malloc(size);
-  if (line == NULL) lerta_panic("out of memory");
+  char *line = lerta_checked_malloc(size);
   char *end = line;
   for (char **arg = args; *arg != NULL; arg++) {
     if (arg != args) *end++ = ' ';
@@ -347,8 +340,7 @@ static char *command_line(char **args) {
 static wchar_t *search_file(const wchar_t *path, const wchar_t *name) {
   DWORD size = SearchPathW(path, name, NULL, 0, NULL, NULL);
   while (size > 0) {
-    wchar_t *found = malloc(size * sizeof(wchar_t));
-    if (found == NULL) lerta_panic("out of memory");
+    wchar_t *found = lerta_checked_malloc(size * sizeof(wchar_t));
     DWORD length = SearchPathW(path, name, NULL, size, found, NULL);
     if (length > 0 && length < size) return found;
     free(found);
@@ -363,11 +355,10 @@ static wchar_t *search_file(const wchar_t *path, const wchar_t *name) {
 // such as python3.11. The caller frees the result.
 static wchar_t *search_path(const char *command) {
   DWORD path_size = GetEnvironmentVariableW(L"PATH", NULL, 0);
-  wchar_t *path = path_size == 0 ? NULL : malloc(path_size * sizeof(wchar_t));
+  wchar_t *path = path_size == 0 ? NULL : lerta_checked_malloc(path_size * sizeof(wchar_t));
   bool has_path = path != NULL && GetEnvironmentVariableW(L"PATH", path, path_size) < path_size;
   size_t command_length = strlen(command);
-  char *exe_command = malloc(command_length + sizeof ".exe");
-  if (exe_command == NULL) lerta_panic("out of memory");
+  char *exe_command = lerta_checked_malloc(command_length + sizeof ".exe");
   memcpy(exe_command, command, command_length);
   memcpy(exe_command + command_length, ".exe", sizeof ".exe");
   wchar_t *exe_name = to_utf16(exe_command);

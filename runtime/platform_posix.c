@@ -113,8 +113,7 @@ char *lerta_os_real_path(const char *path) {
 static char *join_path(const char *dir, const char *name) {
   size_t dir_length = strlen(dir);
   size_t name_length = strlen(name);
-  char *path = malloc(dir_length + name_length + 2);
-  if (path == NULL) lerta_panic("out of memory");
+  char *path = lerta_checked_malloc(dir_length + name_length + 2);
   memcpy(path, dir, dir_length);
   path[dir_length] = '/';
   memcpy(path + dir_length + 1, name, name_length + 1);

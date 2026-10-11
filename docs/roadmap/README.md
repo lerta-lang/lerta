@@ -14,6 +14,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
+- Split `runtime/lerta.h`: what only the runtime's own C code uses (its "Runtime-internal helpers", the platform functions, and the others that nothing outside `runtime/` calls) moves to a new `runtime/internal.h`, which includes `lerta.h` and which the `.c` files include. A new file of the runtime needs a seed refresh (see [internals](../internals.md#bootstrap)), so this waits for the next one.
 
 ## Open questions
 

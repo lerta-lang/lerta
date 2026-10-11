@@ -76,13 +76,11 @@ LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int6
                                void *file) {
   int64_t capacity = 4096;
   int64_t length = 0;
-  uint8_t *bytes = malloc((size_t)capacity);
-  if (bytes == NULL) lerta_panic("out of memory");
+  uint8_t *bytes = lerta_checked_malloc((size_t)capacity);
   for (;;) {
     if (length == capacity) {
       capacity *= 2;
-      bytes = realloc(bytes, (size_t)capacity);
-      if (bytes == NULL) lerta_panic("out of memory");
+      bytes = lerta_checked_realloc(bytes, (size_t)capacity);
     }
     int64_t count = read(file, bytes + length, capacity - length);
     if (count == 0) break;

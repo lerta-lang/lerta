@@ -6,9 +6,26 @@
 static int64_t live_objects = 0;
 #endif
 
+void *lerta_checked_malloc(size_t size) {
+  void *memory = malloc(size);
+  if (memory == NULL) lerta_panic("out of memory");
+  return memory;
+}
+
+void *lerta_checked_realloc(void *memory, size_t size) {
+  void *grown = realloc(memory, size);
+  if (grown == NULL) lerta_panic("out of memory");
+  return grown;
+}
+
+void *lerta_checked_calloc(size_t count, size_t size) {
+  void *memory = calloc(count, size);
+  if (memory == NULL) lerta_panic("out of memory");
+  return memory;
+}
+
 void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
-  LertaHeader *object = malloc((size_t)size);
-  if (object == NULL) lerta_panic("out of memory");
+  LertaHeader *object = lerta_checked_malloc((size_t)size);
   object->ref_count = 1;
   object->drop = drop;
 #ifdef LERTA_DEBUG
@@ -41,8 +58,7 @@ static bool draining = false;
 static void push_pending(void *object) {
   if (pending_length == pending_capacity) {
     pending_capacity = pending_capacity == 0 ? 64 : pending_capacity * 2;
-    pending = realloc(pending, (size_t)pending_capacity * sizeof(void *));
-    if (pending == NULL) lerta_panic("out of memory");
+    pending = lerta_checked_realloc(pending, (size_t)pending_capacity * sizeof(void *));
   }
   pending[pending_length++] = object;
 }

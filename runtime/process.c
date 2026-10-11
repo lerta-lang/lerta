@@ -37,8 +37,7 @@ void lerta_exit(int64_t code) {
 
 int64_t lerta_run(const LertaString *command, const LertaArray *args) {
   int64_t count = args->length + 1;
-  char **c_args = calloc((size_t)count + 1, sizeof(char *));
-  if (c_args == NULL) lerta_panic("out of memory");
+  char **c_args = lerta_checked_calloc((size_t)count + 1, sizeof(char *));
   c_args[0] = lerta_c_string(command);
   bool valid = c_args[0] != NULL;
   for (int64_t i = 1; i < count; i++) {

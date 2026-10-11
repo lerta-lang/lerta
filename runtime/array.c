@@ -88,9 +88,7 @@ void lerta_array_append(LertaArray *array, const void *item) {
   size_t size = (size_t)lerta_item_size(array->item_kind);
   if (array->length == array->capacity) {
     int64_t capacity = array->capacity == 0 ? 4 : array->capacity * 2;
-    uint8_t *items = realloc(array->items, (size_t)capacity * size);
-    if (items == NULL) lerta_panic("out of memory");
-    array->items = items;
+    array->items = lerta_checked_realloc(array->items, (size_t)capacity * size);
     array->capacity = capacity;
   }
   lerta_retain_item(array->item_kind, item);

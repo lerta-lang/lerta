@@ -317,6 +317,10 @@ enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign
 int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
 _Noreturn void lerta_panic(const char *message);
 _Noreturn void lerta_panic_with(const char *prefix, const LertaString *message);
+// malloc, realloc and calloc that panic when out of memory instead of returning NULL.
+void *lerta_checked_malloc(size_t size);
+void *lerta_checked_realloc(void *memory, size_t size);
+void *lerta_checked_calloc(size_t count, size_t size);
 // `panic` of std:builtins.
 _Noreturn void lerta_panic_string(const LertaString *message);
 

@@ -92,12 +92,6 @@ static int64_t find_slot(const LertaMap *map, int64_t key, uint64_t hash) {
   }
 }
 
-static void *checked_alloc(size_t size) {
-  void *memory = malloc(size);
-  if (memory == NULL) lerta_panic("out of memory");
-  return memory;
-}
-
 // Drops the removed entries and rebuilds the index with room for twice the live ones.
 static void grow(LertaMap *map) {
   int64_t live = 0;
@@ -107,14 +101,12 @@ static void grow(LertaMap *map) {
   map->entry_count = live;
   int64_t capacity = 8;
   while (capacity < live * 2) capacity *= 2;
-  uint8_t *entries = realloc(map->entries, (size_t)capacity * entry_size(map));
-  if (entries == NULL) lerta_panic("out of memory");
-  map->entries = entries;
+  map->entries = lerta_checked_realloc(map->entries, (size_t)capacity * entry_size(map));
   map->entry_capacity = capacity;
   // At most half the slots are used, so that probes stay short and always end.
   free(map->slots);
   map->slot_count = capacity * 2;
-  map->slots = checked_alloc((size_t)map->slot_count * sizeof(int64_t));
+  map->slots = lerta_checked_malloc((size_t)map->slot_count * sizeof(int64_t));
   for (int64_t i = 0; i < map->slot_count; i++) map->slots[i] = EMPTY;
   for (int64_t i = 0; i < live; i++) {
     const LertaMapEntry *entry = entry_at(map, i);
