@@ -94,6 +94,8 @@ void lerta_panic(const char *message) {
   lerta_os_abort();
 }
 
+void lerta_panic_string(const LertaString *message) { lerta_panic_with("", message); }
+
 void lerta_panic_with(const char *prefix, const LertaString *message) {
   lerta_stdout_flush();
   lerta_stderr_write((const uint8_t *)prefix, (int64_t)strlen(prefix));

@@ -315,5 +315,7 @@ enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign
 int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
 _Noreturn void lerta_panic(const char *message);
 _Noreturn void lerta_panic_with(const char *prefix, const LertaString *message);
+// `panic` of std:builtins.
+_Noreturn void lerta_panic_string(const LertaString *message);
 
 #endif

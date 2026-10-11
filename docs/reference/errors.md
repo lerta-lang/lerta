@@ -42,7 +42,7 @@ finally
 
 ## Panics
 
-A panic prints its message and a newline to stderr, after flushing stdout, and aborts the program; it cannot be caught. Running out of memory panics with `out of memory`, and recursing too deep with `stack overflow`. The runtime also panics when its internal invariants are violated or a system call it cannot do without fails, such as `deinit kept a reference to its object` or `deinit threw an exception` or `cannot wait for a child process`.
+A panic prints its message and a newline to stderr, after flushing stdout, and aborts the program; it cannot be caught. `panic(message)`, of `std:builtins`, panics: for a bug that no caller could handle, such as a broken invariant, where an exception could be caught by mistake. Running out of memory panics with `out of memory`, and recursing too deep with `stack overflow`. The runtime also panics when its internal invariants are violated or a system call it cannot do without fails, such as `deinit kept a reference to its object` or `deinit threw an exception` or `cannot wait for a child process`.
 
 ## Discarded values
 

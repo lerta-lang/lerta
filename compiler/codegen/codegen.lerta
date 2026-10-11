@@ -1,7 +1,7 @@
 # Generates the program: the modules' top-level code, and every function of theirs (see
 # function).
 import { Declaration, FunctionLiteral, Statement, TypeDeclaration } from '../ast'
-import { FunctionExport, imported_export } from '../checker/imports'
+import { FunctionExport, named_export } from '../checker/imports'
 import { is_generic_object } from '../checker/object_types'
 import { ProgramWide } from '../checker/shared'
 import { generate_constructor, generate_function, generate_main } from './function'
@@ -99,15 +99,19 @@ const released_globals = (globals: Array<Map<String, TopLevelGlobal>>) ->
     in_order.push values[name]! for name in values.keys()
   [in_order[in_order.length - 1 - i] for i in 0...in_order.length]
 
-# The symbols of the functions a module can call by name: its own and those it imports.
+# The symbols of the functions a module can call by name: its own, those it imports and those of
+# std:builtins, which its own names shadow.
 const function_symbols = (program: ProgramWide, module: Module) ->
   const symbols: Map<String, String> = Map()
   for statement in module.program
     if const declaration = plain_function(statement)
       symbols[declaration.name.name] = function_symbol(module.index, declaration.name.name)
-  const names = program.shared[module.index].imports.names
-  for name in names.keys()
-    const exported = imported_export(program, names[name]!)
+  const shared = program.shared[module.index]
+  const names = shared.imports.names.keys()
+  names.append program.shared[builtins].exported.keys() if const builtins = shared.imports.builtins
+  for name in names
+    continue if symbols.has(name)
+    const exported = named_export(shared, name)
     if exported is FunctionExport
       symbols[name] = function_symbol(exported.module_index, exported.name)
   symbols
