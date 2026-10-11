@@ -61,9 +61,13 @@ int64_t lerta_array_length(const LertaArray *array) { return array->length; }
 
 LERTA_STATIC_STRING(index_out_of_range, "index out of range");
 
+void lerta_raise_index_out_of_range(void) {
+  lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&index_out_of_range);
+}
+
 static bool check_index(const LertaArray *array, int64_t index) {
   if (index >= 0 && index < array->length) return true;
-  lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&index_out_of_range);
+  lerta_raise_index_out_of_range();
   return false;
 }
 

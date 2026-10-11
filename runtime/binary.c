@@ -4,11 +4,9 @@ LERTA_STATIC_STRING(slice_out_of_range, "slice out of range");
 
 int64_t lerta_binary_length(const LertaString *binary) { return binary->length; }
 
-LERTA_STATIC_STRING(index_out_of_range, "index out of range");
-
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index) {
   if (index >= 0 && index < binary->length) return binary->bytes[index];
-  lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&index_out_of_range);
+  lerta_raise_index_out_of_range();
   return 0;
 }
 

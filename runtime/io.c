@@ -68,11 +68,17 @@ void lerta_writer_flush(int64_t fd) {
   if (fd == STDOUT_FD) lerta_stdout_flush();
 }
 
-void lerta_throw(const LertaString *message) {
-  // Flush first so that stdout and stderr appear in program order.
+// Writes the prefix and the bytes to stderr as a line, after flushing stdout so that stdout and
+// stderr appear in program order.
+static void write_error_line(const char *prefix, const uint8_t *bytes, int64_t length) {
   lerta_stdout_flush();
-  lerta_stderr_write(message->bytes, message->length);
+  lerta_stderr_write((const uint8_t *)prefix, (int64_t)strlen(prefix));
+  lerta_stderr_write(bytes, length);
   lerta_stderr_write(&newline, 1);
+}
+
+void lerta_throw(const LertaString *message) {
+  write_error_line("", message->bytes, message->length);
   lerta_os_exit(1);
 }
 
@@ -87,19 +93,20 @@ void lerta_raise(LertaErrorKind kind, const LertaString *message) {
   registered_raise((int32_t)kind, message);
 }
 
+void lerta_raise_with(LertaErrorKind kind, const void *prefix, const LertaString *detail) {
+  LertaString *message = lerta_string_concat(2, prefix, detail);
+  lerta_raise(kind, message);
+  lerta_release(message);
+}
+
 void lerta_panic(const char *message) {
-  lerta_stdout_flush();
-  lerta_stderr_write((const uint8_t *)message, (int64_t)strlen(message));
-  lerta_stderr_write(&newline, 1);
+  write_error_line(message, (const uint8_t *)"", 0);
   lerta_os_abort();
 }
 
 void lerta_panic_string(const LertaString *message) { lerta_panic_with("", message); }
 
 void lerta_panic_with(const char *prefix, const LertaString *message) {
-  lerta_stdout_flush();
-  lerta_stderr_write((const uint8_t *)prefix, (int64_t)strlen(prefix));
-  lerta_stderr_write(message->bytes, message->length);
-  lerta_stderr_write(&newline, 1);
+  write_error_line(prefix, message->bytes, message->length);
   lerta_os_abort();
 }

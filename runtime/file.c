@@ -9,17 +9,11 @@ LERTA_STATIC_STRING(cannot_resolve, "cannot resolve path: ");
 LERTA_STATIC_STRING(cannot_make_temp_dir, "cannot make a temporary directory");
 LERTA_STATIC_STRING(cannot_remove, "cannot remove: ");
 
-static void raise_file_error(const void *prefix, const LertaString *path) {
-  LertaString *message = lerta_string_concat(2, prefix, path);
-  lerta_raise(LERTA_IO_ERROR, message);
-  lerta_release(message);
-}
-
 LertaString *lerta_read_file(const LertaString *path) {
   char *name = lerta_c_string(path);
   LertaString *contents = name == NULL ? NULL : lerta_os_read_file(name);
   free(name);
-  if (contents == NULL) raise_file_error(&cannot_read, path);
+  if (contents == NULL) lerta_raise_with(LERTA_IO_ERROR, &cannot_read, path);
   return contents;
 }
 
@@ -27,7 +21,7 @@ void lerta_write_file(const LertaString *path, const LertaString *data) {
   char *name = lerta_c_string(path);
   bool written = name != NULL && lerta_os_write_file(name, data->bytes, data->length);
   free(name);
-  if (!written) raise_file_error(&cannot_write, path);
+  if (!written) lerta_raise_with(LERTA_IO_ERROR, &cannot_write, path);
 }
 
 bool lerta_is_file(const LertaString *path) {
@@ -49,7 +43,7 @@ LertaString *lerta_real_path(const LertaString *path) {
   char *resolved = name == NULL ? NULL : lerta_os_real_path(name);
   free(name);
   if (resolved == NULL) {
-    raise_file_error(&cannot_resolve, path);
+    lerta_raise_with(LERTA_IO_ERROR, &cannot_resolve, path);
     return NULL;
   }
   return string_from_os(resolved);
@@ -68,7 +62,7 @@ void lerta_remove_tree(const LertaString *path) {
   char *name = lerta_c_string(path);
   bool removed = name != NULL && lerta_os_remove_tree(name);
   free(name);
-  if (!removed) raise_file_error(&cannot_remove, path);
+  if (!removed) lerta_raise_with(LERTA_IO_ERROR, &cannot_remove, path);
 }
 
 // Reads in chunks, so that files whose size is not known in advance work too.

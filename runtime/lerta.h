@@ -301,6 +301,11 @@ typedef enum {
 // that is std:builtins or one of the modules it imports, which have no error types to make, it
 // stops the program with lerta_throw.
 void lerta_raise(LertaErrorKind kind, const LertaString *message);
+// As lerta_raise, with the message made of a prefix, a LertaString such as a LERTA_STATIC_STRING,
+// and the detail.
+void lerta_raise_with(LertaErrorKind kind, const void *prefix, const LertaString *detail);
+// An IndexError of an index out of range, as of an array or a Binary.
+void lerta_raise_index_out_of_range(void);
 void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
 
 // Prints the message to stderr and exits with status 1: for an uncaught exception, and for an
