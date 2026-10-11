@@ -35,7 +35,7 @@ The planned design of modules, FFI, the standard library and tools.
 ## Open questions
 
 - Extern properties, `extern lerta_array_length as length: Int` in an extend, which read a property by calling a C function with the receiver. They would move `length` and `s.binary` to std, but they are getters written in C, which [philosophy](../philosophy.md#non-goals) leaves out; allowing them only in `std:` modules, as a builtin special case, keeps that for users.
-- Sorting arrays (`compiler/sort.lerta` sorts by hand for now).
+- Sorting arrays (`compiler/arrays.lerta` sorts by hand for now).
 - The ABI of `String` at the FFI boundary (pass as a 16-byte value, or box it in the heap representation; decide when small strings become immediate values).
 - How to trigger serialization code generation (an annotation on the type, or automatic generation from calls such as `json.decode<T>`).
 - How to hold type information for separate compilation (interface files).
