@@ -109,7 +109,7 @@ export const check_block = (
   warn_if_unused body.shared, local for local in scope.values()
 
 export const check_statement = (body: Body, statement: Statement): void ->
-  const is_top_level = body.context == nil and body.scopes.depth() == 1
+  const is_top_level = body.is_top_level()
   if is_exported(statement) and not is_top_level
     fail body.program, statement.position, 'export can only be at the top level'
   const require_top_level = (message: String) ->
@@ -173,9 +173,8 @@ export const narrow_where_holds = (body: Body, condition: Expression) ->
 
 # A top-level function was added to the module's functions before checking started.
 const check_declaration = (body: Body, declaration: Declaration) ->
-  const is_top_level = body.context == nil and body.self == nil
   const value = declaration.value
-  return if value is FunctionLiteral and is_top_level and body.scopes.depth() == 1
+  return if value is FunctionLiteral and body.is_top_level()
   const type_name = declaration.type
   const annotated = type_name then resolve(body.program, body.resolver, type_name) else nil
   expect_type body, value, annotated if annotated
@@ -194,7 +193,7 @@ const reject_if_not_storable = (body: Body, type: Type, value: Expression) ->
 export const define_local = (body: Body, local: Local) ->
   const { name, position } = local.identifier
   const { program, shared } = body
-  const is_top_level = body.context == nil and body.scopes.depth() == 1
+  const is_top_level = body.is_top_level()
   const is_taken = has_function(shared, name) or names_type_or_import(shared, name)
   fail_already_defined program, local.identifier if is_top_level and is_taken
   if not body.scopes.define(name, local)
