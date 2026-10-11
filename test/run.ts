@@ -16,11 +16,12 @@
 //   tests/**/posix/        tests of what only POSIX systems have, such as signals, which are not
 //                          run for Windows
 import { execFile } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { compiler, OUTPUT_LIMIT, root_dir } from './lerta.ts'
-import { compare_text, run_checks, type Check } from './report.ts'
+import { compare_text, lines } from './expect.ts'
+import { run_checks, run_suite, type Check } from './report.ts'
 import { parse_target } from './target.ts'
 
 const work_dir = mkdtempSync(join(tmpdir(), 'lerta-test-'))
@@ -112,8 +113,6 @@ type Outcome = {
   failed: boolean
   compile_error: boolean
 }
-
-const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join('')
 
 // Diagnostics are reported as the CLI prints them for a bare file name, so
 // that the expected files do not depend on where the test directory is.
@@ -255,16 +254,8 @@ const test_checks: Check[] = suites.flatMap(collect).flatMap((test) => [
   },
 ])
 
-let failed_count: number
-try {
+await run_suite(work_dir, async () => {
   await build_commands()
   for (const dir of skipped_dirs) console.log(`not run for Windows: ${dir}`)
-  failed_count = await run_checks(
-    'run tests',
-    [...stray_checks, ...test_checks],
-    availableParallelism(),
-  )
-} finally {
-  rmSync(work_dir, { recursive: true, force: true })
-}
-process.exit(failed_count === 0 ? 0 : 1)
+  return run_checks('run tests', [...stray_checks, ...test_checks], availableParallelism())
+})

@@ -1,19 +1,12 @@
 // CLI checks: each invocation of the compiler's command line (see lerta.ts) and its expected exit
 // status.
 import { spawnSync, type StdioOptions } from 'node:child_process'
-import {
-  closeSync,
-  mkdtempSync,
-  openSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { closeSync, mkdtempSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { compiler, root_dir } from './lerta.ts'
-import { compare_text, run_checks } from './report.ts'
+import { compare_text, expect_status, expect_success, lines } from './expect.ts'
+import { run_checks, run_suite } from './report.ts'
 
 const cli_work_dir = mkdtempSync(join(tmpdir(), 'lerta-cli-'))
 const hello = join(root_dir, 'examples/hello.lerta')
@@ -97,7 +90,7 @@ const cli_cases: CliCase[] = [
         `${exe}_utf8`,
         utf8_cases.map(([bytes]) => bytes),
       )
-      return decoded.stdout === utf8_cases.map(([, valid]) => `${valid}\n`).join('')
+      return decoded.stdout === lines(utf8_cases.map(([, valid]) => String(valid)))
     },
   },
   {
@@ -119,24 +112,20 @@ const cli_cases: CliCase[] = [
     // -Werror stops the build at a warning, as at an error, after printing the warnings.
     args: ['build', join(root_dir, 'tests/variable/unused.lerta'), '-o', exe, '-Werror'],
     status: 1,
-    stderr: [
+    stderr: lines([
       `${join(root_dir, 'tests/variable/unused.lerta')}:1:7: warning: 'unused' is never used`,
       `${join(root_dir, 'tests/variable/unused.lerta')}:6:7: warning: 'inner' is never used`,
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
   },
   {
     // lerta run with -Werror runs nothing after the warnings.
     args: ['run', join(root_dir, 'tests/variable/unused.lerta'), '-Werror'],
     status: 1,
     stdout: '',
-    stderr: [
+    stderr: lines([
       `${join(root_dir, 'tests/variable/unused.lerta')}:1:7: warning: 'unused' is never used`,
       `${join(root_dir, 'tests/variable/unused.lerta')}:6:7: warning: 'inner' is never used`,
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
   },
   { args: ['build'], status: 2 },
   { args: ['build', hello, '-o', exe, '-Werror', '-Werror'], status: 2 },
@@ -188,20 +177,18 @@ const cli_cases: CliCase[] = [
   {
     args: ['dump-tokens', hello],
     status: 0,
-    stdout: [
+    stdout: lines([
       '1:1 spaced IDENTIFIER "print"',
       '1:7 spaced STRING "hello, world"',
       '1:21 spaced NEWLINE ""',
       '2:1 spaced EOF ""',
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
   },
   {
     // An integer, an interpolation, an indented block, brackets over lines, keywords and punctuation.
     args: ['dump-tokens', join(root_dir, 'tests/lex/dump_tokens.lerta')],
     status: 0,
-    stdout: [
+    stdout: lines([
       '1:1 spaced const "const"',
       '1:7 spaced IDENTIFIER "twice"',
       '1:13 spaced = "="',
@@ -245,9 +232,7 @@ const cli_cases: CliCase[] = [
       '  text " items"',
       '8:27 spaced NEWLINE ""',
       '9:1 spaced EOF ""',
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
   },
   {
     args: ['dump-tokens', join(root_dir, 'tests/lex/column_code_points.lerta')],
@@ -265,7 +250,7 @@ const cli_cases: CliCase[] = [
   {
     args: ['dump-ast', hello],
     status: 0,
-    stdout: [
+    stdout: lines([
       '-',
       '  call 1:1',
       '    args:',
@@ -277,15 +262,13 @@ const cli_cases: CliCase[] = [
       '        name: "print"',
       '    named_args: []',
       '    type_args: []',
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
   },
   {
     // An export, an unset optional field and an interpolation, whose parts are a value and a node.
     args: ['dump-ast', join(root_dir, 'tests/parse/dump.lerta')],
     status: 0,
-    stdout: [
+    stdout: lines([
       '-',
       '  declaration 1:8',
       '    exported: true',
@@ -365,15 +348,13 @@ const cli_cases: CliCase[] = [
       '        name: "greet"',
       '    named_args: []',
       '    type_args: []',
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
   },
   {
     // A cast that gives nil, `as?`, and one that throws, `as!`, which keep the type's `?` apart.
     args: ['dump-ast', join(root_dir, 'tests/parse/cast_dump.lerta')],
     status: 0,
-    stdout: [
+    stdout: lines([
       '-',
       '  call 1:1',
       '    args:',
@@ -410,15 +391,13 @@ const cli_cases: CliCase[] = [
       '        name: "print"',
       '    named_args: []',
       '    type_args: []',
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
   },
   {
     // An interface with a type parameter, whose members are written as a class's.
     args: ['dump-ast', join(root_dir, 'tests/parse/interface_dump.lerta')],
     status: 0,
-    stdout: [
+    stdout: lines([
       '-',
       '  interface 1:8',
       '    exported: true',
@@ -449,9 +428,7 @@ const cli_cases: CliCase[] = [
       '        name:',
       '          identifier 1:24',
       '            name: "T"',
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
   },
   {
     args: ['dump-ast', join(root_dir, 'tests/parse/dangling_operator.lerta')],
@@ -465,7 +442,7 @@ const cli_cases: CliCase[] = [
     // as an Int?; a method of an extend; and a generic function, whose body has no types.
     args: ['dump-checked', dump_checked_source],
     status: 0,
-    stdout: [
+    stdout: lines([
       'module lib/given_back.lerta',
       '-',
       '  import 1:1',
@@ -651,9 +628,7 @@ const cli_cases: CliCase[] = [
       '        name: "print"',
       '    named_args: []',
       '    type_args: []',
-    ]
-      .map((line) => `${line}\n`)
-      .join(''),
+    ]),
     stderr: `${dump_checked_source}:2:7: warning: 'unused' is never used\n`,
   },
   {
@@ -669,7 +644,7 @@ const shorten_path = (arg: string): string =>
 
 const run_cli_case = ({ args, status, stdout, stderr, produced }: CliCase): string[] => {
   const actual = spawnSync(compiler, args, { encoding: 'utf8' })
-  if (actual.status !== status) return [`expected exit status ${status}, got ${actual.status}`]
+  if (actual.status !== status) return expect_status(status, actual.status)
   if (stdout !== undefined && actual.stdout !== stdout)
     return [`unexpected stdout: ${actual.stdout}`]
   if (stderr !== undefined && actual.stderr !== stderr)
@@ -686,8 +661,9 @@ const std_checks = std_modules.map((module) => ({
   name: `${module} builds without warnings`,
   run: () => {
     const args = ['build', module, '-o', join(cli_work_dir, module.replace(':', '_')), '-Werror']
-    const { status, stderr } = spawnSync(compiler, args, { encoding: 'utf8' })
-    return status === 0 && stderr === '' ? [] : [`exit status ${status}, stderr:\n${stderr}`]
+    const built = spawnSync(compiler, args, { encoding: 'utf8' })
+    if (built.status !== 0) return expect_success('build', built)
+    return compare_text('stderr', '', built.stderr)
   },
 }))
 
@@ -699,11 +675,9 @@ const build_and_run_checks = [[], ['-O'], ['--target', host_triple]].map((flags)
     const executable = join(cli_work_dir, `compiled${flags.join('')}`)
     const args = ['build', hello, '-o', executable, ...flags]
     const built = spawnSync(compiler, args, { encoding: 'utf8' })
-    if (built.status !== 0) return [`build exit status ${built.status}, stderr:\n${built.stderr}`]
+    if (built.status !== 0) return expect_success('build', built)
     const ran = spawnSync(executable, { encoding: 'utf8' })
-    const status_reasons =
-      ran.status === 0 ? [] : [`exit status ${ran.status}, stderr:\n${ran.stderr}`]
-    return [...compare_text('stdout', hello_output, ran.stdout), ...status_reasons]
+    return [...compare_text('stdout', hello_output, ran.stdout), ...expect_success('run', ran)]
   },
 }))
 
@@ -727,14 +701,13 @@ const build_in_new_dir = (args: string[], input = '', path?: string) => {
 const expect_left = (what: string, expected: string[], actual: string[]): string[] =>
   compare_text(what, lines(expected), lines(actual.toSorted()))
 
-const lines = (texts: string[]): string => texts.map((text) => `${text}\n`).join('')
-
 const output_checks = [
   {
     name: 'lerta build <source> writes the executable to the current directory, and nothing else',
     run: () => {
-      const { status, stderr, cwd, left, left_in_temp } = build_in_new_dir(['build', hello])
-      if (status !== 0) return [`build exit status ${status}, stderr:\n${stderr}`]
+      const built = build_in_new_dir(['build', hello])
+      const { status, cwd, left, left_in_temp } = built
+      if (status !== 0) return expect_success('build', built)
       const ran = spawnSync(join(cwd, 'hello'), { encoding: 'utf8' })
       return [
         ...expect_left('files left', ['hello'], left),
@@ -749,7 +722,7 @@ const output_checks = [
       const args = ['build', hello, '-o', 'hello', '--target', 'no-such-target']
       const { status, left, left_in_temp } = build_in_new_dir(args)
       return [
-        ...(status === 1 ? [] : [`expected exit status 1, got ${status}`]),
+        ...expect_status(1, status),
         ...expect_left('files left', [], left),
         ...expect_left('files left in the temporary directory', [], left_in_temp),
       ]
@@ -761,7 +734,7 @@ const output_checks = [
       const args = ['build', hello, '-o', 'hello']
       const { status, left, left_in_temp } = build_in_new_dir(args, '', cli_work_dir)
       return [
-        ...(status === 1 ? [] : [`expected exit status 1, got ${status}`]),
+        ...expect_status(1, status),
         ...expect_left('files left', [], left),
         ...expect_left('files left in the temporary directory', [], left_in_temp),
       ]
@@ -772,7 +745,7 @@ const output_checks = [
     run: () => {
       const { status, stdout, left, left_in_temp } = build_in_new_dir(['dump-llvm', hello])
       return [
-        ...(status === 0 ? [] : [`expected exit status 0, got ${status}`]),
+        ...expect_status(0, status),
         ...(stdout.includes('define void @lerta_main()') ? [] : [`no lerta_main in:\n${stdout}`]),
         ...expect_left('files left', [], left),
         ...expect_left('files left in the temporary directory', [], left_in_temp),
@@ -798,10 +771,8 @@ const twice_inputs: [string, (name: string) => string][] = [
 // Runs a tool that makes an input, and throws, which fails the check, if it fails.
 const run_tool = (command: string, args: string[]): void => {
   const ran = spawnSync(command, args, { encoding: 'utf8' })
-  if (ran.status !== 0)
-    throw new Error(
-      `${command} failed (${ran.error?.message ?? `exit status ${ran.status}`}):\n${ran.stderr}`,
-    )
+  const reasons = expect_success(command, ran)
+  if (reasons.length > 0) throw new Error(reasons.join('\n'))
 }
 
 const compile_c = (flags: string[], name: string): string => {
@@ -821,10 +792,9 @@ const build_twice = (file: string, flags: string[], cwd: string, name: string): 
   const executable = join(cli_work_dir, name)
   const args = ['build', twice_source, file, '-o', executable, ...flags]
   const built = spawnSync(compiler, args, { cwd, encoding: 'utf8' })
-  if (built.status !== 0) return [`build exit status ${built.status}, stderr:\n${built.stderr}`]
+  if (built.status !== 0) return expect_success('build', built)
   const ran = spawnSync(executable, { encoding: 'utf8' })
-  const status = ran.status === 0 ? [] : [`exit status ${ran.status}, stderr:\n${ran.stderr}`]
-  return [...compare_text('stdout', '42\n', ran.stdout), ...status]
+  return [...compare_text('stdout', '42\n', ran.stdout), ...expect_success('run', ran)]
 }
 
 const linked_file_checks = [
@@ -925,7 +895,7 @@ const run_checks_of_run = run_cases.map(({ name, args, input, status, stdout, st
   run: () => {
     const ran = build_in_new_dir(args, input)
     return [
-      ...(ran.status === status ? [] : [`expected exit status ${status}, got ${ran.status}`]),
+      ...expect_status(status, ran.status),
       ...compare_text('stdout', stdout, ran.stdout),
       ...(stderr === undefined ? [] : compare_text('stderr', stderr, ran.stderr)),
       ...expect_left('files left', [], ran.left),
@@ -934,9 +904,8 @@ const run_checks_of_run = run_cases.map(({ name, args, input, status, stdout, st
   },
 }))
 
-let failed_count: number
-try {
-  failed_count = await run_checks('CLI checks', [
+await run_suite(cli_work_dir, () =>
+  run_checks('CLI checks', [
     ...cli_cases.map((cli_case) => ({
       name: `lerta ${cli_case.args.map(shorten_path).join(' ')}`,
       run: () => run_cli_case(cli_case),
@@ -946,8 +915,5 @@ try {
     ...output_checks,
     ...linked_file_checks,
     ...run_checks_of_run,
-  ])
-} finally {
-  rmSync(cli_work_dir, { recursive: true, force: true })
-}
-process.exit(failed_count === 0 ? 0 : 1)
+  ]),
+)

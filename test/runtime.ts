@@ -6,14 +6,14 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
-  rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { root_dir } from './lerta.ts'
-import { compare_text, run_checks, type Check } from './report.ts'
+import { compare_text, expect_status } from './expect.ts'
+import { run_checks, run_suite, type Check } from './report.ts'
 
 const runtime_dir = join(root_dir, 'runtime')
 const work_dir = mkdtempSync(join(tmpdir(), 'lerta-runtime-'))
@@ -71,9 +71,6 @@ const interleaved_writes = [
   '  lerta_writer_write(1, (const LertaString *)&third);',
   '  _exit(0);',
 ].join('\n')
-
-const expect_status = (expected: number, actual: number | null): string[] =>
-  expected === actual ? [] : [`expected exit status ${expected}, got ${actual}`]
 
 const leak = '  lerta_alloc(16, NULL);'
 const checks: Check[] = [
@@ -153,10 +150,4 @@ const checks: Check[] = [
   },
 ]
 
-let failed_count: number
-try {
-  failed_count = await run_checks('runtime checks', checks)
-} finally {
-  rmSync(work_dir, { recursive: true, force: true })
-}
-process.exit(failed_count === 0 ? 0 : 1)
+await run_suite(work_dir, () => run_checks('runtime checks', checks))
