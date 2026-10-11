@@ -27,7 +27,8 @@
 - A `String` is immutable text in UTF-8.
 - `+` concatenates two `String`s into a new one.
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
-- `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`.
+- `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`, and `s.ends_with(suffix)` whether it ends with those of `suffix`.
+- `s.without_prefix(prefix)` gives what follows `prefix` in `s`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. `s.without_suffix(suffix)` gives what comes before `suffix`, or nil.
 - `==` and `!=` compare two `String`s byte by byte.
 - A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as `Int`s, in order, so `'é'` gives 233; its bytes are `s.binary`.
 - Why code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
@@ -95,7 +96,7 @@ print ages['ann'] ? 0
 - `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there. `m.get_or_put(k, make)` gives the value of `k`, setting it to `make()` first if `k` is not there. A `Map<K, Bool>` serves as a set: `m.add(k)` sets `k` to `true`.
-- `m.keys()` is an `Array<K>` of the keys in the order they were first added (a key removed and added again counts as new).
+- `m.keys()` is an `Array<K>` of the keys in the order they were first added (a key removed and added again counts as new). `m.values()` is an `Iter<V>` of the values in that order, of the keys there when it is made; a key removed before the Iter reaches it is skipped.
 
 ## Iter
 

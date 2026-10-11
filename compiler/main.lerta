@@ -10,7 +10,7 @@ import {
 import { dump_checked } from './checked_dump'
 import { tokenize } from './lexer/tokens'
 import { parse } from './parser/statement'
-import { basename, has_extension } from './paths'
+import { basename } from './paths'
 import { read_entry_source } from './source'
 import { dump_tokens } from './token_dump'
 
@@ -38,7 +38,7 @@ const run_dump = (args: Array<String>, dump: (String) -> String) ->
 const LINKED_EXTENSIONS = ['.c', '.o', '.ll', '.a', '.obj', '.lib']
 
 const is_linked_file = (path: String) ->
-  LINKED_EXTENSIONS.any((extension) -> has_extension(path, extension))
+  LINKED_EXTENSIONS.any((extension) -> path.ends_with(extension))
 
 # The arguments of `build` and `run`, each of which rejects what it does not take. Each option
 # may be given once. The source comes first, followed by the files to link; the arguments after
@@ -102,9 +102,9 @@ const SOURCE_EXTENSION = '.lerta'
 # output, and with `.exe` for Windows.
 const default_output = (source: String, target: String?) ->
   const name = basename(source)
-  fail_usage() if name == SOURCE_EXTENSION or not has_extension(name, SOURCE_EXTENSION)
-  const stem = name.binary.slice(0, name.binary.length - SOURCE_EXTENSION.binary.length)
-  "#{stem.text()!}#{executable_suffix(target)}"
+  const stem = name.without_suffix(SOURCE_EXTENSION) ? fail_usage()
+  fail_usage() if stem == ''
+  "#{stem}#{executable_suffix(target)}"
 
 # The dumps of one module read no module that it imports.
 const dump_file_tokens = (path: String) ->

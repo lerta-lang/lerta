@@ -131,6 +131,14 @@ extend String
     pieces.push(lerta_binary_as_string(bytes.slice(start, bytes.length)))
     pieces
   starts_with = (prefix: String) -> @binary.occurs_at(0, prefix.binary)
+  ends_with = (suffix: String) ->
+    @binary.occurs_at @binary.length - suffix.binary.length, suffix.binary
+  # The rest after `prefix`, or nil if the String does not start with it.
+  without_prefix = (prefix: String): String? ->
+    @starts_with(prefix) then @binary.text(prefix.binary.length)! else nil
+  # What comes before `suffix`, or nil if the String does not end with it.
+  without_suffix = (suffix: String): String? ->
+    @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)! else nil
 
 extend Binary
   # The bytes, read as the Iter is.
@@ -237,6 +245,8 @@ extend<T> Iterable<T>
 
 extend<K, V> Map<K, V>
   has = (key: K): Bool -> @[key] != nil
+  # The values, in the order of their keys; a key removed before the Iter reaches it is skipped.
+  values = (): Iter<V> -> (@[key]! for key in @keys() when @has(key))
   # The value of `key`, which is first set to `make()` if the key is not there.
   get_or_put = (key: K, make: () -> V): V ->
     return found if const found = @[key]
