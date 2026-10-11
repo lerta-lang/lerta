@@ -159,7 +159,8 @@ const parse_record_field = (tokens: TokenStream) ->
   const value: Expression = has_value then parse_expression(tokens) else copy_identifier(name)
   NamedValue name, value
 
-# `case` followed by an indented block of `when` arms and a final `else` arm.
+# `case` followed by an indented block of `when` arms and a final `else` arm. `when` is not a
+# keyword, so that it stays usable as a name.
 # With a subject, an arm may list several patterns, and the `else` arm may be left out (whether
 # it may is checked later).
 export const parse_case = (tokens: TokenStream, position: Position) ->
@@ -168,7 +169,7 @@ export const parse_case = (tokens: TokenStream, position: Position) ->
   tokens.expect INDENT, "indented 'when' arms"
   const has_subject = subject != nil
   const arms = [parse_case_arm(tokens, has_subject)]
-  arms.push parse_case_arm(tokens, has_subject) while tokens.peek().kind == 'when'
+  arms.push parse_case_arm(tokens, has_subject) while tokens.at_word('when')
   const has_else = not has_subject or tokens.peek().kind == 'else'
   tokens.expect 'else', "'when' or 'else'" if has_else
   const otherwise = has_else then parse_arm_body(tokens, 'else') else nil
@@ -193,7 +194,7 @@ const parse_catch = (tokens: TokenStream) ->
   Catch name, type, position, body: parse_block(tokens)
 
 const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
-  tokens.expect 'when', "'when'"
+  tokens.expect_word 'when'
   # A pattern stops before `then`, which begins the arm's value.
   const parse_pattern = () -> parse_coalesce(tokens)
   const patterns =
