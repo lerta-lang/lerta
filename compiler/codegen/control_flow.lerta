@@ -105,14 +105,15 @@ const iterated = (g: Generator, iterable: Expression): Expression ->
 # The source is evaluated first, then the closures, which capture the values they see then.
 const generate_iter_comprehension = (g: Generator, iterable: Expression, lazy: LazyFunctions) ->
   const ir = g.ir
-  const source = case iterable
-    when Range then emit_range_iter(ir, generate(g, iterable.start), generate(g, iterable.end))
-    else
-      const type = type_of(g, iterable)
-      const iter = emit_source_iter(ir, generate(g, iterable), type)
-      # An Iter's traversal starts here, which throws if one has.
-      while_holding g, iter, type, () -> emit_exception_check(g)
-      iter
+  const source =
+    case iterable
+      when Range then emit_range_iter(ir, generate(g, iterable.start), generate(g, iterable.end))
+      else
+        const type = type_of(g, iterable)
+        const iter = emit_source_iter(ir, generate(g, iterable), type)
+        # An Iter's traversal starts here, which throws if one has.
+        while_holding g, iter, type, () -> emit_exception_check(g)
+        iter
   const item: Type = iterable is Range then int_type else iterable_item(type_of(g, iterable))!
   const lazy_guard = lazy.guard
   const guard = lazy_guard then generate_closure(g, lazy_guard) else nil

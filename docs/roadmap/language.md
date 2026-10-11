@@ -9,6 +9,7 @@ The planned syntax, control flow, types, operators and strings.
 - Variadic parameters are `xs...`.
 - A function literal held by a local `const` may have [defaults](../reference/functions.md), as a top-level function does. Its defaults may use the locals it captures, so each is computed by a closure.
 - An item inside brackets may open an indented block (a `case`, a function body).
+- An `if` or a `case` value may start on the next line, one level deeper, also as the argument of a call without brackets (`print`, then `case` on the next line) and after the `then` of a `case` arm, as it may after `=`, so that the [style](../reference/style.md) can always put it there.
 
 ## Control flow
 
