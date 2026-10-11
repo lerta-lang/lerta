@@ -47,7 +47,7 @@ export const while_holding = (g: Generator, operand: String, type: Type, rest: (
 # The operand that `rest` generates while the owned operand of the type is held.
 export const holding = (g: Generator, operand: String, type: Type, rest: () -> String) ->
   var result = ''
-  const generate_rest = () ->
+  const generate_rest = ->
     result = rest()
   while_holding g, operand, type, generate_rest
   result
@@ -58,10 +58,10 @@ const emit_clear_exception = (ir: IrBuilder) ->
 
 # Returns at once, from code that is no function of the program, if the call before it has thrown.
 export const emit_check_or_return_thrown = (ir: IrBuilder, type: Type) ->
-  emit_check_with ir, () -> emit_return_thrown(ir, type)
+  emit_check_with ir, -> emit_return_thrown(ir, type)
 
 # Unwinds if the call before it has thrown.
-export const emit_exception_check = (g: Generator) -> emit_check_with(g.ir, () -> emit_unwind(g))
+export const emit_exception_check = (g: Generator) -> emit_check_with(g.ir, -> emit_unwind(g))
 
 # Runs `unwind` if the call before it has thrown, in code that is no function of the program, as an
 # Iter's has_next and next are: it releases what that code holds and returns.
@@ -117,7 +117,7 @@ export const generate_try = (g: Generator, try_expression: Try) ->
     const value = generate_block_value(g, body, define)
     incoming.push "[ #{value == '' then 'poison' else value}, %#{ir.current_block} ]"
     ir.emit "br label %#{done_label}"
-  with_handler g, catches_label, () -> generate_value(try_expression.body, no_locals)
+  with_handler g, catches_label, -> generate_value(try_expression.body, no_locals)
   ir.start_block catches_label
   # A catch's own exception goes through the finally block, if there is one.
   const catch_handler = finally_body then rethrow_label else nil
@@ -135,7 +135,7 @@ export const generate_try = (g: Generator, try_expression: Try) ->
     const caught = takes_any then exception else data
     const define = (scope: Map<String, CodegenLocal>) ->
       scope[clause.name.name] = store_in_slot(g, caught, caught_type)
-    const generate_clause = () -> generate_value(clause.body, define)
+    const generate_clause = -> generate_value(clause.body, define)
     if const label = catch_handler
       with_handler g, label, generate_clause
     else
@@ -156,7 +156,7 @@ export const generate_try = (g: Generator, try_expression: Try) ->
   ir.start_block done_label
   const result = merge(g, type, incoming)
   # The value is held while the finally block runs, which may throw.
-  const run_finally = () -> generate_statement(g, statement) for statement in finally_body ? []
+  const run_finally = -> generate_statement(g, statement) for statement in finally_body ? []
   while_holding g, result, type, run_finally
   result
 

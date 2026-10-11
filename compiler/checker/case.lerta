@@ -38,7 +38,7 @@ export const type_of_case = (body: Body, case_expression: Case, expected: Type?)
   const arm_narrowings = check_patterns(body, case_expression)
   const { arms } = case_expression
   const arm_branch = (i: Int) ->
-    Branch statements: arms[i].body, enter: () -> narrow(body, arm_narrowings[i])
+    Branch statements: arms[i].body, enter: -> narrow(body, arm_narrowings[i])
   const branches = [arm_branch(i) for i in 0...arms.length]
   if const otherwise = case_expression.otherwise
     branches.push Branch(statements: otherwise, enter: nothing)
@@ -67,7 +67,7 @@ export const type_of_try = (body: Body, try_expression: Try, expected: Type?): T
   const branches = [Branch(statements: try_expression.body, enter: nothing)]
   for clause in try_expression.catches
     const caught = caught_type(body, clause)
-    const define = () ->
+    const define = ->
       define_local body, Local(identifier: clause.name, type: caught)
     branches.push Branch(statements: clause.body, enter: define)
   const unify = unify_unless_void(body, try_expression, 'the values of try and catch')
@@ -105,8 +105,8 @@ export const type_of_conditional = (body: Body, conditional: Conditional, expect
   const then_body: Array<Statement> = [conditional.then_value]
   const else_body: Array<Statement> = [conditional.else_value]
   const branches = [
-    Branch(statements: then_body, enter: () -> narrow(body, narrowings.where_true))
-    Branch(statements: else_body, enter: () -> narrow(body, narrowings.where_false))
+    Branch(statements: then_body, enter: -> narrow(body, narrowings.where_true))
+    Branch(statements: else_body, enter: -> narrow(body, narrowings.where_false))
   ]
   const unify_then_else = (values: Array<BranchValue>) ->
     if const valueless = values.find((value) -> is_kind(value.type, 'void'))
@@ -152,7 +152,7 @@ const unify_values = (
 ): Type ->
   var type = values[0].type
   for value in values
-    const mismatch = () ->
+    const mismatch = ->
       const types = "expected #{format_type(type)}, got #{format_type(value.type)}"
       fail body.program, value.last.position, "#{description} must have the same type: #{types}"
     type = unify(type, value.type) ? mismatch()
@@ -265,7 +265,7 @@ const fail_unhandled = (body: Body, case_expression: Case, missing: Array<String
 # The pattern's type, recorded on the pattern for codegen: a member of the union, or a union of some
 # of its members, which a type alias names.
 const type_pattern = (body: Body, pattern: Expression, union: UnionType) ->
-  const fail_pattern = () ->
+  const fail_pattern = ->
     const types = "the types #{format_type(union)} or a union of them"
     fail body.program, pattern.position, "expected one of #{types}"
   const { program, resolver } = body

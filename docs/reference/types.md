@@ -123,8 +123,8 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
   ```
   const countdown = (n: Int): Iter<Int> ->
     var i = n
-    const has_next = () -> i > 0
-    const next = () ->
+    const has_next = -> i > 0
+    const next = ->
       i -= 1
       i + 1
     { has_next, next }

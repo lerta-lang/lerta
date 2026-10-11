@@ -18,7 +18,7 @@ import { parse_type_annotation, parse_type_parameters } from './type'
 # map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
 # The lookahead skips line breaks, which may separate the parameters.
 export const starts_function_literal = (tokens: TokenStream) ->
-  tokens.inside SKIP, () -> looks_like_function_literal(tokens)
+  tokens.inside SKIP, -> looks_like_function_literal(tokens)
 
 const looks_like_function_literal = (tokens: TokenStream) ->
   const first = tokens.peek().kind
@@ -41,7 +41,7 @@ export const parse_function_literal = (tokens: TokenStream) ->
   const type_params = parse_type_parameters(tokens)
   const params: Array<Parameter> =
     if tokens.accept('(')
-      tokens.parse_list(')', () -> parse_parameter(tokens))
+      tokens.parse_list(')', -> parse_parameter(tokens))
     else
       []
   const return_type = parse_type_annotation(tokens)
@@ -74,13 +74,13 @@ export const parse_array_literal = (tokens: TokenStream, position: Position) ->
     const first = parse_expression(tokens)
     tokens.next() if tokens.peek().kind == LINE_BREAK and tokens.peek_at(1).kind == 'for'
     return parse_comprehension(tokens, first, position, ']') if tokens.peek().kind == 'for'
-    const elements = tokens.parse_list_rest(']', () -> parse_expression(tokens), [first])
+    const elements = tokens.parse_list_rest(']', -> parse_expression(tokens), [first])
     ArrayLiteral elements, position
   tokens.inside SEPARATE, parse_contents
 
 # `(a)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends inside are skipped.
 export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
-  const parse_contents = () ->
+  const parse_contents = ->
     const first = parse_expression(tokens)
     return parse_comprehension(tokens, first, position, ')') if tokens.peek().kind == 'for'
     tokens.expect ')', "')'"
@@ -94,7 +94,7 @@ export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
 const parse_comprehension = (
   tokens: TokenStream, element: Expression, position: Position, close: TokenKind
 ): Expression ->
-  const parse_header = () ->
+  const parse_header = ->
     const header = parse_loop_header(tokens)
     tokens.expect close, "'#{close}'"
     header
@@ -109,7 +109,7 @@ const parse_comprehension = (
 # written as a key in parentheses: `{ (k): v }`.
 export const parse_map_literal = (tokens: TokenStream, position: Position): Expression ->
   return parse_record_literal(tokens, position) if starts_record_field(tokens)
-  const entries = tokens.parse_list('}', () -> parse_map_entry(tokens))
+  const entries = tokens.parse_list('}', -> parse_map_entry(tokens))
   tokens.fail position, 'the empty map is written `Map()`' if entries.length == 0
   MapLiteral entries, position
 
@@ -131,7 +131,7 @@ const starts_record_field = (tokens: TokenStream) ->
 
 # `{ x: 1, y }`; a field without a value takes that of the name.
 const parse_record_literal = (tokens: TokenStream, position: Position) ->
-  RecordLiteral position, fields: tokens.parse_list('}', () -> parse_record_field(tokens))
+  RecordLiteral position, fields: tokens.parse_list('}', -> parse_record_field(tokens))
 
 const parse_record_field = (tokens: TokenStream) ->
   if not starts_record_field(tokens)
@@ -179,7 +179,7 @@ const parse_catch = (tokens: TokenStream) ->
 const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
   tokens.expect_word 'when'
   # A pattern stops before `then`, which begins the arm's value.
-  const parse_pattern = () -> parse_coalesce(tokens)
+  const parse_pattern = -> parse_coalesce(tokens)
   const patterns =
     if has_subject
       tokens.parse_separated(',', parse_pattern)

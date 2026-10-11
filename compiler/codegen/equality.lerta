@@ -44,7 +44,7 @@ export const item_functions = (module: IrModule, program: ProgramWide, type: Typ
 const equals_function = (module: IrModule, program: ProgramWide, type: Type): String ->
   const define = (name: String, defined: IrModule) ->
     const ir = IrBuilder(module: defined)
-    const compare = () -> emit_equals(ir, program, '%a', '%b', type)
+    const compare = -> emit_equals(ir, program, '%a', '%b', type)
     const result =
       if ir_type(type) == 'ptr'
         const differ = ir.assign('icmp ne ptr %a, %b')
@@ -117,7 +117,7 @@ const emit_optional_equals = (
   const right_present = emit_is_present(ir, right, type)
   const both = ir.assign("and i1 #{left_present}, #{right_present}")
   const neither = ir.assign("icmp eq i1 #{left_present}, #{right_present}")
-  const compare_values = () ->
+  const compare_values = ->
     const values = [emit_unwrap(ir, left, type), emit_unwrap(ir, right, type)]
     emit_equals_by_contents ir, program, values[0], values[1], type.inner
   emit_branch ir, 'i1', both, compare_values, neither
@@ -128,7 +128,7 @@ const emit_union_equals = (
 ) ->
   const left_type = emit_drop_function(ir, left)
   const same_type = ir.assign("icmp eq ptr #{left_type}, #{emit_drop_function(ir, right)}")
-  const compare_members = () ->
+  const compare_members = ->
     const of_member = (member: Type) -> emit_equals_by_contents(ir, program, left, right, member)
     emit_member_dispatch ir, left, type.members, 'i1', of_member
   emit_branch ir, 'i1', same_type, compare_members, 'false'
@@ -147,7 +147,7 @@ const emit_hash = (ir: IrBuilder, program: ProgramWide, value: String, type: Typ
     when is_identity_type(type) then ir.assign("ptrtoint ptr #{value} to i64")
     when type is OptionalType
       # A nil holds no value to hash, as a null pointer.
-      const hash_inner = () ->
+      const hash_inner = ->
         emit_hash_by_contents ir, program, emit_unwrap(ir, value, type), type.inner
       emit_branch ir, 'i64', emit_is_present(ir, value, type), hash_inner, '0'
     when type is ObjectType and type.is_struct

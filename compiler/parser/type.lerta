@@ -22,14 +22,14 @@ export const parse_type_name = (tokens: TokenStream): TypeName ->
 # lines below, one or more on each line.
 export const parse_aliased_type = (tokens: TokenStream): TypeName ->
   return parse_type_name(tokens) if tokens.peek().kind != NEWLINE
-  const lines = tokens.parse_lines('indented union members', () -> parse_union_members(tokens))
+  const lines = tokens.parse_lines('indented union members', -> parse_union_members(tokens))
   const members: Array<UnionMember> = []
   members.append line for line in lines
   union_of members
 
 # `A | B | ...`, or one member alone.
 const parse_union_members = (tokens: TokenStream) ->
-  tokens.parse_separated '|', () -> parse_union_member(tokens)
+  tokens.parse_separated '|', -> parse_union_member(tokens)
 
 # The union of the members, or the member alone.
 const union_of = (members: Array<UnionMember>): TypeName ->
@@ -39,11 +39,11 @@ const union_of = (members: Array<UnionMember>): TypeName ->
 # `(A, B) -> R`, or a function type in parentheses, `((A) -> R)?`, to make it optional.
 const parse_parenthesized_type = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
-  const types = tokens.parse_list(')', () -> parse_type_name(tokens))
+  const types = tokens.parse_list(')', -> parse_type_name(tokens))
   if tokens.accept('->')
     const result = parse_type_name(tokens)
     return FunctionTypeName(result, position, params: types)
-  const fail = () -> tokens.fail_expecting(tokens.peek(), "'->'")
+  const fail = -> tokens.fail_expecting(tokens.peek(), "'->'")
   fail() if types.length != 1
   const inner = types[0]
   if inner is FunctionTypeName
@@ -60,7 +60,7 @@ const parse_union_member = (tokens: TokenStream): UnionMember ->
 # `{ x: Int, y: String }`, with `?` after it if it may be nil.
 const parse_record_type = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
-  const fields = tokens.parse_list('}', () -> parse_record_type_field(tokens))
+  const fields = tokens.parse_list('}', -> parse_record_type_field(tokens))
   RecordTypeName fields, position, optional: tokens.accept('?')
 
 const parse_record_type_field = (tokens: TokenStream) ->
@@ -76,7 +76,7 @@ export const parse_named_type = (tokens: TokenStream) ->
 # `<A, B>`.
 export const parse_type_arguments = (tokens: TokenStream) ->
   tokens.expect '<', "'<'"
-  const args = tokens.parse_separated(',', () -> parse_type_name(tokens))
+  const args = tokens.parse_separated(',', -> parse_type_name(tokens))
   tokens.expect '>', "'>'"
   args
 
@@ -97,7 +97,7 @@ export const parse_type_annotation = (tokens: TokenStream) ->
 # `<T, U: Stringable, X: Iterable<T>>`, if it follows.
 export const parse_type_parameters = (tokens: TokenStream): Array<TypeParameter> ->
   return [] if not tokens.accept('<')
-  const type_params = tokens.parse_separated(',', () -> parse_type_parameter(tokens))
+  const type_params = tokens.parse_separated(',', -> parse_type_parameter(tokens))
   tokens.expect '>', "'>'"
   type_params
 

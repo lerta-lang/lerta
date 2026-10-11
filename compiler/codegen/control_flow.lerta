@@ -92,7 +92,7 @@ export const generate_comprehension = (g: Generator, comprehension: Comprehensio
     release_if_reference g, element, value
     ir.emit "br label %#{next_label}"
     ir.start_block next_label
-  const iterate = () -> generate_iteration(g, iterable, variable, index, body)
+  const iterate = -> generate_iteration(g, iterable, variable, index, body)
   while_holding g, result, array_type, iterate
   result
 
@@ -112,7 +112,7 @@ const generate_iter_comprehension = (g: Generator, iterable: Expression, lazy: L
       const type = type_of(g, iterable)
       const iter = emit_source_iter(ir, generate(g, iterable), type)
       # An Iter's traversal starts here, which throws if one has.
-      while_holding g, iter, type, () -> emit_exception_check(g)
+      while_holding g, iter, type, -> emit_exception_check(g)
       iter
   const item: Type = iterable is Range then int_type else iterable_item(type_of(g, iterable))!
   const lazy_guard = lazy.guard
@@ -133,7 +133,7 @@ const generate_iteration = (
     const define = (scope: Map<String, CodegenLocal>, current: String) ->
       scope[variable.name] = ValueLocal(operand: current, type: int_type)
       define_index scope, g.ir.assign("sub i64 #{current}, #{start}") if index
-    generate_counting_loop g, start, () -> end, body, define
+    generate_counting_loop g, start, -> end, body, define
     return
   const type = type_of(g, iterable)
   if type is IterType
@@ -146,7 +146,7 @@ const generate_iteration = (
     const item = emit_sequence_get(g.ir, sequence, current, type)
     scope[variable.name] = store_in_slot(g, item, item_type)
     define_index scope, current
-  const end = () -> emit_sequence_length(g.ir, sequence, type)
+  const end = -> emit_sequence_length(g.ir, sequence, type)
   generate_counting_loop g, '0', end, body, define
   release_scope g, sequence_scope
   g.locals.pop()
@@ -172,7 +172,7 @@ const generate_iter_loop = (
       scope[variable.name] = store_in_slot(g, value, item)
       define_index scope, place
     generate_loop_body g, body, exit_label, next_label, define
-  emit_iter_loop g.ir, iter, item, loop_body, () -> emit_exception_check(g)
+  emit_iter_loop g.ir, iter, item, loop_body, -> emit_exception_check(g)
   release_scope g, iter_scope
   g.locals.pop()
 

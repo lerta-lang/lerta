@@ -191,7 +191,7 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   const field_pointer = (field: FieldInfo) -> emit_field_pointer(ir, object, info, field.name.name)
   for field in info.fields
     ir.emit "store #{ir_type(field.type!)} zeroinitializer, ptr #{field_pointer(field)}"
-  g.unwind_cleanup = () ->
+  g.unwind_cleanup = ->
     for field in info.fields
       const type = field.type!
       emit_release_stored ir, field_pointer(field), ir_type(type), ownership(type)
@@ -206,9 +206,9 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
     const value = field.value ? continue
-    const compute = () -> store_field(g, object, info, field, generate(g, value))
+    const compute = -> store_field(g, object, info, field, generate(g, value))
     if field.has_default
-      emit_default_or_argument g, arguments, field, compute, () -> store_argument(field)
+      emit_default_or_argument g, arguments, field, compute, -> store_argument(field)
     else
       compute()
   g.locals.pop()
@@ -272,7 +272,7 @@ export const hold = (g: Generator, value: String, type: Type) ->
   const scope = g.locals.push()
   # The name cannot be written in the source, so no code can read it.
   scope['(held)'] = store_in_slot(g, value, type)
-  () ->
+  ->
     release_scope g, scope
     g.locals.pop()
 
