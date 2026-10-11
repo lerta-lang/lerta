@@ -7,7 +7,7 @@ import { argv } from 'std:process'
 # The path as a '...' literal, which has no escapes.
 const path_literal = (path: String) ->
   const is_plain = path.split("'").length == 1 and path.split('\').length == 1
-  is_plain then "'#{path}'" else throw "#{path}: a path cannot hold ' or \\"
+  is_plain then "'#{path}'" else throw ValueError(message: "#{path}: a path cannot hold ' or \\")
 
 # The contents as a "..." literal on one line.
 const contents_literal = (path: String) ->
@@ -25,10 +25,11 @@ const contents_literal = (path: String) ->
     if escape
       bytes.push each for each in escape.binary
     else
-      throw "#{path}: a control character that a literal has no escape for" if byte < 0x20
+      const problem = 'a control character that a literal has no escape for'
+      throw ValueError(message: "#{path}: #{problem}") if byte < 0x20
       bytes.push byte
   bytes.push '"'
-  bytes.to_binary().text() ? throw "#{path} is not valid UTF-8"
+  bytes.to_binary().text() ? throw ValueError(message: "'#{path}' is not valid UTF-8")
 
 # The module of either mode, which the compiler uses alike: EMBEDDED_PATHS, the paths as given,
 # and embedded_source, the contents of one of them, or nil for another path.
@@ -45,7 +46,7 @@ const path_constant = "export const EMBEDDED_PATHS = [\n#{path_list}]\n\n"
 const seed_part = () -> [
   "export const embedded_source = (path: String): String? ->\n"
   "  return nil if not EMBEDDED_PATHS.any((each) -> each == path)\n"
-  "  read_file(path).text() ? throw \"'\#{path}' is not valid UTF-8\"\n"
+  "  read_file(path).text() ? throw ValueError(message: \"'\#{path}' is not valid UTF-8\")\n"
 ].join('')
 const normal_part = () ->
   const contents = ["  #{path_literal(path)}: #{contents_literal(path)}\n" for path in paths]
