@@ -3,7 +3,7 @@
 import {
   ArrayLiteral, BooleanLiteral, Case, CaseArm, Catch, Comprehension, Conditional, copy_identifier
   Expression, FunctionLiteral, Identifier, LazyFunctions, MapEntry, MapLiteral, NamedValue
-  Parameter, Pass, Position, RecordLiteral, Statement, Try, TypeName, TypeParameter
+  Parameter, Pass, Position, RecordLiteral, Statement, Try
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
 import { parse_coalesce, parse_expression, parse_identifier, parse_loop_header } from './expression'
@@ -11,7 +11,7 @@ import {
   at_declaration, parse_block, parse_line_statement, parse_simple_statement
 } from './statement'
 import { is_one_of, token_position, TokenStream } from './token_stream'
-import { parse_named_type, parse_type_name } from './type'
+import { parse_type_annotation, parse_type_parameters } from './type'
 
 # `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
 # `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
@@ -38,8 +38,7 @@ const looks_like_function_literal = (tokens: TokenStream) ->
 # `<T, U: Stringable>`, come first.
 export const parse_function_literal = (tokens: TokenStream) ->
   const token = tokens.peek()
-  const is_generic = token.kind == '<'
-  const type_params: Array<TypeParameter> = is_generic then parse_type_parameters(tokens) else []
+  const type_params = parse_type_parameters(tokens)
   const params: Array<Parameter> =
     if tokens.accept('(')
       tokens.parse_list(')', () -> parse_parameter(tokens))
@@ -66,22 +65,6 @@ const parse_parameter = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   const type = parse_type_annotation(tokens)
   Parameter name, type, default: tokens.accept('=') then parse_expression(tokens) else nil
-
-# `: Type`, if it follows.
-const parse_type_annotation = (tokens: TokenStream) ->
-  tokens.accept(':') then parse_type_name(tokens) else nil
-
-# `<T, U: Stringable, X: Iterable<T>>`.
-export const parse_type_parameters = (tokens: TokenStream) ->
-  tokens.expect '<', "'<'"
-  const type_params = tokens.parse_separated(',', () -> parse_type_parameter(tokens))
-  tokens.expect '>', "'>'"
-  type_params
-
-const parse_type_parameter = (tokens: TokenStream) ->
-  const name = parse_identifier(tokens)
-  const bound = tokens.accept(':') then parse_named_type(tokens) else nil
-  TypeParameter name, bound
 
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
 export const parse_array_literal = (tokens: TokenStream, position: Position) ->
@@ -190,7 +173,7 @@ export const parse_try = (tokens: TokenStream, position: Position) ->
 const parse_catch = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   const name = parse_identifier(tokens)
-  const type: TypeName? = tokens.accept(':') then parse_type_name(tokens) else nil
+  const type = parse_type_annotation(tokens)
   Catch name, type, position, body: parse_block(tokens)
 
 const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->

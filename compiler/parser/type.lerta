@@ -1,6 +1,8 @@
-# Type names: named types, unions, function types and anonymous structs.
+# Type syntax: type names (named types, unions, function types and anonymous structs), type
+# annotations and type parameters.
 import {
-  FunctionTypeName, NamedType, RecordTypeField, RecordTypeName, TypeName, UnionMember, UnionTypeName
+  FunctionTypeName, NamedType, RecordTypeField, RecordTypeName, TypeName, TypeParameter, UnionMember
+  UnionTypeName
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
 import { parse_identifier } from './expression'
@@ -87,3 +89,19 @@ export const starts_type_arguments = (tokens: TokenStream) ->
   const close = tokens.closing_offset('<', '>', is_type_token) ? return false
   const next = tokens.peek_at(close + 1)
   next.kind == '(' and not next.spaced
+
+# `: Type`, if it follows.
+export const parse_type_annotation = (tokens: TokenStream) ->
+  tokens.accept(':') then parse_type_name(tokens) else nil
+
+# `<T, U: Stringable, X: Iterable<T>>`, if it follows.
+export const parse_type_parameters = (tokens: TokenStream): Array<TypeParameter> ->
+  return [] if not tokens.accept('<')
+  const type_params = tokens.parse_separated(',', () -> parse_type_parameter(tokens))
+  tokens.expect '>', "'>'"
+  type_params
+
+const parse_type_parameter = (tokens: TokenStream) ->
+  const name = parse_identifier(tokens)
+  const bound = tokens.accept(':') then parse_named_type(tokens) else nil
+  TypeParameter name, bound
