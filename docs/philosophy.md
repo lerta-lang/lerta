@@ -39,6 +39,7 @@ Safety means **zero undefined behavior** outside [C functions](reference/functio
 | Area | Reference |
 |---|---|
 | Overall architecture | Crystal (Ruby syntax + inference + LLVM), Swift, Go |
+| Syntax | CoffeeScript (indentation, `->`, `@`), Nim (command syntax, without its nesting) |
 | RC + weak | Swift ARC, Rust `Rc`/`Weak` |
 | Single thread + async | Node.js / V8, libuv |
 | interface / itab | Go, Objective-C non-fragile ivars |
@@ -48,3 +49,10 @@ Safety means **zero undefined behavior** outside [C functions](reference/functio
 | Generics | Rust (monomorphization + `linkonce_odr`, trait bounds) |
 | Exception implementation (candidates) | Stackless Python, LLVM shadow stack, Itanium C++ ABI, Swift (error return values) |
 | Bootstrap | GCC `make bootstrap`, Rust, Crystal |
+
+## Why not Nim or Crystal
+
+Both are close, and much of Lerta is in them already. Lerta differs in what it leaves out.
+
+- **Nim** has the syntax and the memory management: its ARC is Lerta's reference counting, and its default, ORC, also collects cycles, which Lerta does not for now ([roadmap](roadmap/runtime.md#memory-management)). Nim also has several ways to write one thing: identifiers that differ only in `_` or in the case of letters after the first are one name, a call can be written `f(a, b)`, `a.f(b)` or `f a, b`, routines come in seven kinds, and templates and macros are central. Nil safety is a rule in Lerta; in Nim, `not nil` is experimental.
+- **Crystal** has the types: unions, `T?` as `T | Nil`, and narrowing. Lerta takes explicit parameter types over Crystal's parameters typed by each call, so that modules can be compiled apart ([roadmap](roadmap/programs.md#open-questions)); reference counting over a tracing GC; and no macros, which Crystal's standard library is built on.
