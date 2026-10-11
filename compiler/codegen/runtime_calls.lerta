@@ -24,14 +24,20 @@ export const emit_valueless_call = (ir: IrBuilder, call: String, result: Type) -
   ir.emit call
   is_kind(result, 'never') then 'poison' else ''
 
-# Declares and calls the function of the signature, as in `i64 @f(ptr, i64)`, giving its result,
-# or '' for void.
+# Declares and calls the function of the signature, as in `i64 @f(ptr, i64)`, giving its result.
 export const call_runtime = (ir: IrBuilder, signature: String, args: String) ->
+  ir.assign runtime_call(ir, signature, args, false)
+
+# Declares and calls the void function of the signature, as in `void @f(ptr)`.
+export const call_void_runtime = (ir: IrBuilder, signature: String, args: String) ->
+  ir.emit runtime_call(ir, signature, args, true)
+
+# A void result cannot be assigned, and a result that call_void_runtime dropped would hide a wrong
+# signature.
+const runtime_call = (ir: IrBuilder, signature: String, args: String, is_void: Bool) ->
   const parts = signature.split(' @')
   const result_type = parts[0]
+  panic "#{signature} does not match the call" if (result_type == 'void') != is_void
   const name = parts[1].split('(')[0]
   ir.module.declare name, "declare #{signature}"
-  const instruction = "call #{result_type} @#{name}(#{args})"
-  return ir.assign(instruction) if result_type != 'void'
-  ir.emit instruction
-  ''
+  "call #{result_type} @#{name}(#{args})"

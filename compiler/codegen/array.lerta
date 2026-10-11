@@ -5,7 +5,7 @@
 # zero-extended (see to_item).
 import { IrBuilder } from './ir_builder'
 import { ir_type, ownership } from './lerta_ir'
-import { call_runtime } from './runtime_calls'
+import { call_runtime, call_void_runtime } from './runtime_calls'
 import { is_kind, is_one_of_kinds, Type, TypeKind } from '../types'
 
 # The kinds whose values are already 8 bytes.
@@ -81,7 +81,7 @@ export const emit_length = (ir: IrBuilder, array: String) ->
 export const emit_get = (ir: IrBuilder, array: String, index: String, element: Type) ->
   const pointer = emit_item_slot(ir, element)
   const args = "ptr #{array}, i64 #{index}, ptr #{pointer}"
-  call_runtime ir, 'void @lerta_array_read(ptr, i64, ptr)', args
+  call_void_runtime ir, 'void @lerta_array_read(ptr, i64, ptr)', args
   emit_load_item ir, pointer, element
 
 # The array retains the item, which stays owned by the caller.
@@ -89,16 +89,16 @@ export const emit_set = (
   ir: IrBuilder, array: String, index: String, value: String, element: Type
 ) ->
   const args = "ptr #{array}, i64 #{index}, ptr #{emit_item_pointer(ir, value, element)}"
-  call_runtime ir, 'void @lerta_array_write(ptr, i64, ptr)', args
+  call_void_runtime ir, 'void @lerta_array_write(ptr, i64, ptr)', args
 
 export const emit_push = (ir: IrBuilder, array: String, value: String, element: Type) ->
   const args = "ptr #{array}, ptr #{emit_item_pointer(ir, value, element)}"
-  call_runtime ir, 'void @lerta_array_append(ptr, ptr)', args
+  call_void_runtime ir, 'void @lerta_array_append(ptr, ptr)', args
 
 # The item is owned.
 export const emit_pop = (ir: IrBuilder, array: String, element: Type) ->
   const pointer = emit_item_slot(ir, element)
-  call_runtime ir, 'void @lerta_array_take_last(ptr, ptr)', "ptr #{array}, ptr #{pointer}"
+  call_void_runtime ir, 'void @lerta_array_take_last(ptr, ptr)', "ptr #{array}, ptr #{pointer}"
   emit_load_item ir, pointer, element
 
 export const call_array_method = (

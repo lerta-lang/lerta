@@ -8,6 +8,7 @@ import {
   drop_symbol, emit_release_stored, emit_retain_value, ir_type, object_ir_type, Ownership, ownership
   special_method_symbol, without_sigil
 } from './lerta_ir'
+import { call_runtime, call_void_runtime } from './runtime_calls'
 import { members_of, ObjectType, RecordType, Type, type_key } from '../types'
 
 # The two header fields come before the object's own.
@@ -40,12 +41,10 @@ export const define_heap_object = (
   module.add_type "#{layout} = type #{heap_object_type(fields)}"
   const ir = IrBuilder(module)
   if weak_slot
-    module.declare 'lerta_weak_detach', 'declare void @lerta_weak_detach(ptr)'
     const slot = emit_heap_field_pointer(ir, layout, '%object', weak_slot)
-    ir.emit "call void @lerta_weak_detach(ptr #{slot})"
+    call_void_runtime ir, 'void @lerta_weak_detach(ptr)', "ptr #{slot}"
   if deinit
-    module.declare 'lerta_run_deinit', 'declare void @lerta_run_deinit(ptr, ptr)'
-    ir.emit "call void @lerta_run_deinit(ptr %object, ptr #{deinit})"
+    call_void_runtime ir, 'void @lerta_run_deinit(ptr, ptr)', "ptr %object, ptr #{deinit}"
   for field, i in fields
     continue if field.owned == NONE
     const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
@@ -59,10 +58,9 @@ export const emit_heap_field_pointer = (
 
 # A new object with reference count 1 and uninitialized fields.
 export const emit_heap_allocate = (ir: IrBuilder, layout: String, drop: String) ->
-  ir.module.declare 'lerta_alloc', 'declare ptr @lerta_alloc(i64, ptr)'
   const end = ir.assign("getelementptr #{layout}, ptr null, i32 1")
   const size = ir.assign("ptrtoint ptr #{end} to i64")
-  ir.assign "call ptr @lerta_alloc(i64 #{size}, ptr #{drop})"
+  call_runtime ir, 'ptr @lerta_alloc(i64, ptr)', "i64 #{size}, ptr #{drop}"
 
 # Classes and structs: named by their types. Constructors and methods are generated like
 # functions (see function).
@@ -95,14 +93,12 @@ const emit_weak_slot_pointer = (ir: IrBuilder, object: String, info: ObjectInfo)
 # The weak box of a class's object, which a `weak!` field holds instead of the object, owned; the
 # object is borrowed.
 export const emit_weak_box = (ir: IrBuilder, object: String, info: ObjectInfo) ->
-  ir.module.declare 'lerta_weak_box', 'declare ptr @lerta_weak_box(ptr, ptr)'
   const slot = emit_weak_slot_pointer(ir, object, info)
-  ir.assign "call ptr @lerta_weak_box(ptr #{object}, ptr #{slot})"
+  call_runtime ir, 'ptr @lerta_weak_box(ptr, ptr)', "ptr #{object}, ptr #{slot}"
 
 # The object of a weak box, borrowed, or null if it is gone.
 export const emit_weak_object = (ir: IrBuilder, box: String) ->
-  ir.module.declare 'lerta_weak_object', 'declare ptr @lerta_weak_object(ptr)'
-  ir.assign "call ptr @lerta_weak_object(ptr #{box})"
+  call_runtime ir, 'ptr @lerta_weak_object(ptr)', "ptr #{box}"
 
 # An i1: whether the object is of the type, or of a member of the union.
 export const emit_type_test = (ir: IrBuilder, object: String, type: Type) ->

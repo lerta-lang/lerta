@@ -3,10 +3,11 @@
 # pending exception. The program registers it with the runtime first thing, so that the runtime's
 # C functions throw through it (see lerta_raise), and so do the checks of the generated code.
 import { Itab } from '../checker/interface_values'
-import { emit_unwind } from './exceptions'
+import { emit_unwind, exception_global } from './exceptions'
 import { emit_interface_value } from './interface'
 import { Generator } from './generator'
 import { constructor_symbol, INTERFACE_IR_TYPE, string_constant } from './lerta_ir'
+import { call_void_runtime } from './runtime_calls'
 import { ObjectType } from '../types'
 
 export const RAISE_ERROR = '@lerta.raise_error'
@@ -30,13 +31,11 @@ const emit_set_error = (g: Generator, itab: Itab) ->
   const type = itab.type as ObjectType!
   const error = g.ir.assign("call ptr #{constructor_symbol(type)}(ptr %message)")
   const value = emit_interface_value(g, error, itab)
-  g.ir.module.declare 'lerta_exception', "@lerta_exception = external global #{INTERFACE_IR_TYPE}"
-  g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr @lerta_exception"
+  g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr #{exception_global(g.ir)}"
 
 # Registers the function with the runtime, as the program starts.
 export const emit_register_raise = (g: Generator) ->
-  g.ir.module.declare 'lerta_register_raise', 'declare void @lerta_register_raise(ptr)'
-  g.ir.emit "call void @lerta_register_raise(ptr #{RAISE_ERROR})"
+  call_void_runtime g.ir, 'void @lerta_register_raise(ptr)', "ptr #{RAISE_ERROR}"
 
 # An error that a check of the generated code throws, by the name of its type, and its message.
 export struct CheckedError
@@ -63,7 +62,6 @@ export const throw_if = (g: Generator, condition: String, error: CheckedError) -
   const message = string_constant(ir, error.message)
   const errors = g.code.program.runtime_errors
   const kind = errors.find_index((itab) -> type_name(itab) == error.type_name)!
-  ir.module.declare 'lerta_raise', 'declare void @lerta_raise(i32, ptr)'
-  ir.emit "call void @lerta_raise(i32 #{kind}, ptr #{message})"
+  call_void_runtime ir, 'void @lerta_raise(i32, ptr)', "i32 #{kind}, ptr #{message}"
   emit_unwind g
   ir.start_block continue_label
