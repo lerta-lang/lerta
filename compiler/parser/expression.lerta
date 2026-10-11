@@ -143,11 +143,24 @@ const parse_binary_comparison = (tokens: TokenStream, left: Expression): Express
 const parse_range = (tokens: TokenStream): Expression ->
   const start = parse_arithmetic(tokens, 0)
   return start if tokens.peek_continuation() != '...'
+  if at_spread(tokens)
+    tokens.spread = token_position(tokens.peek())
+    return start
   tokens.next()
   const end = parse_arithmetic(tokens, 0)
   if tokens.peek_continuation() == '...'
     tokens.fail token_position(tokens.peek()), 'ranges cannot be chained'
   Range start, end, position: start.position
+
+# `xs...` with nothing after it that could end a range, which spreads it rather than a range. An
+# array's item takes it (see parse_array_literal); where nothing does, it is rejected as found
+# (see TokenStream.fail_expecting).
+export const at_spread = (tokens: TokenStream) ->
+  tokens.peek().kind == '...' and is_one_of(tokens.peek_at(1).kind, SPREAD_FOLLOWERS)
+
+const SPREAD_FOLLOWERS: Array<TokenKind> = [
+  ',', ']', ')', '}', 'for', LINE_BREAK, NEWLINE, INDENT, DEDENT, EOF
+]
 
 const at_comparison = (tokens: TokenStream) ->
   is_one_of tokens.peek_continuation(), COMPARISON_OPERATORS

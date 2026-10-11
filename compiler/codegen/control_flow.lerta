@@ -74,13 +74,21 @@ export const generate_for = (g: Generator, for_statement: For) ->
 # A new array, of the comprehension's elements, which the loop pushes. Its loop can be the target
 # of no `break` or `continue`, which its element and guard cannot hold (see jump_positions).
 export const generate_comprehension = (g: Generator, comprehension: Comprehension) ->
-  const { element, variable, index, guard } = comprehension
   const iterable = iterated(g, comprehension.iterable)
   return generate_iter_comprehension(g, iterable, lazy) if const lazy = comprehension.lazy
   const array_type = type_of(g, comprehension) as ArrayType!
-  const element_type = array_type.element
+  const result = emit_array_new(g.ir, array_type.element)
+  const push = -> push_comprehension(g, comprehension, result)
+  while_holding g, result, array_type, push
+  result
+
+# Pushes the comprehension's elements to `result`, an array of them, which may hold others, as
+# for a spread in an array literal.
+export const push_comprehension = (g: Generator, comprehension: Comprehension, result: String) ->
+  const { element, variable, index, guard } = comprehension
+  const iterable = iterated(g, comprehension.iterable)
+  const element_type = (type_of(g, comprehension) as ArrayType!).element
   const ir = g.ir
-  const result = emit_array_new(ir, element_type)
   const body = ->
     const push_label = ir.fresh_label('comprehension.push')
     const next_label = ir.fresh_label('comprehension.next')
@@ -92,9 +100,7 @@ export const generate_comprehension = (g: Generator, comprehension: Comprehensio
     release_if_reference g, element, value
     ir.emit "br label %#{next_label}"
     ir.start_block next_label
-  const iterate = -> generate_iteration(g, iterable, variable, index, body)
-  while_holding g, result, array_type, iterate
-  result
+  generate_iteration g, iterable, variable, index, body
 
 # What a `for` or a comprehension goes through: the iterable, or the call of its `iter()` that
 # the checker made (see type_of_iterated).

@@ -36,7 +36,7 @@ const define_loop_variables = (body: Body, variable: Identifier, index: Identifi
 # Iterable gives its Iter (see iterated).
 export const check_for = (body: Body, for_statement: For) ->
   const { iterable, variable, index } = for_statement
-  const item_type = type_of_iterated(body, iterable)
+  const item_type = type_of_iterated(body, iterable, "after 'in'")
   const define = -> define_loop_variables(body, variable, index, item_type)
   check_loop_body body, for_statement.body, define
 
@@ -49,7 +49,8 @@ export const type_of_comprehension = (
   body: Body, comprehension: Comprehension, expected: Type?
 ): Type ->
   const { element, variable, index, iterable, guard } = comprehension
-  const item_type = type_of_iterated(body, iterable)
+  const place = comprehension.spread then "before '...'" else "after 'in'"
+  const item_type = type_of_iterated(body, iterable, place)
   if comprehension.lazy != nil
     return type_of_iter_comprehension(body, comprehension, item_type, expected)
   const expected_element = expected_array_element(expected)
@@ -94,8 +95,8 @@ const check_loop_body = (body: Body, statements: Array<Statement>, define: () ->
 # The type of the items a `for` goes through: Int values for a range, or the items of an array, a
 # Binary or an Iter. A value of another type that satisfies Iterable is gone through by the Iter
 # of its `iter()`, a call recorded in the facts, which codegen generates instead (see
-# iter_calls).
-const type_of_iterated = (body: Body, iterable: Expression): Type ->
+# iter_calls). `place` tells where the iterable is written, for messages.
+const type_of_iterated = (body: Body, iterable: Expression, place: String): Type ->
   if iterable is Range
     expect_type body, iterable.start, int_type
     expect_type body, iterable.end, int_type
@@ -105,7 +106,7 @@ const type_of_iterated = (body: Body, iterable: Expression): Type ->
   const at = iterable.position
   if iterable_item_of(body, type, at) == nil
     const iterables = 'a range, an array, a Binary, an Iter or an Iterable'
-    reject_not_iterable body, type, at, "expected #{iterables} after 'in', got #{format_type(type)}"
+    reject_not_iterable body, type, at, "expected #{iterables} #{place}, got #{format_type(type)}"
   const iter = Member(object: iterable, name: Identifier(name: 'iter', position: at), position: at)
   const call = Call(callee: iter, args: [], named_args: [], type_args: [], position: at)
   body.facts.iter_calls[iterable] = call

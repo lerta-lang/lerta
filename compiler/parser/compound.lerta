@@ -2,11 +2,14 @@
 # anonymous structs, function literals, and `case`.
 import {
   ArrayLiteral, BooleanLiteral, Case, CaseArm, Catch, Comprehension, Conditional, copy_identifier
+  is_spread
   Expression, FunctionLiteral, Identifier, LazyFunctions, MapEntry, MapLiteral, NamedValue
   Parameter, Pass, Position, RecordLiteral, Statement, Try
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
-import { parse_coalesce, parse_expression, parse_identifier, parse_loop_header } from './expression'
+import {
+  at_spread, parse_coalesce, parse_expression, parse_identifier, parse_loop_header
+} from './expression'
 import {
   at_declaration, parse_block, parse_line_statement, parse_simple_statement
 } from './statement'
@@ -66,17 +69,32 @@ const parse_parameter = (tokens: TokenStream) ->
   const type = parse_type_annotation(tokens)
   Parameter name, type, default: tokens.accept('=') then parse_expression(tokens) else nil
 
-# `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension.
+# `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension. An element
+# `xs...` gives the items of `xs` in its place.
 export const parse_array_literal = (tokens: TokenStream, position: Position) ->
   const parse_contents = (): Expression ->
     tokens.accept LINE_BREAK
     return ArrayLiteral(position, elements: []) if tokens.accept(']')
-    const first = parse_expression(tokens)
+    const first = parse_element(tokens)
     tokens.next() if tokens.peek().kind == LINE_BREAK and tokens.peek_at(1).kind == 'for'
-    return parse_comprehension(tokens, first, position, ']') if tokens.peek().kind == 'for'
-    const elements = tokens.parse_list_rest(']', -> parse_expression(tokens), [first])
+    if tokens.peek().kind == 'for'
+      if is_spread(first)
+        tokens.fail first.position, 'a spread cannot be the element of a comprehension'
+      return parse_comprehension(tokens, first, position, ']')
+    const elements = tokens.parse_list_rest(']', -> parse_element(tokens), [first])
     ArrayLiteral elements, position
   tokens.inside SEPARATE, parse_contents
+
+# A spread `xs...` is the comprehension `[x for x in xs]` marked to give its items in its place;
+# its variable's name cannot be written, so no code can read it.
+const parse_element = (tokens: TokenStream): Expression ->
+  const value = parse_expression(tokens)
+  return value if not at_spread(tokens)
+  tokens.next()
+  const { position } = value
+  const variable = Identifier(position, name: ' item')
+  const element = copy_identifier(variable)
+  Comprehension element, variable, position, iterable: value, guard: nil, lazy: nil, spread: true
 
 # `(a)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends inside are skipped.
 export const parse_parenthesized = (tokens: TokenStream, position: Position) ->

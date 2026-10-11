@@ -75,6 +75,7 @@ print xs[0] + xs.length
 
 - `Array<T>` is a growable sequence of items of type `T`, which can be any type with values (not `void`). Arrays are mutable and shared: assigning or passing an array does not copy it.
 - `[a, b, c]` makes an array (over several lines too: see [lines inside brackets](syntax.md#lines-inside-brackets)). Its item type comes from the expected type if there is one (a type annotation, a parameter, a return type), otherwise from the first item. `[]` needs an expected type.
+- **Spread.** An item `xs...` gives the items of `xs`, anything a `for` goes through, in its place: `[first, rest..., last]`, `[header.binary..., 0x0A]`. Its items count as the array's items in the rules above. A spread can only be an item of an array literal so far, not of a comprehension's element or of a call.
 - `xs[i]` reads an item and `xs[i] = value` replaces one (`+=` and so on work on `Int` items). An index outside `0 ... xs.length` throws `index out of range`.
 - `xs.length` is the number of items.
 - `==` and `!=` compare two arrays by their items, in order (see [equality](objects.md#classes-and-structs)).

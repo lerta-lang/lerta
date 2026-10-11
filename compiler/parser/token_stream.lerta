@@ -17,6 +17,8 @@ export class TokenStream
   # cannot be written there (see parse_function_literal).
   interpolation: Position?
   index = 0
+  # Where the last `xs...` after a value is, which no array item may have taken (see at_spread).
+  spread: Position? = nil
   # How line breaks are read inside each of the brackets being parsed; outside brackets there are
   # none.
   line_breaks: Array<LineBreaks> = []
@@ -79,7 +81,9 @@ export class TokenStream
     @fail_expecting @peek(), description if not @accept(kind)
 
   fail_expecting = (token: Token, expected: String) ->
-    @fail token_position(token), "expected #{expected}, found #{describe_token(token)}"
+    const at = token_position(token)
+    @fail at, 'a spread `xs...` can only be an item of an array' if at == @spread
+    @fail at, "expected #{expected}, found #{describe_token(token)}"
 
   in_brackets = -> @line_breaks.length > 0
 

@@ -1,6 +1,6 @@
 # Types arrays and maps: their literals, `Map()`, and indexing (of a Binary too).
 import {
-  ArrayLiteral, Call, Expression, Identifier, Index, MapEntry, MapLiteral, Position, Throw
+  ArrayLiteral, Call, Expression, Identifier, is_spread, Index, MapEntry, MapLiteral, Position, Throw
 } from '../ast'
 import { fail } from './diagnostics'
 import { is_equatable } from './equality'
@@ -58,10 +58,11 @@ export const check_map_value = (program: ProgramWide, value: Type, at: Position)
 
 # The element type comes from the expected type if there is one, so that `[[], [1]]` can be
 # typed; otherwise from the first element whose type does not come from the context and which
-# gives a value (not a `throw`), so that `[1, c]` holds Bytes when `c` is one.
+# gives a value (not a `throw`), so that `[1, c]` holds Bytes when `c` is one. A spread `xs...`
+# gives elements of the type of its items.
 export const type_of_array = (body: Body, array: ArrayLiteral, expected: Type?) ->
   if expected is ArrayType
-    expect_type body, item, expected.element for item in array.elements
+    expect_element body, item, expected.element for item in array.elements
     return expected
   const elements = array.elements
   const gives_value = (item: Expression) -> not (item is Throw)
@@ -71,11 +72,16 @@ export const type_of_array = (body: Body, array: ArrayLiteral, expected: Type?) 
   const first = elements.length > 0 then elements[0] else nil
   const is_anchor = (item: Expression) -> gives_value(item) and not is_contextual(item)
   const anchor = elements.find(is_anchor) ? elements.find(gives_value) ? first ? empty()
-  const element_type = type_of(body, anchor)
+  const anchor_type = type_of(body, anchor)
+  const element_type = is_spread(anchor) then (anchor_type as ArrayType!).element else anchor_type
   const element = check_item_type(body.program, element_type, anchor.position, 'an array')
   for item in elements
-    expect_type body, item, element if item != anchor
+    expect_element body, item, element if item != anchor
   ArrayType element
+
+# A spread is checked as the array of its items, whose items must be of the type.
+const expect_element = (body: Body, item: Expression, element: Type) ->
+  expect_type body, item, is_spread(item) then ArrayType(element) else element
 
 # The types come from the expected type if there is one, otherwise from the first entry.
 export const type_of_map = (body: Body, map: MapLiteral, expected: Type?) ->
