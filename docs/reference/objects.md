@@ -29,7 +29,7 @@ print c.count
 - Inside methods, `@` is the object and `@x` its member `x` (`@.x` is an error). An initializer can only use `@` to read a field set before it (`@name`): the object is not complete yet, so it cannot be passed on or have its methods called.
 - `p.x` reads a field and `p.m(...)` calls a method.
 - **Mutability.** A class field can be assigned (`c.count = 1`) unless it is declared `const`. A struct field cannot be changed, and cannot be declared `var`.
-- Objects are reference counted, with no cycle collector. Assigning or passing an object shares it, and may retain it; whatever optimization can remove is removed. A struct cannot form a cycle, being immutable, so immutable data is recommended.
+- Objects are reference counted, with no cycle collector. Assigning or passing an object shares it, and may retain it; whatever optimization can remove is removed. A struct can be part of a cycle only through something mutable it holds (an array, a map, a class object, or a function that captures a `var`), so immutable data is recommended.
 - A struct is immutable, so copying it and sharing it cannot be told apart. The implementation may choose either (see [internals](../internals.md#structs-planned)).
 - There are no static members (`static`). Functions related to a type are module functions; `extend` adds methods to a type, but not functions without a receiver.
 - Why a function literal member is a method, one per type with `@` passed at call time, rather than a field holding a closure: closures capturing `@` would create a cycle in every object.

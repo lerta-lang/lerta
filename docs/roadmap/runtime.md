@@ -29,9 +29,11 @@ What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is i
 
 ## Memory management
 
+For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-structs)). The plan is to make them hard to write, and to report the ones that are written:
+
 - To break a cycle through a closure, put the value in a [`weak var`](objects.md#weak-references) local and capture that.
 - Cycles across libraries are left to the leak check of the debug runtime ([internals](../internals.md#leak-checking)).
-- The typical cycle (a closure that captures `@`, held through a field of `@`) gets a compiler warning.
+- The typical cycle (a closure that captures `@`, held through a field of `@`) gets a compiler warning. It comes before async/await, which makes such closures common.
 
 ## Concurrency
 
@@ -44,4 +46,5 @@ What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is i
 - Whether stack overflow should be an exception that can be caught instead of a panic. That needs the check at function entry described in [internals](../internals.md#stack-overflow).
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - The type of asynchronous results (its name, and the type of async functions that return no value).
+- Whether the runtime should collect cycles (as Nim's ORC does by trial deletion), to be decided once async/await shows whether the means above keep closure cycles in check.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).

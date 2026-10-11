@@ -81,7 +81,7 @@ print xs[0] + xs.length
 - `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`. `xs.contains(x)` tells whether an item is `==` to `x`, for items that `==` compares (other items are an error), and `xs.find_index(f)` gives the place of the first item for which `f` is true, or nil. `xs.last()` returns the last item without removing it, and throws `last of an empty array` likewise. `xs.append(ys)` pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`.
 - `xs.iter()` gives an [`Iter`](#iter) of the items, and `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` one of the items as it maps, filters or takes them.
 - `strings.join(separator)` joins an `Array<String>` into one `String`.
-- Arrays cannot be compared or printed.
+- Arrays cannot be printed.
 
 ## Map
 
