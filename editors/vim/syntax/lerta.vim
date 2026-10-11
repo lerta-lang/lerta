@@ -9,12 +9,15 @@ syn match lertaOperator "\.\.\.\|->\|[=!<>+\-*/%]=\|[-+*/%<>=?!@|]"
 syn match lertaCall "\<[a-z_]\w*\ze("
 syn match lertaType "\<[A-Z]\w*\>"
 syn match lertaConstant "\<[A-Z][A-Z0-9_]\+\>"
-syn match lertaDeclarationName "\%(\<\%(class\|struct\|extend\)\s\+\)\@<=\h\w*"
+syn match lertaDeclarationName "\%(\<\%(class\|struct\|extend\|enum\|interface\)\s\+\)\@<=\h\w*"
 
+" The keywords are those of docs/reference/syntax.md. `is` and `as` are not keywords, so they
+" are operators only where a name follows, and can be names elsewhere.
+syn match lertaWordOperator "\.\@<!\<\%(is\|as\)\>\ze\s\+\h"
 syn keyword lertaBoolean true false nil
-syn keyword lertaWordOperator and or not is
-syn keyword lertaControl if else then while for in break continue return case when throw import export
-syn keyword lertaStorage const var class struct extern extend
+syn keyword lertaWordOperator and or not
+syn keyword lertaControl if else then while for in break continue return case when throw try catch finally import export
+syn keyword lertaStorage const var class struct extern extend enum interface
 
 syn match lertaInvalidNumber "\<\d\w*\>"
 syn match lertaNumber "\<\%(0x\x\+\|0\|[1-9]\%(_\=\d\)*\)\>"
