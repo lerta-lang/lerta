@@ -40,11 +40,16 @@ export const check_modules = (entry_path: String, modules: Array<Module>) ->
   program.builtins = builtins_module(program)
   plan_runtime_errors program.shared[builtins] if const builtins = program.builtins
   # Instances of generic functions and of generic classes and structs may make others.
-  const has_pending = (shared: Shared) ->
-    const functions = shared.generics.any((generic) -> check_pending(program, generic))
-    check_pending_objects(shared) or functions
+  # Checks the module's instances left unchecked, and tells whether there were any. Each round
+  # goes through every module, until none has any left.
+  const check_round = (shared: Shared) ->
+    var checked = false
+    checked = check_pending(program, generic) or checked for generic in shared.generics
+    check_pending_objects(shared) or checked
   var pending = true
-  pending = program.shared.any(has_pending) while pending
+  while pending
+    pending = false
+    pending = check_round(shared) or pending for shared in program.shared
   program
 
 # The module that std:builtins is, which every module but std:io imports, unless the program is
