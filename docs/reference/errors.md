@@ -3,8 +3,7 @@
 ## Exceptions
 
 ```
-struct NotFound
-  message: String
+struct NotFound: Error
 
 const find = (key: String): Int ->
   throw NotFound(message: "no #{key}") if key != 'a'
@@ -19,7 +18,7 @@ finally
   print 'done'
 ```
 
-- `throw value` throws an exception: a value of a type that satisfies `interface Error` of `std:builtins`, whose one member is `message: String`, converted to an `Error` as a value converts to an [interface type](objects.md#interfaces), so a class or struct, which a program declares for its own errors. It is an expression of type `never`, so it can stand wherever a value is expected (`case` arms, `x ? throw NotFound(message: 'missing')`); `never` does not count when the types of arms or returns are combined, and a function may end with it.
+- `throw value` throws an exception: a value of a type that satisfies `interface Error` of `std:builtins`, whose one member is `message: String`, converted to an `Error` as a value converts to an [interface type](objects.md#interfaces), so a class or struct, which a program declares for its own errors, as `struct NotFound: Error` (see [declaring an interface](objects.md#interfaces)). It is an expression of type `never`, so it can stand wherever a value is expected (`case` arms, `x ? throw NotFound(message: 'missing')`); `never` does not count when the types of arms or returns are combined, and a function may end with it.
 - The runtime's errors are exceptions too, of types that `std:builtins` declares, each a struct of one field, `message`:
 
   | Type | Thrown by |
