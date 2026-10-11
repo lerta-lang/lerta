@@ -6,6 +6,7 @@ import { all_warnings } from './checker/diagnostics'
 import { check_modules } from './checker/modules'
 import { generate } from './codegen/codegen'
 import { embedded_source, EMBEDDED_PATHS } from './embedded'
+import { CompileError } from './errors'
 import { load_modules } from './loader'
 import { basename, has_extension, join } from './paths'
 
@@ -46,13 +47,16 @@ export const build_and_run = (request: BuildRequest, args: Array<String>) ->
 # code 1.
 const build_then = (request: BuildRequest, use: (String) -> Int) ->
   const ir = generate_ir(request.source, request.warnings_as_errors)
-  const dir = make_temp_dir().decode_utf8() ? throw 'the temporary directory is not valid UTF-8'
-  const ir_path = join(dir, 'program.ll')
-  write_file ir_path, ir.binary
-  const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
-  const clang_status = run('clang', clang_args(request, ir_path, write_runtime(dir), executable))
-  const code = clang_status == 0 then use(executable) else 1
-  remove_tree dir
+  const not_utf8 = CompileError(message: 'the temporary directory is not valid UTF-8')
+  const dir = make_temp_dir().decode_utf8() ? throw not_utf8
+  const code = try
+    const ir_path = join(dir, 'program.ll')
+    write_file ir_path, ir.binary
+    const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
+    const clang_status = run('clang', clang_args(request, ir_path, write_runtime(dir), executable))
+    clang_status == 0 then use(executable) else 1
+  finally
+    remove_tree dir
   exit code
 
 # Writes the embedded runtime, runtime/*.c and runtime/*.h, to `dir`, and returns the paths of

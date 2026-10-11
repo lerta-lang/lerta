@@ -13,7 +13,7 @@ builds an executable. `lerta` is `bin/lerta`, which `make` builds (see the [READ
 - `-O` optimizes, including across the generated code and the runtime (link-time optimization).
 - `-Werror` makes a warning stop the build, as an error does: the warnings are printed, and the exit code is 1. The bootstrap builds the compiler so (see [internals](../internals.md#bootstrap)).
 - `--target <triple>` has clang build the executable for that target, such as `i686-linux-gnu` or `x86_64-w64-mingw32`; without it, the executable is for the host. A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it.
-- The build leaves no other file: it writes the LLVM IR and the runtime's C files to a temporary directory, which it removes after clang has built the executable from them, or failed to. A throw while the directory is there leaves it, as there is no `catch` yet: for a file that cannot be written, or for a program that cannot be started, clang or the one that `run` runs.
+- The build leaves no other file: it writes the LLVM IR and the runtime's C files to a temporary directory, which it removes after clang has built the executable from them, or failed to. An error while the directory is there removes it too: a file that cannot be written, or a program that cannot be started, clang or the one that `run` runs.
 
 ```
 lerta run <source> [<file>...] [-O] [-Werror] [-- <arg>...]

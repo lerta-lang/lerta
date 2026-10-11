@@ -708,16 +708,16 @@ const build_and_run_checks = [[], ['-O'], ['--target', host_triple]].map((flags)
 }))
 
 // Runs the compiler in a new directory, with another new one as the system's directory for
-// temporary files, and returns what it left in each.
+// temporary files, and returns what it left in each. `path`, if given, is the PATH it runs with.
 // stdin is a file of `input`: on Linux, Node gives a child a socket for a pipe, which
 // /dev/stdin cannot open.
-const build_in_new_dir = (args: string[], input = '') => {
+const build_in_new_dir = (args: string[], input = '', path?: string) => {
   const cwd = mkdtempSync(join(cli_work_dir, 'cwd-'))
   const temp = mkdtempSync(join(cli_work_dir, 'temp-'))
   const input_path = join(cli_work_dir, `${basename(cwd)}.in`)
   writeFileSync(input_path, input)
   const stdin = openSync(input_path, 'r')
-  const env = { ...process.env, TMPDIR: temp }
+  const env = { ...process.env, TMPDIR: temp, ...(path === undefined ? {} : { PATH: path }) }
   const stdio: StdioOptions = [stdin, 'pipe', 'pipe']
   const built = spawnSync(compiler, args, { cwd, env, stdio, encoding: 'utf8' })
   closeSync(stdin)
@@ -748,6 +748,18 @@ const output_checks = [
     run: () => {
       const args = ['build', hello, '-o', 'hello', '--target', 'no-such-target']
       const { status, left, left_in_temp } = build_in_new_dir(args)
+      return [
+        ...(status === 1 ? [] : [`expected exit status 1, got ${status}`]),
+        ...expect_left('files left', [], left),
+        ...expect_left('files left in the temporary directory', [], left_in_temp),
+      ]
+    },
+  },
+  {
+    name: 'lerta build removes its temporary directory when clang cannot be started',
+    run: () => {
+      const args = ['build', hello, '-o', 'hello']
+      const { status, left, left_in_temp } = build_in_new_dir(args, '', cli_work_dir)
       return [
         ...(status === 1 ? [] : [`expected exit status 1, got ${status}`]),
         ...expect_left('files left', [], left),
