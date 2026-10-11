@@ -29,10 +29,7 @@ export type IterCode = (IrBuilder, IterKind) -> void
 const symbol_of = (kind: IterKind, part: String) -> "@#{without_sigil(kind.layout)}.#{part}"
 
 const all_fields = (kind: IterKind) ->
-  const fields: Array<HeapField> = []
-  fields.append PROTOCOL
-  fields.append kind.state
-  fields
+  [PROTOCOL..., kind.state...]
 
 # The kind of `key`, defined with its drop function and code the first time it is given. Its next
 # does not check for the end: its callers ask has_next first (see emit_checked_next).
@@ -65,8 +62,7 @@ const emit_throw_unless = (ir: IrBuilder, condition: String, check: () -> void) 
 # A new Iter of the kind, not started, which takes over the values of its state.
 export const emit_iter = (ir: IrBuilder, kind: IterKind, state_values: Array<String>) ->
   const iter = emit_heap_allocate(ir, kind.layout, symbol_of(kind, 'drop'))
-  const values = [symbol_of(kind, 'has_next'), symbol_of(kind, 'next'), 'false']
-  values.append state_values
+  const values = [symbol_of(kind, 'has_next'), symbol_of(kind, 'next'), 'false', state_values...]
   const fields = all_fields(kind)
   for field, i in fields
     const pointer = emit_heap_field_pointer(ir, kind.layout, iter, i)
