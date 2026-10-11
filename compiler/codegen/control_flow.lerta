@@ -38,15 +38,15 @@ export const generate_if = (g: Generator, if_statement: If) ->
 # The test of a condition, and what it defines in the body: for `const name = value`, the value
 # without nil, which the body's scope owns.
 export const generate_condition_of = (g: Generator, condition: Condition) ->
-  case condition
-    when Binding
-      const value = generate(g, condition.value)
-      const optional = type_of(g, condition.value) as OptionalType!
-      const define = (scope: Map<String, CodegenLocal>) ->
-        const unwrapped = emit_unwrap(g.ir, value, optional)
-        scope[condition.name.name] = store_in_slot(g, unwrapped, optional.inner)
-      { test: emit_is_present(g.ir, value, optional), define }
-    else { test: generate_condition(g, condition as Expression!), define: no_locals }
+  if condition is Binding
+    const value = generate(g, condition.value)
+    const optional = type_of(g, condition.value) as OptionalType!
+    const define = (scope: Map<String, CodegenLocal>) ->
+      const unwrapped = emit_unwrap(g.ir, value, optional)
+      scope[condition.name.name] = store_in_slot(g, unwrapped, optional.inner)
+    { test: emit_is_present(g.ir, value, optional), define }
+  else
+    { test: generate_condition(g, condition as Expression!), define: no_locals }
 
 export const generate_while = (g: Generator, while_statement: While) ->
   const ir = g.ir
@@ -106,14 +106,14 @@ const iterated = (g: Generator, iterable: Expression): Expression ->
 const generate_iter_comprehension = (g: Generator, iterable: Expression, lazy: LazyFunctions) ->
   const ir = g.ir
   const source =
-    case iterable
-      when Range then emit_range_iter(ir, generate(g, iterable.start), generate(g, iterable.end))
-      else
-        const type = type_of(g, iterable)
-        const iter = emit_source_iter(ir, generate(g, iterable), type)
-        # An Iter's traversal starts here, which throws if one has.
-        while_holding g, iter, type, () -> emit_exception_check(g)
-        iter
+    if iterable is Range
+      emit_range_iter(ir, generate(g, iterable.start), generate(g, iterable.end))
+    else
+      const type = type_of(g, iterable)
+      const iter = emit_source_iter(ir, generate(g, iterable), type)
+      # An Iter's traversal starts here, which throws if one has.
+      while_holding g, iter, type, () -> emit_exception_check(g)
+      iter
   const item: Type = iterable is Range then int_type else iterable_item(type_of(g, iterable))!
   const lazy_guard = lazy.guard
   const guard = lazy_guard then generate_closure(g, lazy_guard) else nil

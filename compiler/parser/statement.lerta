@@ -85,9 +85,10 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
   return parse_declaration(tokens) if at_declaration(tokens)
   const is_command_call = starts_command_argument(tokens)
   const expression: Expression =
-    case
-      when is_command_call then parse_command_call(tokens)
-      else parse_expression(tokens)
+    if is_command_call
+      parse_command_call(tokens)
+    else
+      parse_expression(tokens)
   const is_callee = expression is Identifier or expression is Member
   const takes_block_arguments = expression is Call or is_callee
   if takes_block_arguments and starts_block_arguments(tokens)
@@ -127,17 +128,19 @@ const wrap_in_postfix_condition = (tokens: TokenStream, statement: Statement): S
   tokens.next()
   const condition = parse_condition(tokens)
   const position = statement.position
-  case kind
-    when 'if' then If(condition, position, then_body: [statement], else_body: [])
-    else While(condition, position, body: [statement])
+  if kind == 'if'
+    If(condition, position, then_body: [statement], else_body: [])
+  else
+    While(condition, position, body: [statement])
 
 const wrap_in_for = (tokens: TokenStream, statement: Statement) ->
   const { variable, index, iterable, guard } = parse_loop_header(tokens)
   const position = statement.position
   const body: Array<Statement> =
-    case
-      when guard then [If(position, condition: guard, then_body: [statement], else_body: [])]
-      else [statement]
+    if guard
+      [If(position, condition: guard, then_body: [statement], else_body: [])]
+    else
+      [statement]
   For variable, iterable, body, position, index
 
 const parse_declaration = (tokens: TokenStream) ->
@@ -260,7 +263,8 @@ export const parse_if = (tokens: TokenStream): If ->
   return If(condition, then_body, position, else_body: []) if tokens.peek().kind != 'else'
   tokens.next()
   const else_body: Array<Statement> =
-    case
-      when tokens.peek().kind == 'if' then [parse_if(tokens)]
-      else parse_block(tokens)
+    if tokens.peek().kind == 'if'
+      [parse_if(tokens)]
+    else
+      parse_block(tokens)
   If condition, then_body, else_body, position
