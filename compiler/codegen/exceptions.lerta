@@ -52,6 +52,14 @@ export const holding = (g: Generator, operand: String, type: Type, rest: () -> S
   while_holding g, operand, type, generate_rest
   result
 
+# The exception is taken: there is none pending.
+const emit_clear_exception = (ir: IrBuilder) ->
+  ir.emit "store #{INTERFACE_IR_TYPE} zeroinitializer, ptr #{exception_global(ir)}"
+
+# Returns at once, from code that is no function of the program, if the call before it has thrown.
+export const emit_check_or_return_thrown = (ir: IrBuilder, type: Type) ->
+  emit_check_with ir, () -> emit_return_thrown(ir, type)
+
 # Unwinds if the call before it has thrown.
 export const emit_exception_check = (g: Generator) -> emit_check_with(g.ir, () -> emit_unwind(g))
 
@@ -91,7 +99,7 @@ export const emit_unwind = (g: Generator) ->
 export const emit_throw_error = (g: Generator, value: String) ->
   g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr #{exception_global(g.ir)}"
   emit_unwind g
-  g.ir.start_block g.ir.fresh_label('after.throw')
+  g.ir.start_unreachable()
   'poison'
 
 # The try block's value, or that of the catch that takes its exception; the finally block runs
@@ -123,7 +131,7 @@ export const generate_try = (g: Generator, try_expression: Try) ->
     const next_label = ir.fresh_label('catch.next')
     ir.emit "br i1 #{matched}, label %#{clause_label}, label %#{next_label}"
     ir.start_block clause_label
-    ir.emit "store #{INTERFACE_IR_TYPE} zeroinitializer, ptr #{exception_global(ir)}"
+    emit_clear_exception ir
     const caught = takes_any then exception else data
     const define = (scope: Map<String, CodegenLocal>) ->
       scope[clause.name.name] = store_in_slot(g, caught, caught_type)
@@ -138,7 +146,7 @@ export const generate_try = (g: Generator, try_expression: Try) ->
   ir.start_block rethrow_label
   if finally_body
     const set_aside = ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
-    ir.emit "store #{INTERFACE_IR_TYPE} zeroinitializer, ptr #{exception_global(ir)}"
+    emit_clear_exception ir
     const depth = g.temporaries.length
     g.temporaries.push Temporary(operand: set_aside, owned: Ownership.INTERFACE)
     generate_statement g, statement for statement in finally_body

@@ -52,15 +52,16 @@ export const emit_static_closure = (ir: IrBuilder, code: String) ->
   ir.module.define_once closure, define
   closure
 
+# The place of the closure's code.
+const emit_code_pointer = (ir: IrBuilder, closure: String) ->
+  ir.assign "getelementptr { i64, ptr, ptr }, ptr #{closure}, i32 0, i32 #{CODE_FIELD}"
+
 # Calls a closure with the operands of its arguments; the closure is borrowed.
 export const emit_closure_call = (
   ir: IrBuilder, closure: String, type: Type, args: Array<String>
 ) ->
   const { params, result } = function_type_of(type)
-  const pointer = ir.assign(
-    "getelementptr { i64, ptr, ptr }, ptr #{closure}, i32 0, i32 #{CODE_FIELD}"
-  )
-  const code = ir.assign("load ptr, ptr #{pointer}")
+  const code = ir.assign("load ptr, ptr #{emit_code_pointer(ir, closure)}")
   const all_args = ["ptr #{closure}"]
   all_args.push "#{ir_type(params[i])} #{arg}" for arg, i in args
   const return_type = ir_return_type(result)
@@ -92,10 +93,7 @@ export const emit_closure = (
   const drop = holds_reference then "#{symbol}.drop" else 'null'
   define_closure_drop ir, drop, slots if holds_reference
   const closure = emit_heap_allocate(ir, closure_ir_type(slots), drop)
-  const code = ir.assign(
-    "getelementptr { i64, ptr, ptr }, ptr #{closure}, i32 0, i32 #{CODE_FIELD}"
-  )
-  ir.emit "store ptr #{symbol}, ptr #{code}"
+  ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}"
   for slot, i in slots
     const pointer = emit_capture_pointer(ir, closure, slots, i)
     ir.emit "store #{slot.ir_type} #{operands[i]}, ptr #{pointer}"

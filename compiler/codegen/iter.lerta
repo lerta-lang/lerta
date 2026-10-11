@@ -5,7 +5,7 @@
 import { emit_get, emit_length } from './array'
 import { emit_closure_call, function_type_of } from './closure'
 import { value_field } from './heap_object'
-import { emit_check_with, emit_return_thrown } from './exceptions'
+import { emit_check_or_return_thrown, emit_check_with, emit_return_thrown } from './exceptions'
 import { emit_interface_call } from './interface'
 import { IrBuilder } from './ir_builder'
 import {
@@ -54,12 +54,12 @@ export const emit_adapter_iter = (ir: IrBuilder, source: String, source_type: Ty
   const has_next = (body: IrBuilder, kind: IterKind) ->
     const type = FunctionType(params: [], result: bool_type)
     const more = emit_interface_call(body, load_state(body, kind, 0), 0, type, [])
-    emit_check_with body, () -> emit_return_thrown(body, bool_type)
+    emit_check_or_return_thrown body, bool_type
     body.emit "ret i1 #{more}"
   const next = (body: IrBuilder, kind: IterKind) ->
     const type = FunctionType(params: [], result: item)
     const value = emit_interface_call(body, load_state(body, kind, 0), 1, type, [])
-    emit_check_with body, () -> emit_return_thrown(body, item)
+    emit_check_or_return_thrown body, item
     body.emit "ret #{ir_type(item)} #{value}"
   const state = [value_field(source_type)]
   const kind = define_kind(ir, "adapter #{type_key(source_type)}", state, item, has_next, next)
@@ -86,14 +86,14 @@ const emit_map_iter = (ir: IrBuilder, source: String, mapper: String, type: Type
   const item = function_type.params[0]
   const has_next = (body: IrBuilder, kind: IterKind) ->
     const more = emit_has_next(body, load_state(body, kind, 0))
-    emit_check_with body, () -> emit_return_thrown(body, bool_type)
+    emit_check_or_return_thrown body, bool_type
     body.emit "ret i1 #{more}"
   const next = (body: IrBuilder, kind: IterKind) ->
     const value = emit_next(body, load_state(body, kind, 0), item)
-    emit_check_with body, () -> emit_return_thrown(body, function_type.result)
+    emit_check_or_return_thrown body, function_type.result
     const result = emit_closure_call(body, load_state(body, kind, 1), type, [value])
     emit_release_value body, value, item
-    emit_check_with body, () -> emit_return_thrown(body, function_type.result)
+    emit_check_or_return_thrown body, function_type.result
     body.emit "ret #{ir_type(function_type.result)} #{result}"
   const state = [value_field(IterType(item)), value_field(type)]
   const key = "map #{type_key(type)}"
@@ -117,16 +117,15 @@ const emit_filter_iter = (ir: IrBuilder, source: String, test: String, item: Typ
     body.start_block search_label
     const source_iter = load_state(body, kind, 0)
     const has_more = emit_has_next(body, source_iter)
-    const thrown = () -> emit_return_thrown(body, bool_type)
-    emit_check_with body, thrown
+    emit_check_or_return_thrown body, bool_type
     body.emit "br i1 #{has_more}, label %#{test_label}, label %#{end_label}"
     body.start_block test_label
     const value = emit_next(body, source_iter, item)
-    emit_check_with body, thrown
+    emit_check_or_return_thrown body, bool_type
     const keep = emit_closure_call(body, load_state(body, kind, 1), test_type, [value])
     const release_and_return = () ->
       emit_release_value body, value, item
-      thrown()
+      emit_return_thrown body, bool_type
     emit_check_with body, release_and_return
     body.emit "br i1 #{keep}, label %#{keep_label}, label %#{skip_label}"
     body.start_block keep_label

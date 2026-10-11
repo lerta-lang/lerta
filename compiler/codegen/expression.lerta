@@ -111,14 +111,12 @@ const generate_value = (g: Generator, expression: Expression): String ->
     when MapLiteral then generate_map(g, expression)
     when Comprehension then generate_comprehension(g, expression)
     when RecordLiteral
-      const values: Map<String, String> = Map()
-      const depth = g.temporaries.length
-      for field in expression.fields
-        const value = generate(g, field.value)
-        push_temporary g, value, type_at_use(g, field.value)
-        values[field.name.name] = value
-      pop_temporaries g, depth
-      emit_record g.ir, type_of(g, expression), values
+      const fields = expression.fields
+      const emit = (operands: Array<String>) ->
+        const values: Map<String, String> = Map()
+        values[field.name.name] = operands[i] for field, i in fields
+        emit_record g.ir, type_of(g, expression), values
+      holding_all g, [field.value for field in fields], emit
     when Index then generate_index(g, expression)
     when FunctionLiteral then generate_closure(g, expression)
 
@@ -222,6 +220,22 @@ const generate_interpolation = (g: Generator, interpolation: Interpolation) ->
     parts.push operand
   pop_temporaries g, depth
   emit_concat g.ir, parts
+
+# Generates the expressions in order, each held while the later ones are evaluated, which may
+# throw, and gives their operands to `use`; they are let go of after it. Unlike `holding`, it
+# generates what it holds, so it lives here, beside `generate`.
+export const holding_all = (
+  g: Generator, expressions: Array<Expression>, use: (Array<String>) -> String
+) ->
+  const depth = g.temporaries.length
+  const operands: Array<String> = []
+  for expression in expressions
+    const operand = generate(g, expression)
+    push_temporary g, operand, type_at_use(g, expression)
+    operands.push operand
+  const result = use(operands)
+  pop_temporaries g, depth
+  result
 
 # Every expression yields the references its value holds owned, which its consumer releases.
 export const release_if_reference = (g: Generator, expression: Expression, operand: String) ->
