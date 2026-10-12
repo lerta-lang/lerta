@@ -1,4 +1,4 @@
-#include "lerta.h"
+#include "internal.h"
 
 LERTA_STATIC_STRING(traversed_twice, "an Iter can be traversed only once");
 LERTA_STATIC_STRING(ended, "next past the end of an Iter");

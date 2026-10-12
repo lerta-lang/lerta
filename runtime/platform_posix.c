@@ -12,7 +12,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 // A stack overflow touches the guard page below the stack, which raises SIGSEGV (SIGBUS on some
 // systems). The handler runs on a stack of its own, since the overflowed one has no room left.

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]) {
   int64_t start = LERTA_INT_TEXT_MAX;

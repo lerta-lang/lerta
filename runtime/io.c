@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 LERTA_STATIC_STRING(unknown_writer, "a Writer writes to stdout (1) or stderr (2) only");
 

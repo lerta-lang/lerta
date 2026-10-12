@@ -1,4 +1,4 @@
-#include "lerta.h"
+#include "internal.h"
 
 // Entry point of every Lerta program: the compiler emits the module's
 // top-level code as lerta_main, and the runtime wraps it with setup and exit.

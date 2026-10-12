@@ -130,8 +130,6 @@ typedef struct {
 void *lerta_alloc(int64_t size, void (*drop)(void *object));
 void lerta_retain(void *object);
 void lerta_release(void *object);
-// With LERTA_DEBUG, live objects are counted; returns false after reporting a leak to stderr.
-bool lerta_check_leaks(void);
 // Runs a class's deinit on its object, whose count has reached zero, from its drop function. The
 // object counts as referenced once while deinit runs, so that passing it on and releasing it again
 // does not drop it twice; deinit must not keep it, which would bring a dropped object back.
@@ -147,9 +145,7 @@ void *lerta_weak_object(void *box);
 // for the object after that, as by its deinit, holds no object.
 void lerta_weak_detach(void **slot);
 
-// Strings (string.c). Also the constructors of Binary values, which share the representation:
-// `lerta_string_new` leaves the bytes for the caller to fill.
-LertaString *lerta_string_new(int64_t length);
+// Strings (string.c). Also the constructors of Binary values, which share the representation.
 LertaString *lerta_string_from_bytes(const void *bytes, int64_t length);
 LertaString *lerta_int_to_string(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
@@ -170,14 +166,6 @@ LertaString *lerta_binary_from_bytes(const LertaArray *bytes);
 // The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
 LertaString *lerta_binary_as_string(LertaString *binary);
 
-// Items (array.c): the size of an item of the kind, and the counting of the reference it holds.
-int64_t lerta_item_size(LertaItemKind kind);
-void lerta_retain_item(LertaItemKind kind, const void *item);
-void lerta_release_item(LertaItemKind kind, const void *item);
-// The item at the index of an array of any kind but interface values, as 8 bytes: a byte item is
-// zero-extended.
-int64_t lerta_word_item(const LertaArray *array, int64_t index);
-
 // Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; get and pop
 // write the item owned. An index out of range throws.
 LertaArray *lerta_array_create(LertaItemKind item_kind);
@@ -186,15 +174,10 @@ void lerta_array_read(const LertaArray *array, int64_t index, void *item);
 void lerta_array_write(LertaArray *array, int64_t index, const void *item);
 void lerta_array_append(LertaArray *array, const void *item);
 void lerta_array_take_last(LertaArray *array, void *item);
-// Appends an item of any kind but interface values, given as 8 bytes (see lerta_word_item).
-void lerta_array_append_word(LertaArray *array, int64_t word);
 // Whether two arrays hold equal items in the same order, and a hash of the items in order.
 bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals);
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
 LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator);
-// The string as a NUL-terminated C string, which the caller frees; NULL if it holds a NUL byte,
-// which C would take as its end.
-char *lerta_c_string(const LertaString *s);
 
 // Maps (map.c). Keys and values in are borrowed; values are passed through pointers to them. get
 // returns whether the key is there, and writes its value owned (zeros otherwise); keys returns
@@ -223,7 +206,6 @@ void lerta_raise_iter_ended(void);
 
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.
-void lerta_set_arguments(int argc, char **argv);
 LertaArray *lerta_argv(void);
 // Flushes stdout and ends the program; leaks are not checked, as for a throw. A code out of 0 to
 // 255 throws a ValueError instead, and the call returns.
@@ -237,48 +219,11 @@ bool lerta_is_file(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);
 LertaString *lerta_make_temp_dir(void);
 void lerta_remove_tree(const LertaString *path);
-// Reads a file to its end through `read`, which returns how many bytes it put in `buffer`, 0 at
-// the end, or -1 on failure; returns NULL on failure.
-LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size),
-                               void *file);
-
-// What differs between systems: platform_posix.c and platform_windows.c, each of which compiles to
-// nothing on the other. Paths and arguments are NUL-terminated UTF-8, and a false or NULL result
-// is a failure.
-// Stack overflow: reported as a panic. Called first thing in main.
-void lerta_stack_init(void);
-// Gives main's arguments as the system's bytes, which are UTF-8 on Windows: POSIX leaves them as
-// they are, and Windows replaces them with ones read from its UTF-16 command line.
-void lerta_os_arguments(int *argc, char ***argv);
-// Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
-bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
-bool lerta_os_is_terminal(int fd);
-// Ends the program at once, without flushing stdout.
-_Noreturn void lerta_os_exit(int code);
-// Ends the program as a failure that is not an exit code, as C's abort does.
-_Noreturn void lerta_os_abort(void);
-LertaString *lerta_os_read_file(const char *path);
-bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
-bool lerta_os_is_file(const char *path);
-// The absolute path with no links, which the caller frees.
-char *lerta_os_real_path(const char *path);
-// A new, empty directory in the system's directory for temporary files, whose path the caller
-// frees.
-char *lerta_os_make_temp_dir(void);
-// Removes a file, or a directory with everything in it; a symbolic link is removed, not followed.
-bool lerta_os_remove_tree(const char *path);
-// Runs the command `args[0]`, found as the system finds commands, with `args`, which end with
-// NULL, and waits for it to end.
-bool lerta_os_run(char **args, int64_t *exit_code);
 
 // Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. For how stdout is
 // buffered, which init decides, see docs/internals.md#output.
-void lerta_stdout_init(void);
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
-// Returns false if any output to stdout has failed.
-bool lerta_stdout_flush(void);
-void lerta_stderr_write(const uint8_t *bytes, int64_t length);
 
 // The exception being thrown, an Error interface value, from its throw until a catch takes it; its
 // data is null while there is none. The generated code checks it after each call (see
@@ -288,9 +233,6 @@ typedef struct {
   void *const *itab;
 } LertaException;
 extern LertaException lerta_exception;
-
-// The message of the pending exception, owned, which the first entry of an Error's itab gives.
-LertaString *lerta_exception_message(void);
 
 // Frees an object whose construction threw, once the caller has released its fields; its deinit
 // does not run.
@@ -315,27 +257,8 @@ typedef enum {
 // that is std:builtins or one of the modules it imports, which have no error types to make, it
 // stops the program with lerta_exit_with_error.
 void lerta_raise(LertaErrorKind kind, const LertaString *message);
-// As lerta_raise, with the message made of a prefix, a LertaString such as a LERTA_STATIC_STRING,
-// and the detail.
-void lerta_raise_with(LertaErrorKind kind, const void *prefix, const LertaString *detail);
-// An IndexError of an index out of range, as of an array or a Binary.
-void lerta_raise_index_out_of_range(void);
 void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
 
-// Prints the message to stderr and exits with status 1: for an uncaught exception, and for an
-// error raised without a raise function.
-_Noreturn void lerta_exit_with_error(const LertaString *message);
-
-// Runtime-internal helpers.
-enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign
-// Writes the decimal text of n at the end of buffer and returns where it starts.
-int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
-_Noreturn void lerta_panic(const char *message);
-_Noreturn void lerta_panic_with(const char *prefix, const LertaString *message);
-// malloc, realloc and calloc that panic when out of memory instead of returning NULL.
-void *lerta_checked_malloc(size_t size);
-void *lerta_checked_realloc(void *memory, size_t size);
-void *lerta_checked_calloc(size_t count, size_t size);
 // `panic` of std:builtins.
 _Noreturn void lerta_panic_string(const LertaString *message);
 

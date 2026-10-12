@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 LERTA_STATIC_STRING(cannot_read, "cannot read file: ");
 LERTA_STATIC_STRING(cannot_write, "cannot write file: ");

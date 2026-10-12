@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 #ifdef LERTA_DEBUG
 static int64_t live_objects = 0;

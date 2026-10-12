@@ -6,7 +6,7 @@ This describes the implementation design. Unmarked statements describe the compi
 
 - The compiler writes `.ll` text and has `clang` compile and link it with the runtime.
 - **Planned:** LLVM emits objects, and `lld` links them (on all platforms).
-- The core of the runtime (RC, the representation and basic operations of strings, arrays and maps) is **written in C** and shared by all stages.
+- The core of the runtime (RC, the representation and basic operations of strings, arrays and maps) is **written in C** and shared by all stages. `runtime/lerta.h` declares what the generated code, std and the C files linked with a program use, and `runtime/internal.h` what only the runtime's own C code does.
   - Builtins and standard modules are written in Lerta where possible (such as `print`). C is limited to the minimal primitives that cannot be written in Lerta (writing to an fd, memory allocation and so on), and the compiler to the operations that need the representation of the builtin types (see [builtins](#builtins)).
 - **Planned:** an event loop, in the C core of the runtime, on libuv, which I/O uses too.
 
@@ -166,7 +166,7 @@ A function with [defaults](reference/functions.md) takes every argument. For eac
 ## Platforms
 
 - Targets are Linux / macOS / **Windows**. No POSIX-specific assumptions from the start (OS dependencies are confined to the boundary of libuv and the runtime).
-- In the runtime, what differs between systems is a small set of functions, declared together in `runtime/lerta.h` and implemented by `platform_posix.c` and `platform_windows.c`. Each file compiles to nothing on the other kind of system, so both are always compiled; the rest of the runtime is shared and calls no system functions.
+- In the runtime, what differs between systems is a small set of functions, declared together in `runtime/internal.h` and implemented by `platform_posix.c` and `platform_windows.c`. Each file compiles to nothing on the other kind of system, so both are always compiled; the rest of the runtime is shared and calls no system functions.
 - Windows uses the wide-character (UTF-16) Win32 functions, converting from and to UTF-8: for paths, for the arguments, which it reads from the command line (`CommandLineToArgvW`), since the C runtime's `argv` is in the ANSI code page, and for the command line of `run` (`CreateProcessW`), which quotes each argument so that the child's C runtime reads it back as it was. `run` searches only `PATH` for a command, as `posix_spawnp` does (`SearchPathW`), since `CreateProcessW` would look in the program's and the current directory first. stdout and stderr are written with `WriteFile`, so no newline becomes CRLF; to a console, they are written as UTF-16 with `WriteConsoleW`, which shows them whatever the console's code page.
 - The tests build Windows programs with mingw-w64 and run them under Wine (`make test-cross`).
 - **Planned:** libuv absorbs platform differences.

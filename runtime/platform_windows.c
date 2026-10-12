@@ -6,7 +6,7 @@
 #include <string.h>
 #include <windows.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 // Windows takes paths and the command line as UTF-16, in its wide-character functions, and Lerta
 // keeps them as UTF-8. Both return NULL on failure; the caller frees the result.

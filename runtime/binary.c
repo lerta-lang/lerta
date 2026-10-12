@@ -1,4 +1,4 @@
-#include "lerta.h"
+#include "internal.h"
 
 LERTA_STATIC_STRING(slice_out_of_range, "slice out of range");
 

@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 LERTA_STATIC_STRING(exit_code_out_of_range, "exit code out of range (0 to 255)");
 LERTA_STATIC_STRING(cannot_run, "cannot run: ");

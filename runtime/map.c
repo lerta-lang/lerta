@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 // A slot of the hash index is the position of an entry, or EMPTY. A removed entry stays in place
 // (not live) until the entries are compacted, so probes pass over it.

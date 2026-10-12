@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lerta.h"
+#include "internal.h"
 
 LERTA_STATIC_STRING(pop_from_empty, "pop from an empty array");
 
