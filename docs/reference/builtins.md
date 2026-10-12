@@ -24,7 +24,7 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | `Bool` | `to_string` | |
 | `String` | `to_string`, `iter`, `parse_int`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix` | `binary` |
 | `Binary` | `iter`, `slice`, `occurs_at`, `text` | `length` |
-| `Array<T>` | `iter`, `contains`, `find_index`, `last`, `append`, `join` of an `Array<String>` and `to_binary` of an `Array<Byte>` | `length`, `push`, `pop` |
+| `Array<T>` | `iter`, `contains`, `find_index`, `first`, `last`, `append`, `join` of an `Array<String>` and `to_binary` of an `Array<Byte>` | `length`, `push`, `pop` |
 | `Map<K, V>` | `has`, `get_or_put`, `values`, and `add` of a `Map<K, Bool>` | `length`, `remove`, `keys` |
 | `Iter<T>` | `iter` | `has_next`, `next` |
 | Any [Iterable](#iterable) | `map`, `filter`, `take`, `any`, `all`, `find`, `to_array` | |

@@ -23,7 +23,7 @@ finally
 
   | Type | Thrown by |
   |---|---|
-  | `IndexError` | an index or a slice out of range, `pop` and `last` of an empty array |
+  | `IndexError` | an index or a slice out of range, `pop` of an empty array |
   | `ArithmeticError` | integer overflow, division by zero, `to_byte` of an Int out of 0 to 255 |
   | `NilError` | `x!` of nil |
   | `CastError` | `x as T!` of a value of another type |
