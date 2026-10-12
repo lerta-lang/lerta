@@ -33,6 +33,7 @@ The planned syntax, control flow, types, operators and strings.
 
 - Union members other than classes and structs, where `?` binds tighter than `|` (`Int | String?` is `Int | (String?)`). `T?` is then shorthand for `T | nil`; unions remain the general form.
 - The downcast of an interface value.
+- An array literal's element type is one that every item fits, rather than that of the first item that gives one ([the reference](../reference/types.md#array)): `[import, statements...]`, of an `Import` and the items of an `Array<Statement>`, is an `Array<Statement>`, as `Import` is a member of that union.
 - Small anonymous structs and tuples as values rather than heap objects, in registers and in the room of an item (`LertaItem`), so that `for (k, v) in m.entries()` allocates nothing. They cannot be changed, so the representation does not show in what a program does.
 - Arrays of optional `Int`, `Byte` and `Bool` values (`Array<Int?>`), which have no item kind yet: an item kind for `{ i1, T }`, which fits in the room of an item (`LertaItem` in `runtime/lerta.h`). A map's value stays not optional, since a missing key reads as nil.
 
@@ -91,4 +92,5 @@ Interfaces and generics are in [objects](objects.md).
 - How to apply a function to an optional value, giving nil for nil (`x then f(x) else nil` now), as Swift's `map` on an optional or Kotlin's `?.let`.
 - How to take part of a `String`: a separate type `StringSlice`, as in Swift, whose conversion to `String` is an explicit copy, or a `String` method. With it, how to find a part (an `s.index_of(part)` giving a byte offset or a slice), since a `String` has no integer index (see [the reference](../reference/types.md#string)). `s.binary.text(i, j)!` serves for now.
 - Whether a `StringBuilder` takes single bytes, `b.write_byte(byte)`: limited to ASCII, so that `to_string()` needs no check of UTF-8, or any byte, with `to_binary()` beside it and `to_string()` checking.
+- Whether `as` also widens a value to a type that it fits, as Swift's `nil as String?` or `x as Shape` does, for a value in the middle of an expression; a `const` with a type annotation does it now. It would sit beside the casts that may fail, `as T?` and `as T!`, which `as T` alone is not allowed to be.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).
