@@ -1,12 +1,18 @@
 # Operations on maps in the generated code, through the runtime (runtime/map.c). Keys are 8 bytes
 # and values are items, as array items are (see array).
 import { ProgramWide } from '../checker/shared'
-import { emit_item_pointer, emit_item_slot, emit_load_item, item_kind, to_item } from './array'
+import {
+  emit_item_pointer, emit_item_slot, emit_load_item, from_item, item_kind, to_item
+} from './array'
 import { item_functions } from './equality'
+import { emit_values, HeapField } from './heap_object'
 import { IrBuilder } from './ir_builder'
+import { define_kind, emit_iter, IterKind, load_state } from './iter_protocol'
 import { ir_type, is_nil_by_null } from './lerta_ir'
 import { call_runtime, call_void_runtime } from './runtime_calls'
-import { is_identity_type, is_one_of_kinds, MapType, optional_type, Type } from '../types'
+import {
+  is_identity_type, is_one_of_kinds, MapType, optional_type, TupleType, Type, type_key
+} from '../types'
 
 # The values of LertaKeyKind in runtime/lerta.h; an enum's value is an Int.
 const key_kind = (key: Type) ->
@@ -59,4 +65,25 @@ export const call_map_method = (
       call_void_runtime ir, 'void @lerta_map_remove(ptr, i64)', key
       ''
     when 'keys' then call_runtime(ir, 'ptr @lerta_map_keys(ptr)', "ptr #{map}")
+    when 'entries' then emit_entries_iter(ir, map, type)
     else panic("no map method #{name}")
+
+# The entries of a borrowed map, as tuples of a key and a value, which the Iter traverses by a
+# cursor (LertaMapCursor in runtime/lerta.h).
+const emit_entries_iter = (ir: IrBuilder, map: String, type: MapType) ->
+  const item = TupleType(items: [type.key, type.value])
+  const has_next = (body: IrBuilder, kind: IterKind) ->
+    const cursor = load_state(body, kind, 0)
+    const more = call_runtime(body, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
+    body.emit "ret i1 #{more}"
+  const next = (body: IrBuilder, kind: IterKind) ->
+    const key_slot = body.alloca('i64')
+    const value_slot = emit_item_slot(body, type.value)
+    const args = "ptr #{load_state(body, kind, 0)}, ptr #{key_slot}, ptr #{value_slot}"
+    call_void_runtime body, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
+    const key = from_item(body, body.assign("load i64, ptr #{key_slot}"), type.key)
+    const entry = emit_values(body, item, [key, emit_load_item(body, value_slot, type.value)])
+    body.emit "ret ptr #{entry}"
+  const state = [HeapField(ir_type: 'ptr', owned: REFERENCE)]
+  const kind = define_kind(ir, "map entries #{type_key(type)}", state, item, has_next, next)
+  emit_iter ir, kind, [call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")]

@@ -93,6 +93,8 @@ typedef struct {
   int64_t length;  // live entries
   int64_t entry_count;
   int64_t entry_capacity;
+  // The cursors alive, while which the entries stay at their positions (see LertaMapCursor).
+  int64_t cursors;
   // Each entry takes the size of an entry and a value (see entry_at in map.c).
   uint8_t *entries;
   int64_t slot_count;  // a power of two
@@ -204,6 +206,15 @@ bool lerta_map_read(const LertaMap *map, int64_t key, void *value);
 void lerta_map_write(LertaMap *map, int64_t key, const void *value);
 void lerta_map_remove(LertaMap *map, int64_t key);
 LertaArray *lerta_map_keys(const LertaMap *map);
+
+// A traversal of a map's entries in insertion order, for the Iter of `entries()`: it gives those
+// there when it was made, but those removed since. It holds the map, which keeps its entries at
+// their positions while the cursor is alive, rather than compacting them. next writes the key and
+// the value, owned, and moves on.
+typedef struct LertaMapCursor LertaMapCursor;
+LertaMapCursor *lerta_map_cursor(LertaMap *map);
+bool lerta_map_cursor_has_next(LertaMapCursor *cursor);
+void lerta_map_cursor_next(LertaMapCursor *cursor, int64_t *key, void *value);
 
 // Iters (iter.c). Starting a traversal of an Iter that has started one throws, and so does next
 // past the end.

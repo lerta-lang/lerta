@@ -69,6 +69,7 @@ LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, Lert
   map->length = 0;
   map->entry_count = 0;
   map->entry_capacity = 0;
+  map->cursors = 0;
   map->entries = NULL;
   map->slot_count = 0;
   map->slots = NULL;
@@ -92,15 +93,19 @@ static int64_t find_slot(const LertaMap *map, int64_t key, uint64_t hash) {
   }
 }
 
-// Drops the removed entries and rebuilds the index with room for twice the live ones.
+// Drops the removed entries, unless a cursor needs the positions, and rebuilds the index with room
+// for twice the entries kept.
 static void grow(LertaMap *map) {
-  int64_t live = 0;
-  for (int64_t i = 0; i < map->entry_count; i++) {
-    if (entry_at(map, i)->live) memmove(entry_at(map, live++), entry_at(map, i), entry_size(map));
+  if (map->cursors == 0) {
+    int64_t live = 0;
+    for (int64_t i = 0; i < map->entry_count; i++) {
+      if (entry_at(map, i)->live) memmove(entry_at(map, live++), entry_at(map, i), entry_size(map));
+    }
+    map->entry_count = live;
   }
-  map->entry_count = live;
+  int64_t kept = map->entry_count;
   int64_t capacity = 8;
-  while (capacity < live * 2) capacity *= 2;
+  while (capacity < kept * 2) capacity *= 2;
   map->entries = lerta_checked_realloc(map->entries, (size_t)capacity * entry_size(map));
   map->entry_capacity = capacity;
   // At most half the slots are used, so that probes stay short and always end.
@@ -108,9 +113,9 @@ static void grow(LertaMap *map) {
   map->slot_count = capacity * 2;
   map->slots = lerta_checked_malloc((size_t)map->slot_count * sizeof(int64_t));
   for (int64_t i = 0; i < map->slot_count; i++) map->slots[i] = EMPTY;
-  for (int64_t i = 0; i < live; i++) {
+  for (int64_t i = 0; i < kept; i++) {
     const LertaMapEntry *entry = entry_at(map, i);
-    map->slots[find_slot(map, entry->key, entry->hash)] = i;
+    if (entry->live) map->slots[find_slot(map, entry->key, entry->hash)] = i;
   }
 }
 
@@ -173,4 +178,44 @@ LertaArray *lerta_map_keys(const LertaMap *map) {
     if (entry->live) lerta_array_append_word(keys, entry->key);
   }
   return keys;
+}
+
+struct LertaMapCursor {
+  LertaHeader header;
+  LertaMap *map;
+  int64_t position;
+  int64_t end;
+};
+
+static void drop_cursor(void *object) {
+  LertaMapCursor *cursor = object;
+  cursor->map->cursors--;
+  lerta_release(cursor->map);
+}
+
+LertaMapCursor *lerta_map_cursor(LertaMap *map) {
+  LertaMapCursor *cursor = lerta_alloc((int64_t)sizeof(LertaMapCursor), drop_cursor);
+  lerta_retain(map);
+  map->cursors++;
+  cursor->map = map;
+  cursor->position = 0;
+  cursor->end = map->entry_count;
+  return cursor;
+}
+
+bool lerta_map_cursor_has_next(LertaMapCursor *cursor) {
+  const LertaMap *map = cursor->map;
+  while (cursor->position < cursor->end && !entry_at(map, cursor->position)->live) {
+    cursor->position++;
+  }
+  return cursor->position < cursor->end;
+}
+
+void lerta_map_cursor_next(LertaMapCursor *cursor, int64_t *key, void *value) {
+  const LertaMap *map = cursor->map;
+  LertaMapEntry *entry = entry_at(map, cursor->position++);
+  *key = entry->key;
+  if (keys_are_references(map)) lerta_retain((void *)(intptr_t)entry->key);
+  memcpy(value, value_of(entry), value_size(map));
+  lerta_retain_item(map->value_kind, value);
 }
