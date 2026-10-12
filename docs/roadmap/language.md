@@ -21,7 +21,11 @@ The planned syntax, control flow, types, operators and strings.
 
 ### Ranges
 
-- A range is a value of the builtin type `Range`, which can be traversed any number of times (unlike `Iter<T>`).
+- A range is a value of the builtin type `Range`, which can be traversed any number of times (unlike `Iter<T>`), stored and passed like any value, as to a query (`where(age: 20..30)`).
+- `a...b` excludes its end and `a..b` includes it, as in CoffeeScript (and Ruby): `0...n` is `0` to `n - 1`, as SQL's `>= 0 AND < n`, and `20..30` is `20` to `30`, as SQL's `BETWEEN 20 AND 30`.
+- `by` and `reversed` after the end are part of the range, so they need no parentheses: `0...n by 2` is `0, 2, 4, ...` below `n`, and `0...n reversed` is the same items in the other order, `n - 1` down to `0`, so the last item need not be worked out as with Python's `range(n - 1, -1, -1)`. Both may follow, `0...10 by 3 reversed` being `9, 6, 3, 0`. A step is positive. Like `in` and `when`, they are not keywords. A method could not do it: `0...n.reversed()` reads as `n.reversed()`.
+- Its items are `Int`s; ranges of other types, as of dates for a query, wait for a `Comparable` interface ([operator overloading](#operator-overloading)).
+- A `for` over a range written in it counts as it does now, making no value.
 
 ### Iterables
 
@@ -83,11 +87,10 @@ Interfaces and generics are in [objects](objects.md).
 - Whether `-1.abs()` is `(-1).abs()` (the negative literal binds first) or `-(1.abs())` (as in Rust and Python). Decide when methods on literals are implemented.
 - Renaming in destructuring (`const { a: x } = value`).
 - Notation for writing an array inside an array without brackets (CoffeeScript can).
-- Whether to have a range that includes its end (`..`), besides `...`. A one-character difference that flips the meaning is easy to get wrong, and CoffeeScript and Rust give `..` opposite meanings.
 - How a union holds a member that is not a heap object, as `Int` or `Bool`, or `String` if it becomes an immediate value (see [internals](../internals.md#strings)): a union value is now a pointer to an object, whose member's type the drop function in its header tells (see `emit_type_test` in `compiler/codegen/heap_object.lerta`), and nil a null pointer. A tag beside a word that holds the value or the pointer keeps `Int` unboxed; boxing it into an object with a header keeps the test as it is but allocates.
 - Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
 - `Binary` literals (`'...'.binary` can substitute).
-- How a range counts down or by a step (`for i in n...0`, `by 2`): `for` over a range only counts up by 1 now, so a reversed loop takes a `while`.
+- Ranges without an end or a start, `20..` and `...n`, as SQL's `>= 20` and `< n` (Rust and Swift have them).
 - An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
 - How an Iter gives an item in one call rather than two, `has_next` and `next`, which each item takes now through a pointer to code (see [internals](../internals.md#lazy-iterators)): `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional, which its `{ i1, T }` in IR can be for the Iters the compiler generates, while an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`; or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
 - How to take part of a `String`: a separate type `StringSlice`, as in Swift, whose conversion to `String` is an explicit copy, or a `String` method. With it, how to find a part (an `s.index_of(part)` giving a byte offset or a slice), since a `String` has no integer index (see [the reference](../reference/types.md#string)). `s.binary.text(i, j)!` serves for now.
