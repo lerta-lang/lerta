@@ -98,8 +98,8 @@ export const infer_type_arguments = (
   # The type argument of a bounded type parameter gives those that its bound names, as `X:
   # Iterable<T>` gives T, before function literals take their parameters' types.
   const bind_from_bounds = ->
-    for type_param, i in generic.type_params
-      const bound = generic.bounds[i] ? continue
+    for (type_param, written_bound) in generic.type_params.zip(generic.bounds)
+      const bound = written_bound ? continue
       const known = bindings[type_param.name.name] ? continue
       infer_through_members body, bound, known.type, known.at, bind_at(known.at)
   bind_from_bounds()
@@ -120,8 +120,7 @@ const written_bindings = (body: Body, call: Call, generic: GenericFunction) ->
   if call.type_args.length != type_params.length
     const counts = "takes #{type_params.length} type argument(s), got #{call.type_args.length}"
     fail body.program, call.position, "'#{name.name}' #{counts}"
-  for type_param, i in type_params
-    const type_name = call.type_args[i]
+  for (type_param, type_name) in type_params.zip(call.type_args)
     const type = resolve(body.program, body.resolver, type_name)
     bindings[type_param.name.name] = TypeBinding(type, at: type_name.position)
   bindings
@@ -136,5 +135,5 @@ export const needs_context = (body: Body, arg: Expression) ->
 
 const types_of = (bindings: Map<String, TypeBinding>) ->
   const types: Map<String, Type> = Map()
-  types[name] = bindings[name]!.type for name in bindings.keys()
+  types[name] = binding.type for (name, binding) in bindings.entries()
   types
