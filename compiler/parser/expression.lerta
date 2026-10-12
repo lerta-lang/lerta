@@ -69,15 +69,17 @@ export const call_of = (callee: Expression, arguments: Arguments, type_args: Arr
   Call callee, args, named_args, type_args, position: callee.position
 
 # `c then a else b`, which binds weaker than the binary operators; `c then a else d then b else
-# e` is `c then a else (d then b else e)`.
+# e` is `c then a else (d then b else e)`. Without `else`, it gives nil where `c` does not hold.
 const parse_conditional = (tokens: TokenStream): Expression ->
   const condition = parse_coalesce(tokens)
   return condition if tokens.peek_continuation() != 'then'
   tokens.next()
   const then_value = parse_conditional(tokens)
-  tokens.expect 'else', "'else'"
-  const else_value = parse_conditional(tokens)
-  Conditional condition, then_value, else_value, position: condition.position
+  const position = condition.position
+  const without_else = not tokens.accept('else')
+  const else_value: Expression =
+    without_else then NilLiteral(position) else parse_conditional(tokens)
+  Conditional condition, then_value, else_value, position, without_else
 
 # `a ? b ? c` is `a ? (b ? c)`.
 export const parse_coalesce = (tokens: TokenStream): Expression ->

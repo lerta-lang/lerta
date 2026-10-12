@@ -28,18 +28,20 @@ while n > 0
 - **Postfix forms** `<statement> if <condition>` and `<statement> while <condition>` apply to one statement other than a declaration (`break if done`, `x *= 2 while x < 100`). The condition of a postfix `while` is evaluated first. A postfix condition may bind a name as `if const` and `while const` do, for the statement before it: `return local if const local = lookup(name)`. A postfix form also follows a body on the same line as `->`, outside brackets (inside them, as in `[(x) -> x for x in xs]`, it belongs to the brackets' contents), and an arm's body on the same line.
 - `and` and `or` evaluate their right operand only when the left one does not decide the result.
 - Why the condition rules: the Ruby approach, constrained by types. There is no hook like `is_true`, so a type that is always true, such as `Int`, `String` or an array, is rejected rather than true (0 and the empty string are not false).
-- Why there is no `unless`, no `&&`/`||`/`!`, no `then` statement without `else` and no `defer`: no forms that say the same thing two ways. Destructors and `try`/`finally` replace `defer`; it may be considered if it becomes necessary.
+- Why there is no `unless`, no `&&`/`||`/`!`, no `then` statement and no `defer`: no forms that say the same thing two ways. Destructors and `try`/`finally` replace `defer`; it may be considered if it becomes necessary.
 
 ## then and else
 
 ```
 const sign = n < 0 then 'negative' else n == 0 then 'zero' else 'positive'
 const label = name then "hello #{name}" else 'nobody'
+const greeting = name then "hello #{name}"
 ```
 
-- `condition then a else b` is `a` if the condition holds, otherwise `b`; only the one chosen is evaluated. It is an expression only: `else` is required, and both values must be values (not `void`). To run statements, write an `if`.
+- `condition then a else b` is `a` if the condition holds, otherwise `b`; only the one chosen is evaluated. Without `else`, it is nil where the condition does not hold, so `name then "hello #{name}"` is a `String?`; an `else` goes with the nearest `then`. It is an expression only: both values must be values (not `void`). To run statements, write an `if`.
 - The condition and its narrowing are those of `if`: in `name then ... else ...` above, `name` is a `String` in the `then` value.
 - The values follow the rules of `case` arms (see below).
+- Why `then` without `else` gives nil and an `if` without one gives no value: `then` is always a value, while an `if` is a statement too, as the last statement of a block, where a missing `else` giving nil would change what a block ending with an `if` gives.
 
 ## for and ranges
 
