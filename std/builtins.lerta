@@ -65,6 +65,8 @@ extend Byte
   is_digit = -> @ >= '0' and @ <= '9'
   is_letter = -> (@ >= 'a' and @ <= 'z') or (@ >= 'A' and @ <= 'Z')
   is_space = -> @ == ' ' or @ == "\t" or @ == "\n" or @ == "\r"
+  # Whether it continues a UTF-8 sequence, which only a lead byte starts.
+  is_utf8_continuation = -> @ >= 0x80 and @ <= 0xBF
 
 extend String
   to_string = -> @
@@ -160,7 +162,7 @@ const is_utf8 = (bytes: Binary) ->
     const length = utf8_sequence_length(lead)
     return false if length == 0 or i + length > bytes.length
     for k in 1...length
-      return false if not is_continuation(bytes[i + k])
+      return false if not bytes[i + k].is_utf8_continuation()
     const second: Byte = length > 1 then bytes[i + 1] else 0
     return false if lead == 0xE0 and second < 0xA0
     return false if lead == 0xED and second > 0x9F
@@ -177,8 +179,6 @@ const utf8_sequence_length = (lead: Byte) ->
     when lead >= 0xE0 and lead <= 0xEF then 3
     when lead >= 0xF0 and lead <= 0xF4 then 4
     else 0
-
-const is_continuation = (byte: Byte) -> byte >= 0x80 and byte <= 0xBF
 
 # What a lead byte of a sequence of 1 to 4 bytes adds to the bits of the code point it holds.
 const UTF8_LEAD_OFFSETS = [0, 0xC0, 0xE0, 0xF0]

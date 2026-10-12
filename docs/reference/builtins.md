@@ -20,7 +20,7 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | Type | In `std/builtins.lerta` | Built into the compiler |
 |---|---|---|
 | `Int` | `to_string`, `to_byte` | |
-| `Byte` | `to_int`, `to_string`, `is_digit`, `is_letter`, `is_space` | |
+| `Byte` | `to_int`, `to_string`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` | |
 | `Bool` | `to_string` | |
 | `String` | `to_string`, `iter`, `parse_int`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `compare` | `binary` |
 | `Binary` | `iter`, `slice`, `occurs_at`, `text` | `length` |
