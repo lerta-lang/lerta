@@ -11,7 +11,7 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 
 ## Iterable
 
-`Iterable<T>` is a builtin [interface](objects.md#interfaces), declared in `std/builtins.lerta`, with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). An extend of it gives every Iterable the methods `map`, `filter`, `take`, `any`, `all`, `find` and `to_array` (see [Iter](types.md#iter)). Arrays, `String`s, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
+`Iterable<T>` is a builtin [interface](objects.md#interfaces), declared in `std/builtins.lerta`, with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). An extend of it gives every Iterable the methods `map`, `filter`, `take`, `zip`, `any`, `all`, `find` and `to_array` (see [Iter](types.md#iter)). Arrays, `String`s, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
 
 ## Methods of the builtin types
 
@@ -27,7 +27,7 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 | `Array<T>` | `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of an `Array<String>` and `to_binary` of an `Array<Byte>` | `length`, `push`, `pop` |
 | `Map<K, V>` | `has`, `get_or_put`, `values`, and `add` of a `Map<K, Bool>` | `length`, `remove`, `keys`, `entries` |
 | `Iter<T>` | `iter` | `has_next`, `next` |
-| Any [Iterable](#iterable) | `map`, `filter`, `take`, `any`, `all`, `find`, `to_array` | |
+| Any [Iterable](#iterable) | `map`, `filter`, `take`, `zip`, `any`, `all`, `find`, `to_array` | |
 | An [enum](types.md#enums) | | `to_string`, and the static `E.parse` |
 
 A `Bool` gives `true` or `false` as its text, and a `Byte` a number. Why each of the others is built in is in [internals](../internals.md#builtins).

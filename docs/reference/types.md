@@ -110,10 +110,11 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 ```
 
 - `Iter<T>` is a lazy sequence of items of type `T`, which can be any type with values, an optional one too. It computes an item only when asked for it, so nothing happens until it is consumed; a statement that only makes an `Iter` is an error (see [discarded values](errors.md#discarded-values)).
-- [Lazy comprehensions](control-flow.md#for-and-ranges) make one, and so do these methods of an array, a `Binary`, an `Iter` or any [Iterable](builtins.md#iterable), which take a function of an item:
+- [Lazy comprehensions](control-flow.md#for-and-ranges) make one, and so do these methods of an array, a `Binary`, an `Iter` or any [Iterable](builtins.md#iterable):
   - `xs.map(f)` gives `f(x)` for each item `x`; its items have the type of `f`'s result.
   - `xs.filter(f)` gives the items for which `f`, which gives a `Bool`, is true.
   - `xs.take(n)` gives the first `n` items, or all of them if there are fewer (none if `n` is not positive).
+  - `xs.zip(ys)` gives the items of `xs` and of the Iterable `ys` in pairs, as [tuples](#tuples), while both have them: `for (name, count) in names.zip(counts)`.
 
   The `Iter` of an array reads the array as it goes, as a `for` does. The functions' parameter types may be left out, as in `(w) -> w + '!'`; `map`'s result type is that of its function.
 - These methods of an Iterable search the items with a function of an item that gives a `Bool`, and stop reading at the first item that decides the result:
