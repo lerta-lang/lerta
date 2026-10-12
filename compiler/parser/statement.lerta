@@ -10,7 +10,8 @@ import {
 } from './declaration'
 import {
   call_of, parse_arguments, parse_block_arguments, parse_expression, parse_identifier
-  parse_loop_header, parse_value, starts_block_arguments
+  parse_loop_header, parse_tuple_names, parse_value, starts_block_arguments, take_apart
+  take_apart_item, tuple_holder
 } from './expression'
 import { Token, TokenKind } from '../lexer/tokens'
 import { parse_primary } from './primary'
@@ -73,7 +74,7 @@ export const at_declaration = (tokens: TokenStream) ->
   is_one_of tokens.peek().kind, ['const', 'var']
 
 export const at_destructuring = (tokens: TokenStream) ->
-  at_declaration(tokens) and tokens.peek_at(1).kind == '{'
+  at_declaration(tokens) and is_one_of(tokens.peek_at(1).kind, ['{', '('])
 
 # A statement that fits on one line, which postfix `if` and `while` can follow, unless it is a
 # declaration.
@@ -134,13 +135,15 @@ const wrap_in_postfix_condition = (tokens: TokenStream, statement: Statement): S
     While(condition, position, body: [statement])
 
 const wrap_in_for = (tokens: TokenStream, statement: Statement) ->
-  const { variable, index, iterable, guard } = parse_loop_header(tokens)
+  const header = parse_loop_header(tokens)
+  const { variable, index, iterable, guard } = header
   const position = statement.position
-  const body: Array<Statement> =
+  const guarded: Statement =
     if guard
-      [If(position, condition: guard, then_body: [statement], else_body: [])]
+      If(position, condition: guard, then_body: [statement], else_body: [])
     else
-      [statement]
+      statement
+  const body = [take_apart_item(header)..., guarded]
   For variable, iterable, body, position, index
 
 const parse_declaration = (tokens: TokenStream) ->
@@ -158,25 +161,38 @@ export const parse_destructuring_statement = (tokens: TokenStream) ->
   declarations
 
 # `const { a, b } = value` declares a const that cannot be named (`.` is not allowed in names),
-# holding the value, then `a` and `b`, each from the field of its name.
+# holding the value, then `a` and `b`, each from the field of its name. `const (a, b) = value`
+# takes a tuple apart likewise, by position.
 const parse_destructuring = (tokens: TokenStream) ->
   const token = tokens.next()
+  const position = token_position(token)
+  const mutable = token.kind == 'var'
+  if tokens.peek().kind == '('
+    const names = parse_tuple_names(tokens)
+    const value = parse_held_value(tokens)
+    # Where the value is, for the message when it is no tuple of as many items.
+    const holder = tuple_holder(value.position)
+    return [holding(holder, value), take_apart(holder, names, mutable, false)...]
   tokens.next()
   const names = tokens.parse_list('}', -> parse_identifier(tokens))
   tokens.fail_expecting tokens.peek(), 'a name' if names.length == 0
-  tokens.expect '=', "'='"
-  const value = parse_expression(tokens)
-  const position = token_position(token)
-  const holder_name = "destructured.#{position.line}.#{position.column}"
-  const holder = Identifier(position, name: holder_name)
-  const holder_declaration = Declaration(value, position, mutable: false, name: holder)
-  const declarations: Array<Statement> = [holder_declaration]
-  const mutable = token.kind == 'var'
-  for name in names
+  const value = parse_held_value(tokens)
+  const holder = Identifier(position, name: "destructured.#{position.line}.#{position.column}")
+  const field_of = (name: Identifier) ->
     const object = copy_identifier(holder)
-    const field = Member(object, name: copy_identifier(name), position: name.position)
-    declarations.push Declaration(mutable, name, value: field, position: name.position)
-  declarations
+    Member object, name: copy_identifier(name), position: name.position
+  const declare = (name: Identifier): Statement ->
+    Declaration mutable, name, value: field_of(name), position: name.position
+  const declarations = [declare(name) for name in names]
+  [holding(holder, value), declarations...]
+
+# `= value`, after the names of a destructuring.
+const parse_held_value = (tokens: TokenStream) ->
+  tokens.expect '=', "'='"
+  parse_expression tokens
+
+const holding = (holder: Identifier, value: Expression): Statement ->
+  Declaration value, mutable: false, name: holder, position: holder.position
 
 const parse_assignment = (tokens: TokenStream, target: Expression, operator: TokenKind) ->
   const message = 'only a name, an indexed item or a field can be assigned to'
@@ -235,11 +251,13 @@ const parse_command_call = (tokens: TokenStream) ->
 # `for <name>[, <index>] in <expression>` followed by an indented block.
 const parse_for = (tokens: TokenStream) ->
   const position = token_position(tokens.peek())
-  const { variable, index, iterable, guard } = parse_loop_header(tokens)
+  const header = parse_loop_header(tokens)
+  const { variable, index, iterable, guard } = header
   if guard
     const message = "a for loop with a block has no 'when'; write an if in the block"
     tokens.fail guard.position, message
-  For variable, iterable, position, index, body: parse_block(tokens)
+  const body = [take_apart_item(header)..., parse_block(tokens)...]
+  For variable, iterable, position, index, body
 
 # A condition, or `const name = value`, which holds when the value is not nil.
 const parse_condition = (tokens: TokenStream): Condition ->

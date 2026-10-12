@@ -83,6 +83,9 @@ export class Comprehension
   position: Position
   # `for x, i in xs`: the name of each item's place, from 0.
   index: Identifier? = default nil
+  # `for (a, b) in xs`: the declarations that take the item apart, before the guard (see
+  # LoopHeader).
+  bindings: Array<Statement> = default []
   # An item `xs...` of an array literal, whose items it gives in its place, as `[x for x in xs]`.
   spread = default false
 
@@ -97,6 +100,19 @@ export struct NamedValue
 # `{ x: 1, y: 'a' }`, an anonymous struct; `{ x }` is short for `{ x: x }`.
 export class RecordLiteral
   fields: Array<NamedValue>
+  position: Position
+
+# `(a, b)`, a tuple of two or more items.
+export class TupleLiteral
+  items: Array<Expression>
+  position: Position
+
+# The item at `index` of a tuple of `count` items, which a taking apart, `const (a, b) = t`, reads
+# for each name; it cannot be written.
+export class TupleItem
+  tuple: Expression
+  index: Int
+  count: Int
   position: Position
 
 # `object[index]`
@@ -181,7 +197,13 @@ export class RecordTypeName
   position: Position
   optional = default false
 
-export type TypeName = NamedType | UnionTypeName | FunctionTypeName | RecordTypeName
+# `(Int, String)`: a tuple, of two or more items.
+export class TupleTypeName
+  items: Array<TypeName>
+  position: Position
+  optional = default false
+
+export type TypeName = NamedType | UnionTypeName | FunctionTypeName | RecordTypeName | TupleTypeName
 
 # A parameter's type may be left out where a function type is expected for the literal, or where
 # its default is a literal that gives it.
@@ -276,7 +298,8 @@ export class Return
 
 export type Expression =
   StringLiteral | Interpolation | BooleanLiteral | NilLiteral | IntegerLiteral
-  ArrayLiteral | Comprehension | MapLiteral | RecordLiteral | FunctionLiteral
+  ArrayLiteral | Comprehension | MapLiteral | RecordLiteral | TupleLiteral | TupleItem
+  FunctionLiteral
   UnaryOperation | BinaryOperation | Range | IsTest | Cast | Conditional | Unwrap
   Identifier | This | Member | Index | Call
   Case | If | Coalesce | Throw | Jump | Return | Try
@@ -298,6 +321,9 @@ export class Declaration
   value: Expression
   position: Position
   exported = false
+  # A part of the item of `for (a, b) in xs`, which, as a loop variable, is never warned about
+  # when unused.
+  of_loop = default false
 
 # The operator that an assignment such as `+=` combines the old value and the new one with: `+`.
 export const combining_operator = (operator: String) ->

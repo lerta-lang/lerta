@@ -11,7 +11,7 @@ import { iterable_item_of, reject_not_iterable } from './satisfaction'
 import { Local } from './scopes'
 import { Body } from './shared'
 import {
-  check_block, check_condition, define_local, narrow_where_holds, nothing
+  check_block, check_condition, check_statement, define_local, narrow_where_holds, nothing
 } from './statement'
 import {
   ArrayType, bool_type, format_type, int_type, iterable_item, IterType, Type, void_type
@@ -48,7 +48,7 @@ export const check_while = (body: Body, while_statement: While) ->
 export const type_of_comprehension = (
   body: Body, comprehension: Comprehension, expected: Type?
 ): Type ->
-  const { element, variable, index, iterable, guard } = comprehension
+  const { element, variable, index, iterable, guard, bindings } = comprehension
   const place = comprehension.spread then "before '...'" else "after 'in'"
   const item_type = type_of_iterated(body, iterable, place)
   if comprehension.lazy != nil
@@ -57,6 +57,7 @@ export const type_of_comprehension = (
   var element_type: Type = void_type
   const define = ->
     define_loop_variables body, variable, index, item_type
+    check_statement body, binding for binding in bindings
     if guard
       expect_condition body, guard
       narrow_where_holds body, guard

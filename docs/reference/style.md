@@ -20,6 +20,7 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Type bodies**: write type-only fields (constructor arguments) first, then those with a `default`. Do not write `const`/`var` when it equals the default.
 - **Functions without parameters**: write `-> body`, not `() -> body`, unless it has a return type or type parameters (`(): T -> body`, `<T>() -> body`).
 - **Return types**: omit a return type that can be inferred. Write it where the language requires it (recursion, `nil` alone), and on generic functions and methods, whose bodies are checked only per instance.
+- **Function types returned**: name a function type that a function literal returns with a `type` alias, `type Combine = (Int, Int) -> Int`, rather than writing it in parentheses before the `->` of the body, where the arrows run together.
 - **Top-level order**: declare a top-level value above the code that uses it, wherever the order allows.
 - **Unused names**: name an unused variable `_`.
 - **Ranges**: parenthesize an end that is an operation (`0...(n - 1)`) for readability; `...` binds weaker than arithmetic, so the parentheses do not change the meaning.

@@ -1,0 +1,31 @@
+# Types tuples: their literals, and the items that taking one apart reads.
+import { Expression, TupleItem, TupleLiteral } from '../ast'
+import { check_value_type } from './collection'
+import { fail } from './diagnostics'
+import { expect_type, type_of } from './expression'
+import { Body } from './shared'
+import { format_type, inner_of, TupleType, Type } from '../types'
+
+# `(a, b)`. Its items take their types from the expected type, if it is a tuple of as many, so
+# that `(1, nil)` can be typed.
+export const type_of_tuple = (body: Body, tuple: TupleLiteral, expected: Type?) ->
+  const expected_items = expected_tuple_items(expected, tuple.items.length)
+  const type_of_item = (item: Expression, i: Int) ->
+    if expected_items
+      expect_type body, item, expected_items[i]
+      return expected_items[i]
+    check_value_type body.program, type_of(body, item), item.position, 'a tuple'
+  TupleType items: [type_of_item(item, i) for item, i in tuple.items]
+
+const expected_tuple_items = (expected: Type?, count: Int): Array<Type>? ->
+  const type = expected ? return nil
+  const tuple = inner_of(type)
+  tuple is TupleType and tuple.items.length == count then tuple.items else nil
+
+# The item of a tuple that `const (a, b) = t` takes apart, which must have as many items as names.
+export const type_of_tuple_item = (body: Body, item: TupleItem) ->
+  const type = type_of(body, item.tuple)
+  if type is TupleType
+    return type.items[item.index] if type.items.length == item.count
+  const message = "expected a tuple of #{item.count} items to take apart, got #{format_type(type)}"
+  fail body.program, item.tuple.position, message

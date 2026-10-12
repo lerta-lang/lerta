@@ -1,8 +1,8 @@
-# Type syntax: type names (named types, unions, function types and anonymous structs), type
+# Type syntax: type names (named types, unions, function types, anonymous structs and tuples), type
 # annotations and type parameters.
 import {
-  FunctionTypeName, NamedType, RecordTypeField, RecordTypeName, TypeName, TypeParameter, UnionMember
-  UnionTypeName
+  FunctionTypeName, NamedType, RecordTypeField, RecordTypeName, TupleTypeName, TypeName
+  TypeParameter, UnionMember, UnionTypeName
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
 import { parse_identifier } from './expression'
@@ -15,7 +15,7 @@ const TYPE_TOKEN_KINDS: Array<TokenKind> = [
 
 # A named type, or a union of them: `A | B`.
 export const parse_type_name = (tokens: TokenStream): TypeName ->
-  return parse_parenthesized_type(tokens) if tokens.peek().kind == '('
+  return parse_parenthesized_type(tokens, false) if tokens.peek().kind == '('
   union_of parse_union_members(tokens)
 
 # The type of `type Name =`: a type on the same line, or a union whose members are on the indented
@@ -36,21 +36,24 @@ const union_of = (members: Array<UnionMember>): TypeName ->
   return members[0] if members.length == 1
   UnionTypeName members, position: members[0].position
 
-# `(A, B) -> R`, or a function type in parentheses, `((A) -> R)?`, to make it optional.
-const parse_parenthesized_type = (tokens: TokenStream) ->
+# `(A, B) -> R`, a tuple, `(A, B)`, or a function type in parentheses, `((A) -> R)?`, to make it
+# optional. As a function literal's return type, the `->` after it starts the body, so a function
+# type there is written in parentheses.
+const parse_parenthesized_type = (tokens: TokenStream, is_result: Bool): TypeName ->
   const position = token_position(tokens.next())
   const types = tokens.parse_list(')', -> parse_type_name(tokens))
-  if tokens.accept('->')
+  const is_tuple = types.length > 1 and (is_result or tokens.peek().kind != '->')
+  return TupleTypeName(position, items: types, optional: tokens.accept('?')) if is_tuple
+  if not is_result and tokens.accept('->')
     const result = parse_type_name(tokens)
     return FunctionTypeName(result, position, params: types)
-  const fail = -> tokens.fail_expecting(tokens.peek(), "'->'")
-  fail() if types.length != 1
-  const inner = types[0]
+  const inner = types.length == 1 then types[0] else nil
   if inner is FunctionTypeName
     const { params, result } = inner
-    FunctionTypeName params, result, position, optional: tokens.accept('?')
-  else
-    fail()
+    return FunctionTypeName(params, result, position, optional: tokens.accept('?'))
+  if is_result
+    tokens.fail position, 'a function type returned is written in parentheses: `((Int) -> Int)`'
+  tokens.fail_expecting tokens.peek(), "'->'"
 
 # A type that `|` can join: a named type or an anonymous struct, which the checker rejects as a
 # member so far.
@@ -93,6 +96,11 @@ export const starts_type_arguments = (tokens: TokenStream) ->
 # `: Type`, if it follows.
 export const parse_type_annotation = (tokens: TokenStream) ->
   tokens.accept(':') then parse_type_name(tokens) else nil
+
+# `: Type` as a function literal's return type (see parse_parenthesized_type), if it follows.
+export const parse_result_annotation = (tokens: TokenStream): TypeName? ->
+  return nil if not tokens.accept(':')
+  tokens.peek().kind == '(' then parse_parenthesized_type(tokens, true) else parse_type_name(tokens)
 
 # `<T, U: Stringable, X: Iterable<T>>`, if it follows.
 export const parse_type_parameters = (tokens: TokenStream): Array<TypeParameter> ->

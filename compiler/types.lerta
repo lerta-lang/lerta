@@ -21,6 +21,7 @@ export enum TypeKind
   MAP
   ITER
   RECORD
+  TUPLE
   OBJECT
   INTERFACE
   ENUM
@@ -48,6 +49,10 @@ export struct RecordField
 # order they are written in does not matter (see record_type).
 export struct RecordType
   fields: Array<RecordField>
+
+# `(Int, String)`: values taken apart by position, each named where it is used.
+export struct TupleType
+  items: Array<Type>
 
 # A class or struct (see ObjectInfo). Its name is the one it is declared with; its symbol, made of
 # its module's index and its name, tells it apart from another module's type of the same name, and
@@ -106,8 +111,8 @@ export struct FunctionType
   result: Type
 
 export type Type =
-  SimpleType | ArrayType | MapType | IterType | RecordType | ObjectType | InterfaceType | EnumType
-  UnionType | OptionalType | TypeParameterType | FunctionType
+  SimpleType | ArrayType | MapType | IterType | RecordType | TupleType | ObjectType | InterfaceType
+  EnumType | UnionType | OptionalType | TypeParameterType | FunctionType
 
 export const string_type = SimpleType(kind: 'String')
 export const int_type = SimpleType(kind: 'Int')
@@ -125,6 +130,7 @@ export const kind_of = (type: Type): TypeKind ->
     when MapType then MAP
     when IterType then ITER
     when RecordType then RECORD
+    when TupleType then TUPLE
     when ObjectType then OBJECT
     when InterfaceType then INTERFACE
     when EnumType then ENUM
@@ -166,6 +172,7 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when RecordType
       const fields = ["#{field.name}: #{format(field.type)}" for field in type.fields]
       "{ #{fields.join(', ')} }"
+    when TupleType then "(#{[format(item) for item in type.items].join(', ')})"
     when UnionType
       [format_member_qualified(member, type, qualified) for member in type.members].join(' | ')
     when OptionalType
@@ -213,6 +220,7 @@ export const type_key = (type: Type): String ->
     when EnumType then type.symbol
     when RecordType
       "{#{["#{field.name}: #{type_key(field.type)}" for field in type.fields].join(', ')}}"
+    when TupleType then "(#{[type_key(item) for item in type.items].join(', ')})"
     when ArrayType then "Array<#{type_key(type.element)}>"
     when IterType then "Iter<#{type_key(type.item)}>"
     when MapType then "Map<#{type_key(type.key)}, #{type_key(type.value)}>"

@@ -2,19 +2,19 @@
 # anonymous structs, function literals, and `case`.
 import {
   ArrayLiteral, BooleanLiteral, Case, CaseArm, Catch, Comprehension, Conditional, copy_identifier
-  is_spread
-  Expression, FunctionLiteral, Identifier, LazyFunctions, MapEntry, MapLiteral, NamedValue
-  Parameter, Pass, Position, RecordLiteral, Statement, Try
+  Expression, FunctionLiteral, Identifier, is_spread, LazyFunctions, MapEntry
+  MapLiteral, NamedValue, Parameter, Pass, Position, RecordLiteral, Statement, Try, TupleLiteral
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
 import {
   at_spread, parse_coalesce, parse_expression, parse_identifier, parse_loop_header
+  take_apart_item
 } from './expression'
 import {
   at_declaration, parse_block, parse_line_statement, parse_simple_statement
 } from './statement'
 import { is_one_of, token_position, TokenStream } from './token_stream'
-import { parse_type_annotation, parse_type_parameters } from './type'
+import { parse_result_annotation, parse_type_annotation, parse_type_parameters } from './type'
 
 # `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
 # `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
@@ -47,7 +47,7 @@ export const parse_function_literal = (tokens: TokenStream) ->
       tokens.parse_list(')', -> parse_parameter(tokens))
     else
       []
-  const return_type = parse_type_annotation(tokens)
+  const return_type = parse_result_annotation(tokens)
   tokens.expect '->', "'->'"
   const is_block = tokens.peek().kind == NEWLINE
   # Interpolated code is one expression; a function literal, whose body is made of statements,
@@ -96,11 +96,15 @@ const parse_element = (tokens: TokenStream): Expression ->
   const element = copy_identifier(variable)
   Comprehension element, variable, position, iterable: value, guard: nil, lazy: nil, spread: true
 
-# `(a)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends inside are skipped.
+# `(a)`, a tuple, `(a, b)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends
+# inside are skipped.
 export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
-  const parse_contents = ->
+  const parse_contents = (): Expression ->
     const first = parse_expression(tokens)
     return parse_comprehension(tokens, first, position, ')') if tokens.peek().kind == 'for'
+    if tokens.peek().kind == ','
+      const items = tokens.parse_list_rest(')', -> parse_expression(tokens), [first])
+      return TupleLiteral(items, position)
     tokens.expect ')', "')'"
     # Diagnostics about the group point at its opening parenthesis.
     first.position = position
@@ -116,12 +120,15 @@ const parse_comprehension = (
     const header = parse_loop_header(tokens)
     tokens.expect close, "'#{close}'"
     header
-  const { variable, index, iterable, guard } = tokens.inside(SKIP, parse_header)
+  const header = tokens.inside(SKIP, parse_header)
+  const { variable, index, iterable, guard } = header
   const is_lazy = close == ')'
   if is_lazy and index != nil
     tokens.fail index.position, 'an Iter comprehension takes no index so far'
-  const lazy = is_lazy then lazy_functions(element, variable, guard) else nil
-  Comprehension element, variable, iterable, guard, lazy, position, index
+  # Each place that reads the parts declares them anew, as each is its own function or scope.
+  const bindings = -> take_apart_item(header)
+  const lazy = is_lazy then lazy_functions(element, variable, guard, bindings) else nil
+  Comprehension element, variable, iterable, guard, lazy, position, index, bindings: bindings()
 
 # `{ k: v, ... }`. A key that is a name would make an anonymous struct, so a name's value is
 # written as a key in parentheses: `{ (k): v }`.
@@ -232,13 +239,15 @@ const parse_inline_arm = (tokens: TokenStream) ->
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
 # Comprehension). The guard's function tests its condition as an `if` would:
 # `guard then true else false`.
-const lazy_functions = (element: Expression, variable: Identifier, guard: Expression?) ->
-  const guard_function = guard then function_of(as_test(guard), variable) else nil
-  LazyFunctions guard: guard_function, element: function_of(element, variable)
-
-const function_of = (body: Expression, variable: Identifier) ->
-  const params = [Parameter(name: copy_identifier(variable))]
-  FunctionLiteral params, type_params: [], body: [body], position: body.position
+const lazy_functions = (
+  element: Expression, variable: Identifier, guard: Expression?, bindings: () -> Array<Statement>
+) ->
+  const function_of = (value: Expression) ->
+    const params = [Parameter(name: copy_identifier(variable))]
+    const body = [bindings()..., value]
+    FunctionLiteral params, body, type_params: [], position: value.position
+  const guard_function = guard then function_of(as_test(guard)) else nil
+  LazyFunctions guard: guard_function, element: function_of(element)
 
 const as_test = (guard: Expression) ->
   const position = guard.position

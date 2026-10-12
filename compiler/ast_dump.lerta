@@ -10,8 +10,8 @@ import {
   IntegerLiteral, InterfaceDeclaration, Interpolation, InterpolationPart, IsTest, Jump
   LazyFunctions, MapEntry, MapLiteral, Member, MemberDeclaration, NamedType, NamedValue, NilLiteral
   Node, Parameter, Pass, Range, RecordLiteral, RecordTypeField, RecordTypeName, Return, Statement
-  StringLiteral, This, Throw, Try, TypeAlias, TypeDeclaration, TypeName, TypeParameter
-  UnaryOperation, UnionTypeName, Unwrap, While
+  StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, TupleTypeName, TypeAlias
+  TypeDeclaration, TypeName, TypeParameter, UnaryOperation, UnionTypeName, Unwrap, While
 } from './ast'
 import { TextPart } from './lexer/string_literal'
 import { quote } from './token_dump'
@@ -134,6 +134,8 @@ const dump_node = (node: Node) ->
     when Comprehension then dump_comprehension(node)
     when MapLiteral then dump_map(node)
     when RecordLiteral then dump_record(node)
+    when TupleLiteral then dump_tuple(node)
+    when TupleItem then dump_tuple_item(node)
     when Conditional then dump_conditional(node)
     when Index then dump_index(node)
     when Call then dump_call(node)
@@ -170,6 +172,7 @@ const dump_node = (node: Node) ->
     when UnionTypeName then dump_union_type(node)
     when FunctionTypeName then dump_function_type(node)
     when RecordTypeName then dump_record_type(node)
+    when TupleTypeName then dump_tuple_type(node)
 
 const dump_string = (literal: StringLiteral) ->
   node 'string', literal, [field('value', text(literal.value))]
@@ -199,6 +202,7 @@ const dump_array = (array: ArrayLiteral): Group ->
 
 const dump_comprehension = (comprehension: Comprehension): Group ->
   node 'comprehension', comprehension, [
+    field('bindings', statements(comprehension.bindings))
     field('element', dump_node(comprehension.element))
     field('guard', optional_node(comprehension.guard))
     field('iterable', dump_node(comprehension.iterable))
@@ -220,6 +224,15 @@ const dump_map_entry = (entry: MapEntry): Group ->
 
 const dump_record = (record: RecordLiteral) ->
   node 'record', record, [field('fields', named_values(record.fields))]
+
+const dump_tuple = (tuple: TupleLiteral): Group ->
+  node 'tuple', tuple, [field('items', expressions(tuple.items))]
+
+const dump_tuple_item = (item: TupleItem): Group ->
+  node 'tuple_item', item, [
+    field('count', number(item.count)), field('index', number(item.index))
+    field('tuple', dump_node(item.tuple))
+  ]
 
 const named_values = (values: Array<NamedValue>) ->
   List items: [dump_named_value(value) for value in values]
@@ -450,6 +463,11 @@ const dump_function_type = (type: FunctionTypeName): Group ->
 const dump_record_type = (type: RecordTypeName) ->
   const fields = List(items: [dump_record_type_field(each) for each in type.fields])
   node 'record_type', type, [field('fields', fields), field('optional', flag(type.optional))]
+
+const dump_tuple_type = (type: TupleTypeName): Group ->
+  node 'tuple_type', type, [
+    field('items', types(type.items)), field('optional', flag(type.optional))
+  ]
 
 const dump_record_type_field = (type_field: RecordTypeField): Group ->
   group [field('name', dump_node(type_field.name)), field('type', dump_node(type_field.type))]

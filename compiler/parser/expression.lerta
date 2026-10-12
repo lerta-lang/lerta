@@ -1,9 +1,9 @@
 # Expressions, from the weakest operators down to primaries, which `primary` reads, as `compound`
 # reads compound expressions.
 import {
-  BinaryOperation, Binding, Call, Cast, Conditional, Coalesce, copy_identifier, Expression
-  Identifier, If, Index, IntegerLiteral, IsTest, Member, NamedValue, NilLiteral, Range
-  RecordLiteral, TypeName, UnaryOperation, Unwrap
+  BinaryOperation, Binding, Call, Cast, Conditional, Coalesce, copy_identifier, Declaration
+  Expression, Identifier, If, Index, IntegerLiteral, IsTest, Member, NamedValue, NilLiteral
+  Position, Range, RecordLiteral, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
 } from '../ast'
 import { TokenKind } from '../lexer/tokens'
 import { parse_block_literal, starts_block, starts_field_block } from './block_literal'
@@ -24,12 +24,14 @@ export struct Arguments
   named_args: Array<NamedValue>
 
 # `for x in xs`, or `for x, i in xs` with the item's place, with `when guard` after it if there is
-# one.
+# one. `for (a, b) in xs` takes the item, a tuple, apart into `parts`, which the loop declares
+# from `variable` (see take_apart).
 export struct LoopHeader
   variable: Identifier
   index: Identifier?
   iterable: Expression
   guard: Expression?
+  parts: Array<Identifier>
 
 export const parse_expression = (tokens: TokenStream) -> parse_conditional(tokens)
 
@@ -240,12 +242,42 @@ const parse_index = (tokens: TokenStream) ->
 # `in` and `when` are not keywords, so that they stay usable as names.
 export const parse_loop_header = (tokens: TokenStream) ->
   tokens.expect 'for', "'for'"
-  const variable = parse_identifier(tokens)
+  const position = token_position(tokens.peek())
+  const parts: Array<Identifier> = tokens.peek().kind == '(' then parse_tuple_names(tokens) else []
+  const variable = parts.length > 0 then tuple_holder(position) else parse_identifier(tokens)
   const index = tokens.accept(',') then parse_identifier(tokens) else nil
   tokens.expect_word 'in'
   const iterable = parse_expression(tokens)
   const guard = tokens.accept_word('when') then parse_expression(tokens) else nil
-  LoopHeader variable, index, iterable, guard
+  LoopHeader variable, index, iterable, guard, parts
+
+# `(a, b)`, the names that a tuple is taken apart into.
+export const parse_tuple_names = (tokens: TokenStream) ->
+  const open = tokens.next()
+  const names = tokens.parse_list(')', -> parse_identifier(tokens))
+  tokens.fail token_position(open), 'a tuple has two or more items' if names.length < 2
+  names
+
+# The name of what holds a tuple while it is taken apart: it cannot be written (`.` is not allowed
+# in names), and it starts with `_` as it may not be read, when every part is `_`.
+export const tuple_holder = (position: Position) ->
+  Identifier position, name: "_tuple.#{position.line}.#{position.column}"
+
+# The declarations of the names from the items of the tuple that `holder` names; `_` discards its
+# item.
+export const take_apart = (
+  holder: Identifier, names: Array<Identifier>, mutable: Bool, of_loop: Bool
+) ->
+  const count = names.length
+  const declaration = (name: Identifier, index: Int): Statement ->
+    const { position } = name
+    const value = TupleItem(index, count, position, tuple: copy_identifier(holder))
+    Declaration mutable, name, value, position, of_loop
+  [declaration(name, i) for name, i in names when name.name != '_']
+
+# The declarations of the parts of a loop's item (see LoopHeader).
+export const take_apart_item = (header: LoopHeader) ->
+  take_apart header.variable, header.parts, false, true
 
 # The arguments after an opening parenthesis, through the closing one.
 const parse_parenthesized_arguments = (tokens: TokenStream) ->

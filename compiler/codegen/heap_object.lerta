@@ -9,7 +9,7 @@ import {
   special_method_symbol, without_sigil
 } from './lerta_ir'
 import { call_runtime, call_void_runtime } from './runtime_calls'
-import { members_of, ObjectType, RecordType, Type, type_key } from '../types'
+import { members_of, ObjectType, RecordType, TupleType, Type, type_key } from '../types'
 
 # The two header fields come before the object's own.
 const HEADER_FIELDS = 2
@@ -140,46 +140,55 @@ export const emit_member_dispatch = (
   ir.start_block done
   ir.assign "phi #{result_type} #{incoming.join(', ')}"
 
-# Anonymous structs: their fields are in name order. Each structural type has its own LLVM type
-# and drop function, defined once.
+# Anonymous structs and tuples: their values in order, those of an anonymous struct in the name
+# order of its fields. Each structural type has its own LLVM type and drop function, defined once.
 
-# The LLVM struct type of the record type, defined with its drop function at the first use.
-const record_layout = (ir: IrBuilder, type: RecordType) ->
-  const fields = [value_field(field.type) for field in type.fields]
+# The types of the values, in the order they are laid out.
+export const value_types = (type: Type): Array<Type> ->
+  case type
+    when RecordType then [field.type for field in type.fields]
+    when TupleType then type.items
+    else panic('not an anonymous struct or a tuple')
+
+# The LLVM struct type of the type, defined with its drop function at the first use.
+const values_layout = (ir: IrBuilder, type: Type) ->
+  const fields = [value_field(each) for each in value_types(type)]
   const define = (name: String, module: IrModule) ->
     define_heap_object module, name, drop_name(name), fields, nil, nil
-  ir.module.named "record #{type_key(type)}", '%lerta.record', define
+  const prefix = type is TupleType then '%lerta.tuple' else '%lerta.record'
+  ir.module.named "values #{type_key(type)}", prefix, define
 
 const drop_name = (layout: String) -> "@#{without_sigil(layout)}.drop"
 
-const record_type_of = (type: Type) ->
-  type as RecordType!
+# A new anonymous struct or tuple, which takes over the values, owned, in their order.
+export const emit_values = (ir: IrBuilder, type: Type, values: Array<String>) ->
+  const layout = values_layout(ir, type)
+  const object = emit_heap_allocate(ir, layout, drop_name(layout))
+  for value_type, i in value_types(type)
+    const pointer = emit_heap_field_pointer(ir, layout, object, i)
+    ir.emit "store #{ir_type(value_type)} #{values[i]}, ptr #{pointer}"
+  object
 
 # A new anonymous struct, which takes over the values, owned, given by field name.
 export const emit_record = (ir: IrBuilder, type: Type, values: Map<String, String>) ->
-  const record_type = record_type_of(type)
-  const layout = record_layout(ir, record_type)
-  const record = emit_heap_allocate(ir, layout, drop_name(layout))
-  for field, i in record_type.fields
-    const pointer = emit_heap_field_pointer(ir, layout, record, i)
-    ir.emit "store #{ir_type(field.type)} #{values[field.name]!}, ptr #{pointer}"
-  record
+  emit_values ir, type, [values[field.name]! for field in (type as RecordType!).fields]
 
-# The pointer to the field at the index, in name order.
-export const emit_record_field_pointer = (
-  ir: IrBuilder, record: String, type: RecordType, index: Int
-) -> emit_heap_field_pointer(ir, record_layout(ir, type), record, index)
+# The pointer to the value at the index.
+export const emit_value_pointer = (ir: IrBuilder, object: String, type: Type, index: Int) ->
+  emit_heap_field_pointer ir, values_layout(ir, type), object, index
 
-# The value of a field, retained if a reference; the record is borrowed.
-export const emit_record_field = (ir: IrBuilder, record: String, type: Type, name: String) ->
-  const record_type = record_type_of(type)
-  const layout = record_layout(ir, record_type)
-  const index = record_type.fields.find_index((field) -> field.name == name)!
-  const field_type = record_type.fields[index].type
-  const pointer = emit_heap_field_pointer(ir, layout, record, index)
-  const value = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
-  emit_retain_value ir, value, field_type
+# The value at the index, retained if a reference; the object is borrowed.
+export const emit_value_at = (ir: IrBuilder, object: String, type: Type, index: Int) ->
+  const value_type = value_types(type)[index]
+  const pointer = emit_value_pointer(ir, object, type, index)
+  const value = ir.assign("load #{ir_type(value_type)}, ptr #{pointer}")
+  emit_retain_value ir, value, value_type
   value
+
+# The value of a field of an anonymous struct, as emit_value_at gives it.
+export const emit_record_field = (ir: IrBuilder, record: String, type: Type, name: String) ->
+  const index = (type as RecordType!).fields.find_index((field) -> field.name == name)!
+  emit_value_at ir, record, type, index
 
 # Cells: each holds one `var` that function literals capture, so that the function that declares
 # it and the literals share it. The scope that declares the var owns its cell, and each closure

@@ -94,7 +94,7 @@ squares[3] = 9
 print ages['ann'] ? 0
 ```
 
-- `Map<K, V>` maps keys of type `K`, any type of values that `==` compares but an optional one (classes by identity, and structs, anonymous structs and arrays by their contents: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
+- `Map<K, V>` maps keys of type `K`, any type of values that `==` compares but an optional one (classes by identity, and structs, anonymous structs, tuples and arrays by their contents: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
 - `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there. `m.get_or_put(k, make)` gives the value of `k`, setting it to `make()` first if `k` is not there. A `Map<K, Bool>` serves as a set: `m.add(k)` sets `k` to `true`.
@@ -190,3 +190,16 @@ const { quotient, remainder } = divide(17, 5)
 - Its fields are read with `.` and cannot be changed. It is useful to return several values.
 - A call may give the last argument, when its parameter is of an anonymous struct type, as named arguments without `{}`: `draw('a', x: 1, y: 2)` is `draw('a', { x: 1, y: 2 })`. Named arguments come after the others, as in the construction of a class or struct.
 - `const { a, b } = value` (or `var`) declares `a` and `b` from the fields of those names of an anonymous struct, a class or a struct; the value is evaluated once. It must be on a line of its own.
+
+## Tuples
+
+```
+const swap = (t: (String, Int)): (Int, String) ->
+  const (s, n) = t
+  (n, s)
+```
+
+- `(1, 'a')` is a value of the tuple type `(Int, String)`, of two or more items. `(a)` is only parentheses. Where a tuple type of as many items (or an optional one) is expected, each item takes its type from it; elsewhere, the types of their values. An item cannot be nil alone. `?` after the type makes it optional: `(Int, String)?`.
+- Two tuple types are the same if their items have the same types in the same order.
+- Its items cannot be read by position: `const (a, b) = value` (or `var`) takes it apart, declaring a name for each item, so that each gets a name where it is used. The value must be a tuple of as many items; it is evaluated once, and `_` discards an item. It must be on a line of its own. A loop takes its items apart too (see [for](control-flow.md#for-and-ranges)).
+- Why tuples beside [anonymous structs](#anonymous-structs): a tuple's items are named by the code that uses it, as is fitting for what `zip` gives, and an anonymous struct's fields by the code that makes it, as for the several results of a function.

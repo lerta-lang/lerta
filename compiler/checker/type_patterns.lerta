@@ -3,8 +3,8 @@
 import { TypeParameter } from '../ast'
 import {
   ArrayType, FunctionType, inner_of, InterfaceType, IterType, MapType, ObjectType, optional_type
-  OptionalType, record_type, RecordField, RecordType, same_type, Type, type_key, TypeParameterType
-  union_type, UnionType
+  OptionalType, record_type, RecordField, RecordType, same_type, TupleType, Type, type_key
+  TypeParameterType, union_type, UnionType
 } from '../types'
 
 # The type parameters standing for themselves, for resolving the types written with them.
@@ -24,6 +24,7 @@ const map_parts = (type: Type, replace: (Type) -> Type): Type ->
       const replace_field = (field: RecordField) ->
         RecordField name: field.name, type: replace(field.type)
       record_type [replace_field(field) for field in type.fields]
+    when TupleType then TupleType(items: [replace(item) for item in type.items])
     when UnionType then union_type([replace(member) for member in type.members])
     when InterfaceType
       const args = [replace(arg) for arg in type.args]
@@ -103,6 +104,9 @@ export const infer = (pattern: Type, type: Type, bind: (String, Type) -> void): 
         for field in pattern.fields
           const found = type.fields.find((each) -> each.name == field.name)
           match field.type, found?.type
+    when TupleType
+      if type is TupleType and type.items.length == pattern.items.length
+        match item, type.items[i] for item, i in pattern.items
     when FunctionType
       if type is FunctionType
         return if type.params.length != pattern.params.length

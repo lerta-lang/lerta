@@ -1,7 +1,7 @@
 # Types written in the source, such as `Array<Int>` in an annotation.
 import {
-  FunctionTypeName, Identifier, NamedType, Position, RecordTypeField, RecordTypeName, TypeAlias
-  TypeName, UnionTypeName
+  FunctionTypeName, Identifier, NamedType, Position, RecordTypeField, RecordTypeName
+  TupleTypeName, TypeAlias, TypeName, UnionTypeName
 } from '../ast'
 import { check_item_type, check_map_value, reject_map_key } from './collection'
 import { fail, fail_already_defined } from './diagnostics'
@@ -13,7 +13,8 @@ import { ProgramWide, Shared } from './shared'
 import {
   ArrayType, binary_type, bool_type, byte_type, format_type, FunctionType, int_type, is_kind
   IterType, MapType, never_type, ObjectType, optional_type, OptionalType
-  record_type, RecordField, same_type, string_type, Type, union_type, UnionType, void_type
+  record_type, RecordField, same_type, string_type, TupleType, Type, union_type, UnionType
+  void_type
 } from '../types'
 
 # Names of builtin types, which a class or struct cannot take.
@@ -104,6 +105,9 @@ const resolve_type = (
     when FunctionTypeName
       const type = resolve_function(program, resolver, type_name)
       optional_if program, type, type_name.position, type_name.optional
+    when TupleTypeName
+      const type = resolve_tuple(program, resolver, type_name)
+      optional_if program, type, type_name.position, type_name.optional
     when NamedType
       const type = resolve_name(program, resolver, type_name, is_result)
       optional_if program, type, type_name.position, type_name.optional
@@ -127,6 +131,10 @@ const resolve_record = (
   const resolve_field = (field: RecordTypeField) ->
     RecordField name: field.name.name, type: resolve(program, resolver, field.type)
   record_type [resolve_field(field) for field in type_name.fields]
+
+const resolve_tuple = (
+  program: ProgramWide, resolver: Resolver, type_name: TupleTypeName
+): Type -> TupleType(items: [resolve(program, resolver, item) for item in type_name.items])
 
 const resolve_function = (
   program: ProgramWide, resolver: Resolver, type_name: FunctionTypeName

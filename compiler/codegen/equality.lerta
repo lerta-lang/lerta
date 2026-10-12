@@ -5,7 +5,7 @@ import { info_of } from '../checker/object_types'
 import { ProgramWide } from '../checker/shared'
 import { from_item } from './array'
 import {
-  emit_drop_function, emit_field_pointer, emit_member_dispatch, emit_record_field_pointer
+  emit_drop_function, emit_field_pointer, emit_member_dispatch, emit_value_pointer, value_types
 } from './heap_object'
 import { emit_branch, IrBuilder, IrModule } from './ir_builder'
 import { ir_type } from './lerta_ir'
@@ -13,8 +13,7 @@ import { emit_is_present, emit_unwrap } from './optional'
 import { call_runtime } from './runtime_calls'
 import { emit_string_equals } from './string'
 import {
-  ArrayType, is_identity_type, is_one_of_kinds, ObjectType, OptionalType, RecordType, Type, type_key
-  UnionType
+  ArrayType, is_identity_type, is_one_of_kinds, ObjectType, OptionalType, Type, type_key, UnionType
 } from '../types'
 
 # An i1: whether the two values of the type are equal. A part that holds parts of its own is
@@ -94,14 +93,13 @@ const emit_equals = (
           ir.assign "load #{ir_type(field_type)}, ptr #{emit_field_pointer(ir, object, info, name)}"
         nested field_type, load(left), load(right)
       all_of ir, [field_equals(field.name.name, field.type!) for field in info.fields]
-    when type is RecordType
-      const field_equals = (index: Int) ->
-        const field_type = type.fields[index].type
-        const load = (record: String) ->
-          const pointer = emit_record_field_pointer(ir, record, type, index)
-          ir.assign "load #{ir_type(field_type)}, ptr #{pointer}"
-        nested field_type, load(left), load(right)
-      all_of ir, [field_equals(i) for i in 0...type.fields.length]
+    when is_one_of_kinds(type, [RECORD, TUPLE])
+      const value_equals = (value_type: Type, index: Int) ->
+        const load = (object: String) ->
+          const pointer = emit_value_pointer(ir, object, type, index)
+          ir.assign "load #{ir_type(value_type)}, ptr #{pointer}"
+        nested value_type, load(left), load(right)
+      all_of ir, [value_equals(each, i) for each, i in value_types(type)]
     when type is ArrayType
       const items = item_equals_function(ir.module, program, type.element)
       const args = "ptr #{left}, ptr #{right}, ptr #{items}"
@@ -157,13 +155,12 @@ const emit_hash = (ir: IrBuilder, program: ProgramWide, value: String, type: Typ
         const loaded = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
         emit_hash_by_contents ir, program, loaded, field_type
       combine ir, [field_hash(field.name.name, field.type!) for field in info.fields]
-    when type is RecordType
-      const field_hash = (index: Int) ->
-        const field_type = type.fields[index].type
-        const pointer = emit_record_field_pointer(ir, value, type, index)
-        const loaded = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
-        emit_hash_by_contents ir, program, loaded, field_type
-      combine ir, [field_hash(i) for i in 0...type.fields.length]
+    when is_one_of_kinds(type, [RECORD, TUPLE])
+      const value_hash = (value_type: Type, index: Int) ->
+        const pointer = emit_value_pointer(ir, value, type, index)
+        const loaded = ir.assign("load #{ir_type(value_type)}, ptr #{pointer}")
+        emit_hash_by_contents ir, program, loaded, value_type
+      combine ir, [value_hash(each, i) for each, i in value_types(type)]
     when type is ArrayType
       const items = item_hash_function(ir.module, program, type.element)
       call_runtime ir, 'i64 @lerta_array_hash(ptr, ptr)', "ptr #{value}, ptr #{items}"

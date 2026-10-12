@@ -1,18 +1,18 @@
-# Which values `==` compares, and which can be map keys. Structs, anonymous structs and arrays
-# compare by their contents, whose parts compare likewise; so do unions that hold them.
+# Which values `==` compares, and which can be map keys. Structs, anonymous structs, tuples and
+# arrays compare by their contents, whose parts compare likewise; so do unions that hold them.
 import { Position } from '../ast'
 import { field_type, info_of } from './object_types'
 import { ProgramWide } from './shared'
 import {
   ArrayType, EnumType, is_identity_type, is_one_of_kinds, ObjectType, OptionalType, RecordType
-  SimpleType, Type, UnionType
+  SimpleType, TupleType, Type, UnionType
 } from '../types'
 
 # Whether the type compares by its contents rather than as a number, a text or an object.
 export const compares_by_contents = (type: Type): Bool ->
   case type
     when ObjectType then type.is_struct
-    when RecordType, ArrayType then true
+    when RecordType, TupleType, ArrayType then true
     when UnionType then not is_identity_type(type)
     else false
 
@@ -33,6 +33,7 @@ const equatable = (program: ProgramWide, type: Type, at: Position, seen: Map<Str
       const info = info_of(program, type)
       all [field_type(program, info, field, at) for field in info.fields]
     when RecordType then all([field.type for field in type.fields])
+    when TupleType then all(type.items)
     when ArrayType then all([type.element])
     when OptionalType then all([type.inner])
     when UnionType then all(type.members)
