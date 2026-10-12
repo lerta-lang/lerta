@@ -311,6 +311,7 @@ const cli_cases: CliCase[] = [
       '                                      object:',
       '                                        identifier 1:74',
       '                                          name: "name"',
+      '                                  without_else: false',
       '                          named_args: []',
       '                          type_args: []',
       '              callee:',
