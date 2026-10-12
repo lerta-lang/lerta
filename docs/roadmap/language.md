@@ -66,6 +66,7 @@ Interfaces and generics are in [objects](objects.md).
 - A separate iterator for graphemes, besides the code points that a `String` gives (see [the reference](../reference/types.md#string)).
 - The code points are `UInt32` values instead of `Int`s once that type exists (see [numeric types](#numeric-types)).
 - `s.trim()` drops the whitespace at both ends, and `s.replace(part, by)` replaces each occurrence of `part`.
+- A `StringBuilder` of the runtime, so that `join`, `to_string`, `repeat` and `pad` can be written in Lerta as efficiently as in C: `StringBuilder(capacity: n)` reserves room, `b.write(s)` copies the bytes of a `String` at once, and `b.to_string()` hands its storage over as the `String`, trimmed to its length and without a copy, leaving the builder empty. An `Array<Byte>` cannot serve, since `to_binary()` copies it again.
 - Ropes, so that `+` is O(1).
 - Small strings as immediate values.
 - For I/O, sockets and FFI, `void*` is `Binary` and `char*` is `String`. Encoding conversions are provided as functions between `Binary` and `String`.
@@ -89,4 +90,5 @@ Interfaces and generics are in [objects](objects.md).
 - An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
 - How to apply a function to an optional value, giving nil for nil (`x then f(x) else nil` now), as Swift's `map` on an optional or Kotlin's `?.let`.
 - How to take part of a `String`: a separate type `StringSlice`, as in Swift, whose conversion to `String` is an explicit copy, or a `String` method. With it, how to find a part (an `s.index_of(part)` giving a byte offset or a slice), since a `String` has no integer index (see [the reference](../reference/types.md#string)). `s.binary.text(i, j)!` serves for now.
+- Whether a `StringBuilder` takes single bytes, `b.write_byte(byte)`: limited to ASCII, so that `to_string()` needs no check of UTF-8, or any byte, with `to_binary()` beside it and `to_string()` checking.
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).
