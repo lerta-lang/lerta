@@ -29,6 +29,7 @@
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`, and `s.ends_with(suffix)` whether it ends with those of `suffix`.
 - `s.without_prefix(prefix)` gives what follows `prefix` in `s`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. `s.without_suffix(suffix)` gives what comes before `suffix`, or nil.
+- `a.compare(b)` is negative, zero or positive as `a` goes before, with or after `b` in the order of their bytes, which does not depend on a locale: a prefix goes first.
 - `==` and `!=` compare two `String`s byte by byte.
 - A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as `Int`s, in order, so `'é'` gives 233; its bytes are `s.binary`.
 - Why code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
@@ -79,7 +80,7 @@ print xs[0] + xs.length
 - `xs[i]` reads an item and `xs[i] = value` replaces one (`+=` and so on work on `Int` items). An index outside `0 ... xs.length` throws `index out of range`.
 - `xs.length` is the number of items.
 - `==` and `!=` compare two arrays by their items, in order (see [equality](objects.md#classes-and-structs)).
-- `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`. `xs.contains(x)` tells whether an item is `==` to `x`, for items that `==` compares (other items are an error), and `xs.find_index(f)` gives the place of the first item for which `f` is true, or nil. `xs.first()` and `xs.last()` return the first and the last item, or nil for an empty array; an array of optional items has neither, since its nil would be ambiguous. `xs.append(ys)` pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`.
+- `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`. `xs.contains(x)` tells whether an item is `==` to `x`, for items that `==` compares (other items are an error), and `xs.find_index(f)` gives the place of the first item for which `f` is true, or nil. `xs.first()` and `xs.last()` return the first and the last item, or nil for an empty array; an array of optional items has neither, since its nil would be ambiguous. `xs.sorted(compare)` gives a new array of the items in the order that `compare` gives, negative when its first argument goes first, equal items keeping their order: `names.sorted((a, b) -> a.compare(b))`. `xs.append(ys)` pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`.
 - `xs.iter()` gives an [`Iter`](#iter) of the items, and `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` one of the items as it maps, filters or takes them.
 - `strings.join(separator)` joins an `Array<String>` into one `String`.
 - Arrays cannot be printed.

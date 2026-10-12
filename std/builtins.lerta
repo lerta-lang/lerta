@@ -123,6 +123,16 @@ extend String
   # What comes before `suffix`, or nil if the String does not end with it.
   without_suffix = (suffix: String): String? ->
     @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)! else nil
+  # Negative, zero or positive as the String goes before, with or after `other` in the order of
+  # their bytes, which does not depend on a locale.
+  compare = (other: String) ->
+    const left = @binary
+    const right = other.binary
+    var i = 0
+    while i < left.length and i < right.length
+      return left[i].to_int() - right[i].to_int() if left[i] != right[i]
+      i += 1
+    left.length - right.length
 
 extend Binary
   # The bytes, read as the Iter is.
@@ -194,6 +204,32 @@ extend<T> Array<T>
   first = (): T? -> @length > 0 then @[0] else nil
   # The last item, or nil for an empty array.
   last = (): T? -> @length > 0 then @[@length - 1] else nil
+  # The items in the order that `compare` gives (negative when its first argument goes first), equal
+  # items keeping their order.
+  # A merge sort: runs of `width` items, sorted, are merged in pairs, doubling it.
+  sorted = (compare: (T, T) -> Int): Array<T> ->
+    var runs = [item for item in @]
+    var width = 1
+    while width < runs.length
+      const merged: Array<T> = []
+      var start = 0
+      while start < runs.length
+        const middle = start + width < runs.length then start + width else runs.length
+        const end = middle + width < runs.length then middle + width else runs.length
+        var left = start
+        var right = middle
+        while left < middle or right < end
+          # The left item goes first when equal, keeping the order of equal items.
+          if right == end or (left < middle and compare(runs[left], runs[right]) <= 0)
+            merged.push runs[left]
+            left += 1
+          else
+            merged.push runs[right]
+            right += 1
+        start = end
+      runs = merged
+      width *= 2
+    runs
   # Pushes the items of another array, one by one; those of the array itself, if it is that, once.
   append = (items: Array<T>) ->
     const count = items.length
