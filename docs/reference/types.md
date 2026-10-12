@@ -114,7 +114,7 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
   - `xs.map(f)` gives `f(x)` for each item `x`; its items have the type of `f`'s result.
   - `xs.filter(f)` gives the items for which `f`, which gives a `Bool`, is true.
   - `xs.take(n)` gives the first `n` items, or all of them if there are fewer (none if `n` is not positive).
-  - `xs.zip(ys)` gives the items of `xs` and of the Iterable `ys` in pairs, as [tuples](#tuples), while both have them: `for (name, count) in names.zip(counts)`.
+  - `xs.zip(ys)` gives the items of `xs` and of the Iterable `ys` in pairs, as [tuples](#tuples): `for (name, count) in names.zip(counts)`. Once one has no more items and the other has, it throws `zip of Iterables of different lengths`, so that a missing item is not dropped silently; to pair only the first items of a longer `ys` with an array `xs`, write `xs.zip(ys.take(xs.length))`.
 
   The `Iter` of an array reads the array as it goes, as a `for` does. The functions' parameter types may be left out, as in `(w) -> w + '!'`; `map`'s result type is that of its function.
 - These methods of an Iterable search the items with a function of an item that gives a `Bool`, and stop reading at the first item that decides the result:
