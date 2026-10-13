@@ -4,7 +4,8 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Modules
 
-- `import mod from 'module'` gives access as `mod.<exported_name>`.
+- The names of an import are written without braces, `import read_file, stdout as out from 'std:io'`, as they are in the [block form](../reference/modules.md), so that a list of names is written one way on one line or many; `import { ... }` goes. A name list ends at `from` followed by the module, so `from` can still be imported by name.
+- `import 'module' as mod` gives access as `mod.<exported_name>`, in values and in types (`x: mod.Point`). `mod` is not a value: it can only be followed by `.name`. This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which brings the names in unqualified; the design is open (see below).
 
 ## C ABI / FFI
 
@@ -39,3 +40,4 @@ The planned design of modules, FFI, the standard library and tools.
 - How to trigger serialization code generation (an annotation on the type, or automatic generation from calls such as `json.decode<T>`).
 - How to hold type information for separate compilation (interface files).
 - The package management approach (npm style vs Go's minimal version selection).
+- How `import 'module' as mod` resolves `mod.name` (in the parser as a qualified name, or in the checker as a member of a module value), and whether philosophy's `import *` should then read as the unqualified form only.
