@@ -58,13 +58,32 @@ export const parse_import = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   if tokens.peek().kind == STRING
     return Import(position, names: [], module: parse_module_name(tokens))
-  const ends_line = tokens.peek().kind == NEWLINE
-  const names = ends_line then parse_name_block(tokens) else parse_name_list(tokens)
+  const names =
+    case tokens.peek().kind
+      when NEWLINE then parse_name_block(tokens)
+      when '{' then parse_braced_names(tokens)
+      else parse_name_line(tokens)
   tokens.expect_word 'from'
   Import names, position, module: parse_module_name(tokens)
 
-const parse_name_list = (tokens: TokenStream) ->
-  tokens.expect '{', "'{', end of line or module name"
+# The names on the line, separated by commas; `from` follows the last one, which no comma does.
+const parse_name_line = (tokens: TokenStream) ->
+  expect_name tokens, 'a name, end of line or module name'
+  const names = [parse_import_name(tokens)]
+  while tokens.accept(',')
+    expect_name tokens, "a name after ','"
+    names.push parse_import_name(tokens)
+  names
+
+# `from` may be a name, unless the module follows it.
+const expect_name = (tokens: TokenStream, expected: String) ->
+  const at_module = tokens.at_word('from') and tokens.peek_at(1).kind == STRING
+  const at_name = tokens.peek().kind == IDENTIFIER and not at_module
+  tokens.fail_expecting tokens.peek(), expected if not at_name
+
+# Goes once the compiler's own imports no longer use it: the seed reads only this form and blocks.
+const parse_braced_names = (tokens: TokenStream) ->
+  tokens.next()
   const first = tokens.peek()
   const names = tokens.parse_list('}', -> parse_import_name(tokens))
   tokens.fail_expecting first, 'a name to import' if names.length == 0
@@ -86,6 +105,7 @@ const parse_module_name = (tokens: TokenStream) ->
 const parse_import_name = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   return ImportName(name) if not tokens.accept_word('as')
+  expect_name tokens, "a name after 'as'"
   ImportName name, alias: parse_identifier(tokens)
 
 # `class Name` or `struct Name`, or `class Name<T>` with type parameters, and `: Interface` for an

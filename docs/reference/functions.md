@@ -70,7 +70,7 @@ for x in countdown(3)
 ## Functions that await
 
 ```
-import { sleep } from 'std:time'
+import sleep from 'std:time'
 
 const fetch = (name: String) ->
   await sleep(1)

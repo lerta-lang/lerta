@@ -4,7 +4,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Modules
 
-- The names of an import are written without braces, `import read_file, stdout as out from 'std:io'`, as they are in the [block form](../reference/modules.md), so that a list of names is written one way on one line or many; `import { ... }` goes. A name list ends at `from` followed by the module, so `from` can still be imported by name.
+- `import { ... }` goes, now that the names are written without braces (see [modules](../reference/modules.md)), once the compiler's own imports no longer use it.
 - `import 'module' as mod` gives access as `mod.<exported_name>`, in values and in types (`x: mod.Point`). `mod` is not a value: it can only be followed by `.name`. This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which brings the names in unqualified; the design is open (see below).
 
 ## C ABI / FFI
