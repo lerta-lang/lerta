@@ -59,7 +59,7 @@ make seed              # rewrites the seed, only when needed (see docs/internals
 make test              # builds bin/lerta, then runs the tests and check-bootstrap, on the host only
 make test-cross        # the tests for every environment but the host's own (see below)
 make clean
-cd test && pnpm install && pnpm check   # type and format checks of test/, and spelling across the repository (cspell.json)
+cd test && pnpm install && pnpm check   # type and format checks of test/
 ```
 
 `make` rebuilds only when the seed, `compiler/`, `std/`, `runtime/` or `tools/embed.lerta` change. The bootstrap and the seed are described in [docs/internals.md](docs/internals.md#bootstrap). The tests run at a low priority (`nice`), with Node.js running the TypeScript directly, so there is no build step. `make test-cross` runs the tests as 32-bit Linux programs and as 64-bit and 32-bit Windows programs (mingw-w64 and Wine), with the bootstrap through a compiler for each, each on the host if it can run them; on a host other than Linux, it runs `make test` on Linux in Docker too. What the host cannot run goes to Docker when Docker runs it without emulation, which for the 32-bit and the Windows programs takes an x86-64 host. It ends with what ran and what was skipped, and why: on an Apple silicon Mac, for instance, it runs Linux in Docker, and Windows only with mingw-w64, lld and Wine installed, and its bootstrap only with a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s) on Wine's `PATH` (`WINEPATH`) too, and skips 32-bit Linux. To compile a program (see [the compiler](docs/reference/compiler.md)):
