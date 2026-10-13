@@ -68,8 +68,8 @@ make --no-print-directory bin/lerta || exit 1
 
 if [ "${1-}" = --here ]; then
   shift
-  for triple; do report "$triple" test_target "$triple"; done
-  printf '\ntest_cross.sh --here:\n%b' "$summary"
+  # The caller reports the result, so a summary here would only repeat it.
+  for triple; do test_target "$triple" || failed=1; done
   exit $failed
 fi
 
