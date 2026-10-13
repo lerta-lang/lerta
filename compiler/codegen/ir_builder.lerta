@@ -1,6 +1,9 @@
 # Accumulates the text of an LLVM IR module. It knows IR syntax only, not Lerta semantics.
 
 export class IrModule
+  # The attributes of every function, such as the target's CPU, or none: those that clang gives the
+  # runtime's functions, which LLVM can inline only into functions that have them too.
+  function_attributes: String
   type_definitions: Array<String> = []
   globals: Array<String> = []
   # The declarations by symbol, in the order they were first made.
@@ -48,7 +51,10 @@ export class IrModule
 
   add_type = (definition: String) -> @type_definitions.push(definition)
 
-  add_function = (definition: String) -> @functions.push(definition)
+  # Adds the function `define <signature>` with the lines of its body.
+  define_function = (signature: String, body: Array<String>) ->
+    const attributes = @function_attributes == '' then '' else ' #0'
+    @functions.push ["define #{signature}#{attributes} {", body..., '}'].join("\n")
 
   render = ->
     const lines = [
@@ -57,6 +63,7 @@ export class IrModule
       @declarations.values().to_array()...
       @functions...
     ]
+    lines.push "attributes #0 = { #{@function_attributes} }" if @function_attributes != ''
     "#{lines.join("\n")}\n"
 
 # Accumulates the body of one function of a module.
@@ -106,8 +113,7 @@ export class IrBuilder
 
   # Adds the function `define <signature>`, holding everything emitted, to the module.
   finish = (signature: String) ->
-    const lines = ["define #{signature} {", 'entry:', @stack_slots..., @body..., '}']
-    @module.add_function lines.join("\n")
+    @module.define_function signature, ['entry:', @stack_slots..., @body...]
 
 # A value of the IR type: `then_value` where the condition holds, computed only there, and
 # `otherwise` elsewhere.

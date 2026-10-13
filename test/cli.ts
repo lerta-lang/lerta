@@ -800,12 +800,28 @@ const output_checks = [
     },
   },
   {
+    // A program that retains Strings, whose optimized build then has no lerta_retain left, which
+    // LLVM can inline only into functions that have the target's attributes.
+    name: 'lerta build -O has the runtime inlined into the program',
+    run: () => {
+      const source = join(root_dir, 'tests/string/split.lerta')
+      const built = build_in_new_dir(['build', source, '-o', 'split', '-O'])
+      const reasons = expect_success('build', built)
+      if (reasons.length > 0) return reasons
+      const symbols = spawnSync('nm', [join(built.cwd, 'split')], { encoding: 'utf8' })
+      if (symbols.status !== 0) return [`nm failed: ${symbols.stderr}`]
+      return symbols.stdout.includes('lerta_retain') ? ['lerta_retain is not inlined'] : []
+    },
+  },
+  {
     name: 'lerta dump-llvm <source> prints the IR, and writes no file',
     run: () => {
       const { status, stdout, left, left_in_temp } = build_in_new_dir(['dump-llvm', hello])
       return [
         ...expect_status(0, status),
         ...(stdout.includes('define void @lerta_main()') ? [] : [`no lerta_main in:\n${stdout}`]),
+        // The target's attributes are a build's, from the cached runtime.
+        ...(stdout.includes('attributes #') ? [`attributes in:\n${stdout}`] : []),
         ...expect_left('files left', [], left),
         ...expect_left('files left in the temporary directory', [], left_in_temp),
       ]
@@ -818,13 +834,21 @@ const new_cache_dir = () => mkdtempSync(join(cli_work_dir, 'cache-'))
 const runtime_objects = readdirSync(join(root_dir, 'runtime'))
   .filter((file) => file.endsWith('.c'))
   .map((file) => file.replace(/\.c$/, '.o'))
+const attributes_file = 'function_attributes.txt'
+const cached_runtime_files = [...runtime_objects, attributes_file].sort()
 
 // The name of a cached runtime, of the kind given and a target that matches `target`, a regular
 // expression, and what it holds.
 const expect_cached_runtime = (cache: string, name: string, kind: string, target: string) => {
   const pattern = new RegExp(`^runtime-${kind}-${target}-clang\\d+-[0-9A-F]{8}$`)
   if (!pattern.test(name)) return [`the cached runtime ${name} does not match ${pattern}`]
-  return expect_left(`the files of ${name}`, runtime_objects, readdirSync(join(cache, name)))
+  const dir = join(cache, name)
+  const files = expect_left(`the files of ${name}`, cached_runtime_files, readdirSync(dir))
+  if (files.length > 0) return files
+  const attributes = readFileSync(join(dir, attributes_file), 'utf8')
+  return attributes.includes('"target-cpu"=')
+    ? []
+    : [`no target-cpu in ${attributes_file}: ${attributes}`]
 }
 
 // Builds hello.lerta with the environment changed as given, and gives the cache's entries after.
@@ -902,8 +926,8 @@ const cache_checks = [
           return [`the second build changed the cache: ${entries}`]
         if (statSync(object).mtimeMs !== built_at)
           return [`the second build compiled the runtime again`]
-        // A runtime that lost an object is reported, not compiled again.
-        rmSync(join(cache, added[0], runtime_objects.at(-1)!))
+        // A runtime that lost a file is reported, not compiled again.
+        rmSync(join(cache, added[0], attributes_file))
         const { built } = build_hello_with(env, flags)
         const message = `the cached runtime ${join(cache, added[0])} is incomplete: remove it\n`
         const problems_after_loss = [
@@ -929,7 +953,7 @@ const cache_checks = [
         () => {},
         (built, dir) => [
           ...expect_success('build', built),
-          ...expect_left(`the files of ${basename(dir)}`, runtime_objects, readdirSync(dir)),
+          ...expect_left(`the files of ${basename(dir)}`, cached_runtime_files, readdirSync(dir)),
         ],
       ),
   },

@@ -89,15 +89,21 @@ static void drain_to(int64_t length) {
   }
 }
 
-void lerta_release(void *object) {
-  LertaHeader *header = object;
-  if (header == NULL || header->ref_count == LERTA_IMMORTAL) return;
-  if (--header->ref_count > 0) return;
+// Kept out of lerta_release, so that the rest, which most releases end in, is small enough for
+// LLVM to inline into the generated code.
+__attribute__((noinline)) static void drop_released(void *object) {
   push_pending(object);
   if (draining) return;
   draining = true;
   drain_to(0);
   draining = false;
+}
+
+void lerta_release(void *object) {
+  LertaHeader *header = object;
+  if (header == NULL || header->ref_count == LERTA_IMMORTAL) return;
+  if (--header->ref_count > 0) return;
+  drop_released(object);
 }
 
 void lerta_run_deinit(void *object, void (*deinit)(void *object)) {

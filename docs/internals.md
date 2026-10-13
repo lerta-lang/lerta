@@ -6,6 +6,9 @@ This describes the implementation design. Unmarked statements describe the compi
 
 - The compiler writes `.ll` text and has `clang` compile and link it with the runtime.
 - **Planned:** LLVM emits objects, and `lld` links them (on all platforms).
+- An optimized build lets LLVM inline the runtime's C functions into the generated code, as `lerta_retain`: the runtime is compiled with `-flto`.
+- LLVM can inline a function only into one that has the target features it was compiled for. So every function that a build generates has the target's attributes (the CPU and its features) that clang gives a C function compiled with the same flags, which the runtime's cache keeps (`compiler/runtime_cache.lerta`).
+- `lerta_release` keeps the dropping of an object out of line, so that the rest is small enough to inline. Inlining it and `lerta_retain` makes the compiler's front end about a quarter faster, and its optimized build about twice as slow, as LLVM then optimizes much more code.
 - The core of the runtime (RC, the representation and basic operations of strings, arrays and maps) is **written in C** and shared by all stages. `runtime/lerta.h` declares what the generated code, std and the C files linked with a program use, and `runtime/internal.h` what only the runtime's own C code does.
   - Builtins and standard modules are written in Lerta where possible (such as `print`). C is limited to the minimal primitives that cannot be written in Lerta (writing to an fd, memory allocation and so on), and the compiler to the operations that need the representation of the builtin types (see [builtins](#builtins)).
 - **Planned:** an event loop, in the C core of the runtime, on libuv, which I/O uses too.

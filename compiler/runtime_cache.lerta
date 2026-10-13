@@ -1,6 +1,6 @@
 # Compiles the runtime once for each kind of build, and keeps its object files in a cache
 # directory, so that a build only links them (see docs/reference/compiler.md).
-import is_file, make_dir, remove_tree, rename, write_file from 'std:io'
+import is_file, make_dir, read_file, remove_tree, rename, write_file from 'std:io'
 import env, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from './embedded'
 import build_flags from './clang_flags'
@@ -10,19 +10,31 @@ import basename, join from './paths'
 
 const RUNTIME_PATHS = [path for path in EMBEDDED_PATHS when path.starts_with('runtime/')]
 
-# The object files of the runtime for a build with `optimize`, for `target` or else the host,
-# compiled into the cache first if it does not have them; nil if clang fails, after printing its
-# messages. `temp_dir` is the build's own temporary directory, whose name no other build has.
-export const runtime_objects = (optimize: Bool, target: String?, temp_dir: String) ->
+# Where the cache keeps the function attributes that clang gives C functions (see CachedRuntime).
+const ATTRIBUTES_FILE = 'function_attributes.txt'
+
+# The runtime's object files, and the attributes that clang gives its functions, as the target's
+# CPU, which the program's functions must have too for LLVM to inline the runtime's into them.
+export struct CachedRuntime
+  objects: Array<String>
+  function_attributes: String
+
+# The runtime for a build with `optimize`, for `target` or else the host, compiled into the cache
+# first if it does not have it; nil if clang fails, after printing its messages. `temp_dir` is the
+# build's own temporary directory, whose name no other build has.
+export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String) ->
   const clang_version = clang_version_text() ? return nil
   const dir = join(cache_dir(), cached_runtime_name(optimize, target, clang_version))
   const objects = [join(dir, object_name(path)) for path in c_paths()]
-  return objects if is_complete(objects)
-  if objects.iter().any((object) -> is_file(object))
-    # Another build may have renamed its runtime into place meanwhile, which puts all the objects
+  const attributes_path = join(dir, ATTRIBUTES_FILE)
+  const files = [join(dir, name) for name in cached_file_names()]
+  const runtime = -> CachedRuntime(objects, function_attributes: read_text(attributes_path))
+  return runtime() if is_complete(files)
+  if files.iter().any((file) -> is_file(file))
+    # Another build may have renamed its runtime into place meanwhile, which puts all the files
     # there at once. Otherwise a person has removed some of them; removing the rest here could
     # pull them from under a build that is linking with them.
-    return objects if is_complete(objects)
+    return runtime() if is_complete(files)
     throw CompileError(message: "the cached runtime #{dir} is incomplete: remove it")
   const staging_dir = "#{dir}.staging-#{basename(temp_dir)}"
   make_dir staging_dir
@@ -34,14 +46,17 @@ export const runtime_objects = (optimize: Bool, target: String?, temp_dir: Strin
   if not compiled
     remove_tree staging_dir
     return nil
-  move_into_place staging_dir, dir, objects
-  objects
+  move_into_place staging_dir, dir, files
+  runtime()
 
 # What `clang --version` prints, or nil if clang fails.
 const clang_version_text = (): String? ->
   const output: Array<Byte> = []
   return nil if run('clang', ['--version'], output) != 0
   output.to_binary().text() ? throw CompileError(message: 'clang --version is not valid UTF-8')
+
+const read_text = (path: String) ->
+  read_file(path).text() ? throw CompileError(message: "#{path} is not valid UTF-8")
 
 # `$LERTA_CACHE_DIR`, or else `$XDG_CACHE_HOME/lerta`, or else `~/.cache/lerta`, made if missing.
 # An empty variable counts as unset, as the XDG specification has it.
@@ -66,14 +81,16 @@ const non_empty_env = (name: String): String? ->
 
 # Such as `runtime-debug-arm64-apple-darwin25.6.0-clang17-3F9A2C1D`, which a person can tell
 # apart from the others. The hash, of the runtime's sources, of the flags and of clang's version,
-# which `-flto` objects depend on, tells apart the builds that the rest of the name does not.
+# which `-flto` objects depend on, and of the names of the files it holds, tells apart the builds
+# that the rest of the name does not.
 const cached_runtime_name = (optimize: Bool, target: String?, clang_version: String) ->
   const kind = optimize then 'release' else 'debug'
   const target_name = target ? version_line_value(clang_version, 'Target: ') ? 'unknown'
   const is_path = target_name.split('/').length > 1 or target_name.split('\\').length > 1
   throw CompileError(message: "not a target: #{target_name}") if is_path
   const clang_name = "clang#{major_version(clang_version) ? 'unknown'}"
-  const hash = hex(runtime_hash([clang_version, build_flags(optimize, target).join(' ')]), 8)
+  const flags = build_flags(optimize, target).join(' ')
+  const hash = hex(runtime_hash([clang_version, flags, cached_file_names()...]), 8)
   "runtime-#{kind}-#{target_name}-#{clang_name}-#{hash}"
 
 # The rest of the line of `clang --version` that starts with `prefix`.
@@ -108,8 +125,10 @@ const c_paths = -> [path for path in RUNTIME_PATHS when path.ends_with('.c')]
 
 const object_name = (c_path: String) -> "#{basename(c_path).without_suffix('.c')!}.o"
 
-# Writes the runtime's sources to `temp_dir` and compiles each C file into `staging_dir`; false if
-# clang fails.
+const cached_file_names = -> [[object_name(path) for path in c_paths()]..., ATTRIBUTES_FILE]
+
+# Writes the runtime's sources to `temp_dir`, compiles each C file into `staging_dir` and writes
+# the function attributes there; false if clang fails.
 const compile_runtime = (optimize: Bool, target: String?, staging_dir: String, temp_dir: String) ->
   const source_dir = join(temp_dir, 'runtime')
   make_dir source_dir
@@ -120,16 +139,41 @@ const compile_runtime = (optimize: Bool, target: String?, staging_dir: String, t
     const source = join(source_dir, basename(path))
     const object = join(staging_dir, object_name(path))
     return false if run('clang', ['-c', flags..., source, '-o', object]) != 0
+  const attributes = clang_function_attributes(flags, temp_dir) ? return false
+  write_file join(staging_dir, ATTRIBUTES_FILE), attributes.binary
   true
 
-const is_complete = (objects: Array<String>) -> objects.iter().all((object) -> is_file(object))
+# The attributes of the target that clang gives a C function compiled with `flags`, as
+# `"target-cpu"="x86-64"`, read from the IR of an empty one; nil if clang fails.
+const clang_function_attributes = (flags: Array<String>, temp_dir: String): String? ->
+  const source = join(temp_dir, 'attributes.c')
+  write_file source, 'void lerta_attributes(void) {}'.binary
+  const output: Array<Byte> = []
+  return nil if run('clang', ['-S', '-emit-llvm', flags..., source, '-o', '-'], output) != 0
+  const ir = output.to_binary().text() ? throw CompileError(message: 'clang IR is not valid UTF-8')
+  const words = attribute_group_of_function(ir).split(' ')
+  const is_target_attribute = (word: String) ->
+    TARGET_ATTRIBUTES.any((name) -> word.starts_with("\"#{name}\"="))
+  [word for word in words when is_target_attribute(word)].join(' ')
+
+# The attributes of the group that the IR's one function has, as in `define void @f() #0 {`.
+const attribute_group_of_function = (ir: String) ->
+  const lines = ir.split("\n")
+  const missing = CompileError(message: 'clang IR has no function attributes')
+  const definition = lines.find((line) -> line.starts_with('define ')) ? throw missing
+  const group = definition.split(' ').find((word) -> word.starts_with('#')) ? throw missing
+  lines.find((line) -> line.starts_with("attributes #{group} = { ")) ? throw missing
+
+const TARGET_ATTRIBUTES = ['target-cpu', 'target-features', 'tune-cpu']
+
+const is_complete = (files: Array<String>) -> files.iter().all((file) -> is_file(file))
 
 # Moves the compiled runtime into place, unless another build has moved its own there first,
 # which is as good.
-const move_into_place = (staging_dir: String, dir: String, objects: Array<String>) ->
+const move_into_place = (staging_dir: String, dir: String, files: Array<String>) ->
   try
     rename staging_dir, dir
   catch _
     remove_tree staging_dir
-    if not is_complete(objects)
+    if not is_complete(files)
       throw CompileError(message: "cannot move the compiled runtime into the cache: #{dir}")

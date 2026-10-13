@@ -4,12 +4,13 @@ import make_temp_dir, remove_tree, stderr, write_file from 'std:io'
 import exit, run from 'std:process'
 import all_warnings from './checker/diagnostics'
 import check_modules from './checker/modules'
+import ProgramWide from './checker/shared'
 import build_flags, executable_suffix from './clang_flags'
 import generate from './codegen/codegen'
 import CompileError from './errors'
 import load_modules from './loader'
 import join from './paths'
-import runtime_objects from './runtime_cache'
+import cached_runtime from './runtime_cache'
 
 # What to build: the executable `output`, or one in the temporary directory if nil, for `target`
 # (a triple such as i686-linux-gnu) or else for the host, linked with `linked_files`, such as C
@@ -32,8 +33,10 @@ export const check_program = (source: String, warnings_as_errors: Bool) ->
   exit 1 if warnings_as_errors and warnings.length > 0
   program
 
+# The IR as `dump-llvm` prints it: without the function attributes of a target, which a build
+# gets from clang.
 export const generate_ir = (source: String, warnings_as_errors: Bool) ->
-  generate check_program(source, warnings_as_errors)
+  generate check_program(source, warnings_as_errors), ''
 
 export const build = (request: BuildRequest) -> build_then(request, (_executable) -> 0)
 
@@ -46,19 +49,25 @@ export const build_and_run = (request: BuildRequest, args: Array<String>) ->
 # IR and, without an output, the executable, is still there. Exits with the code that `use`
 # returns. clang's messages go to stderr as clang writes them, and its failure exits with code 1.
 const build_then = (request: BuildRequest, use: (String) -> Int) ->
-  const ir = generate_ir(request.source, request.warnings_as_errors)
+  const program = check_program(request.source, request.warnings_as_errors)
   const not_utf8 = CompileError(message: 'the temporary directory is not valid UTF-8')
   const dir = make_temp_dir().text() ? throw not_utf8
   const code = try
-    const ir_path = join(dir, 'program.ll')
-    write_file ir_path, ir.binary
-    const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
-    const runtime = runtime_objects(request.optimize, request.target, dir)
-    const linked = runtime and run('clang', clang_args(request, ir_path, runtime, executable)) == 0
-    linked then use(executable) else 1
+    build_in_dir(request, program, dir, use)
   finally
     remove_tree dir
   exit code
+
+# What build_then exits with: 1 if clang fails.
+const build_in_dir = (
+  request: BuildRequest, program: ProgramWide, dir: String, use: (String) -> Int
+) ->
+  const runtime = cached_runtime(request.optimize, request.target, dir) ? return 1
+  const ir_path = join(dir, 'program.ll')
+  write_file ir_path, generate(program, runtime.function_attributes).binary
+  const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
+  const args = clang_args(request, ir_path, runtime.objects, executable)
+  run('clang', args) == 0 then use(executable) else 1
 
 const clang_args = (
   request: BuildRequest, ir_path: String, runtime: Array<String>, output: String
