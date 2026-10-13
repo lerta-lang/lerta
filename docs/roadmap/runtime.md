@@ -34,6 +34,12 @@ For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-
 - A leak that the debug runtime reports becomes a warning, not a failure: the program exits with 0, rather than 1 as now ([compiler](../reference/compiler.md)), so that one cycle does not fail a program whose output is right. The run tests still catch it, as an unexpected line in stderr.
 - The typical cycle (a closure that captures `@`, held through a field of `@`) gets a compiler warning, which suggests a [weak local](../reference/objects.md#classes-and-structs). It comes before input and output, whose callbacks make such closures common.
 
+### Reference count operations
+
+Every expression of a reference type yields an owned reference for now ([internals](../internals.md#memory-management)), so passing a local to a call retains and releases it around the call. The plan is to borrow where the value cannot go away meanwhile, as a `const` local or a parameter passed as an argument, and emit no retain and release there. In the compiler's front end, `lerta_retain` and `lerta_release` take about a third of the time.
+
+First, the operations that this would remove are counted in the generated code, to see whether the gain is worth the change to the ownership of values in codegen.
+
 ## Concurrency
 
 - **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop moves to libuv, which input and output will need; until then it is the runtime's own, with sleeps only. Before input and output, whose callbacks objects will hold, comes the warning below of the cycles that closures make.
