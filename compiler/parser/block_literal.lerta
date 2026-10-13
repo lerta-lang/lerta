@@ -30,10 +30,20 @@ export const parse_block_literal = (tokens: TokenStream): Expression ->
   const items: Array<Item> = []
   while tokens.peek().kind != DEDENT
     add_item tokens, items
-    add_item tokens, items while tokens.accept(',')
+    add_item tokens, items while accept_comma(tokens)
     tokens.expect_line_end()
   tokens.next()
   to_literal items, position
+
+# Whether a comma follows, consumed with the line end after it; an item must follow at the same
+# indentation.
+const accept_comma = (tokens: TokenStream) ->
+  return false if not tokens.accept(',')
+  tokens.accept NEWLINE
+  const next = tokens.peek()
+  const changes_indentation = next.kind == DEDENT or next.kind == INDENT
+  tokens.fail_expecting next, "an item after ','" if changes_indentation
+  true
 
 const add_item = (tokens: TokenStream, items: Array<Item>) ->
   const start = token_position(tokens.peek())

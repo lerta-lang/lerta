@@ -9,7 +9,6 @@ The planned syntax, control flow, types, operators and strings.
 - Variadic parameters are `xs...`, and a call spreads an array into them as an array literal spreads it (see [spread](../reference/types.md#array)): `f(args...)`.
 - A function literal held by a local `const` may have [defaults](../reference/functions.md), as a top-level function does. Its defaults may use the locals it captures, so each is computed by a closure.
 - An item inside brackets may open an indented block (a `case`, a function body).
-- A line of a list, inside brackets or in a [bracketless block](../reference/syntax.md#bracketless-blocks), may end with a comma, which separates it from the next line as the line end would.
 - The names of an import may be a bracketless block, the `from` on the line after it:
   ```
   import

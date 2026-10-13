@@ -18,7 +18,8 @@
 ```
 const keywords = [
   'const'
-  'var', 'if'
+  'var', 'if',
+  'else'
 ]
 print add(
   1
@@ -29,7 +30,7 @@ const total = (1 +
 ```
 
 - Lines inside brackets, `(` `[` `{`, continue the line that opened them, whatever their indentation, until the brackets close. The `<` `>` of type arguments are not brackets.
-- In a list (the brackets of an array or a map, the parentheses of a call's arguments or of a function's parameters, the braces of an import), a line end separates items as a comma does. Items on one line are separated by commas; a comma must be followed by an item on the same line, so neither the last item nor a line ends with one.
+- In a list (the brackets of an array or a map, the parentheses of a call's arguments or of a function's parameters, the braces of an import), a line end separates items as a comma does. Items on one line are separated by commas, and a comma may also end a line, separating it from the next as the line end alone would. An item must follow a comma, so the last item does not end with one.
 - In grouping parentheses and an index, `xs[i]`, lines simply continue the expression.
 - So far, an item inside brackets cannot open an indented block (a `case`, a function body).
 
