@@ -15,7 +15,7 @@ import {
   CELL_SLOT, emit_capture_pointer, emit_closure, emit_static_closure, function_type_of
 } from './closure'
 import { generate_control_jump, generate_for, generate_if, generate_while } from './control_flow'
-import { emit_suspend, generate_coroutine } from './coroutine'
+import { emit_suspend } from './coroutine'
 import { emit_exception_check } from './exceptions'
 import { generate, read_local, release_if_reference, type_of } from './expression'
 import {
@@ -32,6 +32,7 @@ import {
 } from './lerta_ir'
 import { call_void_runtime } from './runtime_calls'
 import { emit_mark_initialized, emit_release_globals } from './top_level'
+import { generate_yielding_function } from './yielding'
 import { is_kind, iterable_item, ObjectType, Type, void_type } from '../types'
 
 # The local of the name: in the scopes or, outside them, a top-level value of the module, which a
@@ -97,7 +98,7 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
 # Parameters are borrowed SSA values; a method gets its object first, as `@`, and a function
 # literal its closure, from which it reads the values it captures. The last statement, if an
 # expression, gives the result. A function that yields returns an Iter that runs its body (see
-# coroutine).
+# yielding).
 export const generate_function = (
   g: Generator, symbol: String, literal: FunctionLiteral, this_type: Type?
   captures: Array<Capture>?
@@ -109,7 +110,7 @@ export const generate_function = (
   params.push "#{ir_type(param)} %p#{i}" for param, i in type.params
   const generate_body = -> generate_function_body(g, literal, this_type, captures)
   if literal.yields
-    generate_coroutine g, symbol, params, iterable_item(type.result)!, generate_body
+    generate_yielding_function g, symbol, params, iterable_item(type.result)!, generate_body
   else
     g.result_type = type.result
     generate_body()
