@@ -2,9 +2,9 @@
 # extends match, substitute and infer their type parameters with these.
 import TypeParameter from '../ast'
 import
-  ArrayType, FunctionType, inner_of, InterfaceType, IterType, MapType, ObjectType, optional_type,
-  OptionalType, PromiseType, record_type, RecordField, RecordType, same_type, TupleType, Type,
-  type_key, TypeParameterType, union_type, UnionType
+  ArrayType, FunctionType, inner_of, InterfaceType, IterType, kind_of, MapType, ObjectType,
+  optional_type, OptionalType, PromiseType, record_type, RecordField, RecordType, same_type,
+  TupleType, Type, type_key, TypeParameterType, union_type, UnionType
 from '../types'
 
 # The type parameters standing for themselves, for resolving the types written with them.
@@ -63,10 +63,23 @@ export const type_depth = (type: Type): Int ->
 
 # Whether the type is the pattern with its type parameters replaced, as Array<Int> is Array<T>.
 export const matches = (pattern: Type, type: Type) ->
+  return false if not has_same_outer_shape(pattern, type)
   const bindings: Map<String, Type> = Map()
   const bind = (name: String, bound: Type) -> bindings[name] = bound if not bindings.has(name)
   infer pattern, type, bind
   same_type substitute(pattern, bindings), type
+
+# Whether the type may match the pattern by what they are outside the types they are made of. It
+# rules out most types cheaply, before inferring and comparing the whole of them, which makes the
+# extends in effect for a generic call's types fast enough to find (see methods_reachable_from).
+# Substituting keeps what a pattern is outside, except a type parameter's and a union's, whose
+# members may merge.
+const has_same_outer_shape = (pattern: Type, type: Type) ->
+  return true if pattern is TypeParameterType or pattern is UnionType or type is UnionType
+  case pattern
+    when ObjectType then type is ObjectType and type.symbol == pattern.symbol
+    when InterfaceType then type is InterfaceType and type.symbol == pattern.symbol
+    else kind_of(pattern) == kind_of(type)
 
 # Whether some type matches both patterns, as Array<Int> matches Array<T> and Array<Int>. A type
 # parameter stands for any type on either side, even where it is repeated, as in Map<T, T>.
