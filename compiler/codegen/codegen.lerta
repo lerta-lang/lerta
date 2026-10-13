@@ -4,7 +4,7 @@ import Declaration, FunctionLiteral, Statement, TypeDeclaration from '../ast'
 import FunctionExport, named_export from '../checker/imports'
 import is_generic_object from '../checker/object_types'
 import ProgramWide from '../checker/shared'
-import generate_constructor, generate_function, generate_main from './function'
+import generate_constructor, generate_function, generate_main, TopLevelCode from './function'
 import function_generator, Generator, ModuleCode, TopLevelGlobal from './generator'
 import define_object from './heap_object'
 import IrModule from './ir_builder'
@@ -42,13 +42,17 @@ const generate_module = (code: ModuleCode) ->
   const main = Generator(code, extensions, facts, top_level_code: true)
   const main_code = [statement for statement in module.program when is_main_code(statement)]
   const entry_index = program.modules.length - 1
+  const top_level_code = (index: Int) ->
+    TopLevelCode symbol: module_init_symbol(index), awaits: program.shared[index].top_level_awaits
   if module.index == entry_index
     emit_register_raise main if program.builtins != nil
-    const runs_first = [module_init_symbol(i) for i in 0...entry_index]
+    const runs_first = [top_level_code(i) for i in 0...entry_index]
+    const awaits = program.shared.any((each) -> each.top_level_awaits)
     const releases = released_globals(code.globals)
-    generate_main main, main_code, 'void @lerta_main()', runs_first, releases, true
+    const program_code = TopLevelCode(awaits, symbol: '@lerta_main')
+    generate_main main, main_code, program_code, runs_first, releases, true
   else
-    generate_main main, main_code, "void #{module_init_symbol(module.index)}()", [], [], false
+    generate_main main, main_code, top_level_code(module.index), [], [], false
   if module.index == program.builtins
     define_raise_error function_generator(code, extensions, facts)
   for statement in module.program

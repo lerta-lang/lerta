@@ -193,3 +193,10 @@ void lerta_loop_run(void (*resume)(void *coroutine)) {
     lerta_release(ended.promise);
   }
 }
+
+LERTA_STATIC_STRING(never_settled, "the top-level code awaits a promise that is never settled");
+
+void lerta_finish_top_level(LertaPromise *promise) {
+  if (promise->state == PENDING) lerta_exit_with_error((const LertaString *)&never_settled);
+  lerta_promise_result(promise);
+}

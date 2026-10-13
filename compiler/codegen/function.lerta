@@ -10,14 +10,14 @@ import FieldInfo, info_of, is_argument, ObjectInfo from '../checker/object_types
 import Capture from '../checker/shared'
 import all_but_last from '../arrays'
 import generate_assignment from './assignment'
-import emit_loop_run, generate_awaiting_function from './awaiting'
+import emit_await_owned, emit_loop_run, generate_awaiting_function from './awaiting'
 import call_user_function from './call'
 import
   CELL_SLOT, emit_capture_pointer, emit_closure, emit_static_closure, function_type_of
 from './closure'
 import generate_control_jump, generate_for, generate_if, generate_while from './control_flow'
 import emit_suspend from './coroutine'
-import emit_exception_check from './exceptions'
+import emit_check_with, emit_exception_check from './exceptions'
 import generate, read_local, release_if_reference, type_of from './expression'
 import
   CellSlot, CodegenLocal, function_generator, Generator, SlotLocal, TopLevelGlobal, TopLevelSlot,
@@ -27,6 +27,7 @@ import
   emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box, HeapField,
   value_field
 from './heap_object'
+import IrBuilder, IrModule from './ir_builder'
 import
   constructor_symbol, default_entry_symbol, emit_release, emit_release_stored, emit_retain,
   emit_retain_value, ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol
@@ -56,20 +57,54 @@ const top_level_slot = (global: TopLevelGlobal, is_checked: Bool) ->
   const top_level = TopLevelSlot(global, is_checked)
   SlotLocal top_level, pointer: global.pointer, type: global.type
 
-# `runs_first` are the symbols of the top-level code of the imported modules. The entry module's,
-# the program's, then runs the event loop, and releases the values of all modules.
+# A module's top-level code: the symbol of its function, and whether it awaits, which makes the
+# function return a Promise.
+export struct TopLevelCode
+  symbol: String
+  awaits: Bool
+
+# The module's top-level code, after that of the modules in `runs_first`, which it awaits where
+# needed. The entry module's, the program's, then runs the event loop, and releases the values of
+# all modules; if it awaits, the program's top-level code is a coroutine of its own, which the loop
+# must finish.
 export const generate_main = (
-  g: Generator, statements: Array<Statement>, signature: String, runs_first: Array<String>,
+  g: Generator, statements: Array<Statement>, code: TopLevelCode, runs_first: Array<TopLevelCode>,
   releases: Array<TopLevelGlobal>, is_program: Bool
 ) ->
-  for symbol in runs_first
-    g.ir.emit "call void #{symbol}()"
-    emit_exception_check g
-  generate_block g, statements, no_locals
-  emit_loop_run g.ir if is_program
-  emit_release_globals g.ir, releases
-  g.ir.emit 'ret void'
-  finish g, signature
+  const run = ->
+    for first in runs_first
+      if first.awaits
+        emit_await_owned g, g.ir.assign("call ptr #{first.symbol}()"), void_type
+      else
+        g.ir.emit "call void #{first.symbol}()"
+        emit_exception_check g
+    generate_block g, statements, no_locals
+  if not code.awaits
+    run()
+    emit_loop_run g.ir if is_program
+    emit_release_globals g.ir, releases
+    g.ir.emit 'ret void'
+    finish g, "void #{code.symbol}()"
+    return
+  const run_and_return = ->
+    run()
+    emit_return g, ''
+  const body = is_program then '@lerta.top_level' else code.symbol
+  generate_awaiting_function g, body, [], void_type, run_and_return
+  generate_program_main g.ir.module, body, releases if is_program
+
+# Runs the program's top-level code, a coroutine, and the event loop, which must settle it; its
+# exception is the program's.
+const generate_program_main = (module: IrModule, body: String, releases: Array<TopLevelGlobal>) ->
+  const ir = IrBuilder(module)
+  const promise = ir.assign("call ptr #{body}()")
+  emit_loop_run ir
+  call_void_runtime ir, 'void @lerta_finish_top_level(ptr)', "ptr #{promise}"
+  emit_release ir, promise
+  emit_check_with ir, -> ir.emit('ret void')
+  emit_release_globals ir, releases
+  ir.emit 'ret void'
+  ir.finish 'void @lerta_main()'
 
 # Defines nothing, for a block that declares no locals besides its statements'.
 export const no_locals = (_scope: Map<String, CodegenLocal>) -> return

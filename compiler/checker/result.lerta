@@ -97,15 +97,18 @@ export const check_return = (body: Body, return_expression: Return) ->
   const type: Type = value then type_of_result(body, value) else void_type
   record_result body, type, value ? return_expression
 
-# A promise's value, once it is settled; the function that waits for it is one that awaits, which
-# its parser marks as such unless the `await` runs elsewhere, as in a lazy comprehension.
+# A promise's value, once it is settled. What waits for it is the top-level code, which the module
+# records, or a function that awaits, which its parser marks as such unless the `await` runs
+# elsewhere, as in a lazy comprehension.
 export const type_of_await = (body: Body, await_expression: Await) ->
   const program = body.program
   const at = await_expression.position
-  # A field's value is computed by the constructor, which does not wait.
-  fail program, at, "'await' cannot be in a field's value" if body.context == nil and body.self
-  const context = body.context ? fail(program, at, "'await' outside a function")
-  fail program, at, "'await' cannot be in a lazy comprehension" if not context.awaits
+  if const context = body.context
+    fail program, at, "'await' cannot be in a lazy comprehension" if not context.awaits
+  else
+    # A field's value is computed by the constructor, which does not wait.
+    fail program, at, "'await' cannot be in a field's value" if body.self
+    body.shared.top_level_awaits = true
   const operand = await_expression.operand
   const type = type_of(body, operand)
   return type.value if type is PromiseType

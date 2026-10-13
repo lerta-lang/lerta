@@ -224,6 +224,9 @@ void *lerta_promise_result(LertaPromise *promise);
 LertaPromise *lerta_sleep(int64_t seconds);
 // Runs the loop; `resume` resumes a coroutine, which only the generated code can do.
 void lerta_loop_run(void (*resume)(void *coroutine));
+// After the loop, the end of the program's top-level code, a coroutine that awaits: an error if it
+// still waits, and its exception, if it threw, as the pending one.
+void lerta_finish_top_level(LertaPromise *promise);
 
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.
