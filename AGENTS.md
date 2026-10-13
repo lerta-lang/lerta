@@ -16,8 +16,7 @@ Read these before changing behavior:
 3. **Review.** After implementing, run an adversarial review with a subagent that follows `.agents/reviewer.md`.
    - Run `make test`, and `pnpm check` in `test/`, yourself before each review; the reviewer does not.
    - Show the reviewer only the code and the tests. Do not pass the intent, the background or your design decisions.
-   - Fix the findings and send the result back to **the same reviewer** for re-review. Repeat until no findings remain.
-   - Then review once more with **a fresh reviewer**, told nothing of the first review, and repeat with it likewise: a reviewer that has seen the change evolve reads it with the earlier versions in mind.
+   - Fix the findings and review the result with **a fresh reviewer**, told nothing of the earlier reviews: a reviewer that has seen the change evolve reads it with the earlier versions in mind. Repeat until no findings remain, or until the only finding is missing tests: then add them and stop, since every reviewer can name one more case.
 4. **Update the docs.** When a feature is implemented, move its description from `docs/roadmap/` to `docs/reference/` as described in `docs/roadmap/README.md`.
 5. **Commit only with approval.** Show the change to the user and get approval before committing.
 6. **Consider refactoring.** Look at the functions, classes, files and directories the change touched. If any has grown long through repeated additions, consider whether it should be split or restructured. If it should, propose the refactoring to the user as the next task; do not mix it into the current change.

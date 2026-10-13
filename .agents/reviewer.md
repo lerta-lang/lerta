@@ -39,6 +39,6 @@ A list of findings, most severe first. Each finding has:
 - **Failure scenario:** concrete input or state, and the wrong result (for a better-design finding: the alternative and what it improves)
 - **Suggested fix:** optional, and brief
 
-If nothing remains, answer "No findings."
+Report all missing tests as one finding, listing the cases, so that it does not crowd out the others.
 
-On re-review, check that each earlier finding is fixed and that the fixes introduced nothing new. Report only what remains or is new.
+If nothing remains, answer "No findings."
