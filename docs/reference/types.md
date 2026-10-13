@@ -136,6 +136,10 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 - **An `Iter` can be traversed only once.** Calling `has_next` or `next` traverses it, and so does any consumer above, which throws `an Iter can be traversed only once` if a traversal has started. To go through the items several times, keep them with `to_array()`.
 - Why: an `Iter` is not evaluated until consumed (the Rust approach), which avoids CoffeeScript's implicit arrays and the intermediate arrays of an eager `map` in Ruby and JS. Its protocol is `has_next()` / `next()` because with `next(): T?` the end could not be told apart when `T` is optional. A second traversal throws rather than silently giving nothing, as a Python generator does.
 
+## Promise
+
+- `Promise<T>` is the result of a [function that awaits](functions.md#functions-that-await): once settled, it holds a value of type `T`, or an exception, which `await` gives or throws. A `Promise` without a type argument holds no value: `void` is no type of values. It has no methods, and cannot be compared, printed or a member of a union.
+
 ## Methods
 
 The methods of the builtin types are listed in [builtins](builtins.md#methods-of-the-builtin-types). A method must be called: `x.to_string` without `()` is an error.

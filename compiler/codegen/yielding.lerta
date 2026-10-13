@@ -2,7 +2,7 @@
 # body as a coroutine (see coroutine): has_next resumes the body, which stores its next item in the
 # Iter at a `yield` and suspends there, or ends. Dropping the Iter destroys the coroutine.
 import { Yield } from '../ast'
-import { emit_suspend, generate_coroutine } from './coroutine'
+import { emit_final_suspension, emit_suspend, generate_coroutine } from './coroutine'
 import { emit_check_or_return_thrown, emit_return_thrown } from './exceptions'
 import { generate } from './expression'
 import { Generator } from './generator'
@@ -36,7 +36,8 @@ export const generate_yielding_function = (
   const generate_with_handle = ->
     store_state g.ir, kind, HANDLE, g.coroutine!.handle
     generate_body()
-  generate_coroutine g, body_symbol, ['ptr %iter', params...], generate_with_handle
+  const params_with_iter = ['ptr %iter', params...]
+  generate_coroutine g, body_symbol, params_with_iter, generate_with_handle, -> emit_final_suspension(g)
   const ir = IrBuilder(module: g.ir.module)
   const iter = emit_iter(ir, kind, ['null', 'false', 'false', 'zeroinitializer'])
   ir.emit "call void #{body_symbol}(#{["ptr #{iter}", params...].join(', ')})"

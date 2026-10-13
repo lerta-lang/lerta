@@ -67,6 +67,32 @@ for x in countdown(3)
 - An exception thrown in the body goes to the code that asked for the item, and ends the `Iter`. Asking the `Iter` for an item from within its own body throws `an Iter cannot be read while its function runs`.
 - Why no keyword marks such a function, as `function*` does in JS: the `yield` and the return type already tell (the CoffeeScript approach).
 
+## Functions that await
+
+```
+import { sleep } from 'std:time'
+
+const fetch = (name: String) ->
+  await sleep(1)
+  "#{name} fetched"
+
+const main = ->
+  const a = fetch('a')
+  const b = fetch('b')
+  print "#{await a}, #{await b}"
+
+const _done = main()
+```
+
+- A function whose body has an `await <promise>` of its own, outside the function literals in it, returns a `Promise` of its result. Calling it runs the body at once, up to an `await` of a promise that is not settled yet; the body then waits, and the call returns the `Promise`. So `a` and `b` above wait at the same time.
+- A `Promise<T>` is settled once: with a value of type `T`, or with an exception. `await` gives the value of a settled promise, or throws its exception, and can be applied to the same promise again; on one that is not settled, it waits for it first. A function without a result returns a `Promise` with no type argument, which is settled without a value.
+- The function's return type is a `Promise`, as in `(): Promise<Int> ->`, whose type the returned values must fit. Left out, it is a `Promise` of the returned values' type, worked out as for any function.
+- An exception that leaves the body settles the `Promise` with it. A `Promise` dropped with an exception that no `await` has taken ends the program as an uncaught exception does.
+- `await` is an expression, written anywhere in the body but in a default; it cannot be in a [lazy comprehension](control-flow.md#for-and-ranges), whose items are computed elsewhere. A function cannot both yield and await yet, and `init` and `deinit` cannot await.
+- The waiting bodies go on in the **event loop**, which runs once the program's top-level code has run, until nothing is left to wait for; the top-level values are released after it. The top-level code cannot await yet.
+- A statement that only makes a `Promise` is an error (see [discarded values](errors.md#discarded-values)): an exception it would throw could be lost.
+- Why `await` alone marks such a function, with no `async`: as for [`yield`](#functions-that-yield).
+
 ## Generic functions
 
 ```

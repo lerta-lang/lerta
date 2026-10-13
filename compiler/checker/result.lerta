@@ -1,25 +1,35 @@
 # Checks how a function gives its result: its last statement and its `return`s.
-import { Expression, FunctionLiteral, If, Node, Position, Return, Statement, Yield } from '../ast'
+import {
+  Await, Expression, FunctionLiteral, If, Node, Position, Return, Statement, Yield
+} from '../ast'
 import { fail } from './diagnostics'
 import { type_of } from './expression'
 import { converts_through_itab } from './interface_values'
 import { Body, FunctionContext, ProgramWide, Result } from './shared'
 import { check_discarded, check_statement } from './statement'
 import {
-  format_type, FunctionType, is_assignable, is_kind, IterType, nil_type, same_type, Type, unify
-  void_type
+  format_type, FunctionType, is_assignable, is_kind, IterType, nil_type, PromiseType, same_type
+  Type, unify, void_type
 } from '../types'
 
 # The context of a function's body, whose written return type, if any, is `annotated`. That of a
-# function that yields must be an Iter, whose items the yielded values must fit.
+# function that yields must be an Iter, whose items the yielded values must fit, and that of a
+# function that awaits a Promise, whose value the returned values must fit.
 export const function_context = (
   program: ProgramWide, literal: FunctionLiteral, annotated: Type?
 ) ->
-  return FunctionContext(annotated, yields: false) if not literal.yields
-  if annotated and not (annotated is IterType)
-    const message = 'a function that yields returns an Iter, as in `(): Iter<Int> ->`'
-    fail program, literal.position, message
-  FunctionContext annotated: (annotated as IterType?)?.item, yields: true
+  const { yields, awaits } = literal
+  const fail_here = (message: String) -> fail(program, literal.position, message)
+  fail_here 'a function cannot both yield and await yet' if yields and awaits
+  if yields
+    if annotated and not (annotated is IterType)
+      fail_here 'a function that yields returns an Iter, as in `(): Iter<Int> ->`'
+    return FunctionContext(yields, awaits, annotated: (annotated as IterType?)?.item)
+  if awaits
+    if annotated and not (annotated is PromiseType)
+      fail_here 'a function that awaits returns a Promise, as in `(): Promise<Int> ->`'
+    return FunctionContext(yields, awaits, annotated: (annotated as PromiseType?)?.value)
+  FunctionContext annotated, yields, awaits
 
 # A function with a result must end with its value or a `return`. This is decided by the last
 # statement alone, not by whether the end can be reached.
@@ -87,6 +97,21 @@ export const check_return = (body: Body, return_expression: Return) ->
   const type: Type = value then type_of_result(body, value) else void_type
   record_result body, type, value ? return_expression
 
+# A promise's value, once it is settled; the function that waits for it is one that awaits, which
+# its parser marks as such unless the `await` runs elsewhere, as in a lazy comprehension.
+export const type_of_await = (body: Body, await_expression: Await) ->
+  const program = body.program
+  const at = await_expression.position
+  # A field's value is computed by the constructor, which does not wait.
+  fail program, at, "'await' cannot be in a field's value" if body.context == nil and body.self
+  const context = body.context ? fail(program, at, "'await' outside a function")
+  fail program, at, "'await' cannot be in a lazy comprehension" if not context.awaits
+  const operand = await_expression.operand
+  const type = type_of(body, operand)
+  return type.value if type is PromiseType
+  return type if is_kind(type, 'never')
+  fail program, operand.position, "expected a Promise, got #{format_type(type)}"
+
 # A yielded value must fit the item type, as a return value fits the return type.
 export const check_yield = (body: Body, yield_expression: Yield) ->
   if body.context == nil
@@ -105,8 +130,8 @@ const type_of_result = (body: Body, value: Expression) ->
 
 # The type of a function once its body is checked: its return type is the written one, or the one
 # its results give, to which they are converted; that of a function that yields is an Iter of its
-# item type, decided so. Its result may be nil alone, which gives no type, as may its items, if it
-# yields nothing else: see reject_nil_result.
+# item type, decided so, and that of one that awaits a Promise of its result. Its result may be nil
+# alone, which gives no type, as may its items, if it yields nothing else: see reject_nil_result.
 export const finish_function_type = (
   context: FunctionContext, params: Array<Type>, conversions: Map<Node, Type>
 ) ->
@@ -115,7 +140,12 @@ export const finish_function_type = (
   for each in context.results
     const is_converted = not is_kind(each.type, 'never') and not same_type(each.type, result)
     conversions[each.value] = result if is_converted
-  FunctionType params, result: context.yields then IterType(item: result) else result
+  const wrapped: Type =
+    case
+      when context.yields then IterType(item: result)
+      when context.awaits then PromiseType(value: result)
+      else result
+  FunctionType params, result: wrapped
 
 # A function whose results are only nil has no return type: it must be written. A function of an
 # item leaves this to its caller, which tells what would hold its results (see check_value_type).
@@ -126,6 +156,10 @@ export const reject_nil_result = (
     const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
     fail program, literal.position, message
   const result = type.result
+  if result is PromiseType and literal.awaits and is_kind(result.value, 'nil')
+    const example = '`(): Promise<String?> ->`'
+    const message = "nil alone does not give the return type; write it, as in #{example}"
+    fail program, literal.position, message
   if result is IterType and literal.yields and is_kind(result.item, 'nil')
     const example = '`(): Iter<Int> ->`'
     const message = "the yielded values do not give the item type; write it, as in #{example}"

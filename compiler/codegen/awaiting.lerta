@@ -1,0 +1,80 @@
+# Functions that await. Such a function returns a new Promise and runs its body at once, as a
+# coroutine (see coroutine), up to an `await` of a promise still pending, where the body suspends
+# until the event loop resumes it once that promise is settled (see runtime/async.c). The body
+# settles its own Promise when it ends: with its result, or with the exception that leaves it.
+import { Await } from '../ast'
+import { item_kind } from './array'
+import { emit_wait, generate_coroutine } from './coroutine'
+import { emit_exception_check, holding } from './exceptions'
+import { generate, type_of } from './expression'
+import { Generator } from './generator'
+import { IrBuilder, IrModule } from './ir_builder'
+import {
+  emit_release, emit_retain, emit_retain_value, ir_type, returns_nothing, suffixed_symbol
+} from './lerta_ir'
+import { call_runtime, call_void_runtime } from './runtime_calls'
+import { PromiseType, Type } from '../types'
+
+# The function `symbol`, of the parameters, as in `i64 %p0`: it makes the Promise, of which the
+# body, which `generate_body` generates, holds a reference too, and runs the body with the Promise
+# first.
+export const generate_awaiting_function = (
+  g: Generator, symbol: String, params: Array<String>, value: Type, generate_body: () -> void
+) ->
+  const body_symbol = suffixed_symbol(symbol, 'coroutine')
+  g.on_return = (result: String) -> emit_resolve(g.ir, value, result)
+  g.unwind_cleanup = -> call_void_runtime(g.ir, 'void @lerta_promise_reject(ptr)', 'ptr %promise')
+  const end = ->
+    emit_release g.ir, '%promise'
+    g.ir.emit "br label %#{g.coroutine!.free_label}"
+  generate_coroutine g, body_symbol, ['ptr %promise', params...], generate_body, end
+  const ir = IrBuilder(module: g.ir.module)
+  const promise = call_runtime(ir, 'ptr @lerta_promise_new(i32)', "i32 #{item_kind(value)}")
+  emit_retain ir, promise
+  ir.emit "call void #{body_symbol}(#{["ptr #{promise}", params...].join(', ')})"
+  ir.emit "ret ptr #{promise}"
+  ir.finish "ptr #{symbol}(#{params.join(', ')})"
+
+# Settles the body's Promise with the result, owned, of the type.
+const emit_resolve = (ir: IrBuilder, type: Type, result: String) ->
+  if not returns_nothing(type)
+    const slot = call_runtime(ir, 'ptr @lerta_promise_slot(ptr)', 'ptr %promise')
+    ir.emit "store #{ir_type(type)} #{result}, ptr #{slot}"
+  call_void_runtime ir, 'void @lerta_promise_resolve(ptr)', 'ptr %promise'
+
+# The value of the promise, which the body waits for if it is pending; its exception is thrown.
+export const generate_await = (g: Generator, await_expression: Await) ->
+  const promise = generate(g, await_expression.operand)
+  const type = type_of(g, await_expression.operand)
+  return promise if not (type is PromiseType)
+  holding g, promise, type, -> emit_await(g, promise, type.value)
+
+const emit_await = (g: Generator, promise: String, value: Type) ->
+  const ir = g.ir
+  const handle = g.coroutine!.handle
+  const args = "ptr #{promise}, ptr #{handle}"
+  const is_pending = call_runtime(ir, 'i1 @lerta_promise_wait(ptr, ptr)', args)
+  const wait_label = ir.fresh_label('await.wait')
+  const settled_label = ir.fresh_label('await.settled')
+  ir.emit "br i1 #{is_pending}, label %#{wait_label}, label %#{settled_label}"
+  ir.start_block wait_label
+  emit_wait g
+  ir.emit "br label %#{settled_label}"
+  ir.start_block settled_label
+  const slot = call_runtime(ir, 'ptr @lerta_promise_result(ptr)', "ptr #{promise}")
+  emit_exception_check g
+  const result = returns_nothing(value) then '' else ir.assign("load #{ir_type(value)}, ptr #{slot}")
+  emit_retain_value ir, result, value if result != ''
+  emit_release ir, promise
+  result
+
+# Runs the event loop, which resumes the coroutines through a function defined here, the only code
+# that can resume one.
+export const emit_loop_run = (ir: IrBuilder) ->
+  const resume = '@lerta.resume'
+  const define = (module: IrModule) ->
+    const body = ['  call void @llvm.coro.resume(ptr %coroutine)', '  ret void']
+    module.add_function ["define private void #{resume}(ptr %coroutine) {", body..., '}'].join("\n")
+    module.declare 'llvm.coro.resume', 'declare void @llvm.coro.resume(ptr)'
+  ir.module.define_once resume, define
+  call_void_runtime ir, 'void @lerta_loop_run(ptr)', "ptr #{resume}"

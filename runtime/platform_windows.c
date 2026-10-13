@@ -136,6 +136,26 @@ bool lerta_os_is_terminal(int fd) {
   return is_console(standard_handle(fd));
 }
 
+int64_t lerta_os_monotonic_ns(void) {
+  LARGE_INTEGER frequency;
+  LARGE_INTEGER count;
+  QueryPerformanceFrequency(&frequency);
+  QueryPerformanceCounter(&count);
+  int64_t seconds = count.QuadPart / frequency.QuadPart;
+  int64_t rest = count.QuadPart % frequency.QuadPart;
+  return seconds * 1000000000 + rest * 1000000000 / frequency.QuadPart;
+}
+
+// Sleep takes milliseconds, so the wait is rounded up, never ending early.
+void lerta_os_sleep_ns(int64_t nanoseconds) {
+  int64_t milliseconds = (nanoseconds + 999999) / 1000000;
+  while (milliseconds > 0) {
+    DWORD part = milliseconds > INFINITE - 1 ? INFINITE - 1 : (DWORD)milliseconds;
+    Sleep(part);
+    milliseconds -= part;
+  }
+}
+
 void lerta_os_exit(int code) {
   ExitProcess((UINT)code);
 }

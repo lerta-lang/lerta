@@ -1,9 +1,9 @@
 # Checks statements and blocks, defining the locals they declare; loops are checked by `loop`.
 import { all_but_last } from '../arrays'
 import {
-  Assignment, Binding, Call, Coalesce, Condition, Declaration, EnumDeclaration, Expression, Extend
-  Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration, is_exported, Pass
-  Statement, statement_else_body, TypeAlias, TypeDeclaration, While
+  Assignment, Await, Binding, Call, Coalesce, Condition, Declaration, EnumDeclaration, Expression
+  Extend, Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration, is_exported
+  Pass, Statement, statement_else_body, TypeAlias, TypeDeclaration, While
 } from '../ast'
 import { check_assignment } from './assignment'
 import { fail, fail_already_defined, warn_if_unused } from './diagnostics'
@@ -18,7 +18,8 @@ import { Body, SelfContext } from './shared'
 import { define_top_level } from './top_level_values'
 import { names_type_or_import, resolve } from './type_names'
 import {
-  format_type, FunctionType, is_kind, is_one_of_kinds, IterType, never_type, Type, void_type
+  format_type, FunctionType, is_kind, is_one_of_kinds, IterType, never_type, PromiseType, Type
+  void_type
 } from '../types'
 
 # Does nothing, where a block has nothing more to define or check.
@@ -208,7 +209,8 @@ export const check_discarded = (body: Body, statement: Expression, type: Type) -
   const program = body.program
   const at = statement.position
   fail program, at, 'an Iter does nothing until it is consumed' if type is IterType
-  return if statement is Call or is_one_of_kinds(type, ['void', 'never'])
+  fail program, at, 'a Promise must be awaited' if type is PromiseType
+  return if statement is Call or statement is Await or is_one_of_kinds(type, ['void', 'never'])
   # `x ? return` is a guard: its value is the reason to stop, not something to use.
   return if statement is Coalesce and is_never_typed(body, statement.fallback)
   if statement is Identifier and type is FunctionType

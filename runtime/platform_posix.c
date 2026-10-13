@@ -10,6 +10,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "internal.h"
@@ -67,6 +68,19 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
 
 bool lerta_os_is_terminal(int fd) {
   return isatty(fd);
+}
+
+int64_t lerta_os_monotonic_ns(void) {
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  return (int64_t)now.tv_sec * 1000000000 + now.tv_nsec;
+}
+
+void lerta_os_sleep_ns(int64_t nanoseconds) {
+  struct timespec left = {(time_t)(nanoseconds / 1000000000), (long)(nanoseconds % 1000000000)};
+  // A signal ends the wait early; it goes on for what is left.
+  while (nanosleep(&left, &left) != 0 && errno == EINTR) {
+  }
 }
 
 void lerta_os_exit(int code) {

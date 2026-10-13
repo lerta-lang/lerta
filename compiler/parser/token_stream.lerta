@@ -9,6 +9,12 @@ export enum LineBreaks
   SEPARATE
   SKIP
 
+# Whether a function literal has a `yield` of its own, outside the literals in it, and where its
+# first `await` is.
+export class FunctionMarks
+  yields = false
+  await_at: Position? = nil
+
 export class TokenStream
   tokens: Array<Token>
   # Names the source in diagnostics.
@@ -22,8 +28,8 @@ export class TokenStream
   # How line breaks are read inside each of the brackets being parsed; outside brackets there are
   # none.
   line_breaks: Array<LineBreaks> = []
-  # Whether each function literal being parsed, innermost last, has a `yield` of its own.
-  yields: Array<Bool> = []
+  # What each function literal being parsed, innermost last, has of its own.
+  functions: Array<FunctionMarks> = []
 
   # The kind of the next token if it continues the current expression. After an indented block
   # (such as a `case`) the line has ended, so `-1` on the next line is not a subtraction.
@@ -155,16 +161,16 @@ export class TokenStream
     @expect close, "'#{close}'"
     false
 
-  # The body that `parse` reads is a function literal's: the result, and whether it yields.
+  # The body that `parse` reads is a function literal's: the result, and what it has of its own.
   in_function = <T>(parse: () -> T) ->
-    @yields.push false
+    const marks = FunctionMarks()
+    @functions.push marks
     const body = parse()
-    { body, yields: @yields.pop() }
+    @functions.pop()
+    { body, marks }
 
-  # A `yield` outside every function literal makes none yield; the checker rejects it.
-  note_yield = ->
-    const innermost = @yields.length - 1
-    @yields[innermost] = true if innermost >= 0
+  # A `yield` or `await` outside every function literal marks none; the checker rejects it.
+  innermost_function = -> @functions.last()
 
   fail = (position: Position, message: String) ->
     compile_error @path, position.line, position.column, message

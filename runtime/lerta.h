@@ -206,6 +206,25 @@ void lerta_raise_iter_ended(void);
 // Asking an Iter for an item while its function, which yields, runs.
 void lerta_raise_iter_running(void);
 
+// Promises and the event loop (async.c). A Promise is settled once, with a value stored in its slot
+// or with the pending exception, which it takes; the coroutines that wait for it are then resumed
+// by the loop, which runs after the program's top-level code until nothing is left to wait for.
+typedef struct LertaPromise LertaPromise;
+LertaPromise *lerta_promise_new(LertaItemKind kind);
+// Whether the coroutine is to wait for the promise, which is pending; it is resumed once the
+// promise is settled.
+bool lerta_promise_wait(LertaPromise *promise, void *coroutine);
+// Where the value goes, before lerta_promise_resolve; where it is read once the promise is settled.
+void *lerta_promise_slot(LertaPromise *promise);
+void lerta_promise_resolve(LertaPromise *promise);
+void lerta_promise_reject(LertaPromise *promise);
+// The slot of a settled promise; if it holds an exception, throws it.
+void *lerta_promise_result(LertaPromise *promise);
+// A promise resolved once the seconds have passed; a negative time throws.
+LertaPromise *lerta_sleep(int64_t seconds);
+// Runs the loop; `resume` resumes a coroutine, which only the generated code can do.
+void lerta_loop_run(void (*resume)(void *coroutine));
+
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.
 LertaArray *lerta_argv(void);

@@ -41,7 +41,7 @@ export const parse_primary = (tokens: TokenStream): Expression ->
       Return value, position
     when 'throw' then Throw(position, message: parse_expression(tokens))
     when 'yield'
-      tokens.note_yield()
+      marks.yields = true if const marks = tokens.innermost_function()
       Yield position, value: parse_expression(tokens)
     when '@' then parse_this(tokens, position)
     when 'true', 'false' then BooleanLiteral(position, value: token.kind == 'true')
@@ -92,22 +92,28 @@ const negated_value = (text: String) ->
   value
 
 const parse_interpolation = (tokens: TokenStream, token: Token) ->
-  const parts = [interpolation_part(tokens.path, part, token.line) for part in token.parts!]
+  const parts = [interpolation_part(tokens, part, token.line) for part in token.parts!]
   Interpolation parts, position: token_position(token)
 
-const interpolation_part = (path: String, part: TemplatePart, line: Int): InterpolationPart ->
+const interpolation_part = (
+  tokens: TokenStream, part: TemplatePart, line: Int
+): InterpolationPart ->
   case part
     when TextPart then part
-    when CodePart then to_string_call(parse_interpolated_code(path, part.source, line, part.column))
+    when CodePart
+      to_string_call parse_interpolated_code(tokens, part.source, line, part.column)
 
 const to_string_call = (value: Expression) ->
   const position = value.position
   const callee = Member(position, object: value, name: Identifier(position, name: 'to_string'))
   Call callee, position, args: [], named_args: [], type_args: []
 
-const parse_interpolated_code = (path: String, source: String, line: Int, column: Int) ->
+# The code belongs to the function literal around the string, which an `await` in it marks.
+const parse_interpolated_code = (outer: TokenStream, source: String, line: Int, column: Int) ->
+  const path = outer.path
   const fragment = tokenize_fragment(source, path, line, column)
   const tokens = TokenStream(path, tokens: fragment, interpolation: Position(line, column))
+  tokens.functions = outer.functions
   const expression = parse_expression(tokens)
   tokens.expect NEWLINE, 'end of interpolation'
   expression

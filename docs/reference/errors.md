@@ -27,10 +27,10 @@ finally
   | `ArithmeticError` | integer overflow, division by zero, `to_byte` of an Int out of 0 to 255 |
   | `NilError` | `x!` of nil |
   | `CastError` | `x as T!` of a value of another type |
-  | `IterError` | a second traversal of an `Iter`, `next` past its end |
+  | `IterError` | a second traversal of an `Iter`, `next` past its end, reading an `Iter` from within its own function |
   | `WeakError` | a `weak!` field whose object is gone |
   | `IOError` | a file that cannot be read or written, a command that cannot be run |
-  | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, and `zip` of Iterables of different lengths |
+  | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, `sleep(-1)`, and `zip` of Iterables of different lengths |
   | `InitError` | a top-level value used before it is initialized (see [functions](functions.md)) |
 - A `String` cannot be thrown: `throw` takes an `Error`, so that a `catch` can tell errors apart by type.
 - `try` runs its block. An exception thrown there, in it or in a function it calls, goes to its `catch` clauses, tried in order: `catch e: T` takes an exception whose type is `T`, or a member of the union `T`, as `is` tells, and its block sees it as `e`, of that type; `catch e` takes any, `e` being an `Error`. A type that a catch names must be a class or struct, or a union of them, that satisfies `Error`. An exception that no catch takes goes on, as from where the `try` is.
@@ -51,7 +51,8 @@ These apply when a value in statement position is not captured.
 - A literal, a name, an operator expression, a field or an index (`'a'`, `x`, `1 + 2`, `x == 1`, `p.x`, `xs[0]`) → error. An unused comparison often means a mistyped assignment.
 - A function value itself (`print`) → error "to call it, write `print()`".
 - An [`Iter`](types.md#iter) (`xs.map(f)`) → error "an Iter does nothing until it is consumed".
-- A call, or an expression with no value such as a `case` whose arms are calls to `void` functions → allowed.
+- A [`Promise`](functions.md#functions-that-await) (`fetch('a')`) → error "a Promise must be awaited".
+- A call, an `await`, or an expression with no value such as a `case` whose arms are calls to `void` functions → allowed.
 
 ## Unused names
 

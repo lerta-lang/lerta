@@ -7,7 +7,7 @@ import { argv, exit } from 'std:process'
 
 - A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import { a as c } from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. Imports are written at the top level. An imported name that is never used is a warning.
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'` and `'std:process'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)); `std:io`, which `std:builtins` imports, cannot use the builtins, nor, since they need `Stringable` and `Iterable`, interpolation or `for` over an Iterable that is no array, `Binary` or `Iter`. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)); `std:io`, which `std:builtins` imports, cannot use the builtins, nor, since they need `Stringable` and `Iterable`, interpolation or `for` over an Iterable that is no array, `Binary` or `Iter`. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
 - Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. A top-level value read through a function is checked at run time, so that functions can be declared in any order.
 
 ## Exports
@@ -48,3 +48,9 @@ export const unit = 1
 | `argv: Array<String>` | The command-line arguments, without the program name, read when the module runs. A program that imports `std:process` throws at its start if an argument is not valid UTF-8. |
 | `exit(code: Int): never` | Flushes `stdout` and ends the program with the exit code, from 0 to 255; another code throws a `ValueError`. If the flush fails, a code of 0 becomes 1. |
 | `run(command: String, args: Array<String>): Int` | Runs a program, found on `PATH` on every platform (adding `.exe` on Windows if it has no extension) unless the command holds a directory, with the arguments, and waits for it to end. The program shares the standard streams; `stdout` is flushed first, so that output keeps its order. Returns its exit code. On POSIX systems, a program killed by a signal gives 128 plus the signal number, as shells do; on Windows, the code of a program that an exception or `TerminateProcess` ended is returned as a non-negative 32-bit value, such as 3221225477 (0xC0000005) for an access violation; this case is not tested yet. Throws `cannot run: <command>` if it cannot start, including when the command or an argument holds a NUL byte. |
+
+## std:time
+
+| Name | |
+|---|---|
+| `sleep(seconds: Int): Promise` | A promise that is resolved once the seconds have passed, for a [function that awaits](functions.md#functions-that-await) to wait for. Throws a `ValueError`, `sleep for a negative time`, for a negative time. |

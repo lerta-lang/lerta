@@ -1,7 +1,7 @@
 # Expressions, from the weakest operators down to primaries, which `primary` reads, as `compound`
 # reads compound expressions.
 import {
-  BinaryOperation, Binding, Call, Cast, Conditional, Coalesce, copy_identifier, Declaration
+  Await, BinaryOperation, Binding, Call, Cast, Conditional, Coalesce, copy_identifier, Declaration
   Expression, Identifier, If, Index, IntegerLiteral, IsTest, Member, NamedValue, NilLiteral
   Position, Range, RecordLiteral, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
 } from '../ast'
@@ -176,6 +176,12 @@ const parse_arithmetic = (tokens: TokenStream, level: Int): Expression ->
 
 const parse_unary = (tokens: TokenStream): Expression ->
   const token = tokens.peek()
+  if token.kind == 'await'
+    tokens.next()
+    const position = token_position(token)
+    const marks = tokens.innermost_function()
+    marks.await_at = position if marks and marks.await_at == nil
+    return Await(position, operand: parse_unary(tokens))
   return parse_postfix(tokens, parse_primary(tokens)) if token.kind != '-'
   tokens.next()
   const position = token_position(token)

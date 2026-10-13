@@ -10,6 +10,7 @@ import { FieldInfo, info_of, is_argument, ObjectInfo } from '../checker/object_t
 import { Capture } from '../checker/shared'
 import { all_but_last } from '../arrays'
 import { generate_assignment } from './assignment'
+import { emit_loop_run, generate_awaiting_function } from './awaiting'
 import { call_user_function } from './call'
 import {
   CELL_SLOT, emit_capture_pointer, emit_closure, emit_static_closure, function_type_of
@@ -33,7 +34,7 @@ import {
 import { call_void_runtime } from './runtime_calls'
 import { emit_mark_initialized, emit_release_globals } from './top_level'
 import { generate_yielding_function } from './yielding'
-import { is_kind, iterable_item, ObjectType, Type, void_type } from '../types'
+import { is_kind, iterable_item, ObjectType, PromiseType, Type, void_type } from '../types'
 
 # The local of the name: in the scopes or, outside them, a top-level value of the module, which a
 # function checks to be initialized, or an imported value. Those of the modules of its import
@@ -55,16 +56,17 @@ const top_level_slot = (global: TopLevelGlobal, is_checked: Bool) ->
   const top_level = TopLevelSlot(global, is_checked)
   SlotLocal top_level, pointer: global.pointer, type: global.type
 
-# `runs_first` are the symbols of the top-level code of the imported modules; the values of all
-# modules are released at the end of the entry module's.
+# `runs_first` are the symbols of the top-level code of the imported modules. The entry module's,
+# the program's, then runs the event loop, and releases the values of all modules.
 export const generate_main = (
   g: Generator, statements: Array<Statement>, signature: String, runs_first: Array<String>
-  releases: Array<TopLevelGlobal>
+  releases: Array<TopLevelGlobal>, is_program: Bool
 ) ->
   for symbol in runs_first
     g.ir.emit "call void #{symbol}()"
     emit_exception_check g
   generate_block g, statements, no_locals
+  emit_loop_run g.ir if is_program
   emit_release_globals g.ir, releases
   g.ir.emit 'ret void'
   finish g, signature
@@ -97,8 +99,8 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
 
 # Parameters are borrowed SSA values; a method gets its object first, as `@`, and a function
 # literal its closure, from which it reads the values it captures. The last statement, if an
-# expression, gives the result. A function that yields returns an Iter that runs its body (see
-# yielding).
+# expression, gives the result. A function that yields returns an Iter that runs its body, and one
+# that awaits a Promise that the body settles (see yielding and awaiting).
 export const generate_function = (
   g: Generator, symbol: String, literal: FunctionLiteral, this_type: Type?
   captures: Array<Capture>?
@@ -108,22 +110,28 @@ export const generate_function = (
   params.push 'ptr %closure' if captures != nil
   params.push "#{ir_type(this_type)} %this" if this_type
   params.push "#{ir_type(param)} %p#{i}" for param, i in type.params
-  const generate_body = -> generate_function_body(g, literal, this_type, captures)
+  const generate_body = (result: Type) ->
+    generate_function_body g, literal, this_type, captures, result
   if literal.yields
-    generate_yielding_function g, symbol, params, iterable_item(type.result)!, generate_body
+    const item = iterable_item(type.result)!
+    generate_yielding_function g, symbol, params, item, -> generate_body(void_type)
+  else if literal.awaits
+    const value = (type.result as PromiseType!).value
+    generate_awaiting_function g, symbol, params, value, -> generate_body(value)
   else
     g.result_type = type.result
-    generate_body()
+    generate_body type.result
     finish g, "#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})"
   for given in required_params(literal)...literal.params.length
     const entry_generator = function_generator(g.code, g.extensions, g.facts)
     generate_default_entry entry_generator, symbol, literal, this_type, given
 
-# The body of a function that yields runs after its call returns, so it holds its parameters, its
-# object and its closure, which its scope releases; it waits for its first item to be asked for
-# before running its statements.
+# The body of a coroutine may run after its call returns, so it holds its parameters, its object
+# and its closure, which its scope releases; that of a function that yields waits for its first
+# item to be asked for before running its statements. `result` is what its last statement gives.
 const generate_function_body = (
   g: Generator, literal: FunctionLiteral, this_type: Type?, captures: Array<Capture>?
+  result: Type
 ) ->
   const type = function_type_of(type_of(g, literal))
   const ir = g.ir
@@ -153,9 +161,9 @@ const generate_function_body = (
         SlotLocal type, cell, pointer: emit_cell_pointer(ir, type, value)
       else
         ValueLocal(type, operand: value)
-  emit_suspend g if holds
+  emit_suspend g if literal.yields
   generate_statement g, statement for statement in all_but_last(literal.body)
-  generate_last_statement g, literal.body, holds then void_type else type.result
+  generate_last_statement g, literal.body, result
   g.locals.pop()
 
 # The entry that takes the first `given` arguments, borrowed, and the object of a method; computes
@@ -286,11 +294,12 @@ export const finish = (g: Generator, signature: String) -> g.ir.finish(signature
 
 # Releases every scope of the function before returning the owned value. The function's result
 # type decides the instruction: a returned value that never comes (`return throw ...`) is poison.
-# The body of a function that yields goes to its final suspension instead.
+# The body of a coroutine gives its value to `on_return`, if any, and goes to its end instead.
 const emit_return = (g: Generator, value: String) ->
+  on_return(value) if const on_return = g.on_return
   release_scope g, scope for scope in g.locals.inner_scopes(0)
   if const coroutine = g.coroutine
-    g.ir.emit "br label %#{coroutine.final_label}"
+    g.ir.emit "br label %#{coroutine.end_label}"
     return
   const result = g.result_type
   g.ir.emit returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}"

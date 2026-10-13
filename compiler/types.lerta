@@ -20,6 +20,7 @@ export enum TypeKind
   ARRAY
   MAP
   ITER
+  PROMISE
   RECORD
   TUPLE
   OBJECT
@@ -40,6 +41,10 @@ export struct MapType
 # A lazy sequence of items, which can be traversed only once.
 export struct IterType
   item: Type
+
+# The result of an async function, which gives its value, or its exception, once settled.
+export struct PromiseType
+  value: Type
 
 export struct RecordField
   name: String
@@ -111,8 +116,8 @@ export struct FunctionType
   result: Type
 
 export type Type =
-  SimpleType | ArrayType | MapType | IterType | RecordType | TupleType | ObjectType | InterfaceType
-  EnumType | UnionType | OptionalType | TypeParameterType | FunctionType
+  SimpleType | ArrayType | MapType | IterType | PromiseType | RecordType | TupleType | ObjectType
+  InterfaceType | EnumType | UnionType | OptionalType | TypeParameterType | FunctionType
 
 export const string_type = SimpleType(kind: 'String')
 export const int_type = SimpleType(kind: 'Int')
@@ -129,6 +134,7 @@ export const kind_of = (type: Type): TypeKind ->
     when ArrayType then ARRAY
     when MapType then MAP
     when IterType then ITER
+    when PromiseType then PROMISE
     when RecordType then RECORD
     when TupleType then TUPLE
     when ObjectType then OBJECT
@@ -165,6 +171,7 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when SimpleType then type.kind.to_string()
     when ArrayType then "Array<#{format(type.element)}>"
     when IterType then "Iter<#{format(type.item)}>"
+    when PromiseType then promise_text(type, format)
     when MapType then "Map<#{format(type.key)}, #{format(type.value)}>"
     when ObjectType then format_named(type.name, type.module, type.args, format, qualified)
     when InterfaceType then format_named(type.name, type.module, type.args, format, qualified)
@@ -182,6 +189,10 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when TypeParameterType then type.name
     when FunctionType
       "(#{[format(param) for param in type.params].join(', ')}) -> #{format(type.result)}"
+
+# A Promise of no value is written without a type argument.
+const promise_text = (type: PromiseType, write: (Type) -> String) ->
+  is_kind(type.value, 'void') then 'Promise' else "Promise<#{write(type.value)}>"
 
 # A class, struct or interface, with its type arguments, and its module where `qualified` says so.
 const format_named = (
@@ -223,6 +234,7 @@ export const type_key = (type: Type): String ->
     when TupleType then "(#{[type_key(item) for item in type.items].join(', ')})"
     when ArrayType then "Array<#{type_key(type.element)}>"
     when IterType then "Iter<#{type_key(type.item)}>"
+    when PromiseType then promise_text(type, type_key)
     when MapType then "Map<#{type_key(type.key)}, #{type_key(type.value)}>"
     when UnionType then [type_key(member) for member in type.members].join(' | ')
     when OptionalType then "(#{type_key(type.inner)})?"

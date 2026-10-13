@@ -24,7 +24,6 @@ What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is i
 - `return`, `break` and `continue` that leave a `try` that has a `finally`, which then runs on the way.
 - No `throws` annotation is needed (if written, it is type-checked). There is no `try` attached to calls (as in Swift).
 - Only throws can be caught; a [panic](../reference/errors.md#panics) cannot.
-- Exceptions inside async functions are carried as the failure value of the asynchronous result.
 - For servers, exceptions are caught at the task boundary of the event loop and only that task is discarded.
 
 ## Memory management
@@ -34,11 +33,12 @@ For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-
 - To break a cycle through a closure, put the value in a [`weak var`](objects.md#weak-references) local and capture that.
 - Cycles across libraries are left to the leak check of the debug runtime ([internals](../internals.md#leak-checking)).
 - A leak that the debug runtime reports becomes a warning, not a failure: the program exits with 0, rather than 1 as now ([compiler](../reference/compiler.md)), so that one cycle does not fail a program whose output is right. The run tests still catch it, as an unexpected line in stderr.
-- The typical cycle (a closure that captures `@`, held through a field of `@`) gets a compiler warning. It comes before async/await, which makes such closures common.
+- The typical cycle (a closure that captures `@`, held through a field of `@`) gets a compiler warning. It is needed now that async/await makes such closures common.
 
 ## Concurrency
 
-- **async/await and an event loop are core features** (Node-like). The event loop runs on libuv.
+- **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop moves to libuv, which input and output will need; until then it is the runtime's own, with sleeps only.
+- `await` in the top-level code, of every module; a top-level `await` still waiting when the event loop has nothing left to run is an error.
 - Parallel computation uses **workers that do not share a heap, with message passing** (Node's worker_threads / the Erlang approach).
 - Programs stay single-threaded, so data races do not exist: there is no thread API (to avoid the GIL path of Python and Ruby).
 
@@ -46,6 +46,5 @@ For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-
 
 - Whether stack overflow should be an exception that can be caught instead of a panic. That needs the check at function entry described in [internals](../internals.md#stack-overflow).
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
-- The type of asynchronous results (its name, and the type of async functions that return no value).
 - Whether the runtime should collect cycles (as Nim's ORC does by trial deletion), to be decided once async/await shows whether the means above keep closure cycles in check.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).

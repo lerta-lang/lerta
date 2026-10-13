@@ -1,0 +1,51 @@
+# An exception that leaves a function that awaits settles its Promise with it, and an await of the
+# Promise throws it again, each time; an exception that nothing awaits ends the program once its
+# Promise is dropped.
+import { sleep } from 'std:time'
+
+struct Failure
+  message: String
+
+const fail_after = (seconds: Int): Promise<Int> ->
+  await sleep(seconds)
+  throw Failure(message: "failed after #{seconds}")
+
+const fail_at_once = (fail: Bool): Promise<Int> ->
+  throw Failure(message: 'failed at once') if fail
+  await sleep(0)
+  1
+
+const main = ->
+  const later = fail_after(0)
+  for _ in 0...2
+    try
+      print await later
+    catch e: Failure
+      print "caught: #{e.message}"
+  try
+    print await fail_at_once(true)
+  catch e: Failure
+    print "caught: #{e.message}"
+  try
+    await sleep(-1)
+  catch e: ValueError
+    print "caught: #{e.message}"
+  # A body may wait in a catch and in a finally; an exception that the finally sets aside meanwhile
+  # goes on after it.
+  try
+    try
+      await fail_after(0)
+    catch e: Failure
+      await sleep(0)
+      print "caught after waiting: #{e.message}"
+      throw Failure(message: 'thrown again')
+    finally
+      await sleep(0)
+      print 'finally after waiting'
+  catch e: Failure
+    print "caught: #{e.message}"
+  const _ignored = fail_after(0)
+  await sleep(0)
+  print 'main done'
+
+const _done = main()

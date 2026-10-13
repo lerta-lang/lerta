@@ -42,11 +42,13 @@ const looks_like_function_literal = (tokens: TokenStream) ->
 export const parse_function_literal = (tokens: TokenStream) ->
   const token = tokens.peek()
   const type_params = parse_type_parameters(tokens)
-  const params: Array<Parameter> =
-    if tokens.accept('(')
-      tokens.parse_list(')', -> parse_parameter(tokens))
-    else
-      []
+  const parse_params = (): Array<Parameter> ->
+    return [] if not tokens.accept('(')
+    tokens.parse_list(')', -> parse_parameter(tokens))
+  # A default is computed before the body runs (see generate_default_entry), so it cannot wait.
+  const parsed_params = tokens.in_function(parse_params)
+  const params = parsed_params.body
+  tokens.fail at, "'await' cannot be in a default" if const at = parsed_params.marks.await_at
   const return_type = parse_result_annotation(tokens)
   tokens.expect '->', "'->'"
   const is_block = tokens.peek().kind == NEWLINE
@@ -61,8 +63,11 @@ export const parse_function_literal = (tokens: TokenStream) ->
       # `[(x) -> x for x in xs]`.
       when tokens.in_brackets() then [parse_simple_statement(tokens)]
       else [parse_line_statement(tokens)]
-  const { body, yields } = tokens.in_function(parse_body)
-  FunctionLiteral type_params, params, return_type, body, yields, position: token_position(token)
+  const { body, marks } = tokens.in_function(parse_body)
+  const yields = marks.yields
+  const awaits = marks.await_at != nil
+  const position = token_position(token)
+  FunctionLiteral type_params, params, return_type, body, yields, awaits, position
 
 # `name[: Type][ = default]`.
 const parse_parameter = (tokens: TokenStream) ->
@@ -246,7 +251,9 @@ const lazy_functions = (
   const function_of = (value: Expression) ->
     const params = [Parameter(name: copy_identifier(variable))]
     const body = [bindings()..., value]
-    FunctionLiteral params, body, type_params: [], position: value.position, yields: false
+    FunctionLiteral(
+      params, body, type_params: [], position: value.position, yields: false, awaits: false
+    )
   const guard_function = guard then function_of(as_test(guard))
   LazyFunctions guard: guard_function, element: function_of(element)
 

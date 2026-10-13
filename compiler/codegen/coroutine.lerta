@@ -7,13 +7,17 @@ import { IrBuilder } from './ir_builder'
 import { call_runtime, call_void_runtime } from './runtime_calls'
 
 # The function `symbol`, of the parameters, as in `i64 %p0`, whose body `generate_body` generates
-# as a coroutine, whose handle it finds in `g.coroutine`.
+# as a coroutine, whose handle it finds in `g.coroutine`. The body goes on to `end` once it has
+# released what it holds, which goes to the free label or suspends for the last time.
 export const generate_coroutine = (
   g: Generator, symbol: String, params: Array<String>, generate_body: () -> void
+  end: () -> void
 ) ->
   const coroutine = start_coroutine(g.ir)
   g.coroutine = coroutine
   generate_body()
+  g.ir.start_block coroutine.end_label
+  end()
   finish_coroutine g.ir, coroutine
   g.ir.finish "void #{symbol}(#{params.join(', ')}) presplitcoroutine"
 
@@ -25,22 +29,26 @@ const start_coroutine = (ir: IrBuilder) ->
   const frame = call_runtime(ir, 'ptr @lerta_frame_alloc(i64)', "i64 #{size}")
   const handle = call_runtime(ir, 'ptr @llvm.coro.begin(token, ptr)', "token #{id}, ptr #{frame}")
   Coroutine(
-    id, handle, final_label: ir.fresh_label('coroutine.final')
+    id, handle, end_label: ir.fresh_label('coroutine.end')
     free_label: ir.fresh_label('coroutine.free')
     suspended_label: ir.fresh_label('coroutine.suspended')
   )
 
-# The body ends at its final suspension, having released what it held; it is never resumed from
-# there, only destroyed, which frees the frame.
-const finish_coroutine = (ir: IrBuilder, coroutine: Coroutine) ->
-  const { id, handle, final_label, free_label, suspended_label } = coroutine
-  ir.start_block final_label
+# Suspends the body for the last time; it is never resumed from there, only destroyed, which frees
+# the frame.
+export const emit_final_suspension = (g: Generator) ->
+  const ir = g.ir
+  const coroutine = g.coroutine!
   const state = emit_suspend_call(ir, true)
   const resumed_label = ir.fresh_label('coroutine.resumed')
-  const cases = "i8 0, label %#{resumed_label} i8 1, label %#{free_label}"
-  ir.emit "switch i8 #{state}, label %#{suspended_label} [ #{cases} ]"
+  const cases = "i8 0, label %#{resumed_label} i8 1, label %#{coroutine.free_label}"
+  ir.emit "switch i8 #{state}, label %#{coroutine.suspended_label} [ #{cases} ]"
   ir.start_block resumed_label
   ir.emit 'unreachable'
+
+# Frees the frame, and gives control back to the caller, or to whatever resumed the body.
+const finish_coroutine = (ir: IrBuilder, coroutine: Coroutine) ->
+  const { id, handle, free_label, suspended_label } = coroutine
   ir.start_block free_label
   const memory = call_runtime(ir, 'ptr @llvm.coro.free(token, ptr)', "token #{id}, ptr #{handle}")
   call_void_runtime ir, 'void @lerta_frame_free(ptr)', "ptr #{memory}"
@@ -55,6 +63,16 @@ const emit_suspend_call = (ir: IrBuilder, is_final: Bool) ->
 # Suspends the body until it is resumed. If it is destroyed instead, it releases what it holds and
 # frees its frame.
 export const emit_suspend = (g: Generator) ->
+  const destroy = ->
+    release_held g, 0, 0
+    g.ir.emit "br label %#{g.coroutine!.free_label}"
+  emit_suspension g, destroy
+
+# Suspends the body until it is resumed, which is all that can happen to it: nothing destroys a
+# body that waits.
+export const emit_wait = (g: Generator) -> emit_suspension(g, -> g.ir.emit('unreachable'))
+
+const emit_suspension = (g: Generator, destroy: () -> void) ->
   const ir = g.ir
   const coroutine = g.coroutine!
   const state = emit_suspend_call(ir, false)
@@ -63,6 +81,5 @@ export const emit_suspend = (g: Generator) ->
   const cases = "i8 0, label %#{resume_label} i8 1, label %#{destroy_label}"
   ir.emit "switch i8 #{state}, label %#{coroutine.suspended_label} [ #{cases} ]"
   ir.start_block destroy_label
-  release_held g, 0, 0
-  ir.emit "br label %#{coroutine.free_label}"
+  destroy()
   ir.start_block resume_label
