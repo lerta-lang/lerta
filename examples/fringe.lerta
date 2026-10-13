@@ -1,0 +1,46 @@
+# The same-fringe problem: whether two trees of different shapes have the same leaves from left to
+# right. Each tree's leaves come from a recursive walk that yields them, so the two walks advance
+# together and stop at the first difference; without yield, each walk would keep its own stack of
+# the nodes still to visit.
+class Leaf
+  name: String
+
+class Node
+  left: Tree
+  right: Tree
+
+type Tree = Leaf | Node
+
+const leaves = (tree: Tree): Iter<String> ->
+  case tree
+    when Leaf
+      print "  visit #{tree.name}"
+      yield tree.name
+    when Node
+      yield leaf for leaf in leaves(tree.left)
+      yield leaf for leaf in leaves(tree.right)
+
+const same_fringe = (a: Tree, b: Tree) ->
+  const left = leaves(a)
+  const right = leaves(b)
+  while left.has_next() and right.has_next()
+    return false if left.next() != right.next()
+  left.has_next() == right.has_next()
+
+const leaf = (name: String): Tree -> Leaf(name)
+const node = (left: Tree, right: Tree): Tree -> Node(left, right)
+
+# a b c d, as ((a b) (c d)) and as (a (b (c d))).
+const balanced = node(node(leaf('a'), leaf('b')), node(leaf('c'), leaf('d')))
+const leaning = node(leaf('a'), node(leaf('b'), node(leaf('c'), leaf('d'))))
+# a x c d: the walks stop at x, before c and d.
+const different = node(node(leaf('a'), leaf('x')), node(leaf('c'), leaf('d')))
+# a b: the shorter walk ends first.
+const short = node(leaf('a'), leaf('b'))
+
+print 'balanced and leaning:'
+print same_fringe(balanced, leaning)
+print 'balanced and different:'
+print same_fringe(balanced, different)
+print 'balanced and short:'
+print same_fringe(balanced, short)
