@@ -1,14 +1,15 @@
 # Where `break`, `continue` and `return` may be written as expressions: where nothing evaluated
 # before them is still held, so that jumping away leaves nothing to release. That is a statement,
 # the value of a declaration or of an assignment to a variable, and, within those, the fallback of
-# `?` and the values of `then`/`else` and of case arms.
+# `?` and the values of `then`/`else` and of case arms. `yield`, which jumps away for good if its
+# Iter is dropped there, gives no value, so it may only be a statement where `return` may be.
 import {
   ArrayLiteral, Assignment, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast, Coalesce
   Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern
   For, FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral, InterfaceDeclaration
   Interpolation, IsTest, Jump, MapLiteral, Member, MemberDeclaration, NilLiteral, Pass, Position
   Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw, Try, TupleItem
-  TupleLiteral, TypeAlias, TypeDeclaration, UnaryOperation, Unwrap, While
+  TupleLiteral, TypeAlias, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
 } from '../ast'
 import { fail } from './diagnostics'
 import { ProgramWide } from './shared'
@@ -21,13 +22,18 @@ struct Jumps
   reason: String?
   may_return = default false
   may_leave_loop = default false
+  # Why a `yield` is not allowed, where it is not for its own reason.
+  yield_reason: String? = default nil
 
 const all_jumps = Jumps(may_return: true, may_leave_loop: true)
 const no_jumps = Jumps()
 
 # Leaving a try that has a finally would have to run the finally on the way, which is not
 # supported yet.
-const within_finally = Jumps(reason: 'cannot leave a try that has a finally yet')
+const within_finally = Jumps(
+  reason: 'cannot leave a try that has a finally yet'
+  yield_reason: 'cannot be in a try that has a finally yet'
+)
 
 # A default is computed by an entry of its own (see generate_default_entry), before the body.
 const in_default = Jumps(reason: 'cannot be in a default')
@@ -39,7 +45,8 @@ const visit_statements = (program: ProgramWide, statements: Array<Statement>, ju
   visit_statement program, statement, jumps for statement in statements
 
 const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
-  const in_loop = Jumps(may_return: jumps.may_return, may_leave_loop: true, reason: jumps.reason)
+  const { may_return, reason, yield_reason } = jumps
+  const in_loop = Jumps(may_return, reason, yield_reason, may_leave_loop: true)
   case statement
     when Declaration then visit program, statement.value, jumps
     when Assignment
@@ -52,6 +59,12 @@ const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jump
     when For
       visit program, statement.iterable, no_jumps
       visit_statements program, statement.body, in_loop
+    when Yield
+      const own_reason = jumps.yield_reason
+      const held = 'cannot be here: only where nothing evaluated before it is still held'
+      const message = "'yield' #{own_reason ? jumps.reason ? held}"
+      fail program, statement.position, message if not jumps.may_return
+      visit program, statement.value, no_jumps
     when TypeDeclaration then visit_members program, statement.members
     when Extend then visit_members program, statement.members
     when Import, Pass, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern then pass
@@ -78,6 +91,7 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
     when Return
       check_jump program, 'return', jumps.may_return, jumps.reason, expression.position
       visit program, value, jumps if const value = expression.value
+    when Yield then fail(program, expression.position, "'yield' can only be a statement")
     when Coalesce
       operand expression.value
       visit program, expression.fallback, jumps

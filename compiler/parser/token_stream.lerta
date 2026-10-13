@@ -22,6 +22,8 @@ export class TokenStream
   # How line breaks are read inside each of the brackets being parsed; outside brackets there are
   # none.
   line_breaks: Array<LineBreaks> = []
+  # Whether each function literal being parsed, innermost last, has a `yield` of its own.
+  yields: Array<Bool> = []
 
   # The kind of the next token if it continues the current expression. After an indented block
   # (such as a `case`) the line has ended, so `-1` on the next line is not a subtraction.
@@ -152,6 +154,17 @@ export class TokenStream
     return true if @accept(LINE_BREAK)
     @expect close, "'#{close}'"
     false
+
+  # The body that `parse` reads is a function literal's: the result, and whether it yields.
+  in_function = <T>(parse: () -> T) ->
+    @yields.push false
+    const body = parse()
+    { body, yields: @yields.pop() }
+
+  # A `yield` outside every function literal makes none yield; the checker rejects it.
+  note_yield = ->
+    const innermost = @yields.length - 1
+    @yields[innermost] = true if innermost >= 0
 
   fail = (position: Position, message: String) ->
     compile_error @path, position.line, position.column, message

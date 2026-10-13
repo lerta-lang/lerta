@@ -110,7 +110,7 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 ```
 
 - `Iter<T>` is a lazy sequence of items of type `T`, which can be any type with values, an optional one too. It computes an item only when asked for it, so nothing happens until it is consumed; a statement that only makes an `Iter` is an error (see [discarded values](errors.md#discarded-values)).
-- [Lazy comprehensions](control-flow.md#for-and-ranges) make one, and so do these methods of an array, a `Binary`, an `Iter` or any [Iterable](builtins.md#iterable):
+- [Lazy comprehensions](control-flow.md#for-and-ranges) and [functions that yield](functions.md#functions-that-yield) make one, and so do these methods of an array, a `Binary`, an `Iter` or any [Iterable](builtins.md#iterable):
   - `xs.map(f)` gives `f(x)` for each item `x`; its items have the type of `f`'s result.
   - `xs.filter(f)` gives the items for which `f`, which gives a `Bool`, is true.
   - `xs.take(n)` gives the first `n` items, or all of them if there are fewer (none if `n` is not positive).

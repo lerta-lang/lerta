@@ -54,14 +54,15 @@ export const parse_function_literal = (tokens: TokenStream) ->
   # cannot be written there.
   if const start = tokens.interpolation
     tokens.fail start, 'a function cannot be written in an interpolation'
-  const body =
+  const parse_body = ->
     case
       when is_block then parse_block(tokens)
       # Inside brackets, a postfix `for` or `if` after the body belongs to them, as in
       # `[(x) -> x for x in xs]`.
       when tokens.in_brackets() then [parse_simple_statement(tokens)]
       else [parse_line_statement(tokens)]
-  FunctionLiteral type_params, params, return_type, body, position: token_position(token)
+  const { body, yields } = tokens.in_function(parse_body)
+  FunctionLiteral type_params, params, return_type, body, yields, position: token_position(token)
 
 # `name[: Type][ = default]`.
 const parse_parameter = (tokens: TokenStream) ->
@@ -245,7 +246,7 @@ const lazy_functions = (
   const function_of = (value: Expression) ->
     const params = [Parameter(name: copy_identifier(variable))]
     const body = [bindings()..., value]
-    FunctionLiteral params, body, type_params: [], position: value.position
+    FunctionLiteral params, body, type_params: [], position: value.position, yields: false
   const guard_function = guard then function_of(as_test(guard))
   LazyFunctions guard: guard_function, element: function_of(element)
 

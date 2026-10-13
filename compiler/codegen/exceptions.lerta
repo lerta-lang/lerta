@@ -81,19 +81,25 @@ export const emit_check_with = (ir: IrBuilder, unwind: () -> void) ->
 export const emit_unwind = (g: Generator) ->
   const ir = g.ir
   const handler = g.handlers.last()
-  const temporary_depth = handler?.temporary_depth ? 0
-  var i = g.temporaries.length - 1
-  while i >= temporary_depth
-    const temporary = g.temporaries[i]
-    emit_release_as ir, temporary.operand, temporary.owned
-    i -= 1
-  release_scope g, scope for scope in g.locals.inner_scopes(handler?.scope_depth ? 0)
+  release_held g, handler?.scope_depth ? 0, handler?.temporary_depth ? 0
   if handler == nil
     cleanup() if const cleanup = g.unwind_cleanup
   if handler
     ir.emit "br label %#{handler.label}"
     return
+  if const coroutine = g.coroutine
+    ir.emit "br label %#{coroutine.final_label}"
+    return
   emit_return_thrown ir, g.result_type
+
+# Releases the temporaries and the scopes held from the depths inward, innermost first.
+export const release_held = (g: Generator, scope_depth: Int, temporary_depth: Int) ->
+  var i = g.temporaries.length - 1
+  while i >= temporary_depth
+    const temporary = g.temporaries[i]
+    emit_release_as g.ir, temporary.operand, temporary.owned
+    i -= 1
+  release_scope g, scope for scope in g.locals.inner_scopes(scope_depth)
 
 # The value, an Error, becomes the exception, owned.
 export const emit_throw_error = (g: Generator, value: String) ->

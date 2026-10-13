@@ -1,0 +1,37 @@
+# An Iter dropped before its end releases what its body holds where it waits: its locals, its
+# parameters, its closure and the item it has yielded but not given yet.
+class Noisy
+  name: String
+  deinit = -> print "drop #{@name}"
+
+const make = (outer: Noisy) ->
+  const inner = Noisy(name: 'inner')
+  for name in ['a', 'b', 'c']
+    const each = Noisy(name)
+    yield each
+  print inner.name
+
+const take_one = ->
+  const items = make(Noisy(name: 'outer'))
+  print items.next().name
+  print items.has_next()
+take_one()
+print 'taken'
+
+const from_closure = ->
+  const shared = Noisy(name: 'captured')
+  const words = -> yield shared.name
+  words()
+print from_closure().next()
+
+const _never_started = make(Noisy(name: 'unused'))
+print 'end'
+
+# Dropped while it waits inside a for over another such Iter, it releases that Iter, which
+# releases what its own body holds.
+const outer_items = ->
+  for item in make(Noisy(name: 'nested'))
+    yield item.name
+const nested = ->
+  print outer_items().next()
+nested()

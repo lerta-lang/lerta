@@ -203,6 +203,8 @@ void lerta_map_cursor_next(LertaMapCursor *cursor, int64_t *key, void *value);
 // past the end.
 void lerta_iter_start(LertaIter *iter);
 void lerta_raise_iter_ended(void);
+// Asking an Iter for an item while its function, which yields, runs.
+void lerta_raise_iter_running(void);
 
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.
@@ -233,6 +235,11 @@ typedef struct {
   void *const *itab;
 } LertaException;
 extern LertaException lerta_exception;
+
+// The frame of a function that yields, an LLVM coroutine's, which has no header: it is counted as
+// a live object, but not reference counted, since the Iter that runs it owns it alone.
+void *lerta_frame_alloc(int64_t size);
+void lerta_frame_free(void *frame);
 
 // Frees an object whose construction threw, once the caller has released its fields; its deinit
 // does not run.

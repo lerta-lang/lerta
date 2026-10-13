@@ -46,6 +46,27 @@ print map([1, 2, 3], (x) -> x * x)
 - The language does not prevent cycles through closures (`@button.listen -> @count += 1`), and there are no capture lists.
 - `return` in a function literal returns from the literal; `break` and `continue` cannot leave a loop around it.
 
+## Functions that yield
+
+```
+const countdown = (n: Int) ->
+  var i = n
+  while i > 0
+    yield i
+    i -= 1
+
+for x in countdown(3)
+  print x
+```
+
+- A function whose body has a `yield <value>` of its own, outside the function literals in it, returns an [`Iter`](types.md#iter) of the values it yields. Calling it runs none of the body; asking the `Iter` for an item runs the body from where it stopped to its next `yield`, which gives the item, or to its end, which ends the `Iter`.
+- Its return type is an `Iter`, as in `(): Iter<Int> ->`, whose item type the yielded values must fit. Left out, it is an `Iter` of the yielded values' type, worked out as a return type is from returned values; `nil` alone does not give one.
+- `return` alone ends the `Iter`; a `return` with a value is an error, and the last statement gives no value.
+- `yield` is a statement, written only where `return` may be (see [control flow](control-flow.md#if-and-while)), and not in a `try` that has a `finally` so far. `init` and `deinit` cannot yield.
+- The body holds its parameters, `@` and what it captures until the `Iter` ends or is dropped. An `Iter` dropped before its end releases what the body holds where it stopped, without running the rest of the body.
+- An exception thrown in the body goes to the code that asked for the item, and ends the `Iter`. Asking the `Iter` for an item from within its own body throws `an Iter cannot be read while its function runs`.
+- Why no keyword marks such a function, as `function*` does in JS: the `yield` and the return type already tell (the CoffeeScript approach).
+
 ## Generic functions
 
 ```

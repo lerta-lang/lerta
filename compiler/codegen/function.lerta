@@ -15,6 +15,7 @@ import {
   CELL_SLOT, emit_capture_pointer, emit_closure, emit_static_closure, function_type_of
 } from './closure'
 import { generate_control_jump, generate_for, generate_if, generate_while } from './control_flow'
+import { emit_suspend, generate_coroutine } from './coroutine'
 import { emit_exception_check } from './exceptions'
 import { generate, read_local, release_if_reference, type_of } from './expression'
 import {
@@ -31,7 +32,7 @@ import {
 } from './lerta_ir'
 import { call_void_runtime } from './runtime_calls'
 import { emit_mark_initialized, emit_release_globals } from './top_level'
-import { is_kind, ObjectType, Type } from '../types'
+import { is_kind, iterable_item, ObjectType, Type, void_type } from '../types'
 
 # The local of the name: in the scopes or, outside them, a top-level value of the module, which a
 # function checks to be initialized, or an imported value. Those of the modules of its import
@@ -95,18 +96,48 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
 
 # Parameters are borrowed SSA values; a method gets its object first, as `@`, and a function
 # literal its closure, from which it reads the values it captures. The last statement, if an
-# expression, gives the result.
+# expression, gives the result. A function that yields returns an Iter that runs its body (see
+# coroutine).
 export const generate_function = (
   g: Generator, symbol: String, literal: FunctionLiteral, this_type: Type?
   captures: Array<Capture>?
 ) ->
   const type = function_type_of(type_of(g, literal))
+  const params: Array<String> = []
+  params.push 'ptr %closure' if captures != nil
+  params.push "#{ir_type(this_type)} %this" if this_type
+  params.push "#{ir_type(param)} %p#{i}" for param, i in type.params
+  const generate_body = -> generate_function_body(g, literal, this_type, captures)
+  if literal.yields
+    generate_coroutine g, symbol, params, iterable_item(type.result)!, generate_body
+  else
+    g.result_type = type.result
+    generate_body()
+    finish g, "#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})"
+  for given in required_params(literal)...literal.params.length
+    const entry_generator = function_generator(g.code, g.extensions, g.facts)
+    generate_default_entry entry_generator, symbol, literal, this_type, given
+
+# The body of a function that yields runs after its call returns, so it holds its parameters, its
+# object and its closure, which its scope releases; it waits for its first item to be asked for
+# before running its statements.
+const generate_function_body = (
+  g: Generator, literal: FunctionLiteral, this_type: Type?, captures: Array<Capture>?
+) ->
+  const type = function_type_of(type_of(g, literal))
   const ir = g.ir
-  g.result_type = type.result
+  const holds = g.coroutine != nil
   const scope = g.locals.push()
-  scope['@'] = ValueLocal(operand: '%this', type: this_type) if this_type
-  for param, i in literal.params
-    scope[param.name.name] = ValueLocal(operand: "%p#{i}", type: type.params[i])
+  const bind = (name: String, operand: String, local_type: Type) ->
+    if not holds
+      scope[name] = ValueLocal(operand, type: local_type)
+      return
+    emit_retain_value ir, operand, local_type
+    scope[name] = store_in_slot(g, operand, local_type)
+  bind '@', '%this', this_type if this_type
+  bind param.name.name, "%p#{i}", type.params[i] for param, i in literal.params
+  # The name cannot be written in the source, so no code can read it.
+  bind '(closure)', '%closure', type if holds and captures != nil
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
   const captured = captures ? []
   const slot_of = (capture: Capture) -> capture.is_var then CELL_SLOT else value_field(capture.type)
@@ -121,17 +152,10 @@ export const generate_function = (
         SlotLocal type, cell, pointer: emit_cell_pointer(ir, type, value)
       else
         ValueLocal(type, operand: value)
+  emit_suspend g if holds
   generate_statement g, statement for statement in all_but_last(literal.body)
-  generate_last_statement g, literal.body, type.result
+  generate_last_statement g, literal.body, holds then void_type else type.result
   g.locals.pop()
-  const param_list: Array<String> = []
-  param_list.push 'ptr %closure' if captures != nil
-  param_list.push "#{ir_type(this_type)} %this" if this_type
-  param_list.push "#{ir_type(param)} %p#{i}" for param, i in type.params
-  finish g, "#{ir_return_type(type.result)} #{symbol}(#{param_list.join(', ')})"
-  for given in required_params(literal)...literal.params.length
-    const entry_generator = function_generator(g.code, g.extensions, g.facts)
-    generate_default_entry entry_generator, symbol, literal, this_type, given
 
 # The entry that takes the first `given` arguments, borrowed, and the object of a method; computes
 # the defaults of the others in order, each seeing `@` and the parameters before it; and calls the
@@ -261,8 +285,12 @@ export const finish = (g: Generator, signature: String) -> g.ir.finish(signature
 
 # Releases every scope of the function before returning the owned value. The function's result
 # type decides the instruction: a returned value that never comes (`return throw ...`) is poison.
+# The body of a function that yields goes to its final suspension instead.
 const emit_return = (g: Generator, value: String) ->
   release_scope g, scope for scope in g.locals.inner_scopes(0)
+  if const coroutine = g.coroutine
+    g.ir.emit "br label %#{coroutine.final_label}"
+    return
   const result = g.result_type
   g.ir.emit returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}"
 

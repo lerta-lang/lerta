@@ -76,10 +76,14 @@ export const instance_symbol = (program: ProgramWide, instance: Instance) ->
 # The entry of the function of the symbol that a call giving only its first `given` arguments
 # calls (see generate_default_entry).
 export const default_entry_symbol = (symbol: String, given: Int) ->
+  suffixed_symbol symbol, "given#{given}"
+
+# The symbol of something that belongs to that of a function, as its name and `.suffix`.
+export const suffixed_symbol = (symbol: String, suffix: String) ->
   const name = without_sigil(symbol)
   const quoted_name = name.without_prefix('"')
   const unquoted = quoted_name then quoted_name.without_suffix('"')! else name
-  quoted "#{unquoted}.given#{given}"
+  quoted "#{unquoted}.#{suffix}"
 
 # Names with characters such as `<` are quoted.
 const quoted = (name: String) -> "@\"#{name}\""
@@ -141,12 +145,14 @@ export const string_constant = (ir: IrBuilder, value: String) ->
   const init = "{ i64 #{LERTA_IMMORTAL}, ptr null, i64 #{bytes.length}, #{bytes_init} }"
   ir.module.global 'lerta.string', "private unnamed_addr constant #{type} #{init}"
 
-# How a value holds references, which retaining and releasing it count: not at all, as one, or as
-# the data of an interface value.
+# How a value holds what it owns: nothing, a reference, the data of an interface value, or, in a
+# generator's Iter alone (see coroutine), the coroutine of the function that yields, which is
+# destroyed rather than released.
 export enum Ownership
   NONE
   REFERENCE
   INTERFACE
+  COROUTINE
 
 export const ownership = (type: Type) ->
   case
@@ -165,6 +171,10 @@ const emit_retain_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
   emit_retain ir, reference if const reference = reference_of(ir, operand, owned)
 
 export const emit_release_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
+  if owned == COROUTINE
+    ir.module.declare 'llvm.coro.destroy', 'declare void @llvm.coro.destroy(ptr)'
+    ir.emit "call void @llvm.coro.destroy(ptr #{operand})"
+    return
   emit_release ir, reference if const reference = reference_of(ir, operand, owned)
 
 const reference_of = (ir: IrBuilder, operand: String, owned: Ownership) ->
@@ -172,6 +182,7 @@ const reference_of = (ir: IrBuilder, operand: String, owned: Ownership) ->
     when NONE then nil
     when REFERENCE then operand
     when INTERFACE then emit_interface_data(ir, operand)
+    when COROUTINE then panic('a coroutine is not reference counted')
 
 # The data of an interface value, null for nil.
 export const emit_interface_data = (ir: IrBuilder, value: String) ->

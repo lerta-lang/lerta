@@ -4,6 +4,7 @@
 import { Extensions } from '../checker/extensions'
 import { NodeFacts, ProgramWide, Shared } from '../checker/shared'
 import { IrBuilder, IrModule } from './ir_builder'
+import { IterKind } from './iter_protocol'
 import { Module } from '../loader'
 import { Ownership } from './lerta_ir'
 import { Type, void_type } from '../types'
@@ -103,6 +104,18 @@ export struct Loop
   continue_label: String
   scope_depth: Int
 
+# The body of a function that yields, an LLVM coroutine (see coroutine): its `id` token and its
+# `handle`; the items it yields go to its Iter, `%iter`, of the kind. It leaves through its final
+# suspension, at `final_label`, rather than by returning; `free_label` frees the frame once the
+# body has released what it holds, and `suspended_label` gives control back to the caller.
+export struct Coroutine
+  id: String
+  handle: String
+  kind: IterKind
+  final_label: String
+  free_label: String
+  suspended_label: String
+
 # The generation of one function. `top_level_code` tells whether it is the module's top-level code,
 # which declares the top-level values, rather than a function, which uses them once they are
 # initialized; `extensions` are those its body sees (see Instance).
@@ -124,6 +137,8 @@ export class Generator
   # What an exception that leaves the function releases besides its scopes, as a constructor
   # releases the object it was making.
   unwind_cleanup: (() -> void)? = nil
+  # Set while the body of a function that yields is generated.
+  coroutine: Coroutine? = nil
 
 # The generator of a function's body, which is not top-level code.
 export const function_generator = (code: ModuleCode, extensions: Extensions, facts: NodeFacts) ->

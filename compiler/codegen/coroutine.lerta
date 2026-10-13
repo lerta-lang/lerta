@@ -1,0 +1,142 @@
+# Functions that yield. Such a function returns a new Iter of the generator kind, which runs its
+# body as an LLVM coroutine (see docs/internals.md#functions-that-yield): has_next resumes the body,
+# which stores its next item in the Iter at a `yield` and suspends there, or ends. Dropping the Iter
+# destroys the coroutine, which releases what the body holds where it is suspended.
+import { Yield } from '../ast'
+import { emit_check_or_return_thrown, emit_return_thrown, release_held } from './exceptions'
+import { generate } from './expression'
+import { Coroutine, Generator } from './generator'
+import { HeapField, plain_field, value_field } from './heap_object'
+import { IrBuilder } from './ir_builder'
+import { define_kind, emit_iter, IterKind, load_state, store_state } from './iter_protocol'
+import { ir_type, Ownership, ownership, suffixed_symbol } from './lerta_ir'
+import { call_runtime, call_void_runtime } from './runtime_calls'
+import { bool_type, Type, type_key } from '../types'
+
+# The state of a generator's Iter: the coroutine, whether it is running, which has_next checks so
+# as not to resume it from within, and the item it has yielded, if one is held.
+const HANDLE = 0
+const RUNNING = 1
+const HELD = 2
+const ITEM = 3
+
+const generator_state = (item: Type) -> [
+  HeapField(ir_type: 'ptr', owned: Ownership.COROUTINE), plain_field('i1'), plain_field('i1')
+  value_field(item)
+]
+
+# The function `symbol`, of the parameters, as in `i64 %p0`: it makes the Iter and runs the
+# coroutine, which `generate_body` generates, up to its first suspension.
+export const generate_coroutine = (
+  g: Generator, symbol: String, params: Array<String>, item: Type, generate_body: () -> void
+) ->
+  const kind = generator_kind(g.ir, item)
+  const body_symbol = suffixed_symbol(symbol, 'coroutine')
+  g.coroutine = start_coroutine(g.ir, kind)
+  generate_body()
+  finish_coroutine g.ir, g.coroutine!
+  g.ir.finish "void #{body_symbol}(#{['ptr %iter', params...].join(', ')}) presplitcoroutine"
+  const ir = IrBuilder(module: g.ir.module)
+  const iter = emit_iter(ir, kind, ['null', 'false', 'false', 'zeroinitializer'])
+  ir.emit "call void #{body_symbol}(#{["ptr #{iter}", params...].join(', ')})"
+  ir.emit "ret ptr #{iter}"
+  ir.finish "ptr #{symbol}(#{params.join(', ')})"
+
+# Makes the coroutine's frame, whose handle the Iter keeps.
+const start_coroutine = (ir: IrBuilder, kind: IterKind) ->
+  const no_promise = 'i32 0, ptr null, ptr null, ptr null'
+  const id = call_runtime(ir, 'token @llvm.coro.id(i32, ptr, ptr, ptr)', no_promise)
+  const size = call_runtime(ir, 'i64 @llvm.coro.size.i64()', '')
+  const frame = call_runtime(ir, 'ptr @lerta_frame_alloc(i64)', "i64 #{size}")
+  const handle = call_runtime(ir, 'ptr @llvm.coro.begin(token, ptr)', "token #{id}, ptr #{frame}")
+  store_state ir, kind, HANDLE, handle
+  Coroutine(
+    id, handle, kind, final_label: ir.fresh_label('coroutine.final')
+    free_label: ir.fresh_label('coroutine.free')
+    suspended_label: ir.fresh_label('coroutine.suspended')
+  )
+
+# The body ends at its final suspension, having released what it held; it is never resumed from
+# there, only destroyed, which frees the frame.
+const finish_coroutine = (ir: IrBuilder, coroutine: Coroutine) ->
+  const { id, handle, final_label, free_label, suspended_label } = coroutine
+  ir.start_block final_label
+  const state = emit_suspend_call(ir, true)
+  const resumed_label = ir.fresh_label('coroutine.resumed')
+  const cases = "i8 0, label %#{resumed_label} i8 1, label %#{free_label}"
+  ir.emit "switch i8 #{state}, label %#{suspended_label} [ #{cases} ]"
+  ir.start_block resumed_label
+  ir.emit 'unreachable'
+  ir.start_block free_label
+  const memory = call_runtime(ir, 'ptr @llvm.coro.free(token, ptr)', "token #{id}, ptr #{handle}")
+  call_void_runtime ir, 'void @lerta_frame_free(ptr)', "ptr #{memory}"
+  ir.emit "br label %#{suspended_label}"
+  ir.start_block suspended_label
+  call_runtime ir, 'i1 @llvm.coro.end(ptr, i1, token)', "ptr #{handle}, i1 false, token none"
+  ir.emit 'ret void'
+
+const emit_suspend_call = (ir: IrBuilder, is_final: Bool) ->
+  call_runtime ir, 'i8 @llvm.coro.suspend(token, i1)', "token none, i1 #{is_final}"
+
+# Suspends the body until has_next resumes it. If the Iter is dropped instead, the body releases
+# what it holds and frees its frame.
+export const emit_suspend = (g: Generator) ->
+  const ir = g.ir
+  const coroutine = g.coroutine!
+  const state = emit_suspend_call(ir, false)
+  const resume_label = ir.fresh_label('coroutine.resume')
+  const destroy_label = ir.fresh_label('coroutine.destroy')
+  const cases = "i8 0, label %#{resume_label} i8 1, label %#{destroy_label}"
+  ir.emit "switch i8 #{state}, label %#{coroutine.suspended_label} [ #{cases} ]"
+  ir.start_block destroy_label
+  release_held g, 0, 0
+  ir.emit "br label %#{coroutine.free_label}"
+  ir.start_block resume_label
+
+# The value becomes the Iter's next item, which has_next finds held once the body suspends.
+export const generate_yield = (g: Generator, yield_expression: Yield) ->
+  const kind = g.coroutine!.kind
+  store_state g.ir, kind, ITEM, generate(g, yield_expression.value)
+  store_state g.ir, kind, HELD, 'true'
+  emit_suspend g
+  ''
+
+# The generator kind of Iter of the item type. has_next resumes the body unless an item is held or
+# the body has ended; next takes the held item.
+const generator_kind = (ir: IrBuilder, item: Type) ->
+  const has_next = (body: IrBuilder, kind: IterKind) ->
+    const look_label = body.fresh_label('generator.look')
+    const check_label = body.fresh_label('generator.check')
+    const reject_label = body.fresh_label('generator.reject')
+    const resume_label = body.fresh_label('generator.resume')
+    const held_label = body.fresh_label('generator.held')
+    const ended_label = body.fresh_label('generator.ended')
+    body.emit "br i1 #{load_state(body, kind, HELD)}, label %#{held_label}, label %#{look_label}"
+    body.start_block look_label
+    const handle = load_state(body, kind, HANDLE)
+    const is_done = call_runtime(body, 'i1 @llvm.coro.done(ptr)', "ptr #{handle}")
+    body.emit "br i1 #{is_done}, label %#{ended_label}, label %#{check_label}"
+    body.start_block check_label
+    const is_running = load_state(body, kind, RUNNING)
+    body.emit "br i1 #{is_running}, label %#{reject_label}, label %#{resume_label}"
+    body.start_block reject_label
+    call_void_runtime body, 'void @lerta_raise_iter_running()', ''
+    emit_return_thrown body, bool_type
+    body.start_block resume_label
+    store_state body, kind, RUNNING, 'true'
+    call_void_runtime body, 'void @llvm.coro.resume(ptr)', "ptr #{handle}"
+    store_state body, kind, RUNNING, 'false'
+    emit_check_or_return_thrown body, bool_type
+    body.emit "ret i1 #{load_state(body, kind, HELD)}"
+    body.start_block held_label
+    body.emit 'ret i1 true'
+    body.start_block ended_label
+    body.emit 'ret i1 false'
+  # The held item passes to the caller; a reference is cleared, so that the drop does not release
+  # it.
+  const next = (body: IrBuilder, kind: IterKind) ->
+    store_state body, kind, HELD, 'false'
+    const value = load_state(body, kind, ITEM)
+    store_state body, kind, ITEM, 'zeroinitializer' if ownership(item) != NONE
+    body.emit "ret #{ir_type(item)} #{value}"
+  define_kind ir, "generator #{type_key(item)}", generator_state(item), item, has_next, next

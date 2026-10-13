@@ -1,18 +1,33 @@
 # Checks how a function gives its result: its last statement and its `return`s.
-import { Expression, FunctionLiteral, If, Node, Position, Return, Statement } from '../ast'
+import { Expression, FunctionLiteral, If, Node, Position, Return, Statement, Yield } from '../ast'
 import { fail } from './diagnostics'
 import { type_of } from './expression'
 import { converts_through_itab } from './interface_values'
 import { Body, FunctionContext, ProgramWide, Result } from './shared'
 import { check_discarded, check_statement } from './statement'
 import {
-  format_type, FunctionType, is_assignable, is_kind, same_type, Type, unify, void_type
+  format_type, FunctionType, is_assignable, is_kind, IterType, nil_type, same_type, Type, unify
+  void_type
 } from '../types'
+
+# The context of a function's body, whose written return type, if any, is `annotated`. That of a
+# function that yields must be an Iter, whose items the yielded values must fit.
+export const function_context = (
+  program: ProgramWide, literal: FunctionLiteral, annotated: Type?
+) ->
+  return FunctionContext(annotated, yields: false) if not literal.yields
+  if annotated and not (annotated is IterType)
+    const message = 'a function that yields returns an Iter, as in `(): Iter<Int> ->`'
+    fail program, literal.position, message
+  FunctionContext annotated: (annotated as IterType?)?.item, yields: true
 
 # A function with a result must end with its value or a `return`. This is decided by the last
 # statement alone, not by whether the end can be reached.
 export const check_last_statement = (body: Body, statement: Statement) ->
   const context = body.context!
+  if context.yields
+    check_statement body, statement
+    return
   const annotated = context.annotated
   const expects_value = annotated != nil and not is_kind(annotated, 'void')
   var gives_value = false
@@ -57,7 +72,8 @@ const record_result = (body: Body, type: Type, at: Expression) ->
   context.inferred = unify(inferred, type) ? reject_result(body, inferred, type, at.position)
 
 const reject_result = (body: Body, expected: Type, type: Type, at: Position) ->
-  const value = "a return value of type #{format_type(expected)}"
+  const kind = body.context!.yields then 'a yielded value' else 'a return value'
+  const value = "#{kind} of type #{format_type(expected)}"
   const message = "expected #{value}, got #{format_type(type)}"
   fail body.program, at, message
 
@@ -65,8 +81,20 @@ export const check_return = (body: Body, return_expression: Return) ->
   if body.context == nil
     fail body.program, return_expression.position, "'return' outside a function"
   const value = return_expression.value
+  if body.context!.yields
+    return if value == nil
+    fail body.program, value.position, 'a function that yields returns no value'
   const type: Type = value then type_of_result(body, value) else void_type
   record_result body, type, value ? return_expression
+
+# A yielded value must fit the item type, as a return value fits the return type.
+export const check_yield = (body: Body, yield_expression: Yield) ->
+  if body.context == nil
+    fail body.program, yield_expression.position, "'yield' outside a function"
+  const value = yield_expression.value
+  const type = type_of_result(body, value)
+  fail body.program, value.position, 'cannot yield a value of type void' if is_kind(type, 'void')
+  record_result body, type, value
 
 # A written return type is a hint for the value's type, which can type `[]` and literals; the
 # value is then checked as a return value, for a message that says so.
@@ -76,16 +104,18 @@ const type_of_result = (body: Body, value: Expression) ->
   type_of body, value, hint
 
 # The type of a function once its body is checked: its return type is the written one, or the one
-# its results give, to which they are converted. Its result may be nil alone, which gives no type:
-# see reject_nil_result.
+# its results give, to which they are converted; that of a function that yields is an Iter of its
+# item type, decided so. Its result may be nil alone, which gives no type, as may its items, if it
+# yields nothing else: see reject_nil_result.
 export const finish_function_type = (
   context: FunctionContext, params: Array<Type>, conversions: Map<Node, Type>
 ) ->
-  const result = context.annotated ? context.inferred ? void_type
+  const unknown = context.yields then nil_type else void_type
+  const result = context.annotated ? context.inferred ? unknown
   for each in context.results
     const is_converted = not is_kind(each.type, 'never') and not same_type(each.type, result)
     conversions[each.value] = result if is_converted
-  FunctionType params, result
+  FunctionType params, result: context.yields then IterType(item: result) else result
 
 # A function whose results are only nil has no return type: it must be written. A function of an
 # item leaves this to its caller, which tells what would hold its results (see check_value_type).
@@ -94,5 +124,10 @@ export const reject_nil_result = (
 ) ->
   if is_kind(type.result, 'nil')
     const message = 'nil alone does not give the return type; write it, as in `(): String? ->`'
+    fail program, literal.position, message
+  const result = type.result
+  if result is IterType and literal.yields and is_kind(result.item, 'nil')
+    const example = '`(): Iter<Int> ->`'
+    const message = "the yielded values do not give the item type; write it, as in #{example}"
     fail program, literal.position, message
   type

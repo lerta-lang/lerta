@@ -41,6 +41,20 @@ void lerta_free_unfinished(void *object) {
 #endif
 }
 
+void *lerta_frame_alloc(int64_t size) {
+#ifdef LERTA_DEBUG
+  live_objects++;
+#endif
+  return lerta_checked_malloc((size_t)size);
+}
+
+void lerta_frame_free(void *frame) {
+  free(frame);
+#ifdef LERTA_DEBUG
+  live_objects--;
+#endif
+}
+
 // NULL is nil, which holds no object.
 void lerta_retain(void *object) {
   LertaHeader *header = object;
