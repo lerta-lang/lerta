@@ -23,6 +23,9 @@ export class ExtensionMethod
   # declaring module's functions hold another's type by `key`.
   generic: GenericRef?
   key: String
+  # Whether the receiver matches the type of each key, which every generic call that reaches the
+  # type asks again (see methods_reachable_from).
+  matched: Map<String, Bool> = Map()
 
 export class Extensions
   module_index: Int
@@ -95,9 +98,9 @@ export const methods_reachable_from = (
   visit_reachable program, seen, type for type in types
   # A generic extend's methods, as those of Array<T>, may be in effect for several of the types.
   const methods: Array<ExtensionMethod> = []
-  for type in seen.values()
+  for (key, type) in seen.entries()
     for method in extensions.in_effect
-      continue if not matches(method.receiver, type)
+      continue if not method.matched.get_or_put(key, -> matches(method.receiver, type))
       methods.push method if not methods.contains(method)
   methods
 
