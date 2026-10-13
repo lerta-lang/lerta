@@ -2,16 +2,16 @@
 # calls without parentheses; `declaration` reads the other declarations.
 import {
   Assignment, AssignmentTarget, Binding, Call, Condition, copy_identifier, Declaration, Expression
-  For, Identifier, If, Index, Member, Statement, While
+  For, Identifier, If, Index, Jump, Member, Return, Statement, Throw, While, Yield
 } from '../ast'
 import {
   parse_enum, parse_export, parse_extend, parse_extern, parse_import, parse_interface
   parse_type_alias, parse_type_declaration, starts_type_alias
 } from './declaration'
 import {
-  call_of, parse_arguments, parse_block_arguments, parse_expression, parse_identifier
-  parse_loop_header, parse_tuple_names, parse_value, starts_block_arguments, take_apart
-  take_apart_item, tuple_holder
+  call_of, continue_with_members, parse_arguments, parse_block_arguments, parse_expression
+  parse_identifier, parse_loop_header, parse_tuple_names, parse_value, starts_block_arguments
+  take_apart, take_apart_item, tuple_holder
 } from './expression'
 import { Token, TokenKind } from '../lexer/tokens'
 import { parse_primary } from './primary'
@@ -85,11 +85,16 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
     tokens.fail position, 'a destructuring declaration must be on a line of its own'
   return parse_declaration(tokens) if at_declaration(tokens)
   const is_command_call = starts_command_argument(tokens)
-  const expression: Expression =
+  const line_expression: Expression =
     if is_command_call
       parse_command_call(tokens)
     else
       parse_expression(tokens)
+  const expression =
+    if takes_no_member_lines(line_expression)
+      line_expression
+    else
+      continue_with_members tokens, line_expression
   const is_callee = expression is Identifier or expression is Member
   const takes_block_arguments = expression is Call or is_callee
   if takes_block_arguments and starts_block_arguments(tokens)
@@ -98,6 +103,12 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
   const operator = tokens.peek_continuation()
   return expression if not is_one_of(operator, ASSIGNMENT_OPERATORS)
   parse_assignment tokens, expression, operator
+
+# The operand of `return`, `throw` or `yield` has taken the member lines after it already, and a
+# jump has no value to continue.
+const takes_no_member_lines = (expression: Expression) ->
+  const takes_operand = expression is Return or expression is Throw or expression is Yield
+  takes_operand or expression is Jump
 
 # A simple statement with the postfix `if`, `while` and `for` that follow it, as on a line of its
 # own; a declaration can have none.

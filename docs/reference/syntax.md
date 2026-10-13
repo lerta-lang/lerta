@@ -60,6 +60,14 @@ draw 'p'
 ## Statements
 
 - One statement per line. A statement is an expression; see [discarded values](errors.md#discarded-values) for which expressions may stand alone.
+- A line that starts with `.` or `?.` continues a value with a member, so a method chain may be split across lines. The value is that of a declaration, an assignment, an item of a [bracketless block](#bracketless-blocks), a statement, or the operand of `return`, `throw` or `yield`; the line has the indentation of the line where the value starts. The member applies to the whole value, however many lines it takes: `a + b` and then `.text` on the next line is `(a + b).text`, as `.join('')` applies to a block:
+  ```
+  const text =
+    'a'
+    'b'
+  .join('')
+  ```
+  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `const g = (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead. After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with named arguments in a block, the line is an error.
 
 ## Calls
 

@@ -5,12 +5,14 @@ import {
   BooleanLiteral, Call, Expression, Identifier, IntegerLiteral, Interpolation, InterpolationPart
   Jump, Member, NilLiteral, Position, Return, StringLiteral, This, Throw, Yield
 } from '../ast'
-import { parse_block_literal, starts_block } from './block_literal'
+import { starts_block } from './block_literal'
 import {
   parse_array_literal, parse_case, parse_function_literal, parse_map_literal, parse_parenthesized
   parse_try, starts_function_literal
 } from './compound'
-import { parse_expression, parse_identifier } from './expression'
+import {
+  continue_with_members, parse_expression, parse_identifier, parse_value
+} from './expression'
 import { Token, tokenize_fragment, TokenKind } from '../lexer/tokens'
 import { CodePart, TemplatePart, TextPart } from '../lexer/string_literal'
 import { is_one_of, token_position, TokenStream } from './token_stream'
@@ -35,14 +37,14 @@ export const parse_primary = (tokens: TokenStream): Expression ->
     when 'return'
       const value =
         case
-          when starts_block(tokens) then parse_block_literal(tokens)
+          when starts_block(tokens) then parse_value(tokens)
           when ends_expression(tokens) then nil
-          else parse_expression(tokens)
+          else parse_operand(tokens)
       Return value, position
-    when 'throw' then Throw(position, message: parse_expression(tokens))
+    when 'throw' then Throw(position, message: parse_operand(tokens))
     when 'yield'
       marks.yields = true if const marks = tokens.innermost_function()
-      Yield position, value: parse_expression(tokens)
+      Yield position, value: parse_operand(tokens)
     when '@' then parse_this(tokens, position)
     when 'true', 'false' then BooleanLiteral(position, value: token.kind == 'true')
     when 'case' then parse_case(tokens, position)
@@ -117,3 +119,8 @@ const parse_interpolated_code = (outer: TokenStream, source: String, line: Int, 
   const expression = parse_expression(tokens)
   tokens.expect NEWLINE, 'end of interpolation'
   expression
+
+# The operand of `return`, `throw` or `yield`, which takes the member lines after it, as a value
+# does, rather than leaving them to the statement.
+const parse_operand = (tokens: TokenStream) ->
+  continue_with_members tokens, parse_expression(tokens)

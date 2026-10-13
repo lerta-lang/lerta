@@ -44,10 +44,40 @@ const parse_if_value = (tokens: TokenStream) ->
 
 # A value that may take lines: a block literal, an `if` (see if_value) or an expression.
 export const parse_value = (tokens: TokenStream): Expression ->
-  case
-    when starts_block(tokens) then parse_block_literal(tokens)
-    when tokens.peek().kind == 'if' then parse_if_value(tokens)
-    else parse_expression(tokens)
+  const value: Expression =
+    case
+      when starts_block(tokens) then parse_block_literal(tokens)
+      when tokens.peek().kind == 'if' then parse_if_value(tokens)
+      else parse_expression(tokens)
+  continue_with_members tokens, value
+
+# The value with the members that the lines after it take, those that start with `.` or `?.` at
+# the indentation of its first line, so that a member applies to the whole value, however many
+# lines it took.
+export const continue_with_members = (tokens: TokenStream, value: Expression): Expression ->
+  var continued = value
+  while at_member_line(tokens)
+    tokens.accept NEWLINE
+    continued = parse_member_line(tokens, continued)
+  continued
+
+# After a block, its NEWLINE is consumed already, so the line's first token is next; otherwise it
+# follows the NEWLINE. A line at another indentation starts with an INDENT or a DEDENT instead.
+const at_member_line = (tokens: TokenStream) ->
+  const after_block = tokens.ended_with_block()
+  const at_line_end = tokens.peek().kind == NEWLINE
+  const line_start = after_block then 0 else 1
+  const first = tokens.peek_at(line_start).kind
+  const dot = tokens.peek_at(line_start + 1)
+  const starts_nil_safe = first == '?' and dot.kind == '.' and not dot.spaced
+  (after_block or at_line_end) and (first == '.' or starts_nil_safe)
+
+# A line's `.` or `?.` follows the space of its indentation, which parse_postfix would not take.
+const parse_member_line = (tokens: TokenStream, object: Expression): Expression ->
+  return parse_nil_safe(tokens, object) if tokens.peek().kind == '?'
+  tokens.next()
+  const position = object.position
+  parse_postfix tokens, Member(position, object, name: parse_identifier(tokens))
 
 # `f`, or `f x`, followed by an indented block of `name: value` lines: its named arguments.
 export const parse_block_arguments = (tokens: TokenStream, callee: Expression) ->
