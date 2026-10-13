@@ -82,3 +82,8 @@ LertaString *lerta_env(const LertaString *name) {
   free(value);
   return result;
 }
+
+LertaString *lerta_platform(void) {
+  const char *name = lerta_os_platform();
+  return lerta_string_from_bytes(name, (int64_t)strlen(name));
+}

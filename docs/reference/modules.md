@@ -58,6 +58,7 @@ export const unit = 1
 | `exit(code: Int): never` | Flushes `stdout` and ends the program with the exit code, from 0 to 255; another code throws a `ValueError`. If the flush fails, a code of 0 becomes 1. |
 | `run(command: String, args: Array<String>, stdout: Array<Byte>? = nil): Int` | Runs a program, found on `PATH` on every platform (adding `.exe` on Windows if it has no extension) unless the command holds a directory, with the arguments, and waits for it to end. The program shares the standard streams, but for its standard output when `stdout` is given, which it is appended to; `stdout` is flushed first, so that output keeps its order. Returns its exit code. On POSIX systems, a program killed by a signal gives 128 plus the signal number, as shells do; on Windows, the code of a program that an exception or `TerminateProcess` ended is returned as a non-negative 32-bit value, such as 3221225477 (0xC0000005) for an access violation; this case is not tested yet. Throws `cannot run: <command>` if it cannot start, including when the command or an argument holds a NUL byte, and `cannot read the output of: <command>` if its output cannot be read. |
 | `env(name: String): String?` | The value of an environment variable, or nil if it is not set, including for a name that holds `=` or a NUL byte. Throws a `ValueError`, `the environment variable <name> is not valid UTF-8`, if the value is not. |
+| `platform: String` | The system the program runs on: `'linux'`, `'macos'` or `'windows'`. |
 
 ## std:time
 

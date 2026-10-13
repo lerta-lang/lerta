@@ -156,6 +156,14 @@ bool lerta_os_rename(const char *from, const char *to) {
   return rename(from, to) == 0;
 }
 
+const char *lerta_os_platform(void) {
+#ifdef __APPLE__
+  return "macos";
+#else
+  return "linux";
+#endif
+}
+
 char *lerta_os_env(const char *name) {
   const char *value = getenv(name);
   return value == NULL ? NULL : strdup(value);

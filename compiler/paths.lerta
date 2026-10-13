@@ -1,58 +1,104 @@
-# File paths, with `/` as the separator, as those of Node's `path` module work them out.
+# File paths, as those of Node's `path` module work them out, written with `/` as the separator.
+# On Windows, `\` separates them too, and an absolute path starts at a drive or a network share.
+# A path relative to the current directory of a drive, `C:a`, is not supported: a real path, from
+# which the compiler works out the others, never is one.
 
-# The directory of the path: `.` for a name alone.
-export const dirname = (path: String) ->
+import platform from 'std:process'
+import all_but_last from './arrays'
+
+const is_windows = platform == 'windows'
+
+# A path as the root it starts at, and the names below it, without empty ones. The root is `` for
+# a relative path, `/`, or on Windows a drive, `C:/`, in upper case as drives are named in either,
+# or a network share, `//server/share/`, as written, which a real path writes alike. Two
+# separators before a single name start no share, so that `/` is their root.
+struct SplitPath
+  root: String
+  names: Array<String>
+
+const split_path = (path: String) ->
   const bytes = path.binary
-  var end = bytes.length
-  end -= 1 while end > 1 and bytes[end - 1] == '/'
-  var slash = end - 1
-  slash -= 1 while slash >= 0 and bytes[slash] != '/'
-  return '.' if slash < 0
-  return '/' if slash == 0
-  var dir_end = slash
-  dir_end -= 1 while dir_end > 1 and bytes[dir_end - 1] == '/'
-  bytes.text(0, dir_end)!
+  const names = names_of(path)
+  const starts_at_separator = bytes.length > 0 and is_separator(bytes[0])
+  const is_share = starts_at_separator and bytes.length > 1 and is_separator(bytes[1])
+  case
+    when is_windows and is_drive(bytes)
+      SplitPath(root: "#{upper_case_letter(bytes[0])}:/", names: names_after(names, 1))
+    when is_windows and is_share and names.length >= 2
+      SplitPath(root: "//#{names[0]}/#{names[1]}/", names: names_after(names, 2))
+    when starts_at_separator then SplitPath(root: '/', names: names)
+    else SplitPath(root: '', names: names)
+
+# Whether the path starts with a drive and a separator, as `C:\`: `C:` alone names the current
+# directory of that drive, which is relative.
+const is_drive = (bytes: Binary) ->
+  bytes.length >= 3 and bytes[0].is_letter() and bytes[1] == ':' and is_separator(bytes[2])
+
+const upper_case_letter = (letter: Byte) ->
+  const upper = letter >= 'a' then letter - 'a' + 'A' else letter
+  [upper].to_binary().text()!
+
+const is_separator = (byte: Byte) -> byte == '/' or (is_windows and byte == "\\")
+
+const names_of = (path: String) ->
+  const bytes = path.binary
+  const names: Array<String> = []
+  var start = 0
+  for i in 0...(bytes.length + 1)
+    continue if i < bytes.length and not is_separator(bytes[i])
+    names.push bytes.text(start, i)! if i > start
+    start = i + 1
+  names
+
+const names_after = (names: Array<String>, count: Int) -> [names[i] for i in count...names.length]
+
+const joined = (root: String, names: Array<String>) ->
+  root == '' and names.length == 0 then '.' else "#{root}#{names.join('/')}"
+
+# The directory of the path: `.` for a name alone, and the root for the root.
+export const dirname = (path: String) ->
+  const split = split_path(path)
+  const names = split.names
+  joined split.root, names.length == 0 then names else all_but_last(names)
 
 export const join = (a: String, b: String) -> normalize("#{a}/#{b}")
 
-# The path without `.` and empty segments, and with each `..` removing the segment before it.
+# The path without `.` and empty names, and with each `..` removing the name before it.
 const normalize = (path: String) ->
-  const is_absolute = path.starts_with('/')
-  const segments: Array<String> = []
-  for segment in path.split('/')
-    case segment
-      when '', '.' then continue
+  const split = split_path(path)
+  const is_absolute = split.root != ''
+  const names: Array<String> = []
+  for name in split.names
+    case name
+      when '.' then continue
       when '..'
-        const can_cancel = segments.last() != '..'
+        const can_cancel = names.length > 0 and names.last() != '..'
         if can_cancel
-          segments.pop()
+          names.pop()
         else if not is_absolute
-          segments.push segment
-      else segments.push segment
-  const joined = segments.join('/')
-  case
-    when is_absolute then "/#{joined}"
-    when joined == '' then '.'
-    else joined
+          names.push name
+      else names.push name
+  joined split.root, names
 
-# The path from the directory `from` to `to`, both relative to `cwd` unless absolute.
+# The path from the directory `from` to `to`, both relative to `cwd` unless absolute. Paths under
+# different roots have none, so `to` is given absolute.
 export const relative = (cwd: String, from: String, to: String) ->
-  const from_segments = absolute_segments(cwd, from)
-  const to_segments = absolute_segments(cwd, to)
+  const from_path = absolute_path(cwd, from)
+  const to_path = absolute_path(cwd, to)
+  return joined(to_path.root, to_path.names) if from_path.root != to_path.root
+  const from_names = from_path.names
+  const to_names = to_path.names
   var common = 0
-  while common < from_segments.length and common < to_segments.length
-    break if from_segments[common] != to_segments[common]
+  while common < from_names.length and common < to_names.length
+    break if from_names[common] != to_names[common]
     common += 1
-  const segments = ['..' for _ in common...from_segments.length]
-  segments.push to_segments[i] for i in common...to_segments.length
-  segments.join '/'
+  const names = ['..' for _ in common...from_names.length]
+  names.push to_names[i] for i in common...to_names.length
+  names.join '/'
 
-const absolute_segments = (cwd: String, path: String) ->
-  const is_absolute = path.starts_with('/')
-  const absolute = normalize(is_absolute then path else join(cwd, path))
-  [segment for segment in absolute.split('/') when segment != '']
+const absolute_path = (cwd: String, path: String) ->
+  const is_absolute = split_path(path).root != ''
+  split_path(normalize(is_absolute then path else join(cwd, path)))
 
-# The last segment of the path: `c` for `a/b/c`, and `` for `/`.
-export const basename = (path: String) ->
-  const segments = [segment for segment in path.split('/') when segment != '']
-  segments.last() ? ''
+# The last name of the path: `c` for `a/b/c`, and `` for a root.
+export const basename = (path: String) -> split_path(path).names.last() ? ''

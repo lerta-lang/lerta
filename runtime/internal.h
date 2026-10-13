@@ -95,6 +95,8 @@ bool lerta_os_make_dir(const char *path);
 bool lerta_os_is_separator(char c);
 // Moves a file or a directory, replacing a file at `to`.
 bool lerta_os_rename(const char *from, const char *to);
+// The system's name: linux, macos or windows.
+const char *lerta_os_platform(void);
 // The value of an environment variable, which the caller frees, or NULL if it is not set.
 char *lerta_os_env(const char *name);
 // Runs the command `args[0]`, found as the system finds commands, with `args`, which end with

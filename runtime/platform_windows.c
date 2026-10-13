@@ -300,6 +300,8 @@ bool lerta_os_rename(const char *from, const char *to) {
   return renamed;
 }
 
+const char *lerta_os_platform(void) { return "windows"; }
+
 char *lerta_os_env(const char *name) {
   wchar_t *wide_name = to_utf16(name);
   DWORD size = wide_name == NULL ? 0 : GetEnvironmentVariableW(wide_name, NULL, 0);

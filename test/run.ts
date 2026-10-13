@@ -15,6 +15,8 @@
 //                          the system; they are built first and found on PATH
 //   tests/**/posix/        tests of what only POSIX systems have, such as signals, which are not
 //                          run for Windows
+//   tests/**/windows/      tests of what only Windows has, such as drives, which are run only for
+//                          Windows
 import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
@@ -56,8 +58,8 @@ const directory_tree = (dir: string, excluded: string[]): string[] => [
 ]
 
 const test_dirs = directory_tree('tests', [examples_expected_dir, commands_dir])
-const is_posix_only = (dir: string): boolean => dir.split('/').includes('posix')
-const skipped_dirs = target.windows ? test_dirs.filter(is_posix_only) : []
+const skipped_kind = target.windows ? 'posix' : 'windows'
+const skipped_dirs = test_dirs.filter((dir) => dir.split('/').includes(skipped_kind))
 
 const suites: Suite[] = [
   ...test_dirs
