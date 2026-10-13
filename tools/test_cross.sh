@@ -97,16 +97,18 @@ if docker info >/dev/null 2>&1; then has_docker=true; else has_docker=false; fi
 host_os=$(uname -s)
 # Docker runs the containers of the host's architecture without emulation, and the x86-64 ones
 # run the 32-bit and the Windows programs.
-case $(uname -m) in x86_64 | amd64) x86_64=true ;; *) x86_64=false ;; esac
+# Some hosts, macOS among them, name the architectures differently from the triples.
+host_linux=$(uname -m | sed 's/^arm64$/aarch64/; s/^amd64$/x86_64/')-linux-gnu
+case $host_linux in x86_64-*) x86_64=true ;; *) x86_64=false ;; esac
 
 if [ "$host_os" != Linux ]; then
-  if ! $has_docker; then skip Linux 'no Docker'
+  if ! $has_docker; then skip "$host_linux" 'no Docker'
   elif $x86_64; then
-    report "Linux in Docker${linux_left:+, with$linux_left}" in_docker linux \
+    report "$host_linux in Docker${linux_left:+, with$linux_left}" in_docker linux \
       "make --no-print-directory test; native=\$?; tools/test_cross.sh --here$linux_left; exit \$((native || \$?))"
     linux_left=''
   else
-    report 'Linux in Docker' in_docker linux 'make --no-print-directory test'
+    report "$host_linux in Docker" in_docker linux 'make --no-print-directory test'
   fi
 fi
 for triple in $linux_left; do
