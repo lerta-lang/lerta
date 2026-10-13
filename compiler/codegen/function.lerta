@@ -24,8 +24,8 @@ import
   ValueLocal
 from './generator'
 import
-  emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of, HeapField,
-  value_field
+  emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of,
+  emit_weak_object, HeapField, value_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
 import
@@ -122,7 +122,7 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
     const local = lookup_local(g, capture.name)!
     if not capture.is_var
       slots.push value_field(capture.type)
-      operands.push captured_value(g, local, capture.type)
+      operands.push captured_value(g, local, capture)
       continue
     const cell = local is SlotLocal then local.cell
     const owned = cell ? panic("the captured var '#{capture.name}' has no cell")
@@ -132,12 +132,35 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
   return emit_static_closure(g.ir, symbol) if captures.length == 0
   emit_closure g.ir, symbol, slots, operands
 
-# The value a function literal captures, owned: a weak local's box rather than its object.
-const captured_value = (g: Generator, local: CodegenLocal, type: Type) ->
-  return read_local(g, local, type) if not local.weak
-  const box = held_value(g, local)
-  emit_retain g.ir, box
+# The value a function literal captures, owned: the box of a weak local, or of `@` for a weak
+# literal, rather than its object.
+const captured_value = (g: Generator, local: CodegenLocal, capture: Capture) ->
+  const type = capture.type
+  if local.weak
+    const box = held_value(g, local)
+    emit_retain g.ir, box
+    return box
+  const value = read_local(g, local, type)
+  return value if not capture.is_weak
+  const box = weak_box_of(g, value, type)
+  emit_release g.ir, value
   box
+
+# A weak literal's `@`, captured as its box, is its object for the whole call, which does nothing if
+# the object is gone.
+const hold_weak_this = (g: Generator, scope: Map<String, CodegenLocal>) ->
+  const captured = scope['@'] ? return
+  const ir = g.ir
+  const object = emit_weak_object(ir, held_value(g, captured))
+  const gone_label = ir.fresh_label('weak.gone')
+  const alive_label = ir.fresh_label('weak.alive')
+  const is_gone = ir.assign("icmp eq ptr #{object}, null")
+  ir.emit "br i1 #{is_gone}, label %#{gone_label}, label %#{alive_label}"
+  ir.start_block gone_label
+  emit_return g, ''
+  ir.start_block alive_label
+  emit_retain ir, object
+  scope['@'] = store_in_slot(g, object, captured.type)
 
 # Parameters are borrowed SSA values; a method gets its object first, as `@`, and a function
 # literal its closure, from which it reads the values it captures. The last statement, if an
@@ -204,6 +227,7 @@ const generate_function_body = (
         SlotLocal type, cell, weak, pointer: emit_cell_pointer(ir, type, value)
       else
         ValueLocal(type, weak, operand: value)
+  hold_weak_this g, scope if literal.weak
   emit_suspend g if literal.yields
   generate_statement g, statement for statement in all_but_last(literal.body)
   generate_last_statement g, literal.body, result

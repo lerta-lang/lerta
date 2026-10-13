@@ -21,6 +21,15 @@ import parse_result_annotation, parse_type_annotation, parse_type_parameters fro
 export const starts_function_literal = (tokens: TokenStream) ->
   tokens.inside SKIP, -> looks_like_function_literal(tokens)
 
+# `weak` is not a keyword: before a function literal, it makes one that captures `@` weakly.
+export const starts_weak_function_literal = (tokens: TokenStream) ->
+  return false if not tokens.at_word('weak')
+  const start = tokens.index
+  tokens.next()
+  const starts = starts_function_literal(tokens)
+  tokens.index = start
+  starts
+
 const looks_like_function_literal = (tokens: TokenStream) ->
   const first = tokens.peek().kind
   const second = tokens.peek_at(1).kind
@@ -37,7 +46,7 @@ const looks_like_function_literal = (tokens: TokenStream) ->
 # `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted, and so may
 # the parameters' types, `(a, b) -> body`, where a function type is expected. Type parameters,
 # `<T, U: Stringable>`, come first.
-export const parse_function_literal = (tokens: TokenStream) ->
+export const parse_function_literal = (tokens: TokenStream, weak = false) ->
   const token = tokens.peek()
   const type_params = parse_type_parameters(tokens)
   const parse_params = (): Array<Parameter> ->
@@ -65,7 +74,7 @@ export const parse_function_literal = (tokens: TokenStream) ->
   const yields = marks.yields
   const awaits = marks.await_at != nil
   const position = token_position(token)
-  FunctionLiteral type_params, params, return_type, body, yields, awaits, position
+  FunctionLiteral type_params, params, return_type, body, yields, awaits, position, weak
 
 # `name[: Type][ = default]`.
 const parse_parameter = (tokens: TokenStream) ->
@@ -250,7 +259,8 @@ const lazy_functions = (
     const params = [Parameter(name: copy_identifier(variable))]
     const body = [bindings()..., value]
     FunctionLiteral(
-      params, body, type_params: [], position: value.position, yields: false, awaits: false
+      params, body, type_params: [], position: value.position, yields: false, awaits: false,
+      weak: false
     )
   const guard_function = guard then function_of(as_test(guard))
   LazyFunctions guard: guard_function, element: function_of(element)
