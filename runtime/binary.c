@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "internal.h"
 
 LERTA_STATIC_STRING(slice_out_of_range, "slice out of range");
@@ -22,6 +24,17 @@ LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_
     return NULL;
   }
   return lerta_string_from_bytes(binary->bytes + start, end - start);
+}
+
+int64_t lerta_binary_find(const LertaString *binary, const LertaString *part, int64_t from) {
+  int64_t last_start = binary->length - part->length;
+  for (int64_t i = from; i <= last_start; i++) {
+    const uint8_t *candidate = memchr(binary->bytes + i, part->bytes[0], (size_t)(last_start - i + 1));
+    if (candidate == NULL) return -1;
+    i = candidate - binary->bytes;
+    if (memcmp(candidate, part->bytes, (size_t)part->length) == 0) return i;
+  }
+  return -1;
 }
 
 LertaString *lerta_binary_from_bytes(const LertaArray *bytes) {

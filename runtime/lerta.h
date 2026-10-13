@@ -163,6 +163,9 @@ int64_t lerta_byte_to_int(uint8_t byte);
 uint8_t lerta_int_to_byte(int64_t n);
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
 LertaString *lerta_binary_from_bytes(const LertaArray *bytes);
+// The place of the first occurrence of `part`, which is not empty, at `from` (not negative) or
+// after, or -1 if there is none.
+int64_t lerta_binary_find(const LertaString *binary, const LertaString *part, int64_t from);
 // The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
 LertaString *lerta_binary_as_string(LertaString *binary);
 
