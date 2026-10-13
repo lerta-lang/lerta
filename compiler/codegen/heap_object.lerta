@@ -1,15 +1,17 @@
 # Objects on the heap with fields: classes and structs, anonymous structs, and cells. Each starts
 # with the header `{ i64 ref_count, ptr drop }`, then holds its fields in order; its drop function
 # releases the references the fields hold.
-import ObjectInfo from '../checker/object_types'
+import info_of, ObjectInfo from '../checker/object_types'
 import ProgramWide from '../checker/shared'
-import IrBuilder, IrModule from './ir_builder'
+import emit_branch, IrBuilder, IrModule from './ir_builder'
 import
   drop_symbol, emit_release_stored, emit_retain_value, ir_type, object_ir_type, Ownership,
   ownership, special_method_symbol, without_sigil
 from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
-import members_of, ObjectType, RecordType, TupleType, Type, type_key from '../types'
+import
+  inner_of, members_of, ObjectType, OptionalType, RecordType, TupleType, Type, type_key
+from '../types'
 
 # The two header fields come before the object's own.
 const HEADER_FIELDS = 2
@@ -96,7 +98,17 @@ export const emit_weak_box = (ir: IrBuilder, object: String, info: ObjectInfo) -
   const slot = emit_weak_slot_pointer(ir, object, info)
   call_runtime ir, 'ptr @lerta_weak_box(ptr, ptr)', "ptr #{object}, ptr #{slot}"
 
-# The object of a weak box, borrowed, or null if it is gone.
+# The weak box of a value of a class or of its optional type, which a weak local or field holds,
+# owned, or null for nil; the object is borrowed.
+export const emit_weak_box_of = (
+  ir: IrBuilder, program: ProgramWide, object: String, type: Type
+) ->
+  const info = info_of(program, inner_of(type) as ObjectType!)
+  return emit_weak_box(ir, object, info) if not (type is OptionalType)
+  const is_present = ir.assign("icmp ne ptr #{object}, null")
+  emit_branch ir, 'ptr', is_present, (-> emit_weak_box(ir, object, info)), 'null'
+
+# The object of a weak box, borrowed, or null if it is gone; a null box, for nil, gives null.
 export const emit_weak_object = (ir: IrBuilder, box: String) ->
   call_runtime ir, 'ptr @lerta_weak_object(ptr)', "ptr #{box}"
 

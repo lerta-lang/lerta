@@ -148,7 +148,7 @@ void *lerta_weak_box(void *object, void **slot) {
 }
 
 void *lerta_weak_object(void *box) {
-  return ((LertaWeakBox *)box)->object;
+  return box == NULL ? NULL : ((LertaWeakBox *)box)->object;
 }
 
 void lerta_weak_detach(void **slot) {

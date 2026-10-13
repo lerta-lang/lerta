@@ -1,0 +1,28 @@
+# Weak locals made and dropped in a loop, given a temporary that is freed at once, and left by an
+# exception, while one is assigned too: each releases its box.
+class Item
+  name: String
+  weak other: Item? = default nil
+  deinit = -> print "drop #{@name}"
+
+struct Failed
+  message: String
+
+const fail = (): Item -> throw Failed(message: 'failed')
+
+const run = ->
+  for name in ['a', 'b']
+    const item = Item(name)
+    weak const seen = item
+    print seen?.name ? 'gone'
+  weak var temporary = Item(name: 'temporary')
+  print temporary?.name ? 'gone'
+  const holder = Item(name: 'holder')
+  try
+    weak const before = holder
+    print before?.name ? 'gone'
+    holder.other = fail()
+  catch e: Failed
+    print e.message
+  print holder.other?.name ? 'none'
+run()

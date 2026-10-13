@@ -7,7 +7,7 @@ import
   emit_exception_check, holding, pop_temporaries, push_temporary, while_holding
 from './exceptions'
 import generate, release_if_reference, slot_pointer, type_at_use, type_of from './expression'
-import lookup_local from './function'
+import lookup_local, weak_box_of from './function'
 import Generator, SlotLocal from './generator'
 import emit_field_pointer, emit_member_dispatch from './heap_object'
 import emit_release, emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
@@ -25,7 +25,11 @@ export const generate_assignment = (g: Generator, assignment: Assignment) ->
     when Identifier
       const local = lookup_local(g, target.name)!
       const slot = local as SlotLocal!
-      assign_through g, assignment, slot_pointer(g, slot), slot.type
+      const pointer = slot_pointer(g, slot)
+      if slot.weak
+        assign_weak g, assignment, pointer, slot.type
+      else
+        assign_through g, assignment, pointer, slot.type
 
 # The field takes the new value's reference and releases the old one. Through a union, the field
 # is that of the member the object is.
@@ -39,9 +43,36 @@ const generate_field_assignment = (g: Generator, assignment: Assignment, target:
       emit_member_dispatch(g.ir, object, object_type.members, 'ptr', pointer_of)
     else
       pointer_of(object_type)
-  const assign = -> assign_through(g, assignment, pointer, type_of(g, target))
+  const field_type = type_of(g, target)
+  const weak = is_weak_field(g, object_type, name)
+  const assign = ->
+    if weak
+      assign_weak g, assignment, pointer, field_type
+    else
+      assign_through g, assignment, pointer, field_type
   while_holding g, object, object_type, assign
   emit_release g.ir, object
+
+# The checker allows no weak field to be assigned through a union.
+const is_weak_field = (g: Generator, type: Type, name: String): Bool ->
+  if type is UnionType
+    const has_weak = type.members.any((member) -> is_weak_field(g, member, name))
+    panic "a weak field '#{name}' assigned through a union" if has_weak
+    return false
+  const info = info_of(g.code.program, type as ObjectType!)
+  info.fields.find((field) -> field.name.name == name)!.weak
+
+# A weak local or field takes the box of the new value's object, and releases its old box; only
+# `=` applies, to an optional class's object.
+const assign_weak = (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
+  panic "'#{assignment.operator}' on a weak local or field" if assignment.operator != '='
+  const ir = g.ir
+  const value = generate(g, assignment.value)
+  const box = weak_box_of(g, value, type)
+  emit_release ir, value
+  const replaced = ir.assign("load ptr, ptr #{pointer}")
+  ir.emit "store ptr #{box}, ptr #{pointer}"
+  emit_release ir, replaced
 
 const field_pointer = (g: Generator, object: String, type: Type, name: String) ->
   const object_type = type as ObjectType!

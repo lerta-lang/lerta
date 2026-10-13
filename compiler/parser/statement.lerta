@@ -70,7 +70,11 @@ export const parse_statement = (tokens: TokenStream): Statement ->
         else parse_postfix_conditions(tokens, parse_simple_statement(tokens))
 
 export const at_declaration = (tokens: TokenStream) ->
-  is_one_of tokens.peek().kind, ['const', 'var']
+  is_one_of(tokens.peek().kind, ['const', 'var']) or at_weak_declaration(tokens)
+
+# `weak` is not a keyword, so that it stays usable as a name.
+const at_weak_declaration = (tokens: TokenStream) ->
+  tokens.at_word('weak') and is_one_of(tokens.peek_at(1).kind, ['const', 'var'])
 
 export const at_destructuring = (tokens: TokenStream) ->
   at_declaration(tokens) and is_one_of(tokens.peek_at(1).kind, ['{', '('])
@@ -156,13 +160,18 @@ const wrap_in_for = (tokens: TokenStream, statement: Statement) ->
   const body = [take_apart_item(header)..., guarded]
   For variable, iterable, body, position, index
 
+# `[weak] const name[: Type] = value`, or `var`.
 const parse_declaration = (tokens: TokenStream) ->
-  const token = tokens.next()
+  const position = token_position(tokens.peek())
+  const weak = tokens.accept_word('weak')
+  const mutable = tokens.next().kind == 'var'
+  if weak and is_one_of(tokens.peek().kind, ['{', '('])
+    tokens.fail position, 'a destructuring declaration cannot be weak'
   const name = parse_identifier(tokens)
   const type = parse_type_annotation(tokens)
   tokens.expect '=', "'='"
   const value = parse_value(tokens)
-  Declaration name, type, value, mutable: token.kind == 'var', position: token_position(token)
+  Declaration name, type, value, mutable, position, weak
 
 # `const { a, b } = value`, as the declarations it stands for.
 export const parse_destructuring_statement = (tokens: TokenStream) ->

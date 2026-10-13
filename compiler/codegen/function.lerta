@@ -6,7 +6,7 @@ import
 from '../ast'
 import imported_export, ValueExport from '../checker/imports'
 import required_params from '../checker/functions'
-import FieldInfo, info_of, is_argument, ObjectInfo from '../checker/object_types'
+import FieldInfo, is_argument, ObjectInfo from '../checker/object_types'
 import Capture from '../checker/shared'
 import all_but_last from '../arrays'
 import generate_assignment from './assignment'
@@ -18,13 +18,13 @@ from './closure'
 import generate_control_jump, generate_for, generate_if, generate_while from './control_flow'
 import emit_suspend from './coroutine'
 import emit_check_with, emit_exception_check from './exceptions'
-import generate, read_local, release_if_reference, type_of from './expression'
+import generate, held_value, read_local, release_if_reference, type_of from './expression'
 import
   CellSlot, CodegenLocal, function_generator, Generator, SlotLocal, TopLevelGlobal, TopLevelSlot,
   ValueLocal
 from './generator'
 import
-  emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box, HeapField,
+  emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of, HeapField,
   value_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
@@ -35,7 +35,7 @@ from './lerta_ir'
 import call_void_runtime from './runtime_calls'
 import emit_mark_initialized, emit_release_globals from './top_level'
 import generate_yielding_function from './yielding'
-import is_kind, iterable_item, ObjectType, PromiseType, Type, void_type from '../types'
+import is_kind, iterable_item, PromiseType, Type, void_type from '../types'
 
 # The local of the name: in the scopes or, outside them, a top-level value of the module, which a
 # function checks to be initialized, or an imported value. Those of the modules of its import
@@ -122,7 +122,7 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
     const local = lookup_local(g, capture.name)!
     if not capture.is_var
       slots.push value_field(capture.type)
-      operands.push read_local(g, local, capture.type)
+      operands.push captured_value(g, local, capture.type)
       continue
     const cell = local is SlotLocal then local.cell
     const owned = cell ? panic("the captured var '#{capture.name}' has no cell")
@@ -131,6 +131,13 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
     operands.push owned.cell
   return emit_static_closure(g.ir, symbol) if captures.length == 0
   emit_closure g.ir, symbol, slots, operands
+
+# The value a function literal captures, owned: a weak local's box rather than its object.
+const captured_value = (g: Generator, local: CodegenLocal, type: Type) ->
+  return read_local(g, local, type) if not local.weak
+  const box = held_value(g, local)
+  emit_retain g.ir, box
+  box
 
 # Parameters are borrowed SSA values; a method gets its object first, as `@`, and a function
 # literal its closure, from which it reads the values it captures. The last statement, if an
@@ -191,11 +198,12 @@ const generate_function_body = (
     const pointer = emit_capture_pointer(ir, '%closure', slots, i)
     const value = ir.assign("load #{slots[i].ir_type}, ptr #{pointer}")
     const cell = CellSlot(cell: value, is_owned: false)
+    const weak = capture.is_weak
     scope[name] =
       if is_var
-        SlotLocal type, cell, pointer: emit_cell_pointer(ir, type, value)
+        SlotLocal type, cell, weak, pointer: emit_cell_pointer(ir, type, value)
       else
-        ValueLocal(type, operand: value)
+        ValueLocal(type, weak, operand: value)
   emit_suspend g if literal.yields
   generate_statement g, statement for statement in all_but_last(literal.body)
   generate_last_statement g, literal.body, result
@@ -267,7 +275,7 @@ export const generate_constructor = (g: Generator, info: ObjectInfo) ->
   const arguments = [field for field in info.fields when is_argument(field)]
   const store_argument = (field: FieldInfo) ->
     const param = "%p#{argument_index(arguments, field)}"
-    emit_retain_value ir, param, field.type! if not field.weak
+    emit_retain_value ir, param, field.type!
     store_field g, object, info, field, param
   store_argument field for field in arguments when not field.has_default
   const scope = g.locals.push()
@@ -314,16 +322,18 @@ const emit_default_or_argument = (
   ir.emit "br label %#{end_label}"
   ir.start_block end_label
 
+# The field takes over the value, owned; a weak field takes its box instead.
 const store_field = (
   g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String
 ) ->
   const pointer = emit_field_pointer(g.ir, object, info, field.name.name)
   const stored = field.weak then weak_box_of(g, value, field.type!) else value
+  emit_release g.ir, value if field.weak
   g.ir.emit "store #{ir_type(field.type!)} #{stored}, ptr #{pointer}"
 
-# A `weak!` field holds the box of its object, which stays borrowed.
-const weak_box_of = (g: Generator, object: String, type: Type) ->
-  emit_weak_box g.ir, object, info_of(g.code.program, type as ObjectType!)
+# A weak local or field holds the box of its object, which stays borrowed.
+export const weak_box_of = (g: Generator, object: String, type: Type) ->
+  emit_weak_box_of g.ir, g.code.program, object, type
 
 export const finish = (g: Generator, signature: String) -> g.ir.finish(signature)
 
@@ -421,7 +431,10 @@ export const generate_statement = (g: Generator, statement: Statement): void ->
 const generate_declaration = (g: Generator, declaration: Declaration) ->
   const ir = g.ir
   const type = type_of(g, declaration.name)
-  const value = generate(g, declaration.value)
+  const weak = declaration.weak
+  const generated = generate(g, declaration.value)
+  const value = weak then weak_box_of(g, generated, type) else generated
+  emit_release ir, generated if weak
   const name = declaration.name.name
   const code = g.code
   const is_top_level = g.top_level_code and g.locals.depth() == 1
@@ -430,10 +443,11 @@ const generate_declaration = (g: Generator, declaration: Declaration) ->
     const cell = emit_cell(ir, type, value)
     const pointer = emit_cell_pointer(ir, type, cell)
     const owned = CellSlot(cell, is_owned: true)
-    g.locals.define name, SlotLocal(type, pointer, cell: owned)
+    g.locals.define name, SlotLocal(type, pointer, weak, cell: owned)
     return
   if global == nil
-    g.locals.define name, store_in_slot(g, value, type)
+    const slot = store_in_slot(g, value, type)
+    g.locals.define name, SlotLocal(type, weak, pointer: slot.pointer)
     return
   ir.emit "store #{ir_type(type)} #{value}, ptr #{global.pointer}"
   emit_mark_initialized ir, global

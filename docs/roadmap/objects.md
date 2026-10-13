@@ -1,6 +1,6 @@
 # Objects
 
-The planned design of classes and structs, interfaces, generics, weak references and equality.
+The planned design of classes and structs, interfaces, generics and equality.
 
 ## Classes and structs
 
@@ -22,11 +22,6 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 - The body of a generic function or method is **checked at definition** against its bounds, instead of per instance (avoiding the C++ template "error deep inside").
 - Generic function literals outside the top level.
 - Bounds on the type parameters of generic classes and structs, `class Sorted<T: Comparable>`, checked wherever the type is written.
-
-## Weak references
-
-- A `weak` field of type `T?` (class only, as `weak!`) that reads as nil once its object is freed, promoted to a strong local when read.
-- `weak var p: Node?` locals. How they break cycles through closures is in [memory management](runtime.md#memory-management).
 
 ## Equality
 

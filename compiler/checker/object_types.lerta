@@ -19,7 +19,9 @@ import
   is_builtin_type_name, module_resolver, resolve, Resolver, with_type_parameters
 from './type_names'
 import has_type_parameters, placeholders, substitute from './type_patterns'
-import InterfaceType, ObjectType, same_type, Type from '../types'
+import
+  format_type, inner_of, InterfaceType, ObjectType, OptionalType, same_type, Type
+from '../types'
 
 export class FieldInfo
   name: Identifier
@@ -170,20 +172,29 @@ const field_of_member = (shared: Shared, info: ObjectInfo, member: MemberDeclara
     fail program, member.position, 'a struct field cannot be var'
   const type_name = member.type
   const type = type_name then resolve(program, info.resolver, type_name)
-  const weak = member.modifier == 'weak!'
+  const modifier = member.modifier
+  const weak = modifier == 'weak' or modifier == 'weak!'
   reject_invalid_weak program, member, is_struct, type if weak
-  const mutable = not is_struct and member.modifier != 'const' and not weak
+  const mutable = not is_struct and modifier != 'const' and modifier != 'weak!'
   FieldInfo type, mutable, value, weak, name: member.name, has_default: member.has_default
 
-# A `weak!` field is a constructor argument of a class, which holds an object of a class.
+# A weak field of a class holds an object of a class, of its written type: a `weak` one, which may
+# hold nil, of an optional type, and a `weak!` one, which is a constructor argument, of a type that
+# is not.
 const reject_invalid_weak = (
   program: ProgramWide, member: MemberDeclaration, is_struct: Bool, type: Type?
 ) ->
   const fail_weak = (message: String) -> fail(program, member.position, message)
   fail_weak 'a struct field cannot be weak' if is_struct
-  fail_weak 'a weak field is a constructor argument, without an initializer' if member.value
-  const object = type as ObjectType?
-  fail_weak 'a weak field holds an object of a class' if not object or object.is_struct
+  const is_bang = member.modifier == 'weak!'
+  if is_bang
+    fail_weak 'a weak! field is a constructor argument, without an initializer' if member.value
+  const written = type ? fail_weak('the type of a weak field must be written')
+  if not is_bang and not (written is OptionalType)
+    const optional = "#{format_type(written)}?"
+    fail_weak "a weak field may hold nil: write its type as #{optional}, or use weak!"
+  const object = (is_bang then written else inner_of(written)) as ObjectType?
+  fail_weak 'a weak field holds an object of a class' if object?.is_struct != false
 
 # The class or struct of the name, of the module or imported.
 export const object_type = (shared: Shared, name: String) ->

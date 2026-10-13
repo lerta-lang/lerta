@@ -9,7 +9,7 @@ import parse_identifier, parse_value from './expression'
 import
   at_destructuring, parse_destructuring_statement, parse_statement, starts_spaced_operand
 from './statement'
-import token_position, TokenStream from './token_stream'
+import is_one_of, token_position, TokenStream from './token_stream'
 import
   parse_aliased_type, parse_named_type, parse_type_annotation, parse_type_name,
   parse_type_parameters
@@ -150,18 +150,28 @@ export const parse_extend = (tokens: TokenStream) ->
 const parse_members = (tokens: TokenStream) ->
   tokens.parse_lines 'indented members', -> parse_member(tokens)
 
-# `weak` is not a keyword, so that it stays usable as a name; `weak!` is a modifier.
+# `weak` is not a keyword, so that it stays usable as a name: it is a modifier before a name, as
+# `weak!` is.
 const parse_member_modifier = (tokens: TokenStream): MemberModifier? ->
   const token = tokens.peek()
-  const bang = tokens.peek_at(1)
-  const is_weak = tokens.at_word('weak') and bang.kind == '!' and not bang.spaced
-  const text = is_weak then 'weak!' else token.kind.to_string()
+  const next = tokens.peek_at(1)
+  const at_weak = tokens.at_word('weak')
+  const is_weak_bang = at_weak and next.kind == '!' and not next.spaced
+  const is_weak = at_weak and next.kind == IDENTIFIER
+  if at_weak and is_one_of(next.kind, ['const', 'var'])
+    const form = '`weak name: Type?`, without const or var'
+    tokens.fail token_position(token), "a weak field is written #{form}"
+  const text =
+    case
+      when is_weak_bang then 'weak!'
+      when is_weak then 'weak'
+      else token.kind.to_string()
   const modifier = MemberModifier.parse(text)
   tokens.next() if modifier
-  tokens.next() if is_weak
+  tokens.next() if is_weak_bang
   modifier
 
-# `[const | var | weak!] name[: Type][ = [default] value]`, with a type, a value or both.
+# `[const | var | weak | weak!] name[: Type][ = [default] value]`, with a type, a value or both.
 const parse_member = (tokens: TokenStream) ->
   const token = tokens.peek()
   const modifier = parse_member_modifier(tokens)

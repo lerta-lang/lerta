@@ -1,0 +1,56 @@
+# Weak locals and fields wherever locals and fields go: in a function that yields and in one that
+# awaits, captured by a literal inside another, and read through a union. A field's initializer
+# may make the object, which nothing else then holds; a weak var may be given the object it holds.
+import sleep from 'std:time'
+
+class Item
+  name: String
+  deinit = -> print "drop #{@name}"
+
+class Holder
+  weak item: Item? = Item(name: 'made')
+  weak other: Item? = default nil
+
+struct Other
+  weak_free = 1
+
+const names = (item: Item) ->
+  weak const held = item
+  yield held?.name ? 'gone'
+  yield held?.name ? 'gone'
+
+const later = (item: Item) ->
+  weak const held = item
+  await sleep(0)
+  print held?.name ? 'gone'
+
+const nested = (item: Item) ->
+  weak const held = item
+  const outer = ->
+    const inner = -> held?.name ? 'gone'
+    inner()
+  outer()
+
+const read = (holder: Holder | Other) ->
+  case holder
+    when Holder then holder.other?.name ? 'none'
+    else 'other'
+
+const run = ->
+  const item = Item(name: 'item')
+  print names(item).to_array().join(' ')
+  await later(item)
+  print nested(item)
+  print read(Holder(other: item))
+  print Holder().item?.name ? 'gone'
+  weak var same = item
+  same = item
+  print same?.name ? 'gone'
+
+await run()
+
+# `weak` stays usable as a name.
+class Named
+  weak: Int
+const weak = Named(weak: 1).weak
+print weak

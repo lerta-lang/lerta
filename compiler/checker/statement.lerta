@@ -18,8 +18,8 @@ import Body, SelfContext from './shared'
 import define_top_level from './top_level_values'
 import names_type_or_import, resolve from './type_names'
 import
-  format_type, FunctionType, is_kind, is_one_of_kinds, IterType, never_type, PromiseType, Type,
-  void_type
+  format_type, FunctionType, inner_of, is_kind, is_one_of_kinds, IterType, never_type, ObjectType,
+  optional_type, OptionalType, PromiseType, Type, void_type
 from '../types'
 
 # Does nothing, where a block has nothing more to define or check.
@@ -177,12 +177,27 @@ const check_declaration = (body: Body, declaration: Declaration) ->
   const type_name = declaration.type
   const annotated = type_name then resolve(body.program, body.resolver, type_name)
   expect_type body, value, annotated if annotated
-  const type = annotated ? type_of(body, value)
-  reject_if_not_storable body, type, value
+  const value_type = annotated ? type_of(body, value)
+  reject_if_not_storable body, value_type, value
   # An exported value is for other modules to use.
-  const { name, mutable, exported } = declaration
+  const { name, mutable, exported, weak } = declaration
+  const type = weak then weak_local_type(body, declaration, value_type) else value_type
   const declared = not declaration.of_loop
-  define_local body, Local(type, mutable, declared, identifier: name, used: exported)
+  define_local body, Local(type, mutable, declared, weak, identifier: name, used: exported)
+
+# A weak local holds an object of a class, or nil, and is no top-level value, which would stay
+# for good.
+const weak_local_type = (body: Body, declaration: Declaration, value_type: Type) ->
+  const program = body.program
+  const at = declaration.position
+  fail program, at, 'a weak const or var can only be a local' if body.is_top_level()
+  if declaration.type != nil and not (value_type is OptionalType)
+    const written = "#{format_type(value_type)}?"
+    fail program, at, "a weak const or var may hold nil: write its type as #{written}"
+  const object = inner_of(value_type) as ObjectType?
+  const holds_class = object?.is_struct == false
+  fail program, at, 'a weak const or var holds an object of a class' if not holds_class
+  optional_type value_type
 
 # nil alone gives no type, and void and never give no value.
 const reject_if_not_storable = (body: Body, type: Type, value: Expression) ->

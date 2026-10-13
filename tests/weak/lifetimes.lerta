@@ -1,0 +1,48 @@
+# Where a weak field or local stands for nothing: left out of the constructor, set to its own
+# object, which its deinit then finds gone, or given nil; and the cycle of an object that holds a
+# literal, two levels deep, that captures it weakly, which is freed.
+class Node
+  name: String
+  weak peer: Node?
+  init = -> @peer = @ if @name == 'self'
+  deinit = -> print "drop #{@name}: #{@peer?.name ? 'no peer'}"
+
+class Box<T>
+  weak item: Node? = default nil
+  value: T
+  set = (node: Node) -> @item = node
+
+class Clicker
+  on_click: (() -> String)? = nil
+  init = ->
+    weak const me = @
+    @on_click = ->
+      const describe = -> me != nil then 'alive' else 'gone'
+      describe()
+  deinit = -> print 'drop clicker'
+
+const run = (missing: Node?) ->
+  const alone = Node(name: 'alone')
+  print alone.peer?.name ? 'no peer'
+  const own = Node(name: 'self')
+  print own.peer?.name ? 'no peer'
+  const box = Box(value: 1)
+  box.set alone
+  print box.item?.name ? 'none'
+  weak const nothing = missing
+  print nothing?.name ? 'nil'
+  const clicker = Clicker()
+  print clicker.on_click!()
+run(nil)
+
+# The literal outlives the object it captures weakly.
+const outlive = ->
+  const click = Clicker().on_click!
+  print click()
+outlive()
+
+# A weak local in a block of the top-level code is a local.
+if true
+  const kept = Node(name: 'kept')
+  weak const seen = kept
+  print seen?.name ? 'gone'

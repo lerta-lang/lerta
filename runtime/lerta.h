@@ -139,7 +139,7 @@ void lerta_run_deinit(void *object, void (*deinit)(void *object));
 // keeps its box. Whichever goes first clears the other's pointer, so that the object is freed as
 // soon as nothing else holds it.
 void *lerta_weak_box(void *object, void **slot);
-// The object of the box, borrowed, or NULL if it is gone.
+// The object of the box, borrowed, or NULL if it is gone or the box is NULL, as for nil.
 void *lerta_weak_object(void *box);
 // Called first by the drop function of a class's object, with the place of its box. A box made
 // for the object after that, as by its deinit, holds no object.

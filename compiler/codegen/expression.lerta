@@ -172,9 +172,14 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
   const field_type = field.type!
   const pointer = emit_field_pointer(ir, object, info, name)
   const loaded = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
-  # The object is held while its weak field is checked.
+  # The object is held while its `weak!` field is checked; a `weak` one gives nil once its object is
+  # gone.
   const read_weak = -> weak_object(g, loaded)
-  const value = field.weak then holding(g, object, object_type, read_weak) else loaded
+  const value =
+    case
+      when not field.weak then loaded
+      when field_type is OptionalType then emit_weak_object(ir, loaded)
+      else holding(g, object, object_type, read_weak)
   emit_retain_value ir, value, field_type
   emit_release ir, object
   value
@@ -275,13 +280,18 @@ export const slot_pointer = (g: Generator, local: SlotLocal) ->
 # reference.
 export const read_local = (g: Generator, local: CodegenLocal, type: Type) ->
   const ir = g.ir
-  const value =
-    case local
-      when SlotLocal then ir.assign("load #{ir_type(local.type)}, ptr #{slot_pointer(g, local)}")
-      when ValueLocal then local.operand
+  const held = held_value(g, local)
+  # A weak local's object, which may be gone, is never narrowed.
+  const value = local.weak then emit_weak_object(ir, held) else held
   emit_retain_value ir, value, local.type
   const is_narrowed = local.type is OptionalType and not (type is OptionalType)
   is_narrowed then emit_unwrap(ir, value, local.type) else value
+
+# What the local holds, borrowed: its value, or a weak local's box.
+export const held_value = (g: Generator, local: CodegenLocal) ->
+  case local
+    when SlotLocal then g.ir.assign("load #{ir_type(local.type)}, ptr #{slot_pointer(g, local)}")
+    when ValueLocal then local.operand
 
 # The Error becomes the exception (see exceptions).
 const generate_throw = (g: Generator, throw_expression: Throw) ->

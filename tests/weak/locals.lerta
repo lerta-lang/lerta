@@ -1,0 +1,50 @@
+# A weak const or var holds an object of a class without keeping it alive, and reads as nil once
+# the object is freed; a function literal that captures one holds no reference to the object, so
+# that an object can hold such a literal without a cycle.
+class Button
+  name: String
+  on_press: (() -> void)? = nil
+  presses = 0
+  init = ->
+    weak const me = @
+    @on_press = ->
+      if const button = me
+        button.presses += 1
+  deinit = -> print "drop #{@name}"
+
+const press_twice = ->
+  const button = Button(name: 'ok')
+  button.on_press!()
+  button.on_press!()
+  print button.presses
+press_twice()
+
+# A weak var can be assigned, nil too; reading it gives a strong reference, which keeps the
+# object while it is held.
+const reassign = ->
+  const first = Button(name: 'first')
+  weak var current = first
+  print current?.name ? 'gone'
+  const make_second = ->
+    const second = Button(name: 'second')
+    current = second
+    print current?.name ? 'gone'
+  make_second()
+  print current?.name ? 'gone'
+  current = nil
+  print current?.name ? 'gone'
+  current = first
+  const held = current
+  print held?.name ? 'gone'
+reassign()
+
+# A captured weak var is shared, as any var is.
+const shared = ->
+  const button = Button(name: 'shared')
+  weak var target: Button? = nil
+  const set = -> target = button
+  const name = -> target?.name ? 'none'
+  print name()
+  set()
+  print name()
+shared()
