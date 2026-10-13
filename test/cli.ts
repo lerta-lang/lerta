@@ -1142,9 +1142,9 @@ const run_cases: RunCase[] = [
     stdout: '0\n',
   },
   {
-    name: 'gives the exit code of a leak, which the unoptimized program reports',
+    name: 'reports a leak of the unoptimized program, whose exit code it leaves alone',
     args: ['run', join(twice_dir, 'leak.lerta'), join(twice_dir, 'leak.c')],
-    status: 1,
+    status: 0,
     stdout: '',
     stderr: 'leak: 1 object(s)\n',
   },

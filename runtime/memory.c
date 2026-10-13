@@ -163,9 +163,9 @@ void lerta_weak_detach(void **slot) {
   *slot = DROPPING;
 }
 
-bool lerta_check_leaks(void) {
+void lerta_report_leaks(void) {
 #ifdef LERTA_DEBUG
-  if (live_objects == 0) return true;
+  if (live_objects == 0) return;
   static const uint8_t prefix[] = "leak: ";
   static const uint8_t suffix[] = " object(s)\n";
   uint8_t count[LERTA_INT_TEXT_MAX];
@@ -173,8 +173,5 @@ bool lerta_check_leaks(void) {
   lerta_stderr_write(prefix, sizeof prefix - 1);
   lerta_stderr_write(count + start, LERTA_INT_TEXT_MAX - start);
   lerta_stderr_write(suffix, sizeof suffix - 1);
-  return false;
-#else
-  return true;
 #endif
 }

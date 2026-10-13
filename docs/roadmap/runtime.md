@@ -31,7 +31,6 @@ What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is i
 For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-structs)). The plan is to make them hard to write, and to report the ones that are written:
 
 - Cycles across libraries are left to the leak check of the debug runtime ([internals](../internals.md#leak-checking)).
-- A leak that the debug runtime reports becomes a warning, not a failure: the program exits with 0, rather than 1 as now ([compiler](../reference/compiler.md)), so that one cycle does not fail a program whose output is right. The run tests still catch it, as an unexpected line in stderr.
 - The warning of a literal that captures `@` and is stored where `@` holds it ([errors](../reference/errors.md#cycles)) extends, with input and output, to a literal given to a method that keeps its argument where its object holds it, as `@button.listen(-> @count += 1)` does if `listen` stores it: a method's parameters that reach a field or a collection are found once, as the method is checked. Callbacks kept by C functions need a way to say so.
 
 ### Reference count operations

@@ -62,11 +62,18 @@ $(BOOTSTRAP)/stage2.ll: bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta dump-llvm $(MAIN) > $@
 
+# The debug runtime reports a leak to stderr without failing, so a run of stage2 fails on the report.
+# $(1) is the command line, $(2) the file that keeps its stderr meanwhile.
+define run_stage2_without_leaks
+$(RUN_STAGE2) $(1) 2> $(2); status=$$?; cat $(2) >&2; \
+  if grep -q '^leak: ' $(2); then status=1; fi; rm -f $(2); exit $$status
+endef
+
 $(BOOTSTRAP)/stage3$(EXE): $(STAGE2)
-	$(RUN_STAGE2) build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
+	$(call run_stage2_without_leaks,build $(MAIN) -o $@ -Werror $(TARGET_FLAGS),$@.stderr)
 
 $(BOOTSTRAP)/stage3.ll: $(STAGE2)
-	$(RUN_STAGE2) dump-llvm $(MAIN) > $@
+	$(call run_stage2_without_leaks,dump-llvm $(MAIN) > $@,$@.stderr)
 
 # Only the IR is compared (see docs/internals.md#bootstrap): that of stage2, which bin/lerta
 # prints, and that of stage3, which stage2 prints. For Windows, stage2 builds stage3 with a clang for

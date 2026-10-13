@@ -106,7 +106,7 @@ const checks: Check[] = [
     name: 'the debug runtime reports a leak',
     run: () => {
       const { stderr, status } = run_main('leak_debug', leak, false)
-      return [...compare_text('stderr', 'leak: 1 object(s)\n', stderr), ...expect_status(1, status)]
+      return [...compare_text('stderr', 'leak: 1 object(s)\n', stderr), ...expect_status(0, status)]
     },
   },
   {

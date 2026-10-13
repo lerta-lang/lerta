@@ -5,9 +5,9 @@
 // files linked with a program use.
 #include "lerta.h"
 
-// Memory (memory.c). With LERTA_DEBUG, live objects are counted; returns false after reporting a
-// leak to stderr.
-bool lerta_check_leaks(void);
+// Memory (memory.c). With LERTA_DEBUG, live objects are counted, and those left are reported to
+// stderr as a leak.
+void lerta_report_leaks(void);
 // malloc, realloc and calloc that panic when out of memory instead of returning NULL.
 void *lerta_checked_malloc(size_t size);
 void *lerta_checked_realloc(void *memory, size_t size);

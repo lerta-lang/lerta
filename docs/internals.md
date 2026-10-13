@@ -79,7 +79,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 - A debug runtime counts live objects (allocations minus releases, excluding immortal static objects).
 - At exit, a non-zero count is reported as a leak. **Planned:** the remaining objects are traversed to report cycles (by type).
-- Release builds do not count. A build without `-O` uses the debug runtime. The run tests build so, and fail on any leak.
+- Release builds do not count. A build without `-O` uses the debug runtime. The run tests build so, and fail on any leak, as an unexpected line in stderr; so does the bootstrap, which checks stage2's stderr for it.
 - An exit through an uncaught `throw` is not checked, since it ends the program in the middle of its work.
 
 ## Objects
