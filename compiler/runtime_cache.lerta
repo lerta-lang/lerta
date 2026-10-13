@@ -1,0 +1,135 @@
+# Compiles the runtime once for each kind of build, and keeps its object files in a cache
+# directory, so that a build only links them (see docs/reference/compiler.md).
+import { is_file, make_dir, remove_tree, rename, write_file } from 'std:io'
+import { env, run } from 'std:process'
+import { embedded_source, EMBEDDED_PATHS } from './embedded'
+import { build_flags } from './clang_flags'
+import { CompileError } from './errors'
+import { hex } from './hex'
+import { basename, join } from './paths'
+
+const RUNTIME_PATHS = [path for path in EMBEDDED_PATHS when path.starts_with('runtime/')]
+
+# The object files of the runtime for a build with `optimize`, for `target` or else the host,
+# compiled into the cache first if it does not have them; nil if clang fails, after printing its
+# messages. `temp_dir` is the build's own temporary directory, whose name no other build has.
+export const runtime_objects = (optimize: Bool, target: String?, temp_dir: String) ->
+  const clang_version = clang_version_text() ? return nil
+  const dir = join(cache_dir(), cached_runtime_name(optimize, target, clang_version))
+  const objects = [join(dir, object_name(path)) for path in c_paths()]
+  return objects if is_complete(objects)
+  if objects.iter().any((object) -> is_file(object))
+    # Another build may have renamed its runtime into place meanwhile, which puts all the objects
+    # there at once. Otherwise a person has removed some of them; removing the rest here could
+    # pull them from under a build that is linking with them.
+    return objects if is_complete(objects)
+    throw CompileError(message: "the cached runtime #{dir} is incomplete: remove it")
+  const staging_dir = "#{dir}.staging-#{basename(temp_dir)}"
+  make_dir staging_dir
+  const compiled = try
+    compile_runtime(optimize, target, staging_dir, temp_dir)
+  catch error
+    remove_tree staging_dir
+    throw error
+  if not compiled
+    remove_tree staging_dir
+    return nil
+  move_into_place staging_dir, dir, objects
+  objects
+
+# What `clang --version` prints, or nil if clang fails.
+const clang_version_text = (): String? ->
+  const output: Array<Byte> = []
+  return nil if run('clang', ['--version'], output) != 0
+  output.to_binary().text() ? throw CompileError(message: 'clang --version is not valid UTF-8')
+
+# `$LERTA_CACHE_DIR`, or else `$XDG_CACHE_HOME/lerta`, or else `~/.cache/lerta`, made if missing.
+# An empty variable counts as unset, as the XDG specification has it.
+const cache_dir = ->
+  const dir = non_empty_env('LERTA_CACHE_DIR') ? default_cache_dir()
+  try
+    make_dir dir
+  catch _
+    throw CompileError(message: "cannot make the cache directory: #{dir}")
+  dir
+
+const default_cache_dir = ->
+  if const cache_home = non_empty_env('XDG_CACHE_HOME')
+    return join(cache_home, 'lerta')
+  if const home = non_empty_env('HOME')
+    return join(home, '.cache/lerta')
+  throw CompileError(message: 'no cache directory: set HOME or LERTA_CACHE_DIR')
+
+const non_empty_env = (name: String): String? ->
+  const value = env(name)
+  value != '' then value else nil
+
+# Such as `runtime-debug-arm64-apple-darwin25.6.0-clang17-3F9A2C1D`, which a person can tell
+# apart from the others. The hash, of the runtime's sources, of the flags and of clang's version,
+# which `-flto` objects depend on, tells apart the builds that the rest of the name does not.
+const cached_runtime_name = (optimize: Bool, target: String?, clang_version: String) ->
+  const kind = optimize then 'release' else 'debug'
+  const target_name = target ? version_line_value(clang_version, 'Target: ') ? 'unknown'
+  const is_path = target_name.split('/').length > 1 or target_name.split('\\').length > 1
+  throw CompileError(message: "not a target: #{target_name}") if is_path
+  const clang_name = "clang#{major_version(clang_version) ? 'unknown'}"
+  const hash = hex(runtime_hash([clang_version, build_flags(optimize, target).join(' ')]), 8)
+  "runtime-#{kind}-#{target_name}-#{clang_name}-#{hash}"
+
+# The rest of the line of `clang --version` that starts with `prefix`.
+const version_line_value = (clang_version: String, prefix: String): String? ->
+  for line in clang_version.split("\n")
+    return value if const value = line.without_prefix(prefix)
+  nil
+
+# The number before the first `.` of the word after `version`, as in `clang version 17.0.0`.
+const major_version = (clang_version: String): String? ->
+  const words = clang_version.split("\n")[0].split(' ')
+  for i in 1...words.length
+    return words[i].split('.')[0] if words[i - 1] == 'version'
+  nil
+
+# A polynomial hash modulo the largest prime below 2^32, so that it fits in 8 hex digits and its
+# products stay far within an Int.
+const HASH_MODULUS = 4294967291
+
+const runtime_hash = (texts_besides_sources: Array<String>) ->
+  var hash = 0
+  const texts = [texts_besides_sources...]
+  for path in RUNTIME_PATHS
+    texts.push path
+    texts.push embedded_source(path)!
+  for text in texts
+    hash = (hash * 257 + byte.to_int() + 1) % HASH_MODULUS for byte in text.binary
+    hash = (hash * 257) % HASH_MODULUS
+  hash
+
+const c_paths = -> [path for path in RUNTIME_PATHS when path.ends_with('.c')]
+
+const object_name = (c_path: String) -> "#{basename(c_path).without_suffix('.c')!}.o"
+
+# Writes the runtime's sources to `temp_dir` and compiles each C file into `staging_dir`; false if
+# clang fails.
+const compile_runtime = (optimize: Bool, target: String?, staging_dir: String, temp_dir: String) ->
+  const source_dir = join(temp_dir, 'runtime')
+  make_dir source_dir
+  for path in RUNTIME_PATHS
+    write_file join(source_dir, basename(path)), embedded_source(path)!.binary
+  const flags = build_flags(optimize, target)
+  for path in c_paths()
+    const source = join(source_dir, basename(path))
+    const object = join(staging_dir, object_name(path))
+    return false if run('clang', ['-c', flags..., source, '-o', object]) != 0
+  true
+
+const is_complete = (objects: Array<String>) -> objects.iter().all((object) -> is_file(object))
+
+# Moves the compiled runtime into place, unless another build has moved its own there first,
+# which is as good.
+const move_into_place = (staging_dir: String, dir: String, objects: Array<String>) ->
+  try
+    rename staging_dir, dir
+  catch _
+    remove_tree staging_dir
+    if not is_complete(objects)
+      throw CompileError(message: "cannot move the compiled runtime into the cache: #{dir}")

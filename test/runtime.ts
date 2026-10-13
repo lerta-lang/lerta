@@ -20,7 +20,8 @@ const work_dir = mkdtempSync(join(tmpdir(), 'lerta-runtime-'))
 
 const runtime_c_files = readdirSync(runtime_dir).filter((file) => file.endsWith('.c'))
 
-// The flags of clang_args in compiler/build.lerta, which the compiler cannot apply to C alone.
+// The flags of optimization_flags in compiler/clang_flags.lerta, which the compiler cannot apply
+// to C alone.
 const runtime_clang_args = (optimize: boolean): string[] => [
   ...(optimize ? ['-O2', '-flto'] : ['-D', 'LERTA_DEBUG']),
   ...runtime_c_files.map((file) => join(runtime_dir, file)),

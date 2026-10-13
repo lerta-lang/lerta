@@ -1,0 +1,22 @@
+# What clang is given for each kind of build, which the program and the runtime share.
+
+export const build_flags = (optimize: Bool, target: String?) ->
+  [optimization_flags(optimize)..., target_flags(target)...]
+
+# Link-time optimization lets the generated code inline the runtime's C functions; unoptimized
+# builds use the debug runtime, which checks for leaks at exit. test/runtime.ts builds the runtime
+# with the same flags.
+const optimization_flags = (optimize: Bool) ->
+  optimize then ['-O2', '-flto'] else ['-D', 'LERTA_DEBUG']
+
+const is_mingw = (target: String) -> target.ends_with('-w64-mingw32')
+
+const target_flags = (target: String?): Array<String> ->
+  return [] if not target
+  # GNU ld, which clang uses for mingw by default, cannot link the bitcode of -flto.
+  is_mingw(target) then ["--target=#{target}", '-fuse-ld=lld'] else ["--target=#{target}"]
+
+# What the name of an executable for the target ends with: `.exe` for Windows. Without a target,
+# it is for the host, which is not Windows, as the compiler does not run there yet.
+export const executable_suffix = (target: String?) ->
+  target and is_mingw(target) then '.exe' else ''

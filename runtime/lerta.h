@@ -231,7 +231,10 @@ LertaArray *lerta_argv(void);
 // Flushes stdout and ends the program; leaks are not checked, as for a throw. A code out of 0 to
 // 255 throws a ValueError instead, and the call returns.
 void lerta_exit(int64_t code);
-int64_t lerta_run(const LertaString *command, const LertaArray *args);
+// With `output`, an array of bytes, the program's standard output is appended to it.
+int64_t lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output);
+// The value of an environment variable, as a Binary, or NULL if it is not set.
+LertaString *lerta_env(const LertaString *name);
 
 // Files (file.c). A failure throws.
 LertaString *lerta_read_file(const LertaString *path);
@@ -240,6 +243,8 @@ bool lerta_is_file(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);
 LertaString *lerta_make_temp_dir(void);
 void lerta_remove_tree(const LertaString *path);
+void lerta_make_dir(const LertaString *path);
+void lerta_rename(const LertaString *from, const LertaString *to);
 
 // Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. For how stdout is
 // buffered, which init decides, see docs/internals.md#output.

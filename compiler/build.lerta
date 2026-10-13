@@ -1,14 +1,15 @@
-# Builds a program: has clang compile the IR that codegen generates for it and link it with the
-# runtime, both written to a temporary directory, which is removed afterwards.
+# Builds a program: has clang compile the IR that codegen generates for it, written to a temporary
+# directory, which is removed afterwards, and link it with the runtime's cached objects.
 import { make_temp_dir, remove_tree, stderr, write_file } from 'std:io'
 import { exit, run } from 'std:process'
 import { all_warnings } from './checker/diagnostics'
 import { check_modules } from './checker/modules'
+import { build_flags, executable_suffix } from './clang_flags'
 import { generate } from './codegen/codegen'
-import { embedded_source, EMBEDDED_PATHS } from './embedded'
 import { CompileError } from './errors'
 import { load_modules } from './loader'
-import { basename, join } from './paths'
+import { join } from './paths'
+import { runtime_objects } from './runtime_cache'
 
 # What to build: the executable `output`, or one in the temporary directory if nil, for `target`
 # (a triple such as i686-linux-gnu) or else for the host, linked with `linked_files`, such as C
@@ -42,9 +43,8 @@ export const build_and_run = (request: BuildRequest, args: Array<String>) ->
   build_then request, (executable) -> run(executable, args)
 
 # Builds the executable, then has `use` take it while the temporary directory, which holds the
-# IR, the runtime and, without an output, the executable, is still there. Exits with the code that
-# `use` returns. clang's messages go to stderr as clang writes them, and its failure exits with
-# code 1.
+# IR and, without an output, the executable, is still there. Exits with the code that `use`
+# returns. clang's messages go to stderr as clang writes them, and its failure exits with code 1.
 const build_then = (request: BuildRequest, use: (String) -> Int) ->
   const ir = generate_ir(request.source, request.warnings_as_errors)
   const not_utf8 = CompileError(message: 'the temporary directory is not valid UTF-8')
@@ -53,41 +53,16 @@ const build_then = (request: BuildRequest, use: (String) -> Int) ->
     const ir_path = join(dir, 'program.ll')
     write_file ir_path, ir.binary
     const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
-    const clang_status = run('clang', clang_args(request, ir_path, write_runtime(dir), executable))
-    clang_status == 0 then use(executable) else 1
+    const runtime = runtime_objects(request.optimize, request.target, dir)
+    const linked = runtime and run('clang', clang_args(request, ir_path, runtime, executable)) == 0
+    linked then use(executable) else 1
   finally
     remove_tree dir
   exit code
 
-# Writes the embedded runtime, runtime/*.c and runtime/*.h, to `dir`, and returns the paths of
-# the C files.
-const write_runtime = (dir: String) ->
-  const c_files: Array<String> = []
-  for path in EMBEDDED_PATHS
-    continue if not path.starts_with('runtime/')
-    const file = join(dir, basename(path))
-    write_file file, embedded_source(path)!.binary
-    c_files.push file if file.ends_with('.c')
-  c_files
-
-const is_mingw = (target: String) -> target.ends_with('-w64-mingw32')
-
-# What the name of an executable for the target ends with: `.exe` for Windows. Without a target,
-# it is for the host, which is not Windows, as the compiler does not run there yet.
-export const executable_suffix = (target: String?) ->
-  target and is_mingw(target) then '.exe' else ''
-
-# test/runtime.ts builds the runtime with the same flags.
-# Link-time optimization lets the generated code inline the runtime's C functions; unoptimized
-# builds use the debug runtime, which checks for leaks at exit.
 const clang_args = (
-  request: BuildRequest, ir_path: String, runtime_c_files: Array<String>, output: String
+  request: BuildRequest, ir_path: String, runtime: Array<String>, output: String
 ) ->
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
-  const args = ['-Wno-override-module', ir_path]
-  if const target = request.target
-    args.push "--target=#{target}"
-    # GNU ld, which clang uses for mingw by default, cannot link the bitcode of -flto.
-    args.push '-fuse-ld=lld' if is_mingw(target)
-  const flags = request.optimize then ['-O2', '-flto'] else ['-D', 'LERTA_DEBUG']
-  [args..., flags..., runtime_c_files..., request.linked_files..., '-o', output]
+  const flags = build_flags(request.optimize, request.target)
+  ['-Wno-override-module', ir_path, flags..., runtime..., request.linked_files..., '-o', output]

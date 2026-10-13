@@ -8,6 +8,8 @@ LERTA_STATIC_STRING(cannot_write, "cannot write file: ");
 LERTA_STATIC_STRING(cannot_resolve, "cannot resolve path: ");
 LERTA_STATIC_STRING(cannot_make_temp_dir, "cannot make a temporary directory");
 LERTA_STATIC_STRING(cannot_remove, "cannot remove: ");
+LERTA_STATIC_STRING(cannot_make_dir, "cannot make directory: ");
+LERTA_STATIC_STRING(cannot_rename, "cannot rename: ");
 
 LertaString *lerta_read_file(const LertaString *path) {
   char *name = lerta_c_string(path);
@@ -63,6 +65,36 @@ void lerta_remove_tree(const LertaString *path) {
   bool removed = name != NULL && lerta_os_remove_tree(name);
   free(name);
   if (!removed) lerta_raise_with(LERTA_IO_ERROR, &cannot_remove, path);
+}
+
+// Each directory that ends before a separator is made first; only whether the whole path is a
+// directory at the end decides, since a parent that cannot be made, such as a drive or a network
+// share on Windows, may be there.
+static bool make_dir_and_parents(char *path) {
+  for (size_t i = 1; path[i] != '\0'; i++) {
+    if (!lerta_os_is_separator(path[i]) || lerta_os_is_separator(path[i - 1])) continue;
+    char separator = path[i];
+    path[i] = '\0';
+    lerta_os_make_dir(path);
+    path[i] = separator;
+  }
+  return lerta_os_make_dir(path);
+}
+
+void lerta_make_dir(const LertaString *path) {
+  char *name = lerta_c_string(path);
+  bool made = name != NULL && name[0] != '\0' && make_dir_and_parents(name);
+  free(name);
+  if (!made) lerta_raise_with(LERTA_IO_ERROR, &cannot_make_dir, path);
+}
+
+void lerta_rename(const LertaString *from, const LertaString *to) {
+  char *from_name = lerta_c_string(from);
+  char *to_name = lerta_c_string(to);
+  bool renamed = from_name != NULL && to_name != NULL && lerta_os_rename(from_name, to_name);
+  free(from_name);
+  free(to_name);
+  if (!renamed) lerta_raise_with(LERTA_IO_ERROR, &cannot_rename, from);
 }
 
 // Reads in chunks, so that files whose size is not known in advance work too.

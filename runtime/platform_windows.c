@@ -181,7 +181,7 @@ static HANDLE open_file(const char *path, DWORD access, DWORD creation, DWORD fl
 static int64_t read_handle(void *file, uint8_t *buffer, int64_t size) {
   DWORD chunk = size > (1 << 30) ? (1 << 30) : (DWORD)size;
   DWORD count;
-  return ReadFile(file, buffer, chunk, &count, NULL) ? count : -1;
+  return ReadFile(file, buffer, chunk, &count, NULL) ? (int64_t)count : -1;
 }
 
 LertaString *lerta_os_read_file(const char *path) {
@@ -275,6 +275,50 @@ char *lerta_os_make_temp_dir(void) {
     if (GetLastError() != ERROR_ALREADY_EXISTS) return NULL;
   }
   return NULL;
+}
+
+bool lerta_os_make_dir(const char *path) {
+  wchar_t *name = to_utf16(path);
+  if (name == NULL) return false;
+  DWORD attributes = CreateDirectoryW(name, NULL) ? FILE_ATTRIBUTE_DIRECTORY
+                                                   : GetFileAttributesW(name);
+  free(name);
+  return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+bool lerta_os_is_separator(char c) {
+  return c == '/' || c == '\\';
+}
+
+bool lerta_os_rename(const char *from, const char *to) {
+  wchar_t *from_name = to_utf16(from);
+  wchar_t *to_name = to_utf16(to);
+  bool renamed = from_name != NULL && to_name != NULL &&
+                 MoveFileExW(from_name, to_name, MOVEFILE_REPLACE_EXISTING);
+  free(from_name);
+  free(to_name);
+  return renamed;
+}
+
+char *lerta_os_env(const char *name) {
+  wchar_t *wide_name = to_utf16(name);
+  DWORD size = wide_name == NULL ? 0 : GetEnvironmentVariableW(wide_name, NULL, 0);
+  char *result = NULL;
+  while (size > 0) {
+    wchar_t *value = lerta_checked_malloc(size * sizeof(wchar_t));
+    value[0] = L'\0';
+    // A call that succeeds need not clear the last error, which tells an empty value apart.
+    SetLastError(ERROR_SUCCESS);
+    DWORD length = GetEnvironmentVariableW(wide_name, value, size);
+    // 0 is an empty value, or a variable removed between the calls.
+    bool is_set = length > 0 || GetLastError() != ERROR_ENVVAR_NOT_FOUND;
+    if (length < size && is_set) result = to_utf8(value);
+    free(value);
+    // The variable grew between the calls; `length` is the size it needs now.
+    size = length < size ? 0 : length;
+  }
+  free(wide_name);
+  return result;
 }
 
 static bool is_dot_or_dot_dot(const wchar_t *name) {
@@ -395,11 +439,27 @@ static wchar_t *search_path(const char *command) {
   return found;
 }
 
+// The end of a pipe's data is an error once the writer has closed it.
+static int64_t read_pipe(void *pipe, uint8_t *buffer, int64_t size) {
+  int64_t count = read_handle(pipe, buffer, size);
+  return count < 0 && GetLastError() == ERROR_BROKEN_PIPE ? 0 : count;
+}
+
 // A command without a directory in it is searched for on PATH only, as on POSIX; CreateProcessW
 // alone would look in the program's directory and the current one first. One with a directory is
 // left to CreateProcessW, which adds .exe if it has no extension. The child gets this program's
-// standard handles even when this program has no console.
-bool lerta_os_run(char **args, int64_t *exit_code) {
+// standard handles even when this program has no console, except for the pipe that it writes its
+// output to, of which only the writing end is inherited.
+bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code) {
+  HANDLE output_read = NULL;
+  HANDLE output_write = GetStdHandle(STD_OUTPUT_HANDLE);
+  SECURITY_ATTRIBUTES inherited = { .nLength = sizeof inherited, .bInheritHandle = TRUE };
+  if (output != NULL && !CreatePipe(&output_read, &output_write, &inherited, 0)) return false;
+  if (output != NULL && !SetHandleInformation(output_read, HANDLE_FLAG_INHERIT, 0)) {
+    CloseHandle(output_read);
+    CloseHandle(output_write);
+    return false;
+  }
   bool has_directory = strpbrk(args[0], "/\\:") != NULL;
   wchar_t *application = has_directory ? NULL : search_path(args[0]);
   char *line = command_line(args);
@@ -409,7 +469,7 @@ bool lerta_os_run(char **args, int64_t *exit_code) {
     .cb = sizeof startup,
     .dwFlags = STARTF_USESTDHANDLES,
     .hStdInput = GetStdHandle(STD_INPUT_HANDLE),
-    .hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE),
+    .hStdOutput = output_write,
     .hStdError = GetStdHandle(STD_ERROR_HANDLE),
   };
   PROCESS_INFORMATION process;
@@ -418,6 +478,12 @@ bool lerta_os_run(char **args, int64_t *exit_code) {
                                 &process);
   free(application);
   free(wide_line);
+  if (output != NULL) {
+    // Closed before reading, so that the pipe ends when the child closes its own end.
+    CloseHandle(output_write);
+    if (started) *output = lerta_read_chunks(read_pipe, output_read);
+    CloseHandle(output_read);
+  }
   if (!started) return false;
   DWORD code;
   if (WaitForSingleObject(process.hProcess, INFINITE) != WAIT_OBJECT_0 ||

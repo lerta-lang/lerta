@@ -88,8 +88,18 @@ char *lerta_os_real_path(const char *path);
 char *lerta_os_make_temp_dir(void);
 // Removes a file, or a directory with everything in it; a symbolic link is removed, not followed.
 bool lerta_os_remove_tree(const char *path);
+// Makes the directory, whose parent must be there; true if it is a directory afterwards, made now
+// or before.
+bool lerta_os_make_dir(const char *path);
+// Whether the byte separates the directories of a path.
+bool lerta_os_is_separator(char c);
+// Moves a file or a directory, replacing a file at `to`.
+bool lerta_os_rename(const char *from, const char *to);
+// The value of an environment variable, which the caller frees, or NULL if it is not set.
+char *lerta_os_env(const char *name);
 // Runs the command `args[0]`, found as the system finds commands, with `args`, which end with
-// NULL, and waits for it to end.
-bool lerta_os_run(char **args, int64_t *exit_code);
+// NULL, and waits for it to end. With `output`, its standard output is read into a new string
+// written there; the string is NULL if it cannot be read.
+bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code);
 
 #endif

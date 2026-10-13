@@ -5,6 +5,7 @@
 
 LERTA_STATIC_STRING(exit_code_out_of_range, "exit code out of range (0 to 255)");
 LERTA_STATIC_STRING(cannot_run, "cannot run: ");
+LERTA_STATIC_STRING(cannot_read_output, "cannot read the output of: ");
 
 static int argument_count = 0;
 static char **arguments = NULL;
@@ -35,7 +36,13 @@ void lerta_exit(int64_t code) {
   lerta_os_exit(flushed || code != 0 ? (int)code : 1);
 }
 
-int64_t lerta_run(const LertaString *command, const LertaArray *args) {
+// Appends the bytes of the string to the array of bytes, and releases the string.
+static void append_bytes(LertaArray *array, LertaString *bytes) {
+  for (int64_t i = 0; i < bytes->length; i++) lerta_array_append(array, &bytes->bytes[i]);
+  lerta_release(bytes);
+}
+
+int64_t lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output) {
   int64_t count = args->length + 1;
   char **c_args = lerta_checked_calloc((size_t)count + 1, sizeof(char *));
   c_args[0] = lerta_c_string(command);
@@ -48,12 +55,30 @@ int64_t lerta_run(const LertaString *command, const LertaArray *args) {
   // flush is remembered and reported by the exit code, as for any other write to stdout.
   lerta_stdout_flush();
   int64_t exit_code;
-  bool ran = valid && lerta_os_run(c_args, &exit_code);
+  LertaString *read_output = NULL;
+  bool ran = valid && lerta_os_run(c_args, output == NULL ? NULL : &read_output, &exit_code);
   for (int64_t i = 0; i < count; i++) free(c_args[i]);
   free(c_args);
   if (!ran) {
     lerta_raise_with(LERTA_IO_ERROR, &cannot_run, command);
     return 0;
   }
+  if (output != NULL && read_output == NULL) {
+    lerta_raise_with(LERTA_IO_ERROR, &cannot_read_output, command);
+    return 0;
+  }
+  if (output != NULL) append_bytes(output, read_output);
   return exit_code;
+}
+
+// No variable's name holds `=`, which the system would take as the end of the name.
+LertaString *lerta_env(const LertaString *name) {
+  char *c_name = lerta_c_string(name);
+  bool can_be_set = c_name != NULL && strchr(c_name, '=') == NULL;
+  char *value = can_be_set ? lerta_os_env(c_name) : NULL;
+  free(c_name);
+  if (value == NULL) return NULL;
+  LertaString *result = lerta_string_from_bytes(value, (int64_t)strlen(value));
+  free(value);
+  return result;
 }
