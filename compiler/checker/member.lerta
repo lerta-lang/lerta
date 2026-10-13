@@ -2,6 +2,7 @@
 # the member of a name that an interface reads.
 import Call, FunctionLiteral, Identifier, Member, This from '../ast'
 import builtin_property from './builtins'
+import warn_if_kept from './cycles'
 import fail from './diagnostics'
 import check_arguments, reject_type_arguments, set_type, type_of from './expression'
 import plain_method_type from './extensions'
@@ -26,7 +27,9 @@ export const type_of_method_call = (body: Body, call: Call, member: Member, expe
   if generic == nil
     reject_type_arguments body, call
     const method = type_of_method(body, member, receiver, source)
-    return check_arguments(body, call, method, method_literal_of(body, source, member))
+    const result = check_arguments(body, call, method, method_literal_of(body, source, member))
+    warn_if_kept body, call, member, receiver
+    return result
   const method = type_of_generic_method_call(body, call, member, generic, receiver, expected)
   set_type body, member, method
   method.result

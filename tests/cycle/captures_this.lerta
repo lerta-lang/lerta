@@ -1,0 +1,43 @@
+# A function literal that captures @, stored where @ holds it, is warned about: in a field of @, in
+# an array or a map reached from @, and as an item, a field or a constructor argument of what is
+# stored there. Each cycle here is broken by hand before the object goes, so nothing leaks.
+class Child
+  on_done: () -> Int
+
+class Button
+  on_press: (() -> Int)? = nil
+  handlers: Array<() -> Int> = []
+  by_name: Map<String, () -> Int> = Map()
+  child: Child? = nil
+  boxed: { run: () -> Int }? = nil
+  count = 0
+  init = ->
+    @on_press = -> @count + 1
+    @handlers.push -> @count + 2
+    @by_name['three'] = -> @count + 3
+    @child = Child(on_done: -> @count + 4)
+    @boxed = { run: -> @count + 5 }
+  release = ->
+    @on_press = nil
+    @handlers = []
+    @by_name = Map()
+    @child = nil
+    @boxed = nil
+
+const button = Button()
+print button.on_press!() + button.handlers[0]() + button.by_name['three']!()
+button.release()
+
+# What is no cycle is not warned about: a weak const, a literal that does not capture @, and one
+# that another object holds.
+class Quiet
+  on_press: (() -> Int)? = nil
+  count = 1
+  init = ->
+    weak const me = @
+    @on_press = -> (me?.count ? 0) + 1
+    @on_press = -> 2
+  lend = (other: Quiet) -> other.on_press = -> @count
+
+const quiet = Quiet()
+print quiet.on_press!()

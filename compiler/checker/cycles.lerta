@@ -1,0 +1,62 @@
+# Warns of the cycle that a function literal makes when it captures `@` and is stored where `@`
+# holds it, as docs/reference/errors.md#cycles states.
+import
+  ArrayLiteral, Call, Coalesce, Conditional, Expression, FunctionLiteral, Index, MapLiteral, Member,
+  RecordLiteral, This, TupleLiteral, Unwrap
+from '../ast'
+import keeps_argument from './builtins'
+import warn from './diagnostics'
+import constructed_type from './object'
+import info_of from './object_types'
+import Body from './shared'
+import ObjectType, Type from '../types'
+
+# Warns if storing the value at the target, already checked, makes such a cycle.
+export const warn_if_cycle = (body: Body, target: Expression, value: Expression) ->
+  return if not is_held_by_this(body, target)
+  const literal = capturing_literal(body, value) ? return
+  const advice = 'capture a weak const instead, as in `weak const me = @`'
+  const message = "this function captures @, which then holds it, so neither is freed; #{advice}"
+  warn body.shared, literal.position, message
+
+# Warns if a builtin method that keeps its argument is given one that makes such a cycle.
+export const warn_if_kept = (body: Body, call: Call, member: Member, receiver: Type) ->
+  warn_if_cycle body, member.object, call.args[0] if keeps_argument(receiver, member.name.name)
+
+# Whether the place is a field of `@`, or reached from one, as an item or a field, through `!` too;
+# not through a weak field, which holds its object without keeping it.
+const is_held_by_this = (body: Body, target: Expression): Bool ->
+  case target
+    when This then true
+    when Member then not is_weak_field(body, target) and is_held_by_this(body, target.object)
+    when Index then is_held_by_this(body, target.object)
+    when Unwrap then is_held_by_this(body, target.operand)
+    else false
+
+const is_weak_field = (body: Body, member: Member) ->
+  const object_type = body.facts.types[member.object] as ObjectType? ? return false
+  const name = member.name.name
+  const field = info_of(body.program, object_type).fields.find((each) -> each.name.name == name)
+  field?.weak == true
+
+# A function literal that captures `@`, as the value or among the values it is made of, or as
+# either value that `?` or `then`/`else` may give.
+const capturing_literal = (body: Body, value: Expression): FunctionLiteral? ->
+  const first = (parts: Array<Expression>) ->
+    for part in parts
+      return found if const found = capturing_literal(body, part)
+    nil
+  case value
+    when FunctionLiteral
+      const captures = body.facts.captures[value] ? []
+      captures.any((capture) -> capture.is_this) then value
+    when ArrayLiteral then first(value.elements)
+    when TupleLiteral then first(value.items)
+    when MapLiteral then first([entry.value for entry in value.entries])
+    when RecordLiteral then first([field.value for field in value.fields])
+    when Coalesce then first([value.value, value.fallback])
+    when Conditional then first([value.then_value, value.else_value])
+    when Call
+      return nil if constructed_type(body, value.callee) == nil
+      first [value.args..., [arg.value for arg in value.named_args]...]
+    else nil

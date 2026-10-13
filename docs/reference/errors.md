@@ -57,3 +57,12 @@ These apply when a value in statement position is not captured.
 ## Unused names
 
 A `const` or `var` that is never read (assigning to it does not count) produces a warning, unless its name starts with `_`. A top-level one may be read by any function, so it is warned about only when the whole module compiles.
+
+## Cycles
+
+A function literal that captures `@`, stored where `@` holds it, produces a warning, since the object and the literal then hold each other and neither is ever freed ([objects](objects.md#classes-and-structs)). The warning suggests a [weak local](objects.md#classes-and-structs) to capture instead.
+
+- The literal captures `@` itself, or a `const` that holds `@`, as `const me = @`, not a weak one; a `var` that holds `@` may change, and is not seen.
+- The place is a field reached from `@`, as `@on_press` or `@child.f`, or an item of an array or a map so reached, set by assignment or by `push`, through `!` too; not through a weak field, which holds its object without keeping it.
+- The literal is the value stored, or a value that `?` or `then`/`else` gives, or an item, a field or a constructor argument of it.
+- Only a literal written in place is seen: one held by a local first, as `const g = -> @n` before `@f = g`, or given to a method, is not, and neither is a capture of a const of such a const.

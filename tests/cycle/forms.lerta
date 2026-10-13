@@ -1,0 +1,26 @@
+# A literal that captures a const of @ makes the cycle as one that captures @ does, even through
+# another literal, and so does one in parentheses, or given by `then`/`else` as an item; a weak
+# const of @ makes no cycle, and a var of @, which may change, is not seen. A struct's method may
+# store into a class that @ holds.
+class Holder
+  f: (() -> Int)? = nil
+  list: Array<() -> Int> = []
+  n = 1
+  init = ->
+    const me = @
+    @f = -> me.n
+    @f = -> (-> me.n)()
+    @f = (-> @n)
+    weak const away = @
+    @f = -> away?.n ? 0
+    var changing = @
+    @f = -> changing.n
+    @list = [@n > 0 then (-> @n) else (-> 0)]
+    @f = nil
+    @list = []
+
+print Holder().n
+
+struct Owner
+  holder: Holder
+  hook = -> @holder.f = -> @holder.n

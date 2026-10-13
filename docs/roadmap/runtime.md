@@ -32,7 +32,7 @@ For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-
 
 - Cycles across libraries are left to the leak check of the debug runtime ([internals](../internals.md#leak-checking)).
 - A leak that the debug runtime reports becomes a warning, not a failure: the program exits with 0, rather than 1 as now ([compiler](../reference/compiler.md)), so that one cycle does not fail a program whose output is right. The run tests still catch it, as an unexpected line in stderr.
-- The typical cycle (a closure that captures `@`, held through a field of `@`) gets a compiler warning, which suggests a [weak local](../reference/objects.md#classes-and-structs). It comes before input and output, whose callbacks make such closures common.
+- The warning of a literal that captures `@` and is stored where `@` holds it ([errors](../reference/errors.md#cycles)) extends, with input and output, to a literal given to a method that keeps its argument where its object holds it, as `@button.listen(-> @count += 1)` does if `listen` stores it: a method's parameters that reach a field or a collection are found once, as the method is checked. Callbacks kept by C functions need a way to say so.
 
 ### Reference count operations
 
@@ -42,7 +42,7 @@ First, the operations that this would remove are counted in the generated code, 
 
 ## Concurrency
 
-- **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop moves to libuv, which input and output will need; until then it is the runtime's own, with sleeps only. Before input and output, whose callbacks objects will hold, comes the warning below of the cycles that closures make.
+- **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop moves to libuv, which input and output will need; until then it is the runtime's own, with sleeps only.
 - Parallel computation uses **workers that do not share a heap, with message passing** (Node's worker_threads / the Erlang approach).
 - Programs stay single-threaded, so data races do not exist: there is no thread API (to avoid the GIL path of Python and Ruby).
 
