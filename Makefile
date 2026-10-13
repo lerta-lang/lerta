@@ -16,8 +16,15 @@ else
 COMPILER := bin/lerta
 endif
 BOOTSTRAP := build/bootstrap$(if $(TARGET),-$(TARGET))
+# stage2 runs for its target: under Wine for Windows.
+STAGE2 := $(BOOTSTRAP)/stage2$(EXE)
+RUN_STAGE2 := $(if $(EXE),wine )$(STAGE2)
 
 all: $(COMPILER)
+
+# So that a failed rule, such as `dump-llvm > $@`, leaves no partial target that the next run would
+# take as up to date.
+.DELETE_ON_ERROR:
 
 build/seed.ll: seed/lerta.ll
 	@mkdir -p build
@@ -47,7 +54,7 @@ $(COMPILER): bin/lerta
 endif
 
 # stage2 is unoptimized, so that its runs, which build stage3 and print its IR, check for leaks.
-$(BOOTSTRAP)/stage2: bin/lerta
+$(STAGE2): bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
 
@@ -55,25 +62,19 @@ $(BOOTSTRAP)/stage2.ll: bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta dump-llvm $(MAIN) > $@
 
-$(BOOTSTRAP)/stage3: $(BOOTSTRAP)/stage2
-	$(BOOTSTRAP)/stage2 build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
+$(BOOTSTRAP)/stage3$(EXE): $(STAGE2)
+	$(RUN_STAGE2) build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
 
-$(BOOTSTRAP)/stage3.ll: $(BOOTSTRAP)/stage2
-	$(BOOTSTRAP)/stage2 dump-llvm $(MAIN) > $@
+$(BOOTSTRAP)/stage3.ll: $(STAGE2)
+	$(RUN_STAGE2) dump-llvm $(MAIN) > $@
 
 # Only the IR is compared (see docs/internals.md#bootstrap): that of stage2, which bin/lerta
-# prints, and that of stage3, which stage2 prints.
-ifneq ($(EXE),)
-# Its stages would be Windows programs, which need Wine to run and a clang for Windows to build
-# the next stage.
-check-bootstrap:
-	@echo 'check-bootstrap does not support Windows targets yet' >&2; exit 2
-else
-check-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3
+# prints, and that of stage3, which stage2 prints. For Windows, stage2 builds stage3 with a clang for
+# Windows, which it finds on Wine's PATH.
+check-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3$(EXE)
 	@cmp -s $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll \
 	  || { echo 'bootstrap: stage2 and stage3 have different IR' >&2; exit 1; }
 	@echo 'bootstrap: stage2 and stage3 have the same IR'
-endif
 
 # Written only from IR that check-bootstrap has found to be a fixed point.
 # The seed is written from the host's bootstrap only, so that a target given by mistake cannot

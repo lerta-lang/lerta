@@ -1,7 +1,7 @@
 # Compiles the runtime once for each kind of build, and keeps its object files in a cache
 # directory, so that a build only links them (see docs/reference/compiler.md).
 import is_file, make_dir, read_file, remove_tree, rename, write_file from 'std:io'
-import env, run from 'std:process'
+import env, platform, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from './embedded'
 import build_flags from './clang_flags'
 import CompileError from './errors'
@@ -58,8 +58,8 @@ const clang_version_text = (): String? ->
 const read_text = (path: String) ->
   read_file(path).text() ? throw CompileError(message: "#{path} is not valid UTF-8")
 
-# `$LERTA_CACHE_DIR`, or else `$XDG_CACHE_HOME/lerta`, or else `~/.cache/lerta`, made if missing.
-# An empty variable counts as unset, as the XDG specification has it.
+# `$LERTA_CACHE_DIR`, or else the system's place for caches, made if missing. An empty variable
+# counts as unset, as the XDG specification has it.
 const cache_dir = ->
   const dir = non_empty_env('LERTA_CACHE_DIR') ? default_cache_dir()
   try
@@ -68,7 +68,14 @@ const cache_dir = ->
     throw CompileError(message: "cannot make the cache directory: #{dir}")
   dir
 
-const default_cache_dir = ->
+const default_cache_dir = -> platform == 'windows' then windows_cache_dir() else posix_cache_dir()
+
+const windows_cache_dir = ->
+  if const local_data = non_empty_env('LOCALAPPDATA')
+    return join(local_data, 'lerta')
+  throw CompileError(message: 'no cache directory: set LOCALAPPDATA or LERTA_CACHE_DIR')
+
+const posix_cache_dir = ->
   if const cache_home = non_empty_env('XDG_CACHE_HOME')
     return join(cache_home, 'lerta')
   if const home = non_empty_env('HOME')

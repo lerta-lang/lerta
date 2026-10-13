@@ -19,8 +19,16 @@ is_windows() {
 
 test_target() {
   nice node test/run.ts --target "$1" || return 1
-  # The stages of a Windows target would need Wine and a clang for Windows (see the Makefile).
-  is_windows "$1" || nice make --no-print-directory check-bootstrap TARGET="$1"
+  if is_windows "$1" && ! has_windows_clang; then
+    skip "the bootstrap for $1" "needs a clang for Windows on Wine's PATH"
+    return
+  fi
+  nice make --no-print-directory check-bootstrap TARGET="$1"
+}
+
+# The compiler for Windows builds the next stage of the bootstrap with it.
+has_windows_clang() {
+  wine clang --version >/dev/null 2>&1
 }
 
 # Whether clang builds a C program for the target that this machine then runs. The compiler is

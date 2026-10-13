@@ -30,7 +30,7 @@ The planned design of modules, FFI, the standard library and tools.
 - A formatter (like gofmt) is provided from day one. It applies what the [style](../reference/style.md) can fix mechanically, such as the commas at line ends, the brackets a list can do without and where long lists break.
 - An LSP.
 - Package management.
-- Testing the compiler itself on Windows (its programs are built and run there already: see [platforms](../internals.md#platforms)).
+- Running the compiler's command-line checks (`test/cli.ts`) on Windows (the bootstrap runs there already: see [platforms](../internals.md#platforms)).
 
 ## Open questions
 
