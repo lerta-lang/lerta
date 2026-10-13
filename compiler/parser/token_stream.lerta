@@ -149,6 +149,27 @@ export class TokenStream
       break if not @ends_item(close)
     items
 
+  # Reads the items of an indented block on the next lines, through its end, with `read_item`.
+  # Items are separated as in a list, with a line end, a comma, or both.
+  read_block_items = (read_item: () -> void) ->
+    @expect NEWLINE, 'end of line'
+    @expect INDENT, 'indented block'
+    while @peek().kind != DEDENT
+      read_item()
+      read_item() while @accept_block_comma()
+      @expect_line_end()
+    @next()
+
+  # Whether a comma follows, consumed with the line end after it; an item must follow at the same
+  # indentation.
+  accept_block_comma = ->
+    return false if not @accept(',')
+    @accept NEWLINE
+    const next = @peek()
+    const changes_indentation = next.kind == DEDENT or next.kind == INDENT
+    @fail_expecting next, "an item after ','" if changes_indentation
+    true
+
   # After an item: whether a separator, which is consumed, follows it; otherwise the closing
   # bracket must, and is consumed.
   ends_item = (close: TokenKind) ->

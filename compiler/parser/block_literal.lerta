@@ -23,27 +23,11 @@ export const starts_field_block = (tokens: TokenStream) ->
   starts_block(tokens) and starts_with_name and tokens.peek_at(3).kind == ':'
 
 export const parse_block_literal = (tokens: TokenStream): Expression ->
-  tokens.expect NEWLINE, 'end of line'
-  tokens.expect INDENT, 'indented block'
-  # Diagnostics about the literal point at its first line.
-  const position = token_position(tokens.peek())
+  # Diagnostics about the literal point at its first line, after the line end and the indentation.
+  const position = token_position(tokens.peek_at(2))
   const items: Array<Item> = []
-  while tokens.peek().kind != DEDENT
-    add_item tokens, items
-    add_item tokens, items while accept_comma(tokens)
-    tokens.expect_line_end()
-  tokens.next()
+  tokens.read_block_items -> add_item(tokens, items)
   to_literal items, position
-
-# Whether a comma follows, consumed with the line end after it; an item must follow at the same
-# indentation.
-const accept_comma = (tokens: TokenStream) ->
-  return false if not tokens.accept(',')
-  tokens.accept NEWLINE
-  const next = tokens.peek()
-  const changes_indentation = next.kind == DEDENT or next.kind == INDENT
-  tokens.fail_expecting next, "an item after ','" if changes_indentation
-  true
 
 const add_item = (tokens: TokenStream, items: Array<Item>) ->
   const start = token_position(tokens.peek())

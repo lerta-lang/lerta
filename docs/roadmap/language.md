@@ -9,13 +9,6 @@ The planned syntax, control flow, types, operators and strings.
 - Variadic parameters are `xs...`, and a call spreads an array into them as an array literal spreads it (see [spread](../reference/types.md#array)): `f(args...)`.
 - A function literal held by a local `const` may have [defaults](../reference/functions.md), as a top-level function does. Its defaults may use the locals it captures, so each is computed by a closure.
 - An item inside brackets may open an indented block (a `case`, a function body).
-- The names of an import may be a bracketless block, the `from` on the line after it:
-  ```
-  import
-    ArrayLiteral, Assignment, Await,
-    Cast, Catch
-  from './ast'
-  ```
 - An error in a [call without parentheses](../reference/syntax.md#calls) suggests the fix: `f g x` suggests `f g(x)`, and a callee that is not a name with `.name`s, as `xs[i].push x`, suggests `xs[i].push(x)`. An undefined name that is a word only in its place, as `default` in `default - 1`, says so.
 - An `if` or a `case` value may start on the next line, one level deeper, also as the argument of a call without brackets (`print`, then `case` on the next line) and after the `then` of a `case` arm, as it may after `=`, so that the [style](../reference/style.md) can always put it there.
 

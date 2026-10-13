@@ -58,12 +58,23 @@ export const parse_import = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   if tokens.peek().kind == STRING
     return Import(position, names: [], module: parse_module_name(tokens))
-  tokens.expect '{', "'{' or module name"
+  const ends_line = tokens.peek().kind == NEWLINE
+  const names = ends_line then parse_name_block(tokens) else parse_name_list(tokens)
+  tokens.expect_word 'from'
+  Import names, position, module: parse_module_name(tokens)
+
+const parse_name_list = (tokens: TokenStream) ->
+  tokens.expect '{', "'{', end of line or module name"
   const first = tokens.peek()
   const names = tokens.parse_list('}', -> parse_import_name(tokens))
   tokens.fail_expecting first, 'a name to import' if names.length == 0
-  tokens.expect_word 'from'
-  Import names, position, module: parse_module_name(tokens)
+  names
+
+# The names on the indented lines below `import`; `from` follows on the line after them.
+const parse_name_block = (tokens: TokenStream) ->
+  const names: Array<ImportName> = []
+  tokens.read_block_items -> names.push(parse_import_name(tokens))
+  names
 
 const parse_module_name = (tokens: TokenStream) ->
   const module = tokens.peek()

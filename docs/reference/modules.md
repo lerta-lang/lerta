@@ -6,6 +6,13 @@ import { argv, exit } from 'std:process'
 ```
 
 - A file is a module. `import { a, b } from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import { a as c } from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. Imports are written at the top level. An imported name that is never used is a warning.
+- The names may also be an indented block on the lines below `import`, separated as the items of a [bracketless block](syntax.md#bracketless-blocks), with `from 'module'` on the line after it:
+  ```
+  import
+    ArrayLiteral, Assignment,
+    Await as wait
+  from './ast'
+  ```
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
 - `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)); `std:io`, which `std:builtins` imports, cannot use the builtins, nor, since they need `Stringable` and `Iterable`, interpolation or `for` over an Iterable that is no array, `Binary` or `Iter`. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import { Point } from './lib/geometry'`. Other names are reserved.
 - Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. A top-level value read through a function is checked at run time, so that functions can be declared in any order.
