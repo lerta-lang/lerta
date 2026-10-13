@@ -27,7 +27,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 - `.ll`/bitcode output from `lerta build`.
 - `lerta run` running directly with JIT, and `lerta repl`.
-- A formatter (like gofmt) is provided from day one.
+- A formatter (like gofmt) is provided from day one. It applies what the [style](../reference/style.md) can fix mechanically, such as the commas at line ends, the brackets a list can do without and where long lists break.
 - An LSP.
 - Package management.
 - Testing the compiler itself on Windows (its programs are built and run there already: see [platforms](../internals.md#platforms)).
