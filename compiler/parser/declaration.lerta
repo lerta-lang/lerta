@@ -5,11 +5,11 @@ import
   InterfaceDeclaration, MemberDeclaration, MemberModifier, Statement, StringLiteral, TypeAlias,
   TypeDeclaration
 from '../ast'
-import { parse_identifier, parse_value } from './expression'
+import parse_identifier, parse_value from './expression'
 import
   at_destructuring, parse_destructuring_statement, parse_statement, starts_spaced_operand
 from './statement'
-import { token_position, TokenStream } from './token_stream'
+import token_position, TokenStream from './token_stream'
 import
   parse_aliased_type, parse_named_type, parse_type_annotation, parse_type_name,
   parse_type_parameters
@@ -52,17 +52,14 @@ export const parse_extern = (tokens: TokenStream) ->
   tokens.expect ':', "':'"
   Extern symbol, name, position, type: parse_type_name(tokens)
 
-# `import { a, b } from 'module'`, or `import 'module'` for its effects alone. `from` is not a
+# `import a, b from 'module'`, or `import 'module'` for its effects alone. `from` is not a
 # keyword, so that it stays usable as a name.
 export const parse_import = (tokens: TokenStream) ->
   const position = token_position(tokens.next())
   if tokens.peek().kind == STRING
     return Import(position, names: [], module: parse_module_name(tokens))
-  const names =
-    case tokens.peek().kind
-      when NEWLINE then parse_name_block(tokens)
-      when '{' then parse_braced_names(tokens)
-      else parse_name_line(tokens)
+  const ends_line = tokens.peek().kind == NEWLINE
+  const names = ends_line then parse_name_block(tokens) else parse_name_line(tokens)
   tokens.expect_word 'from'
   Import names, position, module: parse_module_name(tokens)
 
@@ -80,14 +77,6 @@ const expect_name = (tokens: TokenStream, expected: String) ->
   const at_module = tokens.at_word('from') and tokens.peek_at(1).kind == STRING
   const at_name = tokens.peek().kind == IDENTIFIER and not at_module
   tokens.fail_expecting tokens.peek(), expected if not at_name
-
-# Goes once the compiler's own imports no longer use it: the seed reads only this form and blocks.
-const parse_braced_names = (tokens: TokenStream) ->
-  tokens.next()
-  const first = tokens.peek()
-  const names = tokens.parse_list('}', -> parse_import_name(tokens))
-  tokens.fail_expecting first, 'a name to import' if names.length == 0
-  names
 
 # The names on the indented lines below `import`; `from` follows on the line after them.
 const parse_name_block = (tokens: TokenStream) ->

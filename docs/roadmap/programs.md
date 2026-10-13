@@ -4,7 +4,6 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Modules
 
-- `import { ... }` goes, now that the names are written without braces (see [modules](../reference/modules.md)), once the compiler's own imports no longer use it.
 - `import 'module' as mod` gives access as `mod.<exported_name>`, in values and in types (`x: mod.Point`). `mod` is not a value: it can only be followed by `.name`. This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which brings the names in unqualified; the design is open (see below).
 
 ## C ABI / FFI

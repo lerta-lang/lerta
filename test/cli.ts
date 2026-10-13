@@ -556,7 +556,7 @@ const cli_cases: CliCase[] = [
       '      -',
       '        alias: -',
       '        name:',
-      '          identifier 1:10',
+      '          identifier 1:8',
       '            name: "is_given"',
       '-',
       '  declaration 2:1',
