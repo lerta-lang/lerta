@@ -25,6 +25,7 @@ import { compiler, OUTPUT_LIMIT, root_dir } from './lerta.ts'
 import { compare_text, lines } from './expect.ts'
 import { run_checks, run_suite, type Check } from './report.ts'
 import { parse_target } from './target.ts'
+import { NO_WINE_PREFIXES, start_wine_prefixes } from './wine.ts'
 
 const work_dir = mkdtempSync(join(tmpdir(), 'lerta-test-'))
 
@@ -185,14 +186,22 @@ const build_commands = async (): Promise<void> => {
   }
 }
 
+const concurrency = availableParallelism()
+
+// Wine runs a Windows program in a prefix of its own, when there are such prefixes (see wine.ts).
+let wine_prefixes = NO_WINE_PREFIXES
+
 // Runs a built program, whose exit status tells whether it failed, in a directory of its own, so
-// that files it writes do not meet those of the other runs. Wine runs a Windows program.
+// that files it writes do not meet those of the other runs.
 const run_program = (path: string): Promise<{ stdout: string; stderr: string; failed: boolean }> =>
   new Promise((resolve, reject) => {
     const cwd = mkdtempSync(join(work_dir, 'run-'))
     const [file, args] = target.windows ? ['wine', [path]] : [path, []]
-    const options = { cwd, env: command_env, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT } as const
+    const prefix = wine_prefixes.take()
+    const env = prefix === undefined ? command_env : { ...command_env, WINEPREFIX: prefix }
+    const options = { cwd, env, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT } as const
     execFile(file, args, options, (error, stdout, stderr) => {
+      if (prefix !== undefined) wine_prefixes.give_back(prefix)
       // An exit status, or a signal such as a panic's abort, is a failed run; an error with a code
       // of its own, such as too much output, or none, is a failure to run it.
       const ended =
@@ -259,5 +268,10 @@ const test_checks: Check[] = suites.flatMap(collect).flatMap((test) => [
 await run_suite(work_dir, async () => {
   await build_commands()
   for (const dir of skipped_dirs) console.log(`not run for Windows: ${dir}`)
-  return run_checks('run tests', [...stray_checks, ...test_checks], availableParallelism())
+  if (target.windows) wine_prefixes = await start_wine_prefixes(work_dir, concurrency)
+  try {
+    return await run_checks('run tests', [...stray_checks, ...test_checks], concurrency)
+  } finally {
+    await wine_prefixes.stop()
+  }
 })
