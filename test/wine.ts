@@ -63,7 +63,9 @@ const stop_prefixes = async (prefixes: string[]): Promise<void> => {
 // Wine updates a prefix made by another version of it as it starts, in place, which would change
 // the files the copies link to; so the prefix is updated first, and its wineserver stops, writing
 // the registry, before the copies are made.
+// tools/test_cross.sh updates it once for the runs that it starts at the same time.
 const update_source_prefix = async (): Promise<void> => {
+  if (process.env.LERTA_WINE_PREFIX_UPDATED === source_prefix) return
   await run('wine', ['cmd', '/c', 'exit'], process.env)
   await run('wineserver', ['--wait'], process.env)
 }
