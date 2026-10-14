@@ -22,8 +22,11 @@ export const generate_awaiting_function = (
   g: Generator, symbol: String, params: Array<String>, value: Type, generate_body: () -> void
 ) ->
   const body_symbol = suffixed_symbol(symbol, 'coroutine')
-  g.on_return = (result: String) -> emit_resolve(g.ir, value, result)
-  g.unwind_cleanup = -> call_void_runtime(g.ir, 'void @lerta_promise_reject(ptr)', 'ptr %promise')
+  # What g holds captures its builder, not g, which would then hold itself.
+  const body_ir = g.ir
+  g.on_return = (result: String) -> emit_resolve(body_ir, value, result)
+  const reject = 'void @lerta_promise_reject(ptr)'
+  g.unwind_cleanup = -> call_void_runtime(body_ir, reject, 'ptr %promise')
   const end = ->
     emit_release g.ir, '%promise'
     g.ir.emit "br label %#{g.coroutine!.free_label}"
