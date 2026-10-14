@@ -88,15 +88,25 @@ void lerta_array_write(LertaArray *array, int64_t index, const void *item) {
   lerta_release_item(array->item_kind, &old);
 }
 
-void lerta_array_append(LertaArray *array, const void *item) {
+// Kept out of lerta_array_pushed_items, so that the rest, which most pushes end in, is small
+// enough for LLVM to inline into the generated code.
+__attribute__((noinline)) static void grow(LertaArray *array) {
+  int64_t capacity = array->capacity == 0 ? 4 : array->capacity * 2;
   size_t size = (size_t)lerta_item_size(array->item_kind);
-  if (array->length == array->capacity) {
-    int64_t capacity = array->capacity == 0 ? 4 : array->capacity * 2;
-    array->items = lerta_checked_realloc(array->items, (size_t)capacity * size);
-    array->capacity = capacity;
-  }
+  array->items = lerta_checked_realloc(array->items, (size_t)capacity * size);
+  array->capacity = capacity;
+}
+
+uint8_t *lerta_array_pushed_items(LertaArray *array) {
+  if (array->length == array->capacity) grow(array);
+  array->length++;
+  return array->items;
+}
+
+void lerta_array_append(LertaArray *array, const void *item) {
+  lerta_array_pushed_items(array);
   lerta_retain_item(array->item_kind, item);
-  memcpy(item_at(array, array->length++), item, size);
+  memcpy(item_at(array, array->length - 1), item, (size_t)lerta_item_size(array->item_kind));
 }
 
 void lerta_array_append_word(LertaArray *array, int64_t word) {

@@ -1,9 +1,9 @@
-# Operations on arrays in the generated code. Get and set read and write an item in place, as its
-# item_ir_type, after the runtime (runtime/array.c) has checked the index, so that no code there
-# depends on the item kind; other operations go through the runtime, which takes and gives items
-# through pointers to them. An item is a byte, a Byte or a Bool; or 8 bytes, an Int or an enum as
-# is, a Float as its bits and a reference as its address; or an interface value as it is. Map keys,
-# and the items that the runtime hashes and compares, are words: 8 bytes, a Byte or a Bool
+# Operations on arrays in the generated code. Get, set and push read and write an item in place, as
+# its item_ir_type, after the runtime (runtime/array.c) has checked the index or made room, so that
+# no code there depends on the item kind; other operations go through the runtime, which takes and
+# gives items through pointers to them. An item is a byte, a Byte or a Bool; or 8 bytes, an Int or
+# an enum as is, a Float as its bits and a reference as its address; or an interface value as it is.
+# Map keys, and the items that the runtime hashes and compares, are words: 8 bytes, a Byte or a Bool
 # zero-extended (see to_item).
 import emit_branch, emit_when, IrBuilder from './ir_builder'
 import emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
@@ -101,7 +101,7 @@ export const emit_set = (
     const address = emit_item_address(ir, items, index, element)
     emit_retain_value ir, value, element
     const old = emit_load_item(ir, address, element)
-    ir.emit "store #{item_ir_type(element)} #{to_held_item(ir, value, element)}, ptr #{address}"
+    emit_store_item ir, address, value, element
     emit_release_value ir, old, element
   emit_when ir, emit_is_in_range(ir, items), write
 
@@ -112,12 +112,18 @@ const emit_checked_items = (ir: IrBuilder, array: String, index: String) ->
 
 const emit_is_in_range = (ir: IrBuilder, items: String) -> ir.assign("icmp ne ptr #{items}, null")
 
+const emit_store_item = (ir: IrBuilder, address: String, value: String, element: Type) ->
+  ir.emit "store #{item_ir_type(element)} #{to_held_item(ir, value, element)}, ptr #{address}"
+
 const emit_item_address = (ir: IrBuilder, items: String, index: String, element: Type) ->
   ir.assign "getelementptr #{item_ir_type(element)}, ptr #{items}, i64 #{index}"
 
+# The array retains the item, which stays owned by the caller.
 export const emit_push = (ir: IrBuilder, array: String, value: String, element: Type) ->
-  const args = "ptr #{array}, ptr #{emit_item_pointer(ir, value, element)}"
-  call_void_runtime ir, 'void @lerta_array_append(ptr, ptr)', args
+  const items = call_runtime(ir, 'ptr @lerta_array_pushed_items(ptr)', "ptr #{array}")
+  const last = ir.assign("sub i64 #{emit_length(ir, array)}, 1")
+  emit_retain_value ir, value, element
+  emit_store_item ir, emit_item_address(ir, items, last, element), value, element
 
 # The item is owned.
 export const emit_pop = (ir: IrBuilder, array: String, element: Type) ->

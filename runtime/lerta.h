@@ -184,14 +184,18 @@ LertaString *lerta_binary_as_string(LertaString *binary);
 // the item owned.
 LertaArray *lerta_array_create(LertaItemKind item_kind);
 int64_t lerta_array_length(const LertaArray *array);
-// The array's items, all of them, which the generated code reads and writes in place, if the index
-// is in range; otherwise throws and returns NULL.
+// For the runtime's own code: the generated code pushes in place (below).
+void lerta_array_append(LertaArray *array, const void *item);
+void lerta_array_take_last(LertaArray *array, void *item);
+// These two give all the items, not the one at hand, whose place the generated code computes, as
+// only it knows the item size without a branch on the kind (see compiler/codegen/array.lerta).
+// The items, if the index is in range; otherwise throws and returns NULL.
 uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index);
+// The items, after the array has grown by one item, its last, which the caller then writes.
+uint8_t *lerta_array_pushed_items(LertaArray *array);
 // Only the seed calls these two: they go once it is refreshed.
 void lerta_array_read(const LertaArray *array, int64_t index, void *item);
 void lerta_array_write(LertaArray *array, int64_t index, const void *item);
-void lerta_array_append(LertaArray *array, const void *item);
-void lerta_array_take_last(LertaArray *array, void *item);
 // Whether two arrays hold equal items in the same order, and a hash of the items in order.
 bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals);
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
