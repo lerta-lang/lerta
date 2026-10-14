@@ -274,6 +274,16 @@ const generate_identifier = (g: Generator, identifier: Identifier) ->
   const found = local ? panic("no value for '#{name}'")
   read_local g, found, type_of(g, identifier)
 
+# The value of the expression and whether it is owned: borrowed when it is a local whose scope
+# keeps the value for as long as its consumer uses it, so that using an array in a loop retains and
+# releases nothing (see docs/internals.md#memory-management); owned otherwise.
+export const generate_borrowed = (g: Generator, expression: Expression): (String, Bool) ->
+  if expression is Identifier
+    if const local = g.locals.lookup(expression.name)
+      const can_go = local.weak or (local is SlotLocal and local.is_var)
+      return (read_borrowed(g, local, type_of(g, expression)), false) if not can_go
+  (generate(g, expression), true)
+
 # The slot's pointer, once a top-level value is known to be initialized.
 export const slot_pointer = (g: Generator, local: SlotLocal) ->
   if const top_level = local.top_level
@@ -284,11 +294,16 @@ export const slot_pointer = (g: Generator, local: SlotLocal) ->
 # where it is narrowed. Reading a reference retains it, since every expression yields an owned
 # reference.
 export const read_local = (g: Generator, local: CodegenLocal, type: Type) ->
+  const value = read_borrowed(g, local, type)
+  emit_retain_value g.ir, value, type
+  value
+
+# The local's value, borrowed, as read_local reads it.
+const read_borrowed = (g: Generator, local: CodegenLocal, type: Type) ->
   const ir = g.ir
   const held = held_value(g, local)
   # A weak local's object, which may be gone, is never narrowed.
   const value = local.weak then emit_weak_object(ir, held) else held
-  emit_retain_value ir, value, local.type
   const is_narrowed = local.type is OptionalType and not (type is OptionalType)
   is_narrowed then emit_unwrap(ir, value, local.type) else value
 

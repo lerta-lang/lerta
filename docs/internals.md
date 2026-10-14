@@ -73,7 +73,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - Every heap object starts with a header: its reference count and a drop function, which releases what the object owns before it is freed (`runtime/lerta.h`).
 - Static objects such as string literals are made immortal (exempt from count operations).
 - nil is a null pointer for an optional reference, and `{ i1, T }` with a false flag for an optional `Int`, `Byte` or `Bool`.
-- For now, every expression of a reference type yields an owned (+1) reference, and its consumer releases it: arguments are borrowed and released by the caller after the call, and a discarded statement value is released at once. An immortal literal is owned for free.
+- For now, every expression of a reference type yields an owned (+1) reference, and its consumer releases it: arguments are borrowed and released by the caller after the call, and a discarded statement value is released at once. An immortal literal is owned for free. The exception is the array or map of an index, or of an assignment to one, when it is named by a local, a top-level value or an import: it is borrowed, since what holds it keeps it for the whole use, so that a loop over an array retains and releases nothing (`generate_borrowed` in `compiler/codegen/expression.lerta`). A `var` is not borrowed, since evaluating the index or the value may reassign it and drop what it held, and nor is a weak local's object, which may go meanwhile.
 
 ### Leak checking
 

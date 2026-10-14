@@ -3,7 +3,7 @@ import ArrayLiteral, Comprehension, Index, is_spread, MapLiteral from '../ast'
 import emit_array_new, emit_get, emit_push from './array'
 import push_comprehension from './control_flow'
 import emit_exception_check, holding, while_holding from './exceptions'
-import generate, release_if_reference, type_at_use, type_of from './expression'
+import generate, generate_borrowed, release_if_reference, type_at_use, type_of from './expression'
 import Generator from './generator'
 import emit_release from './lerta_ir'
 import emit_map_get, emit_map_new, emit_map_set from './map'
@@ -41,16 +41,18 @@ export const generate_map = (g: Generator, map: MapLiteral) ->
   result
 
 export const generate_index = (g: Generator, index: Index) ->
-  const object = generate(g, index.object)
+  const (object, is_owned) = generate_borrowed(g, index.object)
   const object_type = type_of(g, index.object)
-  const position = holding(g, object, object_type, -> generate(g, index.index))
+  const generate_position = -> generate(g, index.index)
+  const position =
+    is_owned then holding(g, object, object_type, generate_position) else generate_position()
   const item =
     case
       when object_type is MapType then emit_map_get(g.ir, object, position, object_type)
       when is_kind(object_type, 'Binary') then emit_binary_get(g.ir, object, position)
       else emit_get(g.ir, object, position, type_of(g, index))
   release_if_reference g, index.index, position
-  emit_release g.ir, object
+  emit_release g.ir, object if is_owned
   # An index out of range throws.
   emit_exception_check g
   item

@@ -51,11 +51,11 @@ export const lookup_local = (g: Generator, name: String): CodegenLocal? ->
   const global = code.globals[exported.module_index][exported.name]!
   const is_in_cycle = code.module.cycle.contains(exported.module_index)
   return top_level_slot(global, true) if is_in_cycle
-  SlotLocal pointer: global.pointer, type: global.type
+  SlotLocal pointer: global.pointer, type: global.type, is_var: global.is_var
 
 const top_level_slot = (global: TopLevelGlobal, is_checked: Bool) ->
   const top_level = TopLevelSlot(global, is_checked)
-  SlotLocal top_level, pointer: global.pointer, type: global.type
+  SlotLocal top_level, pointer: global.pointer, type: global.type, is_var: global.is_var
 
 # A module's top-level code: the symbol of its function, and whether it awaits, which makes the
 # function return a Promise.
@@ -224,7 +224,7 @@ const generate_function_body = (
     const weak = capture.is_weak
     scope[name] =
       if is_var
-        SlotLocal type, cell, weak, pointer: emit_cell_pointer(ir, type, value)
+        SlotLocal type, cell, weak, is_var, pointer: emit_cell_pointer(ir, type, value)
       else
         ValueLocal(type, weak, operand: value)
   hold_weak_this g, scope if literal.weak
@@ -467,11 +467,11 @@ const generate_declaration = (g: Generator, declaration: Declaration) ->
     const cell = emit_cell(ir, type, value)
     const pointer = emit_cell_pointer(ir, type, cell)
     const owned = CellSlot(cell, is_owned: true)
-    g.locals.define name, SlotLocal(type, pointer, weak, cell: owned)
+    g.locals.define name, SlotLocal(type, pointer, weak, is_var: declaration.mutable, cell: owned)
     return
   if global == nil
     const slot = store_in_slot(g, value, type)
-    g.locals.define name, SlotLocal(type, weak, pointer: slot.pointer)
+    g.locals.define name, SlotLocal(type, weak, is_var: declaration.mutable, pointer: slot.pointer)
     return
   ir.emit "store #{ir_type(type)} #{value}, ptr #{global.pointer}"
   emit_mark_initialized ir, global

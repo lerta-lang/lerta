@@ -1,0 +1,93 @@
+# An array or a map that a local other than a var holds, as a parameter, a loop variable or a const,
+# is borrowed by an index and by an assignment to one, and stays held by its local, even when the
+# index, the key or the value throws, or across an await. A var stays owned, as it may be reassigned
+# meanwhile: the assignment then writes to the array that it held before.
+import sleep from 'std:time'
+import WORDS from './lib/words'
+
+const fill = (xs: Array<String>, word: String) ->
+  xs[i] = word for i in 0...xs.length
+  xs[0]
+
+const count = (rows: Array<Array<Int>>) ->
+  var total = 0
+  for row in rows
+    row[0] += 1
+    total += row[0]
+  total
+
+const fail = (): String -> throw IndexError(message: 'fail')
+
+const lookup = (index: Int) ->
+  const words = ['a'.to_string(), 'b'.to_string()]
+  const counts: Map<String, Int> = Map()
+  counts[words[1]] = 2
+  try
+    print words[index]
+  catch e
+    print e.message
+  try
+    words[index] = 'c'.to_string()
+  catch e
+    print e.message
+  try
+    words[0] = fail()
+  catch e
+    print e.message
+  try
+    counts[fail()] = 3
+  catch e
+    print e.message
+  const first = ->
+    words[0] = 'i'.to_string()
+    words[0]
+  try
+    print counts[fail()] ? 0
+  catch e
+    print e.message
+  words[1] = 'g'.to_string()
+  words[1] + counts['b']!.to_string() + first()
+
+const reset = (): String ->
+  var xs = ['a'.to_string()]
+  const replace = ->
+    xs = ['b'.to_string(), 'c'.to_string()]
+    0
+  xs[replace()] = 'd'.to_string()
+  xs[0] + xs[1]
+
+const later = (xs: Array<String>): Promise<String> ->
+  const ys = ['e'.to_string()]
+  await sleep(0)
+  xs[0] + ys[0]
+
+const bytes = (data: Binary) -> data[1]
+
+const TOP = ['j'.to_string()]
+var swapped = ['m'.to_string()]
+const top = ->
+  TOP[0] = TOP[0] + 'k'
+  WORDS[0] = WORDS[0] + 'n'
+  const swap = ->
+    swapped = ['o'.to_string()]
+    0
+  swapped[swap()] = 'p'.to_string()
+  TOP[0] + WORDS[0] + swapped[0]
+
+const owned = (maybe: Array<Int>?) ->
+  var counts: Map<String, Int> = Map()
+  counts['h'] = 4
+  return counts['h']! if maybe == nil
+  maybe[0] = counts['h']!
+  maybe[0]
+
+print fill(['x'.to_string(), 'y'.to_string()], 'z'.to_string())
+print count([[1], [2, 3]])
+print lookup(1)
+print lookup(2)
+print reset()
+print await later(['f'.to_string()])
+print bytes('ab'.binary)
+print top()
+print owned(nil)
+print owned([0])

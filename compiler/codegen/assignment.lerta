@@ -5,7 +5,9 @@ import emit_get, emit_set from './array'
 import
   emit_exception_check, holding, pop_temporaries, push_temporary, while_holding
 from './exceptions'
-import generate, release_if_reference, slot_pointer, type_at_use, type_of from './expression'
+import
+  generate, generate_borrowed, release_if_reference, slot_pointer, type_at_use, type_of
+from './expression'
 import lookup_local, weak_box_of from './function'
 import Generator, SlotLocal from './generator'
 import emit_field_pointer, emit_member_dispatch from './heap_object'
@@ -84,9 +86,9 @@ const generate_index_assignment = (g: Generator, assignment: Assignment, target:
   return generate_map_assignment(g, assignment, target, object_type) if object_type is MapType
   const ir = g.ir
   const element = type_of(g, target)
-  const array = generate(g, target.object)
+  const (array, is_owned) = generate_borrowed(g, target.object)
   const depth = g.temporaries.length
-  push_temporary g, array, object_type
+  push_temporary g, array, object_type if is_owned
   const index = generate(g, target.index)
   const old = assignment.operator == '=' then '' else emit_get(ir, array, index, element)
   # An index out of range throws.
@@ -97,16 +99,16 @@ const generate_index_assignment = (g: Generator, assignment: Assignment, target:
   const result = combine(g, assignment.operator, old, value, element)
   emit_set ir, array, index, result, element
   emit_release_value ir, result, element
-  emit_release ir, array
+  emit_release ir, array if is_owned
   emit_exception_check g
 
 # Only `=` applies to a map value. The key, like an index, is evaluated before the value.
 const generate_map_assignment = (
   g: Generator, assignment: Assignment, target: Index, type: MapType
 ) ->
-  const map = generate(g, target.object)
+  const (map, is_owned) = generate_borrowed(g, target.object)
   const depth = g.temporaries.length
-  push_temporary g, map, type
+  push_temporary g, map, type if is_owned
   const key = generate(g, target.index)
   push_temporary g, key, type_at_use(g, target.index)
   const value = generate(g, assignment.value)
@@ -114,7 +116,7 @@ const generate_map_assignment = (
   emit_map_set g.ir, map, key, value, type
   release_if_reference g, target.index, key
   release_if_reference g, assignment.value, value
-  emit_release g.ir, map
+  emit_release g.ir, map if is_owned
 
 # For `+=` and so on, the old value is loaded, and owned, before the value is evaluated, as it is
 # combined. Evaluating the value may change the target (a method that assigns the same field, for
