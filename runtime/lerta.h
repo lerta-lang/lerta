@@ -180,10 +180,14 @@ int64_t lerta_binary_find(const LertaString *binary, const LertaString *part, in
 // The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
 LertaString *lerta_binary_as_string(LertaString *binary);
 
-// Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; get and pop
-// write the item owned. An index out of range throws.
+// Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; pop writes
+// the item owned.
 LertaArray *lerta_array_create(LertaItemKind item_kind);
 int64_t lerta_array_length(const LertaArray *array);
+// The array's items, all of them, which the generated code reads and writes in place, if the index
+// is in range; otherwise throws and returns NULL.
+uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index);
+// Only the seed calls these two: they go once it is refreshed.
 void lerta_array_read(const LertaArray *array, int64_t index, void *item);
 void lerta_array_write(LertaArray *array, int64_t index, const void *item);
 void lerta_array_append(LertaArray *array, const void *item);

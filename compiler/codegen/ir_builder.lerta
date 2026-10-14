@@ -117,18 +117,26 @@ export class IrBuilder
   finish = (signature: String) ->
     @module.define_function signature, ['entry:', @stack_slots..., @body...]
 
+# Emits `body` to run only where the condition holds.
+export const emit_when = (ir: IrBuilder, condition: String, body: () -> void) ->
+  const then_label = ir.fresh_label('branch.then')
+  const end_label = ir.fresh_label('branch.end')
+  ir.emit "br i1 #{condition}, label %#{then_label}, label %#{end_label}"
+  ir.start_block then_label
+  body()
+  ir.emit "br label %#{end_label}"
+  ir.start_block end_label
+
 # A value of the IR type: `then_value` where the condition holds, computed only there, and
 # `otherwise` elsewhere.
 export const emit_branch = (
   ir: IrBuilder, type: String, condition: String, then_value: () -> String, otherwise: String
 ) ->
   const from = ir.current_block
-  const then_label = ir.fresh_label('branch.then')
-  const end_label = ir.fresh_label('branch.end')
-  ir.emit "br i1 #{condition}, label %#{then_label}, label %#{end_label}"
-  ir.start_block then_label
-  const value = then_value()
-  const value_block = ir.current_block
-  ir.emit "br label %#{end_label}"
-  ir.start_block end_label
+  var value = ''
+  var value_block = ''
+  const compute = ->
+    value = then_value()
+    value_block = ir.current_block
+  emit_when ir, condition, compute
   ir.assign "phi #{type} [ #{otherwise}, %#{from} ], [ #{value}, %#{value_block} ]"

@@ -1,10 +1,12 @@
-# Operations on arrays in the generated code, through the runtime (runtime/array.c), which takes and
-# gives items through pointers to them. An item is a byte, a Byte or a Bool; or 8 bytes, an Int or
-# an enum as is, a Float as its bits and a reference as its address; or an interface value as it is.
-# Map keys, and the items that the runtime hashes and compares, are words: 8 bytes, a Byte or a Bool
+# Operations on arrays in the generated code. Get and set read and write an item in place, as its
+# item_ir_type, after the runtime (runtime/array.c) has checked the index, so that no code there
+# depends on the item kind; other operations go through the runtime, which takes and gives items
+# through pointers to them. An item is a byte, a Byte or a Bool; or 8 bytes, an Int or an enum as
+# is, a Float as its bits and a reference as its address; or an interface value as it is. Map keys,
+# and the items that the runtime hashes and compares, are words: 8 bytes, a Byte or a Bool
 # zero-extended (see to_item).
-import IrBuilder from './ir_builder'
-import ir_type, ownership from './lerta_ir'
+import emit_branch, emit_when, IrBuilder from './ir_builder'
+import emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import is_kind, is_one_of_kinds, Type, TypeKind from '../types'
 
@@ -80,19 +82,38 @@ export const emit_array_new = (ir: IrBuilder, element: Type) ->
 export const emit_length = (ir: IrBuilder, array: String) ->
   call_runtime ir, 'i64 @lerta_array_length(ptr)', "ptr #{array}"
 
-# The item is owned.
+# The item is owned. An index out of range throws, and gives poison.
 export const emit_get = (ir: IrBuilder, array: String, index: String, element: Type) ->
-  const pointer = emit_item_slot(ir, element)
-  const args = "ptr #{array}, i64 #{index}, ptr #{pointer}"
-  call_void_runtime ir, 'void @lerta_array_read(ptr, i64, ptr)', args
-  emit_load_item ir, pointer, element
+  const items = emit_checked_items(ir, array, index)
+  const read = ->
+    const item = emit_load_item(ir, emit_item_address(ir, items, index, element), element)
+    emit_retain_value ir, item, element
+    item
+  emit_branch ir, ir_type(element), emit_is_in_range(ir, items), read, 'poison'
 
-# The array retains the item, which stays owned by the caller.
+# The array retains the item, which stays owned by the caller. The new item is retained before the
+# old one is released, in case they are the same object.
 export const emit_set = (
   ir: IrBuilder, array: String, index: String, value: String, element: Type
 ) ->
-  const args = "ptr #{array}, i64 #{index}, ptr #{emit_item_pointer(ir, value, element)}"
-  call_void_runtime ir, 'void @lerta_array_write(ptr, i64, ptr)', args
+  const items = emit_checked_items(ir, array, index)
+  const write = ->
+    const address = emit_item_address(ir, items, index, element)
+    emit_retain_value ir, value, element
+    const old = emit_load_item(ir, address, element)
+    ir.emit "store #{item_ir_type(element)} #{to_held_item(ir, value, element)}, ptr #{address}"
+    emit_release_value ir, old, element
+  emit_when ir, emit_is_in_range(ir, items), write
+
+# The items of the array, which are read and written in place, or null, after the runtime has
+# thrown, when the index is out of range.
+const emit_checked_items = (ir: IrBuilder, array: String, index: String) ->
+  call_runtime ir, 'ptr @lerta_array_checked_items(ptr, i64)', "ptr #{array}, i64 #{index}"
+
+const emit_is_in_range = (ir: IrBuilder, items: String) -> ir.assign("icmp ne ptr #{items}, null")
+
+const emit_item_address = (ir: IrBuilder, items: String, index: String, element: Type) ->
+  ir.assign "getelementptr #{item_ir_type(element)}, ptr #{items}, i64 #{index}"
 
 export const emit_push = (ir: IrBuilder, array: String, value: String, element: Type) ->
   const args = "ptr #{array}, ptr #{emit_item_pointer(ir, value, element)}"

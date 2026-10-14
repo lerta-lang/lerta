@@ -65,21 +65,21 @@ void lerta_raise_index_out_of_range(void) {
   lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&index_out_of_range);
 }
 
-static bool check_index(const LertaArray *array, int64_t index) {
-  if (index >= 0 && index < array->length) return true;
+uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index) {
+  if (index >= 0 && index < array->length) return array->items;
   lerta_raise_index_out_of_range();
-  return false;
+  return NULL;
 }
 
 void lerta_array_read(const LertaArray *array, int64_t index, void *item) {
-  if (!check_index(array, index)) return;
+  if (lerta_array_checked_items(array, index) == NULL) return;
   memcpy(item, item_at(array, index), (size_t)lerta_item_size(array->item_kind));
   lerta_retain_item(array->item_kind, item);
 }
 
 // The new item is retained before the old one is released, in case they are the same object.
 void lerta_array_write(LertaArray *array, int64_t index, const void *item) {
-  if (!check_index(array, index)) return;
+  if (lerta_array_checked_items(array, index) == NULL) return;
   lerta_retain_item(array->item_kind, item);
   LertaItem old;
   size_t size = (size_t)lerta_item_size(array->item_kind);
