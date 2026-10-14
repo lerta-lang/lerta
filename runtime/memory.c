@@ -41,15 +41,17 @@ void lerta_free_unfinished(void *object) {
 #endif
 }
 
+// A coroutine's frame may need the alignment of 16 bytes that malloc gives, which a place has when
+// its size is a multiple of 16 (see docs/internals.md#allocation).
 void *lerta_frame_alloc(int64_t size) {
 #ifdef LERTA_DEBUG
   live_objects++;
 #endif
-  return lerta_checked_malloc((size_t)size);
+  return lerta_mem_alloc((size + 15) & ~(int64_t)15);
 }
 
 void lerta_frame_free(void *frame) {
-  free(frame);
+  lerta_mem_free(frame);
 #ifdef LERTA_DEBUG
   live_objects--;
 #endif

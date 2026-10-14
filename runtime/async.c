@@ -45,7 +45,7 @@ struct LertaPromise {
 
 static void drop_promise(void *object) {
   LertaPromise *promise = object;
-  free(promise->waiters);
+  lerta_mem_free(promise->waiters);
   if (promise->state == RESOLVED) lerta_release_item(promise->kind, promise->value);
   if (promise->state != REJECTED) return;
   // An exception that nothing awaited would be lost: it ends the program, as an uncaught one does.
@@ -73,7 +73,7 @@ bool lerta_promise_wait(LertaPromise *promise, void *coroutine) {
   if (promise->waiter_count == promise->waiter_capacity) {
     promise->waiter_capacity = promise->waiter_capacity == 0 ? 1 : promise->waiter_capacity * 2;
     size_t size = (size_t)promise->waiter_capacity * sizeof(void *);
-    promise->waiters = lerta_checked_realloc(promise->waiters, size);
+    promise->waiters = lerta_mem_realloc(promise->waiters, (int64_t)size);
   }
   promise->waiters[promise->waiter_count++] = coroutine;
   return true;
@@ -82,7 +82,7 @@ bool lerta_promise_wait(LertaPromise *promise, void *coroutine) {
 static void settle(LertaPromise *promise, int state) {
   promise->state = state;
   for (int64_t i = 0; i < promise->waiter_count; i++) push_ready(promise->waiters[i]);
-  free(promise->waiters);
+  lerta_mem_free(promise->waiters);
   promise->waiters = NULL;
   promise->waiter_count = 0;
   promise->waiter_capacity = 0;

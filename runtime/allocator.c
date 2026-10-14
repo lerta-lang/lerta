@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "internal.h"
 
 // The allocator: see docs/internals.md#allocation. A free place keeps an object's count at 0, so
@@ -168,6 +170,7 @@ __attribute__((noinline)) static void free_slab(Region *slab, int size_class) {
 // A release build puts the place first in the free list, a debug build last (see
 // takes_free_place).
 void lerta_mem_free(void *memory) {
+  if (memory == NULL) return;
   Region *region = region_of(memory);
   if (region->is_large) {
     lerta_os_unmap_region(region, region->place_size);
@@ -188,4 +191,21 @@ void lerta_mem_free(void *memory) {
 #endif
   bool is_last_with_room = region->previous == NULL && region->next == NULL;
   if (--region->live == 0 && !is_last_with_room) free_slab(region, size_class);
+}
+
+// The bytes that the place of `memory` holds, which may be more than were asked for.
+static int64_t capacity_of(void *memory) {
+  Region *region = region_of(memory);
+  return region->is_large ? region->place_size - PLACES_START : region->place_size;
+}
+
+// A place more than twice as large as needed is given up for a smaller one, as realloc may.
+void *lerta_mem_realloc(void *memory, int64_t size) {
+  if (memory == NULL) return lerta_mem_alloc(size);
+  int64_t capacity = capacity_of(memory);
+  if (size <= capacity && size > capacity / 2) return memory;
+  void *moved = lerta_mem_alloc(size);
+  memcpy(moved, memory, (size_t)(size < capacity ? size : capacity));
+  lerta_mem_free(memory);
+  return moved;
 }

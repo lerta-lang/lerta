@@ -59,8 +59,8 @@ static void drop_map(void *object) {
   for (int64_t i = 0; i < map->entry_count; i++) {
     if (entry_at(map, i)->live) release_entry(map, entry_at(map, i));
   }
-  free(map->entries);
-  free(map->slots);
+  lerta_mem_free(map->entries);
+  lerta_mem_free(map->slots);
 }
 
 LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, LertaHash hash,
@@ -106,12 +106,12 @@ static void grow(LertaMap *map) {
   int64_t kept = map->entry_count;
   int64_t capacity = 8;
   while (capacity < kept * 2) capacity *= 2;
-  map->entries = lerta_checked_realloc(map->entries, (size_t)capacity * entry_size(map));
+  map->entries = lerta_mem_realloc(map->entries, capacity * (int64_t)entry_size(map));
   map->entry_capacity = capacity;
   // At most half the slots are used, so that probes stay short and always end.
-  free(map->slots);
+  lerta_mem_free(map->slots);
   map->slot_count = capacity * 2;
-  map->slots = lerta_checked_malloc((size_t)map->slot_count * sizeof(int64_t));
+  map->slots = lerta_mem_alloc(map->slot_count * (int64_t)sizeof(int64_t));
   for (int64_t i = 0; i < map->slot_count; i++) map->slots[i] = EMPTY;
   for (int64_t i = 0; i < kept; i++) {
     const LertaMapEntry *entry = entry_at(map, i);

@@ -45,7 +45,7 @@ static void drop_array(void *object) {
   for (int64_t i = 0; i < array->length; i++) {
     lerta_release_item(array->item_kind, item_at(array, i));
   }
-  free(array->items);
+  lerta_mem_free(array->items);
 }
 
 LertaArray *lerta_array_create(LertaItemKind item_kind) {
@@ -76,7 +76,7 @@ uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index) {
 __attribute__((noinline)) static void grow(LertaArray *array) {
   int64_t capacity = array->capacity == 0 ? 4 : array->capacity * 2;
   size_t size = (size_t)lerta_item_size(array->item_kind);
-  array->items = lerta_checked_realloc(array->items, (size_t)capacity * size);
+  array->items = lerta_mem_realloc(array->items, capacity * (int64_t)size);
   array->capacity = capacity;
 }
 

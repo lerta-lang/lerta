@@ -130,13 +130,16 @@ const use_after_drop = (name: string, use: string): Check => ({
       `  void *object = lerta_alloc(16, NULL);\n  lerta_release(object);\n  lerta_${use}(object);`,
     ),
 })
+// Sizes at the edges of the size classes, of slabs and of regions of their own.
+const sizes = `static const int64_t sizes[] = {16, 17, 24, 255, 256, 257, 320, 321, 16384, 16385, 100000};
+#define SIZES (int)(sizeof sizes / sizeof sizes[0])
+`
+
 // Objects at the edges of the size classes, of slabs and of regions of their own, each filled
 // with bytes of its own, which must all be there once all are allocated; then more objects of one
 // size than the empty slabs that the allocator keeps hold, dropped and allocated again.
 const allocate_sizes_definitions = `#include <string.h>
-static const int64_t sizes[] = {16, 17, 24, 255, 256, 257, 320, 321, 16384, 16385, 100000};
-#define SIZES (int)(sizeof sizes / sizeof sizes[0])
-#define PER_SIZE 200
+${sizes}#define PER_SIZE 200
 #define MANY 20000
 static uint8_t *objects[SIZES][PER_SIZE];
 static void *many[MANY];
@@ -160,6 +163,35 @@ const allocate_sizes = `  for (int s = 0; s < SIZES; s++) {
     for (int i = 0; i < MANY; i++) many[i] = lerta_alloc(32, NULL);
     for (int i = 0; i < MANY; i++) lerta_release(many[i]);
   }`
+
+// A buffer grown from none through the sizes, which keeps what it held each time; then grown within
+// its place, in a slab and in a region of its own, and given a size more than half of it, which
+// keep the place, and one far smaller, which does not.
+const reallocate_definitions = `#include <string.h>
+#include "internal.h"
+${sizes}static uint8_t fill_of(int64_t b) { return (uint8_t)(b * 7); }
+`
+const reallocate = `  uint8_t *buffer = NULL;
+  int64_t filled = 0;
+  for (int s = 0; s < SIZES; s++) {
+    buffer = lerta_mem_realloc(buffer, sizes[s]);
+    for (int64_t b = 0; b < filled; b++) {
+      if (buffer[b] != fill_of(b)) _exit(1);
+    }
+    for (; filled < sizes[s]; filled++) buffer[filled] = fill_of(filled);
+  }
+  lerta_mem_free(buffer);
+  uint8_t *small = lerta_mem_alloc(17);
+  if (lerta_mem_realloc(small, 24) != small) _exit(2);
+  uint8_t *large = lerta_mem_alloc(20000);
+  if (lerta_mem_realloc(large, 60000) != large) _exit(3);
+  if (lerta_mem_realloc(large, 40000) != large) _exit(4);
+  large[0] = 9;
+  uint8_t *shrunk = lerta_mem_realloc(large, 16);
+  if (shrunk == large || shrunk[0] != 9) _exit(5);
+  lerta_mem_free(small);
+  lerta_mem_free(shrunk);
+  lerta_mem_free(NULL);`
 
 const checks: Check[] = [
   {
@@ -265,6 +297,18 @@ const checks: Check[] = [
         allocate_sizes,
         optimize,
         allocate_sizes_definitions,
+      )
+      return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
+    },
+  })),
+  ...[false, true].map((optimize): Check => ({
+    name: `the ${optimize ? 'optimized' : 'debug'} runtime reallocates buffers of every kind of size`,
+    run: () => {
+      const { stderr, status } = run_main(
+        optimize ? 'reallocate_optimized' : 'reallocate_debug',
+        reallocate,
+        optimize,
+        reallocate_definitions,
       )
       return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
     },

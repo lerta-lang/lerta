@@ -12,9 +12,12 @@ void lerta_report_leaks(void);
 void *lerta_checked_malloc(size_t size);
 void *lerta_checked_realloc(void *memory, size_t size);
 void *lerta_checked_calloc(size_t count, size_t size);
-// The allocator (allocator.c), which frees with no size.
+// The allocator (allocator.c), which frees with no size, and NULL as free does.
 void *lerta_mem_alloc(int64_t size);
 void lerta_mem_free(void *memory);
+// Keeps the place when it holds `size` bytes and is not more than twice as large; else moves what
+// it holds, as far as it fits, to a new one. NULL is none.
+void *lerta_mem_realloc(void *memory, int64_t size);
 
 // Strings (string.c). A new string or Binary value whose bytes the caller fills.
 LertaString *lerta_string_new(int64_t length);

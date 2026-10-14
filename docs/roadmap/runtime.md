@@ -41,10 +41,7 @@ First, the operations that this would remove are counted in the generated code, 
 
 ### Allocation
 
-Objects are allocated by the runtime's own allocator ([internals](../internals.md#allocation)); the buffers that they own, as an array's items, and the frames of coroutines are still allocated with `malloc`. The plan:
-
-- **The buffers and the frames move to the allocator**, with `lerta_mem_realloc(memory, size)`, which allocates, copies and frees. libuv keeps `malloc`, since its thread pool may allocate, which the allocator, without locks, does not allow.
-- The size classes, the limits of 256 bytes and 16 KiB, and the number of empty slabs kept are settled by measuring the benchmarks in `bench/` and the compiler's own build.
+The size classes of the allocator ([internals](../internals.md#allocation)), the limits of 256 bytes and 16 KiB, and the number of empty slabs kept are settled by measuring the benchmarks in `bench/` and the compiler's own build.
 
 ## Concurrency
 
