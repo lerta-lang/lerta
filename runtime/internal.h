@@ -60,6 +60,8 @@ void lerta_set_arguments(int argc, char **argv);
 // `buffer`, 0 at the end, or -1 on failure; returns NULL on failure.
 LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size),
                                void *file);
+// Appends the C string to an array of strings, as a new string.
+void lerta_append_c_string(LertaArray *array, const char *text);
 
 // Output (io.c). For how stdout is buffered, which init decides, see docs/internals.md#output.
 void lerta_stdout_init(void);
@@ -106,6 +108,11 @@ void lerta_os_unmap_region(void *region, int64_t size);
 LertaString *lerta_os_read_file(const char *path);
 bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
 bool lerta_os_is_file(const char *path);
+// Whether the path names a directory, through symbolic links.
+bool lerta_os_is_dir(const char *path);
+// Appends the names of the entries of the directory, without `.` and `..`, in no order, to the array
+// of strings.
+bool lerta_os_list_dir(const char *path, LertaArray *names);
 // The absolute path with no links, which the caller frees.
 char *lerta_os_real_path(const char *path);
 // A new, empty directory in the system's directory for temporary files, whose path the caller

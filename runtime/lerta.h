@@ -177,6 +177,11 @@ LertaString *lerta_binary_from_bytes(const LertaArray *bytes);
 // The place of the first occurrence of `part`, which is not empty, at `from` (not negative) or
 // after, or -1 if there is none.
 int64_t lerta_binary_find(const LertaString *binary, const LertaString *part, int64_t from);
+// UTF-8, which builtins reads through these, so that its rules are written once. The number of
+// bytes of the sequence that `lead` starts, or 0 if it cannot start one.
+int64_t lerta_utf8_sequence_length(uint8_t lead);
+bool lerta_is_utf8_continuation(uint8_t byte);
+bool lerta_is_utf8(const LertaString *binary);
 // The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
 LertaString *lerta_binary_as_string(LertaString *binary);
 
@@ -270,6 +275,9 @@ LertaString *lerta_env(const LertaString *name);
 LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
 bool lerta_is_file(const LertaString *path);
+bool lerta_is_dir(const LertaString *path);
+// The names of the entries, checked to be UTF-8, in the order of their bytes.
+LertaArray *lerta_list_dir(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);
 LertaString *lerta_make_temp_dir(void);
 void lerta_remove_tree(const LertaString *path);

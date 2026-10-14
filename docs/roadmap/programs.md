@@ -22,7 +22,6 @@ The planned design of modules, FFI, the standard library and tools.
 
 - `read_file`, `write_file` and `remove_tree` give a `Promise`, and stdout and stderr are written from the event loop, as [concurrency](runtime.md#concurrency) has it.
 - JSON, where JSON `null` is Lerta `nil`.
-- `list_dir(path)` in `std:io`: the names of the entries of a directory, sorted, without `.` and `..`.
 - `x.to_fixed(digits)` of a `Float`: the value rounded to that many digits after the point, as JavaScript's `toFixed` writes it, for tables of numbers.
 
 ## Tools

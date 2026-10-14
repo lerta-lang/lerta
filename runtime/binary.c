@@ -43,6 +43,40 @@ LertaString *lerta_binary_from_bytes(const LertaArray *bytes) {
   return binary;
 }
 
+int64_t lerta_utf8_sequence_length(uint8_t lead) {
+  if (lead < 0x80) return 1;
+  if (lead >= 0xC2 && lead <= 0xDF) return 2;
+  if (lead >= 0xE0 && lead <= 0xEF) return 3;
+  if (lead >= 0xF0 && lead <= 0xF4) return 4;
+  return 0;
+}
+
+bool lerta_is_utf8_continuation(uint8_t byte) {
+  return byte >= 0x80 && byte <= 0xBF;
+}
+
+// Overlong forms, surrogates and code points above U+10FFFF are not UTF-8, as the standard
+// requires: the leads 0xE0, 0xED, 0xF0 and 0xF4 limit the byte after them.
+bool lerta_is_utf8(const LertaString *binary) {
+  const uint8_t *bytes = binary->bytes;
+  int64_t i = 0;
+  while (i < binary->length) {
+    uint8_t lead = bytes[i];
+    int64_t length = lerta_utf8_sequence_length(lead);
+    if (length == 0 || i + length > binary->length) return false;
+    for (int64_t k = 1; k < length; k++) {
+      if (!lerta_is_utf8_continuation(bytes[i + k])) return false;
+    }
+    uint8_t second = length > 1 ? bytes[i + 1] : 0;
+    if (lead == 0xE0 && second < 0xA0) return false;
+    if (lead == 0xED && second > 0x9F) return false;
+    if (lead == 0xF0 && second < 0x90) return false;
+    if (lead == 0xF4 && second > 0x8F) return false;
+    i += length;
+  }
+  return true;
+}
+
 LertaString *lerta_binary_as_string(LertaString *binary) {
   lerta_retain(binary);
   return binary;

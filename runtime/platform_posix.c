@@ -112,6 +112,11 @@ bool lerta_os_is_file(const char *path) {
   return stat(path, &status) == 0 && S_ISREG(status.st_mode);
 }
 
+bool lerta_os_is_dir(const char *path) {
+  struct stat status;
+  return stat(path, &status) == 0 && S_ISDIR(status.st_mode);
+}
+
 char *lerta_os_real_path(const char *path) {
   return realpath(path, NULL);
 }
@@ -168,6 +173,21 @@ char *lerta_os_env(const char *name) {
 
 static bool is_dot_or_dot_dot(const char *name) {
   return strcmp(name, ".") == 0 || strcmp(name, "..") == 0;
+}
+
+// readdir tells its end from a failure only by errno, which appending may change.
+bool lerta_os_list_dir(const char *path, LertaArray *names) {
+  DIR *dir = opendir(path);
+  if (dir == NULL) return false;
+  for (;;) {
+    errno = 0;
+    struct dirent *entry = readdir(dir);
+    if (entry == NULL) break;
+    if (!is_dot_or_dot_dot(entry->d_name)) lerta_append_c_string(names, entry->d_name);
+  }
+  bool listed = errno == 0;
+  closedir(dir);
+  return listed;
 }
 
 // readdir may miss entries when the directory changes while it is read, so the directory is read

@@ -190,17 +190,27 @@ bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length)
   return written;
 }
 
-// As POSIX's regular file: opening follows links, so a dangling one fails, and a device such as
-// NUL is not a disk file.
-bool lerta_os_is_file(const char *path) {
+// As POSIX's stat: opening follows links, so a dangling one fails, and a device such as NUL is not
+// a disk file, which this tells apart. The attributes of what the path names, if it is one.
+static bool disk_attributes(const char *path, DWORD *attributes) {
   HANDLE file = open_file(path, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
   if (file == INVALID_HANDLE_VALUE) return false;
   BY_HANDLE_FILE_INFORMATION information;
-  bool is_file = GetFileType(file) == FILE_TYPE_DISK &&
-                 GetFileInformationByHandle(file, &information) &&
-                 !(information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+  bool is_disk_file = GetFileType(file) == FILE_TYPE_DISK &&
+                      GetFileInformationByHandle(file, &information);
   CloseHandle(file);
-  return is_file;
+  if (is_disk_file) *attributes = information.dwFileAttributes;
+  return is_disk_file;
+}
+
+bool lerta_os_is_file(const char *path) {
+  DWORD attributes;
+  return disk_attributes(path, &attributes) && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+bool lerta_os_is_dir(const char *path) {
+  DWORD attributes;
+  return disk_attributes(path, &attributes) && (attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 // The final path is in the form \\?\C:\dir\file, or \\?\UNC\server\share\file for a network
@@ -320,6 +330,29 @@ char *lerta_os_env(const char *name) {
 
 static bool is_dot_or_dot_dot(const wchar_t *name) {
   return wcscmp(name, L".") == 0 || wcscmp(name, L"..") == 0;
+}
+
+// A directory always holds `.` and `..`, so finding nothing is a failure.
+bool lerta_os_list_dir(const char *path, LertaArray *names) {
+  wchar_t *dir = to_utf16(path);
+  if (dir == NULL) return false;
+  wchar_t *pattern = join_path(dir, L"*");
+  free(dir);
+  WIN32_FIND_DATAW entry;
+  HANDLE find = FindFirstFileW(pattern, &entry);
+  free(pattern);
+  if (find == INVALID_HANDLE_VALUE) return false;
+  bool listed = true;
+  do {
+    if (is_dot_or_dot_dot(entry.cFileName)) continue;
+    char *name = to_utf8(entry.cFileName);
+    listed = name != NULL;
+    if (listed) lerta_append_c_string(names, name);
+    free(name);
+  } while (listed && FindNextFileW(find, &entry));
+  listed = listed && GetLastError() == ERROR_NO_MORE_FILES;
+  FindClose(find);
+  return listed;
 }
 
 static bool remove_tree(const wchar_t *path);
