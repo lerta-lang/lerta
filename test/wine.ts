@@ -8,6 +8,11 @@ import { join } from 'node:path'
 
 const source_prefix = process.env.WINEPREFIX ?? join(homedir(), '.wine')
 
+// Wine starts its device service as it starts a prefix, whose kernel, ntoskrnl.exe, may fault when
+// the machine is busy, as when the cross tests run, and writes so to the program's stderr. No
+// tested program needs a device driver, so the service is not started.
+process.env.WINEDLLOVERRIDES = 'winedevice.exe=d'
+
 // How long a wineserver outlives its last program, in seconds: long enough to serve every run, and
 // short enough that one left by a killed test run goes away.
 const SERVER_LINGER = 60
