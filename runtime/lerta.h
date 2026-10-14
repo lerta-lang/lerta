@@ -193,9 +193,6 @@ void lerta_array_take_last(LertaArray *array, void *item);
 uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index);
 // The items, after the array has grown by one item, its last, which the caller then writes.
 uint8_t *lerta_array_pushed_items(LertaArray *array);
-// Only the seed calls these two: they go once it is refreshed.
-void lerta_array_read(const LertaArray *array, int64_t index, void *item);
-void lerta_array_write(LertaArray *array, int64_t index, const void *item);
 // Whether two arrays hold equal items in the same order, and a hash of the items in order.
 bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals);
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
@@ -262,10 +259,6 @@ void lerta_exit(int64_t code);
 // its standard output is appended to it first. It is rejected if the output cannot be read, and a
 // program that cannot start throws at once.
 LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output);
-
-// Only the seed calls this: it goes once it is refreshed.
-LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args,
-                              LertaArray *output);
 // The system's name: linux, macos or windows.
 LertaString *lerta_platform(void);
 // The value of an environment variable, as a Binary, or NULL if it is not set.

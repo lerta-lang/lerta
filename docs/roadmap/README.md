@@ -23,7 +23,7 @@ An order within one area is stated in its file.
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
-- Once the seed is refreshed, remove what only the old seed calls, `lerta_run_async`, `lerta_array_read` and `lerta_array_write`, and move the allocator from `runtime/memory.c` into `runtime/allocator.c`, which is there so that the new seed lists it (see [bootstrap](../internals.md#bootstrap)).
+- Move the allocator from `runtime/memory.c` into `runtime/allocator.c`, which is there so that the seed lists it (see [bootstrap](../internals.md#bootstrap)).
 
 ## Open questions
 

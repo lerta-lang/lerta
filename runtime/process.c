@@ -123,11 +123,6 @@ LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, Lert
   return promise;
 }
 
-LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args,
-                              LertaArray *output) {
-  return lerta_run(command, args, output);
-}
-
 // No variable's name holds `=`, which the system would take as the end of the name.
 LertaString *lerta_env(const LertaString *name) {
   char *c_name = lerta_c_string(name);
