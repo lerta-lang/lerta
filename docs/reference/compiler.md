@@ -52,7 +52,7 @@ loads and checks the program as `build` does, without generating code. For each 
 lerta dump-llvm <source>
 ```
 
-prints the LLVM IR that `build` has clang compile, before optimization. It names no target, so it is the same for every one; `build` also gives every function the attributes of the target, from the cached runtime (below). Warnings and errors are reported as by `build`.
+prints the LLVM IR that `build` has clang compile, before optimization, with the modules as one rather than one each. It names no target, so it is the same for every one; `build` also gives every function the attributes of the target, from the cached runtime (below). Warnings and errors are reported as by `build`.
 
 ## Diagnostics
 

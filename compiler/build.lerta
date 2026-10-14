@@ -36,7 +36,7 @@ export const check_program = (source: String, warnings_as_errors: Bool) ->
 # The IR as `dump-llvm` prints it: without the function attributes of a target, which a build
 # gets from clang, and for LLVM before 23 (see IrModule).
 export const generate_ir = (source: String, warnings_as_errors: Bool) ->
-  generate check_program(source, warnings_as_errors), '', 'i1'
+  generate(check_program(source, warnings_as_errors), '', 'i1', false)[0]
 
 export const build = (request: BuildRequest) -> build_then(request, nil)
 
@@ -64,18 +64,19 @@ const build_in_dir = (
   request: BuildRequest, program: ProgramWide, dir: String, run_args: Array<String>?
 ) ->
   const runtime = (await cached_runtime(request.optimize, request.target, dir)) ? return 1
-  const ir_path = join(dir, 'program.ll')
-  write_file ir_path, generate(program, runtime.function_attributes, runtime.coro_end_type).binary
+  const modules = generate(program, runtime.function_attributes, runtime.coro_end_type, true)
+  const ir_paths = [join(dir, "module#{i}.ll") for _, i in modules]
+  write_file path, text.binary for (path, text) in ir_paths.zip(modules)
   const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
   const libraries = ["-l#{library}" for library in runtime.libraries]
-  const args = clang_args(request, ir_path, [runtime.objects..., libraries...], executable)
+  const args = clang_args(request, ir_paths, [runtime.objects..., libraries...], executable)
   return 1 if await run('clang', args) != 0
   const program_args = run_args ? return 0
   await run(executable, program_args)
 
 const clang_args = (
-  request: BuildRequest, ir_path: String, runtime: Array<String>, output: String
+  request: BuildRequest, ir_paths: Array<String>, runtime: Array<String>, output: String
 ) ->
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
   const flags = build_flags(request.optimize, request.target)
-  ['-Wno-override-module', ir_path, flags..., runtime..., request.linked_files..., '-o', output]
+  ['-Wno-override-module', ir_paths..., flags..., runtime..., request.linked_files..., '-o', output]

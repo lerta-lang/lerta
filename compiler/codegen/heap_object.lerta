@@ -33,14 +33,15 @@ export const heap_object_type = (fields: Array<HeapField>) ->
   types.push field.ir_type for field in fields
   "{ #{types.join(', ')} }"
 
-# Defines the LLVM struct type `layout` and the drop function `drop`. For a class's object, it
+# Defines the LLVM struct type `layout` and the drop function `drop`, of the `linkage`, private
+# for the layouts that each module numbers of its own (see Definition). For a class's object, it
 # first lets go of the object's weak box, held in the field at `weak_slot` (see weak_box), and
 # runs `deinit`, the symbol of the class's deinit method, if there is one.
 export const define_heap_object = (
-  module: IrModule, layout: String, drop: String, fields: Array<HeapField>, deinit: String?,
-  weak_slot: Int?
+  module: IrModule, layout: String, drop: String, linkage: String, fields: Array<HeapField>,
+  deinit: String?, weak_slot: Int?
 ) ->
-  module.add_type "#{layout} = type #{heap_object_type(fields)}"
+  module.add_type layout, heap_object_type(fields)
   const ir = IrBuilder(module)
   if weak_slot
     const slot = emit_heap_field_pointer(ir, layout, '%object', weak_slot)
@@ -52,7 +53,7 @@ export const define_heap_object = (
     const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
     emit_release_stored ir, pointer, field.ir_type, field.owned
   ir.emit 'ret void'
-  ir.finish "void #{drop}(ptr %object)"
+  ir.finish "#{linkage}void #{drop}(ptr %object)"
 
 export const emit_heap_field_pointer = (
   ir: IrBuilder, layout: String, object: String, index: Int
@@ -85,7 +86,7 @@ export const define_object = (module: IrModule, program: ProgramWide, info: Obje
   fields.push plain_field('ptr') if is_class(info)
   const deinit = info.has_deinit then special_method_symbol(program, info, 'deinit')
   const layout = object_ir_type(info.type)
-  define_heap_object module, layout, drop_symbol(info.type), fields, deinit, weak_slot
+  define_heap_object module, layout, drop_symbol(info.type), '', fields, deinit, weak_slot
 
 const is_class = (info: ObjectInfo) -> not info.type.is_struct
 
@@ -166,7 +167,7 @@ export const value_types = (type: Type): Array<Type> ->
 const values_layout = (ir: IrBuilder, type: Type) ->
   const fields = [value_field(each) for each in value_types(type)]
   const define = (name: String, module: IrModule) ->
-    define_heap_object module, name, drop_name(name), fields, nil, nil
+    define_heap_object module, name, drop_name(name), 'private ', fields, nil, nil
   const prefix = type is TupleType then '%lerta.tuple' else '%lerta.record'
   ir.module.named "values #{type_key(type)}", prefix, define
 
@@ -210,7 +211,7 @@ export const emit_record_field = (ir: IrBuilder, record: String, type: Type, nam
 # types of the same representation share them.
 const cell_layout = (ir: IrBuilder, type: Type) ->
   const define = (name: String, module: IrModule) ->
-    define_heap_object module, name, drop_name(name), [value_field(type)], nil, nil
+    define_heap_object module, name, drop_name(name), 'private ', [value_field(type)], nil, nil
   const key = "cell #{ir_type(type)} #{ownership(type)}"
   ir.module.named key, '%lerta.cell', define
 

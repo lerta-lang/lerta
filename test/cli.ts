@@ -819,7 +819,9 @@ const output_checks = [
       const { status, stdout, left, left_in_temp } = build_in_new_dir(['dump-llvm', hello])
       return [
         ...expect_status(0, status),
-        ...(stdout.includes('define void @lerta_main()') ? [] : [`no lerta_main in:\n${stdout}`]),
+        ...(stdout.includes('define external void @lerta_main()')
+          ? []
+          : [`no lerta_main in:\n${stdout}`]),
         // The target's attributes are a build's, from the cached runtime.
         ...(stdout.includes('attributes #') ? [`attributes in:\n${stdout}`] : []),
         ...expect_left('files left', [], left),

@@ -1,16 +1,27 @@
 # Accumulates the text of an LLVM IR module. It knows IR syntax only, not Lerta semantics.
 
+# A function or a global of a module. One given no linkage is external, and the other modules that
+# use it declare it with `declaration` (see link_modules); what a module numbers of its own, which
+# another module may number alike, is private.
+export struct Definition
+  symbol: String
+  text: String
+  declaration: String?
+
+const LINKAGES = ['private ', 'internal ', 'external ']
+
 export class IrModule
   # The attributes of every function, such as the target's CPU, or none: those that clang gives the
   # runtime's functions, which LLVM can inline only into functions that have them too.
   function_attributes: String
   # The type of llvm.coro.end, i1, or void from LLVM 23 on, as the LLVM that reads the IR has it.
   coro_end_type: String
-  type_definitions: Array<String> = []
-  globals: Array<String> = []
+  # The definitions of named types, by name.
+  types: Map<String, String> = Map()
+  globals: Array<Definition> = []
   # The declarations by symbol, in the order they were first made.
   declarations: Map<String, String> = Map()
-  functions: Array<String> = []
+  functions: Array<Definition> = []
   defined: Map<String, Bool> = Map()
   symbol_count = 0
   names: Map<String, String> = Map()
@@ -42,31 +53,53 @@ export class IrModule
       panic("conflicting declarations of #{symbol}") if existing != declaration
     @declarations[symbol] = declaration
 
-  # Adds `@<prefix>.<n> = <definition>` and returns the global's name.
+  # Adds `@<prefix>.<n> = <definition>`, which gives its linkage, and returns the global's name.
   global = (prefix: String, definition: String) ->
     const name = "@#{prefix}.#{@globals.length}"
-    @globals.push "#{name} = #{definition}"
+    @define_global name, definition
     name
 
-  # Adds `<name> = <definition>` for a global whose name is chosen by the caller.
-  define_global = (name: String, definition: String) -> @globals.push("#{name} = #{definition}")
+  # Adds `<name> = <definition>`, which gives its linkage, for a global named by the caller.
+  define_global = (name: String, definition: String) ->
+    @globals.push Definition(symbol: name, text: "#{name} = #{definition}", declaration: nil)
 
-  add_type = (definition: String) -> @type_definitions.push(definition)
+  # A global variable of the IR type, which other modules may use.
+  define_variable = (name: String, type: String, initial: String) ->
+    const declaration = "#{name} = external global #{type}"
+    const symbol = name
+    const text = "#{name} = global #{type} #{initial}"
+    @globals.push Definition(symbol, text, declaration)
 
-  # Adds the function `define <signature>` with the lines of its body.
+  add_type = (name: String, body: String) -> @types[name] = "#{name} = type #{body}"
+
+  # Adds the function `define <signature>` with the lines of its body; without a linkage, the other
+  # modules may use it (see Definition).
   define_function = (signature: String, body: Array<String>) ->
     const attributes = @function_attributes == '' then '' else ' #0'
-    @functions.push ["define #{signature}#{attributes} {", body..., '}'].join("\n")
+    const text = ["define #{signature}#{attributes} {", body..., '}'].join("\n")
+    const has_linkage = LINKAGES.any((linkage) -> signature.starts_with(linkage))
+    const declaration = has_linkage then nil else "declare #{signature}"
+    const symbol = defined_symbol(signature)
+    @functions.push Definition(symbol, text, declaration)
 
-  render = ->
+  # The module, with the declarations and the types that it takes from other modules.
+  render = (imported_types: Array<String>, imported_declarations: Array<String>) ->
     const lines = [
-      @type_definitions...
-      @globals...
+      imported_types...
+      @types.values().to_array()...
+      [definition.text for definition in @globals]...
       @declarations.values().to_array()...
-      @functions...
+      imported_declarations...
+      [definition.text for definition in @functions]...
     ]
     lines.push "attributes #0 = { #{@function_attributes} }" if @function_attributes != ''
     "#{lines.join("\n")}\n"
+
+# The symbol that a function's signature defines: the first, after its result type and attributes.
+const defined_symbol = (signature: String) ->
+  const after_sigil = signature.split('@')[1]
+  return "@#{after_sigil.split('(')[0]}" if not after_sigil.starts_with('"')
+  "@\"#{after_sigil.split('"')[1]}\""
 
 # Accumulates the body of one function of a module.
 export class IrBuilder

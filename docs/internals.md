@@ -4,9 +4,9 @@ This describes the implementation design. Unmarked statements describe the compi
 
 ## Overall architecture
 
-- The compiler writes `.ll` text and has `clang` compile and link it with the runtime.
+- The compiler writes `.ll` text, a file for each module (see [per-module output](#per-module-output)), and has `clang` compile and link it with the runtime.
 - **Planned:** LLVM emits objects, and `lld` links them (on all platforms).
-- An optimized build lets LLVM inline the runtime's C functions into the generated code, as `lerta_retain`: the runtime is compiled with `-flto`. **Planned:** with ThinLTO, one module at a time (see [per-module output](#per-module-output-planned)).
+- An optimized build lets LLVM inline the runtime's C functions into the generated code, as `lerta_retain`: the runtime is compiled with `-flto`. **Planned:** with ThinLTO, one module at a time (see [per-module output](#per-module-output)).
 - LLVM can inline a function only into one that has the target features it was compiled for. So every function that a build generates has the target's attributes (the CPU and its features) that clang gives a C function compiled with the same flags, which the runtime's cache keeps (`compiler/runtime_cache.lerta`).
 - `lerta_release` keeps the dropping of an object out of line, so that the rest is small enough to inline. Inlining it and `lerta_retain` makes the compiler's front end about a quarter faster, and its optimized build about twice as slow, as LLVM then optimizes much more code. Of the compiler's optimized build (15 s on an x86-64 Mac with clang 21, against 1.3 s unoptimized), clang takes 5 s to optimize the program alone and 15 s with the runtime; compiling libuv without `-flto` saves nothing, so libuv takes no measurable part of it.
 - The core of the runtime (RC, the representation and basic operations of strings, arrays and maps) is **written in C** and shared by all stages. `runtime/lerta.h` declares what the generated code, std and the C files linked with a program use, and `runtime/internal.h` what only the runtime's own C code does.
@@ -26,17 +26,17 @@ This describes the implementation design. Unmarked statements describe the compi
   - A fine-grained builder that calls an extern per instruction is not adopted (too many externs, and keeping up with versions is heavy).
 - The runtime is also linked into the compiler, and during JIT execution its symbols resolve as in-process symbols.
 
-### Per-module output (planned)
+### Per-module output
 
-- The front end still checks and generates the whole program at once, but writes one LLVM module per Lerta module, so that an optimized build optimizes the modules in parallel, with ThinLTO (`-flto=thin`), which imports into each module the functions of the others that it inlines, the runtime's among them. One large module would be optimized on one thread, and would gain little over full LTO.
-- The ThinLTO cache is kept with [the runtime's](reference/compiler.md), so that a build optimizes again only the modules whose IR has changed, and those that inline from them.
+- The front end checks and generates the whole program at once, but `build` writes one LLVM module per Lerta module, which clang compiles and links (`compiler/codegen/ir_linking.lerta`). **Planned:** so that an optimized build optimizes the modules in parallel, with ThinLTO (`-flto=thin`), which imports into each module the functions of the others that it inlines, the runtime's among them. One large module would be optimized on one thread, and would gain little over full LTO.
+- **Planned:** the ThinLTO cache is kept with [the runtime's](reference/compiler.md), so that a build optimizes again only the modules whose IR has changed, and those that inline from them.
 - For that, a module's IR depends only on the module and the declarations it uses:
-  - Symbols are named after the module's path and the declaration (see [modules](#modules)), not numbered across the program, so that adding or removing a module renames nothing in the others. **Planned:** the lambdas, numbered across the program now, are numbered within their module.
-  - A module declares (`declare`) what it uses of the others, and gives external linkage to what the others use of it.
-  - Generic instances are emitted by the modules that use them (see [generics](#generics)).
+  - Symbols are named after the module's path and the declaration (see [modules](#modules)), not numbered across the program, so that adding or removing a module renames nothing in the others. What a module makes on demand, such as its lambdas, constants, itabs and equality functions, is numbered within it.
+  - What a module numbers of its own is private; the rest is external, and a module declares what it uses of the others. It also defines the named types of the others that it uses, the layouts of their classes and structs. What a module uses is found in its text, by the names after `@` and `%"`, so the code that generates it does not list them.
+  - **Planned:** generic instances are emitted by the modules that use them (see [generics](#generics)); now the module that declares a generic function emits all of its instances, so its IR depends on those that the others use.
   - A module's top-level code is a function of its own, which the entry module's calls in the order of initialization.
+- `dump-llvm` prints the modules as one, which declares nothing of its own, so that the seed is one `.ll`, and `make check-bootstrap` compares one.
 - Open questions:
-  - What `dump-llvm` prints: the modules linked into one (`llvm-link`) would keep the seed one `.ll`, and the comparison of `make check-bootstrap` as it is.
   - How the cache is passed to each linker (ld64, lld, mingw's), and before [lld is called as a library](#interface-with-llvm-planned).
   - A limit on the cache's size, and what it evicts.
   - The times measured above are to be measured again.
@@ -177,8 +177,8 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 ## Generics
 
-- **Planned:** monomorphized instances are emitted by the using module as `linkonce_odr` and managed by mangled names (see [per-module output](#per-module-output-planned)).
-- The compiler compiles the whole program into one LLVM module, so it emits each instance once, with the module that declares the generic function or method, under a symbol made of the function's and the type arguments' names (`lerta.fn.std:builtins.print<Int>`), and for a method, of the receiver's too (`lerta.extend.std:builtins.Array<T>.map<Int, String>`). An instance checks the function literal with the type parameters standing for its type arguments, and keeps the types and other facts it finds of the literal's nodes apart from those of the other instances; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
+- **Planned:** monomorphized instances are emitted by the using module as `linkonce_odr` and managed by mangled names (see [per-module output](#per-module-output)).
+- The compiler emits each instance once, with the module that declares the generic function or method, under a symbol made of the function's and the type arguments' names (`lerta.fn.std:builtins.print<Int>`), and for a method, of the receiver's too (`lerta.extend.std:builtins.Array<T>.map<Int, String>`). An instance checks the function literal with the type parameters standing for its type arguments, and keeps the types and other facts it finds of the literal's nodes apart from those of the other instances; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
 
 ## Defaults
 

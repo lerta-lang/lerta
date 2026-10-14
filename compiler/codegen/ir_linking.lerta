@@ -1,0 +1,68 @@
+# Renders the modules of a program, each as LLVM IR of its own, which clang links: a module
+# declares the functions and globals of the others that it uses (see Definition), and defines their
+# named types too, which LLVM does not share across modules. What a module uses is found in its
+# text, by the names after `@` and `%"`; the types, layouts of objects, name no other types.
+import Definition, IrModule from './ir_builder'
+
+export const link_modules = (modules: Array<IrModule>) ->
+  const definitions: Map<String, Definition> = Map()
+  const types: Map<String, String> = Map()
+  for module in modules
+    for definition in all_definitions(module)
+      definitions[definition.symbol] = definition if definition.declaration != nil
+    types[name] = text for (name, text) in module.types.entries()
+  const render = (module: IrModule) ->
+    const { symbols, type_names } = imports_of(module, definitions, types)
+    const declarations = [definitions[symbol]!.declaration! for symbol in symbols]
+    module.render [types[name]! for name in type_names], declarations
+  [render(module) for module in modules]
+
+# The symbols and the named types of the other modules that the module uses.
+struct Imports
+  symbols: Array<String>
+  type_names: Array<String>
+
+const imports_of = (
+  module: IrModule, definitions: Map<String, Definition>, types: Map<String, String>
+) ->
+  const own = all_definitions(module)
+  const defined: Map<String, Bool> = Map()
+  defined.add definition.symbol for definition in own
+  const symbols: Map<String, Bool> = Map()
+  const type_names: Map<String, Bool> = Map()
+  for definition in own
+    const text = definition.text
+    for symbol in symbols_in(text)
+      symbols.add symbol if definitions.has(symbol) and not defined.has(symbol)
+    for name in type_names_in(text)
+      type_names.add name if types.has(name) and not module.types.has(name)
+  Imports symbols: symbols.keys(), type_names: type_names.keys()
+
+const all_definitions = (module: IrModule) -> [module.globals..., module.functions...]
+
+# The names after `@`: quoted, or of the characters of an unquoted name.
+const symbols_in = (text: String) ->
+  const pieces = text.split('@')
+  const names: Array<String> = []
+  for i in 1...pieces.length
+    const piece = pieces[i]
+    if piece.starts_with('"')
+      names.push "@\"#{piece.split('"')[1]}\""
+    else
+      names.push "@#{unquoted_name(piece)}"
+  names
+
+# Only types are named after `%` in quotes; registers and labels are not quoted.
+const type_names_in = (text: String) ->
+  const pieces = text.split('%"')
+  ["%\"#{pieces[i].split('"')[0]}\"" for i in 1...pieces.length]
+
+const unquoted_name = (text: String) ->
+  const bytes = text.binary
+  var end = 0
+  while end < bytes.length and is_name_byte(bytes[end])
+    end += 1
+  bytes.text(0, end)!
+
+const is_name_byte = (b: Byte) ->
+  b.is_letter() or b.is_digit() or b == '.' or b == '_' or b == '$' or b == '-'

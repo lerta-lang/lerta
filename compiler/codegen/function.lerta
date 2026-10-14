@@ -84,13 +84,13 @@ export const generate_main = (
     emit_loop_run g.ir if is_program
     emit_release_globals g.ir, releases
     g.ir.emit 'ret void'
-    finish g, "void #{code.symbol}()"
+    finish g, is_program then PROGRAM_MAIN else "void #{code.symbol}()"
     return
   const run_and_return = ->
     run()
     emit_return g, ''
   const body = is_program then '@lerta.top_level' else code.symbol
-  generate_awaiting_function g, body, [], void_type, run_and_return
+  generate_awaiting_function g, '', body, [], void_type, run_and_return
   generate_program_main g.ir.module, body, releases if is_program
 
 # Runs the program's top-level code, a coroutine, and the event loop, which must settle it; its
@@ -104,7 +104,10 @@ const generate_program_main = (module: IrModule, body: String, releases: Array<T
   emit_check_with ir, -> ir.emit('ret void')
   emit_release_globals ir, releases
   ir.emit 'ret void'
-  ir.finish 'void @lerta_main()'
+  ir.finish PROGRAM_MAIN
+
+# The program's top-level code, which the runtime calls.
+const PROGRAM_MAIN = 'external void @lerta_main()'
 
 # Defines nothing, for a block that declares no locals besides its statements'.
 export const no_locals = (_scope: Map<String, CodegenLocal>) -> return
@@ -177,16 +180,18 @@ export const generate_function = (
   params.push "#{ir_type(param)} %p#{i}" for param, i in type.params
   const generate_body = (result: Type) ->
     generate_function_body g, literal, this_type, captures, result
+  # A function literal's symbol is numbered within its module (see Definition).
+  const linkage = captures != nil then 'private ' else ''
   if literal.yields
     const item = iterable_item(type.result)!
-    generate_yielding_function g, symbol, params, item, -> generate_body(void_type)
+    generate_yielding_function g, linkage, symbol, params, item, -> generate_body(void_type)
   else if literal.awaits
     const value = (type.result as PromiseType!).value
-    generate_awaiting_function g, symbol, params, value, -> generate_body(value)
+    generate_awaiting_function g, linkage, symbol, params, value, -> generate_body(value)
   else
     g.result_type = type.result
     generate_body type.result
-    finish g, "#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})"
+    finish g, "#{linkage}#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})"
   for given in required_params(literal)...literal.params.length
     const entry_generator = function_generator(g.code, g.extensions, g.facts)
     generate_default_entry entry_generator, symbol, literal, this_type, given

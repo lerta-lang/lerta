@@ -8,6 +8,7 @@ import generate_constructor, generate_function, generate_main, TopLevelCode from
 import function_generator, Generator, ModuleCode, TopLevelGlobal from './generator'
 import define_object from './heap_object'
 import IrModule from './ir_builder'
+import link_modules from './ir_linking'
 import
   extension_symbol, function_symbol, instance_symbol, method_symbol, module_init_symbol
 from './lerta_ir'
@@ -21,19 +22,22 @@ import Type from '../types'
 # constructor and instance of a generic function becomes a function of its own. The instances are
 # generated with their generic function, once all the calls are checked. Every function has
 # `function_attributes`, if any, and llvm.coro.end has the type `coro_end_type` (see IrModule).
+# Each module becomes an LLVM module of its own, if `separate`, or else all become one.
 export const generate = (
-  program: ProgramWide, function_attributes: String, coro_end_type: String
+  program: ProgramWide, function_attributes: String, coro_end_type: String, separate: Bool
 ) ->
-  const ir_module = IrModule(function_attributes, coro_end_type)
   const modules = program.modules
+  const one = IrModule(function_attributes, coro_end_type)
+  const new_module = -> separate then IrModule(function_attributes, coro_end_type) else one
+  const ir_modules = [new_module() for _ in modules]
   const globals = [
-    define_top_level_globals(ir_module, module, program.shared[module.index]) for module in modules
+    define_top_level_globals(ir_modules[i], module, program.shared[i]) for module, i in modules
   ]
-  for module in modules
-    const shared = program.shared[module.index]
+  for module, i in modules
+    const shared = program.shared[i]
     const symbols = function_symbols(program, module)
-    generate_module ModuleCode(program, ir_module, globals, module, shared, symbols)
-  ir_module.render()
+    generate_module ModuleCode(program, globals, module, shared, symbols, ir_module: ir_modules[i])
+  link_modules separate then ir_modules else [one]
 
 # The module's top-level code, functions, instances of generic functions, classes and structs,
 # and methods of extends.
