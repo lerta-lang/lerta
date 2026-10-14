@@ -149,9 +149,16 @@ void lerta_weak_detach(void **slot);
 LertaString *lerta_string_from_bytes(const void *bytes, int64_t length);
 LertaString *lerta_int_to_string(int64_t n);
 // The bits of the double that a float literal's text, such as `1.5e3`, rounds to, which the
-// compiler writes into the IR; -1, the bits of a NaN, which no finite double has, if it is too
-// large to be finite.
+// compiler writes into the IR and String.parse_float reads back; -1, the bits of a NaN, which no
+// finite double has, if it is too large to be finite.
 int64_t lerta_float_literal_bits(const LertaString *text);
+double lerta_float_from_bits(int64_t bits);
+// A Float's text: the fewest digits that read back as it, positional from 1e-4 up to 1e16, with
+// `.0` for a whole number, and scientific beyond (`1e+16`).
+LertaString *lerta_float_to_string(double value);
+// Truncated toward zero; throws an ArithmeticError unless the result fits in an Int.
+int64_t lerta_float_to_int(double value);
+double lerta_int_to_float(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
@@ -228,7 +235,9 @@ void lerta_promise_reject(LertaPromise *promise);
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
 // A promise resolved once the seconds have passed; a negative time throws.
-LertaPromise *lerta_sleep(int64_t seconds);
+LertaPromise *lerta_sleep(double seconds);
+// Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
+double lerta_unix_time(void);
 // Runs the loop; `resume` resumes a coroutine, which only the generated code can do.
 void lerta_loop_run(void (*resume)(void *coroutine));
 // After the loop, the end of the program's top-level code, a coroutine that awaits: an error if it

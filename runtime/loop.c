@@ -12,8 +12,6 @@ typedef struct {
   LertaPromise *promise;
 } SleepTimer;
 
-enum { MILLISECONDS_PER_SECOND = 1000 };
-
 static void free_sleep(uv_handle_t *handle) {
   free(handle->data);
 }
@@ -26,7 +24,7 @@ static void end_sleep(uv_timer_t *handle) {
   uv_close((uv_handle_t *)handle, free_sleep);
 }
 
-void lerta_loop_resolve_after(int64_t seconds, LertaPromise *promise) {
+void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise) {
   SleepTimer *timer = lerta_checked_malloc(sizeof(SleepTimer));
   timer->promise = promise;
   timer->handle.data = timer;
@@ -35,10 +33,6 @@ void lerta_loop_resolve_after(int64_t seconds, LertaPromise *promise) {
   uv_timer_init(loop, &timer->handle);
   // libuv counts from the time it last read, as it ran; the program may have run long since.
   uv_update_time(loop);
-  // A time past what libuv's milliseconds hold is the longest it holds.
-  uint64_t longest = UINT64_MAX / MILLISECONDS_PER_SECOND;
-  uint64_t milliseconds = (uint64_t)seconds > longest ? UINT64_MAX
-                                                      : (uint64_t)seconds * MILLISECONDS_PER_SECOND;
   uv_timer_start(&timer->handle, end_sleep, milliseconds, 0);
 }
 

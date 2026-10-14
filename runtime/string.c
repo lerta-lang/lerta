@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -88,4 +89,42 @@ int64_t lerta_float_literal_bits(const LertaString *text) {
   int64_t bits;
   memcpy(&bits, &value, sizeof bits);
   return bits;
+}
+
+double lerta_float_from_bits(int64_t bits) {
+  double value;
+  memcpy(&value, &bits, sizeof value);
+  return value;
+}
+
+LertaString *lerta_float_to_string(double value) {
+  // The fewest significant digits that read back as the value, at most 17 for a double.
+  int digits = 1;
+  char text[32];
+  for (;; digits++) {
+    snprintf(text, sizeof text, "%.*e", digits - 1, value);
+    if (digits == 17 || strtod(text, NULL) == value) break;
+  }
+  int exponent = atoi(strchr(text, 'e') + 1);
+  // As Python writes it: in positional notation from 1e-4 up to 1e16, with at least one digit
+  // after the point, and in scientific notation beyond.
+  if (exponent >= -4 && exponent < 16) {
+    int decimals = digits - 1 - exponent;
+    snprintf(text, sizeof text, "%.*f", decimals > 0 ? decimals : 0, value);
+    if (strchr(text, '.') == NULL) strcat(text, ".0");
+  }
+  return lerta_string_from_bytes(text, (int64_t)strlen(text));
+}
+
+LERTA_STATIC_STRING(float_to_int_overflow, "integer overflow");
+
+int64_t lerta_float_to_int(double value) {
+  // -2^63 is a double, the lowest Int; 2^63 is the first double past the highest.
+  if (value >= -9223372036854775808.0 && value < 9223372036854775808.0) return (int64_t)value;
+  lerta_raise(LERTA_ARITHMETIC_ERROR, (const LertaString *)&float_to_int_overflow);
+  return 0;
+}
+
+double lerta_int_to_float(int64_t n) {
+  return (double)n;
 }

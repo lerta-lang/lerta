@@ -13,6 +13,12 @@ extern lerta_binary_from_bytes: (Array<Byte>) -> Binary
 # The same object as a String, for bytes that are valid UTF-8.
 extern lerta_binary_as_string: (Binary) -> String
 extern lerta_string_join: (Array<String>, String) -> String
+extern lerta_float_to_string: (Float) -> String
+extern lerta_float_to_int: (Float) -> Int
+extern lerta_int_to_float: (Int) -> Float
+# The bits of the double that a decimal text rounds to, or -1 if it is too large to be finite.
+extern lerta_float_literal_bits: (String) -> Int
+extern lerta_float_from_bits: (Int) -> Float
 
 const MIN_INT = -9223372036854775808
 
@@ -52,9 +58,15 @@ const write_line = (text: String) -> stdout.write(text + "\n")
 
 extend Int
   to_string = -> lerta_int_to_string(@)
+  to_float = -> lerta_int_to_float(@)
   to_byte = ->
     throw ArithmeticError(message: 'integer overflow') if @ < 0 or @ > 255
     lerta_int_to_byte(@)
+
+extend Float
+  to_string = -> lerta_float_to_string(@)
+  # Truncated toward zero; throws unless the result fits in an Int.
+  to_int = -> lerta_float_to_int(@)
 
 extend Bool
   to_string = -> @ then 'true' else 'false'
@@ -99,6 +111,12 @@ extend String
       value = value * 10 - digit
     return nil if not negative and value == MIN_INT
     negative then value else -value
+  # nil unless the String is a number in decimal, with an optional leading `-`, a fraction after
+  # `.` and an exponent after `e` or `E`, that a finite Float holds: '1.5', '-2', '3e-4'.
+  parse_float = (): Float? ->
+    return nil if not is_decimal_number(@binary)
+    const bits = lerta_float_literal_bits(@)
+    bits != -1 then lerta_float_from_bits(bits)
   # The pieces between the occurrences of a non-empty separator, empty ones too: 'a,,b'.split(',')
   # is ['a', '', 'b']. Cutting valid UTF-8 around a valid separator leaves valid UTF-8.
   split = (separator: String) ->
@@ -295,3 +313,25 @@ extend<K, V> Map<K, V>
 # A Map<K, Bool> serves as a set of its keys.
 extend<K> Map<K, Bool>
   add = (key: K) -> @[key] = true
+
+# Digits, an optional fraction and an optional exponent, after an optional `-` (see parse_float).
+const is_decimal_number = (bytes: Binary) ->
+  var i = bytes.length > 0 and bytes[0] == '-' then 1 else 0
+  const digits_from = (start: Int) ->
+    var end = start
+    end += 1 while end < bytes.length and bytes[end].is_digit()
+    end
+  const whole_end = digits_from(i)
+  return false if whole_end == i
+  i = whole_end
+  if i < bytes.length and bytes[i] == '.'
+    const fraction_end = digits_from(i + 1)
+    return false if fraction_end == i + 1
+    i = fraction_end
+  if i < bytes.length and (bytes[i] == 'e' or bytes[i] == 'E')
+    i += 1
+    i += 1 if i < bytes.length and (bytes[i] == '+' or bytes[i] == '-')
+    const exponent_end = digits_from(i)
+    return false if exponent_end == i
+    i = exponent_end
+  i == bytes.length

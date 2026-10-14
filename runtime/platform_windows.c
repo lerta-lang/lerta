@@ -136,6 +136,16 @@ bool lerta_os_is_terminal(int fd) {
   return is_console(standard_handle(fd));
 }
 
+// A FILETIME counts 100-nanosecond intervals since 1601-01-01, 11644473600 seconds before 1970.
+double lerta_os_unix_time(void) {
+  FILETIME now;
+  GetSystemTimePreciseAsFileTime(&now);
+  uint64_t intervals = ((uint64_t)now.dwHighDateTime << 32) | now.dwLowDateTime;
+  // Whole seconds and the rest apart, as the count is past what a double holds exactly.
+  uint64_t seconds = intervals / 10000000 - 11644473600;
+  return (double)seconds + (double)(intervals % 10000000) / 1e7;
+}
+
 void lerta_os_exit(int code) {
   ExitProcess((UINT)code);
 }

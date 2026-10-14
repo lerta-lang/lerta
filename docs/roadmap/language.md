@@ -47,7 +47,6 @@ Interfaces and generics are in [objects](objects.md).
 ## Numeric types
 
 - `Int8/16/32` and `UInt16/32/64`. Arrays and maps hold each at its own size, as they hold a `Byte` in one byte (`LertaItemKind` in `runtime/lerta.h`).
-- `Float`'s text, as `print` and interpolation give it, the shortest that reads back as the same value, and with `.0` for a whole number (`1.0`); `f.to_int()`, truncated toward zero, which throws unless the result fits in `Int`; `n.to_float()`; `parse_float(s): Float?`; and `sleep` and the Unix time of `std:time` in `Float` seconds.
 - The new integer types follow the overflow rule of `Int` and `Byte` (see [the reference](../reference/types.md#int)): signed types throw and unsigned types wrap around. For the rare case of wanting signed wraparound, use a method such as `x.wrapping_add(y)`.
 - `Int: Div<Int, Int>` (see [operator overloading](#operator-overloading)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
 

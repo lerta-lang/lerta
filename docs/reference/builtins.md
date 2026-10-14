@@ -19,10 +19,11 @@ The methods of the builtin types (see [types](types.md)) are written in Lerta, a
 
 | Type | In `std/builtins.lerta` | Built into the compiler |
 |---|---|---|
-| `Int` | `to_string`, `to_byte` | |
+| `Int` | `to_string`, `to_byte`, `to_float` | |
+| `Float` | `to_string`, `to_int` | |
 | `Byte` | `to_int`, `to_string`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` | |
 | `Bool` | `to_string` | |
-| `String` | `to_string`, `iter`, `parse_int`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `compare` | `binary` |
+| `String` | `to_string`, `iter`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `compare` | `binary` |
 | `Binary` | `iter`, `slice`, `occurs_at`, `text` | `length` |
 | `Array<T>` | `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of an `Array<String>` and `to_binary` of an `Array<Byte>` | `length`, `push`, `pop` |
 | `Map<K, V>` | `has`, `get_or_put`, `values`, and `add` of a `Map<K, Bool>` | `length`, `remove`, `keys`, `entries` |

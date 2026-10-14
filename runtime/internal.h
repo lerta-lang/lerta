@@ -33,8 +33,8 @@ int64_t lerta_word_item(const LertaArray *array, int64_t index);
 void lerta_array_append_word(LertaArray *array, int64_t word);
 
 // The event loop's backend (loop.c). Resolves the promise, which it holds meanwhile, once the
-// seconds, which are not negative, have passed.
-void lerta_loop_resolve_after(int64_t seconds, LertaPromise *promise);
+// milliseconds have passed.
+void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise);
 // Waits for what settles promises, and settles them, once; false, without waiting, if nothing is
 // left to wait for.
 bool lerta_loop_wait(void);
@@ -78,6 +78,8 @@ void lerta_os_arguments(int *argc, char ***argv);
 // Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
 bool lerta_os_is_terminal(int fd);
+// Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
+double lerta_os_unix_time(void);
 // Ends the program at once, without flushing stdout.
 _Noreturn void lerta_os_exit(int code);
 // Ends the program as a failure that is not an exit code, as C's abort does.
