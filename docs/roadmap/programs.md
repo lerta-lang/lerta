@@ -26,6 +26,7 @@ The planned design of modules, FFI, the standard library and tools.
 ## Tools
 
 - `.ll`/bitcode output from `lerta build`.
+- An optimized build keeps what it has optimized of each module in the cache, and optimizes again only the modules that have changed and those that inline from them (see [internals](../internals.md#per-module-output-planned)).
 - `lerta run` running directly with JIT, and `lerta repl`.
 - A formatter (like gofmt) is provided from day one. It applies what the [style](../reference/style.md) can fix mechanically, such as the commas at line ends, the brackets a list can do without and where long lists break.
 - An LSP.
