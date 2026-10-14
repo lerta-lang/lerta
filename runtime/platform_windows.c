@@ -440,4 +440,14 @@ char *lerta_os_program_file(const char *command) {
   return file;
 }
 
+// VirtualAlloc aligns to the allocation granularity, which is 64 KiB.
+void *lerta_os_map_region(int64_t size) {
+  return VirtualAlloc(NULL, (SIZE_T)size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+}
+
+void lerta_os_unmap_region(void *region, int64_t size) {
+  (void)size;
+  VirtualFree(region, 0, MEM_RELEASE);
+}
+
 #endif

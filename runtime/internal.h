@@ -12,6 +12,9 @@ void lerta_report_leaks(void);
 void *lerta_checked_malloc(size_t size);
 void *lerta_checked_realloc(void *memory, size_t size);
 void *lerta_checked_calloc(size_t count, size_t size);
+// The allocator (memory.c), which frees with no size.
+void *lerta_mem_alloc(int64_t size);
+void lerta_mem_free(void *memory);
 
 // Strings (string.c). A new string or Binary value whose bytes the caller fills.
 LertaString *lerta_string_new(int64_t length);
@@ -92,6 +95,11 @@ double lerta_os_unix_time(void);
 _Noreturn void lerta_os_exit(int code);
 // Ends the program as a failure that is not an exit code, as C's abort does.
 _Noreturn void lerta_os_abort(void);
+// Memory from the system for the allocator (memory.c): `size` bytes, a multiple of
+// LERTA_REGION_SIZE, aligned to it, or NULL; and back to the system.
+#define LERTA_REGION_SIZE ((int64_t)1 << 16)
+void *lerta_os_map_region(int64_t size);
+void lerta_os_unmap_region(void *region, int64_t size);
 LertaString *lerta_os_read_file(const char *path);
 bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
 bool lerta_os_is_file(const char *path);

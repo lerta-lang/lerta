@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -203,5 +204,23 @@ char *lerta_os_program_file(const char *command) {
 char *lerta_os_program_argument(const char *argument) {
   return strdup(argument);
 }
+
+// mmap aligns only to a page, so it maps one region more than asked and unmaps what lies outside
+// the alignment.
+void *lerta_os_map_region(int64_t size) {
+  size_t mapped_size = (size_t)(size + LERTA_REGION_SIZE);
+  uint8_t *mapped =
+      mmap(NULL, mapped_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (mapped == MAP_FAILED) return NULL;
+  uintptr_t mask = (uintptr_t)LERTA_REGION_SIZE - 1;
+  uint8_t *region = (uint8_t *)(((uintptr_t)mapped + mask) & ~mask);
+  size_t before = (size_t)(region - mapped);
+  if (before > 0) munmap(mapped, before);
+  size_t after = mapped_size - before - (size_t)size;
+  if (after > 0) munmap(region + size, after);
+  return region;
+}
+
+void lerta_os_unmap_region(void *region, int64_t size) { munmap(region, (size_t)size); }
 
 #endif

@@ -109,15 +109,58 @@ const leak = '  lerta_alloc(16, NULL);'
 
 // The debug runtime stops a program that uses an object after its last release has dropped it,
 // which no Lerta program does unless the generated code releases one reference too many.
+// Whether the debug program, built as run_main builds it, stops with the message.
+const stops_with = (
+  name: string,
+  message: string,
+  main_body: string,
+  definitions = '',
+): string[] => {
+  const { stderr, status } = run_main(name, main_body, false, definitions)
+  const stopped = status === 0 ? ['expected the program to stop, but it exited with 0'] : []
+  return [...compare_text('stderr', `${message}\n`, stderr), ...stopped]
+}
+
 const use_after_drop = (name: string, use: string): Check => ({
   name: `the debug runtime stops a ${use} of a dropped object`,
-  run: () => {
-    const main_body = `  void *object = lerta_alloc(16, NULL);\n  lerta_release(object);\n  lerta_${use}(object);`
-    const { stderr, status } = run_main(name, main_body, false)
-    const stopped = status === 0 ? ['expected the program to stop, but it exited with 0'] : []
-    return [...compare_text('stderr', `${use} of a dropped object\n`, stderr), ...stopped]
-  },
+  run: () =>
+    stops_with(
+      name,
+      `${use} of a dropped object`,
+      `  void *object = lerta_alloc(16, NULL);\n  lerta_release(object);\n  lerta_${use}(object);`,
+    ),
 })
+// Objects at the edges of the size classes, of slabs and of regions of their own, each filled
+// with bytes of its own, which must all be there once all are allocated; then more objects of one
+// size than the empty slabs that the allocator keeps hold, dropped and allocated again.
+const allocate_sizes_definitions = `#include <string.h>
+static const int64_t sizes[] = {16, 17, 24, 255, 256, 257, 320, 321, 16384, 16385, 100000};
+#define SIZES (int)(sizeof sizes / sizeof sizes[0])
+#define PER_SIZE 200
+#define MANY 20000
+static uint8_t *objects[SIZES][PER_SIZE];
+static void *many[MANY];
+static uint8_t fill_of(int s, int i) { return (uint8_t)(s * 31 + i); }
+`
+const allocate_sizes = `  for (int s = 0; s < SIZES; s++) {
+    for (int i = 0; i < PER_SIZE; i++) {
+      objects[s][i] = lerta_alloc(sizes[s], NULL);
+      memset(objects[s][i] + 16, fill_of(s, i), (size_t)sizes[s] - 16);
+    }
+  }
+  for (int s = 0; s < SIZES; s++) {
+    for (int i = 0; i < PER_SIZE; i++) {
+      for (int64_t b = 16; b < sizes[s]; b++) {
+        if (objects[s][i][b] != fill_of(s, i)) _exit(1);
+      }
+      lerta_release(objects[s][i]);
+    }
+  }
+  for (int round = 0; round < 2; round++) {
+    for (int i = 0; i < MANY; i++) many[i] = lerta_alloc(32, NULL);
+    for (int i = 0; i < MANY; i++) lerta_release(many[i]);
+  }`
+
 const checks: Check[] = [
   {
     // A Lerta program cannot make a directory, so the tree is made here.
@@ -167,6 +210,37 @@ const checks: Check[] = [
   use_after_drop('retain_dropped', 'retain'),
   use_after_drop('release_dropped', 'release'),
   {
+    // A new object of the same size does not take the dropped one's place, in a slab with room.
+    name: 'the debug runtime stops a release of a dropped object after another is allocated',
+    run: () =>
+      stops_with(
+        'release_after_allocation',
+        'release of a dropped object',
+        [
+          '  lerta_alloc(16, NULL);',
+          '  void *object = lerta_alloc(16, NULL);',
+          '  lerta_release(object);',
+          '  lerta_alloc(16, NULL);',
+          '  lerta_release(object);',
+        ].join('\n'),
+      ),
+  },
+  {
+    // Nor after the dropped one's slab has become empty, which stays its class's slab with room.
+    name: 'the debug runtime stops a retain of a dropped object whose slab became empty',
+    run: () =>
+      stops_with(
+        'retain_after_empty_slab',
+        'retain of a dropped object',
+        [
+          '  void *object = lerta_alloc(24, NULL);',
+          '  lerta_release(object);',
+          '  for (int i = 0; i < 100; i++) lerta_alloc(24, NULL);',
+          '  lerta_retain(object);',
+        ].join('\n'),
+      ),
+  },
+  {
     // A deinit sets the count to 1 while it runs (see lerta_run_deinit).
     name: 'the debug runtime stops a release of a dropped object that had a deinit',
     run: () => {
@@ -180,25 +254,21 @@ const checks: Check[] = [
         '  lerta_release(object);',
         '  lerta_release(object);',
       ].join('\n')
-      const { stderr, status } = run_main('release_deinit', main_body, false, definitions)
-      const stopped = status === 0 ? ['expected the program to stop, but it exited with 0'] : []
-      return [...compare_text('stderr', 'release of a dropped object\n', stderr), ...stopped]
+      return stops_with('release_deinit', 'release of a dropped object', main_body, definitions)
     },
   },
-  {
-    // More objects than it keeps, by count and by size, and one larger than all it keeps.
-    name: 'the debug runtime frees the dropped objects it no longer keeps',
+  ...[false, true].map((optimize): Check => ({
+    name: `the ${optimize ? 'optimized' : 'debug'} runtime allocates objects of every kind of size`,
     run: () => {
-      const main_body = [
-        '  for (int i = 0; i < (1 << 21); i++) lerta_release(lerta_alloc(16, NULL));',
-        '  for (int i = 0; i < 64; i++) lerta_release(lerta_alloc(1 << 20, NULL));',
-        '  lerta_release(lerta_alloc(32 << 20, NULL));',
-        '  lerta_release(lerta_alloc(16, NULL));',
-      ].join('\n')
-      const { stderr, status } = run_main('evicted', main_body, false)
+      const { stderr, status } = run_main(
+        optimize ? 'sizes_optimized' : 'sizes_debug',
+        allocate_sizes,
+        optimize,
+        allocate_sizes_definitions,
+      )
       return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
     },
-  },
+  })),
   {
     // The parent's drop releases its child twice: the first release queues it, as the parent is
     // being dropped, and the second finds it there.
@@ -217,9 +287,7 @@ const checks: Check[] = [
         '  parent[2] = lerta_alloc(16, NULL);',
         '  lerta_release(parent);',
       ].join('\n')
-      const { stderr, status } = run_main('release_queued', main_body, false, drop_parent)
-      const stopped = status === 0 ? ['expected the program to stop, but it exited with 0'] : []
-      return [...compare_text('stderr', 'release of a dropped object\n', stderr), ...stopped]
+      return stops_with('release_queued', 'release of a dropped object', main_body, drop_parent)
     },
   },
   {
