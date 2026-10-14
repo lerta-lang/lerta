@@ -3,9 +3,10 @@
 # one is known, is passed down so that it can give literals their type.
 import
   ArrayLiteral, Await, BinaryOperation, BooleanLiteral, Call, Case, Cast, Coalesce, Comprehension,
-  Conditional, Expression, FunctionLiteral, Identifier, If, Index, IntegerLiteral, Interpolation,
-  IsTest, Jump, MapLiteral, Member, NamedType, NamedValue, NilLiteral, Node, Range, RecordLiteral,
-  Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation, Unwrap, Yield
+  Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, If, Index, IntegerLiteral,
+  Interpolation, IsTest, Jump, MapLiteral, Member, NamedType, NamedValue, NilLiteral, Node, Range,
+  RecordLiteral, Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation,
+  Unwrap, Yield
 from '../ast'
 import type_of_case, type_of_conditional, type_of_if, type_of_try from './case'
 import type_of_function_literal from './closure'
@@ -20,7 +21,7 @@ from './enums'
 import type_of_generic_call from './generic_call'
 import converts_through_itab from './interface_values'
 import std_interface from './interfaces'
-import byte_literal from './literals'
+import byte_literal, float_literal from './literals'
 import check_loop_jump, type_of_comprehension from './loop'
 import type_of_method_call, type_of_property from './member'
 import generic_callee, named_function_literal, type_of_identifier from './name'
@@ -43,6 +44,7 @@ export const type_of = (body: Body, expression: Expression, expected: Type? = ni
 # `expected` is a hint: the caller still checks that the type fits.
 const compute_type = (body: Body, expression: Expression, expected: Type?): Type ->
   const wants_byte = expected != nil and is_kind(expected, 'Byte')
+  const wants_float = expected != nil and is_kind(expected, 'Float')
   const program = body.program
   case expression
     when StringLiteral
@@ -52,7 +54,12 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
       for part in expression.parts
         check_interpolated body, part if part is Call
       string_type
-    when IntegerLiteral then wants_byte then byte_literal(program, expression) else int_type
+    when IntegerLiteral
+      case
+        when wants_byte then byte_literal(program, expression)
+        when wants_float then float_literal(program, expression)
+        else int_type
+    when FloatLiteral then float_literal(program, expression)
     when NilLiteral then nil_type
     when Throw
       check_throw body, expression

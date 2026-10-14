@@ -1,7 +1,7 @@
-# Operations on arrays in the generated code, through the runtime (runtime/array.c), which takes
-# and gives items through pointers to them. An item is a byte, a Byte or a Bool; or 8 bytes, an
-# Int or an enum as is and a reference as its address; or an interface value as it is. Map keys,
-# and the items that the runtime hashes and compares, are words: 8 bytes, a Byte or a Bool
+# Operations on arrays in the generated code, through the runtime (runtime/array.c), which takes and
+# gives items through pointers to them. An item is a byte, a Byte or a Bool; or 8 bytes, an Int or
+# an enum as is, a Float as its bits and a reference as its address; or an interface value as it is.
+# Map keys, and the items that the runtime hashes and compares, are words: 8 bytes, a Byte or a Bool
 # zero-extended (see to_item).
 import IrBuilder from './ir_builder'
 import ir_type, ownership from './lerta_ir'
@@ -14,6 +14,7 @@ const WORD_KINDS: Array<TypeKind> = ['Int', ENUM]
 # The value as a word.
 export const to_item = (ir: IrBuilder, operand: String, type: Type) ->
   return operand if is_one_of_kinds(type, WORD_KINDS)
+  return ir.assign("bitcast double #{operand} to i64") if is_kind(type, 'Float')
   if is_byte_item(type)
     return ir.assign("zext #{ir_type(type)} #{operand} to i64")
   ir.assign "ptrtoint ptr #{operand} to i64"
@@ -21,6 +22,7 @@ export const to_item = (ir: IrBuilder, operand: String, type: Type) ->
 # The value of a word.
 export const from_item = (ir: IrBuilder, item: String, type: Type) ->
   return item if is_one_of_kinds(type, WORD_KINDS)
+  return ir.assign("bitcast i64 #{item} to double") if is_kind(type, 'Float')
   if is_byte_item(type)
     return ir.assign("trunc i64 #{item} to #{ir_type(type)}")
   ir.assign "inttoptr i64 #{item} to ptr"

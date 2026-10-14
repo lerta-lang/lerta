@@ -154,6 +154,12 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 A function with [defaults](reference/functions.md) takes every argument. For each number of arguments that a call may give, it has an entry, `<symbol>.given<k>`, which computes the defaults of the others and calls it; a call that leaves arguments out calls the entry. The function's value and the itabs refer to the function itself, which a default does not change. A constructor instead takes, after each argument with a [`default`](reference/objects.md), an `i1` of whether it is given, and computes the default in its place among the initializers.
 
+## Floats
+
+- A `Float` is a `double` (`compiler/codegen/float.lerta`). A literal's text is converted by the runtime's `strtod`, which the compiler calls (`lerta_float_literal_bits`), and written into the IR by its bits in hexadecimal, as LLVM takes a decimal constant only if the double holds it exactly.
+- No `Float` is infinite or NaN, so arithmetic checks its result: `/` checks its divisor for zero first, and every operation checks that its result's magnitude is below infinity. With no infinity and no NaN to start from, a NaN can come only from `0.0 / 0.0`, which the first check catches. The comparisons are the ordered ones of `fcmp`. A 32-bit x86 target computes with SSE2 (`-msse2 -mfpmath=sse`), as the x87, which it uses otherwise, keeps more precision than a double, so that a result too large for one could pass the check.
+- Arrays hold a `Float` as an 8-byte item, its bits. A map holds a `Float` key as the word of an `Int`, the bits of the value with `-0.0` made `0.0`, so that equal `Float`s are the same key, and hashes a `Float` inside a key likewise.
+
 ## Strings
 
 - String interpolation is expanded at compile time into a call to the runtime variadic function `lerta_string_concat(a, b, ...)` (this expansion is internal to the compiler, so user-facing variadic parameters are not needed). The total length is computed and allocated once.

@@ -1,9 +1,12 @@
 # Facts about literals: which expressions take their type from the context, and literals as Bytes.
-import BinaryOperation, Expression, IntegerLiteral, StringLiteral, UnaryOperation from '../ast'
+import
+  BinaryOperation, Expression, FloatLiteral, IntegerLiteral, StringLiteral, UnaryOperation
+from '../ast'
 import fail from './diagnostics'
 import is_arithmetic from './operator'
 import ProgramWide from './shared'
-import byte_type from '../types'
+import float_bits from '../float_literals'
+import byte_type, float_type from '../types'
 
 # Whether an expression takes its type from the context: a literal, or arithmetic on such
 # expressions, so that `1 + 2` is a Byte where one is expected.
@@ -29,3 +32,14 @@ export const byte_literal = (program: ProgramWide, literal: Expression) ->
       else 'a string literal used as a Byte must be one byte long'
   fail program, literal.position, message if message
   byte_type
+
+# A float literal, or an integer one where a Float is expected, must be finite as a double: no
+# Float is infinite (see docs/reference/types.md#float).
+export const float_literal = (program: ProgramWide, literal: Expression) ->
+  const text =
+    case literal
+      when FloatLiteral then literal.text
+      when IntegerLiteral then "#{literal.value}"
+      else panic('not a number literal')
+  fail program, literal.position, 'float literal does not fit in Float' if float_bits(text) == nil
+  float_type

@@ -1,13 +1,15 @@
 # Expressions. Each yields an IR operand; a reference-typed one is owned by the consumer.
 import
   ArrayLiteral, Await, BinaryOperation, BooleanLiteral, Call, Case, Cast, Coalesce, Comprehension,
-  Conditional, Expression, FunctionLiteral, Identifier, If, Index, IntegerLiteral, Interpolation,
-  IsTest, Jump, MapLiteral, Member, NamedType, NilLiteral, Node, Range, RecordLiteral, Return,
-  StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation, Unwrap, Yield
+  Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, If, Index, IntegerLiteral,
+  Interpolation, IsTest, Jump, MapLiteral, Member, NamedType, NilLiteral, Node, Range,
+  RecordLiteral, Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation,
+  Unwrap, Yield
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import emit_length from './array'
 import generate_await from './awaiting'
+import float_constant from './float'
 import generate_call from './call'
 import generate_case, generate_conditional, generate_if_value from './case'
 import emit_function_closure from './closure'
@@ -98,7 +100,10 @@ const generate_value = (g: Generator, expression: Expression): String ->
       return "#{expression.value.binary[0]}" if is_kind(type_of(g, expression), 'Byte')
       string_constant g.ir, expression.value
     when Interpolation then generate_interpolation(g, expression)
-    when IntegerLiteral then "#{expression.value}"
+    when IntegerLiteral
+      const as_float = is_kind(type_of(g, expression), 'Float')
+      as_float then float_constant("#{expression.value}") else "#{expression.value}"
+    when FloatLiteral then float_constant(expression.text)
     when BooleanLiteral then "#{expression.value}"
     when Call then generate_call(g, expression)
     when UnaryOperation then generate_unary(g, expression)

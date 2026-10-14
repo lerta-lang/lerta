@@ -13,9 +13,9 @@ import
   Type, TypeKind, UnionType
 from '../types'
 
-const NUMERIC_KINDS: Array<TypeKind> = ['Int', 'Byte']
+const NUMERIC_KINDS: Array<TypeKind> = ['Int', 'Byte', 'Float']
 
-const EQUALITY_KINDS: Array<TypeKind> = ['Int', 'Byte', 'Bool', 'String', 'Binary', ENUM]
+const EQUALITY_KINDS: Array<TypeKind> = ['Int', 'Byte', 'Float', 'Bool', 'String', 'Binary', ENUM]
 
 const ARITHMETIC_OPERATORS = ['+', '-', '*', '/', '%']
 
@@ -28,7 +28,7 @@ const share_a_class = (a: Type, b: Type) ->
   classes_of(a).any((member) -> others.any((other) -> same_type(member, other)))
 
 # Lists kinds for a message, such as "Int or Byte".
-const describe_kinds = (kinds: Array<TypeKind>) ->
+export const describe_kinds = (kinds: Array<TypeKind>) ->
   const names = [kind.to_string() for kind in kinds]
   return names[0] if names.length == 1
   "#{all_but_last(names).join(', ')} or #{names.last()!}"
@@ -61,6 +61,13 @@ export const type_of_coalesce = (body: Body, coalesce: Coalesce) ->
   expect_type body, coalesce.fallback, inner
   inner
 
+# `+` joins Strings too; `%` has no Float.
+export const arithmetic_kinds = (operator: String): Array<TypeKind> ->
+  case operator
+    when '+' then [NUMERIC_KINDS..., 'String']
+    when '%' then ['Int', 'Byte']
+    else NUMERIC_KINDS
+
 # Arithmetic passes the expected type to its operands; a comparison's operands have their own.
 export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Type?): Type ->
   const operator = binary.operator
@@ -73,7 +80,7 @@ export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Ty
     const reject = (type: Type) -> "cannot compare values of type #{format_type(type)}"
     type_of_operands body, binary, nil, EQUALITY_KINDS, reject
     return bool_type
-  const allowed: Array<TypeKind> = operator == '+' then ['Int', 'Byte', 'String'] else NUMERIC_KINDS
+  const allowed = arithmetic_kinds(operator)
   const reject = (type: Type) ->
     "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if not is_arithmetic(operator)

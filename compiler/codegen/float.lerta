@@ -1,0 +1,60 @@
+# Floats in the generated code: doubles, always finite. Arithmetic that would give an infinity or
+# NaN throws instead (see docs/reference/types.md#float).
+import float_bits from '../float_literals'
+import Generator from './generator'
+import hex, hex_digit_value from '../hex'
+import IrBuilder from './ir_builder'
+import DIVISION_BY_ZERO, FLOAT_OVERFLOW, throw_if from './runtime_errors'
+
+# The bits of the largest double's successor, infinity, which no Float reaches.
+const INFINITY = '0x7FF0000000000000'
+
+const INT_MIN = -9223372036854775808
+
+const PREDICATES = { '==': 'oeq', '!=': 'one', '<': 'olt', '<=': 'ole', '>': 'ogt', '>=': 'oge' }
+
+# The literal's double, written by its bits, as LLVM takes a double it cannot hold exactly; the
+# checker has found it finite (see float_literal).
+export const float_constant = (text: String) ->
+  const bits = float_bits(text)!
+  return "0x#{hex(bits, 16)}" if bits >= 0
+  # A negative double's bits are a negative Int: its sign bit, the top one, is set apart from the
+  # rest, which hex writes, as it writes no negative number.
+  const rest = hex(bits - INT_MIN, 16).binary
+  const top = hex(hex_digit_value(rest[0])! + 8, 1)
+  "0x#{top}#{rest.text(1)!}"
+
+# `+`, `-`, `*` or `/` of two Floats; division by zero throws, as does a result too large.
+export const apply_float_arithmetic = (
+  g: Generator, operator: String, left: String, right: String
+) ->
+  const ir = g.ir
+  if operator == '/'
+    throw_if g, ir.assign("fcmp oeq double #{right}, 0.0"), DIVISION_BY_ZERO
+  const instruction =
+    case operator
+      when '+' then 'fadd'
+      when '-' then 'fsub'
+      when '*' then 'fmul'
+      when '/' then 'fdiv'
+      else panic("no Float operator #{operator}")
+  const result = ir.assign("#{instruction} double #{left}, #{right}")
+  ir.module.declare 'llvm.fabs.f64', 'declare double @llvm.fabs.f64(double)'
+  const size = ir.assign("call double @llvm.fabs.f64(double #{result})")
+  throw_if g, ir.assign("fcmp oge double #{size}, #{INFINITY}"), FLOAT_OVERFLOW
+  result
+
+export const emit_float_negation = (ir: IrBuilder, operand: String) ->
+  ir.assign "fneg double #{operand}"
+
+# A comparison of two Floats; no Float is NaN, so they are ordered.
+export const emit_float_comparison = (
+  ir: IrBuilder, operator: String, left: String, right: String
+) ->
+  ir.assign "fcmp #{PREDICATES[operator]!} double #{left}, #{right}"
+
+# The bits of the Float, as an Int, the same for equal Floats: -0.0, which equals 0.0, becomes it
+# first.
+export const emit_float_word = (ir: IrBuilder, value: String) ->
+  const positive_zero = ir.assign("fadd double #{value}, 0.0")
+  ir.assign "bitcast double #{positive_zero} to i64"

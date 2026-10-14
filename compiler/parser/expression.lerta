@@ -2,8 +2,8 @@
 # reads compound expressions.
 import
   Await, BinaryOperation, Binding, Call, Cast, Conditional, Coalesce, copy_identifier, Declaration,
-  Expression, Identifier, If, Index, IntegerLiteral, IsTest, Member, NamedValue, NilLiteral,
-  Position, Range, RecordLiteral, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
+  Expression, FloatLiteral, Identifier, If, Index, IntegerLiteral, IsTest, Member, NamedValue,
+  NilLiteral, Position, Range, RecordLiteral, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import parse_block_literal, starts_block, starts_field_block from './block_literal'
@@ -214,12 +214,16 @@ const parse_unary = (tokens: TokenStream): Expression ->
   return parse_postfix(tokens, parse_primary(tokens)) if token.kind != '-'
   tokens.next()
   const position = token_position(token)
-  # `-1` with no space is a negative literal, so that the minimum Int can be written.
+  # `-1` with no space is a negative literal, so that the minimum Int can be written; `-1.5` is one
+  # too, so that a member applies to it as it does to `-1`.
   const literal = tokens.peek()
   if literal.kind == INTEGER and not literal.spaced
     tokens.next()
     const value = integer_value(tokens, literal.text, true, position)
     return parse_postfix(tokens, IntegerLiteral(value, position))
+  if literal.kind == FLOAT and not literal.spaced
+    tokens.next()
+    return parse_postfix(tokens, FloatLiteral(position, text: "-#{literal.text}"))
   UnaryOperation position, operator: '-', operand: parse_unary(tokens)
 
 export const parse_identifier = (tokens: TokenStream) ->

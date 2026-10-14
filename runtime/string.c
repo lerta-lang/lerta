@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,4 +78,14 @@ char *lerta_c_string(const LertaString *s) {
   memcpy(result, s->bytes, (size_t)s->length);
   result[s->length] = '\0';
   return result;
+}
+
+int64_t lerta_float_literal_bits(const LertaString *text) {
+  char *digits = lerta_c_string(text);
+  double value = strtod(digits, NULL);
+  free(digits);
+  if (!isfinite(value)) return -1;
+  int64_t bits;
+  memcpy(&bits, &value, sizeof bits);
+  return bits;
 }

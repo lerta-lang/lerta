@@ -13,8 +13,17 @@ export const is_mingw = (target: String) -> target.ends_with('-w64-mingw32')
 
 const target_flags = (target: String?): Array<String> ->
   return [] if not target
+  const flags = ["--target=#{target}"]
   # GNU ld, which clang uses for mingw by default, cannot link the bitcode of -flto.
-  is_mingw(target) then ["--target=#{target}", '-fuse-ld=lld'] else ["--target=#{target}"]
+  flags.push '-fuse-ld=lld' if is_mingw(target)
+  # 32-bit x86 computes doubles on the x87 by default, in more precision, which hides a result too
+  # large for a double from the check of a Float's arithmetic; SSE2 computes them as doubles.
+  flags.append ['-msse2', '-mfpmath=sse'] if is_32_bit_x86(target)
+  flags
+
+const is_32_bit_x86 = (target: String) ->
+  const arch = target.split('-')[0]
+  arch == 'i386' or arch == 'i486' or arch == 'i586' or arch == 'i686'
 
 # What the name of an executable for the target ends with: `.exe` for Windows. Without a target,
 # it is for the host, which is not Windows, as the compiler does not run there yet.

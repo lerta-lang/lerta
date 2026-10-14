@@ -148,6 +148,10 @@ void lerta_weak_detach(void **slot);
 // Strings (string.c). Also the constructors of Binary values, which share the representation.
 LertaString *lerta_string_from_bytes(const void *bytes, int64_t length);
 LertaString *lerta_int_to_string(int64_t n);
+// The bits of the double that a float literal's text, such as `1.5e3`, rounds to, which the
+// compiler writes into the IR; -1, the bits of a NaN, which no finite double has, if it is too
+// large to be finite.
+int64_t lerta_float_literal_bits(const LertaString *text);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);

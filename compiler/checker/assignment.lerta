@@ -5,11 +5,12 @@ import fail from './diagnostics'
 import expect_type, type_of from './expression'
 import field_target from './fields'
 import lookup from './name'
+import arithmetic_kinds, describe_kinds from './operator'
 import Body from './shared'
 import reject_pending from './top_level_values'
-import format_type, is_kind, is_one_of_kinds, MapType, TypeKind from '../types'
+import format_type, is_kind, is_one_of_kinds, MapType from '../types'
 
-# Compound assignments such as `+=` apply to an Int or a Byte, and `+=` to a String too.
+# A compound assignment such as `+=` applies to the types that its operator does.
 export const check_assignment = (body: Body, assignment: Assignment) ->
   const { target, operator } = assignment
   const target_type =
@@ -17,12 +18,11 @@ export const check_assignment = (body: Body, assignment: Assignment) ->
       when Index then check_item_target(body, target, operator)
       when Member then field_target(body, target)
       when Identifier then check_variable_target(body, target)
-  const is_append = operator == '+='
-  const kinds: Array<TypeKind> = is_append then ['Int', 'Byte', 'String'] else ['Int', 'Byte']
-  if operator != '=' and not is_one_of_kinds(target_type, kinds)
-    const expected = is_append then 'Int, Byte or String' else 'Int or Byte'
-    const message = "expected #{expected}, got #{format_type(target_type)}"
-    fail body.program, target.position, message
+  if operator != '='
+    const kinds = arithmetic_kinds(combining_operator(operator))
+    if not is_one_of_kinds(target_type, kinds)
+      const message = "expected #{describe_kinds(kinds)}, got #{format_type(target_type)}"
+      fail body.program, target.position, message
   expect_type body, assignment.value, target_type
   warn_if_cycle body, target, assignment.value
 

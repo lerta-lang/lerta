@@ -17,6 +17,16 @@
 - `b.is_digit()`, `b.is_letter()` and `b.is_space()` tell whether it is an ASCII digit, letter (`a` to `z`, `A` to `Z`) or space (a space, `\t`, `\n` or `\r`). `b.is_utf8_continuation()` tells whether it continues a UTF-8 sequence (0x80 to 0xBF), as when counting the code points of a `Binary`.
 - **The type of a literal is decided by context.** Where a `Byte` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a string literal of one byte (`'a'`). The expected type reaches literals inside arithmetic (`c == 1 + 2`), `case` arms, array items and return values. An operand of `+`, `==`, `<` and so on whose type comes from the context is expected to have the type of the other operand, so `c >= '0'` and `'0' <= c` compare two `Byte`s when `c` is one; likewise `[1, c]` is an `Array<Byte>`. Without such a context, `'a'` is a `String` and `1` an `Int`.
 
+## Float
+
+- `Float` is a 64-bit IEEE 754 double that is always finite: no `Float` is an infinity or NaN. An operation whose result would be one throws instead, so `==` holds for every value and its own copy, and `<` orders all values.
+- A literal has a fraction or an exponent, or both (`1.5`, `1e9`, `2.5e-3`; see [syntax](syntax.md)), and rounds to the nearest double. One too large to be finite is an error. **Where a `Float` is expected, an integer literal is one too** (`const x: Float = 3`), as it becomes a `Byte` where one is expected (below), but not where a `Float?` is.
+- `+` `-` `*` `/` and prefix `-` follow IEEE 754. `/` throws `division by zero` when the divisor is 0, and the others `float overflow` when the result is too large to be finite. There is no `%`.
+- Comparisons and `==` follow IEEE 754 too: `-0.0 == 0.0`, and a map whose keys are `Float`s holds them as one key. `0.1 + 0.2 == 0.3` is false, as the doubles nearest these values do not add up exactly.
+- `case` cannot branch on a `Float`, as an exact value of a `Float` is rarely what a branch means.
+- There are no implicit conversions: `Float` and `Int` cannot be mixed in one operation. A `Float` cannot be printed or converted yet ([roadmap](../roadmap/language.md#numeric-types)).
+- Why no infinity and no NaN: a NaN goes on silently through arithmetic until a comparison much later gives a wrong answer, and makes `==` fail for a value and itself; an operation that has no finite result is an error as `Int` overflow is. Whether to allow infinities later is an [open question](../roadmap/language.md#open-questions); allowing them would break no program, while taking them away would.
+
 ## Bool
 
 - `Bool` has the values `true` and `false`.

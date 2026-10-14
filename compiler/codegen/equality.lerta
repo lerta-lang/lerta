@@ -4,6 +4,7 @@
 import info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import from_item from './array'
+import emit_float_word from './float'
 import
   emit_drop_function, emit_field_pointer, emit_member_dispatch, emit_value_pointer, value_types
 from './heap_object'
@@ -13,7 +14,8 @@ import emit_is_present, emit_unwrap from './optional'
 import call_runtime from './runtime_calls'
 import emit_string_equals from './string'
 import
-  ArrayType, is_identity_type, is_one_of_kinds, ObjectType, OptionalType, Type, type_key, UnionType
+  ArrayType, is_identity_type, is_kind, is_one_of_kinds, ObjectType, OptionalType, Type, type_key,
+  TypeKind, UnionType
 from '../types'
 
 # An i1: whether the two values of the type are equal. A part that holds parts of its own is
@@ -31,7 +33,8 @@ const emit_hash_by_contents = (ir: IrBuilder, program: ProgramWide, value: Strin
 
 # A type whose values have no parts that compare on their own.
 const is_whole = (type: Type) ->
-  is_one_of_kinds(type, ['Int', 'Byte', 'Bool', 'String', 'Binary', ENUM]) or is_identity_type(type)
+  const kinds: Array<TypeKind> = ['Int', 'Byte', 'Float', 'Bool', 'String', 'Binary', ENUM]
+  is_one_of_kinds(type, kinds) or is_identity_type(type)
 
 # The functions that compare and hash items of the type, as a map with keys of it takes them.
 export const item_functions = (module: IrModule, program: ProgramWide, type: Type) ->
@@ -105,7 +108,7 @@ const emit_equals = (
       const args = "ptr #{left}, ptr #{right}, ptr #{items}"
       call_runtime ir, 'zeroext i1 @lerta_array_equals(ptr, ptr, ptr)', args
     when type is UnionType then emit_union_equals(ir, program, left, right, type)
-    else ir.assign("icmp eq #{ir_type(type)} #{left}, #{right}")
+    else emit_value_equals(ir, left, right, type)
 
 # Both nil, or both present and equal. A nil of a value type may hold any value, as one from C may.
 const emit_optional_equals = (
@@ -142,6 +145,7 @@ const emit_hash = (ir: IrBuilder, program: ProgramWide, value: String, type: Typ
       call_runtime ir, 'i64 @lerta_string_hash(ptr)', "ptr #{value}"
     when is_one_of_kinds(type, ['Bool', 'Byte'])
       ir.assign "zext #{ir_type(type)} #{value} to i64"
+    when is_kind(type, 'Float') then emit_float_word(ir, value)
     when is_identity_type(type) then ir.assign("ptrtoint ptr #{value} to i64")
     when type is OptionalType
       # A nil holds no value to hash, as a null pointer.
@@ -175,3 +179,9 @@ const combine = (ir: IrBuilder, hashes: Array<String>) ->
     const scaled = ir.assign("mul i64 #{result}, 31")
     result = ir.assign("add i64 #{scaled}, #{hash}")
   result
+
+# Whether two values of a type that is neither a reference nor optional are equal: as bits, but a
+# Float's -0.0 equals 0.0.
+export const emit_value_equals = (ir: IrBuilder, left: String, right: String, type: Type) ->
+  const comparison = is_kind(type, 'Float') then 'fcmp oeq' else 'icmp eq'
+  ir.assign "#{comparison} #{ir_type(type)} #{left}, #{right}"

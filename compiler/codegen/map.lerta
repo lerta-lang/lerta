@@ -5,23 +5,30 @@ import
   emit_item_pointer, emit_item_slot, emit_load_item, from_item, item_kind, to_item
 from './array'
 import item_functions from './equality'
+import emit_float_word from './float'
 import emit_values, HeapField from './heap_object'
 import IrBuilder from './ir_builder'
 import define_kind, emit_iter, IterKind, load_state from './iter_protocol'
 import ir_type, is_nil_by_null from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
-  is_identity_type, is_one_of_kinds, MapType, optional_type, TupleType, Type, type_key
+  is_identity_type, is_kind, is_one_of_kinds, MapType, optional_type, TupleType, Type, type_key
 from '../types'
 
-# The values of LertaKeyKind in runtime/lerta.h; an enum's value is an Int.
+# The values of LertaKeyKind in runtime/lerta.h; an enum's value is an Int, and a Float is its
+# bits (see key_word).
 const key_kind = (key: Type) ->
   case
-    when is_one_of_kinds(key, ['Int', ENUM]) then 0
+    when is_one_of_kinds(key, ['Int', ENUM, 'Float']) then 0
     when is_one_of_kinds(key, ['Byte', 'Bool']) then 4
     when is_one_of_kinds(key, ['String', 'Binary']) then 1
     when is_identity_type(key) then 2
     else 3
+
+# A key as the word that the runtime hashes and compares: equal Floats have equal bits once -0.0
+# becomes 0.0.
+const key_word = (ir: IrBuilder, key: String, type: Type) ->
+  is_kind(type, 'Float') then emit_float_word(ir, key) else to_item(ir, key, type)
 
 # Keys that compare by their contents come with the functions that hash and compare them.
 export const emit_map_new = (ir: IrBuilder, program: ProgramWide, type: MapType) ->
@@ -39,7 +46,7 @@ export const emit_map_length = (ir: IrBuilder, map: String) ->
 # nil.
 export const emit_map_get = (ir: IrBuilder, map: String, key: String, type: MapType) ->
   const slot = emit_item_slot(ir, type.value)
-  const args = "ptr #{map}, i64 #{to_item(ir, key, type.key)}, ptr #{slot}"
+  const args = "ptr #{map}, i64 #{key_word(ir, key, type.key)}, ptr #{slot}"
   const found = call_runtime(ir, 'i1 @lerta_map_read(ptr, i64, ptr)', args)
   const value = emit_load_item(ir, slot, type.value)
   const optional = optional_type(type.value)
@@ -52,7 +59,7 @@ export const emit_map_get = (ir: IrBuilder, map: String, key: String, type: MapT
 export const emit_map_set = (
   ir: IrBuilder, map: String, key: String, value: String, type: MapType
 ) ->
-  const key_item = to_item(ir, key, type.key)
+  const key_item = key_word(ir, key, type.key)
   const args = "ptr #{map}, i64 #{key_item}, ptr #{emit_item_pointer(ir, value, type.value)}"
   call_void_runtime ir, 'void @lerta_map_write(ptr, i64, ptr)', args
 
@@ -61,7 +68,7 @@ export const call_map_method = (
 ) ->
   case name
     when 'remove'
-      const key = "ptr #{map}, i64 #{to_item(ir, args[0], type.key)}"
+      const key = "ptr #{map}, i64 #{key_word(ir, args[0], type.key)}"
       call_void_runtime ir, 'void @lerta_map_remove(ptr, i64)', key
       ''
     when 'keys' then call_runtime(ir, 'ptr @lerta_map_keys(ptr)', "ptr #{map}")

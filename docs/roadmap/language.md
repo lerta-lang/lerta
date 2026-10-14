@@ -46,7 +46,8 @@ Interfaces and generics are in [objects](objects.md).
 
 ## Numeric types
 
-- `Int8/16/32`, `UInt16/32/64` and `Float`. Float literals are only lexed and kept as strings for now. Arrays and maps hold each at its own size, as they hold a `Byte` in one byte (`LertaItemKind` in `runtime/lerta.h`).
+- `Int8/16/32` and `UInt16/32/64`. Arrays and maps hold each at its own size, as they hold a `Byte` in one byte (`LertaItemKind` in `runtime/lerta.h`).
+- `Float`'s text, as `print` and interpolation give it, the shortest that reads back as the same value, and with `.0` for a whole number (`1.0`); `f.to_int()`, truncated toward zero, which throws unless the result fits in `Int`; `n.to_float()`; `parse_float(s): Float?`; and `sleep` and the Unix time of `std:time` in `Float` seconds.
 - The new integer types follow the overflow rule of `Int` and `Byte` (see [the reference](../reference/types.md#int)): signed types throw and unsigned types wrap around. For the rare case of wanting signed wraparound, use a method such as `x.wrapping_add(y)`.
 - `Int: Div<Int, Int>` (see [operator overloading](#operator-overloading)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
 
@@ -80,3 +81,4 @@ Interfaces and generics are in [objects](objects.md).
 - An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
 - How an Iter gives an item in one call rather than two, `has_next` and `next`, which each item takes now through a pointer to code (see [internals](../internals.md#lazy-iterators)): `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional, which its `{ i1, T }` in IR can be for the Iters the compiler generates, while an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`; or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
 - Whether `as` also widens a value to a type that it fits, as Swift's `nil as String?` or `x as Shape` does, for a value in the middle of an expression; a `const` with a type annotation does it now. It would sit beside the casts that may fail, `as T?` and `as T!`, which `as T` alone is not allowed to be.
+- Whether `Float` should hold infinities, as IEEE 754 does, which a division by zero gives (see [the reference](../reference/types.md#float)). For now, an operation that would give one throws; allowing them later breaks no program. JSON has no infinity either.

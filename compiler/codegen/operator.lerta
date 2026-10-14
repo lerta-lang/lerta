@@ -4,8 +4,9 @@ import compares_by_contents from '../checker/equality'
 import is_arithmetic from '../checker/operator'
 import apply_arithmetic from './checked_int'
 import holding from './exceptions'
+import apply_float_arithmetic, emit_float_comparison, emit_float_negation from './float'
 import generate, generate_condition, release_if_reference, type_at_use, type_of from './expression'
-import emit_equals_by_contents from './equality'
+import emit_equals_by_contents, emit_value_equals from './equality'
 import Generator from './generator'
 import emit_branch from './ir_builder'
 import emit_release, ir_type from './lerta_ir'
@@ -13,7 +14,7 @@ import emit_is_nil, emit_is_present, emit_unwrap from './optional'
 import emit_concat, emit_equals, emit_string_equals from './string'
 import throw_if, UNWRAPPED_NIL from './runtime_errors'
 import
-  inner_of, is_identity_type, is_kind, is_one_of_kinds, is_reference_type, OptionalType
+  inner_of, is_identity_type, is_kind, is_one_of_kinds, is_reference_type, OptionalType, Type
 from '../types'
 
 # The predicates of `icmp` for the comparisons of signed integers; Byte is ordered as unsigned.
@@ -26,7 +27,9 @@ export const generate_unary = (g: Generator, unary: UnaryOperation) ->
   if unary.operator == 'not'
     return g.ir.assign("xor i1 #{generate_condition(g, unary.operand)}, true")
   const operand = generate(g, unary.operand)
-  apply_arithmetic g, '-', '0', operand, type_of(g, unary)
+  const type = type_of(g, unary)
+  return emit_float_negation(g.ir, operand) if is_kind(type, 'Float')
+  apply_arithmetic g, '-', '0', operand, type
 
 export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   const operator = binary.operator
@@ -50,10 +53,18 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
     return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
   if is_one_of_kinds(operand_type, ['String', 'Binary'])
     return negate_if_unequal(g, operator, emit_equals(g.ir, left, right))
-  return apply_arithmetic(g, operator, left, right, operand_type) if is_arithmetic(operator)
+  return apply_numeric(g, operator, left, right, operand_type) if is_arithmetic(operator)
+  return emit_float_comparison(g.ir, operator, left, right) if is_kind(operand_type, 'Float')
   const is_byte = is_kind(operand_type, 'Byte')
   const predicate = (is_byte then UNSIGNED_PREDICATES else SIGNED_PREDICATES)[operator]!
   g.ir.assign "icmp #{predicate} #{ir_type(operand_type)} #{left}, #{right}"
+
+# An arithmetic operator applied to two numbers of the type: Floats, or integers.
+export const apply_numeric = (
+  g: Generator, operator: String, left: String, right: String, type: Type
+) ->
+  return apply_float_arithmetic(g, operator, left, right) if is_kind(type, 'Float')
+  apply_arithmetic g, operator, left, right, type
 
 # `!=` is the negation of the equality.
 const negate_if_unequal = (g: Generator, operator: String, equal: String) ->
@@ -71,7 +82,7 @@ const generate_optional_equals = (g: Generator, left: String, right: String, typ
     # A nil may hold any value, as one from C may, so the values count only where present.
     const left_value = emit_unwrap(ir, left, type)
     const right_value = emit_unwrap(ir, right, type)
-    const same_value = ir.assign("icmp eq #{ir_type(inner)} #{left_value}, #{right_value}")
+    const same_value = emit_value_equals(ir, left_value, right_value, inner)
     const values_agree = ir.assign("select i1 #{left_present}, i1 #{same_value}, i1 true")
     return ir.assign("and i1 #{same_presence}, #{values_agree}")
   const both_present = ir.assign("and i1 #{left_present}, #{right_present}")
