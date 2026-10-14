@@ -20,7 +20,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Standard library
 
-- Writes become asynchronous with the event loop (see [concurrency](runtime.md#concurrency)).
+- `read_file`, `write_file` and `remove_tree` give a `Promise`, and stdout and stderr are written from the event loop, as [concurrency](runtime.md#concurrency) has it.
 - JSON, where JSON `null` is Lerta `nil`.
 
 ## Tools
