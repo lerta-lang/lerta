@@ -261,6 +261,9 @@ void lerta_exit(int64_t code);
 // A promise of the program's exit code, settled once it ends; with `output`, an array of bytes,
 // its standard output is appended to it first. It is rejected if the output cannot be read, and a
 // program that cannot start throws at once.
+LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output);
+
+// Only the seed calls this: it goes once it is refreshed.
 LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args,
                               LertaArray *output);
 // The system's name: linux, macos or windows.

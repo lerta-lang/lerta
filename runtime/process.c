@@ -94,8 +94,7 @@ static char **program_args(char **c_args, int64_t count, char **file) {
   return args;
 }
 
-LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args,
-                              LertaArray *output) {
+LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output) {
   int64_t count = args->length + 1;
   bool valid;
   char **c_args = c_args_of(command, args, &valid);
@@ -122,6 +121,11 @@ LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args
   if (output != NULL) lerta_retain(output);
   *run = (Run){promise, (LertaString *)command, output};
   return promise;
+}
+
+LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args,
+                              LertaArray *output) {
+  return lerta_run(command, args, output);
 }
 
 // No variable's name holds `=`, which the system would take as the end of the name.
