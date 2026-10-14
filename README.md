@@ -36,7 +36,7 @@ Early development. The compiler is written in Lerta (`compiler/`) and builds its
 | `third_party/` | libuv, with its license, and `libuv.txt`, which says how the runtime builds it for each system. Its license notice goes with the compiler, and with the programs it builds (see `docs/reference/compiler.md`) |
 | `tests/` | Run tests: Lerta source and expected output |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks, each in Lerta, C, Swift and JavaScript, and `run.sh`, which builds them and prints their times next to each other |
+| `bench/` | Benchmarks, each in Lerta, C, Swift and JavaScript, and `run.lerta`, which builds them and prints their times next to each other (`bin/lerta run bench/run.lerta`) |
 | `docs/` | Documentation (see below) |
 | `editors/` | Editor support for VS Code and Vim; see the README in each subdirectory to install it |
 

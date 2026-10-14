@@ -1,0 +1,115 @@
+# Builds each benchmark in Lerta, C, Swift and JavaScript (Node.js), runs each 3 times, checks
+# that every run of every language prints the same, and prints the best wall-clock time of each in
+# seconds. C is built with clang, or else cc; Swift only where swiftc is; Node.js must be there.
+# Run it from the repository's root after `make`, as `bin/lerta run bench/run.lerta`; the programs
+# go to build/bench/.
+import make_dir, stderr from 'std:io'
+import exit, run from 'std:process'
+import time from 'std:time'
+
+# Listed, as std:io cannot list a directory yet.
+const BENCHMARKS = ['binary_trees', 'fib', 'mandelbrot', 'sieve']
+# The languages, in the order of the columns, and the extensions of their sources.
+const EXTENSIONS =
+  'lerta': 'lerta'
+  'c': 'c'
+  'swift': 'swift'
+  'node': 'js'
+const RUNS = 3
+const OUT = 'build/bench'
+const NAME_COLUMN = 12
+const COLUMN = 8
+
+struct Command
+  program: String
+  args: Array<String>
+
+const fail = (message: String) ->
+  stderr.write "#{message}\n"
+  exit 1
+
+const is_found = (command: String) ->
+  await run('sh', ['-c', "command -v #{command} >/dev/null"]) == 0
+
+const find_c_compiler = ->
+  return 'clang' if await is_found('clang')
+  return 'cc' if await is_found('cc')
+  fail 'no C compiler: neither clang nor cc is found'
+
+const c_compiler = await find_c_compiler()
+const has_swift = await is_found('swiftc')
+
+# Runs the command, which must succeed; with `output`, its standard output is appended to it.
+const run_checked = (label: String, command: Command, output: Array<Byte>? = nil) ->
+  const code = await run(command.program, command.args, output)
+  fail "#{label} failed with exit code #{code}" if code != 0
+
+# The command that runs the benchmark in the language, built first if it is compiled; nil where the
+# language's compiler is missing.
+const build = (name: String, language: String): Promise<Command?> ->
+  const source = "bench/#{name}/main.#{EXTENSIONS[language]!}"
+  const executable = "#{OUT}/#{name}-#{language}"
+  const output = ['-o', executable]
+  return Command(program: 'node', args: [source]) if language == 'node'
+  return nil if language == 'swift' and not has_swift
+  const compile =
+    case language
+      when 'lerta' then Command(program: 'bin/lerta', args: ['build', source, '-O', output...])
+      when 'c' then Command(program: c_compiler, args: ['-O2', source, output...])
+      else Command(program: 'swiftc', args: ['-O', source, output...])
+  await run_checked("building #{name} in #{language}", compile)
+  Command(program: executable, args: [])
+
+# The best time of the runs, in seconds, and what each printed, which must be the same.
+const measure = (label: String, command: Command) ->
+  var best = 0.0
+  var printed = ''
+  for i in 0...RUNS
+    const bytes: Array<Byte> = []
+    const start = time()
+    await run_checked(label, command, bytes)
+    const seconds = time() - start
+    const output = bytes.to_binary().text() ? fail("#{label} printed what is not UTF-8")
+    fail "#{label} printed differently in two runs" if i > 0 and output != printed
+    best = seconds if i == 0 or seconds < best
+    printed = output
+  (best, printed)
+
+# Seconds with 2 digits after the point, as std has no way to format a Float so yet.
+const format_seconds = (seconds: Float) ->
+  const hundredths = (seconds * 100.0 + 0.5).to_int()
+  const fraction = hundredths % 100
+  "#{hundredths / 100}.#{fraction < 10 then '0' else ''}#{fraction}"
+
+const pad_start = (text: String, width: Int) ->
+  var padded = text
+  padded = " #{padded}" while padded.binary.length < width
+  padded
+
+const pad_end = (text: String, width: Int) ->
+  var padded = text
+  padded = "#{padded} " while padded.binary.length < width
+  padded
+
+make_dir OUT
+print "C: #{c_compiler}#{has_swift then '' else '; no swiftc, so no Swift'}"
+const headings = [pad_start(language, COLUMN) for language in EXTENSIONS.keys()]
+print [pad_end('benchmark', NAME_COLUMN), headings...].join(' ')
+for name in BENCHMARKS
+  var expected = ''
+  var expected_language = ''
+  const cells = [pad_end(name, NAME_COLUMN)]
+  for language in EXTENSIONS.keys()
+    const command = await build(name, language)
+    if command == nil
+      cells.push pad_start('-', COLUMN)
+      continue
+    const label = "#{name} in #{language}"
+    const (seconds, output) = await measure(label, command)
+    if expected_language == ''
+      expected = output
+      expected_language = language
+    else if output != expected
+      fail "#{label} printed:\n#{output}#{expected_language} printed:\n#{expected}"
+    cells.push pad_start(format_seconds(seconds), COLUMN)
+  print cells.join(' ')
