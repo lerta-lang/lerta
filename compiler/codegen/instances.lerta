@@ -1,0 +1,57 @@
+# The instances of generic functions, methods, classes and structs, which each module that uses one
+# generates, as linkonce_odr, so that a module's IR does not depend on the instances that the
+# others use (see define_on_demand). An instance is generated with the code of the module that
+# declares its generic one, whose names its body sees.
+import required_params from '../checker/functions'
+import is_generic_object, ObjectInfo from '../checker/object_types'
+import ProgramWide from '../checker/shared'
+import generate_constructor, generate_function from './function'
+import function_generator, ModuleCode from './generator'
+import define_object from './heap_object'
+import IrModule from './ir_builder'
+import OnDemand from './ir_linking'
+import
+  constructor_symbol, default_entry_symbol, drop_symbol, instance_symbol, object_ir_type
+from './lerta_ir'
+
+const LINKAGE = 'linkonce_odr '
+
+# What defines each instance, by the names that it defines: the function and its entries for
+# defaults, or the constructor, the drop function and the layout of an object.
+export const instances_on_demand = (
+  program: ProgramWide, module_code: (Int, IrModule) -> ModuleCode
+) ->
+  const on_demand: Map<String, OnDemand> = Map()
+  for shared in program.shared
+    for generic in shared.generics
+      for instance in generic.instances
+        const { literal, this_type } = instance.entry
+        const symbol = instance_symbol(program, instance)
+        const define = (ir_module: IrModule) ->
+          const code = module_code(shared.index, ir_module)
+          const g = function_generator(code, instance.extensions, instance.facts)
+          generate_function g, LINKAGE, symbol, literal, this_type, nil
+        const entries = [
+          default_entry_symbol(symbol, given)
+          for given in required_params(literal)...literal.params.length
+        ]
+        for name in [symbol, entries...]
+          on_demand[name] = OnDemand(define, key: symbol)
+    for info in shared.objects.values()
+      continue if not is_generic_object(info)
+      const code_of = (ir_module: IrModule) -> module_code(shared.index, ir_module)
+      add_object on_demand, program, each, code_of for each in info.instances
+  on_demand
+
+const add_object = (
+  on_demand: Map<String, OnDemand>, program: ProgramWide, info: ObjectInfo,
+  module_code: (IrModule) -> ModuleCode
+) ->
+  const key = constructor_symbol(info.type)
+  const define = (ir_module: IrModule) ->
+    const code = module_code(ir_module)
+    define_object ir_module, program, info, LINKAGE
+    const g = function_generator(code, code.shared.extensions, info.facts)
+    generate_constructor g, LINKAGE, info
+  for name in [key, drop_symbol(info.type), object_ir_type(info.type)]
+    on_demand[name] = OnDemand(define, key)

@@ -33,7 +33,7 @@ This describes the implementation design. Unmarked statements describe the compi
 - For that, a module's IR depends only on the module and the declarations it uses:
   - Symbols are named after the module's path and the declaration (see [modules](#modules)), not numbered across the program, so that adding or removing a module renames nothing in the others. What a module makes on demand, such as its lambdas, constants, itabs and equality functions, is numbered within it.
   - What a module numbers of its own is private; the rest is external, and a module declares what it uses of the others. It also defines the named types of the others that it uses, the layouts of their classes and structs. What a module uses is found in its text, by the names after `@` and `%"`, so the code that generates it does not list them.
-  - **Planned:** generic instances are emitted by the modules that use them (see [generics](#generics)); now the module that declares a generic function emits all of its instances, so its IR depends on those that the others use.
+  - Generic instances are emitted by the modules that use them (see [generics](#generics)), so that a module's IR does not depend on those that the others use.
   - A module's top-level code is a function of its own, which the entry module's calls in the order of initialization.
 - `dump-llvm` prints the modules as one, which declares nothing of its own, so that the seed is one `.ll`, and `make check-bootstrap` compares one.
 - Open questions:
@@ -177,8 +177,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 ## Generics
 
-- **Planned:** monomorphized instances are emitted by the using module as `linkonce_odr` and managed by mangled names (see [per-module output](#per-module-output)).
-- The compiler emits each instance once, with the module that declares the generic function or method, under a symbol made of the function's and the type arguments' names (`lerta.fn.std:builtins.print<Int>`), and for a method, of the receiver's too (`lerta.extend.std:builtins.Array<T>.map<Int, String>`). An instance checks the function literal with the type parameters standing for its type arguments, and keeps the types and other facts it finds of the literal's nodes apart from those of the other instances; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
+- Each module emits the instances that it uses, those that its code names and those that their bodies name in turn, as `linkonce_odr`, so that the linker keeps one of each (see [per-module output](#per-module-output)): the instances of generic functions and methods, and of generic classes and structs, their layouts, constructors and drop functions. An instance's body sees the names of the module that declares the generic one. It is named with a symbol made of the function's and the type arguments' names (`lerta.fn.std:builtins.print<Int>`), and for a method, of the receiver's too (`lerta.extend.std:builtins.Array<T>.map<Int, String>`). An instance checks the function literal with the type parameters standing for its type arguments, and keeps the types and other facts it finds of the literal's nodes apart from those of the other instances; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
 
 ## Defaults
 

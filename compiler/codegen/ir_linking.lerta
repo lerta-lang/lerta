@@ -4,6 +4,28 @@
 # text, by the names after `@` and `%"`; the types, layouts of objects, name no other types.
 import Definition, IrModule from './ir_builder'
 
+# What a module defines the first time its text names it: `define` runs once in a module for the
+# `key`, by any of the names that it defines.
+export struct OnDemand
+  key: String
+  define: (IrModule) -> void
+
+# Defines what the module's definitions name of `on_demand`, and in turn what those name.
+export const define_on_demand = (module: IrModule, on_demand: Map<String, OnDemand>) ->
+  const define_named = (definition: Definition) ->
+    for name in [symbols_in(definition.text)..., type_names_in(definition.text)...]
+      if const each = on_demand[name]
+        module.define_once each.key, each.define
+  var globals = 0
+  var functions = 0
+  while globals < module.globals.length or functions < module.functions.length
+    if globals < module.globals.length
+      define_named module.globals[globals]
+      globals += 1
+    else
+      define_named module.functions[functions]
+      functions += 1
+
 export const link_modules = (modules: Array<IrModule>) ->
   const definitions: Map<String, Definition> = Map()
   const types: Map<String, String> = Map()
