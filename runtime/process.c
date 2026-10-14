@@ -61,33 +61,6 @@ static void free_c_args(char **c_args, int64_t count) {
   free(c_args);
 }
 
-// Without this, the child's output could come before what this program printed first. A failed
-// flush is remembered and reported by the exit code, as for any other write to stdout.
-static void flush_before_child(void) {
-  lerta_stdout_flush();
-}
-
-// Only the seed's compiler, which was built before run awaited, calls this.
-int64_t lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output) {
-  bool valid;
-  char **c_args = c_args_of(command, args, &valid);
-  flush_before_child();
-  int64_t exit_code;
-  LertaString *read_output = NULL;
-  bool ran = valid && lerta_os_run(c_args, output == NULL ? NULL : &read_output, &exit_code);
-  free_c_args(c_args, args->length + 1);
-  if (!ran) {
-    lerta_raise_with(LERTA_IO_ERROR, &cannot_run, command);
-    return 0;
-  }
-  if (output != NULL && read_output == NULL) {
-    lerta_raise_with(LERTA_IO_ERROR, &cannot_read_output, command);
-    return 0;
-  }
-  if (output != NULL) append_bytes(output, read_output);
-  return exit_code;
-}
-
 typedef struct {
   LertaPromise *promise;
   LertaString *command;
@@ -126,7 +99,9 @@ LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args
   int64_t count = args->length + 1;
   bool valid;
   char **c_args = c_args_of(command, args, &valid);
-  flush_before_child();
+  // Without this, the child's output could come before what this program printed first. A failed
+  // flush is remembered and reported by the exit code, as for any other write to stdout.
+  lerta_stdout_flush();
   char *file = NULL;
   char **spawned_args = valid ? program_args(c_args, count, &file) : NULL;
   Run *run = lerta_checked_malloc(sizeof(Run));

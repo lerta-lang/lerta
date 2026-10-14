@@ -250,10 +250,9 @@ LertaArray *lerta_argv(void);
 // Flushes stdout and ends the program; leaks are not checked, as for a throw. A code out of 0 to
 // 255 throws a ValueError instead, and the call returns.
 void lerta_exit(int64_t code);
-// With `output`, an array of bytes, the program's standard output is appended to it.
-int64_t lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output);
-// A promise of the program's exit code, as lerta_run gives it, settled once it ends; it is rejected
-// if its output cannot be read, and a program that cannot start throws at once.
+// A promise of the program's exit code, settled once it ends; with `output`, an array of bytes,
+// its standard output is appended to it first. It is rejected if the output cannot be read, and a
+// program that cannot start throws at once.
 LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args,
                               LertaArray *output);
 // The system's name: linux, macos or windows.

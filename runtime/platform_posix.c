@@ -4,13 +4,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -197,38 +195,6 @@ bool lerta_os_remove_tree(const char *path) {
   return remove_entries(path) && rmdir(path) == 0;
 }
 
-extern char **environ;
-
-// Shells report a child killed by a signal as 128 plus the signal number, so callers can tell it
-// from an exit code.
-static int64_t exit_code_of(int status) {
-  return WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status);
-}
-
-static bool spawn(char **args, const posix_spawn_file_actions_t *actions, pid_t *pid) {
-  return posix_spawnp(pid, args[0], actions, NULL, args, environ) == 0;
-}
-
-// The child writes its standard output to a pipe, which is read here until the child closes it.
-static bool spawn_reading_output(char **args, LertaString **output, pid_t *pid) {
-  int pipe_fds[2];
-  if (pipe(pipe_fds) != 0) return false;
-  posix_spawn_file_actions_t actions;
-  posix_spawn_file_actions_init(&actions);
-  posix_spawn_file_actions_adddup2(&actions, pipe_fds[1], STDOUT_FILENO);
-  // A program started with stdout closed may get fd 1 as an end of the pipe, which the child must
-  // keep as its stdout.
-  for (int i = 0; i < 2; i++) {
-    if (pipe_fds[i] != STDOUT_FILENO) posix_spawn_file_actions_addclose(&actions, pipe_fds[i]);
-  }
-  bool spawned = spawn(args, &actions, pid);
-  posix_spawn_file_actions_destroy(&actions);
-  close(pipe_fds[1]);
-  if (spawned) *output = lerta_read_chunks(read_fd, (void *)(intptr_t)pipe_fds[0]);
-  close(pipe_fds[0]);
-  return spawned;
-}
-
 // The system searches PATH when it runs the program.
 char *lerta_os_program_file(const char *command) {
   return strdup(command);
@@ -236,18 +202,6 @@ char *lerta_os_program_file(const char *command) {
 
 char *lerta_os_program_argument(const char *argument) {
   return strdup(argument);
-}
-
-bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code) {
-  pid_t pid;
-  bool spawned = output == NULL ? spawn(args, NULL, &pid) : spawn_reading_output(args, output, &pid);
-  if (!spawned) return false;
-  int status;
-  while (waitpid(pid, &status, 0) < 0) {
-    if (errno != EINTR) lerta_panic("cannot wait for a child process");
-  }
-  *exit_code = exit_code_of(status);
-  return true;
 }
 
 #endif

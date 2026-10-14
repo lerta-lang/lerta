@@ -23,6 +23,7 @@ An order within one area is stated in its file.
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
+- The runtime's `lerta_run_async` keeps its name because the seed calls it. Rename it to `lerta_run` at a later seed refresh, together with any other names that the seed keeps in place.
 
 ## Open questions
 

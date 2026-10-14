@@ -379,19 +379,6 @@ static char *write_quoted(char *out, const char *argument) {
   return out;
 }
 
-static char *command_line(char **args) {
-  size_t size = 1;
-  for (char **arg = args; *arg != NULL; arg++) size += 2 * strlen(*arg) + 3;
-  char *line = lerta_checked_malloc(size);
-  char *end = line;
-  for (char **arg = args; *arg != NULL; arg++) {
-    if (arg != args) *end++ = ' ';
-    end = write_quoted(end, *arg);
-  }
-  *end = '\0';
-  return line;
-}
-
 // The file `name` on `path`, as SearchPathW finds it, or NULL; the caller frees it.
 static wchar_t *search_file(const wchar_t *path, const wchar_t *name) {
   DWORD size = SearchPathW(path, name, NULL, 0, NULL, NULL);
@@ -431,12 +418,6 @@ static wchar_t *search_path(const char *command) {
   return found;
 }
 
-// The end of a pipe's data is an error once the writer has closed it.
-static int64_t read_pipe(void *pipe, uint8_t *buffer, int64_t size) {
-  int64_t count = read_handle(pipe, buffer, size);
-  return count < 0 && GetLastError() == ERROR_BROKEN_PIPE ? 0 : count;
-}
-
 // Quoted, for libuv to put on the command line as it is.
 char *lerta_os_program_argument(const char *argument) {
   char *quoted = lerta_checked_malloc(2 * strlen(argument) + 3);
@@ -448,65 +429,15 @@ static bool has_directory(const char *command) {
   return strpbrk(command, "/\\:") != NULL;
 }
 
-// A command with a directory in it is left to libuv, which tries its exact name, then the name with
-// .com and then .exe added.
+// A command without a directory in it is searched for on PATH only, as on POSIX; libuv would look
+// in the current directory first. One with a directory in it is left to libuv, which tries its
+// exact name, then the name with .com and then .exe added.
 char *lerta_os_program_file(const char *command) {
   if (has_directory(command)) return _strdup(command);
   wchar_t *found = search_path(command);
   char *file = found == NULL ? NULL : to_utf8(found);
   free(found);
   return file;
-}
-
-// A command without a directory in it is searched for on PATH only, as on POSIX; CreateProcessW
-// alone would look in the program's directory and the current one first. One with a directory is
-// left to CreateProcessW, which adds .exe if it has no extension. The child gets this program's
-// standard handles even when this program has no console, except for the pipe that it writes its
-// output to, of which only the writing end is inherited.
-bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code) {
-  HANDLE output_read = NULL;
-  HANDLE output_write = GetStdHandle(STD_OUTPUT_HANDLE);
-  SECURITY_ATTRIBUTES inherited = { .nLength = sizeof inherited, .bInheritHandle = TRUE };
-  if (output != NULL && !CreatePipe(&output_read, &output_write, &inherited, 0)) return false;
-  if (output != NULL && !SetHandleInformation(output_read, HANDLE_FLAG_INHERIT, 0)) {
-    CloseHandle(output_read);
-    CloseHandle(output_write);
-    return false;
-  }
-  bool directory_given = has_directory(args[0]);
-  wchar_t *application = directory_given ? NULL : search_path(args[0]);
-  char *line = command_line(args);
-  wchar_t *wide_line = to_utf16(line);
-  free(line);
-  STARTUPINFOW startup = {
-    .cb = sizeof startup,
-    .dwFlags = STARTF_USESTDHANDLES,
-    .hStdInput = GetStdHandle(STD_INPUT_HANDLE),
-    .hStdOutput = output_write,
-    .hStdError = GetStdHandle(STD_ERROR_HANDLE),
-  };
-  PROCESS_INFORMATION process;
-  bool started = (directory_given || application != NULL) && wide_line != NULL &&
-                 CreateProcessW(application, wide_line, NULL, NULL, TRUE, 0, NULL, NULL, &startup,
-                                &process);
-  free(application);
-  free(wide_line);
-  if (output != NULL) {
-    // Closed before reading, so that the pipe ends when the child closes its own end.
-    CloseHandle(output_write);
-    if (started) *output = lerta_read_chunks(read_pipe, output_read);
-    CloseHandle(output_read);
-  }
-  if (!started) return false;
-  DWORD code;
-  if (WaitForSingleObject(process.hProcess, INFINITE) != WAIT_OBJECT_0 ||
-      !GetExitCodeProcess(process.hProcess, &code)) {
-    lerta_panic("cannot wait for a child process");
-  }
-  CloseHandle(process.hThread);
-  CloseHandle(process.hProcess);
-  *exit_code = code;
-  return true;
 }
 
 #endif

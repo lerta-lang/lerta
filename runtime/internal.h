@@ -113,11 +113,6 @@ bool lerta_os_rename(const char *from, const char *to);
 const char *lerta_os_platform(void);
 // The value of an environment variable, which the caller frees, or NULL if it is not set.
 char *lerta_os_env(const char *name);
-// Only for lerta_run, which the seed's compiler alone calls. Runs the command `args[0]`, found
-// as the system finds commands, with `args`, which end with NULL, and waits for it to end. With
-// `output`, its standard output is read into a new string written there; the string is NULL if it
-// cannot be read.
-bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code);
 // The file of a command for lerta_loop_run_program, which on Windows is searched for on PATH if it
 // holds no directory (see docs/reference/modules.md#stdprocess); NULL if there is none. The caller
 // frees it.
