@@ -808,9 +808,17 @@ const output_checks = [
       const built = build_in_new_dir(['build', source, '-o', 'split', '-O'])
       const reasons = expect_success('build', built)
       if (reasons.length > 0) return reasons
-      const symbols = spawnSync('nm', [join(built.cwd, 'split')], { encoding: 'utf8' })
-      if (symbols.status !== 0) return [`nm failed: ${symbols.stderr}`]
-      return symbols.stdout.includes('lerta_retain') ? ['lerta_retain is not inlined'] : []
+      // The symbol may stay, as GNU ld's LTO plugin keeps it, but nothing calls it.
+      const [disassembler, args] =
+        process.platform === 'darwin' ? ['otool', ['-tvV']] : ['objdump', ['-d']]
+      const code = spawnSync(disassembler, [...args, join(built.cwd, 'split')], {
+        encoding: 'utf8',
+        maxBuffer: 1 << 28,
+      })
+      if (code.status !== 0) return [`${disassembler} failed: ${code.stderr}`]
+      return /\b(call\w*|jmp|bl|b)\s.*lerta_retain\b/.test(code.stdout)
+        ? ['lerta_retain is not inlined']
+        : []
     },
   },
   {
@@ -949,23 +957,40 @@ const cache_checks = [
         [[], 'debug'],
         [['-O'], 'release'],
       ]
+      // An optimized build also has the linker keep what ThinLTO optimizes, in `thinlto`.
+      const lto_cache = join(cache, 'thinlto')
+      // The linker also writes when it last pruned the cache. An entry optimized again would
+      // have the same name, but a new time.
+      const lto_entries = () =>
+        existsSync(lto_cache)
+          ? readdirSync(lto_cache)
+              .filter((entry) => entry !== 'llvmcache.timestamp')
+              .sort()
+              .map((entry) => `${entry} ${statSync(join(lto_cache, entry)).mtimeMs}`)
+          : []
+      const runtimes = () => readdirSync(cache).filter((entry) => entry !== 'thinlto')
       for (const [flags, kind] of kinds) {
-        const before = readdirSync(cache)
+        const before = runtimes()
         const { reasons } = build_hello_with(env, flags)
         if (reasons.length > 0) return reasons
-        const added = readdirSync(cache).filter((entry) => !before.includes(entry))
+        const added = runtimes().filter((entry) => !before.includes(entry))
         if (added.length !== 1) return [`${flags.join(' ')} added to the cache: ${added}`]
         const problems = expect_cached_runtime(cache, added[0], kind, host)
         if (problems.length > 0) return problems
+        const optimized = lto_entries()
+        if ((kind === 'release') !== optimized.length > 0)
+          return [`${flags.join(' ')} left the ThinLTO cache with: ${optimized}`]
         const object = join(cache, added[0], runtime_objects[0])
         const built_at = statSync(object).mtimeMs
         const again = build_hello_with(env, flags).reasons
         if (again.length > 0) return again
-        const entries = readdirSync(cache)
+        const entries = runtimes()
         if (entries.length !== before.length + 1)
           return [`the second build changed the cache: ${entries}`]
         if (statSync(object).mtimeMs !== built_at)
           return [`the second build compiled the runtime again`]
+        if (lto_entries().join() !== optimized.join())
+          return [`the second build optimized again: ${lto_entries()}`]
         // A runtime that lost a file is reported, not compiled again.
         rmSync(join(cache, added[0], attributes_file))
         const { built } = build_hello_with(env, flags)

@@ -292,6 +292,11 @@ bool lerta_os_rename(const char *from, const char *to) {
 
 const char *lerta_os_platform(void) { return "windows"; }
 
+int64_t lerta_os_cpu_count(void) {
+  DWORD count = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+  return count > 0 ? count : 1;
+}
+
 char *lerta_os_env(const char *name) {
   wchar_t *wide_name = to_utf16(name);
   DWORD size = wide_name == NULL ? 0 : GetEnvironmentVariableW(wide_name, NULL, 0);

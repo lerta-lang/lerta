@@ -11,7 +11,7 @@ import IrModule from './ir_builder'
 import define_on_demand, link_modules from './ir_linking'
 import instances_on_demand from './instances'
 import
-  extension_symbol, function_symbol, method_symbol, module_init_symbol
+  extension_symbol, function_symbol, method_symbol, module_init_symbol, quoted_name
 from './lerta_ir'
 import Module from '../loader'
 import define_raise_error, emit_register_raise from './runtime_errors'
@@ -29,9 +29,13 @@ export const generate = (
   program: ProgramWide, function_attributes: String, coro_end_type: String, separate: Bool
 ) ->
   const modules = program.modules
-  const one = IrModule(function_attributes, coro_end_type)
-  const new_module = -> separate then IrModule(function_attributes, coro_end_type) else one
-  const ir_modules = [new_module() for _ in modules]
+  const ir_module_of = (module: Module) ->
+    const source_filename = quoted_name(module.symbol_name)
+    IrModule source_filename, function_attributes, coro_end_type
+  # The entry module comes last (see load_modules).
+  const entry = modules[modules.length - 1]
+  const one = ir_module_of(entry)
+  const ir_modules = [separate then ir_module_of(module) else one for module in modules]
   const globals = [
     define_top_level_globals(ir_modules[i], module, program.shared[i]) for module, i in modules
   ]

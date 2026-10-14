@@ -135,6 +135,8 @@ LertaString *lerta_env(const LertaString *name) {
   return result;
 }
 
+int64_t lerta_cpu_count(void) { return lerta_os_cpu_count(); }
+
 LertaString *lerta_platform(void) {
   const char *name = lerta_os_platform();
   return lerta_string_from_bytes(name, (int64_t)strlen(name));

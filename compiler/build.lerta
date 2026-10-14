@@ -1,16 +1,17 @@
 # Builds a program: has clang compile the IR that codegen generates for it, written to a temporary
 # directory, which is removed afterwards, and link it with the runtime's cached objects.
 import make_temp_dir, remove_tree, stderr, write_file from 'std:io'
-import exit, run from 'std:process'
+import cpu_count, exit, run from 'std:process'
 import all_warnings from './checker/diagnostics'
 import check_modules from './checker/modules'
 import ProgramWide from './checker/shared'
-import build_flags, executable_suffix from './clang_flags'
+import build_flags, executable_suffix, lto_cache_flags from './clang_flags'
 import generate from './codegen/codegen'
 import CompileError from './errors'
 import load_modules from './loader'
 import join from './paths'
-import cached_runtime from './runtime_cache'
+import target_system from './libuv'
+import cache_dir, cached_runtime from './runtime_cache'
 
 # What to build: the executable `output`, or one in the temporary directory if nil, for `target`
 # (a triple such as i686-linux-gnu) or else for the host, linked with `linked_files`, such as C
@@ -65,18 +66,42 @@ const build_in_dir = (
 ) ->
   const runtime = (await cached_runtime(request.optimize, request.target, dir)) ? return 1
   const modules = generate(program, runtime.function_attributes, runtime.coro_end_type, true)
-  const ir_paths = [join(dir, "module#{i}.ll") for _, i in modules]
-  write_file path, text.binary for (path, text) in ir_paths.zip(modules)
+  const flags = build_flags(request.optimize, request.target)
+  const objects = (await compile_modules(modules, flags, dir)) ? return 1
   const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
   const libraries = ["-l#{library}" for library in runtime.libraries]
-  const args = clang_args(request, ir_paths, [runtime.objects..., libraries...], executable)
+  const lto_cache = join(cache_dir(), 'thinlto')
+  const cache_flags = request.optimize then lto_cache_flags(target_system(request.target), lto_cache)
+  const args = [
+    objects..., flags..., (cache_flags ? [])..., runtime.objects..., libraries...
+    request.linked_files..., '-o', executable
+  ]
   return 1 if await run('clang', args) != 0
   const program_args = run_args ? return 0
   await run(executable, program_args)
 
-const clang_args = (
-  request: BuildRequest, ir_paths: Array<String>, runtime: Array<String>, output: String
-) ->
-  # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
-  const flags = build_flags(request.optimize, request.target)
-  ['-Wno-override-module', ir_paths..., flags..., runtime..., request.linked_files..., '-o', output]
+# Has clang compile the IR of each module, written to `dir`, into an object file there, as many at
+# once as there are CPUs; nil if it fails for any.
+const compile_modules = (modules: Array<String>, flags: Array<String>, dir: String) ->
+  const paths = [join(dir, "module#{i}") for _, i in modules]
+  write_file "#{path}.ll", text.binary for (path, text) in paths.zip(modules)
+  var next = 0
+  var failed = false
+  # Each compiles the next module until none is left, or one has failed.
+  const worker = ->
+    while not failed and next < paths.length
+      const path = paths[next]
+      next += 1
+      # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
+      const args = ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]
+      failed = true if await run('clang', args) != 0
+  const workers = [worker() for _ in 0...cpu_count]
+  # Each is waited for, even after one has thrown, before the directory is removed.
+  var error: Error? = nil
+  for each in workers
+    try
+      await each
+    catch thrown
+      error = thrown
+  throw thrown if const thrown = error
+  failed then nil else ["#{path}.o" for path in paths]

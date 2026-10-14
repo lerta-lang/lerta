@@ -6,9 +6,9 @@ This describes the implementation design. Unmarked statements describe the compi
 
 - The compiler writes `.ll` text, a file for each module (see [per-module output](#per-module-output)), and has `clang` compile and link it with the runtime.
 - **Planned:** LLVM emits objects, and `lld` links them (on all platforms).
-- An optimized build lets LLVM inline the runtime's C functions into the generated code, as `lerta_retain`: the runtime is compiled with `-flto`. **Planned:** with ThinLTO, one module at a time (see [per-module output](#per-module-output)).
+- An optimized build lets LLVM inline the runtime's C functions into the generated code, as `lerta_retain`: the runtime is compiled with `-flto=thin`, as each module is (see [per-module output](#per-module-output)).
 - LLVM can inline a function only into one that has the target features it was compiled for. So every function that a build generates has the target's attributes (the CPU and its features) that clang gives a C function compiled with the same flags, which the runtime's cache keeps (`compiler/runtime_cache.lerta`).
-- `lerta_release` keeps the dropping of an object out of line, so that the rest is small enough to inline. Inlining it and `lerta_retain` makes the compiler's front end about a quarter faster, and its optimized build about twice as slow, as LLVM then optimizes much more code. Of the compiler's optimized build (15 s on an x86-64 Mac with clang 21, against 1.3 s unoptimized), clang takes 5 s to optimize the program alone and 15 s with the runtime; compiling libuv without `-flto` saves nothing, so libuv takes no measurable part of it.
+- `lerta_release` keeps the dropping of an object out of line, so that the rest is small enough to inline. Inlining it and `lerta_retain` makes the compiler's front end about a quarter faster, and its optimized build about twice as slow, as LLVM then optimizes much more code.
 - The core of the runtime (RC, the representation and basic operations of strings, arrays and maps) is **written in C** and shared by all stages. `runtime/lerta.h` declares what the generated code, std and the C files linked with a program use, and `runtime/internal.h` what only the runtime's own C code does.
   - Builtins and standard modules are written in Lerta where possible (such as `print`). C is limited to the minimal primitives that cannot be written in Lerta (writing to an fd, memory allocation and so on), and the compiler to the operations that need the representation of the builtin types (see [builtins](#builtins)).
 - The event loop is in the C core of the runtime, on libuv (see [functions that await](#functions-that-await)). Programs that `run` starts are waited for on it too; **planned:** I/O on it.
@@ -28,18 +28,15 @@ This describes the implementation design. Unmarked statements describe the compi
 
 ### Per-module output
 
-- The front end checks and generates the whole program at once, but `build` writes one LLVM module per Lerta module, which clang compiles and links (`compiler/codegen/ir_linking.lerta`). **Planned:** so that an optimized build optimizes the modules in parallel, with ThinLTO (`-flto=thin`), which imports into each module the functions of the others that it inlines, the runtime's among them. One large module would be optimized on one thread, and would gain little over full LTO.
-- **Planned:** the ThinLTO cache is kept with [the runtime's](reference/compiler.md), so that a build optimizes again only the modules whose IR has changed, and those that inline from them.
+- The front end checks and generates the whole program at once, but `build` writes one LLVM module per Lerta module (`compiler/codegen/ir_linking.lerta`), which clang compiles at once, each in a process of its own, and links, so that an optimized build optimizes the modules in parallel, with ThinLTO (`-flto=thin`), which imports into each module the functions of the others that it inlines, the runtime's among them. One large module would be optimized on one thread, and would gain little over full LTO.
+- The ThinLTO cache is kept with [the runtime's](reference/compiler.md), so that a build optimizes again only the modules whose IR has changed, and those that inline from them. Each module names its `source_filename`, since clang would give it the path of its `.ll`, in the build's temporary directory, which would make each build's objects new to the cache.
 - For that, a module's IR depends only on the module and the declarations it uses:
   - Symbols are named after the module's path and the declaration (see [modules](#modules)), not numbered across the program, so that adding or removing a module renames nothing in the others. What a module makes on demand, such as its lambdas, constants, itabs and equality functions, is numbered within it.
   - What a module numbers of its own is private; the rest is external, and a module declares what it uses of the others. It also defines the named types of the others that it uses, the layouts of their classes and structs. What a module uses is found in its text, by the names after `@` and `%"`, so the code that generates it does not list them.
   - Generic instances are emitted by the modules that use them (see [generics](#generics)), so that a module's IR does not depend on those that the others use.
   - A module's top-level code is a function of its own, which the entry module's calls in the order of initialization.
 - `dump-llvm` prints the modules as one, which declares nothing of its own, so that the seed is one `.ll`, and `make check-bootstrap` compares one.
-- Open questions:
-  - How the cache is passed to each linker (ld64, lld, mingw's), and before [lld is called as a library](#interface-with-llvm-planned).
-  - A limit on the cache's size, and what it evicts.
-  - The times measured above are to be measured again.
+- The compiler's optimized build, on an x86-64 Mac with clang 21: 15 s with full LTO of one module; with ThinLTO, 2.7 s, 1.9 s after a change to one module, and 1.3 s with nothing changed, besides 3.7 s to compile the runtime once; 1.2 s unoptimized. On x86-64 Linux in Docker, with clang 19: 22 s with full LTO, and 2.8 s with ThinLTO, 1.1 s with nothing changed. The benchmarks run as fast as with full LTO, but on the Mac `fib`, whose recursion is a third slower there for the code's layout, as the code is the same but for one register saved.
 
 ## Bootstrap
 

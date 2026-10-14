@@ -148,6 +148,11 @@ bool lerta_os_rename(const char *from, const char *to) {
   return rename(from, to) == 0;
 }
 
+int64_t lerta_os_cpu_count(void) {
+  long count = sysconf(_SC_NPROCESSORS_ONLN);
+  return count > 0 ? count : 1;
+}
+
 const char *lerta_os_platform(void) {
 #ifdef __APPLE__
   return "macos";

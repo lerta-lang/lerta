@@ -122,6 +122,8 @@ bool lerta_os_is_separator(char c);
 bool lerta_os_rename(const char *from, const char *to);
 // The system's name: linux, macos or windows.
 const char *lerta_os_platform(void);
+// The number of CPUs that are online, at least 1.
+int64_t lerta_os_cpu_count(void);
 // The value of an environment variable, which the caller frees, or NULL if it is not set.
 char *lerta_os_env(const char *name);
 // The file of a command for lerta_loop_run_program, which on Windows is searched for on PATH if it
