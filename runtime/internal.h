@@ -32,6 +32,13 @@ int64_t lerta_word_item(const LertaArray *array, int64_t index);
 // Appends an item of any kind but interface values, given as 8 bytes (see lerta_word_item).
 void lerta_array_append_word(LertaArray *array, int64_t word);
 
+// The event loop's backend (loop.c). Resolves the promise, which it holds meanwhile, once the
+// seconds, which are not negative, have passed.
+void lerta_loop_resolve_after(int64_t seconds, LertaPromise *promise);
+// Waits for what settles promises, and settles them, once; false, without waiting, if nothing is
+// left to wait for.
+bool lerta_loop_wait(void);
+
 // Process (process.c): main's arguments, without the program name.
 void lerta_set_arguments(int argc, char **argv);
 

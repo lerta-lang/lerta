@@ -33,6 +33,7 @@ Early development. The compiler is written in Lerta (`compiler/`) and builds its
 | `tools/` | `test_cross.sh`, which `make test-cross` runs, and the Docker images it uses in `docker/` |
 | `compiler/` | The compiler: `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, `checker/`, which checks them, and `codegen/`, which emits LLVM IR, behind the commands of `main.lerta` |
 | `runtime/` | C runtime |
+| `third_party/` | libuv, with its license, and `libuv.txt`, which says how the runtime builds it for each system. Its license notice goes with the compiler, and with the programs it builds (see `docs/reference/compiler.md`) |
 | `tests/` | Run tests: Lerta source and expected output |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
 | `docs/` | Documentation (see below) |

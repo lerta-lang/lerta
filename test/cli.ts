@@ -15,7 +15,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { compiler, root_dir } from './lerta.ts'
+import { compiler, host_libuv, root_dir } from './lerta.ts'
 import { compare_text, expect_status, expect_success, lines } from './expect.ts'
 import { run_checks, run_suite } from './report.ts'
 
@@ -834,8 +834,13 @@ const new_cache_dir = () => mkdtempSync(join(cli_work_dir, 'cache-'))
 const runtime_objects = readdirSync(join(root_dir, 'runtime'))
   .filter((file) => file.endsWith('.c'))
   .map((file) => file.replace(/\.c$/, '.o'))
+// libuv's objects for the host, each named by its source's path, as `src/unix/core.c` is
+// `libuv-src-unix-core.o`.
+const libuv_objects = host_libuv('source').map(
+  (source) => `libuv-${source.replace(/\.c$/, '').split('/').join('-')}.o`,
+)
 const attributes_file = 'function_attributes.txt'
-const cached_runtime_files = [...runtime_objects, attributes_file].sort()
+const cached_runtime_files = [...runtime_objects, ...libuv_objects, attributes_file].sort()
 
 // The name of a cached runtime, of the kind given and a target that matches `target`, a regular
 // expression, and what it holds.
@@ -1007,8 +1012,36 @@ const cache_checks = [
       return [
         ...expect_status(1, built.status),
         ...compare_text('stderr', 'not a target: ../outside\n', built.stderr),
-        ...expect_left('files beside the cache', ['inner'], readdirSync(cache)),
-        ...expect_left('files left in the cache', [], readdirSync(join(cache, 'inner'))),
+        ...expect_left('files beside the cache', [], readdirSync(cache)),
+      ]
+    },
+  },
+  {
+    name: 'lerta build rejects a target that would name a Windows path in the cache',
+    run: () => {
+      const { built } = build_hello_with({ LERTA_CACHE_DIR: new_cache_dir() }, [
+        '--target',
+        '..\\outside',
+      ])
+      return [
+        ...expect_status(1, built.status),
+        ...compare_text('stderr', 'not a target: ..\\outside\n', built.stderr),
+      ]
+    },
+  },
+  {
+    name: 'lerta build rejects a target of a system that the runtime is not built for',
+    run: () => {
+      const cache = new_cache_dir()
+      const { built } = build_hello_with({ LERTA_CACHE_DIR: cache }, [
+        '--target',
+        'x86_64-unknown-freebsd',
+      ])
+      const message = 'not a target that the runtime is built for: x86_64-unknown-freebsd\n'
+      return [
+        ...expect_status(1, built.status),
+        ...compare_text('stderr', message, built.stderr),
+        ...expect_left('files left in the cache', [], readdirSync(cache)),
       ]
     },
   },

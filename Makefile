@@ -3,7 +3,19 @@
 # 3.81, the one macOS has.
 
 # The files that the compiler carries in compiler/embedded.lerta, which tools/embed.lerta writes.
-EMBEDDED := $(sort $(wildcard std/*.lerta runtime/*.c runtime/*.h))
+# What third_party/libuv.txt lists of the kind $(1) for the host's system, on which the compiler
+# runs: macOS or Linux, by the rule of is_for in compiler/libuv.lerta.
+HOST_SYSTEM := $(if $(filter Darwin,$(shell uname -s)),macos,linux)
+HOST_LIBUV_SYSTEMS := all posix $(HOST_SYSTEM)
+host_libuv = $(shell awk -v kind=$(1) -v systems='$(HOST_LIBUV_SYSTEMS)' \
+  'BEGIN { split(systems, list, " "); for (i in list) wanted[list[i]] = 1 } \
+  $$2 == kind && ($$1 in wanted) { print $$3 }' third_party/libuv.txt)
+
+# Of libuv, the headers, and the sources that third_party/libuv.txt lists for some system.
+LIBUV_HEADERS := $(shell find third_party/libuv/include third_party/libuv/src -name '*.h')
+LIBUV_SOURCES := $(shell awk '$$2 == "source" { print "third_party/libuv/" $$3 }' third_party/libuv.txt)
+LIBUV := third_party/libuv.txt $(LIBUV_HEADERS) $(LIBUV_SOURCES)
+EMBEDDED := $(sort $(wildcard std/*.lerta runtime/*.c runtime/*.h) $(LIBUV))
 SOURCES := $(shell find compiler -name '*.lerta') compiler/embedded.lerta
 RUNTIME_C := $(wildcard runtime/*.c)
 RUNTIME := $(RUNTIME_C) $(wildcard runtime/*.h)
@@ -32,8 +44,18 @@ build/seed.ll: seed/lerta.ll
 
 # Linked with the debug runtime, as the compiler's own unoptimized build does: clang compiles the
 # IR far faster without optimization than minilerta loses running unoptimized, and it runs little.
-build/minilerta: build/seed.ll $(RUNTIME)
-	clang -Wno-override-module build/seed.ll -D LERTA_DEBUG $(RUNTIME_C) -o $@
+build/minilerta: build/seed.ll $(RUNTIME) build/libuv/built
+	clang -Wno-override-module build/seed.ll -D LERTA_DEBUG -Ithird_party/libuv/include \
+	  $(RUNTIME_C) build/libuv/*.o $(addprefix -l,$(call host_libuv,library)) -o $@
+
+# The host's libuv, as the compiler builds it with a program's runtime (see compiler/libuv.lerta):
+# with its flags and its warnings silenced, apart from the runtime, which needs only its headers.
+build/libuv/built: $(LIBUV)
+	@rm -rf build/libuv && mkdir -p build/libuv
+	cd build/libuv && clang -c $(call host_libuv,flag) -I$(CURDIR)/third_party/libuv/include \
+	  -I$(CURDIR)/third_party/libuv/src -w \
+	  $(addprefix $(CURDIR)/third_party/libuv/,$(call host_libuv,source))
+	touch $@
 
 # Each rule that runs minilerta depends on std/ and runtime/ too, which it reads (see
 # docs/internals.md#bootstrap).

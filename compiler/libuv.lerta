@@ -1,0 +1,73 @@
+# libuv, which the runtime is built with, from the sources that the compiler carries (see
+# third_party/libuv.txt): which of them, with which flags and libraries, each system takes.
+import make_dir, write_file from 'std:io'
+import platform from 'std:process'
+import is_mingw from './clang_flags'
+import embedded_source, EMBEDDED_PATHS from './embedded'
+import CompileError from './errors'
+import dirname, join from './paths'
+
+const DESCRIPTION_PATH = 'third_party/libuv.txt'
+const SOURCE_ROOT = 'third_party/libuv/'
+
+# Every file that the build of libuv reads, the description included.
+export const LIBUV_PATHS = [
+  path for path in EMBEDDED_PATHS when path == DESCRIPTION_PATH or path.starts_with(SOURCE_ROOT)
+]
+
+# What one system builds libuv with: its source files, relative to libuv's root, the flags of the
+# compiler, and the libraries to link with.
+export struct LibuvBuild
+  sources: Array<String>
+  flags: Array<String>
+  libraries: Array<String>
+
+# The build for the target, or for the host without one.
+export const libuv_build = (target: String?): LibuvBuild ->
+  const system = target_system(target)
+  const sources: Array<String> = []
+  const flags: Array<String> = []
+  const libraries: Array<String> = []
+  for line in embedded_source(DESCRIPTION_PATH)!.split("\n")
+    continue if line == '' or line.starts_with('#')
+    const words = line.split(' ')
+    const not_a_line = CompileError(message: "#{DESCRIPTION_PATH}: not a build line: #{line}")
+    throw not_a_line if words.length != 3
+    continue if not is_for(words[0], system)
+    case words[1]
+      when 'source' then sources.push words[2]
+      when 'flag' then flags.push words[2]
+      when 'library' then libraries.push words[2]
+      else throw CompileError(message: "#{DESCRIPTION_PATH}: not a kind of line: #{words[1]}")
+  LibuvBuild sources, flags, libraries
+
+# The system of a target triple, as `platform` names the host's: one of those that
+# third_party/libuv.txt describes.
+const target_system = (target: String?) ->
+  const triple = target ? return platform
+  const parts = triple.split('-')
+  const has_part = (prefix: String) -> parts.iter().any((part) -> part.starts_with(prefix))
+  return 'windows' if is_mingw(triple)
+  return 'macos' if has_part('darwin') or has_part('macos')
+  # A Linux target's environment, after `linux`, is left out for glibc, or names glibc or musl.
+  const linux = parts.find_index((part) -> part == 'linux')
+  if const at = linux
+    const environment = at + 1 < parts.length then parts[at + 1] else 'gnu'
+    return 'linux' if environment.starts_with('gnu') or environment.starts_with('musl')
+  throw CompileError(message: "not a target that the runtime is built for: #{triple}")
+
+const is_for = (systems: String, system: String) ->
+  case systems
+    when 'all' then true
+    when 'posix' then system != 'windows'
+    else systems == system
+
+# Writes libuv's files under `dir`, as they are under its root, and gives the flags that find its
+# headers there.
+export const write_libuv_sources = (dir: String) ->
+  for path in LIBUV_PATHS
+    continue if not path.starts_with(SOURCE_ROOT)
+    const file = join(dir, path.without_prefix(SOURCE_ROOT)!)
+    make_dir dirname(file)
+    write_file file, embedded_source(path)!.binary
+  ["-I#{join(dir, 'include')}", "-I#{join(dir, 'src')}"]

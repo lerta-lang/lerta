@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { root_dir } from './lerta.ts'
+import { host_libuv, libuv_dir, root_dir } from './lerta.ts'
 import { compare_text, expect_status } from './expect.ts'
 import { run_checks, run_suite, type Check } from './report.ts'
 
@@ -20,11 +20,32 @@ const work_dir = mkdtempSync(join(tmpdir(), 'lerta-runtime-'))
 
 const runtime_c_files = readdirSync(runtime_dir).filter((file) => file.endsWith('.c'))
 
+// libuv for the host, compiled once on its own, as the compiler builds it with the runtime: with its
+// flags and its warnings silenced, which the runtime, needing only its headers, does not take.
+const libuv_objects_dir = join(work_dir, 'libuv')
+mkdirSync(libuv_objects_dir)
+execFileSync(
+  'clang',
+  [
+    '-c',
+    ...host_libuv('flag'),
+    `-I${join(libuv_dir, 'include')}`,
+    `-I${join(libuv_dir, 'src')}`,
+    '-w',
+    ...host_libuv('source').map((source) => join(libuv_dir, source)),
+  ],
+  { cwd: libuv_objects_dir },
+)
+const libuv_objects = readdirSync(libuv_objects_dir).map((file) => join(libuv_objects_dir, file))
+
 // The flags of optimization_flags in compiler/clang_flags.lerta, which the compiler cannot apply
 // to C alone.
 const runtime_clang_args = (optimize: boolean): string[] => [
   ...(optimize ? ['-O2', '-flto'] : ['-D', 'LERTA_DEBUG']),
+  `-I${join(libuv_dir, 'include')}`,
   ...runtime_c_files.map((file) => join(runtime_dir, file)),
+  ...libuv_objects,
+  ...host_libuv('library').map((library) => `-l${library}`),
 ]
 
 type Outcome = { stdout: string; stderr: string; status: number | null }
