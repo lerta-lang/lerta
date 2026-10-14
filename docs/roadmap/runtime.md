@@ -39,6 +39,17 @@ Every expression of a reference type yields an owned reference for now ([interna
 
 First, the operations that this would remove are counted in the generated code, to see whether the gain is worth the change to the ownership of values in codegen.
 
+### Allocation
+
+Objects are allocated with `malloc` and freed with `free` for now, which take most of the time of a program that makes and drops many small objects, such as `bench/binary_trees`. The plan is an allocator of the runtime's own for small objects, which returns memory to the system:
+
+- **Slabs.** Objects up to 256 bytes are allocated in slabs of 64 KiB, each of one size class, in steps of 16 bytes. A slab starts with its size class, its count of live objects and a list of its free places. A slab is aligned to its size, so that an object's slab is its address with the low 16 bits cleared. Larger objects are allocated with `malloc` as now.
+- **Allocation** takes a place from the free list of the size class's current slab; when that slab is full, from another slab of the class with free places, of which each class keeps a list; when there is none, from a new slab. **Freeing** puts the place back on its slab's free list and counts one live object less. Both are a few instructions, which LLVM inlines into the generated code.
+- **Returning memory.** A slab whose last object is freed is returned to the system, except for a few, kept for reuse, so that a program that makes and drops the same objects over and over does not get and return a slab each time. A slab that holds one live object stays whole.
+- **Slabs come from the system**, not from `malloc`, so that they can be aligned and returned one by one without another libc function: from `mmap` on POSIX, which over-allocates and unmaps what lies outside the alignment, and from `VirtualAlloc` on Windows, whose allocations are aligned to 64 KiB. These are platform functions (see [internals](../internals.md#platforms)), which a microcontroller replaces with a static heap.
+- **The debug runtime** counts the objects that it keeps dropped ([internals](../internals.md#use-after-drop-checking)) as live in their slabs, and takes their size from their slab's size class instead of the size that it writes before each object now.
+- The size classes, the slab size and the number of empty slabs kept are settled by measuring the benchmarks in `bench/`.
+
 ## Concurrency
 
 - **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop runs on libuv, with sleeps and the programs that `run` starts so far; input and output come onto it next.
