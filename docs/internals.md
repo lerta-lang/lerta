@@ -31,7 +31,7 @@ This describes the implementation design. Unmarked statements describe the compi
 - The front end still checks and generates the whole program at once, but writes one LLVM module per Lerta module, so that an optimized build optimizes the modules in parallel, with ThinLTO (`-flto=thin`), which imports into each module the functions of the others that it inlines, the runtime's among them. One large module would be optimized on one thread, and would gain little over full LTO.
 - The ThinLTO cache is kept with [the runtime's](reference/compiler.md), so that a build optimizes again only the modules whose IR has changed, and those that inline from them.
 - For that, a module's IR depends only on the module and the declarations it uses:
-  - Symbols are named after the module's path and the declaration, not numbered across the program, so that adding or removing a module renames nothing in the others.
+  - Symbols are named after the module's path and the declaration (see [modules](#modules)), not numbered across the program, so that adding or removing a module renames nothing in the others. **Planned:** the lambdas, numbered across the program now, are numbered within their module.
   - A module declares (`declare`) what it uses of the others, and gives external linkage to what the others use of it.
   - Generic instances are emitted by the modules that use them (see [generics](#generics)).
   - A module's top-level code is a function of its own, which the entry module's calls in the order of initialization.
@@ -124,6 +124,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 ## Modules
 
+- A module's symbols are named by its path from the entry module's directory (absolute if it is on another root, such as another drive), or `std:name` for a standard module, and the entry module by `./` and its file name, which no other path starts with (`lerta.fn.ast.lerta.parse`, `lerta.fn../main.lerta.main`), rather than by its place among the modules, which changes as others are added. Names are quoted in the IR, with the bytes other than printable ASCII, `"` and `\` escaped as in strings.
 - Reading a top-level value through a function before it is initialized is detected with an initialized flag, as is reading an imported value of a module of the same import cycle. The check is optimized away where initialization is certain: in the module's own top-level code, and for the values of the modules outside the cycle, which have run.
 - The checker checks the modules step by step, each step for all of them before the next, so that the modules of a cycle can use each other's names: their names, then their declarations, their extends (those of the modules of the cycle that run later last), their top-level code in the order it runs, and then the bodies of their functions and the initializers of their fields. An export is worked out when an importer asks for it, and an inferred type on demand, across modules as within one.
 - At the end of the program, the top-level values are released in the reverse order of their initialization, so that a `deinit` that runs then can still use those initialized before, as `print` uses `stdout`.
@@ -177,7 +178,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 ## Generics
 
 - **Planned:** monomorphized instances are emitted by the using module as `linkonce_odr` and managed by mangled names (see [per-module output](#per-module-output-planned)).
-- The compiler compiles the whole program into one LLVM module, so it emits each instance once, with the module that declares the generic function or method, under a symbol made of the function's and the type arguments' names (`lerta.fn.0.print<Int>`), and for a method, of the receiver's too (`lerta.extend.0.Array<T>.map<Int, String>`). An instance checks the function literal with the type parameters standing for its type arguments, and keeps the types and other facts it finds of the literal's nodes apart from those of the other instances; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
+- The compiler compiles the whole program into one LLVM module, so it emits each instance once, with the module that declares the generic function or method, under a symbol made of the function's and the type arguments' names (`lerta.fn.std:builtins.print<Int>`), and for a method, of the receiver's too (`lerta.extend.std:builtins.Array<T>.map<Int, String>`). An instance checks the function literal with the type parameters standing for its type arguments, and keeps the types and other facts it finds of the literal's nodes apart from those of the other instances; its body sees the extends of its type arguments in effect where it is first called, so instances of the same type arguments that see different extends are told apart by a number after the name.
 
 ## Defaults
 

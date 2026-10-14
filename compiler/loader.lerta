@@ -5,7 +5,7 @@ import Import, Position, Statement from './ast'
 import compile_error, CompileError from './errors'
 import tokenize from './lexer/tokens'
 import parse from './parser/statement'
-import dirname, join, relative from './paths'
+import basename, dirname, join, relative from './paths'
 import
   is_standard_name, module_location, read_entry_source, read_source, standard_names, standard_source
 from './source'
@@ -17,6 +17,9 @@ export class Module
   # For diagnostics: relative to the entry module's directory, or `std:name` for a standard
   # module; nil for the entry module.
   display_path: String?
+  # Names it in symbols: its display path, or `./` and its file name for the entry module, which no
+  # display path starts with. Unlike its index, it does not change as modules are added or removed.
+  symbol_name: String
   program: Array<Statement>
   # The indexes of the modules that its imports refer to.
   imported: Map<Import, Int>
@@ -148,8 +151,9 @@ const finished_module = (loader: Loader, id: Int) ->
   const imported: Map<Import, Int> = Map()
   imported[statement] = index_of(place) for (statement, place) in loading.imported.entries()
   const { index, display_path, program } = loading
+  const symbol_name = display_path ? "./#{basename(loader.entry_path)}"
   const cycle = [index_of(place) for place in loading.cycle]
-  Module index, display_path, program, imported, cycle
+  Module index, display_path, symbol_name, program, imported, cycle
 
 export const is_standard_module = (module: Module) ->
   return is_standard_name(path) if const path = module.display_path

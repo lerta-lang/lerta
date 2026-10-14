@@ -5,7 +5,9 @@ import
   emit_heap_allocate, emit_heap_field_pointer, heap_object_type, HeapField, plain_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
-import emit_release_stored, ir_return_type, ir_type, LERTA_IMMORTAL, without_sigil from './lerta_ir'
+import
+  emit_release_stored, ir_return_type, ir_type, LERTA_IMMORTAL, prefixed_symbol, suffixed_symbol
+from './lerta_ir'
 import emit_valueless_call from './runtime_calls'
 import FunctionType, Type from '../types'
 
@@ -19,7 +21,7 @@ export const function_type_of = (type: Type) ->
 # with it, calls the function without the closure.
 export const emit_function_closure = (ir: IrBuilder, symbol: String, type: Type) ->
   const { params, result } = function_type_of(type)
-  const thunk = "@lerta.thunk.#{without_sigil(symbol)}"
+  const thunk = prefixed_symbol('lerta.thunk', symbol)
   const define = (module: IrModule) ->
     const typed_params = ["#{ir_type(param)} %p#{i}" for param, i in params]
     const return_type = ir_return_type(result)
@@ -39,7 +41,7 @@ export const emit_function_closure = (ir: IrBuilder, symbol: String, type: Type)
 # A closure of `code` that captures nothing: an immortal constant, defined once, which is never
 # allocated or freed.
 export const emit_static_closure = (ir: IrBuilder, code: String) ->
-  const closure = "@lerta.closure.#{without_sigil(code)}"
+  const closure = prefixed_symbol('lerta.closure', code)
   const define = (module: IrModule) ->
     const header = "i64 #{LERTA_IMMORTAL}, ptr null, ptr #{code}"
     module.define_global closure, "private constant { i64, ptr, ptr } { #{header} }"
@@ -82,7 +84,7 @@ export const emit_closure = (
   ir: IrBuilder, symbol: String, slots: Array<HeapField>, operands: Array<String>
 ) ->
   const holds_reference = slots.any((slot) -> slot.owned != NONE)
-  const drop = holds_reference then "#{symbol}.drop" else 'null'
+  const drop = holds_reference then suffixed_symbol(symbol, 'drop') else 'null'
   define_closure_drop ir, drop, slots if holds_reference
   const closure = emit_heap_allocate(ir, closure_ir_type(slots), drop)
   ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}"

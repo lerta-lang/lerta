@@ -3,7 +3,7 @@
 import Declaration, FunctionLiteral, Statement, TypeDeclaration from '../ast'
 import FunctionExport, named_export from '../checker/imports'
 import is_generic_object from '../checker/object_types'
-import ProgramWide from '../checker/shared'
+import module_symbol_name, ProgramWide from '../checker/shared'
 import generate_constructor, generate_function, generate_main, TopLevelCode from './function'
 import function_generator, Generator, ModuleCode, TopLevelGlobal from './generator'
 import define_object from './heap_object'
@@ -46,7 +46,8 @@ const generate_module = (code: ModuleCode) ->
   const main_code = [statement for statement in module.program when is_main_code(statement)]
   const entry_index = program.modules.length - 1
   const top_level_code = (index: Int) ->
-    TopLevelCode symbol: module_init_symbol(index), awaits: program.shared[index].top_level_awaits
+    const symbol = module_init_symbol(module_symbol_name(program, index))
+    TopLevelCode symbol, awaits: program.shared[index].top_level_awaits
   if module.index == entry_index
     emit_register_raise main if program.builtins != nil
     const runs_first = [top_level_code(i) for i in 0...entry_index]
@@ -60,7 +61,7 @@ const generate_module = (code: ModuleCode) ->
     define_raise_error function_generator(code, extensions, facts)
   for statement in module.program
     const declaration = plain_function(statement) ? continue
-    const symbol = function_symbol(module.index, declaration.name.name)
+    const symbol = function_symbol(module.symbol_name, declaration.name.name)
     generate_one symbol, literal_of(declaration), nil
   for generic in shared.generics
     for instance in generic.instances
@@ -79,7 +80,7 @@ const generate_module = (code: ModuleCode) ->
       generate_one method_symbol(info.type, method), literal, info.type
   for method in shared.own_methods
     continue if method.generic != nil
-    generate_one extension_symbol(method), method.literal, method.receiver
+    generate_one extension_symbol(program, method), method.literal, method.receiver
 
 # The top-level code: the statements other than the declarations of functions and types.
 const is_main_code = (statement: Statement) ->
@@ -112,7 +113,7 @@ const function_symbols = (program: ProgramWide, module: Module) ->
   const symbols: Map<String, String> = Map()
   for statement in module.program
     if const declaration = plain_function(statement)
-      symbols[declaration.name.name] = function_symbol(module.index, declaration.name.name)
+      symbols[declaration.name.name] = function_symbol(module.symbol_name, declaration.name.name)
   const shared = program.shared[module.index]
   const names = shared.imports.names.keys()
   names.append program.shared[builtins].exported.keys() if const builtins = shared.imports.builtins
@@ -120,5 +121,6 @@ const function_symbols = (program: ProgramWide, module: Module) ->
     continue if symbols.has(name)
     const exported = named_export(shared, name)
     if exported is FunctionExport
-      symbols[name] = function_symbol(exported.module_index, exported.name)
+      const module_name = module_symbol_name(program, exported.module_index)
+      symbols[name] = function_symbol(module_name, exported.name)
   symbols

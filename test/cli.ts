@@ -827,6 +827,27 @@ const output_checks = [
       ]
     },
   },
+  {
+    name: 'lerta dump-llvm names symbols by the module paths, escaped',
+    run: () => {
+      const source = join(root_dir, 'tests/module/escaped_path.lerta')
+      const { status, stdout } = build_in_new_dir(['dump-llvm', source])
+      const module = 'lib/\\E5\\90\\8D\\E5\\89\\8D \\22a\\5Cb\\22.lerta'
+      const expected = [
+        `@"lerta.fn.${module}.describe"`,
+        `@"lerta.thunk.lerta.fn.${module}.describe"`,
+        `@"lerta.method.${module}.Box.doubled"`,
+        `@"lerta.extend.${module}.Int.tripled"`,
+        `%"lerta.object.${module}.Pair<String>"`,
+        '@"lerta.value../escaped_path.lerta.box.set"',
+        '@"lerta.fn.std:builtins.print<String>"',
+      ]
+      return [
+        ...expect_status(0, status),
+        ...expected.filter((symbol) => !stdout.includes(symbol)).map((symbol) => `no ${symbol}`),
+      ]
+    },
+  },
 ]
 
 const new_cache_dir = () => mkdtempSync(join(cli_work_dir, 'cache-'))

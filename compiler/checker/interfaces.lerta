@@ -9,7 +9,7 @@ from '../ast'
 import fail, fail_already_defined from './diagnostics'
 import reject_bad_type_parameters from './generics'
 import builtin_export, has_import, imported_export, InterfaceExport from './imports'
-import ProgramWide, Shared from './shared'
+import module_symbol_name, ProgramWide, Shared from './shared'
 import has_type, module_resolver, resolve, Resolver, with_type_parameters from './type_names'
 import placeholders, substitute from './type_patterns'
 import bool_type, FunctionType, InterfaceType, Type, TypeParameterType from '../types'
@@ -77,14 +77,13 @@ export const add_interfaces = (shared: Shared, declarations: Array<InterfaceDecl
     const { name } = declaration.name
     fail_already_defined program, declaration.name if has_declared_type(shared, name)
     reject_invalid_members program, declaration
-    const module_index = shared.index
     const type_params = [param.name.name for param in declaration.type_params]
     const args: Array<Type> = [TypeParameterType(name: param) for param in type_params]
-    const symbol = "#{module_index}.#{name}"
+    const symbol = "#{module_symbol_name(program, shared.index)}.#{name}"
     const type = InterfaceType(name, symbol, args, module: shared.name)
     const names_self = declaration.members.any((member) -> names_type(member.type, SELF))
     const info = InterfaceInfo(
-      name, type, type_params, names_self, declaration, module_index, members: nil
+      name, type, type_params, names_self, declaration, module_index: shared.index, members: nil
     )
     shared.interfaces[name] = info
     program.interfaces[symbol] = info
