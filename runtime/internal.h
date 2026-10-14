@@ -38,6 +38,14 @@ void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise);
 // Waits for what settles promises, and settles them, once; false, without waiting, if nothing is
 // left to wait for.
 bool lerta_loop_wait(void);
+// What is called once a program has exited and its output, if read, has ended: the output, owned,
+// or NULL if it is not read or cannot be.
+typedef void (*LertaProgramEnd)(void *context, int64_t exit_code, LertaString *output);
+// Starts the program `file` with `args`, which end with NULL, as lerta_os_program_file and
+// lerta_os_program_argument give them, sharing this program's standard streams but for its standard
+// output when `reads_output`; false if it cannot start, and `end` is not called.
+bool lerta_loop_run_program(char *file, char **args, bool reads_output, LertaProgramEnd end,
+                            void *context);
 
 // Process (process.c): main's arguments, without the program name.
 void lerta_set_arguments(int argc, char **argv);
@@ -105,9 +113,16 @@ bool lerta_os_rename(const char *from, const char *to);
 const char *lerta_os_platform(void);
 // The value of an environment variable, which the caller frees, or NULL if it is not set.
 char *lerta_os_env(const char *name);
-// Runs the command `args[0]`, found as the system finds commands, with `args`, which end with
-// NULL, and waits for it to end. With `output`, its standard output is read into a new string
-// written there; the string is NULL if it cannot be read.
+// Only for lerta_run, which the seed's compiler alone calls. Runs the command `args[0]`, found
+// as the system finds commands, with `args`, which end with NULL, and waits for it to end. With
+// `output`, its standard output is read into a new string written there; the string is NULL if it
+// cannot be read.
 bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code);
+// The file of a command for lerta_loop_run_program, which on Windows is searched for on PATH if it
+// holds no directory (see docs/reference/modules.md#stdprocess); NULL if there is none. The caller
+// frees it.
+char *lerta_os_program_file(const char *command);
+// An argument as lerta_loop_run_program takes it, which the caller frees.
+char *lerta_os_program_argument(const char *argument);
 
 #endif

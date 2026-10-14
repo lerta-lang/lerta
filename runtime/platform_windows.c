@@ -437,6 +437,27 @@ static int64_t read_pipe(void *pipe, uint8_t *buffer, int64_t size) {
   return count < 0 && GetLastError() == ERROR_BROKEN_PIPE ? 0 : count;
 }
 
+// Quoted, for libuv to put on the command line as it is.
+char *lerta_os_program_argument(const char *argument) {
+  char *quoted = lerta_checked_malloc(2 * strlen(argument) + 3);
+  *write_quoted(quoted, argument) = '\0';
+  return quoted;
+}
+
+static bool has_directory(const char *command) {
+  return strpbrk(command, "/\\:") != NULL;
+}
+
+// A command with a directory in it is left to libuv, which tries its exact name, then the name with
+// .com and then .exe added.
+char *lerta_os_program_file(const char *command) {
+  if (has_directory(command)) return _strdup(command);
+  wchar_t *found = search_path(command);
+  char *file = found == NULL ? NULL : to_utf8(found);
+  free(found);
+  return file;
+}
+
 // A command without a directory in it is searched for on PATH only, as on POSIX; CreateProcessW
 // alone would look in the program's directory and the current one first. One with a directory is
 // left to CreateProcessW, which adds .exe if it has no extension. The child gets this program's
@@ -452,8 +473,8 @@ bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code) {
     CloseHandle(output_write);
     return false;
   }
-  bool has_directory = strpbrk(args[0], "/\\:") != NULL;
-  wchar_t *application = has_directory ? NULL : search_path(args[0]);
+  bool directory_given = has_directory(args[0]);
+  wchar_t *application = directory_given ? NULL : search_path(args[0]);
   char *line = command_line(args);
   wchar_t *wide_line = to_utf16(line);
   free(line);
@@ -465,7 +486,7 @@ bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code) {
     .hStdError = GetStdHandle(STD_ERROR_HANDLE),
   };
   PROCESS_INFORMATION process;
-  bool started = (has_directory || application != NULL) && wide_line != NULL &&
+  bool started = (directory_given || application != NULL) && wide_line != NULL &&
                  CreateProcessW(application, wide_line, NULL, NULL, TRUE, 0, NULL, NULL, &startup,
                                 &process);
   free(application);

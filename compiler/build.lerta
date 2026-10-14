@@ -38,37 +38,40 @@ export const check_program = (source: String, warnings_as_errors: Bool) ->
 export const generate_ir = (source: String, warnings_as_errors: Bool) ->
   generate check_program(source, warnings_as_errors), '', 'i1'
 
-export const build = (request: BuildRequest) -> build_then(request, (_executable) -> 0)
+export const build = (request: BuildRequest) -> build_then(request, nil)
 
 # Builds the program in the temporary directory and runs it there with `args`, exiting with its
 # exit code.
 export const build_and_run = (request: BuildRequest, args: Array<String>) ->
-  build_then request, (executable) -> run(executable, args)
+  build_then request, args
 
-# Builds the executable, then has `use` take it while the temporary directory, which holds the
-# IR and, without an output, the executable, is still there. Exits with the code that `use`
-# returns. clang's messages go to stderr as clang writes them, and its failure exits with code 1.
-const build_then = (request: BuildRequest, use: (String) -> Int) ->
+# Builds the executable, then runs it with `run_args`, if given, while the temporary directory,
+# which holds the IR and, without an output, the executable, is still there. Exits with 0 or the
+# code that the executable exits with. clang's messages go to stderr as clang writes them, and its
+# failure exits with code 1.
+const build_then = (request: BuildRequest, run_args: Array<String>?) ->
   const program = check_program(request.source, request.warnings_as_errors)
   const not_utf8 = CompileError(message: 'the temporary directory is not valid UTF-8')
   const dir = make_temp_dir().text() ? throw not_utf8
   const code = try
-    build_in_dir(request, program, dir, use)
+    await build_in_dir(request, program, dir, run_args)
   finally
     remove_tree dir
   exit code
 
 # What build_then exits with: 1 if clang fails.
 const build_in_dir = (
-  request: BuildRequest, program: ProgramWide, dir: String, use: (String) -> Int
+  request: BuildRequest, program: ProgramWide, dir: String, run_args: Array<String>?
 ) ->
-  const runtime = cached_runtime(request.optimize, request.target, dir) ? return 1
+  const runtime = (await cached_runtime(request.optimize, request.target, dir)) ? return 1
   const ir_path = join(dir, 'program.ll')
   write_file ir_path, generate(program, runtime.function_attributes, runtime.coro_end_type).binary
   const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
   const libraries = ["-l#{library}" for library in runtime.libraries]
   const args = clang_args(request, ir_path, [runtime.objects..., libraries...], executable)
-  run('clang', args) == 0 then use(executable) else 1
+  return 1 if await run('clang', args) != 0
+  const program_args = run_args ? return 0
+  await run(executable, program_args)
 
 const clang_args = (
   request: BuildRequest, ir_path: String, runtime: Array<String>, output: String

@@ -41,7 +41,7 @@ First, the operations that this would remove are counted in the generated code, 
 
 ## Concurrency
 
-- **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop runs on libuv, with sleeps only so far; input and output come onto it next.
+- **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop runs on libuv, with sleeps and the programs that `run` starts so far; input and output come onto it next.
 - Parallel computation uses **workers that do not share a heap, with message passing** (Node's worker_threads / the Erlang approach).
 - Programs stay single-threaded, so data races do not exist: there is no thread API (to avoid the GIL path of Python and Ruby).
 

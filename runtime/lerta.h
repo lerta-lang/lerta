@@ -252,6 +252,10 @@ LertaArray *lerta_argv(void);
 void lerta_exit(int64_t code);
 // With `output`, an array of bytes, the program's standard output is appended to it.
 int64_t lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output);
+// A promise of the program's exit code, as lerta_run gives it, settled once it ends; it is rejected
+// if its output cannot be read, and a program that cannot start throws at once.
+LertaPromise *lerta_run_async(const LertaString *command, const LertaArray *args,
+                              LertaArray *output);
 // The system's name: linux, macos or windows.
 LertaString *lerta_platform(void);
 // The value of an environment variable, as a Binary, or NULL if it is not set.

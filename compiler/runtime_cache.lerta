@@ -29,7 +29,7 @@ export struct CachedRuntime
 # build's own temporary directory, whose name no other build has.
 export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String) ->
   reject_path_target target if target
-  const clang_version = clang_version_text() ? return nil
+  const clang_version = (await clang_version_text()) ? return nil
   const libuv = libuv_build(target)
   const dir = join(cache_dir(), cached_runtime_name(optimize, target, clang_version, libuv))
   const objects = [join(dir, name) for name in object_names(libuv)]
@@ -49,7 +49,7 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
   const staging_dir = "#{dir}.staging-#{basename(temp_dir)}"
   make_dir staging_dir
   const compiled = try
-    compile_runtime(optimize, target, libuv, staging_dir, temp_dir)
+    await compile_runtime(optimize, target, libuv, staging_dir, temp_dir)
   catch error
     remove_tree staging_dir
     throw error
@@ -60,9 +60,9 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
   runtime()
 
 # What `clang --version` prints, or nil if clang fails.
-const clang_version_text = (): String? ->
+const clang_version_text = (): Promise<String?> ->
   const output: Array<Byte> = []
-  return nil if run('clang', ['--version'], output) != 0
+  return nil if await run('clang', ['--version'], output) != 0
   output.to_binary().text() ? throw CompileError(message: 'clang --version is not valid UTF-8')
 
 const read_text = (path: String) ->
@@ -177,25 +177,26 @@ const compile_runtime = (
   for path in c_paths()
     const source = join(source_dir, basename(path))
     const object = join(staging_dir, object_name(path))
-    return false if run('clang', ['-c', flags..., source, '-o', object]) != 0
+    return false if await run('clang', ['-c', flags..., source, '-o', object]) != 0
   const libuv_flags = [flags..., libuv.flags..., '-w']
   for path in libuv.sources
     const object = join(staging_dir, libuv_object_name(path))
-    return false if run('clang', ['-c', libuv_flags..., join(libuv_dir, path), '-o', object]) != 0
-  const ir = clang_probe_ir(flags, temp_dir) ? return false
+    const libuv_source = join(libuv_dir, path)
+    return false if await run('clang', ['-c', libuv_flags..., libuv_source, '-o', object]) != 0
+  const ir = (await clang_probe_ir(flags, temp_dir)) ? return false
   write_file join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir).binary
   write_file join(staging_dir, CORO_END_FILE), coro_end_type(ir).binary
   true
 
 # The IR that clang writes, with `flags`, for a function that ends a coroutine; nil if clang fails.
 # C has no builtin for that, so it is C++.
-const clang_probe_ir = (flags: Array<String>, temp_dir: String): String? ->
+const clang_probe_ir = (flags: Array<String>, temp_dir: String): Promise<String?> ->
   const source = join(temp_dir, 'probe.cc')
   const code = 'extern "C" void lerta_probe(void *handle) { __builtin_coro_end(handle, 0); }'
   write_file source, code.binary
   const output: Array<Byte> = []
   const args = ['-x', 'c++', '-std=c++20', '-S', '-emit-llvm', flags..., source, '-o', '-']
-  return nil if run('clang', args, output) != 0
+  return nil if await run('clang', args, output) != 0
   output.to_binary().text() ? throw CompileError(message: 'clang IR is not valid UTF-8')
 
 # The attributes of the target that clang gives its function, as `"target-cpu"="x86-64"`.

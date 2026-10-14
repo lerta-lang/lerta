@@ -229,6 +229,15 @@ static bool spawn_reading_output(char **args, LertaString **output, pid_t *pid) 
   return spawned;
 }
 
+// The system searches PATH when it runs the program.
+char *lerta_os_program_file(const char *command) {
+  return strdup(command);
+}
+
+char *lerta_os_program_argument(const char *argument) {
+  return strdup(argument);
+}
+
 bool lerta_os_run(char **args, LertaString **output, int64_t *exit_code) {
   pid_t pid;
   bool spawned = output == NULL ? spawn(args, NULL, &pid) : spawn_reading_output(args, output, &pid);
