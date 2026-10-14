@@ -3,24 +3,12 @@
 
 #include "internal.h"
 
-// The coroutines ready to go on, in the order they became ready, and the sleeps by when they end.
-// The loop resumes the ready ones, then waits for the next sleep to end, until there is neither.
+// The coroutines ready to go on, in the order they became ready. The loop resumes them, then waits
+// for what settles promises (see loop.c), until there is neither.
 static void **ready = NULL;
 static int64_t ready_start = 0;
 static int64_t ready_end = 0;
 static int64_t ready_capacity = 0;
-
-typedef struct {
-  int64_t deadline;
-  // Tells apart sleeps that end at the same time, so that they end in the order they began.
-  int64_t order;
-  LertaPromise *promise;
-} Timer;
-
-static Timer *timers = NULL;
-static int64_t timer_count = 0;
-static int64_t timer_capacity = 0;
-static int64_t timers_started = 0;
 
 static void push_ready(void *coroutine) {
   // The ones already resumed are dropped from the front before the queue grows.
@@ -35,46 +23,6 @@ static void push_ready(void *coroutine) {
     ready = lerta_checked_realloc(ready, (size_t)ready_capacity * sizeof(void *));
   }
   ready[ready_end++] = coroutine;
-}
-
-static bool is_earlier(const Timer *a, const Timer *b) {
-  return a->deadline != b->deadline ? a->deadline < b->deadline : a->order < b->order;
-}
-
-static void swap_timers(int64_t i, int64_t j) {
-  Timer t = timers[i];
-  timers[i] = timers[j];
-  timers[j] = t;
-}
-
-// The timers are a binary heap, the earliest first.
-static void push_timer(Timer timer) {
-  if (timer_count == timer_capacity) {
-    timer_capacity = timer_capacity == 0 ? 16 : timer_capacity * 2;
-    timers = lerta_checked_realloc(timers, (size_t)timer_capacity * sizeof(Timer));
-  }
-  int64_t i = timer_count++;
-  timers[i] = timer;
-  while (i > 0 && is_earlier(&timers[i], &timers[(i - 1) / 2])) {
-    swap_timers(i, (i - 1) / 2);
-    i = (i - 1) / 2;
-  }
-}
-
-static Timer pop_timer(void) {
-  Timer earliest = timers[0];
-  timers[0] = timers[--timer_count];
-  int64_t i = 0;
-  for (;;) {
-    int64_t first = i;
-    int64_t left = 2 * i + 1;
-    int64_t right = left + 1;
-    if (left < timer_count && is_earlier(&timers[left], &timers[first])) first = left;
-    if (right < timer_count && is_earlier(&timers[right], &timers[first])) first = right;
-    if (first == i) return earliest;
-    swap_timers(i, first);
-    i = first;
-  }
 }
 
 enum { PENDING, RESOLVED, REJECTED };
@@ -165,32 +113,20 @@ void *lerta_promise_result(LertaPromise *promise) {
 
 LERTA_STATIC_STRING(negative_sleep, "sleep for a negative time");
 
-enum { NANOSECONDS_PER_SECOND = 1000000000 };
-
 LertaPromise *lerta_sleep(int64_t seconds) {
   if (seconds < 0) {
     lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&negative_sleep);
     return NULL;
   }
   LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
-  // The timer holds the promise until it ends; a deadline past the largest Int is the largest.
-  int64_t now = lerta_os_monotonic_ns();
-  int64_t left = INT64_MAX - now;
-  int64_t delay = seconds > left / NANOSECONDS_PER_SECOND ? left : seconds * NANOSECONDS_PER_SECOND;
-  lerta_retain(promise);
-  push_timer((Timer){now + delay, timers_started++, promise});
+  lerta_loop_resolve_after(seconds, promise);
   return promise;
 }
 
 void lerta_loop_run(void (*resume)(void *coroutine)) {
   for (;;) {
     while (ready_start < ready_end) resume(ready[ready_start++]);
-    if (timer_count == 0) break;
-    int64_t wait = timers[0].deadline - lerta_os_monotonic_ns();
-    if (wait > 0) lerta_os_sleep_ns(wait);
-    Timer ended = pop_timer();
-    lerta_promise_resolve(ended.promise);
-    lerta_release(ended.promise);
+    if (!lerta_loop_wait()) break;
   }
 }
 

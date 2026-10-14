@@ -78,9 +78,6 @@ void lerta_os_arguments(int *argc, char ***argv);
 // Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
 bool lerta_os_is_terminal(int fd);
-// A clock that only goes forward, in nanoseconds from an arbitrary start, and waiting on it.
-int64_t lerta_os_monotonic_ns(void);
-void lerta_os_sleep_ns(int64_t nanoseconds);
 // Ends the program at once, without flushing stdout.
 _Noreturn void lerta_os_exit(int code);
 // Ends the program as a failure that is not an exit code, as C's abort does.

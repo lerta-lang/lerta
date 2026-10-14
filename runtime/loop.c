@@ -5,7 +5,7 @@
 #include "internal.h"
 
 // What the event loop waits for, on libuv: the one file of the runtime that uses it, so that the
-// loop's backend can be replaced (see docs/internals.md#platforms).
+// loop's backend can be replaced (see docs/internals.md#functions-that-await).
 
 typedef struct {
   uv_timer_t handle;
@@ -31,7 +31,10 @@ void lerta_loop_resolve_after(int64_t seconds, LertaPromise *promise) {
   timer->promise = promise;
   timer->handle.data = timer;
   lerta_retain(promise);
-  uv_timer_init(uv_default_loop(), &timer->handle);
+  uv_loop_t *loop = uv_default_loop();
+  uv_timer_init(loop, &timer->handle);
+  // libuv counts from the time it last read, as it ran; the program may have run long since.
+  uv_update_time(loop);
   // A time past what libuv's milliseconds hold is the longest it holds.
   uint64_t longest = UINT64_MAX / MILLISECONDS_PER_SECOND;
   uint64_t milliseconds = (uint64_t)seconds > longest ? UINT64_MAX
