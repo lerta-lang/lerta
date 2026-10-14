@@ -1,6 +1,6 @@
 # Style
 
-These conventions also cover features not implemented yet. The compiler does not check them (in the future, they will be handled by a lint the user can opt into). Whatever a formatter can align mechanically, the formatter aligns.
+These conventions also cover features not implemented yet. The compiler does not check them; the planned [formatter](../roadmap/programs.md#tools) checks all of them and fixes those it can.
 
 - **Naming**: variables, functions, methods, fields and module names are `snake_case`. Types, classes and interfaces are `PascalCase`. A `const` whose value is a literal (such as `MAX_SIZE = 100`) and an enum member are `SCREAMING_CASE`. A `const` holding a computed result is an ordinary variable and is `snake_case`. This matches C names imported through FFI naturally.
 - **String literals**: use `'...'` whenever it can be written with `'...'`.
@@ -9,6 +9,7 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Empty collections**: `[]` rather than `Array<T>()`.
 - **Multi-line literals**: where it can be written without brackets, write it without brackets, the names of an import included. Where only a member call after the closing bracket keeps them, put it on the line after the block (`.join('')`). A function returning one ends with `return` and the block, since a body is not a literal.
 - **Line length**: up to 100 columns per line.
+- **Blank lines**: at most one in a row.
 - **Long lists**: a list that does not fit on one line (parameters, arguments, the items of an array or a map, the names of an import) goes on lines of its own inside the brackets, or in a bracketless block, each holding as many items as fit when every item is simple: a name, a short literal, a parameter `name: Type`, or `name: value` with such a value. Otherwise each item, as a call or an operation, or one that stands for a line of text, goes on a line of its own (see [lines inside brackets](syntax.md#lines-inside-brackets)). A line holding several items ends with a comma, except the last line of the list; a line holding one item does not, so that a comma and a line end do not look like two kinds of separator.
 - **Modules**: a library module contains only code that builds the exported values. Put code to run in a separate entry file.
 - **Calls without parentheses**: call a function or a method without parentheses at the start of a statement, the last expression of a body included (`write_group writer, item, indent`, `xs.push x`), wherever the language allows it (see [calls](syntax.md#calls)).

@@ -30,7 +30,11 @@ The planned design of modules, FFI, the standard library and tools.
 - `.ll`/bitcode output from `lerta build`.
 - An optimized build keeps what it has optimized of each module in the cache, and optimizes again only the modules that have changed and those that inline from them (see [internals](../internals.md#per-module-output-planned)).
 - `lerta run` running directly with JIT, and `lerta repl`.
-- A formatter (like gofmt) is provided from day one. It applies what the [style](../reference/style.md) can fix mechanically, such as the commas at line ends, the brackets a list can do without and where long lists break.
+- A formatter, `lerta fmt`, provided from day one, holds the whole [style](../reference/style.md): it fixes what can be fixed mechanically, such as the commas at line ends, the brackets a list can do without and where long lists break, and reports what cannot, such as a name in the wrong case or a line it cannot bring within 100 columns. The compiler reports only what concerns correctness, such as unused names.
+  - By default it only checks: it shows the fixes it would make as a diff, reports the rest and fails if there is any. `--fix` writes the fixes.
+  - It has no options: it applies the style as written. Settings wait for a configuration file (see [open questions](#open-questions)).
+  - The rules that need types, such as whether a `case` handles every member of its subject or whether a return type can be inferred, are applied only when the file type-checks; the others work on any code that parses.
+  - The lexer gives comments and blank lines as tokens, and the parser keeps them on the nodes: those on lines of their own before a statement or an item, and one at the end of its line after it. The compiler ignores them; the formatter prints them back, and a comment moves with its node when the formatter rewrites it. The output is laid out by a pretty printer whose groups break when they do not fit. Before writing, the formatter parses its output again and refuses if the AST differs from the one it rewrote.
 - An LSP.
 - Package management.
 - Running the compiler's command-line checks (`test/cli.ts`) on Windows (the bootstrap runs there already: see [platforms](../internals.md#platforms)).
@@ -43,3 +47,4 @@ The planned design of modules, FFI, the standard library and tools.
 - How to hold type information for separate compilation (interface files).
 - The package management approach (npm style vs Go's minimal version selection).
 - How `import 'module' as mod` resolves `mod.name` (in the parser as a qualified name, or in the checker as a member of a module value), and whether philosophy's `import *` should then read as the unqualified form only.
+- The formatter's configuration file, such as the line length. A file holding one bracketless literal, checked as the named arguments of a configuration type, reads like YAML without being run; decide it with the package manifest, which has the same need.
