@@ -26,6 +26,7 @@ syn keyword lertaStorage const var class struct extern extend enum interface
 
 syn match lertaInvalidNumber "\<\d\w*\>"
 syn match lertaNumber "\<\%(0x\x\+\|0\|[1-9]\%(_\=\d\)*\)\>"
+syn match lertaFloat "\<\%(0\|[1-9]\%(_\=\d\)*\)\%(\.\d\%(_\=\d\)*\%([eE][-+]\=\d\%(_\=\d\)*\)\=\|[eE][-+]\=\d\%(_\=\d\)*\)\>"
 
 syn match lertaInvalidEscape "\\." contained
 syn match lertaEscape "\\\%([ntr0\\\"#]\|u{\x\+}\)" contained
@@ -36,7 +37,7 @@ syn match lertaRawString "'[^']*'"
 
 syn match lertaComment "#.*$" contains=@Spell
 
-syn cluster lertaCode contains=lertaComment,lertaRawString,lertaString,lertaNumber,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
+syn cluster lertaCode contains=lertaComment,lertaRawString,lertaString,lertaNumber,lertaFloat,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
 
 hi def link lertaComment Comment
 hi def link lertaRawString String
@@ -45,6 +46,7 @@ hi def link lertaEscape SpecialChar
 hi def link lertaInvalidEscape Error
 hi def link lertaInterpolationDelimiter Delimiter
 hi def link lertaNumber Number
+hi def link lertaFloat Float
 hi def link lertaInvalidNumber Error
 hi def link lertaBoolean Boolean
 hi def link lertaWordOperator Operator
