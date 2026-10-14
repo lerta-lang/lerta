@@ -38,9 +38,15 @@ all: $(COMPILER)
 # take as up to date.
 .DELETE_ON_ERROR:
 
+# The seed's IR is for LLVM before 23, whose llvm.coro.end gives an i1, which it drops; for a clang
+# whose LLVM gives void, as it writes for a function that ends a coroutine, the IR is changed to it.
+CORO_END_PROBE = extern "C" void f(void *handle) { __builtin_coro_end(handle, 0); }
 build/seed.ll: seed/lerta.ll
 	@mkdir -p build
-	cp seed/lerta.ll $@
+	if echo '$(CORO_END_PROBE)' | clang -x c++ -std=c++20 -S -emit-llvm - -o - | grep -q '^declare void @llvm.coro.end('; then \
+	  sed -e 's/^declare i1 @llvm\.coro\.end(/declare void @llvm.coro.end(/' \
+	    -e 's/%[^ ]* = call i1 @llvm\.coro\.end(/call void @llvm.coro.end(/' seed/lerta.ll > $@; \
+	else cp seed/lerta.ll $@; fi
 
 # Linked with the debug runtime, as the compiler's own unoptimized build does: clang compiles the
 # IR far faster without optimization than minilerta loses running unoptimized, and it runs little.

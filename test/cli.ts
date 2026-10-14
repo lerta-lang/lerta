@@ -840,7 +840,13 @@ const libuv_objects = host_libuv('source').map(
   (source) => `libuv-${source.replace(/\.c$/, '').split('/').join('-')}.o`,
 )
 const attributes_file = 'function_attributes.txt'
-const cached_runtime_files = [...runtime_objects, ...libuv_objects, attributes_file].sort()
+const coro_end_file = 'coro_end_type.txt'
+const cached_runtime_files = [
+  ...runtime_objects,
+  ...libuv_objects,
+  attributes_file,
+  coro_end_file,
+].sort()
 
 // The name of a cached runtime, of the kind given and a target that matches `target`, a regular
 // expression, and what it holds.
@@ -851,9 +857,15 @@ const expect_cached_runtime = (cache: string, name: string, kind: string, target
   const files = expect_left(`the files of ${name}`, cached_runtime_files, readdirSync(dir))
   if (files.length > 0) return files
   const attributes = readFileSync(join(dir, attributes_file), 'utf8')
-  return attributes.includes('"target-cpu"=')
-    ? []
-    : [`no target-cpu in ${attributes_file}: ${attributes}`]
+  const coro_end_type = readFileSync(join(dir, coro_end_file), 'utf8')
+  return [
+    ...(attributes.includes('"target-cpu"=')
+      ? []
+      : [`no target-cpu in ${attributes_file}: ${attributes}`]),
+    ...(['i1', 'void'].includes(coro_end_type)
+      ? []
+      : [`not a type in ${coro_end_file}: ${coro_end_type}`]),
+  ]
 }
 
 // Builds hello.lerta with the environment changed as given, and gives the cache's entries after.

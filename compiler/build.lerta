@@ -34,9 +34,9 @@ export const check_program = (source: String, warnings_as_errors: Bool) ->
   program
 
 # The IR as `dump-llvm` prints it: without the function attributes of a target, which a build
-# gets from clang.
+# gets from clang, and for LLVM before 23 (see IrModule).
 export const generate_ir = (source: String, warnings_as_errors: Bool) ->
-  generate check_program(source, warnings_as_errors), ''
+  generate check_program(source, warnings_as_errors), '', 'i1'
 
 export const build = (request: BuildRequest) -> build_then(request, (_executable) -> 0)
 
@@ -64,7 +64,7 @@ const build_in_dir = (
 ) ->
   const runtime = cached_runtime(request.optimize, request.target, dir) ? return 1
   const ir_path = join(dir, 'program.ll')
-  write_file ir_path, generate(program, runtime.function_attributes).binary
+  write_file ir_path, generate(program, runtime.function_attributes, runtime.coro_end_type).binary
   const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
   const libraries = ["-l#{library}" for library in runtime.libraries]
   const args = clang_args(request, ir_path, [runtime.objects..., libraries...], executable)

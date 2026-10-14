@@ -11,16 +11,18 @@ import basename, join from './paths'
 
 const RUNTIME_PATHS = [path for path in EMBEDDED_PATHS when path.starts_with('runtime/')]
 
-# Where the cache keeps the function attributes that clang gives C functions (see CachedRuntime).
+# Where the cache keeps what it reads from the IR that clang writes (see CachedRuntime).
 const ATTRIBUTES_FILE = 'function_attributes.txt'
+const CORO_END_FILE = 'coro_end_type.txt'
 
 # The runtime's object files, and the attributes that clang gives its functions, as the target's
 # CPU, which the program's functions must have too for LLVM to inline the runtime's into them; and
-# the libraries that libuv is linked with.
+# the libraries that libuv is linked with; and the type that clang's LLVM gives llvm.coro.end.
 export struct CachedRuntime
   objects: Array<String>
   function_attributes: String
   libraries: Array<String>
+  coro_end_type: String
 
 # The runtime for a build with `optimize`, for `target` or else the host, compiled into the cache
 # first if it does not have it; nil if clang fails, after printing its messages. `temp_dir` is the
@@ -31,11 +33,12 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
   const libuv = libuv_build(target)
   const dir = join(cache_dir(), cached_runtime_name(optimize, target, clang_version, libuv))
   const objects = [join(dir, name) for name in object_names(libuv)]
-  const attributes_path = join(dir, ATTRIBUTES_FILE)
   const files = [join(dir, name) for name in cached_file_names(libuv)]
   const runtime = ->
-    const function_attributes = read_text(attributes_path)
-    CachedRuntime objects, function_attributes, libraries: libuv.libraries
+    const function_attributes = read_text(join(dir, ATTRIBUTES_FILE))
+    const coro_end_type = read_text(join(dir, CORO_END_FILE))
+    const libraries = libuv.libraries
+    CachedRuntime objects, function_attributes, libraries: libraries, coro_end_type: coro_end_type
   return runtime() if is_complete(files)
   if files.iter().any((file) -> is_file(file))
     # Another build may have renamed its runtime into place meanwhile, which puts all the files
@@ -154,10 +157,11 @@ const object_names = (libuv: LibuvBuild) ->
   const runtime = [object_name(path) for path in c_paths()]
   [runtime..., [libuv_object_name(path) for path in libuv.sources]...]
 
-const cached_file_names = (libuv: LibuvBuild) -> [object_names(libuv)..., ATTRIBUTES_FILE]
+const cached_file_names = (libuv: LibuvBuild) ->
+  [object_names(libuv)..., ATTRIBUTES_FILE, CORO_END_FILE]
 
 # Writes the runtime's sources and libuv's to `temp_dir`, compiles each C file into `staging_dir`
-# and writes the function attributes there; false if clang fails.
+# and writes what it reads from clang's IR there; false if clang fails.
 const compile_runtime = (
   optimize: Bool, target: String?, libuv: LibuvBuild, staging_dir: String, temp_dir: String
 ) ->
@@ -178,18 +182,24 @@ const compile_runtime = (
   for path in libuv.sources
     const object = join(staging_dir, libuv_object_name(path))
     return false if run('clang', ['-c', libuv_flags..., join(libuv_dir, path), '-o', object]) != 0
-  const attributes = clang_function_attributes(flags, temp_dir) ? return false
-  write_file join(staging_dir, ATTRIBUTES_FILE), attributes.binary
+  const ir = clang_probe_ir(flags, temp_dir) ? return false
+  write_file join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir).binary
+  write_file join(staging_dir, CORO_END_FILE), coro_end_type(ir).binary
   true
 
-# The attributes of the target that clang gives a C function compiled with `flags`, as
-# `"target-cpu"="x86-64"`, read from the IR of an empty one; nil if clang fails.
-const clang_function_attributes = (flags: Array<String>, temp_dir: String): String? ->
-  const source = join(temp_dir, 'attributes.c')
-  write_file source, 'void lerta_attributes(void) {}'.binary
+# The IR that clang writes, with `flags`, for a function that ends a coroutine; nil if clang fails.
+# C has no builtin for that, so it is C++.
+const clang_probe_ir = (flags: Array<String>, temp_dir: String): String? ->
+  const source = join(temp_dir, 'probe.cc')
+  const code = 'extern "C" void lerta_probe(void *handle) { __builtin_coro_end(handle, 0); }'
+  write_file source, code.binary
   const output: Array<Byte> = []
-  return nil if run('clang', ['-S', '-emit-llvm', flags..., source, '-o', '-'], output) != 0
-  const ir = output.to_binary().text() ? throw CompileError(message: 'clang IR is not valid UTF-8')
+  const args = ['-x', 'c++', '-std=c++20', '-S', '-emit-llvm', flags..., source, '-o', '-']
+  return nil if run('clang', args, output) != 0
+  output.to_binary().text() ? throw CompileError(message: 'clang IR is not valid UTF-8')
+
+# The attributes of the target that clang gives its function, as `"target-cpu"="x86-64"`.
+const function_attributes = (ir: String) ->
   const words = attribute_group_of_function(ir).split(' ')
   const is_target_attribute = (word: String) ->
     TARGET_ATTRIBUTES.any((name) -> word.starts_with("\"#{name}\"="))
@@ -204,6 +214,15 @@ const attribute_group_of_function = (ir: String) ->
   lines.find((line) -> line.starts_with("attributes #{group} = { ")) ? throw missing
 
 const TARGET_ATTRIBUTES = ['target-cpu', 'target-features', 'tune-cpu']
+
+# The type that clang's LLVM gives llvm.coro.end, which LLVM 23 changed from i1 to void, as in
+# `declare i1 @llvm.coro.end(ptr, i1, token)`.
+const coro_end_type = (ir: String) ->
+  const missing = CompileError(message: 'clang IR has no declaration of llvm.coro.end')
+  const is_declaration = (line: String) ->
+    line.starts_with('declare ') and line.split(' @llvm.coro.end(').length == 2
+  const declaration = ir.split("\n").find(is_declaration) ? throw missing
+  declaration.split(' ')[1]
 
 const is_complete = (files: Array<String>) -> files.iter().all((file) -> is_file(file))
 
