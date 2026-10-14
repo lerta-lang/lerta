@@ -82,6 +82,10 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - Release builds do not count. A build without `-O` uses the debug runtime. The run tests build so, and fail on any leak, as an unexpected line in stderr; so does the bootstrap, which checks stage2's stderr for it.
 - An exit through an uncaught `throw` is not checked, since it ends the program in the middle of its work.
 
+### Use-after-drop checking
+
+- A debug runtime keeps the objects that it has dropped last from being freed, with their count at 0, up to 2^20 of them and 16 MiB in all, and stops the program at a retain or release of one, or of one queued to be dropped. One release too many in the generated code leads there sooner or later, where in freed memory it could go unnoticed. An object dropped earlier, and reads other than a retain or release, are not caught. To know the sizes, it writes each object's size before the object, outside its header, whose layout the generated code shares.
+
 ## Objects
 
 - A class or struct object is a heap object: the header, then its fields in declaration order, each in its IR type, and for a class, the pointer to its weak box (above). A generated drop function releases the references the fields hold; for a class with `deinit`, it first runs it through the runtime's `lerta_run_deinit`. That sets the object's count to 1 while `deinit` runs, so that passing `@` on and releasing it does not drop it again, drops at once what `deinit` released (which is otherwise queued until the drop ends), and stops the program if the count is not back to 1, since `deinit` then kept the object.

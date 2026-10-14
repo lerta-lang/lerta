@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdlib.h>
 
 #include "internal.h"
@@ -24,8 +25,31 @@ void *lerta_checked_calloc(size_t count, size_t size) {
   return memory;
 }
 
+#ifdef LERTA_DEBUG
+// A debug runtime puts the size of each object before it, in room that keeps the object aligned as
+// malloc aligns it, to bound the memory of the dropped objects that it keeps (below).
+typedef union {
+  int64_t size;
+  max_align_t alignment;
+} SizePrefix;
+
+static SizePrefix *prefix_of(void *object) { return (SizePrefix *)object - 1; }
+
+static void *alloc_object(int64_t size) {
+  SizePrefix *prefix = lerta_checked_malloc(sizeof(SizePrefix) + (size_t)size);
+  prefix->size = size;
+  return prefix + 1;
+}
+
+static void free_object(void *object) { free(prefix_of(object)); }
+#else
+static void *alloc_object(int64_t size) { return lerta_checked_malloc((size_t)size); }
+
+static void free_object(void *object) { free(object); }
+#endif
+
 void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
-  LertaHeader *object = lerta_checked_malloc((size_t)size);
+  LertaHeader *object = alloc_object(size);
   object->ref_count = 1;
   object->drop = drop;
 #ifdef LERTA_DEBUG
@@ -35,7 +59,7 @@ void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
 }
 
 void lerta_free_unfinished(void *object) {
-  free(object);
+  free_object(object);
 #ifdef LERTA_DEBUG
   live_objects--;
 #endif
@@ -55,10 +79,22 @@ void lerta_frame_free(void *frame) {
 #endif
 }
 
+// See docs/internals.md#use-after-drop-checking.
+static void check_not_dropped(const LertaHeader *header, const char *message) {
+#ifdef LERTA_DEBUG
+  if (header->ref_count <= 0) lerta_panic(message);
+#else
+  (void)header;
+  (void)message;
+#endif
+}
+
 // NULL is nil, which holds no object.
 void lerta_retain(void *object) {
   LertaHeader *header = object;
-  if (header != NULL && header->ref_count != LERTA_IMMORTAL) header->ref_count++;
+  if (header == NULL || header->ref_count == LERTA_IMMORTAL) return;
+  check_not_dropped(header, "retain of a dropped object");
+  header->ref_count++;
 }
 
 // Objects whose count reaches zero wait here to be dropped and freed. Dropping one releases what
@@ -77,14 +113,48 @@ static void push_pending(void *object) {
   pending[pending_length++] = object;
 }
 
+#ifdef LERTA_DEBUG
+// The objects dropped last, oldest first, which a debug runtime keeps from being freed (see
+// docs/internals.md#use-after-drop-checking), up to a count, a power of 2 so that a place wraps around it
+// with a mask, and a size in all.
+#define KEPT_MAX_COUNT (1 << 20)
+#define KEPT_MAX_BYTES ((int64_t)16 << 20)
+static void *kept[KEPT_MAX_COUNT];
+static int64_t kept_first = 0;
+static int64_t kept_count = 0;
+static int64_t kept_bytes = 0;
+
+static void free_oldest_kept(void) {
+  void *oldest = kept[kept_first++ & (KEPT_MAX_COUNT - 1)];
+  kept_count--;
+  kept_bytes -= prefix_of(oldest)->size;
+  free_object(oldest);
+}
+
+// Keeps the object, freeing the oldest ones as it needs room; one object larger than the whole size
+// is kept alone. Its count is 0 again, also when a deinit has run, which sets it to 1.
+static void keep_dropped(LertaHeader *object) {
+  object->ref_count = 0;
+  int64_t size = prefix_of(object)->size;
+  while (kept_count == KEPT_MAX_COUNT || (kept_count > 0 && kept_bytes + size > KEPT_MAX_BYTES)) {
+    free_oldest_kept();
+  }
+  kept[(kept_first + kept_count) & (KEPT_MAX_COUNT - 1)] = object;
+  kept_count++;
+  kept_bytes += size;
+}
+#endif
+
 // Drops and frees the queued objects until only the first `length` are left.
 static void drain_to(int64_t length) {
   while (pending_length > length) {
     LertaHeader *dead = pending[--pending_length];
     if (dead->drop != NULL) dead->drop(dead);
-    free(dead);
 #ifdef LERTA_DEBUG
     live_objects--;
+    keep_dropped(dead);
+#else
+    free_object(dead);
 #endif
   }
 }
@@ -102,6 +172,7 @@ __attribute__((noinline)) static void drop_released(void *object) {
 void lerta_release(void *object) {
   LertaHeader *header = object;
   if (header == NULL || header->ref_count == LERTA_IMMORTAL) return;
+  check_not_dropped(header, "release of a dropped object");
   if (--header->ref_count > 0) return;
   drop_released(object);
 }
