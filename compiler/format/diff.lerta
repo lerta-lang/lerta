@@ -1,0 +1,99 @@
+# The lines where two texts differ, by Myers's algorithm, which finds the fewest lines to remove
+# and add in a time that grows with the lengths and the number of those lines.
+
+# A run of lines removed from the old text and added in the new one, either of which may be none,
+# by the index of its first line in each.
+export struct Hunk
+  old_start: Int
+  old_count: Int
+  new_start: Int
+  new_count: Int
+
+export const hunks = (old: Array<String>, new: Array<String>): Array<Hunk> ->
+  const kept = kept_lines(old, new)
+  const result: Array<Hunk> = []
+  var old_index = 0
+  var new_index = 0
+  # A pair past the last lines ends the last hunk.
+  kept.push (old.length, new.length)
+  for (old_kept, new_kept) in kept
+    if old_kept > old_index or new_kept > new_index
+      const old_count = old_kept - old_index
+      const new_count = new_kept - new_index
+      result.push Hunk(old_count, new_count, old_start: old_index, new_start: new_index)
+    old_index = old_kept + 1
+    new_index = new_kept + 1
+  result
+
+# The lines that both texts keep, as pairs of their indexes, in order: those that they start and
+# end with, and those that Myers's algorithm finds between.
+const kept_lines = (old: Array<String>, new: Array<String>): Array<(Int, Int)> ->
+  var start = 0
+  start += 1 while start < old.length and start < new.length and old[start] == new[start]
+  var end = 0
+  const shared_end = (i: Int) -> old[old.length - 1 - i] == new[new.length - 1 - i]
+  end += 1 while start + end < old.length and start + end < new.length and shared_end(end)
+  const old_middle = [old[i] for i in start...(old.length - end)]
+  const new_middle = [new[i] for i in start...(new.length - end)]
+  const pairs: Array<(Int, Int)> = [(i, i) for i in 0...start]
+  for (old_index, new_index) in kept_pairs(old_middle, new_middle)
+    pairs.push (old_index + start, new_index + start)
+  pairs.push (old.length - end + i, new.length - end + i) for i in 0...end
+  pairs
+
+const MAX_EDITS = 1000
+
+# The lines that both texts keep, as pairs of their indexes, in order.
+const kept_pairs = (old: Array<String>, new: Array<String>): Array<(Int, Int)> ->
+  const n = old.length
+  const m = new.length
+  const max = n + m
+  const offset = max + 1
+  const ends = [0 for _ in 0...(2 * max + 3)]
+  # The ends of the paths for each number of edits, of the diagonals from -d to d that the next
+  # step reads, to find the path back from the last.
+  const trace: Array<Array<Int>> = []
+  for d in 0...(max + 1)
+    # Past so many edits, the texts differ throughout, and the memory of the trace would grow as
+    # their square: the lines between are taken as one run that differs.
+    return [] if d > MAX_EDITS
+    trace.push [ends[k + offset] for k in (-d)...(d + 1)]
+    var k = -d
+    while k <= d
+      const down = k == -d or (k != d and ends[k - 1 + offset] < ends[k + 1 + offset])
+      var x = down then ends[k + 1 + offset] else ends[k - 1 + offset] + 1
+      var y = x - k
+      while x < n and y < m and old[x] == new[y]
+        x += 1
+        y += 1
+      ends[k + offset] = x
+      return path_back(trace, n, m) if x >= n and y >= m
+      k += 2
+  path_back trace, n, m
+
+# Walks back from the end along the shortest path, collecting the lines that it keeps.
+const path_back = (trace: Array<Array<Int>>, n: Int, m: Int) ->
+  const pairs: Array<(Int, Int)> = []
+  var x = n
+  var y = m
+  var d = trace.length - 1
+  while d > 0
+    # The ends after d - 1 edits, from the diagonal -d.
+    const ends = trace[d]
+    const k = x - y
+    const down = k == -d or (k != d and ends[k - 1 + d] < ends[k + 1 + d])
+    const previous_k = down then k + 1 else k - 1
+    const previous_x = ends[previous_k + d]
+    const previous_y = previous_x - previous_k
+    while x > previous_x and y > previous_y
+      x -= 1
+      y -= 1
+      pairs.push (x, y)
+    x = previous_x
+    y = previous_y
+    d -= 1
+  while x > 0 and y > 0
+    x -= 1
+    y -= 1
+    pairs.push (x, y)
+  [pairs[pairs.length - 1 - i] for i in 0...pairs.length]

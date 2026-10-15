@@ -119,6 +119,15 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 - The implementation may copy or share structs, for example inline for small ones and shared via RC for large ones.
 
+## Formatter
+
+`lerta fmt` (`compiler/format/`) prints the syntax tree again, and compares that with the source.
+
+- The printers make a document (`format/doc.lerta`) of texts, line feeds, indentation, and choices between two forms of a part, the first where its first line fits in 100 columns and the second otherwise. A style rule that decides a part marks it, so that a place where the source differs is reported with the rule of the innermost part there.
+- What the tree does not keep is read from the source by position (`format/source.lerta`): the spelling of literals, the names of a destructuring, and the keywords before a clause. A text that prints a token carries its position in the source.
+- The lexer gives the comments apart from the tokens (`lex`). Laying the document out puts each back by the positions of the texts around it: one on a line of its own before the next text, and one that ends a line at the end of the line of the last text of its source line. A choice whose first form would hold a comment between its texts takes the second. A blank line of the source between two texts comes back where the output starts a line.
+- The lines that differ are found by Myers's algorithm (`format/diff.lerta`).
+
 ## Modules
 
 - A module's symbols are named by its path from the entry module's directory (absolute if it is on another root, such as another drive), or `std:name` for a standard module, and the entry module by `./` and its file name, which no other path starts with (`lerta.fn.ast.lerta.parse`, `lerta.fn../main.lerta.main`), rather than by its place among the modules, which changes as others are added. Names are quoted in the IR, with the bytes other than printable ASCII, `"` and `\` escaped as in strings.

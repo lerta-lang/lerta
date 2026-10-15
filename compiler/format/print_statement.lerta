@@ -1,0 +1,309 @@
+# Statements and blocks: declarations, assignments, `if`, `while` and `for` in their block and
+# postfix forms (see Postfix forms), and calls without parentheses (see Calls without parentheses).
+import
+  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Coalesce,
+  Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern,
+  FloatLiteral, For, FunctionLiteral, Identifier, If, Import, IntegerLiteral, InterfaceDeclaration,
+  Interpolation, IsTest, Cast, MapLiteral, Member, NilLiteral, Pass, Position, Range, RecordLiteral,
+  Return, Statement, StringLiteral, This, Throw, Try, TupleLiteral, TupleItem, TypeAlias,
+  TypeDeclaration, UnaryOperation, Unwrap, While, Yield, Index
+from '../ast'
+import choice, Doc, indent, join, line_feed, rule, separated, text, token from './doc'
+import
+  arguments, call_doc, expression_doc, function_doc, keyword, loop_header, value_after, word_before
+from './print_expression'
+import declaration_doc, exported from './print_declaration'
+import Context from './printing'
+import type_doc from './print_type'
+import BRANCHES, CALLS_WITHOUT_PARENTHESES, POSTFIX_FORMS from './rules'
+
+# The statements, one on each line. The parts of a destructuring, which the parser declares one by
+# one after the declaration that holds the value, are written as the one statement of the source.
+export const block_doc = (statements: Array<Statement>, context: Context): Doc ->
+  const lines: Array<Doc> = []
+  var i = 0
+  while i < statements.length
+    const statement = statements[i]
+    i += 1
+    if const holder = destructuring_holder(statement)
+      lines.push destructuring_doc(holder, context)
+      i += 1 while i < statements.length and takes_apart(statements[i], holder.name.name)
+    else
+      lines.push statement_doc(statement, context)
+  separated lines, line_feed()
+
+# The declaration that holds the value of a destructuring, whose name no source can write.
+const destructuring_holder = (statement: Statement): Declaration? ->
+  return nil if not (statement is Declaration)
+  const name = statement.name.name
+  name.starts_with('_tuple.') or name.starts_with('destructured.') then statement
+
+# Whether the statement declares a part of what the holder named `holder` holds.
+const takes_apart = (statement: Statement, holder: String) ->
+  return false if not (statement is Declaration)
+  const value = statement.value
+  const object =
+    case value
+      when Member then value.object
+      when TupleItem then value.tuple
+      else return false
+  object is Identifier and object.name == holder
+
+# `const (a, b) = value` or `var { a, b } = value`, as the source names them.
+const destructuring_doc = (holder: Declaration, context: Context): Doc ->
+  const source = context.source
+  const value_index = source.token_at(holder.value.position) ? return text('')
+  const close = value_index - 2
+  var open = close
+  var depth = 0
+  while true
+    const kind = source.tokens[open].kind
+    depth += 1 if kind == ')' or kind == '}'
+    depth -= 1 if kind == '(' or kind == '{'
+    break if depth == 0
+    open -= 1
+  const word_token = source.tokens[open - 1]
+  const word = token(source.spelling(word_token), at_token(word_token.line, word_token.column))
+  const names = [
+    text(source.spelling(source.tokens[i]))
+    for i in (open + 1)...close
+    when source.tokens[i].kind == IDENTIFIER
+  ]
+  const is_tuple = source.tokens[open].kind == '('
+  const pattern =
+    if is_tuple
+      join [text('('), separated(names, text(', ')), text(')')]
+    else
+      join [text('{ '), separated(names, text(', ')), text(' }')]
+  join [word, text(' '), pattern, text(' ='), value_after(holder.value, context)]
+
+const at_token = (line: Int, column: Int) -> Position(line, column)
+
+export const statement_doc = (statement: Statement, context: Context): Doc ->
+  case statement
+    when Declaration then const_doc(statement, context)
+    when Assignment then assignment_doc(statement, context)
+    when If
+      if statement.nil_safe
+        expression_doc statement, context
+      else if const body = statement_if_postfix(statement, context)
+        const condition = condition_doc(statement.condition, context)
+        const postfix = join([statement_doc(body, context), text(' if '), condition])
+        rule POSTFIX_FORMS, choice(postfix, if_doc(statement, context))
+      else
+        if_doc statement, context
+    when While then while_doc(statement, context)
+    when For then for_doc(statement, context)
+    when Pass then token('pass', statement.position)
+    when TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern, Extend, Import
+      declaration_doc statement, context
+    when Call then call_statement(statement, context)
+    else expression_doc(statement as Expression!, context)
+
+# A statement that an arm or a function literal can hold on its line.
+export const is_inline = (statement: Statement, context: Context) ->
+  is_simple_statement(statement) or (not context.in_brackets and has_postfix_form(
+    statement, context
+  ))
+
+# A statement that holds no block and has no postfix form.
+const is_simple_statement = (statement: Statement) ->
+  case statement
+    when Declaration, While, For, TypeDeclaration, EnumDeclaration, InterfaceDeclaration then false
+    when TypeAlias, Extern, Extend, Import, Case, Try then false
+    when If then statement.nil_safe
+    else true
+
+# An `if`, a `while` or a `for` that can be written in its postfix form, which a line holds.
+const has_postfix_form = (statement: Statement, context: Context) ->
+  case statement
+    when If then not statement.nil_safe and statement_if_postfix(statement, context) != nil
+    when While then while_postfix(statement, context) != nil
+    when For then for_postfix(statement, context) != nil
+    else false
+
+# The statement on the line of an arm or a function literal.
+export const inline_statement = (statement: Statement, context: Context): Doc ->
+  statement_doc statement, context.after_head()
+
+const const_doc = (declaration: Declaration, context: Context): Doc ->
+  const parts: Array<Doc> = [exported(declaration.exported, declaration.position, context)]
+  parts.push text('weak ') if declaration.weak
+  parts.push keyword(declaration.mutable then 'var ' else 'const ', declaration.position)
+  parts.push token(declaration.name.name, declaration.name.position)
+  parts.push join([text(': '), type_doc(type)]) if const type = declaration.type
+  parts.push text(' =')
+  parts.push value_after(declaration.value, context)
+  join parts
+
+const assignment_doc = (assignment: Assignment, context: Context): Doc ->
+  const target = expression_doc(assignment.target, context)
+  join [target, text(" #{assignment.operator}"), value_after(assignment.value, context)]
+
+const condition_doc = (condition: Condition, context: Context): Doc ->
+  case condition
+    when Binding
+      const name = token(condition.name.name, condition.name.position)
+      join [
+        keyword('const ', condition.position)
+        name
+        text(' = ')
+        expression_doc(condition.value, context)
+      ]
+    else expression_doc(condition as Expression!, context)
+
+# `if` and its block, and `else if` or `else` and its block (see Branches).
+export const if_doc = (if_node: If, context: Context): Doc ->
+  const head = join([keyword('if ', if_node.position), condition_doc(if_node.condition, context)])
+  const parts: Array<Doc> = [head, block_below(if_node.then_body, context)]
+  const else_body = if_node.else_body
+  if else_body.length == 1 and else_body[0] is If and not (else_body[0] as If!).nil_safe
+    const word = word_before(else_body[0].position, 'else', context)
+    const else_if = join([line_feed(), word, text(' '), if_doc(else_body[0] as If!, context)])
+    parts.push rule(BRANCHES, else_if)
+  else if else_body.length > 0
+    const word = word_before(else_body[0].position, 'else', context)
+    parts.push join([line_feed(), word, block_below(else_body, context)])
+  join parts
+
+const block_below = (body: Array<Statement>, context: Context): Doc ->
+  indent join([line_feed(), block_doc(body, context)])
+
+# `statement if c`, for an `if` without `else` whose block holds one statement that can have it.
+const statement_if_postfix = (if_node: If, context: Context): Statement? ->
+  return nil if if_node.else_body.length > 0 or if_node.then_body.length != 1
+  return nil if context.source.block_has_comments(if_node.position)
+  const statement = if_node.then_body[0]
+  takes_postfix(statement) then statement
+
+# A statement that a postfix `if`, `while` or `for` can follow: one that no block, no postfix form
+# of its own and nothing that would take the postfix condition, as a function literal at its end,
+# is part of.
+const takes_postfix = (statement: Statement) ->
+  is_simple_statement(statement) and not ends_open(statement)
+
+const ends_open = (statement: Statement): Bool ->
+  case statement
+    when Assignment then ends_open(statement.value)
+    when Return
+      if const value = statement.value
+        ends_open value
+      else
+        false
+    when Throw then ends_open(statement.message)
+    when Yield then ends_open(statement.value)
+    when Await then ends_open(statement.operand)
+    when BinaryOperation then ends_open(statement.right)
+    when UnaryOperation then ends_open(statement.operand)
+    when Coalesce then ends_open(statement.fallback)
+    when Conditional then ends_open(statement.else_value)
+    when Range then ends_open(statement.end)
+    when Call
+      const args = statement.args
+      args.length > 0 and ends_open(args[args.length - 1])
+    when FunctionLiteral, Case, Try then true
+    when If then not statement.nil_safe
+    else false
+
+const while_doc = (while_node: While, context: Context): Doc ->
+  const condition = condition_doc(while_node.condition, context)
+  const word = keyword('while ', while_node.position)
+  const block = join([word, condition, block_below(while_node.body, context)])
+  const body = while_postfix(while_node, context) ? return block
+  const postfix = join([statement_doc(body, context), text(' while '), condition])
+  rule POSTFIX_FORMS, choice(postfix, block)
+
+# The one statement of the block, if the `while` can be written in its postfix form.
+const while_postfix = (while_node: While, context: Context): Statement? ->
+  const body = while_node.body
+  const has_comments = context.source.block_has_comments(while_node.position)
+  body.length == 1 and takes_postfix(body[0]) and not has_comments then body[0]
+
+# A `for`, whose block starts with the declarations that take its item apart, as the parser makes
+# them for `for (a, b) in xs`.
+const for_doc = (for_node: For, context: Context): Doc ->
+  const body = [statement for statement in for_node.body when not is_loop_part(statement)]
+  const header = loop_header(for_node.variable, for_node.index, for_node.iterable, context)
+  const block = join([header, block_below(body, context)])
+  const only = for_postfix(for_node, context) ? return block
+  const postfix = join([statement_doc(only, context), text(' '), header])
+  rule POSTFIX_FORMS, choice(postfix, block)
+
+# The one statement of the block, if the `for` can be written in its postfix form.
+const for_postfix = (for_node: For, context: Context): Statement? ->
+  const body = [statement for statement in for_node.body when not is_loop_part(statement)]
+  const has_comments = context.source.block_has_comments(for_node.position)
+  body.length == 1 and takes_postfix(body[0]) and not has_comments then body[0]
+
+const is_loop_part = (statement: Statement) -> statement is Declaration and statement.of_loop
+
+# A call at the start of a statement, without parentheses where it can be: its callee is a name, or
+# names joined by `.`, and its first argument starts as an argument of such a call can (see
+# starts_spaced_operand). One that does not fit on its line takes them back to break inside them.
+const call_statement = (call: Call, context: Context): Doc ->
+  const with_parentheses = call_doc(call, context)
+  const could =
+    call.type_args.length == 0 and is_command_callee(call.callee) and starts_command(call)
+  return with_parentheses if not could
+  # On the line of an arm or of a function literal, a call keeps its parentheses.
+  return rule(CALLS_WITHOUT_PARENTHESES, with_parentheses) if not context.on_own_line
+  const inside = context.inside_brackets()
+  const items = arguments(call, inside)
+  # The rule decides the space after the callee, which stands for the parentheses.
+  const head =
+    rule(CALLS_WITHOUT_PARENTHESES, join([expression_doc(call.callee, context), text(' ')]))
+  const command_of = (docs: Array<Doc>) -> join([head, separated(docs, text(', '))])
+  const leading = [item.doc for item, i in items when i < items.length - 1]
+  # A function literal last takes the lines below for its body, which parentheses could not hold.
+  const last_arg = call.named_args.length == 0 then call.args.last()
+  if last_arg is FunctionLiteral
+    return command_of([leading..., function_doc(last_arg, context.after_head())])
+  const command = command_of([item.doc for item in items])
+  const fallback =
+    if const opened = items[items.length - 1].opened
+      choice command_of([leading..., opened]), with_parentheses
+    else
+      with_parentheses
+  choice command, fallback
+
+const is_command_callee = (callee: Expression): Bool ->
+  case callee
+    when Identifier then not callee.name.starts_with('?')
+    when Member then callee.object is This or is_command_callee(callee.object)
+    else false
+
+# Whether the call has arguments and the first starts as an argument of a call without
+# parentheses can, rather than continuing an expression with the callee.
+const starts_command = (call: Call) ->
+  return true if call.args.length == 0 and call.named_args.length > 0
+  return false if call.args.length == 0
+  starts_argument leftmost(call.args[0])
+
+const leftmost = (expression: Expression): Expression ->
+  case expression
+    when BinaryOperation then leftmost(expression.left)
+    when Range then leftmost(expression.start)
+    when IsTest then leftmost(expression.value)
+    when Cast then leftmost(expression.value)
+    when Coalesce then leftmost(expression.value)
+    when Conditional then leftmost(expression.condition)
+    when Member
+      expression.object is This then expression.object else leftmost(expression.object)
+    when Call then leftmost(expression.callee)
+    when Index then leftmost(expression.object)
+    when Unwrap then leftmost(expression.operand)
+    when If
+      if expression.nil_safe
+        leftmost (expression.condition as Binding!).value
+      else
+        expression
+    else expression
+
+const starts_argument = (expression: Expression) ->
+  case expression
+    when Identifier, StringLiteral, Interpolation, IntegerLiteral, FloatLiteral then true
+    when BooleanLiteral, NilLiteral, This, ArrayLiteral, MapLiteral, RecordLiteral then true
+    when TupleLiteral, Case, Throw, Await, UnaryOperation then true
+    when Comprehension then not expression.spread
+    when FunctionLiteral then not expression.weak and expression.type_params.length == 0
+    else false

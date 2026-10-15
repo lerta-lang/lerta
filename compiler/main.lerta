@@ -7,6 +7,7 @@ import dump_ast from './ast_dump'
 import build, build_and_run, BuildRequest, check_program, generate_ir from './build'
 import dump_checked from './checked_dump'
 import executable_suffix from './clang_flags'
+import format_command from './format/command'
 import tokenize from './lexer/tokens'
 import parse from './parser/statement'
 import basename from './paths'
@@ -16,6 +17,7 @@ import dump_tokens from './token_dump'
 const USAGE =
   "usage: lerta build <source> [<file>...] [-o <output>] [-O] [-Werror] [--target <triple>]\n"
   "       lerta run <source> [<file>...] [-O] [-Werror] [-- <arg>...]\n"
+  "       lerta fmt [--fix] <path>...\n"
   "       lerta dump-tokens <source>\n"
   "       lerta dump-ast <source>\n"
   "       lerta dump-checked <source>\n"
@@ -103,6 +105,13 @@ const default_output = (source: String, target: String?) ->
   fail_usage() if stem == ''
   "#{stem}#{executable_suffix(target)}"
 
+# `--fix` may come before the paths, of which there is at least one.
+const fmt_command = (args: Array<String>) ->
+  const fix = args.length > 0 and args[0] == '--fix'
+  const paths = [arg for arg, i in args when i > 0 or not fix]
+  fail_usage() if paths.length == 0 or paths.any((path) -> not is_value(path))
+  exit format_command(paths, fix)
+
 # The dumps of one module read no module that it imports.
 const dump_file_tokens = (path: String) ->
   dump_tokens tokenize(read_entry_source(path), path)
@@ -117,6 +126,7 @@ const args = [argv[i] for i in 1...argv.length]
 case command
   when 'build' then await build_command(args)
   when 'run' then await run_command(args)
+  when 'fmt' then fmt_command(args)
   when 'dump-tokens' then run_dump(args, dump_file_tokens)
   when 'dump-ast' then run_dump(args, dump_file_ast)
   when 'dump-checked' then run_dump(args, dump_program_checked)

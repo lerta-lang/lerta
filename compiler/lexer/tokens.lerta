@@ -96,10 +96,28 @@ export struct Token
   column: Int
   # The parts of an interpolated string.
   parts: Array<TemplatePart>?
+  # The column after it, where the formatter reads its spelling up to; that of its start for a
+  # layout token.
+  end_column = default @column
+
+# A comment, which runs from its `#` to the end of its line, alone on it if `own_line`. The
+# compiler skips comments; the formatter puts them back by the tokens around them.
+export struct Comment
+  line: Int
+  column: Int
+  own_line: Bool
+
+export struct Lexed
+  tokens: Array<Token>
+  comments: Array<Comment>
 
 # `path` names the source in diagnostics.
-export const tokenize = (source: String, path: String) ->
+export const tokenize = (source: String, path: String) -> lex(source, path).tokens
+
+# The tokens, and the comments apart from them.
+export const lex = (source: String, path: String) ->
   const tokens: Array<Token> = []
+  const comments: Array<Comment> = []
   const indents = [0]
   const brackets = Brackets(path)
   const lines = source.split("\n")
@@ -108,13 +126,19 @@ export const tokenize = (source: String, path: String) ->
     const bytes = ends_with_lf then without_carriage_return(text) else text.binary
     const line = SourceLine(path, bytes, number: index + 1, column_offset: 0)
     const indent = line.scan_while(0, is_space)
-    const is_blank = indent == line.length or line.bytes[indent] == '#'
-    continue if is_blank
+    continue if indent == line.length
+    const comment_at = (index: Int, own_line: Bool) ->
+      Comment own_line, line: line.number, column: line.column(index)
+    if line.bytes[indent] == '#'
+      comments.push comment_at(indent, true)
+      continue
     line.fail 'tabs are not allowed in indentation', indent if line.bytes[indent] == "\t"
     emit_indentation tokens, indents, line, indent if not brackets.are_open()
-    for token in LineScanner(line, position: indent).run()
+    const scanner = LineScanner(line, position: indent)
+    for token in scanner.run()
       brackets.update token
       tokens.push token
+    comments.push comment_at(index, false) if const index = scanner.comment_index
     const kind: TokenKind = brackets.are_open() then LINE_BREAK else NEWLINE
     tokens.push layout_token(kind, line.number, line.column(line.length))
   brackets.check_closed()
@@ -123,7 +147,7 @@ export const tokenize = (source: String, path: String) ->
     indents.pop()
     tokens.push layout_token(DEDENT, eof_line, 1)
   tokens.push layout_token(EOF, eof_line, 1)
-  tokens
+  Lexed tokens, comments
 
 # The tokens of an interpolated expression, placed where it is in the source line.
 export const tokenize_fragment = (source: String, path: String, line: Int, column: Int) ->
@@ -183,13 +207,17 @@ class LineScanner
   line: SourceLine
   position: Int
   tokens: Array<Token> = []
+  # Where the comment that ends the line starts, if any; scanning stops at it.
+  comment_index: Int? = nil
 
   run = ->
     while @position < @line.length
       const c = @line.bytes[@position]
       case
         when c == ' ' then @position += 1
-        when c == '#' then break
+        when c == '#'
+          @comment_index = @position
+          break
         when is_identifier_start(c) then @scan_word()
         when c == "'" then @scan_raw_string()
         when c == '"' then @scan_double_quoted()
@@ -202,7 +230,8 @@ class LineScanner
     const start = @position
     const spaced = start == 0 or @line.bytes[start - 1] == ' '
     const column = @line.column(start)
-    @tokens.push Token(kind, text, spaced, parts, column, line: @line.number)
+    const end_column = @line.column(end)
+    @tokens.push Token(kind, text, spaced, parts, column, end_column, line: @line.number)
     @position = end
 
   scan_word = ->

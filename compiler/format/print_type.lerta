@@ -1,0 +1,54 @@
+# Types as written: named types, unions, function types, anonymous structs and tuples, and type
+# parameters.
+import
+  FunctionTypeName, NamedType, RecordTypeName, TupleTypeName, TypeName, TypeParameter, UnionTypeName
+from '../ast'
+import Doc, join, separated, text, token from './doc'
+
+export const type_doc = (type: TypeName): Doc ->
+  case type
+    when NamedType then named_type(type)
+    when UnionTypeName then separated([type_doc(member) for member in type.members], text(' | '))
+    when FunctionTypeName
+      const params = separated([type_doc(param) for param in type.params], text(', '))
+      const result = type_doc(type.result)
+      const function = join([token('(', type.position), params, text(') -> '), result])
+      type.optional then join([text('('), function, text(')?')]) else function
+    when RecordTypeName
+      const field_docs = [
+        join([token(field.name.name, field.name.position), text(': '), type_doc(field.type)])
+        for field in type.fields
+      ]
+      const fields = separated(field_docs, text(', '))
+      join [token('{ ', type.position), fields, text(' }'), optional_mark(type.optional)]
+    when TupleTypeName
+      const items = separated([type_doc(item) for item in type.items], text(', '))
+      join [token('(', type.position), items, text(')'), optional_mark(type.optional)]
+
+# A function type returned by a function literal, which its `->` would end, is in parentheses.
+export const result_type_doc = (type: TypeName): Doc ->
+  const function = type is FunctionTypeName and not type.optional
+  function then join([text('('), type_doc(type), text(')')]) else type_doc(type)
+
+export const named_type = (type: NamedType): Doc ->
+  const name = token(type.name, type.position)
+  const args = type_arguments(type.args)
+  join [name, args, optional_mark(type.optional)]
+
+export const type_arguments = (args: Array<TypeName>): Doc ->
+  return text('') if args.length == 0
+  join [text('<'), separated([type_doc(arg) for arg in args], text(', ')), text('>')]
+
+export const type_parameters = (params: Array<TypeParameter>): Doc ->
+  return text('') if params.length == 0
+  const docs = [type_parameter(param) for param in params]
+  join [text('<'), separated(docs, text(', ')), text('>')]
+
+const type_parameter = (param: TypeParameter): Doc ->
+  const name = token(param.name.name, param.name.position)
+  if const bound = param.bound
+    join [name, text(': '), named_type(bound)]
+  else
+    name
+
+const optional_mark = (optional: Bool): Doc -> text(optional then '?' else '')

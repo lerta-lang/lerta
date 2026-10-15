@@ -1,0 +1,159 @@
+# The declarations other than `const` and `var`: classes, structs, interfaces, enums, type aliases,
+# externs, extends and imports.
+import
+  EnumDeclaration, Extend, Extern, Identifier, Import, ImportName, InterfaceDeclaration,
+  MemberDeclaration, Position, Statement, StringLiteral, TypeAlias, TypeDeclaration, UnionTypeName
+from '../ast'
+import breaking, choice, Doc, indent, join, line_feed, separated, text, token from './doc'
+import expression_doc, keyword, string_doc, value_after from './print_expression'
+import Context, Item, lines_of_items from './printing'
+import named_type, type_doc, type_parameters from './print_type'
+import LONG_LISTS, MULTI_LINE_LITERALS from './rules'
+
+export const declaration_doc = (statement: Statement, context: Context): Doc ->
+  case statement
+    when TypeDeclaration
+      const word = statement.is_struct then 'struct ' else 'class '
+      const head: Array<Doc> =
+        exported(statement.exported, statement.position, context)
+        keyword(word, statement.position)
+        name_doc(statement.name)
+        type_parameters(statement.type_params)
+      head.push join([text(': '), named_type(satisfies)]) if const satisfies = statement.satisfies
+      join [join(head), members_doc(statement.members, context)]
+    when InterfaceDeclaration
+      const head = join(
+        [
+          exported(statement.exported, statement.position, context)
+          keyword('interface ', statement.position)
+          name_doc(statement.name)
+          type_parameters(statement.type_params)
+        ]
+      )
+      join [head, members_doc(statement.members, context)]
+    when EnumDeclaration
+      const head = join(
+        [
+          exported(statement.exported, statement.position, context)
+          keyword('enum ', statement.position)
+          name_doc(statement.name)
+        ]
+      )
+      const members = [enum_member(member, context) for member in statement.members]
+      join [head, indent(join([line_feed(), separated(members, line_feed())]))]
+    when TypeAlias
+      const head = join(
+        [
+          exported(statement.exported, statement.position, context)
+          keyword('type ', statement.position)
+          name_doc(statement.name)
+          text(' =')
+        ]
+      )
+      join [head, aliased_type(statement)]
+    when Extern
+      const parts: Array<Doc> =
+        exported(statement.exported, statement.position, context)
+        keyword('extern ', statement.position)
+        name_doc(statement.symbol)
+      # Without `as`, the name is the symbol itself.
+      if statement.name != statement.symbol
+        parts.push join([text(' as '), name_doc(statement.name)])
+      parts.push join([text(': '), type_doc(statement.type)])
+      join parts
+    when Extend
+      const head = join(
+        [
+          keyword('extend', statement.position)
+          type_parameters(statement.type_params)
+          text(' ')
+          type_doc(statement.type)
+        ]
+      )
+      join [head, members_doc(statement.members, context)]
+    when Import then import_doc(statement, context)
+    else text('')
+
+# `export ` before a declaration that has it, at the position of the token before the declaration.
+export const exported = (is_exported: Bool, at: Position, context: Context): Doc ->
+  return text('') if not is_exported
+  const source = context.source
+  if const index = source.token_at(at)
+    if index > 0
+      const word = source.tokens[index - 1]
+      return token('export ', Position(line: word.line, column: word.column))
+  text 'export '
+
+const name_doc = (name: Identifier) -> token(name.name, name.position)
+
+const members_doc = (members: Array<MemberDeclaration>, context: Context): Doc ->
+  return text('') if members.length == 0
+  const docs = [member_doc(member, context) for member in members]
+  indent join([line_feed(), separated(docs, line_feed())])
+
+# `[const | var | weak | weak!] name[: Type][ = [default] value]`.
+const member_doc = (member: MemberDeclaration, context: Context): Doc ->
+  const parts: Array<Doc> = []
+  parts.push keyword("#{modifier} ", member.position) if const modifier = member.modifier
+  parts.push name_doc(member.name)
+  parts.push join([text(': '), type_doc(type)]) if const type = member.type
+  if const value = member.value
+    if member.has_default
+      parts.push join([text(' = default '), expression_doc(value, context)])
+    else
+      parts.push join([text(' ='), value_after(value, context)])
+  join parts
+
+const enum_member = (member: Identifier | StringLiteral, context: Context): Doc ->
+  case member
+    when Identifier then name_doc(member)
+    when StringLiteral then string_doc(member, context)
+
+# A union on the line, or on the indented lines below with as many members on each as fit.
+const aliased_type = (alias: TypeAlias): Doc ->
+  const type = alias.type
+  const on_line = join([text(' '), type_doc(type)])
+  return on_line if not (type is UnionTypeName)
+  const members = [type_doc(member) for member in type.members]
+  const parts: Array<Doc> = []
+  for member, i in members
+    parts.push(
+      i == 0 then member else choice(join([text(' | '), member]), join([line_feed(), member]))
+    )
+  breaking LONG_LISTS, on_line, indent(join([line_feed(), join(parts)]))
+
+# `import a, b as c from 'module'`, with the names in an indented block when they do not fit on
+# the line (see Multi-line literals).
+const import_doc = (import_node: Import, context: Context): Doc ->
+  const word = keyword('import', import_node.position)
+  const module = module_doc(import_node, context)
+  return join([word, text(' '), module]) if import_node.names.length == 0
+  const item = (name: ImportName) ->
+    const after_comment = context.source.comment_before(name.name.position)
+    Item after_comment, doc: import_name(name), simple: true
+  const items = [item(name) for name in import_node.names]
+  const names = separated([item.doc for item in items], text(', '))
+  const on_line = join([word, text(' '), names, text(' from '), module])
+  const block = join(
+    [word, indent(join([line_feed(), lines_of_items(items)])), line_feed(), text('from '), module]
+  )
+  breaking MULTI_LINE_LITERALS, on_line, block
+
+const import_name = (name: ImportName): Doc ->
+  if const alias = name.alias
+    join [name_doc(name.name), text(' as '), name_doc(alias)]
+  else
+    name_doc name.name
+
+# The module's name as the source spells it, the string after `from`, or after `import` alone.
+const module_doc = (import_node: Import, context: Context): Doc ->
+  const source = context.source
+  const start = source.token_at(import_node.position) ? return text("'#{import_node.module}'")
+  const end = source.tokens.length
+  const index = source.find(STRING, start, end) ? return text("'#{import_node.module}'")
+  const module = source.tokens[index]
+  const literal = StringLiteral(
+    value: import_node.module
+    position: Position(line: module.line, column: module.column)
+  )
+  string_doc literal, context

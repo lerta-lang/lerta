@@ -1,0 +1,177 @@
+# `lerta fmt`: prints each file again in the style (docs/reference/style.md), and reports where the
+# file differs from that, by the rule that decides it there, or writes it with `--fix`.
+import Position, Statement from '../ast'
+import dump_ast from '../ast_dump'
+import CompileError from '../errors'
+import lex from '../lexer/tokens'
+import parse from '../parser/statement'
+import hunks from './diff'
+import join, lay_out, line_feed, RulePlace, text from './doc'
+import block_doc from './print_statement'
+import Context from './printing'
+import BLANK_LINES, COMMENTS, LAYOUT, SPACING, StyleRule from './rules'
+import columns, source_text, SourceText, trim_end, trim_start from './source'
+
+# A place where the source differs from the style, at its position in the source.
+export struct Finding
+  at: Position
+  rule: StyleRule
+
+export struct Formatted
+  text: String
+  findings: Array<Finding>
+
+# The source in the style, and where it differs from it. Throws a CompileError if the source does
+# not parse, or if the text in the style would not parse to the same program, which would be a bug.
+export const format_source = (source: String, path: String): Formatted ->
+  const lexed = lex(source, path)
+  const statements = parse(lexed.tokens, path)
+  const text_source = source_text(source, lexed)
+  const context = Context(source: text_source)
+  const body = block_doc(statements, context)
+  const doc = statements.length == 0 then text('') else join([body, line_feed()])
+  const layout = lay_out(doc, text_source)
+  check_same_program statements, layout.text, path
+  const found = findings(text_source, layout.text, layout.rules)
+  const in_order = found.sorted(
+    (a, b) -> a.at.line != b.at.line then a.at.line - b.at.line else a.at.column - b.at.column
+  )
+  Formatted text: layout.text, findings: in_order
+
+const check_same_program = (statements: Array<Statement>, formatted: String, path: String) ->
+  const reparsed = parse(lex(formatted, path).tokens, path)
+  if without_positions(dump_ast(reparsed)) != without_positions(dump_ast(statements))
+    throw CompileError(message: "#{path}: the formatter would change the program, which is a bug")
+
+# The dump of a syntax tree without the positions of its nodes, which the formatter moves, also in
+# the names that the parser makes of them, such as `_tuple.3.5` and `?3:5`.
+const without_positions = (dump: String) ->
+  [without_position(line) for line in dump.split("\n") when not is_position_field(line)].join("\n")
+
+# A node's line, `<kind> <line>:<column>`, without its position, and a field that holds a name that
+# the parser makes of a position, such as `_tuple.3.5` or `?3:5`, without that.
+const without_position = (line: String) ->
+  const field = line.split(': ')
+  const words = line.split(' ')
+  if field.length == 1 and is_position(words[words.length - 1])
+    return [word for word, i in words when i < words.length - 1].join(' ')
+  const value = field[field.length - 1]
+  # Only a name can be one that the parser makes; a string's value can start the same way.
+  return line if without_spaces(field[0]) != 'name'
+  const made = GENERATED_PREFIXES.find((prefix) -> value.starts_with(prefix)) ? return line
+  [part for part, i in field when i < field.length - 1].join(': ') + ": #{made}#\""
+
+# `<line>:<column>`.
+const is_position = (word: String) ->
+  const parts = word.split(':')
+  const is_number = (part: String) -> part != '' and part.parse_int() != nil
+  parts.length == 2 and is_number(parts[0]) and is_number(parts[1])
+
+const GENERATED_PREFIXES = ['"_tuple.', '"destructured.', '"?']
+
+# A group of fields without a kind writes its position as fields.
+const is_position_field = (line: String) ->
+  const field = without_spaces(line)
+  field.starts_with('line:') or field.starts_with('column:')
+
+# Where the formatted text differs from the source: at the first difference of each run of lines
+# that differ, with the innermost rule whose part holds that place in the formatted text, or else
+# the rule that the kind of difference points to.
+const findings = (source: SourceText, formatted: String, rules: Array<RulePlace>) ->
+  const source_lines = source.raw_lines
+  # Lines end with LF, and so does a file (see Layout): the first that ends with CRLF, and a last
+  # line without LF, are places of their own, and the lines are compared without them.
+  const old = [line.without_suffix("\r") ? line for line in source_lines]
+  const new = formatted.split("\n")
+  const result: Array<Finding> = []
+  if const crlf = source_lines.find_index((line) -> line.ends_with("\r"))
+    const column = columns(old[crlf]) + 1
+    result.push Finding(rule: LAYOUT, at: Position(column, line: crlf + 1))
+  const last = old.length - 1
+  if old[last] != ''
+    result.push Finding(rule: LAYOUT, at: Position(line: last + 1, column: columns(old[last]) + 1))
+    old.push ''
+  for hunk in hunks(old, new)
+    # Where as many lines differ in each, each pair of lines is a place of its own.
+    const pairs = hunk.old_count == hunk.new_count then hunk.old_count else 1
+    for i in 0...pairs
+      const old_count = pairs == 1 then hunk.old_count else 1
+      const new_count = pairs == 1 then hunk.new_count else 1
+      const old_lines = [old[hunk.old_start + i + k] for k in 0...old_count]
+      const new_lines = [new[hunk.new_start + i + k] for k in 0...new_count]
+      const column = first_difference(old_lines.first() ? '', new_lines.first() ? '')
+      const at = Position(column, line: hunk.old_start + i + 1)
+      const in_new = Position(column, line: hunk.new_start + i + 1)
+      const rule =
+        if only_blank_lines_differ(old_lines, new_lines)
+          BLANK_LINES
+        else
+          const last_line = in_new.line + new_count
+          const inner = innermost_rule(rules, in_new)
+          const found = inner then inner else first_rule_from(rules, in_new, last_line)
+          found ? kind_of_difference(old_lines, new_lines, source, at.line)
+      result.push Finding(at, rule)
+  result
+
+# The column where the lines first differ, counted in code points from 1.
+const first_difference = (old: String, new: String) ->
+  const old_points = [point for point in old]
+  const new_points = [point for point in new]
+  var i = 0
+  i += 1 while i < old_points.length and i < new_points.length and old_points[i] == new_points[i]
+  i + 1
+
+const innermost_rule = (rules: Array<RulePlace>, at: Position): StyleRule? ->
+  var found: RulePlace? = nil
+  for place in rules
+    if before_or_at(place.start, at) and is_before(at, place.end)
+      if const previous = found
+        found = place if is_before(previous.start, place.start)
+      else
+        found = place
+  found?.rule
+
+# The rule of the first part that starts from the position up to the line, as one that the
+# difference begins just before.
+const first_rule_from = (rules: Array<RulePlace>, at: Position, last_line: Int): StyleRule? ->
+  var found: RulePlace? = nil
+  for place in rules
+    const within = before_or_at(at, place.start) and place.start.line < last_line
+    if within
+      if const previous = found
+        found = place if is_before(place.start, previous.start)
+      else
+        found = place
+  found?.rule
+
+const before_or_at = (a: Position, b: Position) ->
+  a.line < b.line or (a.line == b.line and a.column <= b.column)
+
+const is_before = (a: Position, b: Position) ->
+  a.line < b.line or (a.line == b.line and a.column < b.column)
+
+const only_blank_lines_differ = (old: Array<String>, new: Array<String>) ->
+  const not_blank = (lines: Array<String>) ->
+    [line for line in lines when without_spaces(line) != '']
+  not_blank(old) == not_blank(new)
+
+# The spaces before a comment, spaces within the lines, or else the layout of the lines.
+# `old` starts at the line `line` of the source.
+const kind_of_difference = (
+  old: Array<String>, new: Array<String>, source: SourceText, line: Int
+): StyleRule ->
+  const squeezed = (lines: Array<String>) -> without_spaces(lines.join(''))
+  return LAYOUT if squeezed(old) != squeezed(new) or old.length != new.length
+  const indented = (lines: Array<String>) -> [trim_start(line) for line in lines]
+  return LAYOUT if indented(old) == indented(new)
+  return SPACING if old.length != 1
+  const ending = source.comments.find((c) -> c.line == line and not c.own_line)
+  const comment = ending ? return SPACING
+  # Where only the spaces before a comment that ends the line differ.
+  const text = source.comment_text(comment)
+  const code = (written: String) -> trim_end(written.without_suffix(text) ? written)
+  code(old[0]) == code(new[0]) then COMMENTS else SPACING
+
+const without_spaces = (text: String) ->
+  const bytes = [byte for byte in text.binary when byte != ' ']
+  bytes.to_binary().text()!

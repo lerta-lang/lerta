@@ -139,6 +139,7 @@ test: bin/lerta
 	nice node test/run.ts || status=1; \
 	nice node test/cli.ts || status=1; \
 	nice node test/runtime.ts || status=1; \
+	nice node test/format.ts || status=1; \
 	nice $(MAKE) --no-print-directory check-bootstrap || status=1; \
 	exit $$status
 

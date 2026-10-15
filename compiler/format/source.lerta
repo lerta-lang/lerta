@@ -1,0 +1,150 @@
+# What the formatter reads from the source by position, as the AST does not keep it: the spelling
+# of tokens, the text of comments and which lines are blank.
+import Position from '../ast'
+import Comment, Lexed, Token, TokenKind from '../lexer/tokens'
+
+export class SourceText
+  # The lines as the source has them, and without the CR of a CRLF.
+  raw_lines: Array<String>
+  lines: Array<String>
+  tokens: Array<Token>
+  comments: Array<Comment>
+  # The index in `tokens` of the token that starts at each position.
+  token_indexes: Map<Position, Int> = index_tokens(@tokens)
+  comment_lines: Map<Int, Bool> = lines_of(@comments)
+
+  # The text of the token as written.
+  spelling = (token: Token) -> @slice(token.line, token.column, token.end_column)
+
+  # The text of the comment as written, without the spaces after it.
+  comment_text = (comment: Comment) ->
+    const line = @lines[comment.line - 1]
+    trim_end slice_columns(line, comment.column, columns(line) + 1)
+
+  is_blank = (line: Int) -> trim_end(@lines[line - 1]) == ''
+
+  # Whether a comment is on a line from `first` through `last`.
+  has_comment = (first: Int, last: Int) ->
+    for line in first...(last + 1)
+      return true if @comment_lines.has(line)
+    false
+
+  # Whether a comment is in the indented block that follows the line of the token at the position,
+  # deeper than that line, or ends that line, as one that the postfix form of the block, or the
+  # block on that line, would move.
+  block_has_comments = (at: Position) ->
+    var index = @token_at(at) ? return false
+    index += 1 while @tokens[index].kind != NEWLINE and @tokens[index].kind != EOF
+    return false if @tokens[index + 1].kind != INDENT
+    var depth = 0
+    index += 1
+    while true
+      const kind = @tokens[index].kind
+      depth += 1 if kind == INDENT
+      depth -= 1 if kind == DEDENT
+      break if depth == 0 or kind == EOF
+      index += 1
+    const end_line = @tokens[index].line
+    const indentation = @indentation(at.line)
+    for comment in @comments
+      # One that ends the line of the head would go before the statement of the block.
+      return true if comment.line == at.line
+      const inside = comment.line > at.line and comment.line < end_line
+      return true if inside and comment.column > indentation
+    false
+
+  # The column of the first token on the line.
+  indentation = (line: Int) ->
+    const text = @lines[line - 1]
+    columns(text) - columns(trim_start(text)) + 1
+
+  # Whether a comment is between the token that starts at the position and the token before it,
+  # or on the line of that one.
+  comment_before = (at: Position) ->
+    const index = @token_at(at) ? return false
+    var previous = index - 1
+    previous -= 1 while previous > 0 and LAYOUT_KINDS.contains(@tokens[previous].kind)
+    previous >= 0 and @has_comment(@tokens[previous].line, at.line - 1)
+
+  # The index of the token that starts at the position, if one does.
+  token_at = (position: Position) -> @token_indexes[position]
+
+  # The index of the bracket that closes the one at `open`, past the pairs nested in it.
+  closing = (open: Int) ->
+    var depth = 0
+    var index = open
+    while true
+      const kind = @tokens[index].kind
+      depth += 1 if is_opening(kind)
+      depth -= 1 if is_closing(kind)
+      return index if depth == 0
+      index += 1
+    open
+
+  # The index of the first token of the kind from `start` up to `end`, if there is one.
+  find = (kind: TokenKind, start: Int, end: Int): Int? ->
+    for index in start...end
+      return index if @tokens[index].kind == kind
+    nil
+
+  slice = (line: Int, start: Int, end: Int) -> slice_columns(@lines[line - 1], start, end)
+
+export const source_text = (source: String, lexed: Lexed) ->
+  const raw_lines = source.split("\n")
+  const lines = [without_carriage_return(line) for line in raw_lines]
+  SourceText raw_lines, lines, tokens: lexed.tokens, comments: lexed.comments
+
+# A layout token, as an INDENT, can share the position of the token after it, which is the one
+# that starts there.
+const lines_of = (comments: Array<Comment>) ->
+  const lines: Map<Int, Bool> = Map()
+  lines.add comment.line for comment in comments
+  lines
+
+const index_tokens = (tokens: Array<Token>) ->
+  const indexes: Map<Position, Int> = Map()
+  for token, index in tokens
+    const position = Position(line: token.line, column: token.column)
+    indexes[position] = index if not LAYOUT_KINDS.contains(token.kind)
+  indexes
+
+const LAYOUT_KINDS: Array<TokenKind> = [NEWLINE, LINE_BREAK, INDENT, DEDENT, EOF]
+
+const is_opening = (kind: TokenKind) -> kind == '(' or kind == '[' or kind == '{'
+const is_closing = (kind: TokenKind) -> kind == ')' or kind == ']' or kind == '}'
+
+# The part of the line from the column `start` up to `end`, which is exclusive, counted in code
+# points from 1.
+const slice_columns = (line: String, start: Int, end: Int) ->
+  const bytes = line.binary
+  bytes.text(byte_index(bytes, start), byte_index(bytes, end))!
+
+# The index of the byte where the column starts, or the length after the last one.
+const byte_index = (bytes: Binary, column: Int) ->
+  var seen = 0
+  for byte, index in bytes
+    if not byte.is_utf8_continuation()
+      seen += 1
+      return index if seen == column
+  bytes.length
+
+# The columns that the text takes, one for each code point.
+export const columns = (text: String) ->
+  var count = 0
+  for byte in text.binary
+    count += 1 if not byte.is_utf8_continuation()
+  count
+
+export const trim_start = (text: String) ->
+  const bytes = text.binary
+  var start = 0
+  start += 1 while start < bytes.length and bytes[start] == ' '
+  bytes.text(start, bytes.length)!
+
+export const trim_end = (text: String) ->
+  const bytes = text.binary
+  var end = bytes.length
+  end -= 1 while end > 0 and (bytes[end - 1] == ' ' or bytes[end - 1] == "\t")
+  bytes.text(0, end)!
+
+const without_carriage_return = (line: String) -> line.without_suffix("\r") ? line
