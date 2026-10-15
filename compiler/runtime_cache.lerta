@@ -65,7 +65,7 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
   runtime()
 
 # What `clang --version` prints, or nil if clang fails.
-const clang_version_text = (): Promise<String?> ->
+const clang_version_text = ->
   const output: Byte[] = []
   return nil if await run('clang', ['--version'], output) != 0
   output.to_binary().text() ? throw CompileError(message: 'clang --version is not valid UTF-8')
@@ -94,7 +94,7 @@ const posix_cache_dir = ->
   return join(home, '.cache/lerta') if const home = non_empty_env('HOME')
   throw CompileError(message: 'no cache directory: set HOME or LERTA_CACHE_DIR')
 
-const non_empty_env = (name: String): String? ->
+const non_empty_env = (name: String) ->
   const value = env(name)
   value != '' then value else nil
 
@@ -119,13 +119,13 @@ const reject_path_target = (target: String) ->
   throw CompileError(message: "not a target: #{target}") if is_path
 
 # The rest of the line of `clang --version` that starts with `prefix`.
-const version_line_value = (clang_version: String, prefix: String): String? ->
+const version_line_value = (clang_version: String, prefix: String) ->
   for line in clang_version.split("\n")
     return value if const value = line.without_prefix(prefix)
   nil
 
 # The number before the first `.` of the word after `version`, as in `clang version 17.0.0`.
-const major_version = (clang_version: String): String? ->
+const major_version = (clang_version: String) ->
   const words = clang_version.split("\n")[0].split(' ')
   for i in 1...words.length
     return words[i].split('.')[0] if words[i - 1] == 'version'
@@ -194,7 +194,7 @@ const compile_runtime = (
 
 # The IR that clang writes, with `flags`, for a function that ends a coroutine; nil if clang fails.
 # C has no builtin for that, so it is C++.
-const clang_probe_ir = (flags: String[], temp_dir: String): Promise<String?> ->
+const clang_probe_ir = (flags: String[], temp_dir: String) ->
   const source = join(temp_dir, 'probe.cc')
   const code = 'extern "C" void lerta_probe(void *handle) { __builtin_coro_end(handle, 0); }'
   write_file source, code.binary
