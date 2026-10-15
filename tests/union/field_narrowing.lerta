@@ -1,0 +1,103 @@
+struct A
+  x: Int
+struct B
+  y: Int
+type AB = A | B
+
+struct Box
+  item: AB
+  label: String?
+
+struct Outer
+  box: Box
+
+class Holder
+  const item: AB
+  const count: Int?
+
+  describe = ->
+    return "A #{@item.x}" if @item is A
+    "B #{@item.y}"
+
+  counted = -> @count then @count + 1 else 0
+
+const of_box = (box: Box) ->
+  if box.item is A
+    "A #{box.item.x}"
+  else
+    "B #{box.item.y}"
+
+const deep = (outer: Outer) ->
+  return 'no label' if outer.box.label == nil
+  outer.box.label + " #{sum_of(outer)}"
+
+const sum_of = (outer: Outer) ->
+  case outer.box.item
+    when A then outer.box.item.x
+    else outer.box.item.y
+
+const of_record = (r: { item: AB }) -> r.item is B then r.item.y else -1
+
+const shadowed = (box: Box) ->
+  if box.item is A
+    const box = Box(item: B(y: 7), label: nil)
+    return box.item is B then box.item.y else 0
+  0
+
+print of_box(Box(item: A(x: 1), label: nil))
+print of_box(Box(item: B(y: 2), label: 'b'))
+print deep(Outer(box: Box(item: B(y: 3), label: 'abc')))
+print deep(Outer(box: Box(item: A(x: 4), label: nil)))
+print Holder(item: A(x: 5), count: 1).describe()
+print "#{Holder(item: B(y: 6), count: 2).counted()} #{Holder(item: B(y: 6), count: nil).counted()}"
+print "#{of_record({ item: B(y: 8) })} #{shadowed(Box(item: A(x: 1), label: nil))}"
+
+class Counter
+  const inner: Box
+
+  in_literal = ->
+    return '' if @inner.label == nil
+    const length = -> @inner.label + '!'
+    length()
+
+const in_literal = (box: Box) ->
+  return 'none' if box.label == nil
+  const add = -> box.label + '?'
+  add()
+
+const compared = (box: Box) -> box.label == 'b' then box.label + '!' else '-'
+
+const and_right = (box: Box) -> box.label != nil and box.label + '' == 'b'
+
+struct Generic<T>
+  value: T?
+
+const of_generic = (g: Generic<Int>) -> g.value then g.value + 1 else 0
+
+const of_nested_record = (o: { a: { n: Int? } }) -> o.a.n then o.a.n + 1 else 0
+
+const labelled = Box(item: B(y: 1), label: 'b')
+print "#{Counter(inner: labelled).in_literal()} #{in_literal(labelled)} #{compared(labelled)}"
+print "#{and_right(labelled)} #{of_generic(Generic(value: 2))} #{of_nested_record({ a: { n: 3 } })}"
+
+const others_left = (box: Box) ->
+  return 'A' if box.item is A
+  "B #{box.item.y}"
+
+struct Maybe
+  item: AB?
+
+  describe = ->
+    return 'A' if @item is A
+    @item then "B #{@item.y}" else 'nil'
+
+const from_optional = (box: Box?) -> box != nil and box.label != nil then box.label else '-'
+
+const parameter_shadows = (box: Box) ->
+  return '' if box.label == nil
+  const other = (box: Box) -> box.label ? 'none'
+  other(Box(item: A(x: 1), label: nil))
+
+print "#{others_left(labelled)} #{Maybe(item: A(x: 1)).describe()} #{Maybe(item: B(y: 2)).describe()}"
+print "#{Maybe(item: nil).describe()} #{from_optional(labelled)} #{from_optional(nil)}"
+print parameter_shadows(labelled)

@@ -18,7 +18,6 @@ The planned syntax, control flow, types and operators.
 ## Control flow
 
 - Narrowing a `var`.
-- Narrowing a path of fields that cannot be reassigned, from a value that is narrowed now or from `@`: `if @item is A`, then `@item.a`. A `var` field of a class is not narrowed, as a `var` is not.
 - A `Bool?` is not a condition, nor an operand of `and`, `or` and `not`: write `b == true` or `b != nil`. Now it holds when it is `true` ([the reference](../reference/control-flow.md)), so nil and `false` read alike.
 - Code after a call to a function returning `never` (`exit`) is unreachable.
 - The error for a range outside a `for` names every place that takes one, the `in` of a comprehension too, not only `after 'in' of a 'for'`.

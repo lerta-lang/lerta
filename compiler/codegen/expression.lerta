@@ -207,7 +207,21 @@ const weak_object = (g: Generator, box: String) ->
 const generate_property = (g: Generator, member: Member) ->
   return "#{index}" if const index = g.facts.enum_values[member]
   const object = generate(g, member.object)
-  read_property g, object, type_of(g, member.object), member.name.name, type_of(g, member)
+  const object_type = type_of(g, member.object)
+  const name = member.name.name
+  const type = type_of(g, member)
+  const value = read_property(g, object, object_type, name, type)
+  # A field narrowed where it is read (see checker narrowing FieldPath).
+  const field_type = declared_field_type(g, object_type, name) ? return value
+  const is_narrowed = field_type is OptionalType and type is not OptionalType
+  is_narrowed then emit_unwrap(g.ir, value, field_type) else value
+
+const declared_field_type = (g: Generator, object_type: Type, name: String) ->
+  case object_type
+    when RecordType then object_type.fields.find((field) -> field.name == name)?.type
+    when ObjectType
+      info_of(g.code.program, object_type).fields.find((field) -> field.name.name == name)?.type
+    else nil
 
 # The property of the type of the object, which is owned and released: a field, a member of an
 # interface value, or a property of a builtin type. `s.binary` is the string itself, passing on its

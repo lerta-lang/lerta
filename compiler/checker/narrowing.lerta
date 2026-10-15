@@ -1,20 +1,28 @@
 # Narrowing an optional local where a condition shows it is not nil, or a local of a union type
-# where it shows which type it has, including after a guard `if`.
+# where it shows which type it has, including after a guard `if`; and so a path of fields from one.
 import
-  BinaryOperation, Condition, Expression, Identifier, If, IsTest, NamedType, NilLiteral, Statement,
-  UnaryOperation
+  BinaryOperation, Condition, Expression, Identifier, If, IsTest, Member, NamedType, NilLiteral,
+  Statement, This, UnaryOperation
 from '../ast'
+import field_type_by_name, is_fixed_field from './fields'
 import lookup from './name'
-import Local from './scopes'
+import Local, PathView from './scopes'
 import Body from './shared'
 import resolve from './type_names'
 import
   inner_of, is_kind, members_of, optional_type, OptionalType, Type, type_key, union_type, UnionType
 from '../types'
 
-# A local, and the narrower type it has.
+# A path of fields that cannot change, from a local that cannot either or from `@`: `x.a.b`.
+export struct FieldPath
+  # The local it starts from, or nil for `@`.
+  root: Local?
+  key: String
+  declared: Type
+
+# A local or a path of fields, and the narrower type it has.
 export struct Narrowing
-  local: Local
+  subject: Local | FieldPath
   type: Type
 
 # The locals a condition narrows where it holds, and where it does not.
@@ -25,45 +33,47 @@ export struct ConditionNarrowings
 export const narrowings_where = (narrowings: ConditionNarrowings, value: Bool) ->
   value then narrowings.where_true else narrowings.where_false
 
-export struct TestedName
-  name: Identifier
+# A name or a member that a condition tests.
+struct Tested
+  value: Expression
   condition_value: Bool
   is_type: NamedType?
 
-export const tested_name = (body: Body, condition: Condition) ->
+const tested = (body: Body, condition: Condition) ->
   case condition
-    when Identifier then TestedName(name: condition, condition_value: true)
+    when Identifier then Tested(value: condition, condition_value: true)
+    when Member then Tested(value: condition, condition_value: true)
     when IsTest
       const value = condition.value
-      return nil if value is not Identifier
-      TestedName name: value, condition_value: true, is_type: condition.type
+      return nil if not is_name_or_member(value)
+      Tested value, condition_value: true, is_type: condition.type
     when BinaryOperation
       const operator = condition.operator
       return nil if operator != '==' and operator != '!='
-      if const name = nil_tested(condition.left, condition.right)
-        return TestedName(name, condition_value: operator == '!=')
-      const name = value_tested(body, condition.left, condition.right) ? return nil
-      TestedName name, condition_value: operator == '=='
+      if const value = nil_tested(condition.left, condition.right)
+        return Tested(value, condition_value: operator == '!=')
+      const value = value_tested(body, condition.left, condition.right) ? return nil
+      Tested value, condition_value: operator == '=='
     else nil
 
-# The name that one side compares with a value on the other that cannot be nil.
+const is_name_or_member = (value: Expression) -> value is Identifier or value is Member
+
+# The name or member that one side compares with a value on the other that cannot be nil.
 const value_tested = (body: Body, left: Expression, right: Expression) ->
   const cannot_be_nil = (operand: Expression) ->
     const type = body.facts.types[operand] ? return false
     not (type is OptionalType or is_kind(type, 'nil'))
   case
-    when left is Identifier and cannot_be_nil(right) then left
-    when right is Identifier and cannot_be_nil(left) then right
+    when is_name_or_member(left) and cannot_be_nil(right) then left
+    when is_name_or_member(right) and cannot_be_nil(left) then right
     else nil
 
-# The name that one side compares with nil on the other.
+# The name or member that one side compares with nil on the other.
 const nil_tested = (left: Expression, right: Expression) ->
-  const tested =
-    case
-      when left is NilLiteral then right
-      when right is NilLiteral then left
-      else nil
-  tested as Identifier?
+  case
+    when left is NilLiteral and is_name_or_member(right) then right
+    when right is NilLiteral and is_name_or_member(left) then left
+    else nil
 
 export const ends_with_jump = (statements: Statement[], is_never: (Expression) -> Bool): Bool ->
   return false if statements.length == 0
@@ -112,26 +122,82 @@ export const where_right_operand = (body: Body, logical: BinaryOperation, check:
   check()
   body.scopes.pop()
 
-# Until the innermost scope ends, the locals are seen with the narrower types.
+# Until the innermost scope ends, the locals and the paths are seen with the narrower types.
 export const narrow = (body: Body, narrowings: Narrowing[]) ->
   for narrowing in narrowings
-    const { local, type } = narrowing
-    body.scopes.narrow local.identifier.name, narrowed_view(local, type)
+    const { subject, type } = narrowing
+    case subject
+      when Local then body.scopes.narrow(subject.identifier.name, narrowed_view(subject, type))
+      when FieldPath then body.scopes.narrow_path(subject.key, PathView(type, root: subject.root))
 
-# How a test such as `x != nil` or `x is T` narrows the local it tests.
+# How a test such as `x != nil` or `x is T` narrows the local or the path it tests.
 const tested_narrowings = (body: Body, condition: Condition) ->
-  const tested = tested_name(body, condition) ? return nil
-  const local = lookup(body, tested.name.name) ? return nil
-  return nil if local.mutable or (local.origin ? local).weak
-  if const is_type = tested.is_type
-    return nil if inner_of((local.origin ? local).type) is not UnionType
+  const test = tested(body, condition) ? return nil
+  const value = narrowable(body, test.value) ? return nil
+  const { subject } = value
+  if const is_type = test.is_type
+    return nil if inner_of(value.declared) is not UnionType
     const type = resolve(body.program, body.resolver, is_type)
-    const others = other_members(local.type, type)
-    const where_false: Narrowing[] = others then [Narrowing(local, type: others)] else []
-    return ConditionNarrowings(where_false, where_true: [Narrowing(local, type)])
-  const type = local.type
+    const others = other_members(value.current, type)
+    const where_false: Narrowing[] = others then [Narrowing(subject, type: others)] else []
+    return ConditionNarrowings(where_false, where_true: [Narrowing(subject, type)])
+  const type = value.current
   return nil if type is not OptionalType
-  narrowings_only_where [Narrowing(local, type: type.inner)], tested.condition_value
+  narrowings_only_where [Narrowing(subject, type: type.inner)], test.condition_value
+
+# A local or a path that can be narrowed, with the type it has where it is, and the one it was
+# declared with.
+export struct Narrowable
+  subject: Local | FieldPath
+  current: Type
+  declared: Type
+
+export const narrowable = (body: Body, value: Expression) ->
+  if value is Identifier
+    const local = narrowable_local(body, value) ? return nil
+    return Narrowable(subject: local, current: local.type, declared: (local.origin ? local).type)
+  const path = field_path(body, value) ? return nil
+  const current = body.facts.types[value] ? return nil
+  Narrowable current, subject: path, declared: path.declared
+
+# A local that cannot be reassigned, nor be emptied as a weak one.
+const narrowable_local = (body: Body, name: Identifier) ->
+  const local = lookup(body, name.name) ? return nil
+  local.mutable or (local.origin ? local).weak then nil else local
+
+# The path of fields that a member reads, if each of them cannot change.
+const field_path = (body: Body, value: Expression): FieldPath? ->
+  const member = value as Member? ? return nil
+  const object = member.object
+  const object_type = body.facts.types[object] ? return nil
+  const name = member.name
+  return nil if not is_fixed_field(body, object_type, name.name)
+  const declared = field_type_by_name(body, object_type, name) ? return nil
+  const path_from = (root: Local?, key: String) ->
+    FieldPath root, declared, key: "#{key}.#{name.name}"
+  case object
+    when This then path_from(nil, '@')
+    when Identifier
+      const local = narrowable_local(body, object) ? return nil
+      path_from local.origin ? local, object.name
+    when Member
+      const outer = field_path(body, object) ? return nil
+      path_from outer.root, outer.key
+    else nil
+
+# The narrower type that the member has where it is, if it reads a narrowed path.
+export const narrowed_field_type = (body: Body, member: Member) ->
+  const path = field_path(body, member) ? return nil
+  const view = path_view(body, path.key) ? return nil
+  # A local of the same name, defined in an inner scope, starts another path.
+  view.root == path.root then view.type
+
+# The narrowed path, in the body or, as a function literal sees a narrowed local it captures, in
+# the bodies around it.
+const path_view = (body: Body, key: String): PathView? ->
+  return view if const view = body.scopes.lookup_path(key)
+  const enclosing = body.enclosing ? return nil
+  path_view enclosing, key
 
 # The type of a value of a union type, optional or not, that is none of `excluded`'s members, or nil
 # if it can only be nil.
