@@ -2,7 +2,7 @@
 # README.md for the targets and docs/internals.md#bootstrap for the bootstrap. Written for GNU make
 # 3.81, the one macOS has.
 
-# The files that the compiler carries in compiler/embedded.lerta, which tools/embed.lerta writes.
+# The files that the compiler carries in build/embedded.lerta, which tools/embed.lerta writes.
 # What third_party/libuv.txt lists of the kind $(1) for the host's system, on which the compiler
 # runs: macOS or Linux, by the rule of is_for in compiler/libuv.lerta.
 HOST_SYSTEM := $(if $(filter Darwin,$(shell uname -s)),macos,linux)
@@ -16,7 +16,7 @@ LIBUV_HEADERS := $(shell find third_party/libuv/include third_party/libuv/src -n
 LIBUV_SOURCES := $(shell awk '$$2 == "source" { print "third_party/libuv/" $$3 }' third_party/libuv.txt)
 LIBUV := third_party/libuv.txt $(LIBUV_HEADERS) $(LIBUV_SOURCES)
 EMBEDDED := $(sort $(wildcard std/*.lerta runtime/*.c runtime/*.h) $(LIBUV))
-SOURCES := $(shell find compiler -name '*.lerta') compiler/embedded.lerta
+SOURCES := $(shell find compiler -name '*.lerta') build/embedded.lerta
 RUNTIME_C := $(wildcard runtime/*.c)
 RUNTIME := $(RUNTIME_C) $(wildcard runtime/*.h)
 MAIN := compiler/main.lerta
@@ -68,7 +68,7 @@ build/libuv/built: $(LIBUV)
 build/embed: build/minilerta tools/embed.lerta $(EMBEDDED)
 	build/minilerta build tools/embed.lerta -o $@
 
-compiler/embedded.lerta: build/embed $(EMBEDDED)
+build/embedded.lerta: build/embed $(EMBEDDED)
 	build/embed $@ $(EMBEDDED)
 
 bin/lerta: build/minilerta $(SOURCES) $(EMBEDDED)
@@ -118,14 +118,15 @@ ifdef TARGET
 seed:
 	@echo 'make seed does not take TARGET' >&2; exit 2
 else
-# The seed's compiler embeds std/ and runtime/ in seed mode, in a copy of compiler/, so that the
-# build's own compiler/embedded.lerta stays as it is.
+# The seed's compiler embeds std/ and runtime/ in seed mode, in a copy of compiler/ beside its own
+# build/, so that the build's own build/embedded.lerta stays as it is.
 seed: check-bootstrap
-	rm -rf build/seed-source
-	cp -R compiler build/seed-source
-	build/embed --seed build/seed-source/embedded.lerta $(EMBEDDED)
-	bin/lerta dump-llvm build/seed-source/main.lerta > build/seed-source/lerta.ll
-	cp build/seed-source/lerta.ll seed/lerta.ll
+	rm -rf build/seed
+	mkdir -p build/seed/build
+	cp -R compiler build/seed/compiler
+	build/embed --seed build/seed/build/embedded.lerta $(EMBEDDED)
+	bin/lerta dump-llvm build/seed/compiler/main.lerta > build/seed/lerta.ll
+	cp build/seed/lerta.ll seed/lerta.ll
 endif
 
 # test runs the tests on the host only, and test-cross for every other environment it can reach.
@@ -148,7 +149,7 @@ test-cross:
 endif
 
 clean:
-	rm -rf build bin compiler/embedded.lerta
+	rm -rf build bin
 
 # A command that fails leaves no file, such as half of an IR printed to a redirection.
 .DELETE_ON_ERROR:

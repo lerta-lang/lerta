@@ -73,7 +73,7 @@ const command_checks: Check[] = [
   {
     // The code of the repository, as git lists it, the files not added yet included, but in tests/,
     // which holds code that is not in the style on purpose. git leaves out the files that it
-    // ignores, such as compiler/embedded.lerta, which is generated.
+    // ignores, such as build/, which is generated.
     name: 'the code of the repository is in the style',
     run: () => {
       // -z lists the paths as they are, with no quotes. A file deleted but not yet from git is

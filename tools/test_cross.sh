@@ -99,19 +99,16 @@ start_in_docker() { # <what> <image> <command>
 containers=''
 container_count=0
 
-# The container works in a copy of the tree, which is mounted read-only: the containers that run at
-# the same time would otherwise each write their own build of compiler/embedded.lerta into it. The
-# copy leaves out bin/, build/, test/node_modules and compiler/embedded.lerta, which the host built
-# for itself.
+# The container works on the tree mounted read-only, with build/ and bin/, where the build writes,
+# each its own empty volume: the containers that run at the same time, and the host, would
+# otherwise share their builds. Their mount points must already be in the tree, which is read-only:
+# they are, since the host builds bin/lerta first.
 in_docker() { # <container> <image> <command>
   container=$1
   image=lerta-test-$2
   shift 2
-  copy="mkdir /work && tar -C /lerta --exclude=./.git --exclude=./bin --exclude=./build \
-    --exclude=./test/node_modules --exclude=./compiler/embedded.lerta -cf - . \
-    | tar -C /work -xf - && cd /work"
-  docker run --rm --name "$container" --volume "$root:/lerta:ro" "$image" \
-    sh -c "$copy && $*"
+  docker run --rm --name "$container" --volume "$root:/lerta:ro" --volume /lerta/build \
+    --volume /lerta/bin --workdir /lerta "$image" sh -c "$*"
 }
 
 summary=''
