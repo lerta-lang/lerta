@@ -19,7 +19,7 @@ import generate_closure, generate_jump, lookup_local from './function'
 import CodegenLocal, Generator, SlotLocal, ValueLocal from './generator'
 import
   emit_field_pointer, emit_member_dispatch, emit_record, emit_record_field, emit_type_test,
-  emit_value_at, emit_values, emit_weak_object
+  emit_value_at, emit_values, emit_weak_object, field_named, record_field_index
 from './heap_object'
 import info_of from '../checker/object_types'
 import
@@ -173,7 +173,7 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
     return value
   const object_type = type as ObjectType!
   const info = info_of(g.code.program, object_type)
-  const field = info.fields.find((each) -> each.name.name == name)!
+  const field = field_named(info, name)
   const field_type = field.type!
   const pointer = emit_field_pointer(ir, object, info, name)
   const loaded = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
@@ -211,16 +211,15 @@ const generate_property = (g: Generator, member: Member) ->
   const name = member.name.name
   const type = type_of(g, member)
   const value = read_property(g, object, object_type, name, type)
-  # A field narrowed where it is read (see checker narrowing FieldPath).
+  # A field narrowed where it is read (see checker narrowable FieldPath).
   const field_type = declared_field_type(g, object_type, name) ? return value
   const is_narrowed = field_type is OptionalType and type is not OptionalType
   is_narrowed then emit_unwrap(g.ir, value, field_type) else value
 
 const declared_field_type = (g: Generator, object_type: Type, name: String) ->
   case object_type
-    when RecordType then object_type.fields.find((field) -> field.name == name)?.type
-    when ObjectType
-      info_of(g.code.program, object_type).fields.find((field) -> field.name.name == name)?.type
+    when RecordType then object_type.fields[record_field_index(object_type, name)].type
+    when ObjectType then field_named(info_of(g.code.program, object_type), name).type
     else nil
 
 # The property of the type of the object, which is owned and released: a field, a member of an

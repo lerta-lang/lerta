@@ -1,24 +1,15 @@
 # Narrowing an optional local where a condition shows it is not nil, or a local of a union type
-# where it shows which type it has, including after a guard `if`; and so a path of fields from one.
+# where it shows which type it has, including after a guard `if`; and so a path of fields from one
+# (see narrowable).
 import
   BinaryOperation, Condition, Expression, Identifier, If, IsTest, Member, NamedType, NilLiteral,
-  Statement, This, UnaryOperation
+  Statement, UnaryOperation
 from '../ast'
-import field_type_by_name, is_fixed_field from './fields'
-import lookup from './name'
+import FieldPath, narrowable from './narrowable'
 import Local, PathView from './scopes'
 import Body from './shared'
 import resolve from './type_names'
-import
-  inner_of, is_kind, members_of, optional_type, OptionalType, Type, type_key, union_type, UnionType
-from '../types'
-
-# A path of fields that cannot change, from a local that cannot either or from `@`: `x.a.b`.
-export struct FieldPath
-  # The local it starts from, or nil for `@`.
-  root: Local?
-  key: String
-  declared: Type
+import inner_of, is_kind, other_members, OptionalType, Type, UnionType from '../types'
 
 # A local or a path of fields, and the narrower type it has.
 export struct Narrowing
@@ -144,67 +135,3 @@ const tested_narrowings = (body: Body, condition: Condition) ->
   const type = value.current
   return nil if type is not OptionalType
   narrowings_only_where [Narrowing(subject, type: type.inner)], test.condition_value
-
-# A local or a path that can be narrowed, with the type it has where it is, and the one it was
-# declared with.
-export struct Narrowable
-  subject: Local | FieldPath
-  current: Type
-  declared: Type
-
-export const narrowable = (body: Body, value: Expression) ->
-  if value is Identifier
-    const local = narrowable_local(body, value) ? return nil
-    return Narrowable(subject: local, current: local.type, declared: (local.origin ? local).type)
-  const path = field_path(body, value) ? return nil
-  const current = body.facts.types[value] ? return nil
-  Narrowable current, subject: path, declared: path.declared
-
-# A local that cannot be reassigned, nor be emptied as a weak one.
-const narrowable_local = (body: Body, name: Identifier) ->
-  const local = lookup(body, name.name) ? return nil
-  local.mutable or (local.origin ? local).weak then nil else local
-
-# The path of fields that a member reads, if each of them cannot change.
-const field_path = (body: Body, value: Expression): FieldPath? ->
-  const member = value as Member? ? return nil
-  const object = member.object
-  const object_type = body.facts.types[object] ? return nil
-  const name = member.name
-  return nil if not is_fixed_field(body, object_type, name.name)
-  const declared = field_type_by_name(body, object_type, name) ? return nil
-  const path_from = (root: Local?, key: String) ->
-    FieldPath root, declared, key: "#{key}.#{name.name}"
-  case object
-    when This then path_from(nil, '@')
-    when Identifier
-      const local = narrowable_local(body, object) ? return nil
-      path_from local.origin ? local, object.name
-    when Member
-      const outer = field_path(body, object) ? return nil
-      path_from outer.root, outer.key
-    else nil
-
-# The narrower type that the member has where it is, if it reads a narrowed path.
-export const narrowed_field_type = (body: Body, member: Member) ->
-  const path = field_path(body, member) ? return nil
-  const view = path_view(body, path.key) ? return nil
-  # A local of the same name, defined in an inner scope, starts another path.
-  view.root == path.root then view.type
-
-# The narrowed path, in the body or, as a function literal sees a narrowed local it captures, in
-# the bodies around it.
-const path_view = (body: Body, key: String): PathView? ->
-  return view if const view = body.scopes.lookup_path(key)
-  const enclosing = body.enclosing ? return nil
-  path_view enclosing, key
-
-# The type of a value of a union type, optional or not, that is none of `excluded`'s members, or nil
-# if it can only be nil.
-export const other_members = (type: Type, excluded: Type) ->
-  const excluded_keys = [type_key(member) for member in members_of(excluded)]
-  const is_left = (member: Type) -> not excluded_keys.contains(type_key(member))
-  const left = [member for member in members_of(inner_of(type)) when is_left(member)]
-  return nil if left.length == 0
-  const others: Type = left.length == 1 then left[0] else union_type(left)
-  type is OptionalType then optional_type(others) else others

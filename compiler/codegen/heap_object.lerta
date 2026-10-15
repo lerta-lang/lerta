@@ -68,8 +68,17 @@ export const emit_heap_allocate = (ir: IrBuilder, layout: String, drop: String) 
 
 # The pointer to the field of the name.
 export const emit_field_pointer = (ir: IrBuilder, object: String, info: ObjectInfo, name: String) ->
-  const index = info.fields.find_index((field) -> field.name.name == name)!
-  emit_heap_field_pointer ir, object_ir_type(info.type), object, index
+  emit_heap_field_pointer ir, object_ir_type(info.type), object, field_index(info, name)
+
+# The field of the name, which the class or struct has.
+export const field_named = (info: ObjectInfo, name: String) -> info.fields[field_index(info, name)]
+
+const field_index = (info: ObjectInfo, name: String) ->
+  info.fields.find_index((field) -> field.name.name == name)!
+
+# The index of the field of the name, which the anonymous struct has.
+export const record_field_index = (type: RecordType, name: String) ->
+  type.fields.find_index((field) -> field.name == name)!
 
 # A class's object starts without a weak box.
 export const emit_allocate = (ir: IrBuilder, info: ObjectInfo) ->
@@ -194,8 +203,7 @@ export const emit_value_at = (ir: IrBuilder, object: String, type: Type, index: 
 
 # The value of a field of an anonymous struct, as emit_value_at gives it.
 export const emit_record_field = (ir: IrBuilder, record: String, type: Type, name: String) ->
-  const index = (type as RecordType!).fields.find_index((field) -> field.name == name)!
-  emit_value_at ir, record, type, index
+  emit_value_at ir, record, type, record_field_index(type as RecordType!, name)
 
 # The LLVM struct type of a cell of the type, defined with its drop function at the first use.
 const cell_layout = (ir: IrBuilder, type: Type) ->

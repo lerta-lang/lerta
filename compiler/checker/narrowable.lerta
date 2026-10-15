@@ -1,0 +1,69 @@
+# What can be narrowed (see narrowing): a local that cannot be reassigned, or a path of fields that
+# cannot change from one or from `@`.
+import Expression, Identifier, Member, This from '../ast'
+import field_type_by_name, is_fixed_field from './fields'
+import lookup from './name'
+import Local, PathView from './scopes'
+import Body from './shared'
+import Type from '../types'
+
+# A path of fields that cannot change, from a local that cannot either or from `@`: `x.a.b`.
+export struct FieldPath
+  # The local it starts from, or nil for `@`.
+  root: Local?
+  key: String
+  declared: Type
+
+# A local or a path that can be narrowed, with the type it has where it is, and the one it was
+# declared with.
+export struct Narrowable
+  subject: Local | FieldPath
+  current: Type
+  declared: Type
+
+export const narrowable = (body: Body, value: Expression) ->
+  if value is Identifier
+    const local = narrowable_local(body, value) ? return nil
+    return Narrowable(subject: local, current: local.type, declared: (local.origin ? local).type)
+  const path = field_path(body, value) ? return nil
+  const current = body.facts.types[value] ? return nil
+  Narrowable current, subject: path, declared: path.declared
+
+# A local that cannot be reassigned, nor be emptied as a weak one.
+const narrowable_local = (body: Body, name: Identifier) ->
+  const local = lookup(body, name.name) ? return nil
+  local.mutable or (local.origin ? local).weak then nil else local
+
+# The path of fields that a member reads, if each of them cannot change.
+const field_path = (body: Body, value: Expression): FieldPath? ->
+  const member = value as Member? ? return nil
+  const object = member.object
+  const object_type = body.facts.types[object] ? return nil
+  const name = member.name
+  return nil if not is_fixed_field(body, object_type, name.name)
+  const declared = field_type_by_name(body, object_type, name) ? return nil
+  const path_from = (root: Local?, key: String) ->
+    FieldPath root, declared, key: "#{key}.#{name.name}"
+  case object
+    when This then path_from(nil, '@')
+    when Identifier
+      const local = narrowable_local(body, object) ? return nil
+      path_from local.origin ? local, object.name
+    when Member
+      const outer = field_path(body, object) ? return nil
+      path_from outer.root, outer.key
+    else nil
+
+# The narrower type that the member has where it is, if it reads a narrowed path.
+export const narrowed_field_type = (body: Body, member: Member) ->
+  const path = field_path(body, member) ? return nil
+  const view = path_view(body, path.key) ? return nil
+  # A local of the same name, defined in an inner scope, starts another path.
+  view.root == path.root then view.type
+
+# The narrowed path, in the body or, as a function literal sees a narrowed local it captures, in
+# the bodies around it.
+const path_view = (body: Body, key: String): PathView? ->
+  return view if const view = body.scopes.lookup_path(key)
+  const enclosing = body.enclosing ? return nil
+  path_view enclosing, key
