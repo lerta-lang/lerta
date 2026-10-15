@@ -147,12 +147,12 @@ source_filename = "./minilerta.lerta"
 %"lerta.object.checker/narrowing.lerta.Narrowing" = type { i64, ptr, ptr, ptr }
 %"lerta.object.checker/narrowing.lerta.ConditionNarrowings" = type { i64, ptr, ptr, ptr }
 %"lerta.object.checker/narrowing.lerta.TestedName" = type { i64, ptr, ptr, i1, ptr }
-%"lerta.object.checker/narrowing.lerta.TestedNarrowing" = type { i64, ptr, ptr, i1 }
 %"lerta.object.checker/top_level_values.lerta.TopLevelValues" = type { i64, ptr, ptr, ptr, ptr, i1, ptr }
 %lerta.record.54 = type { i64, ptr, ptr, ptr }
 %lerta.tuple.56 = type { i64, ptr, ptr, ptr }
 %"lerta.object.checker/case.lerta.Branch" = type { i64, ptr, ptr, ptr }
 %"lerta.object.checker/case.lerta.BranchValue" = type { i64, ptr, ptr, ptr }
+%"lerta.object.checker/case.lerta.CaseNarrowings" = type { i64, ptr, ptr, ptr }
 %lerta.iter.57 = type { i64, ptr, ptr, ptr, i1, ptr }
 %lerta.tuple.58 = type { i64, ptr, ptr, ptr }
 %"lerta.object.checker/type_names.lerta.AliasEntry" = type { i64, ptr, ptr, ptr, ptr }
@@ -253,34 +253,35 @@ source_filename = "./minilerta.lerta"
 %lerta.iter.114 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
 %lerta.record.115 = type { i64, ptr, ptr, ptr }
 %lerta.iter.119 = type { i64, ptr, ptr, ptr, i1, { ptr, ptr } }
-%lerta.record.120 = type { i64, ptr, ptr, ptr }
-%lerta.iter.124 = type { i64, ptr, ptr, ptr, i1, { ptr, ptr } }
-%lerta.iter.125 = type { i64, ptr, ptr, ptr, i1, ptr }
-%lerta.tuple.126 = type { i64, ptr, ptr, ptr }
-%lerta.iter.127 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
-%lerta.iter.128 = type { i64, ptr, ptr, ptr, i1, ptr }
-%lerta.tuple.129 = type { i64, ptr, ptr, ptr }
-%lerta.iter.130 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
-%lerta.iter.131 = type { i64, ptr, ptr, ptr, i1, ptr }
-%lerta.tuple.132 = type { i64, ptr, ptr, ptr }
-%lerta.iter.133 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.iter.120 = type { i64, ptr, ptr, ptr, i1, ptr, ptr, i1, ptr }
+%lerta.record.121 = type { i64, ptr, ptr, ptr }
+%lerta.iter.125 = type { i64, ptr, ptr, ptr, i1, { ptr, ptr } }
+%lerta.iter.126 = type { i64, ptr, ptr, ptr, i1, ptr }
+%lerta.tuple.127 = type { i64, ptr, ptr, ptr }
+%lerta.iter.128 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.iter.129 = type { i64, ptr, ptr, ptr, i1, ptr }
+%lerta.tuple.130 = type { i64, ptr, ptr, ptr }
+%lerta.iter.131 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.iter.132 = type { i64, ptr, ptr, ptr, i1, ptr }
+%lerta.tuple.133 = type { i64, ptr, ptr, ptr }
 %lerta.iter.134 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
-%lerta.record.135 = type { i64, ptr, ptr, ptr }
-%lerta.iter.139 = type { i64, ptr, ptr, ptr, i1, { ptr, ptr } }
-%lerta.record.140 = type { i64, ptr, ptr, ptr }
-%lerta.iter.144 = type { i64, ptr, ptr, ptr, i1, { ptr, ptr } }
-%lerta.iter.145 = type { i64, ptr, ptr, ptr, i1, ptr }
-%lerta.tuple.146 = type { i64, ptr, ptr, ptr }
-%lerta.iter.147 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
-%lerta.iter.148 = type { i64, ptr, ptr, ptr, i1, ptr }
-%lerta.tuple.149 = type { i64, ptr, ptr, ptr }
-%lerta.iter.150 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
-%lerta.iter.151 = type { i64, ptr, ptr, ptr, i1, ptr, i64 }
-%lerta.iter.152 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
-%lerta.iter.153 = type { i64, ptr, ptr, ptr, i1, ptr, i64 }
-%lerta.iter.154 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
-%lerta.iter.155 = type { i64, ptr, ptr, ptr, i1, ptr, i64 }
-%lerta.iter.156 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.iter.135 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.record.136 = type { i64, ptr, ptr, ptr }
+%lerta.iter.140 = type { i64, ptr, ptr, ptr, i1, { ptr, ptr } }
+%lerta.record.141 = type { i64, ptr, ptr, ptr }
+%lerta.iter.145 = type { i64, ptr, ptr, ptr, i1, { ptr, ptr } }
+%lerta.iter.146 = type { i64, ptr, ptr, ptr, i1, ptr }
+%lerta.tuple.147 = type { i64, ptr, ptr, ptr }
+%lerta.iter.148 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.iter.149 = type { i64, ptr, ptr, ptr, i1, ptr }
+%lerta.tuple.150 = type { i64, ptr, ptr, ptr }
+%lerta.iter.151 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.iter.152 = type { i64, ptr, ptr, ptr, i1, ptr, i64 }
+%lerta.iter.153 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.iter.154 = type { i64, ptr, ptr, ptr, i1, ptr, i64 }
+%lerta.iter.155 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
+%lerta.iter.156 = type { i64, ptr, ptr, ptr, i1, ptr, i64 }
+%lerta.iter.157 = type { i64, ptr, ptr, ptr, i1, ptr, ptr }
 @"lerta.value.std:io.stdout" = global ptr zeroinitializer
 @"lerta.value.std:io.stdout.set" = global i1 false
 @"lerta.value.std:io.stderr" = global ptr zeroinitializer
@@ -1389,7 +1390,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1105 = private unnamed_addr constant { i64, ptr, i64, [2 x i8] } { i64 -9223372036854775808, ptr null, i64 2, [2 x i8] c"==" }
 @lerta.string.1106 = private unnamed_addr constant { i64, ptr, i64, [2 x i8] } { i64 -9223372036854775808, ptr null, i64 2, [2 x i8] c"!=" }
 @lerta.string.1107 = private unnamed_addr constant { i64, ptr, i64, [30 x i8] } { i64 -9223372036854775808, ptr null, i64 30, [30 x i8] c"cannot compare values of type " }
-@"lerta.closure.lerta.lambda.109" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.109 }
+@"lerta.closure.lerta.lambda.110" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.110 }
 @lerta.string.1109 = private unnamed_addr constant { i64, ptr, i64, [49 x i8] } { i64 -9223372036854775808, ptr null, i64 49, [49 x i8] c"'EQUALITY_KINDS' is used before it is initialized" }
 @lerta.string.1110 = private unnamed_addr constant { i64, ptr, i64, [9 x i8] } { i64 -9223372036854775808, ptr null, i64 9, [9 x i8] c"expected " }
 @lerta.string.1111 = private unnamed_addr constant { i64, ptr, i64, [6 x i8] } { i64 -9223372036854775808, ptr null, i64 6, [6 x i8] c", got " }
@@ -1498,19 +1499,19 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1214 = private unnamed_addr constant { i64, ptr, i64, [57 x i8] } { i64 -9223372036854775808, ptr null, i64 57, [57 x i8] c"nil alone does not give the return type; write it, as in " }
 @lerta.string.1215 = private unnamed_addr constant { i64, ptr, i64, [18 x i8] } { i64 -9223372036854775808, ptr null, i64 18, [18 x i8] c"`(): Iter<Int> ->`" }
 @lerta.string.1216 = private unnamed_addr constant { i64, ptr, i64, [62 x i8] } { i64 -9223372036854775808, ptr null, i64 62, [62 x i8] c"the yielded values do not give the item type; write it, as in " }
-@"lerta.closure.lerta.lambda.129" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.129 }
+@"lerta.closure.lerta.lambda.130" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.130 }
 @lerta.string.1218 = private unnamed_addr constant { i64, ptr, i64, [14 x i8] } { i64 -9223372036854775808, ptr null, i64 14, [14 x i8] c"a function of " }
 @lerta.string.1219 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c" parameter(s)" }
 @lerta.string.1220 = private unnamed_addr constant { i64, ptr, i64, [9 x i8] } { i64 -9223372036854775808, ptr null, i64 9, [9 x i8] c"expected " }
 @lerta.string.1221 = private unnamed_addr constant { i64, ptr, i64, [20 x i8] } { i64 -9223372036854775808, ptr null, i64 20, [20 x i8] c", got a function of " }
 @lerta.string.1222 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c" parameter(s)" }
-@"lerta.closure.lerta.lambda.130" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.130 }
+@"lerta.closure.lerta.lambda.131" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.131 }
 @lerta.string.1224 = private unnamed_addr constant { i64, ptr, i64, [43 x i8] } { i64 -9223372036854775808, ptr null, i64 43, [43 x i8] c"in a method of a class, whose @ it captures" }
 @lerta.string.1225 = private unnamed_addr constant { i64, ptr, i64, [40 x i8] } { i64 -9223372036854775808, ptr null, i64 40, [40 x i8] c"a weak function literal must be written " }
 @lerta.string.1226 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"@" }
-@"lerta.closure.lerta.lambda.131" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.131 }
-@lerta.string.1228 = private unnamed_addr constant { i64, ptr, i64, [60 x i8] } { i64 -9223372036854775808, ptr null, i64 60, [60 x i8] c"a weak function literal that does not use @ need not be weak" }
 @"lerta.closure.lerta.lambda.132" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.132 }
+@lerta.string.1228 = private unnamed_addr constant { i64, ptr, i64, [60 x i8] } { i64 -9223372036854775808, ptr null, i64 60, [60 x i8] c"a weak function literal that does not use @ need not be weak" }
+@"lerta.closure.lerta.lambda.133" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.133 }
 @lerta.string.1230 = private unnamed_addr constant { i64, ptr, i64, [20 x i8] } { i64 -9223372036854775808, ptr null, i64 20, [20 x i8] c"since it may not run" }
 @lerta.string.1231 = private unnamed_addr constant { i64, ptr, i64, [40 x i8] } { i64 -9223372036854775808, ptr null, i64 40, [40 x i8] c"a weak function literal gives no value, " }
 @lerta.string.1232 = private unnamed_addr constant { i64, ptr, i64, [6 x i8] } { i64 -9223372036854775808, ptr null, i64 6, [6 x i8] c"; got " }
@@ -1543,7 +1544,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1259 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"a class or struct, or a union of them" }
 @lerta.string.1260 = private unnamed_addr constant { i64, ptr, i64, [14 x i8] } { i64 -9223372036854775808, ptr null, i64 14, [14 x i8] c"a catch takes " }
 @lerta.string.1261 = private unnamed_addr constant { i64, ptr, i64, [6 x i8] } { i64 -9223372036854775808, ptr null, i64 6, [6 x i8] c", not " }
-@"lerta.closure.lerta.lambda.143" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.143 }
+@"lerta.closure.lerta.lambda.145" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.145 }
 @lerta.string.1263 = private unnamed_addr constant { i64, ptr, i64, [62 x i8] } { i64 -9223372036854775808, ptr null, i64 62, [62 x i8] c"then and else must give values; to run statements, write an if" }
 @lerta.string.1264 = private unnamed_addr constant { i64, ptr, i64, [17 x i8] } { i64 -9223372036854775808, ptr null, i64 17, [17 x i8] c"then without else" }
 @lerta.string.1265 = private unnamed_addr constant { i64, ptr, i64, [27 x i8] } { i64 -9223372036854775808, ptr null, i64 27, [27 x i8] c"the values of then and else" }
@@ -1551,7 +1552,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1267 = private unnamed_addr constant { i64, ptr, i64, [10 x i8] } { i64 -9223372036854775808, ptr null, i64 10, [10 x i8] c", got void" }
 @lerta.string.1268 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c"unwrapped nil" }
 @lerta.string.1269 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c"unwrapped nil" }
-@"lerta.closure.lerta.lambda.149" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.149 }
+@"lerta.closure.lerta.lambda.151" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.151 }
 @lerta.string.1271 = private unnamed_addr constant { i64, ptr, i64, [9 x i8] } { i64 -9223372036854775808, ptr null, i64 9, [9 x i8] c"expected " }
 @lerta.string.1272 = private unnamed_addr constant { i64, ptr, i64, [6 x i8] } { i64 -9223372036854775808, ptr null, i64 6, [6 x i8] c", got " }
 @lerta.string.1273 = private unnamed_addr constant { i64, ptr, i64, [26 x i8] } { i64 -9223372036854775808, ptr null, i64 26, [26 x i8] c" must have the same type: " }
@@ -1603,7 +1604,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1319 = private unnamed_addr constant { i64, ptr, i64, [6 x i8] } { i64 -9223372036854775808, ptr null, i64 6, [6 x i8] c", got " }
 @lerta.string.1320 = private unnamed_addr constant { i64, ptr, i64, [5 x i8] } { i64 -9223372036854775808, ptr null, i64 5, [5 x i8] c"a map" }
 @lerta.string.1321 = private unnamed_addr constant { i64, ptr, i64, [33 x i8] } { i64 -9223372036854775808, ptr null, i64 33, [33 x i8] c"a map cannot hold values of type " }
-@"lerta.closure.lerta.lambda.154" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.154 }
+@"lerta.closure.lerta.lambda.157" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.157 }
 @lerta.string.1323 = private unnamed_addr constant { i64, ptr, i64, [72 x i8] } { i64 -9223372036854775808, ptr null, i64 72, [72 x i8] c"the type of an empty array must be written, as in `const xs: Int[] = []`" }
 @lerta.string.1324 = private unnamed_addr constant { i64, ptr, i64, [11 x i8] } { i64 -9223372036854775808, ptr null, i64 11, [11 x i8] c"failed cast" }
 @lerta.string.1325 = private unnamed_addr constant { i64, ptr, i64, [8 x i8] } { i64 -9223372036854775808, ptr null, i64 8, [8 x i8] c"an array" }
@@ -1725,7 +1726,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1441 = private unnamed_addr constant { i64, ptr, i64, [19 x i8] } { i64 -9223372036854775808, ptr null, i64 19, [19 x i8] c"weak object is gone" }
 @lerta.string.1442 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"." }
 @lerta.string.1443 = private unnamed_addr constant { i64, ptr, i64, [39 x i8] } { i64 -9223372036854775808, ptr null, i64 39, [39 x i8] c"'SELF' is used before it is initialized" }
-@"lerta.closure.lerta.lambda.168" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.168 }
+@"lerta.closure.lerta.lambda.171" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.171 }
 @lerta.string.1445 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"'" }
 @lerta.string.1446 = private unnamed_addr constant { i64, ptr, i64, [25 x i8] } { i64 -9223372036854775808, ptr null, i64 25, [25 x i8] c"' is already a member of " }
 @lerta.string.1447 = private unnamed_addr constant { i64, ptr, i64, [30 x i8] } { i64 -9223372036854775808, ptr null, i64 30, [30 x i8] c"an interface member cannot be " }
@@ -1760,14 +1761,14 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1476 = private unnamed_addr constant { i64, ptr, i64, [39 x i8] } { i64 -9223372036854775808, ptr null, i64 39, [39 x i8] c"'SELF' is used before it is initialized" }
 @lerta.string.1477 = private unnamed_addr constant { i64, ptr, i64, [19 x i8] } { i64 -9223372036854775808, ptr null, i64 19, [19 x i8] c"weak object is gone" }
 @lerta.string.1478 = private unnamed_addr constant { i64, ptr, i64, [49 x i8] } { i64 -9223372036854775808, ptr null, i64 49, [49 x i8] c"'MAX_TYPE_DEPTH' is used before it is initialized" }
-@"lerta.closure.lerta.lambda.178" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.178 }
+@"lerta.closure.lerta.lambda.181" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.181 }
 @lerta.string.1480 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"'" }
 @lerta.string.1481 = private unnamed_addr constant { i64, ptr, i64, [69 x i8] } { i64 -9223372036854775808, ptr null, i64 69, [69 x i8] c"' needs instances without end, each with type arguments nested deeper" }
 @lerta.string.1482 = private unnamed_addr constant { i64, ptr, i64, [5 x i8] } { i64 -9223372036854775808, ptr null, i64 5, [5 x i8] c"from " }
 @lerta.string.1483 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"'" }
 @lerta.string.1484 = private unnamed_addr constant { i64, ptr, i64, [50 x i8] } { i64 -9223372036854775808, ptr null, i64 50, [50 x i8] c"' is recursive, so its return type must be written" }
 @lerta.string.1485 = private unnamed_addr constant { i64, ptr, i64, [2 x i8] } { i64 -9223372036854775808, ptr null, i64 2, [2 x i8] c", " }
-@"lerta.closure.lerta.lambda.179" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.179 }
+@"lerta.closure.lerta.lambda.182" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.182 }
 @lerta.string.1487 = private unnamed_addr constant { i64, ptr, i64, [3 x i8] } { i64 -9223372036854775808, ptr null, i64 3, [3 x i8] c"in " }
 @lerta.string.1488 = private unnamed_addr constant { i64, ptr, i64, [3 x i8] } { i64 -9223372036854775808, ptr null, i64 3, [3 x i8] c"in " }
 @lerta.string.1489 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"." }
@@ -1779,14 +1780,14 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1495 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c"unwrapped nil" }
 @lerta.string.1496 = private unnamed_addr constant { i64, ptr, i64, [27 x i8] } { i64 -9223372036854775808, ptr null, i64 27, [27 x i8] c"the type of the parameter '" }
 @lerta.string.1497 = private unnamed_addr constant { i64, ptr, i64, [17 x i8] } { i64 -9223372036854775808, ptr null, i64 17, [17 x i8] c"' must be written" }
-@"lerta.closure.lerta.lambda.182" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.182 }
+@"lerta.closure.lerta.lambda.185" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.185 }
 @lerta.string.1499 = private unnamed_addr constant { i64, ptr, i64, [59 x i8] } { i64 -9223372036854775808, ptr null, i64 59, [59 x i8] c"only a top-level function or a method can be generic so far" }
-@"lerta.closure.lerta.lambda.183" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.183 }
+@"lerta.closure.lerta.lambda.186" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.186 }
 @lerta.string.1501 = private unnamed_addr constant { i64, ptr, i64, [63 x i8] } { i64 -9223372036854775808, ptr null, i64 63, [63 x i8] c"only a top-level function or a method can have a default so far" }
 @lerta.string.1502 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c"unwrapped nil" }
 @lerta.string.1503 = private unnamed_addr constant { i64, ptr, i64, [19 x i8] } { i64 -9223372036854775808, ptr null, i64 19, [19 x i8] c"weak object is gone" }
 @lerta.string.1504 = private unnamed_addr constant { i64, ptr, i64, [19 x i8] } { i64 -9223372036854775808, ptr null, i64 19, [19 x i8] c"weak object is gone" }
-@"lerta.closure.lerta.lambda.184" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.184 }
+@"lerta.closure.lerta.lambda.187" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.187 }
 @lerta.string.1506 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"'" }
 @lerta.string.1507 = private unnamed_addr constant { i64, ptr, i64, [50 x i8] } { i64 -9223372036854775808, ptr null, i64 50, [50 x i8] c"' is recursive, so its return type must be written" }
 @lerta.string.1508 = private unnamed_addr constant { i64, ptr, i64, [19 x i8] } { i64 -9223372036854775808, ptr null, i64 19, [19 x i8] c"weak object is gone" }
@@ -1836,7 +1837,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.1552 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c":" }
 @lerta.string.1553 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.1554 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@"lerta.closure.lerta.lambda.189" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.189 }
+@"lerta.closure.lerta.lambda.192" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.192 }
 @lerta.string.1556 = private unnamed_addr constant { i64, ptr, i64, [19 x i8] } { i64 -9223372036854775808, ptr null, i64 19, [19 x i8] c"weak object is gone" }
 @lerta.string.1557 = private unnamed_addr constant { i64, ptr, i64, [51 x i8] } { i64 -9223372036854775808, ptr null, i64 51, [51 x i8] c"'EXTENDABLE_KINDS' is used before it is initialized" }
 @lerta.string.1558 = private unnamed_addr constant { i64, ptr, i64, [70 x i8] } { i64 -9223372036854775808, ptr null, i64 70, [70 x i8] c"String, Int, Bool, Byte, Binary, arrays, maps, Iters, classes, structs" }
@@ -2451,7 +2452,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.2167 = private unnamed_addr constant { i64, ptr, i64, [4 x i8] } { i64 -9223372036854775808, ptr null, i64 4, [4 x i8] c"void" }
 @lerta.string.2168 = private unnamed_addr constant { i64, ptr, i64, [3 x i8] } { i64 -9223372036854775808, ptr null, i64 3, [3 x i8] c"ptr" }
 @lerta.string.2169 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@"lerta.closure.lerta.lambda.217" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.217 }
+@"lerta.closure.lerta.lambda.220" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.220 }
 @lerta.string.2171 = private unnamed_addr constant { i64, ptr, i64, [4 x i8] } { i64 -9223372036854775808, ptr null, i64 4, [4 x i8] c"drop" }
 @lerta.string.2172 = private unnamed_addr constant { i64, ptr, i64, [4 x i8] } { i64 -9223372036854775808, ptr null, i64 4, [4 x i8] c"null" }
 @lerta.string.2173 = private unnamed_addr constant { i64, ptr, i64, [10 x i8] } { i64 -9223372036854775808, ptr null, i64 10, [10 x i8] c"store ptr " }
@@ -2538,21 +2539,21 @@ source_filename = "./minilerta.lerta"
 @lerta.string.2254 = private unnamed_addr constant { i64, ptr, i64, [9 x i8] } { i64 -9223372036854775808, ptr null, i64 9, [9 x i8] c"sequence " }
 @lerta.string.2255 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"0" }
 @lerta.string.2256 = private unnamed_addr constant { i64, ptr, i64, [7 x i8] } { i64 -9223372036854775808, ptr null, i64 7, [7 x i8] c"ret i1 " }
-@"lerta.closure.lerta.lambda.223" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.223 }
+@"lerta.closure.lerta.lambda.226" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.226 }
 @lerta.string.2258 = private unnamed_addr constant { i64, ptr, i64, [4 x i8] } { i64 -9223372036854775808, ptr null, i64 4, [4 x i8] c"ret " }
 @lerta.string.2259 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c" " }
 @lerta.string.2260 = private unnamed_addr constant { i64, ptr, i64, [8 x i8] } { i64 -9223372036854775808, ptr null, i64 8, [8 x i8] c"adapter " }
 @lerta.string.2261 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c"icmp slt i64 " }
 @lerta.string.2262 = private unnamed_addr constant { i64, ptr, i64, [2 x i8] } { i64 -9223372036854775808, ptr null, i64 2, [2 x i8] c", " }
 @lerta.string.2263 = private unnamed_addr constant { i64, ptr, i64, [7 x i8] } { i64 -9223372036854775808, ptr null, i64 7, [7 x i8] c"ret i1 " }
-@"lerta.closure.lerta.lambda.225" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.225 }
+@"lerta.closure.lerta.lambda.228" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.228 }
 @lerta.string.2265 = private unnamed_addr constant { i64, ptr, i64, [12 x i8] } { i64 -9223372036854775808, ptr null, i64 12, [12 x i8] c"add nsw i64 " }
 @lerta.string.2266 = private unnamed_addr constant { i64, ptr, i64, [3 x i8] } { i64 -9223372036854775808, ptr null, i64 3, [3 x i8] c", 1" }
 @lerta.string.2267 = private unnamed_addr constant { i64, ptr, i64, [8 x i8] } { i64 -9223372036854775808, ptr null, i64 8, [8 x i8] c"ret i64 " }
-@"lerta.closure.lerta.lambda.226" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.226 }
+@"lerta.closure.lerta.lambda.229" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.229 }
 @lerta.string.2269 = private unnamed_addr constant { i64, ptr, i64, [5 x i8] } { i64 -9223372036854775808, ptr null, i64 5, [5 x i8] c"range" }
 @lerta.string.2270 = private unnamed_addr constant { i64, ptr, i64, [7 x i8] } { i64 -9223372036854775808, ptr null, i64 7, [7 x i8] c"ret i1 " }
-@"lerta.closure.lerta.lambda.227" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.227 }
+@"lerta.closure.lerta.lambda.230" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.230 }
 @lerta.string.2272 = private unnamed_addr constant { i64, ptr, i64, [4 x i8] } { i64 -9223372036854775808, ptr null, i64 4, [4 x i8] c"ret " }
 @lerta.string.2273 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c" " }
 @lerta.string.2274 = private unnamed_addr constant { i64, ptr, i64, [4 x i8] } { i64 -9223372036854775808, ptr null, i64 4, [4 x i8] c"map " }
@@ -2720,7 +2721,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.2436 = private unnamed_addr constant { i64, ptr, i64, [34 x i8] } { i64 -9223372036854775808, ptr null, i64 34, [34 x i8] c"i1 @lerta_map_cursor_has_next(ptr)" }
 @lerta.string.2437 = private unnamed_addr constant { i64, ptr, i64, [4 x i8] } { i64 -9223372036854775808, ptr null, i64 4, [4 x i8] c"ptr " }
 @lerta.string.2438 = private unnamed_addr constant { i64, ptr, i64, [7 x i8] } { i64 -9223372036854775808, ptr null, i64 7, [7 x i8] c"ret i1 " }
-@"lerta.closure.lerta.lambda.250" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.250 }
+@"lerta.closure.lerta.lambda.253" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.253 }
 @lerta.string.2440 = private unnamed_addr constant { i64, ptr, i64, [3 x i8] } { i64 -9223372036854775808, ptr null, i64 3, [3 x i8] c"i64" }
 @lerta.string.2441 = private unnamed_addr constant { i64, ptr, i64, [4 x i8] } { i64 -9223372036854775808, ptr null, i64 4, [4 x i8] c"ptr " }
 @lerta.string.2442 = private unnamed_addr constant { i64, ptr, i64, [6 x i8] } { i64 -9223372036854775808, ptr null, i64 6, [6 x i8] c", ptr " }
@@ -3111,7 +3112,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.2827 = private unnamed_addr constant { i64, ptr, i64, [39 x i8] } { i64 -9223372036854775808, ptr null, i64 39, [39 x i8] c"'HELD' is used before it is initialized" }
 @lerta.string.2828 = private unnamed_addr constant { i64, ptr, i64, [11 x i8] } { i64 -9223372036854775808, ptr null, i64 11, [11 x i8] c"ret i1 true" }
 @lerta.string.2829 = private unnamed_addr constant { i64, ptr, i64, [12 x i8] } { i64 -9223372036854775808, ptr null, i64 12, [12 x i8] c"ret i1 false" }
-@"lerta.closure.lerta.lambda.280" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.280 }
+@"lerta.closure.lerta.lambda.283" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.283 }
 @lerta.string.2831 = private unnamed_addr constant { i64, ptr, i64, [39 x i8] } { i64 -9223372036854775808, ptr null, i64 39, [39 x i8] c"'HELD' is used before it is initialized" }
 @lerta.string.2832 = private unnamed_addr constant { i64, ptr, i64, [5 x i8] } { i64 -9223372036854775808, ptr null, i64 5, [5 x i8] c"false" }
 @lerta.string.2833 = private unnamed_addr constant { i64, ptr, i64, [39 x i8] } { i64 -9223372036854775808, ptr null, i64 39, [39 x i8] c"'ITEM' is used before it is initialized" }
@@ -3214,7 +3215,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.2930 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c"unwrapped nil" }
 @lerta.string.2931 = private unnamed_addr constant { i64, ptr, i64, [10 x i8] } { i64 -9223372036854775808, ptr null, i64 10, [10 x i8] c"br label %" }
 @lerta.string.2932 = private unnamed_addr constant { i64, ptr, i64, [0 x i8] } { i64 -9223372036854775808, ptr null, i64 0, [0 x i8] c"" }
-@"lerta.closure.lerta.lambda.302" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.302 }
+@"lerta.closure.lerta.lambda.305" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.305 }
 @lerta.string.2934 = private unnamed_addr constant { i64, ptr, i64, [13 x i8] } { i64 -9223372036854775808, ptr null, i64 13, [13 x i8] c"unwrapped nil" }
 @lerta.string.2935 = private unnamed_addr constant { i64, ptr, i64, [8 x i8] } { i64 -9223372036854775808, ptr null, i64 8, [8 x i8] c"case.end" }
 @lerta.string.2936 = private unnamed_addr constant { i64, ptr, i64, [0 x i8] } { i64 -9223372036854775808, ptr null, i64 0, [0 x i8] c"" }
@@ -3390,7 +3391,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.3106 = private unnamed_addr constant { i64, ptr, i64, [2 x i8] } { i64 -9223372036854775808, ptr null, i64 2, [2 x i8] c"%p" }
 @lerta.string.3107 = private unnamed_addr constant { i64, ptr, i64, [9 x i8] } { i64 -9223372036854775808, ptr null, i64 9, [9 x i8] c"(closure)" }
 @lerta.string.3108 = private unnamed_addr constant { i64, ptr, i64, [8 x i8] } { i64 -9223372036854775808, ptr null, i64 8, [8 x i8] c"%closure" }
-@"lerta.closure.lerta.lambda.329" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.329 }
+@"lerta.closure.lerta.lambda.332" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.332 }
 @lerta.string.3110 = private unnamed_addr constant { i64, ptr, i64, [8 x i8] } { i64 -9223372036854775808, ptr null, i64 8, [8 x i8] c"%closure" }
 @lerta.string.3111 = private unnamed_addr constant { i64, ptr, i64, [5 x i8] } { i64 -9223372036854775808, ptr null, i64 5, [5 x i8] c"load " }
 @lerta.string.3112 = private unnamed_addr constant { i64, ptr, i64, [6 x i8] } { i64 -9223372036854775808, ptr null, i64 6, [6 x i8] c", ptr " }
@@ -3485,7 +3486,7 @@ source_filename = "./minilerta.lerta"
 @lerta.string.3201 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3202 = private unnamed_addr constant { i64, ptr, i64, [0 x i8] } { i64 -9223372036854775808, ptr null, i64 0, [0 x i8] c"" }
 @lerta.string.3203 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@"lerta.closure.lerta.lambda.347" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.347 }
+@"lerta.closure.lerta.lambda.350" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.350 }
 @lerta.string.3205 = private unnamed_addr constant { i64, ptr, i64, [11 x i8] } { i64 -9223372036854775808, ptr null, i64 11, [11 x i8] c"@lerta_main" }
 @lerta.string.3206 = private unnamed_addr constant { i64, ptr, i64, [0 x i8] } { i64 -9223372036854775808, ptr null, i64 0, [0 x i8] c"" }
 @lerta.string.3207 = private unnamed_addr constant { i64, ptr, i64, [0 x i8] } { i64 -9223372036854775808, ptr null, i64 0, [0 x i8] c"" }
@@ -3497,11 +3498,11 @@ source_filename = "./minilerta.lerta"
 @lerta.string.3213 = private unnamed_addr constant { i64, ptr, i64, [2 x i8] } { i64 -9223372036854775808, ptr null, i64 2, [2 x i8] c"i1" }
 @lerta.string.3214 = private unnamed_addr constant { i64, ptr, i64, [1 x i8] } { i64 -9223372036854775808, ptr null, i64 1, [1 x i8] c"-" }
 @lerta.string.3215 = private unnamed_addr constant { i64, ptr, i64, [26 x i8] } { i64 -9223372036854775808, ptr null, i64 26, [26 x i8] c"usage: minilerta <source>\0A" }
-@"lerta.closure.lerta.lambda.348" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.348 }
-@"lerta.closure.lerta.lambda.349" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.349 }
-@"lerta.closure.lerta.lambda.350" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.350 }
 @"lerta.closure.lerta.lambda.351" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.351 }
 @"lerta.closure.lerta.lambda.352" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.352 }
+@"lerta.closure.lerta.lambda.353" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.353 }
+@"lerta.closure.lerta.lambda.354" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.354 }
+@"lerta.closure.lerta.lambda.355" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.355 }
 @lerta.string.3221 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3222 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3223 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
@@ -3535,21 +3536,21 @@ source_filename = "./minilerta.lerta"
 @lerta.itab.102 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.100, ptr @lerta.reader.101]
 @lerta.string.3252 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"zip of Iterables of different lengths" }
 @lerta.itab.107 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.105, ptr @lerta.reader.106]
-@"lerta.closure.lerta.lambda.370" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.370 }
+@"lerta.closure.lerta.lambda.373" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.373 }
 @lerta.string.3255 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3256 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3257 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@"lerta.closure.lerta.lambda.371" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.371 }
+@"lerta.closure.lerta.lambda.374" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.374 }
 @lerta.string.3259 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"zip of Iterables of different lengths" }
 @lerta.itab.118 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.116, ptr @lerta.reader.117]
-@lerta.string.3261 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@lerta.string.3262 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"zip of Iterables of different lengths" }
-@lerta.itab.123 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.121, ptr @lerta.reader.122]
-@"lerta.closure.lerta.lambda.376" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.376 }
-@lerta.string.3265 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@"lerta.closure.lerta.lambda.377" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.377 }
 @"lerta.closure.lerta.lambda.378" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.378 }
-@lerta.string.3268 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
+@lerta.string.3262 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
+@lerta.string.3263 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"zip of Iterables of different lengths" }
+@lerta.itab.124 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.122, ptr @lerta.reader.123]
+@"lerta.closure.lerta.lambda.381" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.381 }
+@lerta.string.3266 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
+@"lerta.closure.lerta.lambda.382" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.382 }
+@"lerta.closure.lerta.lambda.383" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.383 }
 @lerta.string.3269 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3270 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3271 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
@@ -3557,19 +3558,20 @@ source_filename = "./minilerta.lerta"
 @lerta.string.3273 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3274 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @lerta.string.3275 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@"lerta.closure.lerta.lambda.379" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.379 }
-@lerta.string.3277 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@lerta.string.3278 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"zip of Iterables of different lengths" }
-@lerta.itab.138 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.136, ptr @lerta.reader.137]
-@lerta.string.3280 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"zip of Iterables of different lengths" }
-@lerta.itab.143 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.141, ptr @lerta.reader.142]
-@lerta.string.3282 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
-@lerta.string.3283 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
+@lerta.string.3276 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
 @"lerta.closure.lerta.lambda.384" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.384 }
-@"lerta.closure.lerta.lambda.385" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.385 }
-@"lerta.closure.lerta.lambda.386" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.386 }
-@"lerta.closure.lerta.lambda.387" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.387 }
-@"lerta.closure.lerta.lambda.388" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.388 }
+@lerta.string.3278 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
+@lerta.string.3279 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"zip of Iterables of different lengths" }
+@lerta.itab.139 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.137, ptr @lerta.reader.138]
+@lerta.string.3281 = private unnamed_addr constant { i64, ptr, i64, [37 x i8] } { i64 -9223372036854775808, ptr null, i64 37, [37 x i8] c"zip of Iterables of different lengths" }
+@lerta.itab.144 = private unnamed_addr constant [2 x ptr] [ptr @lerta.reader.142, ptr @lerta.reader.143]
+@lerta.string.3283 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
+@lerta.string.3284 = private unnamed_addr constant { i64, ptr, i64, [16 x i8] } { i64 -9223372036854775808, ptr null, i64 16, [16 x i8] c"integer overflow" }
+@"lerta.closure.lerta.lambda.389" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.389 }
+@"lerta.closure.lerta.lambda.390" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.390 }
+@"lerta.closure.lerta.lambda.391" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.391 }
+@"lerta.closure.lerta.lambda.392" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.392 }
+@"lerta.closure.lerta.lambda.393" = private constant { i64, ptr, ptr } { i64 -9223372036854775808, ptr null, ptr @lerta.lambda.393 }
 @lerta_exception = external global { ptr, ptr }
 declare ptr @lerta_alloc(i64, ptr)
 declare void @lerta_retain(ptr)
@@ -56750,22 +56752,54 @@ unreachable.26:
 if.else.24:
   br label %if.end.25
 if.end.25:
+  call void @lerta_retain(ptr %p0)
+  %r35 = getelementptr { i64, ptr }, ptr %p0, i32 0, i32 1
+  %r36 = load ptr, ptr %r35
+  %r37 = icmp eq ptr %r36, @"lerta.drop.types.lerta.OptionalType"
+  call void @lerta_release(ptr %p0)
+  br i1 %r37, label %if.then.27, label %if.else.28
+if.then.27:
+  call void @lerta_retain(ptr %p0)
+  %r38 = getelementptr %"lerta.object.types.lerta.OptionalType", ptr %p0, i32 0, i32 2
+  %r39 = load ptr, ptr %r38
+  call void @lerta_retain(ptr %r39)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_retain(ptr %p1)
+  %r40 = getelementptr %"lerta.object.types.lerta.OptionalType", ptr %p1, i32 0, i32 2
+  %r41 = load ptr, ptr %r40
+  call void @lerta_retain(ptr %r41)
+  call void @lerta_release(ptr %p1)
+  %r42 = call i1 @"lerta.fn.types.lerta.is_assignable"(ptr %r39, ptr %r41)
+  call void @lerta_release(ptr %r39)
+  call void @lerta_release(ptr %r41)
+  %r43 = load ptr, ptr @lerta_exception
+  %r44 = icmp ne ptr %r43, null
+  br i1 %r44, label %unwind.30, label %no.exception.31
+unwind.30:
+  ret i1 poison
+no.exception.31:
+  ret i1 %r42
+unreachable.32:
+  br label %if.end.29
+if.else.28:
+  br label %if.end.29
+if.end.29:
   br label %if.end.16
 if.else.15:
   br label %if.end.16
 if.end.16:
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
-  %r35 = call i1 @"lerta.fn.types.lerta.same_type"(ptr %p0, ptr %p1)
+  %r45 = call i1 @"lerta.fn.types.lerta.same_type"(ptr %p0, ptr %p1)
   call void @lerta_release(ptr %p0)
   call void @lerta_release(ptr %p1)
-  %r36 = load ptr, ptr @lerta_exception
-  %r37 = icmp ne ptr %r36, null
-  br i1 %r37, label %unwind.27, label %no.exception.28
-unwind.27:
+  %r46 = load ptr, ptr @lerta_exception
+  %r47 = icmp ne ptr %r46, null
+  br i1 %r47, label %unwind.33, label %no.exception.34
+unwind.33:
   ret i1 poison
-no.exception.28:
-  ret i1 %r35
+no.exception.34:
+  ret i1 %r45
 }
 define private i1 @"lerta.thunk.lerta.fn.types.lerta.is_identity_type"(ptr %closure, ptr %p0) {
   %result = call i1 @"lerta.fn.types.lerta.is_identity_type"(ptr %p0)
@@ -56821,6 +56855,7 @@ case.end.0:
 define ptr @"lerta.fn.types.lerta.unify"(ptr %p0, ptr %p1) {
 entry:
   %r42 = alloca i1
+  %r54 = alloca ptr
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
   %r0 = call i1 @"lerta.fn.types.lerta.same_type"(ptr %p0, ptr %p1)
@@ -56989,65 +57024,152 @@ logical.right.46:
 logical.end.47:
   %r41 = phi i1 [ true, %if.end.40 ], [ %r40, %logical.right.46 ]
   store i1 %r41, ptr %r42
-  %r43 = load i1, ptr %r42
-  br i1 %r43, label %logical.right.48, label %logical.end.49
-logical.right.48:
   call void @lerta_retain(ptr %p0)
-  %r44 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %p0)
+  %r43 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %p0)
   call void @lerta_release(ptr %p0)
-  %r45 = load ptr, ptr @lerta_exception
-  %r46 = icmp ne ptr %r45, null
-  br i1 %r46, label %unwind.50, label %no.exception.51
+  %r44 = load ptr, ptr @lerta_exception
+  %r45 = icmp ne ptr %r44, null
+  br i1 %r45, label %unwind.48, label %no.exception.49
+unwind.48:
+  ret ptr poison
+no.exception.49:
+  call void @lerta_retain(ptr %p1)
+  %r46 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %p1)
+  call void @lerta_release(ptr %p1)
+  %r47 = load ptr, ptr @lerta_exception
+  %r48 = icmp ne ptr %r47, null
+  br i1 %r48, label %unwind.50, label %no.exception.51
 unwind.50:
+  call void @lerta_release(ptr %r43)
   ret ptr poison
 no.exception.51:
-  call void @lerta_retain(ptr %p1)
-  %r47 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %p1)
-  call void @lerta_release(ptr %p1)
-  %r48 = load ptr, ptr @lerta_exception
-  %r49 = icmp ne ptr %r48, null
-  br i1 %r49, label %unwind.52, label %no.exception.53
+  %r49 = call ptr @"lerta.fn.types.lerta.wider_union"(ptr %r43, ptr %r46)
+  call void @lerta_release(ptr %r43)
+  call void @lerta_release(ptr %r46)
+  %r50 = load ptr, ptr @lerta_exception
+  %r51 = icmp ne ptr %r50, null
+  br i1 %r51, label %unwind.52, label %no.exception.53
 unwind.52:
-  call void @lerta_release(ptr %r44)
   ret ptr poison
 no.exception.53:
-  %r50 = call i1 @"lerta.fn.types.lerta.same_type"(ptr %r44, ptr %r47)
-  call void @lerta_release(ptr %r44)
-  call void @lerta_release(ptr %r47)
-  %r51 = load ptr, ptr @lerta_exception
-  %r52 = icmp ne ptr %r51, null
-  br i1 %r52, label %unwind.54, label %no.exception.55
-unwind.54:
-  ret ptr poison
-no.exception.55:
-  br label %logical.end.49
-logical.end.49:
-  %r53 = phi i1 [ false, %logical.end.47 ], [ %r50, %no.exception.55 ]
-  br i1 %r53, label %then.56, label %else.57
-then.56:
-  call void @lerta_retain(ptr %p0)
-  %r54 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %p0)
-  call void @lerta_release(ptr %p0)
-  %r55 = load ptr, ptr @lerta_exception
-  %r56 = icmp ne ptr %r55, null
-  br i1 %r56, label %unwind.59, label %no.exception.60
-unwind.59:
-  ret ptr poison
-no.exception.60:
-  %r57 = call ptr @"lerta.fn.types.lerta.optional_type"(ptr %r54)
-  call void @lerta_release(ptr %r54)
+  %r52 = icmp ne ptr %r49, null
+  br i1 %r52, label %coalesce.end.55, label %coalesce.fallback.54
+coalesce.fallback.54:
+  ret ptr zeroinitializer
+unreachable.56:
+  br label %coalesce.end.55
+coalesce.end.55:
+  %r53 = phi ptr [ %r49, %no.exception.53 ], [ poison, %unreachable.56 ]
+  store ptr %r53, ptr %r54
+  %r55 = load i1, ptr %r42
+  br i1 %r55, label %then.57, label %else.58
+then.57:
+  %r56 = load ptr, ptr %r54
+  call void @lerta_retain(ptr %r56)
+  %r57 = call ptr @"lerta.fn.types.lerta.optional_type"(ptr %r56)
+  call void @lerta_release(ptr %r56)
   %r58 = load ptr, ptr @lerta_exception
   %r59 = icmp ne ptr %r58, null
-  br i1 %r59, label %unwind.61, label %no.exception.62
-unwind.61:
+  br i1 %r59, label %unwind.60, label %no.exception.61
+unwind.60:
+  %r60 = load ptr, ptr %r54
+  call void @lerta_release(ptr %r60)
   ret ptr poison
-no.exception.62:
-  br label %then.end.58
-else.57:
-  br label %then.end.58
-then.end.58:
-  %r60 = phi ptr [ %r57, %no.exception.62 ], [ zeroinitializer, %else.57 ]
-  ret ptr %r60
+no.exception.61:
+  br label %then.end.59
+else.58:
+  %r61 = load ptr, ptr %r54
+  call void @lerta_retain(ptr %r61)
+  br label %then.end.59
+then.end.59:
+  %r62 = phi ptr [ %r57, %no.exception.61 ], [ %r61, %else.58 ]
+  %r63 = load ptr, ptr %r54
+  call void @lerta_release(ptr %r63)
+  ret ptr %r62
+}
+define ptr @"lerta.fn.types.lerta.wider_union"(ptr %p0, ptr %p1) {
+entry:
+  call void @lerta_retain(ptr %p0)
+  call void @lerta_retain(ptr %p1)
+  %r0 = call i1 @"lerta.fn.types.lerta.same_type"(ptr %p0, ptr %p1)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %p1)
+  %r1 = load ptr, ptr @lerta_exception
+  %r2 = icmp ne ptr %r1, null
+  br i1 %r2, label %unwind.0, label %no.exception.1
+unwind.0:
+  ret ptr poison
+no.exception.1:
+  br i1 %r0, label %if.then.2, label %if.else.3
+if.then.2:
+  call void @lerta_retain(ptr %p0)
+  ret ptr %p0
+unreachable.5:
+  br label %if.end.4
+if.else.3:
+  br label %if.end.4
+if.end.4:
+  call void @lerta_retain(ptr %p1)
+  %r3 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r4 = load ptr, ptr %r3
+  %r5 = icmp eq ptr %r4, @"lerta.drop.types.lerta.UnionType"
+  call void @lerta_release(ptr %p1)
+  br i1 %r5, label %logical.right.6, label %logical.end.7
+logical.right.6:
+  call void @lerta_retain(ptr %p0)
+  call void @lerta_retain(ptr %p1)
+  %r6 = call i1 @"lerta.fn.types.lerta.is_assignable"(ptr %p0, ptr %p1)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %p1)
+  %r7 = load ptr, ptr @lerta_exception
+  %r8 = icmp ne ptr %r7, null
+  br i1 %r8, label %unwind.8, label %no.exception.9
+unwind.8:
+  ret ptr poison
+no.exception.9:
+  br label %logical.end.7
+logical.end.7:
+  %r9 = phi i1 [ false, %if.end.4 ], [ %r6, %no.exception.9 ]
+  br i1 %r9, label %if.then.10, label %if.else.11
+if.then.10:
+  call void @lerta_retain(ptr %p1)
+  ret ptr %p1
+unreachable.13:
+  br label %if.end.12
+if.else.11:
+  br label %if.end.12
+if.end.12:
+  call void @lerta_retain(ptr %p0)
+  %r10 = getelementptr { i64, ptr }, ptr %p0, i32 0, i32 1
+  %r11 = load ptr, ptr %r10
+  %r12 = icmp eq ptr %r11, @"lerta.drop.types.lerta.UnionType"
+  call void @lerta_release(ptr %p0)
+  br i1 %r12, label %logical.right.14, label %logical.end.15
+logical.right.14:
+  call void @lerta_retain(ptr %p1)
+  call void @lerta_retain(ptr %p0)
+  %r13 = call i1 @"lerta.fn.types.lerta.is_assignable"(ptr %p1, ptr %p0)
+  call void @lerta_release(ptr %p1)
+  call void @lerta_release(ptr %p0)
+  %r14 = load ptr, ptr @lerta_exception
+  %r15 = icmp ne ptr %r14, null
+  br i1 %r15, label %unwind.16, label %no.exception.17
+unwind.16:
+  ret ptr poison
+no.exception.17:
+  br label %logical.end.15
+logical.end.15:
+  %r16 = phi i1 [ false, %if.end.12 ], [ %r13, %no.exception.17 ]
+  br i1 %r16, label %if.then.18, label %if.else.19
+if.then.18:
+  call void @lerta_retain(ptr %p0)
+  ret ptr %p0
+unreachable.21:
+  br label %if.end.20
+if.else.19:
+  br label %if.end.20
+if.end.20:
+  ret ptr zeroinitializer
 }
 define ptr @"lerta.fn.types.lerta.inner_of"(ptr %p0) {
 entry:
@@ -89264,7 +89386,6 @@ define ptr @"lerta.fn.checker/narrowing.lerta.narrowings_of"(ptr %p0, ptr %p1) {
 entry:
   %r12 = alloca ptr
   %r30 = alloca ptr
-  %r51 = alloca ptr
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r1 = load ptr, ptr %r0
@@ -89393,7 +89514,7 @@ if.else.11:
 if.end.12:
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
-  %r42 = call ptr @"lerta.fn.checker/narrowing.lerta.tested_narrowing"(ptr %p0, ptr %p1)
+  %r42 = call ptr @"lerta.fn.checker/narrowing.lerta.tested_narrowings"(ptr %p0, ptr %p1)
   call void @lerta_release(ptr %p0)
   call void @lerta_release(ptr %p1)
   %r43 = load ptr, ptr @lerta_exception
@@ -89414,45 +89535,10 @@ coalesce.fallback.23:
 unwind.25:
   ret ptr poison
 no.exception.26:
-  ret ptr %r47
-unreachable.27:
   br label %coalesce.end.24
 coalesce.end.24:
-  %r50 = phi ptr [ %r42, %no.exception.22 ], [ poison, %unreachable.27 ]
-  store ptr %r50, ptr %r51
-  %r52 = call ptr @lerta_array_create(i32 1)
-  %r53 = load ptr, ptr %r51
-  call void @lerta_retain(ptr %r53)
-  %r54 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedNarrowing", ptr %r53, i32 0, i32 2
-  %r55 = load ptr, ptr %r54
-  call void @lerta_retain(ptr %r55)
-  call void @lerta_release(ptr %r53)
-  %r56 = call ptr @lerta_array_pushed_items(ptr %r52)
-  %r57 = call i64 @lerta_array_length(ptr %r52)
-  %r58 = sub i64 %r57, 1
-  call void @lerta_retain(ptr %r55)
-  %r59 = getelementptr i64, ptr %r56, i64 %r58
-  %r60 = ptrtoint ptr %r55 to i64
-  store i64 %r60, ptr %r59
-  call void @lerta_release(ptr %r55)
-  %r61 = load ptr, ptr %r51
-  call void @lerta_retain(ptr %r61)
-  %r62 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedNarrowing", ptr %r61, i32 0, i32 3
-  %r63 = load i1, ptr %r62
-  call void @lerta_release(ptr %r61)
-  %r64 = call ptr @"lerta.fn.checker/narrowing.lerta.narrowings_only_where"(ptr %r52, i1 %r63)
-  call void @lerta_release(ptr %r52)
-  %r65 = load ptr, ptr @lerta_exception
-  %r66 = icmp ne ptr %r65, null
-  br i1 %r66, label %unwind.28, label %no.exception.29
-unwind.28:
-  %r67 = load ptr, ptr %r51
-  call void @lerta_release(ptr %r67)
-  ret ptr poison
-no.exception.29:
-  %r68 = load ptr, ptr %r51
-  call void @lerta_release(ptr %r68)
-  ret ptr %r64
+  %r50 = phi ptr [ %r42, %no.exception.22 ], [ %r47, %no.exception.26 ]
+  ret ptr %r50
 }
 define private void @"lerta.cell.52.drop"(ptr %object) {
 entry:
@@ -89958,15 +90044,15 @@ for.exit.3:
   call void @lerta_release(ptr %r50)
   ret void
 }
-define ptr @"lerta.fn.checker/narrowing.lerta.tested_narrowing"(ptr %p0, ptr %p1) {
+define ptr @"lerta.fn.checker/narrowing.lerta.tested_narrowings"(ptr %p0, ptr %p1) {
 entry:
   %r5 = alloca ptr
   %r18 = alloca ptr
-  %r34 = alloca ptr
-  %r38 = alloca i1
-  %r43 = alloca ptr
-  %r74 = alloca ptr
-  %r104 = alloca ptr
+  %r37 = alloca ptr
+  %r70 = alloca ptr
+  %r82 = alloca ptr
+  %r103 = alloca ptr
+  %r144 = alloca ptr
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
   %r0 = call ptr @"lerta.fn.checker/narrowing.lerta.tested_name"(ptr %p0, ptr %p1)
@@ -90061,240 +90147,670 @@ if.else.15:
 if.end.16:
   %r33 = load ptr, ptr %r5
   call void @lerta_retain(ptr %r33)
-  store ptr %r33, ptr %r34
+  %r34 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedName", ptr %r33, i32 0, i32 4
   %r35 = load ptr, ptr %r34
   call void @lerta_retain(ptr %r35)
-  %r36 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedName", ptr %r35, i32 0, i32 3
-  %r37 = load i1, ptr %r36
-  call void @lerta_release(ptr %r35)
-  store i1 %r37, ptr %r38
-  %r39 = load ptr, ptr %r5
-  call void @lerta_retain(ptr %r39)
-  %r40 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedName", ptr %r39, i32 0, i32 4
-  %r41 = load ptr, ptr %r40
-  call void @lerta_retain(ptr %r41)
-  call void @lerta_release(ptr %r39)
-  %r42 = icmp ne ptr %r41, null
-  br i1 %r42, label %if.then.18, label %if.else.19
+  call void @lerta_release(ptr %r33)
+  %r36 = icmp ne ptr %r35, null
+  br i1 %r36, label %if.then.18, label %if.else.19
 if.then.18:
-  store ptr %r41, ptr %r43
-  %r44 = load ptr, ptr %r18
-  call void @lerta_retain(ptr %r44)
-  %r45 = getelementptr %"lerta.object.checker/scopes.lerta.Local", ptr %r44, i32 0, i32 3
-  %r46 = load ptr, ptr %r45
-  call void @lerta_retain(ptr %r46)
-  call void @lerta_release(ptr %r44)
-  %r47 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %r46)
-  call void @lerta_release(ptr %r46)
-  %r48 = load ptr, ptr @lerta_exception
-  %r49 = icmp ne ptr %r48, null
-  br i1 %r49, label %unwind.21, label %no.exception.22
-unwind.21:
-  %r50 = load ptr, ptr %r43
+  store ptr %r35, ptr %r37
+  %r38 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r38)
+  %r39 = getelementptr %"lerta.object.checker/scopes.lerta.Local", ptr %r38, i32 0, i32 4
+  %r40 = load ptr, ptr %r39
+  call void @lerta_retain(ptr %r40)
+  call void @lerta_release(ptr %r38)
+  %r41 = icmp ne ptr %r40, null
+  br i1 %r41, label %coalesce.end.22, label %coalesce.fallback.21
+coalesce.fallback.21:
+  %r42 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r42)
+  br label %coalesce.end.22
+coalesce.end.22:
+  %r43 = phi ptr [ %r40, %if.then.18 ], [ %r42, %coalesce.fallback.21 ]
+  %r44 = getelementptr %"lerta.object.checker/scopes.lerta.Local", ptr %r43, i32 0, i32 3
+  %r45 = load ptr, ptr %r44
+  call void @lerta_retain(ptr %r45)
+  call void @lerta_release(ptr %r43)
+  %r46 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %r45)
+  call void @lerta_release(ptr %r45)
+  %r47 = load ptr, ptr @lerta_exception
+  %r48 = icmp ne ptr %r47, null
+  br i1 %r48, label %unwind.23, label %no.exception.24
+unwind.23:
+  %r49 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r49)
+  %r50 = load ptr, ptr %r5
   call void @lerta_release(ptr %r50)
-  %r51 = load ptr, ptr %r5
+  %r51 = load ptr, ptr %r18
   call void @lerta_release(ptr %r51)
-  %r52 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r52)
-  %r53 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r53)
   ret ptr poison
-no.exception.22:
-  %r54 = getelementptr { i64, ptr }, ptr %r47, i32 0, i32 1
-  %r55 = load ptr, ptr %r54
-  %r56 = icmp eq ptr %r55, @"lerta.drop.types.lerta.UnionType"
-  call void @lerta_release(ptr %r47)
-  %r57 = xor i1 %r56, true
-  br i1 %r57, label %if.then.23, label %if.else.24
-if.then.23:
-  %r58 = load ptr, ptr %r43
+no.exception.24:
+  %r52 = getelementptr { i64, ptr }, ptr %r46, i32 0, i32 1
+  %r53 = load ptr, ptr %r52
+  %r54 = icmp eq ptr %r53, @"lerta.drop.types.lerta.UnionType"
+  call void @lerta_release(ptr %r46)
+  %r55 = xor i1 %r54, true
+  br i1 %r55, label %if.then.25, label %if.else.26
+if.then.25:
+  %r56 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r56)
+  %r57 = load ptr, ptr %r5
+  call void @lerta_release(ptr %r57)
+  %r58 = load ptr, ptr %r18
   call void @lerta_release(ptr %r58)
-  %r59 = load ptr, ptr %r5
-  call void @lerta_release(ptr %r59)
-  %r60 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r60)
-  %r61 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r61)
   ret ptr zeroinitializer
-unreachable.26:
-  br label %if.end.25
-if.else.24:
-  br label %if.end.25
-if.end.25:
+unreachable.28:
+  br label %if.end.27
+if.else.26:
+  br label %if.end.27
+if.end.27:
   call void @lerta_retain(ptr %p0)
-  %r62 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 10
-  %r63 = load ptr, ptr %r62
+  %r59 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 10
+  %r60 = load ptr, ptr %r59
+  call void @lerta_retain(ptr %r60)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_retain(ptr %p0)
+  %r61 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 3
+  %r62 = load ptr, ptr %r61
+  call void @lerta_retain(ptr %r62)
+  call void @lerta_release(ptr %p0)
+  %r63 = load ptr, ptr %r37
   call void @lerta_retain(ptr %r63)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_retain(ptr %p0)
-  %r64 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 3
-  %r65 = load ptr, ptr %r64
-  call void @lerta_retain(ptr %r65)
-  call void @lerta_release(ptr %p0)
-  %r66 = load ptr, ptr %r43
-  call void @lerta_retain(ptr %r66)
-  %r67 = call ptr @"lerta.fn.checker/type_names.lerta.resolve"(ptr %r63, ptr %r65, ptr %r66)
+  %r64 = call ptr @"lerta.fn.checker/type_names.lerta.resolve"(ptr %r60, ptr %r62, ptr %r63)
+  call void @lerta_release(ptr %r60)
+  call void @lerta_release(ptr %r62)
   call void @lerta_release(ptr %r63)
-  call void @lerta_release(ptr %r65)
-  call void @lerta_release(ptr %r66)
-  %r68 = load ptr, ptr @lerta_exception
-  %r69 = icmp ne ptr %r68, null
-  br i1 %r69, label %unwind.27, label %no.exception.28
-unwind.27:
-  %r70 = load ptr, ptr %r43
-  call void @lerta_release(ptr %r70)
-  %r71 = load ptr, ptr %r5
-  call void @lerta_release(ptr %r71)
-  %r72 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r72)
-  %r73 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r73)
-  ret ptr poison
-no.exception.28:
-  store ptr %r67, ptr %r74
-  %r75 = load i1, ptr %r38
-  %r76 = load ptr, ptr %r18
-  call void @lerta_retain(ptr %r76)
-  %r77 = load ptr, ptr %r74
-  call void @lerta_retain(ptr %r77)
-  %r78 = call ptr @"lerta.new.checker/narrowing.lerta.Narrowing"(ptr %r76, ptr %r77)
-  call void @lerta_release(ptr %r76)
-  call void @lerta_release(ptr %r77)
-  %r79 = load ptr, ptr @lerta_exception
-  %r80 = icmp ne ptr %r79, null
-  br i1 %r80, label %unwind.29, label %no.exception.30
+  %r65 = load ptr, ptr @lerta_exception
+  %r66 = icmp ne ptr %r65, null
+  br i1 %r66, label %unwind.29, label %no.exception.30
 unwind.29:
-  %r81 = load ptr, ptr %r43
-  call void @lerta_release(ptr %r81)
-  %r82 = load ptr, ptr %r74
-  call void @lerta_release(ptr %r82)
-  %r83 = load ptr, ptr %r5
-  call void @lerta_release(ptr %r83)
-  %r84 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r84)
-  %r85 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r85)
+  %r67 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r67)
+  %r68 = load ptr, ptr %r5
+  call void @lerta_release(ptr %r68)
+  %r69 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r69)
   ret ptr poison
 no.exception.30:
-  %r86 = call ptr @"lerta.new.checker/narrowing.lerta.TestedNarrowing"(ptr %r78, i1 %r75)
-  call void @lerta_release(ptr %r78)
-  %r87 = load ptr, ptr @lerta_exception
-  %r88 = icmp ne ptr %r87, null
-  br i1 %r88, label %unwind.31, label %no.exception.32
+  store ptr %r64, ptr %r70
+  %r71 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r71)
+  %r72 = getelementptr %"lerta.object.checker/scopes.lerta.Local", ptr %r71, i32 0, i32 3
+  %r73 = load ptr, ptr %r72
+  call void @lerta_retain(ptr %r73)
+  call void @lerta_release(ptr %r71)
+  %r74 = load ptr, ptr %r70
+  call void @lerta_retain(ptr %r74)
+  %r75 = call ptr @"lerta.fn.checker/narrowing.lerta.other_members"(ptr %r73, ptr %r74)
+  call void @lerta_release(ptr %r73)
+  call void @lerta_release(ptr %r74)
+  %r76 = load ptr, ptr @lerta_exception
+  %r77 = icmp ne ptr %r76, null
+  br i1 %r77, label %unwind.31, label %no.exception.32
 unwind.31:
-  %r89 = load ptr, ptr %r43
-  call void @lerta_release(ptr %r89)
-  %r90 = load ptr, ptr %r74
-  call void @lerta_release(ptr %r90)
-  %r91 = load ptr, ptr %r5
-  call void @lerta_release(ptr %r91)
-  %r92 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r92)
-  %r93 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r93)
+  %r78 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r78)
+  %r79 = load ptr, ptr %r70
+  call void @lerta_release(ptr %r79)
+  %r80 = load ptr, ptr %r5
+  call void @lerta_release(ptr %r80)
+  %r81 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r81)
   ret ptr poison
 no.exception.32:
-  %r94 = load ptr, ptr %r43
+  store ptr %r75, ptr %r82
+  %r83 = load ptr, ptr %r82
+  call void @lerta_retain(ptr %r83)
+  %r84 = icmp ne ptr %r83, null
+  call void @lerta_release(ptr %r83)
+  br i1 %r84, label %then.33, label %else.34
+then.33:
+  %r85 = call ptr @lerta_array_create(i32 1)
+  %r86 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r86)
+  %r87 = load ptr, ptr %r82
+  call void @lerta_retain(ptr %r87)
+  %r88 = call ptr @"lerta.new.checker/narrowing.lerta.Narrowing"(ptr %r86, ptr %r87)
+  call void @lerta_release(ptr %r86)
+  call void @lerta_release(ptr %r87)
+  %r89 = load ptr, ptr @lerta_exception
+  %r90 = icmp ne ptr %r89, null
+  br i1 %r90, label %unwind.36, label %no.exception.37
+unwind.36:
+  call void @lerta_release(ptr %r85)
+  %r91 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r91)
+  %r92 = load ptr, ptr %r70
+  call void @lerta_release(ptr %r92)
+  %r93 = load ptr, ptr %r82
+  call void @lerta_release(ptr %r93)
+  %r94 = load ptr, ptr %r5
   call void @lerta_release(ptr %r94)
-  %r95 = load ptr, ptr %r74
+  %r95 = load ptr, ptr %r18
   call void @lerta_release(ptr %r95)
-  %r96 = load ptr, ptr %r5
-  call void @lerta_release(ptr %r96)
-  %r97 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r97)
-  %r98 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r98)
-  ret ptr %r86
-unreachable.33:
-  %r99 = load ptr, ptr %r43
-  call void @lerta_release(ptr %r99)
-  %r100 = load ptr, ptr %r74
-  call void @lerta_release(ptr %r100)
-  br label %if.end.20
-if.else.19:
-  br label %if.end.20
-if.end.20:
-  %r101 = load ptr, ptr %r18
-  call void @lerta_retain(ptr %r101)
-  %r102 = getelementptr %"lerta.object.checker/scopes.lerta.Local", ptr %r101, i32 0, i32 3
-  %r103 = load ptr, ptr %r102
-  call void @lerta_retain(ptr %r103)
-  call void @lerta_release(ptr %r101)
-  store ptr %r103, ptr %r104
-  %r105 = load ptr, ptr %r104
-  call void @lerta_retain(ptr %r105)
-  %r106 = getelementptr { i64, ptr }, ptr %r105, i32 0, i32 1
-  %r107 = load ptr, ptr %r106
-  %r108 = icmp eq ptr %r107, @"lerta.drop.types.lerta.OptionalType"
-  call void @lerta_release(ptr %r105)
-  %r109 = xor i1 %r108, true
-  br i1 %r109, label %if.then.34, label %if.else.35
-if.then.34:
-  %r110 = load ptr, ptr %r5
-  call void @lerta_release(ptr %r110)
-  %r111 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r111)
-  %r112 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r112)
-  %r113 = load ptr, ptr %r104
-  call void @lerta_release(ptr %r113)
-  ret ptr zeroinitializer
-unreachable.37:
-  br label %if.end.36
-if.else.35:
-  br label %if.end.36
-if.end.36:
-  %r114 = load i1, ptr %r38
-  %r115 = load ptr, ptr %r18
-  call void @lerta_retain(ptr %r115)
-  %r116 = load ptr, ptr %r104
-  call void @lerta_retain(ptr %r116)
-  %r117 = getelementptr %"lerta.object.types.lerta.OptionalType", ptr %r116, i32 0, i32 2
-  %r118 = load ptr, ptr %r117
-  call void @lerta_retain(ptr %r118)
-  call void @lerta_release(ptr %r116)
-  %r119 = call ptr @"lerta.new.checker/narrowing.lerta.Narrowing"(ptr %r115, ptr %r118)
-  call void @lerta_release(ptr %r115)
-  call void @lerta_release(ptr %r118)
-  %r120 = load ptr, ptr @lerta_exception
-  %r121 = icmp ne ptr %r120, null
-  br i1 %r121, label %unwind.38, label %no.exception.39
+  ret ptr poison
+no.exception.37:
+  %r96 = call ptr @lerta_array_pushed_items(ptr %r85)
+  %r97 = call i64 @lerta_array_length(ptr %r85)
+  %r98 = sub i64 %r97, 1
+  call void @lerta_retain(ptr %r88)
+  %r99 = getelementptr i64, ptr %r96, i64 %r98
+  %r100 = ptrtoint ptr %r88 to i64
+  store i64 %r100, ptr %r99
+  call void @lerta_release(ptr %r88)
+  br label %then.end.35
+else.34:
+  %r101 = call ptr @lerta_array_create(i32 1)
+  br label %then.end.35
+then.end.35:
+  %r102 = phi ptr [ %r85, %no.exception.37 ], [ %r101, %else.34 ]
+  store ptr %r102, ptr %r103
+  %r104 = load ptr, ptr %r103
+  call void @lerta_retain(ptr %r104)
+  %r105 = call ptr @lerta_array_create(i32 1)
+  %r106 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r106)
+  %r107 = load ptr, ptr %r70
+  call void @lerta_retain(ptr %r107)
+  %r108 = call ptr @"lerta.new.checker/narrowing.lerta.Narrowing"(ptr %r106, ptr %r107)
+  call void @lerta_release(ptr %r106)
+  call void @lerta_release(ptr %r107)
+  %r109 = load ptr, ptr @lerta_exception
+  %r110 = icmp ne ptr %r109, null
+  br i1 %r110, label %unwind.38, label %no.exception.39
 unwind.38:
-  %r122 = load ptr, ptr %r5
-  call void @lerta_release(ptr %r122)
-  %r123 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r123)
-  %r124 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r124)
-  %r125 = load ptr, ptr %r104
-  call void @lerta_release(ptr %r125)
+  call void @lerta_release(ptr %r105)
+  call void @lerta_release(ptr %r104)
+  %r111 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r111)
+  %r112 = load ptr, ptr %r70
+  call void @lerta_release(ptr %r112)
+  %r113 = load ptr, ptr %r82
+  call void @lerta_release(ptr %r113)
+  %r114 = load ptr, ptr %r103
+  call void @lerta_release(ptr %r114)
+  %r115 = load ptr, ptr %r5
+  call void @lerta_release(ptr %r115)
+  %r116 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r116)
   ret ptr poison
 no.exception.39:
-  %r126 = call ptr @"lerta.new.checker/narrowing.lerta.TestedNarrowing"(ptr %r119, i1 %r114)
-  call void @lerta_release(ptr %r119)
-  %r127 = load ptr, ptr @lerta_exception
-  %r128 = icmp ne ptr %r127, null
-  br i1 %r128, label %unwind.40, label %no.exception.41
+  %r117 = call ptr @lerta_array_pushed_items(ptr %r105)
+  %r118 = call i64 @lerta_array_length(ptr %r105)
+  %r119 = sub i64 %r118, 1
+  call void @lerta_retain(ptr %r108)
+  %r120 = getelementptr i64, ptr %r117, i64 %r119
+  %r121 = ptrtoint ptr %r108 to i64
+  store i64 %r121, ptr %r120
+  call void @lerta_release(ptr %r108)
+  %r122 = call ptr @"lerta.new.checker/narrowing.lerta.ConditionNarrowings"(ptr %r105, ptr %r104)
+  call void @lerta_release(ptr %r104)
+  call void @lerta_release(ptr %r105)
+  %r123 = load ptr, ptr @lerta_exception
+  %r124 = icmp ne ptr %r123, null
+  br i1 %r124, label %unwind.40, label %no.exception.41
 unwind.40:
+  %r125 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r125)
+  %r126 = load ptr, ptr %r70
+  call void @lerta_release(ptr %r126)
+  %r127 = load ptr, ptr %r82
+  call void @lerta_release(ptr %r127)
+  %r128 = load ptr, ptr %r103
+  call void @lerta_release(ptr %r128)
   %r129 = load ptr, ptr %r5
   call void @lerta_release(ptr %r129)
   %r130 = load ptr, ptr %r18
   call void @lerta_release(ptr %r130)
-  %r131 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r131)
-  %r132 = load ptr, ptr %r104
-  call void @lerta_release(ptr %r132)
   ret ptr poison
 no.exception.41:
-  %r133 = load ptr, ptr %r5
+  %r131 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r131)
+  %r132 = load ptr, ptr %r70
+  call void @lerta_release(ptr %r132)
+  %r133 = load ptr, ptr %r82
   call void @lerta_release(ptr %r133)
-  %r134 = load ptr, ptr %r18
+  %r134 = load ptr, ptr %r103
   call void @lerta_release(ptr %r134)
-  %r135 = load ptr, ptr %r34
+  %r135 = load ptr, ptr %r5
   call void @lerta_release(ptr %r135)
-  %r136 = load ptr, ptr %r104
+  %r136 = load ptr, ptr %r18
   call void @lerta_release(ptr %r136)
-  ret ptr %r126
+  ret ptr %r122
+unreachable.42:
+  %r137 = load ptr, ptr %r37
+  call void @lerta_release(ptr %r137)
+  %r138 = load ptr, ptr %r70
+  call void @lerta_release(ptr %r138)
+  %r139 = load ptr, ptr %r82
+  call void @lerta_release(ptr %r139)
+  %r140 = load ptr, ptr %r103
+  call void @lerta_release(ptr %r140)
+  br label %if.end.20
+if.else.19:
+  br label %if.end.20
+if.end.20:
+  %r141 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r141)
+  %r142 = getelementptr %"lerta.object.checker/scopes.lerta.Local", ptr %r141, i32 0, i32 3
+  %r143 = load ptr, ptr %r142
+  call void @lerta_retain(ptr %r143)
+  call void @lerta_release(ptr %r141)
+  store ptr %r143, ptr %r144
+  %r145 = load ptr, ptr %r144
+  call void @lerta_retain(ptr %r145)
+  %r146 = getelementptr { i64, ptr }, ptr %r145, i32 0, i32 1
+  %r147 = load ptr, ptr %r146
+  %r148 = icmp eq ptr %r147, @"lerta.drop.types.lerta.OptionalType"
+  call void @lerta_release(ptr %r145)
+  %r149 = xor i1 %r148, true
+  br i1 %r149, label %if.then.43, label %if.else.44
+if.then.43:
+  %r150 = load ptr, ptr %r5
+  call void @lerta_release(ptr %r150)
+  %r151 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r151)
+  %r152 = load ptr, ptr %r144
+  call void @lerta_release(ptr %r152)
+  ret ptr zeroinitializer
+unreachable.46:
+  br label %if.end.45
+if.else.44:
+  br label %if.end.45
+if.end.45:
+  %r153 = call ptr @lerta_array_create(i32 1)
+  %r154 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r154)
+  %r155 = load ptr, ptr %r144
+  call void @lerta_retain(ptr %r155)
+  %r156 = getelementptr %"lerta.object.types.lerta.OptionalType", ptr %r155, i32 0, i32 2
+  %r157 = load ptr, ptr %r156
+  call void @lerta_retain(ptr %r157)
+  call void @lerta_release(ptr %r155)
+  %r158 = call ptr @"lerta.new.checker/narrowing.lerta.Narrowing"(ptr %r154, ptr %r157)
+  call void @lerta_release(ptr %r154)
+  call void @lerta_release(ptr %r157)
+  %r159 = load ptr, ptr @lerta_exception
+  %r160 = icmp ne ptr %r159, null
+  br i1 %r160, label %unwind.47, label %no.exception.48
+unwind.47:
+  call void @lerta_release(ptr %r153)
+  %r161 = load ptr, ptr %r5
+  call void @lerta_release(ptr %r161)
+  %r162 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r162)
+  %r163 = load ptr, ptr %r144
+  call void @lerta_release(ptr %r163)
+  ret ptr poison
+no.exception.48:
+  %r164 = call ptr @lerta_array_pushed_items(ptr %r153)
+  %r165 = call i64 @lerta_array_length(ptr %r153)
+  %r166 = sub i64 %r165, 1
+  call void @lerta_retain(ptr %r158)
+  %r167 = getelementptr i64, ptr %r164, i64 %r166
+  %r168 = ptrtoint ptr %r158 to i64
+  store i64 %r168, ptr %r167
+  call void @lerta_release(ptr %r158)
+  %r169 = load ptr, ptr %r5
+  call void @lerta_retain(ptr %r169)
+  %r170 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedName", ptr %r169, i32 0, i32 3
+  %r171 = load i1, ptr %r170
+  call void @lerta_release(ptr %r169)
+  %r172 = call ptr @"lerta.fn.checker/narrowing.lerta.narrowings_only_where"(ptr %r153, i1 %r171)
+  call void @lerta_release(ptr %r153)
+  %r173 = load ptr, ptr @lerta_exception
+  %r174 = icmp ne ptr %r173, null
+  br i1 %r174, label %unwind.49, label %no.exception.50
+unwind.49:
+  %r175 = load ptr, ptr %r5
+  call void @lerta_release(ptr %r175)
+  %r176 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r176)
+  %r177 = load ptr, ptr %r144
+  call void @lerta_release(ptr %r177)
+  ret ptr poison
+no.exception.50:
+  %r178 = load ptr, ptr %r5
+  call void @lerta_release(ptr %r178)
+  %r179 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r179)
+  %r180 = load ptr, ptr %r144
+  call void @lerta_release(ptr %r180)
+  ret ptr %r172
+}
+define private i1 @lerta.lambda.106(ptr %closure, ptr %p0) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_retain(ptr %r1)
+  call void @lerta_retain(ptr %p0)
+  %r2 = call ptr @"lerta.fn.types.lerta.type_key"(ptr %p0)
+  call void @lerta_release(ptr %p0)
+  %r3 = load ptr, ptr @lerta_exception
+  %r4 = icmp ne ptr %r3, null
+  br i1 %r4, label %unwind.0, label %no.exception.1
+unwind.0:
+  call void @lerta_release(ptr %r1)
+  ret i1 poison
+no.exception.1:
+  %r5 = call i1 @"lerta.extend.std:builtins.Array<T>.contains<String>"(ptr %r1, ptr %r2)
+  call void @lerta_release(ptr %r2)
+  call void @lerta_release(ptr %r1)
+  %r6 = load ptr, ptr @lerta_exception
+  %r7 = icmp ne ptr %r6, null
+  br i1 %r7, label %unwind.2, label %no.exception.3
+unwind.2:
+  ret i1 poison
+no.exception.3:
+  %r8 = xor i1 %r5, true
+  ret i1 %r8
+}
+define private void @"lerta.lambda.106.drop"(ptr %closure) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  ret void
+}
+define ptr @"lerta.fn.checker/narrowing.lerta.other_members"(ptr %p0, ptr %p1) {
+entry:
+  %r4 = alloca ptr
+  %r15 = alloca ptr
+  %r29 = alloca ptr
+  %r36 = alloca ptr
+  %r48 = alloca ptr
+  %r59 = alloca ptr
+  %r79 = alloca ptr
+  %r109 = alloca ptr
+  %r0 = call ptr @lerta_array_create(i32 1)
+  call void @lerta_retain(ptr %p1)
+  %r1 = call ptr @"lerta.fn.types.lerta.members_of"(ptr %p1)
+  call void @lerta_release(ptr %p1)
+  %r2 = load ptr, ptr @lerta_exception
+  %r3 = icmp ne ptr %r2, null
+  br i1 %r3, label %unwind.0, label %no.exception.1
+unwind.0:
+  call void @lerta_release(ptr %r0)
+  ret ptr poison
+no.exception.1:
+  store ptr %r1, ptr %r4
+  br label %for.header.2
+for.header.2:
+  %r6 = phi i64 [ 0, %no.exception.1 ], [ %r5, %for.latch.4 ]
+  %r7 = call i64 @lerta_array_length(ptr %r1)
+  %r8 = icmp slt i64 %r6, %r7
+  br i1 %r8, label %for.body.3, label %for.exit.5
+for.body.3:
+  %r9 = call ptr @lerta_array_checked_items(ptr %r1, i64 %r6)
+  %r10 = icmp ne ptr %r9, null
+  br i1 %r10, label %branch.then.6, label %branch.end.7
+branch.then.6:
+  %r11 = getelementptr i64, ptr %r9, i64 %r6
+  %r12 = load i64, ptr %r11
+  %r13 = inttoptr i64 %r12 to ptr
+  call void @lerta_retain(ptr %r13)
+  br label %branch.end.7
+branch.end.7:
+  %r14 = phi ptr [ poison, %for.body.3 ], [ %r13, %branch.then.6 ]
+  store ptr %r14, ptr %r15
+  br i1 true, label %comprehension.push.8, label %comprehension.next.9
+comprehension.push.8:
+  %r16 = load ptr, ptr %r15
+  call void @lerta_retain(ptr %r16)
+  %r17 = call ptr @"lerta.fn.types.lerta.type_key"(ptr %r16)
+  call void @lerta_release(ptr %r16)
+  %r18 = load ptr, ptr @lerta_exception
+  %r19 = icmp ne ptr %r18, null
+  br i1 %r19, label %unwind.10, label %no.exception.11
+unwind.10:
+  call void @lerta_release(ptr %r0)
+  %r20 = load ptr, ptr %r15
+  call void @lerta_release(ptr %r20)
+  %r21 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r21)
+  ret ptr poison
+no.exception.11:
+  %r22 = call ptr @lerta_array_pushed_items(ptr %r0)
+  %r23 = call i64 @lerta_array_length(ptr %r0)
+  %r24 = sub i64 %r23, 1
+  call void @lerta_retain(ptr %r17)
+  %r25 = getelementptr i64, ptr %r22, i64 %r24
+  %r26 = ptrtoint ptr %r17 to i64
+  store i64 %r26, ptr %r25
+  call void @lerta_release(ptr %r17)
+  br label %comprehension.next.9
+comprehension.next.9:
+  %r27 = load ptr, ptr %r15
+  call void @lerta_release(ptr %r27)
+  br label %for.latch.4
+for.latch.4:
+  %r5 = add nsw i64 %r6, 1
+  br label %for.header.2
+for.exit.5:
+  %r28 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r28)
+  store ptr %r0, ptr %r29
+  %r30 = load ptr, ptr %r29
+  call void @lerta_retain(ptr %r30)
+  %r31 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
+  %r32 = ptrtoint ptr %r31 to i64
+  %r33 = call ptr @lerta_alloc(i64 %r32, ptr @"lerta.lambda.106.drop")
+  %r34 = getelementptr { i64, ptr, ptr }, ptr %r33, i32 0, i32 2
+  store ptr @lerta.lambda.106, ptr %r34
+  %r35 = getelementptr { i64, ptr, ptr, ptr }, ptr %r33, i32 0, i32 3
+  store ptr %r30, ptr %r35
+  store ptr %r33, ptr %r36
+  %r37 = call ptr @lerta_array_create(i32 1)
+  call void @lerta_retain(ptr %p0)
+  %r38 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %p0)
+  call void @lerta_release(ptr %p0)
+  %r39 = load ptr, ptr @lerta_exception
+  %r40 = icmp ne ptr %r39, null
+  br i1 %r40, label %unwind.12, label %no.exception.13
+unwind.12:
+  call void @lerta_release(ptr %r37)
+  %r41 = load ptr, ptr %r29
+  call void @lerta_release(ptr %r41)
+  %r42 = load ptr, ptr %r36
+  call void @lerta_release(ptr %r42)
+  ret ptr poison
+no.exception.13:
+  %r43 = call ptr @"lerta.fn.types.lerta.members_of"(ptr %r38)
+  call void @lerta_release(ptr %r38)
+  %r44 = load ptr, ptr @lerta_exception
+  %r45 = icmp ne ptr %r44, null
+  br i1 %r45, label %unwind.14, label %no.exception.15
+unwind.14:
+  call void @lerta_release(ptr %r37)
+  %r46 = load ptr, ptr %r29
+  call void @lerta_release(ptr %r46)
+  %r47 = load ptr, ptr %r36
+  call void @lerta_release(ptr %r47)
+  ret ptr poison
+no.exception.15:
+  store ptr %r43, ptr %r48
+  br label %for.header.16
+for.header.16:
+  %r50 = phi i64 [ 0, %no.exception.15 ], [ %r49, %for.latch.18 ]
+  %r51 = call i64 @lerta_array_length(ptr %r43)
+  %r52 = icmp slt i64 %r50, %r51
+  br i1 %r52, label %for.body.17, label %for.exit.19
+for.body.17:
+  %r53 = call ptr @lerta_array_checked_items(ptr %r43, i64 %r50)
+  %r54 = icmp ne ptr %r53, null
+  br i1 %r54, label %branch.then.20, label %branch.end.21
+branch.then.20:
+  %r55 = getelementptr i64, ptr %r53, i64 %r50
+  %r56 = load i64, ptr %r55
+  %r57 = inttoptr i64 %r56 to ptr
+  call void @lerta_retain(ptr %r57)
+  br label %branch.end.21
+branch.end.21:
+  %r58 = phi ptr [ poison, %for.body.17 ], [ %r57, %branch.then.20 ]
+  store ptr %r58, ptr %r59
+  %r60 = load ptr, ptr %r36
+  call void @lerta_retain(ptr %r60)
+  %r61 = load ptr, ptr %r59
+  call void @lerta_retain(ptr %r61)
+  %r62 = getelementptr { i64, ptr, ptr }, ptr %r60, i32 0, i32 2
+  %r63 = load ptr, ptr %r62
+  %r64 = call i1 %r63(ptr %r60, ptr %r61)
+  call void @lerta_release(ptr %r61)
+  call void @lerta_release(ptr %r60)
+  %r65 = load ptr, ptr @lerta_exception
+  %r66 = icmp ne ptr %r65, null
+  br i1 %r66, label %unwind.24, label %no.exception.25
+unwind.24:
+  call void @lerta_release(ptr %r37)
+  %r67 = load ptr, ptr %r59
+  call void @lerta_release(ptr %r67)
+  %r68 = load ptr, ptr %r48
+  call void @lerta_release(ptr %r68)
+  %r69 = load ptr, ptr %r29
+  call void @lerta_release(ptr %r69)
+  %r70 = load ptr, ptr %r36
+  call void @lerta_release(ptr %r70)
+  ret ptr poison
+no.exception.25:
+  br i1 %r64, label %comprehension.push.22, label %comprehension.next.23
+comprehension.push.22:
+  %r71 = load ptr, ptr %r59
+  call void @lerta_retain(ptr %r71)
+  %r72 = call ptr @lerta_array_pushed_items(ptr %r37)
+  %r73 = call i64 @lerta_array_length(ptr %r37)
+  %r74 = sub i64 %r73, 1
+  call void @lerta_retain(ptr %r71)
+  %r75 = getelementptr i64, ptr %r72, i64 %r74
+  %r76 = ptrtoint ptr %r71 to i64
+  store i64 %r76, ptr %r75
+  call void @lerta_release(ptr %r71)
+  br label %comprehension.next.23
+comprehension.next.23:
+  %r77 = load ptr, ptr %r59
+  call void @lerta_release(ptr %r77)
+  br label %for.latch.18
+for.latch.18:
+  %r49 = add nsw i64 %r50, 1
+  br label %for.header.16
+for.exit.19:
+  %r78 = load ptr, ptr %r48
+  call void @lerta_release(ptr %r78)
+  store ptr %r37, ptr %r79
+  %r80 = load ptr, ptr %r79
+  call void @lerta_retain(ptr %r80)
+  %r81 = call i64 @lerta_array_length(ptr %r80)
+  call void @lerta_release(ptr %r80)
+  %r82 = icmp eq i64 %r81, 0
+  br i1 %r82, label %if.then.26, label %if.else.27
+if.then.26:
+  %r83 = load ptr, ptr %r29
+  call void @lerta_release(ptr %r83)
+  %r84 = load ptr, ptr %r36
+  call void @lerta_release(ptr %r84)
+  %r85 = load ptr, ptr %r79
+  call void @lerta_release(ptr %r85)
+  ret ptr zeroinitializer
+unreachable.29:
+  br label %if.end.28
+if.else.27:
+  br label %if.end.28
+if.end.28:
+  %r86 = load ptr, ptr %r79
+  call void @lerta_retain(ptr %r86)
+  %r87 = call i64 @lerta_array_length(ptr %r86)
+  call void @lerta_release(ptr %r86)
+  %r88 = icmp eq i64 %r87, 1
+  br i1 %r88, label %then.30, label %else.31
+then.30:
+  %r89 = load ptr, ptr %r79
+  %r90 = call ptr @lerta_array_checked_items(ptr %r89, i64 0)
+  %r91 = icmp ne ptr %r90, null
+  br i1 %r91, label %branch.then.33, label %branch.end.34
+branch.then.33:
+  %r92 = getelementptr i64, ptr %r90, i64 0
+  %r93 = load i64, ptr %r92
+  %r94 = inttoptr i64 %r93 to ptr
+  call void @lerta_retain(ptr %r94)
+  br label %branch.end.34
+branch.end.34:
+  %r95 = phi ptr [ poison, %then.30 ], [ %r94, %branch.then.33 ]
+  %r96 = load ptr, ptr @lerta_exception
+  %r97 = icmp ne ptr %r96, null
+  br i1 %r97, label %unwind.35, label %no.exception.36
+unwind.35:
+  %r98 = load ptr, ptr %r29
+  call void @lerta_release(ptr %r98)
+  %r99 = load ptr, ptr %r36
+  call void @lerta_release(ptr %r99)
+  %r100 = load ptr, ptr %r79
+  call void @lerta_release(ptr %r100)
+  ret ptr poison
+no.exception.36:
+  br label %then.end.32
+else.31:
+  %r101 = load ptr, ptr %r79
+  call void @lerta_retain(ptr %r101)
+  %r102 = call ptr @"lerta.fn.types.lerta.union_type"(ptr %r101)
+  call void @lerta_release(ptr %r101)
+  %r103 = load ptr, ptr @lerta_exception
+  %r104 = icmp ne ptr %r103, null
+  br i1 %r104, label %unwind.37, label %no.exception.38
+unwind.37:
+  %r105 = load ptr, ptr %r29
+  call void @lerta_release(ptr %r105)
+  %r106 = load ptr, ptr %r36
+  call void @lerta_release(ptr %r106)
+  %r107 = load ptr, ptr %r79
+  call void @lerta_release(ptr %r107)
+  ret ptr poison
+no.exception.38:
+  br label %then.end.32
+then.end.32:
+  %r108 = phi ptr [ %r95, %no.exception.36 ], [ %r102, %no.exception.38 ]
+  store ptr %r108, ptr %r109
+  call void @lerta_retain(ptr %p0)
+  %r110 = getelementptr { i64, ptr }, ptr %p0, i32 0, i32 1
+  %r111 = load ptr, ptr %r110
+  %r112 = icmp eq ptr %r111, @"lerta.drop.types.lerta.OptionalType"
+  call void @lerta_release(ptr %p0)
+  br i1 %r112, label %then.39, label %else.40
+then.39:
+  %r113 = load ptr, ptr %r109
+  call void @lerta_retain(ptr %r113)
+  %r114 = call ptr @"lerta.fn.types.lerta.optional_type"(ptr %r113)
+  call void @lerta_release(ptr %r113)
+  %r115 = load ptr, ptr @lerta_exception
+  %r116 = icmp ne ptr %r115, null
+  br i1 %r116, label %unwind.42, label %no.exception.43
+unwind.42:
+  %r117 = load ptr, ptr %r29
+  call void @lerta_release(ptr %r117)
+  %r118 = load ptr, ptr %r36
+  call void @lerta_release(ptr %r118)
+  %r119 = load ptr, ptr %r79
+  call void @lerta_release(ptr %r119)
+  %r120 = load ptr, ptr %r109
+  call void @lerta_release(ptr %r120)
+  ret ptr poison
+no.exception.43:
+  br label %then.end.41
+else.40:
+  %r121 = load ptr, ptr %r109
+  call void @lerta_retain(ptr %r121)
+  br label %then.end.41
+then.end.41:
+  %r122 = phi ptr [ %r114, %no.exception.43 ], [ %r121, %else.40 ]
+  %r123 = load ptr, ptr %r29
+  call void @lerta_release(ptr %r123)
+  %r124 = load ptr, ptr %r36
+  call void @lerta_release(ptr %r124)
+  %r125 = load ptr, ptr %r79
+  call void @lerta_release(ptr %r125)
+  %r126 = load ptr, ptr %r109
+  call void @lerta_release(ptr %r126)
+  ret ptr %r122
 }
 define void @"lerta.drop.checker/narrowing.lerta.Narrowing"(ptr %object) {
 entry:
@@ -90379,29 +90895,6 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r8 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedName", ptr %r2, i32 0, i32 4
   store ptr %p2, ptr %r8
-  ret ptr %r2
-}
-define void @"lerta.drop.checker/narrowing.lerta.TestedNarrowing"(ptr %object) {
-entry:
-  %r0 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedNarrowing", ptr %object, i32 0, i32 2
-  %r1 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r1)
-  ret void
-}
-define ptr @"lerta.new.checker/narrowing.lerta.TestedNarrowing"(ptr %p0, i1 %p1) {
-entry:
-  %r0 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedNarrowing", ptr null, i32 1
-  %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.drop.checker/narrowing.lerta.TestedNarrowing")
-  %r3 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedNarrowing", ptr %r2, i32 0, i32 2
-  store ptr zeroinitializer, ptr %r3
-  %r4 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedNarrowing", ptr %r2, i32 0, i32 3
-  store i1 zeroinitializer, ptr %r4
-  call void @lerta_retain(ptr %p0)
-  %r5 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedNarrowing", ptr %r2, i32 0, i32 2
-  store ptr %p0, ptr %r5
-  %r6 = getelementptr %"lerta.object.checker/narrowing.lerta.TestedNarrowing", ptr %r2, i32 0, i32 3
-  store i1 %p1, ptr %r6
   ret ptr %r2
 }
 define void @"lerta.module.checker/operator.lerta"() {
@@ -90561,7 +91054,7 @@ then.end.2:
   %r11 = phi ptr [ %r4, %then.0 ], [ %r5, %else.1 ]
   ret ptr %r11
 }
-define private i1 @lerta.lambda.107(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.108(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -90578,14 +91071,14 @@ unwind.0:
 no.exception.1:
   ret i1 %r2
 }
-define private void @"lerta.lambda.107.drop"(ptr %closure) {
+define private void @"lerta.lambda.108.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @lerta.lambda.106(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.107(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -90593,9 +91086,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r2 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r3 = ptrtoint ptr %r2 to i64
-  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.107.drop")
+  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.108.drop")
   %r5 = getelementptr { i64, ptr, ptr }, ptr %r4, i32 0, i32 2
-  store ptr @lerta.lambda.107, ptr %r5
+  store ptr @lerta.lambda.108, ptr %r5
   %r6 = getelementptr { i64, ptr, ptr, ptr }, ptr %r4, i32 0, i32 3
   store ptr %p0, ptr %r6
   %r7 = call i1 @"lerta.extend.std:builtins.Self.any<Array<types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>, types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>"(ptr %r1, ptr %r4)
@@ -90609,7 +91102,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r7
 }
-define private void @"lerta.lambda.106.drop"(ptr %closure) {
+define private void @"lerta.lambda.107.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -90644,9 +91137,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r8)
   %r9 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r10 = ptrtoint ptr %r9 to i64
-  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.106.drop")
+  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.107.drop")
   %r12 = getelementptr { i64, ptr, ptr }, ptr %r11, i32 0, i32 2
-  store ptr @lerta.lambda.106, ptr %r12
+  store ptr @lerta.lambda.107, ptr %r12
   %r13 = getelementptr { i64, ptr, ptr, ptr }, ptr %r11, i32 0, i32 3
   store ptr %r8, ptr %r13
   %r14 = call i1 @"lerta.extend.std:builtins.Self.any<Array<types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>, types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>"(ptr %r4, ptr %r11)
@@ -91678,7 +92171,7 @@ case.end.0:
   call void @lerta_release(ptr %r43)
   ret ptr %r42
 }
-define private void @lerta.lambda.108(ptr %closure) {
+define private void @lerta.lambda.109(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -91702,7 +92195,7 @@ no.exception.1:
   call void @lerta_release(ptr %r6)
   ret void
 }
-define private void @"lerta.lambda.108.drop"(ptr %closure) {
+define private void @"lerta.lambda.109.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -91712,7 +92205,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.109(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.110(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %p0)
@@ -91738,7 +92231,7 @@ no.exception.3:
   call void @lerta_release(ptr %r3)
   ret ptr %r6
 }
-define private ptr @lerta.lambda.110(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.111(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -91791,7 +92284,7 @@ no.exception.7:
   call void @lerta_release(ptr %r11)
   ret ptr %r14
 }
-define private void @"lerta.lambda.110.drop"(ptr %closure) {
+define private void @"lerta.lambda.111.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -91851,9 +92344,9 @@ no.exception.6:
   call void @lerta_retain(ptr %p1)
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r15 = ptrtoint ptr %r14 to i64
-  %r16 = call ptr @lerta_alloc(i64 %r15, ptr @"lerta.lambda.108.drop")
+  %r16 = call ptr @lerta_alloc(i64 %r15, ptr @"lerta.lambda.109.drop")
   %r17 = getelementptr { i64, ptr, ptr }, ptr %r16, i32 0, i32 2
-  store ptr @lerta.lambda.108, ptr %r17
+  store ptr @lerta.lambda.109, ptr %r17
   %r18 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r16, i32 0, i32 3
   store ptr %p0, ptr %r18
   %r19 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r16, i32 0, i32 4
@@ -91932,7 +92425,7 @@ logical.end.19:
   %r39 = phi i1 [ true, %if.end.14 ], [ %r38, %logical.right.18 ]
   br i1 %r39, label %if.then.20, label %if.else.21
 if.then.20:
-  store ptr @"lerta.closure.lerta.lambda.109", ptr %r40
+  store ptr @"lerta.closure.lerta.lambda.110", ptr %r40
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
   %r41 = load i1, ptr @"lerta.value.checker/operator.lerta.EQUALITY_KINDS.set"
@@ -92001,9 +92494,9 @@ no.exception.29:
   call void @lerta_retain(ptr %r62)
   %r63 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r64 = ptrtoint ptr %r63 to i64
-  %r65 = call ptr @lerta_alloc(i64 %r64, ptr @"lerta.lambda.110.drop")
+  %r65 = call ptr @lerta_alloc(i64 %r64, ptr @"lerta.lambda.111.drop")
   %r66 = getelementptr { i64, ptr, ptr }, ptr %r65, i32 0, i32 2
-  store ptr @lerta.lambda.110, ptr %r66
+  store ptr @lerta.lambda.111, ptr %r66
   %r67 = getelementptr { i64, ptr, ptr, ptr }, ptr %r65, i32 0, i32 3
   store ptr %r62, ptr %r67
   store ptr %r65, ptr %r68
@@ -92133,7 +92626,7 @@ no.exception.43:
   call void @lerta_release(ptr %r111)
   ret ptr %r103
 }
-define private i1 @lerta.lambda.111(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.112(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -92164,7 +92657,7 @@ logical.end.3:
   %r8 = phi i1 [ true, %no.exception.1 ], [ %r5, %no.exception.5 ]
   ret i1 %r8
 }
-define private void @"lerta.lambda.111.drop"(ptr %closure) {
+define private void @"lerta.lambda.112.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -92205,9 +92698,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r9 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r10 = ptrtoint ptr %r9 to i64
-  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.111.drop")
+  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.112.drop")
   %r12 = getelementptr { i64, ptr, ptr }, ptr %r11, i32 0, i32 2
-  store ptr @lerta.lambda.111, ptr %r12
+  store ptr @lerta.lambda.112, ptr %r12
   %r13 = getelementptr { i64, ptr, ptr, ptr }, ptr %r11, i32 0, i32 3
   store ptr %p0, ptr %r13
   store ptr %r11, ptr %r14
@@ -95455,7 +95948,7 @@ if.end.27:
   call void @lerta_release(ptr %r96)
   ret ptr %r94
 }
-define private void @lerta.lambda.112(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.113(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -95518,7 +96011,7 @@ unwind.4:
 no.exception.5:
   ret void
 }
-define private void @"lerta.lambda.112.drop"(ptr %closure) {
+define private void @"lerta.lambda.113.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -95528,7 +96021,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.113(ptr %closure) {
+define private void @lerta.lambda.114(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -95608,7 +96101,7 @@ unwind.7:
 no.exception.8:
   ret void
 }
-define private void @"lerta.lambda.113.drop"(ptr %closure) {
+define private void @"lerta.lambda.114.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -95631,9 +96124,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.112.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.113.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.112, ptr %r3
+  store ptr @lerta.lambda.113, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -95645,9 +96138,9 @@ entry:
   call void @lerta_retain(ptr %r7)
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r9 = ptrtoint ptr %r8 to i64
-  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.lambda.113.drop")
+  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.lambda.114.drop")
   %r11 = getelementptr { i64, ptr, ptr }, ptr %r10, i32 0, i32 2
-  store ptr @lerta.lambda.113, ptr %r11
+  store ptr @lerta.lambda.114, ptr %r11
   %r12 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r10, i32 0, i32 3
   store ptr %p0, ptr %r12
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r10, i32 0, i32 4
@@ -95909,7 +96402,7 @@ if.else.3:
 if.end.4:
   ret void
 }
-define private void @lerta.lambda.114(ptr %closure) {
+define private void @lerta.lambda.115(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -95936,7 +96429,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.114.drop"(ptr %closure) {
+define private void @"lerta.lambda.115.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -96014,9 +96507,9 @@ no.exception.1:
   call void @lerta_retain(ptr %r24)
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r26 = ptrtoint ptr %r25 to i64
-  %r27 = call ptr @lerta_alloc(i64 %r26, ptr @"lerta.lambda.114.drop")
+  %r27 = call ptr @lerta_alloc(i64 %r26, ptr @"lerta.lambda.115.drop")
   %r28 = getelementptr { i64, ptr, ptr }, ptr %r27, i32 0, i32 2
-  store ptr @lerta.lambda.114, ptr %r28
+  store ptr @lerta.lambda.115, ptr %r28
   %r29 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r27, i32 0, i32 3
   store ptr %p0, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r27, i32 0, i32 4
@@ -96113,7 +96606,7 @@ no.exception.3:
   call void @lerta_release(ptr %r12)
   ret void
 }
-define private void @lerta.lambda.115(ptr %closure) {
+define private void @lerta.lambda.116(ptr %closure) {
 entry:
   %r14 = alloca ptr
   %r25 = alloca ptr
@@ -96224,7 +96717,7 @@ if.else.11:
 if.end.12:
   ret void
 }
-define private void @"lerta.lambda.115.drop"(ptr %closure) {
+define private void @"lerta.lambda.116.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -96246,7 +96739,7 @@ entry:
   call void @lerta_release(ptr %r11)
   ret void
 }
-define private void @lerta.lambda.116(ptr %closure) {
+define private void @lerta.lambda.117(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -96299,7 +96792,7 @@ no.exception.6:
 if.end.2:
   ret void
 }
-define private void @"lerta.lambda.116.drop"(ptr %closure) {
+define private void @"lerta.lambda.117.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -96533,9 +97026,9 @@ no.exception.12:
   call void @lerta_retain(ptr %r91)
   %r92 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r93 = ptrtoint ptr %r92 to i64
-  %r94 = call ptr @lerta_alloc(i64 %r93, ptr @"lerta.lambda.115.drop")
+  %r94 = call ptr @lerta_alloc(i64 %r93, ptr @"lerta.lambda.116.drop")
   %r95 = getelementptr { i64, ptr, ptr }, ptr %r94, i32 0, i32 2
-  store ptr @lerta.lambda.115, ptr %r95
+  store ptr @lerta.lambda.116, ptr %r95
   %r96 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r94, i32 0, i32 3
   store ptr %p0, ptr %r96
   %r97 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r94, i32 0, i32 4
@@ -96557,9 +97050,9 @@ no.exception.12:
   call void @lerta_retain(ptr %r84)
   %r105 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r106 = ptrtoint ptr %r105 to i64
-  %r107 = call ptr @lerta_alloc(i64 %r106, ptr @"lerta.lambda.116.drop")
+  %r107 = call ptr @lerta_alloc(i64 %r106, ptr @"lerta.lambda.117.drop")
   %r108 = getelementptr { i64, ptr, ptr }, ptr %r107, i32 0, i32 2
-  store ptr @lerta.lambda.116, ptr %r108
+  store ptr @lerta.lambda.117, ptr %r108
   %r109 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r107, i32 0, i32 3
   store ptr %r103, ptr %r109
   %r110 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r107, i32 0, i32 4
@@ -97794,11 +98287,11 @@ define ptr @"lerta.fn.checker/loop.lerta.type_of_iterated"(ptr %p0, ptr %p1, ptr
 entry:
   %r17 = alloca ptr
   %r24 = alloca ptr
-  %r197 = alloca ptr
-  %r207 = alloca ptr
-  %r255 = alloca ptr
-  %r267 = alloca ptr
-  %r274 = alloca i64
+  %r192 = alloca ptr
+  %r202 = alloca ptr
+  %r250 = alloca ptr
+  %r262 = alloca ptr
+  %r269 = alloca i64
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r1 = load ptr, ptr %r0
@@ -98137,10 +98630,10 @@ member.matched.60:
 member.next.59:
   %r139 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r140 = load ptr, ptr %r139
-  %r141 = icmp eq ptr %r140, @"lerta.drop.ast.lerta.Range"
+  %r141 = icmp eq ptr %r140, @"lerta.drop.ast.lerta.RecordLiteral"
   br i1 %r141, label %member.matched.62, label %member.next.61
 member.matched.62:
-  %r142 = getelementptr %"lerta.object.ast.lerta.Range", ptr %p1, i32 0, i32 4
+  %r142 = getelementptr %"lerta.object.ast.lerta.RecordLiteral", ptr %p1, i32 0, i32 3
   %r143 = load ptr, ptr %r142
   call void @lerta_retain(ptr %r143)
   call void @lerta_release(ptr %p1)
@@ -98148,10 +98641,10 @@ member.matched.62:
 member.next.61:
   %r144 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r145 = load ptr, ptr %r144
-  %r146 = icmp eq ptr %r145, @"lerta.drop.ast.lerta.RecordLiteral"
+  %r146 = icmp eq ptr %r145, @"lerta.drop.ast.lerta.Return"
   br i1 %r146, label %member.matched.64, label %member.next.63
 member.matched.64:
-  %r147 = getelementptr %"lerta.object.ast.lerta.RecordLiteral", ptr %p1, i32 0, i32 3
+  %r147 = getelementptr %"lerta.object.ast.lerta.Return", ptr %p1, i32 0, i32 3
   %r148 = load ptr, ptr %r147
   call void @lerta_retain(ptr %r148)
   call void @lerta_release(ptr %p1)
@@ -98159,10 +98652,10 @@ member.matched.64:
 member.next.63:
   %r149 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r150 = load ptr, ptr %r149
-  %r151 = icmp eq ptr %r150, @"lerta.drop.ast.lerta.Return"
+  %r151 = icmp eq ptr %r150, @"lerta.drop.ast.lerta.StringLiteral"
   br i1 %r151, label %member.matched.66, label %member.next.65
 member.matched.66:
-  %r152 = getelementptr %"lerta.object.ast.lerta.Return", ptr %p1, i32 0, i32 3
+  %r152 = getelementptr %"lerta.object.ast.lerta.StringLiteral", ptr %p1, i32 0, i32 3
   %r153 = load ptr, ptr %r152
   call void @lerta_retain(ptr %r153)
   call void @lerta_release(ptr %p1)
@@ -98170,10 +98663,10 @@ member.matched.66:
 member.next.65:
   %r154 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r155 = load ptr, ptr %r154
-  %r156 = icmp eq ptr %r155, @"lerta.drop.ast.lerta.StringLiteral"
+  %r156 = icmp eq ptr %r155, @"lerta.drop.ast.lerta.This"
   br i1 %r156, label %member.matched.68, label %member.next.67
 member.matched.68:
-  %r157 = getelementptr %"lerta.object.ast.lerta.StringLiteral", ptr %p1, i32 0, i32 3
+  %r157 = getelementptr %"lerta.object.ast.lerta.This", ptr %p1, i32 0, i32 2
   %r158 = load ptr, ptr %r157
   call void @lerta_retain(ptr %r158)
   call void @lerta_release(ptr %p1)
@@ -98181,10 +98674,10 @@ member.matched.68:
 member.next.67:
   %r159 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r160 = load ptr, ptr %r159
-  %r161 = icmp eq ptr %r160, @"lerta.drop.ast.lerta.This"
+  %r161 = icmp eq ptr %r160, @"lerta.drop.ast.lerta.Throw"
   br i1 %r161, label %member.matched.70, label %member.next.69
 member.matched.70:
-  %r162 = getelementptr %"lerta.object.ast.lerta.This", ptr %p1, i32 0, i32 2
+  %r162 = getelementptr %"lerta.object.ast.lerta.Throw", ptr %p1, i32 0, i32 3
   %r163 = load ptr, ptr %r162
   call void @lerta_retain(ptr %r163)
   call void @lerta_release(ptr %p1)
@@ -98192,10 +98685,10 @@ member.matched.70:
 member.next.69:
   %r164 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r165 = load ptr, ptr %r164
-  %r166 = icmp eq ptr %r165, @"lerta.drop.ast.lerta.Throw"
+  %r166 = icmp eq ptr %r165, @"lerta.drop.ast.lerta.Try"
   br i1 %r166, label %member.matched.72, label %member.next.71
 member.matched.72:
-  %r167 = getelementptr %"lerta.object.ast.lerta.Throw", ptr %p1, i32 0, i32 3
+  %r167 = getelementptr %"lerta.object.ast.lerta.Try", ptr %p1, i32 0, i32 5
   %r168 = load ptr, ptr %r167
   call void @lerta_retain(ptr %r168)
   call void @lerta_release(ptr %p1)
@@ -98203,10 +98696,10 @@ member.matched.72:
 member.next.71:
   %r169 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r170 = load ptr, ptr %r169
-  %r171 = icmp eq ptr %r170, @"lerta.drop.ast.lerta.Try"
+  %r171 = icmp eq ptr %r170, @"lerta.drop.ast.lerta.TupleItem"
   br i1 %r171, label %member.matched.74, label %member.next.73
 member.matched.74:
-  %r172 = getelementptr %"lerta.object.ast.lerta.Try", ptr %p1, i32 0, i32 5
+  %r172 = getelementptr %"lerta.object.ast.lerta.TupleItem", ptr %p1, i32 0, i32 5
   %r173 = load ptr, ptr %r172
   call void @lerta_retain(ptr %r173)
   call void @lerta_release(ptr %p1)
@@ -98214,10 +98707,10 @@ member.matched.74:
 member.next.73:
   %r174 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r175 = load ptr, ptr %r174
-  %r176 = icmp eq ptr %r175, @"lerta.drop.ast.lerta.TupleItem"
+  %r176 = icmp eq ptr %r175, @"lerta.drop.ast.lerta.TupleLiteral"
   br i1 %r176, label %member.matched.76, label %member.next.75
 member.matched.76:
-  %r177 = getelementptr %"lerta.object.ast.lerta.TupleItem", ptr %p1, i32 0, i32 5
+  %r177 = getelementptr %"lerta.object.ast.lerta.TupleLiteral", ptr %p1, i32 0, i32 3
   %r178 = load ptr, ptr %r177
   call void @lerta_retain(ptr %r178)
   call void @lerta_release(ptr %p1)
@@ -98225,10 +98718,10 @@ member.matched.76:
 member.next.75:
   %r179 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r180 = load ptr, ptr %r179
-  %r181 = icmp eq ptr %r180, @"lerta.drop.ast.lerta.TupleLiteral"
+  %r181 = icmp eq ptr %r180, @"lerta.drop.ast.lerta.UnaryOperation"
   br i1 %r181, label %member.matched.78, label %member.next.77
 member.matched.78:
-  %r182 = getelementptr %"lerta.object.ast.lerta.TupleLiteral", ptr %p1, i32 0, i32 3
+  %r182 = getelementptr %"lerta.object.ast.lerta.UnaryOperation", ptr %p1, i32 0, i32 4
   %r183 = load ptr, ptr %r182
   call void @lerta_retain(ptr %r183)
   call void @lerta_release(ptr %p1)
@@ -98236,320 +98729,309 @@ member.matched.78:
 member.next.77:
   %r184 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r185 = load ptr, ptr %r184
-  %r186 = icmp eq ptr %r185, @"lerta.drop.ast.lerta.UnaryOperation"
+  %r186 = icmp eq ptr %r185, @"lerta.drop.ast.lerta.Unwrap"
   br i1 %r186, label %member.matched.80, label %member.next.79
 member.matched.80:
-  %r187 = getelementptr %"lerta.object.ast.lerta.UnaryOperation", ptr %p1, i32 0, i32 4
+  %r187 = getelementptr %"lerta.object.ast.lerta.Unwrap", ptr %p1, i32 0, i32 3
   %r188 = load ptr, ptr %r187
   call void @lerta_retain(ptr %r188)
   call void @lerta_release(ptr %p1)
   br label %member.done.16
 member.next.79:
-  %r189 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r189 = getelementptr %"lerta.object.ast.lerta.Yield", ptr %p1, i32 0, i32 3
   %r190 = load ptr, ptr %r189
-  %r191 = icmp eq ptr %r190, @"lerta.drop.ast.lerta.Unwrap"
-  br i1 %r191, label %member.matched.82, label %member.next.81
-member.matched.82:
-  %r192 = getelementptr %"lerta.object.ast.lerta.Unwrap", ptr %p1, i32 0, i32 3
-  %r193 = load ptr, ptr %r192
-  call void @lerta_retain(ptr %r193)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.16
-member.next.81:
-  %r194 = getelementptr %"lerta.object.ast.lerta.Yield", ptr %p1, i32 0, i32 3
-  %r195 = load ptr, ptr %r194
-  call void @lerta_retain(ptr %r195)
+  call void @lerta_retain(ptr %r190)
   call void @lerta_release(ptr %p1)
   br label %member.done.16
 member.done.16:
-  %r196 = phi ptr [ %r33, %member.matched.18 ], [ %r38, %member.matched.20 ], [ %r43, %member.matched.22 ], [ %r48, %member.matched.24 ], [ %r53, %member.matched.26 ], [ %r58, %member.matched.28 ], [ %r63, %member.matched.30 ], [ %r68, %member.matched.32 ], [ %r73, %member.matched.34 ], [ %r78, %member.matched.36 ], [ %r83, %member.matched.38 ], [ %r88, %member.matched.40 ], [ %r93, %member.matched.42 ], [ %r98, %member.matched.44 ], [ %r103, %member.matched.46 ], [ %r108, %member.matched.48 ], [ %r113, %member.matched.50 ], [ %r118, %member.matched.52 ], [ %r123, %member.matched.54 ], [ %r128, %member.matched.56 ], [ %r133, %member.matched.58 ], [ %r138, %member.matched.60 ], [ %r143, %member.matched.62 ], [ %r148, %member.matched.64 ], [ %r153, %member.matched.66 ], [ %r158, %member.matched.68 ], [ %r163, %member.matched.70 ], [ %r168, %member.matched.72 ], [ %r173, %member.matched.74 ], [ %r178, %member.matched.76 ], [ %r183, %member.matched.78 ], [ %r188, %member.matched.80 ], [ %r193, %member.matched.82 ], [ %r195, %member.next.81 ]
-  store ptr %r196, ptr %r197
+  %r191 = phi ptr [ %r33, %member.matched.18 ], [ %r38, %member.matched.20 ], [ %r43, %member.matched.22 ], [ %r48, %member.matched.24 ], [ %r53, %member.matched.26 ], [ %r58, %member.matched.28 ], [ %r63, %member.matched.30 ], [ %r68, %member.matched.32 ], [ %r73, %member.matched.34 ], [ %r78, %member.matched.36 ], [ %r83, %member.matched.38 ], [ %r88, %member.matched.40 ], [ %r93, %member.matched.42 ], [ %r98, %member.matched.44 ], [ %r103, %member.matched.46 ], [ %r108, %member.matched.48 ], [ %r113, %member.matched.50 ], [ %r118, %member.matched.52 ], [ %r123, %member.matched.54 ], [ %r128, %member.matched.56 ], [ %r133, %member.matched.58 ], [ %r138, %member.matched.60 ], [ %r143, %member.matched.62 ], [ %r148, %member.matched.64 ], [ %r153, %member.matched.66 ], [ %r158, %member.matched.68 ], [ %r163, %member.matched.70 ], [ %r168, %member.matched.72 ], [ %r173, %member.matched.74 ], [ %r178, %member.matched.76 ], [ %r183, %member.matched.78 ], [ %r188, %member.matched.80 ], [ %r190, %member.next.79 ]
+  store ptr %r191, ptr %r192
   call void @lerta_retain(ptr %p0)
+  %r193 = load ptr, ptr %r17
+  call void @lerta_retain(ptr %r193)
+  %r194 = load ptr, ptr %r192
+  call void @lerta_retain(ptr %r194)
+  %r195 = call ptr @"lerta.fn.checker/satisfaction.lerta.iterable_item_of"(ptr %p0, ptr %r193, ptr %r194)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r193)
+  call void @lerta_release(ptr %r194)
+  %r196 = load ptr, ptr @lerta_exception
+  %r197 = icmp ne ptr %r196, null
+  br i1 %r197, label %unwind.81, label %no.exception.82
+unwind.81:
   %r198 = load ptr, ptr %r17
-  call void @lerta_retain(ptr %r198)
-  %r199 = load ptr, ptr %r197
-  call void @lerta_retain(ptr %r199)
-  %r200 = call ptr @"lerta.fn.checker/satisfaction.lerta.iterable_item_of"(ptr %p0, ptr %r198, ptr %r199)
-  call void @lerta_release(ptr %p0)
   call void @lerta_release(ptr %r198)
+  %r199 = load ptr, ptr %r192
   call void @lerta_release(ptr %r199)
-  %r201 = load ptr, ptr @lerta_exception
-  %r202 = icmp ne ptr %r201, null
-  br i1 %r202, label %unwind.83, label %no.exception.84
-unwind.83:
-  %r203 = load ptr, ptr %r17
-  call void @lerta_release(ptr %r203)
-  %r204 = load ptr, ptr %r197
-  call void @lerta_release(ptr %r204)
   ret ptr poison
-no.exception.84:
-  %r205 = icmp ne ptr %r200, null
-  call void @lerta_release(ptr %r200)
-  %r206 = xor i1 %r205, true
-  br i1 %r206, label %if.then.85, label %if.else.86
-if.then.85:
-  store ptr @lerta.string.1155, ptr %r207
+no.exception.82:
+  %r200 = icmp ne ptr %r195, null
+  call void @lerta_release(ptr %r195)
+  %r201 = xor i1 %r200, true
+  br i1 %r201, label %if.then.83, label %if.else.84
+if.then.83:
+  store ptr @lerta.string.1155, ptr %r202
   call void @lerta_retain(ptr %p0)
-  %r208 = load ptr, ptr %r17
-  call void @lerta_retain(ptr %r208)
-  %r209 = load ptr, ptr %r197
-  call void @lerta_retain(ptr %r209)
-  %r210 = load ptr, ptr %r207
-  call void @lerta_retain(ptr %r210)
-  %r211 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r210)
-  call void @lerta_release(ptr %r210)
-  %r212 = load ptr, ptr @lerta_exception
-  %r213 = icmp ne ptr %r212, null
-  br i1 %r213, label %unwind.88, label %no.exception.89
-unwind.88:
+  %r203 = load ptr, ptr %r17
+  call void @lerta_retain(ptr %r203)
+  %r204 = load ptr, ptr %r192
+  call void @lerta_retain(ptr %r204)
+  %r205 = load ptr, ptr %r202
+  call void @lerta_retain(ptr %r205)
+  %r206 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r205)
+  call void @lerta_release(ptr %r205)
+  %r207 = load ptr, ptr @lerta_exception
+  %r208 = icmp ne ptr %r207, null
+  br i1 %r208, label %unwind.86, label %no.exception.87
+unwind.86:
   call void @lerta_release(ptr @lerta.string.1156)
-  call void @lerta_release(ptr %r209)
-  call void @lerta_release(ptr %r208)
+  call void @lerta_release(ptr %r204)
+  call void @lerta_release(ptr %r203)
   call void @lerta_release(ptr %p0)
-  %r214 = load ptr, ptr %r207
-  call void @lerta_release(ptr %r214)
-  %r215 = load ptr, ptr %r17
+  %r209 = load ptr, ptr %r202
+  call void @lerta_release(ptr %r209)
+  %r210 = load ptr, ptr %r17
+  call void @lerta_release(ptr %r210)
+  %r211 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r211)
+  ret ptr poison
+no.exception.87:
+  call void @lerta_retain(ptr %p2)
+  %r212 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %p2)
+  call void @lerta_release(ptr %p2)
+  %r213 = load ptr, ptr @lerta_exception
+  %r214 = icmp ne ptr %r213, null
+  br i1 %r214, label %unwind.88, label %no.exception.89
+unwind.88:
+  call void @lerta_release(ptr @lerta.string.1157)
+  call void @lerta_release(ptr %r206)
+  call void @lerta_release(ptr @lerta.string.1156)
+  call void @lerta_release(ptr %r204)
+  call void @lerta_release(ptr %r203)
+  call void @lerta_release(ptr %p0)
+  %r215 = load ptr, ptr %r202
   call void @lerta_release(ptr %r215)
-  %r216 = load ptr, ptr %r197
+  %r216 = load ptr, ptr %r17
   call void @lerta_release(ptr %r216)
+  %r217 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r217)
   ret ptr poison
 no.exception.89:
-  call void @lerta_retain(ptr %p2)
-  %r217 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %p2)
-  call void @lerta_release(ptr %p2)
-  %r218 = load ptr, ptr @lerta_exception
-  %r219 = icmp ne ptr %r218, null
-  br i1 %r219, label %unwind.90, label %no.exception.91
+  %r218 = load ptr, ptr %r17
+  call void @lerta_retain(ptr %r218)
+  %r219 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %r218)
+  call void @lerta_release(ptr %r218)
+  %r220 = load ptr, ptr @lerta_exception
+  %r221 = icmp ne ptr %r220, null
+  br i1 %r221, label %unwind.90, label %no.exception.91
 unwind.90:
+  call void @lerta_release(ptr @lerta.string.1158)
+  call void @lerta_release(ptr %r212)
   call void @lerta_release(ptr @lerta.string.1157)
-  call void @lerta_release(ptr %r211)
+  call void @lerta_release(ptr %r206)
   call void @lerta_release(ptr @lerta.string.1156)
-  call void @lerta_release(ptr %r209)
-  call void @lerta_release(ptr %r208)
+  call void @lerta_release(ptr %r204)
+  call void @lerta_release(ptr %r203)
   call void @lerta_release(ptr %p0)
-  %r220 = load ptr, ptr %r207
-  call void @lerta_release(ptr %r220)
-  %r221 = load ptr, ptr %r17
-  call void @lerta_release(ptr %r221)
-  %r222 = load ptr, ptr %r197
+  %r222 = load ptr, ptr %r202
   call void @lerta_release(ptr %r222)
+  %r223 = load ptr, ptr %r17
+  call void @lerta_release(ptr %r223)
+  %r224 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r224)
   ret ptr poison
 no.exception.91:
-  %r223 = load ptr, ptr %r17
-  call void @lerta_retain(ptr %r223)
-  %r224 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %r223)
-  call void @lerta_release(ptr %r223)
-  %r225 = load ptr, ptr @lerta_exception
-  %r226 = icmp ne ptr %r225, null
-  br i1 %r226, label %unwind.92, label %no.exception.93
+  %r225 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r219)
+  call void @lerta_release(ptr %r219)
+  %r226 = load ptr, ptr @lerta_exception
+  %r227 = icmp ne ptr %r226, null
+  br i1 %r227, label %unwind.92, label %no.exception.93
 unwind.92:
   call void @lerta_release(ptr @lerta.string.1158)
-  call void @lerta_release(ptr %r217)
+  call void @lerta_release(ptr %r212)
   call void @lerta_release(ptr @lerta.string.1157)
-  call void @lerta_release(ptr %r211)
+  call void @lerta_release(ptr %r206)
   call void @lerta_release(ptr @lerta.string.1156)
-  call void @lerta_release(ptr %r209)
-  call void @lerta_release(ptr %r208)
+  call void @lerta_release(ptr %r204)
+  call void @lerta_release(ptr %r203)
   call void @lerta_release(ptr %p0)
-  %r227 = load ptr, ptr %r207
-  call void @lerta_release(ptr %r227)
-  %r228 = load ptr, ptr %r17
+  %r228 = load ptr, ptr %r202
   call void @lerta_release(ptr %r228)
-  %r229 = load ptr, ptr %r197
+  %r229 = load ptr, ptr %r17
   call void @lerta_release(ptr %r229)
+  %r230 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r230)
   ret ptr poison
 no.exception.93:
-  %r230 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r224)
-  call void @lerta_release(ptr %r224)
-  %r231 = load ptr, ptr @lerta_exception
-  %r232 = icmp ne ptr %r231, null
-  br i1 %r232, label %unwind.94, label %no.exception.95
-unwind.94:
-  call void @lerta_release(ptr @lerta.string.1158)
-  call void @lerta_release(ptr %r217)
-  call void @lerta_release(ptr @lerta.string.1157)
-  call void @lerta_release(ptr %r211)
+  %r231 = call ptr (i64, ...) @lerta_string_concat(i64 6, ptr @lerta.string.1156, ptr %r206, ptr @lerta.string.1157, ptr %r212, ptr @lerta.string.1158, ptr %r225)
   call void @lerta_release(ptr @lerta.string.1156)
-  call void @lerta_release(ptr %r209)
-  call void @lerta_release(ptr %r208)
+  call void @lerta_release(ptr %r206)
+  call void @lerta_release(ptr @lerta.string.1157)
+  call void @lerta_release(ptr %r212)
+  call void @lerta_release(ptr @lerta.string.1158)
+  call void @lerta_release(ptr %r225)
+  call void @"lerta.fn.checker/satisfaction.lerta.reject_not_iterable"(ptr %p0, ptr %r203, ptr %r204, ptr %r231)
   call void @lerta_release(ptr %p0)
-  %r233 = load ptr, ptr %r207
-  call void @lerta_release(ptr %r233)
-  %r234 = load ptr, ptr %r17
+  call void @lerta_release(ptr %r203)
+  call void @lerta_release(ptr %r204)
+  call void @lerta_release(ptr %r231)
+  %r232 = load ptr, ptr @lerta_exception
+  %r233 = icmp ne ptr %r232, null
+  br i1 %r233, label %unwind.94, label %no.exception.95
+unwind.94:
+  %r234 = load ptr, ptr %r202
   call void @lerta_release(ptr %r234)
-  %r235 = load ptr, ptr %r197
+  %r235 = load ptr, ptr %r17
   call void @lerta_release(ptr %r235)
+  %r236 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r236)
   ret ptr poison
 no.exception.95:
-  %r236 = call ptr (i64, ...) @lerta_string_concat(i64 6, ptr @lerta.string.1156, ptr %r211, ptr @lerta.string.1157, ptr %r217, ptr @lerta.string.1158, ptr %r230)
-  call void @lerta_release(ptr @lerta.string.1156)
-  call void @lerta_release(ptr %r211)
-  call void @lerta_release(ptr @lerta.string.1157)
-  call void @lerta_release(ptr %r217)
-  call void @lerta_release(ptr @lerta.string.1158)
-  call void @lerta_release(ptr %r230)
-  call void @"lerta.fn.checker/satisfaction.lerta.reject_not_iterable"(ptr %p0, ptr %r208, ptr %r209, ptr %r236)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r208)
-  call void @lerta_release(ptr %r209)
-  call void @lerta_release(ptr %r236)
-  %r237 = load ptr, ptr @lerta_exception
-  %r238 = icmp ne ptr %r237, null
-  br i1 %r238, label %unwind.96, label %no.exception.97
+  %r237 = load ptr, ptr %r202
+  call void @lerta_release(ptr %r237)
+  br label %if.end.85
+if.else.84:
+  br label %if.end.85
+if.end.85:
+  call void @lerta_retain(ptr %p1)
+  %r238 = load ptr, ptr %r192
+  call void @lerta_retain(ptr %r238)
+  %r239 = call ptr @"lerta.new.ast.lerta.Identifier"(ptr @lerta.string.1159, ptr %r238)
+  call void @lerta_release(ptr @lerta.string.1159)
+  call void @lerta_release(ptr %r238)
+  %r240 = load ptr, ptr @lerta_exception
+  %r241 = icmp ne ptr %r240, null
+  br i1 %r241, label %unwind.96, label %no.exception.97
 unwind.96:
-  %r239 = load ptr, ptr %r207
-  call void @lerta_release(ptr %r239)
-  %r240 = load ptr, ptr %r17
-  call void @lerta_release(ptr %r240)
-  %r241 = load ptr, ptr %r197
-  call void @lerta_release(ptr %r241)
+  call void @lerta_release(ptr %p1)
+  %r242 = load ptr, ptr %r17
+  call void @lerta_release(ptr %r242)
+  %r243 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r243)
   ret ptr poison
 no.exception.97:
-  %r242 = load ptr, ptr %r207
-  call void @lerta_release(ptr %r242)
-  br label %if.end.87
-if.else.86:
-  br label %if.end.87
-if.end.87:
-  call void @lerta_retain(ptr %p1)
-  %r243 = load ptr, ptr %r197
-  call void @lerta_retain(ptr %r243)
-  %r244 = call ptr @"lerta.new.ast.lerta.Identifier"(ptr @lerta.string.1159, ptr %r243)
-  call void @lerta_release(ptr @lerta.string.1159)
-  call void @lerta_release(ptr %r243)
-  %r245 = load ptr, ptr @lerta_exception
-  %r246 = icmp ne ptr %r245, null
-  br i1 %r246, label %unwind.98, label %no.exception.99
-unwind.98:
+  %r244 = load ptr, ptr %r192
+  call void @lerta_retain(ptr %r244)
+  %r245 = call ptr @"lerta.new.ast.lerta.Member"(ptr %p1, ptr %r239, ptr %r244)
   call void @lerta_release(ptr %p1)
-  %r247 = load ptr, ptr %r17
-  call void @lerta_release(ptr %r247)
-  %r248 = load ptr, ptr %r197
+  call void @lerta_release(ptr %r239)
+  call void @lerta_release(ptr %r244)
+  %r246 = load ptr, ptr @lerta_exception
+  %r247 = icmp ne ptr %r246, null
+  br i1 %r247, label %unwind.98, label %no.exception.99
+unwind.98:
+  %r248 = load ptr, ptr %r17
   call void @lerta_release(ptr %r248)
+  %r249 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r249)
   ret ptr poison
 no.exception.99:
-  %r249 = load ptr, ptr %r197
-  call void @lerta_retain(ptr %r249)
-  %r250 = call ptr @"lerta.new.ast.lerta.Member"(ptr %p1, ptr %r244, ptr %r249)
-  call void @lerta_release(ptr %p1)
-  call void @lerta_release(ptr %r244)
-  call void @lerta_release(ptr %r249)
-  %r251 = load ptr, ptr @lerta_exception
-  %r252 = icmp ne ptr %r251, null
-  br i1 %r252, label %unwind.100, label %no.exception.101
-unwind.100:
-  %r253 = load ptr, ptr %r17
+  store ptr %r245, ptr %r250
+  %r251 = load ptr, ptr %r250
+  call void @lerta_retain(ptr %r251)
+  %r252 = call ptr @lerta_array_create(i32 1)
+  %r253 = call ptr @lerta_array_create(i32 1)
+  %r254 = call ptr @lerta_array_create(i32 1)
+  %r255 = load ptr, ptr %r192
+  call void @lerta_retain(ptr %r255)
+  %r256 = call ptr @"lerta.new.ast.lerta.Call"(ptr %r251, ptr %r252, ptr %r253, ptr %r254, ptr %r255)
+  call void @lerta_release(ptr %r251)
+  call void @lerta_release(ptr %r252)
   call void @lerta_release(ptr %r253)
-  %r254 = load ptr, ptr %r197
   call void @lerta_release(ptr %r254)
+  call void @lerta_release(ptr %r255)
+  %r257 = load ptr, ptr @lerta_exception
+  %r258 = icmp ne ptr %r257, null
+  br i1 %r258, label %unwind.100, label %no.exception.101
+unwind.100:
+  %r259 = load ptr, ptr %r17
+  call void @lerta_release(ptr %r259)
+  %r260 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r260)
+  %r261 = load ptr, ptr %r250
+  call void @lerta_release(ptr %r261)
   ret ptr poison
 no.exception.101:
-  store ptr %r250, ptr %r255
-  %r256 = load ptr, ptr %r255
-  call void @lerta_retain(ptr %r256)
-  %r257 = call ptr @lerta_array_create(i32 1)
-  %r258 = call ptr @lerta_array_create(i32 1)
-  %r259 = call ptr @lerta_array_create(i32 1)
-  %r260 = load ptr, ptr %r197
-  call void @lerta_retain(ptr %r260)
-  %r261 = call ptr @"lerta.new.ast.lerta.Call"(ptr %r256, ptr %r257, ptr %r258, ptr %r259, ptr %r260)
-  call void @lerta_release(ptr %r256)
-  call void @lerta_release(ptr %r257)
-  call void @lerta_release(ptr %r258)
-  call void @lerta_release(ptr %r259)
-  call void @lerta_release(ptr %r260)
-  %r262 = load ptr, ptr @lerta_exception
-  %r263 = icmp ne ptr %r262, null
-  br i1 %r263, label %unwind.102, label %no.exception.103
-unwind.102:
-  %r264 = load ptr, ptr %r17
+  store ptr %r256, ptr %r262
+  call void @lerta_retain(ptr %p0)
+  %r263 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 5
+  %r264 = load ptr, ptr %r263
+  call void @lerta_retain(ptr %r264)
+  call void @lerta_release(ptr %p0)
+  %r265 = getelementptr %"lerta.object.checker/shared.lerta.NodeFacts", ptr %r264, i32 0, i32 8
+  %r266 = load ptr, ptr %r265
+  call void @lerta_retain(ptr %r266)
   call void @lerta_release(ptr %r264)
-  %r265 = load ptr, ptr %r197
-  call void @lerta_release(ptr %r265)
-  %r266 = load ptr, ptr %r255
+  call void @lerta_retain(ptr %p1)
+  %r267 = load ptr, ptr %r262
+  call void @lerta_retain(ptr %r267)
+  %r268 = ptrtoint ptr %p1 to i64
+  %r270 = ptrtoint ptr %r267 to i64
+  store i64 %r270, ptr %r269
+  call void @lerta_map_write(ptr %r266, i64 %r268, ptr %r269)
+  call void @lerta_release(ptr %p1)
+  call void @lerta_release(ptr %r267)
   call void @lerta_release(ptr %r266)
+  call void @lerta_retain(ptr %p0)
+  %r271 = load ptr, ptr %r262
+  call void @lerta_retain(ptr %r271)
+  %r272 = call ptr @"lerta.fn.checker/expression.lerta.type_of.given2"(ptr %p0, ptr %r271)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r271)
+  %r273 = load ptr, ptr @lerta_exception
+  %r274 = icmp ne ptr %r273, null
+  br i1 %r274, label %unwind.102, label %no.exception.103
+unwind.102:
+  %r275 = load ptr, ptr %r17
+  call void @lerta_release(ptr %r275)
+  %r276 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r276)
+  %r277 = load ptr, ptr %r250
+  call void @lerta_release(ptr %r277)
+  %r278 = load ptr, ptr %r262
+  call void @lerta_release(ptr %r278)
   ret ptr poison
 no.exception.103:
-  store ptr %r261, ptr %r267
-  call void @lerta_retain(ptr %p0)
-  %r268 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 5
-  %r269 = load ptr, ptr %r268
-  call void @lerta_retain(ptr %r269)
-  call void @lerta_release(ptr %p0)
-  %r270 = getelementptr %"lerta.object.checker/shared.lerta.NodeFacts", ptr %r269, i32 0, i32 8
-  %r271 = load ptr, ptr %r270
-  call void @lerta_retain(ptr %r271)
-  call void @lerta_release(ptr %r269)
-  call void @lerta_retain(ptr %p1)
-  %r272 = load ptr, ptr %r267
-  call void @lerta_retain(ptr %r272)
-  %r273 = ptrtoint ptr %p1 to i64
-  %r275 = ptrtoint ptr %r272 to i64
-  store i64 %r275, ptr %r274
-  call void @lerta_map_write(ptr %r271, i64 %r273, ptr %r274)
-  call void @lerta_release(ptr %p1)
+  %r279 = call ptr @"lerta.fn.types.lerta.iterable_item"(ptr %r272)
   call void @lerta_release(ptr %r272)
-  call void @lerta_release(ptr %r271)
-  call void @lerta_retain(ptr %p0)
-  %r276 = load ptr, ptr %r267
-  call void @lerta_retain(ptr %r276)
-  %r277 = call ptr @"lerta.fn.checker/expression.lerta.type_of.given2"(ptr %p0, ptr %r276)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r276)
-  %r278 = load ptr, ptr @lerta_exception
-  %r279 = icmp ne ptr %r278, null
-  br i1 %r279, label %unwind.104, label %no.exception.105
+  %r280 = load ptr, ptr @lerta_exception
+  %r281 = icmp ne ptr %r280, null
+  br i1 %r281, label %unwind.104, label %no.exception.105
 unwind.104:
-  %r280 = load ptr, ptr %r17
-  call void @lerta_release(ptr %r280)
-  %r281 = load ptr, ptr %r197
-  call void @lerta_release(ptr %r281)
-  %r282 = load ptr, ptr %r255
+  %r282 = load ptr, ptr %r17
   call void @lerta_release(ptr %r282)
-  %r283 = load ptr, ptr %r267
+  %r283 = load ptr, ptr %r192
   call void @lerta_release(ptr %r283)
+  %r284 = load ptr, ptr %r250
+  call void @lerta_release(ptr %r284)
+  %r285 = load ptr, ptr %r262
+  call void @lerta_release(ptr %r285)
   ret ptr poison
 no.exception.105:
-  %r284 = call ptr @"lerta.fn.types.lerta.iterable_item"(ptr %r277)
-  call void @lerta_release(ptr %r277)
-  %r285 = load ptr, ptr @lerta_exception
-  %r286 = icmp ne ptr %r285, null
-  br i1 %r286, label %unwind.106, label %no.exception.107
-unwind.106:
-  %r287 = load ptr, ptr %r17
-  call void @lerta_release(ptr %r287)
-  %r288 = load ptr, ptr %r197
-  call void @lerta_release(ptr %r288)
-  %r289 = load ptr, ptr %r255
-  call void @lerta_release(ptr %r289)
-  %r290 = load ptr, ptr %r267
-  call void @lerta_release(ptr %r290)
-  ret ptr poison
-no.exception.107:
-  %r291 = icmp ne ptr %r284, null
-  %r292 = xor i1 %r291, true
-  br i1 %r292, label %raise.108, label %continue.109
-raise.108:
+  %r286 = icmp ne ptr %r279, null
+  %r287 = xor i1 %r286, true
+  br i1 %r287, label %raise.106, label %continue.107
+raise.106:
   call void @lerta_raise(i32 2, ptr @lerta.string.1160)
-  %r293 = load ptr, ptr %r17
-  call void @lerta_release(ptr %r293)
-  %r294 = load ptr, ptr %r197
-  call void @lerta_release(ptr %r294)
-  %r295 = load ptr, ptr %r255
-  call void @lerta_release(ptr %r295)
-  %r296 = load ptr, ptr %r267
-  call void @lerta_release(ptr %r296)
+  %r288 = load ptr, ptr %r17
+  call void @lerta_release(ptr %r288)
+  %r289 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r289)
+  %r290 = load ptr, ptr %r250
+  call void @lerta_release(ptr %r290)
+  %r291 = load ptr, ptr %r262
+  call void @lerta_release(ptr %r291)
   ret ptr poison
-continue.109:
-  %r297 = load ptr, ptr %r17
-  call void @lerta_release(ptr %r297)
-  %r298 = load ptr, ptr %r197
-  call void @lerta_release(ptr %r298)
-  %r299 = load ptr, ptr %r255
-  call void @lerta_release(ptr %r299)
-  %r300 = load ptr, ptr %r267
-  call void @lerta_release(ptr %r300)
-  ret ptr %r284
+continue.107:
+  %r292 = load ptr, ptr %r17
+  call void @lerta_release(ptr %r292)
+  %r293 = load ptr, ptr %r192
+  call void @lerta_release(ptr %r293)
+  %r294 = load ptr, ptr %r250
+  call void @lerta_release(ptr %r294)
+  %r295 = load ptr, ptr %r262
+  call void @lerta_release(ptr %r295)
+  ret ptr %r279
 }
 define void @"lerta.module.checker/statement.lerta"() {
 entry:
@@ -98737,7 +99219,7 @@ for.exit.3:
   call void @lerta_release(ptr %p2)
   ret void
 }
-define private void @lerta.lambda.117(ptr %closure) {
+define private void @lerta.lambda.118(ptr %closure) {
 entry:
   %r11 = alloca ptr
   %r18 = alloca ptr
@@ -99138,7 +99620,7 @@ if.else.44:
 if.end.45:
   ret void
 }
-define private void @"lerta.lambda.117.drop"(ptr %closure) {
+define private void @"lerta.lambda.118.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -99154,7 +99636,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private void @lerta.lambda.118(ptr %closure) {
+define private void @lerta.lambda.119(ptr %closure) {
 entry:
   %r8 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -99196,7 +99678,7 @@ if.else.3:
 if.end.4:
   ret void
 }
-define private void @"lerta.lambda.118.drop"(ptr %closure) {
+define private void @"lerta.lambda.119.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -99217,9 +99699,9 @@ entry:
   call void @lerta_retain(ptr %p3)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.117.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.118.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.117, ptr %r3
+  store ptr @lerta.lambda.118, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -99240,9 +99722,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r14 = ptrtoint ptr %r13 to i64
-  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.118.drop")
+  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.119.drop")
   %r16 = getelementptr { i64, ptr, ptr }, ptr %r15, i32 0, i32 2
-  store ptr @lerta.lambda.118, ptr %r16
+  store ptr @lerta.lambda.119, ptr %r16
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 3
   store ptr %r12, ptr %r17
   %r18 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 4
@@ -99295,7 +99777,7 @@ no.exception.3:
   call void @lerta_release(ptr %r36)
   ret void
 }
-define private void @lerta.lambda.119(ptr %closure) {
+define private void @lerta.lambda.120(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -99314,7 +99796,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.119.drop"(ptr %closure) {
+define private void @"lerta.lambda.120.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -99373,9 +99855,9 @@ branch.end.7:
   call void @lerta_retain(ptr %r18)
   %r19 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r20 = ptrtoint ptr %r19 to i64
-  %r21 = call ptr @lerta_alloc(i64 %r20, ptr @"lerta.lambda.119.drop")
+  %r21 = call ptr @lerta_alloc(i64 %r20, ptr @"lerta.lambda.120.drop")
   %r22 = getelementptr { i64, ptr, ptr }, ptr %r21, i32 0, i32 2
-  store ptr @lerta.lambda.119, ptr %r22
+  store ptr @lerta.lambda.120, ptr %r22
   %r23 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r21, i32 0, i32 3
   store ptr %p0, ptr %r23
   %r24 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r21, i32 0, i32 4
@@ -99535,7 +100017,7 @@ unwind.28:
 no.exception.29:
   ret ptr %r76
 }
-define private i1 @lerta.lambda.121(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.122(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -99552,14 +100034,14 @@ unwind.0:
 no.exception.1:
   ret i1 %r2
 }
-define private void @"lerta.lambda.121.drop"(ptr %closure) {
+define private void @"lerta.lambda.122.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private void @lerta.lambda.120(ptr %closure) {
+define private void @lerta.lambda.121(ptr %closure) {
 entry:
   %r146 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -99767,9 +100249,9 @@ no.exception.7:
   call void @lerta_retain(ptr %r8)
   %r165 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r166 = ptrtoint ptr %r165 to i64
-  %r167 = call ptr @lerta_alloc(i64 %r166, ptr @"lerta.lambda.121.drop")
+  %r167 = call ptr @lerta_alloc(i64 %r166, ptr @"lerta.lambda.122.drop")
   %r168 = getelementptr { i64, ptr, ptr }, ptr %r167, i32 0, i32 2
-  store ptr @lerta.lambda.121, ptr %r168
+  store ptr @lerta.lambda.122, ptr %r168
   %r169 = getelementptr { i64, ptr, ptr, ptr }, ptr %r167, i32 0, i32 3
   store ptr %r8, ptr %r169
   %r170 = call i1 @"lerta.fn.checker/narrowing.lerta.ends_with_jump"(ptr %r159, ptr %r167)
@@ -99794,7 +100276,7 @@ if.else.11:
 if.end.12:
   ret void
 }
-define private void @"lerta.lambda.120.drop"(ptr %closure) {
+define private void @"lerta.lambda.121.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -99846,9 +100328,9 @@ continue.3:
   call void @lerta_retain(ptr %p0)
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r14 = ptrtoint ptr %r13 to i64
-  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.120.drop")
+  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.121.drop")
   %r16 = getelementptr { i64, ptr, ptr }, ptr %r15, i32 0, i32 2
-  store ptr @lerta.lambda.120, ptr %r16
+  store ptr @lerta.lambda.121, ptr %r16
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 3
   store ptr %r12, ptr %r17
   %r18 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 4
@@ -100147,7 +100629,7 @@ iter.exit.22:
   call void @lerta_release(ptr %r75)
   ret void
 }
-define private void @lerta.lambda.122(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.123(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, i1, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load i1, ptr %r0
@@ -100683,7 +101165,7 @@ if.else.1:
 if.end.2:
   ret void
 }
-define private void @"lerta.lambda.122.drop"(ptr %closure) {
+define private void @"lerta.lambda.123.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, i1, ptr, ptr }, ptr %closure, i32 0, i32 4
   %r1 = load ptr, ptr %r0
@@ -101253,9 +101735,9 @@ if.end.8:
   call void @lerta_retain(ptr %p1)
   %r243 = getelementptr { i64, ptr, ptr, i1, ptr, ptr }, ptr null, i32 1
   %r244 = ptrtoint ptr %r243 to i64
-  %r245 = call ptr @lerta_alloc(i64 %r244, ptr @"lerta.lambda.122.drop")
+  %r245 = call ptr @lerta_alloc(i64 %r244, ptr @"lerta.lambda.123.drop")
   %r246 = getelementptr { i64, ptr, ptr }, ptr %r245, i32 0, i32 2
-  store ptr @lerta.lambda.122, ptr %r246
+  store ptr @lerta.lambda.123, ptr %r246
   %r247 = getelementptr { i64, ptr, ptr, i1, ptr, ptr }, ptr %r245, i32 0, i32 3
   store i1 %r242, ptr %r247
   %r248 = getelementptr { i64, ptr, ptr, i1, ptr, ptr }, ptr %r245, i32 0, i32 4
@@ -101730,7 +102212,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @lerta.lambda.123(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.124(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -101747,7 +102229,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r2
 }
-define private void @"lerta.lambda.123.drop"(ptr %closure) {
+define private void @"lerta.lambda.124.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -101861,9 +102343,9 @@ no.exception.7:
   call void @lerta_retain(ptr %p0)
   %r38 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r39 = ptrtoint ptr %r38 to i64
-  %r40 = call ptr @lerta_alloc(i64 %r39, ptr @"lerta.lambda.123.drop")
+  %r40 = call ptr @lerta_alloc(i64 %r39, ptr @"lerta.lambda.124.drop")
   %r41 = getelementptr { i64, ptr, ptr }, ptr %r40, i32 0, i32 2
-  store ptr @lerta.lambda.123, ptr %r41
+  store ptr @lerta.lambda.124, ptr %r41
   %r42 = getelementptr { i64, ptr, ptr, ptr }, ptr %r40, i32 0, i32 3
   store ptr %p0, ptr %r42
   store ptr %r40, ptr %r43
@@ -101944,7 +102426,7 @@ if.end.14:
   call void @lerta_release(ptr %r74)
   ret void
 }
-define private void @lerta.lambda.124(ptr %closure, i1 %p0) {
+define private void @lerta.lambda.125(ptr %closure, i1 %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -101972,7 +102454,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.124.drop"(ptr %closure) {
+define private void @"lerta.lambda.125.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -101982,7 +102464,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.125(ptr %closure) {
+define private void @lerta.lambda.126(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -102012,7 +102494,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.125.drop"(ptr %closure) {
+define private void @"lerta.lambda.126.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -102022,7 +102504,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.126(ptr %closure) {
+define private void @lerta.lambda.127(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -102039,7 +102521,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.126.drop"(ptr %closure) {
+define private void @"lerta.lambda.127.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -102096,9 +102578,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.124.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.125.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.124, ptr %r20
+  store ptr @lerta.lambda.125, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %p0, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -102110,9 +102592,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.125.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.126.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.125, ptr %r29
+  store ptr @lerta.lambda.126, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -102124,9 +102606,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r34)
   %r35 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r36 = ptrtoint ptr %r35 to i64
-  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.lambda.126.drop")
+  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.lambda.127.drop")
   %r38 = getelementptr { i64, ptr, ptr }, ptr %r37, i32 0, i32 2
-  store ptr @lerta.lambda.126, ptr %r38
+  store ptr @lerta.lambda.127, ptr %r38
   %r39 = getelementptr { i64, ptr, ptr, ptr }, ptr %r37, i32 0, i32 3
   store ptr %r34, ptr %r39
   %r40 = getelementptr %lerta.record.54, ptr null, i32 1
@@ -102148,7 +102630,7 @@ no.exception.3:
   call void @lerta_release(ptr %r49)
   ret ptr %r42
 }
-define private void @lerta.lambda.127(ptr %closure) {
+define private void @lerta.lambda.128(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -102167,7 +102649,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.127.drop"(ptr %closure) {
+define private void @"lerta.lambda.128.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -102234,9 +102716,9 @@ no.exception.6:
   call void @lerta_retain(ptr %r20)
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r22 = ptrtoint ptr %r21 to i64
-  %r23 = call ptr @lerta_alloc(i64 %r22, ptr @"lerta.lambda.127.drop")
+  %r23 = call ptr @lerta_alloc(i64 %r22, ptr @"lerta.lambda.128.drop")
   %r24 = getelementptr { i64, ptr, ptr }, ptr %r23, i32 0, i32 2
-  store ptr @lerta.lambda.127, ptr %r24
+  store ptr @lerta.lambda.128, ptr %r24
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r23, i32 0, i32 3
   store ptr %p0, ptr %r25
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r23, i32 0, i32 4
@@ -104479,7 +104961,7 @@ define void @"lerta.module.checker/result.lerta"() {
 entry:
   ret void
 }
-define private void @lerta.lambda.128(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.129(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -104504,7 +104986,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.128.drop"(ptr %closure) {
+define private void @"lerta.lambda.129.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -104540,9 +105022,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r10 = ptrtoint ptr %r9 to i64
-  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.128.drop")
+  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.129.drop")
   %r12 = getelementptr { i64, ptr, ptr }, ptr %r11, i32 0, i32 2
-  store ptr @lerta.lambda.128, ptr %r12
+  store ptr @lerta.lambda.129, ptr %r12
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r11, i32 0, i32 3
   store ptr %p0, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r11, i32 0, i32 4
@@ -105587,10 +106069,10 @@ member.matched.128:
 member.next.127:
   %r324 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r325 = load ptr, ptr %r324
-  %r326 = icmp eq ptr %r325, @"lerta.drop.ast.lerta.Return"
+  %r326 = icmp eq ptr %r325, @"lerta.drop.ast.lerta.StringLiteral"
   br i1 %r326, label %member.matched.130, label %member.next.129
 member.matched.130:
-  %r327 = getelementptr %"lerta.object.ast.lerta.Return", ptr %p1, i32 0, i32 3
+  %r327 = getelementptr %"lerta.object.ast.lerta.StringLiteral", ptr %p1, i32 0, i32 3
   %r328 = load ptr, ptr %r327
   call void @lerta_retain(ptr %r328)
   call void @lerta_release(ptr %p1)
@@ -105598,10 +106080,10 @@ member.matched.130:
 member.next.129:
   %r329 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r330 = load ptr, ptr %r329
-  %r331 = icmp eq ptr %r330, @"lerta.drop.ast.lerta.StringLiteral"
+  %r331 = icmp eq ptr %r330, @"lerta.drop.ast.lerta.This"
   br i1 %r331, label %member.matched.132, label %member.next.131
 member.matched.132:
-  %r332 = getelementptr %"lerta.object.ast.lerta.StringLiteral", ptr %p1, i32 0, i32 3
+  %r332 = getelementptr %"lerta.object.ast.lerta.This", ptr %p1, i32 0, i32 2
   %r333 = load ptr, ptr %r332
   call void @lerta_retain(ptr %r333)
   call void @lerta_release(ptr %p1)
@@ -105609,10 +106091,10 @@ member.matched.132:
 member.next.131:
   %r334 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r335 = load ptr, ptr %r334
-  %r336 = icmp eq ptr %r335, @"lerta.drop.ast.lerta.This"
+  %r336 = icmp eq ptr %r335, @"lerta.drop.ast.lerta.Throw"
   br i1 %r336, label %member.matched.134, label %member.next.133
 member.matched.134:
-  %r337 = getelementptr %"lerta.object.ast.lerta.This", ptr %p1, i32 0, i32 2
+  %r337 = getelementptr %"lerta.object.ast.lerta.Throw", ptr %p1, i32 0, i32 3
   %r338 = load ptr, ptr %r337
   call void @lerta_retain(ptr %r338)
   call void @lerta_release(ptr %p1)
@@ -105620,10 +106102,10 @@ member.matched.134:
 member.next.133:
   %r339 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r340 = load ptr, ptr %r339
-  %r341 = icmp eq ptr %r340, @"lerta.drop.ast.lerta.Throw"
+  %r341 = icmp eq ptr %r340, @"lerta.drop.ast.lerta.Try"
   br i1 %r341, label %member.matched.136, label %member.next.135
 member.matched.136:
-  %r342 = getelementptr %"lerta.object.ast.lerta.Throw", ptr %p1, i32 0, i32 3
+  %r342 = getelementptr %"lerta.object.ast.lerta.Try", ptr %p1, i32 0, i32 5
   %r343 = load ptr, ptr %r342
   call void @lerta_retain(ptr %r343)
   call void @lerta_release(ptr %p1)
@@ -105631,10 +106113,10 @@ member.matched.136:
 member.next.135:
   %r344 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r345 = load ptr, ptr %r344
-  %r346 = icmp eq ptr %r345, @"lerta.drop.ast.lerta.Try"
+  %r346 = icmp eq ptr %r345, @"lerta.drop.ast.lerta.TupleItem"
   br i1 %r346, label %member.matched.138, label %member.next.137
 member.matched.138:
-  %r347 = getelementptr %"lerta.object.ast.lerta.Try", ptr %p1, i32 0, i32 5
+  %r347 = getelementptr %"lerta.object.ast.lerta.TupleItem", ptr %p1, i32 0, i32 5
   %r348 = load ptr, ptr %r347
   call void @lerta_retain(ptr %r348)
   call void @lerta_release(ptr %p1)
@@ -105642,10 +106124,10 @@ member.matched.138:
 member.next.137:
   %r349 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r350 = load ptr, ptr %r349
-  %r351 = icmp eq ptr %r350, @"lerta.drop.ast.lerta.TupleItem"
+  %r351 = icmp eq ptr %r350, @"lerta.drop.ast.lerta.TupleLiteral"
   br i1 %r351, label %member.matched.140, label %member.next.139
 member.matched.140:
-  %r352 = getelementptr %"lerta.object.ast.lerta.TupleItem", ptr %p1, i32 0, i32 5
+  %r352 = getelementptr %"lerta.object.ast.lerta.TupleLiteral", ptr %p1, i32 0, i32 3
   %r353 = load ptr, ptr %r352
   call void @lerta_retain(ptr %r353)
   call void @lerta_release(ptr %p1)
@@ -105653,10 +106135,10 @@ member.matched.140:
 member.next.139:
   %r354 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r355 = load ptr, ptr %r354
-  %r356 = icmp eq ptr %r355, @"lerta.drop.ast.lerta.TupleLiteral"
+  %r356 = icmp eq ptr %r355, @"lerta.drop.ast.lerta.TypeAlias"
   br i1 %r356, label %member.matched.142, label %member.next.141
 member.matched.142:
-  %r357 = getelementptr %"lerta.object.ast.lerta.TupleLiteral", ptr %p1, i32 0, i32 3
+  %r357 = getelementptr %"lerta.object.ast.lerta.TypeAlias", ptr %p1, i32 0, i32 4
   %r358 = load ptr, ptr %r357
   call void @lerta_retain(ptr %r358)
   call void @lerta_release(ptr %p1)
@@ -105664,10 +106146,10 @@ member.matched.142:
 member.next.141:
   %r359 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r360 = load ptr, ptr %r359
-  %r361 = icmp eq ptr %r360, @"lerta.drop.ast.lerta.TypeAlias"
+  %r361 = icmp eq ptr %r360, @"lerta.drop.ast.lerta.TypeDeclaration"
   br i1 %r361, label %member.matched.144, label %member.next.143
 member.matched.144:
-  %r362 = getelementptr %"lerta.object.ast.lerta.TypeAlias", ptr %p1, i32 0, i32 4
+  %r362 = getelementptr %"lerta.object.ast.lerta.TypeDeclaration", ptr %p1, i32 0, i32 6
   %r363 = load ptr, ptr %r362
   call void @lerta_retain(ptr %r363)
   call void @lerta_release(ptr %p1)
@@ -105675,10 +106157,10 @@ member.matched.144:
 member.next.143:
   %r364 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r365 = load ptr, ptr %r364
-  %r366 = icmp eq ptr %r365, @"lerta.drop.ast.lerta.TypeDeclaration"
+  %r366 = icmp eq ptr %r365, @"lerta.drop.ast.lerta.UnaryOperation"
   br i1 %r366, label %member.matched.146, label %member.next.145
 member.matched.146:
-  %r367 = getelementptr %"lerta.object.ast.lerta.TypeDeclaration", ptr %p1, i32 0, i32 6
+  %r367 = getelementptr %"lerta.object.ast.lerta.UnaryOperation", ptr %p1, i32 0, i32 4
   %r368 = load ptr, ptr %r367
   call void @lerta_retain(ptr %r368)
   call void @lerta_release(ptr %p1)
@@ -105686,10 +106168,10 @@ member.matched.146:
 member.next.145:
   %r369 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r370 = load ptr, ptr %r369
-  %r371 = icmp eq ptr %r370, @"lerta.drop.ast.lerta.UnaryOperation"
+  %r371 = icmp eq ptr %r370, @"lerta.drop.ast.lerta.Unwrap"
   br i1 %r371, label %member.matched.148, label %member.next.147
 member.matched.148:
-  %r372 = getelementptr %"lerta.object.ast.lerta.UnaryOperation", ptr %p1, i32 0, i32 4
+  %r372 = getelementptr %"lerta.object.ast.lerta.Unwrap", ptr %p1, i32 0, i32 3
   %r373 = load ptr, ptr %r372
   call void @lerta_retain(ptr %r373)
   call void @lerta_release(ptr %p1)
@@ -105697,69 +106179,58 @@ member.matched.148:
 member.next.147:
   %r374 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
   %r375 = load ptr, ptr %r374
-  %r376 = icmp eq ptr %r375, @"lerta.drop.ast.lerta.Unwrap"
+  %r376 = icmp eq ptr %r375, @"lerta.drop.ast.lerta.While"
   br i1 %r376, label %member.matched.150, label %member.next.149
 member.matched.150:
-  %r377 = getelementptr %"lerta.object.ast.lerta.Unwrap", ptr %p1, i32 0, i32 3
+  %r377 = getelementptr %"lerta.object.ast.lerta.While", ptr %p1, i32 0, i32 4
   %r378 = load ptr, ptr %r377
   call void @lerta_retain(ptr %r378)
   call void @lerta_release(ptr %p1)
   br label %member.done.62
 member.next.149:
-  %r379 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r379 = getelementptr %"lerta.object.ast.lerta.Yield", ptr %p1, i32 0, i32 3
   %r380 = load ptr, ptr %r379
-  %r381 = icmp eq ptr %r380, @"lerta.drop.ast.lerta.While"
-  br i1 %r381, label %member.matched.152, label %member.next.151
-member.matched.152:
-  %r382 = getelementptr %"lerta.object.ast.lerta.While", ptr %p1, i32 0, i32 4
-  %r383 = load ptr, ptr %r382
-  call void @lerta_retain(ptr %r383)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.62
-member.next.151:
-  %r384 = getelementptr %"lerta.object.ast.lerta.Yield", ptr %p1, i32 0, i32 3
-  %r385 = load ptr, ptr %r384
-  call void @lerta_retain(ptr %r385)
+  call void @lerta_retain(ptr %r380)
   call void @lerta_release(ptr %p1)
   br label %member.done.62
 member.done.62:
-  %r386 = phi ptr [ %r163, %member.matched.64 ], [ %r168, %member.matched.66 ], [ %r173, %member.matched.68 ], [ %r178, %member.matched.70 ], [ %r183, %member.matched.72 ], [ %r188, %member.matched.74 ], [ %r193, %member.matched.76 ], [ %r198, %member.matched.78 ], [ %r203, %member.matched.80 ], [ %r208, %member.matched.82 ], [ %r213, %member.matched.84 ], [ %r218, %member.matched.86 ], [ %r223, %member.matched.88 ], [ %r228, %member.matched.90 ], [ %r233, %member.matched.92 ], [ %r238, %member.matched.94 ], [ %r243, %member.matched.96 ], [ %r248, %member.matched.98 ], [ %r253, %member.matched.100 ], [ %r258, %member.matched.102 ], [ %r263, %member.matched.104 ], [ %r268, %member.matched.106 ], [ %r273, %member.matched.108 ], [ %r278, %member.matched.110 ], [ %r283, %member.matched.112 ], [ %r288, %member.matched.114 ], [ %r293, %member.matched.116 ], [ %r298, %member.matched.118 ], [ %r303, %member.matched.120 ], [ %r308, %member.matched.122 ], [ %r313, %member.matched.124 ], [ %r318, %member.matched.126 ], [ %r323, %member.matched.128 ], [ %r328, %member.matched.130 ], [ %r333, %member.matched.132 ], [ %r338, %member.matched.134 ], [ %r343, %member.matched.136 ], [ %r348, %member.matched.138 ], [ %r353, %member.matched.140 ], [ %r358, %member.matched.142 ], [ %r363, %member.matched.144 ], [ %r368, %member.matched.146 ], [ %r373, %member.matched.148 ], [ %r378, %member.matched.150 ], [ %r383, %member.matched.152 ], [ %r385, %member.next.151 ]
-  %r387 = load ptr, ptr %r156
-  call void @lerta_retain(ptr %r387)
-  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r158, ptr %r386, ptr %r387)
+  %r381 = phi ptr [ %r163, %member.matched.64 ], [ %r168, %member.matched.66 ], [ %r173, %member.matched.68 ], [ %r178, %member.matched.70 ], [ %r183, %member.matched.72 ], [ %r188, %member.matched.74 ], [ %r193, %member.matched.76 ], [ %r198, %member.matched.78 ], [ %r203, %member.matched.80 ], [ %r208, %member.matched.82 ], [ %r213, %member.matched.84 ], [ %r218, %member.matched.86 ], [ %r223, %member.matched.88 ], [ %r228, %member.matched.90 ], [ %r233, %member.matched.92 ], [ %r238, %member.matched.94 ], [ %r243, %member.matched.96 ], [ %r248, %member.matched.98 ], [ %r253, %member.matched.100 ], [ %r258, %member.matched.102 ], [ %r263, %member.matched.104 ], [ %r268, %member.matched.106 ], [ %r273, %member.matched.108 ], [ %r278, %member.matched.110 ], [ %r283, %member.matched.112 ], [ %r288, %member.matched.114 ], [ %r293, %member.matched.116 ], [ %r298, %member.matched.118 ], [ %r303, %member.matched.120 ], [ %r308, %member.matched.122 ], [ %r313, %member.matched.124 ], [ %r318, %member.matched.126 ], [ %r323, %member.matched.128 ], [ %r328, %member.matched.130 ], [ %r333, %member.matched.132 ], [ %r338, %member.matched.134 ], [ %r343, %member.matched.136 ], [ %r348, %member.matched.138 ], [ %r353, %member.matched.140 ], [ %r358, %member.matched.142 ], [ %r363, %member.matched.144 ], [ %r368, %member.matched.146 ], [ %r373, %member.matched.148 ], [ %r378, %member.matched.150 ], [ %r380, %member.next.149 ]
+  %r382 = load ptr, ptr %r156
+  call void @lerta_retain(ptr %r382)
+  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r158, ptr %r381, ptr %r382)
   call void @lerta_release(ptr %r158)
+  call void @lerta_release(ptr %r381)
+  call void @lerta_release(ptr %r382)
+  %r383 = load ptr, ptr @lerta_exception
+  %r384 = icmp ne ptr %r383, null
+  br i1 %r384, label %unwind.151, label %no.exception.152
+unwind.151:
+  %r385 = load ptr, ptr %r146
+  call void @lerta_release(ptr %r385)
+  %r386 = load ptr, ptr %r156
   call void @lerta_release(ptr %r386)
+  %r387 = load ptr, ptr %r4
   call void @lerta_release(ptr %r387)
-  %r388 = load ptr, ptr @lerta_exception
-  %r389 = icmp ne ptr %r388, null
-  br i1 %r389, label %unwind.153, label %no.exception.154
-unwind.153:
+  %r388 = load ptr, ptr %r15
+  call void @lerta_release(ptr %r388)
+  %r389 = load ptr, ptr %r115
+  call void @lerta_release(ptr %r389)
+  ret void
+no.exception.152:
   %r390 = load ptr, ptr %r146
   call void @lerta_release(ptr %r390)
   %r391 = load ptr, ptr %r156
   call void @lerta_release(ptr %r391)
+  br label %if.end.55
+if.else.54:
+  br label %if.end.55
+if.end.55:
   %r392 = load ptr, ptr %r4
   call void @lerta_release(ptr %r392)
   %r393 = load ptr, ptr %r15
   call void @lerta_release(ptr %r393)
   %r394 = load ptr, ptr %r115
   call void @lerta_release(ptr %r394)
-  ret void
-no.exception.154:
-  %r395 = load ptr, ptr %r146
-  call void @lerta_release(ptr %r395)
-  %r396 = load ptr, ptr %r156
-  call void @lerta_release(ptr %r396)
-  br label %if.end.55
-if.else.54:
-  br label %if.end.55
-if.end.55:
-  %r397 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r397)
-  %r398 = load ptr, ptr %r15
-  call void @lerta_release(ptr %r398)
-  %r399 = load ptr, ptr %r115
-  call void @lerta_release(ptr %r399)
   ret void
 }
 define ptr @"lerta.fn.checker/result.lerta.value_of"(ptr %p0) {
@@ -109558,7 +110029,7 @@ no.exception.1:
   call void @lerta_release(ptr %r19)
   ret ptr %r18
 }
-define private i1 @lerta.lambda.129(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.130(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.ast.lerta.Parameter", ptr %p0, i32 0, i32 3
@@ -109570,7 +110041,7 @@ entry:
   %r3 = xor i1 %r2, true
   ret i1 %r3
 }
-define private ptr @lerta.lambda.130(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.131(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
@@ -109671,8 +110142,8 @@ no.exception.3:
   %r12 = load ptr, ptr %r11
   call void @lerta_retain(ptr %r12)
   call void @lerta_release(ptr %p1)
-  %r13 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.Parameter>, ast.lerta.Parameter>"(ptr %r12, ptr @"lerta.closure.lerta.lambda.129")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.129")
+  %r13 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.Parameter>, ast.lerta.Parameter>"(ptr %r12, ptr @"lerta.closure.lerta.lambda.130")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.130")
   call void @lerta_release(ptr %r12)
   %r14 = load ptr, ptr @lerta_exception
   %r15 = icmp ne ptr %r14, null
@@ -109833,7 +110304,7 @@ no.exception.27:
 if.else.11:
   br label %if.end.12
 if.end.12:
-  store ptr @"lerta.closure.lerta.lambda.130", ptr %r71
+  store ptr @"lerta.closure.lerta.lambda.131", ptr %r71
   %r72 = call ptr @lerta_array_create(i32 1)
   call void @lerta_retain(ptr %p2)
   %r73 = icmp ne ptr %p2, null
@@ -110633,7 +111104,7 @@ no.exception.3:
   call void @lerta_release(ptr %r16)
   ret void
 }
-define private i1 @lerta.lambda.131(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.132(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.checker/shared.lerta.Capture", ptr %p0, i32 0, i32 2
@@ -110648,8 +111119,8 @@ entry:
 define void @"lerta.fn.checker/closure.lerta.reject_needless_weak"(ptr %p0, ptr %p1, ptr %p2) {
 entry:
   call void @lerta_retain(ptr %p2)
-  %r0 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/shared.lerta.Capture>, checker/shared.lerta.Capture>"(ptr %p2, ptr @"lerta.closure.lerta.lambda.131")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.131")
+  %r0 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/shared.lerta.Capture>, checker/shared.lerta.Capture>"(ptr %p2, ptr @"lerta.closure.lerta.lambda.132")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.132")
   call void @lerta_release(ptr %p2)
   %r1 = load ptr, ptr @lerta_exception
   %r2 = icmp ne ptr %r1, null
@@ -110683,7 +111154,7 @@ unwind.6:
 no.exception.7:
   ret void
 }
-define private i1 @lerta.lambda.132(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.133(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = call i1 @"lerta.fn.types.lerta.is_kind"(ptr %p0, i64 6)
@@ -110702,7 +111173,7 @@ entry:
   %r22 = alloca i1
   %r25 = alloca ptr
   %r43 = alloca ptr
-  store ptr @"lerta.closure.lerta.lambda.132", ptr %r0
+  store ptr @"lerta.closure.lerta.lambda.133", ptr %r0
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_retain(ptr %p2)
@@ -110848,7 +111319,7 @@ if.end.10:
   call void @lerta_release(ptr %r54)
   ret void
 }
-define private i1 @lerta.lambda.133(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.134(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -110863,7 +111334,7 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r4
 }
-define private void @"lerta.lambda.133.drop"(ptr %closure) {
+define private void @"lerta.lambda.134.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -111074,9 +111545,9 @@ if.end.25:
   call void @lerta_retain(ptr %p1)
   %r71 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r72 = ptrtoint ptr %r71 to i64
-  %r73 = call ptr @lerta_alloc(i64 %r72, ptr @"lerta.lambda.133.drop")
+  %r73 = call ptr @lerta_alloc(i64 %r72, ptr @"lerta.lambda.134.drop")
   %r74 = getelementptr { i64, ptr, ptr }, ptr %r73, i32 0, i32 2
-  store ptr @lerta.lambda.133, ptr %r74
+  store ptr @lerta.lambda.134, ptr %r74
   %r75 = getelementptr { i64, ptr, ptr, ptr }, ptr %r73, i32 0, i32 3
   store ptr %p1, ptr %r75
   %r76 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/shared.lerta.Capture>, checker/shared.lerta.Capture>"(ptr %r70, ptr %r73)
@@ -111429,7 +111900,7 @@ unwind.21:
 no.exception.22:
   ret ptr %r40
 }
-define private ptr @lerta.lambda.134(ptr %closure) {
+define private ptr @lerta.lambda.135(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -111448,7 +111919,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r4
 }
-define private void @"lerta.lambda.134.drop"(ptr %closure) {
+define private void @"lerta.lambda.135.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -111644,9 +112115,9 @@ no.exception.17:
   call void @lerta_retain(ptr %r76)
   %r77 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r78 = ptrtoint ptr %r77 to i64
-  %r79 = call ptr @lerta_alloc(i64 %r78, ptr @"lerta.lambda.134.drop")
+  %r79 = call ptr @lerta_alloc(i64 %r78, ptr @"lerta.lambda.135.drop")
   %r80 = getelementptr { i64, ptr, ptr }, ptr %r79, i32 0, i32 2
-  store ptr @lerta.lambda.134, ptr %r80
+  store ptr @lerta.lambda.135, ptr %r80
   %r81 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r79, i32 0, i32 3
   store ptr %r75, ptr %r81
   %r82 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r79, i32 0, i32 4
@@ -111872,7 +112343,7 @@ continue.38:
   call void @lerta_release(ptr %r184)
   ret ptr %r177
 }
-define private void @lerta.lambda.135(ptr %closure) {
+define private void @lerta.lambda.136(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -111910,7 +112381,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.135.drop"(ptr %closure) {
+define private void @"lerta.lambda.136.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -112831,9 +113302,9 @@ if.end.79:
   call void @lerta_retain(ptr %r360)
   %r361 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r362 = ptrtoint ptr %r361 to i64
-  %r363 = call ptr @lerta_alloc(i64 %r362, ptr @"lerta.lambda.135.drop")
+  %r363 = call ptr @lerta_alloc(i64 %r362, ptr @"lerta.lambda.136.drop")
   %r364 = getelementptr { i64, ptr, ptr }, ptr %r363, i32 0, i32 2
-  store ptr @lerta.lambda.135, ptr %r364
+  store ptr @lerta.lambda.136, ptr %r364
   %r365 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r363, i32 0, i32 3
   store ptr %r358, ptr %r365
   %r366 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r363, i32 0, i32 4
@@ -113699,7 +114170,7 @@ entry:
   store i1 true, ptr @"lerta.value.checker/case.lerta.VALUE_KINDS.set"
   ret void
 }
-define private void @lerta.lambda.137(ptr %closure) {
+define private void @lerta.lambda.138(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -113708,36 +114179,42 @@ entry:
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %closure, i32 0, i32 5
   %r5 = load i64, ptr %r4
   call void @lerta_retain(ptr %r1)
-  %r6 = call ptr @lerta_array_checked_items(ptr %r3, i64 %r5)
-  %r7 = icmp ne ptr %r6, null
-  br i1 %r7, label %branch.then.0, label %branch.end.1
+  call void @lerta_retain(ptr %r3)
+  %r6 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr %r3, i32 0, i32 2
+  %r7 = load ptr, ptr %r6
+  call void @lerta_retain(ptr %r7)
+  call void @lerta_release(ptr %r3)
+  %r8 = call ptr @lerta_array_checked_items(ptr %r7, i64 %r5)
+  %r9 = icmp ne ptr %r8, null
+  br i1 %r9, label %branch.then.0, label %branch.end.1
 branch.then.0:
-  %r8 = getelementptr i64, ptr %r6, i64 %r5
-  %r9 = load i64, ptr %r8
-  %r10 = inttoptr i64 %r9 to ptr
-  call void @lerta_retain(ptr %r10)
+  %r10 = getelementptr i64, ptr %r8, i64 %r5
+  %r11 = load i64, ptr %r10
+  %r12 = inttoptr i64 %r11 to ptr
+  call void @lerta_retain(ptr %r12)
   br label %branch.end.1
 branch.end.1:
-  %r11 = phi ptr [ poison, %entry ], [ %r10, %branch.then.0 ]
-  %r12 = load ptr, ptr @lerta_exception
-  %r13 = icmp ne ptr %r12, null
-  br i1 %r13, label %unwind.2, label %no.exception.3
+  %r13 = phi ptr [ poison, %entry ], [ %r12, %branch.then.0 ]
+  call void @lerta_release(ptr %r7)
+  %r14 = load ptr, ptr @lerta_exception
+  %r15 = icmp ne ptr %r14, null
+  br i1 %r15, label %unwind.2, label %no.exception.3
 unwind.2:
   call void @lerta_release(ptr %r1)
   ret void
 no.exception.3:
-  call void @"lerta.fn.checker/narrowing.lerta.narrow"(ptr %r1, ptr %r11)
+  call void @"lerta.fn.checker/narrowing.lerta.narrow"(ptr %r1, ptr %r13)
   call void @lerta_release(ptr %r1)
-  call void @lerta_release(ptr %r11)
-  %r14 = load ptr, ptr @lerta_exception
-  %r15 = icmp ne ptr %r14, null
-  br i1 %r15, label %unwind.4, label %no.exception.5
+  call void @lerta_release(ptr %r13)
+  %r16 = load ptr, ptr @lerta_exception
+  %r17 = icmp ne ptr %r16, null
+  br i1 %r17, label %unwind.4, label %no.exception.5
 unwind.4:
   ret void
 no.exception.5:
   ret void
 }
-define private void @"lerta.lambda.137.drop"(ptr %closure) {
+define private void @"lerta.lambda.138.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -113747,7 +114224,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.136(ptr %closure, i64 %p0) {
+define private ptr @lerta.lambda.137(ptr %closure, i64 %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -113780,9 +114257,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r5)
   %r16 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr null, i32 1
   %r17 = ptrtoint ptr %r16 to i64
-  %r18 = call ptr @lerta_alloc(i64 %r17, ptr @"lerta.lambda.137.drop")
+  %r18 = call ptr @lerta_alloc(i64 %r17, ptr @"lerta.lambda.138.drop")
   %r19 = getelementptr { i64, ptr, ptr }, ptr %r18, i32 0, i32 2
-  store ptr @lerta.lambda.137, ptr %r19
+  store ptr @lerta.lambda.138, ptr %r19
   %r20 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %r18, i32 0, i32 3
   store ptr %r3, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %r18, i32 0, i32 4
@@ -113800,7 +114277,7 @@ unwind.4:
 no.exception.5:
   ret ptr %r23
 }
-define private void @"lerta.lambda.136.drop"(ptr %closure) {
+define private void @"lerta.lambda.137.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -113813,7 +114290,40 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private ptr @lerta.lambda.138(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.139(ptr %closure) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  %r2 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 4
+  %r3 = load ptr, ptr %r2
+  call void @lerta_retain(ptr %r1)
+  call void @lerta_retain(ptr %r3)
+  %r4 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr %r3, i32 0, i32 3
+  %r5 = load ptr, ptr %r4
+  call void @lerta_retain(ptr %r5)
+  call void @lerta_release(ptr %r3)
+  call void @"lerta.fn.checker/narrowing.lerta.narrow"(ptr %r1, ptr %r5)
+  call void @lerta_release(ptr %r1)
+  call void @lerta_release(ptr %r5)
+  %r6 = load ptr, ptr @lerta_exception
+  %r7 = icmp ne ptr %r6, null
+  br i1 %r7, label %unwind.0, label %no.exception.1
+unwind.0:
+  ret void
+no.exception.1:
+  ret void
+}
+define private void @"lerta.lambda.139.drop"(ptr %closure) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  %r2 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 4
+  %r3 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r3)
+  ret void
+}
+define private ptr @lerta.lambda.140(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -113835,7 +114345,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r4
 }
-define private void @"lerta.lambda.138.drop"(ptr %closure) {
+define private void @"lerta.lambda.140.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -113853,7 +114363,7 @@ entry:
   %r18 = alloca ptr
   %r40 = alloca ptr
   %r44 = alloca ptr
-  %r76 = alloca ptr
+  %r83 = alloca ptr
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
   %r0 = call ptr @"lerta.fn.checker/case.lerta.check_patterns"(ptr %p0, ptr %p1)
@@ -113882,9 +114392,9 @@ no.exception.1:
   call void @lerta_retain(ptr %r10)
   %r11 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r12 = ptrtoint ptr %r11 to i64
-  %r13 = call ptr @lerta_alloc(i64 %r12, ptr @"lerta.lambda.136.drop")
+  %r13 = call ptr @lerta_alloc(i64 %r12, ptr @"lerta.lambda.137.drop")
   %r14 = getelementptr { i64, ptr, ptr }, ptr %r13, i32 0, i32 2
-  store ptr @lerta.lambda.136, ptr %r14
+  store ptr @lerta.lambda.137, ptr %r14
   %r15 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r13, i32 0, i32 3
   store ptr %r9, ptr %r15
   %r16 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r13, i32 0, i32 4
@@ -113955,115 +114465,127 @@ if.then.10:
   call void @lerta_retain(ptr %r45)
   %r46 = load ptr, ptr %r44
   call void @lerta_retain(ptr %r46)
-  %r47 = call ptr @"lerta.new.checker/case.lerta.Branch"(ptr %r46, ptr @"lerta.closure.lerta.thunk.lerta.fn.checker/statement.lerta.nothing")
+  call void @lerta_retain(ptr %p0)
+  %r47 = load ptr, ptr %r3
+  call void @lerta_retain(ptr %r47)
+  %r48 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
+  %r49 = ptrtoint ptr %r48 to i64
+  %r50 = call ptr @lerta_alloc(i64 %r49, ptr @"lerta.lambda.139.drop")
+  %r51 = getelementptr { i64, ptr, ptr }, ptr %r50, i32 0, i32 2
+  store ptr @lerta.lambda.139, ptr %r51
+  %r52 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r50, i32 0, i32 3
+  store ptr %p0, ptr %r52
+  %r53 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r50, i32 0, i32 4
+  store ptr %r47, ptr %r53
+  %r54 = call ptr @"lerta.new.checker/case.lerta.Branch"(ptr %r46, ptr %r50)
   call void @lerta_release(ptr %r46)
-  call void @lerta_release(ptr @"lerta.closure.lerta.thunk.lerta.fn.checker/statement.lerta.nothing")
-  %r48 = load ptr, ptr @lerta_exception
-  %r49 = icmp ne ptr %r48, null
-  br i1 %r49, label %unwind.13, label %no.exception.14
+  call void @lerta_release(ptr %r50)
+  %r55 = load ptr, ptr @lerta_exception
+  %r56 = icmp ne ptr %r55, null
+  br i1 %r56, label %unwind.13, label %no.exception.14
 unwind.13:
   call void @lerta_release(ptr %r45)
-  %r50 = load ptr, ptr %r44
-  call void @lerta_release(ptr %r50)
-  %r51 = load ptr, ptr %r3
-  call void @lerta_release(ptr %r51)
-  %r52 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r52)
-  %r53 = load ptr, ptr %r8
-  call void @lerta_release(ptr %r53)
-  %r54 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r54)
-  %r55 = load ptr, ptr %r40
-  call void @lerta_release(ptr %r55)
+  %r57 = load ptr, ptr %r44
+  call void @lerta_release(ptr %r57)
+  %r58 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r58)
+  %r59 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r59)
+  %r60 = load ptr, ptr %r8
+  call void @lerta_release(ptr %r60)
+  %r61 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r61)
+  %r62 = load ptr, ptr %r40
+  call void @lerta_release(ptr %r62)
   ret ptr poison
 no.exception.14:
-  %r56 = call ptr @lerta_array_pushed_items(ptr %r45)
-  %r57 = call i64 @lerta_array_length(ptr %r45)
-  %r58 = sub i64 %r57, 1
-  call void @lerta_retain(ptr %r47)
-  %r59 = getelementptr i64, ptr %r56, i64 %r58
-  %r60 = ptrtoint ptr %r47 to i64
-  store i64 %r60, ptr %r59
-  call void @lerta_release(ptr %r47)
+  %r63 = call ptr @lerta_array_pushed_items(ptr %r45)
+  %r64 = call i64 @lerta_array_length(ptr %r45)
+  %r65 = sub i64 %r64, 1
+  call void @lerta_retain(ptr %r54)
+  %r66 = getelementptr i64, ptr %r63, i64 %r65
+  %r67 = ptrtoint ptr %r54 to i64
+  store i64 %r67, ptr %r66
+  call void @lerta_release(ptr %r54)
   call void @lerta_release(ptr %r45)
-  %r61 = load ptr, ptr @lerta_exception
-  %r62 = icmp ne ptr %r61, null
-  br i1 %r62, label %unwind.15, label %no.exception.16
+  %r68 = load ptr, ptr @lerta_exception
+  %r69 = icmp ne ptr %r68, null
+  br i1 %r69, label %unwind.15, label %no.exception.16
 unwind.15:
-  %r63 = load ptr, ptr %r44
-  call void @lerta_release(ptr %r63)
-  %r64 = load ptr, ptr %r3
-  call void @lerta_release(ptr %r64)
-  %r65 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r65)
-  %r66 = load ptr, ptr %r8
-  call void @lerta_release(ptr %r66)
-  %r67 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r67)
-  %r68 = load ptr, ptr %r40
-  call void @lerta_release(ptr %r68)
+  %r70 = load ptr, ptr %r44
+  call void @lerta_release(ptr %r70)
+  %r71 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r71)
+  %r72 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r72)
+  %r73 = load ptr, ptr %r8
+  call void @lerta_release(ptr %r73)
+  %r74 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r74)
+  %r75 = load ptr, ptr %r40
+  call void @lerta_release(ptr %r75)
   ret ptr poison
 no.exception.16:
-  %r69 = load ptr, ptr %r44
-  call void @lerta_release(ptr %r69)
+  %r76 = load ptr, ptr %r44
+  call void @lerta_release(ptr %r76)
   br label %if.end.12
 if.else.11:
   br label %if.end.12
 if.end.12:
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
-  %r70 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
-  %r71 = ptrtoint ptr %r70 to i64
-  %r72 = call ptr @lerta_alloc(i64 %r71, ptr @"lerta.lambda.138.drop")
-  %r73 = getelementptr { i64, ptr, ptr }, ptr %r72, i32 0, i32 2
-  store ptr @lerta.lambda.138, ptr %r73
-  %r74 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r72, i32 0, i32 3
-  store ptr %p0, ptr %r74
-  %r75 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r72, i32 0, i32 4
-  store ptr %p1, ptr %r75
-  store ptr %r72, ptr %r76
+  %r77 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
+  %r78 = ptrtoint ptr %r77 to i64
+  %r79 = call ptr @lerta_alloc(i64 %r78, ptr @"lerta.lambda.140.drop")
+  %r80 = getelementptr { i64, ptr, ptr }, ptr %r79, i32 0, i32 2
+  store ptr @lerta.lambda.140, ptr %r80
+  %r81 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r79, i32 0, i32 3
+  store ptr %p0, ptr %r81
+  %r82 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r79, i32 0, i32 4
+  store ptr %p1, ptr %r82
+  store ptr %r79, ptr %r83
   call void @lerta_retain(ptr %p0)
-  %r77 = load ptr, ptr %r40
-  call void @lerta_retain(ptr %r77)
+  %r84 = load ptr, ptr %r40
+  call void @lerta_retain(ptr %r84)
   call void @lerta_retain(ptr %p2)
-  %r78 = load ptr, ptr %r76
-  call void @lerta_retain(ptr %r78)
-  %r79 = call ptr @"lerta.fn.checker/case.lerta.type_of_branches"(ptr %p0, ptr %r77, ptr %p2, ptr %r78)
+  %r85 = load ptr, ptr %r83
+  call void @lerta_retain(ptr %r85)
+  %r86 = call ptr @"lerta.fn.checker/case.lerta.type_of_branches"(ptr %p0, ptr %r84, ptr %p2, ptr %r85)
   call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r77)
-  call void @lerta_release(ptr %p2)
-  call void @lerta_release(ptr %r78)
-  %r80 = load ptr, ptr @lerta_exception
-  %r81 = icmp ne ptr %r80, null
-  br i1 %r81, label %unwind.17, label %no.exception.18
-unwind.17:
-  %r82 = load ptr, ptr %r3
-  call void @lerta_release(ptr %r82)
-  %r83 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r83)
-  %r84 = load ptr, ptr %r8
   call void @lerta_release(ptr %r84)
-  %r85 = load ptr, ptr %r18
+  call void @lerta_release(ptr %p2)
   call void @lerta_release(ptr %r85)
-  %r86 = load ptr, ptr %r40
-  call void @lerta_release(ptr %r86)
-  %r87 = load ptr, ptr %r76
-  call void @lerta_release(ptr %r87)
+  %r87 = load ptr, ptr @lerta_exception
+  %r88 = icmp ne ptr %r87, null
+  br i1 %r88, label %unwind.17, label %no.exception.18
+unwind.17:
+  %r89 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r89)
+  %r90 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r90)
+  %r91 = load ptr, ptr %r8
+  call void @lerta_release(ptr %r91)
+  %r92 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r92)
+  %r93 = load ptr, ptr %r40
+  call void @lerta_release(ptr %r93)
+  %r94 = load ptr, ptr %r83
+  call void @lerta_release(ptr %r94)
   ret ptr poison
 no.exception.18:
-  %r88 = load ptr, ptr %r3
-  call void @lerta_release(ptr %r88)
-  %r89 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r89)
-  %r90 = load ptr, ptr %r8
-  call void @lerta_release(ptr %r90)
-  %r91 = load ptr, ptr %r18
-  call void @lerta_release(ptr %r91)
-  %r92 = load ptr, ptr %r40
-  call void @lerta_release(ptr %r92)
-  %r93 = load ptr, ptr %r76
-  call void @lerta_release(ptr %r93)
-  ret ptr %r79
+  %r95 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r95)
+  %r96 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r96)
+  %r97 = load ptr, ptr %r8
+  call void @lerta_release(ptr %r97)
+  %r98 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r98)
+  %r99 = load ptr, ptr %r40
+  call void @lerta_release(ptr %r99)
+  %r100 = load ptr, ptr %r83
+  call void @lerta_release(ptr %r100)
+  ret ptr %r86
 }
 define ptr @"lerta.fn.checker/case.lerta.type_of_if"(ptr %p0, ptr %p1, ptr %p2) {
 entry:
@@ -114281,7 +114803,7 @@ no.exception.15:
   call void @lerta_release(ptr %r87)
   ret ptr %r73
 }
-define private void @lerta.lambda.139(ptr %closure) {
+define private void @lerta.lambda.141(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -114317,7 +114839,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.139.drop"(ptr %closure) {
+define private void @"lerta.lambda.141.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -114416,9 +114938,9 @@ no.exception.9:
   call void @lerta_retain(ptr %r35)
   %r36 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r37 = ptrtoint ptr %r36 to i64
-  %r38 = call ptr @lerta_alloc(i64 %r37, ptr @"lerta.lambda.139.drop")
+  %r38 = call ptr @lerta_alloc(i64 %r37, ptr @"lerta.lambda.141.drop")
   %r39 = getelementptr { i64, ptr, ptr }, ptr %r38, i32 0, i32 2
-  store ptr @lerta.lambda.139, ptr %r39
+  store ptr @lerta.lambda.141, ptr %r39
   %r40 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r38, i32 0, i32 3
   store ptr %p0, ptr %r40
   %r41 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r38, i32 0, i32 4
@@ -115080,7 +115602,7 @@ no.exception.3:
   call void @lerta_release(ptr %r3)
   ret ptr %r7
 }
-define private void @lerta.lambda.140(ptr %closure) {
+define private void @lerta.lambda.142(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -115103,7 +115625,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.140.drop"(ptr %closure) {
+define private void @"lerta.lambda.142.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -115113,7 +115635,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.141(ptr %closure) {
+define private void @lerta.lambda.143(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -115136,7 +115658,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.141.drop"(ptr %closure) {
+define private void @"lerta.lambda.143.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -115146,7 +115668,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @lerta.lambda.143(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.145(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.checker/case.lerta.BranchValue", ptr %p0, i32 0, i32 3
@@ -115163,7 +115685,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r2
 }
-define private ptr @lerta.lambda.142(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.144(ptr %closure, ptr %p0) {
 entry:
   %r8 = alloca ptr
   %r9 = alloca ptr
@@ -115175,8 +115697,8 @@ entry:
   %r2 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 4
   %r3 = load ptr, ptr %r2
   call void @lerta_retain(ptr %p0)
-  %r4 = call ptr @"lerta.extend.std:builtins.Self.find<Array<checker/case.lerta.BranchValue>, checker/case.lerta.BranchValue>"(ptr %p0, ptr @"lerta.closure.lerta.lambda.143")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.143")
+  %r4 = call ptr @"lerta.extend.std:builtins.Self.find<Array<checker/case.lerta.BranchValue>, checker/case.lerta.BranchValue>"(ptr %p0, ptr @"lerta.closure.lerta.lambda.145")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.145")
   call void @lerta_release(ptr %p0)
   %r5 = load ptr, ptr @lerta_exception
   %r6 = icmp ne ptr %r5, null
@@ -115769,7 +116291,7 @@ no.exception.102:
   call void @lerta_release(ptr %r265)
   ret ptr %r259
 }
-define private void @"lerta.lambda.142.drop"(ptr %closure) {
+define private void @"lerta.lambda.144.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -115856,9 +116378,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r31)
   %r32 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r33 = ptrtoint ptr %r32 to i64
-  %r34 = call ptr @lerta_alloc(i64 %r33, ptr @"lerta.lambda.140.drop")
+  %r34 = call ptr @lerta_alloc(i64 %r33, ptr @"lerta.lambda.142.drop")
   %r35 = getelementptr { i64, ptr, ptr }, ptr %r34, i32 0, i32 2
-  store ptr @lerta.lambda.140, ptr %r35
+  store ptr @lerta.lambda.142, ptr %r35
   %r36 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r34, i32 0, i32 3
   store ptr %p0, ptr %r36
   %r37 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r34, i32 0, i32 4
@@ -115894,9 +116416,9 @@ no.exception.5:
   call void @lerta_retain(ptr %r50)
   %r51 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r52 = ptrtoint ptr %r51 to i64
-  %r53 = call ptr @lerta_alloc(i64 %r52, ptr @"lerta.lambda.141.drop")
+  %r53 = call ptr @lerta_alloc(i64 %r52, ptr @"lerta.lambda.143.drop")
   %r54 = getelementptr { i64, ptr, ptr }, ptr %r53, i32 0, i32 2
-  store ptr @lerta.lambda.141, ptr %r54
+  store ptr @lerta.lambda.143, ptr %r54
   %r55 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r53, i32 0, i32 3
   store ptr %p0, ptr %r55
   %r56 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r53, i32 0, i32 4
@@ -115930,9 +116452,9 @@ no.exception.7:
   call void @lerta_retain(ptr %p1)
   %r69 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r70 = ptrtoint ptr %r69 to i64
-  %r71 = call ptr @lerta_alloc(i64 %r70, ptr @"lerta.lambda.142.drop")
+  %r71 = call ptr @lerta_alloc(i64 %r70, ptr @"lerta.lambda.144.drop")
   %r72 = getelementptr { i64, ptr, ptr }, ptr %r71, i32 0, i32 2
-  store ptr @lerta.lambda.142, ptr %r72
+  store ptr @lerta.lambda.144, ptr %r72
   %r73 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r71, i32 0, i32 3
   store ptr %p0, ptr %r73
   %r74 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r71, i32 0, i32 4
@@ -115977,7 +116499,7 @@ no.exception.9:
   call void @lerta_release(ptr %r90)
   ret ptr %r78
 }
-define private ptr @lerta.lambda.144(ptr %closure, ptr %p0, ptr %p1) {
+define private ptr @lerta.lambda.146(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -116006,14 +116528,14 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.144.drop"(ptr %closure) {
+define private void @"lerta.lambda.146.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private ptr @lerta.lambda.145(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.147(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -116035,7 +116557,7 @@ no.exception.1:
   call void @lerta_retain(ptr %r3)
   ret ptr %r3
 }
-define private void @"lerta.lambda.145.drop"(ptr %closure) {
+define private void @"lerta.lambda.147.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -116045,7 +116567,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.146(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.148(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -116062,14 +116584,14 @@ unwind.0:
 no.exception.1:
   ret ptr %r2
 }
-define private void @"lerta.lambda.146.drop"(ptr %closure) {
+define private void @"lerta.lambda.148.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private ptr @lerta.lambda.147(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.149(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -116122,7 +116644,7 @@ unwind.6:
 no.exception.7:
   ret ptr %r16
 }
-define private void @"lerta.lambda.147.drop"(ptr %closure) {
+define private void @"lerta.lambda.149.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -116147,9 +116669,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.144.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.146.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.144, ptr %r3
+  store ptr @lerta.lambda.146, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   store ptr %r2, ptr %r5
@@ -116162,9 +116684,9 @@ if.then.0:
   call void @lerta_retain(ptr %p2)
   %r7 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r8 = ptrtoint ptr %r7 to i64
-  %r9 = call ptr @lerta_alloc(i64 %r8, ptr @"lerta.lambda.145.drop")
+  %r9 = call ptr @lerta_alloc(i64 %r8, ptr @"lerta.lambda.147.drop")
   %r10 = getelementptr { i64, ptr, ptr }, ptr %r9, i32 0, i32 2
-  store ptr @lerta.lambda.145, ptr %r10
+  store ptr @lerta.lambda.147, ptr %r10
   %r11 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r9, i32 0, i32 3
   store ptr %p0, ptr %r11
   %r12 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r9, i32 0, i32 4
@@ -116895,9 +117417,9 @@ if.end.2:
   call void @lerta_retain(ptr %p0)
   %r332 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r333 = ptrtoint ptr %r332 to i64
-  %r334 = call ptr @lerta_alloc(i64 %r333, ptr @"lerta.lambda.146.drop")
+  %r334 = call ptr @lerta_alloc(i64 %r333, ptr @"lerta.lambda.148.drop")
   %r335 = getelementptr { i64, ptr, ptr }, ptr %r334, i32 0, i32 2
-  store ptr @lerta.lambda.146, ptr %r335
+  store ptr @lerta.lambda.148, ptr %r335
   %r336 = getelementptr { i64, ptr, ptr, ptr }, ptr %r334, i32 0, i32 3
   store ptr %p0, ptr %r336
   store ptr %r334, ptr %r337
@@ -116907,9 +117429,9 @@ if.end.2:
   call void @lerta_retain(ptr %r339)
   %r340 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r341 = ptrtoint ptr %r340 to i64
-  %r342 = call ptr @lerta_alloc(i64 %r341, ptr @"lerta.lambda.147.drop")
+  %r342 = call ptr @lerta_alloc(i64 %r341, ptr @"lerta.lambda.149.drop")
   %r343 = getelementptr { i64, ptr, ptr }, ptr %r342, i32 0, i32 2
-  store ptr @lerta.lambda.147, ptr %r343
+  store ptr @lerta.lambda.149, ptr %r343
   %r344 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r342, i32 0, i32 3
   store ptr %r338, ptr %r344
   %r345 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r342, i32 0, i32 4
@@ -117011,7 +117533,7 @@ no.exception.129:
   call void @lerta_release(ptr %r389)
   ret ptr %r381
 }
-define private i1 @lerta.lambda.149(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.151(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.checker/case.lerta.BranchValue", ptr %p0, i32 0, i32 3
@@ -117028,7 +117550,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r2
 }
-define private ptr @lerta.lambda.148(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.150(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -117037,8 +117559,8 @@ entry:
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 5
   %r5 = load ptr, ptr %r4
   call void @lerta_retain(ptr %p0)
-  %r6 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/case.lerta.BranchValue>, checker/case.lerta.BranchValue>"(ptr %p0, ptr @"lerta.closure.lerta.lambda.149")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.149")
+  %r6 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/case.lerta.BranchValue>, checker/case.lerta.BranchValue>"(ptr %p0, ptr @"lerta.closure.lerta.lambda.151")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.151")
   call void @lerta_release(ptr %p0)
   %r7 = load ptr, ptr @lerta_exception
   %r8 = icmp ne ptr %r7, null
@@ -117073,7 +117595,7 @@ unwind.6:
 no.exception.7:
   ret ptr %r10
 }
-define private void @"lerta.lambda.148.drop"(ptr %closure) {
+define private void @"lerta.lambda.150.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -117093,9 +117615,9 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.148.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.150.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.148, ptr %r3
+  store ptr @lerta.lambda.150, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -117104,7 +117626,7 @@ entry:
   store ptr %p2, ptr %r6
   ret ptr %r2
 }
-define private void @lerta.lambda.150(ptr %closure) {
+define private void @lerta.lambda.152(ptr %closure) {
 entry:
   %r25 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -117730,7 +118252,7 @@ no.exception.104:
   call void @lerta_release(ptr %r271)
   ret void
 }
-define private void @"lerta.lambda.150.drop"(ptr %closure) {
+define private void @"lerta.lambda.152.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -117811,9 +118333,9 @@ branch.end.9:
   call void @lerta_retain(ptr %p3)
   %r28 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r29 = ptrtoint ptr %r28 to i64
-  %r30 = call ptr @lerta_alloc(i64 %r29, ptr @"lerta.lambda.150.drop")
+  %r30 = call ptr @lerta_alloc(i64 %r29, ptr @"lerta.lambda.152.drop")
   %r31 = getelementptr { i64, ptr, ptr }, ptr %r30, i32 0, i32 2
-  store ptr @lerta.lambda.150, ptr %r31
+  store ptr @lerta.lambda.152, ptr %r31
   %r32 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r30, i32 0, i32 3
   store ptr %r12, ptr %r32
   %r33 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r30, i32 0, i32 4
@@ -118578,7 +119100,7 @@ define private i1 @"lerta.thunk.lerta.fn.checker/case.lerta.is_nil_pattern"(ptr 
   %result = call i1 @"lerta.fn.checker/case.lerta.is_nil_pattern"(ptr %p0)
   ret i1 %result
 }
-define private i1 @lerta.lambda.151(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.153(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, i1 }, ptr %closure, i32 0, i32 3
   %r1 = load i1, ptr %r0
@@ -118610,24 +119132,27 @@ entry:
   %r7 = alloca ptr
   %r13 = alloca ptr
   %r24 = alloca ptr
-  %r66 = alloca ptr
-  %r71 = alloca i1
+  %r56 = alloca ptr
   %r78 = alloca ptr
-  %r91 = alloca i1
-  %r101 = alloca ptr
-  %r112 = alloca ptr
-  %r182 = alloca ptr
-  %r368 = alloca ptr
-  %r379 = alloca ptr
-  %r407 = alloca ptr
-  %r409 = alloca ptr
-  %r420 = alloca ptr
+  %r83 = alloca i1
+  %r90 = alloca ptr
+  %r103 = alloca i1
+  %r113 = alloca ptr
+  %r124 = alloca ptr
+  %r147 = alloca ptr
+  %r224 = alloca ptr
+  %r411 = alloca ptr
   %r422 = alloca ptr
-  %r433 = alloca ptr
-  %r489 = alloca ptr
-  %r507 = alloca ptr
-  %r510 = alloca ptr
-  %r521 = alloca ptr
+  %r451 = alloca ptr
+  %r453 = alloca ptr
+  %r464 = alloca ptr
+  %r466 = alloca ptr
+  %r477 = alloca ptr
+  %r536 = alloca ptr
+  %r555 = alloca ptr
+  %r558 = alloca ptr
+  %r569 = alloca ptr
+  %r600 = alloca ptr
   call void @lerta_retain(ptr %p1)
   store ptr %p1, ptr %r0
   %r1 = load ptr, ptr %r0
@@ -118751,28 +119276,19 @@ for.latch.5:
 for.exit.6:
   %r55 = load ptr, ptr %r13
   call void @lerta_release(ptr %r55)
-  %r56 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r56)
-  %r57 = load ptr, ptr %r4
+  store ptr %r11, ptr %r56
+  %r57 = load ptr, ptr %r56
+  call void @lerta_retain(ptr %r57)
+  %r58 = call ptr @lerta_array_create(i32 1)
+  %r59 = call ptr @"lerta.new.checker/case.lerta.CaseNarrowings"(ptr %r57, ptr %r58)
   call void @lerta_release(ptr %r57)
-  %r58 = load ptr, ptr %r7
   call void @lerta_release(ptr %r58)
-  ret ptr %r11
-unreachable.17:
-  br label %if.end.2
-if.else.1:
-  br label %if.end.2
-if.end.2:
-  call void @lerta_retain(ptr %p0)
-  %r59 = load ptr, ptr %r7
-  call void @lerta_retain(ptr %r59)
-  %r60 = call ptr @"lerta.fn.checker/expression.lerta.type_of.given2"(ptr %p0, ptr %r59)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r59)
-  %r61 = load ptr, ptr @lerta_exception
-  %r62 = icmp ne ptr %r61, null
-  br i1 %r62, label %unwind.18, label %no.exception.19
-unwind.18:
+  %r60 = load ptr, ptr @lerta_exception
+  %r61 = icmp ne ptr %r60, null
+  br i1 %r61, label %unwind.17, label %no.exception.18
+unwind.17:
+  %r62 = load ptr, ptr %r56
+  call void @lerta_release(ptr %r62)
   %r63 = load ptr, ptr %r0
   call void @lerta_release(ptr %r63)
   %r64 = load ptr, ptr %r4
@@ -118780,1120 +119296,1287 @@ unwind.18:
   %r65 = load ptr, ptr %r7
   call void @lerta_release(ptr %r65)
   ret ptr poison
-no.exception.19:
-  store ptr %r60, ptr %r66
-  %r67 = load ptr, ptr %r66
-  call void @lerta_retain(ptr %r67)
-  %r68 = getelementptr { i64, ptr }, ptr %r67, i32 0, i32 1
-  %r69 = load ptr, ptr %r68
-  %r70 = icmp eq ptr %r69, @"lerta.drop.types.lerta.OptionalType"
+no.exception.18:
+  %r66 = load ptr, ptr %r56
+  call void @lerta_release(ptr %r66)
+  %r67 = load ptr, ptr %r0
   call void @lerta_release(ptr %r67)
-  store i1 %r70, ptr %r71
-  %r72 = load i1, ptr %r71
-  %r73 = getelementptr { i64, ptr, ptr, i1 }, ptr null, i32 1
-  %r74 = ptrtoint ptr %r73 to i64
-  %r75 = call ptr @lerta_alloc(i64 %r74, ptr null)
-  %r76 = getelementptr { i64, ptr, ptr }, ptr %r75, i32 0, i32 2
-  store ptr @lerta.lambda.151, ptr %r76
-  %r77 = getelementptr { i64, ptr, ptr, i1 }, ptr %r75, i32 0, i32 3
-  store i1 %r72, ptr %r77
-  store ptr %r75, ptr %r78
-  %r79 = load i1, ptr %r71
-  br i1 %r79, label %logical.right.20, label %logical.end.21
-logical.right.20:
+  %r68 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r68)
+  %r69 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r69)
+  ret ptr %r59
+unreachable.19:
+  %r70 = load ptr, ptr %r56
+  call void @lerta_release(ptr %r70)
+  br label %if.end.2
+if.else.1:
+  br label %if.end.2
+if.end.2:
   call void @lerta_retain(ptr %p0)
-  %r80 = load ptr, ptr %r4
-  call void @lerta_retain(ptr %r80)
-  %r81 = call i1 @"lerta.fn.checker/case.lerta.check_nil_arms"(ptr %p0, ptr %r80)
+  %r71 = load ptr, ptr %r7
+  call void @lerta_retain(ptr %r71)
+  %r72 = call ptr @"lerta.fn.checker/expression.lerta.type_of.given2"(ptr %p0, ptr %r71)
   call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r80)
-  %r82 = load ptr, ptr @lerta_exception
-  %r83 = icmp ne ptr %r82, null
-  br i1 %r83, label %unwind.22, label %no.exception.23
-unwind.22:
-  %r84 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r84)
-  %r85 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r85)
-  %r86 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r86)
-  %r87 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r87)
-  %r88 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r88)
+  call void @lerta_release(ptr %r71)
+  %r73 = load ptr, ptr @lerta_exception
+  %r74 = icmp ne ptr %r73, null
+  br i1 %r74, label %unwind.20, label %no.exception.21
+unwind.20:
+  %r75 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r75)
+  %r76 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r76)
+  %r77 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r77)
   ret ptr poison
-no.exception.23:
-  %r89 = xor i1 %r81, true
-  br label %logical.end.21
-logical.end.21:
-  %r90 = phi i1 [ false, %no.exception.19 ], [ %r89, %no.exception.23 ]
-  store i1 %r90, ptr %r91
-  %r92 = load i1, ptr %r91
-  br i1 %r92, label %then.24, label %else.25
-then.24:
-  %r93 = call ptr @lerta_array_create(i32 1)
-  %r94 = call ptr @lerta_array_pushed_items(ptr %r93)
-  %r95 = call i64 @lerta_array_length(ptr %r93)
-  %r96 = sub i64 %r95, 1
+no.exception.21:
+  store ptr %r72, ptr %r78
+  %r79 = load ptr, ptr %r78
+  call void @lerta_retain(ptr %r79)
+  %r80 = getelementptr { i64, ptr }, ptr %r79, i32 0, i32 1
+  %r81 = load ptr, ptr %r80
+  %r82 = icmp eq ptr %r81, @"lerta.drop.types.lerta.OptionalType"
+  call void @lerta_release(ptr %r79)
+  store i1 %r82, ptr %r83
+  %r84 = load i1, ptr %r83
+  %r85 = getelementptr { i64, ptr, ptr, i1 }, ptr null, i32 1
+  %r86 = ptrtoint ptr %r85 to i64
+  %r87 = call ptr @lerta_alloc(i64 %r86, ptr null)
+  %r88 = getelementptr { i64, ptr, ptr }, ptr %r87, i32 0, i32 2
+  store ptr @lerta.lambda.153, ptr %r88
+  %r89 = getelementptr { i64, ptr, ptr, i1 }, ptr %r87, i32 0, i32 3
+  store i1 %r84, ptr %r89
+  store ptr %r87, ptr %r90
+  %r91 = load i1, ptr %r83
+  br i1 %r91, label %logical.right.22, label %logical.end.23
+logical.right.22:
+  call void @lerta_retain(ptr %p0)
+  %r92 = load ptr, ptr %r4
+  call void @lerta_retain(ptr %r92)
+  %r93 = call i1 @"lerta.fn.checker/case.lerta.check_nil_arms"(ptr %p0, ptr %r92)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r92)
+  %r94 = load ptr, ptr @lerta_exception
+  %r95 = icmp ne ptr %r94, null
+  br i1 %r95, label %unwind.24, label %no.exception.25
+unwind.24:
+  %r96 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r96)
+  %r97 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r97)
+  %r98 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r98)
+  %r99 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r99)
+  %r100 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r100)
+  ret ptr poison
+no.exception.25:
+  %r101 = xor i1 %r93, true
+  br label %logical.end.23
+logical.end.23:
+  %r102 = phi i1 [ false, %no.exception.21 ], [ %r101, %no.exception.25 ]
+  store i1 %r102, ptr %r103
+  %r104 = load i1, ptr %r103
+  br i1 %r104, label %then.26, label %else.27
+then.26:
+  %r105 = call ptr @lerta_array_create(i32 1)
+  %r106 = call ptr @lerta_array_pushed_items(ptr %r105)
+  %r107 = call i64 @lerta_array_length(ptr %r105)
+  %r108 = sub i64 %r107, 1
   call void @lerta_retain(ptr @lerta.string.1277)
-  %r97 = getelementptr i64, ptr %r94, i64 %r96
-  %r98 = ptrtoint ptr @lerta.string.1277 to i64
-  store i64 %r98, ptr %r97
+  %r109 = getelementptr i64, ptr %r106, i64 %r108
+  %r110 = ptrtoint ptr @lerta.string.1277 to i64
+  store i64 %r110, ptr %r109
   call void @lerta_release(ptr @lerta.string.1277)
-  br label %then.end.26
-else.25:
-  %r99 = call ptr @lerta_array_create(i32 1)
-  br label %then.end.26
-then.end.26:
-  %r100 = phi ptr [ %r93, %then.24 ], [ %r99, %else.25 ]
-  store ptr %r100, ptr %r101
-  %r102 = load ptr, ptr %r66
-  call void @lerta_retain(ptr %r102)
-  %r103 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %r102)
-  call void @lerta_release(ptr %r102)
-  %r104 = load ptr, ptr @lerta_exception
-  %r105 = icmp ne ptr %r104, null
-  br i1 %r105, label %unwind.27, label %no.exception.28
-unwind.27:
-  %r106 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r106)
-  %r107 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r107)
-  %r108 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r108)
-  %r109 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r109)
-  %r110 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r110)
-  %r111 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r111)
+  br label %then.end.28
+else.27:
+  %r111 = call ptr @lerta_array_create(i32 1)
+  br label %then.end.28
+then.end.28:
+  %r112 = phi ptr [ %r105, %then.26 ], [ %r111, %else.27 ]
+  store ptr %r112, ptr %r113
+  %r114 = load ptr, ptr %r78
+  call void @lerta_retain(ptr %r114)
+  %r115 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %r114)
+  call void @lerta_release(ptr %r114)
+  %r116 = load ptr, ptr @lerta_exception
+  %r117 = icmp ne ptr %r116, null
+  br i1 %r117, label %unwind.29, label %no.exception.30
+unwind.29:
+  %r118 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r118)
+  %r119 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r119)
+  %r120 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r120)
+  %r121 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r121)
+  %r122 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r122)
+  %r123 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r123)
   ret ptr poison
-no.exception.28:
-  store ptr %r103, ptr %r112
-  %r113 = load ptr, ptr %r112
-  call void @lerta_retain(ptr %r113)
-  %r114 = getelementptr { i64, ptr }, ptr %r113, i32 0, i32 1
-  %r115 = load ptr, ptr %r114
-  %r116 = icmp eq ptr %r115, @"lerta.drop.types.lerta.UnionType"
-  call void @lerta_release(ptr %r113)
-  br i1 %r116, label %if.then.29, label %if.else.30
-if.then.29:
+no.exception.30:
+  store ptr %r115, ptr %r124
+  call void @lerta_retain(ptr %p0)
+  %r125 = load ptr, ptr %r7
+  call void @lerta_retain(ptr %r125)
+  %r126 = load ptr, ptr %r78
+  call void @lerta_retain(ptr %r126)
+  %r127 = call ptr @"lerta.fn.checker/expression.lerta.unnarrowed_type"(ptr %p0, ptr %r125, ptr %r126)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r125)
+  call void @lerta_release(ptr %r126)
+  %r128 = load ptr, ptr @lerta_exception
+  %r129 = icmp ne ptr %r128, null
+  br i1 %r129, label %unwind.31, label %no.exception.32
+unwind.31:
+  %r130 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r130)
+  %r131 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r131)
+  %r132 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r132)
+  %r133 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r133)
+  %r134 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r134)
+  %r135 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r135)
+  %r136 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r136)
+  ret ptr poison
+no.exception.32:
+  %r137 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %r127)
+  call void @lerta_release(ptr %r127)
+  %r138 = load ptr, ptr @lerta_exception
+  %r139 = icmp ne ptr %r138, null
+  br i1 %r139, label %unwind.33, label %no.exception.34
+unwind.33:
+  %r140 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r140)
+  %r141 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r141)
+  %r142 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r142)
+  %r143 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r143)
+  %r144 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r144)
+  %r145 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r145)
+  %r146 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r146)
+  ret ptr poison
+no.exception.34:
+  store ptr %r137, ptr %r147
+  %r148 = load ptr, ptr %r147
+  call void @lerta_retain(ptr %r148)
+  %r149 = getelementptr { i64, ptr }, ptr %r148, i32 0, i32 1
+  %r150 = load ptr, ptr %r149
+  %r151 = icmp eq ptr %r150, @"lerta.drop.types.lerta.UnionType"
+  call void @lerta_release(ptr %r148)
+  br i1 %r151, label %if.then.35, label %if.else.36
+if.then.35:
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
-  %r117 = load ptr, ptr %r78
-  call void @lerta_retain(ptr %r117)
-  %r118 = load ptr, ptr %r7
-  call void @lerta_retain(ptr %r118)
-  %r119 = load ptr, ptr %r112
-  call void @lerta_retain(ptr %r119)
-  %r120 = load ptr, ptr %r101
-  call void @lerta_retain(ptr %r120)
-  %r121 = call ptr @"lerta.fn.checker/case.lerta.check_type_patterns"(ptr %p0, ptr %p1, ptr %r117, ptr %r118, ptr %r119, ptr %r120)
+  %r152 = load ptr, ptr %r90
+  call void @lerta_retain(ptr %r152)
+  %r153 = load ptr, ptr %r7
+  call void @lerta_retain(ptr %r153)
+  %r154 = load ptr, ptr %r147
+  call void @lerta_retain(ptr %r154)
+  %r155 = load ptr, ptr %r124
+  call void @lerta_retain(ptr %r155)
+  %r156 = load ptr, ptr %r113
+  call void @lerta_retain(ptr %r156)
+  %r157 = call ptr @"lerta.fn.checker/case.lerta.check_type_patterns"(ptr %p0, ptr %p1, ptr %r152, ptr %r153, ptr %r154, ptr %r155, ptr %r156)
   call void @lerta_release(ptr %p0)
   call void @lerta_release(ptr %p1)
-  call void @lerta_release(ptr %r117)
-  call void @lerta_release(ptr %r118)
-  call void @lerta_release(ptr %r119)
-  call void @lerta_release(ptr %r120)
-  %r122 = load ptr, ptr @lerta_exception
-  %r123 = icmp ne ptr %r122, null
-  br i1 %r123, label %unwind.32, label %no.exception.33
-unwind.32:
-  %r124 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r124)
-  %r125 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r125)
-  %r126 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r126)
-  %r127 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r127)
-  %r128 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r128)
-  %r129 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r129)
-  %r130 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r130)
-  ret ptr poison
-no.exception.33:
-  %r131 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r131)
-  %r132 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r132)
-  %r133 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r133)
-  %r134 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r134)
-  %r135 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r135)
-  %r136 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r136)
-  %r137 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r137)
-  ret ptr %r121
-unreachable.34:
-  br label %if.end.31
-if.else.30:
-  br label %if.end.31
-if.end.31:
-  %r138 = load ptr, ptr %r112
-  call void @lerta_retain(ptr %r138)
-  %r139 = load i1, ptr @"lerta.value.checker/case.lerta.VALUE_KINDS.set"
-  %r140 = xor i1 %r139, true
-  br i1 %r140, label %raise.35, label %continue.36
-raise.35:
-  call void @lerta_raise(i32 8, ptr @lerta.string.1278)
-  call void @lerta_release(ptr %r138)
-  %r141 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r141)
-  %r142 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r142)
-  %r143 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r143)
-  %r144 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r144)
-  %r145 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r145)
-  %r146 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r146)
-  %r147 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r147)
-  ret ptr poison
-continue.36:
-  %r148 = load ptr, ptr @"lerta.value.checker/case.lerta.VALUE_KINDS"
-  call void @lerta_retain(ptr %r148)
-  %r149 = call i1 @"lerta.fn.types.lerta.is_one_of_kinds"(ptr %r138, ptr %r148)
-  call void @lerta_release(ptr %r138)
-  call void @lerta_release(ptr %r148)
-  %r150 = load ptr, ptr @lerta_exception
-  %r151 = icmp ne ptr %r150, null
-  br i1 %r151, label %unwind.37, label %no.exception.38
-unwind.37:
-  %r152 = load ptr, ptr %r0
   call void @lerta_release(ptr %r152)
-  %r153 = load ptr, ptr %r4
   call void @lerta_release(ptr %r153)
-  %r154 = load ptr, ptr %r7
   call void @lerta_release(ptr %r154)
-  %r155 = load ptr, ptr %r66
   call void @lerta_release(ptr %r155)
-  %r156 = load ptr, ptr %r78
   call void @lerta_release(ptr %r156)
-  %r157 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r157)
-  %r158 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r158)
-  ret ptr poison
-no.exception.38:
-  %r159 = xor i1 %r149, true
-  br i1 %r159, label %if.then.39, label %if.else.40
-if.then.39:
-  %r160 = load ptr, ptr %r66
-  call void @lerta_retain(ptr %r160)
-  %r161 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %r160)
+  %r158 = load ptr, ptr @lerta_exception
+  %r159 = icmp ne ptr %r158, null
+  br i1 %r159, label %unwind.38, label %no.exception.39
+unwind.38:
+  %r160 = load ptr, ptr %r0
   call void @lerta_release(ptr %r160)
-  %r162 = load ptr, ptr @lerta_exception
-  %r163 = icmp ne ptr %r162, null
-  br i1 %r163, label %unwind.42, label %no.exception.43
-unwind.42:
-  call void @lerta_release(ptr @lerta.string.1279)
-  %r164 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r164)
-  %r165 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r165)
-  %r166 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r166)
-  %r167 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r167)
-  %r168 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r168)
-  %r169 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r169)
-  %r170 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r170)
-  ret ptr poison
-no.exception.43:
-  %r171 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r161)
+  %r161 = load ptr, ptr %r4
   call void @lerta_release(ptr %r161)
-  %r172 = load ptr, ptr @lerta_exception
-  %r173 = icmp ne ptr %r172, null
-  br i1 %r173, label %unwind.44, label %no.exception.45
-unwind.44:
-  call void @lerta_release(ptr @lerta.string.1279)
-  %r174 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r174)
-  %r175 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r175)
-  %r176 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r176)
-  %r177 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r177)
-  %r178 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r178)
-  %r179 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r179)
-  %r180 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r180)
+  %r162 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r162)
+  %r163 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r163)
+  %r164 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r164)
+  %r165 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r165)
+  %r166 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r166)
+  %r167 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r167)
   ret ptr poison
-no.exception.45:
-  %r181 = call ptr (i64, ...) @lerta_string_concat(i64 2, ptr @lerta.string.1279, ptr %r171)
-  call void @lerta_release(ptr @lerta.string.1279)
+no.exception.39:
+  %r168 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r168)
+  %r169 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r169)
+  %r170 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r170)
+  %r171 = load ptr, ptr %r78
   call void @lerta_release(ptr %r171)
-  store ptr %r181, ptr %r182
-  call void @lerta_retain(ptr %p0)
-  %r183 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 10
-  %r184 = load ptr, ptr %r183
-  call void @lerta_retain(ptr %r184)
-  call void @lerta_release(ptr %p0)
-  %r185 = load ptr, ptr %r7
-  call void @lerta_retain(ptr %r185)
-  %r186 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r187 = load ptr, ptr %r186
-  %r188 = icmp eq ptr %r187, @"lerta.drop.ast.lerta.ArrayLiteral"
-  br i1 %r188, label %member.matched.48, label %member.next.47
-member.matched.48:
-  %r189 = getelementptr %"lerta.object.ast.lerta.ArrayLiteral", ptr %r185, i32 0, i32 3
-  %r190 = load ptr, ptr %r189
-  call void @lerta_retain(ptr %r190)
+  %r172 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r172)
+  %r173 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r173)
+  %r174 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r174)
+  %r175 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r175)
+  ret ptr %r157
+unreachable.40:
+  br label %if.end.37
+if.else.36:
+  br label %if.end.37
+if.end.37:
+  %r176 = load ptr, ptr %r124
+  call void @lerta_retain(ptr %r176)
+  %r177 = load i1, ptr @"lerta.value.checker/case.lerta.VALUE_KINDS.set"
+  %r178 = xor i1 %r177, true
+  br i1 %r178, label %raise.41, label %continue.42
+raise.41:
+  call void @lerta_raise(i32 8, ptr @lerta.string.1278)
+  call void @lerta_release(ptr %r176)
+  %r179 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r179)
+  %r180 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r180)
+  %r181 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r181)
+  %r182 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r182)
+  %r183 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r183)
+  %r184 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r184)
+  %r185 = load ptr, ptr %r124
   call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.47:
-  %r191 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r192 = load ptr, ptr %r191
-  %r193 = icmp eq ptr %r192, @"lerta.drop.ast.lerta.Await"
-  br i1 %r193, label %member.matched.50, label %member.next.49
-member.matched.50:
-  %r194 = getelementptr %"lerta.object.ast.lerta.Await", ptr %r185, i32 0, i32 3
-  %r195 = load ptr, ptr %r194
-  call void @lerta_retain(ptr %r195)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.49:
-  %r196 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r197 = load ptr, ptr %r196
-  %r198 = icmp eq ptr %r197, @"lerta.drop.ast.lerta.BinaryOperation"
-  br i1 %r198, label %member.matched.52, label %member.next.51
-member.matched.52:
-  %r199 = getelementptr %"lerta.object.ast.lerta.BinaryOperation", ptr %r185, i32 0, i32 5
-  %r200 = load ptr, ptr %r199
+  %r186 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r186)
+  ret ptr poison
+continue.42:
+  %r187 = load ptr, ptr @"lerta.value.checker/case.lerta.VALUE_KINDS"
+  call void @lerta_retain(ptr %r187)
+  %r188 = call i1 @"lerta.fn.types.lerta.is_one_of_kinds"(ptr %r176, ptr %r187)
+  call void @lerta_release(ptr %r176)
+  call void @lerta_release(ptr %r187)
+  %r189 = load ptr, ptr @lerta_exception
+  %r190 = icmp ne ptr %r189, null
+  br i1 %r190, label %unwind.43, label %no.exception.44
+unwind.43:
+  %r191 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r191)
+  %r192 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r192)
+  %r193 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r193)
+  %r194 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r194)
+  %r195 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r195)
+  %r196 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r196)
+  %r197 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r197)
+  %r198 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r198)
+  ret ptr poison
+no.exception.44:
+  %r199 = xor i1 %r188, true
+  br i1 %r199, label %if.then.45, label %if.else.46
+if.then.45:
+  %r200 = load ptr, ptr %r78
   call void @lerta_retain(ptr %r200)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.51:
-  %r201 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r202 = load ptr, ptr %r201
-  %r203 = icmp eq ptr %r202, @"lerta.drop.ast.lerta.BooleanLiteral"
-  br i1 %r203, label %member.matched.54, label %member.next.53
+  %r201 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %r200)
+  call void @lerta_release(ptr %r200)
+  %r202 = load ptr, ptr @lerta_exception
+  %r203 = icmp ne ptr %r202, null
+  br i1 %r203, label %unwind.48, label %no.exception.49
+unwind.48:
+  call void @lerta_release(ptr @lerta.string.1279)
+  %r204 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r204)
+  %r205 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r205)
+  %r206 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r206)
+  %r207 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r207)
+  %r208 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r208)
+  %r209 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r209)
+  %r210 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r210)
+  %r211 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r211)
+  ret ptr poison
+no.exception.49:
+  %r212 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r201)
+  call void @lerta_release(ptr %r201)
+  %r213 = load ptr, ptr @lerta_exception
+  %r214 = icmp ne ptr %r213, null
+  br i1 %r214, label %unwind.50, label %no.exception.51
+unwind.50:
+  call void @lerta_release(ptr @lerta.string.1279)
+  %r215 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r215)
+  %r216 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r216)
+  %r217 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r217)
+  %r218 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r218)
+  %r219 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r219)
+  %r220 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r220)
+  %r221 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r221)
+  %r222 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r222)
+  ret ptr poison
+no.exception.51:
+  %r223 = call ptr (i64, ...) @lerta_string_concat(i64 2, ptr @lerta.string.1279, ptr %r212)
+  call void @lerta_release(ptr @lerta.string.1279)
+  call void @lerta_release(ptr %r212)
+  store ptr %r223, ptr %r224
+  call void @lerta_retain(ptr %p0)
+  %r225 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 10
+  %r226 = load ptr, ptr %r225
+  call void @lerta_retain(ptr %r226)
+  call void @lerta_release(ptr %p0)
+  %r227 = load ptr, ptr %r7
+  call void @lerta_retain(ptr %r227)
+  %r228 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r229 = load ptr, ptr %r228
+  %r230 = icmp eq ptr %r229, @"lerta.drop.ast.lerta.ArrayLiteral"
+  br i1 %r230, label %member.matched.54, label %member.next.53
 member.matched.54:
-  %r204 = getelementptr %"lerta.object.ast.lerta.BooleanLiteral", ptr %r185, i32 0, i32 3
-  %r205 = load ptr, ptr %r204
-  call void @lerta_retain(ptr %r205)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.53:
-  %r206 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r207 = load ptr, ptr %r206
-  %r208 = icmp eq ptr %r207, @"lerta.drop.ast.lerta.Call"
-  br i1 %r208, label %member.matched.56, label %member.next.55
-member.matched.56:
-  %r209 = getelementptr %"lerta.object.ast.lerta.Call", ptr %r185, i32 0, i32 6
-  %r210 = load ptr, ptr %r209
-  call void @lerta_retain(ptr %r210)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.55:
-  %r211 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r212 = load ptr, ptr %r211
-  %r213 = icmp eq ptr %r212, @"lerta.drop.ast.lerta.Case"
-  br i1 %r213, label %member.matched.58, label %member.next.57
-member.matched.58:
-  %r214 = getelementptr %"lerta.object.ast.lerta.Case", ptr %r185, i32 0, i32 5
-  %r215 = load ptr, ptr %r214
-  call void @lerta_retain(ptr %r215)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.57:
-  %r216 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r217 = load ptr, ptr %r216
-  %r218 = icmp eq ptr %r217, @"lerta.drop.ast.lerta.Cast"
-  br i1 %r218, label %member.matched.60, label %member.next.59
-member.matched.60:
-  %r219 = getelementptr %"lerta.object.ast.lerta.Cast", ptr %r185, i32 0, i32 5
-  %r220 = load ptr, ptr %r219
-  call void @lerta_retain(ptr %r220)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.59:
-  %r221 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r222 = load ptr, ptr %r221
-  %r223 = icmp eq ptr %r222, @"lerta.drop.ast.lerta.Coalesce"
-  br i1 %r223, label %member.matched.62, label %member.next.61
-member.matched.62:
-  %r224 = getelementptr %"lerta.object.ast.lerta.Coalesce", ptr %r185, i32 0, i32 4
-  %r225 = load ptr, ptr %r224
-  call void @lerta_retain(ptr %r225)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.61:
-  %r226 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
-  %r227 = load ptr, ptr %r226
-  %r228 = icmp eq ptr %r227, @"lerta.drop.ast.lerta.Comprehension"
-  br i1 %r228, label %member.matched.64, label %member.next.63
-member.matched.64:
-  %r229 = getelementptr %"lerta.object.ast.lerta.Comprehension", ptr %r185, i32 0, i32 7
-  %r230 = load ptr, ptr %r229
-  call void @lerta_retain(ptr %r230)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.63:
-  %r231 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  %r231 = getelementptr %"lerta.object.ast.lerta.ArrayLiteral", ptr %r227, i32 0, i32 3
   %r232 = load ptr, ptr %r231
-  %r233 = icmp eq ptr %r232, @"lerta.drop.ast.lerta.Conditional"
-  br i1 %r233, label %member.matched.66, label %member.next.65
-member.matched.66:
-  %r234 = getelementptr %"lerta.object.ast.lerta.Conditional", ptr %r185, i32 0, i32 5
-  %r235 = load ptr, ptr %r234
-  call void @lerta_retain(ptr %r235)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.65:
-  %r236 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r232)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.53:
+  %r233 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r234 = load ptr, ptr %r233
+  %r235 = icmp eq ptr %r234, @"lerta.drop.ast.lerta.Await"
+  br i1 %r235, label %member.matched.56, label %member.next.55
+member.matched.56:
+  %r236 = getelementptr %"lerta.object.ast.lerta.Await", ptr %r227, i32 0, i32 3
   %r237 = load ptr, ptr %r236
-  %r238 = icmp eq ptr %r237, @"lerta.drop.ast.lerta.FloatLiteral"
-  br i1 %r238, label %member.matched.68, label %member.next.67
-member.matched.68:
-  %r239 = getelementptr %"lerta.object.ast.lerta.FloatLiteral", ptr %r185, i32 0, i32 3
-  %r240 = load ptr, ptr %r239
-  call void @lerta_retain(ptr %r240)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.67:
-  %r241 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r237)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.55:
+  %r238 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r239 = load ptr, ptr %r238
+  %r240 = icmp eq ptr %r239, @"lerta.drop.ast.lerta.BinaryOperation"
+  br i1 %r240, label %member.matched.58, label %member.next.57
+member.matched.58:
+  %r241 = getelementptr %"lerta.object.ast.lerta.BinaryOperation", ptr %r227, i32 0, i32 5
   %r242 = load ptr, ptr %r241
-  %r243 = icmp eq ptr %r242, @"lerta.drop.ast.lerta.FunctionLiteral"
-  br i1 %r243, label %member.matched.70, label %member.next.69
-member.matched.70:
-  %r244 = getelementptr %"lerta.object.ast.lerta.FunctionLiteral", ptr %r185, i32 0, i32 6
-  %r245 = load ptr, ptr %r244
-  call void @lerta_retain(ptr %r245)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.69:
-  %r246 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r242)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.57:
+  %r243 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r244 = load ptr, ptr %r243
+  %r245 = icmp eq ptr %r244, @"lerta.drop.ast.lerta.BooleanLiteral"
+  br i1 %r245, label %member.matched.60, label %member.next.59
+member.matched.60:
+  %r246 = getelementptr %"lerta.object.ast.lerta.BooleanLiteral", ptr %r227, i32 0, i32 3
   %r247 = load ptr, ptr %r246
-  %r248 = icmp eq ptr %r247, @"lerta.drop.ast.lerta.Identifier"
-  br i1 %r248, label %member.matched.72, label %member.next.71
-member.matched.72:
-  %r249 = getelementptr %"lerta.object.ast.lerta.Identifier", ptr %r185, i32 0, i32 3
-  %r250 = load ptr, ptr %r249
-  call void @lerta_retain(ptr %r250)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.71:
-  %r251 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r247)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.59:
+  %r248 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r249 = load ptr, ptr %r248
+  %r250 = icmp eq ptr %r249, @"lerta.drop.ast.lerta.Call"
+  br i1 %r250, label %member.matched.62, label %member.next.61
+member.matched.62:
+  %r251 = getelementptr %"lerta.object.ast.lerta.Call", ptr %r227, i32 0, i32 6
   %r252 = load ptr, ptr %r251
-  %r253 = icmp eq ptr %r252, @"lerta.drop.ast.lerta.If"
-  br i1 %r253, label %member.matched.74, label %member.next.73
-member.matched.74:
-  %r254 = getelementptr %"lerta.object.ast.lerta.If", ptr %r185, i32 0, i32 5
-  %r255 = load ptr, ptr %r254
-  call void @lerta_retain(ptr %r255)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.73:
-  %r256 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r252)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.61:
+  %r253 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r254 = load ptr, ptr %r253
+  %r255 = icmp eq ptr %r254, @"lerta.drop.ast.lerta.Case"
+  br i1 %r255, label %member.matched.64, label %member.next.63
+member.matched.64:
+  %r256 = getelementptr %"lerta.object.ast.lerta.Case", ptr %r227, i32 0, i32 5
   %r257 = load ptr, ptr %r256
-  %r258 = icmp eq ptr %r257, @"lerta.drop.ast.lerta.Index"
-  br i1 %r258, label %member.matched.76, label %member.next.75
-member.matched.76:
-  %r259 = getelementptr %"lerta.object.ast.lerta.Index", ptr %r185, i32 0, i32 4
-  %r260 = load ptr, ptr %r259
-  call void @lerta_retain(ptr %r260)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.75:
-  %r261 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r257)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.63:
+  %r258 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r259 = load ptr, ptr %r258
+  %r260 = icmp eq ptr %r259, @"lerta.drop.ast.lerta.Cast"
+  br i1 %r260, label %member.matched.66, label %member.next.65
+member.matched.66:
+  %r261 = getelementptr %"lerta.object.ast.lerta.Cast", ptr %r227, i32 0, i32 5
   %r262 = load ptr, ptr %r261
-  %r263 = icmp eq ptr %r262, @"lerta.drop.ast.lerta.IntegerLiteral"
-  br i1 %r263, label %member.matched.78, label %member.next.77
-member.matched.78:
-  %r264 = getelementptr %"lerta.object.ast.lerta.IntegerLiteral", ptr %r185, i32 0, i32 3
-  %r265 = load ptr, ptr %r264
-  call void @lerta_retain(ptr %r265)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.77:
-  %r266 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r262)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.65:
+  %r263 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r264 = load ptr, ptr %r263
+  %r265 = icmp eq ptr %r264, @"lerta.drop.ast.lerta.Coalesce"
+  br i1 %r265, label %member.matched.68, label %member.next.67
+member.matched.68:
+  %r266 = getelementptr %"lerta.object.ast.lerta.Coalesce", ptr %r227, i32 0, i32 4
   %r267 = load ptr, ptr %r266
-  %r268 = icmp eq ptr %r267, @"lerta.drop.ast.lerta.Interpolation"
-  br i1 %r268, label %member.matched.80, label %member.next.79
-member.matched.80:
-  %r269 = getelementptr %"lerta.object.ast.lerta.Interpolation", ptr %r185, i32 0, i32 3
-  %r270 = load ptr, ptr %r269
-  call void @lerta_retain(ptr %r270)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.79:
-  %r271 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r267)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.67:
+  %r268 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r269 = load ptr, ptr %r268
+  %r270 = icmp eq ptr %r269, @"lerta.drop.ast.lerta.Comprehension"
+  br i1 %r270, label %member.matched.70, label %member.next.69
+member.matched.70:
+  %r271 = getelementptr %"lerta.object.ast.lerta.Comprehension", ptr %r227, i32 0, i32 7
   %r272 = load ptr, ptr %r271
-  %r273 = icmp eq ptr %r272, @"lerta.drop.ast.lerta.IsTest"
-  br i1 %r273, label %member.matched.82, label %member.next.81
-member.matched.82:
-  %r274 = getelementptr %"lerta.object.ast.lerta.IsTest", ptr %r185, i32 0, i32 4
-  %r275 = load ptr, ptr %r274
-  call void @lerta_retain(ptr %r275)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.81:
-  %r276 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r272)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.69:
+  %r273 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r274 = load ptr, ptr %r273
+  %r275 = icmp eq ptr %r274, @"lerta.drop.ast.lerta.Conditional"
+  br i1 %r275, label %member.matched.72, label %member.next.71
+member.matched.72:
+  %r276 = getelementptr %"lerta.object.ast.lerta.Conditional", ptr %r227, i32 0, i32 5
   %r277 = load ptr, ptr %r276
-  %r278 = icmp eq ptr %r277, @"lerta.drop.ast.lerta.Jump"
-  br i1 %r278, label %member.matched.84, label %member.next.83
-member.matched.84:
-  %r279 = getelementptr %"lerta.object.ast.lerta.Jump", ptr %r185, i32 0, i32 3
-  %r280 = load ptr, ptr %r279
-  call void @lerta_retain(ptr %r280)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.83:
-  %r281 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r277)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.71:
+  %r278 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r279 = load ptr, ptr %r278
+  %r280 = icmp eq ptr %r279, @"lerta.drop.ast.lerta.FloatLiteral"
+  br i1 %r280, label %member.matched.74, label %member.next.73
+member.matched.74:
+  %r281 = getelementptr %"lerta.object.ast.lerta.FloatLiteral", ptr %r227, i32 0, i32 3
   %r282 = load ptr, ptr %r281
-  %r283 = icmp eq ptr %r282, @"lerta.drop.ast.lerta.MapLiteral"
-  br i1 %r283, label %member.matched.86, label %member.next.85
-member.matched.86:
-  %r284 = getelementptr %"lerta.object.ast.lerta.MapLiteral", ptr %r185, i32 0, i32 3
-  %r285 = load ptr, ptr %r284
-  call void @lerta_retain(ptr %r285)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.85:
-  %r286 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r282)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.73:
+  %r283 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r284 = load ptr, ptr %r283
+  %r285 = icmp eq ptr %r284, @"lerta.drop.ast.lerta.FunctionLiteral"
+  br i1 %r285, label %member.matched.76, label %member.next.75
+member.matched.76:
+  %r286 = getelementptr %"lerta.object.ast.lerta.FunctionLiteral", ptr %r227, i32 0, i32 6
   %r287 = load ptr, ptr %r286
-  %r288 = icmp eq ptr %r287, @"lerta.drop.ast.lerta.Member"
-  br i1 %r288, label %member.matched.88, label %member.next.87
-member.matched.88:
-  %r289 = getelementptr %"lerta.object.ast.lerta.Member", ptr %r185, i32 0, i32 4
-  %r290 = load ptr, ptr %r289
-  call void @lerta_retain(ptr %r290)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.87:
-  %r291 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r287)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.75:
+  %r288 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r289 = load ptr, ptr %r288
+  %r290 = icmp eq ptr %r289, @"lerta.drop.ast.lerta.Identifier"
+  br i1 %r290, label %member.matched.78, label %member.next.77
+member.matched.78:
+  %r291 = getelementptr %"lerta.object.ast.lerta.Identifier", ptr %r227, i32 0, i32 3
   %r292 = load ptr, ptr %r291
-  %r293 = icmp eq ptr %r292, @"lerta.drop.ast.lerta.NilLiteral"
-  br i1 %r293, label %member.matched.90, label %member.next.89
-member.matched.90:
-  %r294 = getelementptr %"lerta.object.ast.lerta.NilLiteral", ptr %r185, i32 0, i32 2
-  %r295 = load ptr, ptr %r294
-  call void @lerta_retain(ptr %r295)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.89:
-  %r296 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r292)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.77:
+  %r293 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r294 = load ptr, ptr %r293
+  %r295 = icmp eq ptr %r294, @"lerta.drop.ast.lerta.If"
+  br i1 %r295, label %member.matched.80, label %member.next.79
+member.matched.80:
+  %r296 = getelementptr %"lerta.object.ast.lerta.If", ptr %r227, i32 0, i32 5
   %r297 = load ptr, ptr %r296
-  %r298 = icmp eq ptr %r297, @"lerta.drop.ast.lerta.Range"
-  br i1 %r298, label %member.matched.92, label %member.next.91
-member.matched.92:
-  %r299 = getelementptr %"lerta.object.ast.lerta.Range", ptr %r185, i32 0, i32 4
-  %r300 = load ptr, ptr %r299
-  call void @lerta_retain(ptr %r300)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.91:
-  %r301 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r297)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.79:
+  %r298 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r299 = load ptr, ptr %r298
+  %r300 = icmp eq ptr %r299, @"lerta.drop.ast.lerta.Index"
+  br i1 %r300, label %member.matched.82, label %member.next.81
+member.matched.82:
+  %r301 = getelementptr %"lerta.object.ast.lerta.Index", ptr %r227, i32 0, i32 4
   %r302 = load ptr, ptr %r301
-  %r303 = icmp eq ptr %r302, @"lerta.drop.ast.lerta.RecordLiteral"
-  br i1 %r303, label %member.matched.94, label %member.next.93
-member.matched.94:
-  %r304 = getelementptr %"lerta.object.ast.lerta.RecordLiteral", ptr %r185, i32 0, i32 3
-  %r305 = load ptr, ptr %r304
-  call void @lerta_retain(ptr %r305)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.93:
-  %r306 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r302)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.81:
+  %r303 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r304 = load ptr, ptr %r303
+  %r305 = icmp eq ptr %r304, @"lerta.drop.ast.lerta.IntegerLiteral"
+  br i1 %r305, label %member.matched.84, label %member.next.83
+member.matched.84:
+  %r306 = getelementptr %"lerta.object.ast.lerta.IntegerLiteral", ptr %r227, i32 0, i32 3
   %r307 = load ptr, ptr %r306
-  %r308 = icmp eq ptr %r307, @"lerta.drop.ast.lerta.Return"
-  br i1 %r308, label %member.matched.96, label %member.next.95
-member.matched.96:
-  %r309 = getelementptr %"lerta.object.ast.lerta.Return", ptr %r185, i32 0, i32 3
-  %r310 = load ptr, ptr %r309
-  call void @lerta_retain(ptr %r310)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.95:
-  %r311 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r307)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.83:
+  %r308 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r309 = load ptr, ptr %r308
+  %r310 = icmp eq ptr %r309, @"lerta.drop.ast.lerta.Interpolation"
+  br i1 %r310, label %member.matched.86, label %member.next.85
+member.matched.86:
+  %r311 = getelementptr %"lerta.object.ast.lerta.Interpolation", ptr %r227, i32 0, i32 3
   %r312 = load ptr, ptr %r311
-  %r313 = icmp eq ptr %r312, @"lerta.drop.ast.lerta.StringLiteral"
-  br i1 %r313, label %member.matched.98, label %member.next.97
-member.matched.98:
-  %r314 = getelementptr %"lerta.object.ast.lerta.StringLiteral", ptr %r185, i32 0, i32 3
-  %r315 = load ptr, ptr %r314
-  call void @lerta_retain(ptr %r315)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.97:
-  %r316 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r312)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.85:
+  %r313 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r314 = load ptr, ptr %r313
+  %r315 = icmp eq ptr %r314, @"lerta.drop.ast.lerta.IsTest"
+  br i1 %r315, label %member.matched.88, label %member.next.87
+member.matched.88:
+  %r316 = getelementptr %"lerta.object.ast.lerta.IsTest", ptr %r227, i32 0, i32 4
   %r317 = load ptr, ptr %r316
-  %r318 = icmp eq ptr %r317, @"lerta.drop.ast.lerta.This"
-  br i1 %r318, label %member.matched.100, label %member.next.99
-member.matched.100:
-  %r319 = getelementptr %"lerta.object.ast.lerta.This", ptr %r185, i32 0, i32 2
-  %r320 = load ptr, ptr %r319
-  call void @lerta_retain(ptr %r320)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.99:
-  %r321 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r317)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.87:
+  %r318 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r319 = load ptr, ptr %r318
+  %r320 = icmp eq ptr %r319, @"lerta.drop.ast.lerta.Jump"
+  br i1 %r320, label %member.matched.90, label %member.next.89
+member.matched.90:
+  %r321 = getelementptr %"lerta.object.ast.lerta.Jump", ptr %r227, i32 0, i32 3
   %r322 = load ptr, ptr %r321
-  %r323 = icmp eq ptr %r322, @"lerta.drop.ast.lerta.Throw"
-  br i1 %r323, label %member.matched.102, label %member.next.101
-member.matched.102:
-  %r324 = getelementptr %"lerta.object.ast.lerta.Throw", ptr %r185, i32 0, i32 3
-  %r325 = load ptr, ptr %r324
-  call void @lerta_retain(ptr %r325)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.101:
-  %r326 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r322)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.89:
+  %r323 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r324 = load ptr, ptr %r323
+  %r325 = icmp eq ptr %r324, @"lerta.drop.ast.lerta.MapLiteral"
+  br i1 %r325, label %member.matched.92, label %member.next.91
+member.matched.92:
+  %r326 = getelementptr %"lerta.object.ast.lerta.MapLiteral", ptr %r227, i32 0, i32 3
   %r327 = load ptr, ptr %r326
-  %r328 = icmp eq ptr %r327, @"lerta.drop.ast.lerta.Try"
-  br i1 %r328, label %member.matched.104, label %member.next.103
-member.matched.104:
-  %r329 = getelementptr %"lerta.object.ast.lerta.Try", ptr %r185, i32 0, i32 5
-  %r330 = load ptr, ptr %r329
-  call void @lerta_retain(ptr %r330)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.103:
-  %r331 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r327)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.91:
+  %r328 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r329 = load ptr, ptr %r328
+  %r330 = icmp eq ptr %r329, @"lerta.drop.ast.lerta.Member"
+  br i1 %r330, label %member.matched.94, label %member.next.93
+member.matched.94:
+  %r331 = getelementptr %"lerta.object.ast.lerta.Member", ptr %r227, i32 0, i32 4
   %r332 = load ptr, ptr %r331
-  %r333 = icmp eq ptr %r332, @"lerta.drop.ast.lerta.TupleItem"
-  br i1 %r333, label %member.matched.106, label %member.next.105
-member.matched.106:
-  %r334 = getelementptr %"lerta.object.ast.lerta.TupleItem", ptr %r185, i32 0, i32 5
-  %r335 = load ptr, ptr %r334
-  call void @lerta_retain(ptr %r335)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.105:
-  %r336 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r332)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.93:
+  %r333 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r334 = load ptr, ptr %r333
+  %r335 = icmp eq ptr %r334, @"lerta.drop.ast.lerta.NilLiteral"
+  br i1 %r335, label %member.matched.96, label %member.next.95
+member.matched.96:
+  %r336 = getelementptr %"lerta.object.ast.lerta.NilLiteral", ptr %r227, i32 0, i32 2
   %r337 = load ptr, ptr %r336
-  %r338 = icmp eq ptr %r337, @"lerta.drop.ast.lerta.TupleLiteral"
-  br i1 %r338, label %member.matched.108, label %member.next.107
-member.matched.108:
-  %r339 = getelementptr %"lerta.object.ast.lerta.TupleLiteral", ptr %r185, i32 0, i32 3
-  %r340 = load ptr, ptr %r339
-  call void @lerta_retain(ptr %r340)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.107:
-  %r341 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r337)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.95:
+  %r338 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r339 = load ptr, ptr %r338
+  %r340 = icmp eq ptr %r339, @"lerta.drop.ast.lerta.Range"
+  br i1 %r340, label %member.matched.98, label %member.next.97
+member.matched.98:
+  %r341 = getelementptr %"lerta.object.ast.lerta.Range", ptr %r227, i32 0, i32 4
   %r342 = load ptr, ptr %r341
-  %r343 = icmp eq ptr %r342, @"lerta.drop.ast.lerta.UnaryOperation"
-  br i1 %r343, label %member.matched.110, label %member.next.109
-member.matched.110:
-  %r344 = getelementptr %"lerta.object.ast.lerta.UnaryOperation", ptr %r185, i32 0, i32 4
-  %r345 = load ptr, ptr %r344
-  call void @lerta_retain(ptr %r345)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.109:
-  %r346 = getelementptr { i64, ptr }, ptr %r185, i32 0, i32 1
+  call void @lerta_retain(ptr %r342)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.97:
+  %r343 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r344 = load ptr, ptr %r343
+  %r345 = icmp eq ptr %r344, @"lerta.drop.ast.lerta.RecordLiteral"
+  br i1 %r345, label %member.matched.100, label %member.next.99
+member.matched.100:
+  %r346 = getelementptr %"lerta.object.ast.lerta.RecordLiteral", ptr %r227, i32 0, i32 3
   %r347 = load ptr, ptr %r346
-  %r348 = icmp eq ptr %r347, @"lerta.drop.ast.lerta.Unwrap"
-  br i1 %r348, label %member.matched.112, label %member.next.111
-member.matched.112:
-  %r349 = getelementptr %"lerta.object.ast.lerta.Unwrap", ptr %r185, i32 0, i32 3
-  %r350 = load ptr, ptr %r349
-  call void @lerta_retain(ptr %r350)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.next.111:
-  %r351 = getelementptr %"lerta.object.ast.lerta.Yield", ptr %r185, i32 0, i32 3
+  call void @lerta_retain(ptr %r347)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.99:
+  %r348 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r349 = load ptr, ptr %r348
+  %r350 = icmp eq ptr %r349, @"lerta.drop.ast.lerta.Return"
+  br i1 %r350, label %member.matched.102, label %member.next.101
+member.matched.102:
+  %r351 = getelementptr %"lerta.object.ast.lerta.Return", ptr %r227, i32 0, i32 3
   %r352 = load ptr, ptr %r351
   call void @lerta_retain(ptr %r352)
-  call void @lerta_release(ptr %r185)
-  br label %member.done.46
-member.done.46:
-  %r353 = phi ptr [ %r190, %member.matched.48 ], [ %r195, %member.matched.50 ], [ %r200, %member.matched.52 ], [ %r205, %member.matched.54 ], [ %r210, %member.matched.56 ], [ %r215, %member.matched.58 ], [ %r220, %member.matched.60 ], [ %r225, %member.matched.62 ], [ %r230, %member.matched.64 ], [ %r235, %member.matched.66 ], [ %r240, %member.matched.68 ], [ %r245, %member.matched.70 ], [ %r250, %member.matched.72 ], [ %r255, %member.matched.74 ], [ %r260, %member.matched.76 ], [ %r265, %member.matched.78 ], [ %r270, %member.matched.80 ], [ %r275, %member.matched.82 ], [ %r280, %member.matched.84 ], [ %r285, %member.matched.86 ], [ %r290, %member.matched.88 ], [ %r295, %member.matched.90 ], [ %r300, %member.matched.92 ], [ %r305, %member.matched.94 ], [ %r310, %member.matched.96 ], [ %r315, %member.matched.98 ], [ %r320, %member.matched.100 ], [ %r325, %member.matched.102 ], [ %r330, %member.matched.104 ], [ %r335, %member.matched.106 ], [ %r340, %member.matched.108 ], [ %r345, %member.matched.110 ], [ %r350, %member.matched.112 ], [ %r352, %member.next.111 ]
-  %r354 = load ptr, ptr %r182
-  call void @lerta_retain(ptr %r354)
-  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r184, ptr %r353, ptr %r354)
-  call void @lerta_release(ptr %r184)
-  call void @lerta_release(ptr %r353)
-  call void @lerta_release(ptr %r354)
-  %r355 = load ptr, ptr @lerta_exception
-  %r356 = icmp ne ptr %r355, null
-  br i1 %r356, label %unwind.113, label %no.exception.114
-unwind.113:
-  %r357 = load ptr, ptr %r182
-  call void @lerta_release(ptr %r357)
-  %r358 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r358)
-  %r359 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r359)
-  %r360 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r360)
-  %r361 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r361)
-  %r362 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r362)
-  %r363 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r363)
-  %r364 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r364)
-  ret ptr poison
-no.exception.114:
-  %r365 = load ptr, ptr %r182
-  call void @lerta_release(ptr %r365)
-  br label %if.end.41
-if.else.40:
-  br label %if.end.41
-if.end.41:
-  %r366 = call ptr @lerta_array_create(i32 1)
-  %r367 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.101:
+  %r353 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r354 = load ptr, ptr %r353
+  %r355 = icmp eq ptr %r354, @"lerta.drop.ast.lerta.StringLiteral"
+  br i1 %r355, label %member.matched.104, label %member.next.103
+member.matched.104:
+  %r356 = getelementptr %"lerta.object.ast.lerta.StringLiteral", ptr %r227, i32 0, i32 3
+  %r357 = load ptr, ptr %r356
+  call void @lerta_retain(ptr %r357)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.103:
+  %r358 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r359 = load ptr, ptr %r358
+  %r360 = icmp eq ptr %r359, @"lerta.drop.ast.lerta.This"
+  br i1 %r360, label %member.matched.106, label %member.next.105
+member.matched.106:
+  %r361 = getelementptr %"lerta.object.ast.lerta.This", ptr %r227, i32 0, i32 2
+  %r362 = load ptr, ptr %r361
+  call void @lerta_retain(ptr %r362)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.105:
+  %r363 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r364 = load ptr, ptr %r363
+  %r365 = icmp eq ptr %r364, @"lerta.drop.ast.lerta.Throw"
+  br i1 %r365, label %member.matched.108, label %member.next.107
+member.matched.108:
+  %r366 = getelementptr %"lerta.object.ast.lerta.Throw", ptr %r227, i32 0, i32 3
+  %r367 = load ptr, ptr %r366
   call void @lerta_retain(ptr %r367)
-  store ptr %r367, ptr %r368
-  br label %for.header.115
-for.header.115:
-  %r370 = phi i64 [ 0, %if.end.41 ], [ %r369, %for.latch.117 ]
-  %r371 = call i64 @lerta_array_length(ptr %r367)
-  %r372 = icmp slt i64 %r370, %r371
-  br i1 %r372, label %for.body.116, label %for.exit.118
-for.body.116:
-  %r373 = call ptr @lerta_array_checked_items(ptr %r367, i64 %r370)
-  %r374 = icmp ne ptr %r373, null
-  br i1 %r374, label %branch.then.119, label %branch.end.120
-branch.then.119:
-  %r375 = getelementptr i64, ptr %r373, i64 %r370
-  %r376 = load i64, ptr %r375
-  %r377 = inttoptr i64 %r376 to ptr
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.107:
+  %r368 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r369 = load ptr, ptr %r368
+  %r370 = icmp eq ptr %r369, @"lerta.drop.ast.lerta.Try"
+  br i1 %r370, label %member.matched.110, label %member.next.109
+member.matched.110:
+  %r371 = getelementptr %"lerta.object.ast.lerta.Try", ptr %r227, i32 0, i32 5
+  %r372 = load ptr, ptr %r371
+  call void @lerta_retain(ptr %r372)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.109:
+  %r373 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r374 = load ptr, ptr %r373
+  %r375 = icmp eq ptr %r374, @"lerta.drop.ast.lerta.TupleItem"
+  br i1 %r375, label %member.matched.112, label %member.next.111
+member.matched.112:
+  %r376 = getelementptr %"lerta.object.ast.lerta.TupleItem", ptr %r227, i32 0, i32 5
+  %r377 = load ptr, ptr %r376
   call void @lerta_retain(ptr %r377)
-  br label %branch.end.120
-branch.end.120:
-  %r378 = phi ptr [ poison, %for.body.116 ], [ %r377, %branch.then.119 ]
-  store ptr %r378, ptr %r379
-  %r380 = load ptr, ptr %r78
-  call void @lerta_retain(ptr %r380)
-  %r381 = load ptr, ptr %r379
-  call void @lerta_retain(ptr %r381)
-  %r382 = getelementptr { i64, ptr, ptr }, ptr %r380, i32 0, i32 2
-  %r383 = load ptr, ptr %r382
-  %r384 = call i1 %r383(ptr %r380, ptr %r381)
-  call void @lerta_release(ptr %r381)
-  call void @lerta_release(ptr %r380)
-  %r385 = load ptr, ptr @lerta_exception
-  %r386 = icmp ne ptr %r385, null
-  br i1 %r386, label %unwind.123, label %no.exception.124
-unwind.123:
-  call void @lerta_release(ptr %r366)
-  %r387 = load ptr, ptr %r379
-  call void @lerta_release(ptr %r387)
-  %r388 = load ptr, ptr %r368
-  call void @lerta_release(ptr %r388)
-  %r389 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r389)
-  %r390 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r390)
-  %r391 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r391)
-  %r392 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r392)
-  %r393 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r393)
-  %r394 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r394)
-  %r395 = load ptr, ptr %r112
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.111:
+  %r378 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r379 = load ptr, ptr %r378
+  %r380 = icmp eq ptr %r379, @"lerta.drop.ast.lerta.TupleLiteral"
+  br i1 %r380, label %member.matched.114, label %member.next.113
+member.matched.114:
+  %r381 = getelementptr %"lerta.object.ast.lerta.TupleLiteral", ptr %r227, i32 0, i32 3
+  %r382 = load ptr, ptr %r381
+  call void @lerta_retain(ptr %r382)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.113:
+  %r383 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r384 = load ptr, ptr %r383
+  %r385 = icmp eq ptr %r384, @"lerta.drop.ast.lerta.UnaryOperation"
+  br i1 %r385, label %member.matched.116, label %member.next.115
+member.matched.116:
+  %r386 = getelementptr %"lerta.object.ast.lerta.UnaryOperation", ptr %r227, i32 0, i32 4
+  %r387 = load ptr, ptr %r386
+  call void @lerta_retain(ptr %r387)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.115:
+  %r388 = getelementptr { i64, ptr }, ptr %r227, i32 0, i32 1
+  %r389 = load ptr, ptr %r388
+  %r390 = icmp eq ptr %r389, @"lerta.drop.ast.lerta.Unwrap"
+  br i1 %r390, label %member.matched.118, label %member.next.117
+member.matched.118:
+  %r391 = getelementptr %"lerta.object.ast.lerta.Unwrap", ptr %r227, i32 0, i32 3
+  %r392 = load ptr, ptr %r391
+  call void @lerta_retain(ptr %r392)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.next.117:
+  %r393 = getelementptr %"lerta.object.ast.lerta.Yield", ptr %r227, i32 0, i32 3
+  %r394 = load ptr, ptr %r393
+  call void @lerta_retain(ptr %r394)
+  call void @lerta_release(ptr %r227)
+  br label %member.done.52
+member.done.52:
+  %r395 = phi ptr [ %r232, %member.matched.54 ], [ %r237, %member.matched.56 ], [ %r242, %member.matched.58 ], [ %r247, %member.matched.60 ], [ %r252, %member.matched.62 ], [ %r257, %member.matched.64 ], [ %r262, %member.matched.66 ], [ %r267, %member.matched.68 ], [ %r272, %member.matched.70 ], [ %r277, %member.matched.72 ], [ %r282, %member.matched.74 ], [ %r287, %member.matched.76 ], [ %r292, %member.matched.78 ], [ %r297, %member.matched.80 ], [ %r302, %member.matched.82 ], [ %r307, %member.matched.84 ], [ %r312, %member.matched.86 ], [ %r317, %member.matched.88 ], [ %r322, %member.matched.90 ], [ %r327, %member.matched.92 ], [ %r332, %member.matched.94 ], [ %r337, %member.matched.96 ], [ %r342, %member.matched.98 ], [ %r347, %member.matched.100 ], [ %r352, %member.matched.102 ], [ %r357, %member.matched.104 ], [ %r362, %member.matched.106 ], [ %r367, %member.matched.108 ], [ %r372, %member.matched.110 ], [ %r377, %member.matched.112 ], [ %r382, %member.matched.114 ], [ %r387, %member.matched.116 ], [ %r392, %member.matched.118 ], [ %r394, %member.next.117 ]
+  %r396 = load ptr, ptr %r224
+  call void @lerta_retain(ptr %r396)
+  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r226, ptr %r395, ptr %r396)
+  call void @lerta_release(ptr %r226)
   call void @lerta_release(ptr %r395)
-  ret ptr poison
-no.exception.124:
-  %r396 = xor i1 %r384, true
-  br i1 %r396, label %comprehension.push.121, label %comprehension.next.122
-comprehension.push.121:
-  %r397 = load ptr, ptr %r379
-  call void @lerta_retain(ptr %r397)
-  %r398 = getelementptr %"lerta.object.ast.lerta.CaseArm", ptr %r397, i32 0, i32 2
-  %r399 = load ptr, ptr %r398
-  call void @lerta_retain(ptr %r399)
-  call void @lerta_release(ptr %r397)
-  %r400 = call ptr @lerta_array_pushed_items(ptr %r366)
-  %r401 = call i64 @lerta_array_length(ptr %r366)
-  %r402 = sub i64 %r401, 1
-  call void @lerta_retain(ptr %r399)
-  %r403 = getelementptr i64, ptr %r400, i64 %r402
-  %r404 = ptrtoint ptr %r399 to i64
-  store i64 %r404, ptr %r403
+  call void @lerta_release(ptr %r396)
+  %r397 = load ptr, ptr @lerta_exception
+  %r398 = icmp ne ptr %r397, null
+  br i1 %r398, label %unwind.119, label %no.exception.120
+unwind.119:
+  %r399 = load ptr, ptr %r224
   call void @lerta_release(ptr %r399)
-  br label %comprehension.next.122
-comprehension.next.122:
-  %r405 = load ptr, ptr %r379
+  %r400 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r400)
+  %r401 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r401)
+  %r402 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r402)
+  %r403 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r403)
+  %r404 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r404)
+  %r405 = load ptr, ptr %r113
   call void @lerta_release(ptr %r405)
-  br label %for.latch.117
-for.latch.117:
-  %r369 = add nsw i64 %r370, 1
-  br label %for.header.115
-for.exit.118:
-  %r406 = load ptr, ptr %r368
+  %r406 = load ptr, ptr %r124
   call void @lerta_release(ptr %r406)
-  store ptr %r366, ptr %r407
-  %r408 = load ptr, ptr %r407
-  call void @lerta_retain(ptr %r408)
-  store ptr %r408, ptr %r409
-  br label %for.header.125
-for.header.125:
-  %r411 = phi i64 [ 0, %for.exit.118 ], [ %r410, %for.latch.127 ]
-  %r412 = call i64 @lerta_array_length(ptr %r408)
-  %r413 = icmp slt i64 %r411, %r412
-  br i1 %r413, label %for.body.126, label %for.exit.128
-for.body.126:
-  %r414 = call ptr @lerta_array_checked_items(ptr %r408, i64 %r411)
-  %r415 = icmp ne ptr %r414, null
-  br i1 %r415, label %branch.then.129, label %branch.end.130
-branch.then.129:
-  %r416 = getelementptr i64, ptr %r414, i64 %r411
-  %r417 = load i64, ptr %r416
-  %r418 = inttoptr i64 %r417 to ptr
-  call void @lerta_retain(ptr %r418)
-  br label %branch.end.130
-branch.end.130:
-  %r419 = phi ptr [ poison, %for.body.126 ], [ %r418, %branch.then.129 ]
-  store ptr %r419, ptr %r420
-  %r421 = load ptr, ptr %r420
-  call void @lerta_retain(ptr %r421)
+  %r407 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r407)
+  ret ptr poison
+no.exception.120:
+  %r408 = load ptr, ptr %r224
+  call void @lerta_release(ptr %r408)
+  br label %if.end.47
+if.else.46:
+  br label %if.end.47
+if.end.47:
+  %r409 = call ptr @lerta_array_create(i32 1)
+  %r410 = load ptr, ptr %r4
+  call void @lerta_retain(ptr %r410)
+  store ptr %r410, ptr %r411
+  br label %for.header.121
+for.header.121:
+  %r413 = phi i64 [ 0, %if.end.47 ], [ %r412, %for.latch.123 ]
+  %r414 = call i64 @lerta_array_length(ptr %r410)
+  %r415 = icmp slt i64 %r413, %r414
+  br i1 %r415, label %for.body.122, label %for.exit.124
+for.body.122:
+  %r416 = call ptr @lerta_array_checked_items(ptr %r410, i64 %r413)
+  %r417 = icmp ne ptr %r416, null
+  br i1 %r417, label %branch.then.125, label %branch.end.126
+branch.then.125:
+  %r418 = getelementptr i64, ptr %r416, i64 %r413
+  %r419 = load i64, ptr %r418
+  %r420 = inttoptr i64 %r419 to ptr
+  call void @lerta_retain(ptr %r420)
+  br label %branch.end.126
+branch.end.126:
+  %r421 = phi ptr [ poison, %for.body.122 ], [ %r420, %branch.then.125 ]
   store ptr %r421, ptr %r422
+  %r423 = load ptr, ptr %r90
+  call void @lerta_retain(ptr %r423)
+  %r424 = load ptr, ptr %r422
+  call void @lerta_retain(ptr %r424)
+  %r425 = getelementptr { i64, ptr, ptr }, ptr %r423, i32 0, i32 2
+  %r426 = load ptr, ptr %r425
+  %r427 = call i1 %r426(ptr %r423, ptr %r424)
+  call void @lerta_release(ptr %r424)
+  call void @lerta_release(ptr %r423)
+  %r428 = load ptr, ptr @lerta_exception
+  %r429 = icmp ne ptr %r428, null
+  br i1 %r429, label %unwind.129, label %no.exception.130
+unwind.129:
+  call void @lerta_release(ptr %r409)
+  %r430 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r430)
+  %r431 = load ptr, ptr %r411
+  call void @lerta_release(ptr %r431)
+  %r432 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r432)
+  %r433 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r433)
+  %r434 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r434)
+  %r435 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r435)
+  %r436 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r436)
+  %r437 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r437)
+  %r438 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r438)
+  %r439 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r439)
+  ret ptr poison
+no.exception.130:
+  %r440 = xor i1 %r427, true
+  br i1 %r440, label %comprehension.push.127, label %comprehension.next.128
+comprehension.push.127:
+  %r441 = load ptr, ptr %r422
+  call void @lerta_retain(ptr %r441)
+  %r442 = getelementptr %"lerta.object.ast.lerta.CaseArm", ptr %r441, i32 0, i32 2
+  %r443 = load ptr, ptr %r442
+  call void @lerta_retain(ptr %r443)
+  call void @lerta_release(ptr %r441)
+  %r444 = call ptr @lerta_array_pushed_items(ptr %r409)
+  %r445 = call i64 @lerta_array_length(ptr %r409)
+  %r446 = sub i64 %r445, 1
+  call void @lerta_retain(ptr %r443)
+  %r447 = getelementptr i64, ptr %r444, i64 %r446
+  %r448 = ptrtoint ptr %r443 to i64
+  store i64 %r448, ptr %r447
+  call void @lerta_release(ptr %r443)
+  br label %comprehension.next.128
+comprehension.next.128:
+  %r449 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r449)
+  br label %for.latch.123
+for.latch.123:
+  %r412 = add nsw i64 %r413, 1
+  br label %for.header.121
+for.exit.124:
+  %r450 = load ptr, ptr %r411
+  call void @lerta_release(ptr %r450)
+  store ptr %r409, ptr %r451
+  %r452 = load ptr, ptr %r451
+  call void @lerta_retain(ptr %r452)
+  store ptr %r452, ptr %r453
   br label %for.header.131
 for.header.131:
-  %r424 = phi i64 [ 0, %branch.end.130 ], [ %r423, %for.latch.133 ]
-  %r425 = call i64 @lerta_array_length(ptr %r421)
-  %r426 = icmp slt i64 %r424, %r425
-  br i1 %r426, label %for.body.132, label %for.exit.134
+  %r455 = phi i64 [ 0, %for.exit.124 ], [ %r454, %for.latch.133 ]
+  %r456 = call i64 @lerta_array_length(ptr %r452)
+  %r457 = icmp slt i64 %r455, %r456
+  br i1 %r457, label %for.body.132, label %for.exit.134
 for.body.132:
-  %r427 = call ptr @lerta_array_checked_items(ptr %r421, i64 %r424)
-  %r428 = icmp ne ptr %r427, null
-  br i1 %r428, label %branch.then.135, label %branch.end.136
+  %r458 = call ptr @lerta_array_checked_items(ptr %r452, i64 %r455)
+  %r459 = icmp ne ptr %r458, null
+  br i1 %r459, label %branch.then.135, label %branch.end.136
 branch.then.135:
-  %r429 = getelementptr i64, ptr %r427, i64 %r424
-  %r430 = load i64, ptr %r429
-  %r431 = inttoptr i64 %r430 to ptr
-  call void @lerta_retain(ptr %r431)
+  %r460 = getelementptr i64, ptr %r458, i64 %r455
+  %r461 = load i64, ptr %r460
+  %r462 = inttoptr i64 %r461 to ptr
+  call void @lerta_retain(ptr %r462)
   br label %branch.end.136
 branch.end.136:
-  %r432 = phi ptr [ poison, %for.body.132 ], [ %r431, %branch.then.135 ]
-  store ptr %r432, ptr %r433
+  %r463 = phi ptr [ poison, %for.body.132 ], [ %r462, %branch.then.135 ]
+  store ptr %r463, ptr %r464
+  %r465 = load ptr, ptr %r464
+  call void @lerta_retain(ptr %r465)
+  store ptr %r465, ptr %r466
+  br label %for.header.137
+for.header.137:
+  %r468 = phi i64 [ 0, %branch.end.136 ], [ %r467, %for.latch.139 ]
+  %r469 = call i64 @lerta_array_length(ptr %r465)
+  %r470 = icmp slt i64 %r468, %r469
+  br i1 %r470, label %for.body.138, label %for.exit.140
+for.body.138:
+  %r471 = call ptr @lerta_array_checked_items(ptr %r465, i64 %r468)
+  %r472 = icmp ne ptr %r471, null
+  br i1 %r472, label %branch.then.141, label %branch.end.142
+branch.then.141:
+  %r473 = getelementptr i64, ptr %r471, i64 %r468
+  %r474 = load i64, ptr %r473
+  %r475 = inttoptr i64 %r474 to ptr
+  call void @lerta_retain(ptr %r475)
+  br label %branch.end.142
+branch.end.142:
+  %r476 = phi ptr [ poison, %for.body.138 ], [ %r475, %branch.then.141 ]
+  store ptr %r476, ptr %r477
   call void @lerta_retain(ptr %p0)
-  %r434 = load ptr, ptr %r433
-  call void @lerta_retain(ptr %r434)
-  %r435 = load ptr, ptr %r112
-  call void @lerta_retain(ptr %r435)
-  call void @"lerta.fn.checker/expression.lerta.expect_type"(ptr %p0, ptr %r434, ptr %r435)
+  %r478 = load ptr, ptr %r477
+  call void @lerta_retain(ptr %r478)
+  %r479 = load ptr, ptr %r124
+  call void @lerta_retain(ptr %r479)
+  call void @"lerta.fn.checker/expression.lerta.expect_type"(ptr %p0, ptr %r478, ptr %r479)
   call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r434)
-  call void @lerta_release(ptr %r435)
-  %r436 = load ptr, ptr @lerta_exception
-  %r437 = icmp ne ptr %r436, null
-  br i1 %r437, label %unwind.137, label %no.exception.138
-unwind.137:
-  %r438 = load ptr, ptr %r433
-  call void @lerta_release(ptr %r438)
-  %r439 = load ptr, ptr %r422
-  call void @lerta_release(ptr %r439)
-  %r440 = load ptr, ptr %r420
-  call void @lerta_release(ptr %r440)
-  %r441 = load ptr, ptr %r409
-  call void @lerta_release(ptr %r441)
-  %r442 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r442)
-  %r443 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r443)
-  %r444 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r444)
-  %r445 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r445)
-  %r446 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r446)
-  %r447 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r447)
-  %r448 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r448)
-  %r449 = load ptr, ptr %r407
-  call void @lerta_release(ptr %r449)
+  call void @lerta_release(ptr %r478)
+  call void @lerta_release(ptr %r479)
+  %r480 = load ptr, ptr @lerta_exception
+  %r481 = icmp ne ptr %r480, null
+  br i1 %r481, label %unwind.143, label %no.exception.144
+unwind.143:
+  %r482 = load ptr, ptr %r477
+  call void @lerta_release(ptr %r482)
+  %r483 = load ptr, ptr %r466
+  call void @lerta_release(ptr %r483)
+  %r484 = load ptr, ptr %r464
+  call void @lerta_release(ptr %r484)
+  %r485 = load ptr, ptr %r453
+  call void @lerta_release(ptr %r485)
+  %r486 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r486)
+  %r487 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r487)
+  %r488 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r488)
+  %r489 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r489)
+  %r490 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r490)
+  %r491 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r491)
+  %r492 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r492)
+  %r493 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r493)
+  %r494 = load ptr, ptr %r451
+  call void @lerta_release(ptr %r494)
   ret ptr poison
-no.exception.138:
-  %r450 = load ptr, ptr %r433
-  call void @lerta_release(ptr %r450)
+no.exception.144:
+  %r495 = load ptr, ptr %r477
+  call void @lerta_release(ptr %r495)
+  br label %for.latch.139
+for.latch.139:
+  %r467 = add nsw i64 %r468, 1
+  br label %for.header.137
+for.exit.140:
+  %r496 = load ptr, ptr %r466
+  call void @lerta_release(ptr %r496)
+  %r497 = load ptr, ptr %r464
+  call void @lerta_release(ptr %r497)
   br label %for.latch.133
 for.latch.133:
-  %r423 = add nsw i64 %r424, 1
+  %r454 = add nsw i64 %r455, 1
   br label %for.header.131
 for.exit.134:
-  %r451 = load ptr, ptr %r422
-  call void @lerta_release(ptr %r451)
-  %r452 = load ptr, ptr %r420
-  call void @lerta_release(ptr %r452)
-  br label %for.latch.127
-for.latch.127:
-  %r410 = add nsw i64 %r411, 1
-  br label %for.header.125
-for.exit.128:
-  %r453 = load ptr, ptr %r409
-  call void @lerta_release(ptr %r453)
-  %r454 = load ptr, ptr %r112
-  call void @lerta_retain(ptr %r454)
-  %r455 = getelementptr { i64, ptr }, ptr %r454, i32 0, i32 1
-  %r456 = load ptr, ptr %r455
-  %r457 = icmp eq ptr %r456, @"lerta.drop.types.lerta.EnumType"
-  call void @lerta_release(ptr %r454)
-  br i1 %r457, label %if.then.139, label %if.else.140
-if.then.139:
-  call void @lerta_retain(ptr %p0)
-  call void @lerta_retain(ptr %p1)
-  %r458 = load ptr, ptr %r112
-  call void @lerta_retain(ptr %r458)
-  %r459 = load ptr, ptr %r101
-  call void @lerta_retain(ptr %r459)
-  call void @"lerta.fn.checker/case.lerta.check_member_patterns"(ptr %p0, ptr %p1, ptr %r458, ptr %r459)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %p1)
-  call void @lerta_release(ptr %r458)
-  call void @lerta_release(ptr %r459)
-  %r460 = load ptr, ptr @lerta_exception
-  %r461 = icmp ne ptr %r460, null
-  br i1 %r461, label %unwind.142, label %no.exception.143
-unwind.142:
-  %r462 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r462)
-  %r463 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r463)
-  %r464 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r464)
-  %r465 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r465)
-  %r466 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r466)
-  %r467 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r467)
-  %r468 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r468)
-  %r469 = load ptr, ptr %r407
-  call void @lerta_release(ptr %r469)
-  ret ptr poison
-no.exception.143:
-  br label %if.end.141
-if.else.140:
-  call void @lerta_retain(ptr %p1)
-  %r470 = getelementptr %"lerta.object.ast.lerta.Case", ptr %p1, i32 0, i32 4
-  %r471 = load ptr, ptr %r470
-  call void @lerta_retain(ptr %r471)
-  call void @lerta_release(ptr %p1)
-  %r472 = icmp ne ptr %r471, null
-  call void @lerta_release(ptr %r471)
-  %r473 = xor i1 %r472, true
-  br i1 %r473, label %if.then.144, label %if.else.145
-if.then.144:
-  call void @lerta_retain(ptr %p0)
-  %r474 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 10
-  %r475 = load ptr, ptr %r474
-  call void @lerta_retain(ptr %r475)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_retain(ptr %p1)
-  %r476 = getelementptr %"lerta.object.ast.lerta.Case", ptr %p1, i32 0, i32 5
-  %r477 = load ptr, ptr %r476
-  call void @lerta_retain(ptr %r477)
-  call void @lerta_release(ptr %p1)
-  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r475, ptr %r477, ptr @lerta.string.1280)
-  call void @lerta_release(ptr %r475)
-  call void @lerta_release(ptr %r477)
-  call void @lerta_release(ptr @lerta.string.1280)
-  %r478 = load ptr, ptr @lerta_exception
-  %r479 = icmp ne ptr %r478, null
-  br i1 %r479, label %unwind.147, label %no.exception.148
-unwind.147:
-  %r480 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r480)
-  %r481 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r481)
-  %r482 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r482)
-  %r483 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r483)
-  %r484 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r484)
-  %r485 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r485)
-  %r486 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r486)
-  %r487 = load ptr, ptr %r407
-  call void @lerta_release(ptr %r487)
-  ret ptr poison
-no.exception.148:
-  br label %if.end.146
-if.else.145:
-  br label %if.end.146
-if.end.146:
-  br label %if.end.141
-if.end.141:
-  %r488 = call ptr @lerta_array_create(i32 1)
-  store ptr %r488, ptr %r489
-  %r490 = load i1, ptr %r71
-  br i1 %r490, label %then.149, label %else.150
-then.149:
-  call void @lerta_retain(ptr %p0)
-  %r491 = load ptr, ptr %r7
-  call void @lerta_retain(ptr %r491)
-  %r492 = load ptr, ptr %r112
-  call void @lerta_retain(ptr %r492)
-  %r493 = call ptr @"lerta.fn.checker/case.lerta.subject_narrowings"(ptr %p0, ptr %r491, ptr %r492)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r491)
-  call void @lerta_release(ptr %r492)
-  %r494 = load ptr, ptr @lerta_exception
-  %r495 = icmp ne ptr %r494, null
-  br i1 %r495, label %unwind.152, label %no.exception.153
-unwind.152:
-  %r496 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r496)
-  %r497 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r497)
-  %r498 = load ptr, ptr %r7
+  %r498 = load ptr, ptr %r453
   call void @lerta_release(ptr %r498)
-  %r499 = load ptr, ptr %r66
+  %r499 = load ptr, ptr %r124
+  call void @lerta_retain(ptr %r499)
+  %r500 = getelementptr { i64, ptr }, ptr %r499, i32 0, i32 1
+  %r501 = load ptr, ptr %r500
+  %r502 = icmp eq ptr %r501, @"lerta.drop.types.lerta.EnumType"
   call void @lerta_release(ptr %r499)
-  %r500 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r500)
-  %r501 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r501)
-  %r502 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r502)
-  %r503 = load ptr, ptr %r407
+  br i1 %r502, label %if.then.145, label %if.else.146
+if.then.145:
+  call void @lerta_retain(ptr %p0)
+  call void @lerta_retain(ptr %p1)
+  %r503 = load ptr, ptr %r124
+  call void @lerta_retain(ptr %r503)
+  %r504 = load ptr, ptr %r113
+  call void @lerta_retain(ptr %r504)
+  call void @"lerta.fn.checker/case.lerta.check_member_patterns"(ptr %p0, ptr %p1, ptr %r503, ptr %r504)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %p1)
   call void @lerta_release(ptr %r503)
-  %r504 = load ptr, ptr %r489
   call void @lerta_release(ptr %r504)
-  ret ptr poison
-no.exception.153:
-  br label %then.end.151
-else.150:
-  %r505 = load ptr, ptr %r489
-  call void @lerta_retain(ptr %r505)
-  br label %then.end.151
-then.end.151:
-  %r506 = phi ptr [ %r493, %no.exception.153 ], [ %r505, %else.150 ]
-  store ptr %r506, ptr %r507
-  %r508 = call ptr @lerta_array_create(i32 1)
-  %r509 = load ptr, ptr %r4
-  call void @lerta_retain(ptr %r509)
-  store ptr %r509, ptr %r510
-  br label %for.header.154
-for.header.154:
-  %r512 = phi i64 [ 0, %then.end.151 ], [ %r511, %for.latch.156 ]
-  %r513 = call i64 @lerta_array_length(ptr %r509)
-  %r514 = icmp slt i64 %r512, %r513
-  br i1 %r514, label %for.body.155, label %for.exit.157
-for.body.155:
-  %r515 = call ptr @lerta_array_checked_items(ptr %r509, i64 %r512)
-  %r516 = icmp ne ptr %r515, null
-  br i1 %r516, label %branch.then.158, label %branch.end.159
-branch.then.158:
-  %r517 = getelementptr i64, ptr %r515, i64 %r512
-  %r518 = load i64, ptr %r517
-  %r519 = inttoptr i64 %r518 to ptr
-  call void @lerta_retain(ptr %r519)
-  br label %branch.end.159
-branch.end.159:
-  %r520 = phi ptr [ poison, %for.body.155 ], [ %r519, %branch.then.158 ]
-  store ptr %r520, ptr %r521
-  br i1 true, label %comprehension.push.160, label %comprehension.next.161
-comprehension.push.160:
-  %r522 = load ptr, ptr %r78
-  call void @lerta_retain(ptr %r522)
-  %r523 = load ptr, ptr %r521
-  call void @lerta_retain(ptr %r523)
-  %r524 = getelementptr { i64, ptr, ptr }, ptr %r522, i32 0, i32 2
-  %r525 = load ptr, ptr %r524
-  %r526 = call i1 %r525(ptr %r522, ptr %r523)
-  call void @lerta_release(ptr %r523)
-  call void @lerta_release(ptr %r522)
-  %r527 = load ptr, ptr @lerta_exception
-  %r528 = icmp ne ptr %r527, null
-  br i1 %r528, label %unwind.162, label %no.exception.163
-unwind.162:
+  %r505 = load ptr, ptr @lerta_exception
+  %r506 = icmp ne ptr %r505, null
+  br i1 %r506, label %unwind.148, label %no.exception.149
+unwind.148:
+  %r507 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r507)
+  %r508 = load ptr, ptr %r4
   call void @lerta_release(ptr %r508)
-  %r529 = load ptr, ptr %r521
-  call void @lerta_release(ptr %r529)
-  %r530 = load ptr, ptr %r510
-  call void @lerta_release(ptr %r530)
-  %r531 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r531)
-  %r532 = load ptr, ptr %r4
-  call void @lerta_release(ptr %r532)
-  %r533 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r533)
-  %r534 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r534)
-  %r535 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r535)
-  %r536 = load ptr, ptr %r101
-  call void @lerta_release(ptr %r536)
-  %r537 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r537)
-  %r538 = load ptr, ptr %r407
-  call void @lerta_release(ptr %r538)
-  %r539 = load ptr, ptr %r489
-  call void @lerta_release(ptr %r539)
-  %r540 = load ptr, ptr %r507
-  call void @lerta_release(ptr %r540)
+  %r509 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r509)
+  %r510 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r510)
+  %r511 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r511)
+  %r512 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r512)
+  %r513 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r513)
+  %r514 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r514)
+  %r515 = load ptr, ptr %r451
+  call void @lerta_release(ptr %r515)
   ret ptr poison
-no.exception.163:
-  br i1 %r526, label %then.164, label %else.165
-then.164:
-  %r541 = load ptr, ptr %r489
-  call void @lerta_retain(ptr %r541)
-  br label %then.end.166
-else.165:
-  %r542 = load ptr, ptr %r507
-  call void @lerta_retain(ptr %r542)
-  br label %then.end.166
-then.end.166:
-  %r543 = phi ptr [ %r541, %then.164 ], [ %r542, %else.165 ]
-  %r544 = call ptr @lerta_array_pushed_items(ptr %r508)
-  %r545 = call i64 @lerta_array_length(ptr %r508)
-  %r546 = sub i64 %r545, 1
-  call void @lerta_retain(ptr %r543)
-  %r547 = getelementptr i64, ptr %r544, i64 %r546
-  %r548 = ptrtoint ptr %r543 to i64
-  store i64 %r548, ptr %r547
+no.exception.149:
+  br label %if.end.147
+if.else.146:
+  call void @lerta_retain(ptr %p1)
+  %r516 = getelementptr %"lerta.object.ast.lerta.Case", ptr %p1, i32 0, i32 4
+  %r517 = load ptr, ptr %r516
+  call void @lerta_retain(ptr %r517)
+  call void @lerta_release(ptr %p1)
+  %r518 = icmp ne ptr %r517, null
+  call void @lerta_release(ptr %r517)
+  %r519 = xor i1 %r518, true
+  br i1 %r519, label %if.then.150, label %if.else.151
+if.then.150:
+  call void @lerta_retain(ptr %p0)
+  %r520 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 10
+  %r521 = load ptr, ptr %r520
+  call void @lerta_retain(ptr %r521)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_retain(ptr %p1)
+  %r522 = getelementptr %"lerta.object.ast.lerta.Case", ptr %p1, i32 0, i32 5
+  %r523 = load ptr, ptr %r522
+  call void @lerta_retain(ptr %r523)
+  call void @lerta_release(ptr %p1)
+  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r521, ptr %r523, ptr @lerta.string.1280)
+  call void @lerta_release(ptr %r521)
+  call void @lerta_release(ptr %r523)
+  call void @lerta_release(ptr @lerta.string.1280)
+  %r524 = load ptr, ptr @lerta_exception
+  %r525 = icmp ne ptr %r524, null
+  br i1 %r525, label %unwind.153, label %no.exception.154
+unwind.153:
+  %r526 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r526)
+  %r527 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r527)
+  %r528 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r528)
+  %r529 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r529)
+  %r530 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r530)
+  %r531 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r531)
+  %r532 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r532)
+  %r533 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r533)
+  %r534 = load ptr, ptr %r451
+  call void @lerta_release(ptr %r534)
+  ret ptr poison
+no.exception.154:
+  br label %if.end.152
+if.else.151:
+  br label %if.end.152
+if.end.152:
+  br label %if.end.147
+if.end.147:
+  %r535 = call ptr @lerta_array_create(i32 1)
+  store ptr %r535, ptr %r536
+  %r537 = load i1, ptr %r83
+  br i1 %r537, label %then.155, label %else.156
+then.155:
+  call void @lerta_retain(ptr %p0)
+  %r538 = load ptr, ptr %r7
+  call void @lerta_retain(ptr %r538)
+  %r539 = load ptr, ptr %r124
+  call void @lerta_retain(ptr %r539)
+  %r540 = call ptr @"lerta.fn.checker/case.lerta.subject_narrowings"(ptr %p0, ptr %r538, ptr %r539)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r538)
+  call void @lerta_release(ptr %r539)
+  %r541 = load ptr, ptr @lerta_exception
+  %r542 = icmp ne ptr %r541, null
+  br i1 %r542, label %unwind.158, label %no.exception.159
+unwind.158:
+  %r543 = load ptr, ptr %r0
   call void @lerta_release(ptr %r543)
-  br label %comprehension.next.161
-comprehension.next.161:
-  %r549 = load ptr, ptr %r521
+  %r544 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r544)
+  %r545 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r545)
+  %r546 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r546)
+  %r547 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r547)
+  %r548 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r548)
+  %r549 = load ptr, ptr %r124
   call void @lerta_release(ptr %r549)
-  br label %for.latch.156
-for.latch.156:
-  %r511 = add nsw i64 %r512, 1
-  br label %for.header.154
-for.exit.157:
-  %r550 = load ptr, ptr %r510
+  %r550 = load ptr, ptr %r147
   call void @lerta_release(ptr %r550)
-  %r551 = load ptr, ptr %r0
+  %r551 = load ptr, ptr %r451
   call void @lerta_release(ptr %r551)
-  %r552 = load ptr, ptr %r4
+  %r552 = load ptr, ptr %r536
   call void @lerta_release(ptr %r552)
-  %r553 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r553)
-  %r554 = load ptr, ptr %r66
-  call void @lerta_release(ptr %r554)
-  %r555 = load ptr, ptr %r78
-  call void @lerta_release(ptr %r555)
-  %r556 = load ptr, ptr %r101
+  ret ptr poison
+no.exception.159:
+  br label %then.end.157
+else.156:
+  %r553 = load ptr, ptr %r536
+  call void @lerta_retain(ptr %r553)
+  br label %then.end.157
+then.end.157:
+  %r554 = phi ptr [ %r540, %no.exception.159 ], [ %r553, %else.156 ]
+  store ptr %r554, ptr %r555
+  %r556 = call ptr @lerta_array_create(i32 1)
+  %r557 = load ptr, ptr %r4
+  call void @lerta_retain(ptr %r557)
+  store ptr %r557, ptr %r558
+  br label %for.header.160
+for.header.160:
+  %r560 = phi i64 [ 0, %then.end.157 ], [ %r559, %for.latch.162 ]
+  %r561 = call i64 @lerta_array_length(ptr %r557)
+  %r562 = icmp slt i64 %r560, %r561
+  br i1 %r562, label %for.body.161, label %for.exit.163
+for.body.161:
+  %r563 = call ptr @lerta_array_checked_items(ptr %r557, i64 %r560)
+  %r564 = icmp ne ptr %r563, null
+  br i1 %r564, label %branch.then.164, label %branch.end.165
+branch.then.164:
+  %r565 = getelementptr i64, ptr %r563, i64 %r560
+  %r566 = load i64, ptr %r565
+  %r567 = inttoptr i64 %r566 to ptr
+  call void @lerta_retain(ptr %r567)
+  br label %branch.end.165
+branch.end.165:
+  %r568 = phi ptr [ poison, %for.body.161 ], [ %r567, %branch.then.164 ]
+  store ptr %r568, ptr %r569
+  br i1 true, label %comprehension.push.166, label %comprehension.next.167
+comprehension.push.166:
+  %r570 = load ptr, ptr %r90
+  call void @lerta_retain(ptr %r570)
+  %r571 = load ptr, ptr %r569
+  call void @lerta_retain(ptr %r571)
+  %r572 = getelementptr { i64, ptr, ptr }, ptr %r570, i32 0, i32 2
+  %r573 = load ptr, ptr %r572
+  %r574 = call i1 %r573(ptr %r570, ptr %r571)
+  call void @lerta_release(ptr %r571)
+  call void @lerta_release(ptr %r570)
+  %r575 = load ptr, ptr @lerta_exception
+  %r576 = icmp ne ptr %r575, null
+  br i1 %r576, label %unwind.168, label %no.exception.169
+unwind.168:
   call void @lerta_release(ptr %r556)
-  %r557 = load ptr, ptr %r112
-  call void @lerta_release(ptr %r557)
-  %r558 = load ptr, ptr %r407
-  call void @lerta_release(ptr %r558)
-  %r559 = load ptr, ptr %r489
-  call void @lerta_release(ptr %r559)
-  %r560 = load ptr, ptr %r507
-  call void @lerta_release(ptr %r560)
-  ret ptr %r508
+  %r577 = load ptr, ptr %r569
+  call void @lerta_release(ptr %r577)
+  %r578 = load ptr, ptr %r558
+  call void @lerta_release(ptr %r578)
+  %r579 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r579)
+  %r580 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r580)
+  %r581 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r581)
+  %r582 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r582)
+  %r583 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r583)
+  %r584 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r584)
+  %r585 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r585)
+  %r586 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r586)
+  %r587 = load ptr, ptr %r451
+  call void @lerta_release(ptr %r587)
+  %r588 = load ptr, ptr %r536
+  call void @lerta_release(ptr %r588)
+  %r589 = load ptr, ptr %r555
+  call void @lerta_release(ptr %r589)
+  ret ptr poison
+no.exception.169:
+  br i1 %r574, label %then.170, label %else.171
+then.170:
+  %r590 = load ptr, ptr %r536
+  call void @lerta_retain(ptr %r590)
+  br label %then.end.172
+else.171:
+  %r591 = load ptr, ptr %r555
+  call void @lerta_retain(ptr %r591)
+  br label %then.end.172
+then.end.172:
+  %r592 = phi ptr [ %r590, %then.170 ], [ %r591, %else.171 ]
+  %r593 = call ptr @lerta_array_pushed_items(ptr %r556)
+  %r594 = call i64 @lerta_array_length(ptr %r556)
+  %r595 = sub i64 %r594, 1
+  call void @lerta_retain(ptr %r592)
+  %r596 = getelementptr i64, ptr %r593, i64 %r595
+  %r597 = ptrtoint ptr %r592 to i64
+  store i64 %r597, ptr %r596
+  call void @lerta_release(ptr %r592)
+  br label %comprehension.next.167
+comprehension.next.167:
+  %r598 = load ptr, ptr %r569
+  call void @lerta_release(ptr %r598)
+  br label %for.latch.162
+for.latch.162:
+  %r559 = add nsw i64 %r560, 1
+  br label %for.header.160
+for.exit.163:
+  %r599 = load ptr, ptr %r558
+  call void @lerta_release(ptr %r599)
+  store ptr %r556, ptr %r600
+  %r601 = load ptr, ptr %r600
+  call void @lerta_retain(ptr %r601)
+  %r602 = load i1, ptr %r103
+  br i1 %r602, label %then.173, label %else.174
+then.173:
+  %r603 = load ptr, ptr %r536
+  call void @lerta_retain(ptr %r603)
+  br label %then.end.175
+else.174:
+  %r604 = load ptr, ptr %r555
+  call void @lerta_retain(ptr %r604)
+  br label %then.end.175
+then.end.175:
+  %r605 = phi ptr [ %r603, %then.173 ], [ %r604, %else.174 ]
+  %r606 = call ptr @"lerta.new.checker/case.lerta.CaseNarrowings"(ptr %r601, ptr %r605)
+  call void @lerta_release(ptr %r601)
+  call void @lerta_release(ptr %r605)
+  %r607 = load ptr, ptr @lerta_exception
+  %r608 = icmp ne ptr %r607, null
+  br i1 %r608, label %unwind.176, label %no.exception.177
+unwind.176:
+  %r609 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r609)
+  %r610 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r610)
+  %r611 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r611)
+  %r612 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r612)
+  %r613 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r613)
+  %r614 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r614)
+  %r615 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r615)
+  %r616 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r616)
+  %r617 = load ptr, ptr %r451
+  call void @lerta_release(ptr %r617)
+  %r618 = load ptr, ptr %r536
+  call void @lerta_release(ptr %r618)
+  %r619 = load ptr, ptr %r555
+  call void @lerta_release(ptr %r619)
+  %r620 = load ptr, ptr %r600
+  call void @lerta_release(ptr %r620)
+  ret ptr poison
+no.exception.177:
+  %r621 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r621)
+  %r622 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r622)
+  %r623 = load ptr, ptr %r7
+  call void @lerta_release(ptr %r623)
+  %r624 = load ptr, ptr %r78
+  call void @lerta_release(ptr %r624)
+  %r625 = load ptr, ptr %r90
+  call void @lerta_release(ptr %r625)
+  %r626 = load ptr, ptr %r113
+  call void @lerta_release(ptr %r626)
+  %r627 = load ptr, ptr %r124
+  call void @lerta_release(ptr %r627)
+  %r628 = load ptr, ptr %r147
+  call void @lerta_release(ptr %r628)
+  %r629 = load ptr, ptr %r451
+  call void @lerta_release(ptr %r629)
+  %r630 = load ptr, ptr %r536
+  call void @lerta_release(ptr %r630)
+  %r631 = load ptr, ptr %r555
+  call void @lerta_release(ptr %r631)
+  %r632 = load ptr, ptr %r600
+  call void @lerta_release(ptr %r632)
+  ret ptr %r606
 }
 define i1 @"lerta.fn.checker/case.lerta.is_nil_pattern"(ptr %p0) {
 entry:
@@ -120479,7 +121162,41 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define ptr @"lerta.fn.checker/case.lerta.check_type_patterns"(ptr %p0, ptr %p1, ptr %p2, ptr %p3, ptr %p4, ptr %p5) {
+define private i1 @lerta.lambda.154(ptr %closure, ptr %p0) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_retain(ptr %r1)
+  call void @lerta_retain(ptr %p0)
+  %r2 = call ptr @"lerta.fn.types.lerta.type_key"(ptr %p0)
+  call void @lerta_release(ptr %p0)
+  %r3 = load ptr, ptr @lerta_exception
+  %r4 = icmp ne ptr %r3, null
+  br i1 %r4, label %unwind.0, label %no.exception.1
+unwind.0:
+  call void @lerta_release(ptr %r1)
+  ret i1 poison
+no.exception.1:
+  %r5 = call i1 @"lerta.extend.std:builtins.Map<K, V>.has<String, Bool>"(ptr %r1, ptr %r2)
+  call void @lerta_release(ptr %r2)
+  call void @lerta_release(ptr %r1)
+  %r6 = load ptr, ptr @lerta_exception
+  %r7 = icmp ne ptr %r6, null
+  br i1 %r7, label %unwind.2, label %no.exception.3
+unwind.2:
+  ret i1 poison
+no.exception.3:
+  %r8 = xor i1 %r5, true
+  ret i1 %r8
+}
+define private void @"lerta.lambda.154.drop"(ptr %closure) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  ret void
+}
+define ptr @"lerta.fn.checker/case.lerta.check_type_patterns"(ptr %p0, ptr %p1, ptr %p2, ptr %p3, ptr %p4, ptr %p5, ptr %p6) {
 entry:
   %r1 = alloca ptr
   %r3 = alloca ptr
@@ -120496,13 +121213,22 @@ entry:
   %r147 = alloca ptr
   %r158 = alloca ptr
   %r174 = alloca ptr
-  %r292 = alloca ptr
-  %r303 = alloca ptr
-  %r336 = alloca ptr
-  %r339 = alloca ptr
-  %r350 = alloca ptr
-  %r359 = alloca ptr
-  %r370 = alloca ptr
+  %r295 = alloca ptr
+  %r309 = alloca ptr
+  %r312 = alloca ptr
+  %r320 = alloca i64
+  %r343 = alloca ptr
+  %r361 = alloca ptr
+  %r364 = alloca ptr
+  %r375 = alloca ptr
+  %r384 = alloca ptr
+  %r395 = alloca ptr
+  %r422 = alloca ptr
+  %r426 = alloca ptr
+  %r437 = alloca ptr
+  %r470 = alloca ptr
+  %r493 = alloca ptr
+  %r510 = alloca ptr
   %r0 = call ptr @lerta_map_create(i32 1, i32 3, ptr null, ptr null)
   store ptr %r0, ptr %r1
   %r2 = call ptr @lerta_array_create(i32 1)
@@ -121143,233 +121869,558 @@ for.latch.2:
 for.exit.3:
   %r288 = load ptr, ptr %r6
   call void @lerta_release(ptr %r288)
-  %r289 = call ptr @lerta_array_create(i32 1)
-  call void @lerta_retain(ptr %p4)
-  %r290 = getelementptr %"lerta.object.types.lerta.UnionType", ptr %p4, i32 0, i32 2
-  %r291 = load ptr, ptr %r290
-  call void @lerta_retain(ptr %r291)
-  call void @lerta_release(ptr %p4)
-  store ptr %r291, ptr %r292
-  br label %for.header.67
-for.header.67:
-  %r294 = phi i64 [ 0, %for.exit.3 ], [ %r293, %for.latch.69 ]
-  %r295 = call i64 @lerta_array_length(ptr %r291)
-  %r296 = icmp slt i64 %r294, %r295
-  br i1 %r296, label %for.body.68, label %for.exit.70
-for.body.68:
-  %r297 = call ptr @lerta_array_checked_items(ptr %r291, i64 %r294)
+  %r289 = load ptr, ptr %r1
+  call void @lerta_retain(ptr %r289)
+  %r290 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
+  %r291 = ptrtoint ptr %r290 to i64
+  %r292 = call ptr @lerta_alloc(i64 %r291, ptr @"lerta.lambda.154.drop")
+  %r293 = getelementptr { i64, ptr, ptr }, ptr %r292, i32 0, i32 2
+  store ptr @lerta.lambda.154, ptr %r293
+  %r294 = getelementptr { i64, ptr, ptr, ptr }, ptr %r292, i32 0, i32 3
+  store ptr %r289, ptr %r294
+  store ptr %r292, ptr %r295
+  call void @lerta_retain(ptr %p5)
+  %r296 = call ptr @"lerta.fn.types.lerta.members_of"(ptr %p5)
+  call void @lerta_release(ptr %p5)
+  %r297 = load ptr, ptr @lerta_exception
   %r298 = icmp ne ptr %r297, null
-  br i1 %r298, label %branch.then.71, label %branch.end.72
-branch.then.71:
-  %r299 = getelementptr i64, ptr %r297, i64 %r294
-  %r300 = load i64, ptr %r299
-  %r301 = inttoptr i64 %r300 to ptr
-  call void @lerta_retain(ptr %r301)
-  br label %branch.end.72
-branch.end.72:
-  %r302 = phi ptr [ poison, %for.body.68 ], [ %r301, %branch.then.71 ]
-  store ptr %r302, ptr %r303
-  %r304 = load ptr, ptr %r1
-  call void @lerta_retain(ptr %r304)
-  %r305 = load ptr, ptr %r303
-  call void @lerta_retain(ptr %r305)
-  %r306 = call ptr @"lerta.fn.types.lerta.type_key"(ptr %r305)
-  call void @lerta_release(ptr %r305)
-  %r307 = load ptr, ptr @lerta_exception
-  %r308 = icmp ne ptr %r307, null
-  br i1 %r308, label %unwind.75, label %no.exception.76
-unwind.75:
-  call void @lerta_release(ptr %r304)
-  call void @lerta_release(ptr %r289)
-  %r309 = load ptr, ptr %r303
-  call void @lerta_release(ptr %r309)
-  %r310 = load ptr, ptr %r292
-  call void @lerta_release(ptr %r310)
-  %r311 = load ptr, ptr %r1
-  call void @lerta_release(ptr %r311)
-  %r312 = load ptr, ptr %r3
-  call void @lerta_release(ptr %r312)
+  br i1 %r298, label %unwind.67, label %no.exception.68
+unwind.67:
+  %r299 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r299)
+  %r300 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r300)
+  %r301 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r301)
   ret ptr poison
-no.exception.76:
-  %r313 = call i1 @"lerta.extend.std:builtins.Map<K, V>.has<String, Bool>"(ptr %r304, ptr %r306)
+no.exception.68:
+  %r302 = load ptr, ptr %r295
+  call void @lerta_retain(ptr %r302)
+  %r303 = call ptr @"lerta.extend.std:builtins.Self.filter<Array<types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>, types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>"(ptr %r296, ptr %r302)
+  call void @lerta_release(ptr %r302)
+  call void @lerta_release(ptr %r296)
+  %r304 = load ptr, ptr @lerta_exception
+  %r305 = icmp ne ptr %r304, null
+  br i1 %r305, label %unwind.69, label %no.exception.70
+unwind.69:
+  %r306 = load ptr, ptr %r1
   call void @lerta_release(ptr %r306)
-  call void @lerta_release(ptr %r304)
-  %r314 = load ptr, ptr @lerta_exception
-  %r315 = icmp ne ptr %r314, null
-  br i1 %r315, label %unwind.77, label %no.exception.78
-unwind.77:
-  call void @lerta_release(ptr %r289)
-  %r316 = load ptr, ptr %r303
+  %r307 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r307)
+  %r308 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r308)
+  ret ptr poison
+no.exception.70:
+  store ptr %r303, ptr %r309
+  %r310 = call ptr @lerta_array_create(i32 1)
+  %r311 = load ptr, ptr %r309
+  call void @lerta_retain(ptr %r311)
+  store ptr %r311, ptr %r312
+  call void @lerta_iter_start(ptr %r311)
+  %r313 = load ptr, ptr @lerta_exception
+  %r314 = icmp ne ptr %r313, null
+  br i1 %r314, label %unwind.71, label %no.exception.72
+unwind.71:
+  call void @lerta_release(ptr %r310)
+  %r315 = load ptr, ptr %r312
+  call void @lerta_release(ptr %r315)
+  %r316 = load ptr, ptr %r1
   call void @lerta_release(ptr %r316)
-  %r317 = load ptr, ptr %r292
+  %r317 = load ptr, ptr %r3
   call void @lerta_release(ptr %r317)
-  %r318 = load ptr, ptr %r1
+  %r318 = load ptr, ptr %r295
   call void @lerta_release(ptr %r318)
-  %r319 = load ptr, ptr %r3
+  %r319 = load ptr, ptr %r309
   call void @lerta_release(ptr %r319)
   ret ptr poison
-no.exception.78:
-  %r320 = xor i1 %r313, true
-  br i1 %r320, label %comprehension.push.73, label %comprehension.next.74
-comprehension.push.73:
-  %r321 = load ptr, ptr %r303
-  call void @lerta_retain(ptr %r321)
-  call void @lerta_retain(ptr %p4)
-  %r322 = call ptr @"lerta.fn.types.lerta.format_member"(ptr %r321, ptr %p4)
-  call void @lerta_release(ptr %r321)
-  call void @lerta_release(ptr %p4)
-  %r323 = load ptr, ptr @lerta_exception
-  %r324 = icmp ne ptr %r323, null
-  br i1 %r324, label %unwind.79, label %no.exception.80
-unwind.79:
-  call void @lerta_release(ptr %r289)
-  %r325 = load ptr, ptr %r303
-  call void @lerta_release(ptr %r325)
-  %r326 = load ptr, ptr %r292
+no.exception.72:
+  store i64 0, ptr %r320
+  br label %iter.header.73
+iter.header.73:
+  %r321 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r311, i32 0, i32 2
+  %r322 = load ptr, ptr %r321
+  %r323 = call i1 %r322(ptr %r311)
+  %r324 = load ptr, ptr @lerta_exception
+  %r325 = icmp ne ptr %r324, null
+  br i1 %r325, label %unwind.76, label %no.exception.77
+unwind.76:
+  call void @lerta_release(ptr %r310)
+  %r326 = load ptr, ptr %r312
   call void @lerta_release(ptr %r326)
   %r327 = load ptr, ptr %r1
   call void @lerta_release(ptr %r327)
   %r328 = load ptr, ptr %r3
   call void @lerta_release(ptr %r328)
+  %r329 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r329)
+  %r330 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r330)
   ret ptr poison
-no.exception.80:
-  %r329 = call ptr @lerta_array_pushed_items(ptr %r289)
-  %r330 = call i64 @lerta_array_length(ptr %r289)
-  %r331 = sub i64 %r330, 1
-  call void @lerta_retain(ptr %r322)
-  %r332 = getelementptr i64, ptr %r329, i64 %r331
-  %r333 = ptrtoint ptr %r322 to i64
-  store i64 %r333, ptr %r332
-  call void @lerta_release(ptr %r322)
-  br label %comprehension.next.74
-comprehension.next.74:
-  %r334 = load ptr, ptr %r303
-  call void @lerta_release(ptr %r334)
-  br label %for.latch.69
-for.latch.69:
-  %r293 = add nsw i64 %r294, 1
-  br label %for.header.67
-for.exit.70:
-  %r335 = load ptr, ptr %r292
-  call void @lerta_release(ptr %r335)
-  store ptr %r289, ptr %r336
+no.exception.77:
+  br i1 %r323, label %iter.body.74, label %iter.exit.75
+iter.body.74:
+  %r331 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r311, i32 0, i32 3
+  %r332 = load ptr, ptr %r331
+  %r333 = call ptr %r332(ptr %r311)
+  %r334 = load ptr, ptr @lerta_exception
+  %r335 = icmp ne ptr %r334, null
+  br i1 %r335, label %unwind.78, label %no.exception.79
+unwind.78:
+  call void @lerta_release(ptr %r310)
+  %r336 = load ptr, ptr %r312
+  call void @lerta_release(ptr %r336)
+  %r337 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r337)
+  %r338 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r338)
+  %r339 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r339)
+  %r340 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r340)
+  ret ptr poison
+no.exception.79:
+  %r341 = load i64, ptr %r320
+  %r342 = add i64 %r341, 1
+  store i64 %r342, ptr %r320
+  store ptr %r333, ptr %r343
+  br i1 true, label %comprehension.push.80, label %comprehension.next.81
+comprehension.push.80:
+  %r344 = load ptr, ptr %r343
+  call void @lerta_retain(ptr %r344)
+  call void @lerta_retain(ptr %p4)
+  %r345 = call ptr @"lerta.fn.types.lerta.format_member"(ptr %r344, ptr %p4)
+  call void @lerta_release(ptr %r344)
+  call void @lerta_release(ptr %p4)
+  %r346 = load ptr, ptr @lerta_exception
+  %r347 = icmp ne ptr %r346, null
+  br i1 %r347, label %unwind.82, label %no.exception.83
+unwind.82:
+  call void @lerta_release(ptr %r310)
+  %r348 = load ptr, ptr %r343
+  call void @lerta_release(ptr %r348)
+  %r349 = load ptr, ptr %r312
+  call void @lerta_release(ptr %r349)
+  %r350 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r350)
+  %r351 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r351)
+  %r352 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r352)
+  %r353 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r353)
+  ret ptr poison
+no.exception.83:
+  %r354 = call ptr @lerta_array_pushed_items(ptr %r310)
+  %r355 = call i64 @lerta_array_length(ptr %r310)
+  %r356 = sub i64 %r355, 1
+  call void @lerta_retain(ptr %r345)
+  %r357 = getelementptr i64, ptr %r354, i64 %r356
+  %r358 = ptrtoint ptr %r345 to i64
+  store i64 %r358, ptr %r357
+  call void @lerta_release(ptr %r345)
+  br label %comprehension.next.81
+comprehension.next.81:
+  %r359 = load ptr, ptr %r343
+  call void @lerta_release(ptr %r359)
+  br label %iter.header.73
+iter.exit.75:
+  %r360 = load ptr, ptr %r312
+  call void @lerta_release(ptr %r360)
+  store ptr %r310, ptr %r361
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
-  %r337 = call ptr @lerta_array_create(i32 1)
-  %r338 = load ptr, ptr %r336
-  call void @lerta_retain(ptr %r338)
-  store ptr %r338, ptr %r339
-  br label %for.header.81
-for.header.81:
-  %r341 = phi i64 [ 0, %for.exit.70 ], [ %r340, %for.latch.83 ]
-  %r342 = call i64 @lerta_array_length(ptr %r338)
-  %r343 = icmp slt i64 %r341, %r342
-  br i1 %r343, label %for.body.82, label %for.exit.84
-for.body.82:
-  %r344 = call ptr @lerta_array_checked_items(ptr %r338, i64 %r341)
-  %r345 = icmp ne ptr %r344, null
-  br i1 %r345, label %branch.then.85, label %branch.end.86
-branch.then.85:
-  %r346 = getelementptr i64, ptr %r344, i64 %r341
-  %r347 = load i64, ptr %r346
-  %r348 = inttoptr i64 %r347 to ptr
-  call void @lerta_retain(ptr %r348)
-  br label %branch.end.86
-branch.end.86:
-  %r349 = phi ptr [ poison, %for.body.82 ], [ %r348, %branch.then.85 ]
-  store ptr %r349, ptr %r350
-  br i1 true, label %comprehension.push.87, label %comprehension.next.88
-comprehension.push.87:
-  %r351 = load ptr, ptr %r350
-  call void @lerta_retain(ptr %r351)
-  %r352 = call ptr @lerta_array_pushed_items(ptr %r337)
-  %r353 = call i64 @lerta_array_length(ptr %r337)
-  %r354 = sub i64 %r353, 1
-  call void @lerta_retain(ptr %r351)
-  %r355 = getelementptr i64, ptr %r352, i64 %r354
-  %r356 = ptrtoint ptr %r351 to i64
-  store i64 %r356, ptr %r355
-  call void @lerta_release(ptr %r351)
-  br label %comprehension.next.88
-comprehension.next.88:
-  %r357 = load ptr, ptr %r350
-  call void @lerta_release(ptr %r357)
-  br label %for.latch.83
-for.latch.83:
-  %r340 = add nsw i64 %r341, 1
-  br label %for.header.81
-for.exit.84:
-  %r358 = load ptr, ptr %r339
-  call void @lerta_release(ptr %r358)
-  call void @lerta_retain(ptr %p5)
-  store ptr %p5, ptr %r359
-  br label %for.header.89
-for.header.89:
-  %r361 = phi i64 [ 0, %for.exit.84 ], [ %r360, %for.latch.91 ]
-  %r362 = call i64 @lerta_array_length(ptr %p5)
-  %r363 = icmp slt i64 %r361, %r362
-  br i1 %r363, label %for.body.90, label %for.exit.92
-for.body.90:
-  %r364 = call ptr @lerta_array_checked_items(ptr %p5, i64 %r361)
-  %r365 = icmp ne ptr %r364, null
-  br i1 %r365, label %branch.then.93, label %branch.end.94
-branch.then.93:
-  %r366 = getelementptr i64, ptr %r364, i64 %r361
-  %r367 = load i64, ptr %r366
-  %r368 = inttoptr i64 %r367 to ptr
-  call void @lerta_retain(ptr %r368)
-  br label %branch.end.94
-branch.end.94:
-  %r369 = phi ptr [ poison, %for.body.90 ], [ %r368, %branch.then.93 ]
-  store ptr %r369, ptr %r370
-  br i1 true, label %comprehension.push.95, label %comprehension.next.96
-comprehension.push.95:
-  %r371 = load ptr, ptr %r370
-  call void @lerta_retain(ptr %r371)
-  %r372 = call ptr @lerta_array_pushed_items(ptr %r337)
-  %r373 = call i64 @lerta_array_length(ptr %r337)
-  %r374 = sub i64 %r373, 1
-  call void @lerta_retain(ptr %r371)
-  %r375 = getelementptr i64, ptr %r372, i64 %r374
-  %r376 = ptrtoint ptr %r371 to i64
-  store i64 %r376, ptr %r375
-  call void @lerta_release(ptr %r371)
-  br label %comprehension.next.96
-comprehension.next.96:
-  %r377 = load ptr, ptr %r370
-  call void @lerta_release(ptr %r377)
-  br label %for.latch.91
-for.latch.91:
-  %r360 = add nsw i64 %r361, 1
-  br label %for.header.89
-for.exit.92:
-  %r378 = load ptr, ptr %r359
-  call void @lerta_release(ptr %r378)
-  call void @"lerta.fn.checker/case.lerta.fail_unhandled"(ptr %p0, ptr %p1, ptr %r337)
+  %r362 = call ptr @lerta_array_create(i32 1)
+  %r363 = load ptr, ptr %r361
+  call void @lerta_retain(ptr %r363)
+  store ptr %r363, ptr %r364
+  br label %for.header.84
+for.header.84:
+  %r366 = phi i64 [ 0, %iter.exit.75 ], [ %r365, %for.latch.86 ]
+  %r367 = call i64 @lerta_array_length(ptr %r363)
+  %r368 = icmp slt i64 %r366, %r367
+  br i1 %r368, label %for.body.85, label %for.exit.87
+for.body.85:
+  %r369 = call ptr @lerta_array_checked_items(ptr %r363, i64 %r366)
+  %r370 = icmp ne ptr %r369, null
+  br i1 %r370, label %branch.then.88, label %branch.end.89
+branch.then.88:
+  %r371 = getelementptr i64, ptr %r369, i64 %r366
+  %r372 = load i64, ptr %r371
+  %r373 = inttoptr i64 %r372 to ptr
+  call void @lerta_retain(ptr %r373)
+  br label %branch.end.89
+branch.end.89:
+  %r374 = phi ptr [ poison, %for.body.85 ], [ %r373, %branch.then.88 ]
+  store ptr %r374, ptr %r375
+  br i1 true, label %comprehension.push.90, label %comprehension.next.91
+comprehension.push.90:
+  %r376 = load ptr, ptr %r375
+  call void @lerta_retain(ptr %r376)
+  %r377 = call ptr @lerta_array_pushed_items(ptr %r362)
+  %r378 = call i64 @lerta_array_length(ptr %r362)
+  %r379 = sub i64 %r378, 1
+  call void @lerta_retain(ptr %r376)
+  %r380 = getelementptr i64, ptr %r377, i64 %r379
+  %r381 = ptrtoint ptr %r376 to i64
+  store i64 %r381, ptr %r380
+  call void @lerta_release(ptr %r376)
+  br label %comprehension.next.91
+comprehension.next.91:
+  %r382 = load ptr, ptr %r375
+  call void @lerta_release(ptr %r382)
+  br label %for.latch.86
+for.latch.86:
+  %r365 = add nsw i64 %r366, 1
+  br label %for.header.84
+for.exit.87:
+  %r383 = load ptr, ptr %r364
+  call void @lerta_release(ptr %r383)
+  call void @lerta_retain(ptr %p6)
+  store ptr %p6, ptr %r384
+  br label %for.header.92
+for.header.92:
+  %r386 = phi i64 [ 0, %for.exit.87 ], [ %r385, %for.latch.94 ]
+  %r387 = call i64 @lerta_array_length(ptr %p6)
+  %r388 = icmp slt i64 %r386, %r387
+  br i1 %r388, label %for.body.93, label %for.exit.95
+for.body.93:
+  %r389 = call ptr @lerta_array_checked_items(ptr %p6, i64 %r386)
+  %r390 = icmp ne ptr %r389, null
+  br i1 %r390, label %branch.then.96, label %branch.end.97
+branch.then.96:
+  %r391 = getelementptr i64, ptr %r389, i64 %r386
+  %r392 = load i64, ptr %r391
+  %r393 = inttoptr i64 %r392 to ptr
+  call void @lerta_retain(ptr %r393)
+  br label %branch.end.97
+branch.end.97:
+  %r394 = phi ptr [ poison, %for.body.93 ], [ %r393, %branch.then.96 ]
+  store ptr %r394, ptr %r395
+  br i1 true, label %comprehension.push.98, label %comprehension.next.99
+comprehension.push.98:
+  %r396 = load ptr, ptr %r395
+  call void @lerta_retain(ptr %r396)
+  %r397 = call ptr @lerta_array_pushed_items(ptr %r362)
+  %r398 = call i64 @lerta_array_length(ptr %r362)
+  %r399 = sub i64 %r398, 1
+  call void @lerta_retain(ptr %r396)
+  %r400 = getelementptr i64, ptr %r397, i64 %r399
+  %r401 = ptrtoint ptr %r396 to i64
+  store i64 %r401, ptr %r400
+  call void @lerta_release(ptr %r396)
+  br label %comprehension.next.99
+comprehension.next.99:
+  %r402 = load ptr, ptr %r395
+  call void @lerta_release(ptr %r402)
+  br label %for.latch.94
+for.latch.94:
+  %r385 = add nsw i64 %r386, 1
+  br label %for.header.92
+for.exit.95:
+  %r403 = load ptr, ptr %r384
+  call void @lerta_release(ptr %r403)
+  call void @"lerta.fn.checker/case.lerta.fail_unhandled"(ptr %p0, ptr %p1, ptr %r362)
   call void @lerta_release(ptr %p0)
   call void @lerta_release(ptr %p1)
-  call void @lerta_release(ptr %r337)
-  %r379 = load ptr, ptr @lerta_exception
-  %r380 = icmp ne ptr %r379, null
-  br i1 %r380, label %unwind.97, label %no.exception.98
-unwind.97:
-  %r381 = load ptr, ptr %r1
-  call void @lerta_release(ptr %r381)
-  %r382 = load ptr, ptr %r3
-  call void @lerta_release(ptr %r382)
-  %r383 = load ptr, ptr %r336
-  call void @lerta_release(ptr %r383)
+  call void @lerta_release(ptr %r362)
+  %r404 = load ptr, ptr @lerta_exception
+  %r405 = icmp ne ptr %r404, null
+  br i1 %r405, label %unwind.100, label %no.exception.101
+unwind.100:
+  %r406 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r406)
+  %r407 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r407)
+  %r408 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r408)
+  %r409 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r409)
+  %r410 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r410)
   ret ptr poison
-no.exception.98:
-  %r384 = load ptr, ptr %r3
-  call void @lerta_retain(ptr %r384)
-  %r385 = load ptr, ptr %r1
-  call void @lerta_release(ptr %r385)
-  %r386 = load ptr, ptr %r3
-  call void @lerta_release(ptr %r386)
-  %r387 = load ptr, ptr %r336
-  call void @lerta_release(ptr %r387)
-  ret ptr %r384
+no.exception.101:
+  call void @lerta_retain(ptr %p6)
+  %r411 = call i64 @lerta_array_length(ptr %p6)
+  call void @lerta_release(ptr %p6)
+  %r412 = icmp sgt i64 %r411, 0
+  br i1 %r412, label %then.102, label %else.103
+then.102:
+  call void @lerta_retain(ptr %p5)
+  %r413 = call ptr @"lerta.fn.types.lerta.optional_type"(ptr %p5)
+  call void @lerta_release(ptr %p5)
+  %r414 = load ptr, ptr @lerta_exception
+  %r415 = icmp ne ptr %r414, null
+  br i1 %r415, label %unwind.105, label %no.exception.106
+unwind.105:
+  %r416 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r416)
+  %r417 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r417)
+  %r418 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r418)
+  %r419 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r419)
+  %r420 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r420)
+  ret ptr poison
+no.exception.106:
+  br label %then.end.104
+else.103:
+  call void @lerta_retain(ptr %p5)
+  br label %then.end.104
+then.end.104:
+  %r421 = phi ptr [ %r413, %no.exception.106 ], [ %p5, %else.103 ]
+  store ptr %r421, ptr %r422
+  %r423 = call ptr @lerta_array_create(i32 1)
+  call void @lerta_retain(ptr %p4)
+  %r424 = getelementptr %"lerta.object.types.lerta.UnionType", ptr %p4, i32 0, i32 2
+  %r425 = load ptr, ptr %r424
+  call void @lerta_retain(ptr %r425)
+  call void @lerta_release(ptr %p4)
+  store ptr %r425, ptr %r426
+  br label %for.header.107
+for.header.107:
+  %r428 = phi i64 [ 0, %then.end.104 ], [ %r427, %for.latch.109 ]
+  %r429 = call i64 @lerta_array_length(ptr %r425)
+  %r430 = icmp slt i64 %r428, %r429
+  br i1 %r430, label %for.body.108, label %for.exit.110
+for.body.108:
+  %r431 = call ptr @lerta_array_checked_items(ptr %r425, i64 %r428)
+  %r432 = icmp ne ptr %r431, null
+  br i1 %r432, label %branch.then.111, label %branch.end.112
+branch.then.111:
+  %r433 = getelementptr i64, ptr %r431, i64 %r428
+  %r434 = load i64, ptr %r433
+  %r435 = inttoptr i64 %r434 to ptr
+  call void @lerta_retain(ptr %r435)
+  br label %branch.end.112
+branch.end.112:
+  %r436 = phi ptr [ poison, %for.body.108 ], [ %r435, %branch.then.111 ]
+  store ptr %r436, ptr %r437
+  %r438 = load ptr, ptr %r1
+  call void @lerta_retain(ptr %r438)
+  %r439 = load ptr, ptr %r437
+  call void @lerta_retain(ptr %r439)
+  %r440 = call ptr @"lerta.fn.types.lerta.type_key"(ptr %r439)
+  call void @lerta_release(ptr %r439)
+  %r441 = load ptr, ptr @lerta_exception
+  %r442 = icmp ne ptr %r441, null
+  br i1 %r442, label %unwind.115, label %no.exception.116
+unwind.115:
+  call void @lerta_release(ptr %r438)
+  call void @lerta_release(ptr %r423)
+  %r443 = load ptr, ptr %r437
+  call void @lerta_release(ptr %r443)
+  %r444 = load ptr, ptr %r426
+  call void @lerta_release(ptr %r444)
+  %r445 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r445)
+  %r446 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r446)
+  %r447 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r447)
+  %r448 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r448)
+  %r449 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r449)
+  %r450 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r450)
+  ret ptr poison
+no.exception.116:
+  %r451 = call i1 @"lerta.extend.std:builtins.Map<K, V>.has<String, Bool>"(ptr %r438, ptr %r440)
+  call void @lerta_release(ptr %r440)
+  call void @lerta_release(ptr %r438)
+  %r452 = load ptr, ptr @lerta_exception
+  %r453 = icmp ne ptr %r452, null
+  br i1 %r453, label %unwind.117, label %no.exception.118
+unwind.117:
+  call void @lerta_release(ptr %r423)
+  %r454 = load ptr, ptr %r437
+  call void @lerta_release(ptr %r454)
+  %r455 = load ptr, ptr %r426
+  call void @lerta_release(ptr %r455)
+  %r456 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r456)
+  %r457 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r457)
+  %r458 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r458)
+  %r459 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r459)
+  %r460 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r460)
+  %r461 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r461)
+  ret ptr poison
+no.exception.118:
+  br i1 %r451, label %comprehension.push.113, label %comprehension.next.114
+comprehension.push.113:
+  %r462 = load ptr, ptr %r437
+  call void @lerta_retain(ptr %r462)
+  %r463 = call ptr @lerta_array_pushed_items(ptr %r423)
+  %r464 = call i64 @lerta_array_length(ptr %r423)
+  %r465 = sub i64 %r464, 1
+  call void @lerta_retain(ptr %r462)
+  %r466 = getelementptr i64, ptr %r463, i64 %r465
+  %r467 = ptrtoint ptr %r462 to i64
+  store i64 %r467, ptr %r466
+  call void @lerta_release(ptr %r462)
+  br label %comprehension.next.114
+comprehension.next.114:
+  %r468 = load ptr, ptr %r437
+  call void @lerta_release(ptr %r468)
+  br label %for.latch.109
+for.latch.109:
+  %r427 = add nsw i64 %r428, 1
+  br label %for.header.107
+for.exit.110:
+  %r469 = load ptr, ptr %r426
+  call void @lerta_release(ptr %r469)
+  store ptr %r423, ptr %r470
+  %r471 = load ptr, ptr %r422
+  call void @lerta_retain(ptr %r471)
+  %r472 = load ptr, ptr %r470
+  call void @lerta_retain(ptr %r472)
+  %r473 = call ptr @"lerta.fn.types.lerta.union_type"(ptr %r472)
+  call void @lerta_release(ptr %r472)
+  %r474 = load ptr, ptr @lerta_exception
+  %r475 = icmp ne ptr %r474, null
+  br i1 %r475, label %unwind.119, label %no.exception.120
+unwind.119:
+  call void @lerta_release(ptr %r471)
+  %r476 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r476)
+  %r477 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r477)
+  %r478 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r478)
+  %r479 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r479)
+  %r480 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r480)
+  %r481 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r481)
+  %r482 = load ptr, ptr %r470
+  call void @lerta_release(ptr %r482)
+  ret ptr poison
+no.exception.120:
+  %r483 = call ptr @"lerta.fn.checker/narrowing.lerta.other_members"(ptr %r471, ptr %r473)
+  call void @lerta_release(ptr %r471)
+  call void @lerta_release(ptr %r473)
+  %r484 = load ptr, ptr @lerta_exception
+  %r485 = icmp ne ptr %r484, null
+  br i1 %r485, label %unwind.121, label %no.exception.122
+unwind.121:
+  %r486 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r486)
+  %r487 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r487)
+  %r488 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r488)
+  %r489 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r489)
+  %r490 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r490)
+  %r491 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r491)
+  %r492 = load ptr, ptr %r470
+  call void @lerta_release(ptr %r492)
+  ret ptr poison
+no.exception.122:
+  store ptr %r483, ptr %r493
+  %r494 = load ptr, ptr %r493
+  call void @lerta_retain(ptr %r494)
+  %r495 = icmp ne ptr %r494, null
+  call void @lerta_release(ptr %r494)
+  br i1 %r495, label %then.123, label %else.124
+then.123:
+  call void @lerta_retain(ptr %p0)
+  call void @lerta_retain(ptr %p3)
+  %r496 = load ptr, ptr %r493
+  call void @lerta_retain(ptr %r496)
+  %r497 = call ptr @"lerta.fn.checker/case.lerta.subject_narrowings"(ptr %p0, ptr %p3, ptr %r496)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %p3)
+  call void @lerta_release(ptr %r496)
+  %r498 = load ptr, ptr @lerta_exception
+  %r499 = icmp ne ptr %r498, null
+  br i1 %r499, label %unwind.126, label %no.exception.127
+unwind.126:
+  %r500 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r500)
+  %r501 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r501)
+  %r502 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r502)
+  %r503 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r503)
+  %r504 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r504)
+  %r505 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r505)
+  %r506 = load ptr, ptr %r470
+  call void @lerta_release(ptr %r506)
+  %r507 = load ptr, ptr %r493
+  call void @lerta_release(ptr %r507)
+  ret ptr poison
+no.exception.127:
+  br label %then.end.125
+else.124:
+  %r508 = call ptr @lerta_array_create(i32 1)
+  br label %then.end.125
+then.end.125:
+  %r509 = phi ptr [ %r497, %no.exception.127 ], [ %r508, %else.124 ]
+  store ptr %r509, ptr %r510
+  %r511 = load ptr, ptr %r510
+  call void @lerta_retain(ptr %r511)
+  %r512 = load ptr, ptr %r3
+  call void @lerta_retain(ptr %r512)
+  %r513 = call ptr @"lerta.new.checker/case.lerta.CaseNarrowings"(ptr %r512, ptr %r511)
+  call void @lerta_release(ptr %r511)
+  call void @lerta_release(ptr %r512)
+  %r514 = load ptr, ptr @lerta_exception
+  %r515 = icmp ne ptr %r514, null
+  br i1 %r515, label %unwind.128, label %no.exception.129
+unwind.128:
+  %r516 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r516)
+  %r517 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r517)
+  %r518 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r518)
+  %r519 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r519)
+  %r520 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r520)
+  %r521 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r521)
+  %r522 = load ptr, ptr %r470
+  call void @lerta_release(ptr %r522)
+  %r523 = load ptr, ptr %r493
+  call void @lerta_release(ptr %r523)
+  %r524 = load ptr, ptr %r510
+  call void @lerta_release(ptr %r524)
+  ret ptr poison
+no.exception.129:
+  %r525 = load ptr, ptr %r1
+  call void @lerta_release(ptr %r525)
+  %r526 = load ptr, ptr %r3
+  call void @lerta_release(ptr %r526)
+  %r527 = load ptr, ptr %r295
+  call void @lerta_release(ptr %r527)
+  %r528 = load ptr, ptr %r309
+  call void @lerta_release(ptr %r528)
+  %r529 = load ptr, ptr %r361
+  call void @lerta_release(ptr %r529)
+  %r530 = load ptr, ptr %r422
+  call void @lerta_release(ptr %r530)
+  %r531 = load ptr, ptr %r470
+  call void @lerta_release(ptr %r531)
+  %r532 = load ptr, ptr %r493
+  call void @lerta_release(ptr %r532)
+  %r533 = load ptr, ptr %r510
+  call void @lerta_release(ptr %r533)
+  ret ptr %r513
 }
 define void @"lerta.fn.checker/case.lerta.check_member_patterns"(ptr %p0, ptr %p1, ptr %p2, ptr %p3) {
 entry:
@@ -122322,7 +123373,7 @@ no.exception.11:
   call void @lerta_release(ptr %r22)
   ret void
 }
-define private void @lerta.lambda.152(ptr %closure) {
+define private void @lerta.lambda.155(ptr %closure) {
 entry:
   %r13 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -122765,7 +123816,7 @@ no.exception.74:
   call void @lerta_release(ptr %r193)
   ret void
 }
-define private void @"lerta.lambda.152.drop"(ptr %closure) {
+define private void @"lerta.lambda.155.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -122792,9 +123843,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.152.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.155.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.152, ptr %r3
+  store ptr @lerta.lambda.155, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p2, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -123608,11 +124659,38 @@ entry:
   store ptr %p1, ptr %r6
   ret ptr %r2
 }
+define void @"lerta.drop.checker/case.lerta.CaseNarrowings"(ptr %object) {
+entry:
+  %r0 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr %object, i32 0, i32 2
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  %r2 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr %object, i32 0, i32 3
+  %r3 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r3)
+  ret void
+}
+define ptr @"lerta.new.checker/case.lerta.CaseNarrowings"(ptr %p0, ptr %p1) {
+entry:
+  %r0 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr null, i32 1
+  %r1 = ptrtoint ptr %r0 to i64
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.drop.checker/case.lerta.CaseNarrowings")
+  %r3 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr %r2, i32 0, i32 2
+  store ptr zeroinitializer, ptr %r3
+  %r4 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr %r2, i32 0, i32 3
+  store ptr zeroinitializer, ptr %r4
+  call void @lerta_retain(ptr %p0)
+  %r5 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr %r2, i32 0, i32 2
+  store ptr %p0, ptr %r5
+  call void @lerta_retain(ptr %p1)
+  %r6 = getelementptr %"lerta.object.checker/case.lerta.CaseNarrowings", ptr %r2, i32 0, i32 3
+  store ptr %p1, ptr %r6
+  ret ptr %r2
+}
 define void @"lerta.module.checker/tuple.lerta"() {
 entry:
   ret void
 }
-define private ptr @lerta.lambda.153(ptr %closure, ptr %p0, i64 %p1) {
+define private ptr @lerta.lambda.156(ptr %closure, ptr %p0, i64 %p1) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -124078,7 +125156,7 @@ unwind.83:
 no.exception.84:
   ret ptr %r196
 }
-define private void @"lerta.lambda.153.drop"(ptr %closure) {
+define private void @"lerta.lambda.156.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -124116,9 +125194,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p0)
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r9 = ptrtoint ptr %r8 to i64
-  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.lambda.153.drop")
+  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.lambda.156.drop")
   %r11 = getelementptr { i64, ptr, ptr }, ptr %r10, i32 0, i32 2
-  store ptr @lerta.lambda.153, ptr %r11
+  store ptr @lerta.lambda.156, ptr %r11
   %r12 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r10, i32 0, i32 3
   store ptr %r7, ptr %r12
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r10, i32 0, i32 4
@@ -127577,18 +128655,20 @@ then.end.8:
 define ptr @"lerta.fn.checker/expression.lerta.check_member_type"(ptr %p0, ptr %p1, ptr %p2, ptr %p3) {
 entry:
   %r2 = alloca ptr
-  %r7 = alloca ptr
-  %r14 = alloca ptr
-  %r34 = alloca ptr
-  %r217 = alloca i64
-  %r241 = alloca ptr
-  %r265 = alloca ptr
+  %r11 = alloca ptr
+  %r18 = alloca ptr
+  %r38 = alloca ptr
+  %r221 = alloca i64
+  %r245 = alloca ptr
+  %r269 = alloca ptr
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 10
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %p0)
   store ptr %r1, ptr %r2
+  call void @lerta_retain(ptr %p0)
+  call void @lerta_retain(ptr %p1)
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
   %r3 = call ptr @"lerta.fn.checker/expression.lerta.type_of.given2"(ptr %p0, ptr %p1)
@@ -127598,649 +128678,728 @@ entry:
   %r5 = icmp ne ptr %r4, null
   br i1 %r5, label %unwind.0, label %no.exception.1
 unwind.0:
+  call void @lerta_release(ptr %p1)
+  call void @lerta_release(ptr %p0)
   %r6 = load ptr, ptr %r2
   call void @lerta_release(ptr %r6)
   ret ptr poison
 no.exception.1:
-  store ptr %r3, ptr %r7
-  %r8 = load ptr, ptr %r7
-  call void @lerta_retain(ptr %r8)
-  %r9 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %r8)
-  call void @lerta_release(ptr %r8)
-  %r10 = load ptr, ptr @lerta_exception
-  %r11 = icmp ne ptr %r10, null
-  br i1 %r11, label %unwind.2, label %no.exception.3
+  %r7 = call ptr @"lerta.fn.checker/expression.lerta.unnarrowed_type"(ptr %p0, ptr %p1, ptr %r3)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %p1)
+  call void @lerta_release(ptr %r3)
+  %r8 = load ptr, ptr @lerta_exception
+  %r9 = icmp ne ptr %r8, null
+  br i1 %r9, label %unwind.2, label %no.exception.3
 unwind.2:
-  %r12 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r12)
-  %r13 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r13)
+  %r10 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r10)
   ret ptr poison
 no.exception.3:
-  store ptr %r9, ptr %r14
-  %r15 = load ptr, ptr %r14
-  call void @lerta_retain(ptr %r15)
-  %r16 = getelementptr { i64, ptr }, ptr %r15, i32 0, i32 1
-  %r17 = load ptr, ptr %r16
-  %r18 = icmp eq ptr %r17, @"lerta.drop.types.lerta.UnionType"
-  call void @lerta_release(ptr %r15)
-  %r19 = xor i1 %r18, true
-  br i1 %r19, label %if.then.4, label %if.else.5
-if.then.4:
-  %r20 = load ptr, ptr %r7
-  call void @lerta_retain(ptr %r20)
-  %r21 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %r20)
-  call void @lerta_release(ptr %r20)
-  %r22 = load ptr, ptr @lerta_exception
-  %r23 = icmp ne ptr %r22, null
-  br i1 %r23, label %unwind.7, label %no.exception.8
-unwind.7:
-  call void @lerta_release(ptr @lerta.string.1305)
-  %r24 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r24)
-  %r25 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r25)
-  %r26 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r26)
+  store ptr %r7, ptr %r11
+  %r12 = load ptr, ptr %r11
+  call void @lerta_retain(ptr %r12)
+  %r13 = call ptr @"lerta.fn.types.lerta.inner_of"(ptr %r12)
+  call void @lerta_release(ptr %r12)
+  %r14 = load ptr, ptr @lerta_exception
+  %r15 = icmp ne ptr %r14, null
+  br i1 %r15, label %unwind.4, label %no.exception.5
+unwind.4:
+  %r16 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r16)
+  %r17 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r17)
   ret ptr poison
-no.exception.8:
-  %r27 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r21)
-  call void @lerta_release(ptr %r21)
-  %r28 = load ptr, ptr @lerta_exception
-  %r29 = icmp ne ptr %r28, null
-  br i1 %r29, label %unwind.9, label %no.exception.10
+no.exception.5:
+  store ptr %r13, ptr %r18
+  %r19 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r19)
+  %r20 = getelementptr { i64, ptr }, ptr %r19, i32 0, i32 1
+  %r21 = load ptr, ptr %r20
+  %r22 = icmp eq ptr %r21, @"lerta.drop.types.lerta.UnionType"
+  call void @lerta_release(ptr %r19)
+  %r23 = xor i1 %r22, true
+  br i1 %r23, label %if.then.6, label %if.else.7
+if.then.6:
+  %r24 = load ptr, ptr %r11
+  call void @lerta_retain(ptr %r24)
+  %r25 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %r24)
+  call void @lerta_release(ptr %r24)
+  %r26 = load ptr, ptr @lerta_exception
+  %r27 = icmp ne ptr %r26, null
+  br i1 %r27, label %unwind.9, label %no.exception.10
 unwind.9:
   call void @lerta_release(ptr @lerta.string.1305)
-  %r30 = load ptr, ptr %r2
+  %r28 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r28)
+  %r29 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r29)
+  %r30 = load ptr, ptr %r18
   call void @lerta_release(ptr %r30)
-  %r31 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r31)
-  %r32 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r32)
   ret ptr poison
 no.exception.10:
-  %r33 = call ptr (i64, ...) @lerta_string_concat(i64 2, ptr @lerta.string.1305, ptr %r27)
+  %r31 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r25)
+  call void @lerta_release(ptr %r25)
+  %r32 = load ptr, ptr @lerta_exception
+  %r33 = icmp ne ptr %r32, null
+  br i1 %r33, label %unwind.11, label %no.exception.12
+unwind.11:
   call void @lerta_release(ptr @lerta.string.1305)
-  call void @lerta_release(ptr %r27)
-  store ptr %r33, ptr %r34
-  %r35 = load ptr, ptr %r2
-  call void @lerta_retain(ptr %r35)
-  call void @lerta_retain(ptr %p1)
-  %r36 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r37 = load ptr, ptr %r36
-  %r38 = icmp eq ptr %r37, @"lerta.drop.ast.lerta.ArrayLiteral"
-  br i1 %r38, label %member.matched.13, label %member.next.12
-member.matched.13:
-  %r39 = getelementptr %"lerta.object.ast.lerta.ArrayLiteral", ptr %p1, i32 0, i32 3
-  %r40 = load ptr, ptr %r39
-  call void @lerta_retain(ptr %r40)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.12:
-  %r41 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r42 = load ptr, ptr %r41
-  %r43 = icmp eq ptr %r42, @"lerta.drop.ast.lerta.Await"
-  br i1 %r43, label %member.matched.15, label %member.next.14
-member.matched.15:
-  %r44 = getelementptr %"lerta.object.ast.lerta.Await", ptr %p1, i32 0, i32 3
-  %r45 = load ptr, ptr %r44
-  call void @lerta_retain(ptr %r45)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.14:
-  %r46 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r47 = load ptr, ptr %r46
-  %r48 = icmp eq ptr %r47, @"lerta.drop.ast.lerta.BinaryOperation"
-  br i1 %r48, label %member.matched.17, label %member.next.16
-member.matched.17:
-  %r49 = getelementptr %"lerta.object.ast.lerta.BinaryOperation", ptr %p1, i32 0, i32 5
-  %r50 = load ptr, ptr %r49
-  call void @lerta_retain(ptr %r50)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.16:
-  %r51 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r52 = load ptr, ptr %r51
-  %r53 = icmp eq ptr %r52, @"lerta.drop.ast.lerta.BooleanLiteral"
-  br i1 %r53, label %member.matched.19, label %member.next.18
-member.matched.19:
-  %r54 = getelementptr %"lerta.object.ast.lerta.BooleanLiteral", ptr %p1, i32 0, i32 3
-  %r55 = load ptr, ptr %r54
-  call void @lerta_retain(ptr %r55)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.18:
-  %r56 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r57 = load ptr, ptr %r56
-  %r58 = icmp eq ptr %r57, @"lerta.drop.ast.lerta.Call"
-  br i1 %r58, label %member.matched.21, label %member.next.20
-member.matched.21:
-  %r59 = getelementptr %"lerta.object.ast.lerta.Call", ptr %p1, i32 0, i32 6
-  %r60 = load ptr, ptr %r59
-  call void @lerta_retain(ptr %r60)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.20:
-  %r61 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r62 = load ptr, ptr %r61
-  %r63 = icmp eq ptr %r62, @"lerta.drop.ast.lerta.Case"
-  br i1 %r63, label %member.matched.23, label %member.next.22
-member.matched.23:
-  %r64 = getelementptr %"lerta.object.ast.lerta.Case", ptr %p1, i32 0, i32 5
-  %r65 = load ptr, ptr %r64
-  call void @lerta_retain(ptr %r65)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.22:
-  %r66 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r67 = load ptr, ptr %r66
-  %r68 = icmp eq ptr %r67, @"lerta.drop.ast.lerta.Cast"
-  br i1 %r68, label %member.matched.25, label %member.next.24
-member.matched.25:
-  %r69 = getelementptr %"lerta.object.ast.lerta.Cast", ptr %p1, i32 0, i32 5
-  %r70 = load ptr, ptr %r69
-  call void @lerta_retain(ptr %r70)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.24:
-  %r71 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r72 = load ptr, ptr %r71
-  %r73 = icmp eq ptr %r72, @"lerta.drop.ast.lerta.Coalesce"
-  br i1 %r73, label %member.matched.27, label %member.next.26
-member.matched.27:
-  %r74 = getelementptr %"lerta.object.ast.lerta.Coalesce", ptr %p1, i32 0, i32 4
-  %r75 = load ptr, ptr %r74
-  call void @lerta_retain(ptr %r75)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.26:
-  %r76 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r77 = load ptr, ptr %r76
-  %r78 = icmp eq ptr %r77, @"lerta.drop.ast.lerta.Comprehension"
-  br i1 %r78, label %member.matched.29, label %member.next.28
-member.matched.29:
-  %r79 = getelementptr %"lerta.object.ast.lerta.Comprehension", ptr %p1, i32 0, i32 7
-  %r80 = load ptr, ptr %r79
-  call void @lerta_retain(ptr %r80)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.28:
-  %r81 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r82 = load ptr, ptr %r81
-  %r83 = icmp eq ptr %r82, @"lerta.drop.ast.lerta.Conditional"
-  br i1 %r83, label %member.matched.31, label %member.next.30
-member.matched.31:
-  %r84 = getelementptr %"lerta.object.ast.lerta.Conditional", ptr %p1, i32 0, i32 5
-  %r85 = load ptr, ptr %r84
-  call void @lerta_retain(ptr %r85)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.30:
-  %r86 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r87 = load ptr, ptr %r86
-  %r88 = icmp eq ptr %r87, @"lerta.drop.ast.lerta.FloatLiteral"
-  br i1 %r88, label %member.matched.33, label %member.next.32
-member.matched.33:
-  %r89 = getelementptr %"lerta.object.ast.lerta.FloatLiteral", ptr %p1, i32 0, i32 3
-  %r90 = load ptr, ptr %r89
-  call void @lerta_retain(ptr %r90)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.32:
-  %r91 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r92 = load ptr, ptr %r91
-  %r93 = icmp eq ptr %r92, @"lerta.drop.ast.lerta.FunctionLiteral"
-  br i1 %r93, label %member.matched.35, label %member.next.34
-member.matched.35:
-  %r94 = getelementptr %"lerta.object.ast.lerta.FunctionLiteral", ptr %p1, i32 0, i32 6
-  %r95 = load ptr, ptr %r94
-  call void @lerta_retain(ptr %r95)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.34:
-  %r96 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r97 = load ptr, ptr %r96
-  %r98 = icmp eq ptr %r97, @"lerta.drop.ast.lerta.Identifier"
-  br i1 %r98, label %member.matched.37, label %member.next.36
-member.matched.37:
-  %r99 = getelementptr %"lerta.object.ast.lerta.Identifier", ptr %p1, i32 0, i32 3
-  %r100 = load ptr, ptr %r99
-  call void @lerta_retain(ptr %r100)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.36:
-  %r101 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r102 = load ptr, ptr %r101
-  %r103 = icmp eq ptr %r102, @"lerta.drop.ast.lerta.If"
-  br i1 %r103, label %member.matched.39, label %member.next.38
-member.matched.39:
-  %r104 = getelementptr %"lerta.object.ast.lerta.If", ptr %p1, i32 0, i32 5
-  %r105 = load ptr, ptr %r104
-  call void @lerta_retain(ptr %r105)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.38:
-  %r106 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r107 = load ptr, ptr %r106
-  %r108 = icmp eq ptr %r107, @"lerta.drop.ast.lerta.Index"
-  br i1 %r108, label %member.matched.41, label %member.next.40
-member.matched.41:
-  %r109 = getelementptr %"lerta.object.ast.lerta.Index", ptr %p1, i32 0, i32 4
-  %r110 = load ptr, ptr %r109
-  call void @lerta_retain(ptr %r110)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.40:
-  %r111 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r112 = load ptr, ptr %r111
-  %r113 = icmp eq ptr %r112, @"lerta.drop.ast.lerta.IntegerLiteral"
-  br i1 %r113, label %member.matched.43, label %member.next.42
-member.matched.43:
-  %r114 = getelementptr %"lerta.object.ast.lerta.IntegerLiteral", ptr %p1, i32 0, i32 3
-  %r115 = load ptr, ptr %r114
-  call void @lerta_retain(ptr %r115)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.42:
-  %r116 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r117 = load ptr, ptr %r116
-  %r118 = icmp eq ptr %r117, @"lerta.drop.ast.lerta.Interpolation"
-  br i1 %r118, label %member.matched.45, label %member.next.44
-member.matched.45:
-  %r119 = getelementptr %"lerta.object.ast.lerta.Interpolation", ptr %p1, i32 0, i32 3
-  %r120 = load ptr, ptr %r119
-  call void @lerta_retain(ptr %r120)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.44:
-  %r121 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r122 = load ptr, ptr %r121
-  %r123 = icmp eq ptr %r122, @"lerta.drop.ast.lerta.IsTest"
-  br i1 %r123, label %member.matched.47, label %member.next.46
-member.matched.47:
-  %r124 = getelementptr %"lerta.object.ast.lerta.IsTest", ptr %p1, i32 0, i32 4
-  %r125 = load ptr, ptr %r124
-  call void @lerta_retain(ptr %r125)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.46:
-  %r126 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r127 = load ptr, ptr %r126
-  %r128 = icmp eq ptr %r127, @"lerta.drop.ast.lerta.Jump"
-  br i1 %r128, label %member.matched.49, label %member.next.48
-member.matched.49:
-  %r129 = getelementptr %"lerta.object.ast.lerta.Jump", ptr %p1, i32 0, i32 3
-  %r130 = load ptr, ptr %r129
-  call void @lerta_retain(ptr %r130)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.48:
-  %r131 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r132 = load ptr, ptr %r131
-  %r133 = icmp eq ptr %r132, @"lerta.drop.ast.lerta.MapLiteral"
-  br i1 %r133, label %member.matched.51, label %member.next.50
-member.matched.51:
-  %r134 = getelementptr %"lerta.object.ast.lerta.MapLiteral", ptr %p1, i32 0, i32 3
-  %r135 = load ptr, ptr %r134
-  call void @lerta_retain(ptr %r135)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.50:
-  %r136 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r137 = load ptr, ptr %r136
-  %r138 = icmp eq ptr %r137, @"lerta.drop.ast.lerta.Member"
-  br i1 %r138, label %member.matched.53, label %member.next.52
-member.matched.53:
-  %r139 = getelementptr %"lerta.object.ast.lerta.Member", ptr %p1, i32 0, i32 4
-  %r140 = load ptr, ptr %r139
-  call void @lerta_retain(ptr %r140)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.52:
-  %r141 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r142 = load ptr, ptr %r141
-  %r143 = icmp eq ptr %r142, @"lerta.drop.ast.lerta.NilLiteral"
-  br i1 %r143, label %member.matched.55, label %member.next.54
-member.matched.55:
-  %r144 = getelementptr %"lerta.object.ast.lerta.NilLiteral", ptr %p1, i32 0, i32 2
-  %r145 = load ptr, ptr %r144
-  call void @lerta_retain(ptr %r145)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.54:
-  %r146 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r147 = load ptr, ptr %r146
-  %r148 = icmp eq ptr %r147, @"lerta.drop.ast.lerta.Range"
-  br i1 %r148, label %member.matched.57, label %member.next.56
-member.matched.57:
-  %r149 = getelementptr %"lerta.object.ast.lerta.Range", ptr %p1, i32 0, i32 4
-  %r150 = load ptr, ptr %r149
-  call void @lerta_retain(ptr %r150)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.56:
-  %r151 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r152 = load ptr, ptr %r151
-  %r153 = icmp eq ptr %r152, @"lerta.drop.ast.lerta.RecordLiteral"
-  br i1 %r153, label %member.matched.59, label %member.next.58
-member.matched.59:
-  %r154 = getelementptr %"lerta.object.ast.lerta.RecordLiteral", ptr %p1, i32 0, i32 3
-  %r155 = load ptr, ptr %r154
-  call void @lerta_retain(ptr %r155)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.58:
-  %r156 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r157 = load ptr, ptr %r156
-  %r158 = icmp eq ptr %r157, @"lerta.drop.ast.lerta.Return"
-  br i1 %r158, label %member.matched.61, label %member.next.60
-member.matched.61:
-  %r159 = getelementptr %"lerta.object.ast.lerta.Return", ptr %p1, i32 0, i32 3
-  %r160 = load ptr, ptr %r159
-  call void @lerta_retain(ptr %r160)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.60:
-  %r161 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r162 = load ptr, ptr %r161
-  %r163 = icmp eq ptr %r162, @"lerta.drop.ast.lerta.StringLiteral"
-  br i1 %r163, label %member.matched.63, label %member.next.62
-member.matched.63:
-  %r164 = getelementptr %"lerta.object.ast.lerta.StringLiteral", ptr %p1, i32 0, i32 3
-  %r165 = load ptr, ptr %r164
-  call void @lerta_retain(ptr %r165)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.62:
-  %r166 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r167 = load ptr, ptr %r166
-  %r168 = icmp eq ptr %r167, @"lerta.drop.ast.lerta.This"
-  br i1 %r168, label %member.matched.65, label %member.next.64
-member.matched.65:
-  %r169 = getelementptr %"lerta.object.ast.lerta.This", ptr %p1, i32 0, i32 2
-  %r170 = load ptr, ptr %r169
-  call void @lerta_retain(ptr %r170)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.64:
-  %r171 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r172 = load ptr, ptr %r171
-  %r173 = icmp eq ptr %r172, @"lerta.drop.ast.lerta.Throw"
-  br i1 %r173, label %member.matched.67, label %member.next.66
-member.matched.67:
-  %r174 = getelementptr %"lerta.object.ast.lerta.Throw", ptr %p1, i32 0, i32 3
-  %r175 = load ptr, ptr %r174
-  call void @lerta_retain(ptr %r175)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.66:
-  %r176 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r177 = load ptr, ptr %r176
-  %r178 = icmp eq ptr %r177, @"lerta.drop.ast.lerta.Try"
-  br i1 %r178, label %member.matched.69, label %member.next.68
-member.matched.69:
-  %r179 = getelementptr %"lerta.object.ast.lerta.Try", ptr %p1, i32 0, i32 5
-  %r180 = load ptr, ptr %r179
-  call void @lerta_retain(ptr %r180)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.68:
-  %r181 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r182 = load ptr, ptr %r181
-  %r183 = icmp eq ptr %r182, @"lerta.drop.ast.lerta.TupleItem"
-  br i1 %r183, label %member.matched.71, label %member.next.70
-member.matched.71:
-  %r184 = getelementptr %"lerta.object.ast.lerta.TupleItem", ptr %p1, i32 0, i32 5
-  %r185 = load ptr, ptr %r184
-  call void @lerta_retain(ptr %r185)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.70:
-  %r186 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r187 = load ptr, ptr %r186
-  %r188 = icmp eq ptr %r187, @"lerta.drop.ast.lerta.TupleLiteral"
-  br i1 %r188, label %member.matched.73, label %member.next.72
-member.matched.73:
-  %r189 = getelementptr %"lerta.object.ast.lerta.TupleLiteral", ptr %p1, i32 0, i32 3
-  %r190 = load ptr, ptr %r189
-  call void @lerta_retain(ptr %r190)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.72:
-  %r191 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r192 = load ptr, ptr %r191
-  %r193 = icmp eq ptr %r192, @"lerta.drop.ast.lerta.UnaryOperation"
-  br i1 %r193, label %member.matched.75, label %member.next.74
-member.matched.75:
-  %r194 = getelementptr %"lerta.object.ast.lerta.UnaryOperation", ptr %p1, i32 0, i32 4
-  %r195 = load ptr, ptr %r194
-  call void @lerta_retain(ptr %r195)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.74:
-  %r196 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
-  %r197 = load ptr, ptr %r196
-  %r198 = icmp eq ptr %r197, @"lerta.drop.ast.lerta.Unwrap"
-  br i1 %r198, label %member.matched.77, label %member.next.76
-member.matched.77:
-  %r199 = getelementptr %"lerta.object.ast.lerta.Unwrap", ptr %p1, i32 0, i32 3
-  %r200 = load ptr, ptr %r199
-  call void @lerta_retain(ptr %r200)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.next.76:
-  %r201 = getelementptr %"lerta.object.ast.lerta.Yield", ptr %p1, i32 0, i32 3
-  %r202 = load ptr, ptr %r201
-  call void @lerta_retain(ptr %r202)
-  call void @lerta_release(ptr %p1)
-  br label %member.done.11
-member.done.11:
-  %r203 = phi ptr [ %r40, %member.matched.13 ], [ %r45, %member.matched.15 ], [ %r50, %member.matched.17 ], [ %r55, %member.matched.19 ], [ %r60, %member.matched.21 ], [ %r65, %member.matched.23 ], [ %r70, %member.matched.25 ], [ %r75, %member.matched.27 ], [ %r80, %member.matched.29 ], [ %r85, %member.matched.31 ], [ %r90, %member.matched.33 ], [ %r95, %member.matched.35 ], [ %r100, %member.matched.37 ], [ %r105, %member.matched.39 ], [ %r110, %member.matched.41 ], [ %r115, %member.matched.43 ], [ %r120, %member.matched.45 ], [ %r125, %member.matched.47 ], [ %r130, %member.matched.49 ], [ %r135, %member.matched.51 ], [ %r140, %member.matched.53 ], [ %r145, %member.matched.55 ], [ %r150, %member.matched.57 ], [ %r155, %member.matched.59 ], [ %r160, %member.matched.61 ], [ %r165, %member.matched.63 ], [ %r170, %member.matched.65 ], [ %r175, %member.matched.67 ], [ %r180, %member.matched.69 ], [ %r185, %member.matched.71 ], [ %r190, %member.matched.73 ], [ %r195, %member.matched.75 ], [ %r200, %member.matched.77 ], [ %r202, %member.next.76 ]
-  %r204 = load ptr, ptr %r34
-  call void @lerta_retain(ptr %r204)
-  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r35, ptr %r203, ptr %r204)
+  %r34 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r34)
+  %r35 = load ptr, ptr %r11
   call void @lerta_release(ptr %r35)
-  call void @lerta_release(ptr %r203)
-  call void @lerta_release(ptr %r204)
-  %r205 = load ptr, ptr @lerta_exception
-  %r206 = icmp ne ptr %r205, null
-  br i1 %r206, label %unwind.78, label %no.exception.79
-unwind.78:
-  %r207 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r207)
-  %r208 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r208)
-  %r209 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r209)
-  %r210 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r210)
+  %r36 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r36)
   ret ptr poison
-no.exception.79:
-  %r211 = load ptr, ptr %r34
-  call void @lerta_release(ptr %r211)
-  br label %if.end.6
-if.else.5:
-  br label %if.end.6
-if.end.6:
-  call void @lerta_retain(ptr %p0)
-  %r212 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 5
-  %r213 = load ptr, ptr %r212
-  call void @lerta_retain(ptr %r213)
-  call void @lerta_release(ptr %p0)
-  %r214 = getelementptr %"lerta.object.checker/shared.lerta.NodeFacts", ptr %r213, i32 0, i32 2
-  %r215 = load ptr, ptr %r214
-  call void @lerta_retain(ptr %r215)
-  call void @lerta_release(ptr %r213)
-  call void @lerta_retain(ptr %p2)
-  call void @lerta_retain(ptr %p3)
-  %r216 = ptrtoint ptr %p2 to i64
-  %r218 = ptrtoint ptr %p3 to i64
-  store i64 %r218, ptr %r217
-  call void @lerta_map_write(ptr %r215, i64 %r216, ptr %r217)
-  call void @lerta_release(ptr %p2)
-  call void @lerta_release(ptr %p3)
-  call void @lerta_release(ptr %r215)
-  call void @lerta_retain(ptr %p3)
-  %r219 = load ptr, ptr %r14
-  call void @lerta_retain(ptr %r219)
-  %r220 = call i1 @"lerta.fn.types.lerta.is_assignable"(ptr %p3, ptr %r219)
-  call void @lerta_release(ptr %p3)
-  call void @lerta_release(ptr %r219)
-  %r221 = load ptr, ptr @lerta_exception
-  %r222 = icmp ne ptr %r221, null
-  br i1 %r222, label %unwind.80, label %no.exception.81
+no.exception.12:
+  %r37 = call ptr (i64, ...) @lerta_string_concat(i64 2, ptr @lerta.string.1305, ptr %r31)
+  call void @lerta_release(ptr @lerta.string.1305)
+  call void @lerta_release(ptr %r31)
+  store ptr %r37, ptr %r38
+  %r39 = load ptr, ptr %r2
+  call void @lerta_retain(ptr %r39)
+  call void @lerta_retain(ptr %p1)
+  %r40 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r41 = load ptr, ptr %r40
+  %r42 = icmp eq ptr %r41, @"lerta.drop.ast.lerta.ArrayLiteral"
+  br i1 %r42, label %member.matched.15, label %member.next.14
+member.matched.15:
+  %r43 = getelementptr %"lerta.object.ast.lerta.ArrayLiteral", ptr %p1, i32 0, i32 3
+  %r44 = load ptr, ptr %r43
+  call void @lerta_retain(ptr %r44)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.14:
+  %r45 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r46 = load ptr, ptr %r45
+  %r47 = icmp eq ptr %r46, @"lerta.drop.ast.lerta.Await"
+  br i1 %r47, label %member.matched.17, label %member.next.16
+member.matched.17:
+  %r48 = getelementptr %"lerta.object.ast.lerta.Await", ptr %p1, i32 0, i32 3
+  %r49 = load ptr, ptr %r48
+  call void @lerta_retain(ptr %r49)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.16:
+  %r50 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r51 = load ptr, ptr %r50
+  %r52 = icmp eq ptr %r51, @"lerta.drop.ast.lerta.BinaryOperation"
+  br i1 %r52, label %member.matched.19, label %member.next.18
+member.matched.19:
+  %r53 = getelementptr %"lerta.object.ast.lerta.BinaryOperation", ptr %p1, i32 0, i32 5
+  %r54 = load ptr, ptr %r53
+  call void @lerta_retain(ptr %r54)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.18:
+  %r55 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r56 = load ptr, ptr %r55
+  %r57 = icmp eq ptr %r56, @"lerta.drop.ast.lerta.BooleanLiteral"
+  br i1 %r57, label %member.matched.21, label %member.next.20
+member.matched.21:
+  %r58 = getelementptr %"lerta.object.ast.lerta.BooleanLiteral", ptr %p1, i32 0, i32 3
+  %r59 = load ptr, ptr %r58
+  call void @lerta_retain(ptr %r59)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.20:
+  %r60 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r61 = load ptr, ptr %r60
+  %r62 = icmp eq ptr %r61, @"lerta.drop.ast.lerta.Call"
+  br i1 %r62, label %member.matched.23, label %member.next.22
+member.matched.23:
+  %r63 = getelementptr %"lerta.object.ast.lerta.Call", ptr %p1, i32 0, i32 6
+  %r64 = load ptr, ptr %r63
+  call void @lerta_retain(ptr %r64)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.22:
+  %r65 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r66 = load ptr, ptr %r65
+  %r67 = icmp eq ptr %r66, @"lerta.drop.ast.lerta.Case"
+  br i1 %r67, label %member.matched.25, label %member.next.24
+member.matched.25:
+  %r68 = getelementptr %"lerta.object.ast.lerta.Case", ptr %p1, i32 0, i32 5
+  %r69 = load ptr, ptr %r68
+  call void @lerta_retain(ptr %r69)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.24:
+  %r70 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r71 = load ptr, ptr %r70
+  %r72 = icmp eq ptr %r71, @"lerta.drop.ast.lerta.Cast"
+  br i1 %r72, label %member.matched.27, label %member.next.26
+member.matched.27:
+  %r73 = getelementptr %"lerta.object.ast.lerta.Cast", ptr %p1, i32 0, i32 5
+  %r74 = load ptr, ptr %r73
+  call void @lerta_retain(ptr %r74)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.26:
+  %r75 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r76 = load ptr, ptr %r75
+  %r77 = icmp eq ptr %r76, @"lerta.drop.ast.lerta.Coalesce"
+  br i1 %r77, label %member.matched.29, label %member.next.28
+member.matched.29:
+  %r78 = getelementptr %"lerta.object.ast.lerta.Coalesce", ptr %p1, i32 0, i32 4
+  %r79 = load ptr, ptr %r78
+  call void @lerta_retain(ptr %r79)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.28:
+  %r80 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r81 = load ptr, ptr %r80
+  %r82 = icmp eq ptr %r81, @"lerta.drop.ast.lerta.Comprehension"
+  br i1 %r82, label %member.matched.31, label %member.next.30
+member.matched.31:
+  %r83 = getelementptr %"lerta.object.ast.lerta.Comprehension", ptr %p1, i32 0, i32 7
+  %r84 = load ptr, ptr %r83
+  call void @lerta_retain(ptr %r84)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.30:
+  %r85 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r86 = load ptr, ptr %r85
+  %r87 = icmp eq ptr %r86, @"lerta.drop.ast.lerta.Conditional"
+  br i1 %r87, label %member.matched.33, label %member.next.32
+member.matched.33:
+  %r88 = getelementptr %"lerta.object.ast.lerta.Conditional", ptr %p1, i32 0, i32 5
+  %r89 = load ptr, ptr %r88
+  call void @lerta_retain(ptr %r89)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.32:
+  %r90 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r91 = load ptr, ptr %r90
+  %r92 = icmp eq ptr %r91, @"lerta.drop.ast.lerta.FloatLiteral"
+  br i1 %r92, label %member.matched.35, label %member.next.34
+member.matched.35:
+  %r93 = getelementptr %"lerta.object.ast.lerta.FloatLiteral", ptr %p1, i32 0, i32 3
+  %r94 = load ptr, ptr %r93
+  call void @lerta_retain(ptr %r94)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.34:
+  %r95 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r96 = load ptr, ptr %r95
+  %r97 = icmp eq ptr %r96, @"lerta.drop.ast.lerta.FunctionLiteral"
+  br i1 %r97, label %member.matched.37, label %member.next.36
+member.matched.37:
+  %r98 = getelementptr %"lerta.object.ast.lerta.FunctionLiteral", ptr %p1, i32 0, i32 6
+  %r99 = load ptr, ptr %r98
+  call void @lerta_retain(ptr %r99)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.36:
+  %r100 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r101 = load ptr, ptr %r100
+  %r102 = icmp eq ptr %r101, @"lerta.drop.ast.lerta.Identifier"
+  br i1 %r102, label %member.matched.39, label %member.next.38
+member.matched.39:
+  %r103 = getelementptr %"lerta.object.ast.lerta.Identifier", ptr %p1, i32 0, i32 3
+  %r104 = load ptr, ptr %r103
+  call void @lerta_retain(ptr %r104)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.38:
+  %r105 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r106 = load ptr, ptr %r105
+  %r107 = icmp eq ptr %r106, @"lerta.drop.ast.lerta.If"
+  br i1 %r107, label %member.matched.41, label %member.next.40
+member.matched.41:
+  %r108 = getelementptr %"lerta.object.ast.lerta.If", ptr %p1, i32 0, i32 5
+  %r109 = load ptr, ptr %r108
+  call void @lerta_retain(ptr %r109)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.40:
+  %r110 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r111 = load ptr, ptr %r110
+  %r112 = icmp eq ptr %r111, @"lerta.drop.ast.lerta.Index"
+  br i1 %r112, label %member.matched.43, label %member.next.42
+member.matched.43:
+  %r113 = getelementptr %"lerta.object.ast.lerta.Index", ptr %p1, i32 0, i32 4
+  %r114 = load ptr, ptr %r113
+  call void @lerta_retain(ptr %r114)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.42:
+  %r115 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r116 = load ptr, ptr %r115
+  %r117 = icmp eq ptr %r116, @"lerta.drop.ast.lerta.IntegerLiteral"
+  br i1 %r117, label %member.matched.45, label %member.next.44
+member.matched.45:
+  %r118 = getelementptr %"lerta.object.ast.lerta.IntegerLiteral", ptr %p1, i32 0, i32 3
+  %r119 = load ptr, ptr %r118
+  call void @lerta_retain(ptr %r119)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.44:
+  %r120 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r121 = load ptr, ptr %r120
+  %r122 = icmp eq ptr %r121, @"lerta.drop.ast.lerta.Interpolation"
+  br i1 %r122, label %member.matched.47, label %member.next.46
+member.matched.47:
+  %r123 = getelementptr %"lerta.object.ast.lerta.Interpolation", ptr %p1, i32 0, i32 3
+  %r124 = load ptr, ptr %r123
+  call void @lerta_retain(ptr %r124)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.46:
+  %r125 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r126 = load ptr, ptr %r125
+  %r127 = icmp eq ptr %r126, @"lerta.drop.ast.lerta.IsTest"
+  br i1 %r127, label %member.matched.49, label %member.next.48
+member.matched.49:
+  %r128 = getelementptr %"lerta.object.ast.lerta.IsTest", ptr %p1, i32 0, i32 4
+  %r129 = load ptr, ptr %r128
+  call void @lerta_retain(ptr %r129)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.48:
+  %r130 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r131 = load ptr, ptr %r130
+  %r132 = icmp eq ptr %r131, @"lerta.drop.ast.lerta.Jump"
+  br i1 %r132, label %member.matched.51, label %member.next.50
+member.matched.51:
+  %r133 = getelementptr %"lerta.object.ast.lerta.Jump", ptr %p1, i32 0, i32 3
+  %r134 = load ptr, ptr %r133
+  call void @lerta_retain(ptr %r134)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.50:
+  %r135 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r136 = load ptr, ptr %r135
+  %r137 = icmp eq ptr %r136, @"lerta.drop.ast.lerta.MapLiteral"
+  br i1 %r137, label %member.matched.53, label %member.next.52
+member.matched.53:
+  %r138 = getelementptr %"lerta.object.ast.lerta.MapLiteral", ptr %p1, i32 0, i32 3
+  %r139 = load ptr, ptr %r138
+  call void @lerta_retain(ptr %r139)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.52:
+  %r140 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r141 = load ptr, ptr %r140
+  %r142 = icmp eq ptr %r141, @"lerta.drop.ast.lerta.Member"
+  br i1 %r142, label %member.matched.55, label %member.next.54
+member.matched.55:
+  %r143 = getelementptr %"lerta.object.ast.lerta.Member", ptr %p1, i32 0, i32 4
+  %r144 = load ptr, ptr %r143
+  call void @lerta_retain(ptr %r144)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.54:
+  %r145 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r146 = load ptr, ptr %r145
+  %r147 = icmp eq ptr %r146, @"lerta.drop.ast.lerta.NilLiteral"
+  br i1 %r147, label %member.matched.57, label %member.next.56
+member.matched.57:
+  %r148 = getelementptr %"lerta.object.ast.lerta.NilLiteral", ptr %p1, i32 0, i32 2
+  %r149 = load ptr, ptr %r148
+  call void @lerta_retain(ptr %r149)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.56:
+  %r150 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r151 = load ptr, ptr %r150
+  %r152 = icmp eq ptr %r151, @"lerta.drop.ast.lerta.Range"
+  br i1 %r152, label %member.matched.59, label %member.next.58
+member.matched.59:
+  %r153 = getelementptr %"lerta.object.ast.lerta.Range", ptr %p1, i32 0, i32 4
+  %r154 = load ptr, ptr %r153
+  call void @lerta_retain(ptr %r154)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.58:
+  %r155 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r156 = load ptr, ptr %r155
+  %r157 = icmp eq ptr %r156, @"lerta.drop.ast.lerta.RecordLiteral"
+  br i1 %r157, label %member.matched.61, label %member.next.60
+member.matched.61:
+  %r158 = getelementptr %"lerta.object.ast.lerta.RecordLiteral", ptr %p1, i32 0, i32 3
+  %r159 = load ptr, ptr %r158
+  call void @lerta_retain(ptr %r159)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.60:
+  %r160 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r161 = load ptr, ptr %r160
+  %r162 = icmp eq ptr %r161, @"lerta.drop.ast.lerta.Return"
+  br i1 %r162, label %member.matched.63, label %member.next.62
+member.matched.63:
+  %r163 = getelementptr %"lerta.object.ast.lerta.Return", ptr %p1, i32 0, i32 3
+  %r164 = load ptr, ptr %r163
+  call void @lerta_retain(ptr %r164)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.62:
+  %r165 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r166 = load ptr, ptr %r165
+  %r167 = icmp eq ptr %r166, @"lerta.drop.ast.lerta.StringLiteral"
+  br i1 %r167, label %member.matched.65, label %member.next.64
+member.matched.65:
+  %r168 = getelementptr %"lerta.object.ast.lerta.StringLiteral", ptr %p1, i32 0, i32 3
+  %r169 = load ptr, ptr %r168
+  call void @lerta_retain(ptr %r169)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.64:
+  %r170 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r171 = load ptr, ptr %r170
+  %r172 = icmp eq ptr %r171, @"lerta.drop.ast.lerta.This"
+  br i1 %r172, label %member.matched.67, label %member.next.66
+member.matched.67:
+  %r173 = getelementptr %"lerta.object.ast.lerta.This", ptr %p1, i32 0, i32 2
+  %r174 = load ptr, ptr %r173
+  call void @lerta_retain(ptr %r174)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.66:
+  %r175 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r176 = load ptr, ptr %r175
+  %r177 = icmp eq ptr %r176, @"lerta.drop.ast.lerta.Throw"
+  br i1 %r177, label %member.matched.69, label %member.next.68
+member.matched.69:
+  %r178 = getelementptr %"lerta.object.ast.lerta.Throw", ptr %p1, i32 0, i32 3
+  %r179 = load ptr, ptr %r178
+  call void @lerta_retain(ptr %r179)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.68:
+  %r180 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r181 = load ptr, ptr %r180
+  %r182 = icmp eq ptr %r181, @"lerta.drop.ast.lerta.Try"
+  br i1 %r182, label %member.matched.71, label %member.next.70
+member.matched.71:
+  %r183 = getelementptr %"lerta.object.ast.lerta.Try", ptr %p1, i32 0, i32 5
+  %r184 = load ptr, ptr %r183
+  call void @lerta_retain(ptr %r184)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.70:
+  %r185 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r186 = load ptr, ptr %r185
+  %r187 = icmp eq ptr %r186, @"lerta.drop.ast.lerta.TupleItem"
+  br i1 %r187, label %member.matched.73, label %member.next.72
+member.matched.73:
+  %r188 = getelementptr %"lerta.object.ast.lerta.TupleItem", ptr %p1, i32 0, i32 5
+  %r189 = load ptr, ptr %r188
+  call void @lerta_retain(ptr %r189)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.72:
+  %r190 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r191 = load ptr, ptr %r190
+  %r192 = icmp eq ptr %r191, @"lerta.drop.ast.lerta.TupleLiteral"
+  br i1 %r192, label %member.matched.75, label %member.next.74
+member.matched.75:
+  %r193 = getelementptr %"lerta.object.ast.lerta.TupleLiteral", ptr %p1, i32 0, i32 3
+  %r194 = load ptr, ptr %r193
+  call void @lerta_retain(ptr %r194)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.74:
+  %r195 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r196 = load ptr, ptr %r195
+  %r197 = icmp eq ptr %r196, @"lerta.drop.ast.lerta.UnaryOperation"
+  br i1 %r197, label %member.matched.77, label %member.next.76
+member.matched.77:
+  %r198 = getelementptr %"lerta.object.ast.lerta.UnaryOperation", ptr %p1, i32 0, i32 4
+  %r199 = load ptr, ptr %r198
+  call void @lerta_retain(ptr %r199)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.76:
+  %r200 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r201 = load ptr, ptr %r200
+  %r202 = icmp eq ptr %r201, @"lerta.drop.ast.lerta.Unwrap"
+  br i1 %r202, label %member.matched.79, label %member.next.78
+member.matched.79:
+  %r203 = getelementptr %"lerta.object.ast.lerta.Unwrap", ptr %p1, i32 0, i32 3
+  %r204 = load ptr, ptr %r203
+  call void @lerta_retain(ptr %r204)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.next.78:
+  %r205 = getelementptr %"lerta.object.ast.lerta.Yield", ptr %p1, i32 0, i32 3
+  %r206 = load ptr, ptr %r205
+  call void @lerta_retain(ptr %r206)
+  call void @lerta_release(ptr %p1)
+  br label %member.done.13
+member.done.13:
+  %r207 = phi ptr [ %r44, %member.matched.15 ], [ %r49, %member.matched.17 ], [ %r54, %member.matched.19 ], [ %r59, %member.matched.21 ], [ %r64, %member.matched.23 ], [ %r69, %member.matched.25 ], [ %r74, %member.matched.27 ], [ %r79, %member.matched.29 ], [ %r84, %member.matched.31 ], [ %r89, %member.matched.33 ], [ %r94, %member.matched.35 ], [ %r99, %member.matched.37 ], [ %r104, %member.matched.39 ], [ %r109, %member.matched.41 ], [ %r114, %member.matched.43 ], [ %r119, %member.matched.45 ], [ %r124, %member.matched.47 ], [ %r129, %member.matched.49 ], [ %r134, %member.matched.51 ], [ %r139, %member.matched.53 ], [ %r144, %member.matched.55 ], [ %r149, %member.matched.57 ], [ %r154, %member.matched.59 ], [ %r159, %member.matched.61 ], [ %r164, %member.matched.63 ], [ %r169, %member.matched.65 ], [ %r174, %member.matched.67 ], [ %r179, %member.matched.69 ], [ %r184, %member.matched.71 ], [ %r189, %member.matched.73 ], [ %r194, %member.matched.75 ], [ %r199, %member.matched.77 ], [ %r204, %member.matched.79 ], [ %r206, %member.next.78 ]
+  %r208 = load ptr, ptr %r38
+  call void @lerta_retain(ptr %r208)
+  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r39, ptr %r207, ptr %r208)
+  call void @lerta_release(ptr %r39)
+  call void @lerta_release(ptr %r207)
+  call void @lerta_release(ptr %r208)
+  %r209 = load ptr, ptr @lerta_exception
+  %r210 = icmp ne ptr %r209, null
+  br i1 %r210, label %unwind.80, label %no.exception.81
 unwind.80:
-  %r223 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r223)
-  %r224 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r224)
-  %r225 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r225)
+  %r211 = load ptr, ptr %r38
+  call void @lerta_release(ptr %r211)
+  %r212 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r212)
+  %r213 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r213)
+  %r214 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r214)
   ret ptr poison
 no.exception.81:
-  %r226 = xor i1 %r220, true
-  br i1 %r226, label %if.then.82, label %if.else.83
-if.then.82:
-  %r227 = load ptr, ptr %r14
-  call void @lerta_retain(ptr %r227)
-  %r228 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %r227)
+  %r215 = load ptr, ptr %r38
+  call void @lerta_release(ptr %r215)
+  br label %if.end.8
+if.else.7:
+  br label %if.end.8
+if.end.8:
+  call void @lerta_retain(ptr %p0)
+  %r216 = getelementptr %"lerta.object.checker/shared.lerta.Body", ptr %p0, i32 0, i32 5
+  %r217 = load ptr, ptr %r216
+  call void @lerta_retain(ptr %r217)
+  call void @lerta_release(ptr %p0)
+  %r218 = getelementptr %"lerta.object.checker/shared.lerta.NodeFacts", ptr %r217, i32 0, i32 2
+  %r219 = load ptr, ptr %r218
+  call void @lerta_retain(ptr %r219)
+  call void @lerta_release(ptr %r217)
+  call void @lerta_retain(ptr %p2)
+  call void @lerta_retain(ptr %p3)
+  %r220 = ptrtoint ptr %p2 to i64
+  %r222 = ptrtoint ptr %p3 to i64
+  store i64 %r222, ptr %r221
+  call void @lerta_map_write(ptr %r219, i64 %r220, ptr %r221)
+  call void @lerta_release(ptr %p2)
+  call void @lerta_release(ptr %p3)
+  call void @lerta_release(ptr %r219)
+  call void @lerta_retain(ptr %p3)
+  %r223 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r223)
+  %r224 = call i1 @"lerta.fn.types.lerta.is_assignable"(ptr %p3, ptr %r223)
+  call void @lerta_release(ptr %p3)
+  call void @lerta_release(ptr %r223)
+  %r225 = load ptr, ptr @lerta_exception
+  %r226 = icmp ne ptr %r225, null
+  br i1 %r226, label %unwind.82, label %no.exception.83
+unwind.82:
+  %r227 = load ptr, ptr %r2
   call void @lerta_release(ptr %r227)
-  %r229 = load ptr, ptr @lerta_exception
-  %r230 = icmp ne ptr %r229, null
-  br i1 %r230, label %unwind.85, label %no.exception.86
-unwind.85:
-  call void @lerta_release(ptr @lerta.string.1306)
-  %r231 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r231)
-  %r232 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r232)
-  %r233 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r233)
-  ret ptr poison
-no.exception.86:
-  %r234 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r228)
+  %r228 = load ptr, ptr %r11
   call void @lerta_release(ptr %r228)
-  %r235 = load ptr, ptr @lerta_exception
-  %r236 = icmp ne ptr %r235, null
-  br i1 %r236, label %unwind.87, label %no.exception.88
+  %r229 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r229)
+  ret ptr poison
+no.exception.83:
+  %r230 = xor i1 %r224, true
+  br i1 %r230, label %if.then.84, label %if.else.85
+if.then.84:
+  %r231 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r231)
+  %r232 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %r231)
+  call void @lerta_release(ptr %r231)
+  %r233 = load ptr, ptr @lerta_exception
+  %r234 = icmp ne ptr %r233, null
+  br i1 %r234, label %unwind.87, label %no.exception.88
 unwind.87:
   call void @lerta_release(ptr @lerta.string.1306)
-  %r237 = load ptr, ptr %r2
+  %r235 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r235)
+  %r236 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r236)
+  %r237 = load ptr, ptr %r18
   call void @lerta_release(ptr %r237)
-  %r238 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r238)
-  %r239 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r239)
   ret ptr poison
 no.exception.88:
-  %r240 = call ptr (i64, ...) @lerta_string_concat(i64 3, ptr @lerta.string.1306, ptr %r234, ptr @lerta.string.1307)
-  call void @lerta_release(ptr @lerta.string.1306)
-  call void @lerta_release(ptr %r234)
-  call void @lerta_release(ptr @lerta.string.1307)
-  store ptr %r240, ptr %r241
-  call void @lerta_retain(ptr %p3)
-  %r242 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %p3)
-  call void @lerta_release(ptr %p3)
-  %r243 = load ptr, ptr @lerta_exception
-  %r244 = icmp ne ptr %r243, null
-  br i1 %r244, label %unwind.89, label %no.exception.90
+  %r238 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r232)
+  call void @lerta_release(ptr %r232)
+  %r239 = load ptr, ptr @lerta_exception
+  %r240 = icmp ne ptr %r239, null
+  br i1 %r240, label %unwind.89, label %no.exception.90
 unwind.89:
-  %r245 = load ptr, ptr %r241
-  call void @lerta_release(ptr %r245)
-  %r246 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r246)
-  %r247 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r247)
-  %r248 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r248)
+  call void @lerta_release(ptr @lerta.string.1306)
+  %r241 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r241)
+  %r242 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r242)
+  %r243 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r243)
   ret ptr poison
 no.exception.90:
-  %r249 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r242)
-  call void @lerta_release(ptr %r242)
-  %r250 = load ptr, ptr @lerta_exception
-  %r251 = icmp ne ptr %r250, null
-  br i1 %r251, label %unwind.91, label %no.exception.92
+  %r244 = call ptr (i64, ...) @lerta_string_concat(i64 3, ptr @lerta.string.1306, ptr %r238, ptr @lerta.string.1307)
+  call void @lerta_release(ptr @lerta.string.1306)
+  call void @lerta_release(ptr %r238)
+  call void @lerta_release(ptr @lerta.string.1307)
+  store ptr %r244, ptr %r245
+  call void @lerta_retain(ptr %p3)
+  %r246 = call ptr @"lerta.fn.types.lerta.format_type"(ptr %p3)
+  call void @lerta_release(ptr %p3)
+  %r247 = load ptr, ptr @lerta_exception
+  %r248 = icmp ne ptr %r247, null
+  br i1 %r248, label %unwind.91, label %no.exception.92
 unwind.91:
-  %r252 = load ptr, ptr %r241
+  %r249 = load ptr, ptr %r245
+  call void @lerta_release(ptr %r249)
+  %r250 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r250)
+  %r251 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r251)
+  %r252 = load ptr, ptr %r18
   call void @lerta_release(ptr %r252)
-  %r253 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r253)
-  %r254 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r254)
-  %r255 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r255)
   ret ptr poison
 no.exception.92:
-  %r256 = load ptr, ptr %r241
-  call void @lerta_retain(ptr %r256)
-  %r257 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r256)
-  call void @lerta_release(ptr %r256)
-  %r258 = load ptr, ptr @lerta_exception
-  %r259 = icmp ne ptr %r258, null
-  br i1 %r259, label %unwind.93, label %no.exception.94
+  %r253 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r246)
+  call void @lerta_release(ptr %r246)
+  %r254 = load ptr, ptr @lerta_exception
+  %r255 = icmp ne ptr %r254, null
+  br i1 %r255, label %unwind.93, label %no.exception.94
 unwind.93:
-  call void @lerta_release(ptr @lerta.string.1308)
-  call void @lerta_release(ptr %r249)
-  %r260 = load ptr, ptr %r241
-  call void @lerta_release(ptr %r260)
-  %r261 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r261)
-  %r262 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r262)
-  %r263 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r263)
+  %r256 = load ptr, ptr %r245
+  call void @lerta_release(ptr %r256)
+  %r257 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r257)
+  %r258 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r258)
+  %r259 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r259)
   ret ptr poison
 no.exception.94:
-  %r264 = call ptr (i64, ...) @lerta_string_concat(i64 3, ptr %r249, ptr @lerta.string.1308, ptr %r257)
-  call void @lerta_release(ptr %r249)
-  call void @lerta_release(ptr @lerta.string.1308)
-  call void @lerta_release(ptr %r257)
-  store ptr %r264, ptr %r265
-  %r266 = load ptr, ptr %r2
-  call void @lerta_retain(ptr %r266)
-  call void @lerta_retain(ptr %p2)
-  %r267 = getelementptr %"lerta.object.ast.lerta.NamedType", ptr %p2, i32 0, i32 4
-  %r268 = load ptr, ptr %r267
-  call void @lerta_retain(ptr %r268)
-  call void @lerta_release(ptr %p2)
-  %r269 = load ptr, ptr %r265
-  call void @lerta_retain(ptr %r269)
-  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r266, ptr %r268, ptr %r269)
-  call void @lerta_release(ptr %r266)
-  call void @lerta_release(ptr %r268)
-  call void @lerta_release(ptr %r269)
-  %r270 = load ptr, ptr @lerta_exception
-  %r271 = icmp ne ptr %r270, null
-  br i1 %r271, label %unwind.95, label %no.exception.96
+  %r260 = load ptr, ptr %r245
+  call void @lerta_retain(ptr %r260)
+  %r261 = call ptr @"lerta.extend.std:builtins.String.to_string"(ptr %r260)
+  call void @lerta_release(ptr %r260)
+  %r262 = load ptr, ptr @lerta_exception
+  %r263 = icmp ne ptr %r262, null
+  br i1 %r263, label %unwind.95, label %no.exception.96
 unwind.95:
-  %r272 = load ptr, ptr %r241
-  call void @lerta_release(ptr %r272)
-  %r273 = load ptr, ptr %r265
-  call void @lerta_release(ptr %r273)
-  %r274 = load ptr, ptr %r2
-  call void @lerta_release(ptr %r274)
-  %r275 = load ptr, ptr %r7
-  call void @lerta_release(ptr %r275)
-  %r276 = load ptr, ptr %r14
-  call void @lerta_release(ptr %r276)
+  call void @lerta_release(ptr @lerta.string.1308)
+  call void @lerta_release(ptr %r253)
+  %r264 = load ptr, ptr %r245
+  call void @lerta_release(ptr %r264)
+  %r265 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r265)
+  %r266 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r266)
+  %r267 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r267)
   ret ptr poison
 no.exception.96:
-  %r277 = load ptr, ptr %r241
+  %r268 = call ptr (i64, ...) @lerta_string_concat(i64 3, ptr %r253, ptr @lerta.string.1308, ptr %r261)
+  call void @lerta_release(ptr %r253)
+  call void @lerta_release(ptr @lerta.string.1308)
+  call void @lerta_release(ptr %r261)
+  store ptr %r268, ptr %r269
+  %r270 = load ptr, ptr %r2
+  call void @lerta_retain(ptr %r270)
+  call void @lerta_retain(ptr %p2)
+  %r271 = getelementptr %"lerta.object.ast.lerta.NamedType", ptr %p2, i32 0, i32 4
+  %r272 = load ptr, ptr %r271
+  call void @lerta_retain(ptr %r272)
+  call void @lerta_release(ptr %p2)
+  %r273 = load ptr, ptr %r269
+  call void @lerta_retain(ptr %r273)
+  call void @"lerta.fn.checker/diagnostics.lerta.fail"(ptr %r270, ptr %r272, ptr %r273)
+  call void @lerta_release(ptr %r270)
+  call void @lerta_release(ptr %r272)
+  call void @lerta_release(ptr %r273)
+  %r274 = load ptr, ptr @lerta_exception
+  %r275 = icmp ne ptr %r274, null
+  br i1 %r275, label %unwind.97, label %no.exception.98
+unwind.97:
+  %r276 = load ptr, ptr %r245
+  call void @lerta_release(ptr %r276)
+  %r277 = load ptr, ptr %r269
   call void @lerta_release(ptr %r277)
-  %r278 = load ptr, ptr %r265
+  %r278 = load ptr, ptr %r2
   call void @lerta_release(ptr %r278)
-  br label %if.end.84
-if.else.83:
-  br label %if.end.84
-if.end.84:
-  call void @lerta_retain(ptr %p3)
-  %r279 = load ptr, ptr %r2
+  %r279 = load ptr, ptr %r11
   call void @lerta_release(ptr %r279)
-  %r280 = load ptr, ptr %r7
+  %r280 = load ptr, ptr %r18
   call void @lerta_release(ptr %r280)
-  %r281 = load ptr, ptr %r14
+  ret ptr poison
+no.exception.98:
+  %r281 = load ptr, ptr %r245
   call void @lerta_release(ptr %r281)
+  %r282 = load ptr, ptr %r269
+  call void @lerta_release(ptr %r282)
+  br label %if.end.86
+if.else.85:
+  br label %if.end.86
+if.end.86:
+  call void @lerta_retain(ptr %p3)
+  %r283 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r283)
+  %r284 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r284)
+  %r285 = load ptr, ptr %r18
+  call void @lerta_release(ptr %r285)
   ret ptr %p3
+}
+define ptr @"lerta.fn.checker/expression.lerta.unnarrowed_type"(ptr %p0, ptr %p1, ptr %p2) {
+entry:
+  %r11 = alloca ptr
+  call void @lerta_retain(ptr %p1)
+  %r0 = getelementptr { i64, ptr }, ptr %p1, i32 0, i32 1
+  %r1 = load ptr, ptr %r0
+  %r2 = icmp eq ptr %r1, @"lerta.drop.ast.lerta.Identifier"
+  call void @lerta_release(ptr %p1)
+  %r3 = xor i1 %r2, true
+  br i1 %r3, label %if.then.0, label %if.else.1
+if.then.0:
+  call void @lerta_retain(ptr %p2)
+  ret ptr %p2
+unreachable.3:
+  br label %if.end.2
+if.else.1:
+  br label %if.end.2
+if.end.2:
+  call void @lerta_retain(ptr %p0)
+  call void @lerta_retain(ptr %p1)
+  %r4 = getelementptr %"lerta.object.ast.lerta.Identifier", ptr %p1, i32 0, i32 2
+  %r5 = load ptr, ptr %r4
+  call void @lerta_retain(ptr %r5)
+  call void @lerta_release(ptr %p1)
+  %r6 = call ptr @"lerta.fn.checker/name.lerta.lookup"(ptr %p0, ptr %r5)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r5)
+  %r7 = load ptr, ptr @lerta_exception
+  %r8 = icmp ne ptr %r7, null
+  br i1 %r8, label %unwind.4, label %no.exception.5
+unwind.4:
+  ret ptr poison
+no.exception.5:
+  %r9 = icmp ne ptr %r6, null
+  br i1 %r9, label %coalesce.end.7, label %coalesce.fallback.6
+coalesce.fallback.6:
+  call void @lerta_retain(ptr %p2)
+  ret ptr %p2
+unreachable.8:
+  br label %coalesce.end.7
+coalesce.end.7:
+  %r10 = phi ptr [ %r6, %no.exception.5 ], [ poison, %unreachable.8 ]
+  store ptr %r10, ptr %r11
+  %r12 = load ptr, ptr %r11
+  call void @lerta_retain(ptr %r12)
+  %r13 = getelementptr %"lerta.object.checker/scopes.lerta.Local", ptr %r12, i32 0, i32 4
+  %r14 = load ptr, ptr %r13
+  call void @lerta_retain(ptr %r14)
+  call void @lerta_release(ptr %r12)
+  %r15 = icmp ne ptr %r14, null
+  br i1 %r15, label %coalesce.end.10, label %coalesce.fallback.9
+coalesce.fallback.9:
+  %r16 = load ptr, ptr %r11
+  call void @lerta_retain(ptr %r16)
+  br label %coalesce.end.10
+coalesce.end.10:
+  %r17 = phi ptr [ %r14, %coalesce.end.7 ], [ %r16, %coalesce.fallback.9 ]
+  %r18 = getelementptr %"lerta.object.checker/scopes.lerta.Local", ptr %r17, i32 0, i32 3
+  %r19 = load ptr, ptr %r18
+  call void @lerta_retain(ptr %r19)
+  call void @lerta_release(ptr %r17)
+  %r20 = load ptr, ptr %r11
+  call void @lerta_release(ptr %r20)
+  ret ptr %r19
 }
 define ptr @"lerta.fn.checker/expression.lerta.set_type"(ptr %p0, ptr %p1, ptr %p2) {
 entry:
@@ -130689,7 +131848,7 @@ if.else.3:
 if.end.4:
   ret void
 }
-define private i1 @lerta.lambda.154(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.157(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr }, ptr %p0, i32 0, i32 1
@@ -130699,7 +131858,7 @@ entry:
   %r3 = xor i1 %r2, true
   ret i1 %r3
 }
-define private void @lerta.lambda.155(ptr %closure) {
+define private void @lerta.lambda.158(ptr %closure) {
 entry:
   %r4 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -130735,7 +131894,7 @@ no.exception.1:
   call void @lerta_release(ptr %r13)
   ret void
 }
-define private void @"lerta.lambda.155.drop"(ptr %closure) {
+define private void @"lerta.lambda.158.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -130745,7 +131904,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @lerta.lambda.156(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.159(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -130779,7 +131938,7 @@ logical.end.3:
   %r11 = phi i1 [ false, %no.exception.1 ], [ %r10, %no.exception.5 ]
   ret i1 %r11
 }
-define private void @"lerta.lambda.156.drop"(ptr %closure) {
+define private void @"lerta.lambda.159.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -130883,14 +132042,14 @@ if.end.4:
   call void @lerta_retain(ptr %r29)
   call void @lerta_release(ptr %p1)
   store ptr %r29, ptr %r30
-  store ptr @"lerta.closure.lerta.lambda.154", ptr %r31
+  store ptr @"lerta.closure.lerta.lambda.157", ptr %r31
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
   %r32 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r33 = ptrtoint ptr %r32 to i64
-  %r34 = call ptr @lerta_alloc(i64 %r33, ptr @"lerta.lambda.155.drop")
+  %r34 = call ptr @lerta_alloc(i64 %r33, ptr @"lerta.lambda.158.drop")
   %r35 = getelementptr { i64, ptr, ptr }, ptr %r34, i32 0, i32 2
-  store ptr @lerta.lambda.155, ptr %r35
+  store ptr @lerta.lambda.158, ptr %r35
   %r36 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r34, i32 0, i32 3
   store ptr %p0, ptr %r36
   %r37 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r34, i32 0, i32 4
@@ -130917,9 +132076,9 @@ no.exception.15:
   call void @lerta_retain(ptr %r47)
   %r48 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r49 = ptrtoint ptr %r48 to i64
-  %r50 = call ptr @lerta_alloc(i64 %r49, ptr @"lerta.lambda.156.drop")
+  %r50 = call ptr @lerta_alloc(i64 %r49, ptr @"lerta.lambda.159.drop")
   %r51 = getelementptr { i64, ptr, ptr }, ptr %r50, i32 0, i32 2
-  store ptr @lerta.lambda.156, ptr %r51
+  store ptr @lerta.lambda.159, ptr %r51
   %r52 = getelementptr { i64, ptr, ptr, ptr }, ptr %r50, i32 0, i32 3
   store ptr %r47, ptr %r52
   store ptr %r50, ptr %r53
@@ -132754,7 +133913,7 @@ logical.end.9:
   %r19 = phi i1 [ false, %logical.end.5 ], [ %r18, %no.exception.11 ]
   ret i1 %r19
 }
-define private void @lerta.lambda.157(ptr %closure) {
+define private void @lerta.lambda.160(ptr %closure) {
 entry:
   %r4 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -132802,7 +133961,7 @@ no.exception.3:
   call void @lerta_release(ptr %r16)
   ret void
 }
-define private void @"lerta.lambda.157.drop"(ptr %closure) {
+define private void @"lerta.lambda.160.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -132828,9 +133987,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r5 = ptrtoint ptr %r4 to i64
-  %r6 = call ptr @lerta_alloc(i64 %r5, ptr @"lerta.lambda.157.drop")
+  %r6 = call ptr @lerta_alloc(i64 %r5, ptr @"lerta.lambda.160.drop")
   %r7 = getelementptr { i64, ptr, ptr }, ptr %r6, i32 0, i32 2
-  store ptr @lerta.lambda.157, ptr %r7
+  store ptr @lerta.lambda.160, ptr %r7
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r6, i32 0, i32 3
   store ptr %r3, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r6, i32 0, i32 4
@@ -134973,7 +136132,7 @@ unwind.28:
 no.exception.29:
   ret ptr %r29
 }
-define private ptr @lerta.lambda.158(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.161(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -135017,7 +136176,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r13
 }
-define private void @"lerta.lambda.158.drop"(ptr %closure) {
+define private void @"lerta.lambda.161.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -135215,9 +136374,9 @@ for.exit.3:
   call void @lerta_retain(ptr %p1)
   %r74 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r75 = ptrtoint ptr %r74 to i64
-  %r76 = call ptr @lerta_alloc(i64 %r75, ptr @"lerta.lambda.158.drop")
+  %r76 = call ptr @lerta_alloc(i64 %r75, ptr @"lerta.lambda.161.drop")
   %r77 = getelementptr { i64, ptr, ptr }, ptr %r76, i32 0, i32 2
-  store ptr @lerta.lambda.158, ptr %r77
+  store ptr @lerta.lambda.161, ptr %r77
   %r78 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r76, i32 0, i32 3
   store ptr %p0, ptr %r78
   %r79 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r76, i32 0, i32 4
@@ -135501,7 +136660,7 @@ no.exception.13:
   call void @lerta_release(ptr %r40)
   ret ptr %r36
 }
-define private i1 @lerta.lambda.159(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.162(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -135518,7 +136677,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r2
 }
-define private void @"lerta.lambda.159.drop"(ptr %closure) {
+define private void @"lerta.lambda.162.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -135804,9 +136963,9 @@ branch.end.33:
   call void @lerta_retain(ptr %r120)
   %r121 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r122 = ptrtoint ptr %r121 to i64
-  %r123 = call ptr @lerta_alloc(i64 %r122, ptr @"lerta.lambda.159.drop")
+  %r123 = call ptr @lerta_alloc(i64 %r122, ptr @"lerta.lambda.162.drop")
   %r124 = getelementptr { i64, ptr, ptr }, ptr %r123, i32 0, i32 2
-  store ptr @lerta.lambda.159, ptr %r124
+  store ptr @lerta.lambda.162, ptr %r124
   %r125 = getelementptr { i64, ptr, ptr, ptr }, ptr %r123, i32 0, i32 3
   store ptr %r120, ptr %r125
   %r126 = call i1 @"lerta.extend.std:builtins.Self.any<Array<types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>, types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>"(ptr %r119, ptr %r123)
@@ -136133,7 +137292,7 @@ no.exception.27:
   call void @lerta_release(ptr %r90)
   ret ptr %r87
 }
-define private void @lerta.lambda.160(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.163(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -136154,7 +137313,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.160.drop"(ptr %closure) {
+define private void @"lerta.lambda.163.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -136209,9 +137368,9 @@ entry:
   call void @lerta_retain(ptr %r13)
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r15 = ptrtoint ptr %r14 to i64
-  %r16 = call ptr @lerta_alloc(i64 %r15, ptr @"lerta.lambda.160.drop")
+  %r16 = call ptr @lerta_alloc(i64 %r15, ptr @"lerta.lambda.163.drop")
   %r17 = getelementptr { i64, ptr, ptr }, ptr %r16, i32 0, i32 2
-  store ptr @lerta.lambda.160, ptr %r17
+  store ptr @lerta.lambda.163, ptr %r17
   %r18 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r16, i32 0, i32 3
   store ptr %p0, ptr %r18
   %r19 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r16, i32 0, i32 4
@@ -139498,7 +140657,7 @@ iter.exit.8:
   call void @lerta_release(ptr %r247)
   ret void
 }
-define private ptr @lerta.lambda.161(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.164(ptr %closure, ptr %p0) {
 entry:
   %r11 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %closure, i32 0, i32 3
@@ -139549,7 +140708,7 @@ no.exception.3:
   call void @lerta_release(ptr %r20)
   ret ptr %r16
 }
-define private void @"lerta.lambda.161.drop"(ptr %closure) {
+define private void @"lerta.lambda.164.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -139650,9 +140809,9 @@ no.exception.5:
   %r32 = load i1, ptr %r30
   %r33 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr null, i32 1
   %r34 = ptrtoint ptr %r33 to i64
-  %r35 = call ptr @lerta_alloc(i64 %r34, ptr @"lerta.lambda.161.drop")
+  %r35 = call ptr @lerta_alloc(i64 %r34, ptr @"lerta.lambda.164.drop")
   %r36 = getelementptr { i64, ptr, ptr }, ptr %r35, i32 0, i32 2
-  store ptr @lerta.lambda.161, ptr %r36
+  store ptr @lerta.lambda.164, ptr %r36
   %r37 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r35, i32 0, i32 3
   store ptr %r31, ptr %r37
   %r38 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r35, i32 0, i32 4
@@ -140866,7 +142025,7 @@ no.exception.33:
   call void @lerta_release(ptr %r147)
   ret ptr %r137
 }
-define private void @lerta.lambda.162(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.165(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -140891,7 +142050,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.162.drop"(ptr %closure) {
+define private void @"lerta.lambda.165.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -140913,9 +142072,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.162.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.165.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.162, ptr %r3
+  store ptr @lerta.lambda.165, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -141310,7 +142469,7 @@ coalesce.end.16:
   call void @lerta_release(ptr %r38)
   ret ptr %r36
 }
-define private i1 @lerta.lambda.163(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.166(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -141331,7 +142490,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private void @"lerta.lambda.163.drop"(ptr %closure) {
+define private void @"lerta.lambda.166.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -141427,9 +142586,9 @@ if.end.12:
   call void @lerta_retain(ptr %p1)
   %r30 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r31 = ptrtoint ptr %r30 to i64
-  %r32 = call ptr @lerta_alloc(i64 %r31, ptr @"lerta.lambda.163.drop")
+  %r32 = call ptr @lerta_alloc(i64 %r31, ptr @"lerta.lambda.166.drop")
   %r33 = getelementptr { i64, ptr, ptr }, ptr %r32, i32 0, i32 2
-  store ptr @lerta.lambda.163, ptr %r33
+  store ptr @lerta.lambda.166, ptr %r33
   %r34 = getelementptr { i64, ptr, ptr, ptr }, ptr %r32, i32 0, i32 3
   store ptr %p1, ptr %r34
   store ptr %r32, ptr %r35
@@ -141492,7 +142651,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.164(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.167(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   %r6 = alloca ptr
@@ -141617,7 +142776,7 @@ no.exception.6:
   call void @lerta_release(ptr %r56)
   ret ptr %r44
 }
-define private void @"lerta.lambda.164.drop"(ptr %closure) {
+define private void @"lerta.lambda.167.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -141893,9 +143052,9 @@ no.exception.18:
   call void @lerta_retain(ptr %r119)
   %r120 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r121 = ptrtoint ptr %r120 to i64
-  %r122 = call ptr @lerta_alloc(i64 %r121, ptr @"lerta.lambda.164.drop")
+  %r122 = call ptr @lerta_alloc(i64 %r121, ptr @"lerta.lambda.167.drop")
   %r123 = getelementptr { i64, ptr, ptr }, ptr %r122, i32 0, i32 2
-  store ptr @lerta.lambda.164, ptr %r123
+  store ptr @lerta.lambda.167, ptr %r123
   %r124 = getelementptr { i64, ptr, ptr, ptr }, ptr %r122, i32 0, i32 3
   store ptr %r119, ptr %r124
   store ptr %r122, ptr %r125
@@ -142799,7 +143958,7 @@ for.exit.3:
   call void @lerta_release(ptr %r22)
   ret void
 }
-define private void @lerta.lambda.165(ptr %closure) {
+define private void @lerta.lambda.168(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -142819,7 +143978,7 @@ no.exception.1:
   call void @lerta_release(ptr %r4)
   ret void
 }
-define private void @"lerta.lambda.165.drop"(ptr %closure) {
+define private void @"lerta.lambda.168.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -142829,7 +143988,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.166(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.169(ptr %closure, ptr %p0) {
 entry:
   %r10 = alloca i64
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -142893,7 +144052,7 @@ unwind.4:
 no.exception.5:
   ret ptr %r24
 }
-define private void @"lerta.lambda.166.drop"(ptr %closure) {
+define private void @"lerta.lambda.169.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -142937,9 +144096,9 @@ if.end.2:
   call void @lerta_retain(ptr %p1)
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r5 = ptrtoint ptr %r4 to i64
-  %r6 = call ptr @lerta_alloc(i64 %r5, ptr @"lerta.lambda.165.drop")
+  %r6 = call ptr @lerta_alloc(i64 %r5, ptr @"lerta.lambda.168.drop")
   %r7 = getelementptr { i64, ptr, ptr }, ptr %r6, i32 0, i32 2
-  store ptr @lerta.lambda.165, ptr %r7
+  store ptr @lerta.lambda.168, ptr %r7
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r6, i32 0, i32 3
   store ptr %p0, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r6, i32 0, i32 4
@@ -143012,9 +144171,9 @@ coalesce.end.14:
   call void @lerta_retain(ptr %r32)
   %r33 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r34 = ptrtoint ptr %r33 to i64
-  %r35 = call ptr @lerta_alloc(i64 %r34, ptr @"lerta.lambda.166.drop")
+  %r35 = call ptr @lerta_alloc(i64 %r34, ptr @"lerta.lambda.169.drop")
   %r36 = getelementptr { i64, ptr, ptr }, ptr %r35, i32 0, i32 2
-  store ptr @lerta.lambda.166, ptr %r36
+  store ptr @lerta.lambda.169, ptr %r36
   %r37 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r35, i32 0, i32 3
   store ptr %p0, ptr %r37
   %r38 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r35, i32 0, i32 4
@@ -145779,7 +146938,7 @@ no.exception.3:
   call void @lerta_release(ptr %r37)
   ret ptr %r27
 }
-define private void @lerta.lambda.167(ptr %closure) {
+define private void @lerta.lambda.170(ptr %closure) {
 entry:
   %r6 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -145854,7 +147013,7 @@ no.exception.7:
   call void @lerta_release(ptr %r25)
   ret void
 }
-define private void @"lerta.lambda.167.drop"(ptr %closure) {
+define private void @"lerta.lambda.170.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -145877,9 +147036,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.167.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.170.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.167, ptr %r3
+  store ptr @lerta.lambda.170, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -146008,7 +147167,7 @@ then.end.16:
   call void @lerta_release(ptr %r56)
   ret ptr %r54
 }
-define private i1 @lerta.lambda.168(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.171(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.ast.lerta.MemberDeclaration", ptr %p0, i32 0, i32 4
@@ -146439,8 +147598,8 @@ no.exception.42:
   %r172 = load ptr, ptr %r171
   call void @lerta_retain(ptr %r172)
   call void @lerta_release(ptr %r170)
-  %r173 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.MemberDeclaration>, ast.lerta.MemberDeclaration>"(ptr %r172, ptr @"lerta.closure.lerta.lambda.168")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.168")
+  %r173 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.MemberDeclaration>, ast.lerta.MemberDeclaration>"(ptr %r172, ptr @"lerta.closure.lerta.lambda.171")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.171")
   call void @lerta_release(ptr %r172)
   %r174 = load ptr, ptr @lerta_exception
   %r175 = icmp ne ptr %r174, null
@@ -147126,82 +148285,6 @@ for.exit.11:
   call void @lerta_release(ptr %r83)
   ret void
 }
-define private i1 @lerta.lambda.169(ptr %closure, ptr %p0) {
-entry:
-  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
-  %r1 = load ptr, ptr %r0
-  call void @lerta_retain(ptr %p0)
-  call void @lerta_retain(ptr %r1)
-  %r2 = call i1 @"lerta.fn.checker/interfaces.lerta.names_type"(ptr %p0, ptr %r1)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r1)
-  %r3 = load ptr, ptr @lerta_exception
-  %r4 = icmp ne ptr %r3, null
-  br i1 %r4, label %unwind.0, label %no.exception.1
-unwind.0:
-  ret i1 poison
-no.exception.1:
-  ret i1 %r2
-}
-define private void @"lerta.lambda.169.drop"(ptr %closure) {
-entry:
-  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
-  %r1 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r1)
-  ret void
-}
-define private i1 @lerta.lambda.170(ptr %closure, ptr %p0) {
-entry:
-  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
-  %r1 = load ptr, ptr %r0
-  call void @lerta_retain(ptr %p0)
-  call void @lerta_retain(ptr %r1)
-  %r2 = call i1 @"lerta.fn.checker/interfaces.lerta.names_type"(ptr %p0, ptr %r1)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_release(ptr %r1)
-  %r3 = load ptr, ptr @lerta_exception
-  %r4 = icmp ne ptr %r3, null
-  br i1 %r4, label %unwind.0, label %no.exception.1
-unwind.0:
-  ret i1 poison
-no.exception.1:
-  ret i1 %r2
-}
-define private void @"lerta.lambda.170.drop"(ptr %closure) {
-entry:
-  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
-  %r1 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r1)
-  ret void
-}
-define private i1 @lerta.lambda.171(ptr %closure, ptr %p0) {
-entry:
-  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
-  %r1 = load ptr, ptr %r0
-  call void @lerta_retain(ptr %p0)
-  %r2 = getelementptr %"lerta.object.ast.lerta.RecordTypeField", ptr %p0, i32 0, i32 3
-  %r3 = load ptr, ptr %r2
-  call void @lerta_retain(ptr %r3)
-  call void @lerta_release(ptr %p0)
-  call void @lerta_retain(ptr %r1)
-  %r4 = call i1 @"lerta.fn.checker/interfaces.lerta.names_type"(ptr %r3, ptr %r1)
-  call void @lerta_release(ptr %r3)
-  call void @lerta_release(ptr %r1)
-  %r5 = load ptr, ptr @lerta_exception
-  %r6 = icmp ne ptr %r5, null
-  br i1 %r6, label %unwind.0, label %no.exception.1
-unwind.0:
-  ret i1 poison
-no.exception.1:
-  ret i1 %r4
-}
-define private void @"lerta.lambda.171.drop"(ptr %closure) {
-entry:
-  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
-  %r1 = load ptr, ptr %r0
-  call void @lerta_release(ptr %r1)
-  ret void
-}
 define private i1 @lerta.lambda.172(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -147244,6 +148327,82 @@ no.exception.1:
   ret i1 %r2
 }
 define private void @"lerta.lambda.173.drop"(ptr %closure) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  ret void
+}
+define private i1 @lerta.lambda.174(ptr %closure, ptr %p0) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_retain(ptr %p0)
+  %r2 = getelementptr %"lerta.object.ast.lerta.RecordTypeField", ptr %p0, i32 0, i32 3
+  %r3 = load ptr, ptr %r2
+  call void @lerta_retain(ptr %r3)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_retain(ptr %r1)
+  %r4 = call i1 @"lerta.fn.checker/interfaces.lerta.names_type"(ptr %r3, ptr %r1)
+  call void @lerta_release(ptr %r3)
+  call void @lerta_release(ptr %r1)
+  %r5 = load ptr, ptr @lerta_exception
+  %r6 = icmp ne ptr %r5, null
+  br i1 %r6, label %unwind.0, label %no.exception.1
+unwind.0:
+  ret i1 poison
+no.exception.1:
+  ret i1 %r4
+}
+define private void @"lerta.lambda.174.drop"(ptr %closure) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  ret void
+}
+define private i1 @lerta.lambda.175(ptr %closure, ptr %p0) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_retain(ptr %p0)
+  call void @lerta_retain(ptr %r1)
+  %r2 = call i1 @"lerta.fn.checker/interfaces.lerta.names_type"(ptr %p0, ptr %r1)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r1)
+  %r3 = load ptr, ptr @lerta_exception
+  %r4 = icmp ne ptr %r3, null
+  br i1 %r4, label %unwind.0, label %no.exception.1
+unwind.0:
+  ret i1 poison
+no.exception.1:
+  ret i1 %r2
+}
+define private void @"lerta.lambda.175.drop"(ptr %closure) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  ret void
+}
+define private i1 @lerta.lambda.176(ptr %closure, ptr %p0) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_retain(ptr %p0)
+  call void @lerta_retain(ptr %r1)
+  %r2 = call i1 @"lerta.fn.checker/interfaces.lerta.names_type"(ptr %p0, ptr %r1)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r1)
+  %r3 = load ptr, ptr @lerta_exception
+  %r4 = icmp ne ptr %r3, null
+  br i1 %r4, label %unwind.0, label %no.exception.1
+unwind.0:
+  ret i1 poison
+no.exception.1:
+  ret i1 %r2
+}
+define private void @"lerta.lambda.176.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -147293,9 +148452,9 @@ logical.right.6:
   call void @lerta_retain(ptr %p1)
   %r15 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r16 = ptrtoint ptr %r15 to i64
-  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.lambda.169.drop")
+  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.lambda.172.drop")
   %r18 = getelementptr { i64, ptr, ptr }, ptr %r17, i32 0, i32 2
-  store ptr @lerta.lambda.169, ptr %r18
+  store ptr @lerta.lambda.172, ptr %r18
   %r19 = getelementptr { i64, ptr, ptr, ptr }, ptr %r17, i32 0, i32 3
   store ptr %p1, ptr %r19
   %r20 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.ArrayTypeName | ast.lerta.FunctionTypeName | ast.lerta.NamedType | ast.lerta.RecordTypeName | ast.lerta.TupleTypeName | ast.lerta.UnionTypeName>, ast.lerta.ArrayTypeName | ast.lerta.FunctionTypeName | ast.lerta.NamedType | ast.lerta.RecordTypeName | ast.lerta.TupleTypeName | ast.lerta.UnionTypeName>"(ptr %r14, ptr %r17)
@@ -147330,9 +148489,9 @@ case.arm.10:
   call void @lerta_retain(ptr %p1)
   %r32 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r33 = ptrtoint ptr %r32 to i64
-  %r34 = call ptr @lerta_alloc(i64 %r33, ptr @"lerta.lambda.170.drop")
+  %r34 = call ptr @lerta_alloc(i64 %r33, ptr @"lerta.lambda.173.drop")
   %r35 = getelementptr { i64, ptr, ptr }, ptr %r34, i32 0, i32 2
-  store ptr @lerta.lambda.170, ptr %r35
+  store ptr @lerta.lambda.173, ptr %r35
   %r36 = getelementptr { i64, ptr, ptr, ptr }, ptr %r34, i32 0, i32 3
   store ptr %p1, ptr %r36
   %r37 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.ArrayTypeName | ast.lerta.FunctionTypeName | ast.lerta.NamedType | ast.lerta.RecordTypeName | ast.lerta.TupleTypeName | ast.lerta.UnionTypeName>, ast.lerta.ArrayTypeName | ast.lerta.FunctionTypeName | ast.lerta.NamedType | ast.lerta.RecordTypeName | ast.lerta.TupleTypeName | ast.lerta.UnionTypeName>"(ptr %r31, ptr %r34)
@@ -147389,9 +148548,9 @@ case.arm.18:
   call void @lerta_retain(ptr %p1)
   %r57 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r58 = ptrtoint ptr %r57 to i64
-  %r59 = call ptr @lerta_alloc(i64 %r58, ptr @"lerta.lambda.171.drop")
+  %r59 = call ptr @lerta_alloc(i64 %r58, ptr @"lerta.lambda.174.drop")
   %r60 = getelementptr { i64, ptr, ptr }, ptr %r59, i32 0, i32 2
-  store ptr @lerta.lambda.171, ptr %r60
+  store ptr @lerta.lambda.174, ptr %r60
   %r61 = getelementptr { i64, ptr, ptr, ptr }, ptr %r59, i32 0, i32 3
   store ptr %p1, ptr %r61
   %r62 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.RecordTypeField>, ast.lerta.RecordTypeField>"(ptr %r56, ptr %r59)
@@ -147423,9 +148582,9 @@ case.arm.22:
   call void @lerta_retain(ptr %p1)
   %r73 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r74 = ptrtoint ptr %r73 to i64
-  %r75 = call ptr @lerta_alloc(i64 %r74, ptr @"lerta.lambda.172.drop")
+  %r75 = call ptr @lerta_alloc(i64 %r74, ptr @"lerta.lambda.175.drop")
   %r76 = getelementptr { i64, ptr, ptr }, ptr %r75, i32 0, i32 2
-  store ptr @lerta.lambda.172, ptr %r76
+  store ptr @lerta.lambda.175, ptr %r76
   %r77 = getelementptr { i64, ptr, ptr, ptr }, ptr %r75, i32 0, i32 3
   store ptr %p1, ptr %r77
   %r78 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.ArrayTypeName | ast.lerta.FunctionTypeName | ast.lerta.NamedType | ast.lerta.RecordTypeName | ast.lerta.TupleTypeName | ast.lerta.UnionTypeName>, ast.lerta.ArrayTypeName | ast.lerta.FunctionTypeName | ast.lerta.NamedType | ast.lerta.RecordTypeName | ast.lerta.TupleTypeName | ast.lerta.UnionTypeName>"(ptr %r72, ptr %r75)
@@ -147457,9 +148616,9 @@ case.arm.26:
   call void @lerta_retain(ptr %p1)
   %r89 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r90 = ptrtoint ptr %r89 to i64
-  %r91 = call ptr @lerta_alloc(i64 %r90, ptr @"lerta.lambda.173.drop")
+  %r91 = call ptr @lerta_alloc(i64 %r90, ptr @"lerta.lambda.176.drop")
   %r92 = getelementptr { i64, ptr, ptr }, ptr %r91, i32 0, i32 2
-  store ptr @lerta.lambda.173, ptr %r92
+  store ptr @lerta.lambda.176, ptr %r92
   %r93 = getelementptr { i64, ptr, ptr, ptr }, ptr %r91, i32 0, i32 3
   store ptr %p1, ptr %r93
   %r94 = call i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.ArrayTypeName | ast.lerta.NamedType | ast.lerta.RecordTypeName>, ast.lerta.ArrayTypeName | ast.lerta.NamedType | ast.lerta.RecordTypeName>"(ptr %r88, ptr %r91)
@@ -149080,7 +150239,7 @@ for.exit.23:
   call void @lerta_release(ptr %r121)
   ret ptr %r117
 }
-define private ptr @lerta.lambda.174(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.177(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -149116,7 +150275,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r9
 }
-define private void @"lerta.lambda.174.drop"(ptr %closure) {
+define private void @"lerta.lambda.177.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -149291,9 +150450,9 @@ continue.14:
   call void @lerta_retain(ptr %r72)
   %r73 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r74 = ptrtoint ptr %r73 to i64
-  %r75 = call ptr @lerta_alloc(i64 %r74, ptr @"lerta.lambda.174.drop")
+  %r75 = call ptr @lerta_alloc(i64 %r74, ptr @"lerta.lambda.177.drop")
   %r76 = getelementptr { i64, ptr, ptr }, ptr %r75, i32 0, i32 2
-  store ptr @lerta.lambda.174, ptr %r76
+  store ptr @lerta.lambda.177, ptr %r76
   %r77 = getelementptr { i64, ptr, ptr, ptr }, ptr %r75, i32 0, i32 3
   store ptr %r72, ptr %r77
   store ptr %r75, ptr %r78
@@ -149392,7 +150551,7 @@ for.exit.20:
   call void @lerta_release(ptr %r120)
   ret ptr %r79
 }
-define private i1 @lerta.lambda.175(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.178(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -149407,7 +150566,7 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r4
 }
-define private void @"lerta.lambda.175.drop"(ptr %closure) {
+define private void @"lerta.lambda.178.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -149437,9 +150596,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p2)
   %r5 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r6 = ptrtoint ptr %r5 to i64
-  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.175.drop")
+  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.178.drop")
   %r8 = getelementptr { i64, ptr, ptr }, ptr %r7, i32 0, i32 2
-  store ptr @lerta.lambda.175, ptr %r8
+  store ptr @lerta.lambda.178, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr }, ptr %r7, i32 0, i32 3
   store ptr %p2, ptr %r9
   %r10 = call { i1, i64 } @"lerta.extend.std:builtins.Array<T>.find_index<checker/interfaces.lerta.InterfaceMember>"(ptr %r4, ptr %r7)
@@ -149692,7 +150851,7 @@ entry:
   store i1 true, ptr @"lerta.value.checker/generics.lerta.MAX_TYPE_DEPTH.set"
   ret void
 }
-define private ptr @lerta.lambda.176(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.179(ptr %closure, ptr %p0) {
 entry:
   %r8 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -149733,7 +150892,7 @@ no.exception.4:
   call void @lerta_release(ptr %r14)
   ret ptr %r10
 }
-define private void @"lerta.lambda.176.drop"(ptr %closure) {
+define private void @"lerta.lambda.179.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -149900,9 +151059,9 @@ no.exception.16:
   call void @lerta_retain(ptr %r54)
   %r55 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r56 = ptrtoint ptr %r55 to i64
-  %r57 = call ptr @lerta_alloc(i64 %r56, ptr @"lerta.lambda.176.drop")
+  %r57 = call ptr @lerta_alloc(i64 %r56, ptr @"lerta.lambda.179.drop")
   %r58 = getelementptr { i64, ptr, ptr }, ptr %r57, i32 0, i32 2
-  store ptr @lerta.lambda.176, ptr %r58
+  store ptr @lerta.lambda.179, ptr %r58
   %r59 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r57, i32 0, i32 3
   store ptr %r53, ptr %r59
   %r60 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r57, i32 0, i32 4
@@ -150353,7 +151512,7 @@ unwind.6:
 no.exception.7:
   ret ptr %r21
 }
-define private i1 @lerta.lambda.177(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.180(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -150374,14 +151533,14 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private void @"lerta.lambda.177.drop"(ptr %closure) {
+define private void @"lerta.lambda.180.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @lerta.lambda.178(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.181(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = call i64 @"lerta.fn.checker/type_patterns.lerta.type_depth"(ptr %p0)
@@ -150523,9 +151682,9 @@ for.exit.7:
   call void @lerta_retain(ptr %p3)
   %r47 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r48 = ptrtoint ptr %r47 to i64
-  %r49 = call ptr @lerta_alloc(i64 %r48, ptr @"lerta.lambda.177.drop")
+  %r49 = call ptr @lerta_alloc(i64 %r48, ptr @"lerta.lambda.180.drop")
   %r50 = getelementptr { i64, ptr, ptr }, ptr %r49, i32 0, i32 2
-  store ptr @lerta.lambda.177, ptr %r50
+  store ptr @lerta.lambda.180, ptr %r50
   %r51 = getelementptr { i64, ptr, ptr, ptr }, ptr %r49, i32 0, i32 3
   store ptr %p3, ptr %r51
   %r52 = call ptr @"lerta.extend.std:builtins.Self.find<Array<checker/generics.lerta.Instance>, checker/generics.lerta.Instance>"(ptr %r46, ptr %r49)
@@ -150552,8 +151711,8 @@ no.exception.15:
   br i1 %r61, label %logical.right.16, label %logical.end.17
 logical.right.16:
   call void @lerta_retain(ptr %p2)
-  %r62 = call i1 @"lerta.extend.std:builtins.Self.any<Array<types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>, types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>"(ptr %p2, ptr @"lerta.closure.lerta.lambda.178")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.178")
+  %r62 = call i1 @"lerta.extend.std:builtins.Self.any<Array<types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>, types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>"(ptr %p2, ptr @"lerta.closure.lerta.lambda.181")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.181")
   call void @lerta_release(ptr %p2)
   %r63 = load ptr, ptr @lerta_exception
   %r64 = icmp ne ptr %r63, null
@@ -151538,7 +152697,7 @@ no.exception.26:
   call void @lerta_release(ptr %r148)
   ret ptr %r140
 }
-define private i1 @lerta.lambda.179(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.182(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.checker/generics.lerta.Instance", ptr %p0, i32 0, i32 2
@@ -151559,7 +152718,7 @@ entry:
   %r34 = alloca ptr
   %r36 = alloca ptr
   %r47 = alloca ptr
-  store ptr @"lerta.closure.lerta.lambda.179", ptr %r0
+  store ptr @"lerta.closure.lerta.lambda.182", ptr %r0
   %r1 = call ptr @lerta_array_create(i32 1)
   call void @lerta_retain(ptr %p1)
   %r2 = getelementptr %"lerta.object.checker/generics.lerta.GenericFunction", ptr %p1, i32 0, i32 10
@@ -151696,7 +152855,7 @@ for.exit.13:
   call void @lerta_release(ptr %r61)
   ret i1 %r59
 }
-define private void @lerta.lambda.180(ptr %closure) {
+define private void @lerta.lambda.183(ptr %closure) {
 entry:
   %r28 = alloca i64
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -151784,7 +152943,7 @@ no.exception.9:
   call void @lerta_release(ptr %r30)
   ret void
 }
-define private void @"lerta.lambda.180.drop"(ptr %closure) {
+define private void @"lerta.lambda.183.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -151813,9 +152972,9 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r3 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r4 = ptrtoint ptr %r3 to i64
-  %r5 = call ptr @lerta_alloc(i64 %r4, ptr @"lerta.lambda.180.drop")
+  %r5 = call ptr @lerta_alloc(i64 %r4, ptr @"lerta.lambda.183.drop")
   %r6 = getelementptr { i64, ptr, ptr }, ptr %r5, i32 0, i32 2
-  store ptr @lerta.lambda.180, ptr %r6
+  store ptr @lerta.lambda.183, ptr %r6
   %r7 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r5, i32 0, i32 3
   store ptr %p0, ptr %r7
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r5, i32 0, i32 4
@@ -152304,7 +153463,7 @@ no.exception.41:
   call void @lerta_release(ptr %r146)
   ret ptr %r141
 }
-define private i1 @lerta.lambda.181(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.184(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -152321,7 +153480,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r2
 }
-define private void @"lerta.lambda.181.drop"(ptr %closure) {
+define private void @"lerta.lambda.184.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -152343,9 +153502,9 @@ logical.right.0:
   call void @lerta_retain(ptr %p1)
   %r3 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r4 = ptrtoint ptr %r3 to i64
-  %r5 = call ptr @lerta_alloc(i64 %r4, ptr @"lerta.lambda.181.drop")
+  %r5 = call ptr @lerta_alloc(i64 %r4, ptr @"lerta.lambda.184.drop")
   %r6 = getelementptr { i64, ptr, ptr }, ptr %r5, i32 0, i32 2
-  store ptr @lerta.lambda.181, ptr %r6
+  store ptr @lerta.lambda.184, ptr %r6
   %r7 = getelementptr { i64, ptr, ptr, ptr }, ptr %r5, i32 0, i32 3
   store ptr %p1, ptr %r7
   %r8 = call i1 @"lerta.extend.std:builtins.Self.all<Array<checker/extensions.lerta.ExtensionMethod>, checker/extensions.lerta.ExtensionMethod>"(ptr %p0, ptr %r5)
@@ -154174,7 +155333,7 @@ case.end.0:
   call void @lerta_release(ptr %r20)
   ret ptr %r19
 }
-define private i1 @lerta.lambda.182(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.185(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.ast.lerta.Parameter", ptr %p0, i32 0, i32 4
@@ -154192,8 +155351,8 @@ entry:
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %p0)
-  %r2 = call { i1, i64 } @"lerta.extend.std:builtins.Array<T>.find_index<ast.lerta.Parameter>"(ptr %r1, ptr @"lerta.closure.lerta.lambda.182")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.182")
+  %r2 = call { i1, i64 } @"lerta.extend.std:builtins.Array<T>.find_index<ast.lerta.Parameter>"(ptr %r1, ptr @"lerta.closure.lerta.lambda.185")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.185")
   call void @lerta_release(ptr %r1)
   %r3 = load ptr, ptr @lerta_exception
   %r4 = icmp ne ptr %r3, null
@@ -154327,7 +155486,7 @@ unwind.4:
 no.exception.5:
   ret void
 }
-define private i1 @lerta.lambda.183(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.186(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.ast.lerta.Parameter", ptr %p0, i32 0, i32 4
@@ -154347,8 +155506,8 @@ entry:
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %p1)
-  %r2 = call ptr @"lerta.extend.std:builtins.Self.find<Array<ast.lerta.Parameter>, ast.lerta.Parameter>"(ptr %r1, ptr @"lerta.closure.lerta.lambda.183")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.183")
+  %r2 = call ptr @"lerta.extend.std:builtins.Self.find<Array<ast.lerta.Parameter>, ast.lerta.Parameter>"(ptr %r1, ptr @"lerta.closure.lerta.lambda.186")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.186")
   call void @lerta_release(ptr %r1)
   %r3 = load ptr, ptr @lerta_exception
   %r4 = icmp ne ptr %r3, null
@@ -155176,7 +156335,7 @@ unwind.5:
 no.exception.6:
   ret ptr %r19
 }
-define private ptr @lerta.lambda.184(ptr %closure) {
+define private ptr @lerta.lambda.187(ptr %closure) {
 entry:
   %r0 = call ptr @lerta_array_create(i32 1)
   ret ptr %r0
@@ -155267,9 +156426,9 @@ if.then.11:
   call void @lerta_release(ptr %p0)
   %r34 = load ptr, ptr %r31
   call void @lerta_retain(ptr %r34)
-  %r35 = call ptr @"lerta.extend.std:builtins.Map<K, V>.get_or_put<ast.lerta.FunctionLiteral, Array<ast.lerta.FunctionLiteral>>"(ptr %r33, ptr %r34, ptr @"lerta.closure.lerta.lambda.184")
+  %r35 = call ptr @"lerta.extend.std:builtins.Map<K, V>.get_or_put<ast.lerta.FunctionLiteral, Array<ast.lerta.FunctionLiteral>>"(ptr %r33, ptr %r34, ptr @"lerta.closure.lerta.lambda.187")
   call void @lerta_release(ptr %r34)
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.184")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.187")
   call void @lerta_release(ptr %r33)
   %r36 = load ptr, ptr @lerta_exception
   %r37 = icmp ne ptr %r36, null
@@ -155554,7 +156713,7 @@ iter.exit.6:
   call void @lerta_release(ptr %r41)
   ret void
 }
-define private void @lerta.lambda.185(ptr %closure) {
+define private void @lerta.lambda.188(ptr %closure) {
 entry:
   %r21 = alloca i64
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %closure, i32 0, i32 3
@@ -155617,7 +156776,7 @@ no.exception.5:
   call void @lerta_release(ptr %r23)
   ret void
 }
-define private void @"lerta.lambda.185.drop"(ptr %closure) {
+define private void @"lerta.lambda.188.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -155651,9 +156810,9 @@ if.end.2:
   call void @lerta_retain(ptr %p2)
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr null, i32 1
   %r5 = ptrtoint ptr %r4 to i64
-  %r6 = call ptr @lerta_alloc(i64 %r5, ptr @"lerta.lambda.185.drop")
+  %r6 = call ptr @lerta_alloc(i64 %r5, ptr @"lerta.lambda.188.drop")
   %r7 = getelementptr { i64, ptr, ptr }, ptr %r6, i32 0, i32 2
-  store ptr @lerta.lambda.185, ptr %r7
+  store ptr @lerta.lambda.188, ptr %r7
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %r6, i32 0, i32 3
   store ptr %p0, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr, i64 }, ptr %r6, i32 0, i32 4
@@ -157114,7 +158273,7 @@ entry:
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private i1 @lerta.lambda.186(ptr %closure) {
+define private i1 @lerta.lambda.189(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -157137,7 +158296,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r6
 }
-define private void @"lerta.lambda.186.drop"(ptr %closure) {
+define private void @"lerta.lambda.189.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -157346,9 +158505,9 @@ branch.end.24:
   call void @lerta_retain(ptr %r91)
   %r92 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r93 = ptrtoint ptr %r92 to i64
-  %r94 = call ptr @lerta_alloc(i64 %r93, ptr @"lerta.lambda.186.drop")
+  %r94 = call ptr @lerta_alloc(i64 %r93, ptr @"lerta.lambda.189.drop")
   %r95 = getelementptr { i64, ptr, ptr }, ptr %r94, i32 0, i32 2
-  store ptr @lerta.lambda.186, ptr %r95
+  store ptr @lerta.lambda.189, ptr %r95
   %r96 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r94, i32 0, i32 3
   store ptr %r90, ptr %r96
   %r97 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r94, i32 0, i32 4
@@ -157699,7 +158858,7 @@ if.end.20:
   call void @lerta_release(ptr %r74)
   ret void
 }
-define private i1 @lerta.lambda.187(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.190(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -157753,7 +158912,7 @@ logical.end.3:
   %r19 = phi i1 [ false, %logical.end.1 ], [ %r16, %no.exception.5 ]
   ret i1 %r19
 }
-define private void @"lerta.lambda.187.drop"(ptr %closure) {
+define private void @"lerta.lambda.190.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -157770,9 +158929,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.187.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.190.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.187, ptr %r3
+  store ptr @lerta.lambda.190, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p2, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -157800,7 +158959,7 @@ no.exception.1:
   call void @lerta_release(ptr %r14)
   ret ptr %r10
 }
-define private i1 @lerta.lambda.188(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.191(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -157883,7 +159042,7 @@ logical.end.7:
   %r30 = phi i1 [ true, %if.end.4 ], [ %r27, %no.exception.9 ]
   ret i1 %r30
 }
-define private void @"lerta.lambda.188.drop"(ptr %closure) {
+define private void @"lerta.lambda.191.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -157912,9 +159071,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r6 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r7 = ptrtoint ptr %r6 to i64
-  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.188.drop")
+  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.191.drop")
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
-  store ptr @lerta.lambda.188, ptr %r9
+  store ptr @lerta.lambda.191, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r8, i32 0, i32 3
   store ptr %r5, ptr %r10
   %r11 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r8, i32 0, i32 4
@@ -161147,7 +162306,7 @@ iter.exit.22:
   call void @lerta_release(ptr %r103)
   ret void
 }
-define private i64 @lerta.lambda.189(ptr %closure, ptr %p0, ptr %p1) {
+define private i64 @lerta.lambda.192(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.checker/shared.lerta.Diagnostic", ptr %p0, i32 0, i32 3
@@ -161437,7 +162596,7 @@ for.latch.2:
 for.exit.3:
   %r89 = load ptr, ptr %r4
   call void @lerta_release(ptr %r89)
-  store ptr @"lerta.closure.lerta.lambda.189", ptr %r90
+  store ptr @"lerta.closure.lerta.lambda.192", ptr %r90
   %r91 = load ptr, ptr %r3
   call void @lerta_retain(ptr %r91)
   %r92 = load ptr, ptr %r90
@@ -161541,7 +162700,7 @@ entry:
   store i1 true, ptr @"lerta.value.checker/extend_declarations.lerta.EXTENDABLE_KINDS.set"
   ret void
 }
-define private i1 @lerta.lambda.190(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.193(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -161562,7 +162721,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private void @"lerta.lambda.190.drop"(ptr %closure) {
+define private void @"lerta.lambda.193.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -162099,9 +163258,9 @@ no.exception.51:
   call void @lerta_retain(ptr %r215)
   %r216 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r217 = ptrtoint ptr %r216 to i64
-  %r218 = call ptr @lerta_alloc(i64 %r217, ptr @"lerta.lambda.190.drop")
+  %r218 = call ptr @lerta_alloc(i64 %r217, ptr @"lerta.lambda.193.drop")
   %r219 = getelementptr { i64, ptr, ptr }, ptr %r218, i32 0, i32 2
-  store ptr @lerta.lambda.190, ptr %r219
+  store ptr @lerta.lambda.193, ptr %r219
   %r220 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r218, i32 0, i32 3
   store ptr %r214, ptr %r220
   %r221 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r218, i32 0, i32 4
@@ -162182,7 +163341,7 @@ no.exception.55:
   call void @lerta_release(ptr %r251)
   ret void
 }
-define private i1 @lerta.lambda.192(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.195(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -162197,14 +163356,14 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r4
 }
-define private void @"lerta.lambda.192.drop"(ptr %closure) {
+define private void @"lerta.lambda.195.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @lerta.lambda.191(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.194(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -162212,9 +163371,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r2 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r3 = ptrtoint ptr %r2 to i64
-  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.192.drop")
+  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.195.drop")
   %r5 = getelementptr { i64, ptr, ptr }, ptr %r4, i32 0, i32 2
-  store ptr @lerta.lambda.192, ptr %r5
+  store ptr @lerta.lambda.195, ptr %r5
   %r6 = getelementptr { i64, ptr, ptr, ptr }, ptr %r4, i32 0, i32 3
   store ptr %p0, ptr %r6
   %r7 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/interfaces.lerta.InterfaceMember>, checker/interfaces.lerta.InterfaceMember>"(ptr %r1, ptr %r4)
@@ -162228,7 +163387,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r7
 }
-define private void @"lerta.lambda.191.drop"(ptr %closure) {
+define private void @"lerta.lambda.194.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -162487,9 +163646,9 @@ no.exception.25:
   call void @lerta_retain(ptr %r101)
   %r102 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r103 = ptrtoint ptr %r102 to i64
-  %r104 = call ptr @lerta_alloc(i64 %r103, ptr @"lerta.lambda.191.drop")
+  %r104 = call ptr @lerta_alloc(i64 %r103, ptr @"lerta.lambda.194.drop")
   %r105 = getelementptr { i64, ptr, ptr }, ptr %r104, i32 0, i32 2
-  store ptr @lerta.lambda.191, ptr %r105
+  store ptr @lerta.lambda.194, ptr %r105
   %r106 = getelementptr { i64, ptr, ptr, ptr }, ptr %r104, i32 0, i32 3
   store ptr %r101, ptr %r106
   store ptr %r104, ptr %r107
@@ -163117,7 +164276,7 @@ for.exit.5:
   call void @lerta_release(ptr %r228)
   ret void
 }
-define private ptr @lerta.lambda.193(ptr %closure) {
+define private ptr @lerta.lambda.196(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -163155,7 +164314,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r11
 }
-define private void @"lerta.lambda.193.drop"(ptr %closure) {
+define private void @"lerta.lambda.196.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -163264,9 +164423,9 @@ logical.end.10:
   call void @lerta_retain(ptr %p1)
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r32 = ptrtoint ptr %r31 to i64
-  %r33 = call ptr @lerta_alloc(i64 %r32, ptr @"lerta.lambda.193.drop")
+  %r33 = call ptr @lerta_alloc(i64 %r32, ptr @"lerta.lambda.196.drop")
   %r34 = getelementptr { i64, ptr, ptr }, ptr %r33, i32 0, i32 2
-  store ptr @lerta.lambda.193, ptr %r34
+  store ptr @lerta.lambda.196, ptr %r34
   %r35 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r33, i32 0, i32 3
   store ptr %p0, ptr %r35
   %r36 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r33, i32 0, i32 4
@@ -163695,7 +164854,7 @@ for.exit.10:
   call void @lerta_release(ptr %r28)
   ret void
 }
-define private i1 @lerta.lambda.194(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.197(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -163714,7 +164873,7 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r6
 }
-define private void @"lerta.lambda.194.drop"(ptr %closure) {
+define private void @"lerta.lambda.197.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -163772,9 +164931,9 @@ logical.right.7:
   call void @lerta_retain(ptr %p2)
   %r17 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.194.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.197.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.194, ptr %r20
+  store ptr @lerta.lambda.197, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %p2, ptr %r21
   %r22 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/object_types.lerta.FieldInfo>, checker/object_types.lerta.FieldInfo>"(ptr %r16, ptr %r19)
@@ -167741,7 +168900,7 @@ no.exception.12:
 if.end.2:
   ret void
 }
-define private void @lerta.lambda.195(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.198(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -167770,7 +168929,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.195.drop"(ptr %closure) {
+define private void @"lerta.lambda.198.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -167814,9 +168973,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.195.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.198.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.195, ptr %r3
+  store ptr @lerta.lambda.198, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   store ptr %r2, ptr %r5
@@ -169961,7 +171120,7 @@ no.exception.3:
   call void @lerta_release(ptr %r9)
   ret ptr %r8
 }
-define private void @lerta.lambda.196(ptr %closure) {
+define private void @lerta.lambda.199(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -169976,7 +171135,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.196.drop"(ptr %closure) {
+define private void @"lerta.lambda.199.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -169989,9 +171148,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.196.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.199.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.196, ptr %r3
+  store ptr @lerta.lambda.199, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = call i1 @"lerta.fn.checker/diagnostics.lerta.check_part"(ptr %p0, ptr %r2)
@@ -170034,7 +171193,7 @@ define private void @"lerta.thunk.lerta.fn.checker/modules.lerta.check_bodies"(p
   call void @"lerta.fn.checker/modules.lerta.check_bodies"(ptr %p0)
   ret void
 }
-define private i1 @lerta.lambda.197(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.200(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca i1
   %r5 = alloca ptr
@@ -170116,7 +171275,7 @@ logical.end.13:
   %r31 = phi i1 [ true, %no.exception.11 ], [ %r30, %logical.right.12 ]
   ret i1 %r31
 }
-define private void @"lerta.lambda.197.drop"(ptr %closure) {
+define private void @"lerta.lambda.200.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -170512,9 +171671,9 @@ if.end.42:
   call void @lerta_retain(ptr %p0)
   %r151 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r152 = ptrtoint ptr %r151 to i64
-  %r153 = call ptr @lerta_alloc(i64 %r152, ptr @"lerta.lambda.197.drop")
+  %r153 = call ptr @lerta_alloc(i64 %r152, ptr @"lerta.lambda.200.drop")
   %r154 = getelementptr { i64, ptr, ptr }, ptr %r153, i32 0, i32 2
-  store ptr @lerta.lambda.197, ptr %r154
+  store ptr @lerta.lambda.200, ptr %r154
   %r155 = getelementptr { i64, ptr, ptr, ptr }, ptr %r153, i32 0, i32 3
   store ptr %p0, ptr %r155
   store ptr %r153, ptr %r156
@@ -171931,7 +173090,7 @@ no.exception.21:
   call void @lerta_release(ptr %r59)
   ret void
 }
-define private void @lerta.lambda.198(ptr %closure) {
+define private void @lerta.lambda.201(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -171967,7 +173126,7 @@ no.exception.1:
   call void @lerta_release(ptr %r18)
   ret void
 }
-define private void @"lerta.lambda.198.drop"(ptr %closure) {
+define private void @"lerta.lambda.201.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -172011,9 +173170,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r14 = ptrtoint ptr %r13 to i64
-  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.198.drop")
+  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.201.drop")
   %r16 = getelementptr { i64, ptr, ptr }, ptr %r15, i32 0, i32 2
-  store ptr @lerta.lambda.198, ptr %r16
+  store ptr @lerta.lambda.201, ptr %r16
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 3
   store ptr %r5, ptr %r17
   %r18 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 4
@@ -172928,7 +174087,7 @@ no.exception.3:
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @lerta.lambda.199(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.202(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -172945,7 +174104,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r2
 }
-define private void @"lerta.lambda.199.drop"(ptr %closure) {
+define private void @"lerta.lambda.202.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -173099,9 +174258,9 @@ continue.18:
   call void @lerta_retain(ptr %p0)
   %r56 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r57 = ptrtoint ptr %r56 to i64
-  %r58 = call ptr @lerta_alloc(i64 %r57, ptr @"lerta.lambda.199.drop")
+  %r58 = call ptr @lerta_alloc(i64 %r57, ptr @"lerta.lambda.202.drop")
   %r59 = getelementptr { i64, ptr, ptr }, ptr %r58, i32 0, i32 2
-  store ptr @lerta.lambda.199, ptr %r59
+  store ptr @lerta.lambda.202, ptr %r59
   %r60 = getelementptr { i64, ptr, ptr, ptr }, ptr %r58, i32 0, i32 3
   store ptr %p0, ptr %r60
   %r61 = call i1 @"lerta.extend.std:builtins.Self.any<Array<String>, String>"(ptr %r55, ptr %r58)
@@ -178485,7 +179644,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r4
 }
-define private ptr @lerta.lambda.200(ptr %closure) {
+define private ptr @lerta.lambda.203(ptr %closure) {
 entry:
   %r14 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -178547,7 +179706,7 @@ no.exception.5:
   call void @lerta_release(ptr %r20)
   ret ptr %r19
 }
-define private void @"lerta.lambda.200.drop"(ptr %closure) {
+define private void @"lerta.lambda.203.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -178588,9 +179747,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p3)
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r6 = ptrtoint ptr %r5 to i64
-  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.200.drop")
+  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.203.drop")
   %r8 = getelementptr { i64, ptr, ptr }, ptr %r7, i32 0, i32 2
-  store ptr @lerta.lambda.200, ptr %r8
+  store ptr @lerta.lambda.203, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 3
   store ptr %p0, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 4
@@ -178657,7 +179816,7 @@ no.exception.7:
   call void @lerta_release(ptr %r32)
   ret ptr %r26
 }
-define private void @lerta.lambda.201(ptr %closure) {
+define private void @lerta.lambda.204(ptr %closure) {
 entry:
   %r13 = alloca ptr
   %r22 = alloca ptr
@@ -178763,7 +179922,7 @@ no.exception.9:
   call void @lerta_release(ptr %r34)
   ret void
 }
-define private void @"lerta.lambda.201.drop"(ptr %closure) {
+define private void @"lerta.lambda.204.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -178808,9 +179967,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p3)
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r6 = ptrtoint ptr %r5 to i64
-  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.201.drop")
+  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.204.drop")
   %r8 = getelementptr { i64, ptr, ptr }, ptr %r7, i32 0, i32 2
-  store ptr @lerta.lambda.201, ptr %r8
+  store ptr @lerta.lambda.204, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 3
   store ptr %p0, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 4
@@ -180093,7 +181252,7 @@ no.exception.13:
   call void @lerta_release(ptr %r37)
   ret ptr %r31
 }
-define private i1 @lerta.lambda.202(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.205(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -180112,7 +181271,7 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r6
 }
-define private void @"lerta.lambda.202.drop"(ptr %closure) {
+define private void @"lerta.lambda.205.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -180130,9 +181289,9 @@ entry:
   call void @lerta_retain(ptr %p3)
   %r2 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r3 = ptrtoint ptr %r2 to i64
-  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.202.drop")
+  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.205.drop")
   %r5 = getelementptr { i64, ptr, ptr }, ptr %r4, i32 0, i32 2
-  store ptr @lerta.lambda.202, ptr %r5
+  store ptr @lerta.lambda.205, ptr %r5
   %r6 = getelementptr { i64, ptr, ptr, ptr }, ptr %r4, i32 0, i32 3
   store ptr %p3, ptr %r6
   %r7 = call { i1, i64 } @"lerta.extend.std:builtins.Array<T>.find_index<checker/object_types.lerta.FieldInfo>"(ptr %r1, ptr %r4)
@@ -180673,7 +181832,7 @@ no.exception.7:
   call void @lerta_release(ptr %r18)
   ret ptr %r14
 }
-define private ptr @lerta.lambda.203(ptr %closure) {
+define private ptr @lerta.lambda.206(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -180696,7 +181855,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.203.drop"(ptr %closure) {
+define private void @"lerta.lambda.206.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -180816,9 +181975,9 @@ no.exception.15:
   call void @lerta_retain(ptr %r32)
   %r33 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r34 = ptrtoint ptr %r33 to i64
-  %r35 = call ptr @lerta_alloc(i64 %r34, ptr @"lerta.lambda.203.drop")
+  %r35 = call ptr @lerta_alloc(i64 %r34, ptr @"lerta.lambda.206.drop")
   %r36 = getelementptr { i64, ptr, ptr }, ptr %r35, i32 0, i32 2
-  store ptr @lerta.lambda.203, ptr %r36
+  store ptr @lerta.lambda.206, ptr %r36
   %r37 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r35, i32 0, i32 3
   store ptr %p0, ptr %r37
   %r38 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r35, i32 0, i32 4
@@ -181928,7 +183087,7 @@ case.end.0:
   call void @lerta_release(ptr %r38)
   ret ptr %r37
 }
-define private void @lerta.lambda.204(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.207(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -181961,7 +183120,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.204.drop"(ptr %closure) {
+define private void @"lerta.lambda.207.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -182047,9 +183206,9 @@ for.exit.5:
   call void @lerta_retain(ptr %r30)
   %r31 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r32 = ptrtoint ptr %r31 to i64
-  %r33 = call ptr @lerta_alloc(i64 %r32, ptr @"lerta.lambda.204.drop")
+  %r33 = call ptr @lerta_alloc(i64 %r32, ptr @"lerta.lambda.207.drop")
   %r34 = getelementptr { i64, ptr, ptr }, ptr %r33, i32 0, i32 2
-  store ptr @lerta.lambda.204, ptr %r34
+  store ptr @lerta.lambda.207, ptr %r34
   %r35 = getelementptr { i64, ptr, ptr, ptr }, ptr %r33, i32 0, i32 3
   store ptr %r30, ptr %r35
   store ptr %r33, ptr %r36
@@ -182716,7 +183875,7 @@ no.exception.17:
   call void @lerta_release(ptr %r51)
   ret ptr %r48
 }
-define private i1 @lerta.lambda.205(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.208(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -182731,7 +183890,7 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r4
 }
-define private void @"lerta.lambda.205.drop"(ptr %closure) {
+define private void @"lerta.lambda.208.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -182759,9 +183918,9 @@ continue.1:
   call void @lerta_retain(ptr %p3)
   %r6 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r7 = ptrtoint ptr %r6 to i64
-  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.205.drop")
+  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.208.drop")
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
-  store ptr @lerta.lambda.205, ptr %r9
+  store ptr @lerta.lambda.208, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr }, ptr %r8, i32 0, i32 3
   store ptr %p3, ptr %r10
   %r11 = call { i1, i64 } @"lerta.extend.std:builtins.Array<T>.find_index<types.lerta.RecordField>"(ptr %r5, ptr %r8)
@@ -182798,7 +183957,7 @@ unwind.6:
 no.exception.7:
   ret ptr %r19
 }
-define private void @lerta.lambda.206(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.209(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -182853,7 +184012,7 @@ unwind.4:
 no.exception.5:
   ret void
 }
-define private void @"lerta.lambda.206.drop"(ptr %closure) {
+define private void @"lerta.lambda.209.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -182867,9 +184026,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.206.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.209.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.206, ptr %r3
+  store ptr @lerta.lambda.209, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p1, ptr %r4
   store ptr %r2, ptr %r5
@@ -183378,7 +184537,7 @@ for.exit.13:
   call void @lerta_release(ptr %r45)
   ret ptr %r0
 }
-define private void @lerta.lambda.207(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.210(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r11 = alloca ptr
   %r17 = alloca ptr
@@ -183706,7 +184865,7 @@ no.exception.31:
   call void @lerta_release(ptr %r121)
   ret void
 }
-define private void @"lerta.lambda.207.drop"(ptr %closure) {
+define private void @"lerta.lambda.210.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -183731,9 +184890,9 @@ entry:
   call void @lerta_retain(ptr %p3)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.207.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.210.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.207, ptr %r3
+  store ptr @lerta.lambda.210, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p2, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -187607,7 +188766,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r4
 }
-define private void @lerta.lambda.208(ptr %closure) {
+define private void @lerta.lambda.211(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -187667,7 +188826,7 @@ unwind.6:
 no.exception.7:
   ret void
 }
-define private void @"lerta.lambda.208.drop"(ptr %closure) {
+define private void @"lerta.lambda.211.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -187680,9 +188839,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.208.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.211.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.208, ptr %r3
+  store ptr @lerta.lambda.211, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   store ptr %r2, ptr %r5
@@ -187704,7 +188863,7 @@ no.exception.1:
   call void @lerta_release(ptr %r10)
   ret void
 }
-define private void @lerta.lambda.209(ptr %closure) {
+define private void @lerta.lambda.212(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -187724,7 +188883,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.209.drop"(ptr %closure) {
+define private void @"lerta.lambda.212.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -187737,9 +188896,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.209.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.212.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.209, ptr %r3
+  store ptr @lerta.lambda.212, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   call void @"lerta.fn.codegen/coroutine.lerta.emit_suspension"(ptr %p0, ptr %r2)
@@ -188089,7 +189248,7 @@ define void @"lerta.module.codegen/awaiting.lerta"() {
 entry:
   ret void
 }
-define private void @lerta.lambda.210(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.213(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -188110,7 +189269,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.210.drop"(ptr %closure) {
+define private void @"lerta.lambda.213.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -188120,7 +189279,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.211(ptr %closure) {
+define private void @lerta.lambda.214(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -188140,7 +189299,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.211.drop"(ptr %closure) {
+define private void @"lerta.lambda.214.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -188150,7 +189309,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.212(ptr %closure) {
+define private void @lerta.lambda.215(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -188215,7 +189374,7 @@ unwind.6:
 no.exception.7:
   ret void
 }
-define private void @"lerta.lambda.212.drop"(ptr %closure) {
+define private void @"lerta.lambda.215.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -188258,9 +189417,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p4)
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r10 = ptrtoint ptr %r9 to i64
-  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.210.drop")
+  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.213.drop")
   %r12 = getelementptr { i64, ptr, ptr }, ptr %r11, i32 0, i32 2
-  store ptr @lerta.lambda.210, ptr %r12
+  store ptr @lerta.lambda.213, ptr %r12
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r11, i32 0, i32 3
   store ptr %r8, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r11, i32 0, i32 4
@@ -188278,9 +189437,9 @@ no.exception.1:
   call void @lerta_retain(ptr %r19)
   %r20 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r21 = ptrtoint ptr %r20 to i64
-  %r22 = call ptr @lerta_alloc(i64 %r21, ptr @"lerta.lambda.211.drop")
+  %r22 = call ptr @lerta_alloc(i64 %r21, ptr @"lerta.lambda.214.drop")
   %r23 = getelementptr { i64, ptr, ptr }, ptr %r22, i32 0, i32 2
-  store ptr @lerta.lambda.211, ptr %r23
+  store ptr @lerta.lambda.214, ptr %r23
   %r24 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r22, i32 0, i32 3
   store ptr %r18, ptr %r24
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r22, i32 0, i32 4
@@ -188292,9 +189451,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p0)
   %r27 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r28 = ptrtoint ptr %r27 to i64
-  %r29 = call ptr @lerta_alloc(i64 %r28, ptr @"lerta.lambda.212.drop")
+  %r29 = call ptr @lerta_alloc(i64 %r28, ptr @"lerta.lambda.215.drop")
   %r30 = getelementptr { i64, ptr, ptr }, ptr %r29, i32 0, i32 2
-  store ptr @lerta.lambda.212, ptr %r30
+  store ptr @lerta.lambda.215, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr }, ptr %r29, i32 0, i32 3
   store ptr %p0, ptr %r31
   store ptr %r29, ptr %r32
@@ -189085,7 +190244,7 @@ no.exception.9:
   call void @lerta_release(ptr %r31)
   ret ptr %r25
 }
-define private ptr @lerta.lambda.213(ptr %closure) {
+define private ptr @lerta.lambda.216(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -189108,7 +190267,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.213.drop"(ptr %closure) {
+define private void @"lerta.lambda.216.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -189141,9 +190300,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p2)
   %r3 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r4 = ptrtoint ptr %r3 to i64
-  %r5 = call ptr @lerta_alloc(i64 %r4, ptr @"lerta.lambda.213.drop")
+  %r5 = call ptr @lerta_alloc(i64 %r4, ptr @"lerta.lambda.216.drop")
   %r6 = getelementptr { i64, ptr, ptr }, ptr %r5, i32 0, i32 2
-  store ptr @lerta.lambda.213, ptr %r6
+  store ptr @lerta.lambda.216, ptr %r6
   %r7 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r5, i32 0, i32 3
   store ptr %p0, ptr %r7
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r5, i32 0, i32 4
@@ -189831,7 +190990,7 @@ no.exception.55:
   call void @lerta_release(ptr %r259)
   ret ptr %r251
 }
-define private void @lerta.lambda.214(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.217(ptr %closure, ptr %p0) {
 entry:
   %r13 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -189903,7 +191062,7 @@ no.exception.5:
   call void @lerta_release(ptr %r26)
   ret void
 }
-define private void @"lerta.lambda.214.drop"(ptr %closure) {
+define private void @"lerta.lambda.217.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -189919,9 +191078,9 @@ entry:
   call void @lerta_retain(ptr %r1)
   %r2 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r3 = ptrtoint ptr %r2 to i64
-  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.214.drop")
+  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.217.drop")
   %r5 = getelementptr { i64, ptr, ptr }, ptr %r4, i32 0, i32 2
-  store ptr @lerta.lambda.214, ptr %r5
+  store ptr @lerta.lambda.217, ptr %r5
   %r6 = getelementptr { i64, ptr, ptr, ptr }, ptr %r4, i32 0, i32 3
   store ptr %r1, ptr %r6
   store ptr %r4, ptr %r7
@@ -190020,7 +191179,7 @@ raise.0:
 continue.1:
   ret ptr %p0
 }
-define private void @lerta.lambda.215(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.218(ptr %closure, ptr %p0) {
 entry:
   %r9 = alloca ptr
   %r20 = alloca ptr
@@ -190547,7 +191706,7 @@ no.exception.52:
   call void @lerta_release(ptr %r214)
   ret void
 }
-define private void @"lerta.lambda.215.drop"(ptr %closure) {
+define private void @"lerta.lambda.218.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -190620,9 +191779,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r21)
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r23 = ptrtoint ptr %r22 to i64
-  %r24 = call ptr @lerta_alloc(i64 %r23, ptr @"lerta.lambda.215.drop")
+  %r24 = call ptr @lerta_alloc(i64 %r23, ptr @"lerta.lambda.218.drop")
   %r25 = getelementptr { i64, ptr, ptr }, ptr %r24, i32 0, i32 2
-  store ptr @lerta.lambda.215, ptr %r25
+  store ptr @lerta.lambda.218, ptr %r25
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r24, i32 0, i32 3
   store ptr %r19, ptr %r26
   %r27 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r24, i32 0, i32 4
@@ -190695,7 +191854,7 @@ no.exception.7:
   call void @lerta_release(ptr %r55)
   ret ptr %r43
 }
-define private void @lerta.lambda.216(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.219(ptr %closure, ptr %p0) {
 entry:
   %r12 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -190768,7 +191927,7 @@ no.exception.7:
   call void @lerta_release(ptr %r22)
   ret void
 }
-define private void @"lerta.lambda.216.drop"(ptr %closure) {
+define private void @"lerta.lambda.219.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -190798,9 +191957,9 @@ no.exception.1:
   call void @lerta_retain(ptr %r4)
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r6 = ptrtoint ptr %r5 to i64
-  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.216.drop")
+  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.219.drop")
   %r8 = getelementptr { i64, ptr, ptr }, ptr %r7, i32 0, i32 2
-  store ptr @lerta.lambda.216, ptr %r8
+  store ptr @lerta.lambda.219, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 3
   store ptr %p1, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 4
@@ -191614,7 +192773,7 @@ unwind.4:
 no.exception.5:
   ret ptr %r6
 }
-define private i1 @lerta.lambda.217(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.220(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.codegen/heap_object.lerta.HeapField", ptr %p0, i32 0, i32 3
@@ -191632,8 +192791,8 @@ entry:
   %r57 = alloca ptr
   %r66 = alloca ptr
   call void @lerta_retain(ptr %p2)
-  %r0 = call i1 @"lerta.extend.std:builtins.Self.any<Array<codegen/heap_object.lerta.HeapField>, codegen/heap_object.lerta.HeapField>"(ptr %p2, ptr @"lerta.closure.lerta.lambda.217")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.217")
+  %r0 = call i1 @"lerta.extend.std:builtins.Self.any<Array<codegen/heap_object.lerta.HeapField>, codegen/heap_object.lerta.HeapField>"(ptr %p2, ptr @"lerta.closure.lerta.lambda.220")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.220")
   call void @lerta_release(ptr %p2)
   %r1 = load ptr, ptr @lerta_exception
   %r2 = icmp ne ptr %r1, null
@@ -191977,7 +193136,7 @@ for.exit.27:
   call void @lerta_release(ptr %r121)
   ret ptr %r119
 }
-define private void @lerta.lambda.218(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.221(ptr %closure, ptr %p0) {
 entry:
   %r7 = alloca ptr
   %r8 = alloca ptr
@@ -192145,7 +193304,7 @@ no.exception.21:
   call void @lerta_release(ptr %r63)
   ret void
 }
-define private void @"lerta.lambda.218.drop"(ptr %closure) {
+define private void @"lerta.lambda.221.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -192162,9 +193321,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.218.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.221.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.218, ptr %r3
+  store ptr @lerta.lambda.221, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p2, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -192723,7 +193882,7 @@ then.end.4:
   %r16 = phi ptr [ %p1, %then.2 ], [ %r13, %no.exception.12 ]
   ret ptr %r16
 }
-define private ptr @lerta.lambda.219(ptr %closure) {
+define private ptr @lerta.lambda.222(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -192761,7 +193920,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r13
 }
-define private void @"lerta.lambda.219.drop"(ptr %closure) {
+define private void @"lerta.lambda.222.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -192803,9 +193962,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p2)
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r6 = ptrtoint ptr %r5 to i64
-  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.219.drop")
+  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.222.drop")
   %r8 = getelementptr { i64, ptr, ptr }, ptr %r7, i32 0, i32 2
-  store ptr @lerta.lambda.219, ptr %r8
+  store ptr @lerta.lambda.222, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 3
   store ptr %p3, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 4
@@ -193453,7 +194612,7 @@ no.exception.1:
   call void @lerta_release(ptr @lerta.string.2221)
   ret ptr %r6
 }
-define private void @lerta.lambda.220(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.223(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r18 = alloca ptr
@@ -193657,7 +194816,7 @@ no.exception.23:
   call void @lerta_release(ptr %r74)
   ret void
 }
-define private void @"lerta.lambda.220.drop"(ptr %closure) {
+define private void @"lerta.lambda.223.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -193674,9 +194833,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.220.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.223.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.220, ptr %r3
+  store ptr @lerta.lambda.223, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p1, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -194226,7 +195385,7 @@ if.end.4:
   %r14 = phi ptr [ %r3, %no.exception.6 ], [ %r11, %no.exception.12 ]
   ret ptr %r14
 }
-define private void @lerta.lambda.221(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.224(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r8 = alloca ptr
   %r13 = alloca ptr
@@ -194371,14 +195530,14 @@ no.exception.15:
   call void @lerta_release(ptr %r48)
   ret void
 }
-define private void @"lerta.lambda.221.drop"(ptr %closure) {
+define private void @"lerta.lambda.224.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private void @lerta.lambda.222(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.225(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r17 = alloca ptr
@@ -194556,7 +195715,7 @@ no.exception.19:
   call void @lerta_release(ptr %r56)
   ret void
 }
-define private void @"lerta.lambda.222.drop"(ptr %closure) {
+define private void @"lerta.lambda.225.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -194593,9 +195752,9 @@ continue.3:
   call void @lerta_retain(ptr %p2)
   %r6 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r7 = ptrtoint ptr %r6 to i64
-  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.221.drop")
+  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.224.drop")
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
-  store ptr @lerta.lambda.221, ptr %r9
+  store ptr @lerta.lambda.224, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr }, ptr %r8, i32 0, i32 3
   store ptr %p2, ptr %r10
   store ptr %r8, ptr %r11
@@ -194604,9 +195763,9 @@ continue.3:
   call void @lerta_retain(ptr %r12)
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r14 = ptrtoint ptr %r13 to i64
-  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.222.drop")
+  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.225.drop")
   %r16 = getelementptr { i64, ptr, ptr }, ptr %r15, i32 0, i32 2
-  store ptr @lerta.lambda.222, ptr %r16
+  store ptr @lerta.lambda.225, ptr %r16
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 3
   store ptr %p2, ptr %r17
   %r18 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 4
@@ -194787,7 +195946,7 @@ no.exception.15:
   call void @lerta_release(ptr %r96)
   ret ptr %r84
 }
-define private void @lerta.lambda.223(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.226(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r5 = alloca ptr
   %r16 = alloca ptr
@@ -194891,7 +196050,7 @@ no.exception.11:
   call void @lerta_release(ptr %r34)
   ret void
 }
-define private void @lerta.lambda.224(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.227(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r6 = alloca ptr
   %r17 = alloca ptr
@@ -195028,7 +196187,7 @@ no.exception.15:
   call void @lerta_release(ptr %r44)
   ret void
 }
-define private void @"lerta.lambda.224.drop"(ptr %closure) {
+define private void @"lerta.lambda.227.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -195041,13 +196200,13 @@ entry:
   %r6 = alloca ptr
   %r18 = alloca ptr
   %r41 = alloca ptr
-  store ptr @"lerta.closure.lerta.lambda.223", ptr %r0
+  store ptr @"lerta.closure.lerta.lambda.226", ptr %r0
   call void @lerta_retain(ptr %p3)
   %r1 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r2 = ptrtoint ptr %r1 to i64
-  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.lambda.224.drop")
+  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.lambda.227.drop")
   %r4 = getelementptr { i64, ptr, ptr }, ptr %r3, i32 0, i32 2
-  store ptr @lerta.lambda.224, ptr %r4
+  store ptr @lerta.lambda.227, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr }, ptr %r3, i32 0, i32 3
   store ptr %p3, ptr %r5
   store ptr %r3, ptr %r6
@@ -195180,7 +196339,7 @@ no.exception.9:
   call void @lerta_release(ptr %r59)
   ret ptr %r49
 }
-define private void @lerta.lambda.225(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.228(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r3 = alloca ptr
   %r8 = alloca ptr
@@ -195310,7 +196469,7 @@ no.exception.13:
   call void @lerta_release(ptr %r43)
   ret void
 }
-define private void @lerta.lambda.226(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.229(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r3 = alloca ptr
   call void @lerta_retain(ptr %p0)
@@ -195411,8 +196570,8 @@ entry:
   %r0 = alloca ptr
   %r1 = alloca ptr
   %r25 = alloca ptr
-  store ptr @"lerta.closure.lerta.lambda.225", ptr %r0
-  store ptr @"lerta.closure.lerta.lambda.226", ptr %r1
+  store ptr @"lerta.closure.lerta.lambda.228", ptr %r0
+  store ptr @"lerta.closure.lerta.lambda.229", ptr %r1
   %r2 = call ptr @lerta_array_create(i32 1)
   %r3 = load ptr, ptr @"lerta.value.types.lerta.int_type"
   call void @lerta_retain(ptr %r3)
@@ -195534,7 +196693,7 @@ no.exception.7:
   call void @lerta_release(ptr %r55)
   ret ptr %r47
 }
-define private void @lerta.lambda.227(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.230(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r6 = alloca ptr
   call void @lerta_retain(ptr %p0)
@@ -195607,7 +196766,7 @@ no.exception.9:
   call void @lerta_release(ptr %r20)
   ret void
 }
-define private void @lerta.lambda.228(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.231(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r12 = alloca ptr
   %r33 = alloca ptr
@@ -195813,7 +196972,7 @@ no.exception.21:
   call void @lerta_release(ptr %r69)
   ret void
 }
-define private void @"lerta.lambda.228.drop"(ptr %closure) {
+define private void @"lerta.lambda.231.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -195872,7 +197031,7 @@ unwind.4:
   ret ptr poison
 no.exception.5:
   store ptr %r12, ptr %r16
-  store ptr @"lerta.closure.lerta.lambda.227", ptr %r17
+  store ptr @"lerta.closure.lerta.lambda.230", ptr %r17
   %r18 = load ptr, ptr %r16
   call void @lerta_retain(ptr %r18)
   %r19 = load ptr, ptr %r3
@@ -195880,9 +197039,9 @@ no.exception.5:
   call void @lerta_retain(ptr %p3)
   %r20 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r21 = ptrtoint ptr %r20 to i64
-  %r22 = call ptr @lerta_alloc(i64 %r21, ptr @"lerta.lambda.228.drop")
+  %r22 = call ptr @lerta_alloc(i64 %r21, ptr @"lerta.lambda.231.drop")
   %r23 = getelementptr { i64, ptr, ptr }, ptr %r22, i32 0, i32 2
-  store ptr @lerta.lambda.228, ptr %r23
+  store ptr @lerta.lambda.231, ptr %r23
   %r24 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r22, i32 0, i32 3
   store ptr %r18, ptr %r24
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r22, i32 0, i32 4
@@ -196108,7 +197267,7 @@ no.exception.19:
   call void @lerta_release(ptr %r125)
   ret ptr %r109
 }
-define private void @lerta.lambda.230(ptr %closure) {
+define private void @lerta.lambda.233(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -196143,7 +197302,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.230.drop"(ptr %closure) {
+define private void @"lerta.lambda.233.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -196156,7 +197315,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private void @lerta.lambda.229(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.232(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r12 = alloca ptr
@@ -196829,9 +197988,9 @@ no.exception.47:
   call void @lerta_retain(ptr %r1)
   %r267 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r268 = ptrtoint ptr %r267 to i64
-  %r269 = call ptr @lerta_alloc(i64 %r268, ptr @"lerta.lambda.230.drop")
+  %r269 = call ptr @lerta_alloc(i64 %r268, ptr @"lerta.lambda.233.drop")
   %r270 = getelementptr { i64, ptr, ptr }, ptr %r269, i32 0, i32 2
-  store ptr @lerta.lambda.230, ptr %r270
+  store ptr @lerta.lambda.233, ptr %r270
   %r271 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r269, i32 0, i32 3
   store ptr %p0, ptr %r271
   %r272 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r269, i32 0, i32 4
@@ -197526,7 +198685,7 @@ no.exception.83:
   call void @lerta_release(ptr %r558)
   ret void
 }
-define private void @"lerta.lambda.229.drop"(ptr %closure) {
+define private void @"lerta.lambda.232.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -197536,7 +198695,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.231(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.234(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -197659,7 +198818,7 @@ no.exception.18:
   call void @lerta_release(ptr %r33)
   ret void
 }
-define private void @"lerta.lambda.231.drop"(ptr %closure) {
+define private void @"lerta.lambda.234.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -197700,9 +198859,9 @@ no.exception.1:
   call void @lerta_retain(ptr %r11)
   %r12 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r13 = ptrtoint ptr %r12 to i64
-  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.lambda.229.drop")
+  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.lambda.232.drop")
   %r15 = getelementptr { i64, ptr, ptr }, ptr %r14, i32 0, i32 2
-  store ptr @lerta.lambda.229, ptr %r15
+  store ptr @lerta.lambda.232, ptr %r15
   %r16 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r14, i32 0, i32 3
   store ptr %p3, ptr %r16
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r14, i32 0, i32 4
@@ -197711,9 +198870,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p3)
   %r19 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r20 = ptrtoint ptr %r19 to i64
-  %r21 = call ptr @lerta_alloc(i64 %r20, ptr @"lerta.lambda.231.drop")
+  %r21 = call ptr @lerta_alloc(i64 %r20, ptr @"lerta.lambda.234.drop")
   %r22 = getelementptr { i64, ptr, ptr }, ptr %r21, i32 0, i32 2
-  store ptr @lerta.lambda.231, ptr %r22
+  store ptr @lerta.lambda.234, ptr %r22
   %r23 = getelementptr { i64, ptr, ptr, ptr }, ptr %r21, i32 0, i32 3
   store ptr %p3, ptr %r23
   store ptr %r21, ptr %r24
@@ -198043,7 +199202,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r0
 }
-define private ptr @lerta.lambda.232(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.235(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -198063,7 +199222,7 @@ no.exception.1:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
 }
-define private void @"lerta.lambda.232.drop"(ptr %closure) {
+define private void @"lerta.lambda.235.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -198099,9 +199258,9 @@ continue.3:
   call void @lerta_retain(ptr %p2)
   %r6 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r7 = ptrtoint ptr %r6 to i64
-  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.232.drop")
+  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.235.drop")
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
-  store ptr @lerta.lambda.232, ptr %r9
+  store ptr @lerta.lambda.235, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r8, i32 0, i32 3
   store ptr %p0, ptr %r10
   %r11 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r8, i32 0, i32 4
@@ -198788,7 +199947,7 @@ no.exception.3:
   call void @lerta_release(ptr %r14)
   ret ptr %r11
 }
-define private ptr @lerta.lambda.234(ptr %closure) {
+define private ptr @lerta.lambda.237(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -198813,7 +199972,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.234.drop"(ptr %closure) {
+define private void @"lerta.lambda.237.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -198826,7 +199985,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private void @lerta.lambda.233(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.236(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r16 = alloca ptr
@@ -198852,9 +200011,9 @@ no.exception.1:
   call void @lerta_retain(ptr %r3)
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r10 = ptrtoint ptr %r9 to i64
-  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.234.drop")
+  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.237.drop")
   %r12 = getelementptr { i64, ptr, ptr }, ptr %r11, i32 0, i32 2
-  store ptr @lerta.lambda.234, ptr %r12
+  store ptr @lerta.lambda.237, ptr %r12
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r11, i32 0, i32 3
   store ptr %r8, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r11, i32 0, i32 4
@@ -199110,7 +200269,7 @@ no.exception.28:
   call void @lerta_release(ptr %r103)
   ret void
 }
-define private void @"lerta.lambda.233.drop"(ptr %closure) {
+define private void @"lerta.lambda.236.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -199127,9 +200286,9 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.233.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.236.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.233, ptr %r3
+  store ptr @lerta.lambda.236, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p1, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -199183,7 +200342,7 @@ no.exception.5:
   call void @lerta_release(ptr %r21)
   ret ptr %r17
 }
-define private void @lerta.lambda.235(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.238(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -199312,7 +200471,7 @@ no.exception.15:
   call void @lerta_release(ptr %r39)
   ret void
 }
-define private void @"lerta.lambda.235.drop"(ptr %closure) {
+define private void @"lerta.lambda.238.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -199329,9 +200488,9 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.235.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.238.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.235, ptr %r3
+  store ptr @lerta.lambda.238, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p1, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -199385,7 +200544,7 @@ no.exception.5:
   call void @lerta_release(ptr %r21)
   ret ptr %r17
 }
-define private void @lerta.lambda.236(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.239(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r13 = alloca ptr
@@ -199548,7 +200707,7 @@ no.exception.15:
   call void @lerta_release(ptr %r58)
   ret void
 }
-define private void @"lerta.lambda.236.drop"(ptr %closure) {
+define private void @"lerta.lambda.239.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -199565,9 +200724,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.236.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.239.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.236, ptr %r3
+  store ptr @lerta.lambda.239, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p2, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -199621,7 +200780,7 @@ no.exception.5:
   call void @lerta_release(ptr %r21)
   ret ptr %r17
 }
-define private void @lerta.lambda.237(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.240(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -199738,7 +200897,7 @@ no.exception.13:
   call void @lerta_release(ptr %r36)
   ret void
 }
-define private void @"lerta.lambda.237.drop"(ptr %closure) {
+define private void @"lerta.lambda.240.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -199755,9 +200914,9 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.237.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.240.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.237, ptr %r3
+  store ptr @lerta.lambda.240, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p1, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -199811,7 +200970,7 @@ no.exception.5:
   call void @lerta_release(ptr %r21)
   ret ptr %r17
 }
-define private ptr @lerta.lambda.238(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
+define private ptr @lerta.lambda.241(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -199836,7 +200995,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r4
 }
-define private void @"lerta.lambda.238.drop"(ptr %closure) {
+define private void @"lerta.lambda.241.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -199846,7 +201005,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.240(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.243(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -199925,7 +201084,7 @@ unwind.8:
 no.exception.9:
   ret ptr %r21
 }
-define private void @"lerta.lambda.240.drop"(ptr %closure) {
+define private void @"lerta.lambda.243.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -199941,7 +201100,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private ptr @lerta.lambda.239(ptr %closure, ptr %p0, ptr %p1) {
+define private ptr @lerta.lambda.242(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r18 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -199960,9 +201119,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r11 = ptrtoint ptr %r10 to i64
-  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.240.drop")
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.243.drop")
   %r13 = getelementptr { i64, ptr, ptr }, ptr %r12, i32 0, i32 2
-  store ptr @lerta.lambda.240, ptr %r13
+  store ptr @lerta.lambda.243, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r12, i32 0, i32 3
   store ptr %r1, ptr %r14
   %r15 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r12, i32 0, i32 4
@@ -200030,7 +201189,7 @@ no.exception.5:
   call void @lerta_release(ptr %r39)
   ret ptr %r35
 }
-define private void @"lerta.lambda.239.drop"(ptr %closure) {
+define private void @"lerta.lambda.242.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -200049,7 +201208,7 @@ entry:
   call void @lerta_release(ptr %r9)
   ret void
 }
-define private ptr @lerta.lambda.242(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.245(ptr %closure, ptr %p0) {
 entry:
   %r11 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
@@ -200136,7 +201295,7 @@ no.exception.9:
   call void @lerta_release(ptr %r30)
   ret ptr %r26
 }
-define private void @"lerta.lambda.242.drop"(ptr %closure) {
+define private void @"lerta.lambda.245.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -200149,7 +201308,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private ptr @lerta.lambda.241(ptr %closure, ptr %p0, i64 %p1) {
+define private ptr @lerta.lambda.244(ptr %closure, ptr %p0, i64 %p1) {
 entry:
   %r18 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -200167,9 +201326,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr, i64, ptr }, ptr null, i32 1
   %r11 = ptrtoint ptr %r10 to i64
-  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.242.drop")
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.245.drop")
   %r13 = getelementptr { i64, ptr, ptr }, ptr %r12, i32 0, i32 2
-  store ptr @lerta.lambda.242, ptr %r13
+  store ptr @lerta.lambda.245, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr, i64, ptr }, ptr %r12, i32 0, i32 3
   store ptr %r1, ptr %r14
   %r15 = getelementptr { i64, ptr, ptr, ptr, ptr, i64, ptr }, ptr %r12, i32 0, i32 4
@@ -200237,7 +201396,7 @@ no.exception.5:
   call void @lerta_release(ptr %r39)
   ret ptr %r35
 }
-define private void @"lerta.lambda.241.drop"(ptr %closure) {
+define private void @"lerta.lambda.244.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -200272,9 +201431,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.238.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.241.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.238, ptr %r3
+  store ptr @lerta.lambda.241, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -200449,9 +201608,9 @@ no.exception.26:
   call void @lerta_retain(ptr %p3)
   %r61 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r62 = ptrtoint ptr %r61 to i64
-  %r63 = call ptr @lerta_alloc(i64 %r62, ptr @"lerta.lambda.239.drop")
+  %r63 = call ptr @lerta_alloc(i64 %r62, ptr @"lerta.lambda.242.drop")
   %r64 = getelementptr { i64, ptr, ptr }, ptr %r63, i32 0, i32 2
-  store ptr @lerta.lambda.239, ptr %r64
+  store ptr @lerta.lambda.242, ptr %r64
   %r65 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r63, i32 0, i32 3
   store ptr %p0, ptr %r65
   %r66 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r63, i32 0, i32 4
@@ -200629,9 +201788,9 @@ case.arm.43:
   call void @lerta_retain(ptr %p3)
   %r142 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r143 = ptrtoint ptr %r142 to i64
-  %r144 = call ptr @lerta_alloc(i64 %r143, ptr @"lerta.lambda.241.drop")
+  %r144 = call ptr @lerta_alloc(i64 %r143, ptr @"lerta.lambda.244.drop")
   %r145 = getelementptr { i64, ptr, ptr }, ptr %r144, i32 0, i32 2
-  store ptr @lerta.lambda.241, ptr %r145
+  store ptr @lerta.lambda.244, ptr %r145
   %r146 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r144, i32 0, i32 3
   store ptr %p0, ptr %r146
   %r147 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r144, i32 0, i32 4
@@ -200908,7 +202067,7 @@ case.end.0:
   call void @lerta_release(ptr %r245)
   ret ptr %r244
 }
-define private ptr @lerta.lambda.243(ptr %closure) {
+define private ptr @lerta.lambda.246(ptr %closure) {
 entry:
   %r27 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -201037,7 +202196,7 @@ no.exception.13:
   call void @lerta_release(ptr %r54)
   ret ptr %r50
 }
-define private void @"lerta.lambda.243.drop"(ptr %closure) {
+define private void @"lerta.lambda.246.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201214,9 +202373,9 @@ no.exception.15:
   call void @lerta_retain(ptr %p1)
   %r50 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r51 = ptrtoint ptr %r50 to i64
-  %r52 = call ptr @lerta_alloc(i64 %r51, ptr @"lerta.lambda.243.drop")
+  %r52 = call ptr @lerta_alloc(i64 %r51, ptr @"lerta.lambda.246.drop")
   %r53 = getelementptr { i64, ptr, ptr }, ptr %r52, i32 0, i32 2
-  store ptr @lerta.lambda.243, ptr %r53
+  store ptr @lerta.lambda.246, ptr %r53
   %r54 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r52, i32 0, i32 3
   store ptr %p0, ptr %r54
   %r55 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r52, i32 0, i32 4
@@ -201269,7 +202428,7 @@ no.exception.17:
   call void @lerta_release(ptr %r75)
   ret ptr %r63
 }
-define private ptr @lerta.lambda.245(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.248(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201298,7 +202457,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r8
 }
-define private void @"lerta.lambda.245.drop"(ptr %closure) {
+define private void @"lerta.lambda.248.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201314,7 +202473,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private ptr @lerta.lambda.244(ptr %closure) {
+define private ptr @lerta.lambda.247(ptr %closure) {
 entry:
   %r18 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -201333,9 +202492,9 @@ entry:
   call void @lerta_retain(ptr %r7)
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r11 = ptrtoint ptr %r10 to i64
-  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.245.drop")
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.248.drop")
   %r13 = getelementptr { i64, ptr, ptr }, ptr %r12, i32 0, i32 2
-  store ptr @lerta.lambda.245, ptr %r13
+  store ptr @lerta.lambda.248, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r12, i32 0, i32 3
   store ptr %r1, ptr %r14
   %r15 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r12, i32 0, i32 4
@@ -201372,7 +202531,7 @@ no.exception.1:
   call void @lerta_release(ptr %r26)
   ret ptr %r22
 }
-define private void @"lerta.lambda.244.drop"(ptr %closure) {
+define private void @"lerta.lambda.247.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201478,9 +202637,9 @@ no.exception.9:
   call void @lerta_retain(ptr %p4)
   %r23 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r24 = ptrtoint ptr %r23 to i64
-  %r25 = call ptr @lerta_alloc(i64 %r24, ptr @"lerta.lambda.244.drop")
+  %r25 = call ptr @lerta_alloc(i64 %r24, ptr @"lerta.lambda.247.drop")
   %r26 = getelementptr { i64, ptr, ptr }, ptr %r25, i32 0, i32 2
-  store ptr @lerta.lambda.244, ptr %r26
+  store ptr @lerta.lambda.247, ptr %r26
   %r27 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r25, i32 0, i32 3
   store ptr %p0, ptr %r27
   %r28 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r25, i32 0, i32 4
@@ -201627,7 +202786,7 @@ for.exit.3:
   call void @lerta_release(ptr %r38)
   ret ptr %r37
 }
-define private ptr @lerta.lambda.246(ptr %closure) {
+define private ptr @lerta.lambda.249(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201672,7 +202831,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r13
 }
-define private void @"lerta.lambda.246.drop"(ptr %closure) {
+define private void @"lerta.lambda.249.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201688,7 +202847,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private ptr @lerta.lambda.247(ptr %closure, ptr %p0, ptr %p1) {
+define private ptr @lerta.lambda.250(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r11 = alloca ptr
   %r30 = alloca ptr
@@ -201801,7 +202960,7 @@ no.exception.11:
   call void @lerta_release(ptr %r38)
   ret ptr %r32
 }
-define private void @"lerta.lambda.247.drop"(ptr %closure) {
+define private void @"lerta.lambda.250.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201817,7 +202976,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private ptr @lerta.lambda.248(ptr %closure, ptr %p0, i64 %p1) {
+define private ptr @lerta.lambda.251(ptr %closure, ptr %p0, i64 %p1) {
 entry:
   %r11 = alloca ptr
   %r30 = alloca ptr
@@ -201928,7 +203087,7 @@ no.exception.11:
   call void @lerta_release(ptr %r38)
   ret ptr %r32
 }
-define private void @"lerta.lambda.248.drop"(ptr %closure) {
+define private void @"lerta.lambda.251.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201944,7 +203103,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private ptr @lerta.lambda.249(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.252(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -201969,7 +203128,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.249.drop"(ptr %closure) {
+define private void @"lerta.lambda.252.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -202195,9 +203354,9 @@ case.arm.35:
   call void @lerta_retain(ptr %p3)
   %r63 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r64 = ptrtoint ptr %r63 to i64
-  %r65 = call ptr @lerta_alloc(i64 %r64, ptr @"lerta.lambda.246.drop")
+  %r65 = call ptr @lerta_alloc(i64 %r64, ptr @"lerta.lambda.249.drop")
   %r66 = getelementptr { i64, ptr, ptr }, ptr %r65, i32 0, i32 2
-  store ptr @lerta.lambda.246, ptr %r66
+  store ptr @lerta.lambda.249, ptr %r66
   %r67 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r65, i32 0, i32 3
   store ptr %p0, ptr %r67
   %r68 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r65, i32 0, i32 4
@@ -202280,9 +203439,9 @@ no.exception.46:
   call void @lerta_retain(ptr %p1)
   %r93 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r94 = ptrtoint ptr %r93 to i64
-  %r95 = call ptr @lerta_alloc(i64 %r94, ptr @"lerta.lambda.247.drop")
+  %r95 = call ptr @lerta_alloc(i64 %r94, ptr @"lerta.lambda.250.drop")
   %r96 = getelementptr { i64, ptr, ptr }, ptr %r95, i32 0, i32 2
-  store ptr @lerta.lambda.247, ptr %r96
+  store ptr @lerta.lambda.250, ptr %r96
   %r97 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r95, i32 0, i32 3
   store ptr %p0, ptr %r97
   %r98 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r95, i32 0, i32 4
@@ -202448,9 +203607,9 @@ case.arm.63:
   call void @lerta_retain(ptr %p1)
   %r168 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r169 = ptrtoint ptr %r168 to i64
-  %r170 = call ptr @lerta_alloc(i64 %r169, ptr @"lerta.lambda.248.drop")
+  %r170 = call ptr @lerta_alloc(i64 %r169, ptr @"lerta.lambda.251.drop")
   %r171 = getelementptr { i64, ptr, ptr }, ptr %r170, i32 0, i32 2
-  store ptr @lerta.lambda.248, ptr %r171
+  store ptr @lerta.lambda.251, ptr %r171
   %r172 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r170, i32 0, i32 3
   store ptr %p0, ptr %r172
   %r173 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r170, i32 0, i32 4
@@ -202648,9 +203807,9 @@ case.arm.89:
   call void @lerta_retain(ptr %p2)
   %r245 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r246 = ptrtoint ptr %r245 to i64
-  %r247 = call ptr @lerta_alloc(i64 %r246, ptr @"lerta.lambda.249.drop")
+  %r247 = call ptr @lerta_alloc(i64 %r246, ptr @"lerta.lambda.252.drop")
   %r248 = getelementptr { i64, ptr, ptr }, ptr %r247, i32 0, i32 2
-  store ptr @lerta.lambda.249, ptr %r248
+  store ptr @lerta.lambda.252, ptr %r248
   %r249 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r247, i32 0, i32 3
   store ptr %p0, ptr %r249
   %r250 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r247, i32 0, i32 4
@@ -204196,7 +205355,7 @@ case.end.0:
   call void @lerta_release(ptr %r57)
   ret ptr %r56
 }
-define private void @lerta.lambda.250(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.253(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r3 = alloca ptr
   %r14 = alloca ptr
@@ -204283,7 +205442,7 @@ no.exception.9:
   call void @lerta_release(ptr %r27)
   ret void
 }
-define private void @lerta.lambda.251(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.254(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r7 = alloca ptr
   %r14 = alloca ptr
@@ -204603,7 +205762,7 @@ no.exception.27:
   call void @lerta_release(ptr %r119)
   ret void
 }
-define private void @"lerta.lambda.251.drop"(ptr %closure) {
+define private void @"lerta.lambda.254.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -204656,15 +205815,15 @@ unwind.0:
   ret ptr poison
 no.exception.1:
   store ptr %r15, ptr %r18
-  store ptr @"lerta.closure.lerta.lambda.250", ptr %r19
+  store ptr @"lerta.closure.lerta.lambda.253", ptr %r19
   call void @lerta_retain(ptr %p2)
   %r20 = load ptr, ptr %r18
   call void @lerta_retain(ptr %r20)
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r22 = ptrtoint ptr %r21 to i64
-  %r23 = call ptr @lerta_alloc(i64 %r22, ptr @"lerta.lambda.251.drop")
+  %r23 = call ptr @lerta_alloc(i64 %r22, ptr @"lerta.lambda.254.drop")
   %r24 = getelementptr { i64, ptr, ptr }, ptr %r23, i32 0, i32 2
-  store ptr @lerta.lambda.251, ptr %r24
+  store ptr @lerta.lambda.254, ptr %r24
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r23, i32 0, i32 3
   store ptr %p2, ptr %r25
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r23, i32 0, i32 4
@@ -204866,7 +206025,7 @@ define void @"lerta.module.codegen/call.lerta"() {
 entry:
   ret void
 }
-define private ptr @lerta.lambda.252(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.255(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -204908,7 +206067,7 @@ unwind.4:
 no.exception.5:
   ret ptr %r14
 }
-define private void @"lerta.lambda.252.drop"(ptr %closure) {
+define private void @"lerta.lambda.255.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -204972,9 +206131,9 @@ if.then.2:
   call void @lerta_retain(ptr %r20)
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r22 = ptrtoint ptr %r21 to i64
-  %r23 = call ptr @lerta_alloc(i64 %r22, ptr @"lerta.lambda.252.drop")
+  %r23 = call ptr @lerta_alloc(i64 %r22, ptr @"lerta.lambda.255.drop")
   %r24 = getelementptr { i64, ptr, ptr }, ptr %r23, i32 0, i32 2
-  store ptr @lerta.lambda.252, ptr %r24
+  store ptr @lerta.lambda.255, ptr %r24
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r23, i32 0, i32 3
   store ptr %p0, ptr %r25
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r23, i32 0, i32 4
@@ -205274,7 +206433,7 @@ no.exception.42:
   call void @lerta_release(ptr %r131)
   ret ptr %r127
 }
-define private ptr @lerta.lambda.253(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.256(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -205317,7 +206476,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r13
 }
-define private void @"lerta.lambda.253.drop"(ptr %closure) {
+define private void @"lerta.lambda.256.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -205552,9 +206711,9 @@ if.then.31:
   call void @lerta_retain(ptr %r73)
   %r74 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r75 = ptrtoint ptr %r74 to i64
-  %r76 = call ptr @lerta_alloc(i64 %r75, ptr @"lerta.lambda.253.drop")
+  %r76 = call ptr @lerta_alloc(i64 %r75, ptr @"lerta.lambda.256.drop")
   %r77 = getelementptr { i64, ptr, ptr }, ptr %r76, i32 0, i32 2
-  store ptr @lerta.lambda.253, ptr %r77
+  store ptr @lerta.lambda.256, ptr %r77
   %r78 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r76, i32 0, i32 3
   store ptr %p0, ptr %r78
   %r79 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r76, i32 0, i32 4
@@ -205693,7 +206852,7 @@ no.exception.44:
   call void @lerta_release(ptr %r131)
   ret ptr %r125
 }
-define private void @lerta.lambda.255(ptr %closure) {
+define private void @lerta.lambda.258(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -205708,14 +206867,14 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.255.drop"(ptr %closure) {
+define private void @"lerta.lambda.258.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private ptr @lerta.lambda.254(ptr %closure) {
+define private ptr @lerta.lambda.257(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -205736,9 +206895,9 @@ entry:
   call void @lerta_retain(ptr %r1)
   %r10 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r11 = ptrtoint ptr %r10 to i64
-  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.255.drop")
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.258.drop")
   %r13 = getelementptr { i64, ptr, ptr }, ptr %r12, i32 0, i32 2
-  store ptr @lerta.lambda.255, ptr %r13
+  store ptr @lerta.lambda.258, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr }, ptr %r12, i32 0, i32 3
   store ptr %r1, ptr %r14
   %r15 = call ptr @"lerta.fn.codegen/iter.lerta.call_iter_method"(ptr %r9, ptr %r3, ptr %r5, ptr %r7, ptr %r12)
@@ -205755,7 +206914,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r15
 }
-define private void @"lerta.lambda.254.drop"(ptr %closure) {
+define private void @"lerta.lambda.257.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -205771,7 +206930,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private ptr @lerta.lambda.257(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.260(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -205804,7 +206963,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r10
 }
-define private void @"lerta.lambda.257.drop"(ptr %closure) {
+define private void @"lerta.lambda.260.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -205820,7 +206979,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private ptr @lerta.lambda.258(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.261(ptr %closure, ptr %p0) {
 entry:
   %r13 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -205883,7 +207042,7 @@ no.exception.3:
   call void @lerta_release(ptr %r25)
   ret ptr %r21
 }
-define private void @"lerta.lambda.258.drop"(ptr %closure) {
+define private void @"lerta.lambda.261.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -205899,7 +207058,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private ptr @lerta.lambda.256(ptr %closure) {
+define private ptr @lerta.lambda.259(ptr %closure) {
 entry:
   %r14 = alloca ptr
   %r26 = alloca ptr
@@ -205933,9 +207092,9 @@ case.arm.1:
   call void @lerta_retain(ptr %r9)
   %r18 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r19 = ptrtoint ptr %r18 to i64
-  %r20 = call ptr @lerta_alloc(i64 %r19, ptr @"lerta.lambda.257.drop")
+  %r20 = call ptr @lerta_alloc(i64 %r19, ptr @"lerta.lambda.260.drop")
   %r21 = getelementptr { i64, ptr, ptr }, ptr %r20, i32 0, i32 2
-  store ptr @lerta.lambda.257, ptr %r21
+  store ptr @lerta.lambda.260, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r20, i32 0, i32 3
   store ptr %r3, ptr %r22
   %r23 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r20, i32 0, i32 4
@@ -205982,9 +207141,9 @@ case.arm.5:
   call void @lerta_retain(ptr %r1)
   %r39 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r40 = ptrtoint ptr %r39 to i64
-  %r41 = call ptr @lerta_alloc(i64 %r40, ptr @"lerta.lambda.258.drop")
+  %r41 = call ptr @lerta_alloc(i64 %r40, ptr @"lerta.lambda.261.drop")
   %r42 = getelementptr { i64, ptr, ptr }, ptr %r41, i32 0, i32 2
-  store ptr @lerta.lambda.258, ptr %r42
+  store ptr @lerta.lambda.261, ptr %r42
   %r43 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r41, i32 0, i32 3
   store ptr %r3, ptr %r43
   %r44 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r41, i32 0, i32 4
@@ -206141,7 +207300,7 @@ case.end.0:
   call void @lerta_release(ptr %r98)
   ret ptr %r97
 }
-define private void @"lerta.lambda.256.drop"(ptr %closure) {
+define private void @"lerta.lambda.259.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -206410,9 +207569,9 @@ if.then.22:
   call void @lerta_retain(ptr %r87)
   %r88 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r89 = ptrtoint ptr %r88 to i64
-  %r90 = call ptr @lerta_alloc(i64 %r89, ptr @"lerta.lambda.254.drop")
+  %r90 = call ptr @lerta_alloc(i64 %r89, ptr @"lerta.lambda.257.drop")
   %r91 = getelementptr { i64, ptr, ptr }, ptr %r90, i32 0, i32 2
-  store ptr @lerta.lambda.254, ptr %r91
+  store ptr @lerta.lambda.257, ptr %r91
   %r92 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r90, i32 0, i32 3
   store ptr %p0, ptr %r92
   %r93 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r90, i32 0, i32 4
@@ -206509,9 +207668,9 @@ if.end.24:
   call void @lerta_retain(ptr %p2)
   %r130 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r131 = ptrtoint ptr %r130 to i64
-  %r132 = call ptr @lerta_alloc(i64 %r131, ptr @"lerta.lambda.256.drop")
+  %r132 = call ptr @lerta_alloc(i64 %r131, ptr @"lerta.lambda.259.drop")
   %r133 = getelementptr { i64, ptr, ptr }, ptr %r132, i32 0, i32 2
-  store ptr @lerta.lambda.256, ptr %r133
+  store ptr @lerta.lambda.259, ptr %r133
   %r134 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r132, i32 0, i32 3
   store ptr %r126, ptr %r134
   %r135 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r132, i32 0, i32 4
@@ -206982,7 +208141,7 @@ case.end.0:
   call void @lerta_release(ptr %r92)
   ret ptr %r91
 }
-define private ptr @lerta.lambda.259(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.262(ptr %closure, ptr %p0) {
 entry:
   %r11 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -207095,7 +208254,7 @@ no.exception.12:
   call void @lerta_release(ptr %r41)
   ret ptr %r37
 }
-define private void @"lerta.lambda.259.drop"(ptr %closure) {
+define private void @"lerta.lambda.262.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -207170,9 +208329,9 @@ then.end.4:
   call void @lerta_retain(ptr %p2)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.259.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.262.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.259, ptr %r20
+  store ptr @lerta.lambda.262, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %p4, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -207522,7 +208681,7 @@ no.exception.19:
   call void @lerta_release(ptr %r48)
   ret ptr %r42
 }
-define private ptr @lerta.lambda.260(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.263(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -207551,7 +208710,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r8
 }
-define private void @"lerta.lambda.260.drop"(ptr %closure) {
+define private void @"lerta.lambda.263.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -207564,7 +208723,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private ptr @lerta.lambda.261(ptr %closure) {
+define private ptr @lerta.lambda.264(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -207587,7 +208746,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.261.drop"(ptr %closure) {
+define private void @"lerta.lambda.264.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -207609,9 +208768,9 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.260.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.263.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.260, ptr %r3
+  store ptr @lerta.lambda.263, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -207628,9 +208787,9 @@ entry:
   call void @lerta_retain(ptr %r8)
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r10 = ptrtoint ptr %r9 to i64
-  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.261.drop")
+  %r11 = call ptr @lerta_alloc(i64 %r10, ptr @"lerta.lambda.264.drop")
   %r12 = getelementptr { i64, ptr, ptr }, ptr %r11, i32 0, i32 2
-  store ptr @lerta.lambda.261, ptr %r12
+  store ptr @lerta.lambda.264, ptr %r12
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r11, i32 0, i32 3
   store ptr %p0, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r11, i32 0, i32 4
@@ -207691,7 +208850,7 @@ no.exception.5:
   call void @lerta_release(ptr %r33)
   ret ptr %r31
 }
-define private ptr @lerta.lambda.262(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.265(ptr %closure, ptr %p0) {
 entry:
   %r11 = alloca ptr
   %r12 = alloca ptr
@@ -207796,7 +208955,7 @@ for.exit.5:
   call void @lerta_release(ptr %r44)
   ret ptr %r43
 }
-define private void @"lerta.lambda.262.drop"(ptr %closure) {
+define private void @"lerta.lambda.265.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -207817,9 +208976,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.262.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.265.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.262, ptr %r3
+  store ptr @lerta.lambda.265, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p2, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -207847,7 +209006,7 @@ no.exception.1:
   call void @lerta_release(ptr %r13)
   ret ptr %r9
 }
-define private ptr @lerta.lambda.263(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.266(ptr %closure, ptr %p0) {
 entry:
   %r7 = alloca ptr
   %r8 = alloca ptr
@@ -208482,7 +209641,7 @@ for.exit.61:
   call void @lerta_release(ptr %r271)
   ret ptr %r268
 }
-define private void @"lerta.lambda.263.drop"(ptr %closure) {
+define private void @"lerta.lambda.266.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -208536,9 +209695,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p0)
   %r13 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r14 = ptrtoint ptr %r13 to i64
-  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.263.drop")
+  %r15 = call ptr @lerta_alloc(i64 %r14, ptr @"lerta.lambda.266.drop")
   %r16 = getelementptr { i64, ptr, ptr }, ptr %r15, i32 0, i32 2
-  store ptr @lerta.lambda.263, ptr %r16
+  store ptr @lerta.lambda.266, ptr %r16
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 3
   store ptr %r11, ptr %r17
   %r18 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r15, i32 0, i32 4
@@ -209332,7 +210491,7 @@ no.exception.9:
   call void @lerta_release(ptr %r35)
   ret ptr %r33
 }
-define private void @lerta.lambda.264(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.267(ptr %closure, ptr %p0) {
 entry:
   %r9 = alloca ptr
   %r11 = alloca ptr
@@ -209506,7 +210665,7 @@ no.exception.19:
   call void @lerta_release(ptr %r65)
   ret void
 }
-define private void @"lerta.lambda.264.drop"(ptr %closure) {
+define private void @"lerta.lambda.267.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -209516,7 +210675,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.265(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.268(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -209535,7 +210694,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.265.drop"(ptr %closure) {
+define private void @"lerta.lambda.268.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -209720,9 +210879,9 @@ no.exception.21:
   call void @lerta_retain(ptr %p0)
   %r61 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r62 = ptrtoint ptr %r61 to i64
-  %r63 = call ptr @lerta_alloc(i64 %r62, ptr @"lerta.lambda.264.drop")
+  %r63 = call ptr @lerta_alloc(i64 %r62, ptr @"lerta.lambda.267.drop")
   %r64 = getelementptr { i64, ptr, ptr }, ptr %r63, i32 0, i32 2
-  store ptr @lerta.lambda.264, ptr %r64
+  store ptr @lerta.lambda.267, ptr %r64
   %r65 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r63, i32 0, i32 3
   store ptr %r60, ptr %r65
   %r66 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r63, i32 0, i32 4
@@ -209743,9 +210902,9 @@ no.exception.21:
   call void @lerta_retain(ptr %r73)
   %r74 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r75 = ptrtoint ptr %r74 to i64
-  %r76 = call ptr @lerta_alloc(i64 %r75, ptr @"lerta.lambda.265.drop")
+  %r76 = call ptr @lerta_alloc(i64 %r75, ptr @"lerta.lambda.268.drop")
   %r77 = getelementptr { i64, ptr, ptr }, ptr %r76, i32 0, i32 2
-  store ptr @lerta.lambda.265, ptr %r77
+  store ptr @lerta.lambda.268, ptr %r77
   %r78 = getelementptr { i64, ptr, ptr, ptr }, ptr %r76, i32 0, i32 3
   store ptr %r73, ptr %r78
   %r79 = call ptr @"lerta.method.codegen/ir_builder.lerta.IrModule.named"(ptr %r71, ptr %r72, ptr @lerta.string.2502, ptr %r76)
@@ -209944,7 +211103,7 @@ case.end.6:
   call void @lerta_release(ptr %r65)
   ret ptr %r63
 }
-define private ptr @lerta.lambda.267(ptr %closure) {
+define private ptr @lerta.lambda.270(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -209960,14 +211119,14 @@ unwind.0:
 no.exception.1:
   ret ptr @lerta.string.2508
 }
-define private void @"lerta.lambda.267.drop"(ptr %closure) {
+define private void @"lerta.lambda.270.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private void @lerta.lambda.268(ptr %closure) {
+define private void @lerta.lambda.271(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -209996,7 +211155,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.268.drop"(ptr %closure) {
+define private void @"lerta.lambda.271.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -210006,7 +211165,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.269(ptr %closure) {
+define private void @lerta.lambda.272(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -210025,7 +211184,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.269.drop"(ptr %closure) {
+define private void @"lerta.lambda.272.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -210035,7 +211194,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.266(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.269(ptr %closure, ptr %p0) {
 entry:
   %r19 = alloca ptr
   %r23 = alloca ptr
@@ -210313,9 +211472,9 @@ for.exit.27:
   call void @lerta_retain(ptr %r113)
   %r114 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r115 = ptrtoint ptr %r114 to i64
-  %r116 = call ptr @lerta_alloc(i64 %r115, ptr @"lerta.lambda.267.drop")
+  %r116 = call ptr @lerta_alloc(i64 %r115, ptr @"lerta.lambda.270.drop")
   %r117 = getelementptr { i64, ptr, ptr }, ptr %r116, i32 0, i32 2
-  store ptr @lerta.lambda.267, ptr %r117
+  store ptr @lerta.lambda.270, ptr %r117
   %r118 = getelementptr { i64, ptr, ptr, ptr }, ptr %r116, i32 0, i32 3
   store ptr %r113, ptr %r118
   store ptr %r116, ptr %r119
@@ -210472,9 +211631,9 @@ case.arm.50:
   call void @lerta_retain(ptr %r182)
   %r183 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r184 = ptrtoint ptr %r183 to i64
-  %r185 = call ptr @lerta_alloc(i64 %r184, ptr @"lerta.lambda.268.drop")
+  %r185 = call ptr @lerta_alloc(i64 %r184, ptr @"lerta.lambda.271.drop")
   %r186 = getelementptr { i64, ptr, ptr }, ptr %r185, i32 0, i32 2
-  store ptr @lerta.lambda.268, ptr %r186
+  store ptr @lerta.lambda.271, ptr %r186
   %r187 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r185, i32 0, i32 3
   store ptr %r181, ptr %r187
   %r188 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r185, i32 0, i32 4
@@ -210486,9 +211645,9 @@ case.arm.50:
   call void @lerta_retain(ptr %r191)
   %r192 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r193 = ptrtoint ptr %r192 to i64
-  %r194 = call ptr @lerta_alloc(i64 %r193, ptr @"lerta.lambda.269.drop")
+  %r194 = call ptr @lerta_alloc(i64 %r193, ptr @"lerta.lambda.272.drop")
   %r195 = getelementptr { i64, ptr, ptr }, ptr %r194, i32 0, i32 2
-  store ptr @lerta.lambda.269, ptr %r195
+  store ptr @lerta.lambda.272, ptr %r195
   %r196 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r194, i32 0, i32 3
   store ptr %r190, ptr %r196
   %r197 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r194, i32 0, i32 4
@@ -211194,7 +212353,7 @@ no.exception.98:
   call void @lerta_release(ptr %r492)
   ret void
 }
-define private void @"lerta.lambda.266.drop"(ptr %closure) {
+define private void @"lerta.lambda.269.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -211213,7 +212372,7 @@ entry:
   call void @lerta_release(ptr %r9)
   ret void
 }
-define private void @lerta.lambda.270(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.273(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -211232,7 +212391,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.270.drop"(ptr %closure) {
+define private void @"lerta.lambda.273.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -211334,9 +212493,9 @@ no.exception.5:
   call void @lerta_retain(ptr %r34)
   %r35 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r36 = ptrtoint ptr %r35 to i64
-  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.lambda.266.drop")
+  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.lambda.269.drop")
   %r38 = getelementptr { i64, ptr, ptr }, ptr %r37, i32 0, i32 2
-  store ptr @lerta.lambda.266, ptr %r38
+  store ptr @lerta.lambda.269, ptr %r38
   %r39 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r37, i32 0, i32 3
   store ptr %p0, ptr %r39
   %r40 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r37, i32 0, i32 4
@@ -211363,9 +212522,9 @@ no.exception.5:
   call void @lerta_retain(ptr %r50)
   %r51 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r52 = ptrtoint ptr %r51 to i64
-  %r53 = call ptr @lerta_alloc(i64 %r52, ptr @"lerta.lambda.270.drop")
+  %r53 = call ptr @lerta_alloc(i64 %r52, ptr @"lerta.lambda.273.drop")
   %r54 = getelementptr { i64, ptr, ptr }, ptr %r53, i32 0, i32 2
-  store ptr @lerta.lambda.270, ptr %r54
+  store ptr @lerta.lambda.273, ptr %r54
   %r55 = getelementptr { i64, ptr, ptr, ptr }, ptr %r53, i32 0, i32 3
   store ptr %r50, ptr %r55
   %r56 = call ptr @"lerta.method.codegen/ir_builder.lerta.IrModule.named"(ptr %r48, ptr %r49, ptr @lerta.string.2521, ptr %r53)
@@ -212100,7 +213259,7 @@ continue.1:
   call void @lerta_release(ptr %r1)
   ret ptr %r7
 }
-define private i1 @lerta.lambda.271(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.274(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -212123,7 +213282,7 @@ no.exception.1:
   call void @lerta_release(ptr %r6)
   ret i1 %r7
 }
-define private void @"lerta.lambda.271.drop"(ptr %closure) {
+define private void @"lerta.lambda.274.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -212318,9 +213477,9 @@ no.exception.15:
   call void @lerta_retain(ptr %p2)
   %r68 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r69 = ptrtoint ptr %r68 to i64
-  %r70 = call ptr @lerta_alloc(i64 %r69, ptr @"lerta.lambda.271.drop")
+  %r70 = call ptr @lerta_alloc(i64 %r69, ptr @"lerta.lambda.274.drop")
   %r71 = getelementptr { i64, ptr, ptr }, ptr %r70, i32 0, i32 2
-  store ptr @lerta.lambda.271, ptr %r71
+  store ptr @lerta.lambda.274, ptr %r71
   %r72 = getelementptr { i64, ptr, ptr, ptr }, ptr %r70, i32 0, i32 3
   store ptr %p2, ptr %r72
   %r73 = call { i1, i64 } @"lerta.extend.std:builtins.Array<T>.find_index<checker/interface_values.lerta.Itab>"(ptr %r67, ptr %r70)
@@ -213368,7 +214527,7 @@ define void @"lerta.module.codegen/collection.lerta"() {
 entry:
   ret void
 }
-define private void @lerta.lambda.272(ptr %closure) {
+define private void @lerta.lambda.275(ptr %closure) {
 entry:
   %r10 = alloca ptr
   %r21 = alloca ptr
@@ -213544,7 +214703,7 @@ for.exit.3:
   call void @lerta_release(ptr %r66)
   ret void
 }
-define private void @"lerta.lambda.272.drop"(ptr %closure) {
+define private void @"lerta.lambda.275.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -213618,9 +214777,9 @@ no.exception.5:
   call void @lerta_retain(ptr %r19)
   %r20 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r21 = ptrtoint ptr %r20 to i64
-  %r22 = call ptr @lerta_alloc(i64 %r21, ptr @"lerta.lambda.272.drop")
+  %r22 = call ptr @lerta_alloc(i64 %r21, ptr @"lerta.lambda.275.drop")
   %r23 = getelementptr { i64, ptr, ptr }, ptr %r22, i32 0, i32 2
-  store ptr @lerta.lambda.272, ptr %r23
+  store ptr @lerta.lambda.275, ptr %r23
   %r24 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r22, i32 0, i32 3
   store ptr %p1, ptr %r24
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r22, i32 0, i32 4
@@ -213664,7 +214823,7 @@ no.exception.7:
   call void @lerta_release(ptr %r40)
   ret ptr %r37
 }
-define private ptr @lerta.lambda.274(ptr %closure) {
+define private ptr @lerta.lambda.277(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -213687,7 +214846,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.274.drop"(ptr %closure) {
+define private void @"lerta.lambda.277.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -213697,7 +214856,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.273(ptr %closure) {
+define private void @lerta.lambda.276(ptr %closure) {
 entry:
   %r10 = alloca ptr
   %r21 = alloca ptr
@@ -213789,9 +214948,9 @@ no.exception.9:
   call void @lerta_retain(ptr %r41)
   %r42 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r43 = ptrtoint ptr %r42 to i64
-  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.lambda.274.drop")
+  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.lambda.277.drop")
   %r45 = getelementptr { i64, ptr, ptr }, ptr %r44, i32 0, i32 2
-  store ptr @lerta.lambda.274, ptr %r45
+  store ptr @lerta.lambda.277, ptr %r45
   %r46 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r44, i32 0, i32 3
   store ptr %r3, ptr %r46
   %r47 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r44, i32 0, i32 4
@@ -213914,7 +215073,7 @@ for.exit.3:
   call void @lerta_release(ptr %r88)
   ret void
 }
-define private void @"lerta.lambda.273.drop"(ptr %closure) {
+define private void @"lerta.lambda.276.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -213994,9 +215153,9 @@ no.exception.5:
   call void @lerta_retain(ptr %r21)
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r23 = ptrtoint ptr %r22 to i64
-  %r24 = call ptr @lerta_alloc(i64 %r23, ptr @"lerta.lambda.273.drop")
+  %r24 = call ptr @lerta_alloc(i64 %r23, ptr @"lerta.lambda.276.drop")
   %r25 = getelementptr { i64, ptr, ptr }, ptr %r24, i32 0, i32 2
-  store ptr @lerta.lambda.273, ptr %r25
+  store ptr @lerta.lambda.276, ptr %r25
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r24, i32 0, i32 3
   store ptr %p1, ptr %r26
   %r27 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r24, i32 0, i32 4
@@ -214047,7 +215206,7 @@ entry:
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private ptr @lerta.lambda.275(ptr %closure) {
+define private ptr @lerta.lambda.278(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -214070,7 +215229,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.275.drop"(ptr %closure) {
+define private void @"lerta.lambda.278.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -214142,9 +215301,9 @@ no.exception.3:
   call void @lerta_retain(ptr %p1)
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r23 = ptrtoint ptr %r22 to i64
-  %r24 = call ptr @lerta_alloc(i64 %r23, ptr @"lerta.lambda.275.drop")
+  %r24 = call ptr @lerta_alloc(i64 %r23, ptr @"lerta.lambda.278.drop")
   %r25 = getelementptr { i64, ptr, ptr }, ptr %r24, i32 0, i32 2
-  store ptr @lerta.lambda.275, ptr %r25
+  store ptr @lerta.lambda.278, ptr %r25
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r24, i32 0, i32 3
   store ptr %p0, ptr %r26
   %r27 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r24, i32 0, i32 4
@@ -215842,7 +217001,7 @@ no.exception.23:
   call void @lerta_release(ptr %r52)
   ret ptr %r46
 }
-define private ptr @lerta.lambda.276(ptr %closure) {
+define private ptr @lerta.lambda.279(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -215865,7 +217024,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.276.drop"(ptr %closure) {
+define private void @"lerta.lambda.279.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -216012,9 +217171,9 @@ no.exception.19:
   call void @lerta_retain(ptr %p1)
   %r39 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r40 = ptrtoint ptr %r39 to i64
-  %r41 = call ptr @lerta_alloc(i64 %r40, ptr @"lerta.lambda.276.drop")
+  %r41 = call ptr @lerta_alloc(i64 %r40, ptr @"lerta.lambda.279.drop")
   %r42 = getelementptr { i64, ptr, ptr }, ptr %r41, i32 0, i32 2
-  store ptr @lerta.lambda.276, ptr %r42
+  store ptr @lerta.lambda.279, ptr %r42
   %r43 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r41, i32 0, i32 3
   store ptr %p0, ptr %r43
   %r44 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r41, i32 0, i32 4
@@ -217067,7 +218226,7 @@ then.end.2:
   %r10 = phi ptr [ %r7, %no.exception.6 ], [ %p2, %else.1 ]
   ret ptr %r10
 }
-define private ptr @lerta.lambda.277(ptr %closure) {
+define private ptr @lerta.lambda.280(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -217090,7 +218249,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.277.drop"(ptr %closure) {
+define private void @"lerta.lambda.280.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -217644,9 +218803,9 @@ no.exception.39:
   call void @lerta_retain(ptr %p2)
   %r214 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r215 = ptrtoint ptr %r214 to i64
-  %r216 = call ptr @lerta_alloc(i64 %r215, ptr @"lerta.lambda.277.drop")
+  %r216 = call ptr @lerta_alloc(i64 %r215, ptr @"lerta.lambda.280.drop")
   %r217 = getelementptr { i64, ptr, ptr }, ptr %r216, i32 0, i32 2
-  store ptr @lerta.lambda.277, ptr %r217
+  store ptr @lerta.lambda.280, ptr %r217
   %r218 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r216, i32 0, i32 3
   store ptr %r213, ptr %r218
   %r219 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r216, i32 0, i32 4
@@ -220261,7 +221420,7 @@ no.exception.7:
 unreachable.8:
   ret ptr poison
 }
-define private void @lerta.lambda.278(ptr %closure) {
+define private void @lerta.lambda.281(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -220326,7 +221485,7 @@ unwind.6:
 no.exception.7:
   ret void
 }
-define private void @"lerta.lambda.278.drop"(ptr %closure) {
+define private void @"lerta.lambda.281.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -220339,7 +221498,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private void @lerta.lambda.279(ptr %closure) {
+define private void @lerta.lambda.282(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -220354,7 +221513,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.279.drop"(ptr %closure) {
+define private void @"lerta.lambda.282.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -220416,9 +221575,9 @@ no.exception.3:
   call void @lerta_retain(ptr %p5)
   %r15 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r16 = ptrtoint ptr %r15 to i64
-  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.lambda.278.drop")
+  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.lambda.281.drop")
   %r18 = getelementptr { i64, ptr, ptr }, ptr %r17, i32 0, i32 2
-  store ptr @lerta.lambda.278, ptr %r18
+  store ptr @lerta.lambda.281, ptr %r18
   %r19 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r17, i32 0, i32 3
   store ptr %p0, ptr %r19
   %r20 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r17, i32 0, i32 4
@@ -220490,9 +221649,9 @@ for.exit.7:
   call void @lerta_retain(ptr %p0)
   %r53 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r54 = ptrtoint ptr %r53 to i64
-  %r55 = call ptr @lerta_alloc(i64 %r54, ptr @"lerta.lambda.279.drop")
+  %r55 = call ptr @lerta_alloc(i64 %r54, ptr @"lerta.lambda.282.drop")
   %r56 = getelementptr { i64, ptr, ptr }, ptr %r55, i32 0, i32 2
-  store ptr @lerta.lambda.279, ptr %r56
+  store ptr @lerta.lambda.282, ptr %r56
   %r57 = getelementptr { i64, ptr, ptr, ptr }, ptr %r55, i32 0, i32 3
   store ptr %p0, ptr %r57
   call void @"lerta.fn.codegen/coroutine.lerta.generate_coroutine"(ptr %p0, ptr %r50, ptr %r51, ptr %r52, ptr %r55)
@@ -221089,7 +222248,7 @@ no.exception.13:
   call void @lerta_release(ptr %r34)
   ret ptr @lerta.string.2797
 }
-define private void @lerta.lambda.280(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.283(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r3 = alloca ptr
   %r8 = alloca ptr
@@ -222396,7 +223555,7 @@ no.exception.93:
   call void @lerta_release(ptr %r510)
   ret void
 }
-define private void @lerta.lambda.281(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.284(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r13 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -222551,7 +223710,7 @@ no.exception.24:
   call void @lerta_release(ptr %r43)
   ret void
 }
-define private void @"lerta.lambda.281.drop"(ptr %closure) {
+define private void @"lerta.lambda.284.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -222562,13 +223721,13 @@ define ptr @"lerta.fn.codegen/yielding.lerta.generator_kind"(ptr %p0, ptr %p1) {
 entry:
   %r0 = alloca ptr
   %r6 = alloca ptr
-  store ptr @"lerta.closure.lerta.lambda.280", ptr %r0
+  store ptr @"lerta.closure.lerta.lambda.283", ptr %r0
   call void @lerta_retain(ptr %p1)
   %r1 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r2 = ptrtoint ptr %r1 to i64
-  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.lambda.281.drop")
+  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.lambda.284.drop")
   %r4 = getelementptr { i64, ptr, ptr }, ptr %r3, i32 0, i32 2
-  store ptr @lerta.lambda.281, ptr %r4
+  store ptr @lerta.lambda.284, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr }, ptr %r3, i32 0, i32 3
   store ptr %p1, ptr %r5
   store ptr %r3, ptr %r6
@@ -223284,7 +224443,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.282(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.285(ptr %closure, ptr %p0) {
 entry:
   %r7 = alloca ptr
   %r15 = alloca ptr
@@ -223444,7 +224603,7 @@ no.exception.14:
   call void @lerta_release(ptr %r71)
   ret ptr %r67
 }
-define private void @"lerta.lambda.282.drop"(ptr %closure) {
+define private void @"lerta.lambda.285.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -223457,7 +224616,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private ptr @lerta.lambda.283(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.286(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -223493,7 +224652,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r9
 }
-define private void @"lerta.lambda.283.drop"(ptr %closure) {
+define private void @"lerta.lambda.286.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -224338,9 +225497,9 @@ case.arm.155:
   call void @lerta_retain(ptr %p1)
   %r304 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r305 = ptrtoint ptr %r304 to i64
-  %r306 = call ptr @lerta_alloc(i64 %r305, ptr @"lerta.lambda.282.drop")
+  %r306 = call ptr @lerta_alloc(i64 %r305, ptr @"lerta.lambda.285.drop")
   %r307 = getelementptr { i64, ptr, ptr }, ptr %r306, i32 0, i32 2
-  store ptr @lerta.lambda.282, ptr %r307
+  store ptr @lerta.lambda.285, ptr %r307
   %r308 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r306, i32 0, i32 3
   store ptr %r303, ptr %r308
   %r309 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r306, i32 0, i32 4
@@ -224432,9 +225591,9 @@ case.arm.167:
   call void @lerta_retain(ptr %p1)
   %r348 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r349 = ptrtoint ptr %r348 to i64
-  %r350 = call ptr @lerta_alloc(i64 %r349, ptr @"lerta.lambda.283.drop")
+  %r350 = call ptr @lerta_alloc(i64 %r349, ptr @"lerta.lambda.286.drop")
   %r351 = getelementptr { i64, ptr, ptr }, ptr %r350, i32 0, i32 2
-  store ptr @lerta.lambda.283, ptr %r351
+  store ptr @lerta.lambda.286, ptr %r351
   %r352 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r350, i32 0, i32 3
   store ptr %p0, ptr %r352
   %r353 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r350, i32 0, i32 4
@@ -224688,7 +225847,7 @@ no.exception.5:
   call void @lerta_release(ptr %r25)
   ret ptr %r23
 }
-define private void @lerta.lambda.284(ptr %closure) {
+define private void @lerta.lambda.287(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -224719,7 +225878,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.284.drop"(ptr %closure) {
+define private void @"lerta.lambda.287.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -224868,9 +226027,9 @@ no.exception.12:
   call void @lerta_retain(ptr %r49)
   %r50 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r51 = ptrtoint ptr %r50 to i64
-  %r52 = call ptr @lerta_alloc(i64 %r51, ptr @"lerta.lambda.284.drop")
+  %r52 = call ptr @lerta_alloc(i64 %r51, ptr @"lerta.lambda.287.drop")
   %r53 = getelementptr { i64, ptr, ptr }, ptr %r52, i32 0, i32 2
-  store ptr @lerta.lambda.284, ptr %r53
+  store ptr @lerta.lambda.287, ptr %r53
   %r54 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r52, i32 0, i32 3
   store ptr %p0, ptr %r54
   %r55 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r52, i32 0, i32 4
@@ -225028,7 +226187,7 @@ no.exception.25:
   call void @lerta_release(ptr %r111)
   ret ptr %r107
 }
-define private ptr @lerta.lambda.285(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.288(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -225053,7 +226212,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.285.drop"(ptr %closure) {
+define private void @"lerta.lambda.288.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -225099,9 +226258,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r9)
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r11 = ptrtoint ptr %r10 to i64
-  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.285.drop")
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.288.drop")
   %r13 = getelementptr { i64, ptr, ptr }, ptr %r12, i32 0, i32 2
-  store ptr @lerta.lambda.285, ptr %r13
+  store ptr @lerta.lambda.288, ptr %r13
   %r14 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r12, i32 0, i32 3
   store ptr %p0, ptr %r14
   %r15 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r12, i32 0, i32 4
@@ -225183,7 +226342,7 @@ no.exception.11:
   call void @lerta_release(ptr %r46)
   ret ptr %r38
 }
-define private i1 @lerta.lambda.286(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.289(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -225202,14 +226361,14 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r6
 }
-define private void @"lerta.lambda.286.drop"(ptr %closure) {
+define private void @"lerta.lambda.289.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private ptr @lerta.lambda.287(ptr %closure) {
+define private ptr @lerta.lambda.290(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -225228,7 +226387,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r4
 }
-define private void @"lerta.lambda.287.drop"(ptr %closure) {
+define private void @"lerta.lambda.290.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -225360,9 +226519,9 @@ no.exception.11:
   call void @lerta_retain(ptr %p3)
   %r41 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r42 = ptrtoint ptr %r41 to i64
-  %r43 = call ptr @lerta_alloc(i64 %r42, ptr @"lerta.lambda.286.drop")
+  %r43 = call ptr @lerta_alloc(i64 %r42, ptr @"lerta.lambda.289.drop")
   %r44 = getelementptr { i64, ptr, ptr }, ptr %r43, i32 0, i32 2
-  store ptr @lerta.lambda.286, ptr %r44
+  store ptr @lerta.lambda.289, ptr %r44
   %r45 = getelementptr { i64, ptr, ptr, ptr }, ptr %r43, i32 0, i32 3
   store ptr %p3, ptr %r45
   %r46 = call ptr @"lerta.extend.std:builtins.Self.find<Array<checker/object_types.lerta.FieldInfo>, checker/object_types.lerta.FieldInfo>"(ptr %r40, ptr %r43)
@@ -225550,9 +226709,9 @@ no.exception.27:
   call void @lerta_retain(ptr %r120)
   %r121 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r122 = ptrtoint ptr %r121 to i64
-  %r123 = call ptr @lerta_alloc(i64 %r122, ptr @"lerta.lambda.287.drop")
+  %r123 = call ptr @lerta_alloc(i64 %r122, ptr @"lerta.lambda.290.drop")
   %r124 = getelementptr { i64, ptr, ptr }, ptr %r123, i32 0, i32 2
-  store ptr @lerta.lambda.287, ptr %r124
+  store ptr @lerta.lambda.290, ptr %r124
   %r125 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r123, i32 0, i32 3
   store ptr %p0, ptr %r125
   %r126 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r123, i32 0, i32 4
@@ -225732,7 +226891,7 @@ no.exception.40:
   call void @lerta_release(ptr %r200)
   ret ptr %r191
 }
-define private ptr @lerta.lambda.288(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.291(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -225757,7 +226916,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.288.drop"(ptr %closure) {
+define private void @"lerta.lambda.291.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -225807,9 +226966,9 @@ if.end.2:
   call void @lerta_retain(ptr %p3)
   %r7 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r8 = ptrtoint ptr %r7 to i64
-  %r9 = call ptr @lerta_alloc(i64 %r8, ptr @"lerta.lambda.288.drop")
+  %r9 = call ptr @lerta_alloc(i64 %r8, ptr @"lerta.lambda.291.drop")
   %r10 = getelementptr { i64, ptr, ptr }, ptr %r9, i32 0, i32 2
-  store ptr @lerta.lambda.288, ptr %r10
+  store ptr @lerta.lambda.291, ptr %r10
   %r11 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r9, i32 0, i32 3
   store ptr %p0, ptr %r11
   %r12 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r9, i32 0, i32 4
@@ -227972,7 +229131,7 @@ no.exception.35:
   call void @lerta_release(ptr %r166)
   ret void
 }
-define private void @lerta.lambda.289(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.292(ptr %closure, ptr %p0) {
 entry:
   %r13 = alloca ptr
   %r26 = alloca i64
@@ -228042,7 +229201,7 @@ no.exception.3:
   call void @lerta_release(ptr %r28)
   ret void
 }
-define private void @"lerta.lambda.289.drop"(ptr %closure) {
+define private void @"lerta.lambda.292.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -228124,9 +229283,9 @@ continue.8:
   call void @lerta_retain(ptr %p1)
   %r23 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r24 = ptrtoint ptr %r23 to i64
-  %r25 = call ptr @lerta_alloc(i64 %r24, ptr @"lerta.lambda.289.drop")
+  %r25 = call ptr @lerta_alloc(i64 %r24, ptr @"lerta.lambda.292.drop")
   %r26 = getelementptr { i64, ptr, ptr }, ptr %r25, i32 0, i32 2
-  store ptr @lerta.lambda.289, ptr %r26
+  store ptr @lerta.lambda.292, ptr %r26
   %r27 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r25, i32 0, i32 3
   store ptr %p0, ptr %r27
   %r28 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r25, i32 0, i32 4
@@ -228880,7 +230039,7 @@ no.exception.5:
   call void @lerta_release(ptr %r39)
   ret void
 }
-define private void @lerta.lambda.290(ptr %closure) {
+define private void @lerta.lambda.293(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -228903,7 +230062,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.290.drop"(ptr %closure) {
+define private void @"lerta.lambda.293.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -229036,9 +230195,9 @@ no.exception.13:
   call void @lerta_retain(ptr %r41)
   %r42 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r43 = ptrtoint ptr %r42 to i64
-  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.lambda.290.drop")
+  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.lambda.293.drop")
   %r45 = getelementptr { i64, ptr, ptr }, ptr %r44, i32 0, i32 2
-  store ptr @lerta.lambda.290, ptr %r45
+  store ptr @lerta.lambda.293, ptr %r45
   %r46 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r44, i32 0, i32 3
   store ptr %p0, ptr %r46
   %r47 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r44, i32 0, i32 4
@@ -229084,7 +230243,7 @@ no.exception.15:
   call void @lerta_release(ptr %r63)
   ret ptr %r59
 }
-define private void @lerta.lambda.291(ptr %closure) {
+define private void @lerta.lambda.294(ptr %closure) {
 entry:
   %r24 = alloca ptr
   %r29 = alloca ptr
@@ -229411,7 +230570,7 @@ no.exception.34:
   call void @lerta_release(ptr %r117)
   ret void
 }
-define private void @"lerta.lambda.291.drop"(ptr %closure) {
+define private void @"lerta.lambda.294.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -229587,9 +230746,9 @@ continue.5:
   call void @lerta_retain(ptr %r64)
   %r65 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r66 = ptrtoint ptr %r65 to i64
-  %r67 = call ptr @lerta_alloc(i64 %r66, ptr @"lerta.lambda.291.drop")
+  %r67 = call ptr @lerta_alloc(i64 %r66, ptr @"lerta.lambda.294.drop")
   %r68 = getelementptr { i64, ptr, ptr }, ptr %r67, i32 0, i32 2
-  store ptr @lerta.lambda.291, ptr %r68
+  store ptr @lerta.lambda.294, ptr %r68
   %r69 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r67, i32 0, i32 3
   store ptr %p0, ptr %r69
   %r70 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r67, i32 0, i32 4
@@ -229713,7 +230872,7 @@ if.end.4:
   call void @lerta_retain(ptr %p1)
   ret ptr %p1
 }
-define private void @lerta.lambda.292(ptr %closure) {
+define private void @lerta.lambda.295(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -229728,7 +230887,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.292.drop"(ptr %closure) {
+define private void @"lerta.lambda.295.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -229868,9 +231027,9 @@ no.exception.14:
   call void @lerta_retain(ptr %p0)
   %r43 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r44 = ptrtoint ptr %r43 to i64
-  %r45 = call ptr @lerta_alloc(i64 %r44, ptr @"lerta.lambda.292.drop")
+  %r45 = call ptr @lerta_alloc(i64 %r44, ptr @"lerta.lambda.295.drop")
   %r46 = getelementptr { i64, ptr, ptr }, ptr %r45, i32 0, i32 2
-  store ptr @lerta.lambda.292, ptr %r46
+  store ptr @lerta.lambda.295, ptr %r46
   %r47 = getelementptr { i64, ptr, ptr, ptr }, ptr %r45, i32 0, i32 3
   store ptr %p0, ptr %r47
   call void @"lerta.fn.codegen/exceptions.lerta.while_holding"(ptr %p0, ptr %r41, ptr %r42, ptr %r45)
@@ -230098,7 +231257,7 @@ no.exception.36:
   call void @lerta_release(ptr %r134)
   ret ptr %r120
 }
-define private void @lerta.lambda.293(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.296(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r10 = alloca i64
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -230138,14 +231297,14 @@ if.else.1:
 if.end.2:
   ret void
 }
-define private void @"lerta.lambda.293.drop"(ptr %closure) {
+define private void @"lerta.lambda.296.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private void @lerta.lambda.294(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.297(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r17 = alloca i64
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -230256,7 +231415,7 @@ if.else.3:
 if.end.4:
   ret void
 }
-define private void @"lerta.lambda.294.drop"(ptr %closure) {
+define private void @"lerta.lambda.297.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -230275,21 +231434,21 @@ entry:
   call void @lerta_release(ptr %r9)
   ret void
 }
-define private ptr @lerta.lambda.295(ptr %closure) {
+define private ptr @lerta.lambda.298(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   ret ptr %r1
 }
-define private void @"lerta.lambda.295.drop"(ptr %closure) {
+define private void @"lerta.lambda.298.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private void @lerta.lambda.296(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.299(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r17 = alloca ptr
   %r26 = alloca i64
@@ -230374,7 +231533,7 @@ no.exception.5:
   call void @lerta_release(ptr %r33)
   ret void
 }
-define private void @"lerta.lambda.296.drop"(ptr %closure) {
+define private void @"lerta.lambda.299.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -230396,7 +231555,7 @@ entry:
   call void @lerta_release(ptr %r11)
   ret void
 }
-define private ptr @lerta.lambda.297(ptr %closure) {
+define private ptr @lerta.lambda.300(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -230423,7 +231582,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r8
 }
-define private void @"lerta.lambda.297.drop"(ptr %closure) {
+define private void @"lerta.lambda.300.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -230452,9 +231611,9 @@ entry:
   call void @lerta_retain(ptr %p3)
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.293.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.296.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.293, ptr %r3
+  store ptr @lerta.lambda.296, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p3, ptr %r4
   store ptr %r2, ptr %r5
@@ -230512,9 +231671,9 @@ no.exception.6:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.294.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.297.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.294, ptr %r29
+  store ptr @lerta.lambda.297, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %p2, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -230533,9 +231692,9 @@ no.exception.6:
   call void @lerta_retain(ptr %r37)
   %r38 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r39 = ptrtoint ptr %r38 to i64
-  %r40 = call ptr @lerta_alloc(i64 %r39, ptr @"lerta.lambda.295.drop")
+  %r40 = call ptr @lerta_alloc(i64 %r39, ptr @"lerta.lambda.298.drop")
   %r41 = getelementptr { i64, ptr, ptr }, ptr %r40, i32 0, i32 2
-  store ptr @lerta.lambda.295, ptr %r41
+  store ptr @lerta.lambda.298, ptr %r41
   %r42 = getelementptr { i64, ptr, ptr, ptr }, ptr %r40, i32 0, i32 3
   store ptr %r37, ptr %r42
   call void @lerta_retain(ptr %p4)
@@ -230749,9 +231908,9 @@ no.exception.27:
   call void @lerta_retain(ptr %r119)
   %r120 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r121 = ptrtoint ptr %r120 to i64
-  %r122 = call ptr @lerta_alloc(i64 %r121, ptr @"lerta.lambda.296.drop")
+  %r122 = call ptr @lerta_alloc(i64 %r121, ptr @"lerta.lambda.299.drop")
   %r123 = getelementptr { i64, ptr, ptr }, ptr %r122, i32 0, i32 2
-  store ptr @lerta.lambda.296, ptr %r123
+  store ptr @lerta.lambda.299, ptr %r123
   %r124 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r122, i32 0, i32 3
   store ptr %p0, ptr %r124
   %r125 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r122, i32 0, i32 4
@@ -230772,9 +231931,9 @@ no.exception.27:
   call void @lerta_retain(ptr %r132)
   %r133 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r134 = ptrtoint ptr %r133 to i64
-  %r135 = call ptr @lerta_alloc(i64 %r134, ptr @"lerta.lambda.297.drop")
+  %r135 = call ptr @lerta_alloc(i64 %r134, ptr @"lerta.lambda.300.drop")
   %r136 = getelementptr { i64, ptr, ptr }, ptr %r135, i32 0, i32 2
-  store ptr @lerta.lambda.297, ptr %r136
+  store ptr @lerta.lambda.300, ptr %r136
   %r137 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r135, i32 0, i32 3
   store ptr %p0, ptr %r137
   %r138 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r135, i32 0, i32 4
@@ -230883,7 +232042,7 @@ no.exception.33:
   call void @lerta_release(ptr %r179)
   ret void
 }
-define private void @lerta.lambda.299(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.302(ptr %closure, ptr %p0) {
 entry:
   %r18 = alloca i64
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -230940,7 +232099,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.299.drop"(ptr %closure) {
+define private void @"lerta.lambda.302.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -230962,7 +232121,7 @@ entry:
   call void @lerta_release(ptr %r11)
   ret void
 }
-define private void @lerta.lambda.298(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
+define private void @lerta.lambda.301(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
 entry:
   %r21 = alloca ptr
   %r34 = alloca ptr
@@ -231108,9 +232267,9 @@ no.exception.13:
   call void @lerta_retain(ptr %r53)
   %r54 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r55 = ptrtoint ptr %r54 to i64
-  %r56 = call ptr @lerta_alloc(i64 %r55, ptr @"lerta.lambda.299.drop")
+  %r56 = call ptr @lerta_alloc(i64 %r55, ptr @"lerta.lambda.302.drop")
   %r57 = getelementptr { i64, ptr, ptr }, ptr %r56, i32 0, i32 2
-  store ptr @lerta.lambda.299, ptr %r57
+  store ptr @lerta.lambda.302, ptr %r57
   %r58 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r56, i32 0, i32 3
   store ptr %r5, ptr %r58
   %r59 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r56, i32 0, i32 4
@@ -231156,7 +232315,7 @@ no.exception.15:
   call void @lerta_release(ptr %r73)
   ret void
 }
-define private void @"lerta.lambda.298.drop"(ptr %closure) {
+define private void @"lerta.lambda.301.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -231178,7 +232337,7 @@ entry:
   call void @lerta_release(ptr %r11)
   ret void
 }
-define private void @lerta.lambda.300(ptr %closure) {
+define private void @lerta.lambda.303(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -231193,7 +232352,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.300.drop"(ptr %closure) {
+define private void @"lerta.lambda.303.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -231398,9 +232557,9 @@ no.exception.19:
   call void @lerta_retain(ptr %p5)
   %r71 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r72 = ptrtoint ptr %r71 to i64
-  %r73 = call ptr @lerta_alloc(i64 %r72, ptr @"lerta.lambda.298.drop")
+  %r73 = call ptr @lerta_alloc(i64 %r72, ptr @"lerta.lambda.301.drop")
   %r74 = getelementptr { i64, ptr, ptr }, ptr %r73, i32 0, i32 2
-  store ptr @lerta.lambda.298, ptr %r74
+  store ptr @lerta.lambda.301, ptr %r74
   %r75 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r73, i32 0, i32 3
   store ptr %p0, ptr %r75
   %r76 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r73, i32 0, i32 4
@@ -231428,9 +232587,9 @@ no.exception.19:
   call void @lerta_retain(ptr %p0)
   %r87 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r88 = ptrtoint ptr %r87 to i64
-  %r89 = call ptr @lerta_alloc(i64 %r88, ptr @"lerta.lambda.300.drop")
+  %r89 = call ptr @lerta_alloc(i64 %r88, ptr @"lerta.lambda.303.drop")
   %r90 = getelementptr { i64, ptr, ptr }, ptr %r89, i32 0, i32 2
-  store ptr @lerta.lambda.300, ptr %r90
+  store ptr @lerta.lambda.303, ptr %r90
   %r91 = getelementptr { i64, ptr, ptr, ptr }, ptr %r89, i32 0, i32 3
   store ptr %p0, ptr %r91
   call void @"lerta.fn.codegen/iter_protocol.lerta.emit_iter_loop"(ptr %r83, ptr %r84, ptr %r85, ptr %r86, ptr %r89)
@@ -231512,7 +232671,7 @@ no.exception.25:
   call void @lerta_release(ptr %r120)
   ret void
 }
-define private void @lerta.lambda.301(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.304(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -231535,7 +232694,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.301.drop"(ptr %closure) {
+define private void @"lerta.lambda.304.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -232238,9 +233397,9 @@ no.exception.45:
   call void @lerta_retain(ptr %r280)
   %r281 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r282 = ptrtoint ptr %r281 to i64
-  %r283 = call ptr @lerta_alloc(i64 %r282, ptr @"lerta.lambda.301.drop")
+  %r283 = call ptr @lerta_alloc(i64 %r282, ptr @"lerta.lambda.304.drop")
   %r284 = getelementptr { i64, ptr, ptr }, ptr %r283, i32 0, i32 2
-  store ptr @lerta.lambda.301, ptr %r284
+  store ptr @lerta.lambda.304, ptr %r284
   %r285 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r283, i32 0, i32 3
   store ptr %p4, ptr %r285
   %r286 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r283, i32 0, i32 4
@@ -232862,13 +234021,13 @@ define void @"lerta.module.codegen/case.lerta"() {
 entry:
   ret void
 }
-define private void @lerta.lambda.302(ptr %closure) {
+define private void @lerta.lambda.305(ptr %closure) {
 entry:
   ret void
 unreachable.0:
   ret void
 }
-define private void @lerta.lambda.303(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.306(ptr %closure, ptr %p0) {
 entry:
   %r11 = alloca ptr
   %r16 = alloca ptr
@@ -233009,7 +234168,7 @@ no.exception.14:
   call void @lerta_release(ptr %r51)
   ret void
 }
-define private void @"lerta.lambda.303.drop"(ptr %closure) {
+define private void @"lerta.lambda.306.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -233146,7 +234305,7 @@ else.11:
 then.end.12:
   %r38 = phi i1 [ %r37, %no.exception.14 ], [ false, %else.11 ]
   store i1 %r38, ptr %r39
-  store ptr @"lerta.closure.lerta.lambda.302", ptr %r40
+  store ptr @"lerta.closure.lerta.lambda.305", ptr %r40
   %r41 = load i1, ptr %r39
   br i1 %r41, label %then.15, label %else.16
 then.15:
@@ -233248,9 +234407,9 @@ no.exception.25:
   call void @lerta_retain(ptr %r82)
   %r83 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r84 = ptrtoint ptr %r83 to i64
-  %r85 = call ptr @lerta_alloc(i64 %r84, ptr @"lerta.lambda.303.drop")
+  %r85 = call ptr @lerta_alloc(i64 %r84, ptr @"lerta.lambda.306.drop")
   %r86 = getelementptr { i64, ptr, ptr }, ptr %r85, i32 0, i32 2
-  store ptr @lerta.lambda.303, ptr %r86
+  store ptr @lerta.lambda.306, ptr %r86
   %r87 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r85, i32 0, i32 3
   store ptr %p0, ptr %r87
   %r88 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r85, i32 0, i32 4
@@ -233978,7 +235137,7 @@ no.exception.66:
   call void @lerta_release(ptr %r408)
   ret ptr %r397
 }
-define private ptr @lerta.lambda.304(ptr %closure, ptr %p0, ptr %p1) {
+define private ptr @lerta.lambda.307(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r17 = alloca ptr
   %r20 = alloca ptr
@@ -234115,7 +235274,7 @@ no.exception.14:
   call void @lerta_release(ptr %r48)
   ret ptr %r46
 }
-define private void @"lerta.lambda.304.drop"(ptr %closure) {
+define private void @"lerta.lambda.307.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -234322,9 +235481,9 @@ no.exception.15:
   call void @lerta_retain(ptr %r71)
   %r72 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r73 = ptrtoint ptr %r72 to i64
-  %r74 = call ptr @lerta_alloc(i64 %r73, ptr @"lerta.lambda.304.drop")
+  %r74 = call ptr @lerta_alloc(i64 %r73, ptr @"lerta.lambda.307.drop")
   %r75 = getelementptr { i64, ptr, ptr }, ptr %r74, i32 0, i32 2
-  store ptr @lerta.lambda.304, ptr %r75
+  store ptr @lerta.lambda.307, ptr %r75
   %r76 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r74, i32 0, i32 3
   store ptr %r70, ptr %r76
   %r77 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r74, i32 0, i32 4
@@ -234514,7 +235673,7 @@ no.exception.25:
   call void @lerta_release(ptr %r160)
   ret ptr %r144
 }
-define private ptr @lerta.lambda.305(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
+define private ptr @lerta.lambda.308(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
 entry:
   %r11 = alloca ptr
   %r14 = alloca ptr
@@ -234643,7 +235802,7 @@ no.exception.14:
   call void @lerta_release(ptr %r42)
   ret ptr %r40
 }
-define private void @"lerta.lambda.305.drop"(ptr %closure) {
+define private void @"lerta.lambda.308.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -234892,9 +236051,9 @@ no.exception.25:
   call void @lerta_retain(ptr %r81)
   %r82 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r83 = ptrtoint ptr %r82 to i64
-  %r84 = call ptr @lerta_alloc(i64 %r83, ptr @"lerta.lambda.305.drop")
+  %r84 = call ptr @lerta_alloc(i64 %r83, ptr @"lerta.lambda.308.drop")
   %r85 = getelementptr { i64, ptr, ptr }, ptr %r84, i32 0, i32 2
-  store ptr @lerta.lambda.305, ptr %r85
+  store ptr @lerta.lambda.308, ptr %r85
   %r86 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r84, i32 0, i32 3
   store ptr %r80, ptr %r86
   %r87 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r84, i32 0, i32 4
@@ -235191,7 +236350,7 @@ case.end.0:
   %r24 = phi ptr [ @lerta.string.2973, %case.arm.3 ], [ @lerta.string.2974, %case.arm.7 ], [ %r21, %no.exception.18 ]
   ret ptr %r24
 }
-define private ptr @lerta.lambda.307(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.310(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -235220,7 +236379,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r8
 }
-define private void @"lerta.lambda.307.drop"(ptr %closure) {
+define private void @"lerta.lambda.310.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -235233,7 +236392,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private ptr @lerta.lambda.306(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.309(ptr %closure, ptr %p0) {
 entry:
   %r24 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -235284,9 +236443,9 @@ if.end.5:
   call void @lerta_retain(ptr %p0)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.307.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.310.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.307, ptr %r20
+  store ptr @lerta.lambda.310, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r3, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -235343,7 +236502,7 @@ unwind.12:
 no.exception.13:
   ret ptr %r34
 }
-define private void @"lerta.lambda.306.drop"(ptr %closure) {
+define private void @"lerta.lambda.309.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -235414,9 +236573,9 @@ coalesce.end.1:
   call void @lerta_retain(ptr %p3)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.306.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.309.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.306, ptr %r20
+  store ptr @lerta.lambda.309, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r16, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -235655,58 +236814,68 @@ entry:
   %r1 = load ptr, ptr %r0
   %r2 = icmp eq ptr %r1, @"lerta.drop.types.lerta.UnionType"
   call void @lerta_release(ptr %p2)
-  br i1 %r2, label %if.then.0, label %if.else.1
-if.then.0:
-  call void @lerta_retain(ptr %p0)
-  %r3 = getelementptr %"lerta.object.codegen/generator.lerta.Generator", ptr %p0, i32 0, i32 6
+  br i1 %r2, label %logical.end.1, label %logical.right.0
+logical.right.0:
+  call void @lerta_retain(ptr %p2)
+  %r3 = getelementptr { i64, ptr }, ptr %p2, i32 0, i32 1
   %r4 = load ptr, ptr %r3
-  call void @lerta_retain(ptr %r4)
+  %r5 = icmp eq ptr %r4, @"lerta.drop.types.lerta.ObjectType"
+  call void @lerta_release(ptr %p2)
+  br label %logical.end.1
+logical.end.1:
+  %r6 = phi i1 [ true, %entry ], [ %r5, %logical.right.0 ]
+  br i1 %r6, label %if.then.2, label %if.else.3
+if.then.2:
+  call void @lerta_retain(ptr %p0)
+  %r7 = getelementptr %"lerta.object.codegen/generator.lerta.Generator", ptr %p0, i32 0, i32 6
+  %r8 = load ptr, ptr %r7
+  call void @lerta_retain(ptr %r8)
   call void @lerta_release(ptr %p0)
   call void @lerta_retain(ptr %p1)
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p3)
-  %r5 = call ptr @"lerta.fn.codegen/expression.lerta.type_of"(ptr %p0, ptr %p3)
+  %r9 = call ptr @"lerta.fn.codegen/expression.lerta.type_of"(ptr %p0, ptr %p3)
   call void @lerta_release(ptr %p0)
   call void @lerta_release(ptr %p3)
-  %r6 = load ptr, ptr @lerta_exception
-  %r7 = icmp ne ptr %r6, null
-  br i1 %r7, label %unwind.3, label %no.exception.4
-unwind.3:
-  call void @lerta_release(ptr %p1)
-  call void @lerta_release(ptr %r4)
-  ret ptr poison
-no.exception.4:
-  %r8 = call ptr @"lerta.fn.codegen/heap_object.lerta.emit_type_test"(ptr %r4, ptr %p1, ptr %r5)
-  call void @lerta_release(ptr %r4)
-  call void @lerta_release(ptr %p1)
-  call void @lerta_release(ptr %r5)
-  %r9 = load ptr, ptr @lerta_exception
-  %r10 = icmp ne ptr %r9, null
-  br i1 %r10, label %unwind.5, label %no.exception.6
+  %r10 = load ptr, ptr @lerta_exception
+  %r11 = icmp ne ptr %r10, null
+  br i1 %r11, label %unwind.5, label %no.exception.6
 unwind.5:
+  call void @lerta_release(ptr %p1)
+  call void @lerta_release(ptr %r8)
   ret ptr poison
 no.exception.6:
-  br label %if.end.2
-if.else.1:
+  %r12 = call ptr @"lerta.fn.codegen/heap_object.lerta.emit_type_test"(ptr %r8, ptr %p1, ptr %r9)
+  call void @lerta_release(ptr %r8)
+  call void @lerta_release(ptr %p1)
+  call void @lerta_release(ptr %r9)
+  %r13 = load ptr, ptr @lerta_exception
+  %r14 = icmp ne ptr %r13, null
+  br i1 %r14, label %unwind.7, label %no.exception.8
+unwind.7:
+  ret ptr poison
+no.exception.8:
+  br label %if.end.4
+if.else.3:
   call void @lerta_retain(ptr %p0)
   call void @lerta_retain(ptr %p1)
   call void @lerta_retain(ptr %p2)
   call void @lerta_retain(ptr %p3)
-  %r11 = call ptr @"lerta.fn.codegen/case.lerta.value_test"(ptr %p0, ptr %p1, ptr %p2, ptr %p3)
+  %r15 = call ptr @"lerta.fn.codegen/case.lerta.value_test"(ptr %p0, ptr %p1, ptr %p2, ptr %p3)
   call void @lerta_release(ptr %p0)
   call void @lerta_release(ptr %p1)
   call void @lerta_release(ptr %p2)
   call void @lerta_release(ptr %p3)
-  %r12 = load ptr, ptr @lerta_exception
-  %r13 = icmp ne ptr %r12, null
-  br i1 %r13, label %unwind.7, label %no.exception.8
-unwind.7:
+  %r16 = load ptr, ptr @lerta_exception
+  %r17 = icmp ne ptr %r16, null
+  br i1 %r17, label %unwind.9, label %no.exception.10
+unwind.9:
   ret ptr poison
-no.exception.8:
-  br label %if.end.2
-if.end.2:
-  %r14 = phi ptr [ %r8, %no.exception.6 ], [ %r11, %no.exception.8 ]
-  ret ptr %r14
+no.exception.10:
+  br label %if.end.4
+if.end.4:
+  %r18 = phi ptr [ %r12, %no.exception.8 ], [ %r15, %no.exception.10 ]
+  ret ptr %r18
 }
 define ptr @"lerta.fn.codegen/case.lerta.value_test"(ptr %p0, ptr %p1, ptr %p2, ptr %p3) {
 entry:
@@ -236133,7 +237302,7 @@ unwind.4:
 no.exception.5:
   ret void
 }
-define private void @lerta.lambda.308(ptr %closure) {
+define private void @lerta.lambda.311(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -236156,7 +237325,7 @@ no.exception.1:
   call void @lerta_release(ptr %r10)
   ret void
 }
-define private void @"lerta.lambda.308.drop"(ptr %closure) {
+define private void @"lerta.lambda.311.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -236179,9 +237348,9 @@ entry:
   call void @lerta_retain(ptr %p3)
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r6 = ptrtoint ptr %r5 to i64
-  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.308.drop")
+  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.311.drop")
   %r8 = getelementptr { i64, ptr, ptr }, ptr %r7, i32 0, i32 2
-  store ptr @lerta.lambda.308, ptr %r8
+  store ptr @lerta.lambda.311, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 3
   store ptr %r2, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 4
@@ -236269,7 +237438,7 @@ unwind.6:
 no.exception.7:
   ret void
 }
-define private void @lerta.lambda.309(ptr %closure) {
+define private void @lerta.lambda.312(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -236288,7 +237457,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.309.drop"(ptr %closure) {
+define private void @"lerta.lambda.312.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -236305,9 +237474,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.309.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.312.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.309, ptr %r3
+  store ptr @lerta.lambda.312, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p0, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -236323,7 +237492,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @lerta.lambda.310(ptr %closure) {
+define private void @lerta.lambda.313(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -236338,7 +237507,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.310.drop"(ptr %closure) {
+define private void @"lerta.lambda.313.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -236355,9 +237524,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r2 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r3 = ptrtoint ptr %r2 to i64
-  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.310.drop")
+  %r4 = call ptr @lerta_alloc(i64 %r3, ptr @"lerta.lambda.313.drop")
   %r5 = getelementptr { i64, ptr, ptr }, ptr %r4, i32 0, i32 2
-  store ptr @lerta.lambda.310, ptr %r5
+  store ptr @lerta.lambda.313, ptr %r5
   %r6 = getelementptr { i64, ptr, ptr, ptr }, ptr %r4, i32 0, i32 3
   store ptr %p0, ptr %r6
   call void @"lerta.fn.codegen/exceptions.lerta.emit_check_with"(ptr %r1, ptr %r4)
@@ -237180,7 +238349,7 @@ unwind.12:
 no.exception.13:
   ret ptr @lerta.string.3007
 }
-define private void @lerta.lambda.311(ptr %closure, ptr %p0, ptr %p1) {
+define private void @lerta.lambda.314(ptr %closure, ptr %p0, ptr %p1) {
 entry:
   %r11 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -237306,7 +238475,7 @@ no.exception.14:
   call void @lerta_release(ptr %r43)
   ret void
 }
-define private void @"lerta.lambda.311.drop"(ptr %closure) {
+define private void @"lerta.lambda.314.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -237322,7 +238491,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private void @lerta.lambda.312(ptr %closure) {
+define private void @lerta.lambda.315(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -237348,7 +238517,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.312.drop"(ptr %closure) {
+define private void @"lerta.lambda.315.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -237358,7 +238527,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @lerta.lambda.313(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.316(ptr %closure, ptr %p0) {
 entry:
   %r16 = alloca i64
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -237400,7 +238569,7 @@ no.exception.1:
   call void @lerta_release(ptr %r12)
   ret void
 }
-define private void @"lerta.lambda.313.drop"(ptr %closure) {
+define private void @"lerta.lambda.316.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -237416,7 +238585,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private void @lerta.lambda.314(ptr %closure) {
+define private void @lerta.lambda.317(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -237445,7 +238614,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.314.drop"(ptr %closure) {
+define private void @"lerta.lambda.317.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -237458,7 +238627,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private void @lerta.lambda.315(ptr %closure) {
+define private void @lerta.lambda.318(ptr %closure) {
 entry:
   %r7 = alloca ptr
   %r18 = alloca ptr
@@ -237521,7 +238690,7 @@ for.exit.5:
   call void @lerta_release(ptr %r25)
   ret void
 }
-define private void @"lerta.lambda.315.drop"(ptr %closure) {
+define private void @"lerta.lambda.318.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -237652,9 +238821,9 @@ no.exception.7:
   call void @lerta_retain(ptr %r39)
   %r40 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r41 = ptrtoint ptr %r40 to i64
-  %r42 = call ptr @lerta_alloc(i64 %r41, ptr @"lerta.lambda.311.drop")
+  %r42 = call ptr @lerta_alloc(i64 %r41, ptr @"lerta.lambda.314.drop")
   %r43 = getelementptr { i64, ptr, ptr }, ptr %r42, i32 0, i32 2
-  store ptr @lerta.lambda.311, ptr %r43
+  store ptr @lerta.lambda.314, ptr %r43
   %r44 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r42, i32 0, i32 3
   store ptr %p0, ptr %r44
   %r45 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r42, i32 0, i32 4
@@ -237672,9 +238841,9 @@ no.exception.7:
   call void @lerta_retain(ptr %p1)
   %r51 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r52 = ptrtoint ptr %r51 to i64
-  %r53 = call ptr @lerta_alloc(i64 %r52, ptr @"lerta.lambda.312.drop")
+  %r53 = call ptr @lerta_alloc(i64 %r52, ptr @"lerta.lambda.315.drop")
   %r54 = getelementptr { i64, ptr, ptr }, ptr %r53, i32 0, i32 2
-  store ptr @lerta.lambda.312, ptr %r54
+  store ptr @lerta.lambda.315, ptr %r54
   %r55 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r53, i32 0, i32 3
   store ptr %r50, ptr %r55
   %r56 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r53, i32 0, i32 4
@@ -238485,9 +239654,9 @@ then.end.58:
   call void @lerta_retain(ptr %r413)
   %r414 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r415 = ptrtoint ptr %r414 to i64
-  %r416 = call ptr @lerta_alloc(i64 %r415, ptr @"lerta.lambda.313.drop")
+  %r416 = call ptr @lerta_alloc(i64 %r415, ptr @"lerta.lambda.316.drop")
   %r417 = getelementptr { i64, ptr, ptr }, ptr %r416, i32 0, i32 2
-  store ptr @lerta.lambda.313, ptr %r417
+  store ptr @lerta.lambda.316, ptr %r417
   %r418 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r416, i32 0, i32 3
   store ptr %r411, ptr %r418
   %r419 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r416, i32 0, i32 4
@@ -238505,9 +239674,9 @@ then.end.58:
   call void @lerta_retain(ptr %r425)
   %r426 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r427 = ptrtoint ptr %r426 to i64
-  %r428 = call ptr @lerta_alloc(i64 %r427, ptr @"lerta.lambda.314.drop")
+  %r428 = call ptr @lerta_alloc(i64 %r427, ptr @"lerta.lambda.317.drop")
   %r429 = getelementptr { i64, ptr, ptr }, ptr %r428, i32 0, i32 2
-  store ptr @lerta.lambda.314, ptr %r429
+  store ptr @lerta.lambda.317, ptr %r429
   %r430 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r428, i32 0, i32 3
   store ptr %r423, ptr %r430
   %r431 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r428, i32 0, i32 4
@@ -239426,9 +240595,9 @@ no.exception.116:
   call void @lerta_retain(ptr %p0)
   %r821 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r822 = ptrtoint ptr %r821 to i64
-  %r823 = call ptr @lerta_alloc(i64 %r822, ptr @"lerta.lambda.315.drop")
+  %r823 = call ptr @lerta_alloc(i64 %r822, ptr @"lerta.lambda.318.drop")
   %r824 = getelementptr { i64, ptr, ptr }, ptr %r823, i32 0, i32 2
-  store ptr @lerta.lambda.315, ptr %r824
+  store ptr @lerta.lambda.318, ptr %r824
   %r825 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r823, i32 0, i32 3
   store ptr %r820, ptr %r825
   %r826 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r823, i32 0, i32 4
@@ -239829,7 +240998,7 @@ case.end.0:
   call void @lerta_release(ptr %r84)
   ret void
 }
-define private ptr @lerta.lambda.316(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.319(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -239854,7 +241023,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.316.drop"(ptr %closure) {
+define private void @"lerta.lambda.319.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -239867,7 +241036,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private void @lerta.lambda.317(ptr %closure) {
+define private void @lerta.lambda.320(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load i1, ptr %r0
@@ -239917,7 +241086,7 @@ no.exception.6:
 if.end.2:
   ret void
 }
-define private void @"lerta.lambda.317.drop"(ptr %closure) {
+define private void @"lerta.lambda.320.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 4
   %r1 = load ptr, ptr %r0
@@ -239994,9 +241163,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r19)
   %r20 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r21 = ptrtoint ptr %r20 to i64
-  %r22 = call ptr @lerta_alloc(i64 %r21, ptr @"lerta.lambda.316.drop")
+  %r22 = call ptr @lerta_alloc(i64 %r21, ptr @"lerta.lambda.319.drop")
   %r23 = getelementptr { i64, ptr, ptr }, ptr %r22, i32 0, i32 2
-  store ptr @lerta.lambda.316, ptr %r23
+  store ptr @lerta.lambda.319, ptr %r23
   %r24 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r22, i32 0, i32 3
   store ptr %p0, ptr %r24
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r22, i32 0, i32 4
@@ -240135,9 +241304,9 @@ no.exception.14:
   call void @lerta_retain(ptr %r82)
   %r83 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r84 = ptrtoint ptr %r83 to i64
-  %r85 = call ptr @lerta_alloc(i64 %r84, ptr @"lerta.lambda.317.drop")
+  %r85 = call ptr @lerta_alloc(i64 %r84, ptr @"lerta.lambda.320.drop")
   %r86 = getelementptr { i64, ptr, ptr }, ptr %r85, i32 0, i32 2
-  store ptr @lerta.lambda.317, ptr %r86
+  store ptr @lerta.lambda.320, ptr %r86
   %r87 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr, ptr }, ptr %r85, i32 0, i32 3
   store i1 %r80, ptr %r87
   %r88 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr, ptr }, ptr %r85, i32 0, i32 4
@@ -240227,7 +241396,7 @@ no.exception.18:
   call void @lerta_release(ptr %r123)
   ret void
 }
-define private i1 @lerta.lambda.318(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.321(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -240248,7 +241417,7 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private void @"lerta.lambda.318.drop"(ptr %closure) {
+define private void @"lerta.lambda.321.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -240258,7 +241427,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @lerta.lambda.319(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.322(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -240277,7 +241446,7 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r6
 }
-define private void @"lerta.lambda.319.drop"(ptr %closure) {
+define private void @"lerta.lambda.322.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -240304,9 +241473,9 @@ if.then.0:
   call void @lerta_retain(ptr %p2)
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r6 = ptrtoint ptr %r5 to i64
-  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.318.drop")
+  %r7 = call ptr @lerta_alloc(i64 %r6, ptr @"lerta.lambda.321.drop")
   %r8 = getelementptr { i64, ptr, ptr }, ptr %r7, i32 0, i32 2
-  store ptr @lerta.lambda.318, ptr %r8
+  store ptr @lerta.lambda.321, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 3
   store ptr %p0, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r7, i32 0, i32 4
@@ -240396,9 +241565,9 @@ no.exception.16:
   call void @lerta_retain(ptr %p2)
   %r37 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r38 = ptrtoint ptr %r37 to i64
-  %r39 = call ptr @lerta_alloc(i64 %r38, ptr @"lerta.lambda.319.drop")
+  %r39 = call ptr @lerta_alloc(i64 %r38, ptr @"lerta.lambda.322.drop")
   %r40 = getelementptr { i64, ptr, ptr }, ptr %r39, i32 0, i32 2
-  store ptr @lerta.lambda.319, ptr %r40
+  store ptr @lerta.lambda.322, ptr %r40
   %r41 = getelementptr { i64, ptr, ptr, ptr }, ptr %r39, i32 0, i32 3
   store ptr %p2, ptr %r41
   %r42 = call ptr @"lerta.extend.std:builtins.Self.find<Array<checker/object_types.lerta.FieldInfo>, checker/object_types.lerta.FieldInfo>"(ptr %r36, ptr %r39)
@@ -241596,7 +242765,7 @@ if.end.25:
   call void @lerta_release(ptr %r104)
   ret void
 }
-define private ptr @lerta.lambda.320(ptr %closure) {
+define private ptr @lerta.lambda.323(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -241655,7 +242824,7 @@ unwind.6:
 no.exception.7:
   ret ptr %r16
 }
-define private void @"lerta.lambda.320.drop"(ptr %closure) {
+define private void @"lerta.lambda.323.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -241668,7 +242837,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private ptr @lerta.lambda.321(ptr %closure) {
+define private ptr @lerta.lambda.324(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -241691,7 +242860,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r6
 }
-define private void @"lerta.lambda.321.drop"(ptr %closure) {
+define private void @"lerta.lambda.324.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -241723,9 +242892,9 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r5 = ptrtoint ptr %r4 to i64
-  %r6 = call ptr @lerta_alloc(i64 %r5, ptr @"lerta.lambda.320.drop")
+  %r6 = call ptr @lerta_alloc(i64 %r5, ptr @"lerta.lambda.323.drop")
   %r7 = getelementptr { i64, ptr, ptr }, ptr %r6, i32 0, i32 2
-  store ptr @lerta.lambda.320, ptr %r7
+  store ptr @lerta.lambda.323, ptr %r7
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r6, i32 0, i32 3
   store ptr %r3, ptr %r8
   %r9 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r6, i32 0, i32 4
@@ -241810,9 +242979,9 @@ if.end.4:
   call void @lerta_retain(ptr %p1)
   %r41 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r42 = ptrtoint ptr %r41 to i64
-  %r43 = call ptr @lerta_alloc(i64 %r42, ptr @"lerta.lambda.321.drop")
+  %r43 = call ptr @lerta_alloc(i64 %r42, ptr @"lerta.lambda.324.drop")
   %r44 = getelementptr { i64, ptr, ptr }, ptr %r43, i32 0, i32 2
-  store ptr @lerta.lambda.321, ptr %r44
+  store ptr @lerta.lambda.324, ptr %r44
   %r45 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r43, i32 0, i32 3
   store ptr %p0, ptr %r45
   %r46 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r43, i32 0, i32 4
@@ -242672,7 +243841,7 @@ no.exception.3:
   call void @lerta_release(ptr %r15)
   ret ptr %r11
 }
-define private void @lerta.lambda.322(ptr %closure) {
+define private void @lerta.lambda.325(ptr %closure) {
 entry:
   %r6 = alloca ptr
   %r17 = alloca ptr
@@ -242854,7 +244023,7 @@ unwind.21:
 no.exception.22:
   ret void
 }
-define private void @"lerta.lambda.322.drop"(ptr %closure) {
+define private void @"lerta.lambda.325.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -242867,7 +244036,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private void @lerta.lambda.323(ptr %closure) {
+define private void @lerta.lambda.326(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -242896,7 +244065,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.323.drop"(ptr %closure) {
+define private void @"lerta.lambda.326.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -242916,9 +244085,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.322.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.325.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.322, ptr %r3
+  store ptr @lerta.lambda.325, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p3, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -243066,9 +244235,9 @@ if.end.2:
   call void @lerta_retain(ptr %p0)
   %r49 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r50 = ptrtoint ptr %r49 to i64
-  %r51 = call ptr @lerta_alloc(i64 %r50, ptr @"lerta.lambda.323.drop")
+  %r51 = call ptr @lerta_alloc(i64 %r50, ptr @"lerta.lambda.326.drop")
   %r52 = getelementptr { i64, ptr, ptr }, ptr %r51, i32 0, i32 2
-  store ptr @lerta.lambda.323, ptr %r52
+  store ptr @lerta.lambda.326, ptr %r52
   %r53 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r51, i32 0, i32 3
   store ptr %r48, ptr %r53
   %r54 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r51, i32 0, i32 4
@@ -243156,7 +244325,7 @@ if.end.31:
   call void @lerta_release(ptr %r81)
   ret void
 }
-define private void @lerta.lambda.324(ptr %closure) {
+define private void @lerta.lambda.327(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -243172,7 +244341,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.324.drop"(ptr %closure) {
+define private void @"lerta.lambda.327.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -243297,9 +244466,9 @@ no.exception.13:
   call void @lerta_retain(ptr %r39)
   %r40 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r41 = ptrtoint ptr %r40 to i64
-  %r42 = call ptr @lerta_alloc(i64 %r41, ptr @"lerta.lambda.324.drop")
+  %r42 = call ptr @lerta_alloc(i64 %r41, ptr @"lerta.lambda.327.drop")
   %r43 = getelementptr { i64, ptr, ptr }, ptr %r42, i32 0, i32 2
-  store ptr @lerta.lambda.324, ptr %r43
+  store ptr @lerta.lambda.327, ptr %r43
   %r44 = getelementptr { i64, ptr, ptr, ptr }, ptr %r42, i32 0, i32 3
   store ptr %r39, ptr %r44
   call void @"lerta.fn.codegen/exceptions.lerta.emit_check_with"(ptr %r38, ptr %r42)
@@ -244647,7 +245816,7 @@ no.exception.37:
   call void @lerta_release(ptr %r168)
   ret void
 }
-define private void @lerta.lambda.325(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.328(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -244676,7 +245845,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.325.drop"(ptr %closure) {
+define private void @"lerta.lambda.328.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -244692,7 +245861,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private void @lerta.lambda.326(ptr %closure) {
+define private void @lerta.lambda.329(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -244712,14 +245881,14 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.326.drop"(ptr %closure) {
+define private void @"lerta.lambda.329.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private void @lerta.lambda.327(ptr %closure) {
+define private void @lerta.lambda.330(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -244740,7 +245909,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.327.drop"(ptr %closure) {
+define private void @"lerta.lambda.330.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -244996,9 +246165,9 @@ for.exit.21:
   call void @lerta_retain(ptr %p5)
   %r94 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r95 = ptrtoint ptr %r94 to i64
-  %r96 = call ptr @lerta_alloc(i64 %r95, ptr @"lerta.lambda.325.drop")
+  %r96 = call ptr @lerta_alloc(i64 %r95, ptr @"lerta.lambda.328.drop")
   %r97 = getelementptr { i64, ptr, ptr }, ptr %r96, i32 0, i32 2
-  store ptr @lerta.lambda.325, ptr %r97
+  store ptr @lerta.lambda.328, ptr %r97
   %r98 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r96, i32 0, i32 3
   store ptr %p0, ptr %r98
   %r99 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r96, i32 0, i32 4
@@ -245059,9 +246228,9 @@ continue.38:
   call void @lerta_retain(ptr %r122)
   %r123 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r124 = ptrtoint ptr %r123 to i64
-  %r125 = call ptr @lerta_alloc(i64 %r124, ptr @"lerta.lambda.326.drop")
+  %r125 = call ptr @lerta_alloc(i64 %r124, ptr @"lerta.lambda.329.drop")
   %r126 = getelementptr { i64, ptr, ptr }, ptr %r125, i32 0, i32 2
-  store ptr @lerta.lambda.326, ptr %r126
+  store ptr @lerta.lambda.329, ptr %r126
   %r127 = getelementptr { i64, ptr, ptr, ptr }, ptr %r125, i32 0, i32 3
   store ptr %r122, ptr %r127
   call void @"lerta.fn.codegen/yielding.lerta.generate_yielding_function"(ptr %p0, ptr %p1, ptr %p2, ptr %r120, ptr %r121, ptr %r125)
@@ -245135,9 +246304,9 @@ continue.45:
   call void @lerta_retain(ptr %r153)
   %r154 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r155 = ptrtoint ptr %r154 to i64
-  %r156 = call ptr @lerta_alloc(i64 %r155, ptr @"lerta.lambda.327.drop")
+  %r156 = call ptr @lerta_alloc(i64 %r155, ptr @"lerta.lambda.330.drop")
   %r157 = getelementptr { i64, ptr, ptr }, ptr %r156, i32 0, i32 2
-  store ptr @lerta.lambda.327, ptr %r157
+  store ptr @lerta.lambda.330, ptr %r157
   %r158 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r156, i32 0, i32 3
   store ptr %r152, ptr %r158
   %r159 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r156, i32 0, i32 4
@@ -245449,7 +246618,7 @@ for.exit.69:
   call void @lerta_release(ptr %r264)
   ret void
 }
-define private void @lerta.lambda.328(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
+define private void @lerta.lambda.331(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
 entry:
   %r13 = alloca i64
   %r21 = alloca i64
@@ -245525,7 +246694,7 @@ no.exception.9:
   call void @lerta_release(ptr %r17)
   ret void
 }
-define private void @"lerta.lambda.328.drop"(ptr %closure) {
+define private void @"lerta.lambda.331.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr }, ptr %closure, i32 0, i32 4
   %r1 = load ptr, ptr %r0
@@ -245538,7 +246707,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private ptr @lerta.lambda.329(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.332(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.checker/shared.lerta.Capture", ptr %p0, i32 0, i32 4
@@ -245655,9 +246824,9 @@ no.exception.5:
   call void @lerta_retain(ptr %p0)
   %r25 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr }, ptr null, i32 1
   %r26 = ptrtoint ptr %r25 to i64
-  %r27 = call ptr @lerta_alloc(i64 %r26, ptr @"lerta.lambda.328.drop")
+  %r27 = call ptr @lerta_alloc(i64 %r26, ptr @"lerta.lambda.331.drop")
   %r28 = getelementptr { i64, ptr, ptr }, ptr %r27, i32 0, i32 2
-  store ptr @lerta.lambda.328, ptr %r28
+  store ptr @lerta.lambda.331, ptr %r28
   %r29 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr }, ptr %r27, i32 0, i32 3
   store i1 %r22, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, i1, ptr, ptr, ptr }, ptr %r27, i32 0, i32 4
@@ -245884,7 +247053,7 @@ coalesce.fallback.32:
 coalesce.end.33:
   %r118 = phi ptr [ %p3, %if.end.29 ], [ %r117, %coalesce.fallback.32 ]
   store ptr %r118, ptr %r119
-  store ptr @"lerta.closure.lerta.lambda.329", ptr %r120
+  store ptr @"lerta.closure.lerta.lambda.332", ptr %r120
   %r121 = call ptr @lerta_array_create(i32 1)
   %r122 = load ptr, ptr %r119
   call void @lerta_retain(ptr %r122)
@@ -248274,7 +249443,7 @@ if.end.22:
   call void @lerta_release(ptr %r179)
   ret void
 }
-define private ptr @lerta.lambda.330(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.333(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -248307,7 +249476,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r10
 }
-define private void @"lerta.lambda.330.drop"(ptr %closure) {
+define private void @"lerta.lambda.333.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -248320,7 +249489,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private void @lerta.lambda.331(ptr %closure) {
+define private void @lerta.lambda.334(ptr %closure) {
 entry:
   %r10 = alloca ptr
   %r21 = alloca ptr
@@ -248490,7 +249659,7 @@ unwind.18:
 no.exception.19:
   ret void
 }
-define private void @"lerta.lambda.331.drop"(ptr %closure) {
+define private void @"lerta.lambda.334.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -248506,7 +249675,7 @@ entry:
   call void @lerta_release(ptr %r7)
   ret void
 }
-define private void @lerta.lambda.332(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.335(ptr %closure, ptr %p0) {
 entry:
   %r17 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -248598,7 +249767,7 @@ no.exception.9:
   call void @lerta_release(ptr %r31)
   ret void
 }
-define private void @"lerta.lambda.332.drop"(ptr %closure) {
+define private void @"lerta.lambda.335.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -248617,7 +249786,7 @@ entry:
   call void @lerta_release(ptr %r9)
   ret void
 }
-define private void @lerta.lambda.333(ptr %closure) {
+define private void @lerta.lambda.336(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -248662,7 +249831,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.333.drop"(ptr %closure) {
+define private void @"lerta.lambda.336.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -248681,7 +249850,7 @@ entry:
   call void @lerta_release(ptr %r9)
   ret void
 }
-define private void @lerta.lambda.334(ptr %closure) {
+define private void @lerta.lambda.337(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -248702,7 +249871,7 @@ unwind.0:
 no.exception.1:
   ret void
 }
-define private void @"lerta.lambda.334.drop"(ptr %closure) {
+define private void @"lerta.lambda.337.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -248774,9 +249943,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p2)
   %r15 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r16 = ptrtoint ptr %r15 to i64
-  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.lambda.330.drop")
+  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.lambda.333.drop")
   %r18 = getelementptr { i64, ptr, ptr }, ptr %r17, i32 0, i32 2
-  store ptr @lerta.lambda.330, ptr %r18
+  store ptr @lerta.lambda.333, ptr %r18
   %r19 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r17, i32 0, i32 3
   store ptr %r13, ptr %r19
   %r20 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r17, i32 0, i32 4
@@ -248971,9 +250140,9 @@ for.exit.5:
   call void @lerta_retain(ptr %r97)
   %r98 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r99 = ptrtoint ptr %r98 to i64
-  %r100 = call ptr @lerta_alloc(i64 %r99, ptr @"lerta.lambda.331.drop")
+  %r100 = call ptr @lerta_alloc(i64 %r99, ptr @"lerta.lambda.334.drop")
   %r101 = getelementptr { i64, ptr, ptr }, ptr %r100, i32 0, i32 2
-  store ptr @lerta.lambda.331, ptr %r101
+  store ptr @lerta.lambda.334, ptr %r101
   %r102 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r100, i32 0, i32 3
   store ptr %p2, ptr %r102
   %r103 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r100, i32 0, i32 4
@@ -249067,9 +250236,9 @@ for.exit.23:
   call void @lerta_retain(ptr %p2)
   %r143 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r144 = ptrtoint ptr %r143 to i64
-  %r145 = call ptr @lerta_alloc(i64 %r144, ptr @"lerta.lambda.332.drop")
+  %r145 = call ptr @lerta_alloc(i64 %r144, ptr @"lerta.lambda.335.drop")
   %r146 = getelementptr { i64, ptr, ptr }, ptr %r145, i32 0, i32 2
-  store ptr @lerta.lambda.332, ptr %r146
+  store ptr @lerta.lambda.335, ptr %r146
   %r147 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r145, i32 0, i32 3
   store ptr %r140, ptr %r147
   %r148 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r145, i32 0, i32 4
@@ -249265,9 +250434,9 @@ coalesce.end.52:
   call void @lerta_retain(ptr %r235)
   %r236 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r237 = ptrtoint ptr %r236 to i64
-  %r238 = call ptr @lerta_alloc(i64 %r237, ptr @"lerta.lambda.333.drop")
+  %r238 = call ptr @lerta_alloc(i64 %r237, ptr @"lerta.lambda.336.drop")
   %r239 = getelementptr { i64, ptr, ptr }, ptr %r238, i32 0, i32 2
-  store ptr @lerta.lambda.333, ptr %r239
+  store ptr @lerta.lambda.336, ptr %r239
   %r240 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r238, i32 0, i32 3
   store ptr %p0, ptr %r240
   %r241 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r238, i32 0, i32 4
@@ -249299,9 +250468,9 @@ if.then.54:
   call void @lerta_retain(ptr %r253)
   %r254 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r255 = ptrtoint ptr %r254 to i64
-  %r256 = call ptr @lerta_alloc(i64 %r255, ptr @"lerta.lambda.334.drop")
+  %r256 = call ptr @lerta_alloc(i64 %r255, ptr @"lerta.lambda.337.drop")
   %r257 = getelementptr { i64, ptr, ptr }, ptr %r256, i32 0, i32 2
-  store ptr @lerta.lambda.334, ptr %r257
+  store ptr @lerta.lambda.337, ptr %r257
   %r258 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r256, i32 0, i32 3
   store ptr %r252, ptr %r258
   %r259 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r256, i32 0, i32 4
@@ -250090,7 +251259,7 @@ no.exception.114:
   call void @lerta_release(ptr %r582)
   ret void
 }
-define private i1 @lerta.lambda.335(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.338(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -250101,7 +251270,7 @@ entry:
   call void @lerta_release(ptr %r1)
   ret i1 %r2
 }
-define private void @"lerta.lambda.335.drop"(ptr %closure) {
+define private void @"lerta.lambda.338.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -250114,9 +251283,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.335.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.338.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.335, ptr %r3
+  store ptr @lerta.lambda.338, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p1, ptr %r4
   %r5 = call { i1, i64 } @"lerta.extend.std:builtins.Array<T>.find_index<checker/object_types.lerta.FieldInfo>"(ptr %p0, ptr %r2)
@@ -251061,7 +252230,7 @@ no.exception.35:
   call void @lerta_release(ptr %r82)
   ret void
 }
-define private void @lerta.lambda.336(ptr %closure) {
+define private void @lerta.lambda.339(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -251093,7 +252262,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @"lerta.lambda.336.drop"(ptr %closure) {
+define private void @"lerta.lambda.339.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -251149,9 +252318,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r14)
   %r15 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r16 = ptrtoint ptr %r15 to i64
-  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.lambda.336.drop")
+  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.lambda.339.drop")
   %r18 = getelementptr { i64, ptr, ptr }, ptr %r17, i32 0, i32 2
-  store ptr @lerta.lambda.336, ptr %r18
+  store ptr @lerta.lambda.339, ptr %r18
   %r19 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r17, i32 0, i32 3
   store ptr %p0, ptr %r19
   %r20 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r17, i32 0, i32 4
@@ -251666,7 +252835,7 @@ unwind.2:
 no.exception.3:
   ret void
 }
-define private void @lerta.lambda.337(ptr %closure) {
+define private void @lerta.lambda.340(ptr %closure) {
 entry:
   %r4 = alloca ptr
   %r15 = alloca ptr
@@ -251722,7 +252891,7 @@ for.exit.3:
   call void @lerta_release(ptr %r22)
   ret void
 }
-define private void @"lerta.lambda.337.drop"(ptr %closure) {
+define private void @"lerta.lambda.340.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -251739,9 +252908,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.337.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.340.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.337, ptr %r3
+  store ptr @lerta.lambda.340, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p1, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -253435,7 +254604,7 @@ define void @"lerta.module.codegen/ir_linking.lerta"() {
 entry:
   ret void
 }
-define private void @lerta.lambda.338(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.341(ptr %closure, ptr %p0) {
 entry:
   %r10 = alloca ptr
   %r21 = alloca ptr
@@ -253651,7 +254820,7 @@ for.exit.23:
   call void @lerta_release(ptr %r92)
   ret void
 }
-define private void @"lerta.lambda.338.drop"(ptr %closure) {
+define private void @"lerta.lambda.341.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -253670,9 +254839,9 @@ entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.338.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.341.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.338, ptr %r3
+  store ptr @lerta.lambda.341, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 3
   store ptr %p1, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r2, i32 0, i32 4
@@ -253880,7 +255049,7 @@ entry:
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private ptr @lerta.lambda.339(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.342(ptr %closure, ptr %p0) {
 entry:
   %r7 = alloca ptr
   %r11 = alloca ptr
@@ -254156,7 +255325,7 @@ no.exception.29:
   call void @lerta_release(ptr %r121)
   ret ptr %r111
 }
-define private void @"lerta.lambda.339.drop"(ptr %closure) {
+define private void @"lerta.lambda.342.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -254433,9 +255602,9 @@ for.exit.3:
   call void @lerta_retain(ptr %r120)
   %r121 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r122 = ptrtoint ptr %r121 to i64
-  %r123 = call ptr @lerta_alloc(i64 %r122, ptr @"lerta.lambda.339.drop")
+  %r123 = call ptr @lerta_alloc(i64 %r122, ptr @"lerta.lambda.342.drop")
   %r124 = getelementptr { i64, ptr, ptr }, ptr %r123, i32 0, i32 2
-  store ptr @lerta.lambda.339, ptr %r124
+  store ptr @lerta.lambda.342, ptr %r124
   %r125 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r123, i32 0, i32 3
   store ptr %r119, ptr %r125
   %r126 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r123, i32 0, i32 4
@@ -255676,7 +256845,7 @@ entry:
   store i1 true, ptr @"lerta.value.codegen/instances.lerta.LINKAGE.set"
   ret void
 }
-define private void @lerta.lambda.340(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.343(ptr %closure, ptr %p0) {
 entry:
   %r19 = alloca ptr
   %r29 = alloca ptr
@@ -255777,7 +256946,7 @@ no.exception.7:
   call void @lerta_release(ptr %r41)
   ret void
 }
-define private void @"lerta.lambda.340.drop"(ptr %closure) {
+define private void @"lerta.lambda.343.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -255799,7 +256968,7 @@ entry:
   call void @lerta_release(ptr %r11)
   ret void
 }
-define private ptr @lerta.lambda.341(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.344(ptr %closure, ptr %p0) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -255824,7 +256993,7 @@ unwind.0:
 no.exception.1:
   ret ptr %r8
 }
-define private void @"lerta.lambda.341.drop"(ptr %closure) {
+define private void @"lerta.lambda.344.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -256006,9 +257175,9 @@ no.exception.19:
   call void @lerta_retain(ptr %r77)
   %r78 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r79 = ptrtoint ptr %r78 to i64
-  %r80 = call ptr @lerta_alloc(i64 %r79, ptr @"lerta.lambda.340.drop")
+  %r80 = call ptr @lerta_alloc(i64 %r79, ptr @"lerta.lambda.343.drop")
   %r81 = getelementptr { i64, ptr, ptr }, ptr %r80, i32 0, i32 2
-  store ptr @lerta.lambda.340, ptr %r81
+  store ptr @lerta.lambda.343, ptr %r81
   %r82 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r80, i32 0, i32 3
   store ptr %p1, ptr %r82
   %r83 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r80, i32 0, i32 4
@@ -256408,9 +257577,9 @@ if.end.61:
   call void @lerta_retain(ptr %r261)
   %r262 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r263 = ptrtoint ptr %r262 to i64
-  %r264 = call ptr @lerta_alloc(i64 %r263, ptr @"lerta.lambda.341.drop")
+  %r264 = call ptr @lerta_alloc(i64 %r263, ptr @"lerta.lambda.344.drop")
   %r265 = getelementptr { i64, ptr, ptr }, ptr %r264, i32 0, i32 2
-  store ptr @lerta.lambda.341, ptr %r265
+  store ptr @lerta.lambda.344, ptr %r265
   %r266 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r264, i32 0, i32 3
   store ptr %p1, ptr %r266
   %r267 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r264, i32 0, i32 4
@@ -256508,7 +257677,7 @@ for.exit.3:
   call void @lerta_release(ptr %r305)
   ret ptr %r304
 }
-define private void @lerta.lambda.342(ptr %closure, ptr %p0) {
+define private void @lerta.lambda.345(ptr %closure, ptr %p0) {
 entry:
   %r11 = alloca ptr
   %r31 = alloca ptr
@@ -256629,7 +257798,7 @@ no.exception.11:
   call void @lerta_release(ptr %r43)
   ret void
 }
-define private void @"lerta.lambda.342.drop"(ptr %closure) {
+define private void @"lerta.lambda.345.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -256668,9 +257837,9 @@ no.exception.1:
   call void @lerta_retain(ptr %p2)
   %r6 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r7 = ptrtoint ptr %r6 to i64
-  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.342.drop")
+  %r8 = call ptr @lerta_alloc(i64 %r7, ptr @"lerta.lambda.345.drop")
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
-  store ptr @lerta.lambda.342, ptr %r9
+  store ptr @lerta.lambda.345, ptr %r9
   %r10 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r8, i32 0, i32 3
   store ptr %p3, ptr %r10
   %r11 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r8, i32 0, i32 4
@@ -256810,7 +257979,7 @@ define void @"lerta.module.codegen/codegen.lerta"() {
 entry:
   ret void
 }
-define private ptr @lerta.lambda.343(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.346(ptr %closure, ptr %p0) {
 entry:
   %r9 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -256851,7 +258020,7 @@ no.exception.3:
   call void @lerta_release(ptr %r15)
   ret ptr %r11
 }
-define private void @"lerta.lambda.343.drop"(ptr %closure) {
+define private void @"lerta.lambda.346.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -256861,7 +258030,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.344(ptr %closure, i64 %p0, ptr %p1) {
+define private ptr @lerta.lambda.347(ptr %closure, i64 %p0, ptr %p1) {
 entry:
   %r18 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -256967,7 +258136,7 @@ no.exception.13:
   call void @lerta_release(ptr %r42)
   ret ptr %r38
 }
-define private void @"lerta.lambda.344.drop"(ptr %closure) {
+define private void @"lerta.lambda.347.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -257015,9 +258184,9 @@ entry:
   call void @lerta_retain(ptr %p2)
   %r3 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r4 = ptrtoint ptr %r3 to i64
-  %r5 = call ptr @lerta_alloc(i64 %r4, ptr @"lerta.lambda.343.drop")
+  %r5 = call ptr @lerta_alloc(i64 %r4, ptr @"lerta.lambda.346.drop")
   %r6 = getelementptr { i64, ptr, ptr }, ptr %r5, i32 0, i32 2
-  store ptr @lerta.lambda.343, ptr %r6
+  store ptr @lerta.lambda.346, ptr %r6
   %r7 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r5, i32 0, i32 3
   store ptr %p1, ptr %r7
   %r8 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r5, i32 0, i32 4
@@ -257394,9 +258563,9 @@ for.exit.42:
   call void @lerta_retain(ptr %r179)
   %r180 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r181 = ptrtoint ptr %r180 to i64
-  %r182 = call ptr @lerta_alloc(i64 %r181, ptr @"lerta.lambda.344.drop")
+  %r182 = call ptr @lerta_alloc(i64 %r181, ptr @"lerta.lambda.347.drop")
   %r183 = getelementptr { i64, ptr, ptr }, ptr %r182, i32 0, i32 2
-  store ptr @lerta.lambda.344, ptr %r183
+  store ptr @lerta.lambda.347, ptr %r183
   %r184 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r182, i32 0, i32 3
   store ptr %p0, ptr %r184
   %r185 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr, ptr }, ptr %r182, i32 0, i32 4
@@ -257709,7 +258878,7 @@ no.exception.77:
   call void @lerta_release(ptr %r329)
   ret ptr %r307
 }
-define private void @lerta.lambda.345(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
+define private void @lerta.lambda.348(ptr %closure, ptr %p0, ptr %p1, ptr %p2) {
 entry:
   %r9 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -257756,7 +258925,7 @@ no.exception.3:
   call void @lerta_release(ptr %r14)
   ret void
 }
-define private void @"lerta.lambda.345.drop"(ptr %closure) {
+define private void @"lerta.lambda.348.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -257769,7 +258938,7 @@ entry:
   call void @lerta_release(ptr %r5)
   ret void
 }
-define private ptr @lerta.lambda.346(ptr %closure, i64 %p0) {
+define private ptr @lerta.lambda.349(ptr %closure, i64 %p0) {
 entry:
   %r8 = alloca ptr
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -257837,14 +259006,14 @@ no.exception.9:
   call void @lerta_release(ptr %r27)
   ret ptr %r23
 }
-define private void @"lerta.lambda.346.drop"(ptr %closure) {
+define private void @"lerta.lambda.349.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @lerta.lambda.347(ptr %closure, ptr %p0) {
+define private i1 @lerta.lambda.350(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   %r0 = getelementptr %"lerta.object.checker/shared.lerta.Shared", ptr %p0, i32 0, i32 20
@@ -257977,9 +259146,9 @@ entry:
   call void @lerta_retain(ptr %r24)
   %r25 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r26 = ptrtoint ptr %r25 to i64
-  %r27 = call ptr @lerta_alloc(i64 %r26, ptr @"lerta.lambda.345.drop")
+  %r27 = call ptr @lerta_alloc(i64 %r26, ptr @"lerta.lambda.348.drop")
   %r28 = getelementptr { i64, ptr, ptr }, ptr %r27, i32 0, i32 2
-  store ptr @lerta.lambda.345, ptr %r28
+  store ptr @lerta.lambda.348, ptr %r28
   %r29 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r27, i32 0, i32 3
   store ptr %p0, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr, ptr }, ptr %r27, i32 0, i32 4
@@ -258144,9 +259313,9 @@ continue.13:
   call void @lerta_retain(ptr %r105)
   %r106 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
   %r107 = ptrtoint ptr %r106 to i64
-  %r108 = call ptr @lerta_alloc(i64 %r107, ptr @"lerta.lambda.346.drop")
+  %r108 = call ptr @lerta_alloc(i64 %r107, ptr @"lerta.lambda.349.drop")
   %r109 = getelementptr { i64, ptr, ptr }, ptr %r108, i32 0, i32 2
-  store ptr @lerta.lambda.346, ptr %r109
+  store ptr @lerta.lambda.349, ptr %r109
   %r110 = getelementptr { i64, ptr, ptr, ptr }, ptr %r108, i32 0, i32 3
   store ptr %r105, ptr %r110
   store ptr %r108, ptr %r111
@@ -258270,8 +259439,8 @@ for.exit.25:
   %r165 = load ptr, ptr %r164
   call void @lerta_retain(ptr %r165)
   call void @lerta_release(ptr %r163)
-  %r166 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/shared.lerta.Shared>, checker/shared.lerta.Shared>"(ptr %r165, ptr @"lerta.closure.lerta.lambda.347")
-  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.347")
+  %r166 = call i1 @"lerta.extend.std:builtins.Self.any<Array<checker/shared.lerta.Shared>, checker/shared.lerta.Shared>"(ptr %r165, ptr @"lerta.closure.lerta.lambda.350")
+  call void @lerta_release(ptr @"lerta.closure.lerta.lambda.350")
   call void @lerta_release(ptr %r165)
   %r167 = load ptr, ptr @lerta_exception
   %r168 = icmp ne ptr %r167, null
@@ -261625,7 +262794,7 @@ branch.end.1:
   store i64 %r10, ptr %r11
   ret ptr %r9
 }
-define private ptr @lerta.lambda.348(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.351(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
@@ -261717,7 +262886,7 @@ no.exception.1:
   %r16 = getelementptr %lerta.iter.75, ptr %r12, i32 0, i32 5
   store ptr %r2, ptr %r16
   %r17 = getelementptr %lerta.iter.75, ptr %r12, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.348", ptr %r17
+  store ptr @"lerta.closure.lerta.lambda.351", ptr %r17
   ret ptr %r12
 }
 define private void @"lerta.iter.76.drop"(ptr %object) {
@@ -261759,7 +262928,7 @@ branch.end.1:
   store i64 %r10, ptr %r11
   ret ptr %r9
 }
-define private ptr @lerta.lambda.349(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.352(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
@@ -261851,7 +263020,7 @@ no.exception.1:
   %r16 = getelementptr %lerta.iter.77, ptr %r12, i32 0, i32 5
   store ptr %r2, ptr %r16
   %r17 = getelementptr %lerta.iter.77, ptr %r12, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.349", ptr %r17
+  store ptr @"lerta.closure.lerta.lambda.352", ptr %r17
   ret ptr %r12
 }
 define private void @"lerta.iter.78.drop"(ptr %object) {
@@ -261893,7 +263062,7 @@ branch.end.1:
   store i64 %r10, ptr %r11
   ret ptr %r9
 }
-define private ptr @lerta.lambda.350(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.353(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
@@ -261985,7 +263154,7 @@ no.exception.1:
   %r16 = getelementptr %lerta.iter.79, ptr %r12, i32 0, i32 5
   store ptr %r2, ptr %r16
   %r17 = getelementptr %lerta.iter.79, ptr %r12, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.350", ptr %r17
+  store ptr @"lerta.closure.lerta.lambda.353", ptr %r17
   ret ptr %r12
 }
 define private void @"lerta.iter.80.drop"(ptr %object) {
@@ -262027,7 +263196,7 @@ branch.end.1:
   store i64 %r10, ptr %r11
   ret ptr %r9
 }
-define private ptr @lerta.lambda.351(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.354(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
@@ -262119,7 +263288,7 @@ no.exception.1:
   %r16 = getelementptr %lerta.iter.81, ptr %r12, i32 0, i32 5
   store ptr %r2, ptr %r16
   %r17 = getelementptr %lerta.iter.81, ptr %r12, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.351", ptr %r17
+  store ptr @"lerta.closure.lerta.lambda.354", ptr %r17
   ret ptr %r12
 }
 define private void @"lerta.iter.82.drop"(ptr %object) {
@@ -262161,7 +263330,7 @@ branch.end.1:
   store i64 %r10, ptr %r11
   ret ptr %r9
 }
-define private ptr @lerta.lambda.352(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.355(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
@@ -262253,7 +263422,7 @@ no.exception.1:
   %r16 = getelementptr %lerta.iter.83, ptr %r12, i32 0, i32 5
   store ptr %r2, ptr %r16
   %r17 = getelementptr %lerta.iter.83, ptr %r12, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.352", ptr %r17
+  store ptr @"lerta.closure.lerta.lambda.355", ptr %r17
   ret ptr %r12
 }
 define linkonce_odr { i1, i64 } @"lerta.extend.std:builtins.Array<T>.last<Int>"(ptr %this) {
@@ -262727,7 +263896,7 @@ while.exit.4:
   call void @lerta_release(ptr %r32)
   ret ptr %r31
 }
-define private ptr @lerta.lambda.353(ptr %closure) {
+define private ptr @lerta.lambda.356(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -262759,7 +263928,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r10
 }
-define private void @"lerta.lambda.353.drop"(ptr %closure) {
+define private void @"lerta.lambda.356.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -262776,9 +263945,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.353.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.356.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.353, ptr %r3
+  store ptr @lerta.lambda.356, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 3
   store ptr %this, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 4
@@ -262804,7 +263973,7 @@ no.exception.1:
   call void @lerta_release(ptr %r13)
   ret ptr %r9
 }
-define private ptr @lerta.lambda.354(ptr %closure) {
+define private ptr @lerta.lambda.357(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -262836,7 +264005,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r10
 }
-define private void @"lerta.lambda.354.drop"(ptr %closure) {
+define private void @"lerta.lambda.357.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -262853,9 +264022,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.354.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.357.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.354, ptr %r3
+  store ptr @lerta.lambda.357, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 3
   store ptr %this, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 4
@@ -263098,7 +264267,7 @@ no.exception.5:
   call void @lerta_release(ptr %r22)
   ret ptr %r21
 }
-define private ptr @lerta.lambda.355(ptr %closure) {
+define private ptr @lerta.lambda.358(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263130,7 +264299,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r10
 }
-define private void @"lerta.lambda.355.drop"(ptr %closure) {
+define private void @"lerta.lambda.358.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263147,9 +264316,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.355.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.358.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.355, ptr %r3
+  store ptr @lerta.lambda.358, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 3
   store ptr %this, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 4
@@ -263175,7 +264344,7 @@ no.exception.1:
   call void @lerta_release(ptr %r13)
   ret ptr %r9
 }
-define private ptr @lerta.lambda.356(ptr %closure) {
+define private ptr @lerta.lambda.359(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263207,7 +264376,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r10
 }
-define private void @"lerta.lambda.356.drop"(ptr %closure) {
+define private void @"lerta.lambda.359.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263224,9 +264393,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.356.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.359.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.356, ptr %r3
+  store ptr @lerta.lambda.359, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 3
   store ptr %this, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 4
@@ -263302,7 +264471,7 @@ no.exception.5:
   %r20 = load i1, ptr %r13
   ret i1 %r20
 }
-define private ptr @lerta.lambda.357(ptr %closure) {
+define private ptr @lerta.lambda.360(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263334,7 +264503,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r10
 }
-define private void @"lerta.lambda.357.drop"(ptr %closure) {
+define private void @"lerta.lambda.360.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263351,9 +264520,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.357.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.360.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.357, ptr %r3
+  store ptr @lerta.lambda.360, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 3
   store ptr %this, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 4
@@ -263705,7 +264874,7 @@ no.exception.5:
   call void @lerta_release(ptr %r22)
   ret ptr %r21
 }
-define private ptr @lerta.lambda.358(ptr %closure) {
+define private ptr @lerta.lambda.361(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263737,7 +264906,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r10
 }
-define private void @"lerta.lambda.358.drop"(ptr %closure) {
+define private void @"lerta.lambda.361.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263754,9 +264923,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.358.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.361.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.358, ptr %r3
+  store ptr @lerta.lambda.361, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 3
   store ptr %this, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 4
@@ -263782,7 +264951,7 @@ no.exception.1:
   call void @lerta_release(ptr %r13)
   ret ptr %r9
 }
-define private ptr @lerta.lambda.359(ptr %closure) {
+define private ptr @lerta.lambda.362(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263814,7 +264983,7 @@ unwind.2:
 no.exception.3:
   ret ptr %r10
 }
-define private void @"lerta.lambda.359.drop"(ptr %closure) {
+define private void @"lerta.lambda.362.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -263831,9 +265000,9 @@ entry:
   call void @lerta_retain(ptr %p1)
   %r0 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.359.drop")
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.lambda.362.drop")
   %r3 = getelementptr { i64, ptr, ptr }, ptr %r2, i32 0, i32 2
-  store ptr @lerta.lambda.359, ptr %r3
+  store ptr @lerta.lambda.362, ptr %r3
   %r4 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 3
   store ptr %this, ptr %r4
   %r5 = getelementptr { i64, ptr, ptr, ptr, i64, ptr }, ptr %r2, i32 0, i32 4
@@ -265729,7 +266898,7 @@ no.exception.1:
   call void @lerta_release(ptr %r4)
   ret i1 %r7
 }
-define private i1 @lerta.lambda.360(ptr %closure) {
+define private i1 @lerta.lambda.363(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -265787,7 +266956,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.360.drop"(ptr %closure) {
+define private void @"lerta.lambda.363.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -265797,7 +266966,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.361(ptr %closure) {
+define private ptr @lerta.lambda.364(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -265885,7 +267054,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.361.drop"(ptr %closure) {
+define private void @"lerta.lambda.364.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -266025,9 +267194,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.360.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.363.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.360, ptr %r20
+  store ptr @lerta.lambda.363, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -266039,9 +267208,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.361.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.364.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.361, ptr %r29
+  store ptr @lerta.lambda.364, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -266215,7 +267384,7 @@ for.exit.3:
   call void @lerta_release(ptr %r23)
   ret i1 false
 }
-define private i1 @lerta.lambda.362(ptr %closure) {
+define private i1 @lerta.lambda.365(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -266273,7 +267442,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.362.drop"(ptr %closure) {
+define private void @"lerta.lambda.365.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -266283,7 +267452,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.363(ptr %closure) {
+define private ptr @lerta.lambda.366(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -266371,7 +267540,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.363.drop"(ptr %closure) {
+define private void @"lerta.lambda.366.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -266511,9 +267680,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.362.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.365.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.362, ptr %r20
+  store ptr @lerta.lambda.365, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -266525,9 +267694,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.363.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.366.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.363, ptr %r29
+  store ptr @lerta.lambda.366, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -266567,7 +267736,7 @@ no.exception.3:
   call void @lerta_release(ptr %r52)
   ret ptr %r44
 }
-define private i1 @lerta.lambda.364(ptr %closure) {
+define private i1 @lerta.lambda.367(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -266625,7 +267794,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.364.drop"(ptr %closure) {
+define private void @"lerta.lambda.367.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -266635,7 +267804,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.365(ptr %closure) {
+define private ptr @lerta.lambda.368(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -266723,7 +267892,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.365.drop"(ptr %closure) {
+define private void @"lerta.lambda.368.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -266863,9 +268032,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.364.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.367.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.364, ptr %r20
+  store ptr @lerta.lambda.367, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -266877,9 +268046,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.365.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.368.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.365, ptr %r29
+  store ptr @lerta.lambda.368, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -267277,7 +268446,7 @@ for.exit.3:
   call void @lerta_release(ptr %r23)
   ret i1 false
 }
-define private i1 @lerta.lambda.366(ptr %closure) {
+define private i1 @lerta.lambda.369(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -267335,7 +268504,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.366.drop"(ptr %closure) {
+define private void @"lerta.lambda.369.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -267345,7 +268514,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.367(ptr %closure) {
+define private ptr @lerta.lambda.370(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -267433,7 +268602,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.367.drop"(ptr %closure) {
+define private void @"lerta.lambda.370.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -267573,9 +268742,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.366.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.369.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.366, ptr %r20
+  store ptr @lerta.lambda.369, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -267587,9 +268756,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.367.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.370.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.367, ptr %r29
+  store ptr @lerta.lambda.370, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -267764,7 +268933,7 @@ for.exit.3:
   call void @lerta_release(ptr %r24)
   ret i1 true
 }
-define private i1 @lerta.lambda.368(ptr %closure) {
+define private i1 @lerta.lambda.371(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -267822,7 +268991,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.368.drop"(ptr %closure) {
+define private void @"lerta.lambda.371.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -267832,7 +269001,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.369(ptr %closure) {
+define private ptr @lerta.lambda.372(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -267920,7 +269089,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.369.drop"(ptr %closure) {
+define private void @"lerta.lambda.372.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -268060,9 +269229,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.368.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.371.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.368, ptr %r20
+  store ptr @lerta.lambda.371, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -268074,9 +269243,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.369.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.372.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.369, ptr %r29
+  store ptr @lerta.lambda.372, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -268160,7 +269329,7 @@ entry:
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private ptr @lerta.lambda.370(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.373(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
@@ -268269,7 +269438,7 @@ no.exception.3:
   %r18 = getelementptr %lerta.iter.111, ptr %r14, i32 0, i32 5
   store ptr %r3, ptr %r18
   %r19 = getelementptr %lerta.iter.111, ptr %r14, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.370", ptr %r19
+  store ptr @"lerta.closure.lerta.lambda.373", ptr %r19
   ret ptr %r14
 }
 define linkonce_odr ptr @"lerta.extend.std:builtins.Array<T>.last<Map<String, checker/scopes.lerta.Local>>"(ptr %this) {
@@ -268487,7 +269656,7 @@ entry:
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private ptr @lerta.lambda.371(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.374(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
@@ -268596,7 +269765,7 @@ no.exception.3:
   %r18 = getelementptr %lerta.iter.114, ptr %r14, i32 0, i32 5
   store ptr %r3, ptr %r18
   %r19 = getelementptr %lerta.iter.114, ptr %r14, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.371", ptr %r19
+  store ptr @"lerta.closure.lerta.lambda.374", ptr %r19
   ret ptr %r14
 }
 define linkonce_odr i1 @"lerta.extend.std:builtins.Self.any<Array<ast.lerta.Parameter>, ast.lerta.Parameter>"(ptr %this, ptr %p0) {
@@ -268920,7 +270089,7 @@ for.exit.3:
   call void @lerta_release(ptr %r23)
   ret i1 false
 }
-define private i1 @lerta.lambda.372(ptr %closure) {
+define private i1 @lerta.lambda.375(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -268978,7 +270147,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.372.drop"(ptr %closure) {
+define private void @"lerta.lambda.375.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -268988,7 +270157,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.373(ptr %closure) {
+define private ptr @lerta.lambda.376(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -269076,7 +270245,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.373.drop"(ptr %closure) {
+define private void @"lerta.lambda.376.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -269216,9 +270385,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.372.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.375.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.372, ptr %r20
+  store ptr @lerta.lambda.375, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -269230,9 +270399,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.373.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.376.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.373, ptr %r29
+  store ptr @lerta.lambda.376, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -269271,6 +270440,185 @@ no.exception.3:
   %r52 = load ptr, ptr %r32
   call void @lerta_release(ptr %r52)
   ret ptr %r44
+}
+define private i1 @lerta.lambda.377(ptr %closure, ptr %p0) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_retain(ptr %r1)
+  call void @lerta_retain(ptr %p0)
+  %r2 = getelementptr { i64, ptr, ptr }, ptr %r1, i32 0, i32 2
+  %r3 = load ptr, ptr %r2
+  %r4 = call i1 %r3(ptr %r1, ptr %p0)
+  call void @lerta_release(ptr %p0)
+  call void @lerta_release(ptr %r1)
+  %r5 = load ptr, ptr @lerta_exception
+  %r6 = icmp ne ptr %r5, null
+  br i1 %r6, label %unwind.0, label %no.exception.1
+unwind.0:
+  ret i1 poison
+no.exception.1:
+  br i1 %r4, label %then.2, label %else.3
+then.2:
+  br label %then.end.4
+else.3:
+  br label %then.end.4
+then.end.4:
+  %r7 = phi i1 [ true, %then.2 ], [ false, %else.3 ]
+  ret i1 %r7
+}
+define private void @"lerta.lambda.377.drop"(ptr %closure) {
+entry:
+  %r0 = getelementptr { i64, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  ret void
+}
+define private ptr @lerta.lambda.378(ptr %closure, ptr %p0) {
+entry:
+  call void @lerta_retain(ptr %p0)
+  ret ptr %p0
+}
+define private void @"lerta.iter.120.drop"(ptr %object) {
+entry:
+  %r0 = getelementptr %lerta.iter.120, ptr %object, i32 0, i32 5
+  %r1 = load ptr, ptr %r0
+  call void @lerta_release(ptr %r1)
+  %r2 = getelementptr %lerta.iter.120, ptr %object, i32 0, i32 6
+  %r3 = load ptr, ptr %r2
+  call void @lerta_release(ptr %r3)
+  %r4 = getelementptr %lerta.iter.120, ptr %object, i32 0, i32 8
+  %r5 = load ptr, ptr %r4
+  call void @lerta_release(ptr %r5)
+  ret void
+}
+define private i1 @"lerta.iter.120.has_next"(ptr %iter) {
+entry:
+  %r0 = getelementptr %lerta.iter.120, ptr %iter, i32 0, i32 7
+  %r1 = load i1, ptr %r0
+  br i1 %r1, label %filter.found.4, label %filter.search.0
+filter.search.0:
+  %r2 = getelementptr %lerta.iter.120, ptr %iter, i32 0, i32 5
+  %r3 = load ptr, ptr %r2
+  %r4 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r3, i32 0, i32 2
+  %r5 = load ptr, ptr %r4
+  %r6 = call i1 %r5(ptr %r3)
+  %r7 = load ptr, ptr @lerta_exception
+  %r8 = icmp ne ptr %r7, null
+  br i1 %r8, label %unwind.6, label %no.exception.7
+unwind.6:
+  ret i1 poison
+no.exception.7:
+  br i1 %r6, label %filter.test.1, label %filter.end.5
+filter.test.1:
+  %r9 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r3, i32 0, i32 3
+  %r10 = load ptr, ptr %r9
+  %r11 = call ptr %r10(ptr %r3)
+  %r12 = load ptr, ptr @lerta_exception
+  %r13 = icmp ne ptr %r12, null
+  br i1 %r13, label %unwind.8, label %no.exception.9
+unwind.8:
+  ret i1 poison
+no.exception.9:
+  %r14 = getelementptr %lerta.iter.120, ptr %iter, i32 0, i32 6
+  %r15 = load ptr, ptr %r14
+  %r16 = getelementptr { i64, ptr, ptr }, ptr %r15, i32 0, i32 2
+  %r17 = load ptr, ptr %r16
+  %r18 = call i1 %r17(ptr %r15, ptr %r11)
+  %r19 = load ptr, ptr @lerta_exception
+  %r20 = icmp ne ptr %r19, null
+  br i1 %r20, label %unwind.10, label %no.exception.11
+unwind.10:
+  call void @lerta_release(ptr %r11)
+  ret i1 poison
+no.exception.11:
+  br i1 %r18, label %filter.keep.2, label %filter.skip.3
+filter.keep.2:
+  %r21 = getelementptr %lerta.iter.120, ptr %iter, i32 0, i32 8
+  store ptr %r11, ptr %r21
+  %r22 = getelementptr %lerta.iter.120, ptr %iter, i32 0, i32 7
+  store i1 true, ptr %r22
+  br label %filter.found.4
+filter.skip.3:
+  call void @lerta_release(ptr %r11)
+  br label %filter.search.0
+filter.found.4:
+  ret i1 true
+filter.end.5:
+  ret i1 false
+}
+define private ptr @"lerta.iter.120.next"(ptr %iter) {
+entry:
+  %r0 = getelementptr %lerta.iter.120, ptr %iter, i32 0, i32 7
+  store i1 false, ptr %r0
+  %r1 = getelementptr %lerta.iter.120, ptr %iter, i32 0, i32 8
+  %r2 = load ptr, ptr %r1
+  %r3 = getelementptr %lerta.iter.120, ptr %iter, i32 0, i32 8
+  store ptr zeroinitializer, ptr %r3
+  ret ptr %r2
+}
+define linkonce_odr ptr @"lerta.extend.std:builtins.Self.filter<Array<types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>, types.lerta.ArrayType | types.lerta.EnumType | types.lerta.FunctionType | types.lerta.InterfaceType | types.lerta.IterType | types.lerta.MapType | types.lerta.ObjectType | types.lerta.OptionalType | types.lerta.PromiseType | types.lerta.RecordType | types.lerta.SimpleType | types.lerta.TupleType | types.lerta.TypeParameterType | types.lerta.UnionType>"(ptr %this, ptr %p0) {
+entry:
+  call void @lerta_retain(ptr %this)
+  %r0 = getelementptr %lerta.iter.74, ptr null, i32 1
+  %r1 = ptrtoint ptr %r0 to i64
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.iter.74.drop")
+  %r3 = getelementptr %lerta.iter.74, ptr %r2, i32 0, i32 2
+  store ptr @"lerta.iter.74.has_next", ptr %r3
+  %r4 = getelementptr %lerta.iter.74, ptr %r2, i32 0, i32 3
+  store ptr @"lerta.iter.74.next", ptr %r4
+  %r5 = getelementptr %lerta.iter.74, ptr %r2, i32 0, i32 4
+  store i1 false, ptr %r5
+  %r6 = getelementptr %lerta.iter.74, ptr %r2, i32 0, i32 5
+  store ptr %this, ptr %r6
+  %r7 = getelementptr %lerta.iter.74, ptr %r2, i32 0, i32 6
+  store i64 0, ptr %r7
+  %r8 = load ptr, ptr @lerta_exception
+  %r9 = icmp ne ptr %r8, null
+  br i1 %r9, label %unwind.0, label %no.exception.1
+unwind.0:
+  call void @lerta_release(ptr %r2)
+  ret ptr poison
+no.exception.1:
+  call void @lerta_retain(ptr %p0)
+  %r10 = getelementptr { i64, ptr, ptr, ptr }, ptr null, i32 1
+  %r11 = ptrtoint ptr %r10 to i64
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.lambda.377.drop")
+  %r13 = getelementptr { i64, ptr, ptr }, ptr %r12, i32 0, i32 2
+  store ptr @lerta.lambda.377, ptr %r13
+  %r14 = getelementptr { i64, ptr, ptr, ptr }, ptr %r12, i32 0, i32 3
+  store ptr %p0, ptr %r14
+  %r15 = getelementptr %lerta.iter.120, ptr null, i32 1
+  %r16 = ptrtoint ptr %r15 to i64
+  %r17 = call ptr @lerta_alloc(i64 %r16, ptr @"lerta.iter.120.drop")
+  %r18 = getelementptr %lerta.iter.120, ptr %r17, i32 0, i32 2
+  store ptr @"lerta.iter.120.has_next", ptr %r18
+  %r19 = getelementptr %lerta.iter.120, ptr %r17, i32 0, i32 3
+  store ptr @"lerta.iter.120.next", ptr %r19
+  %r20 = getelementptr %lerta.iter.120, ptr %r17, i32 0, i32 4
+  store i1 false, ptr %r20
+  %r21 = getelementptr %lerta.iter.120, ptr %r17, i32 0, i32 5
+  store ptr %r2, ptr %r21
+  %r22 = getelementptr %lerta.iter.120, ptr %r17, i32 0, i32 6
+  store ptr %r12, ptr %r22
+  %r23 = getelementptr %lerta.iter.120, ptr %r17, i32 0, i32 7
+  store i1 false, ptr %r23
+  %r24 = getelementptr %lerta.iter.120, ptr %r17, i32 0, i32 8
+  store ptr zeroinitializer, ptr %r24
+  %r25 = getelementptr %lerta.iter.75, ptr null, i32 1
+  %r26 = ptrtoint ptr %r25 to i64
+  %r27 = call ptr @lerta_alloc(i64 %r26, ptr @"lerta.iter.75.drop")
+  %r28 = getelementptr %lerta.iter.75, ptr %r27, i32 0, i32 2
+  store ptr @"lerta.iter.75.has_next", ptr %r28
+  %r29 = getelementptr %lerta.iter.75, ptr %r27, i32 0, i32 3
+  store ptr @"lerta.iter.75.next", ptr %r29
+  %r30 = getelementptr %lerta.iter.75, ptr %r27, i32 0, i32 4
+  store i1 false, ptr %r30
+  %r31 = getelementptr %lerta.iter.75, ptr %r27, i32 0, i32 5
+  store ptr %r17, ptr %r31
+  %r32 = getelementptr %lerta.iter.75, ptr %r27, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.378", ptr %r32
+  ret ptr %r27
 }
 define linkonce_odr i1 @"lerta.extend.std:builtins.Map<K, V>.has<Int, Bool>"(ptr %this, i64 %p0) {
 entry:
@@ -269317,7 +270665,7 @@ then.0:
   %r4 = extractvalue { i64, i1 } %r3, 1
   br i1 %r4, label %raise.3, label %continue.4
 raise.3:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3261)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3262)
   call void @lerta_release(ptr %this)
   ret ptr poison
 continue.4:
@@ -269546,7 +270894,7 @@ for.exit.3:
   call void @lerta_release(ptr %r24)
   ret ptr zeroinitializer
 }
-define private i1 @lerta.lambda.374(ptr %closure) {
+define private i1 @lerta.lambda.379(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -269584,8 +270932,8 @@ no.exception.3:
   %r18 = icmp ne i1 %r14, %r17
   br i1 %r18, label %if.then.4, label %if.else.5
 if.then.4:
-  %r19 = call ptr @"lerta.new.std:builtins.ValueError"(ptr @lerta.string.3262)
-  call void @lerta_release(ptr @lerta.string.3262)
+  %r19 = call ptr @"lerta.new.std:builtins.ValueError"(ptr @lerta.string.3263)
+  call void @lerta_release(ptr @lerta.string.3263)
   %r20 = load ptr, ptr @lerta_exception
   %r21 = icmp ne ptr %r20, null
   br i1 %r21, label %unwind.7, label %no.exception.8
@@ -269604,7 +270952,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.374.drop"(ptr %closure) {
+define private void @"lerta.lambda.379.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -269614,7 +270962,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.375(ptr %closure) {
+define private ptr @lerta.lambda.380(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -269702,7 +271050,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.375.drop"(ptr %closure) {
+define private void @"lerta.lambda.380.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -269712,20 +271060,20 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @"lerta.record.120.drop"(ptr %object) {
+define private void @"lerta.record.121.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.record.120, ptr %object, i32 0, i32 2
+  %r0 = getelementptr %lerta.record.121, ptr %object, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.record.120, ptr %object, i32 0, i32 3
+  %r2 = getelementptr %lerta.record.121, ptr %object, i32 0, i32 3
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @lerta.reader.121(ptr %data) {
+define private i1 @lerta.reader.122(ptr %data) {
 entry:
   call void @lerta_retain(ptr %data)
-  %r0 = getelementptr %lerta.record.120, ptr %data, i32 0, i32 2
+  %r0 = getelementptr %lerta.record.121, ptr %data, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %data)
@@ -269741,10 +271089,10 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @lerta.reader.122(ptr %data) {
+define private ptr @lerta.reader.123(ptr %data) {
 entry:
   call void @lerta_retain(ptr %data)
-  %r0 = getelementptr %lerta.record.120, ptr %data, i32 0, i32 3
+  %r0 = getelementptr %lerta.record.121, ptr %data, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %data)
@@ -269760,17 +271108,17 @@ unwind.0:
 no.exception.1:
   ret ptr %r4
 }
-define private void @"lerta.iter.124.drop"(ptr %object) {
+define private void @"lerta.iter.125.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.124, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.125, ptr %object, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 0
   call void @lerta_release(ptr %r2)
   ret void
 }
-define private i1 @"lerta.iter.124.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.125.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.124, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.125, ptr %iter, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 1
   %r3 = getelementptr ptr, ptr %r2, i64 0
@@ -269785,9 +271133,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r6
 }
-define private ptr @"lerta.iter.124.next"(ptr %iter) {
+define private ptr @"lerta.iter.125.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.124, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.125, ptr %iter, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 1
   %r3 = getelementptr ptr, ptr %r2, i64 1
@@ -269842,9 +271190,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.374.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.379.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.374, ptr %r20
+  store ptr @lerta.lambda.379, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -269856,9 +271204,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.375.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.380.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.375, ptr %r29
+  store ptr @lerta.lambda.380, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -269868,25 +271216,25 @@ no.exception.3:
   call void @lerta_retain(ptr %r33)
   %r34 = load ptr, ptr %r32
   call void @lerta_retain(ptr %r34)
-  %r35 = getelementptr %lerta.record.120, ptr null, i32 1
+  %r35 = getelementptr %lerta.record.121, ptr null, i32 1
   %r36 = ptrtoint ptr %r35 to i64
-  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.record.120.drop")
-  %r38 = getelementptr %lerta.record.120, ptr %r37, i32 0, i32 2
+  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.record.121.drop")
+  %r38 = getelementptr %lerta.record.121, ptr %r37, i32 0, i32 2
   store ptr %r33, ptr %r38
-  %r39 = getelementptr %lerta.record.120, ptr %r37, i32 0, i32 3
+  %r39 = getelementptr %lerta.record.121, ptr %r37, i32 0, i32 3
   store ptr %r34, ptr %r39
   %r40 = insertvalue { ptr, ptr } undef, ptr %r37, 0
-  %r41 = insertvalue { ptr, ptr } %r40, ptr @lerta.itab.123, 1
-  %r42 = getelementptr %lerta.iter.124, ptr null, i32 1
+  %r41 = insertvalue { ptr, ptr } %r40, ptr @lerta.itab.124, 1
+  %r42 = getelementptr %lerta.iter.125, ptr null, i32 1
   %r43 = ptrtoint ptr %r42 to i64
-  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.iter.124.drop")
-  %r45 = getelementptr %lerta.iter.124, ptr %r44, i32 0, i32 2
-  store ptr @"lerta.iter.124.has_next", ptr %r45
-  %r46 = getelementptr %lerta.iter.124, ptr %r44, i32 0, i32 3
-  store ptr @"lerta.iter.124.next", ptr %r46
-  %r47 = getelementptr %lerta.iter.124, ptr %r44, i32 0, i32 4
+  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.iter.125.drop")
+  %r45 = getelementptr %lerta.iter.125, ptr %r44, i32 0, i32 2
+  store ptr @"lerta.iter.125.has_next", ptr %r45
+  %r46 = getelementptr %lerta.iter.125, ptr %r44, i32 0, i32 3
+  store ptr @"lerta.iter.125.next", ptr %r46
+  %r47 = getelementptr %lerta.iter.125, ptr %r44, i32 0, i32 4
   store i1 false, ptr %r47
-  %r48 = getelementptr %lerta.iter.124, ptr %r44, i32 0, i32 5
+  %r48 = getelementptr %lerta.iter.125, ptr %r44, i32 0, i32 5
   store { ptr, ptr } %r41, ptr %r48
   %r49 = load ptr, ptr %r3
   call void @lerta_release(ptr %r49)
@@ -270259,55 +271607,55 @@ for.exit.3:
   call void @lerta_release(ptr %r23)
   ret i1 false
 }
-define private void @"lerta.iter.125.drop"(ptr %object) {
+define private void @"lerta.iter.126.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.125, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.126, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @"lerta.iter.125.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.126.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.125, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.126, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = call i1 @lerta_map_cursor_has_next(ptr %r1)
   ret i1 %r2
 }
-define private void @"lerta.tuple.126.drop"(ptr %object) {
+define private void @"lerta.tuple.127.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.tuple.126, ptr %object, i32 0, i32 2
+  %r0 = getelementptr %lerta.tuple.127, ptr %object, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.tuple.126, ptr %object, i32 0, i32 3
+  %r2 = getelementptr %lerta.tuple.127, ptr %object, i32 0, i32 3
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @"lerta.iter.125.next"(ptr %iter) {
+define private ptr @"lerta.iter.126.next"(ptr %iter) {
 entry:
   %r0 = alloca i64
   %r1 = alloca i64
-  %r2 = getelementptr %lerta.iter.125, ptr %iter, i32 0, i32 5
+  %r2 = getelementptr %lerta.iter.126, ptr %iter, i32 0, i32 5
   %r3 = load ptr, ptr %r2
   call void @lerta_map_cursor_next(ptr %r3, ptr %r0, ptr %r1)
   %r4 = load i64, ptr %r0
   %r5 = inttoptr i64 %r4 to ptr
   %r6 = load i64, ptr %r1
   %r7 = inttoptr i64 %r6 to ptr
-  %r8 = getelementptr %lerta.tuple.126, ptr null, i32 1
+  %r8 = getelementptr %lerta.tuple.127, ptr null, i32 1
   %r9 = ptrtoint ptr %r8 to i64
-  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.126.drop")
-  %r11 = getelementptr %lerta.tuple.126, ptr %r10, i32 0, i32 2
+  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.127.drop")
+  %r11 = getelementptr %lerta.tuple.127, ptr %r10, i32 0, i32 2
   store ptr %r5, ptr %r11
-  %r12 = getelementptr %lerta.tuple.126, ptr %r10, i32 0, i32 3
+  %r12 = getelementptr %lerta.tuple.127, ptr %r10, i32 0, i32 3
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private ptr @lerta.lambda.376(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.381(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
-  %r0 = getelementptr %lerta.tuple.126, ptr %p0, i32 0, i32 3
+  %r0 = getelementptr %lerta.tuple.127, ptr %p0, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %p0)
@@ -270318,19 +271666,19 @@ entry:
   call void @lerta_release(ptr %r4)
   ret ptr %r3
 }
-define private void @"lerta.iter.127.drop"(ptr %object) {
+define private void @"lerta.iter.128.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.127, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.128, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.127, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.128, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.127.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.128.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.127, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.128, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -270343,9 +271691,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.127.next"(ptr %iter) {
+define private ptr @"lerta.iter.128.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.127, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.128, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -270356,7 +271704,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.127, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.128, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -270374,16 +271722,16 @@ define linkonce_odr ptr @"lerta.extend.std:builtins.Map<K, V>.values<String, che
 entry:
   call void @lerta_retain(ptr %this)
   %r0 = call ptr @lerta_map_cursor(ptr %this)
-  %r1 = getelementptr %lerta.iter.125, ptr null, i32 1
+  %r1 = getelementptr %lerta.iter.126, ptr null, i32 1
   %r2 = ptrtoint ptr %r1 to i64
-  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.125.drop")
-  %r4 = getelementptr %lerta.iter.125, ptr %r3, i32 0, i32 2
-  store ptr @"lerta.iter.125.has_next", ptr %r4
-  %r5 = getelementptr %lerta.iter.125, ptr %r3, i32 0, i32 3
-  store ptr @"lerta.iter.125.next", ptr %r5
-  %r6 = getelementptr %lerta.iter.125, ptr %r3, i32 0, i32 4
+  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.126.drop")
+  %r4 = getelementptr %lerta.iter.126, ptr %r3, i32 0, i32 2
+  store ptr @"lerta.iter.126.has_next", ptr %r4
+  %r5 = getelementptr %lerta.iter.126, ptr %r3, i32 0, i32 3
+  store ptr @"lerta.iter.126.next", ptr %r5
+  %r6 = getelementptr %lerta.iter.126, ptr %r3, i32 0, i32 4
   store i1 false, ptr %r6
-  %r7 = getelementptr %lerta.iter.125, ptr %r3, i32 0, i32 5
+  %r7 = getelementptr %lerta.iter.126, ptr %r3, i32 0, i32 5
   store ptr %r0, ptr %r7
   call void @lerta_release(ptr %this)
   %r8 = load ptr, ptr @lerta_exception
@@ -270400,19 +271748,19 @@ unwind.2:
   call void @lerta_release(ptr %r3)
   ret ptr poison
 no.exception.3:
-  %r12 = getelementptr %lerta.iter.127, ptr null, i32 1
+  %r12 = getelementptr %lerta.iter.128, ptr null, i32 1
   %r13 = ptrtoint ptr %r12 to i64
-  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.127.drop")
-  %r15 = getelementptr %lerta.iter.127, ptr %r14, i32 0, i32 2
-  store ptr @"lerta.iter.127.has_next", ptr %r15
-  %r16 = getelementptr %lerta.iter.127, ptr %r14, i32 0, i32 3
-  store ptr @"lerta.iter.127.next", ptr %r16
-  %r17 = getelementptr %lerta.iter.127, ptr %r14, i32 0, i32 4
+  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.128.drop")
+  %r15 = getelementptr %lerta.iter.128, ptr %r14, i32 0, i32 2
+  store ptr @"lerta.iter.128.has_next", ptr %r15
+  %r16 = getelementptr %lerta.iter.128, ptr %r14, i32 0, i32 3
+  store ptr @"lerta.iter.128.next", ptr %r16
+  %r17 = getelementptr %lerta.iter.128, ptr %r14, i32 0, i32 4
   store i1 false, ptr %r17
-  %r18 = getelementptr %lerta.iter.127, ptr %r14, i32 0, i32 5
+  %r18 = getelementptr %lerta.iter.128, ptr %r14, i32 0, i32 5
   store ptr %r3, ptr %r18
-  %r19 = getelementptr %lerta.iter.127, ptr %r14, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.376", ptr %r19
+  %r19 = getelementptr %lerta.iter.128, ptr %r14, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.381", ptr %r19
   ret ptr %r14
 }
 define linkonce_odr { i1, i64 } @"lerta.extend.std:builtins.Array<T>.find_index<checker/interfaces.lerta.InterfaceMember>"(ptr %this, ptr %p0) {
@@ -270919,7 +272267,7 @@ then.0:
   %r4 = extractvalue { i64, i1 } %r3, 1
   br i1 %r4, label %raise.3, label %continue.4
 raise.3:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3265)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3266)
   call void @lerta_release(ptr %this)
   ret ptr poison
 continue.4:
@@ -271014,55 +272362,55 @@ no.exception.7:
   call void @lerta_release(ptr %r23)
   ret ptr %r22
 }
-define private void @"lerta.iter.128.drop"(ptr %object) {
+define private void @"lerta.iter.129.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.128, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.129, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @"lerta.iter.128.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.129.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.128, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.129, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = call i1 @lerta_map_cursor_has_next(ptr %r1)
   ret i1 %r2
 }
-define private void @"lerta.tuple.129.drop"(ptr %object) {
+define private void @"lerta.tuple.130.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.tuple.129, ptr %object, i32 0, i32 2
+  %r0 = getelementptr %lerta.tuple.130, ptr %object, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.tuple.129, ptr %object, i32 0, i32 3
+  %r2 = getelementptr %lerta.tuple.130, ptr %object, i32 0, i32 3
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @"lerta.iter.128.next"(ptr %iter) {
+define private ptr @"lerta.iter.129.next"(ptr %iter) {
 entry:
   %r0 = alloca i64
   %r1 = alloca i64
-  %r2 = getelementptr %lerta.iter.128, ptr %iter, i32 0, i32 5
+  %r2 = getelementptr %lerta.iter.129, ptr %iter, i32 0, i32 5
   %r3 = load ptr, ptr %r2
   call void @lerta_map_cursor_next(ptr %r3, ptr %r0, ptr %r1)
   %r4 = load i64, ptr %r0
   %r5 = inttoptr i64 %r4 to ptr
   %r6 = load i64, ptr %r1
   %r7 = inttoptr i64 %r6 to ptr
-  %r8 = getelementptr %lerta.tuple.129, ptr null, i32 1
+  %r8 = getelementptr %lerta.tuple.130, ptr null, i32 1
   %r9 = ptrtoint ptr %r8 to i64
-  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.129.drop")
-  %r11 = getelementptr %lerta.tuple.129, ptr %r10, i32 0, i32 2
+  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.130.drop")
+  %r11 = getelementptr %lerta.tuple.130, ptr %r10, i32 0, i32 2
   store ptr %r5, ptr %r11
-  %r12 = getelementptr %lerta.tuple.129, ptr %r10, i32 0, i32 3
+  %r12 = getelementptr %lerta.tuple.130, ptr %r10, i32 0, i32 3
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private ptr @lerta.lambda.377(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.382(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
-  %r0 = getelementptr %lerta.tuple.129, ptr %p0, i32 0, i32 3
+  %r0 = getelementptr %lerta.tuple.130, ptr %p0, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %p0)
@@ -271073,19 +272421,19 @@ entry:
   call void @lerta_release(ptr %r4)
   ret ptr %r3
 }
-define private void @"lerta.iter.130.drop"(ptr %object) {
+define private void @"lerta.iter.131.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.130, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.131, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.130, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.131, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.130.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.131.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.130, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.131, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -271098,9 +272446,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.130.next"(ptr %iter) {
+define private ptr @"lerta.iter.131.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.130, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.131, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -271111,7 +272459,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.130, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.131, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -271129,16 +272477,16 @@ define linkonce_odr ptr @"lerta.extend.std:builtins.Map<K, V>.values<String, che
 entry:
   call void @lerta_retain(ptr %this)
   %r0 = call ptr @lerta_map_cursor(ptr %this)
-  %r1 = getelementptr %lerta.iter.128, ptr null, i32 1
+  %r1 = getelementptr %lerta.iter.129, ptr null, i32 1
   %r2 = ptrtoint ptr %r1 to i64
-  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.128.drop")
-  %r4 = getelementptr %lerta.iter.128, ptr %r3, i32 0, i32 2
-  store ptr @"lerta.iter.128.has_next", ptr %r4
-  %r5 = getelementptr %lerta.iter.128, ptr %r3, i32 0, i32 3
-  store ptr @"lerta.iter.128.next", ptr %r5
-  %r6 = getelementptr %lerta.iter.128, ptr %r3, i32 0, i32 4
+  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.129.drop")
+  %r4 = getelementptr %lerta.iter.129, ptr %r3, i32 0, i32 2
+  store ptr @"lerta.iter.129.has_next", ptr %r4
+  %r5 = getelementptr %lerta.iter.129, ptr %r3, i32 0, i32 3
+  store ptr @"lerta.iter.129.next", ptr %r5
+  %r6 = getelementptr %lerta.iter.129, ptr %r3, i32 0, i32 4
   store i1 false, ptr %r6
-  %r7 = getelementptr %lerta.iter.128, ptr %r3, i32 0, i32 5
+  %r7 = getelementptr %lerta.iter.129, ptr %r3, i32 0, i32 5
   store ptr %r0, ptr %r7
   call void @lerta_release(ptr %this)
   %r8 = load ptr, ptr @lerta_exception
@@ -271155,19 +272503,19 @@ unwind.2:
   call void @lerta_release(ptr %r3)
   ret ptr poison
 no.exception.3:
-  %r12 = getelementptr %lerta.iter.130, ptr null, i32 1
+  %r12 = getelementptr %lerta.iter.131, ptr null, i32 1
   %r13 = ptrtoint ptr %r12 to i64
-  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.130.drop")
-  %r15 = getelementptr %lerta.iter.130, ptr %r14, i32 0, i32 2
-  store ptr @"lerta.iter.130.has_next", ptr %r15
-  %r16 = getelementptr %lerta.iter.130, ptr %r14, i32 0, i32 3
-  store ptr @"lerta.iter.130.next", ptr %r16
-  %r17 = getelementptr %lerta.iter.130, ptr %r14, i32 0, i32 4
+  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.131.drop")
+  %r15 = getelementptr %lerta.iter.131, ptr %r14, i32 0, i32 2
+  store ptr @"lerta.iter.131.has_next", ptr %r15
+  %r16 = getelementptr %lerta.iter.131, ptr %r14, i32 0, i32 3
+  store ptr @"lerta.iter.131.next", ptr %r16
+  %r17 = getelementptr %lerta.iter.131, ptr %r14, i32 0, i32 4
   store i1 false, ptr %r17
-  %r18 = getelementptr %lerta.iter.130, ptr %r14, i32 0, i32 5
+  %r18 = getelementptr %lerta.iter.131, ptr %r14, i32 0, i32 5
   store ptr %r3, ptr %r18
-  %r19 = getelementptr %lerta.iter.130, ptr %r14, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.377", ptr %r19
+  %r19 = getelementptr %lerta.iter.131, ptr %r14, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.382", ptr %r19
   ret ptr %r14
 }
 define linkonce_odr void @"lerta.extend.std:builtins.Array<T>.append<checker/extensions.lerta.ExtensionMethod>"(ptr %this, ptr %p0) {
@@ -271338,55 +272686,55 @@ for.latch.2:
 for.exit.3:
   ret void
 }
-define private void @"lerta.iter.131.drop"(ptr %object) {
+define private void @"lerta.iter.132.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.131, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.132, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @"lerta.iter.131.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.132.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.131, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.132, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = call i1 @lerta_map_cursor_has_next(ptr %r1)
   ret i1 %r2
 }
-define private void @"lerta.tuple.132.drop"(ptr %object) {
+define private void @"lerta.tuple.133.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.tuple.132, ptr %object, i32 0, i32 2
+  %r0 = getelementptr %lerta.tuple.133, ptr %object, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.tuple.132, ptr %object, i32 0, i32 3
+  %r2 = getelementptr %lerta.tuple.133, ptr %object, i32 0, i32 3
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @"lerta.iter.131.next"(ptr %iter) {
+define private ptr @"lerta.iter.132.next"(ptr %iter) {
 entry:
   %r0 = alloca i64
   %r1 = alloca i64
-  %r2 = getelementptr %lerta.iter.131, ptr %iter, i32 0, i32 5
+  %r2 = getelementptr %lerta.iter.132, ptr %iter, i32 0, i32 5
   %r3 = load ptr, ptr %r2
   call void @lerta_map_cursor_next(ptr %r3, ptr %r0, ptr %r1)
   %r4 = load i64, ptr %r0
   %r5 = inttoptr i64 %r4 to ptr
   %r6 = load i64, ptr %r1
   %r7 = inttoptr i64 %r6 to ptr
-  %r8 = getelementptr %lerta.tuple.132, ptr null, i32 1
+  %r8 = getelementptr %lerta.tuple.133, ptr null, i32 1
   %r9 = ptrtoint ptr %r8 to i64
-  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.132.drop")
-  %r11 = getelementptr %lerta.tuple.132, ptr %r10, i32 0, i32 2
+  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.133.drop")
+  %r11 = getelementptr %lerta.tuple.133, ptr %r10, i32 0, i32 2
   store ptr %r5, ptr %r11
-  %r12 = getelementptr %lerta.tuple.132, ptr %r10, i32 0, i32 3
+  %r12 = getelementptr %lerta.tuple.133, ptr %r10, i32 0, i32 3
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private ptr @lerta.lambda.378(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.383(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
-  %r0 = getelementptr %lerta.tuple.132, ptr %p0, i32 0, i32 3
+  %r0 = getelementptr %lerta.tuple.133, ptr %p0, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %p0)
@@ -271397,19 +272745,19 @@ entry:
   call void @lerta_release(ptr %r4)
   ret ptr %r3
 }
-define private void @"lerta.iter.133.drop"(ptr %object) {
+define private void @"lerta.iter.134.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.133, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.134, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.133, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.134, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.133.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.134.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.133, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.134, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -271422,9 +272770,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.133.next"(ptr %iter) {
+define private ptr @"lerta.iter.134.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.133, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.134, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -271435,7 +272783,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.133, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.134, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -271453,16 +272801,16 @@ define linkonce_odr ptr @"lerta.extend.std:builtins.Map<K, V>.values<String, che
 entry:
   call void @lerta_retain(ptr %this)
   %r0 = call ptr @lerta_map_cursor(ptr %this)
-  %r1 = getelementptr %lerta.iter.131, ptr null, i32 1
+  %r1 = getelementptr %lerta.iter.132, ptr null, i32 1
   %r2 = ptrtoint ptr %r1 to i64
-  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.131.drop")
-  %r4 = getelementptr %lerta.iter.131, ptr %r3, i32 0, i32 2
-  store ptr @"lerta.iter.131.has_next", ptr %r4
-  %r5 = getelementptr %lerta.iter.131, ptr %r3, i32 0, i32 3
-  store ptr @"lerta.iter.131.next", ptr %r5
-  %r6 = getelementptr %lerta.iter.131, ptr %r3, i32 0, i32 4
+  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.132.drop")
+  %r4 = getelementptr %lerta.iter.132, ptr %r3, i32 0, i32 2
+  store ptr @"lerta.iter.132.has_next", ptr %r4
+  %r5 = getelementptr %lerta.iter.132, ptr %r3, i32 0, i32 3
+  store ptr @"lerta.iter.132.next", ptr %r5
+  %r6 = getelementptr %lerta.iter.132, ptr %r3, i32 0, i32 4
   store i1 false, ptr %r6
-  %r7 = getelementptr %lerta.iter.131, ptr %r3, i32 0, i32 5
+  %r7 = getelementptr %lerta.iter.132, ptr %r3, i32 0, i32 5
   store ptr %r0, ptr %r7
   call void @lerta_release(ptr %this)
   %r8 = load ptr, ptr @lerta_exception
@@ -271479,19 +272827,19 @@ unwind.2:
   call void @lerta_release(ptr %r3)
   ret ptr poison
 no.exception.3:
-  %r12 = getelementptr %lerta.iter.133, ptr null, i32 1
+  %r12 = getelementptr %lerta.iter.134, ptr null, i32 1
   %r13 = ptrtoint ptr %r12 to i64
-  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.133.drop")
-  %r15 = getelementptr %lerta.iter.133, ptr %r14, i32 0, i32 2
-  store ptr @"lerta.iter.133.has_next", ptr %r15
-  %r16 = getelementptr %lerta.iter.133, ptr %r14, i32 0, i32 3
-  store ptr @"lerta.iter.133.next", ptr %r16
-  %r17 = getelementptr %lerta.iter.133, ptr %r14, i32 0, i32 4
+  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.134.drop")
+  %r15 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 2
+  store ptr @"lerta.iter.134.has_next", ptr %r15
+  %r16 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 3
+  store ptr @"lerta.iter.134.next", ptr %r16
+  %r17 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 4
   store i1 false, ptr %r17
-  %r18 = getelementptr %lerta.iter.133, ptr %r14, i32 0, i32 5
+  %r18 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 5
   store ptr %r3, ptr %r18
-  %r19 = getelementptr %lerta.iter.133, ptr %r14, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.378", ptr %r19
+  %r19 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.383", ptr %r19
   ret ptr %r14
 }
 define linkonce_odr ptr @"lerta.extend.std:builtins.Array<T>.sorted<checker/shared.lerta.Diagnostic>"(ptr %this, ptr %p0) {
@@ -271582,7 +272930,7 @@ while.body.12:
   %r37 = extractvalue { i64, i1 } %r36, 1
   br i1 %r37, label %raise.14, label %continue.15
 raise.14:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3268)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3269)
   %r38 = load ptr, ptr %r28
   call void @lerta_release(ptr %r38)
   %r39 = load ptr, ptr %r21
@@ -271603,7 +272951,7 @@ then.16:
   %r47 = extractvalue { i64, i1 } %r46, 1
   br i1 %r47, label %raise.19, label %continue.20
 raise.19:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3269)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3270)
   %r48 = load ptr, ptr %r28
   call void @lerta_release(ptr %r48)
   %r49 = load ptr, ptr %r21
@@ -271627,7 +272975,7 @@ then.end.18:
   %r58 = extractvalue { i64, i1 } %r57, 1
   br i1 %r58, label %raise.21, label %continue.22
 raise.21:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3270)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3271)
   %r59 = load ptr, ptr %r28
   call void @lerta_release(ptr %r59)
   %r60 = load ptr, ptr %r21
@@ -271648,7 +272996,7 @@ then.23:
   %r68 = extractvalue { i64, i1 } %r67, 1
   br i1 %r68, label %raise.26, label %continue.27
 raise.26:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3271)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3272)
   %r69 = load ptr, ptr %r28
   call void @lerta_release(ptr %r69)
   %r70 = load ptr, ptr %r21
@@ -271826,7 +273174,7 @@ no.exception.55:
   %r151 = extractvalue { i64, i1 } %r150, 1
   br i1 %r151, label %raise.56, label %continue.57
 raise.56:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3272)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3273)
   %r152 = load ptr, ptr %r28
   call void @lerta_release(ptr %r152)
   %r153 = load ptr, ptr %r21
@@ -271889,7 +273237,7 @@ no.exception.63:
   %r179 = extractvalue { i64, i1 } %r178, 1
   br i1 %r179, label %raise.64, label %continue.65
 raise.64:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3273)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3274)
   %r180 = load ptr, ptr %r28
   call void @lerta_release(ptr %r180)
   %r181 = load ptr, ptr %r21
@@ -271916,7 +273264,7 @@ while.exit.13:
   %r188 = extractvalue { i64, i1 } %r187, 1
   br i1 %r188, label %raise.66, label %continue.67
 raise.66:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3274)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3275)
   %r189 = load ptr, ptr %r28
   call void @lerta_release(ptr %r189)
   %r190 = load ptr, ptr %r21
@@ -272083,7 +273431,7 @@ then.0:
   %r4 = extractvalue { i64, i1 } %r3, 1
   br i1 %r4, label %raise.3, label %continue.4
 raise.3:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3275)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3276)
   call void @lerta_release(ptr %this)
   ret ptr poison
 continue.4:
@@ -272113,7 +273461,7 @@ then.end.2:
   %r14 = phi ptr [ %r11, %no.exception.8 ], [ zeroinitializer, %else.1 ]
   ret ptr %r14
 }
-define private ptr @lerta.lambda.379(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.384(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
@@ -272128,19 +273476,19 @@ entry:
   call void @lerta_release(ptr %r4)
   ret ptr %r3
 }
-define private void @"lerta.iter.134.drop"(ptr %object) {
+define private void @"lerta.iter.135.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.134, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.135, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.134, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.135, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.134.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.135.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.134, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.135, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -272153,9 +273501,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.134.next"(ptr %iter) {
+define private ptr @"lerta.iter.135.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.134, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.135, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -272166,7 +273514,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.134, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.135, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -272210,19 +273558,19 @@ unwind.2:
   call void @lerta_release(ptr %r3)
   ret ptr poison
 no.exception.3:
-  %r12 = getelementptr %lerta.iter.134, ptr null, i32 1
+  %r12 = getelementptr %lerta.iter.135, ptr null, i32 1
   %r13 = ptrtoint ptr %r12 to i64
-  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.134.drop")
-  %r15 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 2
-  store ptr @"lerta.iter.134.has_next", ptr %r15
-  %r16 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 3
-  store ptr @"lerta.iter.134.next", ptr %r16
-  %r17 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 4
+  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.135.drop")
+  %r15 = getelementptr %lerta.iter.135, ptr %r14, i32 0, i32 2
+  store ptr @"lerta.iter.135.has_next", ptr %r15
+  %r16 = getelementptr %lerta.iter.135, ptr %r14, i32 0, i32 3
+  store ptr @"lerta.iter.135.next", ptr %r16
+  %r17 = getelementptr %lerta.iter.135, ptr %r14, i32 0, i32 4
   store i1 false, ptr %r17
-  %r18 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 5
+  %r18 = getelementptr %lerta.iter.135, ptr %r14, i32 0, i32 5
   store ptr %r3, ptr %r18
-  %r19 = getelementptr %lerta.iter.134, ptr %r14, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.379", ptr %r19
+  %r19 = getelementptr %lerta.iter.135, ptr %r14, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.384", ptr %r19
   ret ptr %r14
 }
 define linkonce_odr ptr @"lerta.extend.std:builtins.Self.to_array<Iter<String>, String>"(ptr %this) {
@@ -272381,7 +273729,7 @@ then.0:
   %r4 = extractvalue { i64, i1 } %r3, 1
   br i1 %r4, label %raise.3, label %continue.4
 raise.3:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3277)
+  call void @lerta_raise(i32 1, ptr @lerta.string.3278)
   call void @lerta_release(ptr %this)
   ret ptr poison
 continue.4:
@@ -272432,7 +273780,7 @@ no.exception.1:
   call void @lerta_release(ptr %r4)
   ret i1 %r7
 }
-define private i1 @lerta.lambda.380(ptr %closure) {
+define private i1 @lerta.lambda.385(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -272470,8 +273818,8 @@ no.exception.3:
   %r18 = icmp ne i1 %r14, %r17
   br i1 %r18, label %if.then.4, label %if.else.5
 if.then.4:
-  %r19 = call ptr @"lerta.new.std:builtins.ValueError"(ptr @lerta.string.3278)
-  call void @lerta_release(ptr @lerta.string.3278)
+  %r19 = call ptr @"lerta.new.std:builtins.ValueError"(ptr @lerta.string.3279)
+  call void @lerta_release(ptr @lerta.string.3279)
   %r20 = load ptr, ptr @lerta_exception
   %r21 = icmp ne ptr %r20, null
   br i1 %r21, label %unwind.7, label %no.exception.8
@@ -272490,7 +273838,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.380.drop"(ptr %closure) {
+define private void @"lerta.lambda.385.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -272500,7 +273848,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.381(ptr %closure) {
+define private ptr @lerta.lambda.386(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -272588,7 +273936,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.381.drop"(ptr %closure) {
+define private void @"lerta.lambda.386.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -272598,20 +273946,20 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @"lerta.record.135.drop"(ptr %object) {
+define private void @"lerta.record.136.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.record.135, ptr %object, i32 0, i32 2
+  %r0 = getelementptr %lerta.record.136, ptr %object, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.record.135, ptr %object, i32 0, i32 3
+  %r2 = getelementptr %lerta.record.136, ptr %object, i32 0, i32 3
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @lerta.reader.136(ptr %data) {
+define private i1 @lerta.reader.137(ptr %data) {
 entry:
   call void @lerta_retain(ptr %data)
-  %r0 = getelementptr %lerta.record.135, ptr %data, i32 0, i32 2
+  %r0 = getelementptr %lerta.record.136, ptr %data, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %data)
@@ -272627,10 +273975,10 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @lerta.reader.137(ptr %data) {
+define private ptr @lerta.reader.138(ptr %data) {
 entry:
   call void @lerta_retain(ptr %data)
-  %r0 = getelementptr %lerta.record.135, ptr %data, i32 0, i32 3
+  %r0 = getelementptr %lerta.record.136, ptr %data, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %data)
@@ -272646,17 +273994,17 @@ unwind.0:
 no.exception.1:
   ret ptr %r4
 }
-define private void @"lerta.iter.139.drop"(ptr %object) {
+define private void @"lerta.iter.140.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.139, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.140, ptr %object, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 0
   call void @lerta_release(ptr %r2)
   ret void
 }
-define private i1 @"lerta.iter.139.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.140.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.139, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.140, ptr %iter, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 1
   %r3 = getelementptr ptr, ptr %r2, i64 0
@@ -272671,9 +274019,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r6
 }
-define private ptr @"lerta.iter.139.next"(ptr %iter) {
+define private ptr @"lerta.iter.140.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.139, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.140, ptr %iter, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 1
   %r3 = getelementptr ptr, ptr %r2, i64 1
@@ -272728,9 +274076,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.380.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.385.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.380, ptr %r20
+  store ptr @lerta.lambda.385, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -272742,9 +274090,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.381.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.386.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.381, ptr %r29
+  store ptr @lerta.lambda.386, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -272754,25 +274102,25 @@ no.exception.3:
   call void @lerta_retain(ptr %r33)
   %r34 = load ptr, ptr %r32
   call void @lerta_retain(ptr %r34)
-  %r35 = getelementptr %lerta.record.135, ptr null, i32 1
+  %r35 = getelementptr %lerta.record.136, ptr null, i32 1
   %r36 = ptrtoint ptr %r35 to i64
-  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.record.135.drop")
-  %r38 = getelementptr %lerta.record.135, ptr %r37, i32 0, i32 2
+  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.record.136.drop")
+  %r38 = getelementptr %lerta.record.136, ptr %r37, i32 0, i32 2
   store ptr %r33, ptr %r38
-  %r39 = getelementptr %lerta.record.135, ptr %r37, i32 0, i32 3
+  %r39 = getelementptr %lerta.record.136, ptr %r37, i32 0, i32 3
   store ptr %r34, ptr %r39
   %r40 = insertvalue { ptr, ptr } undef, ptr %r37, 0
-  %r41 = insertvalue { ptr, ptr } %r40, ptr @lerta.itab.138, 1
-  %r42 = getelementptr %lerta.iter.139, ptr null, i32 1
+  %r41 = insertvalue { ptr, ptr } %r40, ptr @lerta.itab.139, 1
+  %r42 = getelementptr %lerta.iter.140, ptr null, i32 1
   %r43 = ptrtoint ptr %r42 to i64
-  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.iter.139.drop")
-  %r45 = getelementptr %lerta.iter.139, ptr %r44, i32 0, i32 2
-  store ptr @"lerta.iter.139.has_next", ptr %r45
-  %r46 = getelementptr %lerta.iter.139, ptr %r44, i32 0, i32 3
-  store ptr @"lerta.iter.139.next", ptr %r46
-  %r47 = getelementptr %lerta.iter.139, ptr %r44, i32 0, i32 4
+  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.iter.140.drop")
+  %r45 = getelementptr %lerta.iter.140, ptr %r44, i32 0, i32 2
+  store ptr @"lerta.iter.140.has_next", ptr %r45
+  %r46 = getelementptr %lerta.iter.140, ptr %r44, i32 0, i32 3
+  store ptr @"lerta.iter.140.next", ptr %r46
+  %r47 = getelementptr %lerta.iter.140, ptr %r44, i32 0, i32 4
   store i1 false, ptr %r47
-  %r48 = getelementptr %lerta.iter.139, ptr %r44, i32 0, i32 5
+  %r48 = getelementptr %lerta.iter.140, ptr %r44, i32 0, i32 5
   store { ptr, ptr } %r41, ptr %r48
   %r49 = load ptr, ptr %r3
   call void @lerta_release(ptr %r49)
@@ -272938,7 +274286,7 @@ for.exit.3:
   call void @lerta_release(ptr %r24)
   ret { i1, i64 } { i1 false, i64 zeroinitializer }
 }
-define private i1 @lerta.lambda.382(ptr %closure) {
+define private i1 @lerta.lambda.387(ptr %closure) {
 entry:
   %r10 = alloca i1
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
@@ -272976,8 +274324,8 @@ no.exception.3:
   %r18 = icmp ne i1 %r14, %r17
   br i1 %r18, label %if.then.4, label %if.else.5
 if.then.4:
-  %r19 = call ptr @"lerta.new.std:builtins.ValueError"(ptr @lerta.string.3280)
-  call void @lerta_release(ptr @lerta.string.3280)
+  %r19 = call ptr @"lerta.new.std:builtins.ValueError"(ptr @lerta.string.3281)
+  call void @lerta_release(ptr @lerta.string.3281)
   %r20 = load ptr, ptr @lerta_exception
   %r21 = icmp ne ptr %r20, null
   br i1 %r21, label %unwind.7, label %no.exception.8
@@ -272996,7 +274344,7 @@ if.end.6:
   %r24 = load i1, ptr %r10
   ret i1 %r24
 }
-define private void @"lerta.lambda.382.drop"(ptr %closure) {
+define private void @"lerta.lambda.387.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -273006,7 +274354,7 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @lerta.lambda.383(ptr %closure) {
+define private ptr @lerta.lambda.388(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -273094,7 +274442,7 @@ no.exception.15:
   store ptr %r27, ptr %r34
   ret ptr %r32
 }
-define private void @"lerta.lambda.383.drop"(ptr %closure) {
+define private void @"lerta.lambda.388.drop"(ptr %closure) {
 entry:
   %r0 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %closure, i32 0, i32 3
   %r1 = load ptr, ptr %r0
@@ -273104,20 +274452,20 @@ entry:
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private void @"lerta.record.140.drop"(ptr %object) {
+define private void @"lerta.record.141.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.record.140, ptr %object, i32 0, i32 2
+  %r0 = getelementptr %lerta.record.141, ptr %object, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.record.140, ptr %object, i32 0, i32 3
+  %r2 = getelementptr %lerta.record.141, ptr %object, i32 0, i32 3
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @lerta.reader.141(ptr %data) {
+define private i1 @lerta.reader.142(ptr %data) {
 entry:
   call void @lerta_retain(ptr %data)
-  %r0 = getelementptr %lerta.record.140, ptr %data, i32 0, i32 2
+  %r0 = getelementptr %lerta.record.141, ptr %data, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %data)
@@ -273133,10 +274481,10 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @lerta.reader.142(ptr %data) {
+define private ptr @lerta.reader.143(ptr %data) {
 entry:
   call void @lerta_retain(ptr %data)
-  %r0 = getelementptr %lerta.record.140, ptr %data, i32 0, i32 3
+  %r0 = getelementptr %lerta.record.141, ptr %data, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %data)
@@ -273152,17 +274500,17 @@ unwind.0:
 no.exception.1:
   ret ptr %r4
 }
-define private void @"lerta.iter.144.drop"(ptr %object) {
+define private void @"lerta.iter.145.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.144, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.145, ptr %object, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 0
   call void @lerta_release(ptr %r2)
   ret void
 }
-define private i1 @"lerta.iter.144.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.145.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.144, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.145, ptr %iter, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 1
   %r3 = getelementptr ptr, ptr %r2, i64 0
@@ -273177,9 +274525,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r6
 }
-define private ptr @"lerta.iter.144.next"(ptr %iter) {
+define private ptr @"lerta.iter.145.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.144, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.145, ptr %iter, i32 0, i32 5
   %r1 = load { ptr, ptr }, ptr %r0
   %r2 = extractvalue { ptr, ptr } %r1, 1
   %r3 = getelementptr ptr, ptr %r2, i64 1
@@ -273234,9 +274582,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r16)
   %r17 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r18 = ptrtoint ptr %r17 to i64
-  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.382.drop")
+  %r19 = call ptr @lerta_alloc(i64 %r18, ptr @"lerta.lambda.387.drop")
   %r20 = getelementptr { i64, ptr, ptr }, ptr %r19, i32 0, i32 2
-  store ptr @lerta.lambda.382, ptr %r20
+  store ptr @lerta.lambda.387, ptr %r20
   %r21 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 3
   store ptr %r15, ptr %r21
   %r22 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r19, i32 0, i32 4
@@ -273248,9 +274596,9 @@ no.exception.3:
   call void @lerta_retain(ptr %r25)
   %r26 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr null, i32 1
   %r27 = ptrtoint ptr %r26 to i64
-  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.383.drop")
+  %r28 = call ptr @lerta_alloc(i64 %r27, ptr @"lerta.lambda.388.drop")
   %r29 = getelementptr { i64, ptr, ptr }, ptr %r28, i32 0, i32 2
-  store ptr @lerta.lambda.383, ptr %r29
+  store ptr @lerta.lambda.388, ptr %r29
   %r30 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 3
   store ptr %r24, ptr %r30
   %r31 = getelementptr { i64, ptr, ptr, ptr, ptr }, ptr %r28, i32 0, i32 4
@@ -273260,25 +274608,25 @@ no.exception.3:
   call void @lerta_retain(ptr %r33)
   %r34 = load ptr, ptr %r32
   call void @lerta_retain(ptr %r34)
-  %r35 = getelementptr %lerta.record.140, ptr null, i32 1
+  %r35 = getelementptr %lerta.record.141, ptr null, i32 1
   %r36 = ptrtoint ptr %r35 to i64
-  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.record.140.drop")
-  %r38 = getelementptr %lerta.record.140, ptr %r37, i32 0, i32 2
+  %r37 = call ptr @lerta_alloc(i64 %r36, ptr @"lerta.record.141.drop")
+  %r38 = getelementptr %lerta.record.141, ptr %r37, i32 0, i32 2
   store ptr %r33, ptr %r38
-  %r39 = getelementptr %lerta.record.140, ptr %r37, i32 0, i32 3
+  %r39 = getelementptr %lerta.record.141, ptr %r37, i32 0, i32 3
   store ptr %r34, ptr %r39
   %r40 = insertvalue { ptr, ptr } undef, ptr %r37, 0
-  %r41 = insertvalue { ptr, ptr } %r40, ptr @lerta.itab.143, 1
-  %r42 = getelementptr %lerta.iter.144, ptr null, i32 1
+  %r41 = insertvalue { ptr, ptr } %r40, ptr @lerta.itab.144, 1
+  %r42 = getelementptr %lerta.iter.145, ptr null, i32 1
   %r43 = ptrtoint ptr %r42 to i64
-  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.iter.144.drop")
-  %r45 = getelementptr %lerta.iter.144, ptr %r44, i32 0, i32 2
-  store ptr @"lerta.iter.144.has_next", ptr %r45
-  %r46 = getelementptr %lerta.iter.144, ptr %r44, i32 0, i32 3
-  store ptr @"lerta.iter.144.next", ptr %r46
-  %r47 = getelementptr %lerta.iter.144, ptr %r44, i32 0, i32 4
+  %r44 = call ptr @lerta_alloc(i64 %r43, ptr @"lerta.iter.145.drop")
+  %r45 = getelementptr %lerta.iter.145, ptr %r44, i32 0, i32 2
+  store ptr @"lerta.iter.145.has_next", ptr %r45
+  %r46 = getelementptr %lerta.iter.145, ptr %r44, i32 0, i32 3
+  store ptr @"lerta.iter.145.next", ptr %r46
+  %r47 = getelementptr %lerta.iter.145, ptr %r44, i32 0, i32 4
   store i1 false, ptr %r47
-  %r48 = getelementptr %lerta.iter.144, ptr %r44, i32 0, i32 5
+  %r48 = getelementptr %lerta.iter.145, ptr %r44, i32 0, i32 5
   store { ptr, ptr } %r41, ptr %r48
   %r49 = load ptr, ptr %r3
   call void @lerta_release(ptr %r49)
@@ -273291,52 +274639,6 @@ no.exception.3:
   ret ptr %r44
 }
 define linkonce_odr ptr @"lerta.extend.std:builtins.Array<T>.last<codegen/generator.lerta.Loop>"(ptr %this) {
-entry:
-  call void @lerta_retain(ptr %this)
-  %r0 = call i64 @lerta_array_length(ptr %this)
-  call void @lerta_release(ptr %this)
-  %r1 = icmp sgt i64 %r0, 0
-  br i1 %r1, label %then.0, label %else.1
-then.0:
-  call void @lerta_retain(ptr %this)
-  call void @lerta_retain(ptr %this)
-  %r2 = call i64 @lerta_array_length(ptr %this)
-  call void @lerta_release(ptr %this)
-  %r3 = call { i64, i1 } @llvm.ssub.with.overflow.i64(i64 %r2, i64 1)
-  %r4 = extractvalue { i64, i1 } %r3, 1
-  br i1 %r4, label %raise.3, label %continue.4
-raise.3:
-  call void @lerta_raise(i32 1, ptr @lerta.string.3282)
-  call void @lerta_release(ptr %this)
-  ret ptr poison
-continue.4:
-  %r5 = extractvalue { i64, i1 } %r3, 0
-  %r6 = call ptr @lerta_array_checked_items(ptr %this, i64 %r5)
-  %r7 = icmp ne ptr %r6, null
-  br i1 %r7, label %branch.then.5, label %branch.end.6
-branch.then.5:
-  %r8 = getelementptr i64, ptr %r6, i64 %r5
-  %r9 = load i64, ptr %r8
-  %r10 = inttoptr i64 %r9 to ptr
-  call void @lerta_retain(ptr %r10)
-  br label %branch.end.6
-branch.end.6:
-  %r11 = phi ptr [ poison, %continue.4 ], [ %r10, %branch.then.5 ]
-  call void @lerta_release(ptr %this)
-  %r12 = load ptr, ptr @lerta_exception
-  %r13 = icmp ne ptr %r12, null
-  br i1 %r13, label %unwind.7, label %no.exception.8
-unwind.7:
-  ret ptr poison
-no.exception.8:
-  br label %then.end.2
-else.1:
-  br label %then.end.2
-then.end.2:
-  %r14 = phi ptr [ %r11, %no.exception.8 ], [ zeroinitializer, %else.1 ]
-  ret ptr %r14
-}
-define linkonce_odr ptr @"lerta.extend.std:builtins.Array<T>.last<codegen/generator.lerta.Handler>"(ptr %this) {
 entry:
   call void @lerta_retain(ptr %this)
   %r0 = call i64 @lerta_array_length(ptr %this)
@@ -273382,55 +274684,101 @@ then.end.2:
   %r14 = phi ptr [ %r11, %no.exception.8 ], [ zeroinitializer, %else.1 ]
   ret ptr %r14
 }
-define private void @"lerta.iter.145.drop"(ptr %object) {
+define linkonce_odr ptr @"lerta.extend.std:builtins.Array<T>.last<codegen/generator.lerta.Handler>"(ptr %this) {
 entry:
-  %r0 = getelementptr %lerta.iter.145, ptr %object, i32 0, i32 5
+  call void @lerta_retain(ptr %this)
+  %r0 = call i64 @lerta_array_length(ptr %this)
+  call void @lerta_release(ptr %this)
+  %r1 = icmp sgt i64 %r0, 0
+  br i1 %r1, label %then.0, label %else.1
+then.0:
+  call void @lerta_retain(ptr %this)
+  call void @lerta_retain(ptr %this)
+  %r2 = call i64 @lerta_array_length(ptr %this)
+  call void @lerta_release(ptr %this)
+  %r3 = call { i64, i1 } @llvm.ssub.with.overflow.i64(i64 %r2, i64 1)
+  %r4 = extractvalue { i64, i1 } %r3, 1
+  br i1 %r4, label %raise.3, label %continue.4
+raise.3:
+  call void @lerta_raise(i32 1, ptr @lerta.string.3284)
+  call void @lerta_release(ptr %this)
+  ret ptr poison
+continue.4:
+  %r5 = extractvalue { i64, i1 } %r3, 0
+  %r6 = call ptr @lerta_array_checked_items(ptr %this, i64 %r5)
+  %r7 = icmp ne ptr %r6, null
+  br i1 %r7, label %branch.then.5, label %branch.end.6
+branch.then.5:
+  %r8 = getelementptr i64, ptr %r6, i64 %r5
+  %r9 = load i64, ptr %r8
+  %r10 = inttoptr i64 %r9 to ptr
+  call void @lerta_retain(ptr %r10)
+  br label %branch.end.6
+branch.end.6:
+  %r11 = phi ptr [ poison, %continue.4 ], [ %r10, %branch.then.5 ]
+  call void @lerta_release(ptr %this)
+  %r12 = load ptr, ptr @lerta_exception
+  %r13 = icmp ne ptr %r12, null
+  br i1 %r13, label %unwind.7, label %no.exception.8
+unwind.7:
+  ret ptr poison
+no.exception.8:
+  br label %then.end.2
+else.1:
+  br label %then.end.2
+then.end.2:
+  %r14 = phi ptr [ %r11, %no.exception.8 ], [ zeroinitializer, %else.1 ]
+  ret ptr %r14
+}
+define private void @"lerta.iter.146.drop"(ptr %object) {
+entry:
+  %r0 = getelementptr %lerta.iter.146, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @"lerta.iter.145.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.146.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.145, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.146, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = call i1 @lerta_map_cursor_has_next(ptr %r1)
   ret i1 %r2
 }
-define private void @"lerta.tuple.146.drop"(ptr %object) {
+define private void @"lerta.tuple.147.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.tuple.146, ptr %object, i32 0, i32 2
+  %r0 = getelementptr %lerta.tuple.147, ptr %object, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.tuple.146, ptr %object, i32 0, i32 3
+  %r2 = getelementptr %lerta.tuple.147, ptr %object, i32 0, i32 3
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @"lerta.iter.145.next"(ptr %iter) {
+define private ptr @"lerta.iter.146.next"(ptr %iter) {
 entry:
   %r0 = alloca i64
   %r1 = alloca i64
-  %r2 = getelementptr %lerta.iter.145, ptr %iter, i32 0, i32 5
+  %r2 = getelementptr %lerta.iter.146, ptr %iter, i32 0, i32 5
   %r3 = load ptr, ptr %r2
   call void @lerta_map_cursor_next(ptr %r3, ptr %r0, ptr %r1)
   %r4 = load i64, ptr %r0
   %r5 = inttoptr i64 %r4 to ptr
   %r6 = load i64, ptr %r1
   %r7 = inttoptr i64 %r6 to ptr
-  %r8 = getelementptr %lerta.tuple.146, ptr null, i32 1
+  %r8 = getelementptr %lerta.tuple.147, ptr null, i32 1
   %r9 = ptrtoint ptr %r8 to i64
-  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.146.drop")
-  %r11 = getelementptr %lerta.tuple.146, ptr %r10, i32 0, i32 2
+  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.147.drop")
+  %r11 = getelementptr %lerta.tuple.147, ptr %r10, i32 0, i32 2
   store ptr %r5, ptr %r11
-  %r12 = getelementptr %lerta.tuple.146, ptr %r10, i32 0, i32 3
+  %r12 = getelementptr %lerta.tuple.147, ptr %r10, i32 0, i32 3
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private ptr @lerta.lambda.384(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.389(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
-  %r0 = getelementptr %lerta.tuple.146, ptr %p0, i32 0, i32 3
+  %r0 = getelementptr %lerta.tuple.147, ptr %p0, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %p0)
@@ -273441,19 +274789,19 @@ entry:
   call void @lerta_release(ptr %r4)
   ret ptr %r3
 }
-define private void @"lerta.iter.147.drop"(ptr %object) {
+define private void @"lerta.iter.148.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.147, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.148, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.147, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.148, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.147.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.148.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.147, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.148, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -273466,9 +274814,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.147.next"(ptr %iter) {
+define private ptr @"lerta.iter.148.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.147, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.148, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -273479,7 +274827,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.147, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.148, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -273497,16 +274845,16 @@ define linkonce_odr ptr @"lerta.extend.std:builtins.Map<K, V>.values<String, cod
 entry:
   call void @lerta_retain(ptr %this)
   %r0 = call ptr @lerta_map_cursor(ptr %this)
-  %r1 = getelementptr %lerta.iter.145, ptr null, i32 1
+  %r1 = getelementptr %lerta.iter.146, ptr null, i32 1
   %r2 = ptrtoint ptr %r1 to i64
-  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.145.drop")
-  %r4 = getelementptr %lerta.iter.145, ptr %r3, i32 0, i32 2
-  store ptr @"lerta.iter.145.has_next", ptr %r4
-  %r5 = getelementptr %lerta.iter.145, ptr %r3, i32 0, i32 3
-  store ptr @"lerta.iter.145.next", ptr %r5
-  %r6 = getelementptr %lerta.iter.145, ptr %r3, i32 0, i32 4
+  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.146.drop")
+  %r4 = getelementptr %lerta.iter.146, ptr %r3, i32 0, i32 2
+  store ptr @"lerta.iter.146.has_next", ptr %r4
+  %r5 = getelementptr %lerta.iter.146, ptr %r3, i32 0, i32 3
+  store ptr @"lerta.iter.146.next", ptr %r5
+  %r6 = getelementptr %lerta.iter.146, ptr %r3, i32 0, i32 4
   store i1 false, ptr %r6
-  %r7 = getelementptr %lerta.iter.145, ptr %r3, i32 0, i32 5
+  %r7 = getelementptr %lerta.iter.146, ptr %r3, i32 0, i32 5
   store ptr %r0, ptr %r7
   call void @lerta_release(ptr %this)
   %r8 = load ptr, ptr @lerta_exception
@@ -273523,19 +274871,19 @@ unwind.2:
   call void @lerta_release(ptr %r3)
   ret ptr poison
 no.exception.3:
-  %r12 = getelementptr %lerta.iter.147, ptr null, i32 1
+  %r12 = getelementptr %lerta.iter.148, ptr null, i32 1
   %r13 = ptrtoint ptr %r12 to i64
-  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.147.drop")
-  %r15 = getelementptr %lerta.iter.147, ptr %r14, i32 0, i32 2
-  store ptr @"lerta.iter.147.has_next", ptr %r15
-  %r16 = getelementptr %lerta.iter.147, ptr %r14, i32 0, i32 3
-  store ptr @"lerta.iter.147.next", ptr %r16
-  %r17 = getelementptr %lerta.iter.147, ptr %r14, i32 0, i32 4
+  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.148.drop")
+  %r15 = getelementptr %lerta.iter.148, ptr %r14, i32 0, i32 2
+  store ptr @"lerta.iter.148.has_next", ptr %r15
+  %r16 = getelementptr %lerta.iter.148, ptr %r14, i32 0, i32 3
+  store ptr @"lerta.iter.148.next", ptr %r16
+  %r17 = getelementptr %lerta.iter.148, ptr %r14, i32 0, i32 4
   store i1 false, ptr %r17
-  %r18 = getelementptr %lerta.iter.147, ptr %r14, i32 0, i32 5
+  %r18 = getelementptr %lerta.iter.148, ptr %r14, i32 0, i32 5
   store ptr %r3, ptr %r18
-  %r19 = getelementptr %lerta.iter.147, ptr %r14, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.384", ptr %r19
+  %r19 = getelementptr %lerta.iter.148, ptr %r14, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.389", ptr %r19
   ret ptr %r14
 }
 define linkonce_odr i1 @"lerta.extend.std:builtins.Map<K, V>.has<ast.lerta.Identifier, Bool>"(ptr %this, ptr %p0) {
@@ -273668,55 +275016,55 @@ no.exception.1:
   call void @lerta_release(ptr %r4)
   ret i1 %r7
 }
-define private void @"lerta.iter.148.drop"(ptr %object) {
+define private void @"lerta.iter.149.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.148, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.149, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @"lerta.iter.148.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.149.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.148, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.149, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = call i1 @lerta_map_cursor_has_next(ptr %r1)
   ret i1 %r2
 }
-define private void @"lerta.tuple.149.drop"(ptr %object) {
+define private void @"lerta.tuple.150.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.tuple.149, ptr %object, i32 0, i32 2
+  %r0 = getelementptr %lerta.tuple.150, ptr %object, i32 0, i32 2
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.tuple.149, ptr %object, i32 0, i32 3
+  %r2 = getelementptr %lerta.tuple.150, ptr %object, i32 0, i32 3
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private ptr @"lerta.iter.148.next"(ptr %iter) {
+define private ptr @"lerta.iter.149.next"(ptr %iter) {
 entry:
   %r0 = alloca i64
   %r1 = alloca i64
-  %r2 = getelementptr %lerta.iter.148, ptr %iter, i32 0, i32 5
+  %r2 = getelementptr %lerta.iter.149, ptr %iter, i32 0, i32 5
   %r3 = load ptr, ptr %r2
   call void @lerta_map_cursor_next(ptr %r3, ptr %r0, ptr %r1)
   %r4 = load i64, ptr %r0
   %r5 = inttoptr i64 %r4 to ptr
   %r6 = load i64, ptr %r1
   %r7 = inttoptr i64 %r6 to ptr
-  %r8 = getelementptr %lerta.tuple.149, ptr null, i32 1
+  %r8 = getelementptr %lerta.tuple.150, ptr null, i32 1
   %r9 = ptrtoint ptr %r8 to i64
-  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.149.drop")
-  %r11 = getelementptr %lerta.tuple.149, ptr %r10, i32 0, i32 2
+  %r10 = call ptr @lerta_alloc(i64 %r9, ptr @"lerta.tuple.150.drop")
+  %r11 = getelementptr %lerta.tuple.150, ptr %r10, i32 0, i32 2
   store ptr %r5, ptr %r11
-  %r12 = getelementptr %lerta.tuple.149, ptr %r10, i32 0, i32 3
+  %r12 = getelementptr %lerta.tuple.150, ptr %r10, i32 0, i32 3
   store ptr %r7, ptr %r12
   ret ptr %r10
 }
-define private ptr @lerta.lambda.385(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.390(ptr %closure, ptr %p0) {
 entry:
   %r2 = alloca ptr
   call void @lerta_retain(ptr %p0)
-  %r0 = getelementptr %lerta.tuple.149, ptr %p0, i32 0, i32 3
+  %r0 = getelementptr %lerta.tuple.150, ptr %p0, i32 0, i32 3
   %r1 = load ptr, ptr %r0
   call void @lerta_retain(ptr %r1)
   call void @lerta_release(ptr %p0)
@@ -273727,19 +275075,19 @@ entry:
   call void @lerta_release(ptr %r4)
   ret ptr %r3
 }
-define private void @"lerta.iter.150.drop"(ptr %object) {
+define private void @"lerta.iter.151.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.150, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.151, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.150, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.151, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.150.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.151.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.150, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.151, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -273752,9 +275100,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.150.next"(ptr %iter) {
+define private ptr @"lerta.iter.151.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.150, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.151, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -273765,7 +275113,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.150, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.151, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -273783,16 +275131,16 @@ define linkonce_odr ptr @"lerta.extend.std:builtins.Map<K, V>.values<String, cod
 entry:
   call void @lerta_retain(ptr %this)
   %r0 = call ptr @lerta_map_cursor(ptr %this)
-  %r1 = getelementptr %lerta.iter.148, ptr null, i32 1
+  %r1 = getelementptr %lerta.iter.149, ptr null, i32 1
   %r2 = ptrtoint ptr %r1 to i64
-  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.148.drop")
-  %r4 = getelementptr %lerta.iter.148, ptr %r3, i32 0, i32 2
-  store ptr @"lerta.iter.148.has_next", ptr %r4
-  %r5 = getelementptr %lerta.iter.148, ptr %r3, i32 0, i32 3
-  store ptr @"lerta.iter.148.next", ptr %r5
-  %r6 = getelementptr %lerta.iter.148, ptr %r3, i32 0, i32 4
+  %r3 = call ptr @lerta_alloc(i64 %r2, ptr @"lerta.iter.149.drop")
+  %r4 = getelementptr %lerta.iter.149, ptr %r3, i32 0, i32 2
+  store ptr @"lerta.iter.149.has_next", ptr %r4
+  %r5 = getelementptr %lerta.iter.149, ptr %r3, i32 0, i32 3
+  store ptr @"lerta.iter.149.next", ptr %r5
+  %r6 = getelementptr %lerta.iter.149, ptr %r3, i32 0, i32 4
   store i1 false, ptr %r6
-  %r7 = getelementptr %lerta.iter.148, ptr %r3, i32 0, i32 5
+  %r7 = getelementptr %lerta.iter.149, ptr %r3, i32 0, i32 5
   store ptr %r0, ptr %r7
   call void @lerta_release(ptr %this)
   %r8 = load ptr, ptr @lerta_exception
@@ -273809,19 +275157,19 @@ unwind.2:
   call void @lerta_release(ptr %r3)
   ret ptr poison
 no.exception.3:
-  %r12 = getelementptr %lerta.iter.150, ptr null, i32 1
+  %r12 = getelementptr %lerta.iter.151, ptr null, i32 1
   %r13 = ptrtoint ptr %r12 to i64
-  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.150.drop")
-  %r15 = getelementptr %lerta.iter.150, ptr %r14, i32 0, i32 2
-  store ptr @"lerta.iter.150.has_next", ptr %r15
-  %r16 = getelementptr %lerta.iter.150, ptr %r14, i32 0, i32 3
-  store ptr @"lerta.iter.150.next", ptr %r16
-  %r17 = getelementptr %lerta.iter.150, ptr %r14, i32 0, i32 4
+  %r14 = call ptr @lerta_alloc(i64 %r13, ptr @"lerta.iter.151.drop")
+  %r15 = getelementptr %lerta.iter.151, ptr %r14, i32 0, i32 2
+  store ptr @"lerta.iter.151.has_next", ptr %r15
+  %r16 = getelementptr %lerta.iter.151, ptr %r14, i32 0, i32 3
+  store ptr @"lerta.iter.151.next", ptr %r16
+  %r17 = getelementptr %lerta.iter.151, ptr %r14, i32 0, i32 4
   store i1 false, ptr %r17
-  %r18 = getelementptr %lerta.iter.150, ptr %r14, i32 0, i32 5
+  %r18 = getelementptr %lerta.iter.151, ptr %r14, i32 0, i32 5
   store ptr %r3, ptr %r18
-  %r19 = getelementptr %lerta.iter.150, ptr %r14, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.385", ptr %r19
+  %r19 = getelementptr %lerta.iter.151, ptr %r14, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.390", ptr %r19
   ret ptr %r14
 }
 define linkonce_odr ptr @"lerta.extend.std:builtins.Self.to_array<Iter<codegen/generator.lerta.TopLevelGlobal>, codegen/generator.lerta.TopLevelGlobal>"(ptr %this) {
@@ -275002,28 +276350,28 @@ no.exception.5:
   call void @lerta_release(ptr %r22)
   ret ptr %r21
 }
-define private void @"lerta.iter.151.drop"(ptr %object) {
+define private void @"lerta.iter.152.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.151, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.152, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @"lerta.iter.151.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.152.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.151, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.152, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = call i64 @lerta_array_length(ptr %r1)
-  %r3 = getelementptr %lerta.iter.151, ptr %iter, i32 0, i32 6
+  %r3 = getelementptr %lerta.iter.152, ptr %iter, i32 0, i32 6
   %r4 = load i64, ptr %r3
   %r5 = icmp slt i64 %r4, %r2
   ret i1 %r5
 }
-define private ptr @"lerta.iter.151.next"(ptr %iter) {
+define private ptr @"lerta.iter.152.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.151, ptr %iter, i32 0, i32 6
+  %r0 = getelementptr %lerta.iter.152, ptr %iter, i32 0, i32 6
   %r1 = load i64, ptr %r0
-  %r2 = getelementptr %lerta.iter.151, ptr %iter, i32 0, i32 5
+  %r2 = getelementptr %lerta.iter.152, ptr %iter, i32 0, i32 5
   %r3 = load ptr, ptr %r2
   %r4 = call ptr @lerta_array_checked_items(ptr %r3, i64 %r1)
   %r5 = icmp ne ptr %r4, null
@@ -275037,28 +276385,28 @@ branch.then.0:
 branch.end.1:
   %r9 = phi ptr [ poison, %entry ], [ %r8, %branch.then.0 ]
   %r10 = add nsw i64 %r1, 1
-  %r11 = getelementptr %lerta.iter.151, ptr %iter, i32 0, i32 6
+  %r11 = getelementptr %lerta.iter.152, ptr %iter, i32 0, i32 6
   store i64 %r10, ptr %r11
   ret ptr %r9
 }
-define private ptr @lerta.lambda.386(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.391(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
 }
-define private void @"lerta.iter.152.drop"(ptr %object) {
+define private void @"lerta.iter.153.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.152, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.153, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.152, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.153, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.152.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.153.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.152, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.153, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -275071,9 +276419,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.152.next"(ptr %iter) {
+define private ptr @"lerta.iter.153.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.152, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.153, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -275084,7 +276432,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.152, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.153, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -275101,18 +276449,18 @@ no.exception.3:
 define linkonce_odr ptr @"lerta.extend.std:builtins.Array<T>.iter<ast.lerta.TypeParameter>.1"(ptr %this) {
 entry:
   call void @lerta_retain(ptr %this)
-  %r0 = getelementptr %lerta.iter.151, ptr null, i32 1
+  %r0 = getelementptr %lerta.iter.152, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.iter.151.drop")
-  %r3 = getelementptr %lerta.iter.151, ptr %r2, i32 0, i32 2
-  store ptr @"lerta.iter.151.has_next", ptr %r3
-  %r4 = getelementptr %lerta.iter.151, ptr %r2, i32 0, i32 3
-  store ptr @"lerta.iter.151.next", ptr %r4
-  %r5 = getelementptr %lerta.iter.151, ptr %r2, i32 0, i32 4
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.iter.152.drop")
+  %r3 = getelementptr %lerta.iter.152, ptr %r2, i32 0, i32 2
+  store ptr @"lerta.iter.152.has_next", ptr %r3
+  %r4 = getelementptr %lerta.iter.152, ptr %r2, i32 0, i32 3
+  store ptr @"lerta.iter.152.next", ptr %r4
+  %r5 = getelementptr %lerta.iter.152, ptr %r2, i32 0, i32 4
   store i1 false, ptr %r5
-  %r6 = getelementptr %lerta.iter.151, ptr %r2, i32 0, i32 5
+  %r6 = getelementptr %lerta.iter.152, ptr %r2, i32 0, i32 5
   store ptr %this, ptr %r6
-  %r7 = getelementptr %lerta.iter.151, ptr %r2, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.152, ptr %r2, i32 0, i32 6
   store i64 0, ptr %r7
   %r8 = load ptr, ptr @lerta_exception
   %r9 = icmp ne ptr %r8, null
@@ -275121,43 +276469,43 @@ unwind.0:
   call void @lerta_release(ptr %r2)
   ret ptr poison
 no.exception.1:
-  %r10 = getelementptr %lerta.iter.152, ptr null, i32 1
+  %r10 = getelementptr %lerta.iter.153, ptr null, i32 1
   %r11 = ptrtoint ptr %r10 to i64
-  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.iter.152.drop")
-  %r13 = getelementptr %lerta.iter.152, ptr %r12, i32 0, i32 2
-  store ptr @"lerta.iter.152.has_next", ptr %r13
-  %r14 = getelementptr %lerta.iter.152, ptr %r12, i32 0, i32 3
-  store ptr @"lerta.iter.152.next", ptr %r14
-  %r15 = getelementptr %lerta.iter.152, ptr %r12, i32 0, i32 4
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.iter.153.drop")
+  %r13 = getelementptr %lerta.iter.153, ptr %r12, i32 0, i32 2
+  store ptr @"lerta.iter.153.has_next", ptr %r13
+  %r14 = getelementptr %lerta.iter.153, ptr %r12, i32 0, i32 3
+  store ptr @"lerta.iter.153.next", ptr %r14
+  %r15 = getelementptr %lerta.iter.153, ptr %r12, i32 0, i32 4
   store i1 false, ptr %r15
-  %r16 = getelementptr %lerta.iter.152, ptr %r12, i32 0, i32 5
+  %r16 = getelementptr %lerta.iter.153, ptr %r12, i32 0, i32 5
   store ptr %r2, ptr %r16
-  %r17 = getelementptr %lerta.iter.152, ptr %r12, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.386", ptr %r17
+  %r17 = getelementptr %lerta.iter.153, ptr %r12, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.391", ptr %r17
   ret ptr %r12
 }
-define private void @"lerta.iter.153.drop"(ptr %object) {
+define private void @"lerta.iter.154.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.153, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.154, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @"lerta.iter.153.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.154.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.153, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.154, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = call i64 @lerta_array_length(ptr %r1)
-  %r3 = getelementptr %lerta.iter.153, ptr %iter, i32 0, i32 6
+  %r3 = getelementptr %lerta.iter.154, ptr %iter, i32 0, i32 6
   %r4 = load i64, ptr %r3
   %r5 = icmp slt i64 %r4, %r2
   ret i1 %r5
 }
-define private ptr @"lerta.iter.153.next"(ptr %iter) {
+define private ptr @"lerta.iter.154.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.153, ptr %iter, i32 0, i32 6
+  %r0 = getelementptr %lerta.iter.154, ptr %iter, i32 0, i32 6
   %r1 = load i64, ptr %r0
-  %r2 = getelementptr %lerta.iter.153, ptr %iter, i32 0, i32 5
+  %r2 = getelementptr %lerta.iter.154, ptr %iter, i32 0, i32 5
   %r3 = load ptr, ptr %r2
   %r4 = call ptr @lerta_array_checked_items(ptr %r3, i64 %r1)
   %r5 = icmp ne ptr %r4, null
@@ -275171,28 +276519,28 @@ branch.then.0:
 branch.end.1:
   %r9 = phi ptr [ poison, %entry ], [ %r8, %branch.then.0 ]
   %r10 = add nsw i64 %r1, 1
-  %r11 = getelementptr %lerta.iter.153, ptr %iter, i32 0, i32 6
+  %r11 = getelementptr %lerta.iter.154, ptr %iter, i32 0, i32 6
   store i64 %r10, ptr %r11
   ret ptr %r9
 }
-define private ptr @lerta.lambda.387(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.392(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
 }
-define private void @"lerta.iter.154.drop"(ptr %object) {
+define private void @"lerta.iter.155.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.154, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.155, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.154, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.155, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.154.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.155.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.154, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.155, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -275205,9 +276553,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.154.next"(ptr %iter) {
+define private ptr @"lerta.iter.155.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.154, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.155, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -275218,7 +276566,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.154, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.155, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -275235,18 +276583,18 @@ no.exception.3:
 define linkonce_odr ptr @"lerta.extend.std:builtins.Array<T>.iter<checker/type_argument_inference.lerta.TypeBinding>"(ptr %this) {
 entry:
   call void @lerta_retain(ptr %this)
-  %r0 = getelementptr %lerta.iter.153, ptr null, i32 1
+  %r0 = getelementptr %lerta.iter.154, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.iter.153.drop")
-  %r3 = getelementptr %lerta.iter.153, ptr %r2, i32 0, i32 2
-  store ptr @"lerta.iter.153.has_next", ptr %r3
-  %r4 = getelementptr %lerta.iter.153, ptr %r2, i32 0, i32 3
-  store ptr @"lerta.iter.153.next", ptr %r4
-  %r5 = getelementptr %lerta.iter.153, ptr %r2, i32 0, i32 4
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.iter.154.drop")
+  %r3 = getelementptr %lerta.iter.154, ptr %r2, i32 0, i32 2
+  store ptr @"lerta.iter.154.has_next", ptr %r3
+  %r4 = getelementptr %lerta.iter.154, ptr %r2, i32 0, i32 3
+  store ptr @"lerta.iter.154.next", ptr %r4
+  %r5 = getelementptr %lerta.iter.154, ptr %r2, i32 0, i32 4
   store i1 false, ptr %r5
-  %r6 = getelementptr %lerta.iter.153, ptr %r2, i32 0, i32 5
+  %r6 = getelementptr %lerta.iter.154, ptr %r2, i32 0, i32 5
   store ptr %this, ptr %r6
-  %r7 = getelementptr %lerta.iter.153, ptr %r2, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.154, ptr %r2, i32 0, i32 6
   store i64 0, ptr %r7
   %r8 = load ptr, ptr @lerta_exception
   %r9 = icmp ne ptr %r8, null
@@ -275255,43 +276603,43 @@ unwind.0:
   call void @lerta_release(ptr %r2)
   ret ptr poison
 no.exception.1:
-  %r10 = getelementptr %lerta.iter.154, ptr null, i32 1
+  %r10 = getelementptr %lerta.iter.155, ptr null, i32 1
   %r11 = ptrtoint ptr %r10 to i64
-  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.iter.154.drop")
-  %r13 = getelementptr %lerta.iter.154, ptr %r12, i32 0, i32 2
-  store ptr @"lerta.iter.154.has_next", ptr %r13
-  %r14 = getelementptr %lerta.iter.154, ptr %r12, i32 0, i32 3
-  store ptr @"lerta.iter.154.next", ptr %r14
-  %r15 = getelementptr %lerta.iter.154, ptr %r12, i32 0, i32 4
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.iter.155.drop")
+  %r13 = getelementptr %lerta.iter.155, ptr %r12, i32 0, i32 2
+  store ptr @"lerta.iter.155.has_next", ptr %r13
+  %r14 = getelementptr %lerta.iter.155, ptr %r12, i32 0, i32 3
+  store ptr @"lerta.iter.155.next", ptr %r14
+  %r15 = getelementptr %lerta.iter.155, ptr %r12, i32 0, i32 4
   store i1 false, ptr %r15
-  %r16 = getelementptr %lerta.iter.154, ptr %r12, i32 0, i32 5
+  %r16 = getelementptr %lerta.iter.155, ptr %r12, i32 0, i32 5
   store ptr %r2, ptr %r16
-  %r17 = getelementptr %lerta.iter.154, ptr %r12, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.387", ptr %r17
+  %r17 = getelementptr %lerta.iter.155, ptr %r12, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.392", ptr %r17
   ret ptr %r12
 }
-define private void @"lerta.iter.155.drop"(ptr %object) {
+define private void @"lerta.iter.156.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.155, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.156, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
   ret void
 }
-define private i1 @"lerta.iter.155.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.156.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.155, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.156, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = call i64 @lerta_array_length(ptr %r1)
-  %r3 = getelementptr %lerta.iter.155, ptr %iter, i32 0, i32 6
+  %r3 = getelementptr %lerta.iter.156, ptr %iter, i32 0, i32 6
   %r4 = load i64, ptr %r3
   %r5 = icmp slt i64 %r4, %r2
   ret i1 %r5
 }
-define private ptr @"lerta.iter.155.next"(ptr %iter) {
+define private ptr @"lerta.iter.156.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.155, ptr %iter, i32 0, i32 6
+  %r0 = getelementptr %lerta.iter.156, ptr %iter, i32 0, i32 6
   %r1 = load i64, ptr %r0
-  %r2 = getelementptr %lerta.iter.155, ptr %iter, i32 0, i32 5
+  %r2 = getelementptr %lerta.iter.156, ptr %iter, i32 0, i32 5
   %r3 = load ptr, ptr %r2
   %r4 = call ptr @lerta_array_checked_items(ptr %r3, i64 %r1)
   %r5 = icmp ne ptr %r4, null
@@ -275305,28 +276653,28 @@ branch.then.0:
 branch.end.1:
   %r9 = phi ptr [ poison, %entry ], [ %r8, %branch.then.0 ]
   %r10 = add nsw i64 %r1, 1
-  %r11 = getelementptr %lerta.iter.155, ptr %iter, i32 0, i32 6
+  %r11 = getelementptr %lerta.iter.156, ptr %iter, i32 0, i32 6
   store i64 %r10, ptr %r11
   ret ptr %r9
 }
-define private ptr @lerta.lambda.388(ptr %closure, ptr %p0) {
+define private ptr @lerta.lambda.393(ptr %closure, ptr %p0) {
 entry:
   call void @lerta_retain(ptr %p0)
   ret ptr %p0
 }
-define private void @"lerta.iter.156.drop"(ptr %object) {
+define private void @"lerta.iter.157.drop"(ptr %object) {
 entry:
-  %r0 = getelementptr %lerta.iter.156, ptr %object, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.157, ptr %object, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   call void @lerta_release(ptr %r1)
-  %r2 = getelementptr %lerta.iter.156, ptr %object, i32 0, i32 6
+  %r2 = getelementptr %lerta.iter.157, ptr %object, i32 0, i32 6
   %r3 = load ptr, ptr %r2
   call void @lerta_release(ptr %r3)
   ret void
 }
-define private i1 @"lerta.iter.156.has_next"(ptr %iter) {
+define private i1 @"lerta.iter.157.has_next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.156, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.157, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 2
   %r3 = load ptr, ptr %r2
@@ -275339,9 +276687,9 @@ unwind.0:
 no.exception.1:
   ret i1 %r4
 }
-define private ptr @"lerta.iter.156.next"(ptr %iter) {
+define private ptr @"lerta.iter.157.next"(ptr %iter) {
 entry:
-  %r0 = getelementptr %lerta.iter.156, ptr %iter, i32 0, i32 5
+  %r0 = getelementptr %lerta.iter.157, ptr %iter, i32 0, i32 5
   %r1 = load ptr, ptr %r0
   %r2 = getelementptr { i64, ptr, ptr, ptr, i1 }, ptr %r1, i32 0, i32 3
   %r3 = load ptr, ptr %r2
@@ -275352,7 +276700,7 @@ entry:
 unwind.0:
   ret ptr poison
 no.exception.1:
-  %r7 = getelementptr %lerta.iter.156, ptr %iter, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.157, ptr %iter, i32 0, i32 6
   %r8 = load ptr, ptr %r7
   %r9 = getelementptr { i64, ptr, ptr }, ptr %r8, i32 0, i32 2
   %r10 = load ptr, ptr %r9
@@ -275369,18 +276717,18 @@ no.exception.3:
 define linkonce_odr ptr @"lerta.extend.std:builtins.Array<T>.iter<ast.lerta.NamedValue>"(ptr %this) {
 entry:
   call void @lerta_retain(ptr %this)
-  %r0 = getelementptr %lerta.iter.155, ptr null, i32 1
+  %r0 = getelementptr %lerta.iter.156, ptr null, i32 1
   %r1 = ptrtoint ptr %r0 to i64
-  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.iter.155.drop")
-  %r3 = getelementptr %lerta.iter.155, ptr %r2, i32 0, i32 2
-  store ptr @"lerta.iter.155.has_next", ptr %r3
-  %r4 = getelementptr %lerta.iter.155, ptr %r2, i32 0, i32 3
-  store ptr @"lerta.iter.155.next", ptr %r4
-  %r5 = getelementptr %lerta.iter.155, ptr %r2, i32 0, i32 4
+  %r2 = call ptr @lerta_alloc(i64 %r1, ptr @"lerta.iter.156.drop")
+  %r3 = getelementptr %lerta.iter.156, ptr %r2, i32 0, i32 2
+  store ptr @"lerta.iter.156.has_next", ptr %r3
+  %r4 = getelementptr %lerta.iter.156, ptr %r2, i32 0, i32 3
+  store ptr @"lerta.iter.156.next", ptr %r4
+  %r5 = getelementptr %lerta.iter.156, ptr %r2, i32 0, i32 4
   store i1 false, ptr %r5
-  %r6 = getelementptr %lerta.iter.155, ptr %r2, i32 0, i32 5
+  %r6 = getelementptr %lerta.iter.156, ptr %r2, i32 0, i32 5
   store ptr %this, ptr %r6
-  %r7 = getelementptr %lerta.iter.155, ptr %r2, i32 0, i32 6
+  %r7 = getelementptr %lerta.iter.156, ptr %r2, i32 0, i32 6
   store i64 0, ptr %r7
   %r8 = load ptr, ptr @lerta_exception
   %r9 = icmp ne ptr %r8, null
@@ -275389,18 +276737,18 @@ unwind.0:
   call void @lerta_release(ptr %r2)
   ret ptr poison
 no.exception.1:
-  %r10 = getelementptr %lerta.iter.156, ptr null, i32 1
+  %r10 = getelementptr %lerta.iter.157, ptr null, i32 1
   %r11 = ptrtoint ptr %r10 to i64
-  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.iter.156.drop")
-  %r13 = getelementptr %lerta.iter.156, ptr %r12, i32 0, i32 2
-  store ptr @"lerta.iter.156.has_next", ptr %r13
-  %r14 = getelementptr %lerta.iter.156, ptr %r12, i32 0, i32 3
-  store ptr @"lerta.iter.156.next", ptr %r14
-  %r15 = getelementptr %lerta.iter.156, ptr %r12, i32 0, i32 4
+  %r12 = call ptr @lerta_alloc(i64 %r11, ptr @"lerta.iter.157.drop")
+  %r13 = getelementptr %lerta.iter.157, ptr %r12, i32 0, i32 2
+  store ptr @"lerta.iter.157.has_next", ptr %r13
+  %r14 = getelementptr %lerta.iter.157, ptr %r12, i32 0, i32 3
+  store ptr @"lerta.iter.157.next", ptr %r14
+  %r15 = getelementptr %lerta.iter.157, ptr %r12, i32 0, i32 4
   store i1 false, ptr %r15
-  %r16 = getelementptr %lerta.iter.156, ptr %r12, i32 0, i32 5
+  %r16 = getelementptr %lerta.iter.157, ptr %r12, i32 0, i32 5
   store ptr %r2, ptr %r16
-  %r17 = getelementptr %lerta.iter.156, ptr %r12, i32 0, i32 6
-  store ptr @"lerta.closure.lerta.lambda.388", ptr %r17
+  %r17 = getelementptr %lerta.iter.157, ptr %r12, i32 0, i32 6
+  store ptr @"lerta.closure.lerta.lambda.393", ptr %r17
   ret ptr %r12
 }
