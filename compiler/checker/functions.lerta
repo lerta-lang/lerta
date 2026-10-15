@@ -6,7 +6,7 @@ import
   BooleanLiteral, Expression, FunctionLiteral, Identifier, IntegerLiteral, Position, StringLiteral
 from '../ast'
 import check_function from './bodies'
-import fail, fail_already_defined from './diagnostics'
+import abort_part, check_part, fail, fail_already_defined from './diagnostics'
 import GenericFunction, GenericRef from './generics'
 import ProgramWide, Shared from './shared'
 import module_resolver, resolve, resolve_result, Resolver from './type_names'
@@ -18,6 +18,8 @@ export enum CheckState
   UNCHECKED
   CHECKING
   CHECKED
+  # Checked with an error, so that what needs it cannot be checked either (see abort_part).
+  FAILED
 
 export class FunctionEntry
   name: Identifier
@@ -131,10 +133,11 @@ export const function_type_of = (
     const callees: FunctionLiteral[] = program.calls.get_or_put(caller, -> [])
     callees.push entry.literal
   return type if const type = entry.type
+  abort_part() if entry.state == FAILED
   if entry.state == CHECKING
     fail program, at, "'#{name}' is recursive, so its return type must be written"
   check_entry program, module_index, entry
-  entry.type
+  entry.type ? abort_part()
 
 export const check_all_functions = (shared: Shared) ->
   check_entry shared.program, shared.index, entry for entry in shared.functions.entries.values()
@@ -142,9 +145,10 @@ export const check_all_functions = (shared: Shared) ->
 const check_entry = (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
   return if entry.state != UNCHECKED
   entry.state = CHECKING
-  program.functions_checked.push entry.literal
-  check_function program, module_index, entry
-  program.functions_checked.pop()
-  entry.state = CHECKED
+  const check = (): void ->
+    program.functions_checked.push entry.literal
+    check_function program, module_index, entry
+    program.functions_checked.pop()
+  entry.state = check_part(program, check) then CHECKED else FAILED
 
 export const method_key = (type_name: String, method: String) -> "#{type_name}.#{method}"

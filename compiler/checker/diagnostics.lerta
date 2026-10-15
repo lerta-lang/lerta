@@ -1,13 +1,18 @@
-# Errors and warnings found by the checker. An error ends the build, so it is thrown where it is
-# found, after the warnings found so far; it names the module whose code is being checked and, if
-# it is found in an instance of a generic function, the innermost instance being checked.
+# Errors and warnings found by the checker. An error names the module whose code is being checked
+# and, if it is found in an instance of a generic function, the innermost instance being checked.
+# It ends the checking of the part of the program it is found in, and the errors of all the parts
+# end the build together, after the warnings (see check_part and report_errors).
 import stderr from 'std:io'
 import Identifier, Position from '../ast'
-import compile_error from '../errors'
+import CompileError from '../errors'
 import is_standard_module from '../loader'
 import module_location from '../source'
-import ProgramWide, Shared, Warning from './shared'
+import CheckError, Diagnostic, ProgramWide, Shared from './shared'
 import Local from './scopes'
+
+# Ends the checking of the part of the program being checked, whose error is kept, or that cannot
+# be checked as a part that it needs has an error.
+export struct CheckAborted: Error
 
 export const fail = (program: ProgramWide, at: Position, message: String) ->
   fail_in_context program, call.at, message, call.context if const call = program.annotated_call
@@ -24,10 +29,43 @@ export const fail_in_context = (
 ) -> report_error(program, at, "#{message} (#{context})")
 
 const report_error = (program: ProgramWide, at: Position, message: String) ->
+  const error = CheckError(path: error_module_path(program), diagnostic: Diagnostic(message, at))
+  program.errors.push error
+  # The first error tells whether the program checks.
+  report_errors program if not program.reports_warnings
+  abort_part()
+
+# Ends the checking of the part, without an error of its own: that of the part it needs is kept.
+export const abort_part = ->
+  throw CheckAborted(message: 'the checking of a part of the program ended with an error')
+
+# Checks a part of the program, such as a function's body, whose error ends it alone, so that the
+# checking goes on with the other parts and finds their errors too. Returns whether the part
+# checked. The stacks of what is being checked are left as the part found them.
+export const check_part = (program: ProgramWide, check: () -> void) ->
+  const { module_paths, contexts, functions_checked, annotated_call } = program
+  const depths = [module_paths.length, contexts.length, functions_checked.length]
+  try
+    check()
+    true
+  catch _: CheckAborted
+    module_paths.pop() while module_paths.length > depths[0]
+    contexts.pop() while contexts.length > depths[1]
+    functions_checked.pop() while functions_checked.length > depths[2]
+    program.annotated_call = annotated_call
+    false
+
+# Prints the warnings and throws the errors of the program as one CompileError, if it has any.
+export const report_errors = (program: ProgramWide) ->
+  return if program.errors.length == 0
   if program.reports_warnings
     stderr.write "#{line}\n" for line in all_warnings(program)
-  const location = module_location(program.entry_path, error_module_path(program))
-  compile_error location, at.line, at.column, message
+  const lines: String[] = []
+  for module in program.modules
+    const path = module.display_path
+    const errors = [error.diagnostic for error in program.errors when error.path == path]
+    lines.append diagnostic_lines(program, path, errors, '')
+  throw CompileError(message: lines.join("\n"))
 
 # The path of the innermost module being checked; nil for the entry module.
 const error_module_path = (program: ProgramWide) ->
@@ -41,7 +79,7 @@ export const enter_module = (shared: Shared) -> shared.program.module_paths.push
 export const leave_module = (shared: Shared) -> shared.program.module_paths.pop()
 
 export const warn = (shared: Shared, at: Position, message: String) ->
-  shared.warnings.push Warning(message, at)
+  shared.warnings.push Diagnostic(message, at)
 
 # A `const` or `var` that is never read, unless its name starts with `_`.
 export const warn_if_unused = (shared: Shared, local: Local) ->
@@ -52,16 +90,28 @@ export const warn_if_unused = (shared: Shared, local: Local) ->
 # The warnings of the program, as diagnostics print them. A program's author cannot act on the
 # warnings of the standard modules, which would warn, for example, about the names that only
 # generic functions the program never calls use. The unused names of a module are known once its
-# functions are checked, which may use them.
+# functions are checked, which may use them; not if a part has an error, as the names that only it
+# uses may not have been seen used before the error.
 export const all_warnings = (program: ProgramWide) ->
-  warn_unused program.shared[index] for index in program.bodies_checked
+  if program.errors.length == 0
+    warn_unused program.shared[index] for index in program.bodies_checked
   const lines: String[] = []
   for module in program.modules
     continue if is_standard_module(module)
-    const location = module_location(program.entry_path, module.display_path)
-    for warning in in_source_order(program.shared[module.index].warnings)
-      lines.push "#{location}:#{warning.at.line}:#{warning.at.column}: warning: #{warning.message}"
+    const { warnings } = program.shared[module.index]
+    lines.append diagnostic_lines(program, module.display_path, warnings, 'warning: ')
   lines
+
+# The diagnostics of the module of the path, in source order, as `kind` (`warning: `, or empty for
+# errors) introduces them.
+const diagnostic_lines = (
+  program: ProgramWide, path: String?, diagnostics: Diagnostic[], kind: String
+) ->
+  const location = module_location(program.entry_path, path)
+  [
+    "#{location}:#{each.at.line}:#{each.at.column}: #{kind}#{each.message}"
+    for each in in_source_order(diagnostics)
+  ]
 
 # The names of the top-level code and the imports that are never used.
 const warn_unused = (shared: Shared) ->
@@ -71,16 +121,17 @@ const warn_unused = (shared: Shared) ->
     const { name, used } = imported
     warn shared, name.position, "'#{name.name}' is imported but never used" if not used
 
-# Warnings are found as scopes end; they are reported in source order, once each, though each
-# instance of a generic function finds those of its body again.
-const in_source_order = (warnings: Warning[]) ->
+# Warnings are found as scopes end, and errors as parts are checked on demand; they are reported in
+# source order, once each, though each instance of a generic function finds those of its body
+# again.
+const in_source_order = (diagnostics: Diagnostic[]) ->
   const seen: Map<String, Bool> = Map()
-  const unique: Warning[] = []
-  for warning in warnings
-    const key = "#{warning.at.line}:#{warning.at.column}:#{warning.message}"
+  const unique: Diagnostic[] = []
+  for diagnostic in diagnostics
+    const key = "#{diagnostic.at.line}:#{diagnostic.at.column}:#{diagnostic.message}"
     continue if seen.has(key)
     seen.add key
-    unique.push warning
-  const compare = (a: Warning, b: Warning) ->
+    unique.push diagnostic
+  const compare = (a: Diagnostic, b: Diagnostic) ->
     a.at.line != b.at.line then a.at.line - b.at.line else a.at.column - b.at.column
   unique.sorted compare

@@ -6,7 +6,7 @@
 # of its own. A generic function that is never called is not checked.
 import FunctionLiteral, Identifier, Position, TypeParameter from '../ast'
 import check_instance from './bodies'
-import fail, fail_already_defined, fail_in_context from './diagnostics'
+import abort_part, check_part, fail, fail_already_defined, fail_in_context from './diagnostics'
 import ExtensionMethod, Extensions, with_methods from './extensions'
 import annotated_type, FunctionEntry, parameter_types from './functions'
 import bound_interface from './interfaces'
@@ -120,6 +120,7 @@ export const instantiate = (
   # As for a function that is not generic, a body whose return type is written is checked once the
   # calling module is, so that it may use what the module declares after the call.
   check program, generic, instance if found == nil and instance.entry.type == nil
+  abort_part() if instance.entry.state == FAILED
   if instance.entry.type == nil
     fail program, at, "'#{generic.name.name}' is recursive, so its return type must be written"
   instance
@@ -161,10 +162,11 @@ export const check_pending = (program: ProgramWide, generic: GenericFunction) ->
 # An error in the body says which instance it was found in.
 const check = (program: ProgramWide, generic: GenericFunction, instance: Instance) ->
   instance.entry.state = CHECKING
-  program.contexts.push "in #{describe(generic, instance)}"
-  check_instance program, generic.module_index, instance
-  program.contexts.pop()
-  instance.entry.state = CHECKED
+  const check_body = (): void ->
+    program.contexts.push "in #{describe(generic, instance)}"
+    check_instance program, generic.module_index, instance
+    program.contexts.pop()
+  instance.entry.state = check_part(program, check_body) then CHECKED else FAILED
 
 # A written type that the type arguments make wrong, such as `T?` of an optional type, is the
 # call's error, as a type argument that misses its bound is.

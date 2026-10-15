@@ -31,10 +31,16 @@ export struct ExternType
   type: Type
   module_name: String
 
-# Reported without stopping the compilation.
-export struct Warning
+# A warning or an error: a warning is reported without stopping the compilation, and an error ends
+# the checking of the part of the program it is found in (see check_part).
+export struct Diagnostic
   message: String
   at: Position
+
+# An error found in the module of the path, nil for the entry module.
+export struct CheckError
+  path: String?
+  diagnostic: Diagnostic
 
 # What the checking finds of each node of a body, which codegen reads.
 export class NodeFacts
@@ -78,7 +84,7 @@ export class Shared
   exported: Map<String, Exportable>
   # What is found of the nodes of the module's code; an instance of a generic function has its own.
   facts = NodeFacts()
-  warnings: Warning[] = []
+  warnings: Diagnostic[] = []
   functions = Functions()
   # The generic functions, then the generic methods of the module's own extends, in the order they
   # are declared; others refer to them by their places here (see GenericRef).
@@ -112,8 +118,9 @@ export struct AnnotatedCall
 export class ProgramWide
   entry_path: String
   modules: Module[]
-  # Whether an error is reported with the warnings found before it (see report_error); not where the
-  # program is checked only to see whether it checks.
+  # Whether the errors are reported with the warnings, the checking going on after an error with the
+  # other parts of the program (see check_part); not where the program is checked only to see
+  # whether it checks, which the first error tells.
   reports_warnings: Bool
   shared: Shared[] = []
   infos: Map<String, ObjectInfo> = Map()
@@ -124,6 +131,7 @@ export class ProgramWide
   # The interfaces of every module, by symbol.
   interfaces: Map<String, InterfaceInfo> = Map()
   extern_types: Map<String, ExternType> = Map()
+  errors: CheckError[] = []
   # The paths of the modules whose code is being checked, innermost last: an error is in the
   # innermost.
   module_paths: String?[] = []

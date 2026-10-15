@@ -1,6 +1,6 @@
 // Run tests: each source is compiled by the compiler (see lerta.ts), for the target of
 // `--target` if given (see target.ts), and run, and its output is compared with <name>.out
-// (stdout), <name>.err (stderr: a compile error or an uncaught throw) and <name>.warn (compile
+// (stdout), <name>.err (stderr: the compile errors or an uncaught throw) and <name>.warn (compile
 // warnings). A missing file means empty output, but at least one must exist. The run must fail
 // exactly when <name>.err exists.
 // Tests run in parallel, up to the number of cores, and are reported in order;
@@ -131,7 +131,8 @@ const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outco
   const diagnostics = stderr.split('\n').filter((line) => line !== '')
   const warnings = diagnostics.filter((line) => WARNING.test(line))
   const others = diagnostics.filter((line) => !WARNING.test(line))
-  const is_compile_error = status === 1 && others.length === 1 && DIAGNOSTIC.test(others[0])
+  const is_compile_error =
+    status === 1 && others.length > 0 && others.every((line) => DIAGNOSTIC.test(line))
   if (is_compile_error) {
     return {
       stdout: '',

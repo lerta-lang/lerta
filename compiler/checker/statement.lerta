@@ -6,7 +6,7 @@ import
   Pass, Statement, statement_else_body, This, TypeAlias, TypeDeclaration, While
 from '../ast'
 import check_assignment from './assignment'
-import fail, fail_already_defined, warn_if_unused from './diagnostics'
+import check_part, fail, fail_already_defined, warn_if_unused from './diagnostics'
 import expect_condition, expect_optional, expect_type, type_of from './expression'
 import has_function, required_params from './functions'
 import check_for, check_while from './loop'
@@ -15,7 +15,7 @@ import ObjectInfo from './object_types'
 import check_last_statement from './result'
 import Local from './scopes'
 import Body, SelfContext from './shared'
-import define_top_level from './top_level_values'
+import define_top_level, top_level_value from './top_level_values'
 import names_type_or_import, resolve from './type_names'
 import
   format_type, FunctionType, inner_of, is_kind, is_one_of_kinds, IterType, never_type, ObjectType,
@@ -67,10 +67,16 @@ export const check_function_body = (
   check_block body, all_but_last(statements), define_params, finish
 
 # The top-level code. Its names may be used by the functions, which are checked later, so its
-# scope is kept to warn about those never used once they are.
+# scope is kept to warn about those never used once they are. An error ends the checking of its
+# statement alone, leaving the scopes and loops that the statement was in.
 export const check_top_level_code = (body: Body, statements: Statement[]) ->
   body.scopes.push()
-  check_statement body, statement for statement in statements
+  for statement in statements
+    continue if check_part(body.program, -> check_statement(body, statement))
+    body.scopes.pop() while body.scopes.depth() > 1
+    body.loop_depth = 0
+    if const declaration = top_level_value(statement)
+      body.shared.top_level.failed.add declaration.name.name
   body.scopes.pop()
 
 # A block that gives a value: its last statement, typed in its scope by `type_of_last` if it is an
@@ -95,8 +101,9 @@ const is_never_typed = (body: Body, expression: Expression) ->
   is_kind type, 'never'
 
 # A block is a scope; `define` declares the names that belong to it besides its statements, and
-# `finish` checks more before the scope ends. A compile error stops checking for good, so the
-# scope needs no cleanup on the way out.
+# `finish` checks more before the scope ends. A compile error ends the checking of the body, or of
+# the top-level statement, that the block is in, so the scope needs no cleanup on the way out (see
+# check_top_level_code).
 export const check_block = (
   body: Body, statements: Statement[], define: () -> void, finish: () -> void
 ) ->

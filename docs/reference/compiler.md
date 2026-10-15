@@ -70,7 +70,10 @@ Diagnostics are printed to stderr, one per line:
 <path>:<line>:<column>: warning: <message>
 ```
 
-- A compile error stops the build, and the exit code is 1. Warnings found before it are printed first.
+- A compile error stops the build, and the exit code is 1. The compiler goes on past an error to find the others, and reports them together, module by module in the order the modules are read, and in source order in each:
+  - A syntax error ends its top-level statement alone; parsing goes on from the next top-level line, but for `else`, `catch` and `finally`, which continue the statement. The syntax errors of a module are reported without checking the program.
+  - A type error ends the checking of the part of the program it is found in: a top-level statement, a function's or a method's body, an instance of a generic function, or the field initializers of a class or struct. What needs a part with an error, such as a call of a function whose return type the body with the error would tell, or a top-level value whose declaration has the error, is not checked, and reports no error of its own. An error in what the modules declare, such as their imports, ends the checking.
+  - The warnings are printed before the errors; the names never used of the top-level code and the imports are not reported with errors, since the part with an error may use them.
 - A warning does not stop the build, unless `-Werror` is given. Those of the standard modules are not reported, since the program cannot act on them; each standard module builds on its own without warnings.
 - If `<source>` is not a file, `'<source>' is not a file` is printed, and the exit code is 1.
 - If clang fails, its messages are printed as they are, and the exit code is 1.

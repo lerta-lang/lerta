@@ -10,7 +10,7 @@ import
 from './imports'
 import object_type from './object_types'
 import Body from './shared'
-import fail_runs_later, reject_pending from './top_level_values'
+import abort_if_failed, fail_runs_later, reject_pending from './top_level_values'
 
 # The local of the name: in the scopes, or outside them, as a function literal captures it from
 # around it, as a top-level value that a function or a method sees, or as an imported value.
@@ -53,8 +53,10 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
   if const imported = use_import(shared, name)
     const exported = imported_export(program, imported)
     if exported is ValueExport and exported.type == nil
+      abort_if_failed program.shared[exported.module_index].top_level, exported.name
       fail_runs_later program, identifier, "'#{imported.module}'", body.sees_top_level
     return type_of_export(body, exported, identifier, is_callee)
+  abort_if_failed shared.top_level, name
   reject_pending program, shared.top_level, identifier if body.sees_top_level
   const undefined_name = -> fail(program, position, "undefined name '#{name}'")
   const builtin = builtin_export(shared, name) ? undefined_name()

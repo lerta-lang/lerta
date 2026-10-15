@@ -96,7 +96,8 @@ export class TokenStream
   in_brackets = -> @line_breaks.length > 0
 
   # Runs `parse` on the contents of brackets, whose line breaks it reads as `mode` says. A compile
-  # error ends the program, so the mode needs no restoring on one.
+  # error ends the statement, after which skip_to_next_statement leaves the brackets, so the mode
+  # needs no restoring on one.
   inside = <T>(mode: LineBreaks, parse: () -> T): T ->
     @line_breaks.push mode
     const result = parse()
@@ -195,6 +196,37 @@ export class TokenStream
 
   fail = (position: Position, message: String) ->
     compile_error @path, position.line, position.column, message
+
+  # Skips the rest of the top-level statement that an error was found in, in whatever brackets and
+  # blocks it was found, up to the next top-level line that does not continue the statement as
+  # `else`, `catch` and `finally` do. The statement started at `start`; it is skipped past at least
+  # one token, so that parsing goes on.
+  skip_to_next_statement = (start: Int) ->
+    @line_breaks = []
+    @functions = []
+    @spread = nil
+    var depth = 0
+    depth += indentation_change(@tokens[i].kind) for i in start...@index
+    # The error may be at the first token of the next statement, after the line that ends this one.
+    return if @index > start and @ends_statement(@tokens[@index - 1].kind, depth)
+    while @tokens[@index].kind != EOF
+      const kind = @tokens[@index].kind
+      @index += 1
+      depth += indentation_change(kind)
+      return if @ends_statement(kind, depth)
+
+  # Whether the token of `kind`, just read at the indentation `depth`, ends the top-level statement:
+  # the next token starts another.
+  ends_statement = (kind: TokenKind, depth: Int) ->
+    const ends_line = kind == NEWLINE or kind == DEDENT
+    const continues = is_one_of(@tokens[@index].kind, [INDENT, 'else', 'catch', 'finally'])
+    depth == 0 and ends_line and not continues
+
+const indentation_change = (kind: TokenKind) ->
+  case kind
+    when INDENT then 1
+    when DEDENT then -1
+    else 0
 
 export const token_position = (token: Token) -> Position(line: token.line, column: token.column)
 

@@ -14,6 +14,7 @@ import
   parse_identifier, parse_loop_header, parse_tuple_names, parse_value, starts_block_arguments,
   take_apart, take_apart_item, tuple_holder
 from './expression'
+import CompileError from '../errors'
 import Token, TokenKind from '../lexer/tokens'
 import parse_primary from './primary'
 import is_one_of, token_position, TokenStream from './token_stream'
@@ -25,20 +26,35 @@ const COMMAND_ARGUMENT_STARTS: TokenKind[] =
   '(', '[', '{', IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, 'true', 'false', 'nil', 'not',
   'case', '->', '@', 'throw', 'await'
 
-# `path` names the source in diagnostics.
+# `path` names the source in diagnostics. An error ends the parsing of its top-level statement
+# alone, so that those after it are parsed for their errors too; the errors are thrown together.
 export const parse = (tokens: Token[], path: String) ->
-  parse_statements TokenStream(tokens, path), EOF
+  const stream = TokenStream(tokens, path)
+  const statements: Statement[] = []
+  const errors: String[] = []
+  while stream.peek().kind != EOF
+    const start = stream.index
+    try
+      parse_line stream, statements
+    catch error: CompileError
+      errors.push error.message
+      stream.skip_to_next_statement start
+  throw CompileError(message: errors.join("\n")) if errors.length > 0
+  statements
 
 # Statements, one per line, up to the token that ends the block.
 const parse_statements = (tokens: TokenStream, end: TokenKind) ->
   const statements: Statement[] = []
-  while tokens.peek().kind != end and tokens.peek().kind != EOF
-    if at_destructuring(tokens)
-      statements.append parse_destructuring_statement(tokens)
-    else
-      statements.push parse_statement(tokens)
-    tokens.expect_line_end()
+  parse_line tokens, statements while tokens.peek().kind != end and tokens.peek().kind != EOF
   statements
+
+# The statements of a line, into `statements`: one, or the declarations of a destructuring.
+const parse_line = (tokens: TokenStream, statements: Statement[]) ->
+  if at_destructuring(tokens)
+    statements.append parse_destructuring_statement(tokens)
+  else
+    statements.push parse_statement(tokens)
+  tokens.expect_line_end()
 
 # A newline and an indented block of statements.
 export const parse_block = (tokens: TokenStream) ->
