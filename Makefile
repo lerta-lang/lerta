@@ -187,7 +187,4 @@ check: bin/lerta
 clean:
 	rm -rf build bin
 
-# A command that fails leaves no file, such as half of an IR printed to a redirection.
-.DELETE_ON_ERROR:
-
 .PHONY: all check check-bootstrap seed test test-cross clean
