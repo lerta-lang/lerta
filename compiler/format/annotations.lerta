@@ -1,11 +1,11 @@
-# The types written in a module that its checking shows the checker can infer (see Type annotations
-# in docs/reference/style.md), which `lerta fmt` leaves out.
+# The types written in modules that their checking shows the checker can infer (see Type
+# annotations in docs/reference/style.md), which `lerta fmt` leaves out.
 import Node from '../ast'
 import all_warnings from '../checker/diagnostics'
 import check_program from '../checker/modules'
 import ProgramWide from '../checker/shared'
 import CompileError from '../errors'
-import is_standard_module, load_modules, Module from '../loader'
+import imported_files, is_standard_module, load_modules, Module, module_key from '../loader'
 import format_type from '../types'
 import Annotation, annotations_of from './annotated'
 import inferable from './inferable'
@@ -19,28 +19,70 @@ struct CheckResult
   field_types: String[]
   warnings: String[]
 
-# The keys (see annotation_key) of the annotations of the module at `path` that can be left out
-# together; none if the program does not check. Those that the checking shows can be inferred are
-# checked without them, to be sure: a type that alone uses an import, for one, still uses it (the
-# import would be warned about without it).
-export const removable_annotations = (path: String): String[] ->
-  const modules = load_modules(path)
-  const checked = quiet_program(path, modules)
-  return [] if not checks(checked)
-  # The modules are checked in the order of their indexes, the entry module last (see load_modules).
-  const entry = checked.shared.last()!
-  const annotations = annotations_of(entry_program(modules))
-  const inferred =
-    [annotation for annotation in annotations when inferable(annotation, entry, checked)]
-  return [] if inferred.length == 0
+# The keys (see annotation_key) of the annotations that can be left out of each of the files at
+# `paths`, by the key of its module (see module_key); none for a file whose program does not check.
+# A program is checked once for the files it holds, starting with those that no other file imports,
+# whose programs hold the others.
+export const removable_annotations = (paths: String[]) ->
+  const wanted: Map<String, Bool> = Map()
+  wanted.add module_key(path) for path in paths
+  const removable: Map<String, String[]> = Map()
+  for entry in [not_imported(paths)..., paths...]
+    add_removable removable, entry, wanted if not removable.has(module_key(entry))
+  removable
+
+# Those of the files that none of them imports; all of them that do not parse.
+const not_imported = (paths: String[]) ->
+  const imported: Map<String, Bool> = Map()
+  for path in paths
+    const keys = try
+      imported_files path
+    catch _: CompileError
+      continue
+    imported.add key for key in keys
+  [path for path in paths when not imported.has(module_key(path))]
+
+# A written type of the module of `key`.
+struct Placed
+  key: String
+  annotation: Annotation
+
+# Adds the removable annotations of the modules `wanted` that the program of `entry` holds and that
+# have none yet, or none for `entry` if the program does not check. Those that the checking shows
+# can be inferred are checked without them, to be sure: a type that alone uses an import, for one,
+# still uses it (the import would be warned about without it).
+const add_removable = (
+  removable: Map<String, String[]>, entry: String, wanted: Map<String, Bool>
+) ->
+  const modules = try
+    load_modules entry
+  catch _: CompileError
+    removable[module_key(entry)] = []
+    return
+  const checked = quiet_program(entry, modules)
+  if not checks(checked)
+    removable[module_key(entry)] = []
+    return
+  const held =
+    [module for module in modules when wanted.has(module.key) and not removable.has(module.key)]
+  const inferred: Placed[] = []
+  for module in held
+    const { key } = module
+    removable[key] = []
+    const shared = checked.shared[module.index]
+    for annotation in annotations_of(module.program)
+      inferred.push Placed(key, annotation) if inferable(annotation, shared, checked)
+  return if inferred.length == 0
   const original = result_of(checked)
-  const checks_the_same = (left_out: Annotation[]) ->
-    annotation.remove() for annotation in left_out
-    const tried = quiet_program(path, modules)
+  const checks_the_same = (left_out: Placed[]) ->
+    placed.annotation.remove() for placed in left_out
+    const tried = quiet_program(entry, modules)
     const same = checks(tried) and same_result(result_of(tried), original)
-    annotation.restore() for annotation in left_out
+    placed.annotation.restore() for placed in left_out
     same
-  [annotation.key for annotation in removable_among([], inferred, checks_the_same)]
+  for placed in removable_among([], inferred, checks_the_same)
+    const keys = removable[placed.key]!
+    keys.push placed.annotation.key
 
 # `accepted` and those of `trying` that can be left out with them: all at once, or else found by
 # halving `trying` until the parts that cannot be left out are single annotations, so that a module
@@ -48,15 +90,15 @@ export const removable_annotations = (path: String): String[] ->
 # alone but not together are left out depends on their order; those found are checked together, so
 # a second run finds no more.
 const removable_among = (
-  accepted: Annotation[], trying: Annotation[], checks_the_same: (Annotation[]) -> Bool
-): Annotation[] ->
+  accepted: Placed[], trying: Placed[], checks_the_same: (Placed[]) -> Bool
+): Placed[] ->
   return accepted if trying.length == 0
   const all = [accepted..., trying...]
   return all if checks_the_same(all)
   return accepted if trying.length == 1
   const half = trying.length / 2
-  const first = [annotation for annotation, i in trying when i < half]
-  const second = [annotation for annotation, i in trying when i >= half]
+  const first = [placed for placed, i in trying when i < half]
+  const second = [placed for placed, i in trying when i >= half]
   removable_among removable_among(accepted, first, checks_the_same), second, checks_the_same
 
 const quiet_program = (entry_path: String, modules: Module[]) ->
@@ -98,6 +140,3 @@ const field_types = (program: ProgramWide) ->
       const type = field.type then format_type(field.type!) else '-'
       lines.push "#{info.type.symbol}.#{field.name.name}: #{type}"
   lines
-
-# The entry module comes last (see load_modules).
-const entry_program = (modules: Module[]) -> modules.last()!.program

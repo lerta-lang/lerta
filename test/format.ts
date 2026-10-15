@@ -121,6 +121,94 @@ const command_checks: Check[] = [
     },
   },
   {
+    name: 'lerta fmt leaves out the types of the files that a program holds, checked once, or alone where it does not check',
+    run: () => {
+      const dir = tree('programs', {
+        'lib.lerta': 'export const one = (): Int -> 1\n',
+        'main.lerta': "import one from './lib'\nconst two: Int = one() + 1\nprint two\n",
+        'broken.lerta': "import one from './lib'\nconst three: String = one()\n",
+      })
+      const report = (at: string) =>
+        `${at}: leave out the type, which can be inferred (Type annotations)\n`
+      const held = fmt(dir, ['.'])
+      const alone = fmt(dir, ['broken.lerta', 'lib.lerta'])
+      return [
+        ...compare_text(
+          'stderr',
+          report('./lib.lerta:1:20') + report('./main.lerta:2:10'),
+          held.stderr,
+        ),
+        ...expect_status(1, held.status),
+        ...compare_text('stderr alone', report('lib.lerta:1:20'), alone.stderr),
+        ...expect_status(1, alone.status),
+      ]
+    },
+  },
+  {
+    name: 'lerta fmt takes a file given twice once, files that import each other, and keeps the types where an import does not parse',
+    run: () => {
+      const dir = tree('cycles', {
+        'a.lerta': "import b from './b'\nexport const a = (): Int -> 1\nprint b()\n",
+        'b.lerta': "import a from './a'\nexport const b = (): Int -> a()\n",
+        'c.lerta': '(\n',
+        'd.lerta': "import c from './c'\nconst d: Int = 1\nprint d\n",
+      })
+      const report = (at: string) =>
+        `${at}: leave out the type, which can be inferred (Type annotations)\n`
+      const result = fmt(dir, ['a.lerta', './a.lerta', 'b.lerta', 'c.lerta', 'd.lerta'])
+      const expected =
+        report('a.lerta:2:18') +
+        report('./a.lerta:2:18') +
+        report('b.lerta:2:18') +
+        "c.lerta:1:1: '(' is never closed\n"
+      return [
+        ...compare_text('stderr', expected, result.stderr),
+        ...expect_status(1, result.status),
+      ]
+    },
+  },
+  {
+    name: 'lerta fmt --fix leaves out the types of the files of one program, but one that alone uses an import',
+    run: () => {
+      const dir = tree('fix_program', {
+        'lib.lerta': 'export const one = (): Int -> 1\n',
+        'main.lerta':
+          "import stdout, Writer from 'std:io'\nimport one from './lib'\nconst out: Writer = stdout\nconst two: Int = one() + 1\nprint two\n",
+      })
+      const result = fmt(dir, ['--fix', '.'])
+      const main =
+        "import stdout, Writer from 'std:io'\nimport one from './lib'\nconst out: Writer = stdout\nconst two = one() + 1\nprint two\n"
+      return [
+        ...expect_status(0, result.status),
+        ...compare_text(
+          'lib.lerta',
+          'export const one = -> 1\n',
+          readFileSync(join(dir, 'lib.lerta'), 'utf8'),
+        ),
+        ...compare_text('main.lerta', main, readFileSync(join(dir, 'main.lerta'), 'utf8')),
+      ]
+    },
+  },
+  {
+    name: 'lerta fmt checks once the files that a program holds through others, beside a file whose import is missing',
+    run: () => {
+      const dir = tree('chain', {
+        'a.lerta': "import b from './b'\nprint b()\n",
+        'b.lerta': "import c from './c'\nexport const b = (): Int -> c()\n",
+        'c.lerta': 'export const c = (): Int -> 1\n',
+        'e.lerta': "import nope from './nope'\nimport c from './c'\nprint c()\n",
+      })
+      const report = (at: string) =>
+        `${at}: leave out the type, which can be inferred (Type annotations)\n`
+      const result = fmt(dir, ['a.lerta', 'b.lerta', 'c.lerta', 'e.lerta'])
+      const expected = report('b.lerta:2:18') + report('c.lerta:1:18')
+      return [
+        ...compare_text('stderr', expected, result.stderr),
+        ...expect_status(1, result.status),
+      ]
+    },
+  },
+  {
     name: 'lerta fmt --fix writes only the files that change, and fails on one that does not parse',
     run: () => {
       const dir = tree('fix', { 'a.lerta': unformatted, 'b.lerta': 'print 1\n', 'c.lerta': '(\n' })

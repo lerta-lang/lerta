@@ -20,6 +20,8 @@ export class Module
   # Names it in symbols: its display path, or `./` and its file name for the entry module, which no
   # display path starts with. Unlike its index, it does not change as modules are added or removed.
   symbol_name: String
+  # Its key (see load): `std:name`, or the real path of its file.
+  key: String
   program: Statement[]
   # The indexes of the modules that its imports refer to.
   imported: Map<Import, Int>
@@ -38,6 +40,7 @@ const BUILTINS_AND_DEPENDENCIES = [BUILTINS_MODULE, 'std:io']
 # A module as it is loaded: its imports refer to the modules by their places in the loading order,
 # since a module's index is known only once its imports are loaded.
 class LoadingModule
+  key: String
   display_path: String?
   program: Statement[]
   imported: Map<Import, Int> = Map()
@@ -61,8 +64,7 @@ class Loader
 export const load_modules = (entry_path: String) ->
   const loader = Loader(entry_path, cwd: real_path_text('.'))
   const source = read_entry_source(entry_path)
-  const key = is_standard_name(entry_path) then entry_path else real_path_text(entry_path)
-  load loader, key, source, nil
+  load loader, module_key(entry_path), source, nil
   [finished_module(loader, id) for id in loader.order]
 
 # A module is known by its key: a standard module by its name, `std:name`, and a file by its real
@@ -75,7 +77,7 @@ const load = (loader: Loader, key: String, source: String, display_path: String?
   const is_builtins_dependency = BUILTINS_AND_DEPENDENCIES.contains(key)
   const with_builtins = is_builtins_dependency then program else [builtins_import(), program...]
   const id = loader.loaded.length
-  const module = LoadingModule(display_path, program: with_builtins)
+  const module = LoadingModule(key, display_path, program: with_builtins)
   loader.loaded.push module
   loader.by_key[key] = id
   for statement in with_builtins
@@ -151,14 +153,29 @@ const finished_module = (loader: Loader, id: Int) ->
   const index_of = (place: Int) -> loader.loaded[place].index
   const imported: Map<Import, Int> = Map()
   imported[statement] = index_of(place) for (statement, place) in loading.imported.entries()
-  const { index, display_path, program } = loading
+  const { index, key, display_path, program } = loading
   const symbol_name = display_path ? "./#{basename(loader.entry_path)}"
   const cycle = [index_of(place) for place in loading.cycle]
-  Module index, display_path, symbol_name, program, imported, cycle
+  Module index, display_path, symbol_name, key, program, imported, cycle
 
 export const is_standard_module = (module: Module) ->
   return is_standard_name(path) if const path = module.display_path
   false
+
+# The key of the module at the path (see load).
+export const module_key = (path: String) ->
+  is_standard_name(path) then path else real_path_text(path)
+
+# The keys of the files that the file at the path imports, read without loading them.
+export const imported_files = (path: String) ->
+  const location = module_location(path, nil)
+  const program = parse(tokenize(read_source(path), location), location)
+  const from = dirname(module_key(path))
+  const files: String[] = []
+  for statement in program
+    if statement is Import and not is_standard_name(statement.module)
+      files.push real_path_text(imported_file(statement, from, location))
+  files
 
 # Paths are compared as text, so a real path must be UTF-8.
 const real_path_text = (path: String) ->

@@ -150,14 +150,16 @@ endif
 
 # check checks that the .lerta files that git lists, those not added yet included, are in the style,
 # and runs pnpm check in test/. tests/ is left out, as it holds code that is not in the style on
-# purpose, and so is a file deleted but not yet from git (test ! -e). Each file is a run of its own,
-# as lerta fmt checks the program that the file is the entry of.
+# purpose, and so is a file deleted but not yet from git (test -e). The files go to one run of
+# lerta fmt, which checks a program once for the files it holds, while pnpm check runs; xargs splits
+# a list that is too long into more runs.
 check: bin/lerta
 	@status=0; \
 	git ls-files -z --cached --others --exclude-standard -- '*.lerta' ':!tests/' \
-	  | nice xargs -0 -n 1 -P "$$(getconf _NPROCESSORS_ONLN)" sh -c 'test ! -e "$$0" || bin/lerta fmt "$$0"' \
-	  || status=1; \
+	  | xargs -0 sh -c 'for f; do test -e "$$f" && printf "%s\0" "$$f"; done' sh \
+	  | nice xargs -0 bin/lerta fmt & fmt=$$!; \
 	(cd test && nice pnpm check) || status=1; \
+	wait $$fmt || status=1; \
 	exit $$status
 
 clean:
