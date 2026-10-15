@@ -36,7 +36,7 @@ const steps: ((Int) -> Int)[] = [double, square]
 - The name of a top-level function, without a call, is its value. It can be stored, passed, returned and kept in arrays, maps and fields like any value, but not compared or printed.
 - A function value fits only where its type is expected exactly: `(Int) -> Int` does not fit where `(Int) -> Int?` is expected.
 - Calling a value of a function type calls the function it holds: `f(x)`, `make()(x)`, and `button.on_press(x)` for a field that holds a function.
-- Builtins (`print`), generic functions, standard modules' functions, C functions and methods can only be called so far, not used as values.
+- Builtins (`print`), generic functions, C functions, as most of the standard modules' functions are, and methods can only be called so far, not used as values.
 
 ## Function literals
 
@@ -90,7 +90,7 @@ const main = ->
 const _done = main()
 ```
 
-- A function whose body has an `await <promise>` of its own, outside the function literals in it, returns a `Promise` of its result. Calling it runs the body at once, up to an `await` of a promise that is not settled yet; the body then waits, and the call returns the `Promise`. So `a` and `b` above wait at the same time.
+- A function whose body has an `await <promise>` of its own, outside the function literals in it, returns a `Promise` of its result; so does a function literal whose body has one. Calling it runs the body at once, up to an `await` of a promise that is not settled yet; the body then waits, and the call returns the `Promise`. So `a` and `b` above wait at the same time.
 - A `Promise<T>` is settled once: with a value of type `T`, or with an exception. `await` gives the value of a settled promise, or throws its exception, and can be applied to the same promise again; on one that is not settled, it waits for it first. A function without a result returns a `Promise` with no type argument, which is settled without a value.
 - The function's return type is a `Promise`, as in `(): Promise<Int> ->`, whose type the returned values must fit. Left out, it is a `Promise` of the returned values' type, worked out as for any function.
 - An exception that leaves the body settles the `Promise` with it. A `Promise` dropped with an exception that no `await` has taken ends the program as an uncaught exception does.
