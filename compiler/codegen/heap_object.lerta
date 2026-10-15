@@ -46,8 +46,7 @@ export const define_heap_object = (
   if weak_slot
     const slot = emit_heap_field_pointer(ir, layout, '%object', weak_slot)
     call_void_runtime ir, 'void @lerta_weak_detach(ptr)', "ptr #{slot}"
-  if deinit
-    call_void_runtime ir, 'void @lerta_run_deinit(ptr, ptr)', "ptr %object, ptr #{deinit}"
+  call_void_runtime ir, 'void @lerta_run_deinit(ptr, ptr)', "ptr %object, ptr #{deinit}" if deinit
   for field, i in fields
     continue if field.owned == NONE
     const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
@@ -103,13 +102,11 @@ export const emit_weak_box = (ir: IrBuilder, object: String, info: ObjectInfo) -
 
 # The weak box of a value of a class or of its optional type, which a weak local or field holds,
 # owned, or null for nil; the object is borrowed.
-export const emit_weak_box_of = (
-  ir: IrBuilder, program: ProgramWide, object: String, type: Type
-) ->
+export const emit_weak_box_of = (ir: IrBuilder, program: ProgramWide, object: String, type: Type) ->
   const info = info_of(program, inner_of(type) as ObjectType!)
   return emit_weak_box(ir, object, info) if not (type is OptionalType)
   const is_present = ir.assign("icmp ne ptr #{object}, null")
-  emit_branch ir, 'ptr', is_present, (-> emit_weak_box(ir, object, info)), 'null'
+  emit_branch ir, 'ptr', is_present, -> emit_weak_box(ir, object, info), 'null'
 
 # The object of a weak box, borrowed, or null if it is gone; a null box, for nil, gives null.
 export const emit_weak_object = (ir: IrBuilder, box: String) ->

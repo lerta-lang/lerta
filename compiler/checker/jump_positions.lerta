@@ -48,7 +48,7 @@ const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jump
   const { may_return, reason, yield_reason } = jumps
   const in_loop = Jumps(may_return, reason, yield_reason, may_leave_loop: true)
   case statement
-    when Declaration then visit program, statement.value, jumps
+    when Declaration then visit(program, statement.value, jumps)
     when Assignment
       const target = statement.target
       visit program, target, no_jumps
@@ -65,10 +65,10 @@ const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jump
       const message = "'yield' #{own_reason ? jumps.reason ? held}"
       fail program, statement.position, message if not jumps.may_return
       visit program, statement.value, no_jumps
-    when TypeDeclaration then visit_members program, statement.members
-    when Extend then visit_members program, statement.members
+    when TypeDeclaration then visit_members(program, statement.members)
+    when Extend then visit_members(program, statement.members)
     when Import, Pass, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern then pass
-    else visit program, statement as Expression!, jumps
+    else visit(program, statement as Expression!, jumps)
 
 const visit_members = (program: ProgramWide, members: Array<MemberDeclaration>) ->
   for member in members
@@ -123,17 +123,14 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
     when Interpolation
       for part in expression.parts
         operand part if part is Call
-    when ArrayLiteral
-      operand element for element in expression.elements
+    when ArrayLiteral then operand(element) for element in expression.elements
     when Comprehension
       operand expression.element
       operand expression.iterable
       operand guard if const guard = expression.guard
-    when RecordLiteral
-      operand field.value for field in expression.fields
-    when TupleLiteral
-      operand item for item in expression.items
-    when TupleItem then operand expression.tuple
+    when RecordLiteral then operand(field.value) for field in expression.fields
+    when TupleLiteral then operand(item) for item in expression.items
+    when TupleItem then operand(expression.tuple)
     when MapLiteral
       for entry in expression.entries
         operand entry.key
@@ -145,19 +142,19 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
     when Index
       operand expression.object
       operand expression.index
-    when Member then operand expression.object
-    when UnaryOperation then operand expression.operand
-    when Unwrap then operand expression.operand
+    when Member then operand(expression.object)
+    when UnaryOperation then operand(expression.operand)
+    when Unwrap then operand(expression.operand)
     when BinaryOperation
       operand expression.left
       operand expression.right
     when Range
       operand expression.start
       operand expression.end
-    when Throw then operand expression.message
-    when Await then operand expression.operand
-    when IsTest then operand expression.value
-    when Cast then operand expression.value
+    when Throw then operand(expression.message)
+    when Await then operand(expression.operand)
+    when IsTest then operand(expression.value)
+    when Cast then operand(expression.value)
     when StringLiteral, IntegerLiteral, FloatLiteral, BooleanLiteral, NilLiteral then pass
     when Identifier, This then pass
 

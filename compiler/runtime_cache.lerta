@@ -29,7 +29,7 @@ export struct CachedRuntime
 # build's own temporary directory, whose name no other build has.
 export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String) ->
   reject_path_target target if target
-  const clang_version = (await clang_version_text()) ? return nil
+  const clang_version = await clang_version_text() ? return nil
   const libuv = libuv_build(target)
   const dir = join(cache_dir(), cached_runtime_name(optimize, target, clang_version, libuv))
   const objects = [join(dir, name) for name in object_names(libuv)]
@@ -37,7 +37,12 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
   const runtime = ->
     const function_attributes = read_text(join(dir, ATTRIBUTES_FILE))
     const coro_end_type = read_text(join(dir, CORO_END_FILE))
-    CachedRuntime objects, function_attributes, libraries: libuv.libraries, coro_end_type: coro_end_type
+    CachedRuntime(
+      objects
+      function_attributes
+      libraries: libuv.libraries
+      coro_end_type: coro_end_type
+    )
   return runtime() if is_complete(files)
   if files.iter().any((file) -> is_file(file))
     # Another build may have renamed its runtime into place meanwhile, which puts all the files
@@ -80,15 +85,12 @@ export const cache_dir = ->
 const default_cache_dir = -> platform == 'windows' then windows_cache_dir() else posix_cache_dir()
 
 const windows_cache_dir = ->
-  if const local_data = non_empty_env('LOCALAPPDATA')
-    return join(local_data, 'lerta')
+  return join(local_data, 'lerta') if const local_data = non_empty_env('LOCALAPPDATA')
   throw CompileError(message: 'no cache directory: set LOCALAPPDATA or LERTA_CACHE_DIR')
 
 const posix_cache_dir = ->
-  if const cache_home = non_empty_env('XDG_CACHE_HOME')
-    return join(cache_home, 'lerta')
-  if const home = non_empty_env('HOME')
-    return join(home, '.cache/lerta')
+  return join(cache_home, 'lerta') if const cache_home = non_empty_env('XDG_CACHE_HOME')
+  return join(home, '.cache/lerta') if const home = non_empty_env('HOME')
   throw CompileError(message: 'no cache directory: set HOME or LERTA_CACHE_DIR')
 
 const non_empty_env = (name: String): String? ->
@@ -140,7 +142,7 @@ const runtime_hash = (texts_besides_sources: Array<String>) ->
     texts.push embedded_source(path)!
   for text in texts
     hash = (hash * 257 + byte.to_int() + 1) % HASH_MODULUS for byte in text.binary
-    hash = (hash * 257) % HASH_MODULUS
+    hash = hash * 257 % HASH_MODULUS
   hash
 
 const c_paths = -> [path for path in RUNTIME_PATHS when path.ends_with('.c')]
@@ -182,7 +184,7 @@ const compile_runtime = (
     const object = join(staging_dir, libuv_object_name(path))
     const libuv_source = join(libuv_dir, path)
     return false if await run('clang', ['-c', libuv_flags..., libuv_source, '-o', object]) != 0
-  const ir = (await clang_probe_ir(flags, temp_dir)) ? return false
+  const ir = await clang_probe_ir(flags, temp_dir) ? return false
   write_file join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir).binary
   write_file join(staging_dir, CORO_END_FILE), coro_end_type(ir).binary
   true
@@ -202,7 +204,7 @@ const clang_probe_ir = (flags: Array<String>, temp_dir: String): Promise<String?
 const function_attributes = (ir: String) ->
   const words = attribute_group_of_function(ir).split(' ')
   const is_target_attribute = (word: String) ->
-    TARGET_ATTRIBUTES.any((name) -> word.starts_with("\"#{name}\"="))
+    TARGET_ATTRIBUTES.any (name) -> word.starts_with("\"#{name}\"=")
   [word for word in words when is_target_attribute(word)].join(' ')
 
 # The attributes of the group that the IR's one function has, as in `define void @f() #0 {`.

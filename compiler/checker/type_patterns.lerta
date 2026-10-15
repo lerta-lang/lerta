@@ -41,8 +41,7 @@ const map_parts = (type: Type, replace: (Type) -> Type): Type ->
 
 # The type with the type parameters that `bindings` has replaced by their types.
 export const substitute = (type: Type, bindings: Map<String, Type>): Type ->
-  if type is TypeParameterType
-    return bindings[type.name] ? type
+  return bindings[type.name] ? type if type is TypeParameterType
   map_parts type, (part) -> substitute(part, bindings)
 
 # The types that the type is made of, such as the items of an array.
@@ -93,8 +92,7 @@ export const overlaps = (a: Type, b: Type): Bool ->
   true
 
 # The type without the types it is made of: Array<_> for any array.
-const shape_key = (type: Type) ->
-  type_key map_parts(type, (_) -> TypeParameterType(name: '_'))
+const shape_key = (type: Type) -> type_key(map_parts(type, (_) -> TypeParameterType(name: '_')))
 
 export const has_type_parameters = (type: Type): Bool ->
   type is TypeParameterType or parts_of(type).any(has_type_parameters)
@@ -103,7 +101,7 @@ export const has_type_parameters = (type: Type): Bool ->
 # matches: `Array<T>` and an `Array<Int>` bind T to Int. A type parameter bound already is kept;
 # the caller then checks that the type fits.
 export const infer = (pattern: Type, type: Type, bind: (String, Type) -> void): void ->
-  const match = (part: Type, type_part: Type?) -> infer part, type_part, bind if type_part
+  const match = (part: Type, type_part: Type?) -> infer(part, type_part, bind) if type_part
   case pattern
     when TypeParameterType then bind(pattern.name, type)
     when OptionalType then match(pattern.inner, inner_of(type))

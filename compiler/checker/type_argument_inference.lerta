@@ -42,8 +42,7 @@ export const receiver_type_arguments = (
   const pattern = generic.receiver!.type
   infer pattern, receiver, bind
   # The receiver of an extend of an interface is Self, the first type parameter.
-  if pattern is TypeParameterType
-    infer_through_members body, generic.bounds[0]!, receiver, at, bind
+  infer_through_members body, generic.bounds[0]!, receiver, at, bind if pattern is TypeParameterType
   return nil if generic.type_params.any((param) -> not bindings.has(param.name.name))
   [bindings[param.name.name]! for param in generic.type_params]
 
@@ -63,12 +62,13 @@ export const infer_type_arguments = (
   const written: Map<String, Bool> = Map()
   written.add name for name in bindings.keys()
   const inferred: Array<InferredArgument> = []
-  const bind_at = (at: Position) -> (name: String, bound_type: Type) ->
-    # nil and never tell nothing about the type.
-    return if is_kind(bound_type, 'nil') or is_kind(bound_type, 'never')
-    if const bound = bindings[name]
-      return if written.has(name) or not widens(bound.type, bound_type)
-    bindings[name] = TypeBinding(at, type: bound_type)
+  const bind_at = (at: Position) ->
+    (name: String, bound_type: Type) ->
+      # nil and never tell nothing about the type.
+      return if is_kind(bound_type, 'nil') or is_kind(bound_type, 'never')
+      if const bound = bindings[name]
+        return if written.has(name) or not widens(bound.type, bound_type)
+      bindings[name] = TypeBinding(at, type: bound_type)
   # A value converts to an interface type, whose type arguments its members may give.
   const bind_from = (pattern: Type, type: Type, at: Position) ->
     infer pattern, type, bind_at(at)
@@ -76,8 +76,7 @@ export const infer_type_arguments = (
     const value_type = inner_of(type)
     if target is InterfaceType and not (value_type is InterfaceType)
       infer_through_members body, target, value_type, at, bind_at(at)
-  if receiver
-    bind_from generic.receiver!.type, receiver.type, receiver.at
+  bind_from generic.receiver!.type, receiver.type, receiver.at if receiver
   const check_argument = (index: Int) ->
     const arg = call.args[index]
     const param = substitute(params[index], types_of(bindings))
@@ -91,10 +90,12 @@ export const infer_type_arguments = (
     inferred.push InferredArgument(arg, type, index)
   const is_function = (i: Int) -> call.args[i] is FunctionLiteral
   const is_literal = (i: Int) -> needs_context(body, call.args[i]) and not is_function(i)
-  check_argument i for arg, i in call.args when not needs_context(body, arg)
+  for arg, i in call.args
+    check_argument i if not needs_context(body, arg)
   if const result = generic.result
     bind_from result, expected, call.position if expected
-  check_argument i for i in 0...call.args.length when is_literal(i)
+  for i in 0...call.args.length
+    check_argument i if is_literal(i)
   # The type argument of a bounded type parameter gives those that its bound names, as `X:
   # Iterable<T>` gives T, before function literals take their parameters' types.
   const bind_from_bounds = ->
@@ -103,7 +104,8 @@ export const infer_type_arguments = (
       const known = bindings[type_param.name.name] ? continue
       infer_through_members body, bound, known.type, known.at, bind_at(known.at)
   bind_from_bounds()
-  check_argument i for i in 0...call.args.length when is_function(i)
+  for i in 0...call.args.length
+    check_argument i if is_function(i)
   Inference bindings, inferred
 
 # An X? after an X makes the type argument X?.

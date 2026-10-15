@@ -64,17 +64,24 @@ const build_then = (request: BuildRequest, run_args: Array<String>?) ->
 const build_in_dir = (
   request: BuildRequest, program: ProgramWide, dir: String, run_args: Array<String>?
 ) ->
-  const runtime = (await cached_runtime(request.optimize, request.target, dir)) ? return 1
+  const runtime = await cached_runtime(request.optimize, request.target, dir) ? return 1
   const modules = generate(program, runtime.function_attributes, runtime.coro_end_type, true)
   const flags = build_flags(request.optimize, request.target)
-  const objects = (await compile_modules(modules, flags, dir)) ? return 1
+  const objects = await compile_modules(modules, flags, dir) ? return 1
   const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
   const libraries = ["-l#{library}" for library in runtime.libraries]
   const lto_cache = join(cache_dir(), 'thinlto')
-  const cache_flags = request.optimize then lto_cache_flags(target_system(request.target), lto_cache)
+  const cache_flags =
+    request.optimize then lto_cache_flags(target_system(request.target), lto_cache)
   const args = [
-    objects..., flags..., (cache_flags ? [])..., runtime.objects..., libraries...
-    request.linked_files..., '-o', executable
+    objects...
+    flags...
+    (cache_flags ? [])...
+    runtime.objects...
+    libraries...
+    request.linked_files...
+    '-o'
+    executable
   ]
   return 1 if await run('clang', args) != 0
   const program_args = run_args ? return 0

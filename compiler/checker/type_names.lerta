@@ -41,12 +41,10 @@ export struct Resolver
   module_index: Int
   type_parameters: Map<String, Type>
 
-export const module_resolver = (module_index: Int) ->
-  Resolver module_index, type_parameters: Map()
+export const module_resolver = (module_index: Int) -> Resolver(module_index, type_parameters: Map())
 
-export const with_type_parameters = (
-  resolver: Resolver, type_parameters: Map<String, Type>
-) -> Resolver(type_parameters, module_index: resolver.module_index)
+export const with_type_parameters = (resolver: Resolver, type_parameters: Map<String, Type>) ->
+  Resolver type_parameters, module_index: resolver.module_index
 
 # A class, struct, enum or imported type of the name, marking its import as used.
 const named_type = (shared: Shared, name: String): Type? ->
@@ -91,9 +89,8 @@ export const resolve = (program: ProgramWide, resolver: Resolver, type_name: Typ
   resolve_type program, resolver, type_name, false
 
 # `void` and `never` are only allowed as a return type.
-export const resolve_result = (
-  program: ProgramWide, resolver: Resolver, type_name: TypeName
-) -> resolve_type(program, resolver, type_name, true)
+export const resolve_result = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
+  resolve_type program, resolver, type_name, true
 
 const resolve_type = (
   program: ProgramWide, resolver: Resolver, type_name: TypeName, is_result: Bool
@@ -133,9 +130,8 @@ const resolve_record = (
     RecordField name: field.name.name, type: resolve(program, resolver, field.type)
   record_type [resolve_field(field) for field in type_name.fields]
 
-const resolve_tuple = (
-  program: ProgramWide, resolver: Resolver, type_name: TupleTypeName
-): Type -> TupleType(items: [resolve(program, resolver, item) for item in type_name.items])
+const resolve_tuple = (program: ProgramWide, resolver: Resolver, type_name: TupleTypeName): Type ->
+  TupleType items: [resolve(program, resolver, item) for item in type_name.items]
 
 const resolve_function = (
   program: ProgramWide, resolver: Resolver, type_name: FunctionTypeName
@@ -149,9 +145,8 @@ const resolve_union = (program: ProgramWide, resolver: Resolver, type_name: Unio
   for member in type_name.members
     const type = resolve(program, resolver, member)
     case type
-      when UnionType
-        members.append type.members
-      when ObjectType then members.push type
+      when UnionType then members.append(type.members)
+      when ObjectType then members.push(type)
       else
         const message = "a union can only hold classes and structs so far, not #{format_type(type)}"
         fail program, member.position, message
@@ -203,8 +198,7 @@ const resolve_name = (
   return never_type if is_result and name == 'never'
   return parameter if const parameter = resolver.type_parameters[name]
   return simple if const simple = simple_type(name)
-  if interface_info
-    return value_interface_type(program, resolver, interface_info, type_name)
+  return value_interface_type(program, resolver, interface_info, type_name) if interface_info
   return instantiate_object(program, resolver, named as ObjectType!, type_name) if generic_object
   return named if named
   resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")

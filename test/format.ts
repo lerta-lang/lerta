@@ -3,7 +3,7 @@
 // that is not empty (a missing file means empty); `lerta fmt --fix <name>.lerta` must then succeed
 // and leave <name>.formatted (the input itself if it is missing); and `lerta fmt <name>.lerta` must
 // then report nothing, as the formatted text is in the style. Then the command line: the paths it
-// takes, and what it does with a file that does not parse.
+// takes, and what it does with a file that does not parse; and the code of the repository.
 import { spawnSync } from 'node:child_process'
 import {
   existsSync,
@@ -70,6 +70,24 @@ const calls_report =
   'call without parentheses at the start of a statement, with them after `then` or `->` (Calls without parentheses)'
 
 const command_checks: Check[] = [
+  {
+    // The code of the repository, as git lists it, the files not added yet included, but in tests/,
+    // which holds code that is not in the style on purpose. git leaves out the files that it
+    // ignores, such as compiler/embedded.lerta, which is generated.
+    name: 'the code of the repository is in the style',
+    run: () => {
+      // -z lists the paths as they are, with no quotes. A file deleted but not yet from git is
+      // listed too, and left out here.
+      const args = ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '*.lerta']
+      const listed = spawnSync('git', args, { cwd: root_dir, encoding: 'utf8' })
+      const files = listed.stdout
+        .split('\0')
+        .filter((file) => file !== '' && !file.startsWith('tests/'))
+        .filter((file) => existsSync(join(root_dir, file)))
+      const result = fmt(root_dir, files)
+      return [...compare_text('stderr', '', result.stderr), ...expect_status(0, result.status)]
+    },
+  },
   {
     name: 'lerta fmt without a path is a usage error',
     run: () => expect_status(2, fmt(work_dir, []).status),

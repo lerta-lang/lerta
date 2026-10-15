@@ -65,7 +65,8 @@ export const generate_conditional = (g: Generator, conditional: Conditional) ->
     ir.emit "br label %#{end_label}"
     "[ #{operand == '' then 'poison' else operand}, %#{from} ]"
   const incoming =
-    branch(then_label, conditional.then_value), branch(else_label, conditional.else_value)
+    branch(then_label, conditional.then_value)
+    branch(else_label, conditional.else_value)
   ir.start_block end_label
   merge g, type_of(g, conditional), incoming
 
@@ -118,15 +119,14 @@ const generate_test = (g: Generator, arm: CaseArm, subject_type: Type?, operand:
 
 const pattern_test = (g: Generator, subject: String, type: Type, pattern: Expression) ->
   if type is UnionType
-    emit_type_test(g.ir, subject, type_of(g, pattern))
+    emit_type_test g.ir, subject, type_of(g, pattern)
   else
-    value_test(g, subject, type, pattern)
+    value_test g, subject, type, pattern
 
 # The subject is borrowed by the comparison, as it is tested again by the next patterns.
 const value_test = (g: Generator, subject: String, type: Type, pattern: Expression) ->
   const value = generate(g, pattern)
-  if not is_kind(type, 'String')
-    return g.ir.assign("icmp eq #{ir_type(type)} #{subject}, #{value}")
+  return g.ir.assign("icmp eq #{ir_type(type)} #{subject}, #{value}") if not is_kind(type, 'String')
   const equal = emit_string_equals(g.ir, subject, value)
   emit_release g.ir, value
   equal

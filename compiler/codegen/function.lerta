@@ -200,8 +200,7 @@ export const generate_function = (
 # and its closure, which its scope releases; that of a function that yields waits for its first
 # item to be asked for before running its statements. `result` is what its last statement gives.
 const generate_function_body = (
-  g: Generator, literal: FunctionLiteral, this_type: Type?, captures: Array<Capture>?,
-  result: Type
+  g: Generator, literal: FunctionLiteral, this_type: Type?, captures: Array<Capture>?, result: Type
 ) ->
   const type = function_type_of(type_of(g, literal))
   const ir = g.ir
@@ -231,7 +230,7 @@ const generate_function_body = (
       if is_var
         SlotLocal type, cell, weak, is_var, pointer: emit_cell_pointer(ir, type, value)
       else
-        ValueLocal(type, weak, operand: value)
+        ValueLocal type, weak, operand: value
   hold_weak_this g, scope if literal.weak
   emit_suspend g if literal.yields
   generate_statement g, statement for statement in all_but_last(literal.body)
@@ -307,7 +306,8 @@ export const generate_constructor = (g: Generator, linkage: String, info: Object
     const param = "%p#{argument_index(arguments, field)}"
     emit_retain_value ir, param, field.type!
     store_field g, object, info, field, param
-  store_argument field for field in arguments when not field.has_default
+  for field in arguments
+    store_argument field if not field.has_default
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
@@ -371,7 +371,7 @@ export const finish = (g: Generator, signature: String) -> g.ir.finish(signature
 # type decides the instruction: a returned value that never comes (`return throw ...`) is poison.
 # The body of a coroutine gives its value to `on_return`, if any, and goes to its end instead.
 const emit_return = (g: Generator, value: String) ->
-  on_return(value) if const on_return = g.on_return
+  on_return value if const on_return = g.on_return
   release_scope g, scope for scope in g.locals.inner_scopes(0)
   if const coroutine = g.coroutine
     g.ir.emit "br label %#{coroutine.end_label}"
@@ -422,7 +422,7 @@ export const generate_block = (
 
 # What generates the statements, for a block whose code is given that way.
 export const statements_code = (g: Generator, statements: Array<Statement>) ->
-  const generate_all = -> generate_statement g, statement for statement in statements
+  const generate_all = -> generate_statement(g, statement) for statement in statements
   generate_all
 
 # A block whose code `generate` generates in its scope.
@@ -447,11 +447,11 @@ export const release_scope = (g: Generator, scope: Map<String, CodegenLocal>) ->
 
 export const generate_statement = (g: Generator, statement: Statement): void ->
   case statement
-    when For then generate_for g, statement
-    when While then generate_while g, statement
-    when If then generate_if g, statement
-    when Declaration then generate_declaration g, statement
-    when Assignment then generate_assignment g, statement
+    when For then generate_for(g, statement)
+    when While then generate_while(g, statement)
+    when If then generate_if(g, statement)
+    when Declaration then generate_declaration(g, statement)
+    when Assignment then generate_assignment(g, statement)
     when TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias then pass
     when Import, Extern, Extend, Pass then pass
     else
