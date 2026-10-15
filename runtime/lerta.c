@@ -1,7 +1,7 @@
 #include "internal.h"
 
-// Entry point of every Lerta program: the compiler emits the module's
-// top-level code as lerta_main, and the runtime wraps it with setup and exit.
+// The entry module's top-level code, which the compiler generates (see
+// docs/internals.md#per-module-output); the runtime wraps it with setup and exit.
 void lerta_main(void);
 
 LertaException lerta_exception = {NULL, NULL};

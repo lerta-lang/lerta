@@ -10,7 +10,6 @@ static uint8_t stdout_buffer[STDOUT_BUFFER_SIZE];
 static int64_t stdout_buffered = 0;
 // As in C stdio: a terminal shows each write at once, while a pipe or a file gets few large writes.
 static bool stdout_is_terminal = false;
-// Once a write fails, later output is dropped and the program exits non-zero.
 static bool stdout_failed = false;
 
 static void stdout_write_all(const uint8_t *bytes, int64_t length) {

@@ -86,7 +86,7 @@ export enum TokenKind
 
 export struct Token
   kind: TokenKind
-  # The identifier name, the integer's text without separators (with its `0x` prefix if
+  # The identifier name, the number's text without separators (with its `0x` prefix if
   # hexadecimal), the string literal's contents or the punctuation; empty for layout tokens.
   text: String
   # Whether whitespace or the start of the line precedes it: `f (x)` and `f(x)` parse differently.
@@ -250,13 +250,12 @@ class LineScanner
 
   # An integer, or a float with a fraction or an exponent: `1.5`, `1e9`, `2.5e-3`. A `.` begins a
   # fraction only before a digit, so `1.f()` and `0...3` stay an integer and a member or a range.
-  # Only a decimal number has an exponent, so `0xE+1` is an addition.
   scan_number = ->
     const bytes = @line.bytes
     const after_digits = (start: Int) -> @line.scan_while(start, is_identifier_part)
     var end = after_digits(@position)
     const is_decimal = not @line.text(@position, end).starts_with('0x')
-    # What looks like a fraction is taken whole, so that `0x1.5` and `1._5` are reported as numbers.
+    # What looks like a fraction is taken whole (see Float literals in docs/reference/syntax.md).
     const at_dot = end + 1 < @line.length and bytes[end] == '.'
     const after_dot: Byte = at_dot then bytes[end + 1] else ' '
     const has_fraction = after_dot.is_digit() or after_dot == '_'

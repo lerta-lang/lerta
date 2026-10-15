@@ -56,7 +56,7 @@ These apply when a value in statement position is not captured.
 
 ## Unused names
 
-A `const` or `var` that is never read (assigning to it does not count) produces a warning, `'x' is never used`, unless its name starts with `_`. A top-level one may be read by any function, so it is warned about only when the whole module compiles. An exported one is not warned about, since another module may read it. An imported name that the module never uses produces a warning too, `'sleep' is imported but never used`.
+A `const` or `var` that is never read (assigning to it does not count) produces a warning, `'x' is never used`, unless its name starts with `_`. A top-level one may be read by any function, so it is warned about only when the whole module compiles. An exported one is not warned about, since another module may read it. An imported name that the module never uses produces a warning too, `'sleep' is imported but never used`. A [C function](functions.md#c-functions) that a module declares is never warned about.
 
 ## Cycles
 

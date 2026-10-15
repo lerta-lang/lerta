@@ -374,8 +374,7 @@ static bool remove_entries(const wchar_t *path) {
   return removed;
 }
 
-// A link to a directory (a reparse point) is removed itself, not what it links to. A read-only file
-// is not removed, which fails.
+// A link to a directory (a reparse point) is removed itself, not what it links to.
 static bool remove_tree(const wchar_t *path) {
   DWORD attributes = GetFileAttributesW(path);
   if (attributes == INVALID_FILE_ATTRIBUTES) return false;

@@ -19,7 +19,7 @@ typedef struct {
 typedef struct {
   LertaHeader header;
   int64_t length;  // in bytes
-  uint8_t bytes[];  // UTF-8, not NUL-terminated
+  uint8_t bytes[];  // UTF-8 for a String, not NUL-terminated
 } LertaString;
 
 // Marks an array that holds no terminating NUL, which compilers that know the attribute would
@@ -70,10 +70,8 @@ typedef struct {
   bool live;
 } LertaMapEntry;
 
-// How a map treats its keys: Ints, and Bytes and Bools, are compared as they are, Strings by their
-// bytes, objects by identity, and values, such as structs and arrays, by the map's `hash` and
-// `equals`; all but Ints, Bytes and Bools are retained while the map holds them. The keys of byte
-// keys are byte items (see LertaItemKind).
+// How a map treats its keys (see docs/internals.md#maps). The keys of byte keys are byte items (see
+// LertaItemKind).
 typedef enum {
   LERTA_INT_KEYS,
   LERTA_STRING_KEYS,
@@ -86,8 +84,7 @@ typedef enum {
 typedef uint64_t (*LertaHash)(int64_t item);
 typedef bool (*LertaEquals)(int64_t a, int64_t b);
 
-// Keys are 8 bytes each, plain items or references, and values are items of the map's kind.
-// Entries are kept in insertion order, and `slots` is an open-addressing index into them.
+// See docs/internals.md#maps.
 typedef struct {
   LertaHeader header;
   int64_t length;  // live entries

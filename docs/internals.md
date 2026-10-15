@@ -33,7 +33,7 @@ For the planned [object output and linking with lld](roadmap/programs.md#tools):
   - Symbols are named after the module's path and the declaration (see [modules](#modules)), not numbered across the program, so that adding or removing a module renames nothing in the others. What a module makes on demand, such as its function literals, constants, itabs and equality functions, is numbered within it.
   - What a module numbers of its own is private; the rest is external, and a module declares what it uses of the others. It also defines the named types of the others that it uses, the layouts of their classes and structs. What a module uses is found in its text, by the names after `@` and `%"`, so the code that generates it does not list them.
   - Generic instances are emitted by the modules that use them (see [generics](#generics)), so that a module's IR does not depend on those that the others use.
-  - A module's top-level code is a function of its own, which the entry module's calls in the order of initialization.
+  - A module's top-level code is a function of its own; `lerta_main`, the entry module's, calls the others' in the order of initialization.
 - `dump-llvm` prints the modules as one, which declares nothing of its own, so that the seed is one `.ll`, and `make check-bootstrap` compares one.
 - The compiler's optimized build, on an x86-64 Mac with clang 21: 15 s with full LTO of one module; with ThinLTO, 2.7 s, 1.9 s after a change to one module, and 1.3 s with nothing changed, besides 3.7 s to compile the runtime once; 1.2 s unoptimized. On x86-64 Linux in Docker, with clang 19: 22 s with full LTO, and 2.8 s with ThinLTO, 1.1 s with nothing changed. The benchmarks run as fast as with full LTO, but on the Mac `fib`, whose recursion is a third slower there for the code's layout, as the code is the same but for one register saved.
 
@@ -56,6 +56,7 @@ For the planned [object output and linking with lld](roadmap/programs.md#tools):
   1. Implement the feature in a form that the current seed compiler can build, without using it in `compiler/`.
   2. Run `make seed`. It runs `make check-bootstrap` and writes the IR that `bin/lerta`, which has the feature, generates for `compiler/minilerta.lerta` in seed mode, as the new seed. Then check the new seed with `make clean && make test`, and commit it.
   3. The compiler's source may then use the feature.
+- The seed's IR, and so minilerta's, is for LLVM before 23, whose `llvm.coro.end` returns an `i1`, which the IR drops. For a clang whose LLVM declares it `void`, which the Makefile finds by compiling a call of it, the Makefile rewrites the declaration and the calls in that IR before clang builds it (`build/host_llvm.sed`).
 
 ## Execution model
 
@@ -91,7 +92,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - A weak field or local holds a weak box of its object instead of the object (`lerta_weak_box` in `runtime/memory.c`), or null for nil: a heap object that points at the object, which one box serves for every weak field and local of it. A function literal that captures a weak local holds the box, and so does a weak function literal for `@`: at each call it takes the object from the box, or returns at once if it is gone, and holds it in its outermost scope. A class's object keeps a pointer to its box after its fields. The two pointers are not counted: the object's drop function first clears the box's pointer, and the box's clears the object's, so that the object is freed as soon as nothing else holds it, and the box once nothing holds it.
 - Every heap object starts with a header: its reference count and a drop function, which releases what the object owns before it is freed (`runtime/lerta.h`).
 - Static objects such as string literals are made immortal (exempt from count operations).
-- nil is a null pointer for an optional reference, and `{ i1, T }` with a false flag for an optional `Int`, `Float`, `Byte`, `Bool` or enum value.
+- nil is a null pointer for an optional reference, and `{ i1, T }` with a false flag for an optional `Int`, `Float`, `Byte`, `Bool` or enum value, whose `T` is unspecified, as in one that comes from C, so it is read only where the flag is set.
 - For now, every expression of a reference type yields an owned (+1) reference, and its consumer releases it: arguments are borrowed and released by the caller after the call, and a discarded statement value is released at once. An immortal literal is owned for free. The exception is the array or map of an index, or of an assignment to one, when it is named by a local, a top-level value or an import: it is borrowed, since what holds it keeps it for the whole use, so that a loop over an array retains and releases nothing (`generate_borrowed` in `compiler/codegen/expression.lerta`). A `var` is not borrowed, since evaluating the index or the value may reassign it and drop what it held, and nor is a weak local's object, which may go meanwhile.
 
 ### Leak checking
@@ -119,6 +120,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - A class or struct object is a heap object: the header, then its fields in declaration order, each in its IR type, and for a class, the pointer to its weak box (above). A generated drop function releases the references the fields hold; for a class with `deinit`, it first runs it through the runtime's `lerta_run_deinit`. That sets the object's count to 1 while `deinit` runs, so that passing `@` on and releasing it does not drop it again, drops at once what `deinit` released (which is otherwise queued until the drop ends), and stops the program if the count is not back to 1, since `deinit` then kept the object.
 - An anonymous struct is a heap object like a struct, with its fields in name order, and so is a tuple, with its items in order; each structural type has its own LLVM type and drop function, generated where it is first used.
 - A function value is a closure: a heap object with the header, the pointer to its code, then its captured values. The code takes the closure first, then the arguments, borrowed as in any call. A function literal's closure is allocated where the literal is evaluated, with the captured values copied in (references retained) and a generated drop function that releases them. A closure that captures nothing, such as that of a top-level function, whose code is a generated thunk that calls the function without the closure, is an immortal constant instead.
+- The heap cell of a captured `var` (see [execution model](#execution-model)) is a heap object with the header and the value; the cells of types of the same representation share one layout and drop function.
 - Each type has a generated constructor function, which takes the constructor arguments borrowed, like any call, and computes the initialized fields; methods are functions that take the object first.
 
 ## Structs (planned)
@@ -201,6 +203,12 @@ A function with [defaults](reference/functions.md) takes every argument. For eac
 - A `Float` is a `double` (`compiler/codegen/float.lerta`). A literal's text is converted by the runtime's `strtod`, which the compiler calls (`lerta_float_literal_bits`), and written into the IR by its bits in hexadecimal, as LLVM takes a decimal constant only if the double holds it exactly.
 - No `Float` is infinite or NaN, so arithmetic checks its result: `/` checks its divisor for zero first, and every operation checks that its result's magnitude is below infinity. With no infinity and no NaN to start from, a NaN can come only from `0.0 / 0.0`, which the first check catches. The comparisons are the ordered ones of `fcmp`. A 32-bit x86 target computes with SSE2 (`-msse2 -mfpmath=sse`), as the x87, which it uses otherwise, keeps more precision than a double, so that a result too large for one could pass the check.
 - Arrays hold a `Float` as an 8-byte item, its bits. A map holds a `Float` key as the word of an `Int`, the bits of the value with `-0.0` made `0.0`, so that equal `Float`s are the same key, and hashes a `Float` inside a key likewise.
+
+## Maps
+
+- A map (`LertaMap` in `runtime/lerta.h`, `runtime/map.c`) keeps its entries in an array, in insertion order: each its key, 8 bytes, a plain item or a reference, its hash, whether it is live, and its value, an item of the map's kind, the whole rounded up to 8 bytes. An open-addressing index, a power of two of slots, each the position of an entry or empty, is probed linearly, with at most half the slots used.
+- Int, Byte and Bool keys are compared as they are, Strings by their bytes, objects by identity, and other values, such as structs and arrays, by a hash and an equality function that the compiler generates for the type; all but Ints, Bytes and Bools are retained while the map holds them. Strings hash by FNV-1a; the other hashes go through the splitmix64 finalizer.
+- Removing a key marks its entry not live, in place. When the entries are full, they are compacted, unless a cursor of the map is alive (see [Iter](#iter)), and the index is rebuilt with room for twice the entries kept.
 
 ## Strings
 

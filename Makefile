@@ -39,9 +39,8 @@ all: $(COMPILER)
 # take as up to date.
 .DELETE_ON_ERROR:
 
-# The IR that the seed holds and prints is for LLVM before 23, whose llvm.coro.end gives an i1,
-# which it drops; for a clang whose LLVM gives void, as it writes for a function that ends a
-# coroutine, this sed script changes the IR to it, and is empty otherwise.
+# Rewrites llvm.coro.end for the host's LLVM, and is empty when there is nothing to rewrite (see
+# docs/internals.md#bootstrap).
 CORO_END_PROBE = extern "C" void f(void *handle) { __builtin_coro_end(handle, 0); }
 build/host_llvm.sed:
 	@mkdir -p build

@@ -3,8 +3,7 @@
 
 #include "internal.h"
 
-// A slot of the hash index is the position of an entry, or EMPTY. A removed entry stays in place
-// (not live) until the entries are compacted, so probes pass over it.
+// A removed entry stays in place until the entries are compacted, so that probes pass over it.
 #define EMPTY (-1)
 
 // The splitmix64 finalizer, so that the low bits, which pick the slot, depend on every bit.
@@ -93,8 +92,6 @@ static int64_t find_slot(const LertaMap *map, int64_t key, uint64_t hash) {
   }
 }
 
-// Drops the removed entries, unless a cursor needs the positions, and rebuilds the index with room
-// for twice the entries kept.
 static void grow(LertaMap *map) {
   if (map->cursors == 0) {
     int64_t live = 0;

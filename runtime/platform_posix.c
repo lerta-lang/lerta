@@ -213,7 +213,6 @@ static bool remove_entries(const char *path) {
   return removed;
 }
 
-// Each level of nesting holds a directory open, so a tree deeper than the limit on open files fails.
 bool lerta_os_remove_tree(const char *path) {
   struct stat status;
   if (lstat(path, &status) != 0) return false;
