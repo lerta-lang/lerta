@@ -20,6 +20,7 @@ SOURCES := $(shell find compiler -name '*.lerta') build/embedded.lerta
 RUNTIME_C := $(wildcard runtime/*.c)
 RUNTIME := $(RUNTIME_C) $(wildcard runtime/*.h)
 MAIN := compiler/main.lerta
+MINILERTA_MAIN := compiler/minilerta.lerta
 ifdef TARGET
 TARGET_FLAGS := --target $(TARGET)
 EXE := $(if $(filter %-w64-mingw32,$(TARGET)),.exe)
@@ -38,21 +39,35 @@ all: $(COMPILER)
 # take as up to date.
 .DELETE_ON_ERROR:
 
-# The seed's IR is for LLVM before 23, whose llvm.coro.end gives an i1, which it drops; for a clang
-# whose LLVM gives void, as it writes for a function that ends a coroutine, the IR is changed to it.
+# The IR that the seed holds and prints is for LLVM before 23, whose llvm.coro.end gives an i1,
+# which it drops; for a clang whose LLVM gives void, as it writes for a function that ends a
+# coroutine, this sed script changes the IR to it, and is empty otherwise.
 CORO_END_PROBE = extern "C" void f(void *handle) { __builtin_coro_end(handle, 0); }
-build/seed.ll: seed/lerta.ll
+build/host_llvm.sed:
 	@mkdir -p build
 	if echo '$(CORO_END_PROBE)' | clang -x c++ -std=c++20 -S -emit-llvm - -o - | grep -q '^declare void @llvm.coro.end('; then \
-	  sed -e 's/^declare i1 @llvm\.coro\.end(/declare void @llvm.coro.end(/' \
-	    -e 's/%[^ ]* = call i1 @llvm\.coro\.end(/call void @llvm.coro.end(/' seed/lerta.ll > $@; \
-	else cp seed/lerta.ll $@; fi
+	  printf '%s\n' 's/^declare i1 @llvm\.coro\.end(/declare void @llvm.coro.end(/' \
+	    's/%[^ ]* = call i1 @llvm\.coro\.end(/call void @llvm.coro.end(/' > $@; \
+	else : > $@; fi
 
-# Linked with the debug runtime, as the compiler's own unoptimized build does: clang compiles the
-# IR far faster without optimization than minilerta loses running unoptimized, and it runs little.
+build/seed.ll: seed/lerta.ll build/host_llvm.sed
+	sed -f build/host_llvm.sed seed/lerta.ll > $@
+
+# What minilerta prints for the source $(1), into the IR file $(2).
+define minilerta_ir
+build/minilerta $(1) > $(2).unfixed || { rm -f $(2).unfixed; exit 1; }
+sed -f build/host_llvm.sed $(2).unfixed > $(2)
+rm $(2).unfixed
+endef
+
+# Links the IR $(1) into $(2) with the debug runtime, as the compiler's own unoptimized build does:
+# clang compiles the IR far faster without optimization than the program loses running unoptimized,
+# and each such program runs little.
+link_debug = clang -Wno-override-module $(1) -D LERTA_DEBUG -Ithird_party/libuv/include \
+  $(RUNTIME_C) build/libuv/*.o $(addprefix -l,$(call host_libuv,library)) -o $(2)
+
 build/minilerta: build/seed.ll $(RUNTIME) build/libuv/built
-	clang -Wno-override-module build/seed.ll -D LERTA_DEBUG -Ithird_party/libuv/include \
-	  $(RUNTIME_C) build/libuv/*.o $(addprefix -l,$(call host_libuv,library)) -o $@
+	$(call link_debug,build/seed.ll,$@)
 
 # The host's libuv, as the compiler builds it with a program's runtime (see compiler/libuv.lerta):
 # with its flags and its warnings silenced, apart from the runtime, which needs only its headers.
@@ -65,17 +80,27 @@ build/libuv/built: $(LIBUV)
 
 # Each rule that runs minilerta depends on std/ and runtime/ too, which it reads (see
 # docs/internals.md#bootstrap).
-build/embed: build/minilerta tools/embed.lerta $(EMBEDDED)
-	build/minilerta build tools/embed.lerta -o $@
+build/embed.ll: build/minilerta build/host_llvm.sed tools/embed.lerta $(EMBEDDED)
+	$(call minilerta_ir,tools/embed.lerta,$@)
+
+build/embed: build/embed.ll $(RUNTIME) build/libuv/built
+	$(call link_debug,$<,$@)
 
 build/embedded.lerta: build/embed $(EMBEDDED)
 	build/embed $@ $(EMBEDDED)
 
-bin/lerta: build/minilerta $(SOURCES) $(EMBEDDED)
-	@mkdir -p bin
-	build/minilerta build $(MAIN) -o $@ -O
+build/stage1.ll: build/minilerta build/host_llvm.sed $(SOURCES) $(EMBEDDED)
+	$(call minilerta_ir,$(MAIN),$@)
 
-# The compiler builds itself without warnings; minilerta, which the seed is, may not know -Werror.
+build/stage1: build/stage1.ll $(RUNTIME) build/libuv/built
+	$(call link_debug,$<,$@)
+
+# stage1 holds std/ and runtime/, which it embeds, as bin/lerta does. The compiler builds itself
+# without warnings.
+bin/lerta: build/stage1
+	@mkdir -p bin
+	build/stage1 build $(MAIN) -o $@ -O -Werror
+
 ifdef TARGET
 $(COMPILER): bin/lerta
 	bin/lerta build $(MAIN) -o $@ -O -Werror $(TARGET_FLAGS)
@@ -103,13 +128,23 @@ $(BOOTSTRAP)/stage3$(EXE): $(STAGE2)
 $(BOOTSTRAP)/stage3.ll: $(STAGE2)
 	$(call run_stage2_without_leaks,dump-llvm $(MAIN) > $@,$@.stderr)
 
+# minilerta's entry, which nothing else builds before make seed, must print the IR that dump-llvm
+# does. It is built for the host, as the seed is only ever built there.
+$(BOOTSTRAP)/minilerta.ll: bin/lerta
+	@mkdir -p $(BOOTSTRAP)
+	bin/lerta build $(MINILERTA_MAIN) -o $(BOOTSTRAP)/minilerta -Werror
+	$(BOOTSTRAP)/minilerta $(MAIN) > $@
+
 # Only the IR is compared (see docs/internals.md#bootstrap): that of stage2, which bin/lerta
 # prints, and that of stage3, which stage2 prints. For Windows, stage2 builds stage3 with a clang for
 # Windows, which it finds on Wine's PATH.
-check-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3$(EXE)
+check-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3$(EXE) \
+  $(BOOTSTRAP)/minilerta.ll
 	@cmp -s $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll \
 	  || { echo 'bootstrap: stage2 and stage3 have different IR' >&2; exit 1; }
-	@echo 'bootstrap: stage2 and stage3 have the same IR'
+	@cmp -s $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/minilerta.ll \
+	  || { echo "bootstrap: minilerta's entry and dump-llvm print different IR" >&2; exit 1; }
+	@echo "bootstrap: stage2, stage3 and minilerta's entry print the same IR"
 
 # Written only from IR that check-bootstrap has found to be a fixed point.
 # The seed is written from the host's bootstrap only, so that a target given by mistake cannot
@@ -125,7 +160,7 @@ seed: check-bootstrap
 	mkdir -p build/seed/build
 	cp -R compiler build/seed/compiler
 	build/embed --seed build/seed/build/embedded.lerta $(EMBEDDED)
-	bin/lerta dump-llvm build/seed/compiler/main.lerta > build/seed/lerta.ll
+	bin/lerta dump-llvm build/seed/$(MINILERTA_MAIN) > build/seed/lerta.ll
 	cp build/seed/lerta.ll seed/lerta.ll
 endif
 
