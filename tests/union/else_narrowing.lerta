@@ -1,0 +1,73 @@
+struct A
+  x: Int
+struct B
+  y: Int
+struct C
+  z: Int
+type ABC = A | B | C
+type BC = B | C
+
+const sum = (v: BC) -> v is B then v.y else v.z
+
+const guarded = (v: ABC) ->
+  return 'A' if v is A
+  print v is A
+  "#{sum(v)}"
+
+const of_optional = (v: ABC?) ->
+  if v is A
+    'A'
+  else
+    const rest: BC? = v
+    rest then "#{sum(rest)}" else 'nil'
+
+const of_case = (v: ABC?) ->
+  case v
+    when A then 'A'
+    when nil then 'nil'
+    else "#{sum(v)}"
+
+const of_case_one_left = (v: ABC) ->
+  case v
+    when A, B then 'A or B'
+    else "#{v.z}"
+
+const widened = (v: ABC?, w: ABC?) ->
+  return w if v is A
+  v
+
+const label = (v: ABC?) ->
+  const w = widened(v, A(x: 0))
+  w is A then 'A' else w is B then 'B' else w is C then 'C' else 'nil'
+
+const cast_after = (v: ABC) ->
+  return 'A' if v is A
+  v as A? then 'cast' else 'no A'
+
+const case_after_guard = (v: ABC) ->
+  return 'A' if v is A
+  case v
+    when A then 'never'
+    when B then 'B'
+    else "#{v.z}"
+
+const negated = (v: ABC) ->
+  return "#{sum(v)}" if v is not A
+  "A #{v.x}"
+
+const widened_optional = (v: ABC) ->
+  const a = v as A?
+  const wide: ABC? = a
+  wide is A
+
+const either = (flag: Bool, v: ABC) -> flag then A(x: 9) else v
+
+const values: ABC[] = [A(x: 1), B(y: 2), C(z: 3)]
+for v in values
+  print "#{guarded(v)} #{of_optional(v)} #{of_case(v)} #{of_case_one_left(v)}"
+print "#{of_optional(nil)} #{of_case(nil)}"
+for v in values
+  print "#{label(v)} #{cast_after(v)}"
+print label(nil)
+for v in values
+  print "#{case_after_guard(v)} #{negated(v)} #{widened_optional(v)} #{either(true, v) is A}"

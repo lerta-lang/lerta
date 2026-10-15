@@ -24,7 +24,7 @@ import std_interface from './interfaces'
 import byte_literal, float_literal from './literals'
 import check_loop_jump, type_of_comprehension from './loop'
 import type_of_method_call, type_of_property from './member'
-import generic_callee, named_function_literal, type_of_identifier from './name'
+import generic_callee, lookup, named_function_literal, type_of_identifier from './name'
 import constructed_type, type_of_construction, type_of_record, type_of_this from './object'
 import type_of_binary, type_of_coalesce, type_of_unary from './operator'
 import check_return, check_yield, type_of_await from './result'
@@ -183,7 +183,7 @@ const type_of_cast = (body: Body, cast: Cast) ->
 
 const check_member_type = (body: Body, value: Expression, type_name: NamedType, type: Type) ->
   const program = body.program
-  const value_type = type_of(body, value)
+  const value_type = unnarrowed_type(body, value, type_of(body, value))
   const union = inner_of(value_type)
   if union is not UnionType
     const message = "expected a value of a union type, got #{format_type(value_type)}"
@@ -194,6 +194,13 @@ const check_member_type = (body: Body, value: Expression, type_name: NamedType, 
     const message = "#{format_type(type)} is not one of #{types}"
     fail program, type_name.position, message
   type
+
+# The type that a local that the value names was declared with, before narrowing (see narrowing),
+# so that it can be tested for any member of it.
+export const unnarrowed_type = (body: Body, value: Expression, type: Type) ->
+  return type if value is not Identifier
+  const local = lookup(body, value.name) ? return type
+  (local.origin ? local).type
 
 # Records the type of a node, which type_of may not compute, such as a type pattern.
 export const set_type = (body: Body, node: Node, type: Type) ->

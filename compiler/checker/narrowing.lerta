@@ -8,7 +8,9 @@ import lookup from './name'
 import Local from './scopes'
 import Body from './shared'
 import resolve from './type_names'
-import inner_of, is_kind, OptionalType, Type, UnionType from '../types'
+import
+  inner_of, is_kind, members_of, optional_type, OptionalType, Type, type_key, union_type, UnionType
+from '../types'
 
 # A local, and the narrower type it has.
 export struct Narrowing
@@ -86,8 +88,7 @@ export const narrowings_of = (body: Body, condition: Condition): ConditionNarrow
   if condition is BinaryOperation
     const operator = condition.operator
     return narrowings_of_logical(body, condition) if operator == 'and' or operator == 'or'
-  const tested = tested_narrowing(body, condition) ? return narrowings_only_where([], true)
-  narrowings_only_where [tested.narrowing], tested.condition_value
+  tested_narrowings(body, condition) ? narrowings_only_where([], true)
 
 # Both operands narrow where `a and b` holds, or where `a or b` does not.
 const narrowings_of_logical = (body: Body, logical: BinaryOperation) ->
@@ -117,20 +118,27 @@ export const narrow = (body: Body, narrowings: Narrowing[]) ->
     const { local, type } = narrowing
     body.scopes.narrow local.identifier.name, narrowed_view(local, type)
 
-struct TestedNarrowing
-  narrowing: Narrowing
-  condition_value: Bool
-
-# The local a test such as `x != nil` narrows, and the value of the condition where it does.
-const tested_narrowing = (body: Body, condition: Condition) ->
+# How a test such as `x != nil` or `x is T` narrows the local it tests.
+const tested_narrowings = (body: Body, condition: Condition) ->
   const tested = tested_name(body, condition) ? return nil
   const local = lookup(body, tested.name.name) ? return nil
   return nil if local.mutable or (local.origin ? local).weak
-  const { condition_value } = tested
   if const is_type = tested.is_type
-    return nil if inner_of(local.type) is not UnionType
+    return nil if inner_of((local.origin ? local).type) is not UnionType
     const type = resolve(body.program, body.resolver, is_type)
-    return TestedNarrowing(condition_value, narrowing: Narrowing(local, type))
+    const others = other_members(local.type, type)
+    const where_false: Narrowing[] = others then [Narrowing(local, type: others)] else []
+    return ConditionNarrowings(where_false, where_true: [Narrowing(local, type)])
   const type = local.type
   return nil if type is not OptionalType
-  TestedNarrowing condition_value, narrowing: Narrowing(local, type: type.inner)
+  narrowings_only_where [Narrowing(local, type: type.inner)], tested.condition_value
+
+# The type of a value of a union type, optional or not, that is none of `excluded`'s members, or nil
+# if it can only be nil.
+export const other_members = (type: Type, excluded: Type) ->
+  const excluded_keys = [type_key(member) for member in members_of(excluded)]
+  const is_left = (member: Type) -> not excluded_keys.contains(type_key(member))
+  const left = [member for member in members_of(inner_of(type)) when is_left(member)]
+  return nil if left.length == 0
+  const others: Type = left.length == 1 then left[0] else union_type(left)
+  type is OptionalType then optional_type(others) else others

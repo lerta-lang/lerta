@@ -4,9 +4,9 @@ import
   Try
 from '../ast'
 import fail from './diagnostics'
-import expect_condition, expect_type, set_type, type_of from './expression'
+import expect_condition, expect_type, set_type, type_of, unnarrowed_type from './expression'
 import lookup from './name'
-import narrow, Narrowing, narrowings_of from './narrowing'
+import narrow, Narrowing, narrowings_of, other_members from './narrowing'
 import Body from './shared'
 import
   check_block, check_if, check_if_condition, define_local, nothing, type_of_block
@@ -17,8 +17,8 @@ import Local from './scopes'
 import has_type, resolve from './type_names'
 import
   EnumType, format_enum_member, format_member, format_type, inner_of, is_assignable, is_kind,
-  is_one_of_kinds, members_of, ObjectType, OptionalType, same_type, Type, type_key, TypeKind, unify,
-  UnionType, void_type
+  is_one_of_kinds, members_of, ObjectType, optional_type, OptionalType, same_type, Type, type_key,
+  TypeKind, unify, union_type, UnionType, void_type
 from '../types'
 
 const VALUE_KINDS: TypeKind[] = ['Int', 'Byte', 'Bool', 'String', ENUM]
@@ -35,13 +35,13 @@ struct BranchValue
   type: Type
 
 export const type_of_case = (body: Body, case_expression: Case, expected: Type?) ->
-  const arm_narrowings = check_patterns(body, case_expression)
+  const narrowings = check_patterns(body, case_expression)
   const { arms } = case_expression
   const arm_branch = (i: Int) ->
-    Branch statements: arms[i].body, enter: -> narrow(body, arm_narrowings[i])
+    Branch statements: arms[i].body, enter: -> narrow(body, narrowings.arms[i])
   const branches = [arm_branch(i) for i in 0...arms.length]
   if const otherwise = case_expression.otherwise
-    branches.push Branch(statements: otherwise, enter: nothing)
+    branches.push Branch(statements: otherwise, enter: -> narrow(body, narrowings.otherwise))
   const unify_arms = (values: BranchValue[]) ->
     unify_values body, values, case_expression, 'case arms'
   type_of_branches body, branches, expected, unify_arms
@@ -153,19 +153,28 @@ const unify_values = (body: Body, values: BranchValue[], at: Expression, descrip
     body.facts.conversions[value.last] = type if is_converted and value.last is Expression
   type
 
-# Checks the conditions or patterns; returns, for each arm, how the subject is narrowed in it.
-const check_patterns = (body: Body, case_expression: Case) ->
+# How the subject is narrowed in each arm, and in the else arm.
+struct CaseNarrowings
+  arms: Narrowing[][]
+  otherwise: Narrowing[]
+
+# Checks the conditions or patterns, and returns how they narrow.
+const check_patterns = (body: Body, case_expression: Case): CaseNarrowings ->
   const { arms } = case_expression
   const subject = case_expression.subject
-  return [check_condition(body, arm.patterns[0]) for arm in arms] if subject == nil
+  if subject == nil
+    const conditions = [check_condition(body, arm.patterns[0]) for arm in arms]
+    return CaseNarrowings(arms: conditions, otherwise: [])
   const subject_type = type_of(body, subject)
   const is_optional = subject_type is OptionalType
   const is_nil_arm = (arm: CaseArm) -> is_optional and arm.patterns.any(is_nil_pattern)
   const unhandled_nil = is_optional and not check_nil_arms(body, arms)
   const missing: String[] = unhandled_nil then ['nil'] else []
   const type = inner_of(subject_type)
-  if type is UnionType
-    return check_type_patterns(body, case_expression, is_nil_arm, subject, type, missing)
+  # As `is` does, the patterns take the members of the type that the subject was declared with.
+  const declared = inner_of(unnarrowed_type(body, subject, subject_type))
+  if declared is UnionType
+    return check_type_patterns(body, case_expression, is_nil_arm, subject, declared, type, missing)
   if not is_one_of_kinds(type, VALUE_KINDS)
     const message = "cannot branch on a value of type #{format_type(subject_type)}"
     fail body.program, subject.position, message
@@ -178,7 +187,8 @@ const check_patterns = (body: Body, case_expression: Case) ->
     fail body.program, case_expression.position, 'a case on values needs an else arm'
   const no_narrowings: Narrowing[] = []
   const narrowed = is_optional then subject_narrowings(body, subject, type) else no_narrowings
-  [is_nil_arm(arm) then no_narrowings else narrowed for arm in arms]
+  const arm_narrowings = [is_nil_arm(arm) then no_narrowings else narrowed for arm in arms]
+  CaseNarrowings arms: arm_narrowings, otherwise: unhandled_nil then no_narrowings else narrowed
 
 const is_nil_pattern = (pattern: Expression) -> pattern is NilLiteral
 
@@ -196,7 +206,7 @@ const check_nil_arms = (body: Body, arms: CaseArm[]) ->
 
 const check_type_patterns = (
   body: Body, case_expression: Case, is_nil_arm: (CaseArm) -> Bool, subject: Expression,
-  union: UnionType, missing_nil: String[]
+  union: UnionType, narrowed: Type, missing_nil: String[]
 ) ->
   const handled: Map<String, Bool> = Map()
   const arm_narrowings: Narrowing[][] = []
@@ -211,11 +221,16 @@ const check_type_patterns = (
         fail_handled_twice body, pattern, format_member(member, union) if handled.has(key)
         handled.add key
     arm_narrowings.push types.length == 1 then subject_narrowings(body, subject, types[0]) else []
-  const missing = [
-    format_member(member, union) for member in union.members when not handled.has(type_key(member))
-  ]
+  const is_unhandled = (member: Type) -> not handled.has(type_key(member))
+  const unhandled_members = members_of(narrowed).filter(is_unhandled)
+  const missing = [format_member(member, union) for member in unhandled_members]
   fail_unhandled body, case_expression, [missing..., missing_nil...]
-  arm_narrowings
+  # Where nil is handled, the else arm does not see it.
+  const unhandled = missing_nil.length > 0 then optional_type(narrowed) else narrowed
+  const handled_members = [member for member in union.members when handled.has(type_key(member))]
+  const others = other_members(unhandled, union_type(handled_members))
+  const otherwise: Narrowing[] = others then subject_narrowings(body, subject, others) else []
+  CaseNarrowings otherwise, arms: arm_narrowings
 
 const check_member_patterns = (
   body: Body, case_expression: Case, type: EnumType, missing_nil: String[]
