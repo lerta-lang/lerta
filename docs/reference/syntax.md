@@ -53,7 +53,7 @@ draw 'p'
 
 ## Declarations and assignment
 
-- `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Array<Int> = []`).
+- `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Int[] = []`).
 - `name = value` assigns to a `var`, and `xs[i] = value` to an item of an array. `+=` `-=` `*=` `/=` `%=` combine an `Int` `var` with an `Int` value, and `+=` also appends a `String` to a `String`.
 - An assignment is a statement, not an expression.
 - Why: there is no `let` and no function declaration (`def`), so that declarations look the same at the top level, inside functions and in type bodies, for values and for functions, which avoids the CoffeeScript ambiguity between declaration and assignment. `const` only makes the binding immutable, since immutability of the contents is handled by types.
@@ -84,7 +84,7 @@ draw 'p'
 - `(x)` groups an expression.
 - Arguments may be named, `f(name: value)`, after the positional ones: those of a constructor and the fields of an [anonymous struct](types.md#anonymous-structs) parameter.
 - `x.name()` calls a method of `x`, `x.name` reads a property and `xs[i]` indexes. As with `(`, no space is allowed before `.` or `[`. At the start of a statement, `f [1]` is the call `f([1])`.
-- Types are written as names, with type arguments in `<>` and `?` for an optional type: `Int`, `Array<String>`, `String?`.
+- Types are written as names, with type arguments in `<>`, `[]` for an array and `?` for an optional type: `Int`, `Map<String, Int>`, `String[]`, `String?`. `[]` and `?` apply in the order they are written, `Int[]?` being an optional array; a function type or a union is in parentheses to be an array's items, `((Int) -> Int)[]`, `(A | B)[]`.
 - `x!` unwraps an optional value; no space is allowed before `!`. `x?.name` reads a member of an optional value (see [optional values](types.md#optional-values)); no space is allowed before `?` or `.`.
 
 ## Operators

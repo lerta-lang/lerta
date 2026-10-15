@@ -15,7 +15,7 @@
 - `+` `-` `*` and prefix `-` wrap around (`250 + 10` is `4`). `/` and `%` throw `division by zero` when the divisor is 0. Comparisons treat values as unsigned.
 - There are no implicit conversions: `Byte` and `Int` cannot be mixed in one operation. `b.to_int()` converts a `Byte` to an `Int`, and `n.to_byte()` an `Int` to a `Byte`, throwing `integer overflow` unless it is from 0 to 255.
 - `b.is_digit()`, `b.is_letter()` and `b.is_space()` tell whether it is an ASCII digit, letter (`a` to `z`, `A` to `Z`) or space (a space, `\t`, `\n` or `\r`). `b.is_utf8_continuation()` tells whether it continues a UTF-8 sequence (0x80 to 0xBF), as when counting the code points of a `Binary`.
-- **The type of a literal is decided by context.** Where a `Byte` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a string literal of one byte (`'a'`). The expected type reaches literals inside arithmetic (`c == 1 + 2`), `case` arms, array items and return values. An operand of `+`, `==`, `<` and so on whose type comes from the context is expected to have the type of the other operand, so `c >= '0'` and `'0' <= c` compare two `Byte`s when `c` is one; likewise `[1, c]` is an `Array<Byte>`. Without such a context, `'a'` is a `String` and `1` an `Int`.
+- **The type of a literal is decided by context.** Where a `Byte` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a string literal of one byte (`'a'`). The expected type reaches literals inside arithmetic (`c == 1 + 2`), `case` arms, array items and return values. An operand of `+`, `==`, `<` and so on whose type comes from the context is expected to have the type of the other operand, so `c >= '0'` and `'0' <= c` compare two `Byte`s when `c` is one; likewise `[1, c]` is a `Byte[]`. Without such a context, `'a'` is a `String` and `1` an `Int`.
 
 ## Float
 
@@ -37,23 +37,23 @@
 
 - A `String` is immutable text in UTF-8.
 - `+` concatenates two `String`s into a new one.
-- `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in an `Array<String>`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
+- `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in a `String[]`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`, and `s.ends_with(suffix)` whether it ends with those of `suffix`.
 - `s.without_prefix(prefix)` gives what follows `prefix` in `s`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. `s.without_suffix(suffix)` gives what comes before `suffix`, or nil.
 - `a.compare(b)` is negative, zero or positive as `a` goes before, with or after `b` in the order of their bytes, which does not depend on a locale: a prefix goes first.
 - `==` and `!=` compare two `String`s byte by byte.
 - A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as `Int`s, in order, so `'é'` gives 233; its bytes are `s.binary`.
 - Why code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
-- Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `push` onto an `Array<String>` and `join` is O(n) (the Python approach), an idiom that stays valid once ropes make `+` O(1).
+- Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `push` onto a `String[]` and `join` is O(n) (the Python approach), an idiom that stays valid once ropes make `+` O(1).
 
 ## Binary
 
-- `Binary` is an immutable sequence of bytes; a mutable one is an `Array<Byte>`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.text()` goes back (see below).
+- `Binary` is an immutable sequence of bytes; a mutable one is a `Byte[]`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.text()` goes back (see below).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`.
 - `==` and `!=` compare two `Binary`s byte by byte.
 - `b.occurs_at(index, part)` tells whether the bytes of `part` occur in `b` at `index`; it is false where `part` does not fit.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
-- `bytes.to_binary()` copies the items of an `Array<Byte>` into a new `Binary`.
+- `bytes.to_binary()` copies the items of a `Byte[]` into a new `Binary`.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
 - Why `Binary` is separate from `String`: a `String` only adds the invariant "valid UTF-8", rather than "a string is any byte sequence" as in Python 2 and Go.
 - `b.text(start, end)` gives the bytes from `start` up to `end` as a `String` if they are valid UTF-8, or nil otherwise; it throws an `IndexError` if they are out of range. `start` is 0 and `end` is `b.length` by default, and `b.text()` gives the whole `Binary` without copying its bytes. `b.text()!` or `b.text() ? throw ...` takes a String where the bytes must be UTF-8.
@@ -73,19 +73,19 @@ if const n = '42'.parse_int()
 - `x ? fallback` is `x` without nil, or `fallback`, which has that type, if `x` is nil. The fallback is evaluated only then. `?` binds weaker than every other binary operator, and `a ? b ? c` is `a ? (b ? c)`.
 - `x == nil` and `x != nil` test an optional value. `==` and `!=` also compare an optional value with another of its type, or with a value of its type without nil, wherever they compare the values themselves: two nils are equal, nil and a value are not, and two values compare as usual. An expected enum reaches the other operand through the optional (`kind == '('` for a `kind: TokenKind?`). The ordering operators (`<` and so on) do not take optional values.
 - An optional value can be a condition (see [control flow](control-flow.md#if-and-while)).
-- An array cannot hold optional `Int`, `Byte` or `Bool` values yet; optional references are fine (`Array<String?>`).
+- An array cannot hold optional `Int`, `Byte` or `Bool` values yet; optional references are fine (`String?[]`).
 - `s.parse_int()` gives the `Int` that a `String` of decimal digits, with an optional leading `-`, stands for, or nil if it is anything else or does not fit in an `Int`. `s.parse_float()` gives the nearest `Float` to a decimal number, with an optional leading `-`, a fraction after `.` and an exponent after `e` or `E` (`'1.5'`, `'-2'`, `'3e-4'`), or nil if it is anything else or too large to be finite; one too small rounds to zero (`'1e-999'` gives `0.0`).
 
 ## Array
 
 ```
 const xs = [3, 1, 2]
-const names: Array<String> = []
+const names: String[] = []
 names.push('a')
 print xs[0] + xs.length
 ```
 
-- `Array<T>` is a growable sequence of items of type `T`, which can be any type with values (not `void`). Arrays are mutable and shared: assigning or passing an array does not copy it.
+- `T[]` is a growable sequence of items of type `T`, which can be any type with values (not `void`). Arrays are mutable and shared: assigning or passing an array does not copy it.
 - `[a, b, c]` makes an array (over several lines too: see [lines inside brackets](syntax.md#lines-inside-brackets)). Its item type comes from the expected type if there is one (a type annotation, a parameter, a return type), otherwise from the first item. `[]` needs an expected type.
 - **Spread.** An item `xs...` gives the items of `xs`, anything a `for` goes through, in its place: `[first, rest..., last]`, `[header.binary..., 0x0A]`. Its items count as the array's items in the rules above. A spread can only be an item of an array literal so far, not of a comprehension's element or of a call.
 - `xs[i]` reads an item and `xs[i] = value` replaces one (`+=` and so on work on `Int` items). An index outside `0 ... xs.length` throws `index out of range`.
@@ -93,7 +93,7 @@ print xs[0] + xs.length
 - `==` and `!=` compare two arrays by their items, in order (see [equality](objects.md#classes-and-structs)).
 - `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`. `xs.contains(x)` tells whether an item is `==` to `x`, for items that `==` compares (other items are an error), and `xs.find_index(f)` gives the place of the first item for which `f` is true, or nil. `xs.first()` and `xs.last()` return the first and the last item, or nil for an empty array; an array of optional items has neither, since its nil would be ambiguous. `xs.sorted(compare)` gives a new array of the items in the order that `compare` gives, negative when its first argument goes first, equal items keeping their order: `names.sorted((a, b) -> a.compare(b))`. `xs.append(ys)` pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`.
 - `xs.iter()` gives an [`Iter`](#iter) of the items, and `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` one of the items as it maps, filters or takes them.
-- `strings.join(separator)` joins an `Array<String>` into one `String`.
+- `strings.join(separator)` joins a `String[]` into one `String`.
 - Arrays cannot be printed.
 
 ## Map
@@ -109,7 +109,7 @@ print ages['ann'] ? 0
 - `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there. `m.get_or_put(k, make)` gives the value of `k`, setting it to `make()` first if `k` is not there. A `Map<K, Bool>` serves as a set: `m.add(k)` sets `k` to `true`.
-- `m.keys()` is an `Array<K>` of the keys in the order they were first added (a key removed and added again counts as new). `m.entries()` is an `Iter<(K, V)>` of the keys and their values as [tuples](#tuples), `for (key, value) in m.entries()`, of the entries there when it is made, in that order: one removed before the Iter reaches it is skipped, and one added meanwhile is not given, even under a key that was there before. `m.values()` is an `Iter<V>` of their values likewise.
+- `m.keys()` is a `K[]` of the keys in the order they were first added (a key removed and added again counts as new). `m.entries()` is an `Iter<(K, V)>` of the keys and their values as [tuples](#tuples), `for (key, value) in m.entries()`, of the entries there when it is made, in that order: one removed before the Iter reaches it is skipped, and one added meanwhile is not given, even under a key that was there before. `m.values()` is an `Iter<V>` of their values likewise.
 
 ## Iter
 

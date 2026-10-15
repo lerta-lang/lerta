@@ -47,7 +47,7 @@ extend String
 extend Point
   sum = (): Int -> @x + @y
 
-extend<T> Array<T>
+extend<T> T[]
   second = (): T -> @[1]
 
 print 'hi'.shout()
@@ -58,10 +58,10 @@ print [1, 2].second()
 - Only `String`, `Int`, `Bool`, `Byte`, `Binary`, arrays, maps, `Iter`s, classes, structs and [interfaces](#interfaces) can be extended so far. Extending an optional, a function, a union, an anonymous struct or a tuple type is an error.
 - **Extends of interfaces.** `extend<T> Source<T>`, or `extend Equatable`, gives its methods to every type that satisfies the interface, including the interface type itself; its type parameters are those of the interface's type arguments, which the type gives by its members (see [generic functions](functions.md#generic-functions)), and `Self` is the type, as in the interface. In the methods, `@` is of the type, and each method is checked and compiled for each type it is called on, as a generic method is. A method cannot have the name of a member of the interface, and does not count for satisfying an interface. A type that has a member of the name already, of its own or from an extend of a type, cannot call the method: the call is ambiguous, an error. Extends of two interfaces cannot give methods of the same name where both are in effect, since a type may satisfy both.
 - Why extends rather than default implementations in the interface: the interface says only what a type must have, and a method of an extend cannot be overridden, so which code runs never depends on whether the type declares a member.
-- **Generic extends.** `extend<T> Type` declares type parameters, as a generic function does, which the extended type must use and which take no bound: `extend<T> Array<T>` gives its methods to every array, `extend<V> Map<String, V>` to the maps whose keys are `String`s, and `extend<T> Array<Array<T>>` to the arrays of arrays, while `extend Array<Int>` gives them to `Array<Int>` only. In the methods, the type parameters stand for the receiver's type arguments.
-- **Generic methods.** The methods of a generic extend, and the methods of extends, classes and structs that declare type parameters of their own, as `map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)` does, are generic: the receiver gives the extend's type arguments, and the arguments give the method's own, which may have the bound `Stringable`, as those of a generic function are inferred (see [generic functions](functions.md#generic-functions)). Like a generic function, each is checked and compiled per instance, for each receiver type and set of type arguments; an error in its body names the instance, as in `(in Array<String>.total)`. A generic method takes no named arguments so far.
+- **Generic extends.** `extend<T> Type` declares type parameters, as a generic function does, which the extended type must use and which take no bound: `extend<T> T[]` gives its methods to every array, `extend<V> Map<String, V>` to the maps whose keys are `String`s, and `extend<T> T[][]` to the arrays of arrays, while `extend Int[]` gives them to `Int[]` only. In the methods, the type parameters stand for the receiver's type arguments.
+- **Generic methods.** The methods of a generic extend, and the methods of extends, classes and structs that declare type parameters of their own, as `map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)` does, are generic: the receiver gives the extend's type arguments, and the arguments give the method's own, which may have the bound `Stringable`, as those of a generic function are inferred (see [generic functions](functions.md#generic-functions)). Like a generic function, each is checked and compiled per instance, for each receiver type and set of type arguments; an error in its body names the instance, as in `(in String[].total)`. A generic method takes no named arguments so far.
 - An extend is in effect in the module that declares it and in the modules that import that module directly, by any import, `import 'module'` included (see [modules](modules.md)). It is not in effect further: a module that imports one of those does not get it.
-- It is an error, at the extend's method, for the method to have the name of a member that the type has already, builtin or of its class or struct, or of a method that another extend in effect in the module gives the same type; extends of a generic type give the same type a method when some type matches both, as `Array<Int>` matches both `extend<T> Array<T>` and `extend Array<Int>`. When two imported modules' extends conflict, the error is at the second import.
+- It is an error, at the extend's method, for the method to have the name of a member that the type has already, builtin or of its class or struct, or of a method that another extend in effect in the module gives the same type; extends of a generic type give the same type a method when some type matches both, as `Int[]` matches both `extend<T> T[]` and `extend Int[]`. When two imported modules' extends conflict, the error is at the second import.
 
 ## Interfaces
 
@@ -80,7 +80,7 @@ const describe = <T: Shape>(shape: T) -> print "#{shape.name}: #{shape.area()}"
 describe Square(side: 3)
 describe { name: 'dot', area: -> 0 }
 
-const shapes: Array<Shape> = [Square(side: 2), { name: 'dot', area: -> 0 }]
+const shapes: Shape[] = [Square(side: 2), { name: 'dot', area: -> 0 }]
 print shape.area() for shape in shapes
 ```
 

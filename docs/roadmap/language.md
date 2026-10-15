@@ -38,9 +38,9 @@ The planned syntax, control flow, types, operators and strings.
 
 - Union members other than classes and structs, where `?` binds tighter than `|` (`Int | String?` is `Int | (String?)`). `T?` is then shorthand for `T | nil`; unions remain the general form.
 - The downcast of an interface value.
-- An array literal's element type is one that every item fits, rather than that of the first item that gives one ([the reference](../reference/types.md#array)): `[import, statements...]`, of an `Import` and the items of an `Array<Statement>`, is an `Array<Statement>`, as `Import` is a member of that union.
+- An array literal's element type is one that every item fits, rather than that of the first item that gives one ([the reference](../reference/types.md#array)): `[import, statements...]`, of an `Import` and the items of a `Statement[]`, is a `Statement[]`, as `Import` is a member of that union.
 - Small anonymous structs and tuples as values rather than heap objects, in registers and in the room of an item (`LertaItem`), so that `for (k, v) in m.entries()` allocates nothing. They cannot be changed, so the representation does not show in what a program does.
-- Arrays of optional `Int`, `Byte` and `Bool` values (`Array<Int?>`), which have no item kind yet: an item kind for `{ i1, T }`, which fits in the room of an item (`LertaItem` in `runtime/lerta.h`). A map's value stays not optional, since a missing key reads as nil.
+- Arrays of optional `Int`, `Byte` and `Bool` values (`Int?[]`), which have no item kind yet: an item kind for `{ i1, T }`, which fits in the room of an item (`LertaItem` in `runtime/lerta.h`). A map's value stays not optional, since a missing key reads as nil.
 
 Interfaces and generics are in [objects](objects.md).
 

@@ -170,7 +170,7 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
   const format = (inner: Type) -> format_qualified(inner, qualified)
   case type
     when SimpleType then type.kind.to_string()
-    when ArrayType then "Array<#{format(type.element)}>"
+    when ArrayType then "#{operand_text(type.element, format)}[]"
     when IterType then "Iter<#{format(type.item)}>"
     when PromiseType then promise_text(type, format)
     when MapType then "Map<#{format(type.key)}, #{format(type.value)}>"
@@ -183,13 +183,15 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when TupleType then "(#{[format(item) for item in type.items].join(', ')})"
     when UnionType
       [format_member_qualified(member, type, qualified) for member in type.members].join(' | ')
-    when OptionalType
-      const inner = type.inner
-      const needs_parentheses = inner is FunctionType or inner is UnionType
-      needs_parentheses then "(#{format(inner)})?" else "#{format(inner)}?"
+    when OptionalType then "#{operand_text(type.inner, format)}?"
     when TypeParameterType then type.name
     when FunctionType
       "(#{[format(param) for param in type.params].join(', ')}) -> #{format(type.result)}"
+
+# The type that `?` or `[]` follows, in parentheses if it would otherwise apply to a part of it.
+const operand_text = (operand: Type, write: (Type) -> String) ->
+  const needs_parentheses = operand is FunctionType or operand is UnionType
+  needs_parentheses then "(#{write(operand)})" else write(operand)
 
 # A Promise of no value is written without a type argument.
 const promise_text = (type: PromiseType, write: (Type) -> String) ->

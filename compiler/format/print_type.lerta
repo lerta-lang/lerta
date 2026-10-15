@@ -1,9 +1,11 @@
-# Types as written: named types, unions, function types, anonymous structs and tuples, and type
-# parameters.
+# Types as written: named types, unions, function types, anonymous structs, tuples and arrays, and
+# type parameters.
 import
-  FunctionTypeName, NamedType, RecordTypeName, TupleTypeName, TypeName, TypeParameter, UnionTypeName
+  ArrayTypeName, FunctionTypeName, NamedType, RecordTypeName, TupleTypeName, TypeName,
+  TypeParameter, UnionTypeName
 from '../ast'
-import Doc, join, separated, text, token from './doc'
+import Doc, join, rule, separated, text, token from './doc'
+import PARENTHESES from './rules'
 
 export const type_doc = (type: TypeName): Doc ->
   case type
@@ -24,6 +26,7 @@ export const type_doc = (type: TypeName): Doc ->
     when TupleTypeName
       const items = separated([type_doc(item) for item in type.items], text(', '))
       join [token('(', type.position), items, text(')'), optional_mark(type.optional)]
+    when ArrayTypeName then join([element_doc(type), text('[]'), optional_mark(type.optional)])
 
 # A function type returned by a function literal, which its `->` would end, is in parentheses.
 export const result_type_doc = (type: TypeName): Doc ->
@@ -50,5 +53,17 @@ const type_parameter = (param: TypeParameter): Doc ->
     join [name, text(': '), named_type(bound)]
   else
     name
+
+# An array's element, in parentheses if `[]` would otherwise apply to a part of it. An array
+# written with its element in parentheses takes the position of their `(`.
+const element_doc = (array: ArrayTypeName): Doc ->
+  const element = array.element
+  const bare = type_doc(element)
+  const was_in_parentheses = array.position != element.position
+  const is_function = element is FunctionTypeName and not element.optional
+  if is_function or element is UnionTypeName
+    const open = was_in_parentheses then token('(', array.position) else text('(')
+    return join([open, bare, text(')')])
+  was_in_parentheses then rule(PARENTHESES, bare) else bare
 
 const optional_mark = (optional: Bool): Doc -> text(optional then '?' else '')

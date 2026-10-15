@@ -17,7 +17,7 @@ This describes the implementation design. Unmarked statements describe the compi
 
 - The compiler itself (in Lerta) goes as far as producing IR. Beyond that, a **C++ shim** takes over (it exposes a few functions with `extern "C"`).
   - The exposed units are not one-to-one with the LLVM API. They are the operations the compiler needs (output, linking, JIT execution, REPL).
-  - The shim receives Lerta objects (`String`, `Array<String>`) directly. LLVM's C++ API uses `StringRef` (pointer + length), so no conversion to NUL-terminated strings is needed.
+  - The shim receives Lerta objects (`String`, `String[]`) directly. LLVM's C++ API uses `StringRef` (pointer + length), so no conversion to NUL-terminated strings is needed.
   - lld is called as a library (through the shim, since it has no C API).
   - LLVM version differences are confined to the shim. The LLVM major version used is fixed.
 - How IR is passed:
