@@ -1,28 +1,25 @@
 # Expressions, with the parentheses that their precedence needs and the style asks for (see
-# Parentheses), and the values after `=`, `key:` and `return`, which may take the lines below.
+# Parentheses).
 import
-  ArrayLiteral, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, CaseArm, Cast,
-  Coalesce, Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, If,
-  Index, IntegerLiteral, Interpolation, is_spread, IsTest, Jump, MapEntry, MapLiteral, Member,
-  NamedValue, NilLiteral, Parameter, Position, Range, RecordLiteral, Return, Statement,
-  StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation, Unwrap, Yield
+  ArrayLiteral, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast, Coalesce,
+  Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, If, Index,
+  IntegerLiteral, Interpolation, IsTest, Jump, MapLiteral, Member, NilLiteral, Position, Range,
+  RecordLiteral, Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation,
+  Unwrap, Yield
 from '../ast'
-import TokenKind from '../lexer/tokens'
+import breaking, choice, Doc, indent, join, line_feed, rule, separated, text, token from './doc'
+import named_type, type_arguments from './print_type'
+import if_doc from './print_statement'
+import LINE_LENGTH, PARENTHESES, STRING_LITERALS from './rules'
 import
-  breaking, choice, closing, Doc, indent, join, line_feed, rule, separated, text, token
-from './doc'
-import bracketed, Context, Item, lines_of_items, opened_list, removed_type from './printing'
-import columns from './source'
-import named_type, result_type_doc, type_arguments, type_doc, type_parameters from './print_type'
-import block_doc, if_doc, inline_statement, is_inline from './print_statement'
-import
-  BRANCHES, FUNCTION_BODIES, FUNCTIONS_WITHOUT_PARAMETERS, INSIDE_BRACES, LINE_LENGTH,
-  MULTI_LINE_LITERALS, PARENTHESES, SHORTHAND, STRING_LITERALS
-from './rules'
+  array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
+from './print_literal'
+import case_doc, function_doc, try_doc from './print_block'
+import bracketed, Context, is_layout, keyword, word_before from './printing'
 
 # Precedence levels, weakest first (see Operators in docs/reference/syntax.md).
 const CONDITIONAL = 1
-const COALESCE = 2
+export const COALESCE = 2
 const OR = 3
 const AND = 4
 const NOT = 5
@@ -39,12 +36,12 @@ export const expression_doc = (expression: Expression, context: Context) ->
 
 # The expression where it must bind at least as tightly as `level`. One that runs to the end of
 # what holds it, as `return x` and a function literal do, can do so only `last`.
-const operand = (expression: Expression, context: Context, level: Int, last: Bool) ->
+export const operand = (expression: Expression, context: Context, level: Int, last: Bool) ->
   const runs_on = runs_to_end(expression) and not last
   in_parentheses expression, context, precedence(expression) < level or runs_on
 
 # Parentheses that the style asks for although the precedence does not.
-const clarified = (expression: Expression, context: Context) ->
+export const clarified = (expression: Expression, context: Context) ->
   in_parentheses expression, context, true
 
 const in_parentheses = (expression: Expression, context: Context, needed: Bool) ->
@@ -170,9 +167,6 @@ const bare_doc = (expression: Expression, context: Context): Doc ->
 const identifier = (name: Identifier) ->
   name.name.starts_with('?') then text('') else token(name.name, name.position)
 
-# A keyword at the position, where the source has it there.
-export const keyword = (word: String, at: Position) -> token(word, at)
-
 # The literal as written in the source; `-1` is two tokens there.
 const spelled = (at: Position, context: Context) ->
   const source = context.source
@@ -294,196 +288,6 @@ export const arguments = (call: Call, context: Context) ->
   const named = [named_item(named, context) for named in call.named_args]
   [positional..., named...]
 
-const item = (expression: Expression, context: Context) ->
-  const doc = expression_doc(expression, context)
-  const after_comment = context.source.comment_before(expression.position)
-  Item doc, after_comment, simple: is_simple(expression), opened: opened_doc(expression, context)
-
-# A literal list broken after its opening bracket (see Item.opened).
-const opened_doc = (expression: Expression, context: Context): Doc? ->
-  const inside = context.inside_brackets()
-  const at = expression.position
-  const closing_of = (close: String) -> closing(close, closing_at(at, context))
-  case expression
-    when ArrayLiteral
-      return nil if expression.elements.length == 0
-      const items = [item(element, inside) for element in expression.elements]
-      opened_list token('[', at), items, closing_of(']')
-    when MapLiteral
-      const items = [entry_item(entry, inside) for entry in expression.entries]
-      opened_list token('{', at), items, closing_of('}')
-    when RecordLiteral
-      return nil if expression.fields.length == 0
-      const items = [field_item(field, inside) for field in expression.fields]
-      opened_list token('{', at), items, closing_of('}')
-    when Comprehension
-      return nil if expression.spread or expression.lazy != nil
-      comprehension_forms(expression, context).broken
-    else nil
-
-# The literal on one line, its items separated by commas.
-const flat_literal = (literal: Expression, context: Context) ->
-  const inside = context.inside_brackets()
-  const at = literal.position
-  const flat = (open: String, items: Item[], close: String) ->
-    const closing_bracket = closing(close, closing_at(at, context))
-    join [token(open, at), separated([item.doc for item in items], text(', ')), closing_bracket]
-  case literal
-    when ArrayLiteral then flat('[', [item(element, inside) for element in literal.elements], ']')
-    when MapLiteral then flat('{ ', [entry_item(entry, inside) for entry in literal.entries], ' }')
-    when RecordLiteral
-      flat '{ ', [field_item(field, inside) for field in literal.fields], ' }'
-    else expression_doc(literal, context)
-
-const named_item = (named: NamedValue, context: Context) ->
-  const name = token(named.name.name, named.name.position)
-  const doc = join([name, text(': '), expression_doc(named.value, context)])
-  const after_comment = context.source.comment_before(named.name.position)
-  Item doc, after_comment, simple: is_simple(named.value)
-
-# A name or a literal, which shares a line with others in a long list (see Long lists).
-# A string longer than that may stand for a line of text, which is on a line of its own.
-const SHORT_STRING = 12
-
-# A name or a short literal, which shares a line with others in a long list (see Long lists).
-const is_simple = (expression: Expression) ->
-  case expression
-    when Identifier, IntegerLiteral, FloatLiteral, BooleanLiteral, NilLiteral then true
-    when StringLiteral then columns(expression.value) <= SHORT_STRING
-    else false
-
-# Where the bracket that closes the one at the position is in the source.
-const closing_at = (open: Position, context: Context) ->
-  const source = context.source
-  const index = source.token_at(open) ? return nil
-  # A literal written without brackets has none.
-  const kind = source.tokens[index].kind
-  return nil if kind != '[' and kind != '{' and kind != '('
-  const closing = source.tokens[source.closing(index)]
-  Position line: closing.line, column: closing.column
-
-const array_doc = (array: ArrayLiteral, context: Context) ->
-  const items = [item(element, context.inside_brackets()) for element in array.elements]
-  bracketed token('[', array.position), items, ']', closing_at(array.position, context)
-
-const map_doc = (map: MapLiteral, context: Context) ->
-  const items = [entry_item(entry, context.inside_brackets()) for entry in map.entries]
-  braced map.position, items, context
-
-# A map's key that is a name is written in parentheses, as it would be a field's name otherwise.
-const entry_item = (entry: MapEntry, context: Context) ->
-  const key =
-    if entry.key is Identifier
-      clarified entry.key, context
-    else
-      expression_doc entry.key, context
-  const doc = join([key, text(': '), expression_doc(entry.value, context)])
-  const after_comment = context.source.comment_before(entry.key.position)
-  Item doc, after_comment, simple: is_simple(entry.key) and is_simple(entry.value)
-
-const record_doc = (record: RecordLiteral, context: Context) ->
-  const items = [field_item(field, context.inside_brackets()) for field in record.fields]
-  braced record.position, items, context
-
-# `{ x }` for `{ x: x }` (see Shorthand).
-const field_item = (field: NamedValue, context: Context) ->
-  const name = token(field.name.name, field.name.position)
-  const value = field.value
-  if value is Identifier and value.name == field.name.name
-    const commented = context.source.comment_before(field.name.position)
-    return Item(doc: rule(SHORTHAND, name), simple: true, after_comment: commented)
-  const doc = join([name, text(': '), expression_doc(value, context)])
-  const after_comment = context.source.comment_before(field.name.position)
-  Item doc, after_comment, simple: is_simple(value)
-
-# Braces with spaces inside them on one line (see Inside `{}`).
-const braced = (open_at: Position, items: Item[], context: Context) ->
-  const close_at = closing_at(open_at, context)
-  const flat_items = separated([item.doc for item in items], text(', '))
-  const closing_brace = closing(' }', close_at)
-  const flat = rule(INSIDE_BRACES, join([token('{ ', open_at), flat_items, closing_brace]))
-  const broken = bracketed(token('{', open_at), items, '}', close_at)
-  choice flat, broken
-
-# The value after `=`, `key:` or `return`, with the space before it. A literal of several items
-# that does not fit on the line goes in a block below it without brackets (see Multi-line literals),
-# and an `if` or a `case` starts a line of its own (see Branches).
-export const value_after = (value: Expression, context: Context) ->
-  const on_line = join([text(' '), expression_doc(value, context)])
-  return on_line if context.in_brackets
-  case value
-    when If, Case
-      if value is If and value.nil_safe
-        on_line
-      else
-        rule BRANCHES, indent(join([line_feed(), expression_doc(value, context)]))
-    when ArrayLiteral, RecordLiteral, MapLiteral
-      if const block = literal_block(value, context)
-        # On the line only if all of it fits there, without a comment inside.
-        const all_on_line = join([text(' '), flat_literal(value, context)])
-        breaking MULTI_LINE_LITERALS, all_on_line, block
-      else
-        on_line
-    when FunctionLiteral then on_line
-    else
-      if const block = literal_block_with_members(value, context)
-        return breaking(MULTI_LINE_LITERALS, on_line, block)
-      # On the next line, deeper, if it fits there and not on this one.
-      const next_line = indent(join([line_feed(), expression_doc(value, context)]))
-      breaking LINE_LENGTH, on_line, choice(next_line, on_line)
-
-# The items of a literal in an indented block, without brackets, if it can be written so: a block
-# reads one element as the element itself, and takes no spread.
-const literal_block = (literal: Expression, context: Context) ->
-  const items =
-    case literal
-      when ArrayLiteral
-        const spreads = literal.elements.find_index(is_spread) != nil
-        return nil if literal.elements.length < 2 or spreads
-        [item(element, context) for element in literal.elements]
-      when RecordLiteral then [field_item(field, context) for field in literal.fields]
-      when MapLiteral then [entry_item(entry, context) for entry in literal.entries]
-      else return nil
-  return nil if items.length == 0
-  indent join([line_feed(), lines_of_items(items)])
-
-# A literal followed by members, as `.join('')`: the literal in a block, and the members on the
-# line after it, where the value starts (see Multi-line literals).
-const literal_block_with_members = (value: Expression, context: Context) ->
-  const literal = literal_under_members(value) ? return nil
-  const block = literal_block(literal, context) ? return nil
-  join [block, line_feed(), members_doc(value, literal, context)]
-
-const literal_under_members = (value: Expression): Expression? ->
-  const object =
-    case value
-      when Member then value.object
-      when Call then value.callee
-      when Index then value.object
-      else return nil
-  return object if object is ArrayLiteral or object is RecordLiteral or object is MapLiteral
-  literal_under_members object
-
-# The members that follow the literal, without it.
-const members_doc = (value: Expression, literal: Expression, context: Context): Doc ->
-  return text('') if value == literal
-  case value
-    when Member
-      join [
-        members_doc(value.object, literal, context)
-        text('.')
-        token(value.name.name, value.name.position)
-      ]
-    when Call
-      const open = join(
-        [members_doc(value.callee, literal, context), type_arguments(value.type_args), text('(')]
-      )
-      bracketed open, arguments(value, context.inside_brackets()), ')', nil
-    when Index
-      const index = expression_doc(value.index, context.inside_brackets())
-      join [members_doc(value.object, literal, context), text('['), index, text(']')]
-    else expression_doc(value, context)
-
 const comprehension_doc = (comprehension: Comprehension, context: Context) ->
   const inside = context.inside_brackets()
   if comprehension.spread
@@ -493,7 +297,7 @@ const comprehension_doc = (comprehension: Comprehension, context: Context) ->
 
 # A comprehension on one line, and broken: on a line of its own inside the brackets, and on a line
 # for each part if it does not fit there either.
-const comprehension_forms = (comprehension: Comprehension, context: Context) ->
+export const comprehension_forms = (comprehension: Comprehension, context: Context) ->
   const inside = context.inside_brackets()
   const element = expression_doc(comprehension.element, inside)
   const header =
@@ -527,7 +331,7 @@ export const loop_header = (
   join [word, text(' '), with_index, text(' in '), expression_doc(iterable, context)]
 
 # The names in the parentheses at the position, as the source has them.
-export const tuple_names = (open_at: Position, context: Context) ->
+const tuple_names = (open_at: Position, context: Context) ->
   const source = context.source
   const open = source.token_at(open_at) ? return text('()')
   const close = source.closing(open)
@@ -540,122 +344,3 @@ export const tuple_names = (open_at: Position, context: Context) ->
     when source.tokens[i].kind == IDENTIFIER
   ]
   join [token('(', open_at), separated(names, text(', ')), text(')')]
-
-export const function_doc = (function: FunctionLiteral, context: Context) ->
-  const weak = function.weak then text('weak ') else text('')
-  const head = join([weak, function_head(function, context)])
-  const body = function.body
-  # A block that holds a comment stays one, so that the comment stays in it.
-  const has_comments = context.source.block_has_comments(function.position)
-  const fits_line = body.length == 1 and is_inline(body[0], context) and not has_comments
-  # The body goes on the line where the head ends, which its parameters may have broken.
-  const on_line = fits_line then join([text(' '), inline_statement(body[0], context)])
-  return join([head, on_line ? join([text(' '), block_doc(body, context)])]) if context.in_brackets
-  const block = indent(join([line_feed(), block_doc(body, context)]))
-  if const line = on_line
-    join [head, rule(FUNCTION_BODIES, choice(line, block))]
-  else
-    join [head, block]
-
-# What comes before `->`: `-> body` has no parentheses where it needs none (see Functions without
-# parameters).
-const function_head = (function: FunctionLiteral, context: Context) ->
-  const has_signature = function.params.length > 0 or function.return_type != nil
-  const removed_result = removed_type('return', function.position, context)
-  if not has_signature and function.type_params.length == 0
-    return join([removed_result, rule(FUNCTIONS_WITHOUT_PARAMETERS, text('->'))])
-  const inside = context.inside_brackets()
-  const params = [parameter(param, inside) for param in function.params]
-  const type_params = type_parameters(function.type_params)
-  const result =
-    optional_doc(function.return_type, (type) -> join([text(': '), result_type_doc(type)]))
-  const list = bracketed(join([type_params, text('(')]), params, ')', nil)
-  join [list, removed_result, result, text(' ->')]
-
-const parameter = (param: Parameter, context: Context) ->
-  const parts = [token(param.name.name, param.name.position)]
-  parts.push removed_type('parameter', param.name.position, context)
-  parts.push join([text(': '), type_doc(type)]) if const type = param.type
-  parts.push join([text(' = '), expression_doc(value, context)]) if const value = param.default
-  const after_comment = context.source.comment_before(param.name.position)
-  Item after_comment, doc: join(parts), simple: param.default == nil
-
-const case_doc = (case_value: Case, context: Context) ->
-  const head =
-    if const subject = case_value.subject
-      join [keyword('case ', case_value.position), expression_doc(subject, context)]
-    else
-      keyword 'case', case_value.position
-  const arms = [arm_doc(arm, context) for arm in case_value.arms]
-  if const otherwise = case_value.otherwise
-    const at = otherwise[0].position
-    const head = position_before(at, 'else', context) ? at
-    arms.push join([word_before(at, 'else', context), arm_body(otherwise, head, context, ' ')])
-  join [head, indent(join([line_feed(), separated(arms, line_feed())]))]
-
-const arm_doc = (arm: CaseArm, context: Context) ->
-  const patterns =
-    separated([operand(pattern, context, COALESCE, false) for pattern in arm.patterns], text(', '))
-  const at = arm.patterns[0].position
-  const head = position_before(at, 'when', context) ? at
-  const body = arm_body(arm.body, head, context, ' then ')
-  join [word_before(at, 'when', context), text(' '), patterns, body]
-
-# An arm's body on its line where it is one statement that fits there, and otherwise in a block
-# (see Branches).
-# `head` is where the arm starts, whose block, if it holds a comment, stays one.
-const arm_body = (body: Statement[], head: Position, context: Context, joint: String) ->
-  const block = indent(join([line_feed(), block_doc(body, context)]))
-  const has_comments = context.source.block_has_comments(head)
-  return block if body.length != 1 or not is_inline(body[0], context) or has_comments
-  const on_line = join([text(joint), inline_statement(body[0], context)])
-  rule BRANCHES, choice(on_line, block)
-
-const try_doc = (try_value: Try, context: Context) ->
-  const block = (body: Statement[]) -> indent(join([line_feed(), block_doc(body, context)]))
-  const parts = [keyword('try', try_value.position), block(try_value.body)]
-  for clause in try_value.catches
-    const name = token(clause.name.name, clause.name.position)
-    const type = optional_doc(clause.type, (t) -> join([text(': '), type_doc(t)]))
-    parts.push(
-      join([line_feed(), keyword('catch ', clause.position), name, type, block(clause.body)])
-    )
-  if const body = try_value.finally_body
-    parts.push join([line_feed(), word_before(body[0].position, 'finally', context), block(body)])
-  join parts
-
-# A token at the position, if there is one, or the text alone.
-export const maybe_token = (value: String, at: Position?) ->
-  if const position = at
-    token value, position
-  else
-    text value
-
-# What `doc` makes of the value, or nothing.
-const optional_doc = <T>(value: T?, doc: (T) -> Doc): Doc ->
-  if const present = value
-    doc present
-  else
-    text ''
-
-# A keyword before the token at the position, past line ends and indentation, at its position in the
-# source if it is there, so that the comments before it go before it.
-export const word_before = (at: Position, word: String, context: Context) ->
-  if const position = position_before(at, word, context)
-    token word, position
-  else
-    text word
-
-# Where the keyword before the token at the position is, past line ends and indentation, if it is
-# there.
-const position_before = (at: Position, word: String, context: Context) ->
-  const source = context.source
-  const at_index = source.token_at(at) ? return nil
-  var index = at_index - 1
-  index -= 1 while index > 0 and is_layout(source.tokens[index].kind)
-  return nil if index < 0
-  const found = source.tokens[index]
-  source.spelling(found) == word then Position(line: found.line, column: found.column)
-
-const is_layout = (kind: TokenKind) ->
-  kind == NEWLINE or kind == LINE_BREAK or kind == INDENT or kind == DEDENT

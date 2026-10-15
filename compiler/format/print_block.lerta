@@ -1,0 +1,93 @@
+# The expressions that hold blocks: function literals, `case` and `try`.
+import Case, CaseArm, FunctionLiteral, Parameter, Position, Statement, Try from '../ast'
+import choice, indent, join, line_feed, rule, separated, text, token from './doc'
+import result_type_doc, type_doc, type_parameters from './print_type'
+import block_doc, inline_statement, is_inline from './print_statement'
+import BRANCHES, FUNCTION_BODIES, FUNCTIONS_WITHOUT_PARAMETERS from './rules'
+import COALESCE, expression_doc, operand from './print_expression'
+import
+  bracketed, Context, Item, keyword, optional_doc, position_before, removed_type, word_before
+from './printing'
+
+export const function_doc = (function: FunctionLiteral, context: Context) ->
+  const weak = function.weak then text('weak ') else text('')
+  const head = join([weak, function_head(function, context)])
+  const body = function.body
+  # A block that holds a comment stays one, so that the comment stays in it.
+  const has_comments = context.source.block_has_comments(function.position)
+  const fits_line = body.length == 1 and is_inline(body[0], context) and not has_comments
+  # The body goes on the line where the head ends, which its parameters may have broken.
+  const on_line = fits_line then join([text(' '), inline_statement(body[0], context)])
+  return join([head, on_line ? join([text(' '), block_doc(body, context)])]) if context.in_brackets
+  const block = indent(join([line_feed(), block_doc(body, context)]))
+  if const line = on_line
+    join [head, rule(FUNCTION_BODIES, choice(line, block))]
+  else
+    join [head, block]
+
+# What comes before `->`: `-> body` has no parentheses where it needs none (see Functions without
+# parameters).
+const function_head = (function: FunctionLiteral, context: Context) ->
+  const has_signature = function.params.length > 0 or function.return_type != nil
+  const removed_result = removed_type('return', function.position, context)
+  if not has_signature and function.type_params.length == 0
+    return join([removed_result, rule(FUNCTIONS_WITHOUT_PARAMETERS, text('->'))])
+  const inside = context.inside_brackets()
+  const params = [parameter(param, inside) for param in function.params]
+  const type_params = type_parameters(function.type_params)
+  const result =
+    optional_doc(function.return_type, (type) -> join([text(': '), result_type_doc(type)]))
+  const list = bracketed(join([type_params, text('(')]), params, ')', nil)
+  join [list, removed_result, result, text(' ->')]
+
+const parameter = (param: Parameter, context: Context) ->
+  const parts = [token(param.name.name, param.name.position)]
+  parts.push removed_type('parameter', param.name.position, context)
+  parts.push join([text(': '), type_doc(type)]) if const type = param.type
+  parts.push join([text(' = '), expression_doc(value, context)]) if const value = param.default
+  const after_comment = context.source.comment_before(param.name.position)
+  Item after_comment, doc: join(parts), simple: param.default == nil
+
+export const case_doc = (case_value: Case, context: Context) ->
+  const head =
+    if const subject = case_value.subject
+      join [keyword('case ', case_value.position), expression_doc(subject, context)]
+    else
+      keyword 'case', case_value.position
+  const arms = [arm_doc(arm, context) for arm in case_value.arms]
+  if const otherwise = case_value.otherwise
+    const at = otherwise[0].position
+    const head = position_before(at, 'else', context) ? at
+    arms.push join([word_before(at, 'else', context), arm_body(otherwise, head, context, ' ')])
+  join [head, indent(join([line_feed(), separated(arms, line_feed())]))]
+
+const arm_doc = (arm: CaseArm, context: Context) ->
+  const patterns =
+    separated([operand(pattern, context, COALESCE, false) for pattern in arm.patterns], text(', '))
+  const at = arm.patterns[0].position
+  const head = position_before(at, 'when', context) ? at
+  const body = arm_body(arm.body, head, context, ' then ')
+  join [word_before(at, 'when', context), text(' '), patterns, body]
+
+# An arm's body on its line where it is one statement that fits there, and otherwise in a block
+# (see Branches).
+# `head` is where the arm starts, whose block, if it holds a comment, stays one.
+const arm_body = (body: Statement[], head: Position, context: Context, joint: String) ->
+  const block = indent(join([line_feed(), block_doc(body, context)]))
+  const has_comments = context.source.block_has_comments(head)
+  return block if body.length != 1 or not is_inline(body[0], context) or has_comments
+  const on_line = join([text(joint), inline_statement(body[0], context)])
+  rule BRANCHES, choice(on_line, block)
+
+export const try_doc = (try_value: Try, context: Context) ->
+  const block = (body: Statement[]) -> indent(join([line_feed(), block_doc(body, context)]))
+  const parts = [keyword('try', try_value.position), block(try_value.body)]
+  for clause in try_value.catches
+    const name = token(clause.name.name, clause.name.position)
+    const type = optional_doc(clause.type, (t) -> join([text(': '), type_doc(t)]))
+    parts.push(
+      join([line_feed(), keyword('catch ', clause.position), name, type, block(clause.body)])
+    )
+  if const body = try_value.finally_body
+    parts.push join([line_feed(), word_before(body[0].position, 'finally', context), block(body)])
+  join parts

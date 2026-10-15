@@ -1,7 +1,11 @@
-# What the printers of the AST share: where they print, and how they lay out lists.
+# What the printers of the AST share: where they print, how they lay out lists, and the helpers for
+# the tokens that they place at their positions in the source.
 import Position from '../ast'
+import TokenKind from '../lexer/tokens'
 import annotation_key from './annotated'
-import breaking, choice, closing, Doc, indent, join, line_feed, rule, separated, text from './doc'
+import
+  breaking, choice, closing, Doc, indent, join, line_feed, rule, separated, text, token
+from './doc'
 import LONG_LISTS, TYPE_ANNOTATIONS from './rules'
 import SourceText from './source'
 
@@ -74,3 +78,35 @@ export const lines_of_items = (items: Item[]) ->
 export const removed_type = (kind: String, at: Position, context: Context) ->
   const removed = context.removed_types.contains(annotation_key(kind, at))
   removed then rule(TYPE_ANNOTATIONS, text('')) else text('')
+
+# A keyword at the position, where the source has it there.
+export const keyword = (word: String, at: Position) -> token(word, at)
+
+# What `doc` makes of the value, or nothing.
+export const optional_doc = <T>(value: T?, doc: (T) -> Doc): Doc ->
+  if const present = value
+    doc present
+  else
+    text ''
+
+# A keyword before the token at the position, past line ends and indentation, at its position in the
+# source if it is there, so that the comments before it go before it.
+export const word_before = (at: Position, word: String, context: Context) ->
+  if const position = position_before(at, word, context)
+    token word, position
+  else
+    text word
+
+# Where the keyword before the token at the position is, past line ends and indentation, if it is
+# there.
+export const position_before = (at: Position, word: String, context: Context) ->
+  const source = context.source
+  const at_index = source.token_at(at) ? return nil
+  var index = at_index - 1
+  index -= 1 while index > 0 and is_layout(source.tokens[index].kind)
+  return nil if index < 0
+  const found = source.tokens[index]
+  source.spelling(found) == word then Position(line: found.line, column: found.column)
+
+export const is_layout = (kind: TokenKind) ->
+  kind == NEWLINE or kind == LINE_BREAK or kind == INDENT or kind == DEDENT
