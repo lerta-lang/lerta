@@ -1,6 +1,6 @@
 # Language
 
-The planned syntax, control flow, types, operators and strings.
+The planned syntax, control flow, types and operators.
 
 ## Syntax
 
@@ -18,7 +18,7 @@ The planned syntax, control flow, types, operators and strings.
 - Narrowing a `var`.
 - A `Bool?` is not a condition, nor an operand of `and`, `or` and `not`: write `b == true` or `b != nil`. Now it holds when it is `true` ([the reference](../reference/control-flow.md)), so nil and `false` read alike.
 - Code after a call to a function returning `never` (`exit`) is unreachable.
-- Because `void` is not a type, generics cannot treat "returns a value / returns nothing" uniformly, and the standard library splits such functions, like `map` / `for_each`.
+- The error for a range outside a `for` names every place that takes one, the `in` of a comprehension too, not only `after 'in' of a 'for'`.
 
 ### Ranges
 
@@ -30,9 +30,9 @@ The planned syntax, control flow, types, operators and strings.
 
 ### Iterables
 
-- More methods of `Array` and `Iter<T>` besides `map`/`filter`/`take`/`any`/`all`/`find`.
+- More methods of `Array` and `Iter<T>` besides [those there are](../reference/types.md#iter).
 - A comprehension may have several `for`s, the later ones nested in the earlier: `[f(x, y) for x in xs for y in ys]`.
-- Later, `Iter<T>` moves to `std/builtins.lerta` as a generic class that holds such a value and the started flag, once generic classes exist, so that the compiler no longer builds `Iter`s in itself (see [internals](../internals.md#lazy-iterators)) and `take` is written in Lerta. Code that uses `Iter`s does not change.
+- Later, `Iter<T>` moves to `std/builtins.lerta` as a generic class that holds such a value and the started flag, once generic classes exist, so that the compiler no longer builds `Iter`s in itself (see [internals](../internals.md#iter)) and `take` is written in Lerta. Code that uses `Iter`s does not change.
 
 ## Types
 
@@ -78,6 +78,6 @@ Interfaces and generics are in [objects](objects.md).
 - `Binary` literals (`'...'.binary` can substitute).
 - Ranges without an end or a start, `20..` and `...n`, as SQL's `>= 20` and `< n` (Rust and Swift have them).
 - An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
-- How an Iter gives an item in one call rather than two, `has_next` and `next`, which each item takes now through a pointer to code (see [internals](../internals.md#lazy-iterators)): `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional, which its `{ i1, T }` in IR can be for the Iters the compiler generates, while an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`; or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
+- How an Iter gives an item in one call rather than two, `has_next` and `next`, which each item takes now through a pointer to code (see [internals](../internals.md#iter)): `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional, which its `{ i1, T }` in IR can be for the Iters the compiler generates, while an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`; or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
 - Whether `as` also widens a value to a type that it fits, as Swift's `nil as String?` or `x as Shape` does, for a value in the middle of an expression; a `const` with a type annotation does it now. It would sit beside the casts that may fail, `as T?` and `as T!`, which `as T` alone is not allowed to be.
 - Whether `Float` should hold infinities, as IEEE 754 does, which a division by zero gives (see [the reference](../reference/types.md#float)). For now, an operation that would give one throws; allowing them later breaks no program. JSON has no infinity either.

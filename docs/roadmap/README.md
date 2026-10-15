@@ -2,7 +2,7 @@
 
 This directory holds the planned design of what is not implemented yet, by area, in no order: each part is taken up when it is chosen. What is implemented is in [the reference](../reference/README.md).
 
-When a feature is implemented, its description moves to [the reference](../reference/README.md) and is removed from here.
+When a feature is implemented, its description moves to [the reference](../reference/README.md), or for the internal design to [the internals](../internals.md), and is removed from here.
 
 | File | Area |
 |---|---|
@@ -24,6 +24,7 @@ An order within one area is stated in its file.
 ## Follow-ups
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
+- The error for a type that cannot be extended lists the kinds that can (`compiler/checker/extend_declarations.lerta`) apart from `EXTENDABLE_KINDS`, and leaves out `Float`: derive the list from it.
 
 ## Open questions
 

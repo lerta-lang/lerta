@@ -40,14 +40,15 @@ The planned design of modules, FFI, the standard library and tools.
 - `x.to_fixed(digits)` of a `Float`: the value rounded to that many digits after the point, as JavaScript's `toFixed` writes it, for tables of numbers.
 - What the [test harness](#tools) needs of the programs it runs and the files it checks:
   - `run` gives the program an input on stdin, captures its stderr as it does its stdout, runs it in a given directory with variables of the environment changed or removed, tells an exit by a signal from an exit status, and can kill the program.
-  - In `std:io`: whether a path is a directory, a file's modification time, making a symbolic link, and copying a file.
+  - In `std:io`: a file's modification time, making a symbolic link, and copying a file.
 
 ## Tools
 
 - `.ll`/bitcode output from `lerta build`.
-- An optimized build keeps what it has optimized of each module in the cache, and optimizes again only the modules that have changed and those that inline from them (see [internals](../internals.md#per-module-output-planned)).
+- LLVM emits objects, and `lld` links them, on all platforms, through a C++ shim (see [internals](../internals.md#interface-with-llvm-planned)).
 - `lerta run` running directly with JIT, and `lerta repl`.
-- The rest of the style in [`lerta fmt`](../reference/compiler.md): reporting what it cannot fix, such as a name in the wrong case or a line it cannot bring within 100 columns; the rules that change the syntax tree, such as implicit return and the shorthand of named arguments; and, applied only when the file type-checks, the rules that need types, such as whether a `case` handles every member of its subject. The compiler reports only what concerns correctness, such as unused names. The formatter has no options, as it applies the style as written; settings wait for a configuration file (see [open questions](#open-questions)).
+- The rest of the style in [`lerta fmt`](../reference/compiler.md): reporting what it cannot fix, such as a name in the wrong case or a line it cannot bring within 100 columns; the rules that change the syntax tree, such as implicit return and the shorthand of named arguments; and, applied only when the file type-checks, the rules that need types, such as whether a `case` handles every member of its subject. The compiler reports only what concerns correctness, such as unused names.
+- `lerta fmt` reports each difference under the rule that it breaks, and each run of differing lines apart, as [the reference](../reference/compiler.md#fmt) states: now some are reported under another rule, as the shorthand of `{ x: x }` under **Layout**, and separate runs that differ may be reported as one. The formatter has no options, as it applies the style as written; settings wait for a configuration file (see [open questions](#open-questions)).
 - An LSP, `lerta lsp`, a server over stdin and stdout written in Lerta with `std:json` (see [standard library](#standard-library)). It reads a message's `method` and `id` first, then decodes it again as `Request<P>` (a generic struct of `id` and `params: P`) of the params that the method takes. It asks for the whole text on each change (`TextDocumentSyncKind.Full`), so that the changes it decodes are of one shape, and reads of `initialize` only the fields it uses. In order:
   1. Diagnostics, of the program whose entry module is the open file, reported as `lerta build` reports them, without generating code, when a file is opened or changed; and formatting, as `lerta fmt --fix` would write the file.
   2. Hover, giving a node's type, and going to a definition, which need the checker to find a node by its position.

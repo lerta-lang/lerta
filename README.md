@@ -4,7 +4,7 @@ Lerta is a statically typed, compiled language with CoffeeScript-like syntax and
 
 The name comes from the Esperanto word *lerta*, meaning "skillful", "deft" or "good at".
 
-The language as planned (for what works today, see `docs/reference/`):
+The language as planned (for what works today, see [the reference](docs/reference/README.md)):
 
 ```
 struct Circle
@@ -22,50 +22,103 @@ print "area: #{Circle(r: 2).area}"
 
 ## Status
 
-Early development. The compiler is written in Lerta (`compiler/`) and builds itself, starting from a seed, its own LLVM IR. What is left is in `docs/roadmap/`.
+Early development. The compiler is written in Lerta and builds itself, starting from a seed of LLVM IR (see [the bootstrap](docs/internals.md#bootstrap)). What is left is in [the roadmap](docs/roadmap/README.md).
 
-## Repository layout
+## Getting started
 
-| Path | Contents |
-|---|---|
-| `seed/` | The seed, the compiler's own LLVM IR, from which `make` builds it (see `docs/internals.md`) |
-| `test/` | Test scripts in TypeScript, for Node.js: `run.ts` the run tests (`node test/run.ts --target <triple>` builds them for another target), `cli.ts` the command line (its checks in `cli/`, the files of their invocations in `tests/cli/`), `runtime.ts` runtime checks no Lerta program can trigger; `lerta.ts` (where the repository and the compiler are), `report.ts` (running and reporting checks), `expect.ts` (what checks expect of the programs they run) and `target.ts` (`--target`) are shared by them |
-| `tools/` | `test_cross.sh`, which `make test-cross` runs, and the Docker images it uses in `docker/` |
-| `compiler/` | The compiler: `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, `checker/`, which checks them, and `codegen/`, which emits LLVM IR, behind the commands of `main.lerta` |
-| `runtime/` | C runtime |
-| `third_party/` | libuv, with its license, and `libuv.txt`, which says how the runtime builds it for each system. Its license notice goes with the compiler, and with the programs it builds (see `docs/reference/compiler.md`) |
-| `tests/` | Run tests: Lerta source and expected output |
-| `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks, each in Lerta, C, Swift and JavaScript, and `run.lerta`, which builds them and prints their times next to each other (`bin/lerta run bench/run.lerta`) |
-| `docs/` | Documentation (see below) |
-| `editors/` | Editor support for VS Code and Vim; see the README in each subdirectory to install it |
+Requirements: make and `clang` (LLVM). The programs run on Linux, macOS and Windows; the compiler runs on Linux and macOS, and builds Windows programs with mingw-w64 (`--target x86_64-w64-mingw32`).
+
+`make` builds the compiler, `bin/lerta` (see [Building and testing](#building-and-testing)). To compile a program:
+
+```
+bin/lerta build examples/hello.lerta [-o hello] [-O]
+```
+
+The commands of the compiler are in [the reference](docs/reference/compiler.md).
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
-| `docs/philosophy.md` | Design principles and the reasons behind major decisions |
-| `docs/reference/` | Language reference. It covers only what is implemented and grows with the implementation |
-| `docs/internals.md` | Implementation design: execution model, memory management, the LLVM interface |
-| `docs/roadmap/` | Planned design of what is not implemented yet, and open questions |
+| [docs/philosophy.md](docs/philosophy.md) | Design principles and the reasons behind major decisions |
+| [docs/reference/](docs/reference/README.md) | The external specification as implemented: the language, the standard modules and the commands, as a program and its user observe them. It grows with the implementation |
+| [docs/internals.md](docs/internals.md) | The internal specification as implemented: execution model, memory management, the LLVM interface, the runtime and the bootstrap |
+| [docs/roadmap/](docs/roadmap/README.md) | What is planned and not implemented yet, both external and internal, and open questions |
 
-## Building
+## Development
 
-Requirements: make and `clang` (LLVM); for the tests, also Node.js (22.18 or later in 22, or 23.6 or later, where type stripping is on by default) and, for their checks, pnpm. The programs run on Linux, macOS and Windows; the compiler and the tests run on Linux and macOS, and Windows programs are built with mingw-w64 (`--target x86_64-w64-mingw32`).
+### Repository layout
+
+| Path | Contents |
+|---|---|
+| `compiler/` | The compiler: `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, `checker/`, which checks them, `codegen/`, which emits LLVM IR, and `format/`, behind the commands of `main.lerta`; `minilerta.lerta` is the entry the seed is made from |
+| `std/` | The standard modules, in Lerta, which the compiler embeds |
+| `runtime/` | The C runtime, which the compiler embeds |
+| `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals.md#bootstrap)) |
+| `third_party/` | libuv, with its license, and `libuv.txt`, which says how the runtime builds it for each system. Its license notice goes with the compiler, and with the programs it builds (see [the reference](docs/reference/compiler.md)) |
+| `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs, and the Docker images it uses in `docker/` |
+| `test/` | The test scripts (see [Tests](#tests)) |
+| `tests/` | Run tests: Lerta sources and their expected output; also the files of the CLI checks (`tests/cli/`) and the formatter cases (`tests/format/`) |
+| `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
+| `bench/` | Benchmarks, each in Lerta, C, Swift and JavaScript, and `run.lerta`, which builds them and prints their times next to each other (`bin/lerta run bench/run.lerta`) |
+| `editors/` | Editor support for VS Code and Vim; see the README in each subdirectory to install it |
+
+### Building and testing
+
+The tests run on Linux and macOS, and also need Node.js (22.18 or later in 22, or 23.6 or later, where type stripping is on by default) and, for `make check`, pnpm.
 
 ```
 make                   # bin/lerta, the compiler, built from the seed
 make TARGET=<triple>   # bin/lerta-<triple>, the compiler for another target
 make check-bootstrap   # the compiler builds itself to the same IR (TARGET builds the stages for it)
-make seed              # rewrites the seed, only when needed (see docs/internals.md)
+make seed              # rewrites the seed, only when needed (see the bootstrap)
 make test              # builds bin/lerta, then runs the tests and check-bootstrap, on the host only
 make test-cross        # the tests for every environment but the host's own (see below)
 make check             # the code in the style (lerta fmt), and pnpm check in test/ (after pnpm install)
 make clean
 ```
 
-`make` rebuilds only when the seed, `compiler/`, `std/`, `runtime/` or `tools/embed.lerta` change. The bootstrap and the seed are described in [docs/internals.md](docs/internals.md#bootstrap). The tests run at a low priority (`nice`), with Node.js running the TypeScript directly, so there is no build step. `make test-cross` runs the tests as 32-bit Linux programs and as 64-bit and 32-bit Windows programs (mingw-w64 and Wine), with the bootstrap through a compiler for each, each on the host if it can run them; on a host other than Linux, it runs `make test` on Linux in Docker too. The targets run at the same time, so their outputs come one after another once all are done. What the host cannot run goes to Docker when Docker runs it without emulation, which for the 32-bit and the Windows programs takes an x86-64 host. It ends with what ran and what was skipped, and why: on an Apple silicon Mac, for instance, it runs Linux in Docker, and Windows only with mingw-w64, lld and Wine installed, and its bootstrap only with a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s) on Wine's `PATH` (`WINEPATH`) too, and skips 32-bit Linux. To compile a program (see [the compiler](docs/reference/compiler.md)):
+`make` rebuilds only when what the compiler is built from changes: the seed, `compiler/`, `std/`, `runtime/`, `third_party/libuv` or `tools/embed.lerta`.
 
-```
-bin/lerta build examples/hello.lerta [-o hello] [-O]
-```
+`make test-cross` runs the tests as 32-bit Linux programs and as 64-bit and 32-bit Windows programs (mingw-w64 and Wine), with the bootstrap through a compiler for each. On a host other than Linux, it also runs `make test` on Linux in Docker.
+
+- Each runs on the host if the host can run it, and otherwise in Docker when Docker runs it without emulation, which for the 32-bit and the Windows programs takes an x86-64 host.
+- The targets run at the same time, so their outputs come one after another once all are done. It ends with what ran and what was skipped, and why.
+- On an Apple silicon Mac, for instance, it runs Linux in Docker and skips 32-bit Linux. It runs Windows only with mingw-w64, lld and Wine installed, and the Windows bootstrap only with a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s) on Wine's `PATH` (`WINEPATH`) too.
+
+### Tests
+
+Every language feature gets run tests in `tests/`: a Lerta source file and its expected output, as described at the top of `test/run.ts`. Programs in `examples/` are run as tests too. The test scripts, in `test/`, are TypeScript that Node.js runs directly, with no build step, at a low priority (`nice`):
+
+- `run.ts`: the run tests (`node test/run.ts --target <triple>` builds them for another target)
+- `cli.ts`: the command line (its checks in `cli/`)
+- `runtime.ts`: runtime checks that no Lerta program can trigger
+- `format.ts`: the formatter, whose cases are the exact specification of the style
+- Shared by them: `lerta.ts` (where the repository and the compiler are), `report.ts` (running and reporting checks), `expect.ts` (what checks expect of the programs they run), `target.ts` (`--target`) and `wine.ts` (running Windows programs under Wine)
+
+### Changing the language
+
+- Implement a feature as [the roadmap](docs/roadmap/README.md) specifies it. When it is implemented, move its description to [the reference](docs/reference/README.md) or [the internals](docs/internals.md) and remove it from the roadmap.
+- When a design question is not covered, apply [the principles](docs/philosophy.md) in priority order.
+- Follow [the runtime rules](docs/internals.md#runtime-rules), and [the bootstrap](docs/internals.md#bootstrap) for which features the compiler may use.
+
+### Coding style
+
+Simplicity of the result comes first (KISS). Simplicity of the process does not matter.
+
+Unless it conflicts with KISS:
+
+- **DRY.** No duplicated logic.
+- **Separation of concerns.** One module, one responsibility. Split long functions and classes.
+- **Consistency.** Follow the naming and structure that already exist.
+- **Least surprise.**
+
+Let the code speak instead of relying on comments:
+
+- Name things so that **what** they do is clear.
+- Structure logic so that **how** it works is clear. Break complex parts into named intermediate values.
+- Comment only the **why** that the code cannot show.
+
+Documentation follows the same rules: no redundancy, no duplication, and a clear structure. State each fact in one place and point to it from elsewhere.
+
+The style of Lerta code is in [the reference](docs/reference/style.md).

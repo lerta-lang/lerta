@@ -5,17 +5,17 @@ import read_file, stdout from 'std:io'
 import argv, exit from 'std:process'
 ```
 
-- A file is a module. `import a, b from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import a as c from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. The names are separated by commas, and the last one, which no comma follows, by `from`, so `from` itself can be imported. Imports are written at the top level. An imported name that is never used is a warning.
+- A file is a module. `import a, b from 'module'` makes the named exports of a module available in the whole module, functions and methods included. `import a as c from 'module'` makes `a` available as `c`, so that two modules' exports of the same name can be imported together; one export may be imported under several names. `as` is not a keyword. The names are separated by commas, and the last one, which no comma follows, by `from`, so `from` itself can be imported. Imports are written at the top level. An imported name that is never used is a warning (see [unused names](errors.md#unused-names)).
 - The names may also be an indented block on the lines below `import`, separated as the items of a [bracketless block](syntax.md#bracketless-blocks), with `from 'module'` on the line after it:
   ```
   import
-    ArrayLiteral, Assignment,
+    ArrayLiteral, Assignment, BinaryOperation, Call, Conditional, FunctionLiteral, Identifier,
     Await as wait
   from './ast'
   ```
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)); `std:io`, which `std:builtins` imports, cannot use the builtins, nor, since they need `Stringable` and `Iterable`, interpolation or `for` over an Iterable that is no array, `Binary` or `Iter`. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
-- Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. A top-level value read through a function is checked at run time, so that functions can be declared in any order.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)), which imports `std:io`; what `std:io` therefore cannot use is in [internals](../internals.md#builtins). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
+- Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. Functions can be declared in any order (see [top-level values](functions.md#top-level-values)).
 
 ## Exports
 
@@ -24,15 +24,19 @@ export struct Point
   x: Int
   y: Int
 
+export struct Circle
+  center: Point
+  radius: Int
+
 export type Shape = Point | Circle
 
-export const origin = (): Point -> Point(x: 0, y: 0)
+export const origin = -> Point(x: 0, y: 0)
 export const unit = 1
 ```
 
-- `export` before a top-level `const` (a function or a value), class, struct, enum, interface or type alias makes it importable. An imported value cannot be assigned, and is narrowed as a `const` is (see [control flow](control-flow.md#if-and-while)). An exported value is not warned about if its module does not use it. Names are local to their module: other names cannot be imported, and different modules may use the same name. Classes, structs and enums of the same name in different modules are different types; where a message would not tell them apart, it names their modules.
-- A program runs the top-level code of its entry module from top to bottom; there is no `main`. Before it, that of every module it imports, directly or not, runs once, each after the modules it imports, except those that import it back; a module's top-level code that [awaits](functions.md#functions-that-await) is done only once it has stopped waiting.
-- Imports can be circular. The top-level code of a cycle of modules runs as that of one module would: that of its members one after another, in the order above, so in a cycle that the entry module enters at `a`, where `a` imports `b` and `b` imports `a`, `b` runs first. Within the cycle, the rules of one module's top-level values carry over (see [functions](functions.md)): functions can be used in any order, an inferred type is worked out where it is needed, and a value read through a function before it is initialized throws. The top-level code of a module cannot read a value of a module of its cycle that runs after it, nor call a function whose return type is inferred, or construct an object whose field type is inferred, that does: the value's type is not known yet. Functions whose return types are inferred cannot call each other across modules either (`'f' is recursive, so its return type must be written`). Type aliases cannot refer to each other in a cycle across modules, as within one. An extend is still in effect only in its module and those that import it directly.
+- `export` before a top-level `const` (a function or a value), class, struct, enum, interface or type alias makes it importable. An imported value cannot be assigned, and is narrowed as a `const` is (see [control flow](control-flow.md#if-and-while)). An exported value is not warned about if its module does not use it (see [unused names](errors.md#unused-names)). Names are local to their module: other names cannot be imported, and different modules may use the same name. Classes, structs and enums of the same name in different modules are different types; where a message would not tell them apart, it names their modules.
+- A program runs the top-level code of its entry module from top to bottom; there is no `main`. Before it, that of every module it imports, directly or not, runs once, each after the modules it imports, except those that import it back; a module's top-level code that [awaits](functions.md#functions-that-await) is done only once it has stopped waiting. At the end of the program, the top-level values are released in the reverse order of their initialization, so that a `deinit` that runs then can still use those initialized before.
+- Imports can be circular. The top-level code of a cycle of modules runs as that of one module would: that of its members one after another, in the order above, so in a cycle that the entry module enters at `a`, where `a` imports `b` and `b` imports `a`, `b` runs first. Within the cycle, the rules of one module's top-level values carry over (see [top-level values](functions.md#top-level-values)): functions can be used in any order, an inferred type is worked out where it is needed, and a value read through a function before it is initialized throws. The top-level code of a module cannot read a value of a module of its cycle that runs after it, nor call a function whose return type is inferred, or construct an object whose field type is inferred, that does: the value's type is not known yet. Functions whose return types are inferred cannot call each other across modules either (`'f' is recursive, so its return type must be written`). Type aliases cannot refer to each other in a cycle across modules, as within one. A cycle does not widen where an extend is in effect (see [objects](objects.md#extend)).
 
 ## std:io
 
@@ -50,7 +54,7 @@ export const unit = 1
 | `rename(from: String, to: String)` | Moves a file or a directory, replacing a file at `to`; on POSIX systems, the replacement is atomic. A directory also replaces an empty directory at `to` on POSIX systems, but not on Windows. Throws `cannot rename: <from>` on failure, including when `to` is a directory that is not empty, or a path holds a NUL byte. |
 | `stdout`, `stderr` | `Writer`s. `stderr` is not buffered, and neither is `stdout` when it is a terminal. Otherwise `stdout` is buffered, and flushed at exit and before each write to `stderr`, so that the two keep their order. |
 
-`Writer`, exported too, is a struct of a file descriptor with the methods `write(s: String)`, `write_binary(b: Binary)` and `flush()`; a `Writer` of a file descriptor other than 1 (stdout) or 2 (stderr) throws when it is used. `print` writes to `stdout` too.
+`Writer`, exported too, is a struct of a file descriptor with the methods `write(s: String)`, `write_binary(b: Binary)` and `flush()`; a `Writer` of a file descriptor other than 1 (stdout) or 2 (stderr) throws when it is used.
 
 ## std:process
 

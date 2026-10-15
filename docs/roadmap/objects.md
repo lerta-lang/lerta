@@ -6,8 +6,7 @@ The planned design of classes and structs, interfaces, generics and equality.
 
 - A function literal member declared `var`, `var on_hover = -> log 'hover'`, is a function field held per instance, so that it can be replaced (class only). A `const` one (the default) is a method. The difference in representation follows from whether reassignment is allowed.
 - Constructing a class or struct, `Circle(r: 1)`, is also a call to a constructor that takes an anonymous struct with the type-only fields.
-- `deinit` is synchronous only (no `await`).
-- Definite assignment analysis: a class cannot leak `@` before all its fields are initialized, beyond the rule for initializers (see [the reference](../reference/objects.md)).
+- Definite assignment analysis in place of the rule for field initializers, which may read only the fields set before them through `@` ([the reference](../reference/objects.md#classes-and-structs)): `@` still cannot leak before all the fields are initialized, but an initializer may use it otherwise, as by calling a method that reads only those fields.
 - Classes, structs, enums and type aliases declared inside a function, visible in its scope. Their methods and initializers do not see the function's locals, so that a type does not become a closure; `export`, `import`, `extend` and `extern` stay at the top level, where a module's names and the reach of its extends are decided.
 
 ## Interfaces

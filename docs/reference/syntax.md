@@ -32,7 +32,7 @@ const total = (1 +
 
 - Lines inside brackets, `(` `[` `{`, continue the line that opened them, whatever their indentation, until the brackets close. The `<` `>` of type arguments are not brackets.
 - In a list (the brackets of an array or a map, the parentheses of a call's arguments or of a function's parameters), a line end separates items as a comma does. Items on one line are separated by commas, and a comma may also end a line, separating it from the next as the line end alone would. An item must follow a comma, so the last item does not end with one.
-- In grouping parentheses and an index, `xs[i]`, lines simply continue the expression.
+- In grouping parentheses and an index, `xs[i]`, lines simply continue the expression; a line there cannot start with `.` or `?.` to continue it with a member (see [statements](#statements)).
 - So far, an item inside brackets cannot open an indented block (a `case`, a function body).
 
 ## Bracketless blocks
@@ -54,7 +54,8 @@ draw 'p'
 ## Declarations and assignment
 
 - `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Int[] = []`).
-- `name = value` assigns to a `var`, and `xs[i] = value` to an item of an array. `+=` `-=` `*=` `/=` `%=` combine an `Int` `var` with an `Int` value, and `+=` also appends a `String` to a `String`.
+- `name = value` assigns to a `var`, `xs[i] = value` to an item of an array, `m[k] = value` to a value of a map and `c.name = value` to a field of a class that is not `const` (see [mutability](objects.md#classes-and-structs)).
+- `+=` `-=` `*=` `/=` `%=` combine a target with a value as their binary operator does, for the types it takes (`Int`, `Byte` and `Float`; see [types](types.md)), and `+=` also appends a `String` to a `String`. A map's value takes none of them (see [Map](types.md#map)).
 - An assignment is a statement, not an expression.
 - Why: there is no `let` and no function declaration (`def`), so that declarations look the same at the top level, inside functions and in type bodies, for values and for functions, which avoids the CoffeeScript ambiguity between declaration and assignment. `const` only makes the binding immutable, since immutability of the contents is handled by types.
 
@@ -68,7 +69,7 @@ draw 'p'
     'b'
   .join('')
   ```
-  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `const g = (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead. After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with named arguments in a block, the line is an error.
+  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `const g = (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead (see [lines inside brackets](#lines-inside-brackets)). After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with named arguments in a block, the line is an error.
 
 ## Calls
 
@@ -94,4 +95,11 @@ From weakest: `then`/`else` < `?` (nil coalescing) < `or` < `and` < prefix `not`
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`). `then`/`else` and `?` are right-associative: `a then x else b then y else z` is `a then x else (b then y else z)`.
 - Comparisons, `is` and `as` included, cannot be chained: `a < b < c` is a syntax error; use parentheses, as in `(x as T?) == nil`.
 - `as` binds as comparisons do, weaker than `.`: a member of a cast is read as `(x as T!).name`.
-- `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `break` `continue` `return` `case` `then` `class` `struct` `throw` `import` `export` `extern` `extend` `enum` `interface` `try` `catch` `finally` `yield` `await` are keywords and cannot be used as names. `from`, `pass`, `in` and `when` are not: `in` and `when` act as keywords only after the variables of a `for` (`for x in xs when c`, also in comprehensions) and at the start of a `case` arm, so `for x in in` reads a variable `in`.
+- `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `break` `continue` `return` `case` `then` `class` `struct` `throw` `import` `export` `extern` `extend` `enum` `interface` `try` `catch` `finally` `yield` `await` are keywords and cannot be used as names. These words are not keywords, and act as one only where they are written so, staying usable as names elsewhere:
+  - `in` and `when` after the variables of a `for` (`for x in xs when c`, also in comprehensions) and `when` at the start of a `case` arm, so `for x in in` reads a variable `in`;
+  - `pass` alone as an arm's body (see [case](control-flow.md#case-without-a-subject));
+  - `is` and `as` after an operand (see [unions](types.md#unions)), and `as` in an [import](modules.md) or an [extern](functions.md#c-functions);
+  - `from` in an [import](modules.md);
+  - `type` before an alias's name and `=` (see [unions](types.md#unions));
+  - `default` before an operand in a field (see [members](objects.md#classes-and-structs)): `default -1` is a default, and `default - 1` a subtraction;
+  - `weak` before a function literal, a field, `const` or `var` (see [weak function literals](functions.md#function-literals) and [weak fields and locals](objects.md#classes-and-structs)), and `weak!` before a field; a function named `weak` is called with parentheses.

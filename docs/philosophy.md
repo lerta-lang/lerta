@@ -1,6 +1,6 @@
 # Philosophy
 
-Lerta is a safe, single-threaded, event-driven language. It targets both native executables and scripts.
+Lerta is a safe, single-threaded, event-driven language. It targets both native executables and [scripts](roadmap/programs.md#tools).
 
 Lerta's stance is that **cost is visible**: what a line does shows in it, beyond [reference counting](internals.md#memory-management) and [exception checks](internals.md#exceptions).
 
@@ -16,6 +16,7 @@ In priority order:
    - Intuitive to read and to write.
 3. **Fewest rules**
    - Keep the language specification and grammar rules to the necessary minimum.
+   - So `void` is not a type: generics cannot treat returning a value and returning nothing alike, and where both are needed, the standard library needs a function of each kind, as a `for_each` would be beside `map`.
 4. **Punctuation in moderation**
    - Too much punctuation is noise and makes code hard to read.
    - But well-placed punctuation reads better than none at all.

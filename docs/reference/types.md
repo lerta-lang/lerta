@@ -1,5 +1,9 @@
 # Types
 
+Type names: `Int`, `Byte`, `Float`, `Bool`, `String`, `Binary`, `T[]`, `Map<K, V>`, `Iter<T>`, `Promise<T>` and `Promise`, `T?`, unions `A | B`, function types, anonymous struct types such as `{ x: Int }`, tuple types such as `(Int, String)`, the names of classes, structs, enums, interfaces and `type` aliases, `Self` in an [interface](objects.md#interfaces) or an extend of one, the type parameters of a generic function or extend in it, and `void` and `never` as a return type. How they are written is in [the syntax](syntax.md#calls).
+
+The methods of the builtin types are listed in [builtins](builtins.md#methods-of-the-builtin-types). Methods can only be called (see [function values](functions.md#function-values)).
+
 ## Int
 
 - `Int` is a signed 64-bit integer.
@@ -73,7 +77,7 @@ if const n = '42'.parse_int()
 - `x ? fallback` is `x` without nil, or `fallback`, which has that type, if `x` is nil. The fallback is evaluated only then. `?` binds weaker than every other binary operator, and `a ? b ? c` is `a ? (b ? c)`.
 - `x == nil` and `x != nil` test an optional value. `==` and `!=` also compare an optional value with another of its type, or with a value of its type without nil, wherever they compare the values themselves: two nils are equal, nil and a value are not, and two values compare as usual. An expected enum reaches the other operand through the optional (`kind == '('` for a `kind: TokenKind?`). The ordering operators (`<` and so on) do not take optional values.
 - An optional value can be a condition (see [control flow](control-flow.md#if-and-while)).
-- An array cannot hold optional `Int`, `Byte` or `Bool` values yet; optional references are fine (`String?[]`).
+- An array cannot hold optional `Int`, `Byte`, `Float` or `Bool` values yet; optional references are fine (`String?[]`).
 - `s.parse_int()` gives the `Int` that a `String` of decimal digits, with an optional leading `-`, stands for, or nil if it is anything else or does not fit in an `Int`. `s.parse_float()` gives the nearest `Float` to a decimal number, with an optional leading `-`, a fraction after `.` and an exponent after `e` or `E` (`'1.5'`, `'-2'`, `'3e-4'`), or nil if it is anything else or too large to be finite; one too small rounds to zero (`'1e-999'` gives `0.0`).
 
 ## Array
@@ -151,10 +155,6 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 
 - `Promise<T>` is the result of a [function that awaits](functions.md#functions-that-await): once settled, it holds a value of type `T`, or an exception, which `await` gives or throws. A `Promise` without a type argument holds no value: `void` is no type of values. It has no methods, and cannot be compared, printed or a member of a union.
 
-## Methods
-
-The methods of the builtin types are listed in [builtins](builtins.md#methods-of-the-builtin-types). A method must be called: `x.to_string` without `()` is an error.
-
 ## Unions
 
 ```
@@ -171,7 +171,7 @@ type Expr = Num | Add | Mul
   ```
 - A member's value fits where the union is expected. A field that every member declares, with the same type in each, can be read from the union: `shape.name` reads the field of whichever member the value is, and `shape.area()` calls a field that holds a function. It can be assigned through the union, `shape.name = n` (and `+=` and so on), when every member is a class whose field is not `const`. Other fields and methods cannot be used directly: branch on its type first.
 - `x is T` tells whether a union value holds a `T`; for an optional union value, whether it is not nil and holds a `T`. Like nil tests, it narrows a `const`, a parameter or a loop variable to `T` where it holds (see [control flow](control-flow.md#if-and-while)).
-- `x as T?` gives a union value as a `T` if it holds one, and nil otherwise; for an optional union value, nil gives nil. `x as T!` gives it as a `T`, and throws `failed cast` otherwise. `x as T` alone is an error, so that a cast shows where it is written whether it fails into nil or throws. To take a narrowed value under another name, write `if const c = x as Circle?`. Like `is`, `as` is not a keyword and does not chain with comparisons.
+- `x as T?` gives a union value as a `T` if it holds one, and nil otherwise; for an optional union value, nil gives nil. `x as T!` gives it as a `T`, and throws `failed cast` otherwise. `x as T` alone is an error, so that a cast shows where it is written whether it fails into nil or throws. To take a narrowed value under another name, write `if const c = x as Circle?`. `is` and `as` are not [keywords](syntax.md#operators), and do not chain with comparisons.
 - There is no unchecked cast.
 - In `x is T`, `x as T?`, `x as T!` and the patterns of a `case`, `T` may also be a type alias of a union of some of the members: `x is T` then tells whether `x` holds one of them.
 

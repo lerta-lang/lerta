@@ -24,14 +24,14 @@ finally
   | Type | Thrown by |
   |---|---|
   | `IndexError` | an index or a slice out of range, `pop` of an empty array |
-  | `ArithmeticError` | integer overflow, division by zero, `to_byte` of an Int out of 0 to 255 |
+  | `ArithmeticError` | integer overflow, float overflow, division by zero, `to_byte` of an Int out of 0 to 255, `to_int` of a Float that does not fit in an Int |
   | `NilError` | `x!` of nil |
   | `CastError` | `x as T!` of a value of another type |
   | `IterError` | a second traversal of an `Iter`, `next` past its end, reading an `Iter` from within its own function |
   | `WeakError` | a `weak!` field whose object is gone |
   | `IOError` | a file that cannot be read or written, a command that cannot be run |
   | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, `sleep(-1)`, and `zip` of Iterables of different lengths |
-  | `InitError` | a top-level value used before it is initialized (see [functions](functions.md)) |
+  | `InitError` | a top-level value used before it is initialized (see [top-level values](functions.md#top-level-values)) |
 - A `String` cannot be thrown: `throw` takes an `Error`, so that a `catch` can tell errors apart by type.
 - `try` runs its block. An exception thrown there, in it or in a function it calls, goes to its `catch` clauses, tried in order: `catch e: T` takes an exception whose type is `T`, or a member of the union `T`, as `is` tells, and its block sees it as `e`, of that type; `catch e` takes any, `e` being an `Error`. A type that a catch names must be a class or struct, or a union of them, that satisfies `Error`. An exception that no catch takes goes on, as from where the `try` is.
 - `finally` and its block, after the catches, run after the try block or the catch that ran, and before an exception goes on, the one that no catch takes or that a catch throws. A `try` has at least one `catch` or a `finally`. `return`, `break` and `continue` cannot leave a `try` that has a `finally` yet.
@@ -49,14 +49,14 @@ A panic prints its message and a newline to stderr, after flushing stdout, and a
 These apply when a value in statement position is not captured.
 
 - A literal, a name, an operator expression, a field or an index (`'a'`, `x`, `1 + 2`, `x == 1`, `p.x`, `xs[0]`) → error. An unused comparison often means a mistyped assignment.
-- A function value itself (`print`) → error "to call it, write `print()`".
+- A function value itself (`f` after `const f = () -> 1`) → error "function value is unused; to call it, write `f()`".
 - An [`Iter`](types.md#iter) (`xs.map(f)`) → error "an Iter does nothing until it is consumed".
 - A [`Promise`](functions.md#functions-that-await) (`fetch('a')`) → error "a Promise must be awaited".
 - A call, an `await`, or an expression with no value such as a `case` whose arms are calls to `void` functions → allowed.
 
 ## Unused names
 
-A `const` or `var` that is never read (assigning to it does not count) produces a warning, unless its name starts with `_`. A top-level one may be read by any function, so it is warned about only when the whole module compiles.
+A `const` or `var` that is never read (assigning to it does not count) produces a warning, `'x' is never used`, unless its name starts with `_`. A top-level one may be read by any function, so it is warned about only when the whole module compiles. An exported one is not warned about, since another module may read it. An imported name that the module never uses produces a warning too, `'sleep' is imported but never used`.
 
 ## Cycles
 

@@ -2,7 +2,7 @@
 
 The planned design of `String` and `Binary` beyond [the reference](../reference/types.md#string), and the open questions about their operations.
 
-## Planned
+## Operations and representation
 
 - A separate iterator for graphemes, besides the code points that a `String` gives (see [the reference](../reference/types.md#string)).
 - The code points are `UInt32` values instead of `Int`s once that type exists (see [numeric types](language.md#numeric-types)).
@@ -19,15 +19,7 @@ The planned design of `String` and `Binary` beyond [the reference](../reference/
 
 ## What the compiler needs
 
-A survey of the compiler and std, where most text handling is in the lexer, found these gaps (sites by count):
-
-- Finding a byte or a part (about 5): the lexer's own `SourceLine.index_of`, `dirname` in `compiler/paths.lerta`, and `split` used only to find a part in `compiler/codegen/runtime_calls.lerta`. std's `split`, `starts_with` and `ends_with` scan with `occurs_at`.
-- Taking part by byte positions (about 12): mostly the lexer's `line.text(i, j)`, which is `bytes.text(i, j)!`; elsewhere, dropping a first or last character, which `without_prefix` and `without_suffix` already do.
-- Building piecewise (about 6): pushing onto a `Byte[]`, then `to_binary().text()!`, in quoting, IR strings and string literals.
-- Numbers (about 6): `hex` in `compiler/hex.lerta`, and hexadecimal parsing by hand in the parser and for `\u{...}`, which `Int.to_string(radix)` and `parse_int(radix)` would serve.
-- Trimming and case conversion are not used; `replace` once.
-
-Positions fall in two kinds: the lexer needs byte offsets, in hot loops over a line's bytes, for columns, and to skip what is not UTF-8; elsewhere no position is wanted, only operations such as "before the last `/`" or "split once at `' @'`".
+In the compiler and std, the positions that text handling needs fall in two kinds: the lexer, where most of it is, needs byte offsets, in hot loops over a line's bytes, for columns, and to skip what is not UTF-8; elsewhere no position is wanted, only operations such as "before the last `/`" or "split once at `' @'`".
 
 ## Open questions
 
