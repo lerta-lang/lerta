@@ -1,10 +1,9 @@
 // Built programs run with arguments and an environment that the run tests cannot give them.
-import { spawnSync } from 'node:child_process'
 import { basename, join } from 'node:path'
 import { compiler, root_dir } from '../lerta.ts'
 import { expect_success, lines } from '../expect.ts'
 import type { Check } from '../report.ts'
-import { env_with, hello, shorten_path, work_dir } from './common.ts'
+import { env_with, hello, run_command, shorten_path, work_dir } from './common.ts'
 
 // Runs a built program with arguments of the given bytes. Node passes arguments as UTF-8, so the
 // shell makes them.
@@ -12,7 +11,7 @@ const run_with_bytes = (executable: string, args: number[][]) => {
   const words = args.map(
     (bytes) => `"$(printf '${bytes.map((b) => `\\${b.toString(8)}`).join('')}')"`,
   )
-  return spawnSync('sh', ['-c', `"$0" ${words.join(' ')}`, executable], { encoding: 'utf8' })
+  return run_command('sh', ['-c', `"$0" ${words.join(' ')}`, executable])
 }
 
 const invalid_argument = 'a command-line argument is not valid UTF-8\n'
@@ -43,15 +42,15 @@ const utf8_cases: [number[], boolean][] = [
 
 // A source, relative to the repository, and whether the program built from it behaves as it
 // should.
-type ProgramCase = { source: string; behaves: (executable: string) => boolean }
+type ProgramCase = { source: string; behaves: (executable: string) => Promise<boolean> }
 
 const program_cases: ProgramCase[] = [
   {
     // A built program gets its command-line arguments, which must be valid UTF-8.
     source: 'examples/wc.lerta',
-    behaves: (executable) => {
-      const counted = spawnSync(executable, [hello], { encoding: 'utf8' })
-      const invalid = run_with_bytes(executable, [[0xff]])
+    behaves: async (executable) => {
+      const counted = await run_command(executable, [hello])
+      const invalid = await run_with_bytes(executable, [[0xff]])
       return (
         counted.stdout === `1 3 21 ${hello}\n` &&
         invalid.status === 1 &&
@@ -62,16 +61,16 @@ const program_cases: ProgramCase[] = [
   {
     // std:process reads the arguments as it runs, even for a program that only uses `exit`.
     source: 'tests/io/lib/exit_only.lerta',
-    behaves: (executable) => {
-      const invalid = run_with_bytes(executable, [[0xff]])
+    behaves: async (executable) => {
+      const invalid = await run_with_bytes(executable, [[0xff]])
       return invalid.status === 1 && invalid.stderr === invalid_argument
     },
   },
   {
     // text() of each argument, which the program reads without decoding it.
     source: 'tests/binary/lib/decode_arguments.lerta',
-    behaves: (executable) => {
-      const decoded = run_with_bytes(
+    behaves: async (executable) => {
+      const decoded = await run_with_bytes(
         executable,
         utf8_cases.map(([bytes]) => bytes),
       )
@@ -82,15 +81,15 @@ const program_cases: ProgramCase[] = [
     // env of a value that is not UTF-8 throws; Node passes the environment as UTF-8, so the shell
     // makes the value.
     source: 'tests/process/lib/print_env.lerta',
-    behaves: (executable) => {
+    behaves: async (executable) => {
       const script = `LERTA_TEST_VALUE="$(printf '\\377')" "$0"`
-      const ran = spawnSync('sh', ['-c', script, executable], { encoding: 'utf8' })
+      const ran = await run_command('sh', ['-c', script, executable])
       const message = 'the environment variable LERTA_TEST_VALUE is not valid UTF-8\n'
       // A variable set to nothing is not nil.
       const env = env_with({ LERTA_TEST_VALUE: '' })
-      const empty = spawnSync(executable, { env, encoding: 'utf8' })
+      const empty = await run_command(executable, [], { env })
       const set = env_with({ LERTA_TEST_VALUE: 'héllo' })
-      const value = spawnSync(executable, { env: set, encoding: 'utf8' })
+      const value = await run_command(executable, [], { env: set })
       return (
         ran.status === 1 &&
         ran.stderr === message &&
@@ -102,8 +101,8 @@ const program_cases: ProgramCase[] = [
   {
     // run captures through a pipe that may be fd 1, when the program starts with stdout closed.
     source: 'tests/process/lib/capture_without_stdout.lerta',
-    behaves: (executable) => {
-      const ran = spawnSync('sh', ['-c', '"$0" >&-', executable], { encoding: 'utf8' })
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', '"$0" >&-', executable])
       return ran.status === 0 && ran.stderr === 'true\n'
     },
   },
@@ -114,10 +113,10 @@ export const program_checks: Check[] = program_cases.map(({ source, behaves }) =
   const args = ['build', join(root_dir, source), '-o', executable]
   return {
     name: `lerta ${args.map(shorten_path).join(' ')} and run it`,
-    run: () => {
-      const built = spawnSync(compiler, args, { encoding: 'utf8' })
+    run: async () => {
+      const built = await run_command(compiler, args)
       if (built.status !== 0) return expect_success('build', built)
-      return behaves(executable) ? [] : ['the program does not behave as it should']
+      return (await behaves(executable)) ? [] : ['the program does not behave as it should']
     },
   }
 })

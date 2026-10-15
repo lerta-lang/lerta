@@ -72,8 +72,8 @@ const cases_of_status_file: FileCase[] = content_lines(
 
 const check_case = ({ args, input, status, stdout, stderr }: FileCase): Check => ({
   name: `lerta ${args.map(shorten_path).join(' ')}`,
-  run: () => {
-    const ran = build_in_new_dir(args, input)
+  run: async () => {
+    const ran = await build_in_new_dir(args, input)
     return [
       ...expect_status(status, ran.status),
       ...(stdout === undefined ? [] : compare_text('stdout', stdout, ran.stdout)),

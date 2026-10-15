@@ -1,5 +1,4 @@
 // The runtime that the compiler compiles once for each kind of build and target, and caches.
-import { spawn } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -20,8 +19,10 @@ import {
   hello,
   host_triple,
   new_cache_dir,
+  run_command,
   work_dir,
   type Env,
+  type Ran,
 } from './common.ts'
 
 const runtime_objects = readdirSync(join(root_dir, 'runtime'))
@@ -62,56 +63,51 @@ const expect_cached_runtime = (cache: string, name: string, kind: string, target
 }
 
 // Builds hello.lerta with the environment changed as given, and gives the cache's entries after.
-const build_hello_with = (env: Env, flags: string[] = []) => {
-  const built = build_in_new_dir(['build', hello, '-o', 'hello', ...flags], '', env)
+const build_hello_with = async (env: Env, flags: string[] = []) => {
+  const built = await build_in_new_dir(['build', hello, '-o', 'hello', ...flags], '', env)
   return { reasons: expect_success('build', built), built }
 }
 
-const expect_one_cached_runtime = (env: Env, cache: string): string[] => {
-  const { reasons } = build_hello_with(env)
+const expect_one_cached_runtime = async (env: Env, cache: string): Promise<string[]> => {
+  const { reasons } = await build_hello_with(env)
   if (reasons.length > 0) return reasons
   const entries = existsSync(cache) ? readdirSync(cache) : []
   if (entries.length !== 1) return [`expected one cached runtime in ${cache}, found: ${entries}`]
   return expect_cached_runtime(cache, entries[0], 'debug', '.+')
 }
 
-// Runs the compiler, as spawnSync does, without waiting for it.
-const spawn_compiler = (
-  args: string[],
-  env: Env,
-): Promise<{ status: number | null; stderr: string }> =>
-  new Promise((resolve) => {
-    const child = spawn(compiler, args, { cwd: work_dir, env: env_with(env) })
-    let stderr = ''
-    child.stderr.on('data', (data) => (stderr += data))
-    child.on('close', (status) => resolve({ status, stderr }))
-  })
-
 // The name of the runtime that a debug build for the host caches.
-const cached_runtime_name = (): string => {
+const find_cached_runtime_name = async (): Promise<string> => {
   const cache = new_cache_dir()
-  const { reasons } = build_hello_with({ LERTA_CACHE_DIR: cache })
+  const { reasons } = await build_hello_with({ LERTA_CACHE_DIR: cache })
   if (reasons.length > 0) throw new Error(reasons.join('\n'))
   return readdirSync(cache)[0]
 }
 
+// Found once, for the checks that run at the same time, since finding it compiles the runtime.
+let runtime_name: Promise<string> | undefined
+const cached_runtime_name = (): Promise<string> => (runtime_name ??= find_cached_runtime_name())
+// For the checks that use the name, so that finding it is not counted in their time. A failure is
+// left for them to report.
+const wait_for_runtime_name = () => cached_runtime_name().catch(() => undefined)
+
 // Makes the directory of the runtime's name in a new cache, has `prepare` fill it, builds, and
 // checks the build with `check`.
-const with_cached_runtime_dir = (
+const with_cached_runtime_dir = async (
   prepare: (dir: string) => void,
-  check: (built: ReturnType<typeof build_in_new_dir>, dir: string) => string[],
-): string[] => {
+  check: (built: Ran, dir: string) => string[],
+): Promise<string[]> => {
   const cache = new_cache_dir()
-  const dir = join(cache, cached_runtime_name())
+  const dir = join(cache, await cached_runtime_name())
   mkdirSync(dir)
   prepare(dir)
-  return check(build_hello_with({ LERTA_CACHE_DIR: cache }).built, dir)
+  return check((await build_hello_with({ LERTA_CACHE_DIR: cache })).built, dir)
 }
 
 export const cache_checks: Check[] = [
   {
     name: 'lerta build caches the runtime for each kind of build, and uses it again',
-    run: () => {
+    run: async () => {
       const cache = new_cache_dir()
       const env = { LERTA_CACHE_DIR: cache }
       const host = host_triple.replaceAll('.', '\\.')
@@ -133,7 +129,7 @@ export const cache_checks: Check[] = [
       const runtimes = () => readdirSync(cache).filter((entry) => entry !== 'thinlto')
       for (const [flags, kind] of kinds) {
         const before = runtimes()
-        const { reasons } = build_hello_with(env, flags)
+        const { reasons } = await build_hello_with(env, flags)
         if (reasons.length > 0) return reasons
         const added = runtimes().filter((entry) => !before.includes(entry))
         if (added.length !== 1) return [`${flags.join(' ')} added to the cache: ${added}`]
@@ -144,7 +140,7 @@ export const cache_checks: Check[] = [
           return [`${flags.join(' ')} left the ThinLTO cache with: ${optimized}`]
         const object = join(cache, added[0], runtime_objects[0])
         const built_at = statSync(object).mtimeMs
-        const again = build_hello_with(env, flags).reasons
+        const again = (await build_hello_with(env, flags)).reasons
         if (again.length > 0) return again
         const entries = runtimes()
         if (entries.length !== before.length + 1)
@@ -155,7 +151,7 @@ export const cache_checks: Check[] = [
           return [`the second build optimized again: ${lto_entries()}`]
         // A runtime that lost a file is reported, not compiled again.
         rmSync(join(cache, added[0], attributes_file))
-        const { built } = build_hello_with(env, flags)
+        const { built } = await build_hello_with(env, flags)
         const message = `the cached runtime ${join(cache, added[0])} is incomplete: remove it\n`
         const problems_after_loss = [
           ...expect_status(1, built.status),
@@ -166,7 +162,7 @@ export const cache_checks: Check[] = [
       }
       // The host given as the target is in the name too, but clang is given other flags.
       const before = readdirSync(cache)
-      const { reasons } = build_hello_with(env, ['--target', host_triple])
+      const { reasons } = await build_hello_with(env, ['--target', host_triple])
       if (reasons.length > 0) return reasons
       const added = readdirSync(cache).filter((entry) => !before.includes(entry))
       if (added.length !== 1) return [`--target ${host_triple} added to the cache: ${added}`]
@@ -175,6 +171,7 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build compiles the runtime into an empty directory of its name',
+    wait: wait_for_runtime_name,
     run: () =>
       with_cached_runtime_dir(
         () => {},
@@ -186,6 +183,7 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build fails when another directory has the name of the runtime',
+    wait: wait_for_runtime_name,
     run: () =>
       with_cached_runtime_dir(
         (dir) => writeFileSync(join(dir, 'other'), ''),
@@ -201,22 +199,23 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build ignores a staging directory that a killed build left',
-    run: () => {
+    wait: wait_for_runtime_name,
+    run: async () => {
       const cache = new_cache_dir()
-      const name = cached_runtime_name()
+      const name = await cached_runtime_name()
       mkdirSync(join(cache, `${name}.staging-lerta-killed`))
       writeFileSync(join(cache, `${name}.staging-lerta-killed`, 'array.o'), '')
-      const { reasons } = build_hello_with({ LERTA_CACHE_DIR: cache })
+      const { reasons } = await build_hello_with({ LERTA_CACHE_DIR: cache })
       if (reasons.length > 0) return reasons
       return expect_cached_runtime(cache, name, 'debug', '.+')
     },
   },
   {
     name: 'lerta build fails when the cache directory cannot be made',
-    run: () => {
+    run: async () => {
       const file = join(new_cache_dir(), 'file')
       writeFileSync(file, '')
-      const { built } = build_hello_with({ LERTA_CACHE_DIR: join(file, 'cache') })
+      const { built } = await build_hello_with({ LERTA_CACHE_DIR: join(file, 'cache') })
       return [
         ...expect_status(1, built.status),
         ...compare_text('stderr', `cannot make the cache directory: ${file}/cache\n`, built.stderr),
@@ -225,9 +224,9 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build rejects a target that would name a path in the cache',
-    run: () => {
+    run: async () => {
       const cache = new_cache_dir()
-      const { built } = build_hello_with({ LERTA_CACHE_DIR: join(cache, 'inner') }, [
+      const { built } = await build_hello_with({ LERTA_CACHE_DIR: join(cache, 'inner') }, [
         '--target',
         '../outside',
       ])
@@ -240,8 +239,8 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build rejects a target that would name a Windows path in the cache',
-    run: () => {
-      const { built } = build_hello_with({ LERTA_CACHE_DIR: new_cache_dir() }, [
+    run: async () => {
+      const { built } = await build_hello_with({ LERTA_CACHE_DIR: new_cache_dir() }, [
         '--target',
         '..\\outside',
       ])
@@ -253,9 +252,9 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build rejects a target of a system that the runtime is not built for',
-    run: () => {
+    run: async () => {
       const cache = new_cache_dir()
-      const { built } = build_hello_with({ LERTA_CACHE_DIR: cache }, [
+      const { built } = await build_hello_with({ LERTA_CACHE_DIR: cache }, [
         '--target',
         'x86_64-unknown-freebsd',
       ])
@@ -269,7 +268,7 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build caches the runtime in $XDG_CACHE_HOME/lerta without $LERTA_CACHE_DIR',
-    run: () => {
+    run: async () => {
       const cache_home = new_cache_dir()
       const env = { LERTA_CACHE_DIR: '', XDG_CACHE_HOME: cache_home }
       return expect_one_cached_runtime(env, join(cache_home, 'lerta'))
@@ -277,7 +276,7 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build caches the runtime in ~/.cache/lerta without $XDG_CACHE_HOME',
-    run: () => {
+    run: async () => {
       const home = new_cache_dir()
       const env = { LERTA_CACHE_DIR: undefined, XDG_CACHE_HOME: '', HOME: home }
       return expect_one_cached_runtime(env, join(home, '.cache/lerta'))
@@ -285,9 +284,9 @@ export const cache_checks: Check[] = [
   },
   {
     name: 'lerta build fails without $HOME, $XDG_CACHE_HOME or $LERTA_CACHE_DIR',
-    run: () => {
+    run: async () => {
       const env = { LERTA_CACHE_DIR: undefined, XDG_CACHE_HOME: undefined, HOME: undefined }
-      const { built } = build_hello_with(env)
+      const { built } = await build_hello_with(env)
       return [
         ...expect_status(1, built.status),
         ...compare_text(
@@ -304,7 +303,14 @@ export const cache_checks: Check[] = [
       const cache = new_cache_dir()
       const env = { LERTA_CACHE_DIR: cache }
       const builds = [1, 2, 3, 4].map((i) =>
-        spawn_compiler(['build', hello, '-o', join(cache, `../${basename(cache)}_hello${i}`)], env),
+        run_command(
+          compiler,
+          ['build', hello, '-o', join(cache, `../${basename(cache)}_hello${i}`)],
+          {
+            cwd: work_dir,
+            env: env_with(env),
+          },
+        ),
       )
       const reasons = (await Promise.all(builds)).flatMap((built) => expect_success('build', built))
       if (reasons.length > 0) return reasons
