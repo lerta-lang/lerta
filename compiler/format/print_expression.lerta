@@ -10,7 +10,7 @@ from '../ast'
 import breaking, choice, Doc, indent, join, line_feed, rule, separated, text, token from './doc'
 import named_type, type_arguments from './print_type'
 import if_doc from './print_statement'
-import LINE_LENGTH, PARENTHESES, STRING_LITERALS from './rules'
+import LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, STRING_LITERALS from './rules'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
 from './print_literal'
@@ -115,9 +115,7 @@ const bare_doc = (expression: Expression, context: Context): Doc ->
     when Range
       const start = range_end(expression.start, context, false)
       join [start, text('...'), range_end(expression.end, context, true)]
-    when IsTest
-      const value = operand(expression.value, context, RANGE, false)
-      join [value, text(' is '), named_type(expression.type)]
+    when IsTest then is_doc(expression, context, ' is ')
     when Cast
       const value = operand(expression.value, context, RANGE, false)
       # The `?` of `as T?` is read as the type's.
@@ -208,8 +206,11 @@ const member_doc = (member: Member, context: Context) ->
 
 const unary_doc = (unary: UnaryOperation, context: Context) ->
   if unary.operator == 'not'
+    const test = unary.operand as IsTest?
+    return is_not_doc(test, context) if test
+    # `not x is not T` would read as two tests.
     const operand_doc =
-      if unary.operand is IsTest
+      if is_negated_is_test(unary.operand)
         clarified unary.operand, context
       else
         operand unary.operand, context, NOT, true
@@ -344,3 +345,14 @@ const tuple_names = (open_at: Position, context: Context) ->
     when source.tokens[i].kind == IDENTIFIER
   ]
   join [token('(', open_at), separated(names, text(', ')), text(')')]
+
+const is_doc = (test: IsTest, context: Context, word: String) ->
+  join [operand(test.value, context, RANGE, false), text(word), named_type(test.type)]
+
+# `not (x is T)` is written `x is not T` (see Negated is tests).
+const is_not_doc = (test: IsTest, context: Context) ->
+  rule NEGATED_IS_TESTS, is_doc(test, context, ' is not ')
+
+const is_negated_is_test = (expression: Expression) ->
+  const unary = expression as UnaryOperation? ? return false
+  unary.operator == 'not' and unary.operand is IsTest

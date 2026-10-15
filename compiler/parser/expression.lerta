@@ -151,9 +151,13 @@ const parse_comparison = (tokens: TokenStream) ->
     tokens.fail token_position(tokens.peek()), 'comparisons, is tests and casts cannot be chained'
   comparison
 
+# `x is not T` is read as `not (x is T)`.
 const parse_is = (tokens: TokenStream, value: Expression): Expression ->
   tokens.next()
-  IsTest value, type: parse_named_type(tokens), position: value.position
+  const negated = tokens.peek().kind == 'not'
+  tokens.next() if negated
+  const test = IsTest(value, type: parse_named_type(tokens), position: value.position)
+  negated then UnaryOperation(operator: 'not', operand: test, position: value.position) else test
 
 # The `?` is read as the type's, which the checker takes as the form instead.
 const parse_cast = (tokens: TokenStream, value: Expression): Expression ->
