@@ -20,6 +20,10 @@ is_windows() {
   case $1 in *-w64-mingw32) ;; *) return 1 ;; esac
 }
 
+comma_list() { # <word>...
+  echo "$*" | sed 's/ /, /g'
+}
+
 test_target() {
   nice node test/run.ts --target "$1" || return 1
   if is_windows "$1" && ! has_windows_clang; then
@@ -201,7 +205,7 @@ case $host_linux in x86_64-*) x86_64=true ;; *) x86_64=false ;; esac
 if [ "$host_os" != Linux ]; then
   if ! $has_docker; then skip "$host_linux" 'no Docker'
   elif $x86_64; then
-    start_in_docker "$host_linux in Docker${linux_left:+, with$linux_left}" linux \
+    start_in_docker "$(comma_list $host_linux $linux_left) in Docker" linux \
       "make --no-print-directory test; native=\$?; tools/test_cross.sh --here$linux_left; exit \$((native || \$?))"
     linux_left=''
   else
@@ -216,10 +220,10 @@ for triple in $linux_left; do
 done
 if [ -n "$windows_left" ]; then
   if $x86_64 && $has_docker; then
-    start_in_docker "${windows_left# } in Docker with Wine" wine \
+    start_in_docker "$(comma_list $windows_left) in Docker with Wine" wine \
       "tools/test_cross.sh --here$windows_left"
   else
-    skip "${windows_left# }" 'needs mingw-w64, lld and Wine, or Docker on an x86-64 host'
+    skip "$(comma_list $windows_left)" 'needs mingw-w64, lld and Wine, or Docker on an x86-64 host'
   fi
 fi
 start_targets ' on the host' $host_left
