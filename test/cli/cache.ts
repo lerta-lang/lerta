@@ -62,26 +62,82 @@ const expect_cached_runtime = (cache: string, name: string, kind: string, target
   ]
 }
 
-// Builds hello.lerta with the environment changed as given, and gives the cache's entries after.
+// Builds hello.lerta with the environment changed as given.
 const build_hello_with = async (env: Env, flags: string[] = []) => {
   const built = await build_in_new_dir(['build', hello, '-o', 'hello', ...flags], '', env)
   return { reasons: expect_success('build', built), built }
 }
 
-const expect_one_cached_runtime = async (env: Env, cache: string): Promise<string[]> => {
-  const { reasons } = await build_hello_with(env)
-  if (reasons.length > 0) return reasons
-  const entries = existsSync(cache) ? readdirSync(cache) : []
-  if (entries.length !== 1) return [`expected one cached runtime in ${cache}, found: ${entries}`]
-  return expect_cached_runtime(cache, entries[0], 'debug', '.+')
+// The runtimes in a cache, where an optimized build also has the linker keep what ThinLTO
+// optimizes, in `thinlto`.
+const runtimes_in = (cache: string): string[] =>
+  existsSync(cache) ? readdirSync(cache).filter((entry) => entry !== 'thinlto') : []
+
+// What ThinLTO left in a cache, each with when it was written: an entry optimized again would have
+// the same name, but a new time. The linker also writes when it last pruned the cache.
+const lto_entries = (cache: string): string[] => {
+  const lto_cache = join(cache, 'thinlto')
+  return existsSync(lto_cache)
+    ? readdirSync(lto_cache)
+        .filter((entry) => entry !== 'llvmcache.timestamp')
+        .sort()
+        .map((entry) => `${entry} ${statSync(join(lto_cache, entry)).mtimeMs}`)
+    : []
 }
+
+// Builds hello.lerta with `flags`, after which `cache` must hold one runtime, of `kind` and a
+// target that matches `target`, a regular expression.
+const expect_one_cached_runtime = async (
+  env: Env,
+  cache: string,
+  {
+    flags = [],
+    kind = 'debug',
+    target = '.+',
+  }: { flags?: string[]; kind?: string; target?: string } = {},
+): Promise<string[]> => {
+  const { reasons } = await build_hello_with(env, flags)
+  if (reasons.length > 0) return reasons
+  const entries = runtimes_in(cache)
+  if (entries.length !== 1) return [`expected one cached runtime in ${cache}, found: ${entries}`]
+  return expect_cached_runtime(cache, entries[0], kind, target)
+}
+
+// A second build uses the cached runtime, and what ThinLTO optimized, as they are.
+const expect_reused = async (cache: string, flags: string[]): Promise<string[]> => {
+  const [name] = runtimes_in(cache)
+  const object = join(cache, name, runtime_objects[0])
+  const built_at = statSync(object).mtimeMs
+  const optimized = lto_entries(cache)
+  const { reasons } = await build_hello_with({ LERTA_CACHE_DIR: cache }, flags)
+  if (reasons.length > 0) return reasons
+  const entries = runtimes_in(cache)
+  if (entries.length !== 1) return [`the second build changed the cache: ${entries}`]
+  if (statSync(object).mtimeMs !== built_at) return ['the second build compiled the runtime again']
+  if (lto_entries(cache).join() !== optimized.join())
+    return [`the second build optimized again: ${lto_entries(cache)}`]
+  return []
+}
+
+// A cached runtime that lost a file is reported, not compiled again.
+const expect_incomplete_reported = async (cache: string, flags: string[]): Promise<string[]> => {
+  const dir = join(cache, runtimes_in(cache)[0])
+  rmSync(join(dir, attributes_file))
+  const { built } = await build_hello_with({ LERTA_CACHE_DIR: cache }, flags)
+  return [
+    ...expect_status(1, built.status),
+    ...compare_text('stderr', `the cached runtime ${dir} is incomplete: remove it\n`, built.stderr),
+  ]
+}
+
+const host_pattern = host_triple.replaceAll('.', '\\.')
 
 // The name of the runtime that a debug build for the host caches.
 const find_cached_runtime_name = async (): Promise<string> => {
   const cache = new_cache_dir()
   const { reasons } = await build_hello_with({ LERTA_CACHE_DIR: cache })
   if (reasons.length > 0) throw new Error(reasons.join('\n'))
-  return readdirSync(cache)[0]
+  return runtimes_in(cache)[0]
 }
 
 // Found once, for the checks that run at the same time, since finding it compiles the runtime.
@@ -104,69 +160,40 @@ const with_cached_runtime_dir = async (
   return check((await build_hello_with({ LERTA_CACHE_DIR: cache })).built, dir)
 }
 
+const kind_checks: Check[] = [
+  { flags: [], kind: 'debug' },
+  { flags: ['-O'], kind: 'release' },
+].map(({ flags, kind }) => ({
+  name: `lerta build ${[...flags, ''].join(' ')}caches the ${kind} runtime, and uses it again`,
+  run: async () => {
+    const cache = new_cache_dir()
+    const cached = await expect_one_cached_runtime({ LERTA_CACHE_DIR: cache }, cache, {
+      flags,
+      kind,
+      target: host_pattern,
+    })
+    if (cached.length > 0) return cached
+    const optimized = lto_entries(cache)
+    if ((kind === 'release') !== optimized.length > 0)
+      return [`${flags.join(' ')} left the ThinLTO cache with: ${optimized}`]
+    const reused = await expect_reused(cache, flags)
+    if (reused.length > 0) return reused
+    return expect_incomplete_reported(cache, flags)
+  },
+}))
+
 export const cache_checks: Check[] = [
+  ...kind_checks,
   {
-    name: 'lerta build caches the runtime for each kind of build, and uses it again',
-    run: async () => {
+    // The host given as the target is in the name too, but clang is given other flags.
+    name: 'lerta build --target <host> caches the runtime named by the host',
+    run: () => {
       const cache = new_cache_dir()
-      const env = { LERTA_CACHE_DIR: cache }
-      const host = host_triple.replaceAll('.', '\\.')
-      const kinds: [string[], string][] = [
-        [[], 'debug'],
-        [['-O'], 'release'],
-      ]
-      // An optimized build also has the linker keep what ThinLTO optimizes, in `thinlto`.
-      const lto_cache = join(cache, 'thinlto')
-      // The linker also writes when it last pruned the cache. An entry optimized again would
-      // have the same name, but a new time.
-      const lto_entries = () =>
-        existsSync(lto_cache)
-          ? readdirSync(lto_cache)
-              .filter((entry) => entry !== 'llvmcache.timestamp')
-              .sort()
-              .map((entry) => `${entry} ${statSync(join(lto_cache, entry)).mtimeMs}`)
-          : []
-      const runtimes = () => readdirSync(cache).filter((entry) => entry !== 'thinlto')
-      for (const [flags, kind] of kinds) {
-        const before = runtimes()
-        const { reasons } = await build_hello_with(env, flags)
-        if (reasons.length > 0) return reasons
-        const added = runtimes().filter((entry) => !before.includes(entry))
-        if (added.length !== 1) return [`${flags.join(' ')} added to the cache: ${added}`]
-        const problems = expect_cached_runtime(cache, added[0], kind, host)
-        if (problems.length > 0) return problems
-        const optimized = lto_entries()
-        if ((kind === 'release') !== optimized.length > 0)
-          return [`${flags.join(' ')} left the ThinLTO cache with: ${optimized}`]
-        const object = join(cache, added[0], runtime_objects[0])
-        const built_at = statSync(object).mtimeMs
-        const again = (await build_hello_with(env, flags)).reasons
-        if (again.length > 0) return again
-        const entries = runtimes()
-        if (entries.length !== before.length + 1)
-          return [`the second build changed the cache: ${entries}`]
-        if (statSync(object).mtimeMs !== built_at)
-          return [`the second build compiled the runtime again`]
-        if (lto_entries().join() !== optimized.join())
-          return [`the second build optimized again: ${lto_entries()}`]
-        // A runtime that lost a file is reported, not compiled again.
-        rmSync(join(cache, added[0], attributes_file))
-        const { built } = await build_hello_with(env, flags)
-        const message = `the cached runtime ${join(cache, added[0])} is incomplete: remove it\n`
-        const problems_after_loss = [
-          ...expect_status(1, built.status),
-          ...compare_text('stderr', message, built.stderr),
-        ]
-        if (problems_after_loss.length > 0) return problems_after_loss
-        rmSync(join(cache, added[0]), { recursive: true })
-      }
-      // The host given as the target is in the name too, but clang is given other flags.
-      const before = readdirSync(cache)
-      const { reasons } = await build_hello_with(env, ['--target', host_triple])
-      if (reasons.length > 0) return reasons
-      const added = readdirSync(cache).filter((entry) => !before.includes(entry))
-      if (added.length !== 1) return [`--target ${host_triple} added to the cache: ${added}`]
-      return expect_cached_runtime(cache, added[0], 'debug', host)
+      const flags = ['--target', host_triple]
+      return expect_one_cached_runtime({ LERTA_CACHE_DIR: cache }, cache, {
+        flags,
+        target: host_pattern,
+      })
     },
   },
   {
@@ -314,7 +341,7 @@ export const cache_checks: Check[] = [
       )
       const reasons = (await Promise.all(builds)).flatMap((built) => expect_success('build', built))
       if (reasons.length > 0) return reasons
-      const entries = readdirSync(cache)
+      const entries = runtimes_in(cache)
       if (entries.length !== 1) return [`expected one cached runtime, found: ${entries}`]
       return expect_cached_runtime(cache, entries[0], 'debug', '.+')
     },
