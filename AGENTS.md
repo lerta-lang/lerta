@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository. For the project overv
 
 Read these before changing behavior:
 
-- `docs/roadmap/`: the planned design of what is not implemented yet, and the open questions. Implement features as specified there. Ask before implementing a feature it does not describe.
+- `docs/roadmap/`: the planned design of what is not implemented yet, and the open questions. Implement features as specified there. Ask before implementing a feature it does not describe; once agreed, implement it without adding it to the roadmap.
 - `docs/philosophy.md`: the design principles. When a design question is not covered, apply them in priority order.
 - `docs/reference/`: the language as implemented so far, including the coding conventions for Lerta code.
 - `docs/internals.md`: the implementation design, including the constraints on the C runtime.
