@@ -1,67 +1,95 @@
-# The types written in a module that the checker could infer (see Type annotations in
-# docs/reference/style.md), which `lerta fmt` leaves out: those without which the program checks to
-# the same types, and the same warnings, such as of an import that only a type used.
+# The types written in a module that its checking shows the checker can infer (see Type annotations
+# in docs/reference/style.md), which `lerta fmt` leaves out.
+import Node from '../ast'
 import all_warnings from '../checker/diagnostics'
-import check_modules from '../checker/modules'
+import check_program from '../checker/modules'
 import ProgramWide from '../checker/shared'
-import dump_checked from '../checked_dump'
 import CompileError from '../errors'
-import load_modules, Module from '../loader'
+import is_standard_module, load_modules, Module from '../loader'
 import format_type from '../types'
 import Annotation, annotations_of from './annotated'
-import surely_needed from './needed_types'
+import inferable from './inferable'
+
+# What the checking of a program gives that an annotation can change: the type of each node of the
+# modules that are not standard, with the type it is converted to, if any; the types of the fields,
+# which code that the program does not hold, such as a module that imports the entry module, can
+# rely on; and the warnings.
+struct CheckResult
+  node_types: Map<Node, String>
+  field_types: String[]
+  warnings: String[]
 
 # The keys (see annotation_key) of the annotations of the module at `path` that can be left out
-# together; none if the program does not check.
+# together; none if the program does not check. Those that the checking shows can be inferred are
+# checked without them, to be sure: a type that alone uses an import, for one, still uses it (the
+# import would be warned about without it).
 export const removable_annotations = (path: String): String[] ->
   const modules = load_modules(path)
-  const checked = check(path, modules) ? return []
-  const annotations = annotations_of(entry_program(modules))
-  # Telling the unused names adds warnings to the program, so it is done once.
-  const warnings = all_warnings(checked)
-  # The checking reads the syntax tree without changing it, so each try leaves the annotations out of
-  # the one tree, and puts them back after.
-  const checks_the_same = (keys: String[]) ->
-    for_keys annotations, keys, (annotation) -> annotation.remove()
-    const original = result_text(checked, dump_checked(checked), warnings)
-    var same = false
-    if const tried = check(path, modules)
-      same = result_text(tried, dump_checked(tried), all_warnings(tried)) == original
-    for_keys annotations, keys, (annotation) -> annotation.restore()
-    same
+  const checked = quiet_program(path, modules)
+  return [] if not checks(checked)
   # The modules are checked in the order of their indexes, the entry module last (see load_modules).
-  const facts = checked.shared.last()!.facts
-  const tried = [annotation for annotation in annotations when not surely_needed(annotation, facts)]
-  removable_among [], [annotation.key for annotation in tried], checks_the_same
+  const entry = checked.shared.last()!
+  const annotations = annotations_of(entry_program(modules))
+  const inferred =
+    [annotation for annotation in annotations when inferable(annotation, entry, checked)]
+  return [] if inferred.length == 0
+  const original = result_of(checked)
+  const checks_the_same = (left_out: Annotation[]) ->
+    annotation.remove() for annotation in left_out
+    const tried = quiet_program(path, modules)
+    const same = checks(tried) and same_result(result_of(tried), original)
+    annotation.restore() for annotation in left_out
+    same
+  [annotation.key for annotation in removable_among([], inferred, checks_the_same)]
 
-# `accepted` and those of `trying` that can be left out with them, found by halving `trying` until
-# the parts that cannot be left out are single annotations, so that a module with few that cannot is
-# checked few times. Which of the annotations that can be left out alone but not together are left
-# out depends on their order; those found are checked together, so a second run finds no more.
+# `accepted` and those of `trying` that can be left out with them: all at once, or else found by
+# halving `trying` until the parts that cannot be left out are single annotations, so that a module
+# checks once, and few times more for the few that cannot. Which of those that can be left out
+# alone but not together are left out depends on their order; those found are checked together, so
+# a second run finds no more.
 const removable_among = (
-  accepted: String[], trying: String[], checks_the_same: (String[]) -> Bool
-): String[] ->
+  accepted: Annotation[], trying: Annotation[], checks_the_same: (Annotation[]) -> Bool
+): Annotation[] ->
   return accepted if trying.length == 0
   const all = [accepted..., trying...]
   return all if checks_the_same(all)
   return accepted if trying.length == 1
   const half = trying.length / 2
-  const first = [key for key, i in trying when i < half]
-  const second = [key for key, i in trying when i >= half]
+  const first = [annotation for annotation, i in trying when i < half]
+  const second = [annotation for annotation, i in trying when i >= half]
   removable_among removable_among(accepted, first, checks_the_same), second, checks_the_same
 
-# The program checked quietly; nil if it does not check.
-const check = (path: String, modules: Module[]) ->
-  try
-    check_modules path, modules, false
-  catch _: CompileError
-    nil
+const quiet_program = (entry_path: String, modules: Module[]) ->
+  ProgramWide entry_path, modules, reports_warnings: false
 
-# What the checking of the program gives that an annotation can change: the dump, with the types of
-# the nodes; the types of the fields, which the dump lacks and code that the program does not hold,
-# such as a module that imports the entry module, can rely on; and the warnings.
-const result_text = (program: ProgramWide, dump: String, warnings: String[]) ->
-  [dump, field_types(program)..., warnings...].join("\n")
+const checks = (program: ProgramWide) ->
+  try
+    check_program program
+    true
+  catch _: CompileError
+    false
+
+const result_of = (program: ProgramWide) ->
+  const node_types: Map<Node, String> = Map()
+  for shared in program.shared
+    continue if is_standard_module(program.modules[shared.index])
+    const { facts } = shared
+    for (node, type) in facts.types.entries()
+      const converted = facts.conversions[node]
+      const conversion = converted then " => #{format_type(converted)}" else ''
+      node_types[node] = format_type(type) + conversion
+  CheckResult node_types, field_types: field_types(program), warnings: all_warnings(program)
+
+# Whether the nodes that both results have have the same types. The checking makes nodes of its own,
+# such as the `iter()` call of a `for` over an object, new each time, so each result has some that
+# the other lacks; their types show in those of the nodes of the syntax tree, which a program that
+# checks gives types to.
+const same_result = (a: CheckResult, b: CheckResult) ->
+  const same_type = (node: Node) ->
+    const b_type = b.node_types[node] ? return true
+    a.node_types[node] == b_type
+  const same_types = a.node_types.keys().all(same_type)
+  same_types and a.field_types == b.field_types and a.warnings == b.warnings
 
 const field_types = (program: ProgramWide) ->
   const lines: String[] = []
@@ -73,7 +101,3 @@ const field_types = (program: ProgramWide) ->
 
 # The entry module comes last (see load_modules).
 const entry_program = (modules: Module[]) -> modules.last()!.program
-
-const for_keys = (annotations: Annotation[], keys: String[], action: (Annotation) -> void) ->
-  for annotation in annotations
-    action annotation if keys.contains(annotation.key)

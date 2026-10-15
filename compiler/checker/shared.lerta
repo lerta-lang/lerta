@@ -58,6 +58,9 @@ export class NodeFacts
   itabs: Map<Expression, Itab> = Map()
   # The `var`s that function literals capture, by their declarations' names.
   shared_vars: Map<Identifier, Bool> = Map()
+  # The values that each function gives as its results, which tell `lerta fmt` whether its return
+  # type can be inferred (see inferable).
+  results: Map<FunctionLiteral, Expression[]> = Map()
 
 # What is found for one module, and what its checkers share.
 export class Shared
@@ -129,6 +132,15 @@ export class ProgramWide
   annotated_call: AnnotatedCall? = nil
   # The modules whose functions are checked, whose unused names can be told.
   bodies_checked: Int[] = []
+  # The functions whose bodies are being checked, innermost last.
+  functions_checked: FunctionLiteral[] = []
+  # The functions whose types each function's body uses, which tell `lerta fmt` which functions
+  # are recursive (see inferable).
+  calls: Map<FunctionLiteral, FunctionLiteral[]> = Map()
+  # Whether the written type of each parameter, by its name, is the one it would have without it,
+  # from the function type expected or a default, every time it is checked; which tells `lerta fmt`
+  # whether it can be left out (see inferable).
+  inferable_parameters: Map<Identifier, Bool> = Map()
 
 # The type of the object that `@` refers to: in a method, the method of an extend, or the
 # initializer of a field, which sees the constructor arguments and the fields initialized before
@@ -146,6 +158,7 @@ export struct Result
 # results are the values it yields; for a function that awaits, the value type of the Promise it
 # returns.
 export class FunctionContext
+  literal: FunctionLiteral
   annotated: Type?
   yields: Bool
   awaits: Bool

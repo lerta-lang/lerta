@@ -151,7 +151,7 @@ endif
 # check checks that the .lerta files that git lists, those not added yet included, are in the style,
 # and runs pnpm check in test/. tests/ is left out, as it holds code that is not in the style on
 # purpose, and so is a file deleted but not yet from git (test ! -e). Each file is a run of its own,
-# as lerta fmt checks the program that the file is the entry of, several times over.
+# as lerta fmt checks the program that the file is the entry of.
 check: bin/lerta
 	@status=0; \
 	git ls-files -z --cached --others --exclude-standard -- '*.lerta' ':!tests/' \

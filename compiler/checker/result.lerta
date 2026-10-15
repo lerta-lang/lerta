@@ -1,11 +1,9 @@
 # Checks how a function gives its result: its last statement and its `return`s.
-import
-  Await, Expression, FunctionLiteral, If, Node, Position, Return, Statement, Yield
-from '../ast'
+import Await, Expression, FunctionLiteral, If, Position, Return, Statement, Yield from '../ast'
 import fail from './diagnostics'
 import type_of from './expression'
 import converts_through_itab from './interface_values'
-import Body, FunctionContext, ProgramWide, Result from './shared'
+import Body, FunctionContext, NodeFacts, ProgramWide, Result from './shared'
 import check_discarded, check_statement from './statement'
 import
   format_type, FunctionType, is_assignable, is_kind, IterType, nil_type, PromiseType, same_type,
@@ -24,12 +22,12 @@ export const function_context = (
   if yields
     if annotated and not (annotated is IterType)
       fail_here 'a function that yields returns an Iter, as in `(): Iter<Int> ->`'
-    return FunctionContext(yields, awaits, annotated: (annotated as IterType?)?.item)
+    return FunctionContext(literal, yields, awaits, annotated: (annotated as IterType?)?.item)
   if awaits
     if annotated and not (annotated is PromiseType)
       fail_here 'a function that awaits returns a Promise, as in `(): Promise<Int> ->`'
-    return FunctionContext(yields, awaits, annotated: (annotated as PromiseType?)?.value)
-  FunctionContext annotated, yields, awaits
+    return FunctionContext(literal, yields, awaits, annotated: (annotated as PromiseType?)?.value)
+  FunctionContext literal, annotated, yields, awaits
 
 # A function with a result must end with its value or a `return`. This is decided by the last
 # statement alone, not by whether the end can be reached.
@@ -134,14 +132,13 @@ const type_of_result = (body: Body, value: Expression) ->
 # its results give, to which they are converted; that of a function that yields is an Iter of its
 # item type, decided so, and that of one that awaits a Promise of its result. Its result may be nil
 # alone, which gives no type, as may its items, if it yields nothing else: see reject_nil_result.
-export const finish_function_type = (
-  context: FunctionContext, params: Type[], conversions: Map<Node, Type>
-) ->
+export const finish_function_type = (context: FunctionContext, params: Type[], facts: NodeFacts) ->
   const unknown = context.yields then nil_type else void_type
   const result = context.annotated ? context.inferred ? unknown
   for each in context.results
     const is_converted = not is_kind(each.type, 'never') and not same_type(each.type, result)
-    conversions[each.value] = result if is_converted
+    facts.conversions[each.value] = result if is_converted
+  facts.results[context.literal] = [each.value for each in context.results]
   const wrapped: Type =
     case
       when context.yields then IterType(item: result)
