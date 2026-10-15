@@ -29,7 +29,7 @@ Early development. The compiler is written in Lerta (`compiler/`) and builds its
 | Path | Contents |
 |---|---|
 | `seed/` | The seed, the compiler's own LLVM IR, from which `make` builds it (see `docs/internals.md`) |
-| `test/` | Test scripts in TypeScript, for Node.js: `run.ts` the run tests (`node test/run.ts --target <triple>` builds them for another target), `cli.ts` the command line, `runtime.ts` runtime checks no Lerta program can trigger; `lerta.ts` (where the repository and the compiler are), `report.ts` (running and reporting checks), `expect.ts` (what checks expect of the programs they run) and `target.ts` (`--target`) are shared by them |
+| `test/` | Test scripts in TypeScript, for Node.js: `run.ts` the run tests (`node test/run.ts --target <triple>` builds them for another target), `cli.ts` the command line (its checks in `cli/`, the files of their invocations in `tests/cli/`), `runtime.ts` runtime checks no Lerta program can trigger; `lerta.ts` (where the repository and the compiler are), `report.ts` (running and reporting checks), `expect.ts` (what checks expect of the programs they run) and `target.ts` (`--target`) are shared by them |
 | `tools/` | `test_cross.sh`, which `make test-cross` runs, and the Docker images it uses in `docker/` |
 | `compiler/` | The compiler: `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, `checker/`, which checks them, and `codegen/`, which emits LLVM IR, behind the commands of `main.lerta` |
 | `runtime/` | C runtime |

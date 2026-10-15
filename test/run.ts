@@ -13,6 +13,7 @@
 //   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
 //   tests/bin/<name>.lerta commands that tests run, the same on every platform, unlike those of
 //                          the system; they are built first and found on PATH
+//   tests/cli/             not run tests, but the files of the CLI checks (see cli/files.ts)
 //   tests/**/posix/        tests of what only POSIX systems have, such as signals, which are not
 //                          run for Windows
 //   tests/**/windows/      tests of what only Windows has, such as drives, which are run only for
@@ -47,6 +48,7 @@ const expected_extensions = ['out', 'err', 'warn']
 
 const examples_expected_dir = 'tests/examples'
 const commands_dir = 'tests/bin'
+const cli_dir = 'tests/cli'
 
 // `dir` and its subdirectories, relative to the root, except `excluded` and lib/ directories.
 const directory_tree = (dir: string, excluded: string[]): string[] => [
@@ -58,7 +60,7 @@ const directory_tree = (dir: string, excluded: string[]): string[] => [
     .flatMap((path) => directory_tree(path, excluded)),
 ]
 
-const test_dirs = directory_tree('tests', [examples_expected_dir, commands_dir])
+const test_dirs = directory_tree('tests', [examples_expected_dir, commands_dir, cli_dir])
 const skipped_kind = target.windows ? 'posix' : 'windows'
 const skipped_dirs = test_dirs.filter((dir) => dir.split('/').includes(skipped_kind))
 
