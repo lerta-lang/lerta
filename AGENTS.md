@@ -14,7 +14,7 @@ Read these before changing behavior:
 1. **Plan first.** Before implementing, explain the approach and get the user's agreement.
 2. **Implement with tests.** Every language feature gets run tests in `tests/`: a Lerta source file plus its expected output (the expected files are described at the top of `test/run.ts`). Programs in `examples/` are run as tests too; their expected output goes in `tests/examples/`.
 3. **Review.** After implementing, run an adversarial review with a subagent that follows `.agents/reviewer.md`.
-   - Run `make test`, and `pnpm check` in `test/`, yourself before each review, and check that each exits with 0; the reviewer does not.
+   - Run `make test` and `make check` yourself before each review, and check that each exits with 0; the reviewer does not.
    - Show the reviewer only the code and the tests. Do not pass the intent, the background or your design decisions.
    - Settle each finding with the same reviewer: fix it and have the reviewer check the fix, or argue against it and continue until you agree. Repeat until the only findings left are tests to add or docs and comments to fix; fix those, and that reviewer is done.
    - Then start a fresh reviewer. Pass it the findings you argued against and agreed to leave with earlier reviewers, each with the reason; pass nothing else from the earlier reviews.

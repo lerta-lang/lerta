@@ -3,10 +3,9 @@
 // that is not empty (a missing file means empty); `lerta fmt --fix <name>.lerta` must then succeed
 // and leave <name>.formatted (the input itself if it is missing); and `lerta fmt <name>.lerta` must
 // then report nothing, as the formatted text is in the style. Then the command line: the paths it
-// takes, and what it does with a file that does not parse; and the code of the repository, each
-// file a check of its own, as checking a file checks the program that it is the entry of, several
-// times over (see removable_annotations), which takes long for one of the compiler.
-import { execFile, spawnSync } from 'node:child_process'
+// takes, and what it does with a file that does not parse. Whether the code of the repository is in
+// the style is checked by `make check`.
+import { spawnSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -15,7 +14,7 @@ import {
   readFileSync,
   writeFileSync,
 } from 'node:fs'
-import { availableParallelism, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compiler, root_dir } from './lerta.ts'
 import { compare_text, expect_status } from './expect.ts'
@@ -136,40 +135,11 @@ const command_checks: Check[] = [
   },
 ]
 
-// The code of the repository, as git lists it, the files not added yet included, but in tests/,
-// which holds code that is not in the style on purpose. git leaves out the files that it ignores,
-// such as build/, which is generated. A file deleted but not yet from git is listed too, and left
-// out here.
-const repository_files = () => {
-  // -z lists the paths as they are, with no quotes.
-  const args = ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '*.lerta']
-  const listed = spawnSync('git', args, { cwd: root_dir, encoding: 'utf8' })
-  return listed.stdout
-    .split('\0')
-    .filter((file) => file !== '' && !file.startsWith('tests/'))
-    .filter((file) => existsSync(join(root_dir, file)))
-}
-
-const repository_check = (file: string): Check => ({
-  name: `${file} is in the style`,
-  run: () =>
-    new Promise((resolve) => {
-      execFile(compiler, ['fmt', file], { cwd: root_dir }, (error, _stdout, stderr) => {
-        const status = error === null ? 0 : typeof error.code === 'number' ? error.code : null
-        resolve([...compare_text('stderr', '', stderr), ...expect_status(0, status)])
-      })
-    }),
-})
-
 const names = readdirSync(cases_dir)
   .filter((file) => file.endsWith('.in'))
   .map((file) => file.slice(0, -'.in'.length))
   .sort()
 
 await run_suite(work_dir, () =>
-  run_checks(
-    'format checks',
-    [...names.map(case_check), ...command_checks, ...repository_files().map(repository_check)],
-    availableParallelism(),
-  ),
+  run_checks('format checks', [...names.map(case_check), ...command_checks]),
 )
