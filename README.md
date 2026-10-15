@@ -94,7 +94,7 @@ Every language feature gets run tests in `tests/`: a Lerta source file and its e
 - `cli.ts`: the command line (its checks in `cli/`)
 - `runtime.ts`: runtime checks that no Lerta program can trigger
 - `format.ts`: the formatter, whose cases are the exact specification of the style
-- Shared by them: `lerta.ts` (where the repository and the compiler are), `report.ts` (running and reporting checks), `expect.ts` (what checks expect of the programs they run), `target.ts` (`--target`) and `wine.ts` (running Windows programs under Wine)
+- Shared by them: `lerta.ts` (where the repository and the compiler are, running it, and caching the runtimes before the tests), `report.ts` (running and reporting checks), `expect.ts` (what checks expect of the programs they run), `target.ts` (`--target`) and `wine.ts` (running Windows programs under Wine)
 
 ### Changing the language
 

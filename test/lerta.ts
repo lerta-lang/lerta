@@ -1,4 +1,6 @@
-// Where the tests find the repository and the compiler they check, bin/lerta, which `make` builds.
+// Where the tests find the repository and the compiler they check, bin/lerta, which `make` builds,
+// how they run it, and what they need of it before they start.
+import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,3 +34,34 @@ export const host_libuv = (kind: 'source' | 'flag' | 'library'): string[] =>
     .map((line) => line.split(' '))
     .filter(([systems, line_kind]) => line_kind === kind && host_systems.includes(systems))
     .map(([, , value]) => value)
+
+// Runs a file to its end, whatever its exit status; `failure` tells how it ended, for messages.
+export const run_file = (
+  file: string,
+  args: string[],
+  cwd: string,
+): Promise<{ status: number | null; failure: string; stderr: string }> =>
+  new Promise((resolve) => {
+    const options = { cwd, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT } as const
+    execFile(file, args, options, (error, _stdout, stderr) => {
+      const status = error === null ? 0 : typeof error.code === 'number' ? error.code : null
+      const failure =
+        error === null ? 'exit status 0' : status === null ? error.message : `exit status ${status}`
+      resolve({ status, failure, stderr })
+    })
+  })
+
+// Builds a program in `dir` with each of the sets of flags, so that the compiler caches each kind of
+// runtime before the tests start. Otherwise the tests started together would each compile the same
+// runtime, and each such compile runs as many clang processes as there are CPUs.
+export const build_runtimes = async (dir: string, flag_sets: string[][]): Promise<void> => {
+  const builds = flag_sets.map(async (flags, index) => {
+    const args = ['build', 'tests/empty.lerta', '-o', join(dir, `runtime${index}`), ...flags]
+    const { status, failure, stderr } = await run_file(compiler, args, root_dir)
+    if (status !== 0) {
+      const what = `tests/empty with [${flags.join(' ')}]`
+      throw new Error(`the build of ${what} failed (${failure}):\n${stderr}`)
+    }
+  })
+  await Promise.all(builds)
+}

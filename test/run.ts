@@ -22,7 +22,7 @@ import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { compiler, OUTPUT_LIMIT, root_dir } from './lerta.ts'
+import { build_runtimes, compiler, OUTPUT_LIMIT, root_dir, run_file } from './lerta.ts'
 import { compare_text, lines } from './expect.ts'
 import { run_checks, run_suite, type Check } from './report.ts'
 import { parse_target } from './target.ts'
@@ -153,22 +153,6 @@ const compile_and_run = async (test: TestCase, optimize: boolean): Promise<Outco
 const DIAGNOSTIC = /^.+?:\d+:\d+: /
 const WARNING = /^.+?:\d+:\d+: warning: /
 
-// Runs a file to its end, whatever its exit status; `failure` tells how it ended, for messages.
-const run_file = (
-  file: string,
-  args: string[],
-  cwd: string,
-): Promise<{ status: number | null; failure: string; stderr: string }> =>
-  new Promise((resolve) => {
-    const options = { cwd, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT } as const
-    execFile(file, args, options, (error, _stdout, stderr) => {
-      const status = error === null ? 0 : typeof error.code === 'number' ? error.code : null
-      const failure =
-        error === null ? 'exit status 0' : status === null ? error.message : `exit status ${status}`
-      resolve({ status, failure, stderr })
-    })
-  })
-
 // The commands of tests/bin are built next to the tested programs, and `run` finds them on PATH:
 // a POSIX program on the PATH given here, and a Windows program under Wine on its Windows PATH,
 // to which Wine adds WINEPATH (Z: is the root of the Unix file system).
@@ -187,19 +171,6 @@ const build_commands = async (): Promise<void> => {
     if (status !== 0)
       throw new Error(`the build of ${commands_dir}/${name} failed (${failure}):\n${stderr}`)
   }
-}
-
-// Caches both runtimes before the tests start, as cli/common.ts does, for the reason given there.
-const build_runtimes = async (): Promise<void> => {
-  // Not in work_dir itself, which is on the PATH of the tested programs.
-  const dir = mkdtempSync(join(work_dir, 'runtime-'))
-  const builds = [[], ['-O']].map(async (optimize) => {
-    const executable = join(dir, `empty${optimize.join('')}${executable_suffix}`)
-    const args = ['build', 'tests/empty.lerta', '-o', executable, ...optimize, ...target.args]
-    const { status, failure, stderr } = await run_file(compiler, args, root_dir)
-    if (status !== 0) throw new Error(`the build of tests/empty failed (${failure}):\n${stderr}`)
-  })
-  await Promise.all(builds)
 }
 
 const concurrency = availableParallelism()
@@ -282,7 +253,9 @@ const test_checks: Check[] = suites.flatMap(collect).flatMap((test) => [
 ])
 
 await run_suite(work_dir, async () => {
-  await build_runtimes()
+  // Not in work_dir itself, which is on the PATH of the tested programs.
+  const runtime_dir = mkdtempSync(join(work_dir, 'runtime-'))
+  await build_runtimes(runtime_dir, [target.args, ['-O', ...target.args]])
   await build_commands()
   for (const dir of skipped_dirs) console.log(`not run for Windows: ${dir}`)
   if (target.windows) wine_prefixes = await start_wine_prefixes(work_dir, concurrency)

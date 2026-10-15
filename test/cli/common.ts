@@ -5,7 +5,7 @@ import { spawn, spawnSync, type SpawnOptions, type StdioOptions } from 'node:chi
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { compiler, OUTPUT_LIMIT, root_dir } from '../lerta.ts'
-import { compare_text, expect_success, lines } from '../expect.ts'
+import { compare_text, lines } from '../expect.ts'
 
 export const work_dir = mkdtempSync(join(tmpdir(), 'lerta-cli-'))
 export const hello = join(root_dir, 'examples/hello.lerta')
@@ -83,19 +83,6 @@ export const run_command = (
     child.on('error', (error) => resolve({ status: null, stdout, stderr, error }))
     child.on('close', (status) => resolve({ status, stdout, stderr }))
   })
-
-// Builds a program with each kind of runtime, so that the compiler caches them before the checks
-// start. Otherwise the checks started together would each compile the same runtime, and each such
-// compile runs as many clang processes as there are CPUs.
-export const build_runtimes = async (): Promise<void> => {
-  const builds = runtime_flags.map(async (flags) => {
-    const executable = join(work_dir, `runtime${flags.join('')}`)
-    const built = await run_command(compiler, ['build', hello, '-o', executable, ...flags])
-    const reasons = expect_success('build', built)
-    if (reasons.length > 0) throw new Error(reasons.join('\n'))
-  })
-  await Promise.all(builds)
-}
 
 export const expect_left = (what: string, expected: string[], actual: string[]): string[] =>
   compare_text(what, lines(expected), lines(actual.toSorted()))
