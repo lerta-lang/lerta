@@ -9,6 +9,9 @@ The planned syntax, control flow, types and operators.
 - Variadic parameters are `xs...`, and a call spreads an array into them as an array literal spreads it (see [spread](../reference/types.md#array)): `f(args...)`.
 - A call may name the arguments of parameters that have [defaults](../reference/functions.md), after the others, and leave out any of them, not only some from the last: `build(source, optimize: true)` for `build = (source: String, output: String? = nil, optimize = false)`. How this sits with the named arguments of an anonymous struct (see [the reference](../reference/types.md#anonymous-structs)) is open.
 - A function literal held by a local `const` may have [defaults](../reference/functions.md), as a top-level function does. Its defaults may use the locals it captures, so each is computed by a closure.
+- A function literal held by a local `const` may call itself by that name, its return type written as for any recursive function. It does not capture itself, which would make a cycle that is never freed, but calls its own code with its own captures.
+- A parameter whose default is a `Float` literal may leave out its type, as one whose default is an `Int`, `String` or `Bool` literal may ([the reference](../reference/functions.md)).
+- `x is not T`, the same as `not (x is T)`, narrowing as it does. `not` there cannot be read otherwise, since a type follows `is`.
 - An item inside brackets may open an indented block (a `case`, a function body).
 - An error in a [call without parentheses](../reference/syntax.md#calls) suggests the fix: `f g x` suggests `f g(x)`, and a callee that is not a name with `.name`s, as `xs[i].push x`, suggests `xs[i].push(x)`. An undefined name that is a word only in its place, as `default` in `default - 1`, says so.
 - An `if` or a `case` value may start on the next line, one level deeper, also as the argument of a call without brackets (`print`, then `case` on the next line) and after the `then` of a `case` arm, as it may after `=`, so that the [style](../reference/style.md) can always put it there.
@@ -16,6 +19,8 @@ The planned syntax, control flow, types and operators.
 ## Control flow
 
 - Narrowing a `var`.
+- Narrowing a path of fields that cannot be reassigned, from a value that is narrowed now or from `@`: `if @item is A`, then `@item.a`. A `var` field of a class is not narrowed, as a `var` is not.
+- The `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names, or to the one member left.
 - A `Bool?` is not a condition, nor an operand of `and`, `or` and `not`: write `b == true` or `b != nil`. Now it holds when it is `true` ([the reference](../reference/control-flow.md)), so nil and `false` read alike.
 - Code after a call to a function returning `never` (`exit`) is unreachable.
 - The error for a range outside a `for` names every place that takes one, the `in` of a comprehension too, not only `after 'in' of a 'for'`.
@@ -48,6 +53,7 @@ Interfaces and generics are in [objects](objects.md).
 
 - `Int8/16/32` and `UInt16/32/64`. Arrays and maps hold each at its own size, as they hold a `Byte` in one byte (`LertaItemKind` in `runtime/lerta.h`).
 - The new integer types follow the overflow rule of `Int` and `Byte` (see [the reference](../reference/types.md#int)): signed types throw and unsigned types wrap around. For the rare case of wanting signed wraparound, use a method such as `x.wrapping_add(y)`.
+- Bitwise operators `&`, `|`, `^`, `<<` and `>>` on the integer types; where they sit among the [precedences](../reference/syntax.md#operators) is open.
 - `Int: Div<Int, Int>` (see [operator overloading](#operator-overloading)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
 
 ## Operator overloading
@@ -74,10 +80,10 @@ Interfaces and generics are in [objects](objects.md).
 - Renaming in destructuring (`const { a: x } = value`).
 - Notation for writing an array inside an array without brackets (CoffeeScript can).
 - How a union holds a member that is not a heap object, as `Int` or `Bool`, or `String` if it becomes an immediate value (see [internals](../internals.md#strings)): a union value is now a pointer to an object, whose member's type the drop function in its header tells (see `emit_type_test` in `compiler/codegen/heap_object.lerta`), and nil a null pointer. A tag beside a word that holds the value or the pointer keeps `Int` unboxed; boxing it into an object with a header keeps the test as it is but allocates.
-- Whether the `else` arm of a `case` over a union narrows the subject to the members that no `when` arm names.
 - `Binary` literals (`'...'.binary` can substitute).
 - Ranges without an end or a start, `20..` and `...n`, as SQL's `>= 20` and `< n` (Rust and Swift have them).
 - An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
 - How an Iter gives an item in one call rather than two, `has_next` and `next`, which each item takes now through a pointer to code (see [internals](../internals.md#iter)): `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional, which its `{ i1, T }` in IR can be for the Iters the compiler generates, while an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`; or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
 - Whether `as` also widens a value to a type that it fits, as Swift's `nil as String?` or `x as Shape` does, for a value in the middle of an expression; a `const` with a type annotation does it now. It would sit beside the casts that may fail, `as T?` and `as T!`, which `as T` alone is not allowed to be.
+- Whether `?` (nil coalescing) binds tighter than comparisons, as Swift's `??` and Kotlin's `?:` do: now `ages[name] ? 0 > 18` is `ages[name] ? (0 > 18)` ([the reference](../reference/syntax.md#operators)), and goes unnoticed when both sides are `Bool`. Count the code whose meaning would change before deciding.
 - Whether `Float` should hold infinities, as IEEE 754 does, which a division by zero gives (see [the reference](../reference/types.md#float)). For now, an operation that would give one throws; allowing them later breaks no program. JSON has no infinity either.

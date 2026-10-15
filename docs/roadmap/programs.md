@@ -9,7 +9,7 @@ The planned design of modules, FFI, the standard library and tools.
 ## C ABI / FFI
 
 - An `extern` declaration may also refer to a C variable.
-- Generic externs, `extern lerta_map_keys: <K, V>(Map<K, V>) -> K[]`, for C functions that take a value of any type as a pointer, as an array, a map or a String is. With them, the methods `keys` and `remove`, built into the compiler now (see [internals](../internals.md#builtins)), move to `std/builtins.lerta`, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)); `push`, `pop` and indexing stay built in, since their code depends on the items' kind. Using them in std needs a seed refresh.
+- Generic externs, `extern lerta_map_keys: <K, V>(Map<K, V>) -> K[]`, for C functions that take a value of any type as a pointer, as an array, a map or a String is. With them, the methods `keys` and `remove`, built into the compiler now (see [internals](../internals.md#builtins)), move to `std/builtins.lerta`, `keys` then giving an `Iter<K>` as `values` and `entries` give theirs, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)); `push`, `pop` and indexing stay built in, since their code depends on the items' kind. Using them in std needs a seed refresh.
 - C headers are imported with libclang.
 - The C side reaches Lerta's objects through accessors (see [internals](../internals.md#ffi)).
 - Decided points:
@@ -36,6 +36,7 @@ The planned design of modules, FFI, the standard library and tools.
   - Keys are the field names as written. `encode_json(value, JsonKeys.camel_case)` and `decode_json<T>(text, JsonKeys.camel_case)` write `text_document` as `textDocument`, for formats such as the [LSP](#tools)'s.
   - Decoding throws a `JsonError` for text that is not JSON or does not fit `T`, whose message gives the path and what was found: `$.params.position.line: expected an Int, found a string`.
   - Unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
+- `Set<T>`, a generic struct over a `Map<T, Bool>`, with `add`, `has`, `remove`, `length` and `iter`, in place of the maps whose values are only `true`; `m.add` of such a map ([the reference](../reference/types.md#map)) then goes.
 - In `std:io`, reading stdin, for the [LSP](#tools).
 - `x.to_fixed(digits)` of a `Float`: the value rounded to that many digits after the point, as JavaScript's `toFixed` writes it, for tables of numbers.
 - What the [test harness](#tools) needs of the programs it runs and the files it checks:
