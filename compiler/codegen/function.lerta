@@ -68,8 +68,8 @@ export struct TopLevelCode
 # all modules; if it awaits, the program's top-level code is a coroutine of its own, which the loop
 # must finish.
 export const generate_main = (
-  g: Generator, statements: Array<Statement>, code: TopLevelCode, runs_first: Array<TopLevelCode>,
-  releases: Array<TopLevelGlobal>, is_program: Bool
+  g: Generator, statements: Statement[], code: TopLevelCode, runs_first: TopLevelCode[],
+  releases: TopLevelGlobal[], is_program: Bool
 ) ->
   const run = ->
     for first in runs_first
@@ -95,7 +95,7 @@ export const generate_main = (
 
 # Runs the program's top-level code, a coroutine, and the event loop, which must settle it; its
 # exception is the program's.
-const generate_program_main = (module: IrModule, body: String, releases: Array<TopLevelGlobal>) ->
+const generate_program_main = (module: IrModule, body: String, releases: TopLevelGlobal[]) ->
   const ir = IrBuilder(module)
   const promise = ir.assign("call ptr #{body}()")
   emit_loop_run ir
@@ -120,8 +120,8 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
   const body_generator = function_generator(g.code, g.extensions, g.facts)
   # Its symbol is numbered within the module.
   generate_function body_generator, 'private ', symbol, literal, nil, captures
-  const slots: Array<HeapField> = []
-  const operands: Array<String> = []
+  const slots: HeapField[] = []
+  const operands: String[] = []
   for capture in captures
     const local = lookup_local(g, capture.name)!
     if not capture.is_var
@@ -173,10 +173,10 @@ const hold_weak_this = (g: Generator, scope: Map<String, CodegenLocal>) ->
 # entries for defaults have the linkage (see Definition).
 export const generate_function = (
   g: Generator, linkage: String, symbol: String, literal: FunctionLiteral, this_type: Type?,
-  captures: Array<Capture>?
+  captures: Capture[]?
 ) ->
   const type = function_type_of(type_of(g, literal))
-  const params: Array<String> = []
+  const params: String[] = []
   params.push 'ptr %closure' if captures != nil
   params.push "#{ir_type(this_type)} %this" if this_type
   params.push "#{ir_type(param)} %p#{i}" for param, i in type.params
@@ -200,7 +200,7 @@ export const generate_function = (
 # and its closure, which its scope releases; that of a function that yields waits for its first
 # item to be asked for before running its statements. `result` is what its last statement gives.
 const generate_function_body = (
-  g: Generator, literal: FunctionLiteral, this_type: Type?, captures: Array<Capture>?, result: Type
+  g: Generator, literal: FunctionLiteral, this_type: Type?, captures: Capture[]?, result: Type
 ) ->
   const type = function_type_of(type_of(g, literal))
   const ir = g.ir
@@ -248,7 +248,7 @@ const generate_default_entry = (
   g.result_type = type.result
   const scope = g.locals.push()
   scope['@'] = ValueLocal(operand: '%this', type: this_type) if this_type
-  const operands: Array<String> = []
+  const operands: String[] = []
   for param, i in literal.params
     const param_type = type.params[i]
     if i < given
@@ -258,21 +258,21 @@ const generate_default_entry = (
       const value = generate(g, param.default!)
       scope[param.name.name] = store_in_slot(g, value, param_type)
       operands.push value
-  const args: Array<String> = []
+  const args: String[] = []
   args.push "#{ir_type(this_type)} %this" if this_type
   args.push "#{ir_type(param)} #{operand}" for (param, operand) in type.params.zip(operands)
   const result = call_user_function(g.ir, symbol, type, args.join(', '))
   emit_exception_check g
   emit_return g, result
   g.locals.pop()
-  const params: Array<String> = []
+  const params: String[] = []
   params.push "#{ir_type(this_type)} %this" if this_type
   params.push "#{ir_type(type.params[i])} %p#{i}" for i in 0...given
   const entry = default_entry_symbol(symbol, given)
   finish g, "#{linkage}#{ir_return_type(type.result)} #{entry}(#{params.join(', ')})"
 
 # The last statement returns its value, if it is an expression and the function has a result.
-const generate_last_statement = (g: Generator, body: Array<Statement>, result: Type) ->
+const generate_last_statement = (g: Generator, body: Statement[], result: Type) ->
   const has_result = not is_kind(result, 'void')
   const last = body.last()
   if last
@@ -323,19 +323,19 @@ export const generate_constructor = (g: Generator, linkage: String, info: Object
     ir.emit "call void #{init}(ptr #{object})"
     emit_exception_check g
   ir.emit "ret ptr #{object}"
-  const params: Array<String> = []
+  const params: String[] = []
   for argument, i in arguments
     params.push "#{ir_type(argument.type!)} %p#{i}"
     params.push "i1 %given#{i}" if argument.has_default
   finish g, "#{linkage}ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
 
-const argument_index = (arguments: Array<FieldInfo>, field: FieldInfo) ->
+const argument_index = (arguments: FieldInfo[], field: FieldInfo) ->
   arguments.find_index((each) -> each == field)!
 
 # An argument with a default comes with whether it is given (see generate_construction); if it is
 # not, its default is computed in its place among the initializers.
 const emit_default_or_argument = (
-  g: Generator, arguments: Array<FieldInfo>, field: FieldInfo, compute: () -> void,
+  g: Generator, arguments: FieldInfo[], field: FieldInfo, compute: () -> void,
   store_argument: () -> void
 ) ->
   const ir = g.ir
@@ -401,7 +401,7 @@ export const generate_jump = (g: Generator, jump: Jump | Return) ->
 # A block that gives a value: its last statement, if an expression, gives it, or ''. The value is
 # computed before the locals are released, as it may be one of them.
 export const generate_block_value = (
-  g: Generator, body: Array<Statement>, define: (Map<String, CodegenLocal>) -> void
+  g: Generator, body: Statement[], define: (Map<String, CodegenLocal>) -> void
 ) ->
   const scope = g.locals.push()
   define scope
@@ -417,11 +417,11 @@ export const generate_block_value = (
 # A block is a scope: the references held by its locals are released at its end. `define`
 # declares the locals that belong to it besides its statements'.
 export const generate_block = (
-  g: Generator, body: Array<Statement>, define: (Map<String, CodegenLocal>) -> void
+  g: Generator, body: Statement[], define: (Map<String, CodegenLocal>) -> void
 ) -> generate_block_with(g, statements_code(g, body), define)
 
 # What generates the statements, for a block whose code is given that way.
-export const statements_code = (g: Generator, statements: Array<Statement>) ->
+export const statements_code = (g: Generator, statements: Statement[]) ->
   const generate_all = -> generate_statement(g, statement) for statement in statements
   generate_all
 

@@ -19,7 +19,7 @@ export struct Finding
 
 export struct Formatted
   text: String
-  findings: Array<Finding>
+  findings: Finding[]
 
 # The source in the style, and where it differs from it. Throws a CompileError if the source does
 # not parse, or if the text in the style would not parse to the same program, which would be a bug.
@@ -38,7 +38,7 @@ export const format_source = (source: String, path: String): Formatted ->
   )
   Formatted text: layout.text, findings: in_order
 
-const check_same_program = (statements: Array<Statement>, formatted: String, path: String) ->
+const check_same_program = (statements: Statement[], formatted: String, path: String) ->
   const reparsed = parse(lex(formatted, path).tokens, path)
   if without_positions(dump_ast(reparsed)) != without_positions(dump_ast(statements))
     throw CompileError(message: "#{path}: the formatter would change the program, which is a bug")
@@ -77,13 +77,13 @@ const is_position_field = (line: String) ->
 # Where the formatted text differs from the source: at the first difference of each run of lines
 # that differ, with the innermost rule whose part holds that place in the formatted text, or else
 # the rule that the kind of difference points to.
-const findings = (source: SourceText, formatted: String, rules: Array<RulePlace>) ->
+const findings = (source: SourceText, formatted: String, rules: RulePlace[]) ->
   const source_lines = source.raw_lines
   # Lines end with LF, and so does a file (see Layout): the first that ends with CRLF, and a last
   # line without LF, are places of their own, and the lines are compared without them.
   const old = [line.without_suffix("\r") ? line for line in source_lines]
   const new = formatted.split("\n")
-  const result: Array<Finding> = []
+  const result: Finding[] = []
   if const crlf = source_lines.find_index((line) -> line.ends_with("\r"))
     const column = columns(old[crlf]) + 1
     result.push Finding(rule: LAYOUT, at: Position(column, line: crlf + 1))
@@ -121,7 +121,7 @@ const first_difference = (old: String, new: String) ->
   i += 1 while i < old_points.length and i < new_points.length and old_points[i] == new_points[i]
   i + 1
 
-const innermost_rule = (rules: Array<RulePlace>, at: Position): StyleRule? ->
+const innermost_rule = (rules: RulePlace[], at: Position): StyleRule? ->
   var found: RulePlace? = nil
   for place in rules
     if before_or_at(place.start, at) and is_before(at, place.end)
@@ -133,7 +133,7 @@ const innermost_rule = (rules: Array<RulePlace>, at: Position): StyleRule? ->
 
 # The rule of the first part that starts from the position up to the line, as one that the
 # difference begins just before.
-const first_rule_from = (rules: Array<RulePlace>, at: Position, last_line: Int): StyleRule? ->
+const first_rule_from = (rules: RulePlace[], at: Position, last_line: Int): StyleRule? ->
   var found: RulePlace? = nil
   for place in rules
     const within = before_or_at(at, place.start) and place.start.line < last_line
@@ -150,19 +150,18 @@ const before_or_at = (a: Position, b: Position) ->
 const is_before = (a: Position, b: Position) ->
   a.line < b.line or (a.line == b.line and a.column < b.column)
 
-const only_blank_lines_differ = (old: Array<String>, new: Array<String>) ->
-  const not_blank = (lines: Array<String>) ->
-    [line for line in lines when without_spaces(line) != '']
+const only_blank_lines_differ = (old: String[], new: String[]) ->
+  const not_blank = (lines: String[]) -> [line for line in lines when without_spaces(line) != '']
   not_blank(old) == not_blank(new)
 
 # The spaces before a comment, spaces within the lines, or else the layout of the lines.
 # `old` starts at the line `line` of the source.
 const kind_of_difference = (
-  old: Array<String>, new: Array<String>, source: SourceText, line: Int
+  old: String[], new: String[], source: SourceText, line: Int
 ): StyleRule ->
-  const squeezed = (lines: Array<String>) -> without_spaces(lines.join(''))
+  const squeezed = (lines: String[]) -> without_spaces(lines.join(''))
   return LAYOUT if squeezed(old) != squeezed(new) or old.length != new.length
-  const indented = (lines: Array<String>) -> [trim_start(line) for line in lines]
+  const indented = (lines: String[]) -> [trim_start(line) for line in lines]
   return LAYOUT if indented(old) == indented(new)
   return SPACING if old.length != 1
   const ending = source.comments.find((c) -> c.line == line and not c.own_line)

@@ -9,7 +9,7 @@ import ProgramWide, Shared from './shared'
 import matches, overlaps, parts_of from './type_patterns'
 import format_type, InterfaceType, ObjectType, Type, type_key from '../types'
 
-# The receiver of a generic extend, `Array<T>`, has type parameters, which stand for any type.
+# The receiver of a generic extend, `T[]`, has type parameters, which stand for any type.
 export class ExtensionMethod
   # Self, for a method of an extend of an interface, which `bound` is.
   receiver: Type
@@ -30,7 +30,7 @@ export class ExtensionMethod
 export class Extensions
   module_index: Int
   module_name: String
-  in_effect: Array<ExtensionMethod> = []
+  in_effect: ExtensionMethod[] = []
 
 # The type of a method that is not generic, checking its body first if needed.
 export const plain_method_type = (program: ProgramWide, method: ExtensionMethod, at: Position) ->
@@ -39,7 +39,7 @@ export const plain_method_type = (program: ProgramWide, method: ExtensionMethod,
 # The methods of the module that `statement` imports; a module imported twice brings them once.
 # A conflict between two imported modules is the importer's, so it is reported at its import.
 export const add_imported = (
-  program: ProgramWide, extensions: Extensions, methods: Array<ExtensionMethod>, statement: Import
+  program: ProgramWide, extensions: Extensions, methods: ExtensionMethod[], statement: Import
 ) ->
   for method in methods
     continue if extensions.in_effect.contains(method)
@@ -80,7 +80,7 @@ export const add_own = (shared: Shared, method: ExtensionMethod) ->
 
 # The extends in effect here, with `methods` before them, as an instance of a generic function
 # sees them (see GenericFunction).
-export const with_methods = (extensions: Extensions, methods: Array<ExtensionMethod>) ->
+export const with_methods = (extensions: Extensions, methods: ExtensionMethod[]) ->
   const { module_index, module_name } = extensions
   const seen = Extensions(module_index, module_name)
   seen.in_effect.append methods
@@ -91,12 +91,12 @@ export const with_methods = (extensions: Extensions, methods: Array<ExtensionMet
 # The methods that the extends in effect give the types and the types they are made of, fields
 # included: those that the body of an instance with these type arguments may reach.
 export const methods_reachable_from = (
-  program: ProgramWide, extensions: Extensions, types: Array<Type>
+  program: ProgramWide, extensions: Extensions, types: Type[]
 ) ->
   const seen: Map<String, Type> = Map()
   visit_reachable program, seen, type for type in types
-  # A generic extend's methods, as those of Array<T>, may be in effect for several of the types.
-  const methods: Array<ExtensionMethod> = []
+  # A generic extend's methods, as those of T[], may be in effect for several of the types.
+  const methods: ExtensionMethod[] = []
   for (key, type) in seen.entries()
     for method in extensions.in_effect
       continue if not method.matched.get_or_put(key, -> matches(method.receiver, type))

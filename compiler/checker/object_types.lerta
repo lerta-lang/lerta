@@ -49,7 +49,7 @@ export class ObjectInfo
   generic: ObjectInfo?
   init: Instance?
   deinit: Instance?
-  fields: Array<FieldInfo> = []
+  fields: FieldInfo[] = []
   # The interface that the declaration says it satisfies, with the type arguments of an instance.
   satisfies: InterfaceType? = nil
   methods: Map<String, FunctionLiteral> = Map()
@@ -60,7 +60,7 @@ export class ObjectInfo
   has_deinit = false
   state: CheckState = UNCHECKED
   # Of a generic class or struct, whose type arguments make them.
-  instances: Array<ObjectInfo> = []
+  instances: ObjectInfo[] = []
 
 # A field without an initializer, or with a default, is a constructor argument.
 export const is_argument = (field: FieldInfo) -> field.value == nil or field.has_default
@@ -73,7 +73,7 @@ export const method_literal = (member: MemberDeclaration) ->
   member.value as FunctionLiteral?
 
 # Registers the names first, so that the members can refer to any of the types.
-export const add_objects = (shared: Shared, declarations: Array<TypeDeclaration>) ->
+export const add_objects = (shared: Shared, declarations: TypeDeclaration[]) ->
   const program = shared.program
   for declaration in declarations
     const { name } = declaration.name
@@ -94,7 +94,7 @@ export const add_objects = (shared: Shared, declarations: Array<TypeDeclaration>
 
 # A type argument of a generic class or struct is checked against no bound where the type is
 # written, so it takes none so far.
-const reject_bounds = (program: ProgramWide, type_params: Array<TypeParameter>) ->
+const reject_bounds = (program: ProgramWide, type_params: TypeParameter[]) ->
   for param in type_params
     if const bound = param.bound
       fail program, bound.position, "a class's or struct's type parameter takes no bound so far"
@@ -254,7 +254,7 @@ export const field_type = (
 # type satisfies the interface it names is checked once all are, as its methods may need the
 # fields of any.
 export const check_all_objects = (shared: Shared) ->
-  const checked: Array<ObjectInfo> = []
+  const checked: ObjectInfo[] = []
   for info in shared.objects.values()
     continue if is_generic_object(info)
     check_info shared.program, info
@@ -264,7 +264,7 @@ export const check_all_objects = (shared: Shared) ->
 # Checks the instances of the module's generic classes and structs left unchecked, which checking
 # others may make; returns whether there were any.
 export const check_pending_objects = (shared: Shared) ->
-  const pending: Array<ObjectInfo> = []
+  const pending: ObjectInfo[] = []
   for info in shared.objects.values()
     pending.append [each for each in info.instances when each.state == UNCHECKED]
   check_info shared.program, info for info in pending

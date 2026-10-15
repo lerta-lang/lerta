@@ -95,7 +95,7 @@ export struct Token
   # Counted in code points, starting at 1.
   column: Int
   # The parts of an interpolated string.
-  parts: Array<TemplatePart>?
+  parts: TemplatePart[]?
   # The column after it, where the formatter reads its spelling up to; that of its start for a
   # layout token.
   end_column = default @column
@@ -108,16 +108,16 @@ export struct Comment
   own_line: Bool
 
 export struct Lexed
-  tokens: Array<Token>
-  comments: Array<Comment>
+  tokens: Token[]
+  comments: Comment[]
 
 # `path` names the source in diagnostics.
 export const tokenize = (source: String, path: String) -> lex(source, path).tokens
 
 # The tokens, and the comments apart from them.
 export const lex = (source: String, path: String) ->
-  const tokens: Array<Token> = []
-  const comments: Array<Comment> = []
+  const tokens: Token[] = []
+  const comments: Comment[] = []
   const indents = [0]
   const brackets = Brackets(path)
   const lines = source.split("\n")
@@ -172,7 +172,7 @@ const layout_token = (kind: TokenKind, line: Int, column: Int) ->
 # nothing in a grouping.
 class Brackets
   path: String
-  open: Array<Token> = []
+  open: Token[] = []
 
   update = (token: Token) ->
     case token.kind
@@ -188,9 +188,7 @@ class Brackets
     const unclosed = @open.last()!
     compile_error @path, unclosed.line, unclosed.column, "'#{unclosed.kind}' is never closed"
 
-const emit_indentation = (
-  tokens: Array<Token>, indents: Array<Int>, line: SourceLine, indent: Int
-) ->
+const emit_indentation = (tokens: Token[], indents: Int[], line: SourceLine, indent: Int) ->
   const column = line.column(indent)
   if indent > indents.last()!
     indents.push indent
@@ -205,7 +203,7 @@ const emit_indentation = (
 class LineScanner
   line: SourceLine
   position: Int
-  tokens: Array<Token> = []
+  tokens: Token[] = []
   # Where the comment that ends the line starts, if any; scanning stops at it.
   comment_index: Int? = nil
 
@@ -225,7 +223,7 @@ class LineScanner
     @tokens
 
   # Adds the token that starts at the position, and moves to `end`, after it.
-  add = (kind: TokenKind, text: String, end: Int, parts: Array<TemplatePart>?) ->
+  add = (kind: TokenKind, text: String, end: Int, parts: TemplatePart[]?) ->
     const start = @position
     const spaced = start == 0 or @line.bytes[start - 1] == ' '
     const column = @line.column(start)
@@ -298,7 +296,7 @@ class LineScanner
     @line.fail "unexpected character #{shown}", @position
 
 # The text of a literal without interpolations, or nil.
-const plain_text = (parts: Array<TemplatePart>) ->
+const plain_text = (parts: TemplatePart[]) ->
   return nil if parts.length != 1
   const part = parts[0]
   part is TextPart then part.text

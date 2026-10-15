@@ -13,15 +13,15 @@ import is_one_of, token_position, TokenStream from './token_stream'
 import parse_named_type, parse_type_arguments, starts_type_arguments from './type'
 
 # Arithmetic operators by precedence, weakest first. Comparisons are weaker than all of them.
-const ARITHMETIC_PRECEDENCE: Array<Array<TokenKind>> = [['+', '-'], ['*', '/', '%']]
+const ARITHMETIC_PRECEDENCE: TokenKind[][] = [['+', '-'], ['*', '/', '%']]
 
-const POSTFIX_OPERATORS: Array<TokenKind> = ['(', '[', '.', '!']
+const POSTFIX_OPERATORS: TokenKind[] = ['(', '[', '.', '!']
 
-const COMPARISON_OPERATORS: Array<TokenKind> = ['==', '!=', '<', '<=', '>', '>=']
+const COMPARISON_OPERATORS: TokenKind[] = ['==', '!=', '<', '<=', '>', '>=']
 
 export struct Arguments
-  args: Array<Expression>
-  named_args: Array<NamedValue>
+  args: Expression[]
+  named_args: NamedValue[]
 
 # `for x in xs`, or `for x, i in xs` with the item's place, with `when guard` after it if there is
 # one. `for (a, b) in xs` takes the item, a tuple, apart into `parts`, which the loop declares
@@ -31,7 +31,7 @@ export struct LoopHeader
   index: Identifier?
   iterable: Expression
   guard: Expression?
-  parts: Array<Identifier>
+  parts: Identifier[]
 
 export const parse_expression = (tokens: TokenStream) -> parse_conditional(tokens)
 
@@ -94,7 +94,7 @@ export const parse_block_arguments = (tokens: TokenStream, callee: Expression) -
 
 export const starts_block_arguments = (tokens: TokenStream) -> starts_field_block(tokens)
 
-export const call_of = (callee: Expression, arguments: Arguments, type_args: Array<TypeName>) ->
+export const call_of = (callee: Expression, arguments: Arguments, type_args: TypeName[]) ->
   const { args, named_args } = arguments
   Call callee, args, named_args, type_args, position: callee.position
 
@@ -127,7 +127,7 @@ const parse_and = (tokens: TokenStream) ->
 
 # Operands that `parse_operand` reads, joined by any of `operators`, from left to right.
 const parse_left_associative = (
-  tokens: TokenStream, operators: Array<TokenKind>, parse_operand: () -> Expression
+  tokens: TokenStream, operators: TokenKind[], parse_operand: () -> Expression
 ) ->
   var left = parse_operand()
   while is_one_of(tokens.peek_continuation(), operators)
@@ -192,7 +192,7 @@ const parse_range = (tokens: TokenStream): Expression ->
 export const at_spread = (tokens: TokenStream) ->
   tokens.peek().kind == '...' and is_one_of(tokens.peek_at(1).kind, SPREAD_FOLLOWERS)
 
-const SPREAD_FOLLOWERS: Array<TokenKind> =
+const SPREAD_FOLLOWERS: TokenKind[] =
   ',', ']', ')', '}', 'for', LINE_BREAK, NEWLINE, INDENT, DEDENT, EOF
 
 const at_comparison = (tokens: TokenStream) ->
@@ -284,7 +284,7 @@ const parse_index = (tokens: TokenStream) ->
 export const parse_loop_header = (tokens: TokenStream) ->
   tokens.expect 'for', "'for'"
   const position = token_position(tokens.peek())
-  const parts: Array<Identifier> = tokens.peek().kind == '(' then parse_tuple_names(tokens) else []
+  const parts: Identifier[] = tokens.peek().kind == '(' then parse_tuple_names(tokens) else []
   const variable = parts.length > 0 then tuple_holder(position) else parse_identifier(tokens)
   const index = tokens.accept(',') then parse_identifier(tokens)
   tokens.expect_word 'in'
@@ -306,9 +306,7 @@ export const tuple_holder = (position: Position) ->
 
 # The declarations of the names from the items of the tuple that `holder` names; `_` discards its
 # item.
-export const take_apart = (
-  holder: Identifier, names: Array<Identifier>, mutable: Bool, of_loop: Bool
-) ->
+export const take_apart = (holder: Identifier, names: Identifier[], mutable: Bool, of_loop: Bool) ->
   const count = names.length
   const declaration = (name: Identifier, index: Int): Statement ->
     const { position } = name
@@ -346,9 +344,9 @@ const parse_argument = (tokens: TokenStream) ->
   Argument name, value: parse_value(tokens)
 
 # Named arguments come last.
-const to_arguments = (tokens: TokenStream, items: Array<Argument>) ->
-  const args: Array<Expression> = []
-  const named_args: Array<NamedValue> = []
+const to_arguments = (tokens: TokenStream, items: Argument[]) ->
+  const args: Expression[] = []
+  const named_args: NamedValue[] = []
   for item in items
     if const name = item.name
       named_args.push NamedValue(name, value: item.value)

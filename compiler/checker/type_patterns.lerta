@@ -1,4 +1,4 @@
-# Types with type parameters, as patterns: `Array<T>` stands for any array. Generic functions and
+# Types with type parameters, as patterns: `T[]` stands for any array. Generic functions and
 # extends match, substitute and infer their type parameters with these.
 import TypeParameter from '../ast'
 import
@@ -8,7 +8,7 @@ import
 from '../types'
 
 # The type parameters standing for themselves, for resolving the types written with them.
-export const placeholders = (type_params: Array<TypeParameter>) ->
+export const placeholders = (type_params: TypeParameter[]) ->
   const types: Map<String, Type> = Map()
   types[param.name.name] = TypeParameterType(name: param.name.name) for param in type_params
   types
@@ -46,7 +46,7 @@ export const substitute = (type: Type, bindings: Map<String, Type>): Type ->
 
 # The types that the type is made of, such as the items of an array.
 export const parts_of = (type: Type) ->
-  const parts: Array<Type> = []
+  const parts: Type[] = []
   const collect = (part: Type) ->
     parts.push part
     part
@@ -60,7 +60,7 @@ export const type_depth = (type: Type): Int ->
     deepest = depth if depth > deepest
   1 + deepest
 
-# Whether the type is the pattern with its type parameters replaced, as Array<Int> is Array<T>.
+# Whether the type is the pattern with its type parameters replaced, as Int[] is T[].
 export const matches = (pattern: Type, type: Type) ->
   return false if not has_same_outer_shape(pattern, type)
   const bindings: Map<String, Type> = Map()
@@ -80,7 +80,7 @@ const has_same_outer_shape = (pattern: Type, type: Type) ->
     when InterfaceType then type is InterfaceType and type.symbol == pattern.symbol
     else kind_of(pattern) == kind_of(type)
 
-# Whether some type matches both patterns, as Array<Int> matches Array<T> and Array<Int>. A type
+# Whether some type matches both patterns, as Int[] matches T[] and Int[]. A type
 # parameter stands for any type on either side, even where it is repeated, as in Map<T, T>.
 export const overlaps = (a: Type, b: Type): Bool ->
   return true if a is TypeParameterType or b is TypeParameterType
@@ -91,14 +91,14 @@ export const overlaps = (a: Type, b: Type): Bool ->
     return false if not overlaps(a_part, b_part)
   true
 
-# The type without the types it is made of: Array<_> for any array.
+# The type without the types it is made of: _[] for any array.
 const shape_key = (type: Type) -> type_key(map_parts(type, (_) -> TypeParameterType(name: '_')))
 
 export const has_type_parameters = (type: Type): Bool ->
   type is TypeParameterType or parts_of(type).any(has_type_parameters)
 
 # Binds the type parameters in `pattern` to the types they have in `type`, where its shape
-# matches: `Array<T>` and an `Array<Int>` bind T to Int. A type parameter bound already is kept;
+# matches: `T[]` and an `Int[]` bind T to Int. A type parameter bound already is kept;
 # the caller then checks that the type fits.
 export const infer = (pattern: Type, type: Type, bind: (String, Type) -> void): void ->
   const match = (part: Type, type_part: Type?) -> infer(part, type_part, bind) if type_part

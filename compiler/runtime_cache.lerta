@@ -19,9 +19,9 @@ const CORO_END_FILE = 'coro_end_type.txt'
 # CPU, which the program's functions must have too for LLVM to inline the runtime's into them; and
 # the libraries that libuv is linked with; and the type that clang's LLVM gives llvm.coro.end.
 export struct CachedRuntime
-  objects: Array<String>
+  objects: String[]
   function_attributes: String
-  libraries: Array<String>
+  libraries: String[]
   coro_end_type: String
 
 # The runtime for a build with `optimize`, for `target` or else the host, compiled into the cache
@@ -65,7 +65,7 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
 
 # What `clang --version` prints, or nil if clang fails.
 const clang_version_text = (): Promise<String?> ->
-  const output: Array<Byte> = []
+  const output: Byte[] = []
   return nil if await run('clang', ['--version'], output) != 0
   output.to_binary().text() ? throw CompileError(message: 'clang --version is not valid UTF-8')
 
@@ -134,7 +134,7 @@ const major_version = (clang_version: String): String? ->
 # products stay far within an Int.
 const HASH_MODULUS = 4294967291
 
-const runtime_hash = (texts_besides_sources: Array<String>) ->
+const runtime_hash = (texts_besides_sources: String[]) ->
   var hash = 0
   const texts = [texts_besides_sources...]
   for path in [RUNTIME_PATHS..., LIBUV_PATHS...]
@@ -191,11 +191,11 @@ const compile_runtime = (
 
 # The IR that clang writes, with `flags`, for a function that ends a coroutine; nil if clang fails.
 # C has no builtin for that, so it is C++.
-const clang_probe_ir = (flags: Array<String>, temp_dir: String): Promise<String?> ->
+const clang_probe_ir = (flags: String[], temp_dir: String): Promise<String?> ->
   const source = join(temp_dir, 'probe.cc')
   const code = 'extern "C" void lerta_probe(void *handle) { __builtin_coro_end(handle, 0); }'
   write_file source, code.binary
-  const output: Array<Byte> = []
+  const output: Byte[] = []
   const args = ['-x', 'c++', '-std=c++20', '-S', '-emit-llvm', flags..., source, '-o', '-']
   return nil if await run('clang', args, output) != 0
   output.to_binary().text() ? throw CompileError(message: 'clang IR is not valid UTF-8')
@@ -226,11 +226,11 @@ const coro_end_type = (ir: String) ->
   const declaration = ir.split("\n").find(is_declaration) ? throw missing
   declaration.split(' ')[1]
 
-const is_complete = (files: Array<String>) -> files.iter().all((file) -> is_file(file))
+const is_complete = (files: String[]) -> files.iter().all((file) -> is_file(file))
 
 # Moves the compiled runtime into place, unless another build has moved its own there first,
 # which is as good.
-const move_into_place = (staging_dir: String, dir: String, files: Array<String>) ->
+const move_into_place = (staging_dir: String, dir: String, files: String[]) ->
   try
     rename staging_dir, dir
   catch _

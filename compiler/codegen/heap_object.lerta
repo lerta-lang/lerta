@@ -28,7 +28,7 @@ export const value_field = (type: Type) -> HeapField(ir_type: ir_type(type), own
 export const plain_field = (ir: String) -> HeapField(ir_type: ir, owned: NONE)
 
 # The LLVM struct type of a heap object with the fields: the header, then the fields.
-export const heap_object_type = (fields: Array<HeapField>) ->
+export const heap_object_type = (fields: HeapField[]) ->
   const types = ['i64', 'ptr']
   types.push field.ir_type for field in fields
   "{ #{types.join(', ')} }"
@@ -38,7 +38,7 @@ export const heap_object_type = (fields: Array<HeapField>) ->
 # first lets go of the object's weak box, held in the field at `weak_slot` (see weak_box), and
 # runs `deinit`, the symbol of the class's deinit method, if there is one.
 export const define_heap_object = (
-  module: IrModule, layout: String, drop: String, linkage: String, fields: Array<HeapField>,
+  module: IrModule, layout: String, drop: String, linkage: String, fields: HeapField[],
   deinit: String?, weak_slot: Int?
 ) ->
   module.add_type layout, heap_object_type(fields)
@@ -131,11 +131,10 @@ export const emit_drop_function = (ir: IrBuilder, object: String) ->
 # A value of the IR type, computed by `of_member` for the member of the union that the object is:
 # each member but the last is tested in turn.
 export const emit_member_dispatch = (
-  ir: IrBuilder, object: String, members: Array<Type>, result_type: String,
-  of_member: (Type) -> String
+  ir: IrBuilder, object: String, members: Type[], result_type: String, of_member: (Type) -> String
 ) ->
   const done = ir.fresh_label('member.done')
-  const incoming: Array<String> = []
+  const incoming: String[] = []
   for member, i in members
     const is_last = i == members.length - 1
     const next = is_last then '' else ir.fresh_label('member.next')
@@ -156,7 +155,7 @@ export const emit_member_dispatch = (
 # order of its fields. Each structural type has its own LLVM type and drop function, defined once.
 
 # The types of the values, in the order they are laid out.
-export const value_types = (type: Type): Array<Type> ->
+export const value_types = (type: Type): Type[] ->
   case type
     when RecordType then [field.type for field in type.fields]
     when TupleType then type.items
@@ -173,7 +172,7 @@ const values_layout = (ir: IrBuilder, type: Type) ->
 const drop_name = (layout: String) -> suffixed_symbol(layout, 'drop')
 
 # A new anonymous struct or tuple, which takes over the values, owned, in their order.
-export const emit_values = (ir: IrBuilder, type: Type, values: Array<String>) ->
+export const emit_values = (ir: IrBuilder, type: Type, values: String[]) ->
   const layout = values_layout(ir, type)
   const object = emit_heap_allocate(ir, layout, drop_name(layout))
   for value_type, i in value_types(type)

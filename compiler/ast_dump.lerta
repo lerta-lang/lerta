@@ -26,7 +26,7 @@ struct Scalar
 # A node, whose head is its kind and position, or a group of fields without a kind.
 struct Group
   head: Head?
-  fields: Array<Field>
+  fields: Field[]
 
 # The line of a node's kind and position, which the dump may annotate.
 struct Head
@@ -34,7 +34,7 @@ struct Head
   node: Node
 
 struct List
-  items: Array<Item>
+  items: Item[]
 
 type Value = Scalar | Group | List
 type Item = Scalar | Group
@@ -45,22 +45,22 @@ struct Field
 
 const NONE = Scalar(text: '-')
 
-export const dump_ast = (program: Array<Statement>) -> dump_annotated(program, (_) -> '')
+export const dump_ast = (program: Statement[]) -> dump_annotated(program, (_) -> '')
 
 # The text after a node's header line, such as its type.
 export type Annotate = (Node) -> String
 
-export const dump_annotated = (program: Array<Statement>, annotate: Annotate) ->
-  const lines: Array<String> = []
+export const dump_annotated = (program: Statement[], annotate: Annotate) ->
+  const lines: String[] = []
   const writer = Writer(lines, annotate)
   write_items writer, statements(program).items, ''
   [line + "\n" for line in lines].join('')
 
 struct Writer
-  lines: Array<String>
+  lines: String[]
   annotate: Annotate
 
-const write_items = (writer: Writer, items: Array<Item>, indent: String) ->
+const write_items = (writer: Writer, items: Item[], indent: String) ->
   write_item writer, item, indent for item in items
 
 const write_item = (writer: Writer, item: Item, indent: String) ->
@@ -95,11 +95,11 @@ const write_field = (writer: Writer, field: Field, indent: String): void ->
         lines.push "#{name}:"
         write_items writer, value.items, indent + INDENT
 
-const node = (kind: String, of: Node, fields: Array<Field>) ->
+const node = (kind: String, of: Node, fields: Field[]) ->
   const { line, column } = of.position
   Group fields, head: Head(text: "#{kind} #{line}:#{column}", node: of)
 
-const group = (fields: Array<Field>) -> Group(fields)
+const group = (fields: Field[]) -> Group(fields)
 
 const field = (name: String, value: Value) -> Field(name, value)
 
@@ -114,13 +114,13 @@ const optional_node = <T>(value: T?): Value -> value then dump_node(value) else 
 
 const optional_text = (value: String?) -> value then text(value) else NONE
 
-const optional_statements = (body: Array<Statement>?): Value -> body then statements(body) else NONE
+const optional_statements = (body: Statement[]?): Value -> body then statements(body) else NONE
 
-const statements = (body: Array<Statement>) -> List(items: [dump_node(s) for s in body])
+const statements = (body: Statement[]) -> List(items: [dump_node(s) for s in body])
 
-const expressions = (values: Array<Expression>) -> List(items: [dump_node(e) for e in values])
+const expressions = (values: Expression[]) -> List(items: [dump_node(e) for e in values])
 
-const types = (values: Array<TypeName>) -> List(items: [dump_node(t) for t in values])
+const types = (values: TypeName[]) -> List(items: [dump_node(t) for t in values])
 
 const dump_node = (node: Node) ->
   case node
@@ -242,7 +242,7 @@ const dump_tuple_item = (item: TupleItem): Group ->
     field('tuple', dump_node(item.tuple))
   ]
 
-const named_values = (values: Array<NamedValue>) ->
+const named_values = (values: NamedValue[]) ->
   List items: [dump_named_value(value) for value in values]
 
 const dump_named_value = (value: NamedValue): Group ->
@@ -364,7 +364,7 @@ const dump_function = (function: FunctionLiteral): Group ->
 const dump_parameter = (param: Parameter) ->
   group [field('name', dump_node(param.name)), field('type', optional_node(param.type))]
 
-const type_parameters = (params: Array<TypeParameter>) ->
+const type_parameters = (params: TypeParameter[]) ->
   List items: [dump_type_parameter(param) for param in params]
 
 const dump_type_parameter = (param: TypeParameter) ->
@@ -389,7 +389,7 @@ const dump_type_declaration = (declaration: TypeDeclaration): Group ->
     field('type_params', type_parameters(declaration.type_params))
   ]
 
-const members = (values: Array<MemberDeclaration>) ->
+const members = (values: MemberDeclaration[]) ->
   List items: [dump_member_declaration(member) for member in values]
 
 # A member has a position but no kind, so its position is written as fields.

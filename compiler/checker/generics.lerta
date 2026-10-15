@@ -1,5 +1,5 @@
-# Generic functions, `const first = <T>(xs: Array<T>) -> xs[0]`, declared at the top level, and
-# generic methods: those of a generic extend, `extend Array<T>`, and those of extends, classes and
+# Generic functions, `const first = <T>(xs: T[]) -> xs[0]`, declared at the top level, and
+# generic methods: those of a generic extend, `extend T[]`, and those of extends, classes and
 # structs with type parameters of their own. Each distinct set of type arguments makes an
 # instance, which checks the literal's body with the type parameters standing for the type
 # arguments, keeping what it finds of the nodes in facts of its own, and is generated as a function
@@ -21,18 +21,18 @@ export struct GenericRef
   index: Int
 
 # The receiver of a generic method: its class or struct, or the extended type, in which the
-# extend's type parameters stand for themselves, as `Array<T>`.
+# extend's type parameters stand for themselves, as `T[]`.
 export struct Receiver
   type: Type
-  type_params: Array<TypeParameter>
+  type_params: TypeParameter[]
 
 export class Instance
   entry: FunctionEntry
   generic: GenericRef
-  type_arguments: Array<Type>
+  type_arguments: Type[]
   # The extends of the type arguments in effect where it is first called: the body sees them, as
   # the caller does, before the declaring module's own.
-  methods: Array<ExtensionMethod>
+  methods: ExtensionMethod[]
   extensions: Extensions
   resolver: Resolver
   # Tells apart the instances of the same type arguments with different extends.
@@ -41,7 +41,7 @@ export class Instance
   facts = NodeFacts()
 
 # Type arguments nested deeper come from instances that would never end, as from `f<T>` calling
-# `f<Array<T>>`.
+# `f<T[]>`.
 const MAX_TYPE_DEPTH = 32
 
 export class GenericFunction
@@ -50,21 +50,21 @@ export class GenericFunction
   module_index: Int
   # A method's receiver, whose type parameters come first.
   receiver: Receiver?
-  type_params: Array<TypeParameter>
+  type_params: TypeParameter[]
   # The interface types that bound the type parameters, in their order, in which the type
   # parameters stand for themselves.
-  bounds: Array<InterfaceType?>
+  bounds: InterfaceType?[]
   # The parameters' types, and the result's if it is written, in which the type parameters stand
   # for themselves.
-  params: Array<Type>
+  params: Type[]
   result: Type?
-  instances: Array<Instance> = []
+  instances: Instance[] = []
 
 export const make_generic_function = (
   shared: Shared, name: Identifier, literal: FunctionLiteral, receiver: Receiver?
 ) ->
   const program = shared.program
-  const type_params: Array<TypeParameter> = []
+  const type_params: TypeParameter[] = []
   type_params.append receiver.type_params if receiver
   type_params.append literal.type_params
   const resolver = module_resolver(shared.index)
@@ -90,7 +90,7 @@ export const make_generic_function = (
   )
 
 export const reject_bad_type_parameters = (
-  program: ProgramWide, resolver: Resolver, type_params: Array<TypeParameter>
+  program: ProgramWide, resolver: Resolver, type_params: TypeParameter[]
 ) ->
   const seen: Map<String, Bool> = Map()
   for param in type_params
@@ -103,8 +103,8 @@ export const generic_of = (program: ProgramWide, ref: GenericRef) ->
 
 # The instance of the type arguments, whose extends in effect are `methods`, checked if new.
 export const instantiate = (
-  program: ProgramWide, ref: GenericRef, type_arguments: Array<Type>,
-  methods: Array<ExtensionMethod>, at: Position
+  program: ProgramWide, ref: GenericRef, type_arguments: Type[], methods: ExtensionMethod[],
+  at: Position
 ) ->
   const generic = generic_of(program, ref)
   const key = arguments_key(type_arguments)
@@ -124,19 +124,19 @@ export const instantiate = (
     fail program, at, "'#{generic.name.name}' is recursive, so its return type must be written"
   instance
 
-const arguments_key = (type_arguments: Array<Type>) ->
+const arguments_key = (type_arguments: Type[]) ->
   [type_key(type) for type in type_arguments].join(', ')
 
 # The type arguments by the names of the type parameters.
-export const bindings = (generic: GenericFunction, type_arguments: Array<Type>) ->
+export const bindings = (generic: GenericFunction, type_arguments: Type[]) ->
   const types: Map<String, Type> = Map()
   const { type_params } = generic
   types[param.name.name] = arg for (param, arg) in type_params.zip(type_arguments)
   types
 
 const add_instance = (
-  program: ProgramWide, ref: GenericRef, type_arguments: Array<Type>,
-  methods: Array<ExtensionMethod>, variant: Int, at: Position
+  program: ProgramWide, ref: GenericRef, type_arguments: Type[], methods: ExtensionMethod[],
+  variant: Int, at: Position
 ) ->
   const generic = generic_of(program, ref)
   const type_bindings = bindings(generic, type_arguments)
@@ -176,7 +176,7 @@ const resolve_annotation = (
   program.annotated_call = nil
   type
 
-# `print<Int>`, as messages write an instance; a method's, `Array<Int>.map<String>`, by its
+# `print<Int>`, as messages write an instance; a method's, `Int[].map<String>`, by its
 # receiver and the type arguments of its own.
 const describe = (generic: GenericFunction, instance: Instance) ->
   const receiver = generic.receiver
@@ -189,5 +189,5 @@ const describe = (generic: GenericFunction, instance: Instance) ->
   return name if own_arguments.length == 0
   "#{name}<#{[format_type(type) for type in own_arguments].join(', ')}>"
 
-const same_methods = (a: Array<ExtensionMethod>, b: Array<ExtensionMethod>) ->
+const same_methods = (a: ExtensionMethod[], b: ExtensionMethod[]) ->
   a.length == b.length and a.all((method) -> b.contains(method))

@@ -9,13 +9,13 @@ extern lerta_byte_to_int: (Byte) -> Int
 extern lerta_int_to_byte: (Int) -> Byte
 extern lerta_binary_slice: (Binary, Int, Int) -> Binary
 extern lerta_binary_find: (Binary, Binary, Int) -> Int
-extern lerta_binary_from_bytes: (Array<Byte>) -> Binary
+extern lerta_binary_from_bytes: (Byte[]) -> Binary
 extern lerta_is_utf8: (Binary) -> Bool
 extern lerta_utf8_sequence_length: (Byte) -> Int
 extern lerta_is_utf8_continuation: (Byte) -> Bool
 # The same object as a String, for bytes that are valid UTF-8.
 extern lerta_binary_as_string: (Binary) -> String
-extern lerta_string_join: (Array<String>, String) -> String
+extern lerta_string_join: (String[], String) -> String
 extern lerta_float_to_string: (Float) -> String
 extern lerta_float_to_int: (Float) -> Int
 extern lerta_int_to_float: (Int) -> Float
@@ -126,7 +126,7 @@ extend String
     throw ValueError(message: 'split by an empty separator') if separator == ''
     const bytes = @binary
     const separator_bytes = separator.binary
-    const pieces: Array<String> = []
+    const pieces: String[] = []
     var start = 0
     var found = lerta_binary_find(bytes, separator_bytes, 0)
     while found >= 0
@@ -175,15 +175,15 @@ extend Binary
 # What a lead byte of a sequence of 1 to 4 bytes adds to the bits of the code point it holds.
 const UTF8_LEAD_OFFSETS = [0, 0xC0, 0xE0, 0xF0]
 
-extend Array<String>
+extend String[]
   # The Strings one after another, with the separator between each two.
   join = (separator: String) -> lerta_string_join(@, separator)
 
-extend Array<Byte>
+extend Byte[]
   # The same bytes, copied into a Binary.
   to_binary = -> lerta_binary_from_bytes(@)
 
-extend<T> Array<T>
+extend<T> T[]
   # The items, read as the Iter is.
   iter = (): Iter<T> -> (x for x in @)
   # A loop rather than `@any`, which would allocate a closure, and an Iter of the array, per call.
@@ -203,11 +203,11 @@ extend<T> Array<T>
   # The items in the order that `compare` gives (negative when its first argument goes first), equal
   # items keeping their order.
   # A merge sort: runs of `width` items, sorted, are merged in pairs, doubling it.
-  sorted = (compare: (T, T) -> Int): Array<T> ->
+  sorted = (compare: (T, T) -> Int): T[] ->
     var runs = [item for item in @]
     var width = 1
     while width < runs.length
-      const merged: Array<T> = []
+      const merged: T[] = []
       var start = 0
       while start < runs.length
         const middle = start + width < runs.length then start + width else runs.length
@@ -227,7 +227,7 @@ extend<T> Array<T>
       width *= 2
     runs
   # Pushes the items of another array, one by one; those of the array itself, if it is that, once.
-  append = (items: Array<T>) ->
+  append = (items: T[]) ->
     const count = items.length
     @push items[i] for i in 0...count
 
@@ -239,7 +239,7 @@ extend<T> Iter<T>
 extend<T> Iterable<T>
   map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)
   filter = (keep: (T) -> Bool): Iter<T> -> (x for x in @ when keep(x))
-  to_array = (): Array<T> -> [x for x in @]
+  to_array = (): T[] -> [x for x in @]
   any = (test: (T) -> Bool): Bool ->
     for x in @
       return true if test(x)

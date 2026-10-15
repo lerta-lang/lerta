@@ -25,9 +25,9 @@ export const generate_case = (g: Generator, case_expression: Case) ->
   const held = holds_subject then hold(g, subject_operand, subject_type!)
   const release_subject = held ? release_nothing
   const end_label = ir.fresh_label('case.end')
-  const incoming: Array<String> = []
+  const incoming: String[] = []
   # An arm that ends with a jump gives no operand; it never reaches the end.
-  const generate_arm_value = (body: Array<Statement>) ->
+  const generate_arm_value = (body: Statement[]) ->
     const value = generate_block_value(g, body, no_locals)
     const operand = value == '' then 'poison' else value
     incoming.push "[ #{operand}, %#{ir.current_block} ]"
@@ -82,9 +82,7 @@ export const generate_if_value = (g: Generator, if_expression: If) ->
   const else_label = ir.fresh_label('if.else')
   const end_label = ir.fresh_label('if.end')
   ir.emit "br i1 #{condition.test}, label %#{then_label}, label %#{else_label}"
-  const branch = (
-    label: String, body: Array<Statement>, define: (Map<String, CodegenLocal>) -> void
-  ) ->
+  const branch = (label: String, body: Statement[], define: (Map<String, CodegenLocal>) -> void) ->
     ir.start_block label
     const operand = generate_block_value(g, body, define)
     const from = ir.current_block
@@ -97,7 +95,7 @@ export const generate_if_value = (g: Generator, if_expression: If) ->
   merge g, type_of(g, if_expression), incoming
 
 # The value of the arms at their end block: none for void, and none that comes for never.
-export const merge = (g: Generator, type: Type, incoming: Array<String>) ->
+export const merge = (g: Generator, type: Type, incoming: String[]) ->
   case
     when is_kind(type, 'void') then ''
     when is_kind(type, 'never') then 'poison'

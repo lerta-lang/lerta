@@ -325,7 +325,7 @@ const opened_doc = (expression: Expression, context: Context): Doc? ->
 const flat_literal = (literal: Expression, context: Context): Doc ->
   const inside = context.inside_brackets()
   const at = literal.position
-  const flat = (open: String, items: Array<Item>, close: String) ->
+  const flat = (open: String, items: Item[], close: String) ->
     const closing_bracket = closing(close, closing_at(at, context))
     join [token(open, at), separated([item.doc for item in items], text(', ')), closing_bracket]
   case literal
@@ -397,7 +397,7 @@ const field_item = (field: NamedValue, context: Context) ->
   Item doc, after_comment, simple: is_simple(value)
 
 # Braces with spaces inside them on one line (see Inside `{}`).
-const braced = (open_at: Position, items: Array<Item>, context: Context): Doc ->
+const braced = (open_at: Position, items: Item[], context: Context): Doc ->
   const close_at = closing_at(open_at, context)
   const flat_items = separated([item.doc for item in items], text(', '))
   const closing_brace = closing(' }', close_at)
@@ -435,7 +435,7 @@ export const value_after = (value: Expression, context: Context): Doc ->
 # The items of a literal in an indented block, without brackets, if it can be written so: a block
 # reads one element as the element itself, and takes no spread.
 const literal_block = (literal: Expression, context: Context): Doc? ->
-  const items: Array<Item> =
+  const items: Item[] =
     case literal
       when ArrayLiteral
         const spreads = literal.elements.find_index(is_spread) != nil
@@ -498,7 +498,7 @@ const comprehension_forms = (comprehension: Comprehension, context: Context) ->
   const element = expression_doc(comprehension.element, inside)
   const header =
     loop_header(comprehension.variable, comprehension.index, comprehension.iterable, inside)
-  const parts: Array<Doc> = [element, header]
+  const parts: Doc[] = [element, header]
   if const guard = comprehension.guard
     parts.push join([text('when '), expression_doc(guard, inside)])
   const lazy = comprehension.lazy != nil
@@ -520,7 +520,7 @@ export const loop_header = (
       tuple_names variable.position, context
     else
       token variable.name, variable.position
-  const parts: Array<Doc> = [names]
+  const parts: Doc[] = [names]
   parts.push join([text(', '), token(at.name, at.position)]) if const at = index
   const with_index = join(parts)
   const word = word_before(variable.position, 'for', context)
@@ -572,7 +572,7 @@ const function_head = (function: FunctionLiteral, context: Context): Doc ->
   join [list, result, text(' ->')]
 
 const parameter = (param: Parameter, context: Context) ->
-  const parts: Array<Doc> = [token(param.name.name, param.name.position)]
+  const parts: Doc[] = [token(param.name.name, param.name.position)]
   parts.push join([text(': '), type_doc(type)]) if const type = param.type
   parts.push join([text(' = '), expression_doc(value, context)]) if const value = param.default
   const after_comment = context.source.comment_before(param.name.position)
@@ -602,7 +602,7 @@ const arm_doc = (arm: CaseArm, context: Context): Doc ->
 # An arm's body on its line where it is one statement that fits there, and otherwise in a block
 # (see Branches).
 # `head` is where the arm starts, whose block, if it holds a comment, stays one.
-const arm_body = (body: Array<Statement>, head: Position, context: Context, joint: String): Doc ->
+const arm_body = (body: Statement[], head: Position, context: Context, joint: String): Doc ->
   const block = indent(join([line_feed(), block_doc(body, context)]))
   const has_comments = context.source.block_has_comments(head)
   return block if body.length != 1 or not is_inline(body[0], context) or has_comments
@@ -610,8 +610,8 @@ const arm_body = (body: Array<Statement>, head: Position, context: Context, join
   rule BRANCHES, choice(on_line, block)
 
 const try_doc = (try_value: Try, context: Context): Doc ->
-  const block = (body: Array<Statement>) -> indent(join([line_feed(), block_doc(body, context)]))
-  const parts: Array<Doc> = [keyword('try', try_value.position), block(try_value.body)]
+  const block = (body: Statement[]) -> indent(join([line_feed(), block_doc(body, context)]))
+  const parts: Doc[] = [keyword('try', try_value.position), block(try_value.body)]
   for clause in try_value.catches
     const name = token(clause.name.name, clause.name.position)
     const type = optional_doc(clause.type, (t) -> join([text(': '), type_doc(t)]))

@@ -16,7 +16,7 @@ export class FunctionMarks
   await_at: Position? = nil
 
 export class TokenStream
-  tokens: Array<Token>
+  tokens: Token[]
   # Names the source in diagnostics.
   path: String
   # Where the interpolated code that the tokens are made of starts, if they are; a function literal
@@ -27,9 +27,9 @@ export class TokenStream
   spread: Position? = nil
   # How line breaks are read inside each of the brackets being parsed; outside brackets there are
   # none.
-  line_breaks: Array<LineBreaks> = []
+  line_breaks: LineBreaks[] = []
   # What each function literal being parsed, innermost last, has of its own.
-  functions: Array<FunctionMarks> = []
+  functions: FunctionMarks[] = []
 
   # The kind of the next token if it continues the current expression. After an indented block
   # (such as a `case`) the line has ended, so `-1` on the next line is not a subtraction.
@@ -104,16 +104,16 @@ export class TokenStream
     result
 
   # Items separated by `separator`, at least one.
-  parse_separated = <T>(separator: TokenKind, parse_item: () -> T): Array<T> ->
+  parse_separated = <T>(separator: TokenKind, parse_item: () -> T): T[] ->
     const items = [parse_item()]
     items.push parse_item() while @accept(separator)
     items
 
   # A newline and an indented block of lines, each of which `parse_line` parses.
-  parse_lines = <T>(description: String, parse_line: () -> T): Array<T> ->
+  parse_lines = <T>(description: String, parse_line: () -> T): T[] ->
     @expect NEWLINE, 'end of line'
     @expect INDENT, description
-    const lines: Array<T> = []
+    const lines: T[] = []
     while @peek().kind != DEDENT
       lines.push parse_line()
       @expect_line_end()
@@ -135,14 +135,14 @@ export class TokenStream
 
   # The items of a list after its opening bracket, through `close`. Items are separated by a
   # comma, by a line end, or by both, a comma ending a line.
-  parse_list = <T>(close: TokenKind, parse_item: () -> T): Array<T> ->
+  parse_list = <T>(close: TokenKind, parse_item: () -> T): T[] ->
     const parse_items = ->
       @accept LINE_BREAK
       @parse_list_rest close, parse_item, []
     @inside SEPARATE, parse_items
 
   # The rest of a list whose first items are `items`, through `close`.
-  parse_list_rest = <T>(close: TokenKind, parse_item: () -> T, items: Array<T>): Array<T> ->
+  parse_list_rest = <T>(close: TokenKind, parse_item: () -> T, items: T[]): T[] ->
     return items if items.length > 0 and not @ends_item(close)
     while not @accept(close)
       items.push parse_item()
@@ -198,7 +198,7 @@ export class TokenStream
 
 export const token_position = (token: Token) -> Position(line: token.line, column: token.column)
 
-export const is_one_of = (kind: TokenKind, kinds: Array<TokenKind>) -> kinds.contains(kind)
+export const is_one_of = (kind: TokenKind, kinds: TokenKind[]) -> kinds.contains(kind)
 
 const describe_token = (token: Token) ->
   case token.kind

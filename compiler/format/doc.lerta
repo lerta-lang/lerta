@@ -24,7 +24,7 @@ export struct Indent
   doc: Doc
 
 export struct Concat
-  docs: Array<Doc>
+  docs: Doc[]
 
 # `flat` where its first line fits on the rest of the line, with what follows it up to the next
 # line feed, and otherwise `broken`. A part such as the block of a `case` is laid out on lines of
@@ -55,7 +55,7 @@ export struct RulePlace
 
 export struct Layout
   text: String
-  rules: Array<RulePlace>
+  rules: RulePlace[]
 
 export const lay_out = (doc: Doc, source: SourceText) ->
   const printer = Printer(source)
@@ -78,10 +78,10 @@ type Step = Work | RuleEnd
 
 class Printer
   source: SourceText
-  pieces: Array<String> = []
-  rules: Array<RulePlace> = []
+  pieces: String[] = []
+  rules: RulePlace[] = []
   # The parts of rules that no text has started yet.
-  unstarted: Array<RuleEnd> = []
+  unstarted: RuleEnd[] = []
   line = 1
   column = 1
   # The depth of the line that the next text starts, which a line feed sets; nil once text is on it.
@@ -98,7 +98,7 @@ class Printer
   comment_lines: Map<Int, Bool> = lines_of(@source.comments)
 
   run = (doc: Doc) ->
-    const steps: Array<Step> = [Work(doc, indent: 0)]
+    const steps: Step[] = [Work(doc, indent: 0)]
     while steps.length > 0
       const step = steps.pop()
       case step
@@ -113,7 +113,7 @@ class Printer
     @feed_lines()
 
   # Prints the step, or puts what it holds on `steps`, the first of them last.
-  print = (work: Work, steps: Array<Step>) ->
+  print = (work: Work, steps: Step[]) ->
     const { doc, indent } = work
     const inner = (part: Doc, depth: Int) -> Work(doc: part, indent: depth)
     case doc
@@ -135,7 +135,7 @@ class Printer
         steps.push inner(doc.doc, indent)
 
   # The part of the rule ends after what is on `steps` next, and starts at its first text.
-  start_rule = (style_rule: StyleRule, steps: Array<Step>) ->
+  start_rule = (style_rule: StyleRule, steps: Step[]) ->
     const rule_end = RuleEnd(rule: style_rule)
     @unstarted.push rule_end
     steps.push rule_end
@@ -226,7 +226,7 @@ class Printer
     Position line: @line, column: @column
 
 # Whether the comment on each line that holds one is on a line of its own.
-const lines_of = (comments: Array<Comment>) ->
+const lines_of = (comments: Comment[]) ->
   const lines: Map<Int, Bool> = Map()
   lines[comment.line] = comment.own_line for comment in comments
   lines
@@ -249,8 +249,7 @@ struct Measured
 # `flat` holds it, which breaks there itself; from `from_line` mid-line, as a comment not printed
 # yet would go before the first text.
 const fits = (
-  flat: Doc, room: Int, indent: Int, steps: Array<Step>, comment_lines: Map<Int, Bool>,
-  from_line: Int
+  flat: Doc, room: Int, indent: Int, steps: Step[], comment_lines: Map<Int, Bool>, from_line: Int
 ) ->
   var left = room
   const pending = [Measured(doc: flat, depth: indent, nested: false)]
@@ -324,7 +323,7 @@ export const token = (value: String, at: Position): Doc -> Text(at, text: value)
 # A closing bracket, at its position in the source if it is there (see Text.closes).
 export const closing = (value: String, at: Position?): Doc -> Text(at, text: value, closes: true)
 
-export const join = (docs: Array<Doc>): Doc -> Concat(docs)
+export const join = (docs: Doc[]): Doc -> Concat(docs)
 
 export const line_feed = (): Doc -> Newline(count: 1)
 
@@ -340,8 +339,8 @@ export const breaking = (style_rule: StyleRule, flat: Doc, broken: Doc): Doc ->
 export const rule = (style_rule: StyleRule, doc: Doc): Doc -> Rule(doc, rule: style_rule)
 
 # The docs with `separator` between them.
-export const separated = (docs: Array<Doc>, separator: Doc): Doc ->
-  const parts: Array<Doc> = []
+export const separated = (docs: Doc[], separator: Doc): Doc ->
+  const parts: Doc[] = []
   for doc, i in docs
     parts.push separator if i > 0
     parts.push doc

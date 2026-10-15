@@ -18,7 +18,7 @@ import cache_dir, cached_runtime from './runtime_cache'
 # files that define the program's externs.
 export struct BuildRequest
   source: String
-  linked_files: Array<String>
+  linked_files: String[]
   output: String?
   optimize: Bool
   target: String?
@@ -43,14 +43,13 @@ export const build = (request: BuildRequest) -> build_then(request, nil)
 
 # Builds the program in the temporary directory and runs it there with `args`, exiting with its
 # exit code.
-export const build_and_run = (request: BuildRequest, args: Array<String>) ->
-  build_then request, args
+export const build_and_run = (request: BuildRequest, args: String[]) -> build_then(request, args)
 
 # Builds the executable, then runs it with `run_args`, if given, while the temporary directory,
 # which holds the IR and, without an output, the executable, is still there. Exits with 0 or the
 # code that the executable exits with. clang's messages go to stderr as clang writes them, and its
 # failure exits with code 1.
-const build_then = (request: BuildRequest, run_args: Array<String>?) ->
+const build_then = (request: BuildRequest, run_args: String[]?) ->
   const program = check_program(request.source, request.warnings_as_errors)
   const not_utf8 = CompileError(message: 'the temporary directory is not valid UTF-8')
   const dir = make_temp_dir().text() ? throw not_utf8
@@ -62,7 +61,7 @@ const build_then = (request: BuildRequest, run_args: Array<String>?) ->
 
 # What build_then exits with: 1 if clang fails.
 const build_in_dir = (
-  request: BuildRequest, program: ProgramWide, dir: String, run_args: Array<String>?
+  request: BuildRequest, program: ProgramWide, dir: String, run_args: String[]?
 ) ->
   const runtime = await cached_runtime(request.optimize, request.target, dir) ? return 1
   const modules = generate(program, runtime.function_attributes, runtime.coro_end_type, true)
@@ -89,7 +88,7 @@ const build_in_dir = (
 
 # Has clang compile the IR of each module, written to `dir`, into an object file there, as many at
 # once as there are CPUs; nil if it fails for any.
-const compile_modules = (modules: Array<String>, flags: Array<String>, dir: String) ->
+const compile_modules = (modules: String[], flags: String[], dir: String) ->
   const paths = [join(dir, "module#{i}") for _, i in modules]
   write_file "#{path}.ll", text.binary for (path, text) in paths.zip(modules)
   var next = 0

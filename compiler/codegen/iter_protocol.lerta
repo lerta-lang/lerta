@@ -20,7 +20,7 @@ const PROTOCOL_LAYOUT = heap_object_type(PROTOCOL)
 # A kind of Iter: its LLVM struct type, and the fields of its state.
 export struct IterKind
   layout: String
-  state: Array<HeapField>
+  state: HeapField[]
 
 # The code of a kind is the bodies of has_next, which returns an i1, and of next, which returns the
 # item and runs only when has_next is true. They get the Iter as `%iter`.
@@ -33,8 +33,7 @@ const all_fields = (kind: IterKind) -> [PROTOCOL..., kind.state...]
 # The kind of `key`, defined with its drop function and code the first time it is given. Its next
 # does not check for the end: its callers ask has_next first (see emit_checked_next).
 export const define_kind = (
-  ir: IrBuilder, key: String, state: Array<HeapField>, item: Type, has_next: IterCode,
-  next: IterCode
+  ir: IrBuilder, key: String, state: HeapField[], item: Type, has_next: IterCode, next: IterCode
 ) ->
   const define = (layout: String, module: IrModule) ->
     const kind = IterKind(layout, state)
@@ -60,7 +59,7 @@ const emit_throw_unless = (ir: IrBuilder, condition: String, check: () -> void) 
   ir.start_block go_label
 
 # A new Iter of the kind, not started, which takes over the values of its state.
-export const emit_iter = (ir: IrBuilder, kind: IterKind, state_values: Array<String>) ->
+export const emit_iter = (ir: IrBuilder, kind: IterKind, state_values: String[]) ->
   const iter = emit_heap_allocate(ir, kind.layout, symbol_of(kind, 'drop'))
   const values = [symbol_of(kind, 'has_next'), symbol_of(kind, 'next'), 'false', state_values...]
   const fields = all_fields(kind)

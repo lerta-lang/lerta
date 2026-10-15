@@ -17,8 +17,8 @@ export struct Narrowing
 
 # The locals a condition narrows where it holds, and where it does not.
 export struct ConditionNarrowings
-  where_true: Array<Narrowing>
-  where_false: Array<Narrowing>
+  where_true: Narrowing[]
+  where_false: Narrowing[]
 
 export const narrowings_where = (narrowings: ConditionNarrowings, value: Bool) ->
   value then narrowings.where_true else narrowings.where_false
@@ -70,9 +70,7 @@ const nil_tested = (left: Expression, right: Expression) ->
 # A body that cannot go on past its end: it ends with an expression that never gives a value,
 # such as `return`, `break`, `continue`, `throw` or a call to `exit`, or an `if` whose branches
 # both end so.
-export const ends_with_jump = (
-  statements: Array<Statement>, is_never: (Expression) -> Bool
-): Bool ->
+export const ends_with_jump = (statements: Statement[], is_never: (Expression) -> Bool): Bool ->
   return false if statements.length == 0
   const last = statements.last()!
   if last is If
@@ -105,12 +103,12 @@ export const narrowings_of = (body: Body, condition: Condition): ConditionNarrow
 const narrowings_of_logical = (body: Body, logical: BinaryOperation) ->
   const value = logical.operator == 'and'
   const first = narrowings_where(narrowings_of(body, logical.left), value)
-  var second: Array<Narrowing> = []
+  var second: Narrowing[] = []
   where_right_operand body, logical, ->
     second = narrowings_where(narrowings_of(body, logical.right), value)
   narrowings_only_where [first..., second...], value
 
-const narrowings_only_where = (narrowings: Array<Narrowing>, value: Bool) ->
+const narrowings_only_where = (narrowings: Narrowing[], value: Bool) ->
   return ConditionNarrowings(where_true: narrowings, where_false: []) if value
   ConditionNarrowings where_true: [], where_false: narrowings
 
@@ -124,7 +122,7 @@ export const where_right_operand = (body: Body, logical: BinaryOperation, check:
   body.scopes.pop()
 
 # Until the innermost scope ends, the locals are seen with the narrower types.
-export const narrow = (body: Body, narrowings: Array<Narrowing>) ->
+export const narrow = (body: Body, narrowings: Narrowing[]) ->
   for narrowing in narrowings
     const { local, type } = narrowing
     body.scopes.narrow local.identifier.name, narrowed_view(local, type)

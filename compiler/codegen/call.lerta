@@ -50,7 +50,7 @@ const generate_named_call = (g: Generator, call: Call, name: String) ->
   return generate_construction(g, call, callee_type) if callee_type is ObjectType
   const exported = g.code.symbols.has(name) then nil else named_export(g.code.shared, name)
   if exported is ExternExport
-    const emit_call = (operands: Array<String>) ->
+    const emit_call = (operands: String[]) ->
       emit_runtime_call g.ir, exported.symbol, function_type_of(callee_type), operands
     const result = with_arguments(g, call.args, emit_call)
     # A C function of the runtime may throw (see lerta_raise).
@@ -80,11 +80,11 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
   const call_method = ->
     case source
       when BuiltinMethod
-        const emit_call = (args: Array<String>) ->
+        const emit_call = (args: String[]) ->
           call_builtin_method g.ir, name, object, object_type, args
         with_arguments g, call.args, emit_call
       when InterfaceMethod
-        const emit_call = (operands: Array<String>) ->
+        const emit_call = (operands: String[]) ->
           const args = typed_arguments(g, call.args, operands)
           emit_interface_call g.ir, object, source.index, source.type, args
         with_arguments g, call.args, emit_call
@@ -121,12 +121,12 @@ const lerta_method_symbol = (g: Generator, source: MethodSource, name: String, c
 # Calls a function written in Lerta by its symbol, or by the entry that computes the defaults of
 # the arguments left out; a method gets `receiver`, its object as an IR argument, first.
 const call_function = (
-  g: Generator, symbol: String, type: Type, args: Array<Expression>, receiver: String?
+  g: Generator, symbol: String, type: Type, args: Expression[], receiver: String?
 ) ->
   const left_out = args.length < function_type_of(type).params.length
   const target = left_out then default_entry_symbol(symbol, args.length) else symbol
-  const emit_call = (operands: Array<String>) ->
-    const all_args: Array<String> = []
+  const emit_call = (operands: String[]) ->
+    const all_args: String[] = []
     all_args.push receiver if receiver
     all_args.append typed_arguments(g, args, operands)
     call_user_function g.ir, target, type, all_args.join(', ')
@@ -136,7 +136,7 @@ const call_function = (
   result
 
 # The arguments' operands with their IR types.
-const typed_arguments = (g: Generator, args: Array<Expression>, operands: Array<String>) ->
+const typed_arguments = (g: Generator, args: Expression[], operands: String[]) ->
   ["#{ir_type(type_at_use(g, arg))} #{operands[i]}" for arg, i in args]
 
 export const call_user_function = (ir: IrBuilder, symbol: String, type: Type, args: String) ->
@@ -147,8 +147,8 @@ export const call_user_function = (ir: IrBuilder, symbol: String, type: Type, ar
 
 # Calls a function value, a closure, which the call owns and releases; it is evaluated before
 # the arguments, as a named function is known before them.
-const call_closure = (g: Generator, closure: String, type: Type, args: Array<Expression>) ->
-  const emit_call = (operands: Array<String>) -> emit_closure_call(g.ir, closure, type, operands)
+const call_closure = (g: Generator, closure: String, type: Type, args: Expression[]) ->
+  const emit_call = (operands: String[]) -> emit_closure_call(g.ir, closure, type, operands)
   const result = holding(g, closure, type, -> with_arguments(g, args, emit_call))
   emit_release g.ir, closure
   emit_exception_check g
@@ -156,10 +156,8 @@ const call_closure = (g: Generator, closure: String, type: Type, args: Array<Exp
 
 # Generates the arguments, which `emit_call` borrows, and releases them after the call. Each is
 # held while the next ones are evaluated, which may throw.
-const with_arguments = (
-  g: Generator, args: Array<Expression>, emit_call: (Array<String>) -> String
-) ->
-  const call_and_release = (operands: Array<String>) ->
+const with_arguments = (g: Generator, args: Expression[], emit_call: (String[]) -> String) ->
+  const call_and_release = (operands: String[]) ->
     const result = emit_call(operands)
     release_if_reference g, arg, operands[i] for arg, i in args
     result
@@ -171,10 +169,10 @@ const with_arguments = (
 const generate_construction = (g: Generator, call: Call, type: ObjectType) ->
   const info = info_of(g.code.program, type)
   const named_args = call.named_args
-  const construct_and_release = (operands: Array<String>) ->
+  const construct_and_release = (operands: String[]) ->
     const given: Map<String, String> = Map()
     given[arg.name.name] = operands[i] for arg, i in named_args
-    const args: Array<String> = []
+    const args: String[] = []
     for field in info.fields
       continue if not is_argument(field)
       const field_type = field.type!
@@ -191,7 +189,7 @@ const generate_construction = (g: Generator, call: Call, type: ObjectType) ->
   object
 
 export const call_builtin_method = (
-  ir: IrBuilder, name: String, object: String, type: Type, args: Array<String>
+  ir: IrBuilder, name: String, object: String, type: Type, args: String[]
 ) ->
   case type
     when ArrayType then call_array_method(ir, name, object, type.element, args)

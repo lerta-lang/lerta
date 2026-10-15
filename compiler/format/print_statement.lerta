@@ -19,8 +19,8 @@ import BRANCHES, CALLS_WITHOUT_PARENTHESES, POSTFIX_FORMS from './rules'
 
 # The statements, one on each line. The parts of a destructuring, which the parser declares one by
 # one after the declaration that holds the value, are written as the one statement of the source.
-export const block_doc = (statements: Array<Statement>, context: Context): Doc ->
-  const lines: Array<Doc> = []
+export const block_doc = (statements: Statement[], context: Context): Doc ->
+  const lines: Doc[] = []
   var i = 0
   while i < statements.length
     const statement = statements[i]
@@ -127,7 +127,7 @@ export const inline_statement = (statement: Statement, context: Context): Doc ->
   statement_doc statement, context.after_head()
 
 const const_doc = (declaration: Declaration, context: Context): Doc ->
-  const parts: Array<Doc> = [exported(declaration.exported, declaration.position, context)]
+  const parts: Doc[] = [exported(declaration.exported, declaration.position, context)]
   parts.push text('weak ') if declaration.weak
   parts.push keyword(declaration.mutable then 'var ' else 'const ', declaration.position)
   parts.push token(declaration.name.name, declaration.name.position)
@@ -155,7 +155,7 @@ const condition_doc = (condition: Condition, context: Context): Doc ->
 # `if` and its block, and `else if` or `else` and its block (see Branches).
 export const if_doc = (if_node: If, context: Context): Doc ->
   const head = join([keyword('if ', if_node.position), condition_doc(if_node.condition, context)])
-  const parts: Array<Doc> = [head, block_below(if_node.then_body, context)]
+  const parts: Doc[] = [head, block_below(if_node.then_body, context)]
   const else_body = if_node.else_body
   if else_body.length == 1 and else_body[0] is If and not (else_body[0] as If!).nil_safe
     const word = word_before(else_body[0].position, 'else', context)
@@ -166,7 +166,7 @@ export const if_doc = (if_node: If, context: Context): Doc ->
     parts.push join([line_feed(), word, block_below(else_body, context)])
   join parts
 
-const block_below = (body: Array<Statement>, context: Context): Doc ->
+const block_below = (body: Statement[], context: Context): Doc ->
   indent join([line_feed(), block_doc(body, context)])
 
 # `statement if c`, for an `if` without `else` whose block holds one statement that can have it.
@@ -252,7 +252,7 @@ const call_statement = (call: Call, context: Context): Doc ->
   # The rule decides the space after the callee, which stands for the parentheses.
   const head =
     rule(CALLS_WITHOUT_PARENTHESES, join([expression_doc(call.callee, context), text(' ')]))
-  const command_of = (docs: Array<Doc>) -> join([head, separated(docs, text(', '))])
+  const command_of = (docs: Doc[]) -> join([head, separated(docs, text(', '))])
   const leading = [item.doc for item, i in items when i < items.length - 1]
   # A function literal last takes the lines below for its body, which parentheses could not hold.
   const last_arg = call.named_args.length == 0 then call.args.last()

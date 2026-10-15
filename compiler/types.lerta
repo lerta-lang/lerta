@@ -54,11 +54,11 @@ export struct RecordField
 # An anonymous struct, `{ x: Int, y: String }`; its fields are kept in name order, so that the
 # order they are written in does not matter (see record_type).
 export struct RecordType
-  fields: Array<RecordField>
+  fields: RecordField[]
 
 # `(Int, String)`: values taken apart by position, each named where it is used.
 export struct TupleType
-  items: Array<Type>
+  items: Type[]
 
 # A class or struct (see ObjectInfo). Its name is the one it is declared with; its symbol, made of
 # its module's index and its name, tells it apart from another module's type of the same name, and
@@ -69,7 +69,7 @@ export struct ObjectType
   module: String
   is_struct: Bool
   # The type arguments of a generic class or struct, as `Int` of `Stack<Int>`.
-  args: Array<Type>
+  args: Type[]
 
 # An interface (see InterfaceInfo), named as an ObjectType is. Its value holds a value of a type
 # that satisfies it, with the itab that reads that type's members.
@@ -78,7 +78,7 @@ export struct InterfaceType
   symbol: String
   module: String
   # The type arguments of a generic interface, as `Int` of `Iterable<Int>`.
-  args: Array<Type>
+  args: Type[]
 
 # An enum: its values are its members, held as their places among them (see EnumDeclaration). Its
 # name, symbol and module are as those of an ObjectType.
@@ -86,7 +86,7 @@ export struct EnumType
   name: String
   symbol: String
   module: String
-  members: Array<EnumMember>
+  members: EnumMember[]
 
 # A member of an enum, a name, `INTEGER`, or a string literal, `'('`, by its text, which its
 # to_string gives.
@@ -101,7 +101,7 @@ export const format_enum_member = (member: EnumMember) ->
 # `A | B`: classes and structs, by name; the object carries which one it is. The members are kept
 # in order (see union_type).
 export struct UnionType
-  members: Array<Type>
+  members: Type[]
 
 # `T?`: a T or nil.
 export struct OptionalType
@@ -113,7 +113,7 @@ export struct TypeParameterType
   name: String
 
 export struct FunctionType
-  params: Array<Type>
+  params: Type[]
   result: Type
 
 export type Type =
@@ -149,9 +149,9 @@ export const kind_of = (type: Type): TypeKind ->
 
 export const is_kind = (type: Type, kind: TypeKind) -> kind_of(type) == kind
 
-export const is_one_of_kinds = (type: Type, kinds: Array<TypeKind>) -> kinds.contains(kind_of(type))
+export const is_one_of_kinds = (type: Type, kinds: TypeKind[]) -> kinds.contains(kind_of(type))
 
-export const record_type = (fields: Array<RecordField>) ->
+export const record_type = (fields: RecordField[]) ->
   RecordType fields: fields.sorted((a, b) -> a.name.compare(b.name))
 
 # `T?` of a T that may be nil already, as a type argument may be, is T.
@@ -159,7 +159,7 @@ export const optional_type = (inner: Type): Type ->
   inner is OptionalType then inner else OptionalType(inner)
 
 # The members are kept in the order of their keys, so that `A | B` and `B | A` are the same type.
-export const union_type = (members: Array<Type>) ->
+export const union_type = (members: Type[]) ->
   UnionType members: members.sorted((a, b) -> type_key(a).compare(type_key(b)))
 
 # How a type is written in messages. A class, struct or enum is written by its name, and with its
@@ -199,7 +199,7 @@ const promise_text = (type: PromiseType, write: (Type) -> String) ->
 
 # A class, struct or interface, with its type arguments, and its module where `qualified` says so.
 const format_named = (
-  name: String, module: String, args: Array<Type>, format: (Type) -> String, qualified: Bool
+  name: String, module: String, args: Type[], format: (Type) -> String, qualified: Bool
 ) ->
   const written_args = [format(arg) for arg in args].join(', ')
   const written = args.length == 0 then name else "#{name}<#{written_args}>"
@@ -245,7 +245,7 @@ export const type_key = (type: Type): String ->
       "(#{[type_key(param) for param in type.params].join(', ')}) -> #{type_key(type.result)}"
     when TypeParameterType then type.name
 
-const named_key = (symbol: String, args: Array<Type>) ->
+const named_key = (symbol: String, args: Type[]) ->
   return symbol if args.length == 0
   "#{symbol}<#{[type_key(arg) for arg in args].join(', ')}>"
 
