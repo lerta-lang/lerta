@@ -17,6 +17,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 Where one part needs another first, across areas:
 
 - Checking a generic body at definition ([objects](objects.md#generics)) needs the [operator interfaces](language.md#operator-overloading), since a bound must then allow every operator the body uses, as `x * 2`.
+- Decoding JSON into a union of `Int` and `String` ([programs](programs.md#standard-library)), which the LSP needs for a request's `id`, needs [union members other than classes and structs](language.md#types).
 
 An order within one area is stated in its file.
 
