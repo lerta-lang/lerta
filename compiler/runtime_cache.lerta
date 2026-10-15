@@ -3,6 +3,7 @@
 import is_file, make_dir, read_file, remove_tree, rename, write_file from 'std:io'
 import env, platform, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
+import run_clang_jobs from './clang_jobs'
 import build_flags from './clang_flags'
 import CompileError from './errors'
 import hex from './hex'
@@ -175,15 +176,17 @@ const compile_runtime = (
   # uv.h, which the runtime includes, asks nothing of its users but where it is; libuv's own flags
   # are for its sources, whose warnings are not the program's, which a build prints.
   const flags = [build_flags(optimize, target)..., libuv_includes...]
-  for path in c_paths()
-    const source = join(source_dir, basename(path))
-    const object = join(staging_dir, object_name(path))
-    return false if await run('clang', ['-c', flags..., source, '-o', object]) != 0
+  const runtime_job = (path: String) ->
+    ['-c', flags..., join(source_dir, basename(path)), '-o', join(staging_dir, object_name(path))]
   const libuv_flags = [flags..., libuv.flags..., '-w']
-  for path in libuv.sources
+  const libuv_job = (path: String) ->
     const object = join(staging_dir, libuv_object_name(path))
-    const libuv_source = join(libuv_dir, path)
-    return false if await run('clang', ['-c', libuv_flags..., libuv_source, '-o', object]) != 0
+    ['-c', libuv_flags..., join(libuv_dir, path), '-o', object]
+  const jobs = [
+    [runtime_job(path) for path in c_paths()]...
+    [libuv_job(path) for path in libuv.sources]...
+  ]
+  return false if not await run_clang_jobs(jobs)
   const ir = await clang_probe_ir(flags, temp_dir) ? return false
   write_file join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir).binary
   write_file join(staging_dir, CORO_END_FILE), coro_end_type(ir).binary

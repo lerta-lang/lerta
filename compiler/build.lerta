@@ -1,10 +1,11 @@
 # Builds a program: has clang compile the IR that codegen generates for it, written to a temporary
 # directory, which is removed afterwards, and link it with the runtime's cached objects.
 import make_temp_dir, remove_tree, stderr, write_file from 'std:io'
-import cpu_count, exit, run from 'std:process'
+import exit, run from 'std:process'
 import all_warnings from './checker/diagnostics'
 import check_modules from './checker/modules'
 import ProgramWide from './checker/shared'
+import run_clang_jobs from './clang_jobs'
 import build_flags, executable_suffix, lto_cache_flags from './clang_flags'
 import generate from './codegen/codegen'
 import CompileError from './errors'
@@ -91,23 +92,9 @@ const build_in_dir = (
 const compile_modules = (modules: String[], flags: String[], dir: String) ->
   const paths = [join(dir, "module#{i}") for _, i in modules]
   write_file "#{path}.ll", text.binary for (path, text) in paths.zip(modules)
-  var next = 0
-  var failed = false
-  # Each compiles the next module until none is left, or one has failed.
-  const worker = ->
-    while not failed and next < paths.length
-      const path = paths[next]
-      next += 1
-      # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
-      const args = ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]
-      failed = true if await run('clang', args) != 0
-  const workers = [worker() for _ in 0...cpu_count]
-  # Each is waited for, even after one has thrown, before the directory is removed.
-  var error: Error? = nil
-  for each in workers
-    try
-      await each
-    catch thrown
-      error = thrown
-  throw thrown if const thrown = error
-  failed then nil else ["#{path}.o" for path in paths]
+  # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
+  const job = (path: String) ->
+    ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]
+  const jobs = [job(path) for path in paths]
+  return nil if not await run_clang_jobs(jobs)
+  ["#{path}.o" for path in paths]
