@@ -1,0 +1,75 @@
+# The types written in a module that the checker could infer (see Type annotations in
+# docs/reference/style.md), which `lerta fmt` leaves out: those without which the program checks to
+# the same types, and the same warnings, such as of an import that only a type used.
+import all_warnings from '../checker/diagnostics'
+import check_modules from '../checker/modules'
+import ProgramWide from '../checker/shared'
+import dump_checked from '../checked_dump'
+import CompileError from '../errors'
+import load_modules, Module from '../loader'
+import format_type from '../types'
+import Annotation, annotations_of from './annotated'
+
+# The keys (see annotation_key) of the annotations of the module at `path` that can be left out
+# together; none if the program does not check.
+export const removable_annotations = (path: String): String[] ->
+  const modules = load_modules(path)
+  const checked = check(path, modules) ? return []
+  const annotations = annotations_of(entry_program(modules))
+  # Telling the unused names adds warnings to the program, so it is done once.
+  const warnings = all_warnings(checked)
+  # The checking reads the syntax tree without changing it, so each try leaves the annotations out of
+  # the one tree, and puts them back after.
+  const checks_the_same = (keys: String[]) ->
+    for_keys annotations, keys, (annotation) -> annotation.remove()
+    const original = result_text(checked, dump_checked(checked), warnings)
+    var same = false
+    if const tried = check(path, modules)
+      same = result_text(tried, dump_checked(tried), all_warnings(tried)) == original
+    for_keys annotations, keys, (annotation) -> annotation.restore()
+    same
+  removable_among [], [annotation.key for annotation in annotations], checks_the_same
+
+# `accepted` and those of `trying` that can be left out with them, found by halving `trying` until
+# the parts that cannot be left out are single annotations, so that a module with few that cannot is
+# checked few times. Which of the annotations that can be left out alone but not together are left
+# out depends on their order; those found are checked together, so a second run finds no more.
+const removable_among = (
+  accepted: String[], trying: String[], checks_the_same: (String[]) -> Bool
+): String[] ->
+  return accepted if trying.length == 0
+  const all = [accepted..., trying...]
+  return all if checks_the_same(all)
+  return accepted if trying.length == 1
+  const half = trying.length / 2
+  const first = [key for key, i in trying when i < half]
+  const second = [key for key, i in trying when i >= half]
+  removable_among removable_among(accepted, first, checks_the_same), second, checks_the_same
+
+# The program checked quietly; nil if it does not check.
+const check = (path: String, modules: Module[]) ->
+  try
+    check_modules path, modules, false
+  catch _: CompileError
+    nil
+
+# What the checking of the program gives that an annotation can change: the dump, with the types of
+# the nodes; the types of the fields, which the dump lacks and code that the program does not hold,
+# such as a module that imports the entry module, can rely on; and the warnings.
+const result_text = (program: ProgramWide, dump: String, warnings: String[]) ->
+  [dump, field_types(program)..., warnings...].join("\n")
+
+const field_types = (program: ProgramWide) ->
+  const lines: String[] = []
+  for info in program.infos.values()
+    for field in info.fields
+      const type = field.type then format_type(field.type!) else '-'
+      lines.push "#{info.type.symbol}.#{field.name.name}: #{type}"
+  lines
+
+# The entry module comes last (see load_modules).
+const entry_program = (modules: Module[]) -> modules.last()!.program
+
+const for_keys = (annotations: Annotation[], keys: String[], action: (Annotation) -> void) ->
+  for annotation in annotations
+    action annotation if keys.contains(annotation.key)

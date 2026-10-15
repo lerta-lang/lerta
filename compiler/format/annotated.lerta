@@ -1,0 +1,190 @@
+# The types written in a syntax tree that the checker may be able to infer, and how to take them out
+# of it.
+import
+  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
+  Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern,
+  For, FunctionLiteral, If, Import, Index, InterfaceDeclaration, Interpolation, IsTest, MapLiteral,
+  Member, MemberDeclaration, Parameter, Pass, Position, Range, RecordLiteral, Return, Statement,
+  Throw, Try, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration, UnaryOperation, Unwrap, While,
+  Yield
+from '../ast'
+
+# A written type, named by `key` (see annotation_key), which `remove` takes out of the syntax tree
+# and `restore` puts back.
+export struct Annotation
+  key: String
+  remove: () -> void
+  restore: () -> void
+
+# The checking and the printer find an annotation in syntax trees parsed apart, by what it annotates
+# (`return`, `parameter`, `variable` or `field`) and where that is: the function literal, or the
+# name.
+export const annotation_key = (kind: String, at: Position) -> "#{kind} #{at.line}:#{at.column}"
+
+# The annotations that may be left out, in the order of the source. Those in generic functions and
+# types are not: the checker checks their code only for each instance, which tells nothing of the
+# code no instance uses. Nor are the types of the parameters of top-level functions, methods and
+# function values held by a `const` without a type, which no function type is expected for (see
+# Parameter), but those with a default. This only spares checks that would fail: the checking
+# decides which can be left out (see removable_annotations).
+export const annotations_of = (program: Statement[]) ->
+  const found: Annotation[] = []
+  add_statements found, program
+  found
+
+const add_statements = (found: Annotation[], statements: Statement[]) ->
+  add_statement found, statement for statement in statements
+
+const add_statement = (found: Annotation[], statement: Statement): void ->
+  case statement
+    when Declaration
+      found.push variable_annotation(statement) if statement.type != nil
+      add_value found, statement.value, statement.type != nil
+    when Assignment
+      add_expression found, statement.target
+      add_expression found, statement.value
+    when While
+      add_condition found, statement.condition
+      add_statements found, statement.body
+    when For
+      add_expression found, statement.iterable
+      add_statements found, statement.body
+    when TypeDeclaration
+      add_members found, statement.members if statement.type_params.length == 0
+    when Extend then add_members(found, statement.members) if statement.type_params.length == 0
+    when Pass, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern, Import then pass
+    else add_expression(found, statement as Expression!)
+
+# The fields with a value, and the methods, whose parameters no function type is expected for.
+const add_members = (found: Annotation[], members: MemberDeclaration[]) ->
+  for member, i in members
+    const value = member.value ? continue
+    found.push field_annotation(members, i) if member.type != nil and not (value is FunctionLiteral)
+    add_value found, value, false
+
+# A value where a type is `expected` or not, which tells whether a function literal there can leave
+# out the types of its parameters.
+const add_value = (found: Annotation[], value: Expression, expected: Bool) ->
+  if value is FunctionLiteral
+    add_function found, value, expected
+  else
+    add_expression found, value
+
+const add_function = (found: Annotation[], literal: FunctionLiteral, expected: Bool) ->
+  return if literal.type_params.length > 0
+  for param, i in literal.params
+    if param.type != nil and (expected or param.default != nil)
+      found.push parameter_annotation(literal, i)
+  found.push return_annotation(literal) if literal.return_type != nil
+  add_expression found, value for value in default_values(literal.params)
+  add_statements found, literal.body
+
+const default_values = (params: Parameter[]) ->
+  const values: Expression[] = []
+  for param in params
+    values.push value if const value = param.default
+  values
+
+const add_condition = (found: Annotation[], condition: Condition) ->
+  case condition
+    when Binding then add_expression(found, condition.value)
+    else add_expression(found, condition as Expression!)
+
+const add_expression = (found: Annotation[], expression: Expression): void ->
+  const add = (value: Expression) -> add_expression(found, value)
+  case expression
+    when FunctionLiteral then add_function(found, expression, true)
+    when Interpolation
+      for part in expression.parts
+        add part if part is Call
+    when Throw then add(expression.message)
+    when Yield then add(expression.value)
+    when Await then add(expression.operand)
+    when Unwrap then add(expression.operand)
+    when UnaryOperation then add(expression.operand)
+    when Coalesce
+      add expression.value
+      add expression.fallback
+    when ArrayLiteral then add(element) for element in expression.elements
+    when MapLiteral
+      for entry in expression.entries
+        add entry.key
+        add entry.value
+    when Comprehension
+      add expression.iterable
+      add guard if const guard = expression.guard
+      add expression.element
+    when RecordLiteral then add(field.value) for field in expression.fields
+    when TupleLiteral then add(item) for item in expression.items
+    when TupleItem then add(expression.tuple)
+    when Index
+      add expression.object
+      add expression.index
+    when Call
+      add expression.callee
+      add arg for arg in expression.args
+      add arg.value for arg in expression.named_args
+    when Member then add(expression.object)
+    when BinaryOperation
+      add expression.left
+      add expression.right
+    when Range
+      add expression.start
+      add expression.end
+    when IsTest then add(expression.value)
+    when Cast then add(expression.value)
+    when Conditional
+      add expression.condition
+      add expression.then_value
+      add expression.else_value
+    when Case
+      add subject if const subject = expression.subject
+      for arm in expression.arms
+        add pattern for pattern in arm.patterns
+        add_statements found, arm.body
+      add_statements found, otherwise if const otherwise = expression.otherwise
+    when If
+      add_condition found, expression.condition
+      add_statements found, expression.then_body
+      add_statements found, expression.else_body
+    when Return then add(value) if const value = expression.value
+    when Try
+      add_statements found, expression.body
+      add_statements found, catch_clause.body for catch_clause in expression.catches
+      add_statements found, finally_body if const finally_body = expression.finally_body
+    else pass
+
+const return_annotation = (literal: FunctionLiteral) ->
+  const type = literal.return_type
+  Annotation(
+    key: annotation_key('return', literal.position)
+    remove: -> literal.return_type = nil
+    restore: -> literal.return_type = type
+  )
+
+const parameter_annotation = (literal: FunctionLiteral, i: Int) ->
+  const param = literal.params[i]
+  Annotation(
+    key: annotation_key('parameter', param.name.position)
+    remove: -> literal.params[i] = Parameter(name: param.name, type: nil, default: param.default)
+    restore: -> literal.params[i] = param
+  )
+
+const variable_annotation = (declaration: Declaration) ->
+  const type = declaration.type
+  Annotation(
+    key: annotation_key('variable', declaration.name.position)
+    remove: -> declaration.type = nil
+    restore: -> declaration.type = type
+  )
+
+const field_annotation = (members: MemberDeclaration[], i: Int) ->
+  const member = members[i]
+  const { name, modifier, value, has_default, position } = member
+  Annotation(
+    key: annotation_key('field', name.position)
+    remove: -> members[i] = MemberDeclaration(
+      name, modifier, value, has_default, position, type: nil
+    )
+    restore: -> members[i] = member
+  )

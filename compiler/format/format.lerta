@@ -5,6 +5,7 @@ import dump_ast from '../ast_dump'
 import CompileError from '../errors'
 import lex from '../lexer/tokens'
 import parse from '../parser/statement'
+import annotations_of from './annotated'
 import hunks from './diff'
 import join, lay_out, line_feed, RulePlace, text from './doc'
 import block_doc from './print_statement'
@@ -21,13 +22,16 @@ export struct Formatted
   text: String
   findings: Finding[]
 
-# The source in the style, and where it differs from it. Throws a CompileError if the source does
-# not parse, or if the text in the style would not parse to the same program, which would be a bug.
-export const format_source = (source: String, path: String): Formatted ->
+# The source in the style, without the annotations of `removed_types` (see annotation_key), and
+# where it differs from it. Throws a CompileError if the source does not parse, or if the text in
+# the style would not parse to the same program, which would be a bug.
+export const format_source = (source: String, path: String, removed_types: String[]) ->
   const lexed = lex(source, path)
   const statements = parse(lexed.tokens, path)
+  for annotation in annotations_of(statements)
+    annotation.remove() if removed_types.contains(annotation.key)
   const text_source = source_text(source, lexed)
-  const context = Context(source: text_source)
+  const context = Context(removed_types, source: text_source)
   const body = block_doc(statements, context)
   const doc = statements.length == 0 then text('') else join([body, line_feed()])
   const layout = lay_out(doc, text_source)
@@ -121,10 +125,12 @@ const first_difference = (old: String, new: String) ->
   i += 1 while i < old_points.length and i < new_points.length and old_points[i] == new_points[i]
   i + 1
 
-const innermost_rule = (rules: RulePlace[], at: Position): StyleRule? ->
+# A part that holds no text, which marks where text was left out, holds its place.
+const innermost_rule = (rules: RulePlace[], at: Position) ->
   var found: RulePlace? = nil
   for place in rules
-    if before_or_at(place.start, at) and is_before(at, place.end)
+    const marks = place.start == at and place.end == at
+    if marks or (before_or_at(place.start, at) and is_before(at, place.end))
       if const previous = found
         found = place if is_before(previous.start, place.start)
       else
@@ -133,7 +139,7 @@ const innermost_rule = (rules: RulePlace[], at: Position): StyleRule? ->
 
 # The rule of the first part that starts from the position up to the line, as one that the
 # difference begins just before.
-const first_rule_from = (rules: RulePlace[], at: Position, last_line: Int): StyleRule? ->
+const first_rule_from = (rules: RulePlace[], at: Position, last_line: Int) ->
   var found: RulePlace? = nil
   for place in rules
     const within = before_or_at(at, place.start) and place.start.line < last_line
@@ -156,9 +162,7 @@ const only_blank_lines_differ = (old: String[], new: String[]) ->
 
 # The spaces before a comment, spaces within the lines, or else the layout of the lines.
 # `old` starts at the line `line` of the source.
-const kind_of_difference = (
-  old: String[], new: String[], source: SourceText, line: Int
-): StyleRule ->
+const kind_of_difference = (old: String[], new: String[], source: SourceText, line: Int) ->
   const squeezed = (lines: String[]) -> without_spaces(lines.join(''))
   return LAYOUT if squeezed(old) != squeezed(new) or old.length != new.length
   const indented = (lines: String[]) -> [trim_start(line) for line in lines]

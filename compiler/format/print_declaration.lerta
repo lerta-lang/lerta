@@ -6,15 +6,15 @@ import
 from '../ast'
 import breaking, choice, Doc, indent, join, line_feed, separated, text, token from './doc'
 import expression_doc, keyword, string_doc, value_after from './print_expression'
-import Context, Item, lines_of_items from './printing'
+import Context, Item, lines_of_items, removed_type from './printing'
 import named_type, type_doc, type_parameters from './print_type'
 import LONG_LISTS, MULTI_LINE_LITERALS from './rules'
 
-export const declaration_doc = (statement: Statement, context: Context): Doc ->
+export const declaration_doc = (statement: Statement, context: Context) ->
   case statement
     when TypeDeclaration
       const word = statement.is_struct then 'struct ' else 'class '
-      const head: Doc[] =
+      const head =
         exported(statement.exported, statement.position, context)
         keyword(word, statement.position)
         name_doc(statement.name)
@@ -52,7 +52,7 @@ export const declaration_doc = (statement: Statement, context: Context): Doc ->
       )
       join [head, aliased_type(statement)]
     when Extern
-      const parts: Doc[] =
+      const parts =
         exported(statement.exported, statement.position, context)
         keyword('extern ', statement.position)
         name_doc(statement.symbol)
@@ -75,7 +75,7 @@ export const declaration_doc = (statement: Statement, context: Context): Doc ->
     else text('')
 
 # `export ` before a declaration that has it, at the position of the token before the declaration.
-export const exported = (is_exported: Bool, at: Position, context: Context): Doc ->
+export const exported = (is_exported: Bool, at: Position, context: Context) ->
   return text('') if not is_exported
   const source = context.source
   if const index = source.token_at(at)
@@ -86,16 +86,17 @@ export const exported = (is_exported: Bool, at: Position, context: Context): Doc
 
 const name_doc = (name: Identifier) -> token(name.name, name.position)
 
-const members_doc = (members: MemberDeclaration[], context: Context): Doc ->
+const members_doc = (members: MemberDeclaration[], context: Context) ->
   return text('') if members.length == 0
   const docs = [member_doc(member, context) for member in members]
   indent join([line_feed(), separated(docs, line_feed())])
 
 # `[const | var | weak | weak!] name[: Type][ = [default] value]`.
-const member_doc = (member: MemberDeclaration, context: Context): Doc ->
+const member_doc = (member: MemberDeclaration, context: Context) ->
   const parts: Doc[] = []
   parts.push keyword("#{modifier} ", member.position) if const modifier = member.modifier
   parts.push name_doc(member.name)
+  parts.push removed_type('field', member.name.position, context)
   parts.push join([text(': '), type_doc(type)]) if const type = member.type
   if const value = member.value
     if member.has_default
@@ -104,13 +105,13 @@ const member_doc = (member: MemberDeclaration, context: Context): Doc ->
       parts.push join([text(' ='), value_after(value, context)])
   join parts
 
-const enum_member = (member: Identifier | StringLiteral, context: Context): Doc ->
+const enum_member = (member: Identifier | StringLiteral, context: Context) ->
   case member
     when Identifier then name_doc(member)
     when StringLiteral then string_doc(member, context)
 
 # A union on the line, or on the indented lines below with as many members on each as fit.
-const aliased_type = (alias: TypeAlias): Doc ->
+const aliased_type = (alias: TypeAlias) ->
   const type = alias.type
   const on_line = join([text(' '), type_doc(type)])
   return on_line if not (type is UnionTypeName)
@@ -124,7 +125,7 @@ const aliased_type = (alias: TypeAlias): Doc ->
 
 # `import a, b as c from 'module'`, with the names in an indented block when they do not fit on
 # the line (see Multi-line literals).
-const import_doc = (import_node: Import, context: Context): Doc ->
+const import_doc = (import_node: Import, context: Context) ->
   const word = keyword('import', import_node.position)
   const module = module_doc(import_node, context)
   return join([word, text(' '), module]) if import_node.names.length == 0
@@ -139,14 +140,14 @@ const import_doc = (import_node: Import, context: Context): Doc ->
   )
   breaking MULTI_LINE_LITERALS, on_line, block
 
-const import_name = (name: ImportName): Doc ->
+const import_name = (name: ImportName) ->
   if const alias = name.alias
     join [name_doc(name.name), text(' as '), name_doc(alias)]
   else
     name_doc name.name
 
 # The module's name as the source spells it, the string after `from`, or after `import` alone.
-const module_doc = (import_node: Import, context: Context): Doc ->
+const module_doc = (import_node: Import, context: Context) ->
   const source = context.source
   const start = source.token_at(import_node.position) ? return text("'#{import_node.module}'")
   const end = source.tokens.length
