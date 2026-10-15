@@ -186,6 +186,21 @@ const build_commands = async (): Promise<void> => {
   }
 }
 
+// Builds a program with and without -O, so that the compiler caches both runtimes before the
+// tests start. Otherwise the tests started together would each compile the same runtime, and each
+// such compile runs as many clang processes as there are CPUs.
+const build_runtimes = async (): Promise<void> => {
+  // Not in work_dir itself, which is on the PATH of the tested programs.
+  const dir = mkdtempSync(join(work_dir, 'runtime-'))
+  const builds = [[], ['-O']].map(async (optimize) => {
+    const executable = join(dir, `empty${optimize.join('')}${executable_suffix}`)
+    const args = ['build', 'tests/empty.lerta', '-o', executable, ...optimize, ...target.args]
+    const { status, failure, stderr } = await run_file(compiler, args, root_dir)
+    if (status !== 0) throw new Error(`the build of tests/empty failed (${failure}):\n${stderr}`)
+  })
+  await Promise.all(builds)
+}
+
 const concurrency = availableParallelism()
 
 // Wine runs a Windows program in a prefix of its own, when there are such prefixes (see wine.ts).
@@ -266,6 +281,7 @@ const test_checks: Check[] = suites.flatMap(collect).flatMap((test) => [
 ])
 
 await run_suite(work_dir, async () => {
+  await build_runtimes()
   await build_commands()
   for (const dir of skipped_dirs) console.log(`not run for Windows: ${dir}`)
   if (target.windows) wine_prefixes = await start_wine_prefixes(work_dir, concurrency)
