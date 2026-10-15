@@ -1,0 +1,62 @@
+# The annotations that the program surely needs, as its checking with them shows, which need not be
+# tried without them (see removable_annotations). This only spares checks: an annotation that it
+# lets through is still tried, and one that it holds back must be one that the program needs.
+import
+  ArrayLiteral, Call, Conditional, Expression, MapEntry, MapLiteral, StringLiteral
+from '../ast'
+import NodeFacts from '../checker/shared'
+import ArrayType, FunctionType, is_kind, MapType, ObjectType, same_type, Type from '../types'
+import Annotation from './annotated'
+
+# A type whose value is converted to it, or takes its type from it; or `void` as the return type of
+# a function whose last value has a type. Other return types are left to the checking, as a
+# function may return values of several types, which give the return type together.
+export const surely_needed = (annotation: Annotation, facts: NodeFacts) ->
+  const value = annotation.value ? return false
+  const function = annotation.function ? return converted(value, facts) or given_type(value, facts)
+  const declared = facts.types[function] as FunctionType? ? return false
+  const last = facts.types[value] ? return false
+  is_kind(declared.result, 'void') and not is_kind(last, 'void')
+
+const converted = (value: Expression, facts: NodeFacts) -> facts.conversions[value] != nil
+
+# Whether the value has its type only by being given one: an empty array or map, a string that is a
+# member of an enum, a generic class or struct made with no arguments, as `Map()`, or a value whose
+# parts all have their types so, as a part that has a type gives it to the others; or an array whose
+# items all have one type, other than the item type it is given.
+const given_type = (value: Expression, facts: NodeFacts): Bool ->
+  const given = (part: Expression) -> given_type(part, facts)
+  case value
+    when ArrayLiteral
+      const { elements } = value
+      elements.length == 0 or elements.all(given) or widened_items(value, facts)
+    when MapLiteral
+      const takes = (entry: MapEntry) -> given(entry.key) or given(entry.value)
+      value.entries.length == 0 or value.entries.all(takes)
+    when Conditional then given(value.then_value) and given(value.else_value)
+    when StringLiteral
+      const type = facts.types[value] ? return false
+      not is_kind(type, 'String')
+    when Call then is_made_bare(value, facts)
+    else false
+
+# `[x]` given as a `Statement[]` where x is an Expression, which alone would give an Expression[].
+const widened_items = (array: ArrayLiteral, facts: NodeFacts) ->
+  const type = facts.types[array] as ArrayType? ? return false
+  const first = facts.types[array.elements[0]] ? return false
+  const same_as_first = (element: Expression) ->
+    const element_type = facts.types[element] ? return false
+    same_type element_type, first
+  array.elements.all(same_as_first) and not same_type(first, type.element)
+
+# `Map()`: a constructor, which names a type rather than a value, called without arguments.
+const is_made_bare = (call: Call, facts: NodeFacts) ->
+  const bare = call.args.length == 0 and call.named_args.length == 0
+  const type = facts.types[call] ? return false
+  bare and facts.types[call.callee] == nil and has_type_arguments(type)
+
+const has_type_arguments = (type: Type) ->
+  case type
+    when MapType then true
+    when ObjectType then type.args.length > 0
+    else false

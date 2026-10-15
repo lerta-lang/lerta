@@ -15,6 +15,11 @@ export struct Annotation
   key: String
   remove: () -> void
   restore: () -> void
+  # What the type is given to, which tells whether the program surely needs it (see surely_needed):
+  # the value of a variable or a field, or the last value of a function for its return type, with
+  # the function; neither for a parameter.
+  value: Expression? = default nil
+  function: FunctionLiteral? = default nil
 
 # The checking and the printer find an annotation in syntax trees parsed apart, by what it annotates
 # (`return`, `parameter`, `variable` or `field`) and where that is: the function literal, or the
@@ -160,7 +165,13 @@ const return_annotation = (literal: FunctionLiteral) ->
     key: annotation_key('return', literal.position)
     remove: -> literal.return_type = nil
     restore: -> literal.return_type = type
+    value: last_value(literal.body)
+    function: literal
   )
+
+const last_value = (body: Statement[]) ->
+  const last = body.last() ? return nil
+  last as Expression?
 
 const parameter_annotation = (literal: FunctionLiteral, i: Int) ->
   const param = literal.params[i]
@@ -176,12 +187,14 @@ const variable_annotation = (declaration: Declaration) ->
     key: annotation_key('variable', declaration.name.position)
     remove: -> declaration.type = nil
     restore: -> declaration.type = type
+    value: declaration.value
   )
 
 const field_annotation = (members: MemberDeclaration[], i: Int) ->
   const member = members[i]
   const { name, modifier, value, has_default, position } = member
   Annotation(
+    value
     key: annotation_key('field', name.position)
     remove: -> members[i] = MemberDeclaration(
       name, modifier, value, has_default, position, type: nil
