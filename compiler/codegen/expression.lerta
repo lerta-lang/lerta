@@ -55,7 +55,7 @@ export const generate = (g: Generator, expression: Expression) ->
   const itab = g.facts.itabs[expression] ? return emit_wrap(g.ir, operand, type_of(g, expression))
   const value = emit_interface_value(g, operand, itab)
   const converted = inner_of(target)
-  return value if not (converted is IterType)
+  return value if converted is not IterType
   emit_adapter_iter g.ir, value, itab.target, converted.item
 
 # The type of the operand that `generate` returns: the type the expression is converted to, if
@@ -68,7 +68,7 @@ export const type_at_use = (g: Generator, expression: Expression) ->
 export const generate_condition = (g: Generator, expression: Expression) ->
   const operand = generate(g, expression)
   const type = type_of(g, expression)
-  return operand if not (type is OptionalType)
+  return operand if type is not OptionalType
   const present = emit_is_present(g.ir, operand, type)
   release_if_reference g, expression, operand
   return present if not is_kind(type.inner, 'Bool')
@@ -160,7 +160,7 @@ const emit_member_test = (g: Generator, object: String, value: Expression, type_
   const value_type = type_of(g, value)
   const type = type_of(g, type_name)
   const test_of = (each: String) -> emit_type_test(g.ir, each, type)
-  return test_of(object) if not (value_type is OptionalType)
+  return test_of(object) if value_type is not OptionalType
   emit_present_test g.ir, object, value_type, test_of
 
 # A field's value, of a class, a struct or an anonymous struct; the object is released, and the
@@ -193,7 +193,7 @@ export const read_field = (g: Generator, object: String, type: Type, name: Strin
 export const read_any_field = (
   g: Generator, object: String, object_type: Type, name: String, field_type: Type
 ) ->
-  return read_field(g, object, object_type, name) if not (object_type is UnionType)
+  return read_field(g, object, object_type, name) if object_type is not UnionType
   const of_member = (type: Type) -> read_field(g, object, type, name)
   emit_member_dispatch g.ir, object, object_type.members, ir_type(field_type), of_member
 
@@ -300,7 +300,7 @@ const read_borrowed = (g: Generator, local: CodegenLocal, type: Type) ->
   const held = held_value(g, local)
   # A weak local's object, which may be gone, is never narrowed.
   const value = local.weak then emit_weak_object(ir, held) else held
-  const is_narrowed = local.type is OptionalType and not (type is OptionalType)
+  const is_narrowed = local.type is OptionalType and type is not OptionalType
   is_narrowed then emit_unwrap(ir, value, local.type) else value
 
 # What the local holds, borrowed: its value, or a weak local's box.
