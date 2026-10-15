@@ -1,9 +1,5 @@
 #!/bin/sh
-# Runs the tests for every environment but the host's own, which `make test` covers, by the
-# shortest way without emulation: each other target on the host if it can build and run its
-# programs, Linux in a container of the host's architecture if the host is not Linux, and what
-# is left in a container that runs it, which only an x86-64 host runs as it is. Prints what ran
-# and what was skipped, and why.
+# Runs the tests for every environment but the host's own (see README.md#building-and-testing).
 #
 # The targets run at the same time, each container's and the host's own, with their outputs kept
 # apart (see start).

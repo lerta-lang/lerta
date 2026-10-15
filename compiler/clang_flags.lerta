@@ -3,17 +3,12 @@
 export const build_flags = (optimize: Bool, target: String?) ->
   [optimization_flags(optimize)..., target_flags(target)...]
 
-# Link-time optimization lets the generated code inline the runtime's C functions; ThinLTO
-# optimizes each module on a thread of its own, and keeps what it has optimized in a cache (see
-# lto_cache_flags). Unoptimized builds use the debug runtime, which checks for leaks at exit.
 # test/runtime.ts builds the runtime with the same flags.
 const optimization_flags = (optimize: Bool) ->
   optimize then ['-O2', '-flto=thin'] else ['-D', 'LERTA_DEBUG']
 
-# Has the linker of the system (as target_system names it) keep what ThinLTO optimizes in `dir`, so
-# that a build optimizes again only the modules that have changed, and those that inline from them:
-# ld64 for macOS, lld for Windows (see target_flags), and for Linux, GNU ld with LLVM's plugin,
-# which clang uses by default there, as lld takes none of the plugin's options.
+# For Linux, the options are GNU ld's LLVM plugin's, which clang uses by default there, as lld takes
+# none of them.
 export const lto_cache_flags = (system: String, dir: String) ->
   case system
     when 'macos' then ["-Wl,-cache_path_lto,#{dir}"]

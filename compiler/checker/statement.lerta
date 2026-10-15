@@ -38,10 +38,9 @@ export const check_initializers = (body: Body, info: ObjectInfo, self: SelfConte
     field.type = type
   self.initializing = nil
 
-# The parameters are borrowed locals. The last statement gives the return value. A method's body
-# also has `@`, the object, as a local that cannot be written in the source. `holds`, a condition
-# known to hold where the body runs, narrows the parameters it tests. A parameter's default sees
-# `@` and the parameters before it, which are computed before it (see generate_default_entry).
+# The parameters are borrowed locals. A method's body also has `@` as a local that cannot be
+# written in the source. `holds`, a condition known to hold where the body runs, narrows the
+# parameters it tests.
 export const check_function_body = (
   body: Body, literal: FunctionLiteral, params: Type[], holds: Expression?
 ) ->
@@ -138,9 +137,6 @@ export const check_statement = (body: Body, statement: Statement): void ->
       require_top_level 'a class or struct can only be declared at the top level'
     else check_expression_statement(body, statement as Expression!)
 
-# An optional name tested in the condition is narrowed where it is known not to be nil: in the
-# then branch of `if x`, in the else branch of `if not x`, and after a guard such as
-# `return if x == nil`.
 export const check_if = (body: Body, if_statement: If) ->
   const { then_body } = if_statement
   const else_body = statement_else_body(if_statement)
@@ -207,12 +203,10 @@ const weak_local_type = (body: Body, declaration: Declaration, value_type: Type)
   fail program, at, 'a weak const or var holds an object of a class' if not holds_class
   optional_type value_type
 
-# nil alone gives no type, and void and never give no value.
 const reject_if_not_storable = (body: Body, type: Type, value: Expression) ->
   if is_one_of_kinds(type, ['void', 'never', 'nil'])
     fail body.program, value.position, "cannot store a value of type #{format_type(type)}"
 
-# A local may shadow any name of an outer scope, a top-level name or a builtin.
 export const define_local = (body: Body, local: Local) ->
   const { name, position } = local.identifier
   const { program, shared } = body

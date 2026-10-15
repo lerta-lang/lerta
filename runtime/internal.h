@@ -5,8 +5,7 @@
 // files linked with a program use.
 #include "lerta.h"
 
-// Memory (memory.c). With LERTA_DEBUG, live objects are counted, and those left are reported to
-// stderr as a leak.
+// Memory (memory.c).
 void lerta_report_leaks(void);
 // malloc, realloc and calloc that panic when out of memory instead of returning NULL.
 void *lerta_checked_malloc(size_t size);
@@ -83,9 +82,8 @@ _Noreturn void lerta_exit_with_error(const LertaString *message);
 _Noreturn void lerta_panic(const char *message);
 _Noreturn void lerta_panic_with(const char *prefix, const LertaString *message);
 
-// What differs between systems: platform_posix.c and platform_windows.c, each of which compiles to
-// nothing on the other. Paths and arguments are NUL-terminated UTF-8, and a false or NULL result
-// is a failure.
+// What differs between systems (see docs/internals.md#platforms). Paths and arguments are
+// NUL-terminated UTF-8, and a false or NULL result is a failure.
 // Stack overflow: reported as a panic. Called first thing in main.
 void lerta_stack_init(void);
 // Gives main's arguments as the system's bytes, which are UTF-8 on Windows: POSIX leaves them as

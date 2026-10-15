@@ -4,8 +4,7 @@
 
 #include "internal.h"
 
-// What the event loop waits for, on libuv: the one file of the runtime that uses it, so that the
-// loop's backend can be replaced (see docs/internals.md#functions-that-await).
+// See docs/internals.md#functions-that-await.
 
 typedef struct {
   uv_timer_t handle;
@@ -73,8 +72,6 @@ static void end_program_if_done(RunningProgram *program) {
   if (program->reads_output) uv_close((uv_handle_t *)&program->pipe, free_program);
 }
 
-// Shells report a child killed by a signal as 128 plus the signal number, so callers can tell it
-// from an exit code.
 static void exit_program(uv_process_t *process, int64_t exit_status, int term_signal) {
   RunningProgram *program = process->data;
   program->exited = true;

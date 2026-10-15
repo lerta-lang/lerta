@@ -1,7 +1,4 @@
-# The builtin functions and the methods of the builtin types, which every module has: the compiler
-# imports this module into every other but std:io, which it imports. The compiler gives the builtin
-# types the methods that need their representation, and C functions of the runtime build Strings
-# and Binary values (see docs/internals.md#builtins).
+# See docs/reference/builtins.md and docs/internals.md#builtins.
 import stdout from 'std:io'
 
 extern lerta_int_to_string: (Int) -> String
@@ -53,7 +50,6 @@ export struct InitError: Error
 export interface Iterable<T>
   iter: () -> Iter<T>
 
-# Writes the text of x and a newline to stdout.
 export const print = <T: Stringable>(x: T) -> write_line(x.to_string())
 
 # Not generic, so that it is checked, and its use of stdout counted, even if print is never called.
@@ -68,7 +64,6 @@ extend Int
 
 extend Float
   to_string = -> lerta_float_to_string(@)
-  # Truncated toward zero; throws unless the result fits in an Int.
   to_int = -> lerta_float_to_int(@)
 
 extend Bool
@@ -77,11 +72,9 @@ extend Bool
 extend Byte
   to_int = -> lerta_byte_to_int(@)
   to_string = -> @to_int().to_string()
-  # ASCII only, as the bytes of other characters are not characters on their own.
   is_digit = -> @ >= '0' and @ <= '9'
   is_letter = -> (@ >= 'a' and @ <= 'z') or (@ >= 'A' and @ <= 'Z')
   is_space = -> @ == ' ' or @ == "\t" or @ == "\n" or @ == "\r"
-  # Whether it continues a UTF-8 sequence, which only a lead byte starts.
   is_utf8_continuation = -> lerta_is_utf8_continuation(@)
 
 extend String
@@ -98,8 +91,7 @@ extend String
       i += length
       code
     { has_next, next }
-  # nil unless the String is an integer in decimal, with an optional leading `-`, that fits in an
-  # Int. The digits are accumulated as a negative number, which can hold the minimum Int.
+  # The digits are accumulated as a negative number, which can hold the minimum Int.
   parse_int = ->
     const bytes = @binary
     const negative = bytes.length > 0 and bytes[0] == '-'
@@ -114,14 +106,11 @@ extend String
       value = value * 10 - digit
     return nil if not negative and value == MIN_INT
     negative then value else -value
-  # nil unless the String is a number in decimal, with an optional leading `-`, a fraction after
-  # `.` and an exponent after `e` or `E`, that a finite Float holds: '1.5', '-2', '3e-4'.
   parse_float = (): Float? ->
     return nil if not is_decimal_number(@binary)
     const bits = lerta_float_literal_bits(@)
     bits != -1 then lerta_float_from_bits(bits)
-  # The pieces between the occurrences of a non-empty separator, empty ones too: 'a,,b'.split(',')
-  # is ['a', '', 'b']. Cutting valid UTF-8 around a valid separator leaves valid UTF-8.
+  # Cutting valid UTF-8 around a valid separator leaves valid UTF-8.
   split = (separator: String) ->
     throw ValueError(message: 'split by an empty separator') if separator == ''
     const bytes = @binary
@@ -138,14 +127,10 @@ extend String
   starts_with = (prefix: String) -> @binary.occurs_at(0, prefix.binary)
   ends_with = (suffix: String) ->
     @binary.occurs_at @binary.length - suffix.binary.length, suffix.binary
-  # The rest after `prefix`, or nil if the String does not start with it.
   without_prefix = (prefix: String): String? ->
     @starts_with(prefix) then @binary.text(prefix.binary.length)!
-  # What comes before `suffix`, or nil if the String does not end with it.
   without_suffix = (suffix: String): String? ->
     @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)!
-  # Negative, zero or positive as the String goes before, with or after `other` in the order of
-  # their bytes, which does not depend on a locale.
   compare = (other: String) ->
     const left = @binary
     const right = other.binary
@@ -158,16 +143,12 @@ extend String
 extend Binary
   # The bytes, read as the Iter is.
   iter = (): Iter<Byte> -> (b for b in @)
-  # The bytes from `start` up to `end`, which is exclusive. Throws if they are out of range.
   slice = (start: Int, end: Int) -> lerta_binary_slice(@, start, end)
-  # Whether `part` occurs at `index`; false if it does not fit there.
   occurs_at = (index: Int, part: Binary) ->
     return false if index < 0 or index > @length - part.length
     for byte, k in part
       return false if @[index + k] != byte
     true
-  # The bytes from `start` up to `end` as a String if they are valid UTF-8, otherwise nil; all of
-  # them, the same object, by default. Throws if they are out of range.
   text = (start = 0, end: Int = @length): String? ->
     const bytes = start == 0 and end == @length then @ else @slice(start, end)
     lerta_is_utf8(bytes) then lerta_binary_as_string(bytes)
@@ -191,14 +172,11 @@ extend<T> T[]
     for each in @
       return true if each == item
     false
-  # The place of the first item for which `test` is true, or nil if there is none.
   find_index = (test: (T) -> Bool): Int? ->
     for item, i in @
       return i if test(item)
     nil
-  # The first item, or nil for an empty array.
   first = (): T? -> @length > 0 then @[0]
-  # The last item, or nil for an empty array.
   last = (): T? -> @length > 0 then @[@length - 1]
   # The items in the order that `compare` gives (negative when its first argument goes first), equal
   # items keeping their order.
@@ -253,8 +231,7 @@ extend<T> Iterable<T>
     for x in @
       return x if test(x)
     nil
-  # The first `n` items, or all of them if there are fewer; it stops reading its source after them,
-  # which a comprehension could not.
+  # It stops reading its source after them, which a comprehension could not.
   take = (n: Int): Iter<T> ->
     const source = @iter()
     var left = n
@@ -263,8 +240,6 @@ extend<T> Iterable<T>
       left -= 1
       source.next()
     { has_next, next }
-  # The items of both, in pairs. It throws once one has no more items and the other has, so that
-  # Iterables of different lengths are not paired silently.
   zip = <U>(other: Iterable<U>): Iter<(T, U)> ->
     const left = @iter()
     const right = other.iter()
@@ -279,14 +254,12 @@ extend<K, V> Map<K, V>
   has = (key: K): Bool -> @[key] != nil
   # The values of the entries, as `entries()` gives them.
   values = (): Iter<V> -> (value for (_, value) in @entries())
-  # The value of `key`, which is first set to `make()` if the key is not there.
   get_or_put = (key: K, make: () -> V): V ->
     return found if const found = @[key]
     const made = make()
     @[key] = made
     made
 
-# A Map<K, Bool> serves as a set of its keys.
 extend<K> Map<K, Bool>
   add = (key: K) -> @[key] = true
 

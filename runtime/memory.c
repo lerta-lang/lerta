@@ -41,8 +41,6 @@ void lerta_free_unfinished(void *object) {
 #endif
 }
 
-// A coroutine's frame may need the alignment of 16 bytes that malloc gives, which a place has when
-// its size is a multiple of 16 (see docs/internals.md#allocation).
 void *lerta_frame_alloc(int64_t size) {
 #ifdef LERTA_DEBUG
   live_objects++;
@@ -67,7 +65,6 @@ static void check_not_dropped(const LertaHeader *header, const char *message) {
 #endif
 }
 
-// NULL is nil, which holds no object.
 void lerta_retain(void *object) {
   LertaHeader *header = object;
   if (header == NULL || header->ref_count == LERTA_IMMORTAL) return;
@@ -75,9 +72,6 @@ void lerta_retain(void *object) {
   header->ref_count++;
 }
 
-// Objects whose count reaches zero wait here to be dropped and freed. Dropping one releases what
-// it owns, which may queue more; a loop, not recursion, handles them, so that a long chain such as
-// a linked list does not overflow the stack.
 static void **pending = NULL;
 static int64_t pending_length = 0;
 static int64_t pending_capacity = 0;
@@ -103,8 +97,6 @@ static void drain_to(int64_t length) {
   }
 }
 
-// Kept out of lerta_release, so that the rest, which most releases end in, is small enough for
-// LLVM to inline into the generated code.
 __attribute__((noinline)) static void drop_released(void *object) {
   push_pending(object);
   if (draining) return;
@@ -125,8 +117,6 @@ void lerta_run_deinit(void *object, void (*deinit)(void *object)) {
   LertaHeader *header = object;
   header->ref_count = 1;
   int64_t queued_before = pending_length;
-  // An exception may be on its way while the object is released; the deinit's code runs without
-  // it, and cannot throw one of its own: no code that releases the object could take it.
   LertaException set_aside = lerta_exception;
   lerta_exception = (LertaException){NULL, NULL};
   deinit(object);

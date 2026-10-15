@@ -17,13 +17,10 @@ import top_level_values from './top_level_values'
 import module_resolver from './type_names'
 import FunctionType, is_kind from '../types'
 
-# Checks the modules step by step, each step for all of them before the next, so that the modules
-# of an import cycle can use each other's names: the names, the declarations, the extends, the
-# top-level code in the order it runs (see load_modules), then the bodies of the functions and
-# objects. Inferred types are worked out on demand across modules, as within one. The warnings of
-# all the modules are gathered at the end (see all_warnings), or with an error, since a module
-# that calls a generic function of another checks an instance of it there, which may find warnings
-# and use names of that module.
+# Checks the modules step by step (see docs/internals.md#modules). The warnings of all the modules
+# are gathered at the end (see all_warnings), or with an error, since a module that calls a generic
+# function of another checks an instance of it there, which may find warnings and use names of that
+# module.
 export const check_modules = (entry_path: String, modules: Module[], reports_warnings: Bool) ->
   const program = ProgramWide(entry_path, modules, reports_warnings)
   check_program program
@@ -62,8 +59,8 @@ const check_steps = (program: ProgramWide) ->
     pending = false
     pending = check_round(shared) or pending for shared in program.shared
 
-# The module that std:builtins is, which every module but std:io imports, unless the program is
-# std:io alone; std:builtins itself may be the entry module.
+# The module that std:builtins is, unless the program is std:io alone; std:builtins itself may be
+# the entry module.
 const builtins_module = (program: ProgramWide) ->
   return index if const index = program.shared.last()!.imports.builtins
   program.entry_path == BUILTINS_MODULE then program.shared.length - 1
@@ -101,7 +98,6 @@ const check_bodies = (shared: Shared) ->
   reject_deinit_results shared
   program.bodies_checked.push shared.index
 
-# A deinit runs as part of a release, where nothing could take a value it gave, or handle a throw.
 const reject_deinit_results = (shared: Shared) ->
   const program = shared.program
   for info in shared.objects.values()

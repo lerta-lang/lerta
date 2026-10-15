@@ -141,7 +141,6 @@ export const check_arguments = (
   expect_type body, arg, params[i] for arg, i in call.args
   callee_type.result
 
-# A call gives every parameter, or leaves out some of those with defaults, from the last.
 export const check_argument_count = (
   body: Body, call: Call, param_count: Int, declaration: FunctionLiteral?
 ) ->
@@ -152,9 +151,8 @@ export const check_argument_count = (
   const expected = "#{range}#{param_count}"
   fail body.program, call.position, "expected #{expected} argument(s), got #{count}"
 
-# Named arguments are the fields of an anonymous struct for the last parameter: `draw(x: 1, y: 2)`
-# is `draw({ x: 1, y: 2 })`. The call is rewritten into that form so that codegen, which reads
-# named arguments only as a construction, generates it as any other call. Every pass reading the
+# Named arguments are rewritten into an anonymous struct so that codegen, which reads named
+# arguments only as a construction, generates the call as any other. Every pass reading the
 # arguments (jump_positions, codegen) visits the same values in either form. The instances of a
 # generic function share its literal, so later ones see the rewritten form, which checks as the
 # named one does.
@@ -174,19 +172,15 @@ const is_record_parameter = (param: Type?) ->
 export const expect_type = (body: Body, expression: Expression, expected: Type) ->
   require_type body, expression, type_of(body, expression, expected), expected
 
-# `x is T`: x has a union type, or an optional one, and T is one of its types.
 const type_of_is_test = (body: Body, test: IsTest) ->
   check_member_type body, test.value, test.type, resolve(body.program, body.resolver, test.type)
   bool_type
 
-# `x as T?` or `x as T!`: as for `x is T`, with the type written without its `?`.
 const type_of_cast = (body: Body, cast: Cast) ->
   const written = resolve(body.program, body.resolver, cast.type)
   const type = check_member_type(body, cast.value, cast.type, inner_of(written))
   cast.throws then type else optional_type(type)
 
-# The type, which must be a member of the value's union type, optional or not, or a union of
-# some of its members.
 const check_member_type = (body: Body, value: Expression, type_name: NamedType, type: Type) ->
   const program = body.program
   const value_type = type_of(body, value)
@@ -206,7 +200,6 @@ export const set_type = (body: Body, node: Node, type: Type) ->
   body.facts.types[node] = type
   type
 
-# A throw takes a value of a type that satisfies Error, which it converts to an Error.
 const check_throw = (body: Body, throw_expression: Throw) ->
   const value = throw_expression.message
   const type = type_of(body, value)
@@ -224,7 +217,6 @@ export const require_type = (body: Body, expression: Expression, type: Type, exp
   const to_optional = expected is OptionalType and is_converted
   body.facts.conversions[expression] = expected if to_optional or through_itab
 
-# A condition is a Bool, or an optional value that holds when it is not nil.
 export const expect_condition = (body: Body, expression: Expression) ->
   const type = type_of(body, expression)
   if not is_one_of_kinds(type, ['Bool', OPTIONAL, 'never'])

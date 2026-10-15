@@ -28,10 +28,6 @@ export const constructed_type = (body: Body, callee: Expression) ->
   body.facts.types[callee] = type
   type
 
-# Every argument is named. The arguments are the fields without an initializer or with a default
-# (see is_argument). One with a default may be left out, and then has its default; so may an
-# optional one, which is then nil. A generic class or struct takes its type arguments as written,
-# or as the expected type and the arguments give them (see constructed_instance).
 export const type_of_construction = (
   body: Body, call: Call, declared: ObjectType, expected: Type?
 ) ->
@@ -128,9 +124,8 @@ export const object_method_type = (body: Body, object_type: Type, name: Identifi
   function_type_of body.program, module_index, method_key(owner.name, name.name), name.position
 
 # `@` is a local of a method's body (see check_function_body), which a function literal in it
-# captures like any other. An initializer has no such local: there the object is not complete, so
-# `@` can only read the fields set before (see field_of), not be passed on or called, which could
-# reach the others.
+# captures like any other. An initializer has no such local, so `@` can only read fields there (see
+# field_of).
 export const type_of_this = (body: Body, at: Expression) ->
   return local.type if const local = lookup(body, '@')
   const message =
@@ -140,8 +135,6 @@ export const type_of_this = (body: Body, at: Expression) ->
       "'@' can only be used in a method, a function literal in a method, or a field initializer"
   fail body.program, at.position, message
 
-# `{ x: 1, y }`. Its fields take their types from the expected type, if it is an anonymous struct
-# with the same fields, so that `{ x: nil }` can be typed.
 export const type_of_record = (body: Body, record: RecordLiteral, expected: Type?) ->
   const program = body.program
   const names: Map<String, Bool> = Map()
@@ -167,9 +160,8 @@ const expected_record_fields = (expected: Type?): RecordField[] ->
   const record = inner_of(type)
   record is RecordType then record.fields else []
 
-# A name alone, `Point(x)`, is short for `Point(x: x)`, as in `{ x }`; a construction has no
-# positional arguments to confuse it with. The call is rewritten into the named form, which every
-# later pass reads, as do the later instances of a generic function that holds the call.
+# The call is rewritten into the named form, which every later pass reads, as do the later
+# instances of a generic function that holds the call.
 const name_shorthand_args = (body: Body, call: Call, type: ObjectType) ->
   if const not_named = call.args.find((arg) -> not (arg is Identifier))
     const example = 'Point(x: 1) or Point(x)'

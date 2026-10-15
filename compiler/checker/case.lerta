@@ -46,7 +46,6 @@ export const type_of_case = (body: Body, case_expression: Case, expected: Type?)
     unify_values body, values, case_expression, 'case arms'
   type_of_branches body, branches, expected, unify_arms
 
-# An `if` gives the value of its branches as a case does; without an `else`, it gives none.
 export const type_of_if = (body: Body, if_expression: If, expected: Type?): Type ->
   const { then_body, else_body } = if_expression
   if else_body.length == 0
@@ -59,9 +58,6 @@ export const type_of_if = (body: Body, if_expression: If, expected: Type?): Type
   const unify = unify_unless_void(body, if_expression, 'the branches of if')
   type_of_branches body, branches, expected, unify
 
-# A `try` gives the value of its block, or of the catch that takes an exception, as an `if` gives
-# its branches'; its `finally` runs after them, and gives none. A catch defines its name, as the
-# exception of the type that it takes, in its block.
 export const type_of_try = (body: Body, try_expression: Try, expected: Type?) ->
   const branches = [Branch(statements: try_expression.body, enter: nothing)]
   for clause in try_expression.catches
@@ -74,14 +70,11 @@ export const type_of_try = (body: Body, try_expression: Try, expected: Type?) ->
     check_block body, finally_body, nothing, nothing
   type
 
-# The type that a catch takes: Error for any exception, or a class or struct, or a union of them,
-# that satisfies Error, which the thrown object's type is tested against.
 const caught_type = (body: Body, clause: Catch): Type ->
   const error = std_interface(body.shared, 'Error', clause.position).type
   const type_name = clause.type ? return error
   const type = resolve(body.program, body.resolver, type_name)
   set_type body, type_name, type
-  # `catch e: Error` takes any exception, as `catch e` does.
   return type if same_type(type, error)
   for member in members_of(type)
     if not (member is ObjectType)
@@ -144,8 +137,7 @@ const unify_unless_void = (body: Body, at: Expression, description: String) ->
     return void_type if values.any((value) -> is_kind(value.type, 'void'))
     unify_values body, values, at, description
 
-# A mix of T, T? and nil gives T?, to which the values (the last statements of the bodies) are
-# converted.
+# The values, the last statements of the bodies, are converted to the type they unify to.
 const unify_values = (body: Body, values: BranchValue[], at: Expression, description: String) ->
   var type = values[0].type
   for value in values
@@ -161,8 +153,7 @@ const unify_values = (body: Body, values: BranchValue[], at: Expression, descrip
     body.facts.conversions[value.last] = type if is_converted and value.last is Expression
   type
 
-# Checks the conditions or patterns; returns, for each arm, how the subject is narrowed in it. A
-# subject of type T? is matched as a T, besides an arm for nil.
+# Checks the conditions or patterns; returns, for each arm, how the subject is narrowed in it.
 const check_patterns = (body: Body, case_expression: Case) ->
   const { arms } = case_expression
   const subject = case_expression.subject
@@ -191,7 +182,6 @@ const check_patterns = (body: Body, case_expression: Case) ->
 
 const is_nil_pattern = (pattern: Expression) -> pattern is NilLiteral
 
-# Whether an arm handles nil, which must be the only pattern of its arm.
 const check_nil_arms = (body: Body, arms: CaseArm[]) ->
   var handled = false
   for arm in arms
@@ -204,8 +194,6 @@ const check_nil_arms = (body: Body, arms: CaseArm[]) ->
       handled = true
   handled
 
-# Each pattern names a type of the union; without an else arm, every type must be handled. An arm
-# with one type narrows a subject that is a local that cannot be reassigned.
 const check_type_patterns = (
   body: Body, case_expression: Case, is_nil_arm: (CaseArm) -> Bool, subject: Expression,
   union: UnionType, missing_nil: String[]
@@ -229,8 +217,6 @@ const check_type_patterns = (
   fail_unhandled body, case_expression, [missing..., missing_nil...]
   arm_narrowings
 
-# Each pattern that names a member of the enum handles it; without an else arm, every member must
-# be handled.
 const check_member_patterns = (
   body: Body, case_expression: Case, type: EnumType, missing_nil: String[]
 ) ->

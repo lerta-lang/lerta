@@ -20,8 +20,6 @@ const work_dir = mkdtempSync(join(tmpdir(), 'lerta-runtime-'))
 
 const runtime_c_files = readdirSync(runtime_dir).filter((file) => file.endsWith('.c'))
 
-// libuv for the host, compiled once on its own, as the compiler builds it with the runtime: with its
-// flags and its warnings silenced, which the runtime, needing only its headers, does not take.
 const libuv_objects_dir = join(work_dir, 'libuv')
 mkdirSync(libuv_objects_dir)
 execFileSync(
@@ -107,8 +105,6 @@ const interleaved_writes = [
 
 const leak = '  lerta_alloc(16, NULL);'
 
-// The debug runtime stops a program that uses an object after its last release has dropped it,
-// which no Lerta program does unless the generated code releases one reference too many.
 // Whether the debug program, built as run_main builds it, stops with the message.
 const stops_with = (
   name: string,

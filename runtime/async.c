@@ -3,8 +3,6 @@
 
 #include "internal.h"
 
-// The coroutines ready to go on, in the order they became ready. The loop resumes them, then waits
-// for what settles promises (see loop.c), until there is neither.
 static void **ready = NULL;
 static int64_t ready_start = 0;
 static int64_t ready_end = 0;
@@ -27,12 +25,11 @@ static void push_ready(void *coroutine) {
 
 enum { PENDING, RESOLVED, REJECTED };
 
-// The value, of the kind, is stored in place, as an item of an array is; a Promise of no value has none.
 struct LertaPromise {
   int64_t ref_count;
   void (*drop)(void *object);
   int32_t state;
-  // Whether its result has been taken: an exception never taken ends the program when it is dropped.
+  // Whether its result has been taken.
   bool observed;
   LertaItemKind kind;
   LertaException exception;

@@ -48,20 +48,17 @@ export const type_of_unary = (body: Body, unary: UnaryOperation, expected: Type?
     fail body.program, unary.operand.position, message
   type
 
-# `x == nil` and `x != nil` test an optional value.
 const type_of_nil_test = (body: Body, binary: BinaryOperation) ->
   const left_is_nil = binary.left is NilLiteral
   type_of body, left_is_nil then binary.left else binary.right
   expect_optional body, left_is_nil then binary.right else binary.left
   bool_type
 
-# `x ? fallback` is x without nil; the fallback has that type too.
 export const type_of_coalesce = (body: Body, coalesce: Coalesce) ->
   const inner = expect_optional(body, coalesce.value)
   expect_type body, coalesce.fallback, inner
   inner
 
-# `+` joins Strings too; `%` has no Float.
 export const arithmetic_kinds = (operator: String): TypeKind[] ->
   case operator
     when '+' then [NUMERIC_KINDS..., 'String']
@@ -87,9 +84,6 @@ export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Ty
     return bool_type
   type_of_operands body, binary, hint_of(expected, allowed), allowed, reject
 
-# The type both operands share. An operand whose type comes from the context is checked against
-# the other one, so that `c == 'a'` and `'a' == c` compare Bytes when `c` is one, and `k == A` and
-# `A == k` compare members of an enum when `k` is one.
 const type_of_operands = (
   body: Body, binary: BinaryOperation, expected: Type?, allowed_kinds: TypeKind[],
   reject: (Type) -> String
@@ -116,8 +110,6 @@ const type_of_operands = (
   expect_type body, second, type
   type
 
-# Either operand of `==` may be optional: a T is then compared as a T?. The second operand is
-# typed with T as the hint, so that `c == 'a'` takes 'a' as a Byte when c is a Byte?.
 const type_of_equality_operand = (
   body: Body, first: Expression, second: Expression, first_type: Type
 ): Type ->
@@ -128,8 +120,6 @@ const type_of_equality_operand = (
   require_type body, second, second_type, first_type
   first_type
 
-# Objects compared by identity may be of different types, as a class and a union that holds it,
-# as long as both can hold an object of the same class. Either may be optional.
 const type_of_identity_operand = (body: Body, second: Expression, first_type: Type) ->
   const type = type_of(body, second)
   const first_inner = inner_of(first_type)

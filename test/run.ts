@@ -189,9 +189,7 @@ const build_commands = async (): Promise<void> => {
   }
 }
 
-// Builds a program with and without -O, so that the compiler caches both runtimes before the
-// tests start. Otherwise the tests started together would each compile the same runtime, and each
-// such compile runs as many clang processes as there are CPUs.
+// Caches both runtimes before the tests start, as cli/common.ts does, for the reason given there.
 const build_runtimes = async (): Promise<void> => {
   // Not in work_dir itself, which is on the PATH of the tested programs.
   const dir = mkdtempSync(join(work_dir, 'runtime-'))

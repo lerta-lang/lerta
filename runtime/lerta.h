@@ -5,14 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Objects whose reference count is this value are immortal (static literals)
-// and exempt from count operations.
 #define LERTA_IMMORTAL INT64_MIN
 
-// Every heap object starts with this header.
 typedef struct {
   int64_t ref_count;
-  // Releases what the object owns before it is freed; NULL if it owns nothing.
   void (*drop)(void *object);
 } LertaHeader;
 
@@ -103,8 +99,6 @@ typedef struct {
   LertaEquals equals;
 } LertaMap;
 
-// An Iter. Its has_next and next take the Iter itself, whose state follows these fields; next
-// returns the item, owned, in the representation of its type, so the compiler declares its type.
 // The header's fields are spelled out: the generated code lays them out flat, while a nested
 // LertaHeader would be padded to the alignment of its int64_t, which is 8 on 32-bit Windows.
 typedef struct LertaIter {
@@ -131,10 +125,6 @@ void lerta_release(void *object);
 // object counts as referenced once while deinit runs, so that passing it on and releasing it again
 // does not drop it twice; deinit must not keep it, which would bring a dropped object back.
 void lerta_run_deinit(void *object, void (*deinit)(void *object));
-// A `weak!` field holds a box of its object instead of the object, shared by every such field of
-// it. The object and its box point at each other without counting: `slot` is where the object
-// keeps its box. Whichever goes first clears the other's pointer, so that the object is freed as
-// soon as nothing else holds it.
 void *lerta_weak_box(void *object, void **slot);
 // The object of the box, borrowed, or NULL if it is gone or the box is NULL, as for nil.
 void *lerta_weak_object(void *box);
@@ -211,10 +201,7 @@ void lerta_map_write(LertaMap *map, int64_t key, const void *value);
 void lerta_map_remove(LertaMap *map, int64_t key);
 LertaArray *lerta_map_keys(const LertaMap *map);
 
-// A traversal of a map's entries in insertion order, for the Iter of `entries()`: it gives those
-// there when it was made, but those removed since. It holds the map, which keeps its entries at
-// their positions while the cursor is alive, rather than compacting them. next writes the key and
-// the value, owned, and moves on.
+// next writes the key and the value, owned, and moves on.
 typedef struct LertaMapCursor LertaMapCursor;
 LertaMapCursor *lerta_map_cursor(LertaMap *map);
 bool lerta_map_cursor_has_next(LertaMapCursor *cursor);
@@ -227,9 +214,7 @@ void lerta_raise_iter_ended(void);
 // Asking an Iter for an item while its function, which yields, runs.
 void lerta_raise_iter_running(void);
 
-// Promises and the event loop (async.c). A Promise is settled once, with a value stored in its slot
-// or with the pending exception, which it takes; the coroutines that wait for it are then resumed
-// by the loop, which runs after the program's top-level code until nothing is left to wait for.
+// Promises and the event loop (async.c).
 typedef struct LertaPromise LertaPromise;
 LertaPromise *lerta_promise_new(LertaItemKind kind);
 // Whether the coroutine is to wait for the promise, which is pending; it is resumed once the
@@ -286,17 +271,14 @@ void lerta_rename(const LertaString *from, const LertaString *to);
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
 
-// The exception being thrown, an Error interface value, from its throw until a catch takes it; its
-// data is null while there is none. The generated code checks it after each call (see
-// docs/internals.md#exceptions). The first entry of an Error's itab gives its message.
+// The exception being thrown (see docs/internals.md#exceptions); its data is null while there is
+// none. The first entry of an Error's itab gives its message.
 typedef struct {
   void *data;
   void *const *itab;
 } LertaException;
 extern LertaException lerta_exception;
 
-// The frame of a function that yields, an LLVM coroutine's, which has no header: it is counted as
-// a live object, but not reference counted, since the Iter that runs it owns it alone.
 void *lerta_frame_alloc(int64_t size);
 void lerta_frame_free(void *frame);
 
@@ -317,11 +299,8 @@ typedef enum {
   LERTA_INIT_ERROR
 } LertaErrorKind;
 
-// Throws an error of the kind with the message, borrowed: sets the pending exception, which the
-// generated code checks after the call, and the caller returns at once. The program registers
-// the function that makes the error (see lerta_register_raise); without one, as in a program
-// that is std:builtins or one of the modules it imports, which have no error types to make, it
-// stops the program with lerta_exit_with_error.
+// Throws an error of the kind with the message, borrowed (see docs/internals.md#exceptions): the
+// caller returns at once.
 void lerta_raise(LertaErrorKind kind, const LertaString *message);
 void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
 

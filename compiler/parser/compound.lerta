@@ -20,7 +20,6 @@ import parse_result_annotation, parse_type_annotation, parse_type_parameters fro
 export const starts_function_literal = (tokens: TokenStream) ->
   tokens.inside SKIP, -> looks_like_function_literal(tokens)
 
-# `weak` is not a keyword: before a function literal, it makes one that captures `@` weakly.
 export const starts_weak_function_literal = (tokens: TokenStream) ->
   return false if not tokens.at_word('weak')
   const start = tokens.index
@@ -142,8 +141,6 @@ const parse_comprehension = (
   const lazy = is_lazy then lazy_functions(element, variable, guard, bindings)
   Comprehension element, variable, iterable, guard, lazy, position, index, bindings: bindings()
 
-# `{ k: v, ... }`. A key that is a name would make an anonymous struct, so a name's value is
-# written as a key in parentheses: `{ (k): v }`.
 export const parse_map_literal = (tokens: TokenStream, position: Position): Expression ->
   return parse_record_literal(tokens, position) if starts_record_field(tokens)
   const entries = tokens.parse_list('}', -> parse_map_entry(tokens))
@@ -179,10 +176,7 @@ const parse_record_field = (tokens: TokenStream) ->
   const value: Expression = has_value then parse_expression(tokens) else copy_identifier(name)
   NamedValue name, value
 
-# `case` followed by an indented block of `when` arms and a final `else` arm. `when` is not a
-# keyword, so that it stays usable as a name.
-# With a subject, an arm may list several patterns, and the `else` arm may be left out (whether
-# it may is checked later).
+# With a subject, the `else` arm may be left out; whether it may is checked later.
 export const parse_case = (tokens: TokenStream, position: Position) ->
   const subject = tokens.peek().kind == NEWLINE then nil else parse_expression(tokens)
   tokens.expect NEWLINE, 'end of line'
@@ -236,8 +230,8 @@ const parse_arm_body = (tokens: TokenStream, arm: TokenKind) ->
   tokens.fail_expecting next, "'then' or end of line" if next.kind != NEWLINE
   parse_block tokens
 
-# `pass`, alone after `then` or `else`, is an arm that does nothing. It is not a keyword, so that
-# it stays usable as a name; a name alone there would be an unused value anyway.
+# `pass` is not a keyword: a name alone after `then` or `else` would be an unused value, so it can
+# mean nothing else there.
 const parse_pass = (tokens: TokenStream): Statement? ->
   return nil if not tokens.at_word('pass') or tokens.peek_at(1).kind != NEWLINE
   Pass position: token_position(tokens.next())

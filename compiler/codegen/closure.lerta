@@ -1,6 +1,4 @@
-# Function values in the generated code. A function value is a closure: a reference-counted
-# object `{ i64 ref_count, ptr drop, ptr code, captured values... }`. Its code takes the closure
-# first, then the arguments, which are borrowed, and gives an owned result.
+# Function values in the generated code (see docs/internals.md#objects).
 import
   emit_heap_allocate, emit_heap_field_pointer, heap_object_type, HeapField, plain_field
 from './heap_object'
@@ -16,8 +14,6 @@ const CODE_FIELD = 2
 
 export const function_type_of = (type: Type) -> type as FunctionType!
 
-# The closure of a top-level function, `symbol`: an immortal constant whose code, a thunk defined
-# with it, calls the function without the closure.
 export const emit_function_closure = (ir: IrBuilder, symbol: String, type: Type) ->
   const { params, result } = function_type_of(type)
   const thunk = prefixed_symbol('lerta.thunk', symbol)
@@ -25,7 +21,6 @@ export const emit_function_closure = (ir: IrBuilder, symbol: String, type: Type)
     const typed_params = ["#{ir_type(param)} %p#{i}" for param, i in params]
     const return_type = ir_return_type(result)
     const call = "call #{return_type} #{symbol}(#{typed_params.join(', ')})"
-    # A never function returns, with an exception pending, to the caller's check.
     const body =
       if return_type == 'void'
         ["  #{call}", '  ret void']
@@ -37,8 +32,6 @@ export const emit_function_closure = (ir: IrBuilder, symbol: String, type: Type)
   ir.module.define_once thunk, define
   emit_static_closure ir, thunk
 
-# A closure of `code` that captures nothing: an immortal constant, defined once, which is never
-# allocated or freed.
 export const emit_static_closure = (ir: IrBuilder, code: String) ->
   const closure = prefixed_symbol('lerta.closure', code)
   const define = (module: IrModule) ->

@@ -15,16 +15,12 @@
 
 #include "internal.h"
 
-// A stack overflow touches the guard page below the stack, which raises SIGSEGV (SIGBUS on some
-// systems). The handler runs on a stack of its own, since the overflowed one has no room left.
 static uint8_t handler_stack[1 << 16];
 static uintptr_t stack_top = 0;
 static uintptr_t stack_limit = 0;
 
-// Without a limit, or with one beyond the address space, the stack has no known range, so no
-// fault is taken for an overflow. The guard page lies just past the limit, so a little slack is
-// allowed below it.
 static bool is_stack_overflow(uintptr_t address) {
+  // The guard page lies just past the limit, so a little slack is allowed below it.
   uintptr_t slack = 1 << 16;
   if (stack_limit == RLIM_INFINITY || stack_limit > stack_top - slack) return false;
   return address >= stack_top - slack - stack_limit && address < stack_top;
@@ -33,8 +29,6 @@ static bool is_stack_overflow(uintptr_t address) {
 static void on_fault(int signal_number, siginfo_t *info, void *context) {
   (void)context;
   if (is_stack_overflow((uintptr_t)info->si_addr)) lerta_panic("stack overflow");
-  // Any other fault is not Lerta's to report: the default action ends the program when the
-  // faulting instruction runs again.
   signal(signal_number, SIG_DFL);
 }
 
@@ -229,8 +223,6 @@ char *lerta_os_program_argument(const char *argument) {
   return strdup(argument);
 }
 
-// mmap aligns only to a page, so it maps one region more than asked and unmaps what lies outside
-// the alignment.
 void *lerta_os_map_region(int64_t size) {
   size_t mapped_size = (size_t)(size + LERTA_REGION_SIZE);
   uint8_t *mapped =

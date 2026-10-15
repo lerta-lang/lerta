@@ -8,8 +8,7 @@
 
 #include "internal.h"
 
-// Windows takes paths and the command line as UTF-16, in its wide-character functions, and Lerta
-// keeps them as UTF-8. Both return NULL on failure; the caller frees the result.
+// Both return NULL on failure; the caller frees the result.
 static wchar_t *to_utf16(const char *utf8) {
   int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8, -1, NULL, 0);
   if (length == 0) return NULL;
@@ -26,8 +25,6 @@ static char *to_utf8(const wchar_t *utf16) {
   return utf8;
 }
 
-// A stack overflow raises EXCEPTION_STACK_OVERFLOW in the overflowing thread, on what is left of
-// its stack; the guarantee keeps enough of it for the handler to report the panic.
 static LONG CALLBACK on_exception(EXCEPTION_POINTERS *exception) {
   if (exception->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW) {
     lerta_panic("stack overflow");
@@ -43,9 +40,7 @@ void lerta_stack_init(void) {
   AddVectoredExceptionHandler(1, on_exception);
 }
 
-// The C runtime's argv is in the ANSI code page, which may not hold every character, so the
-// arguments are read again from the UTF-16 command line. They are kept for the life of the
-// process, so they are never freed.
+// The arguments are kept for the life of the process, so they are never freed.
 void lerta_os_arguments(int *argc, char ***argv) {
   wchar_t **wide_arguments = CommandLineToArgvW(GetCommandLineW(), argc);
   if (wide_arguments == NULL) lerta_panic("cannot read the arguments");
@@ -58,8 +53,6 @@ void lerta_os_arguments(int *argc, char ***argv) {
   *argv = arguments;
 }
 
-// WriteFile takes the bytes as they are: no newline becomes CRLF, as it would through the C
-// runtime's text mode.
 static bool write_all(HANDLE handle, const uint8_t *bytes, int64_t length) {
   while (length > 0) {
     DWORD chunk = length > (1 << 30) ? (1 << 30) : (DWORD)length;
@@ -98,8 +91,6 @@ static int incomplete_tail(const uint8_t *bytes, int64_t length) {
 static uint8_t console_tails[3][3];
 static int console_tail_lengths[3];
 
-// A console shows bytes in its code page, which is rarely UTF-8, but shows UTF-16 as it is. Bytes
-// that are not UTF-8 show as U+FFFD.
 static bool write_console(int fd, HANDLE console, const uint8_t *bytes, int64_t length) {
   int tail_length = console_tail_lengths[fd];
   if (length > INT_MAX - tail_length) return false;
@@ -150,8 +141,6 @@ void lerta_os_exit(int code) {
   ExitProcess((UINT)code);
 }
 
-// 3 is the exit code of C's abort on Windows. Unlike ExitProcess, TerminateProcess runs no code of
-// the loaded libraries, which is safer on an overflowed stack.
 void lerta_os_abort(void) {
   TerminateProcess(GetCurrentProcess(), 3);
   // TerminateProcess returns while the process ends.
@@ -466,9 +455,6 @@ static bool has_directory(const char *command) {
   return strpbrk(command, "/\\:") != NULL;
 }
 
-// A command without a directory in it is searched for on PATH only, as on POSIX; libuv would look
-// in the current directory first. One with a directory in it is left to libuv, which tries its
-// exact name, then the name with .com and then .exe added.
 char *lerta_os_program_file(const char *command) {
   if (has_directory(command)) return _strdup(command);
   wchar_t *found = search_path(command);
@@ -477,7 +463,6 @@ char *lerta_os_program_file(const char *command) {
   return file;
 }
 
-// VirtualAlloc aligns to the allocation granularity, which is 64 KiB.
 void *lerta_os_map_region(int64_t size) {
   return VirtualAlloc(NULL, (SIZE_T)size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }

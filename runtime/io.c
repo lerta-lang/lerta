@@ -8,7 +8,6 @@ enum { STDOUT_FD = 1, STDERR_FD = 2, STDOUT_BUFFER_SIZE = 4096 };
 
 static uint8_t stdout_buffer[STDOUT_BUFFER_SIZE];
 static int64_t stdout_buffered = 0;
-// As in C stdio: a terminal shows each write at once, while a pipe or a file gets few large writes.
 static bool stdout_is_terminal = false;
 static bool stdout_failed = false;
 

@@ -2,9 +2,7 @@
 
 #include "internal.h"
 
-// The allocator: see docs/internals.md#allocation. A free place keeps an object's count at 0, so
-// that a retain or release of what it held stops a debug program, and holds its free-list link
-// where an object's drop is.
+// See docs/internals.md#allocation.
 typedef struct Region Region;
 typedef struct Place {
   int64_t count;
@@ -31,9 +29,6 @@ struct Region {
 #define SLAB_LIMIT (16 << 10)
 #define SMALL_CLASSES ((SMALL_LIMIT - SMALLEST_PLACE) / 8 + 1)
 #define SIZE_CLASSES (SMALL_CLASSES + 4 * 6)
-// Empty slabs kept: by a release build for reuse, so that a program that makes and drops the same
-// objects over and over does not map and unmap a slab each time; by a debug build, the last ones,
-// never reused, so that a use of what they held is still caught.
 #define EMPTY_SLABS_KEPT 4
 
 static Region *slabs_with_room[SIZE_CLASSES];
@@ -105,8 +100,6 @@ static void keep_empty_slab(Region *slab) {
   }
 }
 
-// The part never used first, then the place freed first, so that a place stays free as long as
-// possible.
 static bool takes_free_place(const Region *slab) { return !has_fresh_room(slab); }
 #else
 static Region *take_empty_slab(void) {
@@ -121,7 +114,6 @@ static void keep_empty_slab(Region *slab) {
   }
 }
 
-// The place freed last, which is warm in the cache.
 static bool takes_free_place(const Region *slab) { return slab->free_first != NULL; }
 #endif
 

@@ -68,8 +68,6 @@ link_debug = clang -Wno-override-module $(1) -D LERTA_DEBUG -Ithird_party/libuv/
 build/minilerta: build/seed.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,build/seed.ll,$@)
 
-# The host's libuv, as the compiler builds it with a program's runtime (see compiler/libuv.lerta):
-# with its flags and its warnings silenced, apart from the runtime, which needs only its headers.
 build/libuv/built: $(LIBUV)
 	@rm -rf build/libuv && mkdir -p build/libuv
 	cd build/libuv && clang -c $(call host_libuv,flag) -I$(CURDIR)/third_party/libuv/include \
@@ -94,8 +92,6 @@ build/stage1.ll: build/minilerta build/host_llvm.sed $(SOURCES) $(EMBEDDED)
 build/stage1: build/stage1.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,$<,$@)
 
-# stage1 holds std/ and runtime/, which it embeds, as bin/lerta does. The compiler builds itself
-# without warnings.
 bin/lerta: build/stage1
 	@mkdir -p bin
 	build/stage1 build $(MAIN) -o $@ -O -Werror
@@ -114,7 +110,6 @@ $(BOOTSTRAP)/stage2.ll: bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta dump-llvm $(MAIN) > $@
 
-# The debug runtime reports a leak to stderr without failing, so a run of stage2 fails on the report.
 # $(1) is the command line, $(2) the file that keeps its stderr meanwhile.
 define run_stage2_without_leaks
 $(RUN_STAGE2) $(1) 2> $(2); status=$$?; cat $(2) >&2; \
@@ -127,16 +122,12 @@ $(BOOTSTRAP)/stage3$(EXE): $(STAGE2)
 $(BOOTSTRAP)/stage3.ll: $(STAGE2)
 	$(call run_stage2_without_leaks,dump-llvm $(MAIN) > $@,$@.stderr)
 
-# minilerta's entry, which nothing else builds before make seed, must print the IR that dump-llvm
-# does. It is built for the host, as the seed is only ever built there.
+# Built for the host, as the seed is only ever built there.
 $(BOOTSTRAP)/minilerta.ll: bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta build $(MINILERTA_MAIN) -o $(BOOTSTRAP)/minilerta -Werror
 	$(BOOTSTRAP)/minilerta $(MAIN) > $@
 
-# Only the IR is compared (see docs/internals.md#bootstrap): that of stage2, which bin/lerta
-# prints, and that of stage3, which stage2 prints. For Windows, stage2 builds stage3 with a clang for
-# Windows, which it finds on Wine's PATH.
 check-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3$(EXE) \
   $(BOOTSTRAP)/minilerta.ll
 	@cmp -s $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll \
@@ -152,8 +143,6 @@ ifdef TARGET
 seed:
 	@echo 'make seed does not take TARGET' >&2; exit 2
 else
-# The seed's compiler embeds std/ and runtime/ in seed mode, in a copy of compiler/ beside its own
-# build/, so that the build's own build/embedded.lerta stays as it is.
 seed: check-bootstrap
 	rm -rf build/seed
 	mkdir -p build/seed/build
@@ -163,7 +152,6 @@ seed: check-bootstrap
 	cp build/seed/lerta.ll seed/lerta.ll
 endif
 
-# test runs the tests on the host only, and test-cross for every other environment it can reach.
 ifdef TARGET
 test test-cross:
 	@echo 'make $@ does not take TARGET: run node test/run.ts --target <triple>' >&2; exit 2
