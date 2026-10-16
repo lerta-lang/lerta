@@ -279,6 +279,26 @@ typedef struct {
 } LertaException;
 extern LertaException lerta_exception;
 
+// The trace of the pending exception (see docs/internals.md#exception-traces), printed if it is
+// uncaught: the sites where it was thrown, and of the calls it has gone through, innermost first,
+// which the compiler emits as constants. `start` starts a new trace, for a new throw; `push` adds
+// to the trace, or starts one if the trace is of another exception, so that a caught exception
+// thrown again goes on with its own. A saved trace is a copy, for while the exception is set
+// aside: `load` copies it back, and `restore` does and frees it.
+typedef struct {
+  const LertaString *function;
+  const LertaString *file;
+  int32_t line;
+  int32_t column;
+} LertaTraceSite;
+void lerta_trace_push(const LertaTraceSite *site);
+void lerta_trace_start(const LertaTraceSite *site);
+typedef struct LertaTrace LertaTrace;
+LertaTrace *lerta_trace_save(void);
+void lerta_trace_load(const LertaTrace *saved);
+void lerta_trace_restore(LertaTrace *saved);
+void lerta_trace_free(LertaTrace *saved);
+
 void *lerta_frame_alloc(int64_t size);
 void lerta_frame_free(void *frame);
 

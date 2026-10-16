@@ -23,6 +23,8 @@ export struct BuildRequest
   target: String?
   # `-Werror`: a warning stops the build, as an error does.
   warnings_as_errors: Bool
+  # Without `--no-trace`: an uncaught exception prints its trace (see generate).
+  traces: Bool
 
 export const build = (request: BuildRequest) -> build_then(request, nil)
 
@@ -49,7 +51,8 @@ const build_in_dir = (
   request: BuildRequest, program: ProgramWide, dir: String, run_args: String[]?
 ) ->
   const runtime = await cached_runtime(request.optimize, request.target, dir) ? return 1
-  const modules = generate(program, runtime.function_attributes, runtime.coro_end_type, true)
+  const { function_attributes, coro_end_type } = runtime
+  const modules = generate(program, function_attributes, coro_end_type, true, request.traces)
   const flags = build_flags(request.optimize, request.target)
   const objects = await compile_modules(modules, flags, dir) ? return 1
   const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")

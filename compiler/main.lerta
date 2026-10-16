@@ -6,6 +6,7 @@ import build, build_and_run, BuildRequest from './build'
 import dump_checked from './checked_dump'
 import executable_suffix from './clang_flags'
 import check_program, generate_ir from './compile'
+import CompileError from './errors'
 import format_command from './format/command'
 import tokenize from './lexer/tokens'
 import parse from './parser/statement'
@@ -14,8 +15,9 @@ import read_entry_source, SOURCE_EXTENSION from './source'
 import dump_tokens from './token_dump'
 
 const USAGE =
-  "usage: lerta build <source> [<file>...] [-o <output>] [-O] [-Werror] [--target <triple>]\n"
-  "       lerta run <source> [<file>...] [-O] [-Werror] [-- <arg>...]\n"
+  "usage: lerta build <source> [<file>...] [-o <output>] [-O] [-Werror] [--no-trace]\n"
+  "                   [--target <triple>]\n"
+  "       lerta run <source> [<file>...] [-O] [-Werror] [--no-trace] [-- <arg>...]\n"
   "       lerta fmt [--fix] <path>...\n"
   "       lerta dump-tokens <source>\n"
   "       lerta dump-ast <source>\n"
@@ -47,6 +49,7 @@ const parse_build_arguments = (args: String[]) ->
   var target: String? = nil
   var optimize = false
   var warnings_as_errors = false
+  var traces = true
   var program_args: String[]? = nil
   var i = 0
   const take_value = (previous: String?) ->
@@ -62,6 +65,9 @@ const parse_build_arguments = (args: String[]) ->
       when '-Werror'
         fail_usage() if warnings_as_errors
         warnings_as_errors = true
+      when '--no-trace'
+        fail_usage() if not traces
+        traces = false
       when '-o' then output = take_value(output)
       when '--target' then target = take_value(target)
       when '--'
@@ -76,21 +82,28 @@ const parse_build_arguments = (args: String[]) ->
           linked_files.push arg
     i += 1
   const given_source = source ? fail_usage()
-  { source: given_source, linked_files, output, target, optimize, warnings_as_errors, program_args }
+  {
+    source: given_source, linked_files, output, target, optimize, warnings_as_errors, traces,
+    program_args
+  }
 
 const build_command = (args: String[]) ->
   const parsed = parse_build_arguments(args)
-  const { source, linked_files, output, target, optimize, warnings_as_errors } = parsed
+  const { source, linked_files, output, target, optimize, warnings_as_errors, traces } = parsed
   fail_usage() if parsed.program_args != nil
   const executable = output ? default_output(source, target)
-  build BuildRequest(source, linked_files, optimize, target, warnings_as_errors, output: executable)
+  const request = BuildRequest(
+    source, linked_files, optimize, target, warnings_as_errors, traces, output: executable
+  )
+  build request
 
 # The program is built in the temporary directory, for the host.
 const run_command = (args: String[]) ->
   const parsed = parse_build_arguments(args)
-  const { source, linked_files, output, target, optimize, warnings_as_errors } = parsed
+  const { source, linked_files, output, target, optimize, warnings_as_errors, traces } = parsed
   fail_usage() if output != nil or target != nil
-  const request = BuildRequest(source, linked_files, optimize, target, output, warnings_as_errors)
+  const request =
+    BuildRequest(source, linked_files, optimize, target, output, warnings_as_errors, traces)
   build_and_run request, parsed.program_args ? []
 
 const default_output = (source: String, target: String?) ->
@@ -116,12 +129,17 @@ const dump_program_checked = (path: String) -> dump_checked(check_program(path, 
 
 const command = argv.first() ? ''
 const args = [argv[i] for i in 1...argv.length]
-case command
-  when 'build' then await build_command(args)
-  when 'run' then await run_command(args)
-  when 'fmt' then fmt_command(args)
-  when 'dump-tokens' then run_dump(args, dump_file_tokens)
-  when 'dump-ast' then run_dump(args, dump_file_ast)
-  when 'dump-checked' then run_dump(args, dump_program_checked)
-  when 'dump-llvm' then run_dump(args, (path) -> generate_ir(path, false))
-  else fail_usage()
+# A compile error is the user's, so it is reported without the compiler's trace.
+try
+  case command
+    when 'build' then await build_command(args)
+    when 'run' then await run_command(args)
+    when 'fmt' then fmt_command(args)
+    when 'dump-tokens' then run_dump(args, dump_file_tokens)
+    when 'dump-ast' then run_dump(args, dump_file_ast)
+    when 'dump-checked' then run_dump(args, dump_program_checked)
+    when 'dump-llvm' then run_dump(args, (path) -> generate_ir(path, false))
+    else fail_usage()
+catch error: CompileError
+  stderr.write "#{error.message}\n"
+  exit 1

@@ -16,6 +16,9 @@ const run_with_bytes = (executable: string, args: number[][]) => {
 
 const invalid_argument = 'a command-line argument is not valid UTF-8\n'
 
+// The message of an uncaught exception, without the trace that follows it.
+const uncaught_message = (stderr: string) => stderr.slice(0, stderr.indexOf('\n') + 1)
+
 // Byte sequences and whether they are UTF-8: the bounds of each length and those around the
 // surrogates, then overlong forms, a surrogate, a code point above U+10FFFF, bytes that cannot
 // lead, truncated sequences and a lone continuation byte.
@@ -54,7 +57,7 @@ const program_cases: ProgramCase[] = [
       return (
         counted.stdout === `1 3 21 ${hello}\n` &&
         invalid.status === 1 &&
-        invalid.stderr === invalid_argument
+        uncaught_message(invalid.stderr) === invalid_argument
       )
     },
   },
@@ -63,7 +66,7 @@ const program_cases: ProgramCase[] = [
     source: 'tests/io/lib/exit_only.lerta',
     behaves: async (executable) => {
       const invalid = await run_with_bytes(executable, [[0xff]])
-      return invalid.status === 1 && invalid.stderr === invalid_argument
+      return invalid.status === 1 && uncaught_message(invalid.stderr) === invalid_argument
     },
   },
   {
@@ -92,7 +95,7 @@ const program_cases: ProgramCase[] = [
       const value = await run_command(executable, [], { env: set })
       return (
         ran.status === 1 &&
-        ran.stderr === message &&
+        uncaught_message(ran.stderr) === message &&
         empty.stdout === '\n' &&
         value.stdout === 'héllo\n'
       )

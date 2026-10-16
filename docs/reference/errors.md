@@ -37,7 +37,11 @@ finally
 - `finally` and its block, after the catches, run after the try block or the catch that ran, and before an exception goes on, the one that no catch takes or that a catch throws. A `try` has at least one `catch` or a `finally`. `return`, `break` and `continue` cannot leave a `try` that has a `finally` yet.
 - `try` is an expression: its value is that of its block, or of the catch that ran, which must have one type, as the arms of a `case` must (see [control flow](control-flow.md)); if one of them gives none, it gives none. The value of `finally` is discarded.
 - On its way, an exception releases what it leaves: the values of the expressions it interrupts, the locals of the blocks and the functions it leaves, and the fields of an object it interrupts the construction of, whose `deinit` does not run.
-- An uncaught exception prints its message and a newline to stderr, after flushing stdout, and the program exits with status 1.
+- An uncaught exception prints its message and a newline to stderr, after flushing stdout, then its trace, and the program exits with status 1. The trace tells where the exception was thrown and the calls and the `await`s it went through, innermost first, one line each, as `  at <function> (<file>:<line>:<column>)`:
+  - The function is named as it is declared, a method as `<type>.<name>` (as `Box<Int>.get`), a constructor by its type, a function literal as `<function>.<anonymous>` after the function it is in, and the top-level code of a module as `<top level>`. The file is as compile errors name it, relative to the current directory when the program was built, or `std:<name>`; the line and the column are those of the statement or the expression that threw or made the call.
+  - A `throw` of the exception that a `catch` has taken, by the catch's name, goes on with its trace, unless another was thrown meanwhile: the trace then tells both where it was first thrown and where it was thrown again. Any other `throw` starts a new trace, even of an object thrown before.
+  - The trace keeps the 32 entries nearest to the throw and the 32 outermost; between them, `  ... <n> more` tells how many it leaves out.
+  - A program built with `--no-trace` prints the message alone (see [the compiler](compiler.md#build)).
 - Why exceptions propagate as a pending exception checked after each call, rather than by unwinding the machine stack, is in [internals](../internals.md#exceptions).
 
 ## Panics

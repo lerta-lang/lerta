@@ -33,6 +33,8 @@ struct LertaPromise {
   bool observed;
   LertaItemKind kind;
   LertaException exception;
+  // The exception's trace, while it is rejected.
+  LertaTrace *trace;
   // The coroutines that await it, which become ready when it is settled.
   void **waiters;
   int64_t waiter_count;
@@ -48,8 +50,10 @@ static void drop_promise(void *object) {
   // An exception that nothing awaited would be lost: it ends the program, as an uncaught one does.
   if (!promise->observed) {
     lerta_exception = promise->exception;
-    lerta_exit_with_error(lerta_exception_message());
+    lerta_trace_load(promise->trace);
+    lerta_exit_with_exception();
   }
+  lerta_trace_free(promise->trace);
   lerta_release(promise->exception.data);
 }
 
@@ -59,6 +63,7 @@ LertaPromise *lerta_promise_new(LertaItemKind kind) {
   promise->observed = false;
   promise->kind = kind;
   promise->exception = (LertaException){NULL, NULL};
+  promise->trace = NULL;
   promise->waiters = NULL;
   promise->waiter_count = 0;
   promise->waiter_capacity = 0;
@@ -95,6 +100,7 @@ void lerta_promise_resolve(LertaPromise *promise) {
 
 void lerta_promise_reject(LertaPromise *promise) {
   promise->exception = lerta_exception;
+  promise->trace = lerta_trace_save();
   lerta_exception = (LertaException){NULL, NULL};
   settle(promise, REJECTED);
 }
@@ -104,6 +110,7 @@ void *lerta_promise_result(LertaPromise *promise) {
   if (promise->state == REJECTED) {
     lerta_retain(promise->exception.data);
     lerta_exception = promise->exception;
+    lerta_trace_load(promise->trace);
   }
   return promise->value;
 }

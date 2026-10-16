@@ -1,13 +1,14 @@
 # The state of the generation of a module's code, and of one function of it. Objects refer to the
 # checker's results and to the IR being built, never back to the generator, so that they form no
 # cycle.
+import Position from '../ast'
 import Extensions from '../checker/extensions'
 import NodeFacts, ProgramWide, Shared from '../checker/shared'
 import IrBuilder, IrModule from './ir_builder'
 import IterKind from './iter_protocol'
 import Module from '../loader'
 import Ownership from './lerta_ir'
-import Type, void_type from '../types'
+import format_type, Type, void_type from '../types'
 
 # A top-level value: the global that holds it, and the flag that tells whether it is initialized
 # (see top_level).
@@ -20,7 +21,8 @@ export struct TopLevelGlobal
 
 # What the generation of one module's code shares: the program as checked, the IR module, the
 # top-level values of every module, by module index, and the symbols of the functions the module
-# can call by name, its own and those it imports.
+# can call by name, its own and those it imports; and whether exceptions are traced (see
+# emit_trace_entry).
 export class ModuleCode
   program: ProgramWide
   ir_module: IrModule
@@ -28,6 +30,7 @@ export class ModuleCode
   module: Module
   shared: Shared
   symbols: Map<String, String>
+  traces: Bool
 
 # A loop variable or a parameter is an SSA value; a `const` or `var` lives in a stack slot.
 export struct ValueLocal
@@ -55,6 +58,8 @@ export struct SlotLocal
   weak = default false
   # A `var`, which assignments may change.
   is_var = default false
+  # The exception that a catch takes, whose throw goes on with its trace (see emit_throw_error).
+  caught = default false
 
 export type CodegenLocal = ValueLocal | SlotLocal
 
@@ -120,12 +125,14 @@ export struct Coroutine
 
 # The generation of one function. `top_level_code` tells whether it is the module's top-level code,
 # which declares the top-level values, rather than a function, which uses them once they are
-# initialized; `extensions` are those its body sees (see Instance).
+# initialized; `extensions` are those its body sees (see Instance); `function_name` names it in
+# traces (see trace_name).
 export class Generator
   code: ModuleCode
   extensions: Extensions
   facts: NodeFacts
   top_level_code: Bool
+  function_name: String
   ir = IrBuilder(module: @code.ir_module)
   locals = Locals()
   loops: Loop[] = []
@@ -145,7 +152,20 @@ export class Generator
   yield_kind: IterKind? = nil
   # What the body of a coroutine does with the value it returns, owned, or '', before it ends.
   on_return: ((String) -> void)? = nil
+  # Where the code being generated is in the source, the innermost statement or expression; nil
+  # outside them, as in the code that a function runs before its body.
+  position: Position? = nil
 
-# The generator of a function's body, which is not top-level code.
-export const function_generator = (code: ModuleCode, extensions: Extensions, facts: NodeFacts) ->
-  Generator code, extensions, facts, top_level_code: false
+# The generator of a function's body, which is not top-level code. Code that is no function of the
+# program has the name '', which no trace shows, since it adds no sites: it has no position (see
+# emit_trace_entry).
+export const function_generator = (
+  code: ModuleCode, extensions: Extensions, facts: NodeFacts, function_name: String
+) -> Generator(code, extensions, facts, function_name, top_level_code: false)
+
+# How a trace names a function: a method by its type and its name, as `Point.length`.
+export const trace_name = (name: String, this_type: Type?) ->
+  this_type then "#{format_type(this_type)}.#{name}" else name
+
+# How a trace names the top-level code of a module.
+export const TOP_LEVEL_NAME = '<top level>'

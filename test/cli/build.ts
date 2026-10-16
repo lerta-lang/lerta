@@ -1,5 +1,5 @@
 // Building programs, and what the compiler writes and leaves.
-import { readdirSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { compiler, root_dir } from '../lerta.ts'
 import { compare_text, expect_status, expect_success } from '../expect.ts'
@@ -88,6 +88,24 @@ const output_checks: Check[] = [
       return /\b(call\w*|jmp|bl|b)\s.*lerta_retain\b/.test(code.stdout)
         ? ['lerta_retain is not inlined']
         : []
+    },
+  },
+  {
+    // The symbols still name the functions; what is left out is the names that traces add.
+    name: 'lerta build --no-trace prints an uncaught exception without its trace, whose names it leaves out',
+    run: async () => {
+      const source = join(root_dir, 'tests/trace/rethrow.lerta')
+      const built = await build_in_new_dir(['build', source, '-o', 'rethrow', '-O', '--no-trace'])
+      const reasons = expect_success('build', built)
+      if (reasons.length > 0) return reasons
+      const executable = join(built.cwd, 'rethrow')
+      const ran = await run_command(executable, [])
+      const program = readFileSync(executable)
+      return [
+        ...expect_status(1, ran.status),
+        ...compare_text('stderr', 'failed\n', ran.stderr),
+        ...(program.includes('<top level>') ? ['the program holds the names of traces'] : []),
+      ]
     },
   },
   {

@@ -71,6 +71,12 @@ void lerta_stderr_write(const uint8_t *bytes, int64_t length);
 // Errors (io.c, lerta.c). The message of the pending exception, owned, which the first entry of an
 // Error's itab gives.
 LertaString *lerta_exception_message(void);
+// Prints the pending exception's message and trace to stderr, after flushing stdout, and exits with
+// status 1.
+_Noreturn void lerta_exit_with_exception(void);
+// Called as an object is freed: a trace of it is of no exception any more, so that one made later
+// at its address starts its own.
+void lerta_trace_forget(void *object);
 // As lerta_raise, with the message made of a prefix, a LertaString such as a LERTA_STATIC_STRING,
 // and the detail.
 void lerta_raise_with(LertaErrorKind kind, const void *prefix, const LertaString *detail);

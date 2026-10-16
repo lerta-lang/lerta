@@ -93,6 +93,7 @@ static void drain_to(int64_t length) {
 #ifdef LERTA_DEBUG
     live_objects--;
 #endif
+    lerta_trace_forget(dead);
     lerta_mem_free(dead);
   }
 }
@@ -118,12 +119,15 @@ void lerta_run_deinit(void *object, void (*deinit)(void *object)) {
   header->ref_count = 1;
   int64_t queued_before = pending_length;
   LertaException set_aside = lerta_exception;
+  // An exception that deinit throws and catches would replace the trace of the one set aside.
+  LertaTrace *set_aside_trace = set_aside.data != NULL ? lerta_trace_save() : NULL;
   lerta_exception = (LertaException){NULL, NULL};
   deinit(object);
   if (lerta_exception.data != NULL) {
     lerta_panic_with("deinit threw an exception: ", lerta_exception_message());
   }
   lerta_exception = set_aside;
+  if (set_aside_trace != NULL) lerta_trace_restore(set_aside_trace);
   // What deinit released is dropped now, not after it: a temporary that holds the object, such as a
   // closure of a function literal that uses `@`, must have let it go before the check.
   drain_to(queued_before);

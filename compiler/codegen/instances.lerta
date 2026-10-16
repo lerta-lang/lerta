@@ -3,13 +3,14 @@ import required_params from '../checker/functions'
 import is_generic_object, ObjectInfo from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import generate_constructor, generate_function from './function'
-import function_generator, ModuleCode from './generator'
+import function_generator, ModuleCode, trace_name from './generator'
 import define_object from './heap_object'
 import IrModule from './ir_builder'
 import OnDemand from './ir_linking'
 import
   constructor_symbol, default_entry_symbol, drop_symbol, instance_symbol, object_ir_type
 from './lerta_ir'
+import format_type from '../types'
 
 const LINKAGE = 'linkonce_odr '
 
@@ -24,9 +25,10 @@ export const instances_on_demand = (
       for instance in generic.instances
         const { literal, this_type } = instance.entry
         const symbol = instance_symbol(program, instance)
+        const function_name = trace_name(generic.name.name, this_type)
         const define = (ir_module: IrModule) ->
           const code = module_code(shared.index, ir_module)
-          const g = function_generator(code, instance.extensions, instance.facts)
+          const g = function_generator(code, instance.extensions, instance.facts, function_name)
           generate_function g, LINKAGE, symbol, literal, this_type, nil
         const entries = [
           default_entry_symbol(symbol, given)
@@ -47,7 +49,7 @@ const add_object = (
   const define = (ir_module: IrModule) ->
     const code = module_code(ir_module)
     define_object ir_module, program, info, LINKAGE
-    const g = function_generator(code, code.shared.extensions, info.facts)
+    const g = function_generator(code, code.shared.extensions, info.facts, format_type(info.type))
     generate_constructor g, LINKAGE, info
   for name in [key, drop_symbol(info.type), object_ir_type(info.type)]
     on_demand[name] = OnDemand(define, key)

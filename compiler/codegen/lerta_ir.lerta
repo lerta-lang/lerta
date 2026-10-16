@@ -4,7 +4,7 @@ import generic_of, Instance from '../checker/generics'
 import ObjectInfo from '../checker/object_types'
 import module_symbol_name, ProgramWide from '../checker/shared'
 import hex from '../hex'
-import IrBuilder from './ir_builder'
+import IrBuilder, IrModule from './ir_builder'
 import call_void_runtime from './runtime_calls'
 import
   inner_of, is_kind, is_one_of_kinds, is_reference_type, kind_of, ObjectType, OptionalType, Type,
@@ -145,22 +145,34 @@ const ir_string_bytes = (bytes: Binary) ->
 
 # An immortal LertaString (see runtime/lerta.h) holding the literal's bytes.
 export const string_constant = (ir: IrBuilder, value: String) ->
+  ir.module.global 'lerta.string', string_definition(value)
+
+# As string_constant, one per module for each value: for the names that the module's traces repeat
+# at every call.
+export const shared_string_constant = (ir: IrBuilder, value: String) ->
+  const define = (symbol: String, module: IrModule) ->
+    module.define_global symbol, string_definition(value)
+  ir.module.named "string #{value}", '@lerta.name', define
+
+const string_definition = (value: String) ->
   const bytes = value.binary
   const bytes_type = "[#{bytes.length} x i8]"
   # The header (reference count and drop function), the length and the bytes.
   const type = "{ i64, ptr, i64, #{bytes_type} }"
   const bytes_init = "#{bytes_type} c\"#{ir_string_bytes(bytes)}\""
   const init = "{ i64 #{LERTA_IMMORTAL}, ptr null, i64 #{bytes.length}, #{bytes_init} }"
-  ir.module.global 'lerta.string', "private unnamed_addr constant #{type} #{init}"
+  "private unnamed_addr constant #{type} #{init}"
 
-# How a value holds what it owns: nothing, a reference, the data of an interface value, or, in a
+# How a value holds what it owns: nothing, a reference, the data of an interface value; in a
 # generator's Iter alone (see yielding), the coroutine of the function that yields, which is
-# destroyed rather than released.
+# destroyed rather than released; or, while a finally block runs, the saved trace of the exception
+# set aside (see generate_try), which is freed.
 export enum Ownership
   NONE
   REFERENCE
   INTERFACE
   COROUTINE
+  TRACE
 
 export const ownership = (type: Type) ->
   case
@@ -179,11 +191,12 @@ const emit_retain_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
   emit_retain ir, reference if const reference = reference_of(ir, operand, owned)
 
 export const emit_release_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
-  if owned == COROUTINE
-    ir.module.declare 'llvm.coro.destroy', 'declare void @llvm.coro.destroy(ptr)'
-    ir.emit "call void @llvm.coro.destroy(ptr #{operand})"
-    return
-  emit_release ir, reference if const reference = reference_of(ir, operand, owned)
+  case owned
+    when COROUTINE
+      ir.module.declare 'llvm.coro.destroy', 'declare void @llvm.coro.destroy(ptr)'
+      ir.emit "call void @llvm.coro.destroy(ptr #{operand})"
+    when TRACE then call_void_runtime(ir, 'void @lerta_trace_free(ptr)', "ptr #{operand}")
+    else emit_release(ir, reference) if const reference = reference_of(ir, operand, owned)
 
 const reference_of = (ir: IrBuilder, operand: String, owned: Ownership) ->
   case owned
@@ -191,6 +204,7 @@ const reference_of = (ir: IrBuilder, operand: String, owned: Ownership) ->
     when REFERENCE then operand
     when INTERFACE then emit_interface_data(ir, operand)
     when COROUTINE then panic('a coroutine is not reference counted')
+    when TRACE then panic('a trace is not reference counted')
 
 # The data of an interface value, null for nil.
 export const emit_interface_data = (ir: IrBuilder, value: String) ->

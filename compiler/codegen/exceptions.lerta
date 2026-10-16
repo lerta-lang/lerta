@@ -5,13 +5,15 @@ import type_of from './expression'
 import
   generate_block_value, generate_statement, no_locals, release_scope, store_in_slot
 from './function'
-import CodegenLocal, Generator, Handler, Temporary from './generator'
+import CodegenLocal, Generator, Handler, SlotLocal, Temporary from './generator'
 import IrBuilder from './ir_builder'
 import emit_type_test from './heap_object'
 import
   emit_interface_data, emit_release_as, INTERFACE_IR_TYPE, ir_type, Ownership, ownership,
-  returns_nothing
+  returns_nothing, shared_string_constant
 from './lerta_ir'
+import call_runtime, call_void_runtime from './runtime_calls'
+import module_location from '../source'
 import is_kind, Type from '../types'
 
 # The runtime's pending exception (see lerta_exception in runtime/lerta.h), declared in the module.
@@ -56,8 +58,9 @@ const emit_clear_exception = (ir: IrBuilder) ->
 export const emit_check_or_return_thrown = (ir: IrBuilder, type: Type) ->
   emit_check_with ir, -> emit_return_thrown(ir, type)
 
-# Unwinds if the call before it has thrown.
-export const emit_exception_check = (g: Generator) -> emit_check_with(g.ir, -> emit_unwind(g))
+# Unwinds if the call before it has thrown, adding where the call is to the exception's trace.
+export const emit_exception_check = (g: Generator) ->
+  emit_check_with g.ir, -> emit_traced_unwind(g, TRACE_PUSH)
 
 # Runs `unwind` if the call before it has thrown, in code that is no function of the program, as an
 # Iter's has_next and next are: it releases what that code holds and returns.
@@ -70,6 +73,34 @@ export const emit_check_with = (ir: IrBuilder, unwind: () -> void) ->
   ir.start_block unwind_label
   unwind()
   ir.start_block next_label
+
+# The runtime's functions that add a site to the trace: one that goes on with the trace of the
+# exception, if it is its own, and one that starts a new trace for a new exception.
+export const TRACE_PUSH = 'void @lerta_trace_push(ptr)'
+export const TRACE_START = 'void @lerta_trace_start(ptr)'
+
+# Unwinds an exception that the code has just thrown, or that a call has passed on to it, adding
+# where the code is to its trace with the function `add`, TRACE_PUSH or TRACE_START.
+export const emit_traced_unwind = (g: Generator, add: String) ->
+  emit_trace_entry g, add
+  emit_unwind g
+
+# Adds the site of the code, its function and its position in the source, to the trace (see
+# lerta_trace_push), unless the program is built without traces or the code is outside every
+# statement. The site is a constant, so that the code of each is one argument.
+const emit_trace_entry = (g: Generator, add: String) ->
+  const code = g.code
+  return if not code.traces
+  const position = g.position ? return
+  const file = module_location(code.program.entry_path, code.module.display_path)
+  const fields =
+    "ptr #{shared_string_constant(g.ir, g.function_name)}"
+    "ptr #{shared_string_constant(g.ir, file)}"
+    "i32 #{position.line}"
+    "i32 #{position.column}"
+  const definition = "private unnamed_addr constant { ptr, ptr, i32, i32 } { #{fields.join(', ')} }"
+  const site = g.ir.module.global('lerta.site', definition)
+  call_void_runtime g.ir, add, "ptr #{site}"
 
 # Releases what the code holds up to the innermost `try`, and goes to its catches; outside every
 # `try`, releases what the function holds and returns a value that the caller never reads.
@@ -96,16 +127,19 @@ export const release_held = (g: Generator, scope_depth: Int, temporary_depth: In
     i -= 1
   release_scope g, scope for scope in g.locals.inner_scopes(scope_depth)
 
-# The value, an Error, becomes the exception, owned.
-export const emit_throw_error = (g: Generator, value: String) ->
+# The value, an Error, becomes the exception, owned. One that a catch has taken, thrown again from
+# there, goes on with its trace; any other throw starts a new one, even of an object thrown before,
+# whose trace tells where that throw went, not this one.
+export const emit_throw_error = (g: Generator, value: String, rethrows: Bool) ->
   g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr #{exception_global(g.ir)}"
-  emit_unwind g
+  emit_traced_unwind g, rethrows then TRACE_PUSH else TRACE_START
   g.ir.start_unreachable()
   'poison'
 
 # The try block's value, or that of the catch that takes its exception; the finally block runs
 # after either. An exception that no catch takes, or that a catch throws, runs the finally block
-# too, then unwinds further, while the finally block runs with it set aside.
+# too, then unwinds further, while the finally block runs with it set aside, and its trace, which an
+# exception thrown and caught there would replace.
 export const generate_try = (g: Generator, try_expression: Try) ->
   const ir = g.ir
   const type = type_of(g, try_expression)
@@ -135,7 +169,8 @@ export const generate_try = (g: Generator, try_expression: Try) ->
     emit_clear_exception ir
     const caught = takes_any then exception else data
     const define = (scope: Map<String, CodegenLocal>) ->
-      scope[clause.name.name] = store_in_slot(g, caught, caught_type)
+      const slot = store_in_slot(g, caught, caught_type)
+      scope[clause.name.name] = SlotLocal(pointer: slot.pointer, type: slot.type, caught: true)
     const generate_clause = -> generate_value(clause.body, define)
     if const label = catch_handler
       with_handler g, label, generate_clause
@@ -147,12 +182,15 @@ export const generate_try = (g: Generator, try_expression: Try) ->
   ir.start_block rethrow_label
   if finally_body
     const set_aside = ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
+    const trace = call_runtime(ir, 'ptr @lerta_trace_save()', '')
     emit_clear_exception ir
     const depth = g.temporaries.length
     g.temporaries.push Temporary(operand: set_aside, owned: Ownership.INTERFACE)
+    g.temporaries.push Temporary(operand: trace, owned: Ownership.TRACE)
     generate_statement g, statement for statement in finally_body
     pop_temporaries g, depth
     ir.emit "store #{INTERFACE_IR_TYPE} #{set_aside}, ptr #{exception_global(ir)}"
+    call_void_runtime ir, 'void @lerta_trace_restore(ptr)', "ptr #{trace}"
   emit_unwind g
   ir.start_block done_label
   const result = merge(g, type, incoming)

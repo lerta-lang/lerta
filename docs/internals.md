@@ -69,7 +69,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - A function's frame is on the machine stack. **Non-RC values (Int, Float, Bool) stay as SSA values** in registers.
 - Only variables captured by closures and variables living across `await` are placed in a heap **context object** (the V8 approach). Only the captured variables, not the whole frame.
 - For an async function, the context is the coroutine frame itself, which outlives the call that made it; suspended functions are linked by which one awaits which, a spaghetti stack on the heap.
-- A **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach), which would let a panic print a stack trace, is not needed for exceptions (see below); it may come for stack traces.
+- A **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach), which would let a panic print a stack trace, is not needed for exceptions, whose traces are made as they unwind (see below); it may come for the traces of panics.
 
 ### Exceptions
 
@@ -78,6 +78,14 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - The runtime's errors: a C function of the runtime that throws calls `lerta_raise` with the error's kind and message, and returns; the generated code checks the pending exception after each call of such a function. `lerta_raise` calls a function that the compiler generates in `std:builtins`, which constructs the error, of the kind's type there, and sets it as the pending exception; the program registers it first thing. A program that is `std:builtins` or a module it imports, without those types, registers none, and the runtime then stops the program at once. The generated code's own checks, such as for overflow, throw so too, where they fail.
 - Why: unwinding reuses the release on `return` and `break`, needs no tables or `longjmp`, and works alike on every platform. A throw across an `await` cannot unwind the machine stack anyway, since the awaiting function's frame is no longer on it: it is carried as the failure of the asynchronous result, which this approach does within synchronous code too. The cost is a load and a branch after each call.
 - Considered: a frame chain with `longjmp` (needs a frame record listing the references in every function) and LLVM's zero-cost unwinding (needs landing pads, unwind tables for the runtime's C code, and Windows' SEH apart).
+
+### Exception traces
+
+- The trace is made as the exception unwinds, so that it costs nothing until one is thrown. Where the generated code throws, or finds that a call has thrown, it calls `lerta_trace_push` with its **site**, a constant of the function's name, the module's file and the position of the innermost statement or expression (`Generator.position`); code that is no function of the program, as an Iter's `has_next`, adds none. A function that the exception leaves adds one entry, at the check of the call that threw, and so does an `await`, whose check is that of the promise's result. A runtime error is thrown by the C function that the code calls, so the call's check is its site.
+- The runtime keeps one trace, of the pending exception (`runtime/lerta.c`): its **owner**, the exception's data, and the sites pushed. A `throw` and a runtime error start a new trace (`lerta_trace_start`), but a `throw` of a catch's name, which the codegen tells by its local (`SlotLocal.caught`): that one pushes, as a call's check does (`lerta_trace_push`), which goes on with the trace if it is still the exception's own, and else starts one. Catching an exception does nothing to the trace, which an exception thrown and caught in the catch replaces. An object freed is the owner of none (`lerta_trace_forget`, as it is freed), so that an exception made at its place does not take its trace.
+- Where an exception is set aside while code that may throw and catch others runs, its trace is saved and restored with it: around a `finally` block, where the saved copy is a temporary (`Ownership.TRACE`) that an exception leaving the block frees; around a `deinit` (`lerta_run_deinit`); and in a rejected Promise, which keeps a copy for each `await` of it, and for the report of an exception that nothing awaited. Copies are `malloc`ed, as the runtime's own buffers are.
+- The trace keeps the first 32 sites pushed and the last 32 in a ring, so that it takes a fixed room however deep the exception comes from.
+- Each check that unwinds calls `lerta_trace_push`, which is kept out of line, so that LTO does not copy it into every site: the sites' code is one call with one argument. They make the compiler's own executable some 15% larger; `--no-trace` leaves them out.
 
 ### Stack overflow
 
