@@ -178,6 +178,10 @@ const concurrency = availableParallelism()
 // Wine runs a Windows program in a prefix of its own, when there are such prefixes (see wine.ts).
 let wine_prefixes = NO_WINE_PREFIXES
 
+// The longest a program may run, far beyond what any test takes, so that one that does not end
+// fails instead of holding up the run; Wine starts a program much more slowly.
+const RUN_TIMEOUT_SECONDS = target.windows ? 180 : 60
+
 // Runs a built program, whose exit status tells whether it failed, in a directory of its own, so
 // that files it writes do not meet those of the other runs.
 const run_program = (path: string): Promise<{ stdout: string; stderr: string; failed: boolean }> =>
@@ -186,9 +190,15 @@ const run_program = (path: string): Promise<{ stdout: string; stderr: string; fa
     const [file, args] = target.windows ? ['wine', [path]] : [path, []]
     const prefix = wine_prefixes.take()
     const env = prefix === undefined ? command_env : { ...command_env, WINEPREFIX: prefix }
-    const options = { cwd, env, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT } as const
+    const timeout = RUN_TIMEOUT_SECONDS * 1000
+    const options = { cwd, env, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT, timeout } as const
     execFile(file, args, options, (error, stdout, stderr) => {
       if (prefix !== undefined) wine_prefixes.give_back(prefix)
+      // Node kills the program only past the timeout, as maxBuffer gives an error of its own.
+      if (error?.killed === true) {
+        reject(new Error(`the program did not end in ${RUN_TIMEOUT_SECONDS}s`))
+        return
+      }
       // An exit status, or a signal such as a panic's abort, is a failed run; an error with a code
       // of its own, such as too much output, or none, is a failure to run it.
       const ended =
