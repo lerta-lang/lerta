@@ -150,6 +150,7 @@ print primes.has(4)
 - `Set<T>` holds distinct items of type `T`, which take the rules of a [map](#map)'s keys. It is a map without values: it cannot be compared with `==`, nor be a map key or a set item, as a map cannot.
 - `Set<T>()` makes an empty set, or `Set()` where a set type is expected. `Set(xs)` or `Set<T>(xs)` makes one of the items of the array `xs`, the first of equal ones kept, in order.
 - `s.length` is the number of items, `s.has(x)` tells whether `x` is there, `s.add(x)` adds it if it is not, and `s.remove(x)` removes it, if it is there.
+- `a | b`, `a & b`, `a - b` and `a ^ b` give new sets: the items of either, those of both, those of `a` that `b` has not, and those of one that the other has not, in the order of `a`, followed by the items taken from `b` in its order (see [operators](objects.md#classes-and-structs)); `a |= b` and the like replace `a`. `a.is_subset(b)` tells whether `b` has every item of `a`.
 - `s.iter()` is an `Iter<T>` of the items in the order they were first added, of those there when it is made, as `m.entries()` gives a map's entries; `for x in s` goes through it. A set has no indexing, no literal, and none of a map's other methods, nor those of an extend of `Map<K, V>`.
 
 ## Iter
