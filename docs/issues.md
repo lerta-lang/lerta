@@ -6,12 +6,13 @@ Each entry says what goes wrong, a minimal program that shows it, and where the 
 
 ## Compiler
 
-### A field whose type its initializer gives can hold a larger instance, which hangs the compiler
+### Instances that each make two larger ones hang the compiler
 
 ```
 class A<T>
-  b = Map<String, A<T[]>>()
-print A<Int>().b.length
+  a = Map<String, A<T[]>>()
+  b = Map<String, A<Map<String, T>>>()
+print A<Int>().a.length
 ```
 
-The compiler never ends: each instance's initializer makes a larger one. The instances that would grow without end are rejected by the written types of the members (`compiler/checker/growing_instances.lerta`), but a field given by its initializer alone has none, and its type is found as each instance is checked. Taking the edges from the types of the generic declaration's initializers, found once, would cover it.
+The compiler never ends, and so does a generic function that calls two instances of deeper type arguments, as `f<T>` calling `f<T[]>` and `f<Map<String, T>>`. The depth that stops a chain of ever deeper instances (`MAX_TYPE_DEPTH` in `compiler/checker/generics.lerta`) is reached only after a number of instances exponential in it. Limiting the number of instances as well, or finding the growth from the generic declaration once, would cover it.

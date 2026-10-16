@@ -6,16 +6,19 @@ import
   TypeParameter
 from '../ast'
 import check_object, check_satisfies from './bodies'
-import abort_part, check_part, fail, fail_already_defined from './diagnostics'
+import
+  abort_part, check_part, enter_module, fail, fail_already_defined, fail_in_context
+from './diagnostics'
 import add_function, add_generic, CheckState, method_key from './functions'
 import
-  GenericRef, Instance, instantiate, make_generic_function, Receiver, reject_bad_type_parameters
+  GenericRef, Instance, instantiate, make_generic_function, MAX_TYPE_DEPTH, Receiver,
+  reject_bad_type_parameters
 from './generics'
 import builtin_type, imported_type from './imports'
 import bound_interface, has_declared_type, InterfaceMember, members_for from './interfaces'
 import module_symbol_name, NodeFacts, ProgramWide, Shared from './shared'
 import module_resolver, resolve, Resolver, with_type_parameters from './type_names'
-import has_type_parameters, placeholders, substitute from './type_patterns'
+import has_type_parameters, placeholders, substitute, type_depth from './type_patterns'
 import
   format_type, inner_of, InterfaceType, ObjectType, OptionalType, same_type, Type
 from '../types'
@@ -279,7 +282,10 @@ const check_all_satisfy = (program: ProgramWide, infos: ObjectInfo[]) ->
 const check_info = (program: ProgramWide, info: ObjectInfo) ->
   return if info.state != UNCHECKED
   info.state = CHECKING
-  const checked = check_part(program, -> check_object(program, info))
+  const check = (): void ->
+    reject_endless_instance program, info
+    check_object program, info
+  const checked = check_part(program, check)
   info.state = checked then CHECKED else FAILED
   return if not checked
   const generic = info.generic ? return
@@ -288,3 +294,14 @@ const check_info = (program: ProgramWide, info: ObjectInfo) ->
     instantiate program, generic.generics[name]!, info.type.args, [], at
   info.init = instance_of('init') if info.has_init
   info.deinit = instance_of('deinit') if info.has_deinit
+
+# An instance whose members make ever larger ones, as `A<T>` does with a field of `A<T[]>`, which
+# its type alone may not tell, is stopped at the depth that ends a generic function's.
+const reject_endless_instance = (program: ProgramWide, info: ObjectInfo): void ->
+  const generic = info.generic ? return
+  return if not info.type.args.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
+  const shared = program.shared[info.module_index]
+  enter_module shared
+  const { name, position } = info.declaration.name
+  const message = "'#{name}' needs instances without end, each with type arguments nested deeper"
+  fail_in_context program, position, message, "from #{format_type(generic.instances[0].type)}"
