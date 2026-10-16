@@ -1,14 +1,12 @@
 # Generates assignments to names, fields, array items and map values.
-import Assignment, combining_operator, Identifier, Index, Member from '../ast'
+import Assignment, combining_operator, Expression, Identifier, Index, Member from '../ast'
 import info_of from '../checker/object_types'
 import emit_get, emit_set from './array'
-import
-  emit_exception_check, holding, pop_temporaries, push_temporary, while_holding
-from './exceptions'
+import emit_exception_check, pop_temporaries, push_temporary, while_holding from './exceptions'
 import
   generate, generate_borrowed, release_if_reference, slot_pointer, type_at_use, type_of
 from './expression'
-import lookup_local, weak_box_of from './function'
+import lookup_local, push_held_scope, weak_box_of from './function'
 import Generator, SlotLocal from './generator'
 import emit_field_pointer, emit_member_dispatch, field_named from './heap_object'
 import emit_release, emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
@@ -121,7 +119,8 @@ const generate_map_assignment = (
 # For `+=` and so on, the old value is loaded, and owned, before the value is evaluated, as it is
 # combined. Evaluating the value may change the target (a method that assigns the same field, for
 # example), so the value to release is loaded again after it: releasing a stale one would free it
-# twice.
+# twice. The old value is held in a scope, not as a temporary, so that a jump in the value, which
+# an assignment to a variable allows, releases it.
 const assign_through = (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
   const ir = g.ir
   const load = -> ir.assign("load #{ir_type(type)}, ptr #{pointer}")
@@ -130,12 +129,20 @@ const assign_through = (g: Generator, assignment: Assignment, pointer: String, t
   if assignment.operator != '='
     old = load()
     emit_retain_value ir, old, type
-  const generate_value = -> generate(g, assignment.value)
-  const value = old == '' then generate_value() else holding(g, old, type, generate_value)
+  const value = generate_holding_old(g, old, type, assignment.value)
   const result = combine(g, assignment.operator, old, value, type)
   const replaced = holds_reference then load() else ''
   ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}"
   emit_release_value ir, replaced, type
+
+# The value, generated while the old value, if any, is held in a scope; `combine` consumes the old
+# value, so the scope is left without releasing it.
+const generate_holding_old = (g: Generator, old: String, type: Type, value: Expression) ->
+  return generate(g, value) if old == ''
+  push_held_scope g, old, type
+  const operand = generate(g, value)
+  g.locals.pop()
+  operand
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
 # Both are owned.

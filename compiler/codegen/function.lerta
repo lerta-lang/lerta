@@ -383,12 +383,17 @@ const emit_return = (g: Generator, value: String) ->
 # Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
 # function releases it where the code goes on.
 export const hold = (g: Generator, value: String, type: Type) ->
-  const scope = g.locals.push()
-  # The name cannot be written in the source, so no code can read it.
-  scope['(held)'] = store_in_slot(g, value, type)
+  const scope = push_held_scope(g, value, type)
   ->
     release_scope g, scope
     g.locals.pop()
+
+# Pushes a scope that holds an owned reference, which a jump out of it releases.
+export const push_held_scope = (g: Generator, value: String, type: Type) ->
+  const scope = g.locals.push()
+  # The name cannot be written in the source, so no code can read it.
+  scope['(held)'] = store_in_slot(g, value, type)
+  scope
 
 # A jump ends the block; the code after it, until the next label, is unreachable.
 export const generate_jump = (g: Generator, jump: Jump | Return) ->

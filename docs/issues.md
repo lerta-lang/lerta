@@ -61,21 +61,6 @@ b.put 1
 
 Cause: `add_instance` and `instance_field` in `compiler/checker/object_types.lerta` substitute the field types without the checks that `reject_invalid_signature` (`compiler/checker/generic_call.lerta`) makes for generic functions.
 
-### A jump in the value of a compound assignment leaks the old value
-
-A `return`, `break` or `continue` in the value of `+=` and the like on a `var` of a reference type leaks the value the `var` had.
-
-```
-const m: Map<String, String> = { 'a': 'x' }
-const f = (): String ->
-  var acc = 'start' + '!'
-  acc += m['missing'] ? return acc
-  acc
-print f()
-```
-
-The program prints `leak: 1 object(s)`. `assign_through` in `compiler/codegen/assignment.lerta` holds the old value as a temporary, which jumps do not release, while `compiler/checker/jump_positions.lerta` allows jumps in the value of any assignment to a name.
-
 ### A `const` may take the name of a builtin type
 
 `const Int = 3` is accepted, while `class Int` is rejected as already defined, though types and values share one namespace.
