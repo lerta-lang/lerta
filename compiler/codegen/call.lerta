@@ -3,9 +3,8 @@
 import Call, Expression, Identifier, Member from '../ast'
 import BuiltinMethod from '../checker/builtins'
 import ExternExport, named_export from '../checker/imports'
-import
-  ExtensionSource, find_method, InterfaceMethod, MethodSource, OwnMethod
-from '../checker/methods'
+import EnumParse, InterfaceProperty, Method, Property from '../checker/member_targets'
+import ExtensionSource, InterfaceMethod, MethodSource, OwnMethod from '../checker/methods'
 import info_of, is_argument from '../checker/object_types'
 import call_builtin_method, takes_object from './builtins'
 import emit_conversion from './checked_int'
@@ -30,9 +29,7 @@ import FunctionType, MapType, ObjectType, Type from '../types'
 
 export const generate_call = (g: Generator, call: Call) ->
   const callee = call.callee
-  if const parsed = g.facts.enum_parses[callee]
-    return with_arguments(g, call.args, (args) -> emit_parse(g.ir, args[0], parsed))
-  return generate_method_call(g, call, callee) if callee is Member
+  return generate_member_call(g, call, callee) if callee is Member
   if const instance = g.facts.instances[call]
     const symbol = instance_symbol(g.code.program, instance)
     return call_function(g, symbol, instance.entry.type!, call.args, nil)
@@ -65,17 +62,26 @@ const generate_named_call = (g: Generator, call: Call, name: String) ->
     return result
   call_function g, g.code.symbols[name]!, callee_type, call.args, nil
 
+# A member that is called: `E.parse`, a field that holds a function, or a method.
+const generate_member_call = (g: Generator, call: Call, member: Member) ->
+  const target = g.facts.members[member]!
+  case target
+    when EnumParse
+      with_arguments g, call.args, (args) -> emit_parse(g.ir, args[0], target.type)
+    when Property
+      const object = generate(g, member.object)
+      const field_type = type_of(g, member)
+      const closure =
+        read_any_field(g, object, type_of(g, member.object), member.name.name, field_type)
+      call_closure g, closure, field_type, call.args
+    when Method then generate_method_call(g, call, member, target.source)
+    when InterfaceProperty then panic('a member of an interface that is called is a method')
+
 # The methods of Iters (see takes_object) take the object and the arguments; the other
-# methods borrow them, and the object is released after the call. A member that is no method
-# (see find_method) is a field that holds a function.
-const generate_method_call = (g: Generator, call: Call, member: Member) ->
+# methods borrow them, and the object is released after the call.
+const generate_method_call = (g: Generator, call: Call, member: Member, source: MethodSource) ->
   const object_type = type_of(g, member.object)
   const object = generate(g, member.object)
-  const name = member.name.name
-  const source = method_source(g, object_type, member)
-  if source == nil
-    const closure = read_any_field(g, object, object_type, name, type_of(g, member))
-    return call_closure(g, closure, type_of(g, member), call.args)
   const check = -> emit_exception_check(g)
   # An Iter's has_next and next run the code of its kind, which may throw.
   if source is BuiltinMethod and takes_object(source.member)
@@ -88,6 +94,9 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
   if source is BuiltinMethod and source.member == INTEGER_CONVERSION
     const target = (source.type as FunctionType!).result
     return emit_conversion(g, object, object_type, target)
+  const call_written = (symbol: String) ->
+    const receiver = "#{ir_type(object_type)} #{object}"
+    call_function g, symbol, type_of(g, member), call.args, receiver
   const call_method = ->
     case source
       when BuiltinMethod
@@ -99,35 +108,23 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
           const args = typed_arguments(g, call.args, operands)
           emit_interface_call g.ir, object, source.index, source.type, args
         with_arguments g, call.args, emit_call
-      else
-        const symbol = lerta_method_symbol(g, source, name, call)
-        const receiver = "#{ir_type(object_type)} #{object}"
-        call_function g, symbol, type_of(g, member), call.args, receiver
+      when OwnMethod then call_written(own_method_symbol(g, source, member.name.name, call))
+      when ExtensionSource then call_written(extension_method_symbol(g, source, call))
   const result = holding(g, object, object_type, call_method)
   release_if_reference g, member.object, object
   emit_exception_check g
   result
 
-# The method that the member names: one of the object's type, or one that an extend of an
-# interface gives it, as the checker found it.
-const method_source = (g: Generator, object_type: Type, member: Member) ->
-  const found = find_method(g.code.program, object_type, member.name.name, g.extensions)
-  return found if found
-  const method = g.facts.interface_extends[member.name] ? return nil
-  ExtensionSource method
+# The symbol of a method written in Lerta: of a class or struct, or of an extend; or of the
+# instance of a generic method that the call calls.
+const own_method_symbol = (g: Generator, source: OwnMethod, name: String, call: Call) ->
+  return method_symbol(source.receiver, name) if source.generic == nil
+  instance_symbol g.code.program, g.facts.instances[call]!
 
-# The symbol of a method written in Lerta: of a class or struct, of an extend, or of the instance
-# of a generic method that the call calls.
-const lerta_method_symbol = (g: Generator, source: MethodSource, name: String, call: Call) ->
-  case source
-    when OwnMethod
-      return method_symbol(source.receiver, name) if source.generic == nil
-      instance_symbol g.code.program, g.facts.instances[call]!
-    when ExtensionSource
-      const method = source.method
-      return extension_symbol(g.code.program, method) if method.generic == nil
-      instance_symbol g.code.program, g.facts.instances[call]!
-    else panic('a builtin method is not written in Lerta')
+const extension_method_symbol = (g: Generator, source: ExtensionSource, call: Call) ->
+  const method = source.method
+  return extension_symbol(g.code.program, method) if method.generic == nil
+  instance_symbol g.code.program, g.facts.instances[call]!
 
 # Calls a function written in Lerta by its symbol, or by the entry that computes the defaults of
 # the arguments left out; a method gets `receiver`, its object as an IR argument, first.

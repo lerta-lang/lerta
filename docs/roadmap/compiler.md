@@ -4,14 +4,11 @@ The planned changes to the structure of the compiler, which change no program's 
 
 ## Resolutions in the checker's facts
 
-The checker records the types of nodes but not what a name or a member refers to, so codegen resolves them again: `generate_named_call` and `lookup_local` repeat the lookup of names with its shadowing, `function_symbols` gathers the declarations, imports and builtins again, and `method_source` calls `find_method` again. Each new kind of name adds a branch on both sides.
+The checker records what a member refers to (see [internals](../internals.md#overall-architecture)), but not what a name refers to, so codegen resolves names again: `generate_named_call` and `lookup_local` repeat the lookup of names with its shadowing, and `function_symbols` gathers the declarations, imports and builtins again. Each new kind of name adds a branch on both sides.
 
-`NodeFacts` gets two tables, which take in `enum_values`, `enum_parses` and `interface_extends`, and to which the checker writes where it resolves:
+`NodeFacts` gets a table `references`, which takes in `enum_values`, and to which the checker writes where it resolves: from an `Identifier` to what it refers to, a local, a top-level value or function of a module, an extern, the constructor of a class or struct, `Map` or `Set`, or an enum value. `E.MEMBER`, an enum value that a member names, becomes a target of `members` with it.
 
-- `references`, from an `Identifier` to what it refers to: a local, a top-level value or function of a module, an extern, the constructor of a class or struct, `Map` or `Set`, or an enum value.
-- `members`, from a member to what it refers to: a field, a builtin property or method, a method with its source, an interface member, an enum value or an enum's `parse`.
-
-Codegen only reads them, and no longer imports `checker/imports` or `find_method`. `members` comes first, then `references`. Then `ProgramWide.calls` and `functions_checked`, kept only for the formatter's `is_recursive`, give way to following `references`.
+Codegen only reads it, and no longer imports `checker/imports`. Then `ProgramWide.calls` and `functions_checked`, kept only for the formatter's `is_recursive`, give way to following `references`.
 
 ## Scalar descriptors
 

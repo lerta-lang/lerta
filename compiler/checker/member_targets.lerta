@@ -1,0 +1,52 @@
+# What a member, `x.name`, refers to, which the checker records where it resolves the member (see
+# NodeFacts.members), and codegen generates by.
+import MethodSource from './methods'
+import binary_type, EnumType, int_type, is_kind, kind_of, Type from '../types'
+
+# A field, of a class, a struct, an anonymous struct or every member of a union, which may hold a
+# function that is called; or a property of a builtin type.
+export enum PropertyKind
+  FIELD
+  ARRAY_LENGTH
+  MAP_LENGTH
+  BINARY_LENGTH
+  STRING_BINARY
+
+export struct Property
+  kind: PropertyKind
+
+# A member of an interface value that is no method, read through the itab at the place.
+export struct InterfaceProperty
+  index: Int
+
+# `E.parse` of the enum.
+export struct EnumParse
+  type: EnumType
+
+# A method, which is called.
+export struct Method
+  source: MethodSource
+
+export type MemberTarget = Method | Property | InterfaceProperty | EnumParse
+
+# A member of a type with its type (see find_member).
+export struct FoundMember
+  target: MemberTarget
+  type: Type
+
+# The property of a builtin type by the name, if it has one.
+export const builtin_property = (receiver: Type, name: String) ->
+  const kind: PropertyKind? =
+    case name
+      when 'length'
+        case kind_of(receiver)
+          when ARRAY then ARRAY_LENGTH
+          when MAP then MAP_LENGTH
+          when 'Binary' then BINARY_LENGTH
+          else nil
+      when 'binary' then is_kind(receiver, 'String') then STRING_BINARY
+      else nil
+  kind then FoundMember(
+    target: Property(kind)
+    type: kind == STRING_BINARY then binary_type else int_type
+  )

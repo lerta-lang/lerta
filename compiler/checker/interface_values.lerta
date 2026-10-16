@@ -6,8 +6,8 @@ import fail from './diagnostics'
 import receiver_instance from './generic_call'
 import Instance from './generics'
 import InterfaceMember, iter_source_type, members_for, std_interface from './interfaces'
-import generic_method, member_type_by_name from './member'
-import find_method, MethodSource from './methods'
+import find_member, generic_method, member_type_by_name from './member'
+import MemberTarget, Method from './member_targets'
 import ObjectInfo from './object_types'
 import reject_unsatisfied from './satisfaction'
 import Body, Shared from './shared'
@@ -17,11 +17,11 @@ import
   Type, UnionType
 from '../types'
 
-# How the type gives a member of the interface: by a method, as find_method finds it, with the
-# instance of a generic one; or, without a method, by a field or a property.
+# How the type gives a member of the interface: by a method, with the instance of a generic one, or
+# by a field or a property, as find_member finds it.
 export struct ItabEntry
   member: InterfaceMember
-  method: MethodSource?
+  target: MemberTarget
   instance: Instance?
 
 # What converting a value of the type to the interface needs: the entries of the itab, in the
@@ -78,10 +78,12 @@ const itab_of = (body: Body, at: Position, type: Type, target: InterfaceType) ->
   Itab type, target, entries
 
 const itab_entry = (body: Body, type: Type, member: InterfaceMember, at: Position) ->
-  const method = find_method(body.program, type, member.name, body.extensions)
-  const generic = generic_method(method)
+  const name = Identifier(name: member.name, position: at)
+  # The type satisfies the interface (see reject_unsatisfied), so it has the member.
+  const target = find_member(body, type, name)!.target
+  const generic = target is Method then generic_method(target.source)
   const instance = generic then receiver_instance(body, generic, type, at, nil)
-  ItabEntry member, method, instance
+  ItabEntry member, target, instance
 
 # The plans of the itabs of the runtime's errors, from which codegen makes them (see
 # runtime_errors), by std:builtins, the module that `shared` is: its structs that declare Error, in

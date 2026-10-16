@@ -1,7 +1,7 @@
 # Interface values in the generated code (see docs/internals.md#interfaces).
-import interface_member from '../checker/interfaces'
 import Itab, ItabEntry from '../checker/interface_values'
 import BuiltinMethod from '../checker/builtins'
+import EnumParse, InterfaceProperty, Method, Property from '../checker/member_targets'
 import ExtensionSource, OwnMethod from '../checker/methods'
 import call_builtin_method, takes_object from './builtins'
 import call_user_function from './call'
@@ -37,9 +37,8 @@ export const emit_interface_call = (
 
 # The member of the interface value that is no method, which is released.
 export const emit_interface_read = (
-  g: Generator, value: String, type: InterfaceType, name: String, member_type: Type
+  g: Generator, value: String, type: InterfaceType, index: Int, member_type: Type
 ) ->
-  const index = interface_member(g.code.program, type, name)!.index
   const getter = FunctionType(params: [], result: member_type)
   const result = emit_interface_call(g.ir, value, index, getter, [])
   emit_release_value g.ir, value, type
@@ -58,11 +57,11 @@ const define_itab = (g: Generator, itab: Itab) ->
 # The function of the entry: the method that gives the member, if it is written in Lerta, which
 # takes its object first; otherwise a function that reads the member, defined once.
 const entry_function = (g: Generator, itab: Itab, entry: ItabEntry) ->
-  const method = entry.method
   return instance_symbol(g.code.program, instance) if const instance = entry.instance
-  case method
-    when OwnMethod then method_symbol(method.receiver, entry.member.name)
-    when ExtensionSource then extension_symbol(g.code.program, method.method)
+  const source = entry.target is Method then entry.target.source
+  case source
+    when OwnMethod then method_symbol(source.receiver, entry.member.name)
+    when ExtensionSource then extension_symbol(g.code.program, source.method)
     else define_reader(g, itab.type, entry)
 
 # A function that gives the member of a value of the type: calls a builtin method or a field that
@@ -83,12 +82,22 @@ const define_reader = (g: Generator, type: Type, entry: ItabEntry) ->
     const take_data = ->
       emit_retain ir, '%data'
       '%data'
-    const builtin = entry.method as BuiltinMethod?
     const result_type = function_type?.result ? member_type
+    const call_field = ->
+      const closure = read_any_field(reader, take_data(), type, name, member_type)
+      const value = emit_closure_call(ir, closure, member_type, operands)
+      emit_release ir, closure
+      emit_check_or_return_thrown ir, result_type
+      value
+    const target = entry.target
     const result =
-      case
-        when function_type == nil then read_property(reader, take_data(), type, name, member_type)
-        when builtin
+      case target
+        when Property
+          const read = -> read_property(reader, take_data(), type, target.kind, name, member_type)
+          function_type then call_field() else read()
+        when Method
+          # The other methods are written in Lerta (see entry_function).
+          const builtin = target.source as BuiltinMethod!
           const release_and_return = ->
             emit_release ir, '%data'
             emit_return_thrown ir, result_type
@@ -96,12 +105,8 @@ const define_reader = (g: Generator, type: Type, entry: ItabEntry) ->
           const check = -> emit_check_with(ir, release_and_return)
           const object = takes_object(builtin.member) then take_data() else '%data'
           call_builtin_method ir, builtin.member, object, type, operands, check
-        else
-          const closure = read_any_field(reader, take_data(), type, name, member_type)
-          const value = emit_closure_call(ir, closure, member_type, operands)
-          emit_release ir, closure
-          emit_check_or_return_thrown ir, result_type
-          value
+        when InterfaceProperty, EnumParse
+          panic 'a reader reads a field, a property or a builtin method'
     const return_type = ir_return_type(result_type)
     ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
     const params_list = ['ptr %data', args...]

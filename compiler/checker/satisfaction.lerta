@@ -10,7 +10,7 @@ import common_field_problem from './fields'
 import
   interface_members, interface_of, InterfaceMember, members_for, SELF, std_interface
 from './interfaces'
-import member_type_by_name from './member'
+import find_member, member_type_by_name, record_member from './member'
 import find_method from './methods'
 import Body from './shared'
 import has_type_parameters, infer, substitute from './type_patterns'
@@ -19,15 +19,15 @@ import format_type, InterfaceType, same_type, string_type, Type, UnionType from 
 # Rejects a type that does not satisfy the interface type.
 export const reject_unsatisfied = (body: Body, type: Type, bound: InterfaceType, at: Position) ->
   for member in members_for(body.program, bound, type)
-    satisfying_type body, type, bound, member, Identifier(position: at, name: member.name), nil
+    satisfying_member body, type, bound, member, Identifier(position: at, name: member.name), nil
 
-# The type of the type's member that satisfies the interface's member.
-const satisfying_type = (
+# The type's member that satisfies the interface's member.
+const satisfying_member = (
   body: Body, type: Type, bound: InterfaceType, member: InterfaceMember, name: Identifier,
   call: Call?
 ) ->
-  const found = member_type_by_name(body, type, name, call)
-  const reason = unsatisfied_reason(body, type, member, name, found) ? return found!
+  const found = find_member(body, type, name, call)
+  const reason = unsatisfied_reason(body, type, member, name, found?.type) ? return found!
   const bound_name = format_type(bound)
   fail body.program, name.position, "#{format_type(type)} does not satisfy #{bound_name}: #{reason}"
 
@@ -71,7 +71,9 @@ export const check_interpolated = (body: Body, part: Call) ->
   const bound = std_interface(body.shared, 'Stringable', member.object.position).type
   const to_string = members_for(body.program, bound, type)[0]
   const name = Identifier(position: member.object.position, name: member.name.name)
-  set_type body, member, satisfying_type(body, type, bound, to_string, name, part)
+  const found = satisfying_member(body, type, bound, to_string, name, part)
+  record_member body, member, found.target
+  set_type body, member, found.type
   set_type body, part, string_type
 
 # The method of the name that an extend of an interface in effect gives the type, by an interface

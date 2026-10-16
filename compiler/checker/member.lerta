@@ -1,21 +1,24 @@
 # Types the members of values: method calls, `x.name(...)`, and properties, `x.name`; and finds
 # the member of a name that an interface reads.
 import Call, FunctionLiteral, Identifier, Member, This from '../ast'
-import builtin_property, BuiltinMethod from './builtins'
+import BuiltinMethod from './builtins'
 import warn_if_kept from './cycles'
 import fail from './diagnostics'
 import check_arguments, reject_type_arguments, set_type, type_of from './expression'
 import plain_method_type from './extensions'
 import common_field_type, common_field_type_by_name, field_type, field_type_by_name from './fields'
 import receiver_instance, type_of_generic_method_call from './generic_call'
-import interface_property from './interfaces'
+import interface_member from './interfaces'
+import
+  builtin_property, FoundMember, InterfaceProperty, MemberTarget, Method, Property
+from './member_targets'
 import narrowed_field_type from './narrowable'
 import ExtensionSource, find_method, InterfaceMethod, MethodSource, OwnMethod from './methods'
 import method_owner, object_method_type from './object'
 import info_of from './object_types'
 import find_interface_extension from './satisfaction'
 import Body from './shared'
-import format_type, Type, UnionType from '../types'
+import format_type, FunctionType, InterfaceType, Type, UnionType from '../types'
 
 # The result of a call of the method that `member` names: a method of the object's type (see
 # find_method), or a field that holds a function.
@@ -29,6 +32,7 @@ export const type_of_method_call = (body: Body, call: Call, member: Member, expe
     const result = check_arguments(body, call, method, method_literal_of(body, source, member))
     warn_if_kept body, call, member, source
     return result
+  record_member body, member, Method(source: source!)
   const method = type_of_generic_method_call(body, call, member, generic, receiver, expected)
   set_type body, member, method
   method.result
@@ -59,6 +63,7 @@ const type_of_method = (body: Body, member: Member, receiver: Type, source: Meth
     else
       field_type body, receiver, member
   const method = from_source ? field ? no_method()
+  record_member body, member, from_source then Method(source: source!) else Property(kind: FIELD)
   set_type body, member, method
 
 const find = (body: Body, receiver: Type, name: String) ->
@@ -74,7 +79,6 @@ const find_callable = (body: Body, receiver: Type, name: Identifier): MethodSour
     const from = "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
     const gets = "has a member '#{name.name}', and gets a method of that name #{from}"
     fail body.program, name.position, "#{format_type(receiver)} #{gets}"
-  body.facts.interface_extends[name] = extended
   ExtensionSource method: extended
 
 # The type of the method, checking its body first if needed. A generic one's comes from its
@@ -92,20 +96,48 @@ const method_type = (
     when InterfaceMethod then source.type
     when ExtensionSource then plain_method_type(body.program, source.method, name.position)
 
-# The type of the member of the type that an interface reads by the name: of a method, or of a
-# field or a property, or of a field of every member of a union, as `x.name` reads it; nil if it
-# has none. `call`, if given, calls a generic method.
+# The member of the type that an interface reads by the name: a method, or a field or a property,
+# or a field of every member of a union, as `x.name` reads it; nil if it has none. `call`, if
+# given, calls a generic method.
+export const find_member = (
+  body: Body
+  type: Type
+  name: Identifier
+  call: Call? = nil
+): FoundMember? ->
+  if const source = find(body, type, name.name)
+    const method = method_type(body, type, source, name, call) ? return nil
+    return FoundMember(target: Method(source), type: method)
+  if type is UnionType
+    const common = common_field_type_by_name(body, type, name) ? return nil
+    return FoundMember(target: Property(kind: FIELD), type: common)
+  if const field = field_type_by_name(body, type, name)
+    return FoundMember(target: Property(kind: FIELD), type: field)
+  property_of body, type, name.name
+
+# A property of a builtin type, or of an interface value, by the name.
+const property_of = (body: Body, type: Type, name: String): FoundMember? ->
+  return property if const property = builtin_property(type, name)
+  interface_property body, type, name
+
 export const member_type_by_name = (
   body: Body
   type: Type
   name: Identifier
   call: Call? = nil
-): Type? ->
-  return method_type(body, type, source, name, call) if const source = find(body, type, name.name)
-  return common_field_type_by_name(body, type, name) if type is UnionType
-  return field if const field = field_type_by_name(body, type, name)
-  return property if const property = builtin_property(type, name.name)
-  interface_property body.program, type, name.name
+): Type? -> find_member(body, type, name, call)?.type
+
+# The member of the interface type of the name that is no method, which is read through the itab.
+const interface_property = (body: Body, type: Type, name: String) ->
+  return nil if type is not InterfaceType
+  const found = interface_member(body.program, type, name) ? return nil
+  const member_type = found.member.type
+  return nil if member_type is FunctionType
+  FoundMember target: InterfaceProperty(index: found.index), type: member_type
+
+# Records what the member refers to, which codegen generates it by.
+export const record_member = (body: Body, member: Member, target: MemberTarget) ->
+  body.facts.members[member] = target
 
 const reject_deinit = (body: Body, object_type: Type, member: Member) ->
   const { name, position } = member.name
@@ -117,11 +149,15 @@ export const type_of_property = (body: Body, member: Member): Type ->
   const object_type = type_of_object(body, member)
   const { name, position } = member.name
   reject_deinit body, object_type, member
-  return common_field_type(body, object_type, member) if object_type is UnionType
+  if object_type is UnionType
+    record_member body, member, Property(kind: FIELD)
+    return common_field_type(body, object_type, member)
   if const field = field_type(body, object_type, member)
+    record_member body, member, Property(kind: FIELD)
     return narrowed_field_type(body, member) ? field
-  return property if const property = builtin_property(object_type, name)
-  return member_type if const member_type = interface_property(body.program, object_type, name)
+  if const property = property_of(body, object_type, name)
+    record_member body, member, property.target
+    return property.type
   const extended = find_interface_extension(body, object_type, member.name)
   if find(body, object_type, name) != nil or extended != nil
     fail body.program, position, "a method must be called: write `#{name}()`"
