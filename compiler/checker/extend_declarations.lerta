@@ -29,17 +29,6 @@ const EXTENDABLE_KINDS: TypeKind[] = [
   OBJECT
 ]
 
-# The methods that std:builtins gives as the compiler does, which the seed takes from std, as it
-# does not give them; the builtins are found first. They go, with this list and the runtime
-# functions that they call (lerta_int_to_float, lerta_byte_to_int and lerta_int_to_byte), once the
-# seed is refreshed (see docs/internals.md#bootstrap).
-const SEED_METHODS =
-  'Int.to_string'
-  'Int.to_byte'
-  'Int.to_float'
-  'Byte.to_string'
-  'Byte.to_int'
-
 # Puts the extend's methods in effect in the module, and adds them to its functions, which check
 # their bodies with `@` as the receiver, or makes them generic methods, whose instances are
 # checked so.
@@ -59,11 +48,7 @@ export const declare_extend = (shared: Shared, statement: Extend) ->
     const message = "#{format_type(receiver)} cannot be extended; #{so_far}"
     fail program, written.position, message
   reject_unused_type_parameters program, type_params, receiver
-  const is_builtins = program.modules[shared.index].key == 'std:builtins'
-  const kept_for_seed = (name: String) ->
-    is_builtins and SEED_METHODS.contains("#{format_type(receiver)}.#{name}")
-  const has_already = (name: String) ->
-    has_member(program, receiver, name) and not kept_for_seed(name)
+  const has_already = (name: String) -> has_member(program, receiver, name)
   declare_methods shared, statement, Receiver(type_params, type: receiver), nil, has_already
 
 # The methods of an extend of an interface are those of the types that satisfy it: each is
