@@ -12,11 +12,6 @@ uint8_t lerta_binary_get(const LertaString *binary, int64_t index) {
   return 0;
 }
 
-int64_t lerta_byte_to_int(uint8_t byte) { return byte; }
-
-// The caller has checked that `n` fits in a byte.
-uint8_t lerta_int_to_byte(int64_t n) { return (uint8_t)n; }
-
 // `end` is exclusive.
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end) {
   if (start < 0 || start > end || end > binary->length) {

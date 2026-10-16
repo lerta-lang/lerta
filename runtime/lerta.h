@@ -150,11 +150,6 @@ double lerta_float_from_bits(int64_t bits);
 LertaString *lerta_float_to_string(double value);
 // Truncated toward zero; throws an ArithmeticError unless the result fits in an Int.
 int64_t lerta_float_to_int(double value);
-// Called only by the seed's IR, from std's Int.to_float of before the compiler gave it, as are
-// lerta_byte_to_int and lerta_int_to_byte; they go at the next refresh of the seed (see
-// docs/internals.md#bootstrap). tests/extern/optional_bool_or_byte.lerta names lerta_byte_to_int
-// only in an extern that the checker rejects, so it needs no such function.
-double lerta_int_to_float(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
@@ -166,8 +161,6 @@ int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const L
 // a slice out of range throws.
 int64_t lerta_binary_length(const LertaString *binary);
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
-int64_t lerta_byte_to_int(uint8_t byte);
-uint8_t lerta_int_to_byte(int64_t n);
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
 LertaString *lerta_binary_from_bytes(const LertaArray *bytes);
 // The place of the first occurrence of `part`, which is not empty, at `from` (not negative) or

@@ -136,10 +136,6 @@ int64_t lerta_float_to_int(double value) {
   return 0;
 }
 
-double lerta_int_to_float(int64_t n) {
-  return (double)n;
-}
-
 LERTA_STATIC_STRING(true_text, "true");
 LERTA_STATIC_STRING(false_text, "false");
 
