@@ -11,6 +11,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 | [objects.md](objects.md) | Classes and structs, interfaces, generics, equality |
 | [runtime.md](runtime.md) | Safety, errors and exceptions, memory management, concurrency |
 | [programs.md](programs.md) | Modules, FFI, the standard library, tools |
+| [compiler.md](compiler.md) | The structure of the compiler |
 
 ## Dependencies
 
