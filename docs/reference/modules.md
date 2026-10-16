@@ -14,7 +14,7 @@ import argv, exit from 'std:process'
   from './ast'
   ```
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'`, `'std:math'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
 - Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. Functions can be declared in any order (see [top-level values](functions.md#top-level-values)).
 
 ## Exports
@@ -60,6 +60,19 @@ export const unit = 1
 `Reader`, exported too, is a class that reads a stream in chunks through a buffer: its field `read_chunk: () -> Promise<Binary?>` gives the next chunk, or nil at the end. Its methods are `read_line(): Promise<String?>`, the next line without its `\n` and a `\r` before it, or nil at the end, which throws a `ValueError`, `a line is not valid UTF-8`, for one that is not; `read(count: Int): Promise<Binary?>`, up to `count` bytes, as many as one chunk holds at most, or nil at the end, which throws a `ValueError` for a count below 1; and `read_all(): Promise<Binary>`, all that is left. A read must end before the next one starts: one that starts while another is pending throws a `ValueError`, `a Reader is read by another read that has not ended`. A read of `stdin` keeps the program running until it ends, as a timer does, even if nothing awaits it.
 
 `Writer`, exported too, is a struct of a file descriptor with the methods `write(s: String): Promise`, `write_binary(b: Binary): Promise` and `flush(): Promise`; a `Writer` of a file descriptor other than 1 (stdout) or 2 (stderr) throws when it is used. A write that leaves the buffer under 64 KiB is resolved at once; one that fills it is resolved once its bytes are written out, so that a program that writes faster than its reader reads waits for it, and `flush` once all that was written before it is. Once the bytes of a stream fail to be written out, the writes and flushes that wait for them, and every later write and flush of the stream, are rejected with an `IOError`, `cannot write to stdout` or `cannot write to stderr`; a write resolved at once is not.
+
+## std:math
+
+Functions of `Float`s, which throw an `ArithmeticError` where the result would not be finite, as `Float`'s operators do (see [Float](types.md#float)). `min` and `max` are [builtins](builtins.md).
+
+| Name | |
+|---|---|
+| `abs(x: Float): Float` | The value without its sign. |
+| `floor(x: Float): Float`, `ceil(x: Float): Float` | The greatest integer not above `x`, and the least not below it, as `Float`s; `.to_int()` makes an `Int` of one. |
+| `round(x: Float): Float` | The nearest integer, half way between two away from zero: `round(2.5)` is `3.0`, `round(-2.5)` is `-3.0`. |
+| `sqrt(x: Float): Float` | The square root. Throws `square root of a negative number` for one below 0. |
+| `pow(x: Float, y: Float): Float` | `x` to the power `y`. Throws `float overflow` where the result is too large, `division by zero` for 0 to a negative power, and `a negative number to a fractional power` for a negative `x` and a `y` that is no integer. |
+| `remainder(x: Float, y: Float): Float` | The remainder of `x` divided by `y`, `x - n * y` for `n` the integer of `x / y` truncated toward zero, as `%` of `Int`s takes it, so of the sign of `x`: `remainder(-7.5, 2.0)` is `-1.5`. It is C's `fmod`, not its `remainder`, which rounds `n` to the nearest. Throws `division by zero` for a `y` of 0. |
 
 ## std:process
 

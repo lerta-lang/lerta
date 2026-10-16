@@ -43,7 +43,8 @@ const runtime_clang_args = (optimize: boolean): string[] => [
   `-I${join(libuv_dir, 'include')}`,
   ...runtime_c_files.map((file) => join(runtime_dir, file)),
   ...libuv_objects,
-  ...host_libuv('library').map((library) => `-l${library}`),
+  // libm, which runtime/math.c calls, as compiler/build.lerta links it.
+  ...['m', ...host_libuv('library')].map((library) => `-l${library}`),
 ]
 
 type Outcome = { stdout: string; stderr: string; status: number | null }

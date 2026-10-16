@@ -16,7 +16,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 
 Each milestone is a kind of program that can be written once it is reached, so that real programs, not only the compiler, find what the language lacks.
 
-1. **Small command-line tools**: the operations on strings and the math functions of [the standard library](programs.md#standard-library), reading stdin, [narrowing a `var`](language.md#control-flow), and line tables for a debugger ([tools](programs.md#tools)).
+1. **Small command-line tools**: the operations on [strings](strings.md#operations-and-representation), [narrowing a `var`](language.md#control-flow), and line tables for a debugger ([tools](programs.md#tools)).
 2. **Programs that read and write structured data**: [union members other than classes and structs](language.md#types) and `std:json`.
 3. **The LSP and the test harness in Lerta** ([tools](programs.md#tools)), then checking generic bodies at definition ([objects](objects.md#generics)).
 

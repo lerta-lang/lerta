@@ -69,7 +69,7 @@ endef
 # clang compiles the IR far faster without optimization than the program loses running unoptimized,
 # and each such program runs little.
 link_debug = clang -Wno-override-module $(1) -D LERTA_DEBUG -Ithird_party/libuv/include \
-  $(RUNTIME_C) build/libuv/*.o $(addprefix -l,$(call host_libuv,library)) -o $(2)
+  $(RUNTIME_C) build/libuv/*.o $(addprefix -l,m $(call host_libuv,library)) -o $(2)
 
 build/minilerta: build/seed.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,build/seed.ll,$@)

@@ -163,6 +163,12 @@ LertaString *lerta_float32_to_string(float value);
 // Throws an ArithmeticError unless the value is finite as a float.
 float lerta_float_to_float32(double value);
 double lerta_float32_to_float(float value);
+
+// std:math's sqrt, pow and remainder, which throw where libm's result would not be finite.
+double lerta_math_sqrt(double x);
+double lerta_math_pow(double x, double y);
+double lerta_math_remainder(double x, double y);
+
 // Truncated toward zero; throws an ArithmeticError unless the result fits in an Int.
 int64_t lerta_float_to_int(double value);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
