@@ -55,7 +55,7 @@ draw 'p'
 
 - `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Int[] = []`). A `var` of an optional type may leave out its value, which is then nil: `var found: String?`.
 - `name = value` assigns to a `var`, `xs[i] = value` to an item of an array, `m[k] = value` to a value of a map and `c.name = value` to a field of a class that is not `const` (see [mutability](objects.md#classes-and-structs)).
-- `+=` `-=` `*=` `/=` `%=` combine a target with a value as their binary operator does, for the types it takes (`Int`, `Byte` and `Float`; see [types](types.md)), and `+=` also appends a `String` to a `String`. A map's value takes none of them (see [Map](types.md#map)).
+- `+=` `-=` `*=` `/=` `%=` `&=` `|=` `^=` `<<=` `>>=` combine a target with a value as their binary operator does, for the types it takes (`Int`, `Byte` and `Float`; see [types](types.md)), and `+=` also appends a `String` to a `String`. A map's value takes none of them (see [Map](types.md#map)).
 - An assignment is a statement, not an expression.
 - Why: there is no `let` and no function declaration (`def`), so that declarations look the same at the top level, inside functions and in type bodies, for values and for functions, which avoids the CoffeeScript ambiguity between declaration and assignment. `const` only makes the binding immutable, since immutability of the contents is handled by types.
 
@@ -90,9 +90,9 @@ draw 'p'
 
 ## Operators
 
-From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is` and `as`) < `?` (nil coalescing) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
+From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is` and `as`) < `?` (nil coalescing) < range `...` < `+` `-` `|` `^` < `*` `/` `%` `&` `<<` `>>` < prefix `-`.
 
-- Arithmetic operators are left-associative (`10 - 4 - 3` is `3`). `then`/`else` and `?` are right-associative: `a then x else b then y else z` is `a then x else (b then y else z)`.
+- Arithmetic and bitwise operators are left-associative (`10 - 4 - 3` is `3`). As they bind tighter than comparisons, `x & 0xF == 0` compares `x & 0xF`. `<<` and `>>` are each two `<` or `>` with no space between them, so that `Map<String, Set<Int>>` ends with two closing brackets. `then`/`else` and `?` are right-associative: `a then x else b then y else z` is `a then x else (b then y else z)`.
 - Comparisons, `is` and `as` included, cannot be chained: `a < b < c` is a syntax error; use parentheses, as in `(x as T?) == nil`.
 - `as` binds as comparisons do, weaker than `.`: a member of a cast is read as `(x as T!).name`.
 - `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `break` `continue` `return` `case` `then` `class` `struct` `throw` `import` `export` `extern` `extend` `enum` `interface` `try` `catch` `finally` `yield` `await` are keywords and cannot be used as names. These words are not keywords, and act as one only where they are written so, staying usable as names elsewhere:

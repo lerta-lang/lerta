@@ -1,8 +1,8 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import BinaryOperation, Coalesce, is_nil_test, NilLiteral, UnaryOperation, Unwrap from '../ast'
 import compares_by_contents from '../checker/equality'
-import is_arithmetic from '../checker/operator'
-import apply_arithmetic from './checked_int'
+import is_numeric_operator from '../checker/operator'
+import apply_integer_operator from './checked_int'
 import holding from './exceptions'
 import apply_float_arithmetic, emit_float_comparison, emit_float_negation from './float'
 import generate, generate_condition, release_if_reference, type_at_use, type_of from './expression'
@@ -29,7 +29,7 @@ export const generate_unary = (g: Generator, unary: UnaryOperation) ->
   const operand = generate(g, unary.operand)
   const type = type_of(g, unary)
   return emit_float_negation(g.ir, operand) if is_kind(type, 'Float')
-  apply_arithmetic g, '-', '0', operand, type
+  apply_integer_operator g, '-', '0', operand, type
 
 export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   const operator = binary.operator
@@ -53,7 +53,7 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
     return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
   if is_one_of_kinds(operand_type, ['String', 'Binary'])
     return negate_if_unequal(g, operator, emit_equals(g.ir, left, right))
-  return apply_numeric(g, operator, left, right, operand_type) if is_arithmetic(operator)
+  return apply_numeric(g, operator, left, right, operand_type) if is_numeric_operator(operator)
   return emit_float_comparison(g.ir, operator, left, right) if is_kind(operand_type, 'Float')
   const is_byte = is_kind(operand_type, 'Byte')
   const predicate = (is_byte then UNSIGNED_PREDICATES else SIGNED_PREDICATES)[operator]!
@@ -64,7 +64,7 @@ export const apply_numeric = (
   g: Generator, operator: String, left: String, right: String, type: Type
 ) ->
   return apply_float_arithmetic(g, operator, left, right) if is_kind(type, 'Float')
-  apply_arithmetic g, operator, left, right, type
+  apply_integer_operator g, operator, left, right, type
 
 # `!=` is the negation of the equality.
 const negate_if_unequal = (g: Generator, operator: String, equal: String) ->

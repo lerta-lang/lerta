@@ -14,8 +14,9 @@ import
   parse_named_type, parse_named_type_alone, parse_type_arguments, starts_type_arguments
 from './type'
 
-# Arithmetic operators by precedence, weakest first. Comparisons are weaker than all of them.
-const ARITHMETIC_PRECEDENCE: TokenKind[][] = [['+', '-'], ['*', '/', '%']]
+# Arithmetic and bitwise operators by precedence, weakest first. Comparisons are weaker than all of them.
+# `<<` and `>>` bind as `*` does, each two tokens (see shift_at).
+const ARITHMETIC_PRECEDENCE: TokenKind[][] = [['+', '-', '|', '^'], ['*', '/', '%', '&']]
 
 const POSTFIX_OPERATORS: TokenKind[] = ['(', '[', '.', '!']
 
@@ -209,13 +210,44 @@ export const at_spread = (tokens: TokenStream) ->
 const SPREAD_FOLLOWERS: TokenKind[] =
   ',', ']', ')', '}', 'for', LINE_BREAK, NEWLINE, INDENT, DEDENT, EOF
 
+# Not at `<<=` or `>>=`, which starts an assignment.
 const at_comparison = (tokens: TokenStream) ->
-  is_one_of tokens.peek_continuation(), COMPARISON_OPERATORS
+  is_one_of(tokens.peek_continuation(), COMPARISON_OPERATORS) and shift_ahead(tokens, '=') == nil
 
 const parse_arithmetic = (tokens: TokenStream, level: Int): Expression ->
   return parse_unary(tokens) if level == ARITHMETIC_PRECEDENCE.length
   const operators = ARITHMETIC_PRECEDENCE[level]
-  parse_left_associative tokens, operators, -> parse_arithmetic(tokens, level + 1)
+  const takes_shifts = level == ARITHMETIC_PRECEDENCE.length - 1
+  var left = parse_arithmetic(tokens, level + 1)
+  while true
+    const operator = operator_at(tokens, operators, takes_shifts then '') ? break
+    const right = parse_arithmetic(tokens, level + 1)
+    left = BinaryOperation(operator, left, right, position: left.position)
+  left
+
+# The operator that follows, consumed: one of `kinds`, or a shift and `shift_rest` if that is given,
+# as `=` for `<<=` (see shift_at).
+export const operator_at = (tokens: TokenStream, kinds: TokenKind[], shift_rest: String?) ->
+  if const rest = shift_rest
+    return shift if const shift = shift_at(tokens, rest)
+  return nil if not is_one_of(tokens.peek_continuation(), kinds)
+  tokens.next().kind.to_string()
+
+# `<<` or `>>`, consumed, and then `rest`, as `=` of `<<=`: two tokens with no space between them,
+# so that the `>>` that ends `Map<String, Set<Int>>` stays two closing brackets.
+const shift_at = (tokens: TokenStream, rest: String) ->
+  const shift = shift_ahead(tokens, rest) ? return nil
+  tokens.next()
+  tokens.next()
+  shift
+
+# The shift and `rest` that the next two tokens make, not consumed, as shift_at reads them.
+const shift_ahead = (tokens: TokenStream, rest: String) ->
+  const first = tokens.peek_continuation()
+  return nil if first != '<' and first != '>'
+  const second = tokens.peek_at(1)
+  return nil if second.spaced or second.kind.to_string() != "#{first}#{rest}"
+  "#{first}#{second.kind}"
 
 const parse_unary = (tokens: TokenStream): Expression ->
   const token = tokens.peek()

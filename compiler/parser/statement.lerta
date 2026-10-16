@@ -10,9 +10,9 @@ import
   parse_type_alias, parse_type_declaration, starts_type_alias
 from './declaration'
 import
-  call_of, continue_with_members, parse_arguments, parse_block_arguments, parse_expression,
-  parse_identifier, parse_loop_header, parse_tuple_names, parse_value, starts_block_arguments,
-  take_apart, take_apart_item, tuple_holder
+  call_of, continue_with_members, operator_at, parse_arguments, parse_block_arguments,
+  parse_expression, parse_identifier, parse_loop_header, parse_tuple_names, parse_value,
+  starts_block_arguments, take_apart, take_apart_item, tuple_holder
 from './expression'
 import CompileError from '../errors'
 import Token, TokenKind from '../lexer/tokens'
@@ -20,7 +20,7 @@ import parse_primary from './primary'
 import is_one_of, token_position, TokenStream from './token_stream'
 import parse_type_annotation from './type'
 
-const ASSIGNMENT_OPERATORS: TokenKind[] = ['=', '+=', '-=', '*=', '/=', '%=']
+const ASSIGNMENT_OPERATORS: TokenKind[] = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=']
 
 const COMMAND_ARGUMENT_STARTS: TokenKind[] =
   '(', '[', '{', IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, 'true', 'false', 'nil', 'not',
@@ -119,8 +119,7 @@ export const parse_simple_statement = (tokens: TokenStream): Statement ->
   if takes_block_arguments and starts_block_arguments(tokens)
     return parse_block_arguments(tokens, expression)
   return expression if is_command_call
-  const operator = tokens.peek_continuation()
-  return expression if not is_one_of(operator, ASSIGNMENT_OPERATORS)
+  const operator = operator_at(tokens, ASSIGNMENT_OPERATORS, '=') ? return expression
   parse_assignment tokens, expression, operator
 
 # The operand of `return`, `throw` or `yield` has taken the member lines after it already, and a
@@ -239,12 +238,11 @@ const parse_held_value = (tokens: TokenStream) ->
 const holding = (holder: Identifier, value: Expression): Statement ->
   Declaration value, mutable: false, name: holder, position: holder.position
 
-const parse_assignment = (tokens: TokenStream, target: Expression, operator: TokenKind) ->
+const parse_assignment = (tokens: TokenStream, target: Expression, operator: String) ->
   const message = 'only a name, an indexed item or a field can be assigned to'
   const assigned = assignment_target(target) ? tokens.fail(target.position, message)
-  tokens.next()
   const value = parse_value(tokens)
-  Assignment value, operator: operator.to_string(), target: assigned, position: target.position
+  Assignment value, operator, target: assigned, position: target.position
 
 const assignment_target = (expression: Expression): AssignmentTarget? ->
   case expression
