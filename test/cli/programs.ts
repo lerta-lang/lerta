@@ -257,6 +257,28 @@ const program_cases: ProgramCase[] = [
     },
   },
   {
+    // A program whose reads have ended ends, though stdin stays open: the thread that reads stdin
+    // keeps it running only while a read is pending.
+    source: 'tests/io/lib/read_one_line.lerta',
+    behaves: async (executable) => {
+      // The pipeline waits for the writer, so the program's end is timed in it, in seconds.
+      const timed = 'start=$(date +%s); "$0"; echo $(( $(date +%s) - start ))'
+      const script = `{ printf 'a\\n'; sleep 4; } | { ${timed}; }`
+      const ran = await run_command('sh', ['-c', script, executable])
+      const [line, seconds] = ran.stdout.split('\n')
+      return ran.status === 0 && line === 'a' && Number(seconds) < 3
+    },
+  },
+  {
+    // Reading stdin leaves it as it was, blocking, for a program that `run` starts after it.
+    source: 'tests/io/lib/read_then_run.lerta',
+    behaves: async (executable) => {
+      const script = `{ printf 'first\\n'; sleep 0.5; printf 'second\\n'; } | "$0"`
+      const ran = await run_command('sh', ['-c', script, executable])
+      return ran.status === 0 && ran.stdout === 'first\nsecond\ntrue\n' && ran.stderr === ''
+    },
+  },
+  {
     // run captures through a pipe that may be fd 1, when the program starts with stdout closed.
     source: 'tests/process/lib/capture_without_stdout.lerta',
     behaves: async (executable) => {

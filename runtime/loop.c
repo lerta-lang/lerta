@@ -35,6 +35,83 @@ void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise) {
   uv_timer_start(&timer->handle, end_sleep, milliseconds, 0);
 }
 
+// stdin is read with blocking reads on a thread of its own, as Deno and Go read it, rather than as
+// a libuv stream, which would make descriptor 0 non-blocking for the programs that share it, and
+// rather than on the thread pool, whose few threads a read that waits for input would hold.
+enum { STDIN_CHUNK_SIZE = 65536 };
+
+static uv_thread_t stdin_thread;
+static uv_async_t stdin_done;
+static uv_mutex_t stdin_mutex;
+static uv_cond_t stdin_wanted;
+static bool stdin_started = false;
+// Set by the loop to ask for a chunk, and cleared by the thread with the chunk, under the mutex.
+static bool stdin_requested = false;
+static uint8_t *stdin_bytes;
+static int64_t stdin_length;
+// The read that the loop waits for; it holds stdin_done referenced meanwhile.
+static bool stdin_pending = false;
+static LertaChunkEnd stdin_end;
+static void *stdin_context;
+
+// The thread touches only what the mutex guards, and the bytes it allocates with malloc.
+static void read_stdin_chunks(void *unused) {
+  (void)unused;
+  for (;;) {
+    uv_mutex_lock(&stdin_mutex);
+    while (!stdin_requested) uv_cond_wait(&stdin_wanted, &stdin_mutex);
+    uv_mutex_unlock(&stdin_mutex);
+    uint8_t *bytes = malloc(STDIN_CHUNK_SIZE);
+    int64_t length =
+        bytes == NULL ? LERTA_OUT_OF_MEMORY : lerta_os_read_stdin(bytes, STDIN_CHUNK_SIZE);
+    if (length <= 0) {
+      free(bytes);
+      bytes = NULL;
+    }
+    uv_mutex_lock(&stdin_mutex);
+    stdin_bytes = bytes;
+    stdin_length = length;
+    stdin_requested = false;
+    uv_mutex_unlock(&stdin_mutex);
+    uv_async_send(&stdin_done);
+  }
+}
+
+// Each request makes one send, so the callback always has the chunk that the request asked for.
+static void end_stdin_read(uv_async_t *handle) {
+  uv_mutex_lock(&stdin_mutex);
+  uint8_t *bytes = stdin_bytes;
+  int64_t length = stdin_length;
+  uv_mutex_unlock(&stdin_mutex);
+  stdin_pending = false;
+  uv_unref((uv_handle_t *)handle);
+  stdin_end(stdin_context, bytes, length);
+}
+
+static void start_stdin_thread(void) {
+  stdin_started = true;
+  uv_mutex_init(&stdin_mutex);
+  uv_cond_init(&stdin_wanted);
+  uv_async_init(uv_default_loop(), &stdin_done, end_stdin_read);
+  uv_unref((uv_handle_t *)&stdin_done);
+  if (uv_thread_create(&stdin_thread, read_stdin_chunks, NULL) != 0) {
+    lerta_panic("cannot start the thread that reads stdin");
+  }
+}
+
+void lerta_loop_read_stdin(LertaChunkEnd end, void *context) {
+  if (!stdin_started) start_stdin_thread();
+  if (stdin_pending) lerta_panic("stdin is read again before its read ends");
+  stdin_pending = true;
+  stdin_end = end;
+  stdin_context = context;
+  uv_ref((uv_handle_t *)&stdin_done);
+  uv_mutex_lock(&stdin_mutex);
+  stdin_requested = true;
+  uv_cond_signal(&stdin_wanted);
+  uv_mutex_unlock(&stdin_mutex);
+}
+
 // A program that runs, and the output it writes to the pipe, if it is read, which ends with it.
 typedef struct {
   uv_process_t process;

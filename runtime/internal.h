@@ -49,6 +49,12 @@ typedef void (*LertaProgramEnd)(void *context, int64_t exit_code, LertaString *o
 // output when `reads_output`; false if it cannot start, and `end` is not called.
 bool lerta_loop_run_program(char *file, char **args, bool reads_output, LertaProgramEnd end,
                             void *context);
+// What is called with a chunk that a read gives: its bytes, which it takes, allocated with malloc,
+// and their count; or NULL and 0 at the end, -1 on failure, or LERTA_OUT_OF_MEMORY.
+typedef void (*LertaChunkEnd)(void *context, uint8_t *bytes, int64_t length);
+// Reads a chunk of stdin on a thread of its own, and calls `end` with it on the loop. One read is
+// pending at most.
+void lerta_loop_read_stdin(LertaChunkEnd end, void *context);
 // Runs `work` on libuv's thread pool, then `done` on the loop, both with `data`. `work` must not
 // touch what the main thread does, such as Lerta's allocator.
 void lerta_loop_work(void *data, void (*work)(void *data), void (*done)(void *data));
