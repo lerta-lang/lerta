@@ -76,10 +76,6 @@ print f()
 
 The program prints `leak: 1 object(s)`. `assign_through` in `compiler/codegen/assignment.lerta` holds the old value as a temporary, which jumps do not release, while `compiler/checker/jump_positions.lerta` allows jumps in the value of any assignment to a name.
 
-### `return return 1` is accepted
-
-The operand of `return` is not among the places where [control flow](reference/control-flow.md) allows `return`, and `print(return 1)` is rejected.
-
 ### A `const` may take the name of a builtin type
 
 `const Int = 3` is accepted, while `class Int` is rejected as already defined, though types and values share one namespace.
