@@ -182,6 +182,80 @@ const program_cases: ProgramCase[] = [
     },
   },
   {
+    // stdin's lines, without "\n" and a "\r" before it, the last one without "\n" too, which keeps
+    // a "\r" at its end.
+    source: 'tests/io/lib/read_lines.lerta',
+    behaves: async (executable) => {
+      const script = `printf 'a\\r\\nb\\n\\nlast\\r' | "$0"`
+      const ran = await run_command('sh', ['-c', script, executable])
+      return ran.status === 0 && ran.stdout === '[a]\n[b]\n[]\n[last\r]\n'
+    },
+  },
+  {
+    // A line, a count of bytes and the rest, read from one buffer, then nil at the end.
+    source: 'tests/io/lib/read_parts.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', `printf '3\\nabcdef' | "$0"`, executable])
+      return ran.status === 0 && ran.stdout === 'abc\ndef\ntrue\ntrue\n'
+    },
+  },
+  {
+    // read_all reads past one chunk of 64 KiB.
+    source: 'tests/io/lib/read_much.lerta',
+    behaves: async (executable) => {
+      const script = `head -c 200000 /dev/zero | tr '\\0' x | "$0"`
+      const ran = await run_command('sh', ['-c', script, executable])
+      return ran.status === 0 && ran.stdout === '200000\n'
+    },
+  },
+  {
+    // A count below 1, a read while another waits, and a line that is not UTF-8 throw, and the
+    // reads go on after them.
+    source: 'tests/io/lib/read_errors.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', `printf '\\377\\nrest' | "$0"`, executable])
+      const expected = [
+        'read a count of bytes below 1: 0',
+        'a Reader is read by another read that has not ended',
+        'a line is not valid UTF-8',
+        'rest',
+      ]
+      return ran.status === 0 && ran.stdout === lines(expected)
+    },
+  },
+  {
+    // A closed stdin reads as empty, rather than as a descriptor that libuv opens in its place,
+    // and one that cannot be read, a directory, rejects the read.
+    source: 'tests/io/lib/read_much.lerta',
+    behaves: async (executable) => {
+      const closed = await run_command('sh', ['-c', '"$0" <&-', executable])
+      const directory = await run_command('sh', ['-c', '"$0" < /', executable])
+      return (
+        closed.status === 0 &&
+        closed.stdout === '0\n' &&
+        directory.status === 1 &&
+        uncaught_message(directory.stderr) === 'cannot read stdin\n'
+      )
+    },
+  },
+  {
+    // An empty stdin ends at once for each kind of read.
+    source: 'tests/io/lib/read_empty.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', `printf '' | "$0"`, executable])
+      return ran.status === 0 && ran.stdout === 'true\ntrue\n0\n'
+    },
+  },
+  {
+    // A line longer than a chunk of 64 KiB is read whole, and the next one after it.
+    source: 'tests/io/lib/read_long_line.lerta',
+    behaves: async (executable) => {
+      const script = `{ head -c 100000 /dev/zero | tr '\\0' x; printf '\\nnext\\n'; } | "$0"`
+      const ran = await run_command('sh', ['-c', script, executable])
+      return ran.status === 0 && ran.stdout === '100000\nnext\n'
+    },
+  },
+  {
     // run captures through a pipe that may be fd 1, when the program starts with stdout closed.
     source: 'tests/process/lib/capture_without_stdout.lerta',
     behaves: async (executable) => {

@@ -62,7 +62,8 @@ void lerta_set_arguments(int argc, char **argv);
 // `buffer`, 0 at the end, or -1 on failure; returns the bytes, which the caller frees, and their
 // count in `length`, or NULL on failure, with LERTA_OUT_OF_MEMORY in `length` if memory ran out.
 // It allocates with malloc and does not panic, so a worker may call it; the caller panics.
-enum { LERTA_OUT_OF_MEMORY = -1 };
+// Not -1, which a read gives on failure.
+enum { LERTA_OUT_OF_MEMORY = -2 };
 uint8_t *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size), void *file,
                            int64_t *length);
 // Appends the C string to an array of strings, as a new string.
@@ -123,7 +124,8 @@ void lerta_os_arguments(int *argc, char ***argv);
 // Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
 // Has a write to a pipe whose reader is gone end the program, as SIGPIPE does by default on POSIX,
-// whatever the parent left it as (see docs/reference/modules.md); Windows has no such signal.
+// whatever the parent left it as (see docs/reference/modules.md); Windows has no such signal. A
+// closed stdin reads as empty.
 void lerta_os_stdio_init(void);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_os_unix_time(void);
@@ -139,6 +141,9 @@ void lerta_os_unmap_region(void *region, int64_t size);
 // As lerta_read_chunks returns them; `length` is left as it is if the file cannot be opened, so the
 // caller sets it first.
 uint8_t *lerta_os_read_file(const char *path, int64_t *length);
+// Reads what stdin has, up to `size` bytes, waiting for some: their count, 0 at the end, or -1 on
+// failure.
+int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size);
 bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
 bool lerta_os_is_file(const char *path);
 // Whether the path names a directory, through symbolic links.

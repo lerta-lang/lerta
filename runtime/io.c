@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 
 #include "internal.h"
@@ -20,6 +21,51 @@ LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes) {
 
 LertaPromise *lerta_stream_flush(int64_t fd) {
   return check_writer(fd) ? lerta_output_wait((int)fd) : NULL;
+}
+
+LERTA_STATIC_STRING(cannot_read_stdin, "cannot read stdin");
+
+enum { STDIN_CHUNK_SIZE = 65536 };
+
+// A read of stdin on libuv's thread pool, whose worker touches only `bytes`, allocated with malloc,
+// and `length`.
+typedef struct {
+  LertaPromise *promise;
+  uint8_t *bytes;
+  int64_t length;
+} StdinRead;
+
+static void read_stdin_work(void *data) {
+  StdinRead *task = data;
+  task->bytes = malloc(STDIN_CHUNK_SIZE);
+  task->length = task->bytes == NULL ? LERTA_OUT_OF_MEMORY
+                                     : lerta_os_read_stdin(task->bytes, STDIN_CHUNK_SIZE);
+}
+
+// On the loop, as a panic touches what only the main thread may.
+static void end_stdin_read(void *data) {
+  StdinRead *task = data;
+  if (task->length == LERTA_OUT_OF_MEMORY) lerta_panic("out of memory");
+  if (task->length < 0) {
+    lerta_raise(LERTA_IO_ERROR, (const LertaString *)&cannot_read_stdin);
+    lerta_promise_reject(task->promise);
+  } else {
+    LertaString *chunk =
+        task->length == 0 ? NULL : lerta_string_from_bytes(task->bytes, task->length);
+    *(LertaString **)lerta_promise_slot(task->promise) = chunk;
+    lerta_promise_resolve(task->promise);
+  }
+  lerta_release(task->promise);
+  free(task->bytes);
+  free(task);
+}
+
+LertaPromise *lerta_stdin_read(void) {
+  StdinRead *task = lerta_checked_calloc(1, sizeof(StdinRead));
+  task->promise = lerta_promise_new(LERTA_REFERENCE_ITEMS);
+  lerta_retain(task->promise);
+  lerta_loop_work(task, read_stdin_work, end_stdin_read);
+  return task->promise;
 }
 
 // print and print_error write at once, after what the buffer holds, so that the output keeps its

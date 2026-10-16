@@ -376,6 +376,23 @@ const checks: Check[] = [
     },
   },
   {
+    // Input that comes later, so that the read finds the pipe empty first.
+    name: 'a read of a non-blocking stdin waits while the pipe is empty',
+    run: () => {
+      const read_non_blocking = [
+        '  uint8_t bytes[16];',
+        '  fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);',
+        '  int64_t count = lerta_os_read_stdin(bytes, sizeof bytes);',
+        '  _exit(count == 2 && bytes[0] == 104 && bytes[1] == 105 ? 0 : 1);',
+      ].join('\n')
+      const includes = '#include <fcntl.h>\n#include "internal.h"\n'
+      const executable = build_main('read_non_blocking', read_non_blocking, false, includes)
+      const script = '{ sleep 0.3; printf hi; } | "$0"'
+      const run = spawnSync('sh', ['-c', script, executable], { timeout: 10_000 })
+      return expect_status(0, run.status)
+    },
+  },
+  {
     // libuv 1.53.0 took the handle of a spawn that failed while it made the stdio off the loop's
     // queue, and uv_close, which its docs ask for even then, took it off again: with a handle
     // made in between, the loop never ended (see docs/internals.md, on libuv). A TCP handle given

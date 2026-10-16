@@ -57,11 +57,12 @@ static size_t request_size(int64_t length) {
 }
 
 // A non-blocking fd, such as the pipe that Node.js gives a child for its stdout, takes nothing
-// while it is full, so the write waits for it as a blocking one would.
-static bool wait_writable(int fd) {
-  struct pollfd writable = { .fd = fd, .events = POLLOUT };
+// while it is full, and gives nothing while it is empty, so a write or a read waits for it as a
+// blocking one would, for `events`, POLLOUT or POLLIN.
+static bool wait_ready(int fd, short events) {
+  struct pollfd ready_fd = { .fd = fd, .events = events };
   for (;;) {
-    int ready = poll(&writable, 1, -1);
+    int ready = poll(&ready_fd, 1, -1);
     if (ready >= 0 || errno != EINTR) return ready > 0;
   }
 }
@@ -71,7 +72,7 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
     ssize_t written = write(fd, bytes, request_size(length));
     if (written < 0 && errno == EINTR) continue;
     bool is_full = written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
-    if (is_full && wait_writable(fd)) continue;
+    if (is_full && wait_ready(fd, POLLOUT)) continue;
     if (written <= 0) return false;
     bytes += written;
     length -= written;
@@ -79,7 +80,14 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
   return true;
 }
 
-void lerta_os_stdio_init(void) { signal(SIGPIPE, SIG_DFL); }
+// A closed stdin is opened on /dev/null, which takes the lowest free descriptor, 0, before libuv
+// opens descriptors of its own, which would otherwise take 0 and be read as stdin. If even that
+// fails, no stdin is safe to read, so the program stops.
+void lerta_os_stdio_init(void) {
+  signal(SIGPIPE, SIG_DFL);
+  bool closed = fcntl(STDIN_FILENO, F_GETFD) == -1 && errno == EBADF;
+  if (closed && open("/dev/null", O_RDONLY) != STDIN_FILENO) lerta_panic("cannot open /dev/null");
+}
 
 double lerta_os_unix_time(void) {
   struct timespec now;
@@ -99,6 +107,14 @@ static int64_t read_fd(void *file, uint8_t *buffer, int64_t size) {
   for (;;) {
     ssize_t count = read((int)(intptr_t)file, buffer, request_size(size));
     if (count >= 0 || errno != EINTR) return count < 0 ? -1 : count;
+  }
+}
+
+int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size) {
+  for (;;) {
+    int64_t count = read_fd((void *)(intptr_t)STDIN_FILENO, buffer, size);
+    bool is_empty = count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
+    if (!is_empty || !wait_ready(STDIN_FILENO, POLLIN)) return count;
   }
 }
 

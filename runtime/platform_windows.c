@@ -163,6 +163,15 @@ static int64_t read_handle(void *file, uint8_t *buffer, int64_t size) {
   return ReadFile(file, buffer, chunk, &count, NULL) ? (int64_t)count : -1;
 }
 
+// A pipe whose writer has closed it fails with ERROR_BROKEN_PIPE, which is its end; a program
+// without stdin reads it as empty, as on POSIX.
+int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size) {
+  HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+  if (input == NULL || input == INVALID_HANDLE_VALUE) return 0;
+  int64_t count = read_handle(input, buffer, size);
+  return count < 0 && GetLastError() == ERROR_BROKEN_PIPE ? 0 : count;
+}
+
 uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
   HANDLE file = open_file(path, GENERIC_READ, OPEN_EXISTING, 0);
   if (file == INVALID_HANDLE_VALUE) return NULL;

@@ -301,6 +301,8 @@ void lerta_rename(const LertaString *from, const LertaString *to);
 // a buffer, written out on the event loop (output.c; see docs/internals.md#output).
 LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes);
 LertaPromise *lerta_stream_flush(int64_t fd);
+// Up to 64 KiB of what stdin has, read on the thread pool, or NULL at its end.
+LertaPromise *lerta_stdin_read(void);
 void lerta_print_stdout(const LertaString *text);
 void lerta_print_stderr(const LertaString *text);
 
