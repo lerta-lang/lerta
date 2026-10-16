@@ -150,6 +150,8 @@ double lerta_float_from_bits(int64_t bits);
 LertaString *lerta_float_to_string(double value);
 // Truncated toward zero; throws an ArithmeticError unless the result fits in an Int.
 int64_t lerta_float_to_int(double value);
+// Called only by std's methods for the seed (see SEED_METHODS in
+// compiler/checker/extend_declarations.lerta), as are lerta_byte_to_int and lerta_int_to_byte.
 double lerta_int_to_float(int64_t n);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
