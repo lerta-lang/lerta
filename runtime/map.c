@@ -214,6 +214,7 @@ void lerta_map_cursor_next(LertaMapCursor *cursor, int64_t *key, void *value) {
   LertaMapEntry *entry = entry_at(map, cursor->position++);
   *key = entry->key;
   if (keys_are_references(map)) lerta_retain((void *)(intptr_t)entry->key);
+  if (value == NULL) return;
   memcpy(value, value_of(entry), value_size(map));
   lerta_retain_item(map->value_kind, value);
 }

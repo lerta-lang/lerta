@@ -228,9 +228,11 @@ int64_t lerta_map_length(const LertaMap *map);
 bool lerta_map_read(const LertaMap *map, int64_t key, void *value);
 void lerta_map_write(LertaMap *map, int64_t key, const void *value);
 void lerta_map_remove(LertaMap *map, int64_t key);
+// Called only by the seed's IR, from keys() of before it gave an Iter; it goes at the next refresh
+// of the seed (see docs/internals.md#bootstrap).
 LertaArray *lerta_map_keys(const LertaMap *map);
 
-// next writes the key and the value, owned, and moves on.
+// next writes the key, and the value unless `value` is NULL, both owned, and moves on.
 typedef struct LertaMapCursor LertaMapCursor;
 LertaMapCursor *lerta_map_cursor(LertaMap *map);
 bool lerta_map_cursor_has_next(LertaMapCursor *cursor);

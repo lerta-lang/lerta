@@ -13,7 +13,7 @@ import define_kind, emit_iter, IterKind, load_state from './iter_protocol'
 import emit_release_value, ir_type, is_nil_by_null from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
-  is_float, is_identity_type, is_integer, is_kind, is_one_of_kinds, is_set, MapType, optional_type,
+  is_float, is_identity_type, is_integer, is_kind, is_one_of_kinds, MapType, optional_type,
   TupleType, Type, type_key
 from '../types'
 
@@ -69,11 +69,11 @@ export const emit_map_remove = (ir: IrBuilder, map: String, key: String, type: M
   const args = "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
   call_void_runtime ir, 'void @lerta_map_remove(ptr, i64)', args
 
-export const emit_map_keys = (ir: IrBuilder, map: String) ->
-  call_runtime ir, 'ptr @lerta_map_keys(ptr)', "ptr #{map}"
+export const emit_map_keys = (ir: IrBuilder, map: String, type: MapType) ->
+  emit_cursor_iter ir, map, type, true
 
 export const emit_map_entries = (ir: IrBuilder, map: String, type: MapType) ->
-  emit_cursor_iter ir, map, type, TupleType(items: [type.key, type.value])
+  emit_cursor_iter ir, map, type, false
 
 export const emit_set_has = (ir: IrBuilder, set: String, item: String, type: MapType) ->
   call_runtime ir, 'i1 @lerta_map_read(ptr, i64, ptr)', set_item(ir, set, item, type)
@@ -82,7 +82,7 @@ export const emit_set_add = (ir: IrBuilder, set: String, item: String, type: Map
   call_void_runtime ir, 'void @lerta_map_write(ptr, i64, ptr)', set_item(ir, set, item, type)
 
 export const emit_set_iter = (ir: IrBuilder, set: String, type: MapType) ->
-  emit_cursor_iter ir, set, type, type.key
+  emit_cursor_iter ir, set, type, true
 
 # The arguments that give the runtime an item of a set and its value, which takes no bytes, so that
 # the slot for it is neither read nor written.
@@ -90,24 +90,26 @@ const set_item = (ir: IrBuilder, set: String, item: String, type: MapType) ->
   "ptr #{set}, i64 #{key_word(ir, item, type.key)}, ptr #{ir.alloca('i64')}"
 
 # The entries of a borrowed map, which the Iter traverses by a cursor (LertaMapCursor in
-# runtime/lerta.h): as tuples of a key and a value, or the keys alone, as a set gives its items.
-const emit_cursor_iter = (ir: IrBuilder, map: String, type: MapType, item: Type) ->
+# runtime/lerta.h): the keys alone, as a set gives its items, or as tuples of a key and a value.
+const emit_cursor_iter = (ir: IrBuilder, map: String, type: MapType, keys_only: Bool) ->
+  const item = keys_only then type.key else TupleType(items: [type.key, type.value])
   const has_next = (body: IrBuilder, kind: IterKind) ->
     const cursor = load_state(body, kind, 0)
     const more = call_runtime(body, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
     body.emit "ret i1 #{more}"
   const next = (body: IrBuilder, kind: IterKind) ->
     const key_slot = body.alloca('i64')
-    # A set's value takes no bytes, written nowhere.
-    const value_slot = is_set(type) then key_slot else emit_item_slot(body, type.value)
+    # The keys alone take no value from the cursor.
+    const value_slot = keys_only then 'null' else emit_item_slot(body, type.value)
     const args = "ptr #{load_state(body, kind, 0)}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime body, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
     const key = from_item(body, body.assign("load i64, ptr #{key_slot}"), type.key)
-    return body.emit("ret #{ir_type(item)} #{key}") if is_set(type)
+    return body.emit("ret #{ir_type(item)} #{key}") if keys_only
     const entry = emit_values(body, item, [key, emit_load_item(body, value_slot, type.value)])
     body.emit "ret ptr #{entry}"
   const state = [HeapField(ir_type: 'ptr', owned: REFERENCE)]
-  const kind = define_kind(ir, "map entries #{type_key(type)}", state, item, has_next, next)
+  const traversed = keys_only then 'keys' else 'entries'
+  const kind = define_kind(ir, "map #{traversed} #{type_key(type)}", state, item, has_next, next)
   emit_iter ir, kind, [call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")]
 
 # Adds the items of a borrowed array to the set, in order, as `Set(xs)` does.
