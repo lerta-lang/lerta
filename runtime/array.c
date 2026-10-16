@@ -103,9 +103,6 @@ void lerta_array_append(LertaArray *array, const void *item) {
   memcpy(item_at(array, array->length - 1), item, (size_t)lerta_item_size(array->item_kind));
 }
 
-// An item narrower than a word is the word's first bytes, as in lerta_word_item.
-void lerta_array_append_word(LertaArray *array, int64_t word) { lerta_array_append(array, &word); }
-
 // The array's reference to the item passes to the caller.
 void lerta_array_take_last(LertaArray *array, void *item) {
   if (array->length == 0) {

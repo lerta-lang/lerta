@@ -163,21 +163,6 @@ void lerta_map_remove(LertaMap *map, int64_t key) {
   release_entry(map, entry);
 }
 
-static LertaItemKind key_item_kind(const LertaMap *map) {
-  if (keys_are_references(map)) return LERTA_REFERENCE_ITEMS;
-  if (map->key_kind & LERTA_INTEGER_KEYS) return (LertaItemKind)map->key_kind;
-  return LERTA_PLAIN_ITEMS;
-}
-
-LertaArray *lerta_map_keys(const LertaMap *map) {
-  LertaArray *keys = lerta_array_create(key_item_kind(map));
-  for (int64_t i = 0; i < map->entry_count; i++) {
-    const LertaMapEntry *entry = entry_at(map, i);
-    if (entry->live) lerta_array_append_word(keys, entry->key);
-  }
-  return keys;
-}
-
 struct LertaMapCursor {
   LertaHeader header;
   LertaMap *map;

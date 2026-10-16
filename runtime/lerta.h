@@ -75,8 +75,8 @@ typedef struct {
 } LertaMapEntry;
 
 // How a map treats its keys (see docs/internals.md#maps). Int keys are words, an Int, a UInt64, a
-// Float or an enum, compared as they are; so are integer keys, LERTA_INTEGER_KEYS with the size and
-// the sign of the integer items that `keys()` gives, as in LertaItemKind.
+// Float or an enum, compared as they are; so are integer keys narrower than a word,
+// LERTA_INTEGER_KEYS with their size and sign, as in LertaItemKind.
 typedef enum {
   LERTA_INT_KEYS,
   LERTA_STRING_KEYS,
@@ -228,9 +228,6 @@ int64_t lerta_map_length(const LertaMap *map);
 bool lerta_map_read(const LertaMap *map, int64_t key, void *value);
 void lerta_map_write(LertaMap *map, int64_t key, const void *value);
 void lerta_map_remove(LertaMap *map, int64_t key);
-// Called only by the seed's IR, from keys() of before it gave an Iter; it goes at the next refresh
-// of the seed (see docs/internals.md#bootstrap).
-LertaArray *lerta_map_keys(const LertaMap *map);
 
 // next writes the key, and the value unless `value` is NULL, both owned, and moves on.
 typedef struct LertaMapCursor LertaMapCursor;
