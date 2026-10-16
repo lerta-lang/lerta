@@ -122,16 +122,6 @@ The operand of `return` is not among the places where [control flow](reference/c
 
 ## Formatter
 
-### `lerta fmt` refuses a call with a block `weak` function literal
-
-```
-g weak ->
-  a()
-  b()
-```
-
-The formatter puts the argument in parentheses, where a block cannot be, and stops with `the formatter would change the program, which is a bug`. `tests/weak_literal/basic.lerta` has such a call. Cause: `starts_argument` in `compiler/format/print_statement.lerta` returns false for a `weak` literal.
-
 ### `lerta fmt` fails on an `else` holding a comment and one `if`
 
 ```
