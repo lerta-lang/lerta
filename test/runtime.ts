@@ -338,6 +338,23 @@ const checks: Check[] = [
     },
   },
   {
+    // macOS rejects a write of more than INT_MAX bytes at once. The buffer is never touched, so
+    // its pages are never made.
+    name: 'a write of more than 2 GiB is done whole',
+    run: () => {
+      const write_large = [
+        '  int64_t length = ((int64_t)1 << 31) + 1;',
+        '  uint8_t *bytes = malloc((size_t)length);',
+        '  int fd = open("/dev/null", O_WRONLY);',
+        '  if (bytes == NULL || fd < 0) _exit(2);',
+        '  _exit(lerta_os_write(fd, bytes, length) ? 0 : 1);',
+      ].join('\n')
+      const includes = '#include <fcntl.h>\n#include <stdlib.h>\n#include "internal.h"\n'
+      const { stderr, status } = run_main('write_large', write_large, false, includes)
+      return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
+    },
+  },
+  {
     name: 'stdout to a pipe is buffered, and flushed before a write to stderr',
     run: () => {
       const { stdout, stderr } = run_main('buffered', interleaved_writes, false)

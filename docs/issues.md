@@ -41,10 +41,6 @@ A request of 4 GiB or more is converted to `size_t` unchecked, so the mapping is
 
 ## Runtime
 
-### macOS fails to write or read 2 GiB or more at once
-
-macOS rejects a `read` or `write` of more than `INT_MAX` bytes with `EINVAL`, where Linux does part of it. `lerta_os_write` and `read_fd` in `runtime/platform_posix.c` pass the whole length; the Windows versions take 1 GiB at a time. So `write_file` and `print` of 2 GiB fail, and `read_file` of a file of 2 GiB or more.
-
 ### Output to a non-blocking stdout is dropped
 
 When stdout is a non-blocking pipe, as Node.js gives a child, a full pipe makes `write` fail with `EAGAIN`, which `lerta_os_write` takes as a failure: the output from then on is dropped without a message, and the program exits with 1 (`runtime/platform_posix.c`, `runtime/io.c`).

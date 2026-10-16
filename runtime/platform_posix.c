@@ -49,9 +49,15 @@ void lerta_os_arguments(int *argc, char ***argv) {
   (void)argv;
 }
 
+// macOS rejects a read or a write of more than INT_MAX bytes, so each asks for 1 GiB at most, as
+// on Windows.
+static size_t request_size(int64_t length) {
+  return length > (1 << 30) ? (size_t)1 << 30 : (size_t)length;
+}
+
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
   while (length > 0) {
-    ssize_t written = write(fd, bytes, (size_t)length);
+    ssize_t written = write(fd, bytes, request_size(length));
     if (written < 0 && errno == EINTR) continue;
     if (written <= 0) return false;
     bytes += written;
@@ -80,7 +86,7 @@ void lerta_os_abort(void) {
 
 static int64_t read_fd(void *file, uint8_t *buffer, int64_t size) {
   for (;;) {
-    ssize_t count = read((int)(intptr_t)file, buffer, (size_t)size);
+    ssize_t count = read((int)(intptr_t)file, buffer, request_size(size));
     if (count >= 0 || errno != EINTR) return count < 0 ? -1 : count;
   }
 }
