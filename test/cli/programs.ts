@@ -192,11 +192,12 @@ const program_cases: ProgramCase[] = [
     },
   },
   {
-    // A line, a count of bytes and the rest, read from one buffer, then nil at the end.
+    // A line, a count of bytes, the rest of the buffer with the largest Int as a count, which must
+    // not overflow when added to where the buffer is read, and the rest, then nil at the end.
     source: 'tests/io/lib/read_parts.lerta',
     behaves: async (executable) => {
       const ran = await run_command('sh', ['-c', `printf '3\\nabcdef' | "$0"`, executable])
-      return ran.status === 0 && ran.stdout === 'abc\ndef\ntrue\ntrue\n'
+      return ran.status === 0 && ran.stdout === 'abc\ndef\n0\ntrue\ntrue\n'
     },
   },
   {

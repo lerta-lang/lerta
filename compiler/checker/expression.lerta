@@ -169,13 +169,14 @@ export const check_argument_count = (
 # an array literal of them, `f(a, b, c)` into `f(a, [b, c])` for `f = (x: Int, rest: Int...)`, as
 # named arguments are (see gather_named_args), so that the later passes and codegen see an array
 # argument; a spread among them is one of the literal. A call is rewritten once, as the instances of
-# a generic function share its literal. A spread anywhere else is an error.
+# a generic function share its literal and a program may be checked again. A spread anywhere else
+# is an error.
 export const pack_variadic = (body: Body, call: Call, declaration: FunctionLiteral?) ->
   const program = body.program
   const params = declaration?.params ? []
   const place = params.length - 1
   const is_variadic = params.length > 0 and params[place].variadic
-  if is_variadic and not program.packed_calls.has(call)
+  if is_variadic and not call.packed
     const fixed = [arg for arg, i in call.args when i < place]
     if const spread = fixed.find(is_spread)
       const rest = params[place].name.name
@@ -188,7 +189,7 @@ export const pack_variadic = (body: Body, call: Call, declaration: FunctionLiter
       fail program, call.position, "expected at least #{place} argument(s), got #{call.args.length}"
     if call.named_args.length > 0
       fail program, call.named_args[0].name.position, 'a variadic function takes no named arguments'
-    program.packed_calls.add call
+    call.packed = true
     const elements = [arg for arg, i in call.args when i >= place]
     const position = elements.first()?.position ? call.position
     call.args = [arg for arg, i in call.args when i < place]
