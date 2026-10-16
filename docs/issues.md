@@ -76,15 +76,6 @@ print f()
 
 The program prints `leak: 1 object(s)`. `assign_through` in `compiler/codegen/assignment.lerta` holds the old value as a temporary, which jumps do not release, while `compiler/checker/jump_positions.lerta` allows jumps in the value of any assignment to a name.
 
-### A path of fields from an imported `const` is not narrowed
-
-```
-import A, shared from './boxes'   # export const shared = Box(item: A(x: 9))
-print shared.item is A then shared.item.x else 0
-```
-
-The checker reports `'x' is not a field of B`. `value_local` in `compiler/checker/imports.lerta` makes a new `Local` at each lookup, and `narrowed_field_type` in `compiler/checker/narrowable.lerta` compares the roots by identity.
-
 ### `return return 1` is accepted
 
 The operand of `return` is not among the places where [control flow](reference/control-flow.md) allows `return`, and `print(return 1)` is rejected.

@@ -61,6 +61,8 @@ export class ImportedName
   source: ExportRef | ExternExport
   used: Bool
   module: String
+  # The local of an imported `const`, made once, as narrowed paths compare their roots by identity.
+  local: Local? = nil
 
 export class Imports
   names: Map<String, ImportedName> = Map()
@@ -150,10 +152,13 @@ export const imported_type = (shared: Shared, name: String) ->
 # type_of_export, which reports it where it is used.
 export const value_local = (shared: Shared, name: String) ->
   const imported = shared.imports.names[name] ? return nil
+  return imported.local if imported.local
   const exported = imported_export(shared.program, imported) as ValueExport ? return nil
   const type = exported.type ? return nil
   imported.used = true
-  Local type, identifier: imported.name, used: true
+  const local = Local(type, identifier: imported.name, used: true)
+  imported.local = local
+  local
 
 export const builtin_export = (shared: Shared, name: String) ->
   const program = shared.program
