@@ -35,6 +35,14 @@ Cause: `unwind_cleanup` in `compiler/codegen/function.lerta` calls `lerta_free_u
 
 `const Int = 3` is accepted, while `class Int` is rejected as already defined, though types and values share one namespace.
 
+### An integer literal is not a Float where a `Float?` is expected
+
+`const e: Float? = 1` is rejected with `expected Float?, got Int`, though an integer literal is a Float where a Float is expected; so is `-0 as Float ? 1.0`. The reference does not say whether a `Float?` counts, so this may need deciding first.
+
+### A generic interface is not checked for the member types its type arguments make
+
+`Source<Int?>`, for an interface whose member returns `T[]`, is accepted where it is written, though an array cannot hold `Int?`; no class can satisfy it, so the error comes only where one is given for it.
+
 ## Runtime
 
 ### A spawn that fails to make the output pipe leaves libuv's handle queue broken
