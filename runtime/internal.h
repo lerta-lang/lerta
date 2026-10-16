@@ -120,7 +120,7 @@ bool lerta_os_is_file(const char *path);
 // Whether the path names a directory, through symbolic links.
 bool lerta_os_is_dir(const char *path);
 // Appends the names of the entries of the directory, without `.` and `..`, in no order, to the array
-// of strings.
+// of Binaries.
 bool lerta_os_list_dir(const char *path, LertaArray *names);
 // The absolute path with no links, which the caller frees.
 char *lerta_os_real_path(const char *path);

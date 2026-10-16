@@ -267,8 +267,8 @@ LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
 bool lerta_is_file(const LertaString *path);
 bool lerta_is_dir(const LertaString *path);
-// The names of the entries, checked to be UTF-8, in the order of their bytes.
-LertaArray *lerta_list_dir(const LertaString *path);
+// The names of the entries, unchecked and in no order (std:io checks and sorts them).
+LertaArray *lerta_list_dir_names(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);
 LertaString *lerta_make_temp_dir(void);
 void lerta_remove_tree(const LertaString *path);

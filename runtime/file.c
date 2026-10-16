@@ -11,7 +11,6 @@ LERTA_STATIC_STRING(cannot_remove, "cannot remove: ");
 LERTA_STATIC_STRING(cannot_make_dir, "cannot make directory: ");
 LERTA_STATIC_STRING(cannot_rename, "cannot rename: ");
 LERTA_STATIC_STRING(cannot_list, "cannot list directory: ");
-LERTA_STATIC_STRING(name_not_utf8, "a name is not valid UTF-8 in the directory: ");
 
 LertaString *lerta_read_file(const LertaString *path) {
   char *name = lerta_c_string(path);
@@ -42,33 +41,8 @@ bool lerta_is_dir(const LertaString *path) {
   return is_dir;
 }
 
-// An item takes 8 bytes even where a pointer takes 4, and holds its reference in its first bytes.
-static const LertaString *string_item(const void *item) {
-  const LertaString *string;
-  memcpy(&string, item, sizeof string);
-  return string;
-}
-
-// In the order of their bytes, as String.compare gives.
-static int compare_strings(const void *a, const void *b) {
-  const LertaString *left = string_item(a);
-  const LertaString *right = string_item(b);
-  int64_t common = left->length < right->length ? left->length : right->length;
-  int order = memcmp(left->bytes, right->bytes, (size_t)common);
-  if (order != 0) return order;
-  return (left->length > right->length) - (left->length < right->length);
-}
-
-static bool are_utf8(const LertaArray *strings) {
-  int64_t size = lerta_item_size(strings->item_kind);
-  for (int64_t i = 0; i < strings->length; i++) {
-    if (!lerta_is_utf8(string_item(strings->items + i * size))) return false;
-  }
-  return true;
-}
-
 // An empty path is refused here, as Windows would read `\*` in it as the root of the drive.
-LertaArray *lerta_list_dir(const LertaString *path) {
+LertaArray *lerta_list_dir_names(const LertaString *path) {
   char *name = lerta_c_string(path);
   LertaArray *names = lerta_array_create(LERTA_REFERENCE_ITEMS);
   bool listed = name != NULL && name[0] != '\0' && lerta_os_list_dir(name, names);
@@ -78,13 +52,6 @@ LertaArray *lerta_list_dir(const LertaString *path) {
     lerta_raise_with(LERTA_IO_ERROR, &cannot_list, path);
     return NULL;
   }
-  if (!are_utf8(names)) {
-    lerta_release(names);
-    lerta_raise_with(LERTA_VALUE_ERROR, &name_not_utf8, path);
-    return NULL;
-  }
-  size_t size = (size_t)lerta_item_size(names->item_kind);
-  qsort(names->items, (size_t)names->length, size, compare_strings);
   return names;
 }
 
