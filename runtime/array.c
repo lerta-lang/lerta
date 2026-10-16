@@ -6,6 +6,7 @@
 LERTA_STATIC_STRING(pop_from_empty, "pop from an empty array");
 
 int64_t lerta_item_size(LertaItemKind kind) {
+  if (kind & LERTA_INTEGER_ITEMS) return kind & LERTA_ITEM_BYTES;
   switch (kind) {
     case LERTA_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
     case LERTA_BYTE_ITEMS: return 1;
@@ -34,11 +35,22 @@ static uint8_t *item_at(const LertaArray *array, int64_t index) {
   return array->items + index * lerta_item_size(array->item_kind);
 }
 
+// The targets are all little-endian, so that an item narrower than a word is the word's first
+// bytes.
 int64_t lerta_word_item(const LertaArray *array, int64_t index) {
-  if (array->item_kind == LERTA_BYTE_ITEMS) return array->items[index];
-  int64_t item;
-  memcpy(&item, item_at(array, index), sizeof item);
-  return item;
+  LertaItemKind kind = array->item_kind;
+  const uint8_t *item = item_at(array, index);
+  if (kind == LERTA_BYTE_ITEMS) return *item;
+  int64_t word;
+  if (!(kind & LERTA_INTEGER_ITEMS)) {
+    memcpy(&word, item, sizeof word);
+    return word;
+  }
+  uint64_t bits = 0;
+  memcpy(&bits, item, (size_t)lerta_item_size(kind));
+  int unused_bits = 64 - 8 * (int)lerta_item_size(kind);
+  if (!(kind & LERTA_SIGNED_ITEMS)) return (int64_t)bits;
+  return (int64_t)(bits << unused_bits) >> unused_bits;
 }
 
 static void drop_array(void *object) {
@@ -93,10 +105,8 @@ void lerta_array_append(LertaArray *array, const void *item) {
   memcpy(item_at(array, array->length - 1), item, (size_t)lerta_item_size(array->item_kind));
 }
 
-void lerta_array_append_word(LertaArray *array, int64_t word) {
-  uint8_t byte = (uint8_t)word;
-  lerta_array_append(array, array->item_kind == LERTA_BYTE_ITEMS ? (void *)&byte : &word);
-}
+// An item narrower than a word is the word's first bytes, as in lerta_word_item.
+void lerta_array_append_word(LertaArray *array, int64_t word) { lerta_array_append(array, &word); }
 
 // The array's reference to the item passes to the caller.
 void lerta_array_take_last(LertaArray *array, void *item) {

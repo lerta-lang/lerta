@@ -31,8 +31,8 @@ char *lerta_c_string(const LertaString *s);
 int64_t lerta_item_size(LertaItemKind kind);
 void lerta_retain_item(LertaItemKind kind, const void *item);
 void lerta_release_item(LertaItemKind kind, const void *item);
-// The item at the index of an array of any kind but interface values, as 8 bytes: a byte item is
-// zero-extended.
+// The item at the index of an array of any kind but interface values, as 8 bytes: an integer item
+// is extended by its sign, as the generated code widens it.
 int64_t lerta_word_item(const LertaArray *array, int64_t index);
 // Appends an item of any kind but interface values, given as 8 bytes (see lerta_word_item).
 void lerta_array_append_word(LertaArray *array, int64_t word);

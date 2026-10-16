@@ -35,16 +35,23 @@ typedef struct {
     uint8_t bytes[sizeof(text) - 1] LERTA_NONSTRING;         \
   } name = {{LERTA_IMMORTAL, NULL}, sizeof(text) - 1, text}
 
-// How arrays and maps hold their items. A plain item is 8 bytes, an Int as is; a byte item is one
-// byte, a Byte or a Bool; a reference is 8 bytes, its address, and is retained while it is held. An
-// interface value is two pointers, its data, a reference, then its itab. LERTA_NO_ITEMS take no
-// bytes, as the values of a set, a map without values, do.
+// How arrays and maps hold their items. A plain item is 8 bytes, an Int as is; a reference is 8
+// bytes, its address, and is retained while it is held. An interface value is two pointers, its
+// data, a reference, then its itab. LERTA_NO_ITEMS take no bytes, as the values of a set, a map
+// without values, do. An integer narrower than 8 bytes, or a Bool, is LERTA_INTEGER_ITEMS with its
+// size in bytes in LERTA_ITEM_BYTES, and LERTA_SIGNED_ITEMS if it is signed, and takes that size.
+// LERTA_BYTE_ITEMS, an unsigned byte, is passed only by the seed's IR, and goes at its next refresh
+// (see docs/internals.md#bootstrap).
 typedef enum {
   LERTA_PLAIN_ITEMS,
   LERTA_REFERENCE_ITEMS,
   LERTA_INTERFACE_ITEMS,
   LERTA_BYTE_ITEMS,
-  LERTA_NO_ITEMS
+  LERTA_NO_ITEMS,
+  // The mask and the flags of a kind, not kinds.
+  LERTA_ITEM_BYTES = 0x0F,
+  LERTA_INTEGER_ITEMS = 0x10,
+  LERTA_SIGNED_ITEMS = 0x20
 } LertaItemKind;
 
 // Room for an item of any kind.
@@ -68,14 +75,17 @@ typedef struct {
   bool live;
 } LertaMapEntry;
 
-// How a map treats its keys (see docs/internals.md#maps). The keys of byte keys are byte items (see
-// LertaItemKind).
+// How a map treats its keys (see docs/internals.md#maps). Int keys are words, an Int, a UInt64, a
+// Float or an enum, compared as they are; so are integer keys, LERTA_INTEGER_KEYS with the size and
+// the sign of the integer items that `keys()` gives, as in LertaItemKind. LERTA_BYTE_KEYS, keys of
+// unsigned bytes, is passed only by the seed's IR, and goes at its next refresh.
 typedef enum {
   LERTA_INT_KEYS,
   LERTA_STRING_KEYS,
   LERTA_OBJECT_KEYS,
   LERTA_VALUE_KEYS,
-  LERTA_BYTE_KEYS
+  LERTA_BYTE_KEYS,
+  LERTA_INTEGER_KEYS = LERTA_INTEGER_ITEMS
 } LertaKeyKind;
 
 // The hash and the equality of two items of a type that compares by its contents.

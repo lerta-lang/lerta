@@ -2,13 +2,13 @@
 # its item_ir_type, after the runtime (runtime/array.c) has checked the index or made room, so that
 # no code there depends on the item kind; other operations go through the runtime, which takes and
 # gives items through pointers to them. Items are represented as docs/internals.md#builtins states;
-# map keys, and the items that the runtime hashes and compares, are words: 8 bytes, a Byte or a Bool
-# zero-extended (see to_item).
+# map keys, and the items that the runtime hashes and compares, are words: 8 bytes, a narrower value
+# extended by its sign (see to_item).
 import emit_branch, emit_when, IrBuilder from './ir_builder'
 import emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import narrowed_from_word, scalar_of, widened_to_word from './scalar'
-import is_kind, is_one_of_kinds, Type from '../types'
+import is_kind, Type from '../types'
 
 # The value as a word.
 export const to_item = (ir: IrBuilder, operand: String, type: Type) ->
@@ -20,13 +20,24 @@ export const from_item = (ir: IrBuilder, item: String, type: Type) ->
   const scalar = scalar_of(type) ? return ir.assign("inttoptr i64 #{item} to ptr")
   narrowed_from_word ir, item, scalar
 
-# Byte and Bool are one byte in an array or a map; the other integer types take a word there so
-# far, as an Int does (see docs/roadmap/language.md#numeric-types).
-const is_byte_item = (type: Type) -> is_one_of_kinds(type, ['Bool', 'Byte'])
+# A value narrower than a word, an integer or a Bool, is held at its own size: the value of
+# LertaItemKind in runtime/lerta.h of its bytes, LERTA_INTEGER_ITEMS, and LERTA_SIGNED_ITEMS if it
+# is signed. Nil for a value of a word, which is held as one.
+export const narrow_item_kind = (type: Type) ->
+  const scalar = scalar_of(type) ? return nil
+  return nil if scalar.bits == 64
+  const bytes = scalar.bits <= 8 then 1 else scalar.bits >> 3
+  const signed = scalar.signed then SIGNED_ITEMS else 0
+  bytes | INTEGER_ITEMS | signed
+
+# The flags of LertaItemKind in runtime/lerta.h.
+const INTEGER_ITEMS = 0x10
+const SIGNED_ITEMS = 0x20
 
 # The value of LertaItemKind in runtime/lerta.h that holds values of the type.
 export const item_kind = (type: Type) ->
-  return 3 if is_byte_item(type)
+  const narrow = narrow_item_kind(type)
+  return narrow if narrow != nil
   # A map's value type is void only for a set, whose values take no bytes; the checker rejects void
   # elsewhere, as an array's items.
   return 4 if is_kind(type, 'void')
@@ -41,7 +52,8 @@ export const item_kind = (type: Type) ->
 const item_ir_type = (type: Type) ->
   case
     when is_kind(type, INTERFACE) then ir_type(type)
-    when is_byte_item(type) then 'i8'
+    when is_kind(type, 'Bool') then 'i8'
+    when narrow_item_kind(type) != nil then ir_type(type)
     else 'i64'
 
 const to_held_item = (ir: IrBuilder, operand: String, type: Type) ->
