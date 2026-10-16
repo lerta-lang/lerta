@@ -19,11 +19,11 @@ import bracketed, Context, is_layout, keyword, word_before from './printing'
 
 # Precedence levels, weakest first (see Operators in docs/reference/syntax.md).
 const CONDITIONAL = 1
-export const COALESCE = 2
-const OR = 3
-const AND = 4
-const NOT = 5
-const COMPARISON = 6
+export const OR = 2
+const AND = 3
+const NOT = 4
+const COMPARISON = 5
+const COALESCE = 6
 const RANGE = 7
 const ADDITIVE = 8
 const MULTIPLICATIVE = 9
@@ -87,13 +87,12 @@ const binary_precedence = (operator: String) ->
     else COMPARISON
 
 # Whether what follows it on its line would be taken into it.
-const runs_to_end = (expression: Expression) ->
+const runs_to_end = (expression: Expression): Bool ->
   case expression
     when Return then expression.value != nil
     when Throw, Yield, FunctionLiteral, Case, Try then true
     when If then not expression.nil_safe
-    # Its fallback runs on as that of `?` does.
-    when Coalesce then cast_of(expression) != nil
+    when Coalesce then runs_to_end(expression.fallback)
     else false
 
 const bare_doc = (expression: Expression, context: Context): Doc ->
@@ -121,14 +120,17 @@ const bare_doc = (expression: Expression, context: Context): Doc ->
     when Cast then cast_doc(expression, context, expression.throws then '!' else '?')
     when Conditional then conditional_doc(expression, context)
     when Coalesce
-      const fallback = operand(expression.fallback, context, COALESCE, true)
-      if const cast = cast_of(expression)
+      const cast = cast_of(expression)
+      const takes_cast = cast != nil and is_cast(expression.fallback)
+      const fallback_level = takes_cast then COMPARISON else COALESCE
+      const fallback = operand(expression.fallback, context, fallback_level, true)
+      if cast
         # The style's part starts where the old form differs: at the `(` around the cast, if any.
         const written_cast = cast_doc(cast, context, '')
         if written_in_parentheses(cast, context)
           return join([rule(CAST_FALLBACKS, join([written_cast, text(' ? ')])), fallback])
         return join([written_cast, rule(CAST_FALLBACKS, text(' ? ')), fallback])
-      join [operand(expression.value, context, OR, false), text(' ? '), fallback]
+      join [operand(expression.value, context, RANGE, false), text(' ? '), fallback]
     when Await
       join [
         keyword('await ', expression.position)
@@ -230,8 +232,8 @@ const unary_doc = (unary: UnaryOperation, context: Context) ->
 
 const binary_doc = (binary: BinaryOperation, context: Context) ->
   const level = binary_precedence(binary.operator)
-  const left_level = level == COMPARISON then RANGE else level
-  const right_level = level == COMPARISON then RANGE else level + 1
+  const left_level = level == COMPARISON then COALESCE else level
+  const right_level = level == COMPARISON then COALESCE else level + 1
   const side = (child: Expression, child_level: Int, last: Bool) ->
     # `and` mixed with `or` is clarified (see Parentheses).
     const mixes = binary.operator == 'or' and child is BinaryOperation and child.operator == 'and'
@@ -246,7 +248,7 @@ const range_end = (end: Expression, context: Context, last: Bool) ->
 
 # A `then`/`else` inside the `then` value of another is in parentheses (see Parentheses).
 const conditional_doc = (conditional: Conditional, context: Context) ->
-  const condition = operand(conditional.condition, context, COALESCE, false)
+  const condition = operand(conditional.condition, context, OR, false)
   const then_value =
     if conditional.then_value is Conditional
       clarified conditional.then_value, context
@@ -351,7 +353,7 @@ const tuple_names = (open_at: Position, context: Context) ->
   join [token('(', open_at), separated(names, text(', ')), text(')')]
 
 const is_doc = (test: IsTest, context: Context, word: String) ->
-  join [operand(test.value, context, RANGE, false), text(word), named_type(test.type)]
+  join [operand(test.value, context, COALESCE, false), text(word), named_type(test.type)]
 
 # `not (x is T)` is written `x is not T` (see Negated is tests).
 const is_not_doc = (test: IsTest, context: Context) ->
@@ -363,7 +365,7 @@ const is_negated_is_test = (expression: Expression) ->
 
 # `x as T`, then `form`. The `?` of `as T?` is read as the type's, so it is not printed with it.
 const cast_doc = (cast: Cast, context: Context, form: String) ->
-  const value = operand(cast.value, context, RANGE, false)
+  const value = operand(cast.value, context, COALESCE, false)
   const { name, args, position } = cast.type
   join [value, text(' as '), token(name, position), type_arguments(args), text(form)]
 
@@ -371,3 +373,8 @@ const cast_doc = (cast: Cast, context: Context, form: String) ->
 const cast_of = (coalesce: Coalesce) ->
   const cast = coalesce.value as Cast ? return nil
   cast.throws then nil else cast
+
+# A cast, or a cast with a fallback, which the fallback of a cast may be without parentheses (see
+# parse_cast_fallback); that of `?` cannot.
+const is_cast = (expression: Expression) ->
+  expression is Cast or (expression is Coalesce and cast_of(expression) != nil)

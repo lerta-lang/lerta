@@ -90,7 +90,7 @@ draw 'p'
 
 ## Operators
 
-From weakest: `then`/`else` < `?` (nil coalescing) < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is` and `as`) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
+From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is` and `as`) < `?` (nil coalescing) < range `...` < `+` `-` < `*` `/` `%` < prefix `-`.
 
 - Arithmetic operators are left-associative (`10 - 4 - 3` is `3`). `then`/`else` and `?` are right-associative: `a then x else b then y else z` is `a then x else (b then y else z)`.
 - Comparisons, `is` and `as` included, cannot be chained: `a < b < c` is a syntax error; use parentheses, as in `(x as T?) == nil`.

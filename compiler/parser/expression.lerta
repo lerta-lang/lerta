@@ -101,7 +101,7 @@ export const call_of = (callee: Expression, arguments: Arguments, type_args: Typ
   Call callee, args, named_args, type_args, position: callee.position
 
 const parse_conditional = (tokens: TokenStream): Expression ->
-  const condition = parse_coalesce(tokens)
+  const condition = parse_or(tokens)
   return condition if tokens.peek_continuation() != 'then'
   tokens.next()
   const then_value = parse_conditional(tokens)
@@ -111,15 +111,7 @@ const parse_conditional = (tokens: TokenStream): Expression ->
     without_else then NilLiteral(position) else parse_conditional(tokens)
   Conditional condition, then_value, else_value, position, without_else
 
-# `a ? b ? c` is `a ? (b ? c)`.
-export const parse_coalesce = (tokens: TokenStream): Expression ->
-  const value = parse_or(tokens)
-  return value if tokens.peek_continuation() != '?'
-  tokens.next()
-  const fallback = parse_coalesce(tokens)
-  Coalesce value, fallback, position: value.position
-
-const parse_or = (tokens: TokenStream) ->
+export const parse_or = (tokens: TokenStream): Expression ->
   parse_left_associative tokens, ['or'], -> parse_and(tokens)
 
 const parse_and = (tokens: TokenStream) ->
@@ -142,7 +134,7 @@ const parse_not = (tokens: TokenStream): Expression ->
   UnaryOperation operator: 'not', operand: parse_not(tokens), position: token_position(token)
 
 const parse_comparison = (tokens: TokenStream) ->
-  const left = parse_range(tokens)
+  const left = parse_coalesce(tokens)
   const comparison =
     case
       when tokens.continues_with_word('is') then parse_is(tokens, left)
@@ -177,11 +169,24 @@ const parse_cast = (tokens: TokenStream, value: Expression): Expression ->
   type.optional = not throws
   const cast = Cast(value, type, throws, position: value.position)
   return cast if not falls_back
-  Coalesce value: cast, fallback: parse_coalesce(tokens), position: value.position
+  Coalesce value: cast, fallback: parse_cast_fallback(tokens), position: value.position
+
+# The fallback of `x as T ? y`, which may itself be one, as `a ? b ? c` is `a ? (b ? c)`.
+const parse_cast_fallback = (tokens: TokenStream) ->
+  const fallback = parse_coalesce(tokens)
+  tokens.continues_with_word('as') then parse_cast(tokens, fallback) else fallback
 
 const parse_binary_comparison = (tokens: TokenStream, left: Expression): Expression ->
   const operator = tokens.next().kind.to_string()
-  BinaryOperation operator, left, right: parse_range(tokens), position: left.position
+  BinaryOperation operator, left, right: parse_coalesce(tokens), position: left.position
+
+# `a ? b ? c` is `a ? (b ? c)`.
+const parse_coalesce = (tokens: TokenStream): Expression ->
+  const value = parse_range(tokens)
+  return value if tokens.peek_continuation() != '?'
+  tokens.next()
+  const fallback = parse_coalesce(tokens)
+  Coalesce value, fallback, position: value.position
 
 const parse_range = (tokens: TokenStream): Expression ->
   const start = parse_arithmetic(tokens, 0)
