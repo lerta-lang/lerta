@@ -290,10 +290,6 @@ LertaString *lerta_env(const LertaString *name);
 LertaPromise *lerta_read_file_async(const LertaString *path);
 LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data);
 LertaPromise *lerta_remove_tree_async(const LertaString *path);
-// For the seed's IR until the next refresh: done at once.
-LertaString *lerta_read_file(const LertaString *path);
-void lerta_write_file(const LertaString *path, const LertaString *data);
-void lerta_remove_tree(const LertaString *path);
 bool lerta_is_file(const LertaString *path);
 bool lerta_is_dir(const LertaString *path);
 // The names of the entries, unchecked and in no order (std:io checks and sorts them).

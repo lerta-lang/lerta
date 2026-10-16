@@ -193,8 +193,9 @@ const reallocate = `  uint8_t *buffer = NULL;
 
 const checks: Check[] = [
   {
-    // A Lerta program cannot make a directory, so the tree is made here.
-    name: 'remove_tree removes a directory with everything in it',
+    // A Lerta program cannot make a symbolic link, so the tree, which holds one that must not be
+    // followed, is made here.
+    name: 'lerta_os_remove_tree removes a directory with everything in it, but not what a link names',
     run: () => {
       const tree = join(work_dir, 'tree')
       const linked = join(work_dir, 'linked')
@@ -203,12 +204,9 @@ const checks: Check[] = [
       writeFileSync(join(tree, 'inner/file'), '')
       writeFileSync(join(linked, 'file'), '')
       symlinkSync(linked, join(tree, 'link'))
-      const removal = [
-        `  LertaString *path = lerta_string_from_bytes("${tree}", ${Buffer.byteLength(tree)});`,
-        '  lerta_remove_tree(path);',
-        '  lerta_release(path);',
-      ].join('\n')
-      const { stderr, status } = run_main('remove_tree', removal, false)
+      const removal = `  if (!lerta_os_remove_tree("${tree}")) _exit(1);`
+      const includes = '#include "internal.h"\n'
+      const { stderr, status } = run_main('remove_tree', removal, false, includes)
       const reasons = existsSync(tree) ? [`${tree} is still there`] : []
       const kept = existsSync(join(linked, 'file')) ? [] : ['the link was followed']
       return [

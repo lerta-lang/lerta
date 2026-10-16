@@ -20,24 +20,6 @@ static LertaString *string_of_bytes(uint8_t *bytes, int64_t length) {
   return string;
 }
 
-LertaString *lerta_read_file(const LertaString *path) {
-  char *name = lerta_c_string(path);
-  int64_t length = 0;
-  uint8_t *bytes = name == NULL ? NULL : lerta_os_read_file(name, &length);
-  if (length == LERTA_OUT_OF_MEMORY) lerta_panic("out of memory");
-  LertaString *contents = string_of_bytes(bytes, length);
-  free(name);
-  if (contents == NULL) lerta_raise_with(LERTA_IO_ERROR, &cannot_read, path);
-  return contents;
-}
-
-void lerta_write_file(const LertaString *path, const LertaString *data) {
-  char *name = lerta_c_string(path);
-  bool written = name != NULL && lerta_os_write_file(name, data->bytes, data->length);
-  free(name);
-  if (!written) lerta_raise_with(LERTA_IO_ERROR, &cannot_write, path);
-}
-
 bool lerta_is_file(const LertaString *path) {
   char *name = lerta_c_string(path);
   bool is_file = name != NULL && lerta_os_is_file(name);
@@ -97,13 +79,6 @@ LertaString *lerta_make_temp_dir(void) {
     return NULL;
   }
   return string_from_os(path);
-}
-
-void lerta_remove_tree(const LertaString *path) {
-  char *name = lerta_c_string(path);
-  bool removed = name != NULL && lerta_os_remove_tree(name);
-  free(name);
-  if (!removed) lerta_raise_with(LERTA_IO_ERROR, &cannot_remove, path);
 }
 
 // A read, write or removal on libuv's thread pool (see docs/internals.md#files). It holds the

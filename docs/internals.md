@@ -175,7 +175,6 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 - `read_file`, `write_file` and `remove_tree` run the platform's blocking calls on libuv's thread pool, one task each (`runtime/file.c`), and settle their promise on the loop. The task holds the promise, the path and the data until then; the worker reads into memory from malloc, and the String is made on the loop, as Lerta's allocator is not thread-safe. A worker does not panic either, as a panic touches what only the main thread may: a read that runs out of memory says so, and the loop panics; the platform's small allocations, such as a path converted on Windows, still panic where they are. The data written is a String or a Binary, which nothing changes, so the worker reads it in place.
 - `stdin` reads a chunk at a time on the thread pool (`lerta_stdin_read`, `runtime/io.c`), and its `Reader`, in `std:io`, splits lines and counts of bytes out of the chunk it holds. On POSIX, a closed stdin is opened on `/dev/null` at start, before libuv opens descriptors of its own, one of which would otherwise take descriptor 0 and be read as stdin.
-- The seed's IR calls their synchronous versions, which the runtime keeps until the next refresh.
 
 ## Iter
 
