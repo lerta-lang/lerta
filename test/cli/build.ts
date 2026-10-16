@@ -71,6 +71,22 @@ const output_checks: Check[] = [
       ]
     },
   },
+  {
+    // A path that starts with `-` is given as `./-hi.lerta`, and `-o` takes the next argument as
+    // its value whatever it starts with.
+    name: 'lerta build ./-hi.lerta -o -hi builds a source and an output whose names start with -',
+    run: async () => {
+      const cwd = mkdtempSync(join(work_dir, 'cwd-'))
+      copyFileSync(hello, join(cwd, '-hi.lerta'))
+      const built = await run_command(compiler, ['build', './-hi.lerta', '-o', '-hi'], { cwd })
+      if (built.status !== 0) return expect_success('build', built)
+      const ran = await run_command(join(cwd, '-hi'), [])
+      return [
+        ...expect_left('files left', ['-hi', '-hi.lerta'], readdirSync(cwd)),
+        ...compare_text('stdout', hello_output, ran.stdout),
+      ]
+    },
+  },
   ...overwritten_input_cases.map(({ what, input, args }) => ({
     name: `lerta build rejects an output that is ${what}`,
     run: async () => {

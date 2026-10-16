@@ -18,7 +18,6 @@ The compiler never ends: the instances of the class it makes grow without end. I
 
 ## Commands and tools
 
-- A value or a path that starts with `-` cannot be given, as any such argument is taken as a flag (`is_value` in `compiler/main.lerta`).
 - `lerta build` killed while it compiles the runtime leaves its `.staging-` directory in the cache (`compiler/runtime_cache.lerta`; unconfirmed).
 
 ## Open questions
