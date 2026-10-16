@@ -1,4 +1,4 @@
-# Types arrays and maps: their literals, `Map()`, and indexing (of a Binary too).
+# Types arrays, maps and sets: their literals, `Map()`, `Set()`, and indexing (of a Binary too).
 import
   ArrayLiteral, Call, Expression, Identifier, is_spread, Index, MapEntry, MapLiteral, Position,
   Throw
@@ -11,8 +11,8 @@ import is_contextual from './literals'
 import lookup from './name'
 import Body, ProgramWide from './shared'
 import
-  ArrayType, byte_type, format_type, int_type, is_kind, is_reference_type, MapType, optional_type,
-  OptionalType, Type
+  ArrayType, byte_type, format_type, int_type, is_kind, is_reference_type, is_set, MapType,
+  optional_type, OptionalType, set_of, Type
 from '../types'
 
 # The type of the values of a container, such as 'an Iter', which `at` gives: any type with
@@ -38,9 +38,10 @@ export const check_item_type = (
   type
 
 # A key is any value that `==` compares but an optional one, since a missing key reads as nil.
-export const reject_map_key = (program: ProgramWide, key: Type, at: Position) ->
+# `role` names the key in messages: 'a map key', or 'a set item'.
+export const reject_map_key = (program: ProgramWide, key: Type, at: Position, role = 'a map key') ->
   if key is OptionalType or not is_equatable(program, key, at)
-    const message = 'a map key must be a value that == compares, not optional'
+    const message = "#{role} must be a value that == compares, not optional"
     fail program, at, "#{message}, got #{format_type(key)}"
 
 # The types of a map's keys and values, which `key_at` and `value_at` give (see reject_map_key and
@@ -89,7 +90,13 @@ export const type_of_map = (body: Body, map: MapLiteral, expected: Type?) ->
     expect_type body, entry.value, type.value
   type
 
-const expected_map = (expected: Type?) -> expected as MapType?
+const expected_map = (expected: Type?) ->
+  const map = expected as MapType ? return nil
+  is_set(map) then nil else map
+
+const expected_set = (expected: Type?) ->
+  const map = expected as MapType ? return nil
+  is_set(map) then map
 
 const map_type_of_entry = (body: Body, entry: MapEntry) ->
   const key = type_of(body, entry.key)
@@ -97,25 +104,46 @@ const map_type_of_entry = (body: Body, entry: MapEntry) ->
   check_map_types body.program, key, value, entry.key.position, entry.value.position
   MapType key, value
 
-# `Map()`, unless the name is taken in the program.
-export const is_empty_map = (body: Body, callee: Expression) ->
+# A call of the builtin `Map` or `Set`, unless the name is taken in the program.
+export const is_builtin_call = (body: Body, callee: Expression, name: String) ->
   return false if callee is not Identifier
-  callee.name == 'Map' and lookup(body, 'Map') == nil and not has_function(body.shared, 'Map')
+  callee.name == name and lookup(body, name) == nil and not has_function(body.shared, name)
 
 export const type_of_empty_map = (body: Body, call: Call, expected: Type?) ->
   const program = body.program
   const missing_type = ->
     const example = '`const m: Map<String, Int> = Map()`'
     fail program, call.position, "the type of an empty map must be written, as in #{example}"
+  if const set = expected_set(expected)
+    fail program, call.position, "expected #{format_type(set)}, got a map; write Set()"
   const type = expected_map(expected) ? missing_type()
   if call.args.length > 0 or call.named_args.length > 0
     fail program, call.position, 'Map() takes no arguments'
   type
 
+# `Set()`, of the expected type, or `Set(xs)`, of the items of an array.
+export const type_of_new_set = (body: Body, call: Call, expected: Type?) ->
+  const program = body.program
+  if call.args.length > 1 or call.named_args.length > 0
+    fail program, call.position, 'Set() takes an array of its items, or nothing'
+  const set = expected_set(expected)
+  if call.args.length == 0
+    const example = '`const s: Set<String> = Set()`'
+    const message = "the type of an empty set must be written, as in #{example}"
+    return set ? fail(program, call.position, message)
+  const items = call.args[0]
+  const array_type = set then ArrayType(element: set.key)
+  const type = type_of(body, items, array_type)
+  const not_array = "expected an array, got #{format_type(type)}"
+  const array = type as ArrayType ? fail(program, items.position, not_array)
+  reject_map_key program, array.element, items.position, 'a set item'
+  set_of array.element
+
 # An item of an array or a Binary, or the value of a map's key, which may not be there.
 export const type_of_index = (body: Body, index: Index): Type ->
   const object_type = type_of(body, index.object)
   if object_type is MapType
+    reject_set_index body, index, object_type
     expect_type body, index.index, object_type.key
     return optional_type(object_type.value)
   if object_type is not ArrayType and not is_kind(object_type, 'Binary')
@@ -123,3 +151,8 @@ export const type_of_index = (body: Body, index: Index): Type ->
     fail body.program, index.object.position, message
   expect_type body, index.index, int_type
   object_type is ArrayType then object_type.element else byte_type
+
+const reject_set_index = (body: Body, index: Index, type: MapType) ->
+  return if not is_set(type)
+  const message = "cannot index a value of type #{format_type(type)}; use has"
+  fail body.program, index.object.position, message

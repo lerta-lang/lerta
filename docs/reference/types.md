@@ -115,6 +115,20 @@ print ages['ann'] ? 0
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there. `m.get_or_put(k, make)` gives the value of `k`, setting it to `make()` first if `k` is not there. A `Map<K, Bool>` serves as a set: `m.add(k)` sets `k` to `true`.
 - `m.keys()` is a `K[]` of the keys in the order they were first added (a key removed and added again counts as new). `m.entries()` is an `Iter<(K, V)>` of the keys and their values as [tuples](#tuples), `for (key, value) in m.entries()`, of the entries there when it is made, in that order: one removed before the Iter reaches it is skipped, and one added meanwhile is not given, even under a key that was there before. `m.values()` is an `Iter<V>` of their values likewise.
 
+## Set
+
+```
+const seen: Set<String> = Set()
+seen.add 'a'
+const primes = Set([2, 3, 5])
+print primes.has(4)
+```
+
+- `Set<T>` holds distinct items of type `T`, which take the rules of a [map](#map)'s keys. It is a map without values: it cannot be compared with `==`, nor be a map key or a set item, as a map cannot.
+- `Set()` makes an empty set, whose type must be expected, as `Map()`'s. `Set(xs)` makes one of the items of the array `xs`, the first of equal ones kept, in order.
+- `s.length` is the number of items, `s.has(x)` tells whether `x` is there, `s.add(x)` adds it if it is not, and `s.remove(x)` removes it, if it is there.
+- `s.iter()` is an `Iter<T>` of the items in the order they were first added, of those there when it is made, as `m.entries()` gives a map's entries; `for x in s` goes through it. A set has no indexing, no literal, and none of a map's other methods, nor those of an extend of `Map<K, V>`.
+
 ## Iter
 
 ```

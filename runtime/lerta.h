@@ -37,12 +37,14 @@ typedef struct {
 
 // How arrays and maps hold their items. A plain item is 8 bytes, an Int as is; a byte item is one
 // byte, a Byte or a Bool; a reference is 8 bytes, its address, and is retained while it is held. An
-// interface value is two pointers, its data, a reference, then its itab.
+// interface value is two pointers, its data, a reference, then its itab. LERTA_NO_ITEMS take no
+// bytes, as the values of a set, a map without values, do.
 typedef enum {
   LERTA_PLAIN_ITEMS,
   LERTA_REFERENCE_ITEMS,
   LERTA_INTERFACE_ITEMS,
-  LERTA_BYTE_ITEMS
+  LERTA_BYTE_ITEMS,
+  LERTA_NO_ITEMS
 } LertaItemKind;
 
 // Room for an item of any kind.

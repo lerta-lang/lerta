@@ -217,6 +217,7 @@ A function with [defaults](reference/functions.md) takes every argument. For eac
 
 - A map (`LertaMap` in `runtime/lerta.h`, `runtime/map.c`) keeps its entries in an array, in insertion order: each its key, 8 bytes, a plain item or a reference, its hash, whether it is live, and its value, an item of the map's kind, the whole rounded up to 8 bytes. An open-addressing index, a power of two of slots, each the position of an entry or empty, is probed linearly, with at most half the slots used.
 - Int, Byte and Bool keys are compared as they are, Strings by their bytes, objects by identity, and other values, such as structs and arrays, by a hash and an equality function that the compiler generates for the type; all but Ints, Bytes and Bools are retained while the map holds them. Strings hash by FNV-1a; the other hashes go through the splitmix64 finalizer.
+- A set is a map whose value type is `void` (`MapType` in `compiler/types.lerta`), with values of no bytes (`LERTA_NO_ITEMS`), so that its entries hold a key, its hash and whether it is live; `Set<T>` names it, and a map pattern of an extend or a generic function does not match it.
 - Removing a key marks its entry not live, in place. When the entries are full, they are compacted, unless a cursor of the map is alive (see [Iter](#iter)), and the index is rebuilt with room for twice the entries kept.
 
 ## Strings

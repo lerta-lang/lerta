@@ -2,7 +2,7 @@
 # docs/internals.md#builtins).
 import
   ArrayType, binary_type, bool_type, EnumType, FunctionType, int_type, is_kind, is_one_of_kinds,
-  IterType, MapType, string_type, TupleType, Type, void_type
+  is_set, IterType, MapType, string_type, TupleType, Type, void_type
 from '../types'
 
 const method = (params: Type[], result: Type) -> FunctionType(params, result)
@@ -36,10 +36,18 @@ const iter_method = (item: Type, name: String): Type? ->
 
 const map_method = (map: MapType, name: String): Type? ->
   const { key, value } = map
+  return set_method(key, name) if is_set(map)
   case name
     when 'remove' then method([key], void_type)
     when 'keys' then method([], ArrayType(element: key))
     when 'entries' then method([], IterType(item: TupleType(items: [key, value])))
+    else nil
+
+const set_method = (item: Type, name: String): Type? ->
+  case name
+    when 'has' then method([item], bool_type)
+    when 'add', 'remove' then method([item], void_type)
+    when 'iter' then method([], IterType(item))
     else nil
 
 # The type of a property of a builtin type, read without a call, if it has one.

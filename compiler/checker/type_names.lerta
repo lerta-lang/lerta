@@ -14,13 +14,13 @@ import reject_invalid_instance from './type_validity'
 import
   ArrayType, binary_type, bool_type, byte_type, float_type, format_type, FunctionType, int_type,
   is_kind, IterType, MapType, never_type, ObjectType, optional_type, OptionalType, PromiseType,
-  record_type, RecordField, same_type, string_type, TupleType, Type, union_type, UnionType,
+  record_type, RecordField, same_type, set_of, string_type, TupleType, Type, union_type, UnionType,
   void_type
 from '../types'
 
 # Names of builtin types, which a type of the module cannot take.
 export const is_builtin_type_name = (name: String) ->
-  simple_type(name) != nil or ['Iter', 'Map', 'void', 'never'].contains(name)
+  simple_type(name) != nil or ['Iter', 'Map', 'Set', 'void', 'never'].contains(name)
 
 # Whether a type of the module or a builtin type has the name, which a new type cannot then take.
 export const is_taken_type_name = (shared: Shared, name: String) ->
@@ -189,6 +189,9 @@ const resolve_name = (
       fail_here 'Map takes two type arguments' if args.length != 2
       const key = resolve_key(program, resolver, args[0])
       return MapType(key, value: resolve_map_value(program, resolver, args[1]))
+    when 'Set'
+      fail_here 'Set takes one type argument' if args.length != 1
+      return set_of(resolve_key(program, resolver, args[0], 'a set item'))
     else pass
   const shared = program.shared[resolver.module_index]
   const interface_info = named_interface(program, resolver, name)
@@ -220,9 +223,14 @@ export const instantiate_object = (
   type
 
 # A type parameter's type argument is checked where it is given (see generic_call).
-const resolve_key = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
+const resolve_key = (
+  program: ProgramWide
+  resolver: Resolver
+  type_name: TypeName
+  role = 'a map key'
+) ->
   const type = resolve(program, resolver, type_name)
-  reject_map_key program, type, type_name.position if not is_kind(type, TYPE_PARAMETER)
+  reject_map_key program, type, type_name.position, role if not is_kind(type, TYPE_PARAMETER)
   type
 
 const resolve_map_value = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->

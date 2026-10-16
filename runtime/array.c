@@ -9,13 +9,14 @@ int64_t lerta_item_size(LertaItemKind kind) {
   switch (kind) {
     case LERTA_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
     case LERTA_BYTE_ITEMS: return 1;
+    case LERTA_NO_ITEMS: return 0;
     default: return 8;
   }
 }
 
 // The reference an item holds is its first 8 bytes: a reference, or an interface value's data.
 static void *reference_of(LertaItemKind kind, const void *item) {
-  if (kind == LERTA_PLAIN_ITEMS || kind == LERTA_BYTE_ITEMS) return NULL;
+  if (kind != LERTA_REFERENCE_ITEMS && kind != LERTA_INTERFACE_ITEMS) return NULL;
   void *reference;
   memcpy(&reference, item, sizeof reference);
   return reference;

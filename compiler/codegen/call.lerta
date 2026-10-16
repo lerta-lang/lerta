@@ -22,7 +22,7 @@ import
   constructor_symbol, default_entry_symbol, emit_release, extension_symbol, instance_symbol,
   ir_return_type, ir_type, method_symbol, returns_nothing
 from './lerta_ir'
-import call_map_method, emit_map_new from './map'
+import call_map_method, emit_add_items, emit_map_new from './map'
 import nil_constant from './optional'
 import emit_runtime_call, emit_valueless_call from './runtime_calls'
 import ArrayType, EnumType, kind_of, MapType, ObjectType, Type from '../types'
@@ -43,9 +43,14 @@ export const generate_call = (g: Generator, call: Call) ->
 # function written in Lerta.
 const generate_named_call = (g: Generator, call: Call, name: String) ->
   # A top-level function may take the builtin's name.
-  if name == 'Map' and not g.code.symbols.has(name)
-    const map_type = type_of(g, call)
-    return emit_map_new(g.ir, g.code.program, map_type as MapType!)
+  if (name == 'Map' or name == 'Set') and not g.code.symbols.has(name)
+    const map_type = type_of(g, call) as MapType!
+    const map = emit_map_new(g.ir, g.code.program, map_type)
+    if const items = call.args.first()
+      const array = generate(g, items)
+      emit_add_items g.ir, map, array, map_type
+      emit_release g.ir, array
+    return map
   const callee_type = type_of(g, call.callee)
   return generate_construction(g, call, callee_type) if callee_type is ObjectType
   const exported = g.code.symbols.has(name) then nil else named_export(g.code.shared, name)

@@ -1,17 +1,19 @@
 # Operations on maps in the generated code, through the runtime (runtime/map.c).
 import ProgramWide from '../checker/shared'
 import
-  emit_item_pointer, emit_item_slot, emit_load_item, from_item, item_kind, to_item
+  emit_get, emit_item_pointer, emit_item_slot, emit_length, emit_load_item, from_item, item_kind,
+  to_item
 from './array'
 import item_functions from './equality'
 import emit_float_word from './float'
 import emit_values, HeapField from './heap_object'
 import IrBuilder from './ir_builder'
 import define_kind, emit_iter, IterKind, load_state from './iter_protocol'
-import ir_type, is_nil_by_null from './lerta_ir'
+import emit_release_value, ir_type, is_nil_by_null from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
-  is_identity_type, is_kind, is_one_of_kinds, MapType, optional_type, TupleType, Type, type_key
+  is_identity_type, is_kind, is_one_of_kinds, is_set, MapType, optional_type, TupleType, Type,
+  type_key
 from '../types'
 
 # The values of LertaKeyKind in runtime/lerta.h.
@@ -68,25 +70,61 @@ export const call_map_method = (
       call_void_runtime ir, 'void @lerta_map_remove(ptr, i64)', key
       ''
     when 'keys' then call_runtime(ir, 'ptr @lerta_map_keys(ptr)', "ptr #{map}")
-    when 'entries' then emit_entries_iter(ir, map, type)
+    when 'entries' then emit_cursor_iter(ir, map, type, TupleType(items: [type.key, type.value]))
+    when 'has'
+      call_runtime ir, 'i1 @lerta_map_read(ptr, i64, ptr)', set_item(ir, map, args[0], type)
+    when 'add'
+      call_void_runtime ir, 'void @lerta_map_write(ptr, i64, ptr)', set_item(ir, map, args[0], type)
+      ''
+    when 'iter' then emit_cursor_iter(ir, map, type, type.key)
     else panic("no map method #{name}")
 
-# The entries of a borrowed map, as tuples of a key and a value, which the Iter traverses by a
-# cursor (LertaMapCursor in runtime/lerta.h).
-const emit_entries_iter = (ir: IrBuilder, map: String, type: MapType) ->
-  const item = TupleType(items: [type.key, type.value])
+# The arguments that give the runtime an item of a set and its value, which takes no bytes, so that
+# the slot for it is neither read nor written.
+const set_item = (ir: IrBuilder, set: String, item: String, type: MapType) ->
+  "ptr #{set}, i64 #{key_word(ir, item, type.key)}, ptr #{ir.alloca('i64')}"
+
+# The entries of a borrowed map, which the Iter traverses by a cursor (LertaMapCursor in
+# runtime/lerta.h): as tuples of a key and a value, or the keys alone, as a set gives its items.
+const emit_cursor_iter = (ir: IrBuilder, map: String, type: MapType, item: Type) ->
   const has_next = (body: IrBuilder, kind: IterKind) ->
     const cursor = load_state(body, kind, 0)
     const more = call_runtime(body, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
     body.emit "ret i1 #{more}"
   const next = (body: IrBuilder, kind: IterKind) ->
     const key_slot = body.alloca('i64')
-    const value_slot = emit_item_slot(body, type.value)
+    # A set's value takes no bytes, written nowhere.
+    const value_slot = is_set(type) then key_slot else emit_item_slot(body, type.value)
     const args = "ptr #{load_state(body, kind, 0)}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime body, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
     const key = from_item(body, body.assign("load i64, ptr #{key_slot}"), type.key)
+    return body.emit("ret #{ir_type(item)} #{key}") if is_set(type)
     const entry = emit_values(body, item, [key, emit_load_item(body, value_slot, type.value)])
     body.emit "ret ptr #{entry}"
   const state = [HeapField(ir_type: 'ptr', owned: REFERENCE)]
   const kind = define_kind(ir, "map entries #{type_key(type)}", state, item, has_next, next)
   emit_iter ir, kind, [call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")]
+
+# Adds the items of a borrowed array to the set, in order, as `Set(xs)` does.
+export const emit_add_items = (ir: IrBuilder, set: String, array: String, type: MapType) ->
+  const length = emit_length(ir, array)
+  const preheader_label = ir.current_block
+  const header_label = ir.fresh_label('set.header')
+  const body_label = ir.fresh_label('set.body')
+  const latch_label = ir.fresh_label('set.latch')
+  const exit_label = ir.fresh_label('set.exit')
+  const next = ir.fresh_register()
+  ir.emit "br label %#{header_label}"
+  ir.start_block header_label
+  const current = ir.assign("phi i64 [ 0, %#{preheader_label} ], [ #{next}, %#{latch_label} ]")
+  const in_range = ir.assign("icmp slt i64 #{current}, #{length}")
+  ir.emit "br i1 #{in_range}, label %#{body_label}, label %#{exit_label}"
+  ir.start_block body_label
+  const item = emit_get(ir, array, current, type.key)
+  call_map_method ir, 'add', set, [item], type
+  emit_release_value ir, item, type.key
+  ir.emit "br label %#{latch_label}"
+  ir.start_block latch_label
+  ir.assign_to next, "add nsw i64 #{current}, 1"
+  ir.emit "br label %#{header_label}"
+  ir.start_block exit_label

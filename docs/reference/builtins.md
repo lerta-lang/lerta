@@ -28,6 +28,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `Binary` | `length`, `iter`, `slice`, `occurs_at`, `text` |
 | `T[]` | `length`, `push`, `pop`, `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` and `to_binary` of a `Byte[]` |
 | `Map<K, V>` | `length`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries`, and `add` of a `Map<K, Bool>` |
+| `Set<T>` | `length`, `has`, `add`, `remove`, `iter` |
 | `Iter<T>` | `has_next`, `next`, `iter` |
 | Any [Iterable](#iterable) | those that [Iterable](#iterable) gives |
 | An [enum](types.md#enums) | `to_string`, and the static `E.parse` |

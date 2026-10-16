@@ -1,20 +1,25 @@
 # Checks a type that type arguments make, as the signature of a generic function's instance or the
 # fields of a generic class's, as a written type is checked (see type_names).
 import Position from '../ast'
-import check_item_type, check_map_types, check_value_type from './collection'
+import check_item_type, check_map_types, check_value_type, reject_map_key from './collection'
 import check_part, enter_module, leave_module from './diagnostics'
 import info_of from './object_types'
 import EarlyInstance, ProgramWide from './shared'
 import has_type_parameters, parts_of from './type_patterns'
-import ArrayType, IterType, MapType, ObjectType, Type from '../types'
+import ArrayType, is_set, IterType, MapType, ObjectType, Type from '../types'
 
 # Fails at `at`, where the type is given, if a part of it is invalid.
 export const reject_invalid_type = (program: ProgramWide, type: Type, at: Position): void ->
   check_item_type program, type.element, at, 'an array' if type is ArrayType
   check_value_type program, type.item, at, 'an Iter' if type is IterType
-  check_map_types program, type.key, type.value, at, at if type is MapType
+  reject_invalid_map program, type, at if type is MapType
   reject_invalid_fields program, type, at if type is ObjectType
   reject_invalid_type program, part, at for part in parts_of(type)
+
+# A set's value type, void, is no map value.
+const reject_invalid_map = (program: ProgramWide, type: MapType, at: Position) ->
+  return reject_map_key(program, type.key, at, 'a set item') if is_set(type)
+  check_map_types program, type.key, type.value, at, at
 
 # Checks the field types of an instance of a generic class or struct where the module gives it,
 # once they are known.

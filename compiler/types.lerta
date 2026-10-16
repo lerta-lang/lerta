@@ -35,6 +35,7 @@ export enum TypeKind
 export struct ArrayType
   element: Type
 
+# A map, or a set: a map whose value type is void, which holds no values (see set_of).
 export struct MapType
   key: Type
   value: Type
@@ -173,7 +174,7 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when ArrayType then "#{operand_text(type.element, format)}[]"
     when IterType then "Iter<#{format(type.item)}>"
     when PromiseType then promise_text(type, format)
-    when MapType then "Map<#{format(type.key)}, #{format(type.value)}>"
+    when MapType then map_text(type, format)
     when ObjectType then format_named(type.name, type.module, type.args, format, qualified)
     when InterfaceType then format_named(type.name, type.module, type.args, format, qualified)
     when EnumType then qualified then "#{type.name} (of #{type.module})" else type.name
@@ -192,6 +193,10 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
 const operand_text = (operand: Type, write: (Type) -> String) ->
   const needs_parentheses = operand is FunctionType or operand is UnionType
   needs_parentheses then "(#{write(operand)})" else write(operand)
+
+const map_text = (type: MapType, format: (Type) -> String) ->
+  const key = format(type.key)
+  is_set(type) then "Set<#{key}>" else "Map<#{key}, #{format(type.value)}>"
 
 # A Promise of no value is written without a type argument.
 const promise_text = (type: PromiseType, write: (Type) -> String) ->
@@ -322,6 +327,11 @@ export const other_members = (type: Type, excluded: Type) ->
   return nil if left.length == 0
   const others: Type = left.length == 1 then left[0] else union_type(left)
   type is OptionalType then optional_type(others) else others
+
+# `Set<T>`, a map without values.
+export const set_of = (item: Type) -> MapType(key: item, value: void_type)
+
+export const is_set = (type: Type) -> type is MapType and is_kind(type.value, 'void')
 
 # The type without nil: the inner type of an optional one.
 export const inner_of = (type: Type) -> type is OptionalType then type.inner else type
