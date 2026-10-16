@@ -285,7 +285,7 @@ void lerta_make_dir(const LertaString *path);
 void lerta_rename(const LertaString *from, const LertaString *to);
 
 // Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. Its writes go through
-// a buffer, written out on the event loop (see docs/internals.md#output).
+// a buffer, written out on the event loop (output.c; see docs/internals.md#output).
 LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes);
 LertaPromise *lerta_stream_flush(int64_t fd);
 // For the seed's IR until the next refresh: written at once.

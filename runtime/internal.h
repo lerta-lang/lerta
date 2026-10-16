@@ -62,15 +62,27 @@ LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int6
 // Appends the C string to an array of strings, as a new string.
 void lerta_append_c_string(LertaArray *array, const char *text);
 
-// Output (io.c), buffered for stdout and stderr together (see docs/internals.md#output).
+// Output (output.c), buffered for stdout and stderr together (see docs/internals.md#output).
+enum { STDOUT_FD = 1, STDERR_FD = 2 };
 void lerta_output_init(void);
+// Appends the bytes for STDOUT_FD or STDERR_FD. The promise is rejected at once if the stream has
+// failed, resolved at once if the buffer stays under its limit, and otherwise settled once they
+// are written out.
+LertaPromise *lerta_output_write(int fd, const uint8_t *bytes, int64_t length);
+// A promise settled once all that was written to the buffer so far is written out; rejected if
+// the stream has failed.
+LertaPromise *lerta_output_wait(int fd);
+// Writes at once, after writing out the buffer and settling its promises as lerta_output_flush
+// does, remembering a failure as a write out does.
+void lerta_output_write_now(int fd, const uint8_t *bytes, int64_t length);
 // Writes out what the buffer holds, waiting for a write out in flight, and settles the promises of
 // the writes.
 void lerta_output_flush(void);
 // The same, for a program that ends, which settles no promise: settling one may throw, and the end
-// may come while an exception is pending. A panic does not lock (see io.c). Returns false if any
+// may come while an exception is pending. A panic does not lock (see output.c). Returns false if any
 // output to stdout has failed.
 bool lerta_output_flush_at_end(bool panicking);
+// Writes to stderr at once, for reports, whose failure cannot be reported (io.c).
 void lerta_stderr_write(const uint8_t *bytes, int64_t length);
 
 // Errors (io.c, lerta.c). The message of the pending exception, owned, which the first entry of an
