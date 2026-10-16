@@ -7,7 +7,8 @@ from '../ast'
 import fail from './diagnostics'
 import expect_type, reject_type_arguments, require_type, type_of from './expression'
 import function_type_of, has_function, method_key from './functions'
-import lookup from './name'
+import lookup, record_reference from './name'
+import Constructor from './references'
 import field_type, info_of, is_argument, object_type, ObjectInfo from './object_types'
 import Body from './shared'
 import instantiate_object from './type_names'
@@ -20,7 +21,6 @@ import
 from '../types'
 
 # A call to the name of a class or struct, not shadowed by a local or a function, constructs one.
-# The callee is recorded with the object type, which codegen recognizes.
 export const constructed_type = (body: Body, callee: Expression) ->
   return nil if callee is not Identifier
   const name = callee.name
@@ -37,6 +37,8 @@ export const type_of_construction = (
   const typed = Map<Expression, Type>()
   const type = constructed_instance(body, call, declared, expected, typed)
   body.facts.types[call.callee] = type
+  # The callee is a name (see constructed_type).
+  record_reference body, call.callee as Identifier!, Constructor(type)
   const info = info_of(program, type)
   const given = Set<String>()
   for arg in call.named_args

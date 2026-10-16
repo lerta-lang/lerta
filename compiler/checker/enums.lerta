@@ -5,8 +5,8 @@ import fail, fail_already_defined from './diagnostics'
 import has_function from './functions'
 import builtin_export, has_import, imported_type from './imports'
 import record_member from './member'
-import EnumParse from './member_targets'
-import lookup from './name'
+import EnumParse, EnumValue from './member_targets'
+import lookup, record_reference from './name'
 import Body, module_symbol_name, Shared from './shared'
 import has_declared_type from './interfaces'
 import
@@ -47,7 +47,8 @@ export const type_of_qualified_member = (body: Body, member: Member): Type? ->
   const { name, position } = member.name
   fail body.program, position, "#{type.name}.parse must be called" if name == 'parse'
   const no_member = -> fail(body.program, position, "#{type.name} has no member '#{name}'")
-  name_member body, member, type, name_index(type, name) ? no_member()
+  record_member body, member, EnumValue(index: name_index(type, name) ? no_member())
+  type
 
 # `E.parse`, the member whose to_string gives a String, or nil.
 export const enum_parse_type = (body: Body, member: Member) ->
@@ -70,7 +71,8 @@ export const type_of_elided_member = (body: Body, identifier: Identifier, expect
   if is_name_taken(body, name)
     const message = "'#{name}' names something else here; write #{type.name}.#{name}"
     fail body.program, identifier.position, message
-  name_member body, identifier, type, index
+  record_reference body, identifier, EnumValue(index)
+  type
 
 export const type_of_literal_member = (
   body: Body, literal: StringLiteral, expected: Type?
@@ -82,7 +84,8 @@ export const type_of_literal_member = (
     fail body.program, literal.position, "'#{text}' is not a member of #{type.name}#{hint}"
   const is_literal_of_text = (member: EnumMember) -> not member.is_name and member.text == text
   const index = type.members.find_index(is_literal_of_text) ? no_member()
-  name_member body, literal, type, index
+  body.facts.enum_literals[literal] = index
+  type
 
 const expected_enum = (expected: Type?) ->
   const wanted = expected ? return nil
@@ -103,8 +106,3 @@ const is_name_taken = (body: Body, name: String) ->
 
 const name_index = (type: EnumType, name: String) ->
   type.members.find_index (member) -> member.is_name and member.text == name
-
-# Records the member's place, which codegen gives as the value.
-const name_member = (body: Body, expression: Expression, type: EnumType, index: Int) ->
-  body.facts.enum_values[expression] = index
-  type

@@ -2,8 +2,10 @@
 # methods.
 import Call, Expression, Identifier, Member from '../ast'
 import BuiltinMethod from '../checker/builtins'
-import ExternExport, named_export from '../checker/imports'
-import EnumParse, InterfaceProperty, Method, Property from '../checker/member_targets'
+import EnumParse, EnumValue, InterfaceProperty, Method, Property from '../checker/member_targets'
+import
+  CollectionMaker, Constructor, ExternReference, FunctionReference, ScopedLocal, TopLevelValue
+from '../checker/references'
 import ExtensionSource, InterfaceMethod, MethodSource, OwnMethod from '../checker/methods'
 import info_of, is_argument from '../checker/object_types'
 import call_builtin_method, takes_object from './builtins'
@@ -13,7 +15,7 @@ import emit_parse from './enum'
 import
   generate, holding_all, read_any_field, release_if_reference, type_at_use, type_of
 from './expression'
-import lookup_local from './function'
+import function_reference_symbol from './function'
 import emit_exception_check, holding from './exceptions'
 import Generator from './generator'
 import emit_interface_call from './interface'
@@ -33,34 +35,38 @@ export const generate_call = (g: Generator, call: Call) ->
   if const instance = g.facts.instances[call]
     const symbol = instance_symbol(g.code.program, instance)
     return call_function(g, symbol, instance.entry.type!, call.args, nil)
-  if callee is Identifier
-    return generate_named_call(g, call, callee.name) if lookup_local(g, callee.name) == nil
+  return generate_named_call(g, call, callee) if callee is Identifier
   call_closure g, generate(g, callee), type_of(g, callee), call.args
 
-# A call of a name that no local takes: of the builtin Map, a constructor, a C function or a
-# function written in Lerta.
-const generate_named_call = (g: Generator, call: Call, name: String) ->
-  # A name of the module may take the builtin's name; the checker types the callee of every call
-  # but those of the builtins.
-  if (name == 'Map' or name == 'Set') and not g.facts.types.has(call.callee)
-    const map_type = type_of(g, call) as MapType!
-    const map = emit_map_new(g.ir, g.code.program, map_type)
-    if const items = call.args.first()
-      const array = generate(g, items)
-      emit_add_items g.ir, map, array, map_type
-      emit_release g.ir, array
-    return map
-  const callee_type = type_of(g, call.callee)
-  return generate_construction(g, call, callee_type) if callee_type is ObjectType
-  const exported = g.code.symbols.has(name) then nil else named_export(g.code.shared, name)
-  if exported is ExternExport
-    const emit_call = (operands: String[]) ->
-      emit_runtime_call g.ir, exported.symbol, function_type_of(callee_type), operands
-    const result = with_arguments(g, call.args, emit_call)
-    # A C function of the runtime may throw (see lerta_raise).
-    emit_exception_check g
-    return result
-  call_function g, g.code.symbols[name]!, callee_type, call.args, nil
+# A call of a name: of the builtin Map or Set, a constructor, a C function, a function written in
+# Lerta, or a local or a top-level value that holds a function.
+const generate_named_call = (g: Generator, call: Call, callee: Identifier) ->
+  # The checker types the callee of every call but those of Map and Set.
+  const callee_type = -> type_of(g, callee)
+  const reference = g.facts.references[callee]!
+  case reference
+    when CollectionMaker then generate_new_collection(g, call, reference.type)
+    when Constructor then generate_construction(g, call, reference.type)
+    when ExternReference
+      const emit_call = (operands: String[]) ->
+        emit_runtime_call g.ir, reference.symbol, function_type_of(callee_type()), operands
+      const result = with_arguments(g, call.args, emit_call)
+      # A C function of the runtime may throw (see lerta_raise).
+      emit_exception_check g
+      result
+    when FunctionReference
+      call_function g, function_reference_symbol(g, reference), callee_type(), call.args, nil
+    when ScopedLocal, TopLevelValue
+      call_closure g, generate(g, callee), callee_type(), call.args
+    when EnumValue then panic('an enum value is not called')
+
+const generate_new_collection = (g: Generator, call: Call, map_type: MapType) ->
+  const map = emit_map_new(g.ir, g.code.program, map_type)
+  if const items = call.args.first()
+    const array = generate(g, items)
+    emit_add_items g.ir, map, array, map_type
+    emit_release g.ir, array
+  map
 
 # A member that is called: `E.parse`, a field that holds a function, or a method.
 const generate_member_call = (g: Generator, call: Call, member: Member) ->
@@ -76,6 +82,7 @@ const generate_member_call = (g: Generator, call: Call, member: Member) ->
       call_closure g, closure, field_type, call.args
     when Method then generate_method_call(g, call, member, target.source)
     when InterfaceProperty then panic('a member of an interface that is called is a method')
+    when EnumValue then panic('an enum value is not called')
 
 # The methods of Iters (see takes_object) take the object and the arguments; the other
 # methods borrow them, and the object is released after the call.

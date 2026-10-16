@@ -9,6 +9,8 @@ import
   InterfaceExport, TypeExport, use_import, value_local, ValueExport
 from './imports'
 import object_type from './object_types'
+import ExternReference, FunctionReference, Reference, ScopedLocal, TopLevelValue from './references'
+import Local from './scopes'
 import Body from './shared'
 import abort_if_failed, fail_runs_later, reject_pending from './top_level_values'
 import has_alias from './type_names'
@@ -43,8 +45,10 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
   if const local = lookup(body, name)
     const origin = local.origin ? local
     origin.used = true
+    record_reference body, identifier, local_reference(body, name, local)
     return local.type
   if const function_type = function_type_of(program, shared.index, name, position)
+    record_reference body, identifier, FunctionReference(name, module_index: shared.index)
     return function_type
   fail_only_called body, identifier if generic_function(shared, name) != nil
   if object_type(shared, name) != nil
@@ -96,11 +100,32 @@ const type_of_export = (body: Body, exported: Export, identifier: Identifier, is
     when GenericExport then fail_only_called(body, identifier)
     when ExternExport
       fail_only_called body, identifier if not is_callee
+      record_reference body, identifier, ExternReference(symbol: exported.symbol)
       exported.type
     when FunctionExport
-      function_type_of(body.program, exported.module_index, exported.name, position)!
+      const { module_index } = exported
+      record_reference body, identifier, FunctionReference(module_index, name: exported.name)
+      function_type_of(body.program, module_index, exported.name, position)!
     when ValueExport then exported.type ? panic('the type of an imported value is not known')
 
 const fail_only_called = (body: Body, identifier: Identifier) ->
   const message = "'#{identifier.name}' can only be called so far, not used as a value"
   fail body.program, identifier.position, message
+
+# What the name, which lookup found as the local, refers to: a top-level value of the module or
+# of another one, or a local of a scope, as one that a function literal captures is. A narrowed
+# local refers to what it narrows.
+export const local_reference = (body: Body, name: String, local: Local): Reference ->
+  return ScopedLocal(name) if local.captured
+  const shared = body.shared
+  const origin = local.origin ? local
+  if body.sees_top_level and origin == shared.top_level.locals[name]
+    return TopLevelValue(name, module_index: shared.index)
+  const imported = shared.imports.names[name]
+  if imported and imported.local == origin
+    const exported = imported_export(body.program, imported) as ValueExport!
+    return TopLevelValue(module_index: exported.module_index, name: exported.name)
+  ScopedLocal name
+
+export const record_reference = (body: Body, identifier: Identifier, reference: Reference) ->
+  body.facts.references[identifier] = reference

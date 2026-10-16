@@ -16,13 +16,16 @@ import generate_case, generate_conditional, generate_if_value from './case'
 import emit_function_closure from './closure'
 import generate_array, generate_index, generate_map from './collection'
 import generate_comprehension from './control_flow'
-import generate_closure, generate_jump, lookup_local from './function'
+import function_reference_symbol, generate_closure, generate_jump, local_of from './function'
 import CodegenLocal, Generator, SlotLocal, ValueLocal from './generator'
 import
   emit_field_pointer, emit_member_dispatch, emit_record, emit_record_field, emit_type_test,
   emit_value_at, emit_values, emit_weak_object, field_named, record_field_index
 from './heap_object'
-import EnumParse, InterfaceProperty, Method, Property, PropertyKind from '../checker/member_targets'
+import
+  EnumParse, EnumValue, InterfaceProperty, Method, Property, PropertyKind
+from '../checker/member_targets'
+import FunctionReference, ScopedLocal, TopLevelValue from '../checker/references'
 import info_of from '../checker/object_types'
 import
   emit_throw_error, generate_try, holding, pop_temporaries, push_temporary, while_holding
@@ -101,12 +104,12 @@ const generate_node = (g: Generator, expression: Expression): String ->
     when IsTest then generate_is_test(g, expression)
     when Cast then generate_cast(g, expression)
     when This
-      const object = lookup_local(g, '@')!
+      const object = g.locals.lookup('@')!
       read_local g, object, object.type
     when Unwrap then generate_unwrap(g, expression)
     when Coalesce then generate_coalesce(g, expression)
     when StringLiteral
-      return "#{index}" if const index = g.facts.enum_values[expression]
+      return "#{index}" if const index = g.facts.enum_literals[expression]
       return "#{expression.value.binary[0]}" if is_kind(type_of(g, expression), 'Byte')
       string_constant g.ir, expression.value
     when Interpolation then generate_interpolation(g, expression)
@@ -215,18 +218,19 @@ const weak_object = (g: Generator, box: String) ->
 
 # `E.MEMBER` is a member of an enum.
 const generate_property = (g: Generator, member: Member) ->
-  return "#{index}" if const index = g.facts.enum_values[member]
+  const target = g.facts.members[member]!
+  return "#{target.index}" if target is EnumValue
   const object = generate(g, member.object)
   const object_type = type_of(g, member.object)
   const name = member.name.name
   const type = type_of(g, member)
-  const target = g.facts.members[member]!
   const value =
     case target
       when Property then read_property(g, object, object_type, target.kind, name, type)
       when InterfaceProperty
         emit_interface_read g, object, object_type as InterfaceType!, target.index, type
       when Method, EnumParse then panic('a method must be called')
+      when EnumValue then panic('an enum value is read before its object')
   # A field narrowed where it is read (see checker narrowable FieldPath).
   const field_type = declared_field_type(g, object_type, name) ? return value
   const is_narrowed = field_type is OptionalType and type is not OptionalType
@@ -288,24 +292,25 @@ export const release_if_reference = (g: Generator, expression: Expression, opera
 # A local's value, a member of an enum, or a top-level function's closure (see
 # emit_function_closure).
 const generate_identifier = (g: Generator, identifier: Identifier) ->
-  return "#{index}" if const index = g.facts.enum_values[identifier]
-  const name = identifier.name
-  const local = lookup_local(g, name)
-  if local == nil
-    if const symbol = g.code.symbols[name]
-      return emit_function_closure(g.ir, symbol, type_of(g, identifier))
-  # The checker allows no other name as a value: a C function can only be called.
-  const found = local ? panic("no value for '#{name}'")
-  read_local g, found, type_of(g, identifier)
+  const reference = g.facts.references[identifier]!
+  const type = type_of(g, identifier)
+  case reference
+    when EnumValue then "#{reference.index}"
+    when FunctionReference
+      emit_function_closure g.ir, function_reference_symbol(g, reference), type
+    when ScopedLocal, TopLevelValue then read_local(g, local_of(g, identifier), type)
+    # A C function can only be called, and generate_named_call generates the callee of a
+    # construction or of Map or Set.
+    else panic("no value for '#{identifier.name}'")
 
 # The value of the expression and whether it is owned: borrowed when it is a local whose scope
 # keeps the value for as long as its consumer uses it, so that using an array in a loop retains and
 # releases nothing (see docs/internals.md#memory-management); owned otherwise.
 export const generate_borrowed = (g: Generator, expression: Expression) ->
-  if expression is Identifier
-    if const local = g.locals.lookup(expression.name)
-      const can_go = local.weak or (local is SlotLocal and local.is_var)
-      return (read_borrowed(g, local, type_of(g, expression)), false) if not can_go
+  if expression is Identifier and g.facts.references[expression] is ScopedLocal
+    const local = local_of(g, expression)
+    const can_go = local.weak or (local is SlotLocal and local.is_var)
+    return (read_borrowed(g, local, type_of(g, expression)), false) if not can_go
   (generate(g, expression), true)
 
 # The slot's pointer, once a top-level value is known to be initialized.
@@ -339,6 +344,6 @@ export const held_value = (g: Generator, local: CodegenLocal) ->
 # The Error becomes the exception (see exceptions).
 const generate_throw = (g: Generator, throw_expression: Throw) ->
   const message = throw_expression.message
-  const local = message is Identifier then lookup_local(g, message.name)
+  const local = message is Identifier then local_of(g, message)
   const rethrows = local is SlotLocal and local.caught
   emit_throw_error g, generate(g, message), rethrows

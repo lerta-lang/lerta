@@ -2,13 +2,14 @@
 # others may read, and the state of the checking of one body. Objects refer to the modules, and to
 # what each module declares, by index, so that no two of them refer to each other.
 import
-  Call, Exportable, Expression, FunctionLiteral, Identifier, Member, Node, Position
+  Call, Exportable, Expression, FunctionLiteral, Identifier, Member, Node, Position, StringLiteral
 from '../ast'
 import ExtensionMethod, Extensions from './extensions'
 import Functions from './functions'
 import GenericFunction, Instance from './generics'
 import Imports from './imports'
-import MemberTarget from './member_targets'
+import EnumValue, MemberTarget from './member_targets'
+import Reference from './references'
 import Itab from './interface_values'
 import InterfaceInfo from './interfaces'
 import Module from '../loader'
@@ -22,6 +23,8 @@ import EnumType, InterfaceType, ObjectType, Type from '../types'
 # and the types they have there, which may be narrowed.
 export struct Capture
   name: String
+  # What the name refers to around the literal, where the closure is made.
+  source: Reference
   type: Type
   is_var: Bool
   # A weak local is captured as the box of its object (see captured_value in codegen).
@@ -51,10 +54,12 @@ export class NodeFacts
   types: Map<Node, Type> = Map()
   # The type an expression is converted to where it is used, such as an Int passed as an Int?.
   conversions: Map<Node, Type> = Map()
-  # The members of enums that expressions name, `E.MEMBER` or `MEMBER`, as their places in them.
-  enum_values: Map<Expression, Int> = Map()
+  # What the names that are read, called or assigned refer to.
+  references: Map<Identifier, Reference> = Map()
   # What the members that are read or called refer to.
   members: Map<Member, MemberTarget> = Map()
+  # The members of enums that string literals name, `'text'`, as their places in them.
+  enum_literals: Map<StringLiteral, Int> = Map()
   captures: Map<FunctionLiteral, Capture[]> = Map()
   # The instances of generic functions that calls call.
   instances: Map<Call, Instance> = Map()
@@ -68,6 +73,14 @@ export class NodeFacts
   # The values that each function gives as its results, which tell `lerta fmt` whether its return
   # type can be inferred (see inferable).
   results: Map<FunctionLiteral, Expression[]> = Map()
+
+# The place of the member of an enum that the expression names, if it names one (see EnumValue).
+export const enum_value_of = (facts: NodeFacts, expression: Expression) ->
+  case expression
+    when Identifier then (facts.references[expression] as EnumValue?)?.index
+    when Member then (facts.members[expression] as EnumValue?)?.index
+    when StringLiteral then facts.enum_literals[expression]
+    else nil
 
 # What is found for one module, and what its checkers share.
 export class Shared

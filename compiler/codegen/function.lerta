@@ -1,13 +1,14 @@
 # Generates a function of a program: its blocks, declarations, returns and constructors;
 # control_flow generates control flow, and assignment assignments.
 import
-  Assignment, Declaration, EnumDeclaration, Expression, Extend, Extern, For, FunctionLiteral, If,
-  Import, InterfaceDeclaration, Jump, Pass, Return, Statement, TypeAlias, TypeDeclaration, While
+  Assignment, Declaration, EnumDeclaration, Expression, Extend, Extern, For, FunctionLiteral,
+  Identifier, If, Import, InterfaceDeclaration, Jump, Pass, Return, Statement, TypeAlias,
+  TypeDeclaration, While
 from '../ast'
-import imported_export, ValueExport from '../checker/imports'
+import FunctionReference, Reference, ScopedLocal, TopLevelValue from '../checker/references'
 import required_params from '../checker/functions'
 import FieldInfo, is_argument, ObjectInfo from '../checker/object_types'
-import Capture from '../checker/shared'
+import Capture, module_symbol_name from '../checker/shared'
 import all_but_last from '../arrays'
 import generate_assignment from './assignment'
 import emit_await_owned, emit_loop_run, generate_awaiting_function from './awaiting'
@@ -32,28 +33,36 @@ from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
 import
   constructor_symbol, default_entry_symbol, emit_release, emit_release_stored, emit_retain,
-  emit_retain_value, ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol
+  emit_retain_value, function_symbol, ir_return_type, ir_type, ownership, returns_nothing,
+  special_method_symbol
 from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import emit_mark_initialized, emit_release_globals from './top_level'
 import generate_yielding_function from './yielding'
 import is_kind, iterable_item, PromiseType, Type, void_type from '../types'
 
-# The local of the name: in the scopes or, outside them, a top-level value of the module or an
-# imported value. A function checks either to be initialized, since it may run while the values are
-# released at exit; top-level code checks only an imported value of its cycle.
-export const lookup_local = (g: Generator, name: String) ->
-  return local if const local = g.locals.lookup(name)
+# The local that the name refers to (see checker references): one of the scopes, or a top-level
+# value. A function checks the top-level value to be initialized, since it may run while the values
+# are released at exit; top-level code checks only an imported value of its cycle.
+export const local_of = (g: Generator, identifier: Identifier) ->
+  referred_local g, g.facts.references[identifier]!, identifier.name
+
+const referred_local = (g: Generator, reference: Reference, name: String) ->
   const code = g.code
-  if not g.top_level_code
-    return top_level_slot(own, true) if const own = code.globals[code.module.index][name]
-  const imported = code.shared.imports.names[name] ? return nil
-  const exported = imported_export(code.program, imported)
-  return nil if exported is not ValueExport
-  const global = code.globals[exported.module_index][exported.name]!
-  const is_in_cycle = code.module.cycle.contains(exported.module_index)
-  return top_level_slot(global, true) if is_in_cycle or not g.top_level_code
-  SlotLocal pointer: global.pointer, type: global.type, is_var: global.is_var
+  case reference
+    when ScopedLocal then g.locals.lookup(reference.name)!
+    when TopLevelValue
+      const { module_index } = reference
+      const global = code.globals[module_index][reference.name]!
+      const is_in_cycle = code.module.cycle.contains(module_index)
+      return top_level_slot(global, true) if is_in_cycle or not g.top_level_code
+      SlotLocal pointer: global.pointer, type: global.type, is_var: global.is_var
+    # A function, a C function, a constructor, Map, Set or an enum value is read by
+    # generate_identifier or called by generate_named_call.
+    else panic("'#{name}' is no value")
+
+export const function_reference_symbol = (g: Generator, reference: FunctionReference) ->
+  function_symbol module_symbol_name(g.code.program, reference.module_index), reference.name
 
 const top_level_slot = (global: TopLevelGlobal, is_checked: Bool) ->
   const top_level = TopLevelSlot(global, is_checked)
@@ -126,7 +135,7 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
   const slots: HeapField[] = []
   const operands: String[] = []
   for capture in captures
-    const local = lookup_local(g, capture.name)!
+    const local = referred_local(g, capture.source, capture.name)
     if not capture.is_var
       slots.push value_field(capture.type)
       operands.push captured_value(g, local, capture)
