@@ -42,6 +42,8 @@ const greeting = name then "hello #{name}"
 - The condition and its narrowing are those of `if`: in `name then ... else ...` above, `name` is a `String` in the `then` value.
 - The values follow the rules of `case` arms (see below).
 - Why `then` without `else` gives nil and an `if` without one gives no value: `then` is always a value, while an `if` is a statement too, as the last statement of a block, where a missing `else` giving nil would change what a block ending with an `if` gives.
+- Why `?`, not `else` without `then`, gives the fallback of a nil (`x else y`, mirroring `c then a`): one `else` would then take two precedences, the weakest for `then`/`else` and a tighter one for `x ? 0 > 18` and `n ? 0 + 1`, and in `c then a else b else d` the last `else` could continue the `then` or take the fallback, which differ where `c` holds and `a` is nil. Only a guard, `ages[name] else return -1`, would read better.
+- Why `c then a else b`, not `if c then a else b` on one line: `if c then a` would have to give nil, while an `if` without `else` gives no value, or require `else` and lose `name then greet(name)`; and `if c then x` as a statement would duplicate the postfix `x if c`. `a if c else b`, as in Python, cannot tell `x = a if c` from a postfix `if`.
 
 ## for and ranges
 
