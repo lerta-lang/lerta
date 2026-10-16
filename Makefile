@@ -55,8 +55,8 @@ build/host_llvm.sed: FORCE
 
 FORCE:
 
-build/seed.ll: seed/lerta.ll build/host_llvm.sed
-	sed -f build/host_llvm.sed seed/lerta.ll > $@
+build/seed.ll: seed/minilerta.ll build/host_llvm.sed
+	sed -f build/host_llvm.sed seed/minilerta.ll > $@
 
 # What minilerta prints for the source $(1), into the IR file $(2).
 define minilerta_ir
@@ -155,8 +155,8 @@ seed: test-bootstrap
 	mkdir -p build/seed/build
 	cp -R compiler build/seed/compiler
 	build/embed --seed build/seed/build/embedded.lerta $(EMBEDDED)
-	bin/lerta dump-llvm build/seed/$(MINILERTA_MAIN) > build/seed/lerta.ll
-	cp build/seed/lerta.ll seed/lerta.ll
+	bin/lerta dump-llvm build/seed/$(MINILERTA_MAIN) > build/seed/minilerta.ll
+	cp build/seed/minilerta.ll seed/minilerta.ll
 endif
 
 ifdef TARGET
