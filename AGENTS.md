@@ -13,7 +13,7 @@ Read the documents before changing behavior. Ask before implementing a feature t
    - Show the reviewer only the code and the tests. Do not pass the intent, the background or your design decisions.
    - Settle each finding with the same reviewer: fix it and have the reviewer check the fix, or argue against it and continue until you agree. Repeat until the only findings left are tests to add or docs and comments to fix; fix those, and that reviewer is done.
    - Then start a fresh reviewer. Pass it the findings you argued against and agreed to leave with earlier reviewers, each with the reason; pass nothing else from the earlier reviews.
-   - Stop when a fresh reviewer's first review finds nothing but tests to add or docs and comments to fix; fix those and stop. If its first review finds anything else, settle all its findings as above, then start another fresh reviewer. The first reviewer cannot end the review, even with no findings.
+   - Stop when none of a fresh reviewer's findings, from its first review to its last, is more than a test to add or a doc or comment to fix; fix those and stop. If any is, settle all its findings as above, then start another fresh reviewer. The first reviewer cannot end the review, even with no findings.
 4. **Update the docs,** as [Changing the language](README.md#changing-the-language) describes.
 5. **Commit only with approval.** Show the change to the user and get approval before committing.
 6. **Consider refactoring.** Look at the functions, classes, files and directories the change touched. If any has grown long through repeated additions, consider whether it should be split or restructured. If it should, propose the refactoring to the user as the next task; do not mix it into the current change.
