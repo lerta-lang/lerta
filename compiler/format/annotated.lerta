@@ -4,9 +4,9 @@ import
   ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
   Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern,
   For, FunctionLiteral, Identifier, If, Import, Index, InterfaceDeclaration, Interpolation, IsTest,
-  MapLiteral, Member, MemberDeclaration, Parameter, Pass, Position, Range, RecordLiteral, Return,
-  Statement, Throw, Try, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration, UnaryOperation,
-  Unwrap, While, Yield
+  MapLiteral, Member, MemberDeclaration, NamedType, Parameter, Pass, Position, Range, RecordLiteral,
+  Return, Statement, Throw, Try, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration,
+  UnaryOperation, Unwrap, While, Yield
 from '../ast'
 
 # A written type, named by `key` (see annotation_key), which `remove` takes out of the syntax tree
@@ -184,15 +184,32 @@ const parameter_annotation = (literal: FunctionLiteral, i: Int) ->
     parameter: param.name
   )
 
+# The type of `Map()` or `Set()` moves to its type arguments: `const s = Set<String>()`.
 const variable_annotation = (declaration: Declaration) ->
   const type = declaration.type
+  const collection = collection_call(declaration)
+  const remove = ->
+    declaration.type = nil
+    collection.call.type_args = collection.args if collection
+  const restore = ->
+    declaration.type = type
+    collection.call.type_args = [] if collection
   Annotation(
+    remove
+    restore
     key: annotation_key('variable', declaration.name.position)
-    remove: -> declaration.type = nil
-    restore: -> declaration.type = type
     name: declaration.name
     value: declaration.value
   )
+
+# A call of Map or Set without type arguments, with those of the type that the declaration writes.
+const collection_call = (declaration: Declaration) ->
+  const type = declaration.type as NamedType ? return nil
+  const call = declaration.value as Call ? return nil
+  const callee = call.callee as Identifier ? return nil
+  const is_collection = type.name == 'Map' or type.name == 'Set'
+  const matches = is_collection and callee.name == type.name and not type.optional
+  matches and call.type_args.length == 0 then { call, args: type.args }
 
 const field_annotation = (members: MemberDeclaration[], i: Int) ->
   const member = members[i]

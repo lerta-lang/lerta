@@ -1,7 +1,7 @@
 # Types arrays, maps and sets: their literals, `Map()`, `Set()`, and indexing (of a Binary too).
 import
-  ArrayLiteral, Call, Expression, Identifier, is_spread, Index, MapEntry, MapLiteral, Position,
-  Throw
+  ArrayLiteral, Call, Expression, Identifier, is_spread, Index, MapEntry, MapLiteral, NamedType,
+  Position, Throw
 from '../ast'
 import fail from './diagnostics'
 import is_equatable from './equality'
@@ -10,8 +10,9 @@ import has_function from './functions'
 import is_contextual from './literals'
 import lookup from './name'
 import Body, ProgramWide from './shared'
+import resolve from './type_names'
 import
-  ArrayType, byte_type, format_type, int_type, is_kind, is_reference_type, is_set, MapType,
+  ArrayType, byte_type, format_type, inner_of, int_type, is_kind, is_reference_type, is_set, MapType,
   optional_type, OptionalType, set_of, Type
 from '../types'
 
@@ -91,11 +92,13 @@ export const type_of_map = (body: Body, map: MapLiteral, expected: Type?) ->
   type
 
 const expected_map = (expected: Type?) ->
-  const map = expected as MapType ? return nil
+  const type = expected ? return nil
+  const map = inner_of(type) as MapType ? return nil
   is_set(map) then nil else map
 
 const expected_set = (expected: Type?) ->
-  const map = expected as MapType ? return nil
+  const type = expected ? return nil
+  const map = inner_of(type) as MapType ? return nil
   is_set(map) then map
 
 const map_type_of_entry = (body: Body, entry: MapEntry) ->
@@ -111,12 +114,13 @@ export const is_builtin_call = (body: Body, callee: Expression, name: String) ->
 
 export const type_of_empty_map = (body: Body, call: Call, expected: Type?) ->
   const program = body.program
+  const target = written_or_expected(body, call, 'Map', expected)
   const missing_type = ->
-    const example = '`const m: Map<String, Int> = Map()`'
+    const example = '`Map<String, Int>()`'
     fail program, call.position, "the type of an empty map must be written, as in #{example}"
-  if const set = expected_set(expected)
+  if const set = expected_set(target)
     fail program, call.position, "expected #{format_type(set)}, got a map; write Set()"
-  const type = expected_map(expected) ? missing_type()
+  const type = expected_map(target) ? missing_type()
   if call.args.length > 0 or call.named_args.length > 0
     fail program, call.position, 'Map() takes no arguments'
   type
@@ -126,9 +130,9 @@ export const type_of_new_set = (body: Body, call: Call, expected: Type?) ->
   const program = body.program
   if call.args.length > 1 or call.named_args.length > 0
     fail program, call.position, 'Set() takes an array of its items, or nothing'
-  const set = expected_set(expected)
+  const set = expected_set(written_or_expected(body, call, 'Set', expected))
   if call.args.length == 0
-    const example = '`const s: Set<String> = Set()`'
+    const example = '`Set<String>()`'
     const message = "the type of an empty set must be written, as in #{example}"
     return set ? fail(program, call.position, message)
   const items = call.args[0]
@@ -138,6 +142,12 @@ export const type_of_new_set = (body: Body, call: Call, expected: Type?) ->
   const array = type as ArrayType ? fail(program, items.position, not_array)
   reject_map_key program, array.element, items.position, 'a set item'
   set_of array.element
+
+# The type that `Map<K, V>()` or `Set<T>()` writes, or else the one expected.
+const written_or_expected = (body: Body, call: Call, name: String, expected: Type?) ->
+  return expected if call.type_args.length == 0
+  const written = NamedType(name, args: call.type_args, position: call.callee.position)
+  resolve body.program, body.resolver, written
 
 # An item of an array or a Binary, or the value of a map's key, which may not be there.
 export const type_of_index = (body: Body, index: Index): Type ->

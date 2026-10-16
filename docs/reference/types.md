@@ -104,13 +104,13 @@ print xs[0] + xs.length
 
 ```
 const ages = { 'ann': 31, 'bob': 27 }
-const squares: Map<Int, Int> = Map()
+const squares = Map<Int, Int>()
 squares[3] = 9
 print ages['ann'] ? 0
 ```
 
 - `Map<K, V>` maps keys of type `K`, any type of values that `==` compares but an optional one (classes by identity, and structs, anonymous structs, tuples and arrays by their contents: see [equality](objects.md#classes-and-structs)), to values of type `V`, which can be any type with values except an optional one. Like arrays, maps are mutable and shared.
-- `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map()`, which needs an expected type.
+- `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise from the first entry; of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map<K, V>()`, or `Map()` where a map type is expected.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply, since the key may be missing.
 - `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there. `m.get_or_put(k, make)` gives the value of `k`, setting it to `make()` first if `k` is not there.
 - `m.keys()` is a `K[]` of the keys in the order they were first added (a key removed and added again counts as new). `m.entries()` is an `Iter<(K, V)>` of the keys and their values as [tuples](#tuples), `for (key, value) in m.entries()`, of the entries there when it is made, in that order: one removed before the Iter reaches it is skipped, and one added meanwhile is not given, even under a key that was there before. `m.values()` is an `Iter<V>` of their values likewise.
@@ -118,14 +118,14 @@ print ages['ann'] ? 0
 ## Set
 
 ```
-const seen: Set<String> = Set()
+const seen = Set<String>()
 seen.add 'a'
 const primes = Set([2, 3, 5])
 print primes.has(4)
 ```
 
 - `Set<T>` holds distinct items of type `T`, which take the rules of a [map](#map)'s keys. It is a map without values: it cannot be compared with `==`, nor be a map key or a set item, as a map cannot.
-- `Set()` makes an empty set, whose type must be expected, as `Map()`'s. `Set(xs)` makes one of the items of the array `xs`, the first of equal ones kept, in order.
+- `Set<T>()` makes an empty set, or `Set()` where a set type is expected. `Set(xs)` or `Set<T>(xs)` makes one of the items of the array `xs`, the first of equal ones kept, in order.
 - `s.length` is the number of items, `s.has(x)` tells whether `x` is there, `s.add(x)` adds it if it is not, and `s.remove(x)` removes it, if it is there.
 - `s.iter()` is an `Iter<T>` of the items in the order they were first added, of those there when it is made, as `m.entries()` gives a map's entries; `for x in s` goes through it. A set has no indexing, no literal, and none of a map's other methods, nor those of an extend of `Map<K, V>`.
 

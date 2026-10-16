@@ -100,7 +100,9 @@ const has_own_type = (value: Expression, facts: NodeFacts): Bool ->
     when Interpolation, FloatLiteral, BooleanLiteral, NilLiteral, This, IsTest, Cast, TupleItem, Index
       true
     when Range, Await, Unwrap, Coalesce then true
-    when Call then facts.instances[value] == nil and not has_type_arguments(facts.types[value])
+    when Call
+      const own_type = facts.instances[value] == nil and not has_type_arguments(facts.types[value])
+      own_type or is_collection_call(value)
     when UnaryOperation then own(value.operand)
     when BinaryOperation then own(value.left) and own(value.right)
     when Conditional then unifies_to([value.then_value, value.else_value], type, facts)
@@ -151,3 +153,10 @@ const has_type_arguments = (type: Type?) ->
     when MapType then true
     when ObjectType then type.args.length > 0
     else false
+
+# `Map()` or `Set()`, whose type arguments give its type, or take those of its annotation (see
+# annotated). A local that takes the name passes too: this only picks the annotations to check
+# without, and that checking keeps them (see removable_annotations).
+const is_collection_call = (call: Call) ->
+  const callee = call.callee as Identifier ? return false
+  callee.name == 'Map' or callee.name == 'Set'
