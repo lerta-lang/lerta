@@ -6,15 +6,12 @@ Each entry says what goes wrong, a minimal program that shows it, and where the 
 
 ## Compiler
 
-### Two generic classes that hold larger instances of each other hang the compiler
+### A field whose type its initializer gives can hold a larger instance, which hangs the compiler
 
 ```
 class A<T>
-  b: B<A<T>>? = nil
-class B<T>
-  a: A<B<T>>? = nil
-const x: A<Int>? = nil
+  b = Map<String, A<T[]>>()
+print A<Int>().b.length
 ```
 
-The compiler never ends: the instances of the classes it makes grow without end. A class that holds a larger instance of itself is rejected where it is written (`reject_larger_self` in `compiler/checker/object_types.lerta`), but that looks at one declaration only. Checking each generic declaration once for what its type parameters must be, across the declarations it names, rather than each instance's fields, would cover this, and would also give the check of interface instances (`compiler/checker/type_validity.lerta`) the errors it skips for an instance nested in one of the same interface.
-
+The compiler never ends: each instance's initializer makes a larger one. The instances that would grow without end are rejected by the written types of the members (`compiler/checker/growing_instances.lerta`), but a field given by its initializer alone has none, and its type is found as each instance is checked. Taking the edges from the types of the generic declaration's initializers, found once, would cover it.

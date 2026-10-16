@@ -25,16 +25,20 @@ const is_core_type_name = (name: String) ->
 
 # The parts of the written type that name the type of the name, wherever they are in it.
 export const named_in = (type_name: TypeName?, name: String) ->
+  [named for named in named_types_in(type_name) when named.name == name]
+
+# The names in the written type, in all its parts, outer ones first.
+export const named_types_in = (type_name: TypeName?) ->
   const found: NamedType[] = []
-  collect_named type_name, name, found
+  collect_named type_name, found
   found
 
-const collect_named = (type_name: TypeName?, name: String, found: NamedType[]): void ->
+const collect_named = (type_name: TypeName?, found: NamedType[]): void ->
   const written = type_name ? return
-  const collect = (part: TypeName) -> collect_named(part, name, found)
+  const collect = (part: TypeName) -> collect_named(part, found)
   case written
     when NamedType
-      found.push written if written.name == name
+      found.push written
       collect arg for arg in written.args
     when FunctionTypeName
       collect param for param in written.params
@@ -71,7 +75,7 @@ export const with_type_parameters = (resolver: Resolver, type_parameters: Map<St
 
 # A class, struct, enum or imported type of the name, or else a type that std:builtins exports
 # unless an alias takes the name, marking its import as used.
-const named_type = (shared: Shared, name: String): Type? ->
+export const named_type = (shared: Shared, name: String): Type? ->
   return info.type if const info = shared.objects[name]
   return own if const own = shared.enums[name]
   return declared.type if const declared = shared.interfaces[name]

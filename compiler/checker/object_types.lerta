@@ -2,8 +2,8 @@
 # an initializer alone are found on demand, and so are the instances of a generic class or struct
 # (see info_of).
 import
-  Expression, FunctionLiteral, Identifier, MemberDeclaration, NamedType, Position, TypeDeclaration,
-  TypeName, TypeParameter
+  Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration, TypeName,
+  TypeParameter
 from '../ast'
 import check_object, check_satisfies from './bodies'
 import abort_part, check_part, fail, fail_already_defined from './diagnostics'
@@ -14,7 +14,7 @@ from './generics'
 import builtin_type, imported_type from './imports'
 import bound_interface, has_declared_type, InterfaceMember, members_for from './interfaces'
 import module_symbol_name, NodeFacts, ProgramWide, Shared from './shared'
-import module_resolver, named_in, resolve, Resolver, with_type_parameters from './type_names'
+import module_resolver, resolve, Resolver, with_type_parameters from './type_names'
 import has_type_parameters, placeholders, substitute from './type_patterns'
 import
   format_type, inner_of, InterfaceType, ObjectType, OptionalType, same_type, Type
@@ -107,7 +107,6 @@ export const add_members = (shared: Shared) ->
         const message = "'#{name}' is already a member of #{info.declaration.name.name}"
         fail program, position, message
       seen.add name
-      reject_larger_self program, info.declaration, member
       if const literal = method_literal(member)
         add_method shared, info, member, literal
       else
@@ -115,38 +114,11 @@ export const add_members = (shared: Shared) ->
     add_interface_fields shared, info, seen if info.declaration.satisfies != nil
 
 # The types written in a member: a field's, or a method's parameters' and result's.
-const written_types = (member: MemberDeclaration) ->
+export const written_types = (member: MemberDeclaration) ->
   const literal = method_literal(member) ? return [member.type]
   const types: TypeName?[] = [param.type for param in literal.params]
   types.push literal.return_type
   types
-
-# An instance of the generic class or struct itself in the written type of a member takes each
-# type argument as a type parameter of it alone, as `next: Node<T>?` or `swapped: Pair<B, A>`, or
-# without one, as `Node<Int>`: one that holds a type parameter in a larger type, as
-# `Node<Node<T>>` or `Node<T[]>` does, would make instances that grow without end, as each
-# instance's members are checked. A method's own type parameters, which it has an instance for
-# each of, do not count, nor do the class's that they would shadow, which is reported apart.
-const reject_larger_self = (
-  program: ProgramWide, declaration: TypeDeclaration, member: MemberDeclaration
-) ->
-  const method_params = [param.name.name for param in method_literal(member)?.type_params ? []]
-  const own = [
-    param.name.name
-    for param in declaration.type_params
-    when not method_params.contains(param.name.name)
-  ]
-  return if own.length == 0
-  const name = declaration.name.name
-  const holds_own = (arg: TypeName) -> own.any((param) -> named_in(arg, param).length > 0)
-  const is_own = (arg: TypeName) ->
-    arg is NamedType and own.contains(arg.name) and arg.args.length == 0 and not arg.optional
-  const message =
-    "'#{name}' cannot hold a larger instance of itself, whose instances would grow without end"
-  for written in written_types(member)
-    for named in named_in(written, name)
-      if named.args.any((arg) -> holds_own(arg) and not is_own(arg))
-        fail program, named.position, message
 
 const add_interface_fields = (shared: Shared, info: ObjectInfo, declared: Set<String>) ->
   const program = shared.program
