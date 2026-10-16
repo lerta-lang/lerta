@@ -1,0 +1,47 @@
+# The builtin methods (see checker builtins) in the generated code.
+import BuiltinMember from '../checker/builtins'
+import emit_pop, emit_push from './array'
+import emit_array_text from './array_text'
+import emit_wrapping from './checked_int'
+import emit_member_name from './enum'
+import IrBuilder from './ir_builder'
+import call_has_next, call_next from './iter'
+import
+  emit_map_entries, emit_map_keys, emit_map_remove, emit_set_add, emit_set_has, emit_set_iter
+from './map'
+import ArrayType, EnumType, MapType, Type from '../types'
+
+# Whether the method takes the object over, as an Iter's do; the others borrow it.
+export const takes_object = (member: BuiltinMember) ->
+  member == ITER_HAS_NEXT or member == ITER_NEXT
+
+# Calls the method of the object, of the type, with borrowed arguments. `check` checks for an
+# exception, which an Iter's next may throw.
+export const call_builtin_method = (
+  ir: IrBuilder, member: BuiltinMember, object: String, type: Type, args: String[],
+  check: () -> void
+) ->
+  case member
+    when ARRAY_PUSH
+      emit_push ir, object, args[0], element_of(type)
+      ''
+    when ARRAY_POP then emit_pop(ir, object, element_of(type))
+    when ARRAY_TO_STRING then emit_array_text(ir, object, element_of(type))
+    when MAP_REMOVE
+      emit_map_remove ir, object, args[0], type as MapType!
+      ''
+    when MAP_KEYS then emit_map_keys(ir, object)
+    when MAP_ENTRIES then emit_map_entries(ir, object, type as MapType!)
+    when SET_HAS then emit_set_has(ir, object, args[0], type as MapType!)
+    when SET_ADD
+      emit_set_add ir, object, args[0], type as MapType!
+      ''
+    when SET_ITER then emit_set_iter(ir, object, type as MapType!)
+    when ITER_HAS_NEXT then call_has_next(ir, object)
+    when ITER_NEXT then call_next(ir, object, type, check)
+    when ENUM_TO_STRING then emit_member_name(ir, object, type as EnumType!)
+    when WRAPPING_ADD then emit_wrapping(ir, 'add', object, args[0], type)
+    when WRAPPING_SUB then emit_wrapping(ir, 'sub', object, args[0], type)
+    when WRAPPING_MUL then emit_wrapping(ir, 'mul', object, args[0], type)
+
+const element_of = (type: Type) -> (type as ArrayType!).element

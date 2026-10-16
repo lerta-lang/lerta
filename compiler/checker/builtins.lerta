@@ -5,34 +5,62 @@ import
   is_set, IterType, MapType, string_type, TupleType, Type, void_type
 from '../types'
 
-const method = (params: Type[], result: Type) -> FunctionType(params, result)
+# The builtin methods, which the checker resolves a name to once, so that codegen generates each
+# by a `case` that names them all. A set's `remove` is a map's, as a set is a map.
+export enum BuiltinMember
+  ARRAY_PUSH
+  ARRAY_POP
+  ARRAY_TO_STRING
+  MAP_REMOVE
+  MAP_KEYS
+  MAP_ENTRIES
+  SET_HAS
+  SET_ADD
+  SET_ITER
+  ITER_HAS_NEXT
+  ITER_NEXT
+  ENUM_TO_STRING
+  WRAPPING_ADD
+  WRAPPING_SUB
+  WRAPPING_MUL
 
-# The type of a method of a generic builtin type, an enum or an integer type, if it has one: an
+# The source of a builtin method (see methods' MethodSource): its member and its type.
+export struct BuiltinMethod
+  member: BuiltinMember
+  type: Type
+
+const method = (member: BuiltinMember, params: Type[], result: Type) ->
+  BuiltinMethod member, type: FunctionType(params, result)
+
+# The method of a generic builtin type, an enum or an integer type by the name, if it has one: an
 # enum's to_string gives the member's text.
-export const builtin_method = (receiver: Type, name: String): Type? ->
+export const builtin_method = (receiver: Type, name: String) ->
   case receiver
     when ArrayType then array_method(receiver.element, name)
     when MapType then map_method(receiver, name)
     when IterType then iter_method(receiver.item, name)
-    when EnumType then name == 'to_string' then method([], string_type)
-    else is_wrapping_method(receiver, name) then method([receiver], receiver)
+    when EnumType then name == 'to_string' then method(ENUM_TO_STRING, [], string_type)
+    else is_one_of_kinds(receiver, ['Int', 'Byte']) then wrapping_method(receiver, name)
 
 # `x.wrapping_add(y)` and so on of an integer type, which wrap around where its operators throw.
-export const is_wrapping_method = (receiver: Type, name: String) ->
-  is_one_of_kinds(receiver, ['Int', 'Byte']) and WRAPPING_METHODS.contains(name)
-
-const WRAPPING_METHODS = ['wrapping_add', 'wrapping_sub', 'wrapping_mul']
+const wrapping_method = (receiver: Type, name: String) ->
+  const member: BuiltinMember? =
+    case name
+      when 'wrapping_add' then WRAPPING_ADD
+      when 'wrapping_sub' then WRAPPING_SUB
+      when 'wrapping_mul' then WRAPPING_MUL
+      else nil
+  member then method(member, [receiver], receiver)
 
 # Whether the builtin method keeps its argument, as an array's `push` does, which a cycle can go
 # through (see cycles).
-export const keeps_argument = (receiver: Type, name: String) ->
-  receiver is ArrayType and name == 'push'
+export const keeps_argument = (member: BuiltinMember) -> member == ARRAY_PUSH
 
-const array_method = (element: Type, name: String): Type? ->
+const array_method = (element: Type, name: String) ->
   case name
-    when 'push' then method([element], void_type)
-    when 'pop' then method([], element)
-    when 'to_string' then is_text_item(element) then method([], string_type)
+    when 'push' then method(ARRAY_PUSH, [element], void_type)
+    when 'pop' then method(ARRAY_POP, [], element)
+    when 'to_string' then is_text_item(element) then method(ARRAY_TO_STRING, [], string_type)
     else nil
 
 # An item type that the text of an array can show, as the compiler knows how to write it (see
@@ -41,26 +69,27 @@ const is_text_item = (item: Type): Bool ->
   return is_text_item(item.element) if item is ArrayType
   is_one_of_kinds item, ['String', 'Int', 'Float', 'Bool', 'Byte', ENUM]
 
-const iter_method = (item: Type, name: String): Type? ->
+const iter_method = (item: Type, name: String) ->
   case name
-    when 'has_next' then method([], bool_type)
-    when 'next' then method([], item)
+    when 'has_next' then method(ITER_HAS_NEXT, [], bool_type)
+    when 'next' then method(ITER_NEXT, [], item)
     else nil
 
-const map_method = (map: MapType, name: String): Type? ->
+const map_method = (map: MapType, name: String) ->
   const { key, value } = map
   return set_method(key, name) if is_set(map)
   case name
-    when 'remove' then method([key], void_type)
-    when 'keys' then method([], ArrayType(element: key))
-    when 'entries' then method([], IterType(item: TupleType(items: [key, value])))
+    when 'remove' then method(MAP_REMOVE, [key], void_type)
+    when 'keys' then method(MAP_KEYS, [], ArrayType(element: key))
+    when 'entries' then method(MAP_ENTRIES, [], IterType(item: TupleType(items: [key, value])))
     else nil
 
-const set_method = (item: Type, name: String): Type? ->
+const set_method = (item: Type, name: String) ->
   case name
-    when 'has' then method([item], bool_type)
-    when 'add', 'remove' then method([item], void_type)
-    when 'iter' then method([], IterType(item))
+    when 'has' then method(SET_HAS, [item], bool_type)
+    when 'add' then method(SET_ADD, [item], void_type)
+    when 'remove' then method(MAP_REMOVE, [item], void_type)
+    when 'iter' then method(SET_ITER, [], IterType(item))
     else nil
 
 # The type of a property of a builtin type, read without a call, if it has one.

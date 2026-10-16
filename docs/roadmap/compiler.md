@@ -2,10 +2,6 @@
 
 The planned changes to the structure of the compiler, which change no program's behavior. Each step keeps the generated IR the same, so that `bin/lerta dump-llvm` of every test and of `compiler/main.lerta`, before and after, shows any change; none needs a seed refresh. In this order:
 
-## Builtin members as an enum
-
-The checker types a builtin method by its name (`compiler/checker/builtins.lerta`), and codegen generates it by a `case` on the name again (`compiler/codegen/call.lerta`, then `array`, `map`, `iter`, `enum` and `checked_int`), ending in `else panic`. An `enum BuiltinMember` that the checker resolves once and `BuiltinMethod` holds lets codegen `case` on it, so that a member one side forgets is a compile error rather than a panic.
-
 ## Resolutions in the checker's facts
 
 The checker records the types of nodes but not what a name or a member refers to, so codegen resolves them again: `generate_named_call` and `lookup_local` repeat the lookup of names with its shadowing, `function_symbols` gathers the declarations, imports and builtins again, and `method_source` calls `find_method` again. Each new kind of name adds a branch on both sides.

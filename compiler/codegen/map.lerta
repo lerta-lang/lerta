@@ -61,23 +61,25 @@ export const emit_map_set = (
   const args = "ptr #{map}, i64 #{key_item}, ptr #{emit_item_pointer(ir, value, type.value)}"
   call_void_runtime ir, 'void @lerta_map_write(ptr, i64, ptr)', args
 
-export const call_map_method = (
-  ir: IrBuilder, name: String, map: String, args: String[], type: MapType
-) ->
-  case name
-    when 'remove'
-      const key = "ptr #{map}, i64 #{key_word(ir, args[0], type.key)}"
-      call_void_runtime ir, 'void @lerta_map_remove(ptr, i64)', key
-      ''
-    when 'keys' then call_runtime(ir, 'ptr @lerta_map_keys(ptr)', "ptr #{map}")
-    when 'entries' then emit_cursor_iter(ir, map, type, TupleType(items: [type.key, type.value]))
-    when 'has'
-      call_runtime ir, 'i1 @lerta_map_read(ptr, i64, ptr)', set_item(ir, map, args[0], type)
-    when 'add'
-      call_void_runtime ir, 'void @lerta_map_write(ptr, i64, ptr)', set_item(ir, map, args[0], type)
-      ''
-    when 'iter' then emit_cursor_iter(ir, map, type, type.key)
-    else panic("no map method #{name}")
+# The builtin methods of maps and sets (see codegen builtins), of borrowed arguments.
+export const emit_map_remove = (ir: IrBuilder, map: String, key: String, type: MapType) ->
+  const args = "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
+  call_void_runtime ir, 'void @lerta_map_remove(ptr, i64)', args
+
+export const emit_map_keys = (ir: IrBuilder, map: String) ->
+  call_runtime ir, 'ptr @lerta_map_keys(ptr)', "ptr #{map}"
+
+export const emit_map_entries = (ir: IrBuilder, map: String, type: MapType) ->
+  emit_cursor_iter ir, map, type, TupleType(items: [type.key, type.value])
+
+export const emit_set_has = (ir: IrBuilder, set: String, item: String, type: MapType) ->
+  call_runtime ir, 'i1 @lerta_map_read(ptr, i64, ptr)', set_item(ir, set, item, type)
+
+export const emit_set_add = (ir: IrBuilder, set: String, item: String, type: MapType) ->
+  call_void_runtime ir, 'void @lerta_map_write(ptr, i64, ptr)', set_item(ir, set, item, type)
+
+export const emit_set_iter = (ir: IrBuilder, set: String, type: MapType) ->
+  emit_cursor_iter ir, set, type, type.key
 
 # The arguments that give the runtime an item of a set and its value, which takes no bytes, so that
 # the slot for it is neither read nor written.
@@ -121,7 +123,7 @@ export const emit_add_items = (ir: IrBuilder, set: String, array: String, type: 
   ir.emit "br i1 #{in_range}, label %#{body_label}, label %#{exit_label}"
   ir.start_block body_label
   const item = emit_get(ir, array, current, type.key)
-  call_map_method ir, 'add', set, [item], type
+  emit_set_add ir, set, item, type
   emit_release_value ir, item, type.key
   ir.emit "br label %#{latch_label}"
   ir.start_block latch_label

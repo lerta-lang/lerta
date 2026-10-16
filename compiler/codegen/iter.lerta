@@ -157,24 +157,18 @@ export const emit_source_iter = (ir: IrBuilder, value: String, type: Type) ->
   emit_iter_start ir, value
   value
 
-export const is_iter_method = (type: Type) -> is_kind(type, ITER)
+# The methods of an Iter, has_next and next (see codegen builtins), which take over the object.
+export const call_has_next = (ir: IrBuilder, object: String) ->
+  emit_mark_started ir, object
+  consume ir, object, emit_has_next(ir, object)
 
-# A method of an Iter, has_next or next, which takes over the object.
-export const call_iter_method = (
-  ir: IrBuilder, name: String, object: String, type: Type, check: () -> void
-) ->
-  const item = iterable_item(type)!
-  const consume = (result: String) ->
-    emit_release ir, object
-    result
-  case name
-    when 'has_next'
-      emit_mark_started ir, object
-      consume emit_has_next(ir, object)
-    when 'next'
-      emit_mark_started ir, object
-      consume emit_checked_next(ir, object, item, check)
-    else panic("no Iter method #{name}")
+export const call_next = (ir: IrBuilder, object: String, type: Type, check: () -> void) ->
+  emit_mark_started ir, object
+  consume ir, object, emit_checked_next(ir, object, iterable_item(type)!, check)
+
+const consume = (ir: IrBuilder, object: String, result: String) ->
+  emit_release ir, object
+  result
 
 # A comprehension's Iter: the items of the source for which the guard, if any, gives true, mapped
 # by the element's function. The closures are owned, of functions of the item.

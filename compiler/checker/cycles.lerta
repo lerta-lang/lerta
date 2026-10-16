@@ -4,12 +4,13 @@ import
   ArrayLiteral, Call, Coalesce, Conditional, Expression, FunctionLiteral, Index, MapLiteral, Member,
   RecordLiteral, This, TupleLiteral, Unwrap
 from '../ast'
-import keeps_argument from './builtins'
+import BuiltinMethod, keeps_argument from './builtins'
 import warn from './diagnostics'
 import constructed_type from './object'
 import info_of from './object_types'
+import MethodSource from './methods'
 import Body from './shared'
-import ObjectType, Type from '../types'
+import ObjectType from '../types'
 
 # Warns if storing the value at the target, already checked, makes such a cycle.
 export const warn_if_cycle = (body: Body, target: Expression, value: Expression) ->
@@ -20,8 +21,9 @@ export const warn_if_cycle = (body: Body, target: Expression, value: Expression)
   warn body.shared, literal.position, message
 
 # Warns if a builtin method that keeps its argument is given one that makes such a cycle.
-export const warn_if_kept = (body: Body, call: Call, member: Member, receiver: Type) ->
-  warn_if_cycle body, member.object, call.args[0] if keeps_argument(receiver, member.name.name)
+export const warn_if_kept = (body: Body, call: Call, member: Member, source: MethodSource?) ->
+  const keeps = source is BuiltinMethod and keeps_argument(source.member)
+  warn_if_cycle body, member.object, call.args[0] if keeps
 
 const is_held_by_this = (body: Body, target: Expression): Bool ->
   case target
