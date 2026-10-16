@@ -3,28 +3,19 @@
 # structs: they are parts of a node, neither told apart nor changed.
 import TextPart from './lexer/string_literal'
 
-export struct Position
-  line: Int
-  column: Int
+export struct Position(line: Int, column: Int)
 
-export class StringLiteral
-  value: String
-  position: Position
+export class StringLiteral(value: String, position: Position)
 
 # `"a#{b}c"`: text parts and interpolated values, in order. A value is read as a call of its
 # `to_string()`, `b.to_string()`, which gives its text.
 export type InterpolationPart = TextPart | Call
 
-export class Interpolation
-  parts: InterpolationPart[]
-  position: Position
+export class Interpolation(parts: InterpolationPart[], position: Position)
 
-export class NilLiteral
-  position: Position
+export class NilLiteral(position: Position)
 
-export class BooleanLiteral
-  value: Bool
-  position: Position
+export class BooleanLiteral(value: Bool, position: Position)
 
 export class IntegerLiteral
   # Nil for a literal beyond Int, which only a Float can hold.
@@ -35,58 +26,35 @@ export class IntegerLiteral
   position: Position
 
 # `1.5`, `1e9`: its text, without separators, which the compiler converts to a double as C does.
-export class FloatLiteral
-  text: String
-  position: Position
+export class FloatLiteral(text: String, position: Position)
 
-export class Identifier
-  name: String
-  position: Position
+export class Identifier(name: String, position: Position)
 
 # `throw error`: throws an Error. It never gives a value.
-export class Throw
-  message: Expression
-  position: Position
+export class Throw(message: Expression, position: Position)
 
 # `yield value`
-export class Yield
-  value: Expression
-  position: Position
+export class Yield(value: Expression, position: Position)
 
 # `await promise`
-export class Await
-  operand: Expression
-  position: Position
+export class Await(operand: Expression, position: Position)
 
 # `x!`
-export class Unwrap
-  operand: Expression
-  position: Position
+export class Unwrap(operand: Expression, position: Position)
 
 # `x ? fallback`
-export class Coalesce
-  value: Expression
-  fallback: Expression
-  position: Position
+export class Coalesce(value: Expression, fallback: Expression, position: Position)
 
 # `[a, b]`
-export class ArrayLiteral
-  elements: Expression[]
-  position: Position
+export class ArrayLiteral(elements: Expression[], position: Position)
 
-export struct MapEntry
-  key: Expression
-  value: Expression
+export struct MapEntry(key: Expression, value: Expression)
 
-export class MapLiteral
-  entries: MapEntry[]
-  position: Position
+export class MapLiteral(entries: MapEntry[], position: Position)
 
 # The guard and the element of an Iter comprehension as function literals of the loop variable
 # (see Comprehension).
-export struct LazyFunctions
-  guard: FunctionLiteral?
-  element: FunctionLiteral
+export struct LazyFunctions(guard: FunctionLiteral?, element: FunctionLiteral)
 
 # `[f(x) for x in xs when g(x)]`: an array of the values of `element`, for each item for which the
 # guard, if any, holds. In parentheses, `(f(x) for x in xs when g(x))`, it is an Iter of them,
@@ -112,33 +80,20 @@ export const is_spread = (item: Expression) -> item is Comprehension and item.sp
 
 # A field of an anonymous struct, or a named argument of a call, which gives such a field or
 # constructs a class or struct.
-export struct NamedValue
-  name: Identifier
-  value: Expression
+export struct NamedValue(name: Identifier, value: Expression)
 
 # `{ x: 1, y: 'a' }`, an anonymous struct; `{ x }` is short for `{ x: x }`.
-export class RecordLiteral
-  fields: NamedValue[]
-  position: Position
+export class RecordLiteral(fields: NamedValue[], position: Position)
 
 # `(a, b)`, a tuple of two or more items.
-export class TupleLiteral
-  items: Expression[]
-  position: Position
+export class TupleLiteral(items: Expression[], position: Position)
 
 # The item at `index` of a tuple of `count` items, which a taking apart, `const (a, b) = t`, reads
 # for each name; it cannot be written.
-export class TupleItem
-  tuple: Expression
-  index: Int
-  count: Int
-  position: Position
+export class TupleItem(tuple: Expression, index: Int, count: Int, position: Position)
 
 # `object[index]`
-export class Index
-  object: Expression
-  index: Expression
-  position: Position
+export class Index(object: Expression, index: Expression, position: Position)
 
 # `f(a, b)`, or `Point(x: 1, y: 2)` with named arguments, which construct a class or struct.
 # `f<Int>(x)` gives a generic function its type arguments.
@@ -150,20 +105,13 @@ export class Call
   position: Position
 
 # `@` inside a method or a field initializer: the object itself. `@x` is its member x.
-export class This
-  position: Position
+export class This(position: Position)
 
 # `object.name`
-export class Member
-  object: Expression
-  name: Identifier
-  position: Position
+export class Member(object: Expression, name: Identifier, position: Position)
 
 # `-` or `not`.
-export class UnaryOperation
-  operator: String
-  operand: Expression
-  position: Position
+export class UnaryOperation(operator: String, operand: Expression, position: Position)
 
 # An arithmetic or comparison operator, `and` or `or`.
 export class BinaryOperation
@@ -178,10 +126,7 @@ export const is_nil_test = (binary: BinaryOperation) ->
   compares and (binary.left is NilLiteral or binary.right is NilLiteral)
 
 # `start...end`
-export class Range
-  start: Expression
-  end: Expression
-  position: Position
+export class Range(start: Expression, end: Expression, position: Position)
 
 # A type written in the source, such as `Int` in a parameter.
 export class NamedType
@@ -194,9 +139,7 @@ export class NamedType
 export type UnionMember = NamedType | RecordTypeName | ArrayTypeName
 
 # `A | B`: a value of any of the member types.
-export class UnionTypeName
-  members: UnionMember[]
-  position: Position
+export class UnionTypeName(members: UnionMember[], position: Position)
 
 # `(A, B) -> R`: a function. Written in parentheses with `?` after them, `((A) -> R)?`, it may
 # be nil.
@@ -206,27 +149,16 @@ export class FunctionTypeName
   position: Position
   optional = default false
 
-export struct RecordTypeField
-  name: Identifier
-  type: TypeName
+export struct RecordTypeField(name: Identifier, type: TypeName)
 
 # `{ x: Int, y: String }`: an anonymous struct.
-export class RecordTypeName
-  fields: RecordTypeField[]
-  position: Position
-  optional = default false
+export class RecordTypeName(fields: RecordTypeField[], position: Position, optional = default false)
 
 # `(Int, String)`: a tuple, of two or more items.
-export class TupleTypeName
-  items: TypeName[]
-  position: Position
-  optional = default false
+export class TupleTypeName(items: TypeName[], position: Position, optional = default false)
 
 # `T[]`: an array of `T`.
-export class ArrayTypeName
-  element: TypeName
-  position: Position
-  optional = default false
+export class ArrayTypeName(element: TypeName, position: Position, optional = default false)
 
 export type TypeName =
   NamedType | UnionTypeName | FunctionTypeName | RecordTypeName | TupleTypeName | ArrayTypeName
@@ -241,9 +173,7 @@ export struct Parameter
 
 # `T` in `<T>(x: T) -> x`, or `T: Shape`, whose type arguments must satisfy the interface Shape,
 # or `X: Iterable<T>`.
-export struct TypeParameter
-  name: Identifier
-  bound: NamedType?
+export struct TypeParameter(name: Identifier, bound: NamedType?)
 
 # `<T>(x: T): T -> body`. `yields` and `awaits` count only the body, outside the function literals
 # in it.
@@ -260,9 +190,7 @@ export class FunctionLiteral
 
 # `when a, b then body`; without a subject, it has one pattern, its condition. `otherwise` (in
 # Case) is the `else` arm.
-export struct CaseArm
-  patterns: Expression[]
-  body: Statement[]
+export struct CaseArm(patterns: Expression[], body: Statement[])
 
 export class Case
   subject: Expression?
@@ -279,24 +207,13 @@ export class Try
   position: Position
 
 # `catch e: T` or `catch e`.
-export class Catch
-  name: Identifier
-  type: TypeName?
-  body: Statement[]
-  position: Position
+export class Catch(name: Identifier, type: TypeName?, body: Statement[], position: Position)
 
 # `x is T`
-export class IsTest
-  value: Expression
-  type: NamedType
-  position: Position
+export class IsTest(value: Expression, type: NamedType, position: Position)
 
 # `x as T?` or `x as T!`. `type` is written without its `?`.
-export class Cast
-  value: Expression
-  type: NamedType
-  throws: Bool
-  position: Position
+export class Cast(value: Expression, type: NamedType, throws: Bool, position: Position)
 
 # `condition then a else b`.
 export class Conditional
@@ -308,21 +225,16 @@ export class Conditional
   without_else = default false
 
 # `break` or `continue`, which, like `return`, are expressions that never give a value, as `throw`.
-export class Jump
-  kind: JumpKind
-  position: Position
+export class Jump(kind: JumpKind, position: Position)
 
 export enum JumpKind
   'break'
   'continue'
 
 # `pass`, an arm of a `case` that does nothing.
-export class Pass
-  position: Position
+export class Pass(position: Position)
 
-export class Return
-  value: Expression?
-  position: Position
+export class Return(value: Expression?, position: Position)
 
 export type Expression =
   StringLiteral | Interpolation | BooleanLiteral | NilLiteral | IntegerLiteral | FloatLiteral
@@ -370,10 +282,7 @@ export class Assignment
 
 # `if const name = value`: the condition holds when value is not nil, and name is the value
 # without nil inside the body.
-export class Binding
-  name: Identifier
-  value: Expression
-  position: Position
+export class Binding(name: Identifier, value: Expression, position: Position)
 
 export type Condition = Expression | Binding
 
@@ -386,10 +295,7 @@ export class If
   # Whether it is `x?.rest`, whose else branch gives nil (see parse_nil_safe).
   nil_safe = false
 
-export class While
-  condition: Condition
-  body: Statement[]
-  position: Position
+export class While(condition: Condition, body: Statement[], position: Position)
 
 # A member of a class or struct body: a field (with a type, an initial value, or both) or, for a
 # function literal value, a method.
@@ -446,14 +352,9 @@ export class TypeAlias
 
 # `import a, b as c from 'std:io'`, or from another file, `'./util'`. An imported name is
 # known in the module by its alias, if it has one.
-export struct ImportName
-  name: Identifier
-  alias: Identifier?
+export struct ImportName(name: Identifier, alias: Identifier?)
 
-export class Import
-  names: ImportName[]
-  module: String
-  position: Position
+export class Import(names: ImportName[], module: String, position: Position)
 
 # `extern lerta_write as write: (Int, String) -> Int`: a C function, by its symbol, known in the
 # module by the name after `as`, or by its symbol without one.
