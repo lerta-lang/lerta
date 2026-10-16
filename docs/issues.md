@@ -29,20 +29,6 @@ print registry.items[0].name
 
 Cause: `unwind_cleanup` in `compiler/codegen/function.lerta` calls `lerta_free_unfinished`, which frees regardless of the reference count (`runtime/memory.c`).
 
-### A `deinit` at the end of the program can read a released top-level value
-
-The top-level values are released in reverse order, but their initialized flags stay set, so a `deinit` that runs then reads a value already released instead of failing the initialized check. The debug runtime aborts with `retain of a dropped object`.
-
-```
-class N
-  v: Int
-  deinit = -> print g[0]
-const n = N(v: 1)
-const g = ["gone #{n.v}"]
-```
-
-Cause: `emit_release_globals` in `compiler/codegen/top_level.lerta` does not clear the flags.
-
 ### Sizes are cut to 32 bits on 32-bit targets (unconfirmed)
 
 A request of 4 GiB or more is converted to `size_t` unchecked, so the mapping is smaller than the region claims: `lerta_os_map_region` in `runtime/platform_posix.c` and `runtime/platform_windows.c`, and the capacity in `lerta_read_chunks` (`runtime/file.c`). It takes a 2 GiB array or file first.

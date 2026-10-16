@@ -30,7 +30,9 @@ export const emit_initialized_check = (g: Generator, global: TopLevelGlobal) ->
   const message = "'#{global.name}' is used before it is initialized"
   throw_if g, is_unset, CheckedError(message, type_name: 'InitError')
 
-# At the end of the program, the references the values hold.
+# At the end of the program, the references the values hold. Each value is unset first, so that a
+# deinit run by the releases fails the initialized check instead of reading a released value.
 export const emit_release_globals = (ir: IrBuilder, globals: TopLevelGlobal[]) ->
   for global in globals
+    ir.emit "store i1 false, ptr #{global.flag}"
     emit_release_stored ir, global.pointer, ir_type(global.type), ownership(global.type)

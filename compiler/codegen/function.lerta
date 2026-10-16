@@ -37,8 +37,9 @@ import emit_mark_initialized, emit_release_globals from './top_level'
 import generate_yielding_function from './yielding'
 import is_kind, iterable_item, PromiseType, Type, void_type from '../types'
 
-# The local of the name: in the scopes or, outside them, a top-level value of the module, which a
-# function checks to be initialized, or an imported value.
+# The local of the name: in the scopes or, outside them, a top-level value of the module or an
+# imported value. A function checks either to be initialized, since it may run while the values are
+# released at exit; top-level code checks only an imported value of its cycle.
 export const lookup_local = (g: Generator, name: String) ->
   return local if const local = g.locals.lookup(name)
   const code = g.code
@@ -49,7 +50,7 @@ export const lookup_local = (g: Generator, name: String) ->
   return nil if exported is not ValueExport
   const global = code.globals[exported.module_index][exported.name]!
   const is_in_cycle = code.module.cycle.contains(exported.module_index)
-  return top_level_slot(global, true) if is_in_cycle
+  return top_level_slot(global, true) if is_in_cycle or not g.top_level_code
   SlotLocal pointer: global.pointer, type: global.type, is_var: global.is_var
 
 const top_level_slot = (global: TopLevelGlobal, is_checked: Bool) ->
