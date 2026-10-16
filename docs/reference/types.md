@@ -26,7 +26,7 @@ The methods of the builtin types are listed in [builtins](builtins.md#methods-of
 ## Float
 
 - `Float` is a 64-bit IEEE 754 double that is always finite: no `Float` is an infinity or NaN. An operation whose result would be one throws instead, so `==` holds for every value and its own copy, and `<` orders all values.
-- A literal has a fraction or an exponent, or both (`1.5`, `1e9`, `2.5e-3`; see [syntax](syntax.md)), and rounds to the nearest double. One too large to be finite is an error. **Where a `Float` or a `Float?` is expected, an integer literal is a `Float` too** (`const x: Float = 3`), as it becomes a `Byte` where one is expected (below).
+- A literal has a fraction or an exponent, or both (`1.5`, `1e9`, `2.5e-3`; see [syntax](syntax.md)), and rounds to the nearest double. One too large to be finite is an error. **Where a `Float` or a `Float?` is expected, an integer literal is a `Float` too** (`const x: Float = 3`), as it becomes a `Byte` where one is expected (below), and a decimal one may then be beyond `Int`, rounding as a float literal does (`const x: Float = 18446744073709551616`). A hexadecimal one may not, as it stands for the bits of an `Int`.
 - `+` `-` `*` `/` and prefix `-` follow IEEE 754. `/` throws `division by zero` when the divisor is 0, and the others `float overflow` when the result is too large to be finite. There is no `%`.
 - Comparisons and `==` follow IEEE 754 too: `-0.0 == 0.0`, and a map whose keys are `Float`s, or a set of them, holds them as one key, `0.0`. `0.1 + 0.2 == 0.3` is false, as the doubles nearest these values do not add up exactly.
 - `case` cannot branch on a `Float`, as an exact value of a `Float` is rarely what a branch means.

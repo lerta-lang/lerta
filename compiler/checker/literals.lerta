@@ -5,8 +5,8 @@ from '../ast'
 import fail from './diagnostics'
 import is_numeric_operator from './operator'
 import ProgramWide from './shared'
-import float_bits from '../float_literals'
-import byte_type, float_type from '../types'
+import float_bits, integer_float_text from '../float_literals'
+import byte_type, float_type, int_type from '../types'
 
 # Whether an expression takes its type from the context: a literal, or arithmetic on such
 # expressions, so that `1 + 2` is a Byte where one is expected.
@@ -23,7 +23,8 @@ export const byte_literal = (program: ProgramWide, literal: Expression) ->
   const message =
     case literal
       when IntegerLiteral
-        const fits = literal.value >= 0 and literal.value <= 255
+        const value = literal.value
+        const fits = value != nil and value >= 0 and value <= 255
         fits then nil else 'integer literal does not fit in Byte'
       when StringLiteral
         const fits = literal.value.binary.length == 1
@@ -33,12 +34,24 @@ export const byte_literal = (program: ProgramWide, literal: Expression) ->
   byte_type
 
 # A float literal, or an integer one where a Float is expected, must be finite as a double: no
-# Float is infinite (see docs/reference/types.md#float).
+# Float is infinite (see docs/reference/types.md#float). A hexadecimal integer one stands for the
+# bits of an Int, so it must fit in one.
 export const float_literal = (program: ProgramWide, literal: Expression) ->
   const text =
     case literal
       when FloatLiteral then literal.text
-      when IntegerLiteral then "#{literal.value}"
+      when IntegerLiteral
+        if is_hexadecimal(literal)
+          int_literal program, literal
+          return float_type
+        integer_float_text literal
       else panic('not a number literal')
   fail program, literal.position, 'float literal does not fit in Float' if float_bits(text) == nil
   float_type
+
+export const int_literal = (program: ProgramWide, literal: IntegerLiteral) ->
+  fail program, literal.position, 'integer literal does not fit in Int' if literal.value == nil
+  int_type
+
+const is_hexadecimal = (literal: IntegerLiteral) ->
+  (literal.text.without_prefix('-') ? literal.text).starts_with('0x')

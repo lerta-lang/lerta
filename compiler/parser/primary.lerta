@@ -51,9 +51,7 @@ export const parse_primary = (tokens: TokenStream): Expression ->
     when 'try' then parse_try(tokens, position)
     when '[' then parse_array_literal(tokens, position)
     when '{' then parse_map_literal(tokens, position)
-    when INTEGER
-      const value = integer_value(tokens, token.text, false, position)
-      IntegerLiteral value, position, is_negative: false
+    when INTEGER then integer_literal(token.text, position)
     when FLOAT then FloatLiteral(position, text: token.text)
     when '(' then parse_parenthesized(tokens, position)
     else tokens.fail_expecting(token, 'expression')
@@ -70,15 +68,16 @@ const parse_this = (tokens: TokenStream, position: Position): Expression ->
 const ends_expression = (tokens: TokenStream) ->
   is_one_of tokens.peek_continuation(), EXPRESSION_ENDS
 
-# The value of an integer literal's text, negated if `is_negative`.
-export const integer_value = (
-  tokens: TokenStream, text: String, is_negative: Bool, position: Position
-) ->
-  const fail = -> tokens.fail(position, 'integer literal does not fit in Int')
-  const negated = negated_value(text) ? fail()
-  return negated if is_negative
-  fail() if negated == INT_MIN
-  -negated
+export const integer_literal = (text: String, position: Position) ->
+  IntegerLiteral position, text, value: integer_value(text)
+
+# The value of an integer literal's text, with its minus, or nil if it is beyond Int, which the
+# checker rejects but where a Float is expected.
+const integer_value = (text: String) ->
+  const digits = text.without_prefix('-')
+  const negated = negated_value(digits ? text) ? return nil
+  return negated if digits
+  negated != INT_MIN then -negated
 
 # The value of a literal's text, decimal or hexadecimal, negated, or nil if that is below the
 # minimum Int. It is computed negated since the minimum Int has no positive counterpart.

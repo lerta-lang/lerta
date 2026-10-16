@@ -22,5 +22,4 @@ The compiler never ends: the instances of the classes it makes grow without end.
 
 Behavior the reference leaves open, to decide before it is fixed or documented as is:
 
-- An integer literal beyond `Int` is rejected where a Float is expected.
 - A list of `when` patterns cannot be broken across lines, so a long one goes past 100 columns.
