@@ -79,7 +79,9 @@ static int incomplete_tail(const uint8_t *bytes, int64_t length) {
     uint8_t byte = bytes[length - back];
     bool is_continuation = (byte & 0xC0) == 0x80;
     if (!is_continuation) {
-      int needed = byte >= 0xF0 ? 4 : byte >= 0xE0 ? 3 : byte >= 0xC0 ? 2 : 1;
+      // 0xC0, 0xC1 and the bytes above 0xF4 begin no character, so they are shown at once.
+      bool is_lead = byte >= 0xC2 && byte <= 0xF4;
+      int needed = !is_lead ? 1 : byte >= 0xF0 ? 4 : byte >= 0xE0 ? 3 : 2;
       return needed > back ? back : 0;
     }
   }

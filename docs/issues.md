@@ -39,7 +39,6 @@ Cause: `unwind_cleanup` in `compiler/codegen/function.lerta` calls `lerta_free_u
 
 ### Smaller ones (unconfirmed)
 
-- `incomplete_tail` in `runtime/platform_windows.c` keeps an invalid byte of `0xC0` or above as the start of a character, so a console write ending with it does not show it.
 - After a failed `uv_spawn`, `runtime/loop.c` closes the handle that libuv has already removed from its queue, which only matters when the spawn fails in fork or pipe creation.
 
 ## Commands and tools
