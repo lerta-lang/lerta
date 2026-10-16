@@ -34,13 +34,6 @@ void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
   return object;
 }
 
-void lerta_free_unfinished(void *object) {
-  lerta_mem_free(object);
-#ifdef LERTA_DEBUG
-  live_objects--;
-#endif
-}
-
 void *lerta_frame_alloc(int64_t size) {
 #ifdef LERTA_DEBUG
   live_objects++;
@@ -104,6 +97,24 @@ __attribute__((noinline)) static void drop_released(void *object) {
   draining = true;
   drain_to(0);
   draining = false;
+}
+
+int64_t lerta_drop_mark(void) { return pending_length; }
+
+void lerta_free_unfinished(void *object, void **weak_slot, int64_t mark) {
+  // A field released while a drop goes on, as in a constructor that a deinit calls, is queued: it
+  // may still hold the object until it is dropped.
+  drain_to(mark);
+  LertaHeader *header = object;
+  if (header->ref_count != 1) {
+    lerta_panic_with_exception("init threw an exception after its object escaped: ");
+  }
+  if (weak_slot != NULL) lerta_weak_detach(weak_slot);
+  lerta_trace_forget(object);
+  lerta_mem_free(object);
+#ifdef LERTA_DEBUG
+  live_objects--;
+#endif
 }
 
 void lerta_release(void *object) {

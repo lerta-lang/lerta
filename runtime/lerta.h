@@ -302,9 +302,14 @@ void lerta_trace_free(LertaTrace *saved);
 void *lerta_frame_alloc(int64_t size);
 void lerta_frame_free(void *frame);
 
-// Frees an object whose construction threw, once the caller has released its fields; its deinit
-// does not run.
-void lerta_free_unfinished(void *object);
+// The length of the queue of objects to drop, before the fields of an unfinished object are
+// released, for lerta_free_unfinished.
+int64_t lerta_drop_mark(void);
+// Frees an object whose construction threw, once the caller has released its fields, dropping
+// first what their release queued after `mark`; its deinit does not run. If anything still holds
+// the object, which init let escape, the program panics with the exception. `weak_slot` is the
+// slot of the object's weak box, or NULL for a struct.
+void lerta_free_unfinished(void *object, void **weak_slot, int64_t mark);
 
 // The kinds of the runtime's errors, by their types, in the order std:builtins declares them.
 typedef enum {

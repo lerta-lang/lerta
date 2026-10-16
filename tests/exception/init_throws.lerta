@@ -1,0 +1,103 @@
+# An init that throws frees its object without running its deinit, as long as nothing outside the
+# object still holds it.
+struct Stop: Error
+  message: String
+
+class Plain
+  name: String
+  init = -> throw Stop(message: "plain #{@name}")
+  deinit = -> print 'plain deinit'
+
+try
+  const _p = Plain(name: 'a')
+catch e: Stop
+  print e.message
+
+# A child that holds the object, kept in the object's own field, is released with the fields.
+class Child
+  parent: Parent
+  deinit = -> print 'child deinit'
+
+class Parent
+  var child: Child? = nil
+  init = ->
+    @child = Child(parent: @)
+    throw Stop(message: 'cycle')
+  deinit = -> print 'parent deinit'
+
+try
+  const _p = Parent()
+catch e: Stop
+  print e.message
+
+# A weak reference does not keep the object: it reads nil once the object is freed.
+class Holder
+  weak target: Watched? = nil
+
+const holder = Holder()
+
+class Watched
+  init = ->
+    holder.target = @
+    throw Stop(message: 'watched')
+
+try
+  const _w = Watched()
+catch e: Stop
+  print e.message
+print holder.target == nil
+
+# The object's weak box, made by a weak field of its own, is let go of too.
+class Weakself
+  weak me: Weakself? = nil
+  init = ->
+    @me = @
+    throw Stop(message: 'weak self')
+
+try
+  const _w = Weakself()
+catch e: Stop
+  print e.message
+
+class Box<T>
+  item: T
+  init = -> throw Stop(message: 'generic')
+
+try
+  const _b = Box(item: 'x')
+catch e: Stop
+  print e.message
+
+# An initializer whose construction throws leaves the fields after it nil, which are released as
+# such.
+class Outer
+  first: String = 'set'
+  inner: Plain = Plain(name: 'inner')
+  last: String = 'never'
+
+try
+  const _o = Outer()
+catch e: Stop
+  print e.message
+
+struct Point
+  x: Int
+  init = -> throw Stop(message: "point #{@x}")
+
+try
+  const _p = Point(x: 1)
+catch e: Stop
+  print e.message
+
+# A constructor that a deinit calls runs while a drop goes on, where what its fields release is
+# dropped later.
+class Cleaner
+  deinit = ->
+    try
+      const _p = Parent()
+    catch e: Stop
+      print "in deinit: #{e.message}"
+
+const make_cleaner = -> Cleaner()
+make_cleaner()
+print 'end'

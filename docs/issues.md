@@ -4,31 +4,6 @@ Defects of what is implemented: where the implementation departs from [the refer
 
 Each entry says what goes wrong, a minimal program that shows it, and where the cause is. An entry marked *unconfirmed* was found by reading the code and has not been reproduced.
 
-## Memory safety
-
-### An object that `init` lets escape is freed when `init` throws
-
-When `init` stores `@` somewhere and then throws, the unwinding frees the object without regard to the other references, and does not detach its weak box. The debug runtime aborts with `retain of a dropped object`; with `-O` the program crashes or reads freed memory.
-
-```
-struct Oops: Error
-class Registry
-  items: Node[] = []
-const registry = Registry()
-class Node
-  name: String
-  init = ->
-    registry.items.push @
-    throw Oops(message: 'after escape')
-try
-  const _n = Node(name: 'n1')
-catch e: Oops
-  print e.message
-print registry.items[0].name
-```
-
-Cause: `unwind_cleanup` in `compiler/codegen/function.lerta` calls `lerta_free_unfinished`, which frees regardless of the reference count (`runtime/memory.c`).
-
 ## Compiler
 
 ### A `const` may take the name of a builtin type
