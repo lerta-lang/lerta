@@ -10,7 +10,9 @@ import parse_block_literal, starts_block, starts_field_block from './block_liter
 import integer_value, parse_primary from './primary'
 import parse_if from './statement'
 import is_one_of, token_position, TokenStream from './token_stream'
-import parse_named_type, parse_type_arguments, starts_type_arguments from './type'
+import
+  parse_named_type, parse_named_type_alone, parse_type_arguments, starts_type_arguments
+from './type'
 
 # Arithmetic operators by precedence, weakest first. Comparisons are weaker than all of them.
 const ARITHMETIC_PRECEDENCE: TokenKind[][] = [['+', '-'], ['*', '/', '%']]
@@ -159,16 +161,23 @@ const parse_is = (tokens: TokenStream, value: Expression): Expression ->
   const test = IsTest(value, type: parse_named_type(tokens), position: value.position)
   negated then UnaryOperation(operator: 'not', operand: test, position: value.position) else test
 
-# The `?` is read as the type's, which the checker takes as the form instead.
+# The `?` is read as the type's, which the checker takes as the form instead. `x as T ? y`, with a
+# space before `?`, is read as `(x as T?) ? y`.
 const parse_cast = (tokens: TokenStream, value: Expression): Expression ->
   const as_token = tokens.next()
-  const type = parse_named_type(tokens)
-  const throws = not type.optional and tokens.peek().kind == '!' and not tokens.peek().spaced
-  tokens.next() if throws
-  if not type.optional and not throws
-    const forms = "'as T?' for nil where it is no T, or 'as T!' to throw"
+  const type = parse_named_type_alone(tokens)
+  const next = tokens.peek()
+  const optional = next.kind == '?' and not next.spaced
+  const throws = next.kind == '!' and not next.spaced
+  const falls_back = next.kind == '?' and next.spaced
+  if not optional and not throws and not falls_back
+    const forms = "'as T?' for nil where it is no T, 'as T ? y' for y, or 'as T!' to throw"
     tokens.fail token_position(as_token), "write #{forms}"
-  Cast value, type, throws, position: value.position
+  tokens.next()
+  type.optional = not throws
+  const cast = Cast(value, type, throws, position: value.position)
+  return cast if not falls_back
+  Coalesce value: cast, fallback: parse_coalesce(tokens), position: value.position
 
 const parse_binary_comparison = (tokens: TokenStream, left: Expression): Expression ->
   const operator = tokens.next().kind.to_string()

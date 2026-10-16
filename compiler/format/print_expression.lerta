@@ -10,7 +10,7 @@ from '../ast'
 import breaking, choice, Doc, indent, join, line_feed, rule, separated, text, token from './doc'
 import named_type, type_arguments from './print_type'
 import if_doc from './print_statement'
-import LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, STRING_LITERALS from './rules'
+import CAST_FALLBACKS, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, STRING_LITERALS from './rules'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
 from './print_literal'
@@ -68,7 +68,7 @@ const is_lazy = (expression: Expression) -> expression is Comprehension and expr
 const precedence = (expression: Expression) ->
   case expression
     when Conditional then CONDITIONAL
-    when Coalesce then COALESCE
+    when Coalesce then cast_of(expression) then COMPARISON else COALESCE
     when BinaryOperation then binary_precedence(expression.operator)
     when UnaryOperation then expression.operator == 'not' then NOT else PREFIX
     when IsTest, Cast then COMPARISON
@@ -92,6 +92,8 @@ const runs_to_end = (expression: Expression) ->
     when Return then expression.value != nil
     when Throw, Yield, FunctionLiteral, Case, Try then true
     when If then not expression.nil_safe
+    # Its fallback runs on as that of `?` does.
+    when Coalesce then cast_of(expression) != nil
     else false
 
 const bare_doc = (expression: Expression, context: Context): Doc ->
@@ -116,15 +118,17 @@ const bare_doc = (expression: Expression, context: Context): Doc ->
       const start = range_end(expression.start, context, false)
       join [start, text('...'), range_end(expression.end, context, true)]
     when IsTest then is_doc(expression, context, ' is ')
-    when Cast
-      const value = operand(expression.value, context, RANGE, false)
-      # The `?` of `as T?` is read as the type's.
-      const form = expression.throws then '!' else ''
-      join [value, text(' as '), named_type(expression.type), text(form)]
+    when Cast then cast_doc(expression, context, expression.throws then '!' else '?')
     when Conditional then conditional_doc(expression, context)
     when Coalesce
-      const value = operand(expression.value, context, OR, false)
-      join [value, text(' ? '), operand(expression.fallback, context, COALESCE, true)]
+      const fallback = operand(expression.fallback, context, COALESCE, true)
+      if const cast = cast_of(expression)
+        # The style's part starts where the old form differs: at the `(` around the cast, if any.
+        const written_cast = cast_doc(cast, context, '')
+        if written_in_parentheses(cast, context)
+          return join([rule(CAST_FALLBACKS, join([written_cast, text(' ? ')])), fallback])
+        return join([written_cast, rule(CAST_FALLBACKS, text(' ? ')), fallback])
+      join [operand(expression.value, context, OR, false), text(' ? '), fallback]
     when Await
       join [
         keyword('await ', expression.position)
@@ -356,3 +360,14 @@ const is_not_doc = (test: IsTest, context: Context) ->
 const is_negated_is_test = (expression: Expression) ->
   const unary = expression as UnaryOperation? ? return false
   unary.operator == 'not' and unary.operand is IsTest
+
+# `x as T`, then `form`. The `?` of `as T?` is read as the type's, so it is not printed with it.
+const cast_doc = (cast: Cast, context: Context, form: String) ->
+  const value = operand(cast.value, context, RANGE, false)
+  const { name, args, position } = cast.type
+  join [value, text(' as '), token(name, position), type_arguments(args), text(form)]
+
+# `(x as T?) ? y`, written `x as T ? y` (see Cast fallbacks).
+const cast_of = (coalesce: Coalesce) ->
+  const cast = coalesce.value as Cast? ? return nil
+  cast.throws then nil else cast
