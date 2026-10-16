@@ -137,7 +137,6 @@ When stdout is a non-blocking pipe, as Node.js gives a child, a full pipe makes 
 
 ## Commands and tools
 
-- `lerta build x.lerta -o x.lerta` overwrites the source with the executable; `-o` is not checked against the source or the linked files (`compiler/main.lerta`, `compiler/build.lerta`).
 - A value or a path that starts with `-` cannot be given, as any such argument is taken as a flag (`is_value` in `compiler/main.lerta`).
 - `lerta build` killed while it compiles the runtime leaves its `.staging-` directory in the cache (`compiler/runtime_cache.lerta`; unconfirmed).
 - The run tests give a program no time limit, so one that does not end hangs `make test` (`run_program` in `test/run.ts`; unconfirmed).

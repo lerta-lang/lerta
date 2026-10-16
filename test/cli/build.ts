@@ -1,5 +1,13 @@
 // Building programs, and what the compiler writes and leaves.
-import { readdirSync, readFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { compiler, root_dir } from '../lerta.ts'
 import { compare_text, expect_status, expect_success } from '../expect.ts'
@@ -28,6 +36,26 @@ const build_and_run_checks: Check[] = runtime_flags.map((flags) => ({
   },
 }))
 
+// Outputs that name a file of the build by another path, which the build must leave as it is.
+const overwritten_input_cases = [
+  { what: 'the source', input: 'hello.lerta', args: ['hello.lerta', '-o', './hello.lerta'] },
+  {
+    what: 'a linked file',
+    input: 'extern.c',
+    args: ['hello.lerta', 'extern.c', '-o', 'lib/../extern.c'],
+  },
+  {
+    what: 'an imported module',
+    input: 'lib/greeting.lerta',
+    args: ['main.lerta', '-o', 'lib/greeting.lerta'],
+  },
+  {
+    what: 'a symlink to the source',
+    input: 'hello.lerta',
+    args: ['hello.lerta', '-o', 'link.lerta'],
+  },
+]
+
 const output_checks: Check[] = [
   {
     name: 'lerta build <source> writes the executable to the current directory, and nothing else',
@@ -43,6 +71,29 @@ const output_checks: Check[] = [
       ]
     },
   },
+  ...overwritten_input_cases.map(({ what, input, args }) => ({
+    name: `lerta build rejects an output that is ${what}`,
+    run: async () => {
+      const cwd = mkdtempSync(join(work_dir, 'cwd-'))
+      mkdirSync(join(cwd, 'lib'))
+      copyFileSync(hello, join(cwd, 'hello.lerta'))
+      writeFileSync(join(cwd, 'extern.c'), '')
+      writeFileSync(
+        join(cwd, 'main.lerta'),
+        "import greeting from './lib/greeting'\nprint greeting\n",
+      )
+      writeFileSync(join(cwd, 'lib/greeting.lerta'), "export const greeting = 'hi'\n")
+      symlinkSync('hello.lerta', join(cwd, 'link.lerta'))
+      const before = readFileSync(join(cwd, input), 'utf8')
+      const built = await run_command(compiler, ['build', ...args], { cwd })
+      const message = `the output '${args.at(-1)}' is an input of the build\n`
+      return [
+        ...expect_status(1, built.status),
+        ...compare_text('stderr', message, built.stderr),
+        ...compare_text(input, before, readFileSync(join(cwd, input), 'utf8')),
+      ]
+    },
+  })),
   {
     name: 'lerta build removes its temporary directory and the runtime when clang fails',
     run: async () => {

@@ -1,6 +1,6 @@
 # Builds a program: has clang compile the IR that codegen generates for it, written to a temporary
 # directory, which is removed afterwards, and link it with the runtime's cached objects.
-import make_temp_dir, remove_tree, write_file from 'std:io'
+import is_file, make_temp_dir, remove_tree, write_file from 'std:io'
 import exit, run from 'std:process'
 import ProgramWide from './checker/shared'
 import run_clang_jobs from './clang_jobs'
@@ -10,6 +10,7 @@ import check_program from './compile'
 import CompileError from './errors'
 import join from './paths'
 import target_system from './libuv'
+import real_path_text from './loader'
 import cache_dir, cached_runtime from './runtime_cache'
 
 # What to build: the executable `output`, or one in the temporary directory if nil, for `target`
@@ -38,6 +39,7 @@ export const build_and_run = (request: BuildRequest, args: String[]) -> build_th
 # failure exits with code 1.
 const build_then = (request: BuildRequest, run_args: String[]?) ->
   const program = check_program(request.source, request.warnings_as_errors)
+  reject_input_as_output request, program
   const not_utf8 = CompileError(message: 'the temporary directory is not valid UTF-8')
   const dir = make_temp_dir().text() ? throw not_utf8
   const code = try
@@ -45,6 +47,17 @@ const build_then = (request: BuildRequest, run_args: String[]?) ->
   finally
     remove_tree dir
   exit code
+
+# The output would replace a file that the build reads, which another path may name: a module,
+# whose key is its real path, or a linked file.
+const reject_input_as_output = (request: BuildRequest, program: ProgramWide) ->
+  const output = request.output ? return
+  return if not is_file(output)
+  const real_output = real_path_text(output)
+  const linked = [real_path_text(file) for file in request.linked_files when is_file(file)]
+  const inputs = [[module.key for module in program.modules]..., linked...]
+  return if not inputs.any((input) -> input == real_output)
+  throw CompileError(message: "the output '#{output}' is an input of the build")
 
 # What build_then exits with: 1 if clang fails.
 const build_in_dir = (
