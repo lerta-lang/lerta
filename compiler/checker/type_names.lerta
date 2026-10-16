@@ -26,6 +26,27 @@ export const is_builtin_type_name = (name: String) ->
 export const is_taken_type_name = (shared: Shared, name: String) ->
   has_declared_type(shared, name) or is_builtin_type_name(name)
 
+# The parts of the written type that name the type of the name, wherever they are in it.
+export const named_in = (type_name: TypeName?, name: String) ->
+  const found: NamedType[] = []
+  collect_named type_name, name, found
+  found
+
+const collect_named = (type_name: TypeName?, name: String, found: NamedType[]): void ->
+  const written = type_name ? return
+  const collect = (part: TypeName) -> collect_named(part, name, found)
+  case written
+    when NamedType
+      found.push written if written.name == name
+      collect arg for arg in written.args
+    when FunctionTypeName
+      collect param for param in written.params
+      collect written.result
+    when RecordTypeName then collect(field.type) for field in written.fields
+    when TupleTypeName then collect(item) for item in written.items
+    when UnionTypeName then collect(member) for member in written.members
+    when ArrayTypeName then collect(written.element)
+
 const simple_type = (name: String) ->
   case name
     when 'Int' then int_type

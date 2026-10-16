@@ -2,16 +2,13 @@
 # `interface Iterable<T>`: their declarations, their types and their members. A type satisfies an
 # interface by its members (see satisfaction); an interface bounds type parameters, and is the
 # type of values that hold a value of a type that satisfies it (see interface_values).
-import
-  ArrayTypeName, FunctionTypeName, InterfaceDeclaration, NamedType, Position, RecordTypeName,
-  TupleTypeName, TypeName, UnionTypeName
-from '../ast'
+import InterfaceDeclaration, NamedType, Position, TypeName from '../ast'
 import fail, fail_already_defined from './diagnostics'
 import reject_bad_type_parameters from './generics'
 import builtin_export, has_import, imported_export, InterfaceExport from './imports'
 import module_symbol_name, ProgramWide, Shared from './shared'
 import
-  has_type, is_taken_type_name, module_resolver, resolve, Resolver, with_type_parameters
+  has_type, is_taken_type_name, module_resolver, named_in, resolve, Resolver, with_type_parameters
 from './type_names'
 import placeholders, substitute from './type_patterns'
 import reject_invalid_instance from './type_validity'
@@ -119,16 +116,7 @@ const reject_invalid_type_parameters = (program: ProgramWide, info: InterfaceInf
       fail program, bound.position, "an interface's type parameter takes no bound"
 
 # Whether the written type names the type of the name, in any of its parts.
-const names_type = (type_name: TypeName?, name: String): Bool ->
-  const written = type_name ? return false
-  case written
-    when NamedType then written.name == name or written.args.any((arg) -> names_type(arg, name))
-    when FunctionTypeName
-      written.params.any((param) -> names_type(param, name)) or names_type(written.result, name)
-    when RecordTypeName then written.fields.any((field) -> names_type(field.type, name))
-    when TupleTypeName then written.items.any((item) -> names_type(item, name))
-    when UnionTypeName then written.members.any((member) -> names_type(member, name))
-    when ArrayTypeName then names_type(written.element, name)
+const names_type = (type_name: TypeName?, name: String) -> named_in(type_name, name).length > 0
 
 # Whether the module declares a class, struct, enum or interface of the name.
 export const has_declared_type = (shared: Shared, name: String) ->
