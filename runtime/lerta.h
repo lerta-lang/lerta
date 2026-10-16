@@ -81,6 +81,8 @@ typedef enum {
 // The hash and the equality of two items of a type that compares by its contents.
 typedef uint64_t (*LertaHash)(int64_t item);
 typedef bool (*LertaEquals)(int64_t a, int64_t b);
+// The text of an item, owned, as `to_string` of an array gives each (see lerta_array_text).
+typedef LertaString *(*LertaItemText)(int64_t item);
 
 // See docs/internals.md#maps.
 typedef struct {
@@ -191,6 +193,9 @@ uint8_t *lerta_array_pushed_items(LertaArray *array);
 bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals);
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
 LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator);
+LertaString *lerta_array_text(const LertaArray *array, LertaItemText text_of);
+LertaString *lerta_string_quoted(const LertaString *s);
+LertaString *lerta_bool_text(bool value);
 
 // Maps (map.c). Keys and values in are borrowed; values are passed through pointers to them. get
 // returns whether the key is there, and writes its value owned (zeros otherwise); keys returns

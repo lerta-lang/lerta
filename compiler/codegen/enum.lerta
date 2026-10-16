@@ -1,5 +1,5 @@
 # Enums in the generated code (see EnumType).
-import IrBuilder, IrModule from './ir_builder'
+import emit_branch, IrBuilder, IrModule from './ir_builder'
 import ir_type, string_constant from './lerta_ir'
 import emit_wrap, nil_constant from './optional'
 import call_runtime from './runtime_calls'
@@ -11,6 +11,29 @@ export const emit_member_name = (ir: IrBuilder, value: String, type: EnumType) -
   const texts = member_texts(ir, type)
   const pointer = ir.assign("getelementptr #{array_type}, ptr #{texts}, i64 0, i64 #{value}")
   ir.assign "load ptr, ptr #{pointer}"
+
+# The member as it is declared, an owned String: its name, or its text as a String literal that
+# gives it, `'('`, as an array's text writes it.
+export const emit_member_as_declared = (ir: IrBuilder, value: String, type: EnumType) ->
+  const name = emit_member_name(ir, value, type)
+  return name if type.members.all((member) -> member.is_name)
+  const array_type = "[#{type.members.length} x i1]"
+  const pointer =
+    ir.assign("getelementptr #{array_type}, ptr #{literal_flags(ir, type)}, i64 0, i64 #{value}")
+  const is_literal = ir.assign("load i1, ptr #{pointer}")
+  const quoted = -> call_runtime(ir, 'ptr @lerta_string_quoted(ptr)', "ptr #{name}")
+  emit_branch ir, 'ptr', is_literal, quoted, name
+
+# A constant array of whether each member is declared as a String literal, in their order.
+const literal_flags = (ir: IrBuilder, type: EnumType) ->
+  const define = (name: String, module: IrModule) ->
+    const flags = ["i1 #{not member.is_name}" for member in type.members]
+    const value = "[#{flags.join(', ')}]"
+    module.define_global(
+      name
+      "private unnamed_addr constant [#{type.members.length} x i1] #{value}"
+    )
+  ir.module.named "enum literals #{type.symbol}", '@lerta.enum_literals', define
 
 # `E.parse(text)`: the member whose text is the String, or nil.
 export const emit_parse = (ir: IrBuilder, text: String, type: EnumType) ->

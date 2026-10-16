@@ -1,0 +1,38 @@
+# `to_string` of an array whose items are of builtin types (see checker builtins): `[1, 2]`, with
+# a String as a literal that gives it, `['a']`. The runtime joins the texts of the items, which a
+# function for each item type gives (lerta_array_text in runtime/array.c).
+import from_item from './array'
+import emit_member_as_declared from './enum'
+import IrBuilder, IrModule from './ir_builder'
+import call_runtime from './runtime_calls'
+import ArrayType, EnumType, is_kind, Type, type_key from '../types'
+
+# The text of a borrowed array, owned.
+export const emit_array_text = (ir: IrBuilder, array: String, element: Type) ->
+  const text_of = item_text_function(ir.module, element)
+  call_runtime ir, 'ptr @lerta_array_text(ptr, ptr)', "ptr #{array}, ptr #{text_of}"
+
+const item_text_function = (module: IrModule, type: Type) ->
+  const define = (name: String, defined: IrModule) ->
+    const ir = IrBuilder(module: defined)
+    ir.emit "ret ptr #{emit_item_text(ir, from_item(ir, '%item', type), type)}"
+    ir.finish "private ptr #{name}(i64 %item)"
+  module.named "item text #{type_key(type)}", '@lerta.item_text', define
+
+const emit_item_text = (ir: IrBuilder, item: String, type: Type): String ->
+  case type
+    when ArrayType then emit_array_text(ir, item, type.element)
+    when EnumType then emit_member_as_declared(ir, item, type)
+    else
+      case
+        when is_kind(type, 'String')
+          call_runtime ir, 'ptr @lerta_string_quoted(ptr)', "ptr #{item}"
+        when is_kind(type, 'Float')
+          call_runtime ir, 'ptr @lerta_float_to_string(double)', "double #{item}"
+        when is_kind(type, 'Bool')
+          call_runtime ir, 'ptr @lerta_bool_text(i1 zeroext)', "i1 zeroext #{item}"
+        when is_kind(type, 'Byte') then int_text(ir, ir.assign("zext i8 #{item} to i64"))
+        else int_text(ir, item)
+
+const int_text = (ir: IrBuilder, value: String) ->
+  call_runtime ir, 'ptr @lerta_int_to_string(i64)', "i64 #{value}"

@@ -8,7 +8,7 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 
 ## Stringable
 
-`Stringable` is a builtin [interface](objects.md#interfaces), declared in `std/builtins.lerta`, with one member, `to_string: () -> String`. `String`, `Int`, `Float`, `Byte`, `Bool` and enums satisfy it, and so does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect; a `to_string` with parameters or another result does not. A module's own name `Stringable` shadows it. `Int?`, unions and arrays are not `Stringable`, unless an extend gives them `to_string`. String interpolation goes through it (see [syntax](syntax.md)).
+`Stringable` is a builtin [interface](objects.md#interfaces), declared in `std/builtins.lerta`, with one member, `to_string: () -> String`. `String`, `Int`, `Float`, `Byte`, `Bool` and enums satisfy it, and so does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect; a `to_string` with parameters or another result does not. A module's own name `Stringable` shadows it. An array is `Stringable` when its items are `String`s, `Int`s, `Float`s, `Bool`s, `Byte`s, enum values or such arrays: `[1, 2]`, `[[1], []]`, with a `String` as a literal that gives it, `['a', "it's"]`, in single quotes if it has no `'` and no control character, and otherwise in double quotes with escapes. `Int?`, unions and other arrays are not `Stringable`, unless an extend gives them `to_string`. String interpolation goes through it (see [syntax](syntax.md)).
 
 ## Iterable
 
@@ -26,7 +26,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `Bool` | `to_string` |
 | `String` | `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `compare` |
 | `Binary` | `length`, `iter`, `slice`, `occurs_at`, `text` |
-| `T[]` | `length`, `push`, `pop`, `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` and `to_binary` of a `Byte[]` |
+| `T[]` | `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` and `to_binary` of a `Byte[]` |
 | `Map<K, V>` | `length`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries` |
 | `Set<T>` | `length`, `has`, `add`, `remove`, `iter` |
 | `Iter<T>` | `has_next`, `next`, `iter` |

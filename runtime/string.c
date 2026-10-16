@@ -128,3 +128,65 @@ int64_t lerta_float_to_int(double value) {
 double lerta_int_to_float(int64_t n) {
   return (double)n;
 }
+
+LERTA_STATIC_STRING(true_text, "true");
+LERTA_STATIC_STRING(false_text, "false");
+
+// Immortal, so that the caller's release of it does nothing.
+LertaString *lerta_bool_text(bool value) {
+  const void *text = value ? (const void *)&true_text : (const void *)&false_text;
+  return (LertaString *)(intptr_t)text;
+}
+
+static bool is_control(uint8_t byte) { return byte < 0x20 || byte == 0x7F; }
+
+// The escape of a byte in a "..." literal (see docs/reference/syntax.md), or NULL if it needs none.
+static const char *escape_of(uint8_t byte) {
+  switch (byte) {
+    case '\\': return "\\\\";
+    case '"': return "\\\"";
+    case '#': return "\\#";
+    case '\n': return "\\n";
+    case '\t': return "\\t";
+    case '\r': return "\\r";
+    case '\0': return "\\0";
+    default: return NULL;
+  }
+}
+
+// The string as a literal that gives it: '...' if that can hold it, as it has no escapes, and
+// otherwise "...", with escapes, a control character as \u{...}.
+LertaString *lerta_string_quoted(const LertaString *s) {
+  bool plain = true;
+  for (int64_t i = 0; i < s->length; i++) {
+    if (s->bytes[i] == '\'' || is_control(s->bytes[i])) plain = false;
+  }
+  if (plain) {
+    LertaString *result = lerta_string_new(s->length + 2);
+    result->bytes[0] = '\'';
+    memcpy(result->bytes + 1, s->bytes, (size_t)s->length);
+    result->bytes[s->length + 1] = '\'';
+    return result;
+  }
+  // Each byte takes at most 7 bytes, as \u{7F}.
+  char *buffer = lerta_mem_alloc(s->length * 7 + 2);
+  int64_t length = 0;
+  buffer[length++] = '"';
+  for (int64_t i = 0; i < s->length; i++) {
+    uint8_t byte = s->bytes[i];
+    const char *escape = escape_of(byte);
+    if (escape) {
+      size_t size = strlen(escape);
+      memcpy(buffer + length, escape, size);
+      length += (int64_t)size;
+    } else if (is_control(byte)) {
+      length += (int64_t)snprintf(buffer + length, 8, "\\u{%X}", byte);
+    } else {
+      buffer[length++] = (char)byte;
+    }
+  }
+  buffer[length++] = '"';
+  LertaString *result = lerta_string_from_bytes(buffer, length);
+  lerta_mem_free(buffer);
+  return result;
+}
