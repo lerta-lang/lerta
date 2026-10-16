@@ -35,18 +35,6 @@ A request of 4 GiB or more is converted to `size_t` unchecked, so the mapping is
 
 ## Compiler
 
-### A declaration in a `finally` body crashes the compiler
-
-```
-try
-  print 'body'
-finally
-  const note = 'done'
-  print note
-```
-
-The compiler aborts with `'note' is already defined in this scope`. The finally body is generated twice, for the normal path and the rethrow, both in the enclosing scope without one of its own (`compiler/codegen/exceptions.lerta`).
-
 ### Field types of generic instances are not checked
 
 A type argument that makes a field type invalid, as `T?` in an array or a map, or a key that `==` does not compare, is accepted for a generic class or struct, and the program fails in LLVM.

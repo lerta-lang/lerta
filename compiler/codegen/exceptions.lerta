@@ -3,7 +3,7 @@ import Statement, Try from '../ast'
 import merge from './case'
 import type_of from './expression'
 import
-  generate_block_value, generate_statement, no_locals, release_scope, store_in_slot
+  generate_block, generate_block_value, no_locals, release_scope, store_in_slot
 from './function'
 import CodegenLocal, Generator, Handler, SlotLocal, Temporary from './generator'
 import IrBuilder from './ir_builder'
@@ -187,7 +187,7 @@ export const generate_try = (g: Generator, try_expression: Try) ->
     const depth = g.temporaries.length
     g.temporaries.push Temporary(operand: set_aside, owned: Ownership.INTERFACE)
     g.temporaries.push Temporary(operand: trace, owned: Ownership.TRACE)
-    generate_statement g, statement for statement in finally_body
+    generate_block g, finally_body, no_locals
     pop_temporaries g, depth
     ir.emit "store #{INTERFACE_IR_TYPE} #{set_aside}, ptr #{exception_global(ir)}"
     call_void_runtime ir, 'void @lerta_trace_restore(ptr)', "ptr #{trace}"
@@ -195,7 +195,7 @@ export const generate_try = (g: Generator, try_expression: Try) ->
   ir.start_block done_label
   const result = merge(g, type, incoming)
   # The value is held while the finally block runs, which may throw.
-  const run_finally = -> generate_statement(g, statement) for statement in finally_body ? []
+  const run_finally = -> generate_block(g, finally_body ? [], no_locals)
   while_holding g, result, type, run_finally
   result
 
