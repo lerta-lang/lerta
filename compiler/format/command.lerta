@@ -13,9 +13,9 @@ export const format_command = (paths: String[], fix: Bool) ->
       print_error "'#{path}' is not a file or a directory"
       status = 1
   const files = source_files(paths)
-  const removable = removable_annotations(files)
+  const removable = await removable_annotations(files)
   for file in files
-    status = 1 if not format_file(file, fix, removable[module_key(file)] ? [])
+    status = 1 if not await format_file(file, fix, removable[module_key(file)] ? [])
   status
 
 const source_files = (paths: String[]) ->
@@ -38,13 +38,14 @@ const add_sources = (files: String[], dir: String): void ->
 # Whether the file is in the style, without the annotations of `removable`, or is written so with
 # `fix`.
 const format_file = (path: String, fix: Bool, removable: String[]) ->
-  const source = read_file(path).text() ? return failed("#{path}: the file is not valid UTF-8")
+  const source =
+    (await read_file(path)).text() ? return failed("#{path}: the file is not valid UTF-8")
   const formatted = try
     format_source source, path, removable
   catch error: CompileError
     return failed(error.message)
   if fix
-    write_file path, formatted.text.binary if formatted.text != source
+    await write_file(path, formatted.text.binary) if formatted.text != source
     return true
   for finding in formatted.findings
     const { at, rule } = finding

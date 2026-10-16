@@ -16,8 +16,6 @@ const attempt = (label: String, run: () -> void) ->
     print "#{label}: IterError #{e.message}"
   catch e: WeakError
     print "#{label}: WeakError #{e.message}"
-  catch e: IOError
-    print "#{label}: IOError #{e.message}"
 
 const xs = [1, 2]
 attempt 'index', -> print xs[5]
@@ -57,5 +55,12 @@ const holder = ->
   const node = Node(next: nil)
   Holder(node)
 attempt 'weak', -> print holder().node.next == nil
-attempt 'read', -> print read_file('/no/such/file').length
-attempt 'write', -> write_file '/no/such/dir/file', 'x'.binary
+# Files are read and written on the event loop, so their errors come through await.
+try
+  print (await read_file('/no/such/file')).length
+catch e: IOError
+  print "read: IOError #{e.message}"
+try
+  await write_file('/no/such/dir/file', 'x'.binary)
+catch e: IOError
+  print "write: IOError #{e.message}"

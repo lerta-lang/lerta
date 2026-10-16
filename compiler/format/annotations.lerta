@@ -22,8 +22,8 @@ export const removable_annotations = (paths: String[]) ->
   const wanted = Set<String>()
   wanted.add module_key(path) for path in paths
   const removable = Map<String, String[]>()
-  for entry in [not_imported(paths)..., paths...]
-    add_removable removable, entry, wanted if not removable.has(module_key(entry))
+  for entry in [await not_imported(paths)..., paths...]
+    await add_removable(removable, entry, wanted) if not removable.has(module_key(entry))
   removable
 
 # Those of the files that none of them imports; all of them that do not parse.
@@ -31,7 +31,7 @@ const not_imported = (paths: String[]) ->
   const imported = Set<String>()
   for path in paths
     const keys = try
-      imported_files path
+      await imported_files(path)
     catch _: CompileError
       continue
     imported.add key for key in keys
@@ -46,7 +46,7 @@ struct Placed(key: String, annotation: Annotation)
 # still uses it (the import would be warned about without it).
 const add_removable = (removable: Map<String, String[]>, entry: String, wanted: Set<String>) ->
   const modules = try
-    load_modules entry
+    await load_modules(entry)
   catch _: CompileError
     removable[module_key(entry)] = []
     return

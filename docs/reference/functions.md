@@ -129,7 +129,7 @@ const xs = empty<String>()
 
 ```
 extern lerta_int_to_string as text_of: (Int) -> String
-export extern lerta_write_file as write_file: (String, Binary) -> void
+export extern lerta_rename as rename: (String, String) -> void
 ```
 
 - `extern <symbol> as <name>: <function type>` declares a C function, of the runtime or of a file that `lerta build` links with the program (see [the compiler](compiler.md)), by its C symbol, as `name` in the module; without `as <name>`, its name is the symbol. Its type gives its parameters and result: `Int` is `int64_t`, `Float` is `double` and `Float32` is `float`, which must be finite, as no `Float` or `Float32` is infinite or NaN (see [Float](types.md#float)), `Byte` is `uint8_t`, `Bool` is `bool`, `Int?` is `LertaOptionalInt` (a `bool present` and an `int64_t value`, in `runtime/lerta.h`), references are pointers, an optional one being NULL for nil; other optional values, `Bool?`, `Byte?`, `Float?` and `Float32?`, have no C type and are rejected; arguments are borrowed and a returned reference is owned. An extern is declared at the top level and can be exported like a function, and can only be called (see [function values](#function-values)).

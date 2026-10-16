@@ -58,15 +58,15 @@ class Loader
 # last. The standard modules are those embedded in the compiler.
 export const load_modules = (entry_path: String) ->
   const loader = Loader(entry_path, cwd: real_path_text('.'))
-  const source = read_entry_source(entry_path)
-  load loader, module_key(entry_path), source, nil
+  const source = await read_entry_source(entry_path)
+  await load(loader, module_key(entry_path), source, nil)
   [finished_module(loader, id) for id in loader.order]
 
 # A module is known by its key: a standard module by its name, `std:name`, and a file by its real
 # path, so that one file reached by different paths loads once, and its imports are relative to
 # where it really is. Diagnostics name a file by a path from the entry module's directory as
 # given. Returns the module's place in the loading order.
-const load = (loader: Loader, key: String, source: String, display_path: String?) ->
+const load = (loader: Loader, key: String, source: String, display_path: String?): Promise<Int> ->
   const location = module_location(loader.entry_path, display_path)
   const program = parse(tokenize(source, location), location)
   const with_builtins = key == BUILTINS_MODULE then program else [builtins_import(), program...]
@@ -77,7 +77,7 @@ const load = (loader: Loader, key: String, source: String, display_path: String?
   for statement in with_builtins
     if statement is Import
       check_standard_import statement, key, location
-      module.imported[statement] = visit(loader, statement, dirname(key), location)
+      module.imported[statement] = await visit(loader, statement, dirname(key), location)
   module.index = loader.order.length
   loader.order.push id
   id
@@ -93,15 +93,15 @@ const builtins_import = (): Statement ->
 # The module that an import names, loaded if it is not yet: `std:name` is a standard module, and a
 # path that starts with `./` or `../` is a file relative to `from`, the directory of the importing
 # file. Other names are reserved. `location` names the importing module in diagnostics.
-const visit = (loader: Loader, statement: Import, from: String, location: String): Int ->
+const visit = (loader: Loader, statement: Import, from: String, location: String): Promise<Int> ->
   const module = statement.module
   if is_standard_name(module)
     const source = imported_standard_source(statement, location)
-    return loaded(loader, module) ? load(loader, module, source, module)
+    return loaded(loader, module) ? await load(loader, module, source, module)
   const path = imported_file(statement, from, location)
   const real = real_path_text(path)
   const display_path = relative(loader.cwd, dirname(loader.entry_path), path)
-  loaded(loader, real) ? load(loader, real, read_source(path), display_path)
+  loaded(loader, real) ? await load(loader, real, await read_source(path), display_path)
 
 # The place of the module of `key` if it is loaded. An import of a module whose imports are being
 # loaded closes a cycle (see close_cycle).
@@ -163,7 +163,7 @@ export const module_key = (path: String) ->
 # The keys of the files that the file at the path imports, read without loading them.
 export const imported_files = (path: String) ->
   const location = module_location(path, nil)
-  const program = parse(tokenize(read_source(path), location), location)
+  const program = parse(tokenize(await read_source(path), location), location)
   const from = dirname(module_key(path))
   const files: String[] = []
   for statement in program

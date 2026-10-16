@@ -51,14 +51,20 @@ typedef void (*LertaProgramEnd)(void *context, int64_t exit_code, LertaString *o
 // output when `reads_output`; false if it cannot start, and `end` is not called.
 bool lerta_loop_run_program(char *file, char **args, bool reads_output, LertaProgramEnd end,
                             void *context);
+// Runs `work` on libuv's thread pool, then `done` on the loop, both with `data`. `work` must not
+// touch what the main thread does, such as Lerta's allocator.
+void lerta_loop_work(void *data, void (*work)(void *data), void (*done)(void *data));
 
 // Process (process.c): main's arguments, without the program name.
 void lerta_set_arguments(int argc, char **argv);
 
 // Files (file.c). Reads a file to its end through `read`, which returns how many bytes it put in
-// `buffer`, 0 at the end, or -1 on failure; returns NULL on failure.
-LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size),
-                               void *file);
+// `buffer`, 0 at the end, or -1 on failure; returns the bytes, which the caller frees, and their
+// count in `length`, or NULL on failure, with LERTA_OUT_OF_MEMORY in `length` if memory ran out.
+// It allocates with malloc and does not panic, so a worker may call it; the caller panics.
+enum { LERTA_OUT_OF_MEMORY = -1 };
+uint8_t *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size), void *file,
+                           int64_t *length);
 // Appends the C string to an array of strings, as a new string.
 void lerta_append_c_string(LertaArray *array, const char *text);
 
@@ -130,7 +136,9 @@ _Noreturn void lerta_os_abort(void);
 #define LERTA_REGION_SIZE ((int64_t)1 << 16)
 void *lerta_os_map_region(int64_t size);
 void lerta_os_unmap_region(void *region, int64_t size);
-LertaString *lerta_os_read_file(const char *path);
+// As lerta_read_chunks returns them; `length` is left as it is if the file cannot be opened, so the
+// caller sets it first.
+uint8_t *lerta_os_read_file(const char *path, int64_t *length);
 bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
 bool lerta_os_is_file(const char *path);
 // Whether the path names a directory, through symbolic links.

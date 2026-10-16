@@ -102,10 +102,10 @@ static int64_t read_fd(void *file, uint8_t *buffer, int64_t size) {
   }
 }
 
-LertaString *lerta_os_read_file(const char *path) {
+uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
   int fd = open(path, O_RDONLY);
   if (fd < 0) return NULL;
-  LertaString *contents = lerta_read_chunks(read_fd, (void *)(intptr_t)fd);
+  uint8_t *contents = lerta_read_chunks(read_fd, (void *)(intptr_t)fd, length);
   close(fd);
   return contents;
 }

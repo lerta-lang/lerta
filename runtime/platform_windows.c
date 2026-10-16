@@ -163,10 +163,10 @@ static int64_t read_handle(void *file, uint8_t *buffer, int64_t size) {
   return ReadFile(file, buffer, chunk, &count, NULL) ? (int64_t)count : -1;
 }
 
-LertaString *lerta_os_read_file(const char *path) {
+uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
   HANDLE file = open_file(path, GENERIC_READ, OPEN_EXISTING, 0);
   if (file == INVALID_HANDLE_VALUE) return NULL;
-  LertaString *contents = lerta_read_chunks(read_handle, file);
+  uint8_t *contents = lerta_read_chunks(read_handle, file, length);
   CloseHandle(file);
   return contents;
 }

@@ -280,16 +280,20 @@ bool lerta_is_running(int64_t id);
 // The value of an environment variable, as a Binary, or NULL if it is not set.
 LertaString *lerta_env(const LertaString *name);
 
-// Files (file.c). A failure throws.
+// Files (file.c). A failure throws, or rejects the promise of one that runs on the thread pool.
+LertaPromise *lerta_read_file_async(const LertaString *path);
+LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data);
+LertaPromise *lerta_remove_tree_async(const LertaString *path);
+// For the seed's IR until the next refresh: done at once.
 LertaString *lerta_read_file(const LertaString *path);
 void lerta_write_file(const LertaString *path, const LertaString *data);
+void lerta_remove_tree(const LertaString *path);
 bool lerta_is_file(const LertaString *path);
 bool lerta_is_dir(const LertaString *path);
 // The names of the entries, unchecked and in no order (std:io checks and sorts them).
 LertaArray *lerta_list_dir_names(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);
 LertaString *lerta_make_temp_dir(void);
-void lerta_remove_tree(const LertaString *path);
 void lerta_make_dir(const LertaString *path);
 void lerta_rename(const LertaString *from, const LertaString *to);
 

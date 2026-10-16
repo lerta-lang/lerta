@@ -38,14 +38,14 @@ export const build_and_run = (request: BuildRequest, args: String[]) -> build_th
 # code that the executable exits with. clang's messages go to stderr as clang writes them, and its
 # failure exits with code 1.
 const build_then = (request: BuildRequest, run_args: String[]?) ->
-  const program = check_program(request.source, request.warnings_as_errors)
+  const program = await check_program(request.source, request.warnings_as_errors)
   reject_input_as_output request, program
   const not_utf8 = CompileError(message: 'the temporary directory is not valid UTF-8')
   const dir = make_temp_dir().text() ? throw not_utf8
   const code = try
     await build_in_dir(request, program, dir, run_args)
   finally
-    remove_tree dir
+    await remove_tree(dir)
   exit code
 
 # The output would replace a file that the build reads, which another path may name: a module,
@@ -91,7 +91,7 @@ const build_in_dir = (
 # once as there are CPUs; nil if it fails for any.
 const compile_modules = (modules: String[], flags: String[], dir: String) ->
   const paths = [join(dir, "module#{i}") for _, i in modules]
-  write_file "#{path}.ll", text.binary for (path, text) in paths.zip(modules)
+  await write_file("#{path}.ll", text.binary) for (path, text) in paths.zip(modules)
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
   const job = (path: String) ->
     ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]

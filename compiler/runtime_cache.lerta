@@ -38,34 +38,34 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
   const objects = [join(dir, name) for name in object_names(libuv)]
   const files = [join(dir, name) for name in cached_file_names(libuv)]
   const runtime = ->
-    const function_attributes = read_text(join(dir, ATTRIBUTES_FILE))
-    const coro_end_type = read_text(join(dir, CORO_END_FILE))
+    const function_attributes = await read_text(join(dir, ATTRIBUTES_FILE))
+    const coro_end_type = await read_text(join(dir, CORO_END_FILE))
     CachedRuntime(
       objects
       function_attributes
       libraries: libuv.libraries
       coro_end_type: coro_end_type
     )
-  return runtime() if is_complete(files)
+  return await runtime() if is_complete(files)
   if files.iter().any((file) -> is_file(file))
     # Another build may have renamed its runtime into place meanwhile, which puts all the files
     # there at once. Otherwise a person has removed some of them; removing the rest here could
     # pull them from under a build that is linking with them.
-    return runtime() if is_complete(files)
+    return await runtime() if is_complete(files)
     throw CompileError(message: "the cached runtime #{dir} is incomplete: remove it")
-  remove_abandoned_staging cache, runtime_name
+  await remove_abandoned_staging(cache, runtime_name)
   const staging_dir = "#{dir}#{STAGING_INFIX}#{process_id}-#{basename(temp_dir)}"
   make_dir staging_dir
   const compiled = try
     await compile_runtime(optimize, target, libuv, staging_dir, temp_dir)
   catch error
-    remove_tree staging_dir
+    await remove_tree(staging_dir)
     throw error
   if not compiled
-    remove_tree staging_dir
+    await remove_tree(staging_dir)
     return nil
-  move_into_place staging_dir, dir, files
-  runtime()
+  await move_into_place(staging_dir, dir, files)
+  await runtime()
 
 # Where a build compiles the runtime before it moves it into place:
 # `<dir>.staging-<process ID>-<name of the build's temporary directory>`. The ID tells a later build
@@ -82,7 +82,7 @@ const remove_abandoned_staging = (cache: String, name: String) ->
     const id = suffix.split('-')[0].parse_int() ? continue
     continue if is_running(id)
     try
-      remove_tree join(cache, entry)
+      await remove_tree(join(cache, entry))
     catch _
       # Another build may have removed it first, and one left in place only takes space.
       continue
@@ -94,7 +94,7 @@ const clang_version_text = ->
   output.to_binary().text() ? throw CompileError(message: 'clang --version is not valid UTF-8')
 
 const read_text = (path: String) ->
-  read_file(path).text() ? throw CompileError(message: "#{path} is not valid UTF-8")
+  (await read_file(path)).text() ? throw CompileError(message: "#{path} is not valid UTF-8")
 
 # `$LERTA_CACHE_DIR`, or else the system's place for caches, made if missing. An empty variable
 # counts as unset, as the XDG specification has it.
@@ -190,9 +190,9 @@ const compile_runtime = (
   const source_dir = join(temp_dir, 'runtime')
   make_dir source_dir
   for path in RUNTIME_PATHS
-    write_file join(source_dir, basename(path)), embedded_source(path)!.binary
+    await write_file(join(source_dir, basename(path)), embedded_source(path)!.binary)
   const libuv_dir = join(temp_dir, 'libuv')
-  const libuv_includes = write_libuv_sources(libuv_dir)
+  const libuv_includes = await write_libuv_sources(libuv_dir)
   # uv.h, which the runtime includes, asks nothing of its users but where it is; libuv's own flags
   # are for its sources, whose warnings are not the program's, which a build prints.
   const flags = [build_flags(optimize, target)..., libuv_includes...]
@@ -208,8 +208,8 @@ const compile_runtime = (
   ]
   return false if not await run_clang_jobs(jobs)
   const ir = await clang_probe_ir(flags, temp_dir) ? return false
-  write_file join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir).binary
-  write_file join(staging_dir, CORO_END_FILE), coro_end_type(ir).binary
+  await write_file(join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir).binary)
+  await write_file(join(staging_dir, CORO_END_FILE), coro_end_type(ir).binary)
   true
 
 # The IR that clang writes, with `flags`, for a function that ends a coroutine; nil if clang fails.
@@ -217,7 +217,7 @@ const compile_runtime = (
 const clang_probe_ir = (flags: String[], temp_dir: String) ->
   const source = join(temp_dir, 'probe.cc')
   const code = 'extern "C" void lerta_probe(void *handle) { __builtin_coro_end(handle, 0); }'
-  write_file source, code.binary
+  await write_file(source, code.binary)
   const output: Byte[] = []
   const args = ['-x', 'c++', '-std=c++20', '-S', '-emit-llvm', flags..., source, '-o', '-']
   return nil if await run('clang', args, output) != 0
@@ -257,6 +257,6 @@ const move_into_place = (staging_dir: String, dir: String, files: String[]) ->
   try
     rename staging_dir, dir
   catch _
-    remove_tree staging_dir
+    await remove_tree(staging_dir)
     if not is_complete(files)
       throw CompileError(message: "cannot move the compiled runtime into the cache: #{dir}")

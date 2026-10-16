@@ -32,7 +32,6 @@ typedef struct {
 // A write out of the buffer on libuv's thread pool, with blocking writes, which leave the file
 // descriptors blocking for print and the programs that inherit them. One at most is in flight.
 typedef struct {
-  uv_work_t request;
   Segments segments;
   // Which streams have failed: those known as it starts, and those that fail in it.
   bool failed[STDERR_FD + 1];
@@ -115,8 +114,8 @@ static Segments take_buffered(void) {
   return taken;
 }
 
-static void work(uv_work_t *request) {
-  WriteOut *write_out = request->data;
+static void work(void *data) {
+  WriteOut *write_out = data;
   write_segments(&write_out->segments, write_out->failed);
   // Set before the lock, which a panicking main thread may hold as it spins on it. A waiter that
   // saw it unset under the lock is in uv_cond_wait by the time the lock is taken here.
@@ -171,9 +170,8 @@ static void settle_waiters(void) {
 
 static void start_write_out(void);
 
-static void after_work(uv_work_t *request, int status) {
-  (void)status;
-  WriteOut *write_out = request->data;
+static void after_work(void *data) {
+  WriteOut *write_out = data;
   if (!write_out->finished) finish(write_out);
   free_segments(&write_out->segments);
   free(write_out);
@@ -184,11 +182,10 @@ static void after_work(uv_work_t *request, int status) {
 static void start_write_out(void) {
   if (in_flight != NULL || buffered.count == 0) return;
   WriteOut *write_out = lerta_checked_calloc(1, sizeof(WriteOut));
-  write_out->request.data = write_out;
   write_out->segments = take_buffered();
   memcpy(write_out->failed, failed, sizeof failed);
-  uv_queue_work(uv_default_loop(), &write_out->request, work, after_work);
-  // Only once it is queued: a panic in uv_queue_work, as for a stack overflow, would otherwise wait
+  lerta_loop_work(write_out, work, after_work);
+  // Only once it is queued: a panic in lerta_loop_work, as for a stack overflow, would otherwise wait
   // for a write out that never runs. Its bytes are then lost, or come out of order with the panic's
   // report if the worker has started, as the program ends.
   in_flight = write_out;

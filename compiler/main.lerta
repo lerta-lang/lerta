@@ -32,9 +32,9 @@ const fail_usage = ->
   exit 2
 
 # Prints what `dump` makes of the source file.
-const run_dump = (args: String[], dump: (String) -> String) ->
+const run_dump = (args: String[], dump: (String) -> Promise<String>) ->
   fail_usage() if args.length != 1 or not is_value(args[0])
-  await stdout.write(dump(args[0]))
+  await stdout.write(await dump(args[0]))
 
 # The files that clang links with the program, as it takes them.
 const LINKED_EXTENSIONS = ['.c', '.o', '.ll', '.a', '.obj', '.lib']
@@ -118,15 +118,16 @@ const fmt_command = (args: String[]) ->
   const fix = args.length > 0 and args[0] == '--fix'
   const paths = [arg for arg, i in args when i > 0 or not fix]
   fail_usage() if paths.length == 0 or paths.any((path) -> not is_value(path))
-  exit format_command(paths, fix)
+  exit await format_command(paths, fix)
 
 # The dumps of one module read no module that it imports.
-const dump_file_tokens = (path: String) -> dump_tokens(tokenize(read_entry_source(path), path))
+const dump_file_tokens = (path: String) ->
+  dump_tokens tokenize(await read_entry_source(path), path)
 
 const dump_file_ast = (path: String) ->
-  dump_ast parse(tokenize(read_entry_source(path), path), path)
+  dump_ast parse(tokenize(await read_entry_source(path), path), path)
 
-const dump_program_checked = (path: String) -> dump_checked(check_program(path, false))
+const dump_program_checked = (path: String) -> dump_checked(await check_program(path, false))
 
 const command = argv.first() ? ''
 const args = [argv[i] for i in 1...argv.length]
@@ -135,7 +136,7 @@ try
   case command
     when 'build' then await build_command(args)
     when 'run' then await run_command(args)
-    when 'fmt' then fmt_command(args)
+    when 'fmt' then await fmt_command(args)
     when 'dump-tokens' then await run_dump(args, dump_file_tokens)
     when 'dump-ast' then await run_dump(args, dump_file_ast)
     when 'dump-checked' then await run_dump(args, dump_program_checked)
