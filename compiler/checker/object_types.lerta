@@ -11,7 +11,7 @@ import
 from './diagnostics'
 import add_function, add_generic, CheckState, method_key from './functions'
 import
-  GenericRef, Instance, instantiate, make_generic_function, MAX_TYPE_DEPTH, Receiver,
+  GenericRef, Instance, instantiate, make_generic_function, MAX_INSTANCES, MAX_TYPE_DEPTH, Receiver,
   reject_bad_type_parameters
 from './generics'
 import builtin_type, imported_type from './imports'
@@ -296,12 +296,17 @@ const check_info = (program: ProgramWide, info: ObjectInfo) ->
   info.deinit = instance_of('deinit') if info.has_deinit
 
 # An instance whose members make ever larger ones, as `A<T>` does with a field of `A<T[]>`, which
-# its type alone may not tell, is stopped at the depth that ends a generic function's.
+# its type alone may not tell, is stopped at the depth or the number that ends a generic
+# function's.
 const reject_endless_instance = (program: ProgramWide, info: ObjectInfo): void ->
   const generic = info.generic ? return
-  return if not info.type.args.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
+  const too_deep = info.type.args.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
+  # The instance is counted already, as a generic function's is not before it is added.
+  const too_many = generic.instances.length > MAX_INSTANCES
+  return if not too_deep and not too_many
   const shared = program.shared[info.module_index]
   enter_module shared
   const { name, position } = info.declaration.name
-  const message = "'#{name}' needs instances without end, each with type arguments nested deeper"
+  const endless = "'#{name}' needs instances without end, each with type arguments nested deeper"
+  const message = too_deep then endless else "'#{name}' needs more than #{MAX_INSTANCES} instances"
   fail_in_context program, position, message, "from #{format_type(generic.instances[0].type)}"

@@ -37,6 +37,9 @@ export class Instance
 
 # See docs/reference/functions.md#generic-functions.
 export const MAX_TYPE_DEPTH = 32
+# Instances that each call more than one of deeper type arguments would number exponentially many
+# before any reached MAX_TYPE_DEPTH.
+export const MAX_INSTANCES = 1000
 
 export class GenericFunction
   name: Identifier
@@ -108,6 +111,9 @@ export const instantiate = (
   if found == nil and type_arguments.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
     const name = generic.name.name
     const message = "'#{name}' needs instances without end, each with type arguments nested deeper"
+    fail_in_context program, at, message, "from #{describe(generic, generic.instances[0])}"
+  if found == nil and generic.instances.length >= MAX_INSTANCES
+    const message = "'#{generic.name.name}' needs more than #{MAX_INSTANCES} instances"
     fail_in_context program, at, message, "from #{describe(generic, generic.instances[0])}"
   const variant = same_arguments.length
   const instance = found ? add_instance(program, ref, type_arguments, methods, variant, at)
