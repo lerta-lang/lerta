@@ -50,8 +50,9 @@ print (flags >> 15).to_int() + offset.to_int()
 
 ## Float32
 
-- `Float32` is a 32-bit IEEE 754 float, finite as `Float` is: its operations are in 32 bits and throw where the result would not be finite, it compares, is a map key and a set item, and is written by an array's `to_string`, and `case` cannot branch on it. It does not mix with `Float` in one operation. Its methods are only `equals`, `compare` and `hash` so far, so it is not Stringable.
+- `Float32` is a 32-bit IEEE 754 float, finite as `Float` is: its operations are in 32 bits and throw where the result would not be finite, it compares, is a map key and a set item, and is written by an array's `to_string`, and `case` cannot branch on it. It does not mix with `Float` in one operation.
 - Where a `Float32` or a `Float32?` is expected, a float literal, or an integer one, is a `Float32`: it rounds to the nearest `Float32` at once, and one too large to be finite as a `Float32` is an error.
+- `x.to_float32()` gives the nearest `Float32` to a `Float`, throwing `float overflow` unless it is finite as a `Float32`, and `x.to_float()` the `Float` of a `Float32`, exactly. `x.to_string()` gives the fewest digits that read back as the `Float32`, written as a `Float`'s are: `0.1`, `0.33333334`, `3.4028235e+38`.
 - A C function takes and gives a `Float32` as a `float`.
 
 ## Bool
