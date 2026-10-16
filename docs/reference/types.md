@@ -33,7 +33,7 @@ print (flags >> 15).to_int() + offset.to_int()
 
 - `Int8`, `Int16` and `Int32` are signed integers of 8, 16 and 32 bits, and `UInt16`, `UInt32` and `UInt64` unsigned ones of 16, 32 and 64 bits; `Byte` is the unsigned one of 8 bits and `Int` the signed one of 64, with no second names.
 - Each takes the rules of `Int` if it is signed and those of `Byte` if it is unsigned: `+` `-` `*` throw `integer overflow` when the result does not fit, `/` and `%` throw `division by zero`, and the least value of a signed type divided by `-1` overflows; comparisons follow the sign; prefix `-` is for the signed ones; `&` `|` `^` `<<` `>>` work by the type's bits, a shift throwing `shift out of range` from the bits up, and `<<` of a signed type checked as that of `Int` is; `wrapping_add`, `wrapping_sub` and `wrapping_mul` wrap around modulo 2 to the bits.
-- An integer literal is of the integer type that is expected, and must fit in it; elsewhere it is an `Int`. A `UInt64` literal cannot be above the largest `Int` so far.
+- An integer literal is of the integer type that is expected, and must fit in it; elsewhere it is an `Int`. `CodePoint` is an alias of `UInt32` for a Unicode code point; where a `UInt32` is expected, a string literal of one code point is that code point, `c == 'é'`, as a string literal of one byte is that byte where a `Byte` is. A `UInt64` literal cannot be above the largest `Int` so far.
 - There are no implicit conversions between integer types. `x.to_int()`, `x.to_byte()`, `x.to_int8()`, `x.to_int16()`, `x.to_int32()`, `x.to_uint16()`, `x.to_uint32()` and `x.to_uint64()` convert a value of any integer type to that type, throwing `integer overflow` unless it fits there, as a negative value fits in no unsigned type. `x.to_float()` gives the nearest `Float`. `x.to_string()` gives the decimal digits, with a `-` for a negative value.
 - They compare with `==`, are map keys and set items, are written by an array's `to_string`, and are patterns of a `case`; arrays hold each in 8 bytes so far. A C function may take and give them as the C types of their bits and sign, as `int32_t`.
 
@@ -62,7 +62,7 @@ print (flags >> 15).to_int() + offset.to_int()
 - `s.without_prefix(prefix)` gives what follows `prefix` in `s`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. `s.without_suffix(suffix)` gives what comes before `suffix`, or nil.
 - `a.compare(b)` is negative, zero or positive as `a` goes before, with or after `b` in the order of their bytes, which does not depend on a locale: a prefix goes first.
 - `==` and `!=` compare two `String`s byte by byte.
-- A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as `Int`s, in order, so `'é'` gives 233; its bytes are `s.binary`.
+- A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as `CodePoint`s, in order, so `'é'` gives 233; its bytes are `s.binary`.
 - Why code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
 - Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `push` onto a `String[]` and `join` is O(n) (the Python approach), an idiom that stays valid once ropes make `+` O(1).
 

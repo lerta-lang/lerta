@@ -1,4 +1,5 @@
-# Facts about literals: which expressions take their type from the context, and literals as Bytes.
+# Facts about literals: which expressions take their type from the context, and integer and
+# string literals as the integer types that are expected.
 import
   BinaryOperation, Expression, FloatLiteral, IntegerLiteral, StringLiteral, UnaryOperation
 from '../ast'
@@ -6,7 +7,7 @@ import fail from './diagnostics'
 import is_numeric_operator from './operator'
 import ProgramWide from './shared'
 import float_bits, integer_float_text from '../float_literals'
-import float_type, format_type, int_type, integer_range, Type from '../types'
+import float_type, format_type, int_type, integer_range, is_kind, Type from '../types'
 
 # Whether an expression takes its type from the context: a literal, or arithmetic on such
 # expressions, so that `1 + 2` is a Byte where one is expected.
@@ -19,9 +20,11 @@ export const is_contextual = (expression: Expression): Bool ->
       is_numeric_operator(operator) and is_contextual(left) and is_contextual(right)
     else false
 
-# An integer literal where an integer type other than Int is expected, or a string literal where a
-# Byte is, which must fit in it.
-export const integer_literal = (program: ProgramWide, literal: Expression, type: Type) ->
+# An integer literal where an integer type other than Int is expected, or a string literal of one
+# character where a Byte or a UInt32 is: one byte, or one code point.
+export const integer_literal = (
+  program: ProgramWide, literal: IntegerLiteral | StringLiteral, type: Type
+) ->
   const message =
     case literal
       when IntegerLiteral
@@ -30,9 +33,12 @@ export const integer_literal = (program: ProgramWide, literal: Expression, type:
         const fits = value != nil and value >= least and value <= most
         fits then nil else "integer literal does not fit in #{format_type(type)}"
       when StringLiteral
-        const fits = literal.value.binary.length == 1
-        fits then nil else 'a string literal used as a Byte must be one byte long'
-      else 'a string literal used as a Byte must be one byte long'
+        if is_kind(type, 'UInt32')
+          const one = [c for c in literal.value].length == 1
+          one then nil else 'a string literal used as a UInt32 must be one code point'
+        else
+          const fits = literal.value.binary.length == 1
+          fits then nil else 'a string literal used as a Byte must be one byte long'
   fail program, literal.position, message if message
   type
 

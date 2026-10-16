@@ -47,7 +47,9 @@ export const type_of = (body: Body, expression: Expression, expected: Type? = ni
 # expected is a T, as where a T is.
 const compute_type = (body: Body, expression: Expression, expected: Type?): Type ->
   const literal_kind = expected != nil then inner_of(expected) else nil
-  const wants_byte = literal_kind != nil and is_kind(literal_kind, 'Byte')
+  # A string literal of one character is a byte where a Byte is expected, a code point where a
+  # UInt32 is.
+  const wants_character = literal_kind != nil and is_one_of_kinds(literal_kind, ['Byte', 'UInt32'])
   # An integer literal is an Int unless another integer type is expected.
   const wants_integer =
     literal_kind != nil and is_integer(literal_kind) and not is_kind(literal_kind, 'Int')
@@ -55,7 +57,7 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
   const program = body.program
   case expression
     when StringLiteral
-      return integer_literal(program, expression, literal_kind!) if wants_byte
+      return integer_literal(program, expression, literal_kind!) if wants_character
       type_of_literal_member(body, expression, expected) ? string_type
     when Interpolation
       for part in expression.parts

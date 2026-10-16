@@ -26,6 +26,9 @@ export interface Stringable
 # Stops the program at once, for a bug that no caller could handle (see docs/reference/errors.md).
 export extern lerta_panic_string as panic: (String) -> never
 
+# A Unicode code point, which a String gives and a string literal of one code point stands for.
+export type CodePoint = UInt32
+
 # What `throw` takes, and `catch` takes back: a program declares its own types of errors.
 export interface Error
   message: String
@@ -69,15 +72,16 @@ extend Byte
 
 extend String
   to_string = -> @
-  # The code points, as Ints. A String is always valid UTF-8, so its sequences need no checks.
-  iter = (): Iter<Int> ->
+  # The code points. A String is always valid UTF-8, so its sequences need no checks: the bits of the
+  # lead byte that its length leaves, then 6 of each byte that continues it.
+  iter = (): Iter<CodePoint> ->
     const bytes = @binary
     var i = 0
     const has_next = -> i < bytes.length
     const next = ->
       const length = lerta_utf8_sequence_length(bytes[i])
-      var code = bytes[i].to_int() - UTF8_LEAD_OFFSETS[length - 1]
-      code = code * 64 + bytes[i + k].to_int() - 0x80 for k in 1...length
+      var code = (bytes[i] & UTF8_LEAD_BITS[length - 1]).to_uint32()
+      code = code << 6 | (bytes[i + k] & 0x3F).to_uint32() for k in 1...length
       i += length
       code
     { has_next, next }
@@ -143,8 +147,8 @@ extend Binary
     const bytes = start == 0 and end == @length then @ else @slice(start, end)
     lerta_is_utf8(bytes) then lerta_binary_as_string(bytes)
 
-# What a lead byte of a sequence of 1 to 4 bytes adds to the bits of the code point it holds.
-const UTF8_LEAD_OFFSETS = [0, 0xC0, 0xE0, 0xF0]
+# The bits of a lead byte that hold a code point, by the length of its sequence.
+const UTF8_LEAD_BITS: Byte[] = [0x7F, 0x1F, 0x0F, 0x07]
 
 extend String[]
   # The Strings one after another, with the separator between each two.

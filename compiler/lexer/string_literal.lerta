@@ -12,7 +12,7 @@ export struct CodePart
 
 export type TemplatePart = TextPart | CodePart
 
-const MAX_CODE_POINT = 0x10FFFF
+const MAX_CODE_POINT: CodePoint = 0x10FFFF
 
 # Reads the literal whose opening quote is at `start`. Returns its parts and the index after it.
 export const scan_double_quoted = (line: SourceLine, start: Int) ->
@@ -68,30 +68,31 @@ const simple_escape = (kind: Byte) ->
 # The code point that 1 to 6 hexadecimal digits give, or nil if they do not give one.
 const parse_code_point = (digits: Binary) ->
   return nil if digits.length == 0 or digits.length > 6
-  var value = 0
+  var value: CodePoint = 0
   for digit in digits
     const digit_value = hex_digit_value(digit) ? return nil
-    value = value * 16 + digit_value
+    value = value << 4 | digit_value.to_uint32()
   const is_surrogate = value >= 0xD800 and value <= 0xDFFF
   value <= MAX_CODE_POINT and not is_surrogate then value
 
-const encode_utf8 = (code_point: Int) ->
+# A lead byte holds the high bits after the marks of the sequence's length, and each continuation
+# byte 6 bits after its mark.
+const encode_utf8 = (code_point: CodePoint) ->
   const bytes =
     case
       when code_point < 0x80 then [code_point.to_byte()]
-      when code_point < 0x800 then [(0xC0 + code_point / 0x40).to_byte(), continuation(code_point)]
+      when code_point < 0x800 then [lead(0xC0, code_point >> 6), continuation(code_point)]
       when code_point < 0x10000
-        const lead = (0xE0 + code_point / 0x1000).to_byte()
-        [lead, continuation(code_point / 0x40), continuation(code_point)]
+        [lead(0xE0, code_point >> 12), continuation(code_point >> 6), continuation(code_point)]
       else
-        const lead = (0xF0 + code_point / 0x40000).to_byte()
-        const second = continuation(code_point / 0x1000)
-        const third = continuation(code_point / 0x40)
-        [lead, second, third, continuation(code_point)]
+        const high = [lead(0xF0, code_point >> 18), continuation(code_point >> 12)]
+        [high..., continuation(code_point >> 6), continuation(code_point)]
   bytes.to_binary()
 
+const lead = (marks: UInt32, bits: UInt32) -> (marks | bits).to_byte()
+
 # The continuation byte of the low 6 bits.
-const continuation = (bits: Int) -> (0x80 + bits % 0x40).to_byte()
+const continuation = (bits: UInt32) -> (0x80 | bits & 0x3F).to_byte()
 
 # The index of the `}` that closes an interpolation, skipping nested braces and string literals.
 # Each arm moves past what it reads.
