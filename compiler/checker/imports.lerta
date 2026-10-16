@@ -12,7 +12,7 @@ import BUILTINS_MODULE from '../loader'
 import ObjectInfo, object_type from './object_types'
 import Local from './scopes'
 import ProgramWide, Shared from './shared'
-import alias_type, is_builtin_type_name from './type_names'
+import alias_type from './type_names'
 import Type from '../types'
 
 # A C function, by its symbol (see Extern).
@@ -120,11 +120,18 @@ const add_import = (shared: Shared, statement: Import, exporter: Int) ->
     if not program.shared[exporter].exported.has(name.name)
       fail program, name.position, "'#{statement.module}' has no export '#{name.name}'"
     const local = imported.alias ? name
-    const names_type = names_a_type(program.shared[exporter].exported[name.name]!)
-    const is_taken = names.has(local.name) or (names_type and is_builtin_type_name(local.name))
-    fail_already_defined program, local if is_taken
+    fail_already_defined program, local if names.has(local.name)
     const source = ExportRef(module_index: exporter, name: name.name)
     names[local.name] = ImportedName(source, name: local, used: false, module: statement.module)
+
+# Whether the module imports a value by the name: a function, a `const` or an extern.
+export const imports_value = (shared: Shared, name: String) ->
+  const source = shared.imports.names[name]?.source ? return false
+  case source
+    when ExternExport then true
+    when ExportRef
+      const exported = shared.program.shared[source.module_index].exported[source.name]!
+      not names_a_type(exported)
 
 const names_a_type = (statement: Exportable) ->
   case statement

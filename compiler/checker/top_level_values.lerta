@@ -6,6 +6,8 @@ import ProgramWide from './shared'
 
 export class TopLevelValues
   names: Set<String>
+  # The top-level functions, known before they are declared, as types are resolved earlier.
+  function_names: Set<String>
   # A value's local once the top-level code has declared it; until then its type is unknown.
   locals: Map<String, Local> = Map()
   # The values whose declarations have an error, which what uses them cannot be checked without.
@@ -21,9 +23,12 @@ export const top_level_value = (statement: Statement) ->
 
 export const top_level_values = (program: Statement[]) ->
   const names = Set<String>()
+  const function_names = Set<String>()
   for statement in program
-    names.add declaration.name.name if const declaration = top_level_value(statement)
-  TopLevelValues names
+    continue if statement is not Declaration
+    const set = statement.value is FunctionLiteral then function_names else names
+    set.add statement.name.name
+  TopLevelValues names, function_names
 
 # A use of a value whose declaration has an error cannot be checked, and has no error of its own.
 export const abort_if_failed = (values: TopLevelValues, name: String) ->

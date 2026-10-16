@@ -4,7 +4,7 @@
 
 - An indented block holds statements, one per line.
 - A name declared in a block (such as a loop variable) is visible only inside it. Declaring it again in the same block is an error.
-- A declaration may have the name of one visible from an outer scope, a top-level name or a builtin (shadowing). Inside its block, the name refers to the new declaration. [Builtins](builtins.md) live outside every scope: inside `for print in 0...3`, `print` is the loop variable.
+- A declaration may have the name of one visible from an outer scope, a top-level name or a builtin (shadowing). Inside its block, the name refers to the new declaration. [Builtins](builtins.md) live outside every scope: inside `for print in 0...3`, `print` is the loop variable. A name of the module, top-level or imported, shadows a builtin type as well as a builtin value, in the whole module, as types and values share one namespace: after `const Int = 1`, `x: Int` is an error, `'Int' is a value, not a type`, and after `class print`, `print(...)` constructs the class. A local shadows only the value: where a type is written, its name still names the type. What the language does through builtin types and interfaces, as literals, `for`, interpolation and `catch` do, does not go through the names that shadow them.
 
 ## if and while
 

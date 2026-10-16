@@ -11,6 +11,8 @@ from './imports'
 import object_type from './object_types'
 import Body from './shared'
 import abort_if_failed, fail_runs_later, reject_pending from './top_level_values'
+import has_alias from './type_names'
+import has_declared_type from './interfaces'
 
 # The local of the name: in the scopes, or outside them, as a function literal captures it from
 # around it, as a top-level value that a function or a method sees, or as an imported value.
@@ -49,6 +51,7 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
     fail program, position, "'#{name}' is a type; construct it as #{name}(...)"
   fail program, position, "'#{name}' is a type" if shared.enums.has(name)
   fail program, position, "'#{name}' is an interface" if shared.interfaces.has(name)
+  fail program, position, "'#{name}' is a type" if has_alias(shared, name)
   if const imported = use_import(shared, name)
     const exported = imported_export(program, imported)
     if exported is ValueExport and exported.type == nil
@@ -69,6 +72,7 @@ export const generic_callee = (body: Body, callee: Expression) ->
   const name = callee.name
   return nil if lookup(body, name) != nil
   return nil if body.sees_top_level and shared.top_level.names.has(name)
+  return nil if has_declared_type(shared, name) or has_alias(shared, name)
   return generic_function(shared, name) if has_function(shared, name)
   const imported = shared.imports.names[name]
   const exported =

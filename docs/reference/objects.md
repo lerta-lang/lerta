@@ -19,7 +19,7 @@ c.increment()
 print c.count
 ```
 
-- `class` and `struct` declare a type at the top level. Its name cannot be the name of a builtin type, a top-level function or another top-level name: types and values share one namespace (`class A` then `const A = 1` is an error, `'A' is already defined`). Like functions, types can be used anywhere in the module, so they can refer to each other and to themselves (`next: Node?`).
+- `class` and `struct` declare a type at the top level. Its name cannot be the name of a top-level function or another top-level name: types and values share one namespace (`class A` then `const A = 1` is an error, `'A' is already defined`). It may be that of a builtin, type or value, which it then shadows in the whole module (see [control flow](control-flow.md)). Like functions, types can be used anywhere in the module, so they can refer to each other and to themselves (`next: Node?`).
 - **Members**, one per line:
   - `name: Type` is a field without an initializer: a constructor argument. If its type is optional, the argument may be left out, and the field is nil. A field may hold a function (`on_click: () -> void`); `b.on_click()` calls it (see [function values](functions.md#function-values)).
   - `name = value` or `name: Type = value` is a field computed at construction from its initializer.
@@ -100,7 +100,7 @@ const shapes: Shape[] = [Square(side: 2), { name: 'dot', area: -> 0 }]
 print shape.area() for shape in shapes
 ```
 
-- `interface Name` at the top level, followed by an indented block of members, `name: Type`, one per line, declares what a type must have to satisfy it. Its name is in the namespace of types and values, and cannot be that of a builtin type, as a class's.
+- `interface Name` at the top level, followed by an indented block of members, `name: Type`, one per line, declares what a type must have to satisfy it. Its name is in the namespace of types and values, and may be that of a builtin, as a class's.
 - **Generic interfaces.** `interface Source<T>` declares type parameters, which take no bound, and its type is written with as many type arguments, `Source<Int>`. A type satisfies it with the type arguments in the members' types. The types that the type arguments make in the members must be valid, as the fields of a [generic class](#classes-and-structs): `Source<Int?>`, whose `items: () -> T[]` would give an `Int?[]`, is an error where it is first written.
 - **`Self`** in the members stands for the type that satisfies the interface: `equals: (Self) -> Bool` is satisfied by a `Point` with `equals: (Point) -> Bool`. An interface whose members name `Self` can only bound type parameters, not be a type of values, since its values could not tell which type `Self` is.
 - A type **satisfies** an interface when it has, for each member, a method, a field or a property of the member's name and of exactly its type. Nothing needs to declare that it does (structural typing). A method may come from an extend in effect where it is checked; one with type parameters of its own has no one type, and satisfies no member. A function member, such as `area: () -> Int`, is satisfied alike by a method and by a field that holds a function. A union satisfies a member by a field that every member of it has, of the member's type, as it is read through the union (see [unions](types.md#unions)).
