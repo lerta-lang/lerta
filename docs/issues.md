@@ -53,10 +53,6 @@ Cause: `add_instance` and `instance_field` in `compiler/checker/object_types.ler
 
 `const Int = 3` is accepted, while `class Int` is rejected as already defined, though types and values share one namespace.
 
-### `-0` where a Float is expected is `0.0`
-
-`const c: Float = -0` prints `0.0`, while `-(0)` gives `-0.0`. The parser folds `-0` into the integer literal 0 (`compiler/parser/expression.lerta`), and codegen makes it `0.0` (`compiler/codegen/expression.lerta`).
-
 ### Parsing takes cubic time in the nesting of parentheses
 
 `print ((…1…))` with 800 levels takes 4.5 s, and with 2000 more than a minute. At each `(`, `looks_like_function_literal` (`compiler/parser/compound.lerta`) finds the closing one through `peek_at`, which counts from the current token each time (`compiler/parser/token_stream.lerta`).
