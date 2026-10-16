@@ -6,6 +6,7 @@ import
   NamedValue, Parameter, Pass, Position, RecordLiteral, Statement, Try, TupleLiteral
 from '../ast'
 import TokenKind from '../lexer/tokens'
+import starts_block from './block_literal'
 import
   at_spread, parse_expression, parse_identifier, parse_loop_header, parse_or, take_apart_item
 from './expression'
@@ -212,6 +213,9 @@ const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
   tokens.expect_word 'when'
   # A pattern stops before `then`, which begins the arm's value.
   const parse_pattern = -> parse_or(tokens)
+  if has_subject and starts_block(tokens)
+    const patterns = parse_pattern_block(tokens, parse_pattern)
+    return CaseArm(patterns, body: parse_arm_body(tokens, 'else'))
   const patterns =
     if has_subject
       tokens.parse_separated ',', parse_pattern
@@ -219,8 +223,18 @@ const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
       [parse_pattern()]
   CaseArm patterns, body: parse_arm_body(tokens, 'then')
 
+# Patterns in an indented block, as the items of a literal are, and `then` at the indentation of
+# `when`, which the body follows as it follows `else`: `when` and then `'a', 'b'` and `'c'` on the
+# lines below, and `then 1`.
+const parse_pattern_block = (tokens: TokenStream, parse_pattern: () -> Expression) ->
+  const patterns: Expression[] = []
+  tokens.read_block_items -> patterns.push(parse_pattern())
+  tokens.expect 'then', "'then'"
+  patterns
+
 # A simple statement on the same line (`when c then x`, `else i += 1`), or an indented block.
-# `arm` is 'then' or 'else'.
+# `arm` is 'then', which comes first, or 'else', which is read already, as `then` is after a block
+# of patterns.
 const parse_arm_body = (tokens: TokenStream, arm: TokenKind) ->
   const is_inline = arm == 'then' then tokens.accept('then') else tokens.peek().kind != NEWLINE
   if is_inline

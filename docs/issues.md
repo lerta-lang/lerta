@@ -18,8 +18,3 @@ const x: A<Int>? = nil
 
 The compiler never ends: the instances of the classes it makes grow without end. A class that holds a larger instance of itself is rejected where it is written (`reject_larger_self` in `compiler/checker/object_types.lerta`), but that looks at one declaration only. Checking each generic declaration once for what its type parameters must be, across the declarations it names, rather than each instance's fields, would cover this, and would also give the check of interface instances (`compiler/checker/type_validity.lerta`) the errors it skips for an instance nested in one of the same interface.
 
-## Open questions
-
-Behavior the reference leaves open, to decide before it is fixed or documented as is:
-
-- A list of `when` patterns cannot be broken across lines, so a long one goes past 100 columns.

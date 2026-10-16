@@ -80,6 +80,14 @@ case c
 ```
 
 - The subject is evaluated once, and the first arm whose pattern matches is taken. An arm may list several patterns, separated by commas.
+- **Patterns in a block.** A line of `when` alone takes its patterns from the indented block below, written as the items of a [bracketless block](syntax.md#bracketless-blocks) are, and `then` follows at the indentation of `when`, with the body after it as it is after `else`: on its line or as an indented block.
+
+  ```
+  when
+    'const', 'var', 'if', 'else',
+    'while', 'for'
+  then 'keyword'
+  ```
 - **Type patterns.** For a subject of a union type, a pattern names one of its types, or a [type alias](types.md#unions) of a union of some of them, which stands for each of those. In an arm with one pattern, a subject that is a `const`, a parameter or a loop variable is narrowed to that type, and in the `else` arm to the types that no arm names, as where `x is T` does not hold. Without an `else` arm, every type of the union must be handled.
 - **Value patterns.** For a subject of type `Int`, `Byte`, `Bool`, `String` or an [enum](types.md#enums), a pattern is a value, compared with `==`. The `else` arm is required, except for an enum when the patterns name every member; a member named twice is an error.
 - **Optional subjects.** For a subject of type `T?`, the patterns are those for a `T`, and `nil`, which must be the only pattern of its arm. Without an `else` arm, `nil` must be handled too, and handling it twice is an error. In an arm of value patterns, and in the `else` arm once `nil` is handled, the subject is narrowed to `T` as with type patterns; in the `nil` arm, and the `else` arm otherwise, it is not.

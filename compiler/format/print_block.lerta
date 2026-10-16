@@ -1,12 +1,13 @@
 # The expressions that hold blocks: function literals, `case` and `try`.
-import Case, CaseArm, FunctionLiteral, Parameter, Position, Statement, Try from '../ast'
-import choice, indent, join, line_feed, rule, separated, text, token from './doc'
+import Case, CaseArm, Expression, FunctionLiteral, Parameter, Position, Statement, Try from '../ast'
+import breaking_after, choice, indent, join, line_feed, rule, separated, text, token from './doc'
 import result_type_doc, type_doc, type_parameters from './print_type'
 import block_doc, inline_statement, is_inline from './print_statement'
-import BRANCHES, FUNCTION_BODIES, FUNCTIONS_WITHOUT_PARAMETERS from './rules'
+import BRANCHES, FUNCTION_BODIES, FUNCTIONS_WITHOUT_PARAMETERS, LONG_LISTS from './rules'
 import expression_doc, operand, OR from './print_expression'
 import
-  bracketed, Context, Item, keyword, optional_doc, position_before, removed_type, word_before
+  bracketed, Context, Item, keyword, lines_of_items, optional_doc, position_before, removed_type,
+  word_before
 from './printing'
 
 export const function_doc = (function: FunctionLiteral, context: Context) ->
@@ -54,20 +55,36 @@ export const case_doc = (case_value: Case, context: Context) ->
       join [keyword('case ', case_value.position), expression_doc(subject, context)]
     else
       keyword 'case', case_value.position
-  const arms = [arm_doc(arm, context) for arm in case_value.arms]
+  const has_subject = case_value.subject != nil
+  const arms = [arm_doc(arm, has_subject, context) for arm in case_value.arms]
   if const otherwise = case_value.otherwise
     const at = otherwise[0].position
     const head = position_before(at, 'else', context) ? at
     arms.push join([word_before(at, 'else', context), arm_body(otherwise, head, context, ' ')])
   join [head, indent(join([line_feed(), separated(arms, line_feed())]))]
 
-const arm_doc = (arm: CaseArm, context: Context) ->
-  const patterns =
-    separated([operand(pattern, context, OR, false) for pattern in arm.patterns], text(', '))
+# The patterns on the line of `when` if they fit there, and otherwise on lines of their own below
+# it, with `then` on the line after them (see Long lists). A condition, without a subject, stays on
+# the line of `when`.
+const arm_doc = (arm: CaseArm, has_subject: Bool, context: Context) ->
+  const patterns = [pattern_item(pattern, context) for pattern in arm.patterns]
   const at = arm.patterns[0].position
-  const head = position_before(at, 'when', context) ? at
-  const body = arm_body(arm.body, head, context, ' then ')
-  join [word_before(at, 'when', context), text(' '), patterns, body]
+  # The body's block starts after `then` where `then` is on a line of its own, after the patterns.
+  const then_at = position_before(arm.body[0].position, 'then', context)
+  const head = then_at ? position_before(at, 'when', context) ? at
+  const when_word = word_before(at, 'when', context)
+  const on_line = separated([pattern.doc for pattern in patterns], text(', '))
+  const when_line = join([when_word, text(' '), on_line])
+  return join([when_line, arm_body(arm.body, head, context, ' then ')]) if not has_subject
+  const below = indent(join([line_feed(), lines_of_items(patterns)]))
+  const then_word = word_before(arm.body[0].position, 'then', context)
+  const then_body = join([then_word, arm_body(arm.body, head, context, ' ')])
+  const broken = join([when_word, below, line_feed(), then_body])
+  breaking_after LONG_LISTS, when_line, arm_body(arm.body, head, context, ' then '), broken
+
+const pattern_item = (pattern: Expression, context: Context) ->
+  const after_comment = context.source.comment_before(pattern.position)
+  Item after_comment, doc: operand(pattern, context, OR, false), simple: true
 
 # An arm's body on its line where it is one statement that fits there, and otherwise in a block
 # (see Branches).

@@ -32,6 +32,9 @@ export struct Choice
   broken: Doc
   # The rule that decides the part where it is broken, which a part that fits leaves to others.
   breaking_rule: StyleRule? = default nil
+  # What must fit for `flat`, if not all of it: the start of `flat`, whose rest decides its own
+  # breaks.
+  measured: Doc? = default nil
 
 # A part whose form the rule of the style decides.
 export struct Rule
@@ -123,7 +126,8 @@ class Printer
         const room = WIDTH + 1 - @place().column
         # Mid-line, a comment not printed yet would end the line inside `flat`.
         const from_line = @pending_indent then 0 else @source_line
-        const fitting = fits(doc.flat, room, indent, steps, @comment_lines, from_line)
+        const measured = doc.measured ? doc.flat
+        const fitting = fits(measured, room, indent, steps, @comment_lines, from_line)
         if not fitting
           @start_rule breaking_rule, steps if const breaking_rule = doc.breaking_rule
         steps.push Work(indent, doc: fitting then doc.flat else doc.broken)
@@ -332,6 +336,11 @@ export const choice = (flat: Doc, broken: Doc): Doc -> Choice(flat, broken)
 # inside it.
 export const breaking = (style_rule: StyleRule, flat: Doc, broken: Doc): Doc ->
   Choice flat, broken, breaking_rule: style_rule
+
+# A breaking choice whose flat form is `start` and then `rest`, where only `start` must fit, and
+# `rest` decides its own breaks.
+export const breaking_after = (style_rule: StyleRule, start: Doc, rest: Doc, broken: Doc): Doc ->
+  Choice broken, flat: join([start, rest]), breaking_rule: style_rule, measured: start
 
 export const rule = (style_rule: StyleRule, doc: Doc): Doc -> Rule(doc, rule: style_rule)
 
