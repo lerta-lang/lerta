@@ -6,9 +6,10 @@ import module_symbol_name, ProgramWide from '../checker/shared'
 import hex from '../hex'
 import IrBuilder, IrModule from './ir_builder'
 import call_void_runtime from './runtime_calls'
+import scalar_of from './scalar'
 import
-  inner_of, integer_bits, is_integer, is_kind, is_one_of_kinds, is_reference_type, is_signed,
-  kind_of, ObjectType, OptionalType, Type, type_key
+  inner_of, is_kind, is_one_of_kinds, is_reference_type, kind_of, ObjectType, OptionalType, Type,
+  type_key
 from '../types'
 
 export const LERTA_IMMORTAL = '-9223372036854775808'
@@ -26,13 +27,8 @@ export const ir_type = (type: Type): String ->
   if type is OptionalType
     return ir_type(type.inner) if is_nil_by_null(type)
     return "{ i1, #{ir_type(type.inner)} }"
+  return scalar.ir_type if const scalar = scalar_of(type)
   case kind_of(type)
-    when 'Int', 'UInt64', ENUM then 'i64'
-    when 'Bool' then 'i1'
-    when 'Byte', 'Int8' then 'i8'
-    when 'Int16', 'UInt16' then 'i16'
-    when 'Int32', 'UInt32' then 'i32'
-    when 'Float' then 'double'
     when 'String', 'Binary', ARRAY, ITER, PROMISE, MAP, OBJECT, UNION, RECORD, TUPLE then 'ptr'
     when FUNCTION then 'ptr'
     # The data, a reference, and the itab (see interface).
@@ -46,9 +42,9 @@ export const returns_nothing = (result: Type) -> is_one_of_kinds(result, ['void'
 # C values narrower than 32 bits, `bool`, `int8_t`, `uint16_t` and so on, are extended to them, as
 # parameters and as results, by their sign; clang marks them so.
 const extension = (type: Type) ->
-  return 'zeroext' if is_kind(type, 'Bool')
-  return '' if not is_integer(type) or integer_bits(type) > 16
-  is_signed(type) then 'signext' else 'zeroext'
+  const scalar = scalar_of(type) ? return ''
+  return '' if scalar.is_float or scalar.bits > 16
+  scalar.signed then 'signext' else 'zeroext'
 
 export const ir_c_return_type = (type: Type) ->
   const attribute = extension(type)

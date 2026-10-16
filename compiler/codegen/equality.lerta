@@ -12,10 +12,11 @@ import emit_branch, IrBuilder, IrModule from './ir_builder'
 import ir_type from './lerta_ir'
 import emit_is_present, emit_unwrap from './optional'
 import call_runtime from './runtime_calls'
+import scalar_of, widened_to_word from './scalar'
 import emit_string_equals from './string'
 import
-  ArrayType, integer_bits, is_identity_type, is_integer, is_kind, is_one_of_kinds, is_signed,
-  ObjectType, OptionalType, Type, type_key, TypeKind, UnionType
+  ArrayType, is_identity_type, is_integer, is_kind, is_one_of_kinds, ObjectType, OptionalType, Type,
+  type_key, TypeKind, UnionType
 from '../types'
 
 # An i1: whether the two values of the type are equal. A part that holds parts of its own is
@@ -141,13 +142,13 @@ const all_of = (ir: IrBuilder, tests: String[]) ->
   all
 
 const emit_hash = (ir: IrBuilder, program: ProgramWide, value: String, type: Type): String ->
+  const scalar = scalar_of(type)
   case
     when is_one_of_kinds(type, ['String', 'Binary'])
       call_runtime ir, 'i64 @lerta_string_hash(ptr)', "ptr #{value}"
-    when is_kind(type, 'Bool') then ir.assign("zext i1 #{value} to i64")
-    when is_integer(type) and integer_bits(type) < 64
-      ir.assign "#{is_signed(type) then 'sext' else 'zext'} #{ir_type(type)} #{value} to i64"
+    # Equal Floats, as 0.0 and -0.0, hash alike.
     when is_kind(type, 'Float') then emit_float_word(ir, value)
+    when scalar then widened_to_word(ir, value, scalar)
     when is_identity_type(type) then ir.assign("ptrtoint ptr #{value} to i64")
     when type is OptionalType
       # A nil holds no value to hash, as a null pointer.

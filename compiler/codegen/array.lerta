@@ -7,28 +7,18 @@
 import emit_branch, emit_when, IrBuilder from './ir_builder'
 import emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
-import is_integer, is_kind, is_one_of_kinds, is_signed, Type, TypeKind from '../types'
-
-# The kinds whose values are already 8 bytes.
-const WORD_KINDS: TypeKind[] = ['Int', 'UInt64', ENUM]
+import narrowed_from_word, scalar_of, widened_to_word from './scalar'
+import is_kind, is_one_of_kinds, Type from '../types'
 
 # The value as a word.
 export const to_item = (ir: IrBuilder, operand: String, type: Type) ->
-  return operand if is_one_of_kinds(type, WORD_KINDS)
-  return ir.assign("bitcast double #{operand} to i64") if is_kind(type, 'Float')
-  return ir.assign("zext i1 #{operand} to i64") if is_kind(type, 'Bool')
-  if is_integer(type)
-    return
-      ir.assign("#{is_signed(type) then 'sext' else 'zext'} #{ir_type(type)} #{operand} to i64")
-  ir.assign "ptrtoint ptr #{operand} to i64"
+  const scalar = scalar_of(type) ? return ir.assign("ptrtoint ptr #{operand} to i64")
+  widened_to_word ir, operand, scalar
 
 # The value of a word.
 export const from_item = (ir: IrBuilder, item: String, type: Type) ->
-  return item if is_one_of_kinds(type, WORD_KINDS)
-  return ir.assign("bitcast i64 #{item} to double") if is_kind(type, 'Float')
-  if is_kind(type, 'Bool') or is_integer(type)
-    return ir.assign("trunc i64 #{item} to #{ir_type(type)}")
-  ir.assign "inttoptr i64 #{item} to ptr"
+  const scalar = scalar_of(type) ? return ir.assign("inttoptr i64 #{item} to ptr")
+  narrowed_from_word ir, item, scalar
 
 # Byte and Bool are one byte in an array or a map; the other integer types take a word there so
 # far, as an Int does (see docs/roadmap/language.md#numeric-types).
