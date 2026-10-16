@@ -7,15 +7,21 @@ from '../types'
 
 const method = (params: Type[], result: Type) -> FunctionType(params, result)
 
-# The type of a method of a generic builtin type or an enum, if it has one: an enum's to_string
-# gives the member's text.
+# The type of a method of a generic builtin type, an enum or an integer type, if it has one: an
+# enum's to_string gives the member's text.
 export const builtin_method = (receiver: Type, name: String): Type? ->
   case receiver
     when ArrayType then array_method(receiver.element, name)
     when MapType then map_method(receiver, name)
     when IterType then iter_method(receiver.item, name)
     when EnumType then name == 'to_string' then method([], string_type)
-    else nil
+    else is_wrapping_method(receiver, name) then method([receiver], receiver)
+
+# `x.wrapping_add(y)` and so on of an integer type, which wrap around where its operators throw.
+export const is_wrapping_method = (receiver: Type, name: String) ->
+  is_one_of_kinds(receiver, ['Int', 'Byte']) and WRAPPING_METHODS.contains(name)
+
+const WRAPPING_METHODS = ['wrapping_add', 'wrapping_sub', 'wrapping_mul']
 
 # Whether the builtin method keeps its argument, as an array's `push` does, which a cycle can go
 # through (see cycles).

@@ -1,5 +1,8 @@
-# Integer arithmetic. Int throws on overflow; Byte wraps around. Both throw on division by zero.
+# Integer arithmetic, which throws on overflow and on division by zero; and the methods that wrap
+# around instead (see emit_wrapping).
 import Generator from './generator'
+import IrBuilder from './ir_builder'
+import ir_type from './lerta_ir'
 import DIVISION_BY_ZERO, OVERFLOW, throw_if from './runtime_errors'
 import is_kind, Type from '../types'
 
@@ -14,23 +17,28 @@ export const apply_arithmetic = (
   case
     when is_division and is_byte then byte_division(g, operator, left, right)
     when is_division then division(g, operator, left, right)
-    when is_byte then byte_arithmetic(g, operator, left, right)
-    else arithmetic(g, operator, left, right)
+    else checked(g, operator, left, right, is_byte then 'i8' else 'i64', not is_byte)
 
-const arithmetic = (g: Generator, operator: String, left: String, right: String) ->
+# Byte is unsigned, so that 0 - 1 overflows as 255 + 1 does.
+const checked = (
+  g: Generator, operator: String, left: String, right: String, width: String, signed: Bool
+) ->
+  const sign = signed then 's' else 'u'
   const operation =
     case operator
-      when '+' then 'sadd'
-      when '-' then 'ssub'
-      when '*' then 'smul'
+      when '+' then 'add'
+      when '-' then 'sub'
+      when '*' then 'mul'
       else panic("no arithmetic operator #{operator}")
-  const intrinsic = "llvm.#{operation}.with.overflow.i64"
+  const intrinsic = "llvm.#{sign}#{operation}.with.overflow.#{width}"
+  const result_type = "{ #{width}, i1 }"
   const ir = g.ir
-  ir.module.declare intrinsic, "declare { i64, i1 } @#{intrinsic}(i64, i64)"
-  const result = ir.assign("call { i64, i1 } @#{intrinsic}(i64 #{left}, i64 #{right})")
-  const overflowed = ir.assign("extractvalue { i64, i1 } #{result}, 1")
+  ir.module.declare intrinsic, "declare #{result_type} @#{intrinsic}(#{width}, #{width})"
+  const args = "#{width} #{left}, #{width} #{right}"
+  const result = ir.assign("call #{result_type} @#{intrinsic}(#{args})")
+  const overflowed = ir.assign("extractvalue #{result_type} #{result}, 1")
   throw_if g, overflowed, OVERFLOW
-  ir.assign "extractvalue { i64, i1 } #{result}, 0"
+  ir.assign "extractvalue #{result_type} #{result}, 0"
 
 # INT_MIN / -1 overflows; INT_MIN % -1 is rejected too, since LLVM leaves it undefined.
 const division = (g: Generator, operator: String, left: String, right: String) ->
@@ -44,17 +52,15 @@ const division = (g: Generator, operator: String, left: String, right: String) -
   const instruction = operator == '/' then 'sdiv' else 'srem'
   ir.assign "#{instruction} i64 #{left}, #{right}"
 
-const byte_arithmetic = (g: Generator, operator: String, left: String, right: String) ->
-  const instruction =
-    case operator
-      when '+' then 'add'
-      when '-' then 'sub'
-      when '*' then 'mul'
-      else panic("no arithmetic operator #{operator}")
-  g.ir.assign "#{instruction} i8 #{left}, #{right}"
-
 const byte_division = (g: Generator, operator: String, left: String, right: String) ->
   const is_zero = g.ir.assign("icmp eq i8 #{right}, 0")
   throw_if g, is_zero, DIVISION_BY_ZERO
   const instruction = operator == '/' then 'udiv' else 'urem'
   g.ir.assign "#{instruction} i8 #{left}, #{right}"
+
+# `x.wrapping_add(y)` and the like: the operation without the check, modulo 2 to the type's bits.
+export const emit_wrapping = (
+  ir: IrBuilder, name: String, left: String, right: String, type: Type
+) ->
+  const instruction = name.without_prefix('wrapping_')!
+  ir.assign "#{instruction} #{ir_type(type)} #{left}, #{right}"

@@ -30,4 +30,4 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Top-level order**: declare a top-level value above the code that uses it, wherever the order allows.
 - **Unused names**: name an unused variable `_`.
 - **Ranges**: parenthesize an end that is an operation (`0...(n - 1)`) for readability; `...` binds weaker than arithmetic, so the parentheses do not change the meaning.
-- **Integer types**: quantities (counters, sizes, indexes, `length`) are `Int`. Unsigned types are only for bit operations, FFI and `Byte` (because `0 - 1` on a `UInt` passes silently).
+- **Integer types**: quantities (counters, sizes, indexes, `length`) are `Int`, which every API takes. Unsigned types are for bit operations, FFI and `Byte`.

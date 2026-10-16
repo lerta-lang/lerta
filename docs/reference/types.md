@@ -11,12 +11,13 @@ The methods of the builtin types are listed in [builtins](builtins.md#methods-of
 - Comparisons (`==` `!=` `<` `<=` `>` `>=`) between `Int`s give a `Bool`.
 - `+` `-` `*` and prefix `-` throw `integer overflow` when the result does not fit.
 - `/` is the quotient, truncated toward zero, and `%` is the remainder (`-7 / 2 == -3`, `-7 % 2 == -1`). Both throw `division by zero` when the divisor is 0, and `integer overflow` for the minimum value divided by `-1`.
-- Why one name each for `Int` and `Byte`, rather than also `Int64` and `UInt8`: the common types have no second name to choose between. Why overflow depends on signedness (signed types throw, unsigned ones wrap around, the Ada modular type approach): since there are no implicit conversions, both operands have the same type, so each operation has one rule, and no dedicated operators like `&+` are needed.
+- `x.wrapping_add(y)`, `wrapping_sub` and `wrapping_mul` do the same without the check, wrapping around modulo 2 to the 64, for hashes and checksums.
+- Why one name each for `Int` and `Byte`, rather than also `Int64` and `UInt8`: the common types have no second name to choose between. Why every integer type throws on overflow, an unsigned one too: a size that goes below 0 would otherwise be a large number, silently; a computation that means to wrap around says so with a method, so that an operator has one rule for every type.
 
 ## Byte
 
 - `Byte` is an unsigned 8-bit integer.
-- `+` `-` `*` and prefix `-` wrap around (`250 + 10` is `4`). `/` and `%` throw `division by zero` when the divisor is 0. Comparisons treat values as unsigned.
+- `+` `-` `*` throw `integer overflow` when the result is not from 0 to 255, as `250 + 10` and `1 - 2` are not; there is no prefix `-`, which would throw for all but 0; `wrapping_add`, `wrapping_sub` and `wrapping_mul` wrap around modulo 256, `250.wrapping_add(10)` being `4`. `/` and `%` throw `division by zero` when the divisor is 0. Comparisons treat values as unsigned.
 - There are no implicit conversions: `Byte` and `Int` cannot be mixed in one operation. `b.to_int()` converts a `Byte` to an `Int`, and `n.to_byte()` an `Int` to a `Byte`, throwing `integer overflow` unless it is from 0 to 255.
 - `b.is_digit()`, `b.is_letter()` and `b.is_space()` tell whether it is an ASCII digit, letter (`a` to `z`, `A` to `Z`) or space (a space, `\t`, `\n` or `\r`). `b.is_utf8_continuation()` tells whether it continues a UTF-8 sequence (0x80 to 0xBF), as when counting the code points of a `Binary`.
 - **The type of a literal is decided by context.** Where a `Byte` or a `Byte?` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a string literal of one byte (`'a'`). The expected type reaches literals inside arithmetic (`c == 1 + 2`), `case` arms, array items and return values. An operand of `+`, `==`, `<` and so on whose type comes from the context is expected to have the type of the other operand, so `c >= '0'` and `'0' <= c` compare two `Byte`s when `c` is one; likewise `[1, c]` is a `Byte[]`. Without such a context, `'a'` is a `String` and `1` an `Int`.

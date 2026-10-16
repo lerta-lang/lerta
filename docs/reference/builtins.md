@@ -20,9 +20,9 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 
 | Type | Methods |
 |---|---|
-| `Int` | `to_string`, `to_byte`, `to_float` |
+| `Int` | `to_string`, `to_byte`, `to_float`, `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
 | `Float` | `to_string`, `to_int` |
-| `Byte` | `to_int`, `to_string`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` |
+| `Byte` | `to_int`, `to_string`, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` |
 | `Bool` | `to_string` |
 | `String` | `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `compare` |
 | `Binary` | `length`, `iter`, `slice`, `occurs_at`, `text` |

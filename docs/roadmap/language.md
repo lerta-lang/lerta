@@ -47,9 +47,11 @@ Interfaces and generics are in [objects](objects.md).
 
 ## Numeric types
 
-- `Int8/16/32` and `UInt16/32/64`. Arrays and maps hold each at its own size, as they hold a `Byte` in one byte (`LertaItemKind` in `runtime/lerta.h`).
-- The new integer types follow the overflow rule of `Int` and `Byte` (see [the reference](../reference/types.md#int)): signed types throw and unsigned types wrap around. For the rare case of wanting signed wraparound, use a method such as `x.wrapping_add(y)`.
-- Bitwise operators `&`, `|`, `^`, `<<` and `>>` on the integer types; where they sit among the [precedences](../reference/syntax.md#operators) is open.
+- Bitwise operators `&`, `|`, `^`, `<<` and `>>` on the integer types, both operands of the same type, and their compound assignments. `<<`, `>>` and `&` bind as `*` does, and `|` and `^` as `+` does, so that `x & 0xF == 0` compares `x & 0xF`. `>>` keeps the sign of a signed type and shifts zeros into an unsigned one; `<<` drops the bits shifted out. A shift by a negative amount or by the type's bits or more throws. There is no `~`: `x ^ -1` inverts the bits of a signed type.
+- `Int8`, `Int16`, `Int32`, `UInt16`, `UInt32` and `UInt64`, with no second names for `Byte` and `Int`. Each takes the rules of `Int` and `Byte` (see [the reference](../reference/types.md#int)) and those above, and an integer literal is of the type that is expected, as a `Byte` literal is. `x.to_int8()`, `x.to_uint32()` and so on convert between any two of the integer types, throwing `integer overflow` unless the value fits. They print, are map keys and set items, and compare as their sign says.
+- Arrays and maps hold each at its own size, as they hold a `Byte` in one byte (`LertaItemKind` in `runtime/lerta.h`), rather than in 8 bytes.
+- `Float32`, finite as `Float` is, whose operations throw where the result would not be finite. `x.to_float32()` converts a `Float`, throwing unless it is finite as a `Float32`, and `x.to_float()` back; a float literal is of the type that is expected. `to_string` gives the fewest digits that read back as the `Float32`.
+- `String.iter()` gives the code points as `UInt32`s, which the UTF-8 code of std and of the compiler computes with bitwise operators.
 - `Int: Div<Int, Int>` (see [operator overloading](#operator-overloading)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
 
 ## Operator overloading
