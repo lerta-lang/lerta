@@ -55,13 +55,21 @@ export class TokenStream
 
   # The index of the token `offset` tokens ahead, past the line breaks that are skipped.
   index_at = (offset: Int) ->
-    const last = @tokens.length - 1
-    var index = @index
-    var remaining = offset
-    while index < last and (remaining > 0 or @is_skipped(index))
-      remaining -= 1 if not @is_skipped(index)
-      index += 1
+    var index = @unskipped_from(@index)
+    index = @index_after(index) for _ in 0...offset
     index
+
+  # The index of the token after the one at `index`, past the line breaks that are skipped; none
+  # follows the end of the file, the last token.
+  index_after = (index: Int) ->
+    index == @tokens.length - 1 then index else @unskipped_from(index + 1)
+
+  # The index of the first token from `index` on that is not a skipped line break.
+  unskipped_from = (index: Int) ->
+    const last = @tokens.length - 1
+    var unskipped = index
+    unskipped += 1 while unskipped < last and @is_skipped(unskipped)
+    unskipped
 
   is_skipped = (index: Int) ->
     const skips = @line_breaks.last() != SEPARATE
@@ -126,12 +134,14 @@ export class TokenStream
   closing_offset = (open: TokenKind, close: TokenKind, allowed: (TokenKind) -> Bool) ->
     var depth = 0
     var offset = 0
-    while allowed(@peek_at(offset).kind)
-      const kind = @peek_at(offset).kind
+    var index = @index_at(0)
+    while allowed(@tokens[index].kind)
+      const kind = @tokens[index].kind
       depth += 1 if kind == open
       depth -= 1 if kind == close
       return offset if depth == 0
       offset += 1
+      index = @index_after(index)
     nil
 
   # The items of a list after its opening bracket, through `close`. Items are separated by a
