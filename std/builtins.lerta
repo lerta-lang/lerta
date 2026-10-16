@@ -1,6 +1,7 @@
 # See docs/reference/builtins.md and docs/internals.md#builtins.
-import stdout from 'std:io'
-
+# Writes at once, unlike std:io's Writer (see runtime/io.c).
+extern lerta_print_stdout: (String) -> void
+extern lerta_print_stderr: (String) -> void
 extern lerta_binary_slice: (Binary, Int, Int) -> Binary
 extern lerta_binary_find: (Binary, Binary, Int) -> Int
 extern lerta_binary_from_bytes: (Byte[]) -> Binary
@@ -46,10 +47,12 @@ export struct InitError: Error
 export interface Iterable<T>
   iter: () -> Iter<T>
 
-export const print = <T: Stringable>(x: T) -> write_line(x.to_string())
+export const print = <T: Stringable>(x: T) -> print_stdout_line(x.to_string())
+export const print_error = <T: Stringable>(x: T) -> print_stderr_line(x.to_string())
 
-# Not generic, so that it is checked, and its use of stdout counted, even if print is never called.
-const write_line = (text: String) -> stdout.write(text + "\n")
+# Not generic, so that they are checked even if print and print_error are never called.
+const print_stdout_line = (text: String) -> lerta_print_stdout(text + "\n")
+const print_stderr_line = (text: String) -> lerta_print_stderr(text + "\n")
 
 extend Float
   to_string = -> lerta_float_to_string(@)

@@ -1,10 +1,10 @@
 # Builtins
 
-Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the module `'std:builtins'`, which every other module but `std:io` imports as `import 'std:builtins'` (see [modules](modules.md)); what it exports is a builtin, and a module's own names shadow them.
+Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the module `'std:builtins'`, which every other module imports as `import 'std:builtins'` (see [modules](modules.md)); what it exports is a builtin, and a module's own names shadow them.
 
 - `panic(message: String): never` stops the program at once (see [panics](errors.md#panics)).
 - `Error` is the interface of what `throw` takes, and the runtime's error types are builtins too (see [exceptions](errors.md#exceptions)).
-- `print<T: Stringable>(x: T)` writes `x.to_string()` followed by a newline, in one `stdout.write` of [std:io](modules.md#stdio), so the output of the two keeps its order.
+- `print<T: Stringable>(x: T)` writes `x.to_string()` followed by a newline to stdout, and `print_error<T: Stringable>(x: T)` to stderr. Each writes at once, unbuffered, so that what it prints is out even if a long computation follows, and after what `stdout` of [std:io](modules.md#stdio) holds in its buffer, so that the output keeps its order. A failed write to stdout is reported as `stdout.write` reports one.
 
 ## Stringable
 

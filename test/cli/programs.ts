@@ -114,6 +114,23 @@ const program_cases: ProgramCase[] = [
     },
   },
   {
+    // print_error writes after what stdout holds in its buffer, so that one pipe for both shows
+    // the output in order.
+    source: 'tests/print/lib/write_then_print_error.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', '"$0" 2>&1', executable])
+      return ran.status === 0 && ran.stdout === 'out error\nprinted\n'
+    },
+  },
+  {
+    // A failed write of print is reported by the exit code, and the program goes on.
+    source: 'tests/print/lib/print_lost.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', '"$0" >&-', executable])
+      return ran.status === 1 && ran.stderr === 'reported\n'
+    },
+  },
+  {
     // run captures through a pipe that may be fd 1, when the program starts with stdout closed.
     source: 'tests/process/lib/capture_without_stdout.lerta',
     behaves: async (executable) => {

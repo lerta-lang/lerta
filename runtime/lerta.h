@@ -286,6 +286,8 @@ void lerta_rename(const LertaString *from, const LertaString *to);
 // buffered, which init decides, see docs/internals.md#output.
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
+void lerta_print_stdout(const LertaString *text);
+void lerta_print_stderr(const LertaString *text);
 
 // The exception being thrown (see docs/internals.md#exceptions); its data is null while there is
 // none. The first entry of an Error's itab gives its message.

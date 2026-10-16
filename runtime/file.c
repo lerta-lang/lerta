@@ -67,8 +67,7 @@ static bool are_utf8(const LertaArray *strings) {
   return true;
 }
 
-// An empty path is refused here, as Windows would read `\*` in it as the root of the drive. The
-// names are checked and sorted here, since std:io, which builtins imports, has no String methods.
+// An empty path is refused here, as Windows would read `\*` in it as the root of the drive.
 LertaArray *lerta_list_dir(const LertaString *path) {
   char *name = lerta_c_string(path);
   LertaArray *names = lerta_array_create(LERTA_REFERENCE_ITEMS);

@@ -67,6 +67,18 @@ void lerta_writer_flush(int64_t fd) {
   if (fd == STDOUT_FD) lerta_stdout_flush();
 }
 
+// print and print_error write at once, whatever the buffering, after what stdout holds, so that
+// the output keeps its order.
+void lerta_print_stdout(const LertaString *text) {
+  lerta_stdout_flush();
+  stdout_write_all(text->bytes, text->length);
+}
+
+void lerta_print_stderr(const LertaString *text) {
+  lerta_stdout_flush();
+  lerta_stderr_write(text->bytes, text->length);
+}
+
 // Writes the prefix and the bytes to stderr as a line, after flushing stdout so that stdout and
 // stderr appear in program order.
 static void write_error_line(const char *prefix, const uint8_t *bytes, int64_t length) {
