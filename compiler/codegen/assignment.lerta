@@ -18,7 +18,8 @@ import is_kind, MapType, ObjectType, Type, UnionType from '../types'
 
 # The new value is stored before the old one is released, which is safe even if they are the
 # same object.
-export const generate_assignment = (g: Generator, assignment: Assignment) ->
+export const generate_assignment = (g: Generator, written: Assignment) ->
+  const assignment = through_method(g, written)
   const target = assignment.target
   case target
     when Index then generate_index_assignment(g, assignment, target)
@@ -31,6 +32,12 @@ export const generate_assignment = (g: Generator, assignment: Assignment) ->
         assign_weak g, assignment, pointer, slot.type
       else
         assign_through g, assignment, pointer, slot.type
+
+# `a += b` through a method assigns the call of it that the checker made, `a.add(b)` (see
+# check_operator_assignment).
+const through_method = (g: Generator, assignment: Assignment) ->
+  const call = g.facts.operator_calls[assignment] ? return assignment
+  Assignment operator: '=', target: assignment.target, value: call, position: assignment.position
 
 # The field takes the new value's reference and releases the old one. Through a union, the field
 # is that of the member the object is.

@@ -26,19 +26,23 @@ Builtin [interfaces](objects.md#interfaces), declared in `std/builtins.lerta`, f
 
 Every type that `==` compares has `equals`, which compares as `==` does, and every type that can be a [map key](types.md#map) has `hash`, which equal values share: builtin ones, unless a class or struct declares [its own](objects.md#classes-and-structs), and one that declares `compare` has a builtin `equals` by it. So they satisfy `Equatable` and `Hashable`. The numbers and `String` have a `compare`, and so satisfy `Comparable`, as does a class or struct that declares its own; `<` and the like order by it. A module's own names shadow them.
 
+## Operators
+
+Builtin [interfaces](objects.md#interfaces), declared in `std/builtins.lerta`, for bounds such as `<T: Add<T, T>>`, of the methods that the arithmetic and bitwise operators call (see [operators](objects.md#classes-and-structs)): `Add<Rhs, Out>` (`add: (Rhs) -> Out`), `Sub`, `Mul`, `Div`, `Rem`, `BitAnd`, `BitOr`, `BitXor`, `Shl` and `Shr` likewise, and `Neg<Out>` (`neg: () -> Out`). The numbers have the methods of the operators that apply to them, which apply the operators, throwing as they do (`3.add(4)` is 7), and `String` has `add`, so that `<T: Add<T, T>>` takes an `Int` or a `String` as well as a type that declares `add`.
+
 ## Methods of the builtin types
 
 The methods of the builtin types, by type (see [types](types.md) for what each does; how each is written is in [internals](../internals.md#builtins)):
 
 | Type | Methods |
 |---|---|
-| `Int` | `equals`, `compare`, `hash`, `to_string`, `to_float`, the conversions to each integer type (see [sized integers](types.md#sized-integers)), `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
-| `Int8`, `Int16`, `Int32`, `UInt16`, `UInt32`, `UInt64` | `equals`, `compare`, `hash`, `to_string`, `to_float`, the conversions to each integer type, `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
-| `Float` | `equals`, `compare`, `hash`, `to_string`, `to_int`, `to_float32` |
-| `Float32` | `equals`, `compare`, `hash`, `to_string`, `to_float` |
-| `Byte` | `equals`, `compare`, `hash`, `to_string`, `to_float`, the conversions to each integer type, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` |
+| `Int` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type (see [sized integers](types.md#sized-integers)), `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
+| `Int8`, `Int16`, `Int32`, `UInt16`, `UInt32`, `UInt64` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type, `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
+| `Float` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_int`, `to_float32` |
+| `Float32` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float` |
+| `Byte` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` |
 | `Bool` | `equals`, `hash`, `to_string` |
-| `String` | `equals`, `hash`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `compare` |
+| `String` | `equals`, `hash`, `add`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `compare` |
 | `Binary` | `equals`, `hash`, `length`, `iter`, `slice`, `occurs_at`, `text` |
 | `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` and `to_binary` of a `Byte[]` |
 | `Map<K, V>` | `length`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries` |

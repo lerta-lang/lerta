@@ -2,6 +2,7 @@
 # docs/internals.md#builtins).
 import is_equatable, is_hashable from './equality'
 import info_of from './object_types'
+import operand_kinds, operator_of_method, SIGNED_KINDS from './operator'
 import ProgramWide from './shared'
 import
   ArrayType, bool_type, EnumType, FLOAT_KINDS, float_type, FunctionType, int_type, INTEGER_KINDS,
@@ -36,6 +37,8 @@ export enum BuiltinMember
   INTEGER_TO_FLOAT
   # A conversion to the integer type that the method's type gives (see integer_method).
   INTEGER_CONVERSION
+  # The method that an operator calls, which applies it (see operator_method).
+  OPERATOR
 
 # The source of a builtin method (see methods' MethodSource): its member and its type.
 export struct BuiltinMethod(member: BuiltinMember, type: Type)
@@ -76,7 +79,16 @@ const value_method = (program: ProgramWide, receiver: Type, name: String) ->
       method NUMBER_COMPARE, [receiver], ordering_type(program)
     else
       return method(ENUM_TO_STRING, [], string_type) if receiver is EnumType and name == 'to_string'
+      return operator if const operator = operator_method(receiver, name)
       is_integer(receiver) then integer_method(receiver, name)
+
+# The method that an operator calls, `add` for `+` and so on, of a type that the operator applies
+# to, which applies it: the numbers', and String's add.
+const operator_method = (receiver: Type, name: String) ->
+  if name == 'neg'
+    return is_one_of_kinds(receiver, SIGNED_KINDS) then method(OPERATOR, [], receiver)
+  const operator = operator_of_method(name) ? return nil
+  is_one_of_kinds(receiver, operand_kinds(operator)) then method(OPERATOR, [receiver], receiver)
 
 # The enum that compare gives, of std:builtins.
 export const ordering_type = (program: ProgramWide) ->

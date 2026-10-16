@@ -48,18 +48,10 @@ Interfaces and generics are in [objects](objects.md).
 
 - A `UInt64` literal above the largest `Int`, as `0xFFFFFFFFFFFFFFFF`.
 - Conversions from `Float` to the sized integer types, which now go through `to_int()`.
-- `Int: Div<Int, Int>` (see [operator overloading](#operator-overloading)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
+- `Int` divides as `Div<Int, Int>` (see [operators](../reference/builtins.md#operators)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
 
 ## Operator overloading
 
-- Supported. Operators are sugar for named methods (`a + b` ≡ `a.add(b)`, `Add` interface).
-- Operator interfaces **take `Rhs` and `Out` as type parameters** (the Rust trait approach): `interface Div<Rhs, Out> { div(other: Rhs): Out }`. The return type may differ from the operand types.
-- The builtin `Int` satisfies the same interfaces (so `sum<T: Add<T, T>>` can be written).
-- Restrictions:
-  - New operators cannot be defined. Precedence is fixed.
-  - `=`, `and`, `or`, `not`, `.`, `?.` cannot be overloaded (the meaning of short-circuit evaluation and access syntax cannot be changed).
-  - Comparison and equality come from `equals` and `compare`, as [the reference](../reference/objects.md#classes-and-structs) has them.
-  - `+=` is derived automatically from `+`.
 - Interfaces for construction from literals (like Swift's `ExpressibleByIntegerLiteral`) let types added later, such as BigInt, be treated almost like builtins. BigInt is planned too.
 
 ## Open questions

@@ -1,10 +1,14 @@
 # Types unary and binary operators, nil tests and `?`.
 import all_but_last from '../arrays'
-import BinaryOperation, Coalesce, Expression, is_nil_test, NilLiteral, UnaryOperation from '../ast'
+import
+  Assignment, BinaryOperation, Call, Coalesce, Expression, Identifier, is_nil_test, Member,
+  NilLiteral, UnaryOperation
+from '../ast'
 import fail from './diagnostics'
 import compares_by_contents, is_equatable, own_equality from './equality'
 import may_name_member from './enums'
 import expect_condition, expect_optional, expect_type, require_type, type_of from './expression'
+import member_type_by_name from './member'
 import holds_float_literal, is_contextual from './literals'
 import where_right_operand from './narrowing'
 import Body from './shared'
@@ -22,6 +26,38 @@ const EQUALITY_KINDS: TypeKind[] = [NUMERIC_KINDS..., 'Bool', 'String', 'Binary'
 const NUMERIC_OPERATORS = ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>']
 
 export const is_numeric_operator = (operator: String) -> NUMERIC_OPERATORS.contains(operator)
+
+# The methods that the arithmetic and bitwise operators call on values of the types that they do
+# not apply to otherwise, `a + b` as `a.add(b)`, as prefix `-` calls `neg` (see Add and the like
+# in std:builtins).
+export const OPERATOR_METHODS =
+  '+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'rem', '&': 'bit_and', '|': 'bit_or',
+  '^': 'bit_xor', '<<': 'shl', '>>': 'shr'
+
+# The operator whose method has the name, as `+` that of `add`, or nil.
+export const operator_of_method = (name: String) ->
+  for (operator, method) in OPERATOR_METHODS.entries()
+    return operator if method == name
+  nil
+
+# The result of the call of the method of the name on the object, of a type that the operator,
+# written as `written`, does not apply to otherwise, with the arguments; a call recorded in the
+# facts, which codegen generates instead of the operation (see operator_calls). Nil if the type has
+# no such member, which is an error for a class or struct.
+export const type_of_operator_call = (
+  body: Body, operation: BinaryOperation | UnaryOperation | Assignment, written: String,
+  object: Expression, object_type: Type, name: String, args: Expression[]
+): Type? ->
+  const at = operation.position
+  const method_name = Identifier(name: name, position: at)
+  if member_type_by_name(body, object_type, method_name) == nil
+    return nil if object_type is not ObjectType
+    const message = "#{format_type(object_type)} has no #{name}, by which #{written} applies"
+    fail body.program, object.position, message
+  const member = Member(object: object, name: method_name, position: at)
+  const call = Call(callee: member, args: args, named_args: [], type_args: [], position: at)
+  body.facts.operator_calls[operation] = call
+  type_of body, call
 
 const classes_of = (type: Type): Type[] -> type is UnionType then type.members else [type]
 
@@ -52,12 +88,15 @@ export const type_of_unary = (body: Body, unary: UnaryOperation, expected: Type?
     return bool_type
   const type = type_of(body, unary.operand, hint_of(expected, SIGNED_KINDS))
   if not is_one_of_kinds(type, SIGNED_KINDS)
+    const operand = unary.operand
+    if const result = type_of_operator_call(body, unary, '-', operand, type, 'neg', [])
+      return result
     const message = "expected #{describe_kinds(SIGNED_KINDS)}, got #{format_type(type)}"
     fail body.program, unary.operand.position, message
   type
 
 # The types that prefix `-` takes: not an unsigned one, whose negation throws unless it is 0.
-const SIGNED_KINDS: TypeKind[] = [SIGNED_INTEGER_KINDS..., FLOAT_KINDS...]
+export const SIGNED_KINDS: TypeKind[] = [SIGNED_INTEGER_KINDS..., FLOAT_KINDS...]
 
 const type_of_nil_test = (body: Body, binary: BinaryOperation) ->
   const left_is_nil = binary.left is NilLiteral
@@ -111,7 +150,23 @@ const type_of_operands = (
   const second = right_first then left else right
   const type = type_of(body, first, expected)
   const program = body.program
+  # An operator on a value of a type it does not apply to calls the type's method, which is that of
+  # its left operand.
+  const operator = binary.operator
+  if is_numeric_operator(operator) and not is_one_of_kinds(type, allowed_kinds)
+    const name = OPERATOR_METHODS[operator]!
+    if right_first
+      const has_method =
+        member_type_by_name(body, type, Identifier(name: name, position: first.position)) != nil
+      if has_method or type is ObjectType
+        const message =
+          "#{operator} calls the #{name} of its left operand, not of #{format_type(type)}"
+        fail program, first.position, message
+    else
+      const call = -> type_of_operator_call(body, binary, operator, left, type, name, [right])
+      return result if const result = call()
   const is_equality = binary.operator == '==' or binary.operator == '!='
+  const is_order = not is_equality and not is_numeric_operator(binary.operator)
   const inner = is_equality then inner_of(type) else type
   const by_contents = is_equality and compares_by_contents(program, inner)
   const is_identity = is_equality and is_identity_type(inner) and not by_contents
@@ -120,9 +175,9 @@ const type_of_operands = (
     case
       when by_contents then is_equatable(program, inner, first.position)
       # `<` and the like of a class or struct compare by its compare.
-      when not is_equality and own_equality(program, inner) == 'compare' then true
+      when is_order and own_equality(program, inner) == 'compare' then true
       else is_one_of_kinds(inner, allowed_kinds)
-  if not is_allowed and not is_equality
+  if not is_allowed and is_order
     if own_equality(program, inner_of(type)) == 'compare'
       fail(
         program

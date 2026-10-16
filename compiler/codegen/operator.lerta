@@ -1,7 +1,7 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import BinaryOperation, Coalesce, is_nil_test, NilLiteral, UnaryOperation, Unwrap from '../ast'
 import compares_by_contents, own_equality from '../checker/equality'
-import is_numeric_operator from '../checker/operator'
+import is_numeric_operator, operator_of_method from '../checker/operator'
 import apply_integer_operator from './checked_int'
 import holding from './exceptions'
 import apply_float_arithmetic, emit_float_comparison, emit_float_negation from './float'
@@ -11,7 +11,7 @@ import emit_equals_by_contents, emit_value_equals from './equality'
 import Generator from './generator'
 import emit_branch, IrBuilder from './ir_builder'
 import call_runtime from './runtime_calls'
-import emit_release, ir_type from './lerta_ir'
+import emit_release, emit_retain, ir_type from './lerta_ir'
 import emit_is_nil, emit_is_present, emit_unwrap from './optional'
 import emit_concat, emit_equals, emit_string_equals from './string'
 import throw_if, UNWRAPPED_NIL from './runtime_errors'
@@ -28,14 +28,30 @@ const UNSIGNED_PREDICATES =
   '==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': 'ugt', '>=': 'uge'
 
 export const generate_unary = (g: Generator, unary: UnaryOperation) ->
+  return generate(g, call) if const call = g.facts.operator_calls[unary]
   if unary.operator == 'not'
     return g.ir.assign("xor i1 #{generate_condition(g, unary.operand)}, true")
-  const operand = generate(g, unary.operand)
-  const type = type_of(g, unary)
+  negate g, generate(g, unary.operand), type_of(g, unary)
+
+const negate = (g: Generator, operand: String, type: Type) ->
   return emit_float_negation(g.ir, operand, type) if is_float(type)
   apply_integer_operator g, '-', '0', operand, type
 
+# The method of a number, `add` and so on, or a String's add, which applies its operator to the
+# object and the arguments, both borrowed.
+export const apply_operator_method = (
+  g: Generator, name: String, object: String, args: String[], type: Type
+) ->
+  return negate(g, object, type) if name == 'neg'
+  if is_kind(type, 'String')
+    emit_retain g.ir, part for part in [object, args[0]]
+    return emit_concat(g.ir, [object, args[0]])
+  apply_numeric g, operator_of_method(name)!, object, args[0], type
+
+# An operator that applies through a method is the call of it that the checker made (see
+# type_of_operator_call).
 export const generate_binary = (g: Generator, binary: BinaryOperation) ->
+  return generate(g, call) if const call = g.facts.operator_calls[binary]
   const operator = binary.operator
   return generate_logical(g, binary) if operator == 'and' or operator == 'or'
   return generate_nil_test(g, binary) if is_nil_test(binary)
