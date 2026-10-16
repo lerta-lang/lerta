@@ -67,48 +67,69 @@ const entry_function = (g: Generator, itab: Itab, entry: ItabEntry) ->
 # A function that gives the member of a value of the type: calls a builtin method or a field that
 # holds a function, or reads a field or a property.
 const define_reader = (g: Generator, type: Type, entry: ItabEntry) ->
-  const { name } = entry.member
   const member_type = entry.member.type
-  const key = "reader #{type_key(type)} #{name}"
+  const key = "reader #{type_key(type)} #{entry.member.name}"
   const define = (symbol: String) ->
     const reader = function_generator(g.code, g.extensions, g.facts, '')
-    const ir = reader.ir
     const function_type = member_type is FunctionType then member_type
     const params = function_type?.params ? []
-    const args = ["#{ir_type(param)} %p#{i}" for param, i in params]
     const operands = ["%p#{i}" for i in 0...params.length]
-    # The data is borrowed, while reading a field or a property, or an Iter's method, takes the
-    # object over.
-    const take_data = ->
-      emit_retain ir, '%data'
-      '%data'
     const result_type = function_type?.result ? member_type
-    const call_field = ->
-      const closure = read_any_field(reader, take_data(), type, name, member_type)
-      const value = emit_closure_call(ir, closure, member_type, operands)
-      emit_release ir, closure
-      emit_check_or_return_thrown ir, result_type
-      value
-    const target = entry.target
-    const result =
-      case target
-        when Property
-          const read = -> read_property(reader, take_data(), type, target.kind, name, member_type)
-          function_type then call_field() else read()
-        when Method
-          # The other methods are written in Lerta (see entry_function).
-          const builtin = target.source as BuiltinMethod!
-          const release_and_return = ->
-            emit_release ir, '%data'
-            emit_return_thrown ir, result_type
-          # Only an Iter's next calls it, past the end, before it takes the object over.
-          const check = -> emit_check_with(ir, release_and_return)
-          const object = takes_object(builtin.member) then take_data() else '%data'
-          call_builtin_method ir, builtin.member, object, type, operands, check
-        when InterfaceProperty, EnumParse
-          panic 'a reader reads a field, a property or a builtin method'
+    const result = generate_reading(reader, type, entry, operands, result_type)
     const return_type = ir_return_type(result_type)
-    ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
+    reader.ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
+    const args = ["#{ir_type(param)} %p#{i}" for param, i in params]
     const params_list = ['ptr %data', args...]
     finish reader, "private #{return_type} #{symbol}(#{params_list.join(', ')})"
   g.ir.module.named key, '@lerta.reader', (symbol, module) -> define(symbol)
+
+# The reader's result, computed from its data, `%data`, and its parameters, `operands`.
+const generate_reading = (
+  reader: Generator, type: Type, entry: ItabEntry, operands: String[], result_type: Type
+) ->
+  const { name } = entry.member
+  const member_type = entry.member.type
+  const target = entry.target
+  case target
+    when Property
+      const call = -> call_field(reader, type, name, member_type, operands, result_type)
+      const read = ->
+        read_property reader, take_data(reader.ir), type, target.kind, name, member_type
+      member_type is FunctionType then call() else read()
+    when Method
+      # The other methods are written in Lerta (see entry_function).
+      const builtin = target.source as BuiltinMethod!
+      call_builtin reader.ir, type, builtin, operands, result_type
+    when InterfaceProperty, EnumParse
+      panic 'a reader reads a field, a property or a builtin method'
+
+# `%data`, retained: the reader borrows its data, while reading a field or a property, or an Iter's
+# method, takes the object over.
+const take_data = (ir: IrBuilder) ->
+  emit_retain ir, '%data'
+  '%data'
+
+# Calls the field that holds a function with the operands, returning what it throws.
+const call_field = (
+  reader: Generator, type: Type, name: String, field_type: Type, operands: String[],
+  result_type: Type
+) ->
+  const ir = reader.ir
+  const closure = read_any_field(reader, take_data(ir), type, name, field_type)
+  const value = emit_closure_call(ir, closure, field_type, operands)
+  emit_release ir, closure
+  emit_check_or_return_thrown ir, result_type
+  value
+
+# Calls the builtin method on the data, releasing the data if an Iter's next throws before it
+# takes the data over.
+const call_builtin = (
+  ir: IrBuilder, type: Type, builtin: BuiltinMethod, operands: String[], result_type: Type
+) ->
+  const release_and_return = ->
+    emit_release ir, '%data'
+    emit_return_thrown ir, result_type
+  # Only an Iter's next calls it, past the end, before it takes the object over.
+  const check = -> emit_check_with(ir, release_and_return)
+  const object = takes_object(builtin.member) then take_data(ir) else '%data'
+  call_builtin_method ir, builtin.member, object, type, operands, check
