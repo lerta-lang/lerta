@@ -5,7 +5,7 @@ import type_of from './expression'
 import
   generate_block, generate_block_value, no_locals, release_scope, store_in_slot
 from './function'
-import CodegenLocal, Generator, Handler, SlotLocal, Temporary from './generator'
+import CodegenLocal, Finally, Generator, Handler, SlotLocal, Temporary from './generator'
 import IrBuilder from './ir_builder'
 import emit_type_test from './heap_object'
 import
@@ -147,6 +147,10 @@ export const generate_try = (g: Generator, try_expression: Try) ->
   const done_label = ir.fresh_label('try.done')
   const rethrow_label = ir.fresh_label('try.rethrow')
   const finally_body = try_expression.finally_body
+  const finally_depth = g.finallies.length
+  if finally_body
+    const scope_depth = g.locals.depth()
+    g.finallies.push Finally(scope_depth, body: finally_body, handler_depth: g.handlers.length)
   const incoming: String[] = []
   const generate_value = (body: Statement[], define: (Map<String, CodegenLocal>) -> void) ->
     const value = generate_block_value(g, body, define)
@@ -179,6 +183,7 @@ export const generate_try = (g: Generator, try_expression: Try) ->
     ir.start_block next_label
   # No catch takes the exception.
   ir.emit "br label %#{rethrow_label}"
+  g.finallies.pop() if g.finallies.length > finally_depth
   ir.start_block rethrow_label
   if finally_body
     const set_aside = ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
@@ -198,6 +203,43 @@ export const generate_try = (g: Generator, try_expression: Try) ->
   const run_finally = -> generate_block(g, finally_body ? [], no_locals)
   while_holding g, result, type, run_finally
   result
+
+# Releases the scopes from `scope_depth` inward, innermost first, as a jump out of them does, and
+# runs on the way the finally blocks of the `try` blocks among them. Each runs as code right after
+# its `try` would: the scopes inside the `try`, released, are set aside, and so are the handlers
+# and the finally blocks inside it, so that an exception thrown there goes to the handlers outside.
+export const leave_scopes = (g: Generator, scope_depth: Int) ->
+  var released_depth = g.locals.depth()
+  var i = g.finallies.length - 1
+  while i >= 0 and g.finallies[i].scope_depth >= scope_depth
+    const left = g.finallies[i]
+    release_scopes_between g, left.scope_depth, released_depth
+    released_depth = left.scope_depth
+    run_finally_left g, left, i
+    i -= 1
+  release_scopes_between g, scope_depth, released_depth
+
+# Releases the scopes from `from` up to `to`, innermost first.
+const release_scopes_between = (g: Generator, from: Int, to: Int) ->
+  var depth = to - 1
+  while depth >= from
+    release_scope g, g.locals.scopes[depth]
+    depth -= 1
+
+const run_finally_left = (g: Generator, left: Finally, finally_depth: Int) ->
+  const scopes = take_from(g.locals.scopes, left.scope_depth)
+  const handlers = take_from(g.handlers, left.handler_depth)
+  const finallies = take_from(g.finallies, finally_depth)
+  generate_block g, left.body, no_locals
+  g.locals.scopes.append scopes
+  g.handlers.append handlers
+  g.finallies.append finallies
+
+# Removes the items from `length` on, and gives them, in order.
+const take_from = <T>(items: T[], length: Int) ->
+  const taken = [items[i] for i in length...items.length]
+  items.pop() while items.length > length
+  taken
 
 const with_handler = (g: Generator, label: String, generate_body: () -> void) ->
   const handler =

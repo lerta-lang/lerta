@@ -17,8 +17,10 @@ import
 from './closure'
 import generate_control_jump, generate_for, generate_if, generate_while from './control_flow'
 import emit_suspend from './coroutine'
-import emit_check_with, emit_exception_check from './exceptions'
-import generate, held_value, read_local, release_if_reference, type_of from './expression'
+import emit_check_with, emit_exception_check, leave_scopes, while_holding from './exceptions'
+import
+  generate, held_value, read_local, release_if_reference, type_at_use, type_of
+from './expression'
 import
   CellSlot, CodegenLocal, function_generator, Generator, SlotLocal, TopLevelGlobal, TopLevelSlot,
   ValueLocal
@@ -88,7 +90,7 @@ export const generate_main = (
     return
   const run_and_return = ->
     run()
-    emit_return g, ''
+    emit_return g, '', void_type
   const body = is_program then '@lerta.top_level' else code.symbol
   generate_awaiting_function g, '', body, [], void_type, run_and_return
   generate_program_main g.ir.module, body, releases if is_program
@@ -162,7 +164,7 @@ const hold_weak_this = (g: Generator, scope: Map<String, CodegenLocal>) ->
   const is_gone = ir.assign("icmp eq ptr #{object}, null")
   ir.emit "br i1 #{is_gone}, label %#{gone_label}, label %#{alive_label}"
   ir.start_block gone_label
-  emit_return g, ''
+  emit_return g, '', void_type
   ir.start_block alive_label
   emit_retain ir, object
   scope['@'] = store_in_slot(g, object, captured.type)
@@ -264,7 +266,7 @@ const generate_default_entry = (
   args.push "#{ir_type(param)} #{operand}" for (param, operand) in type.params.zip(operands)
   const result = call_user_function(g.ir, symbol, type, args.join(', '))
   emit_exception_check g
-  emit_return g, result
+  emit_return g, result, type.result
   g.locals.pop()
   const params: String[] = []
   params.push "#{ir_type(this_type)} %this" if this_type
@@ -279,12 +281,12 @@ const generate_last_statement = (g: Generator, body: Statement[], result: Type) 
   if last
     const value = last as Expression?
     if value
-      return emit_return(g, generate(g, value)) if has_result
+      return emit_return(g, generate(g, value), type_at_use(g, value)) if has_result
     generate_statement g, last
   if has_result
     g.ir.emit 'unreachable'
   else
-    emit_return g, ''
+    emit_return g, '', void_type
 
 # Takes the constructor arguments (see is_argument, in order) borrowed, as for any call; then
 # computes the other fields, and the defaults of the arguments not given, in order, and runs `init`
@@ -371,12 +373,13 @@ export const weak_box_of = (g: Generator, object: String, type: Type) ->
 
 export const finish = (g: Generator, signature: String) -> g.ir.finish(signature)
 
-# Releases every scope of the function before returning the owned value. The function's result
-# type decides the instruction: a returned value that never comes (`return throw ...`) is poison.
-# The body of a coroutine gives its value to `on_return`, if any, and goes to its end instead.
-const emit_return = (g: Generator, value: String) ->
+# Releases every scope of the function, running the finally blocks of the `try` blocks it leaves,
+# while it holds the owned value of the type, which it then returns. The function's result type
+# decides the instruction: a returned value that never comes (`return throw ...`) is poison. The
+# body of a coroutine gives its value to `on_return`, if any, and goes to its end instead.
+const emit_return = (g: Generator, value: String, type: Type) ->
+  while_holding g, value, type, -> leave_scopes(g, 0)
   on_return value if const on_return = g.on_return
-  release_scope g, scope for scope in g.locals.inner_scopes(0)
   if const coroutine = g.coroutine
     g.ir.emit "br label %#{coroutine.end_label}"
     return
@@ -404,7 +407,10 @@ export const generate_jump = (g: Generator, jump: Jump | Return) ->
     when Jump then generate_control_jump(g, jump)
     when Return
       const value = jump.value
-      emit_return g, value then generate(g, value) else ''
+      if value
+        emit_return g, generate(g, value), type_at_use(g, value)
+      else
+        emit_return g, '', void_type
       g.ir.start_unreachable()
 
 # A block that gives a value: its last statement, if an expression, gives it, or ''. The value is

@@ -21,7 +21,6 @@ These apply when a value in statement position is not captured, beyond [the refe
 
 What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is in [the reference](../reference/errors.md#exceptions). Planned:
 
-- `return`, `break` and `continue` that leave a `try` that has a `finally`, which then runs on the way.
 - No `throws` annotation is needed (if written, it is type-checked). There is no `try` attached to calls (as in Swift).
 - For servers, exceptions are caught at the task boundary of the event loop and only that task is discarded.
 

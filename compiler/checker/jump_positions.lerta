@@ -27,10 +27,9 @@ struct Jumps
 const all_jumps = Jumps(may_return: true, may_leave_loop: true)
 const no_jumps = Jumps()
 
-const within_finally = Jumps(
-  reason: 'cannot leave a try that has a finally yet'
-  yield_reason: 'cannot be in a try that has a finally yet'
-)
+const FINALLY_YIELD_REASON = 'cannot be in a try that has a finally yet'
+
+const within_finally = Jumps(reason: 'cannot leave a finally', yield_reason: FINALLY_YIELD_REASON)
 
 # A default is computed by an entry of its own (see generate_default_entry), before the body.
 const in_default = Jumps(reason: 'cannot be in a default')
@@ -60,7 +59,7 @@ const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jump
       const own_reason = jumps.yield_reason
       const held = 'cannot be here: only where nothing evaluated before it is still held'
       const message = "'yield' #{own_reason ? jumps.reason ? held}"
-      fail program, statement.position, message if not jumps.may_return
+      fail program, statement.position, message if own_reason or not jumps.may_return
       visit program, statement.value, no_jumps
     when TypeDeclaration then visit_members(program, statement.members)
     when Extend then visit_members(program, statement.members)
@@ -107,7 +106,10 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
         visit_statements program, arm.body, jumps
       visit_statements program, otherwise, jumps if const otherwise = expression.otherwise
     when Try
-      const inside = expression.finally_body then within_finally else jumps
+      const { may_return, may_leave_loop, reason } = jumps
+      const yield_reason = FINALLY_YIELD_REASON
+      const finally_inside = Jumps(may_return, may_leave_loop, reason, yield_reason)
+      const inside = expression.finally_body then finally_inside else jumps
       visit_statements program, expression.body, inside
       visit_statements program, clause.body, inside for clause in expression.catches
       if const finally_body = expression.finally_body

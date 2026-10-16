@@ -1,0 +1,226 @@
+# return, break and continue that leave a try run its finally block on the way, and those of the
+# trys around it, innermost first, releasing what the trys held.
+import sleep from 'std:time'
+
+struct Oops: Error
+
+class Noisy
+  name: String
+  deinit = -> print "release #{@name}"
+
+const returns = (): String[] ->
+  const _outer = Noisy(name: 'outer')
+  try
+    const _inner = Noisy(name: 'inner')
+    return ['returned']
+  finally
+    print 'finally'
+  ['not reached']
+print returns()[0]
+
+const returns_nothing = (): void ->
+  try
+    return
+  finally
+    print 'finally of a return of nothing'
+returns_nothing()
+
+const nested = ->
+  try
+    try
+      return 1
+    finally
+      print 'inner finally'
+  finally
+    print 'outer finally'
+  2
+print nested()
+
+const from_catch = ->
+  try
+    throw Oops(message: 'oops')
+  catch e
+    const _caught = Noisy(name: e.message)
+    return 'from catch'
+  finally
+    print 'finally after catch'
+print from_catch()
+
+for i in 0...4
+  try
+    const _item = Noisy(name: "item #{i}")
+    continue if i == 1
+    break if i == 2
+    print "body #{i}"
+  finally
+    print "finally #{i}"
+
+# A break inside the try runs no finally of a try around the loop.
+try
+  while true
+    try
+      break
+    finally
+      print 'inside the loop'
+  print 'after the loop'
+finally
+  print 'around the loop'
+
+# A finally block that throws on the way: the returned value is released, and the exception goes
+# to the handlers outside the try, not to its own catches.
+const throws_on_the_way = (): Noisy ->
+  try
+    try
+      return Noisy(name: 'returned value')
+    catch e
+      print 'not here'
+    finally
+      throw Oops(message: 'from finally')
+  catch e
+    print "outside: #{e.message}"
+  Noisy(name: 'after')
+print throws_on_the_way().name
+
+# The finally block runs with the exception set aside, and a jump out of a try within it runs that
+# try's finally block alone.
+const within_finally = ->
+  try
+    throw Oops(message: 'pending')
+  finally
+    for i in 0...1
+      try
+        break
+      finally
+        print 'nested finally'
+    print 'leaving'
+try
+  within_finally()
+catch e
+  print "caught #{e.message}"
+
+const later = (): Promise<Int> ->
+  await sleep(0)
+  try
+    return 3
+  finally
+    print 'async finally'
+print await later()
+
+# The returned value, converted to the result type, is released so if a finally block throws.
+const converted = (): Error? ->
+  try
+    try
+      return Oops(message: 'converted')
+    finally
+      throw Oops(message: 'instead')
+  catch e
+    print "outside: #{e.message}"
+  nil
+print converted() == nil
+
+# A break and a continue that leave two trys in one iteration run both finally blocks.
+for i in 0...3
+  try
+    try
+      continue if i == 0
+      break if i == 1
+    finally
+      print "inner #{i}"
+  finally
+    print "outer #{i}"
+
+# A return from a loop inside a try, within a try inside a loop, releases each scope once, between
+# the finally blocks.
+const interleaved = ->
+  try
+    const _outside = Noisy(name: 'outside the loop')
+    for i in 0...2
+      const _in_loop = Noisy(name: "in the loop #{i}")
+      try
+        const _inside = Noisy(name: 'inside the try')
+        return 'interleaved'
+      finally
+        print 'inner finally'
+  finally
+    print 'outer finally'
+  'not reached'
+print interleaved()
+
+# A finally block that throws while a break passes through it, where nothing outside the function
+# catches until its caller.
+const break_throws = ->
+  const _held = Noisy(name: 'held by the function')
+  for i in 0...2
+    const _item = Noisy(name: "item #{i}")
+    try
+      break
+    finally
+      throw Oops(message: 'from a finally on a break')
+try
+  break_throws()
+catch e
+  print "caught #{e.message}"
+
+# A jump out of a catch whose try has a finally, through a try nested in the catch.
+const from_nested_catch = ->
+  try
+    throw Oops(message: 'first')
+  catch e
+    try
+      return e.message
+    finally
+      print 'nested finally in the catch'
+  finally
+    print 'finally of the catch'
+  'not reached'
+print from_nested_catch()
+
+# A return in a function that yields ends its Iter after the finally block.
+const items = () ->
+  yield 1
+  try
+    return
+  finally
+    print 'generator finally'
+  yield 2
+print n for n in items()
+
+# The value returned is that evaluated before the finally block runs.
+const evaluated_first = ->
+  var s = 'before'
+  try
+    return s
+  finally
+    s = 'after'
+print evaluated_first()
+
+# A return of a throw runs the finally block on the way out of the function.
+const returns_a_throw = (): Int ->
+  try
+    return throw Oops(message: 'thrown by return')
+  finally
+    print 'finally of a thrown return'
+try
+  print returns_a_throw()
+catch e
+  print "caught #{e.message}"
+
+# A finally block that a jump runs may hold a try with a finally of its own.
+for i in 0...1
+  try
+    break
+  finally
+    try
+      print 'finally of the jump'
+    finally
+      print 'nested in it'
+
+# A return in a function literal in the try leaves only that function.
+const with_closure = ->
+  try
+    const inner = (): Int ->
+      return 4
+    print inner()
+  finally
+    print 'finally around the closure'
+with_closure()
