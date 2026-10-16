@@ -5,7 +5,7 @@ import
   Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration, TypeName,
   TypeParameter
 from '../ast'
-import check_object, check_satisfies from './bodies'
+import check_equality_methods, check_object, check_satisfies from './bodies'
 import
   abort_part, check_part, enter_module, fail, fail_already_defined, fail_in_context
 from './diagnostics'
@@ -49,6 +49,9 @@ export class ObjectInfo
   generic: ObjectInfo?
   init: Instance?
   deinit: Instance?
+  # The instances of its own equals, compare and hash, of an instance of a generic class or struct
+  # (see check_equality_methods).
+  comparison_instances: Map<String, Instance> = Map()
   fields: FieldInfo[] = []
   # The interface that the declaration says it satisfies, with the type arguments of an instance.
   satisfies: InterfaceType? = nil
@@ -272,10 +275,13 @@ export const check_pending_objects = (shared: Shared) ->
   check_all_satisfy shared.program, pending
   pending.length > 0
 
-# Those with an error are left out, as their fields' types may be unknown.
+# Those with an error are left out, as their fields' types may be unknown. Each satisfies the
+# interface it names, and its equals, compare and hash are of their types.
 const check_all_satisfy = (program: ProgramWide, infos: ObjectInfo[]) ->
   for info in infos
-    check_satisfies program, info if info.state == CHECKED
+    continue if info.state != CHECKED
+    check_satisfies program, info
+    check_equality_methods program, info
 
 # Checks the initializers of the fields with the declaring module's checker, setting the types
 # that they give. An instance gets the instances of its generic's init and deinit.

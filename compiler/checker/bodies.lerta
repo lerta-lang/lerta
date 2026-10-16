@@ -1,7 +1,12 @@
 # Checks the bodies of the module's functions, methods, instances of generic functions and
 # initializers of fields, each on demand (see functions, generics and object_types).
+import Identifier from '../ast'
 import enter_module, fail, leave_module from './diagnostics'
 import Extensions from './extensions'
+import ordering_type from './builtins'
+import receiver_instance from './generic_call'
+import find_member, generic_method from './member'
+import Method from './member_targets'
 import FunctionEntry, parameter_types from './functions'
 import Instance from './generics'
 import ObjectInfo from './object_types'
@@ -10,7 +15,9 @@ import Body, NodeFacts, ProgramWide, SelfContext, Shared from './shared'
 import reject_unsatisfied from './satisfaction'
 import check_function_body, check_initializers from './statement'
 import module_resolver, Resolver from './type_names'
-import FunctionType, Type from '../types'
+import
+  bool_type, format_qualified, format_type, FunctionType, int_type, same_type, Type
+from '../types'
 
 # A body may be checked on demand from another module, such as the method `to_string` that an
 # instance of `print` calls; its diagnostics give its own module.
@@ -64,4 +71,47 @@ export const check_satisfies = (program: ProgramWide, info: ObjectInfo): void ->
   const { extensions } = shared
   const body = Body(shared, extensions, resolver: info.resolver, facts: info.facts)
   reject_unsatisfied body, info.type, satisfies, info.declaration.satisfies!.position
+  leave_module shared
+
+# Rejects a class or struct whose own equals, compare or hash is not of its type, that has both
+# equals and compare, or that has a hash but neither, by which equal values would be told.
+export const check_equality_methods = (program: ProgramWide, info: ObjectInfo): void ->
+  const methods = info.methods
+  const has = (name: String) -> methods.has(name)
+  return if not has('equals') and not has('compare') and not has('hash')
+  const shared = program.shared[info.module_index]
+  enter_module shared
+  const { extensions } = shared
+  const body = Body(shared, extensions, resolver: info.resolver, facts: info.facts)
+  const type = info.type
+  const name = format_type(type)
+  const at = (method: String) -> methods[method]!.position
+  if has('equals') and has('compare')
+    fail(
+      program
+      at('equals')
+      "#{name} has both equals and compare, which gives its == too; leave out equals"
+    )
+  if has('hash') and not has('equals') and not has('compare')
+    fail program, at('hash'), "#{name} has a hash but neither equals nor compare"
+  const expect_method = (method: String, expected: FunctionType) ->
+    return if not has(method)
+    const name_at = Identifier(name: method, position: at(method))
+    const found = find_member(body, type, name_at)
+    if found and same_type(found.type, expected)
+      const target = found.target
+      const generic = target is Method then generic_method(target.source)
+      if generic
+        const instance = receiver_instance(body, generic, type, name_at.position, nil)
+        info.comparison_instances[method] = instance!
+      return
+    const must = "#{method} of #{name} must be of type"
+    const got = found?.type ? return fail(program, at(method), "#{must} #{format_type(expected)}")
+    # A type of the module may take the name of the builtin one: they are told apart by module.
+    const qualified = format_type(got) == format_type(expected)
+    const show = (each: Type) -> format_qualified(each, qualified)
+    fail program, at(method), "#{must} #{show(expected)}, not #{show(got)}"
+  expect_method 'equals', FunctionType(params: [type], result: bool_type)
+  expect_method 'compare', FunctionType(params: [type], result: ordering_type(program))
+  expect_method 'hash', FunctionType(params: [], result: int_type)
   leave_module shared

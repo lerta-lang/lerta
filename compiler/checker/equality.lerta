@@ -8,31 +8,55 @@ import
   RecordType, SimpleType, TupleType, Type, UnionType
 from '../types'
 
-# Whether the type compares by its contents rather than as a number, a text or an object.
-export const compares_by_contents = (type: Type) ->
+# The method by which a class or struct compares its values, `equals` or `compare`, if it has one
+# of its own; others compare as the language does.
+export const own_equality = (program: ProgramWide, type: Type) ->
+  return nil if type is not ObjectType
+  const methods = info_of(program, type).methods
+  return 'equals' if methods.has('equals')
+  methods.has('compare') then 'compare'
+
+# Whether the class or struct hashes its values with a `hash` of its own.
+export const has_own_hash = (program: ProgramWide, type: ObjectType) ->
+  info_of(program, type).methods.has('hash')
+
+# Whether the type compares by its contents, or by a method of its own (see own_equality), rather
+# than as a number, a text or an object.
+export const compares_by_contents = (program: ProgramWide, type: Type): Bool ->
   case type
-    when ObjectType then type.is_struct
+    when ObjectType then type.is_struct or own_equality(program, type) != nil
     when RecordType, TupleType, ArrayType then true
-    when UnionType then not is_identity_type(type)
+    when UnionType
+      not is_identity_type(type) or type.members.any(
+        (member) -> compares_by_contents(program, member)
+      )
     else false
 
-# Whether `==` compares values of the type. `at` is where a struct's field types are needed.
-export const is_equatable = (program: ProgramWide, type: Type, at: Position) ->
-  const seen = Set<String>()
-  equatable program, type, at, seen
+# Whether `==` compares values of the type. `at` is where a struct's field types are needed, or nil
+# for where each field is declared.
+export const is_equatable = (program: ProgramWide, type: Type, at: Position?) ->
+  equatable program, type, at, false, Set()
 
-const equatable = (program: ProgramWide, type: Type, at: Position, seen: Set<String>): Bool ->
-  const all = (parts: Type[]) -> parts.all((part) -> equatable(program, part, at, seen))
+# Whether values of the type can be map keys: they compare, and a type that compares by a method
+# of its own hashes by one too, so that equal values have the same hash.
+export const is_hashable = (program: ProgramWide, type: Type, at: Position?) ->
+  equatable program, type, at, true, Set()
+
+const equatable = (
+  program: ProgramWide, type: Type, at: Position?, hashes: Bool, seen: Set<String>
+): Bool ->
+  const all = (parts: Type[]) -> parts.all((part) -> equatable(program, part, at, hashes, seen))
   case type
     when SimpleType
       is_integer(type) or is_one_of_kinds(type, ['Float', 'Bool', 'String', 'Binary'])
     when EnumType then true
     when ObjectType
+      return not hashes or has_own_hash(program, type) if own_equality(program, type)
       # A struct that holds itself, through an array, compares as far as its other parts do.
       return true if not type.is_struct or seen.has(type.symbol)
       seen.add type.symbol
       const info = info_of(program, type)
-      all [field_type(program, info, field, at) for field in info.fields]
+      all [field_type(program, info, field, at ? field.name.position) for field in info.fields]
     when RecordType then all([field.type for field in type.fields])
     when TupleType then all(type.items)
     when ArrayType then all([type.element])

@@ -146,6 +146,12 @@ _Noreturn void lerta_panic_with_exception(const char *prefix) {
   lerta_os_abort();
 }
 
+void lerta_check_comparison(void) {
+  if (lerta_exception.data != NULL) {
+    lerta_panic_with_exception("equals, compare or hash threw an exception: ");
+  }
+}
+
 int main(int argc, char **argv) {
   lerta_stack_init();
   lerta_set_arguments(argc, argv);

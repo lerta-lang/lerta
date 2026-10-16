@@ -16,6 +16,7 @@ extern lerta_float_to_int: (Float) -> Int
 # The bits of the double that a decimal text rounds to, or -1 if it is too large to be finite.
 extern lerta_float_literal_bits: (String) -> Int
 extern lerta_float_from_bits: (Int) -> Float
+extern lerta_string_compare: (String, String) -> Int
 
 const MIN_INT = -9223372036854775808
 
@@ -125,14 +126,7 @@ extend String
     @starts_with(prefix) then @binary.text(prefix.binary.length)!
   without_suffix = (suffix: String): String? ->
     @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)!
-  compare = (other: String) ->
-    const left = @binary
-    const right = other.binary
-    var i = 0
-    while i < left.length and i < right.length
-      return left[i].to_int() - right[i].to_int() if left[i] != right[i]
-      i += 1
-    left.length - right.length
+  compare = (other: String) -> order_of(lerta_string_compare(@, other), 0)
 
 extend Binary
   # The bytes, read as the Iter is.
@@ -172,10 +166,10 @@ extend<T> T[]
     nil
   first = (): T? -> @length > 0 then @[0]
   last = (): T? -> @length > 0 then @[@length - 1]
-  # The items in the order that `compare` gives (negative when its first argument goes first), equal
+  # The items in the order that `compare` gives (LESS when its first argument goes first), equal
   # items keeping their order.
   # A merge sort: runs of `width` items, sorted, are merged in pairs, doubling it.
-  sorted = (compare: (T, T) -> Int): T[] ->
+  sorted = (compare: (T, T) -> Ordering): T[] ->
     var runs = [item for item in @]
     var width = 1
     while width < runs.length
@@ -188,7 +182,7 @@ extend<T> T[]
         var right = middle
         while left < middle or right < end
           # The left item goes first when equal, keeping the order of equal items.
-          if right == end or (left < middle and compare(runs[left], runs[right]) <= 0)
+          if right == end or (left < middle and compare(runs[left], runs[right]) != GREATER)
             merged.push runs[left]
             left += 1
           else
@@ -275,3 +269,28 @@ const is_decimal_number = (bytes: Binary) ->
     return false if exponent_end == i
     i = exponent_end
   i == bytes.length
+
+# How a value compares with another, which compare gives (see Comparable).
+export enum Ordering
+  LESS
+  EQUAL
+  GREATER
+
+# The Ordering of a before b. Written with `<` while the seed has no builtin compare (see
+# docs/internals.md#bootstrap).
+const order_of = (a: Int, b: Int): Ordering -> a < b then LESS else a == b then EQUAL else GREATER
+
+# The types that have `equals`: every type that `==` compares, by its own equals or compare, or as
+# `==` does.
+export interface Equatable
+  equals: (Self) -> Bool
+
+# The types that have `compare`, which gives their `<` and the like: the numbers, String, and the
+# classes and structs that have their own, which gives their `==` too.
+export interface Comparable
+  compare: (Self) -> Ordering
+
+# The types that can be map keys and set items: equal values have the same hash.
+export interface Hashable
+  equals: (Self) -> Bool
+  hash: () -> Int

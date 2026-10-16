@@ -1,6 +1,7 @@
 # `==` of values that compare by their contents (see checker/equality), and their hashes as map
 # keys: a function for each type, defined at its first use, which borrows its operands. A part of
 # such a value compares as `==` compares it: by value, by its bytes, or as the same object.
+import compares_by_contents, has_own_hash, own_equality from '../checker/equality'
 import info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import from_item from './array'
@@ -9,14 +10,14 @@ import
   emit_drop_function, emit_field_pointer, emit_member_dispatch, emit_value_pointer, value_types
 from './heap_object'
 import emit_branch, IrBuilder, IrModule from './ir_builder'
-import ir_type from './lerta_ir'
+import instance_symbol, ir_type, method_symbol from './lerta_ir'
 import emit_is_present, emit_unwrap from './optional'
-import call_runtime from './runtime_calls'
+import call_runtime, call_void_runtime from './runtime_calls'
 import scalar_of, widened_to_word from './scalar'
 import emit_string_equals from './string'
 import
-  ArrayType, is_identity_type, is_integer, is_kind, is_one_of_kinds, ObjectType, OptionalType, Type,
-  type_key, TypeKind, UnionType
+  ArrayType, is_identity_type, is_kind, is_one_of_kinds, is_signed, ObjectType, OptionalType, Type,
+  type_key, UnionType
 from '../types'
 
 # An i1: whether the two values of the type are equal. A part that holds parts of its own is
@@ -24,18 +25,26 @@ from '../types'
 export const emit_equals_by_contents = (
   ir: IrBuilder, program: ProgramWide, left: String, right: String, type: Type
 ) ->
-  return emit_equals(ir, program, left, right, type) if is_whole(type)
+  return emit_equals(ir, program, left, right, type) if is_whole(program, type)
   const symbol = equals_function(ir.module, program, type)
   ir.assign "call i1 #{symbol}(#{ir_type(type)} #{left}, #{ir_type(type)} #{right})"
 
-const emit_hash_by_contents = (ir: IrBuilder, program: ProgramWide, value: String, type: Type) ->
-  return emit_hash(ir, program, value, type) if is_whole(type)
+export const emit_hash_by_contents = (
+  ir: IrBuilder, program: ProgramWide, value: String, type: Type
+) ->
+  return emit_hash(ir, program, value, type) if is_whole(program, type)
   ir.assign "call i64 #{hash_function(ir.module, program, type)}(#{ir_type(type)} #{value})"
 
-# A type whose values have no parts that compare on their own.
-const is_whole = (type: Type) ->
-  const kinds: TypeKind[] = ['Float', 'Bool', 'String', 'Binary', ENUM]
-  is_integer(type) or is_one_of_kinds(type, kinds) or is_identity_type(type)
+# A type whose values have no parts that compare on their own: a value, an object that compares as
+# itself, or one that compares by its own method.
+const is_whole = (program: ProgramWide, type: Type) ->
+  return true if is_value_type(type) or own_equality(program, type) != nil
+  is_identity program, type
+
+# Whether values of the type compare as the same object: a class, or a union of classes, none of
+# which has its own equality.
+const is_identity = (program: ProgramWide, type: Type) ->
+  is_identity_type(type) and not compares_by_contents(program, type)
 
 # The functions that compare and hash items of the type, as a map with keys of it takes them.
 export const item_functions = (module: IrModule, program: ProgramWide, type: Type) ->
@@ -87,8 +96,9 @@ const emit_equals = (
   const nested = (part: Type, a: String, b: String) ->
     emit_equals_by_contents ir, program, a, b, part
   case
+    when own_equality(program, type) then emit_own_equals(ir, program, left, right, type)
     when is_one_of_kinds(type, ['String', 'Binary']) then emit_string_equals(ir, left, right)
-    when is_identity_type(type) then ir.assign("icmp eq ptr #{left}, #{right}")
+    when is_identity(program, type) then ir.assign("icmp eq ptr #{left}, #{right}")
     when type is OptionalType then emit_optional_equals(ir, program, left, right, type)
     when type is ObjectType and type.is_struct
       const info = info_of(program, type)
@@ -142,14 +152,11 @@ const all_of = (ir: IrBuilder, tests: String[]) ->
   all
 
 const emit_hash = (ir: IrBuilder, program: ProgramWide, value: String, type: Type): String ->
-  const scalar = scalar_of(type)
   case
-    when is_one_of_kinds(type, ['String', 'Binary'])
-      call_runtime ir, 'i64 @lerta_string_hash(ptr)', "ptr #{value}"
-    # Equal Floats, as 0.0 and -0.0, hash alike.
-    when is_kind(type, 'Float') then emit_float_word(ir, value)
-    when scalar then widened_to_word(ir, value, scalar)
-    when is_identity_type(type) then ir.assign("ptrtoint ptr #{value} to i64")
+    when type is ObjectType and has_own_hash(program, type)
+      emit_own_call ir, program, 'i64', type, 'hash', "ptr #{value}"
+    when is_value_type(type) then emit_value_hash(ir, value, type)
+    when is_identity(program, type) then ir.assign("ptrtoint ptr #{value} to i64")
     when type is OptionalType
       # A nil holds no value to hash, as a null pointer.
       const hash_inner = ->
@@ -188,3 +195,58 @@ const combine = (ir: IrBuilder, hashes: String[]) ->
 export const emit_value_equals = (ir: IrBuilder, left: String, right: String, type: Type) ->
   const comparison = is_kind(type, 'Float') then 'fcmp oeq' else 'icmp eq'
   ir.assign "#{comparison} #{ir_type(type)} #{left}, #{right}"
+
+# A value of a number, a Bool, a String, a Binary or an enum (see checker builtins).
+const is_value_type = (type: Type) ->
+  scalar_of(type) != nil or is_one_of_kinds(type, ['String', 'Binary'])
+
+const emit_value_hash = (ir: IrBuilder, value: String, type: Type) ->
+  if is_one_of_kinds(type, ['String', 'Binary'])
+    return call_runtime(ir, 'i64 @lerta_string_hash(ptr)', "ptr #{value}")
+  # Equal Floats, as 0.0 and -0.0, hash alike.
+  return emit_float_word(ir, value) if is_kind(type, 'Float')
+  widened_to_word ir, value, scalar_of(type)!
+
+# An i1, by the class's or struct's own equals, or by its compare giving EQUAL.
+const emit_own_equals = (
+  ir: IrBuilder, program: ProgramWide, left: String, right: String, type: Type
+) ->
+  if own_equality(program, type) == 'equals'
+    return emit_own_call(ir, program, 'i1', type, 'equals', "ptr #{left}, ptr #{right}")
+  ir.assign "icmp eq i64 #{emit_own_compare(ir, program, left, right, type)}, #{EQUAL}"
+
+# The Ordering of the two values, as an i64, by the class's or struct's own compare.
+export const emit_own_compare = (
+  ir: IrBuilder, program: ProgramWide, left: String, right: String, type: Type
+) -> emit_own_call(ir, program, 'i64', type, 'compare', "ptr #{left}, ptr #{right}")
+
+# Calls the method, which cannot throw (see lerta_check_comparison).
+const emit_own_call = (
+  ir: IrBuilder, program: ProgramWide, result: String, type: Type, name: String, args: String
+) ->
+  const value = ir.assign("call #{result} #{own_method_symbol(program, type, name)}(#{args})")
+  call_void_runtime ir, 'void @lerta_check_comparison()', ''
+  value
+
+# The method of a class, or of an instance of a generic class, whose method is an instance of a
+# generic one (see check_equality_methods).
+const own_method_symbol = (program: ProgramWide, type: Type, name: String) ->
+  const object_type = type as ObjectType!
+  const instance = info_of(program, object_type).comparison_instances[name]
+  instance then instance_symbol(program, instance) else method_symbol(object_type, name)
+
+# The places of the members of Ordering, LESS, EQUAL and GREATER, as compare gives them.
+export const LESS = 0
+export const EQUAL = 1
+export const GREATER = 2
+
+# The Ordering of two numbers of the type, as an i64.
+export const emit_number_compare = (ir: IrBuilder, left: String, right: String, type: Type) ->
+  const is_float = is_kind(type, 'Float')
+  const signed = is_float or is_signed(type)
+  const less = is_float then 'fcmp olt' else "icmp #{signed then 'slt' else 'ult'}"
+  const operands = "#{ir_type(type)} #{left}, #{right}"
+  const is_less = ir.assign("#{less} #{operands}")
+  const is_equal = emit_value_equals(ir, left, right, type)
+  const not_less = ir.assign("select i1 #{is_equal}, i64 #{EQUAL}, i64 #{GREATER}")
+  ir.assign "select i1 #{is_less}, i64 #{LESS}, i64 #{not_less}"

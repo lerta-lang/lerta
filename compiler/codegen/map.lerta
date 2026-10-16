@@ -1,4 +1,5 @@
 # Operations on maps in the generated code, through the runtime (runtime/map.c).
+import compares_by_contents from '../checker/equality'
 import ProgramWide from '../checker/shared'
 import
   emit_get, emit_item_pointer, emit_item_slot, emit_length, emit_load_item, from_item, item_kind,
@@ -18,13 +19,13 @@ from '../types'
 
 # The values of LertaKeyKind in runtime/lerta.h: a key narrower than a word is of the integer keys
 # of the kind of its items.
-const key_kind = (key: Type) ->
+const key_kind = (program: ProgramWide, key: Type) ->
   const narrow = narrow_item_kind(key)
   case
     when narrow != nil then narrow
     when is_integer(key) or is_one_of_kinds(key, [ENUM, 'Float']) then 0
     when is_one_of_kinds(key, ['String', 'Binary']) then 1
-    when is_identity_type(key) then 2
+    when is_identity_type(key) and not compares_by_contents(program, key) then 2
     else 3
 
 const key_word = (ir: IrBuilder, key: String, type: Type) ->
@@ -32,7 +33,7 @@ const key_word = (ir: IrBuilder, key: String, type: Type) ->
 
 # Keys that compare by their contents come with the functions that hash and compare them.
 export const emit_map_new = (ir: IrBuilder, program: ProgramWide, type: MapType) ->
-  const kind = key_kind(type.key)
+  const kind = key_kind(program, type.key)
   const functions = kind == 3 then item_functions(ir.module, program, type.key)
   const hash = functions?.hash ? 'null'
   const equals = functions?.equals ? 'null'

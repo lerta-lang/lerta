@@ -77,6 +77,13 @@ bool lerta_string_equals(const LertaString *a, const LertaString *b) {
   return a->length == b->length && memcmp(a->bytes, b->bytes, (size_t)a->length) == 0;
 }
 
+int64_t lerta_string_compare(const LertaString *a, const LertaString *b) {
+  int64_t shorter = a->length < b->length ? a->length : b->length;
+  int bytes = memcmp(a->bytes, b->bytes, (size_t)shorter);
+  if (bytes != 0) return bytes < 0 ? -1 : 1;
+  return a->length < b->length ? -1 : a->length > b->length ? 1 : 0;
+}
+
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text) {
   for (int64_t i = 0; i < count; i++) {
     if (lerta_string_equals(texts[i], text)) return i;

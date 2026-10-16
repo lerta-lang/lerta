@@ -2,7 +2,7 @@
 import all_but_last from '../arrays'
 import BinaryOperation, Coalesce, Expression, is_nil_test, NilLiteral, UnaryOperation from '../ast'
 import fail from './diagnostics'
-import compares_by_contents, is_equatable from './equality'
+import compares_by_contents, is_equatable, own_equality from './equality'
 import may_name_member from './enums'
 import expect_condition, expect_optional, expect_type, require_type, type_of from './expression'
 import is_contextual from './literals'
@@ -10,7 +10,7 @@ import where_right_operand from './narrowing'
 import Body from './shared'
 import
   bool_type, format_type, inner_of, INTEGER_KINDS, is_identity_type, is_one_of_kinds, OptionalType,
-  same_type, SIGNED_INTEGER_KINDS, Type, TypeKind, UnionType
+  ObjectType, same_type, SIGNED_INTEGER_KINDS, Type, TypeKind, UnionType
 from '../types'
 
 const NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., 'Float']
@@ -74,6 +74,8 @@ export const operand_kinds = (operator: String): TypeKind[] ->
   case operator
     when '+' then [NUMERIC_KINDS..., 'String']
     when '%', '&', '|', '^', '<<', '>>' then INTEGER_KINDS
+    # Strings order by their compare.
+    when '<', '<=', '>', '>=' then [NUMERIC_KINDS..., 'String']
     else NUMERIC_KINDS
 
 # An arithmetic or bitwise operator passes the expected type to its operands; a comparison's operands have their own.
@@ -91,7 +93,7 @@ export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Ty
   const allowed = operand_kinds(operator)
   const reject = (type: Type) -> "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if not is_numeric_operator(operator)
-    type_of_operands body, binary, nil, NUMERIC_KINDS, reject
+    type_of_operands body, binary, nil, allowed, reject
     return bool_type
   type_of_operands body, binary, hint_of(expected, allowed), allowed, reject
 
@@ -106,16 +108,31 @@ const type_of_operands = (
   const first = right_first then right else left
   const second = right_first then left else right
   const type = type_of(body, first, expected)
+  const program = body.program
   const is_equality = binary.operator == '==' or binary.operator == '!='
-  const is_identity = is_equality and is_identity_type(inner_of(type))
-  return type_of_identity_operand(body, second, type) if is_identity
   const inner = is_equality then inner_of(type) else type
-  const by_contents = is_equality and compares_by_contents(inner)
+  const by_contents = is_equality and compares_by_contents(program, inner)
+  const is_identity = is_equality and is_identity_type(inner) and not by_contents
+  return type_of_identity_operand(body, second, type) if is_identity
   const is_allowed =
-    if by_contents
-      is_equatable body.program, inner, first.position
-    else
-      is_one_of_kinds inner, allowed_kinds
+    case
+      when by_contents then is_equatable(program, inner, first.position)
+      # `<` and the like of a class or struct compare by its compare.
+      when not is_equality and own_equality(program, inner) == 'compare' then true
+      else is_one_of_kinds(inner, allowed_kinds)
+  if not is_allowed and not is_equality
+    if own_equality(program, inner_of(type)) == 'compare'
+      fail(
+        program
+        first.position
+        "#{binary.operator} takes no optional values, got #{format_type(type)}"
+      )
+    if type is ObjectType
+      fail(
+        program
+        first.position
+        "#{format_type(type)} has no compare, by which #{binary.operator} orders"
+      )
   fail body.program, first.position, reject(type) if not is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
   expect_type body, second, type

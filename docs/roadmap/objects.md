@@ -24,7 +24,6 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 ## Equality
 
-- User-defined `equals` and `hash`, which `==` and maps use. A class that defines `equals` is `Hashable` only if it also defines `hash` (preventing the mistake of equal values with different hashes).
 - `==` on interface values, and interface values as `Map` keys, by the equality of the values they hold.
 
 ## Open questions

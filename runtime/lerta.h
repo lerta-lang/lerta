@@ -159,6 +159,9 @@ int64_t lerta_float_to_int(double value);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
+// -1, 0 or 1 as `a` goes before, with or after `b` in the order of their bytes: `String.compare` and
+// `<` and the like of Strings.
+int64_t lerta_string_compare(const LertaString *a, const LertaString *b);
 uint64_t lerta_string_hash(const LertaString *s);
 // The place of `text` among an enum's `count` member texts, or -1 if none has it (`E.parse`).
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);
@@ -351,5 +354,9 @@ void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message
 
 // `panic` of std:builtins.
 _Noreturn void lerta_panic_string(const LertaString *message);
+
+// After a call of a class's or struct's own equals, compare or hash, which may not throw: they run
+// where `==`, `<` and map keys need them, which no code could catch an exception from.
+void lerta_check_comparison(void);
 
 #endif

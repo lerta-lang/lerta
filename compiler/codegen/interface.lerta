@@ -99,7 +99,7 @@ const generate_reading = (
     when Method
       # The other methods are written in Lerta (see entry_function).
       const builtin = target.source as BuiltinMethod!
-      call_builtin reader.ir, type, builtin, operands, result_type
+      call_builtin reader, type, builtin, operands, result_type
     when InterfaceProperty, EnumValue, EnumParse
       panic 'a reader reads a field, a property or a builtin method'
 
@@ -124,12 +124,14 @@ const call_field = (
 # Calls the builtin method on the data, releasing the data if an Iter's next throws before it
 # takes the data over.
 const call_builtin = (
-  ir: IrBuilder, type: Type, builtin: BuiltinMethod, operands: String[], result_type: Type
+  reader: Generator, type: Type, builtin: BuiltinMethod, operands: String[], result_type: Type
 ) ->
+  const ir = reader.ir
+  const program = reader.code.program
   const release_and_return = ->
     emit_release ir, '%data'
     emit_return_thrown ir, result_type
   # Only an Iter's next calls it, past the end, before it takes the object over.
   const check = -> emit_check_with(ir, release_and_return)
   const object = takes_object(builtin.member) then take_data(ir) else '%data'
-  call_builtin_method ir, builtin.member, object, type, operands, check
+  call_builtin_method ir, program, builtin.member, object, type, operands, check

@@ -4,7 +4,7 @@ import
   Position, Throw
 from '../ast'
 import fail from './diagnostics'
-import is_equatable from './equality'
+import is_equatable, is_hashable from './equality'
 import expect_type, type_of from './expression'
 import has_function from './functions'
 import is_contextual from './literals'
@@ -39,12 +39,16 @@ export const check_item_type = (
     fail program, at, "#{container} cannot hold values of type #{format_type(type)}"
   type
 
-# A key is any value that `==` compares but an optional one, since a missing key reads as nil.
-# `role` names the key in messages: 'a map key', or 'a set item'.
+# A key is any value that `==` compares but an optional one, since a missing key reads as nil, and
+# hashes as equal values do (see is_hashable). `role` names the key in messages: 'a map key', or
+# 'a set item'.
 export const reject_map_key = (program: ProgramWide, key: Type, at: Position, role = 'a map key') ->
+  const got = format_type(key)
   if key is OptionalType or not is_equatable(program, key, at)
-    const message = "#{role} must be a value that == compares, not optional"
-    fail program, at, "#{message}, got #{format_type(key)}"
+    fail program, at, "#{role} must be a value that == compares, not optional, got #{got}"
+  if not is_hashable(program, key, at)
+    const reason = 'a class or struct that compares by its own equals or compare needs a hash too'
+    fail program, at, "#{role} must hash as it compares, got #{got}: #{reason}"
 
 # The types of a map's keys and values, which `key_at` and `value_at` give (see reject_map_key and
 # check_map_value).

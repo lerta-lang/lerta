@@ -1,8 +1,12 @@
 # The methods that the compiler gives the builtin types (see
 # docs/internals.md#builtins).
+import is_equatable, is_hashable from './equality'
+import info_of from './object_types'
+import ProgramWide from './shared'
 import
-  ArrayType, bool_type, EnumType, float_type, FunctionType, is_integer, is_one_of_kinds, is_set,
-  IterType, MapType, SimpleType, string_type, TupleType, Type, TypeKind, void_type
+  ArrayType, bool_type, EnumType, float_type, FunctionType, int_type, INTEGER_KINDS, is_integer,
+  ObjectType, OptionalType, is_one_of_kinds, is_set, IterType, MapType, SimpleType, string_type,
+  TupleType, Type, TypeKind, void_type
 from '../types'
 
 # The builtin methods, which the checker resolves a name to once, so that codegen generates each
@@ -23,6 +27,11 @@ export enum BuiltinMember
   WRAPPING_ADD
   WRAPPING_SUB
   WRAPPING_MUL
+  # `equals` and `hash` of the types that `==` compares and that can be map keys, but by a method
+  # of their own (see Equatable and Hashable).
+  EQUALS
+  HASH
+  NUMBER_COMPARE
   INTEGER_TO_STRING
   INTEGER_TO_FLOAT
   # A conversion to the integer type that the method's type gives (see integer_method).
@@ -36,13 +45,41 @@ const method = (member: BuiltinMember, params: Type[], result: Type) ->
 
 # The method of a generic builtin type, an enum or an integer type by the name, if it has one: an
 # enum's to_string gives the member's text.
-export const builtin_method = (receiver: Type, name: String) ->
+export const builtin_method = (program: ProgramWide, receiver: Type, name: String) ->
+  return equality_method(program, receiver, name) if name == 'equals' or name == 'hash'
+  return value_method(program, receiver, name) if is_value_type(receiver)
   case receiver
     when ArrayType then array_method(receiver.element, name)
     when MapType then map_method(receiver, name)
     when IterType then iter_method(receiver.item, name)
-    when EnumType then name == 'to_string' then method(ENUM_TO_STRING, [], string_type)
-    else is_integer(receiver) then integer_method(receiver, name)
+    else nil
+
+# Whether the type's values are numbers, Bools, texts, Binaries or members of enums; numbers order
+# by their builtin compare (see Comparable).
+const is_value_type = (type: Type) ->
+  type is EnumType or is_one_of_kinds(type, [INTEGER_KINDS..., 'Float', 'Bool', 'String', 'Binary'])
+
+# The equals of a type that `==` compares, but by an equals of its own, and the hash of one that
+# can be a map key, but by a hash of its own; a compare of its own gives its equals.
+const equality_method = (program: ProgramWide, receiver: Type, name: String): BuiltinMethod? ->
+  return nil if receiver is ObjectType and info_of(program, receiver).methods.has(name)
+  if name == 'equals'
+    return is_equatable(program, receiver, nil) then method(EQUALS, [receiver], bool_type)
+  const is_key = receiver is not OptionalType and is_hashable(program, receiver, nil)
+  is_key then method(HASH, [], int_type)
+
+const value_method = (program: ProgramWide, receiver: Type, name: String) ->
+  case name
+    when 'compare'
+      return nil if not is_one_of_kinds(receiver, [INTEGER_KINDS..., 'Float'])
+      method NUMBER_COMPARE, [receiver], ordering_type(program)
+    else
+      return method(ENUM_TO_STRING, [], string_type) if receiver is EnumType and name == 'to_string'
+      is_integer(receiver) then integer_method(receiver, name)
+
+# The enum that compare gives, of std:builtins.
+export const ordering_type = (program: ProgramWide) ->
+  program.shared[program.builtins!].enums['Ordering']!
 
 # `x.wrapping_add(y)` and so on, which wrap around where the operators throw; the conversions to
 # the integer types and to Float; and to_string.

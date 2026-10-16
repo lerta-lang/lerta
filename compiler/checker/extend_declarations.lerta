@@ -82,6 +82,16 @@ const declare_methods = (
     if name.name == 'init' or name.name == 'deinit'
       const message = "an extend cannot declare #{name.name}, which only a class or struct runs"
       fail program, name.position, message
+    # Every type that == compares has its equals and hash, which an extend would not replace.
+    if name.name == 'equals' or name.name == 'hash'
+      fail(
+        program
+        name.position
+        "an extend cannot declare #{name.name}, which == and map keys give"
+      )
+    if receiver is ObjectType and name.name == 'compare'
+      const where = 'which < takes only from the class or struct itself'
+      fail program, name.position, "an extend of a class or struct cannot declare compare, #{where}"
     if has_already(name.name)
       const extended_type = bound then format_type(bound) else format_type(receiver)
       fail program, name.position, "#{extended_type} already has a member '#{name.name}'"
@@ -127,4 +137,4 @@ const has_member = (program: ProgramWide, receiver: Type, name: String) ->
   if receiver is ObjectType
     const info = info_of(program, receiver)
     return info.methods.has(name) or info.fields.any((field) -> field.name.name == name)
-  builtin_method(receiver, name) != nil or builtin_property(receiver, name) != nil
+  builtin_method(program, receiver, name) != nil or builtin_property(receiver, name) != nil

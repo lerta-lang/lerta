@@ -1,14 +1,15 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import BinaryOperation, Coalesce, is_nil_test, NilLiteral, UnaryOperation, Unwrap from '../ast'
-import compares_by_contents from '../checker/equality'
+import compares_by_contents, own_equality from '../checker/equality'
 import is_numeric_operator from '../checker/operator'
 import apply_integer_operator from './checked_int'
 import holding from './exceptions'
 import apply_float_arithmetic, emit_float_comparison, emit_float_negation from './float'
 import generate, generate_condition, release_if_reference, type_at_use, type_of from './expression'
-import emit_equals_by_contents, emit_value_equals from './equality'
+import emit_equals_by_contents, emit_own_compare, emit_value_equals, GREATER, LESS from './equality'
 import Generator from './generator'
-import emit_branch from './ir_builder'
+import emit_branch, IrBuilder from './ir_builder'
+import call_runtime from './runtime_calls'
 import emit_release, ir_type from './lerta_ir'
 import emit_is_nil, emit_is_present, emit_unwrap from './optional'
 import emit_concat, emit_equals, emit_string_equals from './string'
@@ -42,17 +43,29 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   const right = holding(g, left, operand_type, -> generate(g, binary.right))
   const is_string = is_kind(operand_type, 'String')
   return emit_concat(g.ir, [left, right]) if is_string and operator == '+'
+  const program = g.code.program
+  const inner = inner_of(operand_type)
+  const by_contents = compares_by_contents(program, inner)
   # nil is the null pointer, so optional objects compare as pointers too.
-  if is_identity_type(inner_of(operand_type))
+  if is_identity_type(inner) and not by_contents
     return negate_if_unequal(g, operator, generate_same_object(g, left, right))
-  if compares_by_contents(inner_of(operand_type))
-    const program = g.code.program
-    const equal = emit_equals_by_contents(g.ir, program, left, right, operand_type)
+  const released = (result: String) ->
     emit_release g.ir, left
     emit_release g.ir, right
-    return negate_if_unequal(g, operator, equal)
+    result
+  if own_equality(program, operand_type) == 'compare' and not is_equality(operator)
+    const ordering = emit_own_compare(g.ir, program, left, right, operand_type)
+    return released(emit_order_test(g.ir, operator, ordering))
+  if by_contents
+    const equal = emit_equals_by_contents(g.ir, program, left, right, operand_type)
+    return negate_if_unequal(g, operator, released(equal))
   if operand_type is OptionalType
     return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
+  if is_kind(operand_type, 'String') and not is_equality(operator)
+    const args = "ptr #{left}, ptr #{right}"
+    const sign = call_runtime(g.ir, 'i64 @lerta_string_compare(ptr, ptr)', args)
+    const predicate = SIGNED_PREDICATES[operator]!
+    return released(g.ir.assign("icmp #{predicate} i64 #{sign}, 0"))
   if is_one_of_kinds(operand_type, ['String', 'Binary'])
     return negate_if_unequal(g, operator, emit_equals(g.ir, left, right))
   return apply_numeric(g, operator, left, right, operand_type) if is_numeric_operator(operator)
@@ -67,6 +80,18 @@ export const apply_numeric = (
 ) ->
   return apply_float_arithmetic(g, operator, left, right) if is_kind(type, 'Float')
   apply_integer_operator g, operator, left, right, type
+
+const is_equality = (operator: String) -> operator == '==' or operator == '!='
+
+# Whether the Ordering, an i64, is one that the operator, `<` or the like, holds for.
+const emit_order_test = (ir: IrBuilder, operator: String, ordering: String) ->
+  const test =
+    case operator
+      when '<' then "eq i64 #{ordering}, #{LESS}"
+      when '<=' then "ne i64 #{ordering}, #{GREATER}"
+      when '>' then "eq i64 #{ordering}, #{GREATER}"
+      else "ne i64 #{ordering}, #{LESS}"
+  ir.assign "icmp #{test}"
 
 # `!=` is the negation of the equality.
 const negate_if_unequal = (g: Generator, operator: String, equal: String) ->
