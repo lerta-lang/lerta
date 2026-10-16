@@ -168,6 +168,7 @@ LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int6
   for (;;) {
     if (length == capacity) {
       capacity *= 2;
+      if ((uint64_t)capacity > SIZE_MAX) lerta_panic("out of memory");
       bytes = lerta_checked_realloc(bytes, (size_t)capacity);
     }
     int64_t count = read(file, bytes + length, capacity - length);

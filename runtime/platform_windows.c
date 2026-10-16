@@ -464,6 +464,7 @@ char *lerta_os_program_file(const char *command) {
 }
 
 void *lerta_os_map_region(int64_t size) {
+  if ((uint64_t)size > SIZE_MAX) return NULL;
   return VirtualAlloc(NULL, (SIZE_T)size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 }
 

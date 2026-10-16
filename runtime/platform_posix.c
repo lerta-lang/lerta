@@ -243,6 +243,7 @@ char *lerta_os_program_argument(const char *argument) {
 }
 
 void *lerta_os_map_region(int64_t size) {
+  if ((uint64_t)size > SIZE_MAX - LERTA_REGION_SIZE) return NULL;
   size_t mapped_size = (size_t)(size + LERTA_REGION_SIZE);
   uint8_t *mapped =
       mmap(NULL, mapped_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);

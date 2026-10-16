@@ -29,10 +29,6 @@ print registry.items[0].name
 
 Cause: `unwind_cleanup` in `compiler/codegen/function.lerta` calls `lerta_free_unfinished`, which frees regardless of the reference count (`runtime/memory.c`).
 
-### Sizes are cut to 32 bits on 32-bit targets (unconfirmed)
-
-A request of 4 GiB or more is converted to `size_t` unchecked, so the mapping is smaller than the region claims: `lerta_os_map_region` in `runtime/platform_posix.c` and `runtime/platform_windows.c`, and the capacity in `lerta_read_chunks` (`runtime/file.c`). It takes a 2 GiB array or file first.
-
 ## Compiler
 
 ### A `const` may take the name of a builtin type
