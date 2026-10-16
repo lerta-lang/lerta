@@ -37,9 +37,9 @@ Cause: `unwind_cleanup` in `compiler/codegen/function.lerta` calls `lerta_free_u
 
 ## Runtime
 
-### Smaller ones (unconfirmed)
+### A spawn that fails to make the output pipe leaves libuv's handle queue broken
 
-- After a failed `uv_spawn`, `runtime/loop.c` closes the handle that libuv has already removed from its queue, which only matters when the spawn fails in fork or pipe creation.
+When `uv_spawn` on Unix fails to make or open a pipe for the child's stdio, it removes the process handle from the loop's handle queue itself. `lerta_loop_run_program` in `runtime/loop.c` then closes the handle as after any failure, and libuv removes it again. With the output pipe, which is closed later but finishes closing first, this sets the queue's last link to the pipe in the freed program. A fork or exec failure leaves the handle in the queue, and Windows never removes it, so the fix must tell the cases apart, which libuv's API does not.
 
 ## Commands and tools
 
