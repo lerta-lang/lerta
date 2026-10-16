@@ -9,13 +9,13 @@ import is_contextual from './literals'
 import where_right_operand from './narrowing'
 import Body from './shared'
 import
-  bool_type, format_type, inner_of, is_identity_type, is_one_of_kinds, OptionalType, same_type,
-  Type, TypeKind, UnionType
+  bool_type, format_type, inner_of, INTEGER_KINDS, is_identity_type, is_one_of_kinds, OptionalType,
+  same_type, SIGNED_INTEGER_KINDS, Type, TypeKind, UnionType
 from '../types'
 
-const NUMERIC_KINDS: TypeKind[] = ['Int', 'Byte', 'Float']
+const NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., 'Float']
 
-const EQUALITY_KINDS: TypeKind[] = ['Int', 'Byte', 'Float', 'Bool', 'String', 'Binary', ENUM]
+const EQUALITY_KINDS: TypeKind[] = [NUMERIC_KINDS..., 'Bool', 'String', 'Binary', ENUM]
 
 # The arithmetic and bitwise operators, which give a value of their operands' type, as a comparison
 # does not.
@@ -31,7 +31,11 @@ const share_a_class = (a: Type, b: Type) ->
 
 # Lists kinds for a message, such as "Int or Byte".
 export const describe_kinds = (kinds: TypeKind[]) ->
-  const names = [kind.to_string() for kind in kinds]
+  const integers = INTEGER_KINDS.all((kind) -> kinds.contains(kind))
+  const others =
+    [kind.to_string() for kind in kinds when not (integers and INTEGER_KINDS.contains(kind))]
+  # All the integer types are named as one, first.
+  const names = integers then ['an integer type', others...] else others
   return names[0] if names.length == 1
   "#{all_but_last(names).join(', ')} or #{names.last()!}"
 
@@ -53,7 +57,7 @@ export const type_of_unary = (body: Body, unary: UnaryOperation, expected: Type?
   type
 
 # The types that prefix `-` takes: not an unsigned one, whose negation throws unless it is 0.
-const SIGNED_KINDS: TypeKind[] = ['Int', 'Float']
+const SIGNED_KINDS: TypeKind[] = [SIGNED_INTEGER_KINDS..., 'Float']
 
 const type_of_nil_test = (body: Body, binary: BinaryOperation) ->
   const left_is_nil = binary.left is NilLiteral
@@ -69,7 +73,7 @@ export const type_of_coalesce = (body: Body, coalesce: Coalesce) ->
 export const operand_kinds = (operator: String): TypeKind[] ->
   case operator
     when '+' then [NUMERIC_KINDS..., 'String']
-    when '%', '&', '|', '^', '<<', '>>' then ['Int', 'Byte']
+    when '%', '&', '|', '^', '<<', '>>' then INTEGER_KINDS
     else NUMERIC_KINDS
 
 # An arithmetic or bitwise operator passes the expected type to its operands; a comparison's operands have their own.

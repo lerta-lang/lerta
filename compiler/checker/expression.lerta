@@ -21,7 +21,7 @@ from './enums'
 import type_of_generic_call from './generic_call'
 import converts_through_itab from './interface_values'
 import std_interface from './interfaces'
-import byte_literal, float_literal, int_literal from './literals'
+import float_literal, int_literal, integer_literal from './literals'
 import check_loop_jump, type_of_comprehension from './loop'
 import type_of_method_call, type_of_property from './member'
 import generic_callee, named_function_literal, type_of_identifier from './name'
@@ -34,7 +34,7 @@ import Body from './shared'
 import type_of_tuple, type_of_tuple_item from './tuple'
 import resolve from './type_names'
 import
-  bool_type, format_type, format_types, FunctionType, inner_of, is_assignable, is_kind,
+  bool_type, format_type, format_types, FunctionType, inner_of, is_assignable, is_integer, is_kind,
   is_one_of_kinds, never_type, nil_type, optional_type, OptionalType, RecordType, same_type,
   string_type, Type, UnionType, void_type
 from '../types'
@@ -47,11 +47,14 @@ export const type_of = (body: Body, expression: Expression, expected: Type? = ni
 const compute_type = (body: Body, expression: Expression, expected: Type?): Type ->
   const literal_kind = expected != nil then inner_of(expected) else nil
   const wants_byte = literal_kind != nil and is_kind(literal_kind, 'Byte')
+  # An integer literal is an Int unless another integer type is expected.
+  const wants_integer =
+    literal_kind != nil and is_integer(literal_kind) and not is_kind(literal_kind, 'Int')
   const wants_float = literal_kind != nil and is_kind(literal_kind, 'Float')
   const program = body.program
   case expression
     when StringLiteral
-      return byte_literal(program, expression) if wants_byte
+      return integer_literal(program, expression, literal_kind!) if wants_byte
       type_of_literal_member(body, expression, expected) ? string_type
     when Interpolation
       for part in expression.parts
@@ -59,7 +62,7 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
       string_type
     when IntegerLiteral
       case
-        when wants_byte then byte_literal(program, expression)
+        when wants_integer then integer_literal(program, expression, literal_kind!)
         when wants_float then float_literal(program, expression)
         else int_literal(program, expression)
     when FloatLiteral then float_literal(program, expression)

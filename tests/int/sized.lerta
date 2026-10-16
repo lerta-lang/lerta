@@ -1,0 +1,94 @@
+# The sized integer types: literals of the type that is expected, at their limits.
+const i8: Int8 = -128
+const i16: Int16 = 32767
+const i32: Int32 = -2147483648
+const u16: UInt16 = 65535
+const u32: UInt32 = 4294967295
+const u64: UInt64 = 9223372036854775807
+print [i8.to_string(), i16.to_string(), i32.to_string()]
+print [u16.to_string(), u32.to_string(), u64.to_string()]
+
+# Arithmetic, division and comparison by the type's sign.
+const small: Int8 = 100
+print [(small + 27).to_int(), (small - 127 - 100).to_int(), (small / -3).to_int(), (small % 7).to_int()]
+const half: UInt32 = 2147483648
+print (half + (half - 1)).to_uint64().to_string()
+print [(half / 3).to_int(), (half % 10).to_int()]
+print [half > 1, i8 < 0, u16 >= 65535, i32 < -1]
+
+# Bitwise operators by the type's bits and sign.
+const bits: UInt16 = 0xF00F
+print [(bits & 0xFF).to_int(), (bits | 0xF0).to_int(), (bits ^ 0xFFFF).to_int()]
+print [(bits << 4).to_int(), (bits >> 12).to_int(), (i8 >> 7).to_int(), (i16 << 0).to_int()]
+
+# Wrapping methods, by the type's bits.
+print [i8.wrapping_sub(1).to_int(), u16.wrapping_add(1).to_int(), u32.wrapping_mul(2).to_int()]
+print u64.wrapping_add(u64).wrapping_add(1).to_string()
+
+# Conversions between any two integer types, and to Float.
+print [i8.to_int(), i8.to_int16().to_int(), u16.to_int32().to_int(), u32.to_uint64().to_int()]
+print [u64.to_int(), 255.to_byte().to_uint16().to_int()]
+print [i16.to_float(), u32.to_float()]
+
+# As map keys, set items, array items and case patterns.
+const by_size = Map<UInt32, String>()
+by_size[u32] = 'largest'
+print by_size[u32] ? '-'
+print Set<Int16>([1, 2, 1]).length
+print [u16, 0]
+print [i8, -1]
+const describe = (n: Int8) ->
+  case n
+    when -128 then 'least'
+    when 0 then 'zero'
+    else 'other'
+print [describe(i8), describe(0), describe(1)]
+
+# A value above the largest Int as a UInt64, and the top bits of unsigned types in `>>`.
+const top: UInt64 = 9223372036854775807
+const above = top + top
+print above.to_float() > 1e19
+print [(above >> 63).to_int(), (half >> 31).to_int()]
+# Negative keys and items, hashed as their values.
+const by_offset = Map<Int8, String>()
+by_offset[-5] = 'back'
+print [by_offset[-5] ? '-', by_offset[5] ? '-']
+print Set<Int16>([-1, -1, 1]).length
+
+# An extend of a sized type, an optional one, and a struct of them as a map key.
+extend Int16
+  doubled = -> @ * 2
+print i16.wrapping_sub(16384).doubled().to_int()
+const maybe: UInt16? = nil
+const some: UInt16? = 7
+print [maybe == nil, some == 7]
+print (some ? 0).to_int()
+struct Pixel
+  x: Int16
+  level: UInt32
+const levels = Map<Pixel, String>()
+levels[Pixel(x: -1, level: 3)] = 'dim'
+print levels[Pixel(x: -1, level: 3)] ? '-'
+print Pixel(x: 2, level: 1) == Pixel(x: 2, level: 1)
+# The unsigned order of a UInt64 above the largest Int.
+print [above > top, top < above]
+print [(above / top).to_int(), (above % top).to_int()]
+# A conversion to the type itself is the value, as in generic code over integer types.
+const as_int = <T>(n: T) -> n.to_int()
+print [5.to_int(), as_int(i16), as_int(u32), u16.to_uint16().to_int()]
+# Byte has the builtin to_float and wrapping methods too.
+const byte: Byte = 200
+print [byte.to_float(), byte.wrapping_add(100).to_float()]
+# Interpolation and an array's text, of a UInt64 above the largest Int too.
+print "#{i8} #{u32} #{above}"
+print [above, 1]
+# Compound assignments of the sized types.
+var counter: UInt32 = 4000000000
+counter /= 3
+counter %= 1000
+counter <<= 2
+counter >>= 1
+var signed: Int8 = -100
+signed >>= 1
+signed <<= 1
+print [counter.to_int(), signed.to_int()]

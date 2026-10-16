@@ -47,7 +47,8 @@ Interfaces and generics are in [objects](objects.md).
 
 ## Numeric types
 
-- `Int8`, `Int16`, `Int32`, `UInt16`, `UInt32` and `UInt64`, with no second names for `Byte` and `Int`. Each takes the rules of `Int` and `Byte`, those of its sign (see [the reference](../reference/types.md#int)), and an integer literal is of the type that is expected, as a `Byte` literal is. `x.to_int8()`, `x.to_uint32()` and so on convert between any two of the integer types, throwing `integer overflow` unless the value fits. They print, are map keys and set items, and compare as their sign says.
+- A `UInt64` literal above the largest `Int`, as `0xFFFFFFFFFFFFFFFF`.
+- Conversions from `Float` to the sized integer types, which now go through `to_int()`.
 - Arrays and maps hold each at its own size, as they hold a `Byte` in one byte (`LertaItemKind` in `runtime/lerta.h`), rather than in 8 bytes.
 - `Float32`, finite as `Float` is, whose operations throw where the result would not be finite. `x.to_float32()` converts a `Float`, throwing unless it is finite as a `Float32`, and `x.to_float()` back; a float literal is of the type that is expected. `to_string` gives the fewest digits that read back as the `Float32`.
 - `String.iter()` gives the code points as `UInt32`s, which the UTF-8 code of std and of the compiler computes with bitwise operators.

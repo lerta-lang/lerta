@@ -1,38 +1,32 @@
-# Integer arithmetic, which throws on overflow and on division by zero; and the methods that wrap
-# around instead (see emit_wrapping).
+# Integer arithmetic, which throws on overflow and on division by zero, and the builtin methods of
+# the integer types: those that wrap around instead, the conversions, to_float and to_string.
 import Generator from './generator'
 import IrBuilder from './ir_builder'
 import ir_type from './lerta_ir'
+import call_runtime from './runtime_calls'
 import DIVISION_BY_ZERO, OVERFLOW, SHIFT_OUT_OF_RANGE, throw_if from './runtime_errors'
-import is_kind, Type from '../types'
-
-const INT_MIN = '-9223372036854775808'
+import int_type, integer_bits, integer_range, is_kind, is_signed, Type from '../types'
 
 # An arithmetic operator, `+`, `-`, `*`, `/` or `%`, or a bitwise one, `&`, `|`, `^`, `<<` or `>>`,
-# applied to two Ints or two Bytes.
+# applied to two values of an integer type, by its bits and its sign.
 export const apply_integer_operator = (
   g: Generator, operator: String, left: String, right: String, type: Type
 ) ->
   return bitwise(g, operator, left, right, type) if BITWISE_INSTRUCTIONS.has(operator)
   return shift(g, operator, left, right, type) if operator == '<<' or operator == '>>'
-  const is_division = operator == '/' or operator == '%'
-  const is_byte = is_kind(type, 'Byte')
-  case
-    when is_division and is_byte then byte_division(g, operator, left, right)
-    when is_division then division(g, operator, left, right)
-    else checked(g, operator, left, right, is_byte then 'i8' else 'i64', not is_byte)
+  return division(g, operator, left, right, type) if operator == '/' or operator == '%'
+  checked g, operator, left, right, type
 
-# Byte is unsigned, so that 0 - 1 overflows as 255 + 1 does.
-const checked = (
-  g: Generator, operator: String, left: String, right: String, width: String, signed: Bool
-) ->
-  const sign = signed then 's' else 'u'
+# An unsigned type overflows below 0, as 0 - 1 does, as it does above its largest value.
+const checked = (g: Generator, operator: String, left: String, right: String, type: Type) ->
+  const sign = is_signed(type) then 's' else 'u'
   const operation =
     case operator
       when '+' then 'add'
       when '-' then 'sub'
       when '*' then 'mul'
       else panic("no arithmetic operator #{operator}")
+  const width = ir_type(type)
   const intrinsic = "llvm.#{sign}#{operation}.with.overflow.#{width}"
   const result_type = "{ #{width}, i1 }"
   const ir = g.ir
@@ -53,37 +47,71 @@ const bitwise = (g: Generator, operator: String, left: String, right: String, ty
 # gives the value, as it does when no bit that differs from the sign is shifted out.
 const shift = (g: Generator, operator: String, left: String, right: String, type: Type) ->
   const ir = g.ir
-  const is_byte = is_kind(type, 'Byte')
+  const signed = is_signed(type)
   const width = ir_type(type)
-  const out_of_range = ir.assign("icmp uge #{width} #{right}, #{is_byte then 8 else 64}")
+  const out_of_range = ir.assign("icmp uge #{width} #{right}, #{integer_bits(type)}")
   throw_if g, out_of_range, SHIFT_OUT_OF_RANGE
   if operator == '>>'
-    return ir.assign("#{is_byte then 'lshr' else 'ashr'} #{width} #{left}, #{right}")
+    return ir.assign("#{signed then 'ashr' else 'lshr'} #{width} #{left}, #{right}")
   const shifted = ir.assign("shl #{width} #{left}, #{right}")
-  return shifted if is_byte
+  return shifted if not signed
   const back = ir.assign("ashr #{width} #{shifted}, #{right}")
   throw_if g, ir.assign("icmp ne #{width} #{back}, #{left}"), OVERFLOW
   shifted
 
-# INT_MIN / -1 overflows; INT_MIN % -1 is rejected too, since LLVM leaves it undefined.
-const division = (g: Generator, operator: String, left: String, right: String) ->
+# The least value of a signed type / -1 overflows; its % -1 is rejected too, since LLVM leaves it
+# undefined.
+const division = (g: Generator, operator: String, left: String, right: String, type: Type) ->
   const ir = g.ir
-  const is_zero = ir.assign("icmp eq i64 #{right}, 0")
-  throw_if g, is_zero, DIVISION_BY_ZERO
-  const is_min = ir.assign("icmp eq i64 #{left}, #{INT_MIN}")
-  const is_minus_one = ir.assign("icmp eq i64 #{right}, -1")
-  const overflows = ir.assign("and i1 #{is_min}, #{is_minus_one}")
-  throw_if g, overflows, OVERFLOW
-  const instruction = operator == '/' then 'sdiv' else 'srem'
-  ir.assign "#{instruction} i64 #{left}, #{right}"
-
-const byte_division = (g: Generator, operator: String, left: String, right: String) ->
-  const is_zero = g.ir.assign("icmp eq i8 #{right}, 0")
-  throw_if g, is_zero, DIVISION_BY_ZERO
-  const instruction = operator == '/' then 'udiv' else 'urem'
-  g.ir.assign "#{instruction} i8 #{left}, #{right}"
+  const width = ir_type(type)
+  throw_if g, ir.assign("icmp eq #{width} #{right}, 0"), DIVISION_BY_ZERO
+  const is_quotient = operator == '/'
+  if not is_signed(type)
+    return ir.assign("#{is_quotient then 'udiv' else 'urem'} #{width} #{left}, #{right}")
+  const is_min = ir.assign("icmp eq #{width} #{left}, #{integer_range(type).least}")
+  const is_minus_one = ir.assign("icmp eq #{width} #{right}, -1")
+  throw_if g, ir.assign("and i1 #{is_min}, #{is_minus_one}"), OVERFLOW
+  ir.assign "#{is_quotient then 'sdiv' else 'srem'} #{width} #{left}, #{right}"
 
 # `x.wrapping_add(y)` and the like: the operation without the check, modulo 2 to the type's bits.
 export const emit_wrapping = (
   ir: IrBuilder, instruction: String, left: String, right: String, type: Type
 ) -> ir.assign("#{instruction} #{ir_type(type)} #{left}, #{right}")
+
+# The text of a value of an integer type, through that of an Int, or that of a UInt64, which may be
+# above an Int's values.
+export const emit_integer_text = (ir: IrBuilder, value: String, type: Type) ->
+  if is_kind(type, 'UInt64')
+    return call_runtime(ir, 'ptr @lerta_uint64_to_string(i64)', "i64 #{value}")
+  call_runtime(
+    ir
+    'ptr @lerta_int_to_string(i64)'
+    "i64 #{resized(ir, value, type, int_type, is_signed(type))}"
+  )
+
+export const emit_integer_to_float = (ir: IrBuilder, value: String, type: Type) ->
+  ir.assign "#{is_signed(type) then 'sitofp' else 'uitofp'} #{ir_type(type)} #{value} to double"
+
+# `x.to_int8()` and the like, which throw unless the value fits in the type: converted there and
+# back, it must come back the same, and with the same sign, as a value of one sign that is
+# negative as one of the other is no value of it.
+export const emit_conversion = (g: Generator, value: String, from: Type, to: Type) ->
+  const ir = g.ir
+  const converted = resized(ir, value, from, to, is_signed(from))
+  const back = resized(ir, converted, to, from, is_signed(to))
+  const changed = ir.assign("icmp ne #{ir_type(from)} #{back}, #{value}")
+  const is_negative = (operand: String, type: Type) ->
+    is_signed(type) then ir.assign("icmp slt #{ir_type(type)} #{operand}, 0") else 'false'
+  const negative = is_signed(from) then is_negative(value, from) else is_negative(converted, to)
+  const lost =
+    is_signed(from) == is_signed(to) then changed else ir.assign("or i1 #{changed}, #{negative}")
+  throw_if g, lost, OVERFLOW
+  converted
+
+# The value with the bits of `to`: cut, or extended by its sign if `signed`.
+const resized = (ir: IrBuilder, value: String, from: Type, to: Type, signed: Bool) ->
+  const from_bits = integer_bits(from)
+  const to_bits = integer_bits(to)
+  return value if from_bits == to_bits
+  const instruction = to_bits < from_bits then 'trunc' else signed then 'sext' else 'zext'
+  ir.assign "#{instruction} #{ir_type(from)} #{value} to #{ir_type(to)}"

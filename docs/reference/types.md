@@ -23,6 +23,20 @@ The methods of the builtin types are listed in [builtins](builtins.md#methods-of
 - `b.is_digit()`, `b.is_letter()` and `b.is_space()` tell whether it is an ASCII digit, letter (`a` to `z`, `A` to `Z`) or space (a space, `\t`, `\n` or `\r`). `b.is_utf8_continuation()` tells whether it continues a UTF-8 sequence (0x80 to 0xBF), as when counting the code points of a `Binary`.
 - **The type of a literal is decided by context.** Where a `Byte` or a `Byte?` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a string literal of one byte (`'a'`). The expected type reaches literals inside arithmetic (`c == 1 + 2`), `case` arms, array items and return values. An operand of `+`, `==`, `<` and so on whose type comes from the context is expected to have the type of the other operand, so `c >= '0'` and `'0' <= c` compare two `Byte`s when `c` is one; likewise `[1, c]` is a `Byte[]`. Without such a context, `'a'` is a `String` and `1` an `Int`.
 
+## Sized integers
+
+```
+const flags: UInt16 = 0x8001
+const offset: Int32 = -4
+print (flags >> 15).to_int() + offset.to_int()
+```
+
+- `Int8`, `Int16` and `Int32` are signed integers of 8, 16 and 32 bits, and `UInt16`, `UInt32` and `UInt64` unsigned ones of 16, 32 and 64 bits; `Byte` is the unsigned one of 8 bits and `Int` the signed one of 64, with no second names.
+- Each takes the rules of `Int` if it is signed and those of `Byte` if it is unsigned: `+` `-` `*` throw `integer overflow` when the result does not fit, `/` and `%` throw `division by zero`, and the least value of a signed type divided by `-1` overflows; comparisons follow the sign; prefix `-` is for the signed ones; `&` `|` `^` `<<` `>>` work by the type's bits, a shift throwing `shift out of range` from the bits up, and `<<` of a signed type checked as that of `Int` is; `wrapping_add`, `wrapping_sub` and `wrapping_mul` wrap around modulo 2 to the bits.
+- An integer literal is of the integer type that is expected, and must fit in it; elsewhere it is an `Int`. A `UInt64` literal cannot be above the largest `Int` so far.
+- There are no implicit conversions between integer types. `x.to_int()`, `x.to_byte()`, `x.to_int8()`, `x.to_int16()`, `x.to_int32()`, `x.to_uint16()`, `x.to_uint32()` and `x.to_uint64()` convert a value of any integer type to that type, throwing `integer overflow` unless it fits there, as a negative value fits in no unsigned type. `x.to_float()` gives the nearest `Float`. `x.to_string()` gives the decimal digits, with a `-` for a negative value.
+- They compare with `==`, are map keys and set items, are written by an array's `to_string`, and are patterns of a `case`; arrays hold each in 8 bytes so far. A C function may take and give them as the C types of their bits and sign, as `int32_t`.
+
 ## Float
 
 - `Float` is a 64-bit IEEE 754 double that is always finite: no `Float` is an infinity or NaN. An operation whose result would be one throws instead, so `==` holds for every value and its own copy, and `<` orders all values.

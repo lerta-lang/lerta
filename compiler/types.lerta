@@ -14,6 +14,12 @@ export enum TypeKind
   'Float'
   'Bool'
   'Byte'
+  'Int8'
+  'Int16'
+  'Int32'
+  'UInt16'
+  'UInt32'
+  'UInt64'
   'Binary'
   'void'
   'never'
@@ -149,6 +155,34 @@ export const kind_of = (type: Type): TypeKind ->
     when FunctionType then FUNCTION
 
 export const is_kind = (type: Type, kind: TypeKind) -> kind_of(type) == kind
+
+# The integer types, `Int` and `Byte` among them, which differ in their bits and their sign.
+export const INTEGER_KINDS: TypeKind[] =
+  'Int', 'Byte', 'Int8', 'Int16', 'Int32', 'UInt16', 'UInt32', 'UInt64'
+
+export const is_integer = (type: Type) -> is_one_of_kinds(type, INTEGER_KINDS)
+
+export const SIGNED_INTEGER_KINDS: TypeKind[] = ['Int', 'Int8', 'Int16', 'Int32']
+
+export const is_signed = (type: Type) -> is_one_of_kinds(type, SIGNED_INTEGER_KINDS)
+
+export const integer_bits = (type: Type) ->
+  case kind_of(type)
+    when 'Byte', 'Int8' then 8
+    when 'Int16', 'UInt16' then 16
+    when 'Int32', 'UInt32' then 32
+    else 64
+
+# The least and the largest value of an integer type, from its bits and its sign; a UInt64's
+# largest is taken as the largest Int, as no value above it can be written.
+export const integer_range = (type: Type) ->
+  const bits = integer_bits(type)
+  # -(2 to the bits - 1), in steps that stay within an Int.
+  var signed_least = -1
+  signed_least *= 2 for _ in 1...bits
+  const signed_most = -(signed_least + 1)
+  return { least: signed_least, most: signed_most } if is_signed(type)
+  { least: 0, most: bits == 64 then signed_most else signed_most * 2 + 1 }
 
 export const is_one_of_kinds = (type: Type, kinds: TypeKind[]) -> kinds.contains(kind_of(type))
 

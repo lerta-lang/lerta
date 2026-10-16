@@ -36,6 +36,17 @@ LertaString *lerta_int_to_string(int64_t n) {
   return lerta_string_from_bytes(text + start, LERTA_INT_TEXT_MAX - start);
 }
 
+// A UInt64, whose values above the largest Int an Int's text would show as negative.
+LertaString *lerta_uint64_to_string(uint64_t n) {
+  uint8_t text[LERTA_INT_TEXT_MAX];
+  int64_t start = LERTA_INT_TEXT_MAX;
+  do {
+    text[--start] = (uint8_t)('0' + n % 10);
+    n /= 10;
+  } while (n != 0);
+  return lerta_string_from_bytes(text + start, LERTA_INT_TEXT_MAX - start);
+}
+
 LertaString *lerta_string_concat(int64_t count, ...) {
   va_list args;
   va_start(args, count);

@@ -1,8 +1,9 @@
 # The methods and properties that the compiler gives the builtin types (see
 # docs/internals.md#builtins).
 import
-  ArrayType, binary_type, bool_type, EnumType, FunctionType, int_type, is_kind, is_one_of_kinds,
-  is_set, IterType, MapType, string_type, TupleType, Type, void_type
+  ArrayType, binary_type, bool_type, EnumType, float_type, format_type, FunctionType, int_type,
+  is_integer, is_kind, is_one_of_kinds, is_set, IterType, MapType, SimpleType, string_type,
+  TupleType, Type, TypeKind, void_type
 from '../types'
 
 # The builtin methods, which the checker resolves a name to once, so that codegen generates each
@@ -23,6 +24,10 @@ export enum BuiltinMember
   WRAPPING_ADD
   WRAPPING_SUB
   WRAPPING_MUL
+  INTEGER_TO_STRING
+  INTEGER_TO_FLOAT
+  # A conversion to the integer type that the method's type gives (see integer_method).
+  INTEGER_CONVERSION
 
 # The source of a builtin method (see methods' MethodSource): its member and its type.
 export struct BuiltinMethod
@@ -40,17 +45,37 @@ export const builtin_method = (receiver: Type, name: String) ->
     when MapType then map_method(receiver, name)
     when IterType then iter_method(receiver.item, name)
     when EnumType then name == 'to_string' then method(ENUM_TO_STRING, [], string_type)
-    else is_one_of_kinds(receiver, ['Int', 'Byte']) then wrapping_method(receiver, name)
+    else is_integer(receiver) then integer_method(receiver, name)
 
-# `x.wrapping_add(y)` and so on of an integer type, which wrap around where its operators throw.
-const wrapping_method = (receiver: Type, name: String) ->
-  const member: BuiltinMember? =
+# `x.wrapping_add(y)` and so on, which wrap around where the operators throw; the conversions to
+# the integer types and to Float; and to_string; but for those that std gives.
+const integer_method = (receiver: Type, name: String) ->
+  return nil if STD_METHODS.contains("#{format_type(receiver)}.#{name}")
+  const wrapping: BuiltinMember? =
     case name
       when 'wrapping_add' then WRAPPING_ADD
       when 'wrapping_sub' then WRAPPING_SUB
       when 'wrapping_mul' then WRAPPING_MUL
       else nil
-  member then method(member, [receiver], receiver)
+  return method(wrapping, [receiver], receiver) if wrapping
+  return method(INTEGER_TO_STRING, [], string_type) if name == 'to_string'
+  return method(INTEGER_TO_FLOAT, [], float_type) if name == 'to_float'
+  const kind = CONVERSIONS[name] ? return nil
+  method INTEGER_CONVERSION, [], SimpleType(kind)
+
+# std gives these, as the seed does not know them as builtins (see docs/internals.md#bootstrap): the
+# methods of `extend Int` and `extend Byte` in std/builtins.lerta that integer_method would give.
+const STD_METHODS =
+  'Int.to_string'
+  'Int.to_byte'
+  'Int.to_float'
+  'Byte.to_string'
+  'Byte.to_int'
+
+# The integer types that `to_int`, `to_byte`, `to_int8` and so on convert to.
+const CONVERSIONS: Map<String, TypeKind> =
+  'to_int': 'Int', 'to_byte': 'Byte', 'to_int8': 'Int8', 'to_int16': 'Int16', 'to_int32': 'Int32',
+  'to_uint16': 'UInt16', 'to_uint32': 'UInt32', 'to_uint64': 'UInt64'
 
 # Whether the builtin method keeps its argument, as an array's `push` does, which a cycle can go
 # through (see cycles).
@@ -67,7 +92,7 @@ const array_method = (element: Type, name: String) ->
 # codegen array_text); arrays of other items are Stringable only through an extend.
 const is_text_item = (item: Type): Bool ->
   return is_text_item(item.element) if item is ArrayType
-  is_one_of_kinds item, ['String', 'Int', 'Float', 'Bool', 'Byte', ENUM]
+  is_integer(item) or is_one_of_kinds(item, ['String', 'Float', 'Bool', ENUM])
 
 const iter_method = (item: Type, name: String) ->
   case name

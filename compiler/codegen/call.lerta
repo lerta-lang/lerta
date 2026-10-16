@@ -8,6 +8,7 @@ import
 from '../checker/methods'
 import info_of, is_argument from '../checker/object_types'
 import call_builtin_method, takes_object from './builtins'
+import emit_conversion from './checked_int'
 import emit_closure_call, function_type_of from './closure'
 import emit_parse from './enum'
 import
@@ -25,7 +26,7 @@ from './lerta_ir'
 import emit_add_items, emit_map_new from './map'
 import nil_constant from './optional'
 import emit_runtime_call, emit_valueless_call from './runtime_calls'
-import MapType, ObjectType, Type from '../types'
+import FunctionType, MapType, ObjectType, Type from '../types'
 
 export const generate_call = (g: Generator, call: Call) ->
   const callee = call.callee
@@ -83,6 +84,10 @@ const generate_method_call = (g: Generator, call: Call, member: Member) ->
     const result = holding(g, object, object_type, call_iter)
     emit_exception_check g
     return result
+  # A conversion between integer types throws where the value does not fit.
+  if source is BuiltinMethod and source.member == INTEGER_CONVERSION
+    const target = (source.type as FunctionType!).result
+    return emit_conversion(g, object, object_type, target)
   const call_method = ->
     case source
       when BuiltinMethod
