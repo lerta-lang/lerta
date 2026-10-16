@@ -158,7 +158,7 @@ export const if_doc = (if_node: If, context: Context): Doc ->
   const head = join([keyword('if ', if_node.position), condition_doc(if_node.condition, context)])
   const parts = [head, block_below(if_node.then_body, context)]
   const else_body = if_node.else_body
-  if else_body.length == 1 and else_body[0] is If and not (else_body[0] as If!).nil_safe
+  if is_else_if(else_body, context)
     const word = word_before(else_body[0].position, 'else', context)
     const else_if = join([line_feed(), word, text(' '), if_doc(else_body[0] as If!, context)])
     parts.push rule(BRANCHES, else_if)
@@ -166,6 +166,12 @@ export const if_doc = (if_node: If, context: Context): Doc ->
     const word = word_before(else_body[0].position, 'else', context)
     parts.push join([line_feed(), word, block_below(else_body, context)])
   join parts
+
+# Whether an `else` is written `else if`: not when a comment comes before its `if`, which `else if`
+# would move above it.
+const is_else_if = (else_body: Statement[], context: Context) ->
+  return false if else_body.length != 1 or else_body[0] is not If
+  not (else_body[0] as If!).nil_safe and not context.source.comment_before(else_body[0].position)
 
 const block_below = (body: Statement[], context: Context) ->
   indent join([line_feed(), block_doc(body, context)])

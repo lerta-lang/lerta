@@ -120,21 +120,6 @@ The operand of `return` is not among the places where [control flow](reference/c
 - `const r = d?.die()`, where `die` returns `never`, reports that nil alone does not give the type of the branches of `if`, which names neither `?.` nor `never` (`unify_values` in `compiler/checker/case.lerta`).
 - `print 1e+` reports the literal as `'1e'` (`scan_number` in `compiler/lexer/tokens.lerta`).
 
-## Formatter
-
-### `lerta fmt` fails on an `else` holding a comment and one `if`
-
-```
-if x > 0
-  print 1
-else
-  # c
-  if x < 0
-    print 2
-```
-
-The formatter reports `expected indented block, found 'if'`, apparently by joining `else` and `if` into `else if` above the comment.
-
 ## Runtime
 
 ### macOS fails to write or read 2 GiB or more at once
