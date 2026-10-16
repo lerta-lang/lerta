@@ -5,7 +5,6 @@ The planned syntax, control flow, types and operators.
 ## Syntax
 
 - Multi-line strings use `"""..."""`. The common leading indentation is removed, measured from the position of the closing `"""` (the Swift approach).
-- Variadic parameters are `xs...`, and a call spreads an array into them as an array literal spreads it (see [spread](../reference/types.md#array)): `f(args...)`.
 - A call may name the arguments of parameters that have [defaults](../reference/functions.md), after the others, and leave out any of them, not only some from the last: `build(source, optimize: true)` for `build = (source: String, output: String? = nil, optimize = false)`. How this sits with the named arguments of an anonymous struct (see [the reference](../reference/types.md#anonymous-structs)) is open.
 - A function literal held by a local `const` may have [defaults](../reference/functions.md), as a top-level function does. Its defaults may use the locals it captures, so each is computed by a closure.
 - A function literal held by a local `const` may call itself by that name, its return type written as for any recursive function. It does not capture itself, which would make a cycle that is never freed, but calls its own code with its own captures.

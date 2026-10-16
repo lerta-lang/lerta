@@ -11,7 +11,9 @@ import abort_part, check_part, fail, fail_already_defined from './diagnostics'
 import GenericFunction, GenericRef from './generics'
 import ProgramWide, Shared from './shared'
 import module_resolver, resolve, resolve_result, Resolver from './type_names'
-import bool_type, float_type, FunctionType, int_type, same_type, string_type, Type from '../types'
+import
+  ArrayType, bool_type, float_type, FunctionType, int_type, same_type, string_type, Type
+from '../types'
 
 # Where the checking of a function or a type is, so that a cycle is found when it reaches one
 # that is still being checked.
@@ -47,6 +49,7 @@ export const parameter_types = (
   expected: Type?[] = []
 ) ->
   const types: Type[] = []
+  reject_misplaced_variadic program, literal
   for param, i in literal.params
     const expected_type = i < expected.length then expected[i]
     const unwritten = expected_type then expected_type else literal_type(param.default)
@@ -55,12 +58,22 @@ export const parameter_types = (
       const inferable = unwritten != nil and same_type(type, unwritten)
       const inferable_before = program.inferable_parameters[param.name] ? true
       program.inferable_parameters[param.name] = inferable and inferable_before
-      types.push type
+      types.push param.variadic then ArrayType(element: type) else type
       continue
     const { name, position } = param.name
     const message = "the type of the parameter '#{name}' must be written"
     types.push unwritten ? fail(program, position, message)
   types
+
+# A variadic parameter comes last, and its function has no defaults, so that the arguments that it
+# takes are those after the others.
+const reject_misplaced_variadic = (program: ProgramWide, literal: FunctionLiteral) ->
+  const params = literal.params
+  const found = params.find_index((param) -> param.variadic) ? return
+  const name = params[found].name
+  fail program, name.position, 'a variadic parameter must be the last' if found != params.length - 1
+  if const param = params.find((each) -> each.default != nil)
+    fail program, param.default!.position, 'a variadic function cannot have defaults so far'
 
 # The type of a default that is a literal of one type alone.
 const literal_type = (value: Expression?): Type? ->
@@ -86,6 +99,11 @@ export const annotated_type = (
 export const reject_generic = (program: ProgramWide, literal: FunctionLiteral) ->
   return if literal.type_params.length == 0
   fail program, literal.position, 'only a top-level function or a method can be generic so far'
+
+export const reject_variadic = (program: ProgramWide, literal: FunctionLiteral) ->
+  const param = literal.params.find((each) -> each.variadic) ? return
+  const message = 'only a top-level function or a method can be variadic so far'
+  fail program, param.name.position, message
 
 export const reject_defaults = (program: ProgramWide, literal: FunctionLiteral) ->
   const param = literal.params.find((each) -> each.default != nil) ? return

@@ -4,9 +4,9 @@
 import
   ArrayLiteral, Await, BinaryOperation, BooleanLiteral, Call, Case, Cast, Coalesce, Comprehension,
   Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, If, Index, IntegerLiteral,
-  Interpolation, IsTest, Jump, MapLiteral, Member, NamedType, NamedValue, NilLiteral, Node, Range,
-  RecordLiteral, Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation,
-  Unwrap, Yield
+  Interpolation, is_spread, IsTest, Jump, MapLiteral, Member, NamedType, NamedValue, NilLiteral,
+  Node, Range, RecordLiteral, Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral,
+  UnaryOperation, Unwrap, Yield
 from '../ast'
 import type_of_case, type_of_conditional, type_of_if, type_of_try from './case'
 import type_of_function_literal from './closure'
@@ -149,6 +149,7 @@ export const check_arguments = (
   if callee_type is not FunctionType
     fail program, call.position, "cannot call a value of type #{format_type(callee_type)}"
   const params = callee_type.params
+  pack_variadic body, call, declaration
   gather_named_args body, call, params.last() if call.named_args.length > 0
   check_argument_count body, call, params.length, declaration
   expect_type body, arg, params[i] for arg, i in call.args
@@ -163,6 +164,41 @@ export const check_argument_count = (
   const range = required == param_count then '' else "#{required} to "
   const expected = "#{range}#{param_count}"
   fail body.program, call.position, "expected #{expected} argument(s), got #{count}"
+
+# The arguments from the place of the declaration's variadic parameter on are rewritten into one,
+# an array literal of them, `f(a, b, c)` into `f(a, [b, c])` for `f = (x: Int, rest: Int...)`, as
+# named arguments are (see gather_named_args), so that the later passes and codegen see an array
+# argument; a spread among them is one of the literal. A call is rewritten once, as the instances of
+# a generic function share its literal. A spread anywhere else is an error.
+export const pack_variadic = (body: Body, call: Call, declaration: FunctionLiteral?) ->
+  const program = body.program
+  const params = declaration?.params ? []
+  const place = params.length - 1
+  const is_variadic = params.length > 0 and params[place].variadic
+  if is_variadic and not program.packed_calls.has(call)
+    const fixed = [arg for arg, i in call.args when i < place]
+    if const spread = fixed.find(is_spread)
+      const rest = params[place].name.name
+      fail(
+        program
+        spread.position
+        "a spread fills only the variadic parameter '#{rest}', after the others"
+      )
+    if call.args.length < place
+      fail program, call.position, "expected at least #{place} argument(s), got #{call.args.length}"
+    if call.named_args.length > 0
+      fail program, call.named_args[0].name.position, 'a variadic function takes no named arguments'
+    program.packed_calls.add call
+    const elements = [arg for arg, i in call.args when i >= place]
+    const position = elements.first()?.position ? call.position
+    call.args = [arg for arg, i in call.args when i < place]
+    call.args.push ArrayLiteral(elements, position)
+  if const spread = call.args.find(is_spread)
+    fail(
+      program
+      spread.position
+      'a spread `xs...` can only be an item of an array or an argument of a variadic parameter'
+    )
 
 # Named arguments are rewritten into an anonymous struct so that codegen, which reads named
 # arguments only as a construction, generates the call as any other. Every pass reading the

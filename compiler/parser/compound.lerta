@@ -75,10 +75,14 @@ export const parse_function_literal = (tokens: TokenStream, weak = false) ->
   const position = token_position(token)
   FunctionLiteral type_params, params, return_type, body, yields, awaits, position, weak
 
-# `name[: Type][ = default]`.
+# `name[: Type][ = default]`, or `name: Type...`.
 const parse_parameter = (tokens: TokenStream) ->
   const name = parse_identifier(tokens)
   const type = parse_type_annotation(tokens)
+  if tokens.accept('...')
+    if type == nil
+      tokens.fail name.position, 'a variadic parameter must have a type, as in `rest: Int...`'
+    return Parameter(name, type, default: nil, variadic: true)
   Parameter name, type, default: tokens.accept('=') then parse_expression(tokens)
 
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension. An element
@@ -99,7 +103,7 @@ export const parse_array_literal = (tokens: TokenStream, position: Position) ->
 
 # A spread `xs...` is the comprehension `[x for x in xs]` marked to give its items in its place;
 # its variable's name cannot be written, so no code can read it.
-const parse_element = (tokens: TokenStream): Expression ->
+export const parse_element = (tokens: TokenStream): Expression ->
   const value = parse_expression(tokens)
   return value if not at_spread(tokens)
   tokens.next()
