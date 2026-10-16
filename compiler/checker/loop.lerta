@@ -36,11 +36,24 @@ export const check_for = (body: Body, for_statement: For) ->
   const { iterable, variable, index } = for_statement
   const item_type = type_of_iterated(body, iterable, "after 'in'")
   const define = -> define_loop_variables(body, variable, index, item_type)
-  check_loop_body body, for_statement.body, define
+  in_loop body, -> check_loop_body(body, for_statement.body, define)
 
-export const check_while = (body: Body, while_statement: While) ->
-  const define = check_condition(body, while_statement.condition)
-  check_loop_body body, while_statement.body, define
+export const check_while = (body: Body, while_statement: While): void ->
+  const check = (): void ->
+    body.scopes.push()
+    body.scopes.hide_var_views()
+    const define = check_condition(body, while_statement.condition)
+    check_loop_body body, while_statement.body, define
+    body.scopes.pop()
+  in_loop body, check
+
+# Checks a loop, numbered so that a narrowing made in it is known to be (see forget_narrowing).
+const in_loop = (body: Body, check: () -> void): void ->
+  const program = body.program
+  program.loops_checked += 1
+  body.loops.push program.loops_checked
+  check()
+  body.loops.pop()
 
 export const type_of_comprehension = (
   body: Body, comprehension: Comprehension, expected: Type?
@@ -85,7 +98,10 @@ const expected_iter_item = (expected: Type?) -> (expected as IterType?)?.item
 
 const check_loop_body = (body: Body, statements: Statement[], define: () -> void) ->
   body.loop_depth += 1
-  check_block body, statements, define, nothing
+  const define_hiding = ->
+    body.scopes.hide_var_views()
+    define()
+  check_block body, statements, define_hiding, nothing
   body.loop_depth -= 1
 
 # A value of a type that satisfies Iterable is gone through by the Iter

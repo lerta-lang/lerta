@@ -17,6 +17,11 @@ export class Local
   used = default false
   # Seen from a function literal that captures it (see captured).
   captured = false
+  # A `var` that a function literal assigns, which may run at any later point, so that it is not
+  # narrowed from there on (see forget_views).
+  assigned_by_literal = false
+  # The loops that a narrowing of this `var` was made in (see in_loop).
+  narrowed_in_loops: Int[] = []
 
 # The narrower type of a path of fields (see narrowable FieldPath), from the local it starts from, or
 # from `@` if nil.
@@ -44,6 +49,22 @@ export class Scopes
 
   # Until the innermost scope ends, the name is seen as `local`.
   narrow = (name: String, local: Local) -> @overlays.last()![name] = local
+
+  # Until the innermost scope ends, the `var`s narrowed outside it are seen as declared, as a loop's
+  # condition and body see them: a round may assign one before the next.
+  hide_var_views = ->
+    const hidden = @overlays.last()!
+    for overlays in @overlays
+      for name in overlays.keys()
+        const current = @lookup_local(name) ? continue
+        const origin = current.origin ? current
+        hidden[name] = origin if current != origin and origin.mutable
+
+  # The local is assigned: its narrowed views end, in every scope.
+  forget_views = (local: Local) ->
+    for overlays in @overlays
+      const names = [name for (name, view) in overlays.entries() when view.origin ? view == local]
+      overlays.remove name for name in names
 
   narrow_path = (key: String, view: PathView) -> @paths.last()![key] = view
 

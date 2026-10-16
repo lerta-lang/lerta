@@ -2,7 +2,8 @@
 # cannot change from one or from `@`.
 import Expression, Identifier, Member, This from '../ast'
 import field_type_by_name, is_fixed_field from './fields'
-import lookup from './name'
+import local_reference, lookup from './name'
+import TopLevelValue from './references'
 import Local, PathView from './scopes'
 import Body from './shared'
 import Type from '../types'
@@ -26,10 +27,24 @@ export const narrowable = (body: Body, value: Expression) ->
   const current = body.facts.types[value] ? return nil
   Narrowable current, subject: path, declared: path.declared
 
-# A local that cannot be reassigned, nor be emptied as a weak one.
+# A local that cannot be emptied as a weak one, nor be assigned where it is read: a `var` of a
+# module's top level may be assigned by any function, and one that a function literal assigns by
+# the literal (see forget_narrowing).
 const narrowable_local = (body: Body, name: Identifier) ->
   const local = lookup(body, name.name) ? return nil
-  local.mutable or (local.origin ? local).weak then nil else local
+  const origin = local.origin ? local
+  return nil if origin.weak or origin.assigned_by_literal
+  return nil if origin.mutable and is_module_value(body, name.name, origin)
+  local
+
+# A path of fields starts from a local that cannot be reassigned, whose paths no assignment ends.
+const path_root = (body: Body, name: Identifier) ->
+  const local = narrowable_local(body, name) ? return nil
+  (local.origin ? local).mutable then nil else local
+
+const is_module_value = (body: Body, name: String, origin: Local) ->
+  return true if origin == body.shared.top_level.locals[name]
+  local_reference(body, name, origin) is TopLevelValue
 
 # The path of fields that a member reads, if each of them cannot change.
 const field_path = (body: Body, value: Expression): FieldPath? ->
@@ -44,7 +59,7 @@ const field_path = (body: Body, value: Expression): FieldPath? ->
   case object
     when This then path_from(nil, '@')
     when Identifier
-      const local = narrowable_local(body, object) ? return nil
+      const local = path_root(body, object) ? return nil
       path_from local.origin ? local, object.name
     when Member
       const outer = field_path(body, object) ? return nil
