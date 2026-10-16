@@ -355,6 +355,26 @@ const checks: Check[] = [
     },
   },
   {
+    // More than a pipe holds, so that the write finds the pipe full.
+    name: 'a write to a non-blocking pipe waits while the pipe is full',
+    run: () => {
+      const length = 1 << 20
+      const write_non_blocking = [
+        `  static uint8_t bytes[${length}];`,
+        "  memset(bytes, 'x', sizeof bytes);",
+        '  fcntl(1, F_SETFL, fcntl(1, F_GETFL) | O_NONBLOCK);',
+        '  _exit(lerta_os_write(1, bytes, sizeof bytes) ? 0 : 1);',
+      ].join('\n')
+      const includes = '#include <fcntl.h>\n#include <string.h>\n#include "internal.h"\n'
+      const executable = build_main('write_non_blocking', write_non_blocking, false, includes)
+      const run = spawnSync(executable, { maxBuffer: 2 * length })
+      return [
+        ...compare_text('stdout length', `${length}`, `${run.stdout.length}`),
+        ...expect_status(0, run.status),
+      ]
+    },
+  },
+  {
     name: 'stdout to a pipe is buffered, and flushed before a write to stderr',
     run: () => {
       const { stdout, stderr } = run_main('buffered', interleaved_writes, false)

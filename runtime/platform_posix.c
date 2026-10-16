@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,10 +56,22 @@ static size_t request_size(int64_t length) {
   return length > (1 << 30) ? (size_t)1 << 30 : (size_t)length;
 }
 
+// A non-blocking fd, such as the pipe that Node.js gives a child for its stdout, takes nothing
+// while it is full, so the write waits for it as a blocking one would.
+static bool wait_writable(int fd) {
+  struct pollfd writable = { .fd = fd, .events = POLLOUT };
+  for (;;) {
+    int ready = poll(&writable, 1, -1);
+    if (ready >= 0 || errno != EINTR) return ready > 0;
+  }
+}
+
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
   while (length > 0) {
     ssize_t written = write(fd, bytes, request_size(length));
     if (written < 0 && errno == EINTR) continue;
+    bool is_full = written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
+    if (is_full && wait_writable(fd)) continue;
     if (written <= 0) return false;
     bytes += written;
     length -= written;

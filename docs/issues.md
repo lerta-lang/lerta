@@ -41,10 +41,6 @@ A request of 4 GiB or more is converted to `size_t` unchecked, so the mapping is
 
 ## Runtime
 
-### Output to a non-blocking stdout is dropped
-
-When stdout is a non-blocking pipe, as Node.js gives a child, a full pipe makes `write` fail with `EAGAIN`, which `lerta_os_write` takes as a failure: the output from then on is dropped without a message, and the program exits with 1 (`runtime/platform_posix.c`, `runtime/io.c`).
-
 ### Smaller ones (unconfirmed)
 
 - `incomplete_tail` in `runtime/platform_windows.c` keeps an invalid byte of `0xC0` or above as the start of a character, so a console write ending with it does not show it.
