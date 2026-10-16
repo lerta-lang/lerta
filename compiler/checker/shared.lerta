@@ -13,7 +13,7 @@ import FieldInfo, ObjectInfo from './object_types'
 import Local, Scopes from './scopes'
 import TopLevelValues from './top_level_values'
 import AliasEntry, Resolver from './type_names'
-import EnumType, Type from '../types'
+import EnumType, ObjectType, Type from '../types'
 
 # What each function literal that is not a top-level function captures from around it: the names
 # and the types they have there, which may be narrowed.
@@ -106,6 +106,13 @@ export class Shared
   # the functions that may use them are checked (see warn_unused).
   top_level_scope: Map<String, Local>? = nil
 
+# An instance of a generic class or struct written before the fields of every generic one are
+# known, whose fields are checked once they are (see check_early_instances).
+export struct EarlyInstance
+  type: ObjectType
+  at: Position
+  module_index: Int
+
 # A call whose instance's written types are being resolved: an error in them is the call's (see
 # resolve_annotation).
 export struct AnnotatedCall
@@ -124,6 +131,10 @@ export class ProgramWide
   reports_warnings: Bool
   shared: Shared[] = []
   infos: Map<String, ObjectInfo> = Map()
+  # Whether the fields of every class and struct are known; until then, the instances given are
+  # kept to be checked then.
+  fields_known = false
+  early_instances: EarlyInstance[] = []
   # The module that std:builtins is, if the program has it.
   builtins: Int? = nil
   # The itabs of the runtime's errors (see plan_runtime_errors).

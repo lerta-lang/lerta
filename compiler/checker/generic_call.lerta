@@ -2,7 +2,6 @@
 # type_argument_inference) against the bounds and the signature, and has the instance checked
 # (see generics).
 import Call, Member, Position, TypeParameter from '../ast'
-import check_item_type, check_map_types, check_value_type from './collection'
 import fail from './diagnostics'
 import check_argument_count, require_type from './expression'
 import methods_reachable_from from './extensions'
@@ -10,8 +9,9 @@ import bindings, generic_of, GenericFunction, GenericRef, Instance, instantiate 
 import reject_unsatisfied from './satisfaction'
 import Body from './shared'
 import infer_type_arguments, receiver_type_arguments, TypeBinding from './type_argument_inference'
-import parts_of, substitute from './type_patterns'
-import ArrayType, FunctionType, InterfaceType, IterType, MapType, Type from '../types'
+import substitute from './type_patterns'
+import reject_invalid_type from './type_validity'
+import FunctionType, InterfaceType, Type from '../types'
 
 # The result of a call of a generic function.
 export const type_of_generic_call = (
@@ -92,12 +92,7 @@ const reject_invalid_signature = (
   body: Body, generic: GenericFunction, type_arguments: Type[], at: Position
 ) ->
   const type_bindings = bindings(generic, type_arguments)
-  reject_invalid_parts body, substitute(param, type_bindings), at for param in generic.params
-  reject_invalid_parts body, substitute(result, type_bindings), at if const result = generic.result
-
-const reject_invalid_parts = (body: Body, type: Type, at: Position): void ->
-  const program = body.program
-  check_item_type program, type.element, at, 'an array' if type is ArrayType
-  check_value_type program, type.item, at, 'an Iter' if type is IterType
-  check_map_types program, type.key, type.value, at, at if type is MapType
-  reject_invalid_parts body, part, at for part in parts_of(type)
+  const reject_invalid = (type: Type) ->
+    reject_invalid_type body.program, substitute(type, type_bindings), at
+  reject_invalid param for param in generic.params
+  reject_invalid result if const result = generic.result

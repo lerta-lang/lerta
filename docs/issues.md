@@ -35,20 +35,6 @@ A request of 4 GiB or more is converted to `size_t` unchecked, so the mapping is
 
 ## Compiler
 
-### Field types of generic instances are not checked
-
-A type argument that makes a field type invalid, as `T?` in an array or a map, or a key that `==` does not compare, is accepted for a generic class or struct, and the program fails in LLVM.
-
-```
-class Box<T>
-  items: T[] = []
-  put = (v: T) -> @items.push v
-const b = Box<Int?>()
-b.put 1
-```
-
-Cause: `add_instance` and `instance_field` in `compiler/checker/object_types.lerta` substitute the field types without the checks that `reject_invalid_signature` (`compiler/checker/generic_call.lerta`) makes for generic functions.
-
 ### A `const` may take the name of a builtin type
 
 `const Int = 3` is accepted, while `class Int` is rejected as already defined, though types and values share one namespace.

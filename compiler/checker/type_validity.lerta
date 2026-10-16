@@ -1,0 +1,46 @@
+# Checks a type that type arguments make, as the signature of a generic function's instance or the
+# fields of a generic class's, as a written type is checked (see type_names).
+import Position from '../ast'
+import check_item_type, check_map_types, check_value_type from './collection'
+import check_part, enter_module, leave_module from './diagnostics'
+import info_of from './object_types'
+import EarlyInstance, ProgramWide from './shared'
+import has_type_parameters, parts_of from './type_patterns'
+import ArrayType, IterType, MapType, ObjectType, Type from '../types'
+
+# Fails at `at`, where the type is given, if a part of it is invalid.
+export const reject_invalid_type = (program: ProgramWide, type: Type, at: Position): void ->
+  check_item_type program, type.element, at, 'an array' if type is ArrayType
+  check_value_type program, type.item, at, 'an Iter' if type is IterType
+  check_map_types program, type.key, type.value, at, at if type is MapType
+  reject_invalid_fields program, type, at if type is ObjectType
+  reject_invalid_type program, part, at for part in parts_of(type)
+
+# Checks the field types of an instance of a generic class or struct where the module gives it,
+# once they are known.
+export const reject_invalid_instance = (
+  program: ProgramWide, module_index: Int, type: ObjectType, at: Position
+) ->
+  if program.fields_known
+    reject_invalid_fields program, type, at
+  else
+    program.early_instances.push EarlyInstance(type, at, module_index)
+
+# Checks the instances given before the fields were known, each as a part of the program.
+export const check_early_instances = (program: ProgramWide) ->
+  program.fields_known = true
+  for instance in program.early_instances
+    const shared = program.shared[instance.module_index]
+    enter_module shared
+    check_part program, -> reject_invalid_fields(program, instance.type, instance.at)
+    leave_module shared
+
+# Reports each instance once, where it is first given; which also ends the check of a field that
+# holds the instance itself, as `next: Node<T>?` does.
+const reject_invalid_fields = (program: ProgramWide, type: ObjectType, at: Position) ->
+  return if type.args.length == 0 or has_type_parameters(type)
+  const info = info_of(program, type)
+  return if info.fields_checked
+  info.fields_checked = true
+  for field in info.fields
+    reject_invalid_type program, field_type, at if const field_type = field.type
