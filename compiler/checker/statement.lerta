@@ -18,8 +18,8 @@ import Body, SelfContext from './shared'
 import define_top_level, top_level_value from './top_level_values'
 import names_type_or_import, resolve from './type_names'
 import
-  format_type, FunctionType, inner_of, is_kind, is_one_of_kinds, IterType, never_type, ObjectType,
-  optional_type, OptionalType, PromiseType, Type, void_type
+  format_type, FunctionType, inner_of, is_assignable, is_kind, is_one_of_kinds, IterType,
+  never_type, nil_type, ObjectType, optional_type, OptionalType, PromiseType, Type, void_type
 from '../types'
 
 # Does nothing, where a block has nothing more to define or check.
@@ -179,6 +179,7 @@ const check_declaration = (body: Body, declaration: Declaration) ->
   return if value is FunctionLiteral and body.is_top_level()
   const type_name = declaration.type
   const annotated = type_name then resolve(body.program, body.resolver, type_name)
+  reject_omitted_value body, declaration, annotated
   expect_type body, value, annotated if annotated
   const value_type = annotated ? type_of(body, value)
   reject_if_not_storable body, value_type, value
@@ -188,6 +189,14 @@ const check_declaration = (body: Body, declaration: Declaration) ->
   const declared = not declaration.of_loop
   const is_this = value is This and not mutable and not weak
   define_local body, Local(type, mutable, declared, weak, is_this, identifier: name, used: exported)
+
+# `var x: T` without a value, which is nil.
+const reject_omitted_value = (body: Body, declaration: Declaration, type: Type?) ->
+  const written = type ? return
+  return if not declaration.omits_value or is_assignable(nil_type, written)
+  const needs = "a var of type #{format_type(written)} needs an initial value"
+  const message = "#{needs}: only one of an optional type starts at nil"
+  fail body.program, declaration.type!.position, message
 
 # A weak local holds an object of a class, or nil, and is no top-level value, which would stay
 # for good.

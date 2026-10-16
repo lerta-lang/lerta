@@ -2,7 +2,7 @@
 # calls without parentheses; `declaration` reads the other declarations.
 import
   Assignment, AssignmentTarget, Binding, Call, Condition, copy_identifier, Declaration, Expression,
-  For, Identifier, If, Index, Jump, Member, Return, Statement, Throw, While, Yield
+  For, Identifier, If, Index, Jump, Member, NilLiteral, Return, Statement, Throw, While, Yield
 from '../ast'
 import starts_weak_function_literal from './compound'
 import
@@ -185,6 +185,16 @@ const parse_declaration = (tokens: TokenStream) ->
     tokens.fail position, 'a destructuring declaration cannot be weak'
   const name = parse_identifier(tokens)
   const type = parse_type_annotation(tokens)
+  # `var x: T?` without a value is nil at first; the checker rejects a type that nil does not fit.
+  if mutable and tokens.peek().kind != '='
+    if type == nil
+      const why = 'only one of an optional type starts at nil'
+      tokens.fail(
+        token_position(tokens.peek())
+        "a var without a type needs an initial value: #{why}"
+      )
+    const value = NilLiteral(position: name.position)
+    return Declaration(name, type, value, mutable, position, weak, omits_value: true)
   tokens.expect '=', "'='"
   const value = parse_value(tokens)
   Declaration name, type, value, mutable, position, weak

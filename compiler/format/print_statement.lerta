@@ -6,12 +6,12 @@ import
   FloatLiteral, For, FunctionLiteral, Identifier, If, Import, IntegerLiteral, InterfaceDeclaration,
   Interpolation, IsTest, Cast, MapLiteral, Member, NilLiteral, Pass, Position, Range, RecordLiteral,
   Return, Statement, StringLiteral, This, Throw, Try, TupleLiteral, TupleItem, TypeAlias,
-  TypeDeclaration, UnaryOperation, Unwrap, While, Yield, Index
+  TypeDeclaration, UnaryOperation, UnionTypeName, Unwrap, While, Yield, Index
 from '../ast'
 import choice, Doc, indent, join, line_feed, rule, separated, text, token from './doc'
 import declaration_doc, exported from './print_declaration'
 import type_doc from './print_type'
-import BRANCHES, CALLS_WITHOUT_PARENTHESES, POSTFIX_FORMS from './rules'
+import BRANCHES, CALLS_WITHOUT_PARENTHESES, NIL_INITIAL_VALUES, POSTFIX_FORMS from './rules'
 import arguments, call_doc, expression_doc, loop_header from './print_expression'
 import value_after from './print_literal'
 import function_doc from './print_block'
@@ -133,9 +133,20 @@ const const_doc = (declaration: Declaration, context: Context) ->
   parts.push token(declaration.name.name, declaration.name.position)
   parts.push removed_type('variable', declaration.name.position, context)
   parts.push join([text(': '), type_doc(type)]) if const type = declaration.type
+  # `var x: T?` is nil at first without `= nil` (see Nil initial values).
+  return join([parts..., rule(NIL_INITIAL_VALUES, text(''))]) if starts_nil(declaration)
   parts.push text(' =')
   parts.push value_after(declaration.value, context)
   join parts
+
+# The type is written with `?`, or the value is left out already: one that an alias makes optional
+# keeps `= nil` where it is written, which is still right.
+const starts_nil = (declaration: Declaration) ->
+  return true if declaration.omits_value
+  const { mutable, type, value } = declaration
+  const written = type ? return false
+  const optional = written is not UnionTypeName and written.optional
+  mutable and optional and value is NilLiteral
 
 const assignment_doc = (assignment: Assignment, context: Context) ->
   const target = expression_doc(assignment.target, context)
