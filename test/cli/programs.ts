@@ -102,6 +102,18 @@ const program_cases: ProgramCase[] = [
     },
   },
   {
+    // A write to a pipe whose reader has gone ends the program by SIGPIPE (141 in the shell), as
+    // it does C programs, rather than as a failed write that it would go on after.
+    source: 'tests/io/lib/print_many.lerta',
+    behaves: async (executable) => {
+      const script = '{ "$0"; echo $? >&2; } | head -1'
+      const ran = await run_command('sh', ['-c', script, executable])
+      // Even if started with SIGPIPE ignored, which the program does not inherit.
+      const ignoring = await run_command('sh', ['-c', `trap '' PIPE; ${script}`, executable])
+      return [ran, ignoring].every(({ stdout, stderr }) => stdout === 'y\n' && stderr === '141\n')
+    },
+  },
+  {
     // run captures through a pipe that may be fd 1, when the program starts with stdout closed.
     source: 'tests/process/lib/capture_without_stdout.lerta',
     behaves: async (executable) => {

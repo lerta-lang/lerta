@@ -100,6 +100,9 @@ void lerta_os_arguments(int *argc, char ***argv);
 // Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
 bool lerta_os_is_terminal(int fd);
+// Has a write to a pipe whose reader is gone end the program, as SIGPIPE does by default on POSIX,
+// whatever the parent left it as (see docs/reference/modules.md); Windows has no such signal.
+void lerta_os_stdio_init(void);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_os_unix_time(void);
 // Ends the program at once, without flushing stdout.

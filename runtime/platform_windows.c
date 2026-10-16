@@ -125,6 +125,8 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
                             : write_all(handle, bytes, length);
 }
 
+void lerta_os_stdio_init(void) {}
+
 bool lerta_os_is_terminal(int fd) {
   return is_console(standard_handle(fd));
 }

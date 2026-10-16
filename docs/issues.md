@@ -25,6 +25,5 @@ The compiler never ends: the instances of the class it makes grow without end. I
 
 Behavior the reference leaves open, to decide before it is fixed or documented as is:
 
-- SIGPIPE is not ignored, so `program | head -1` ends the program with status 141 instead of through the failure of stdout.
 - An integer literal beyond `Int` is rejected where a Float is expected.
 - A list of `when` patterns cannot be broken across lines, so a long one goes past 100 columns.

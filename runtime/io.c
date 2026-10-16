@@ -16,6 +16,7 @@ static void stdout_write_all(const uint8_t *bytes, int64_t length) {
 }
 
 void lerta_stdout_init(void) {
+  lerta_os_stdio_init();
   stdout_is_terminal = lerta_os_is_terminal(STDOUT_FD);
 }
 

@@ -79,6 +79,8 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
   return true;
 }
 
+void lerta_os_stdio_init(void) { signal(SIGPIPE, SIG_DFL); }
+
 bool lerta_os_is_terminal(int fd) {
   return isatty(fd);
 }
