@@ -40,14 +40,18 @@ all: $(COMPILER)
 .DELETE_ON_ERROR:
 
 # Rewrites llvm.coro.end for the host's LLVM, and is empty when there is nothing to rewrite (see
-# docs/internals.md#bootstrap).
+# docs/internals.md#bootstrap). It is worked out again on each run, as clang may have changed, but
+# replaced only when it differs, so that what depends on it is not made again for nothing.
 CORO_END_PROBE = extern "C" void f(void *handle) { __builtin_coro_end(handle, 0); }
-build/host_llvm.sed:
+build/host_llvm.sed: FORCE
 	@mkdir -p build
-	if echo '$(CORO_END_PROBE)' | clang -x c++ -std=c++20 -S -emit-llvm - -o - | grep -q '^declare void @llvm.coro.end('; then \
+	@if echo '$(CORO_END_PROBE)' | clang -x c++ -std=c++20 -S -emit-llvm - -o - | grep -q '^declare void @llvm.coro.end('; then \
 	  printf '%s\n' 's/^declare i1 @llvm\.coro\.end(/declare void @llvm.coro.end(/' \
-	    's/%[^ ]* = call i1 @llvm\.coro\.end(/call void @llvm.coro.end(/' > $@; \
-	else : > $@; fi
+	    's/%[^ ]* = call i1 @llvm\.coro\.end(/call void @llvm.coro.end(/' > $@.new; \
+	else : > $@.new; fi
+	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
+
+FORCE:
 
 build/seed.ll: seed/lerta.ll build/host_llvm.sed
 	sed -f build/host_llvm.sed seed/lerta.ll > $@

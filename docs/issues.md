@@ -139,7 +139,6 @@ When stdout is a non-blocking pipe, as Node.js gives a child, a full pipe makes 
 
 - A value or a path that starts with `-` cannot be given, as any such argument is taken as a flag (`is_value` in `compiler/main.lerta`).
 - `lerta build` killed while it compiles the runtime leaves its `.staging-` directory in the cache (`compiler/runtime_cache.lerta`; unconfirmed).
-- `build/host_llvm.sed` depends on nothing, so it is not made again when clang changes across the change of `llvm.coro.end` (`Makefile`; unconfirmed).
 
 ## Open questions
 
