@@ -20,7 +20,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Standard library
 
-- `read_file`, `write_file` and `remove_tree` give a `Promise`, and stdout and stderr are written from the event loop, as [concurrency](runtime.md#concurrency) has it.
+- `read_file`, `write_file` and `remove_tree` give a `Promise`; `print` and a new `print_error` write synchronously, and `stdout` and `stderr` through a buffer with a `Promise`, as [concurrency](runtime.md#concurrency) has it.
 - JSON, in `std:json`: `encode_json(value)` gives a `String`, and `decode_json<T>(text)` a `T`, checked. The compiler generates the code for each type that a call instantiates them with, as [philosophy](../philosophy.md#non-goals) has it, with no annotation on the type and no reflection; a type it cannot convert, such as a function, a `Promise`, an `Iter`, an interface or a weak field, is an error at the call, naming the path to it, as `Request.handler`.
 
   | Lerta | JSON |
