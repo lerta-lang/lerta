@@ -281,8 +281,11 @@ void lerta_remove_tree(const LertaString *path);
 void lerta_make_dir(const LertaString *path);
 void lerta_rename(const LertaString *from, const LertaString *to);
 
-// Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. For how stdout is
-// buffered, which init decides, see docs/internals.md#output.
+// Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. Its writes go through
+// a buffer, written out on the event loop (see docs/internals.md#output).
+LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes);
+LertaPromise *lerta_stream_flush(int64_t fd);
+// For the seed's IR until the next refresh: written at once.
 void lerta_writer_write(int64_t fd, const LertaString *bytes);
 void lerta_writer_flush(int64_t fd);
 void lerta_print_stdout(const LertaString *text);

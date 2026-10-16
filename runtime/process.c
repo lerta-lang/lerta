@@ -34,7 +34,7 @@ void lerta_exit(int64_t code) {
     lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&exit_code_out_of_range);
     return;
   }
-  bool flushed = lerta_stdout_flush();
+  bool flushed = lerta_output_flush_at_end(false);
   lerta_os_exit(flushed || code != 0 ? (int)code : 1);
 }
 
@@ -102,7 +102,7 @@ LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, Lert
   char **c_args = c_args_of(command, args, &valid);
   // Without this, the child's output could come before what this program printed first. A failed
   // flush is remembered and reported by the exit code, as for any other write to stdout.
-  lerta_stdout_flush();
+  lerta_output_flush();
   char *file = NULL;
   char **spawned_args = valid ? program_args(c_args, count, &file) : NULL;
   Run *run = lerta_checked_malloc(sizeof(Run));

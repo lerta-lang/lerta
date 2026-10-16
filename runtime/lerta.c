@@ -126,10 +126,10 @@ static void write_trace(void) {
   }
 }
 
-// The prefix, the pending exception's message and its trace, after flushing stdout.
-static void write_exception(const char *prefix) {
+// The prefix, the pending exception's message and its trace, after what the buffer of output holds.
+static void write_exception(const char *prefix, bool panicking) {
   LertaString *message = lerta_exception_message();
-  lerta_stdout_flush();
+  lerta_output_flush_at_end(panicking);
   write_text(prefix);
   write_string(message);
   write_text("\n");
@@ -137,22 +137,22 @@ static void write_exception(const char *prefix) {
 }
 
 _Noreturn void lerta_exit_with_exception(void) {
-  write_exception("");
+  write_exception("", false);
   lerta_os_exit(1);
 }
 
 _Noreturn void lerta_panic_with_exception(const char *prefix) {
-  write_exception(prefix);
+  write_exception(prefix, true);
   lerta_os_abort();
 }
 
 int main(int argc, char **argv) {
   lerta_stack_init();
   lerta_set_arguments(argc, argv);
-  lerta_stdout_init();
+  lerta_output_init();
   lerta_main();
   if (lerta_exception.data != NULL) lerta_exit_with_exception();
-  bool flushed = lerta_stdout_flush();
+  bool flushed = lerta_output_flush_at_end(false);
   // A leak is only a warning (see docs/reference/compiler.md).
   lerta_report_leaks();
   return flushed ? 0 : 1;

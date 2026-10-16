@@ -43,10 +43,8 @@ The size classes of the allocator ([internals](../internals.md#allocation)), the
 
 ## Concurrency
 
-- **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop runs on libuv, with sleeps and the programs that `run` starts so far; input and output come onto it next.
+- **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await). The event loop runs on libuv, with sleeps, the programs that `run` starts and the writes of `stdout` and `stderr` so far; the rest of input and output come onto it next.
 - **What awaits**: an operation whose wait has no bound, set by the outside world or by the amount of data, gives a `Promise`: processes, timers, the network, standard input, reading and writing a file's contents, and removing a tree. One that is a single small system call stays synchronous, as `is_file`, `real_path`, `make_dir`, `make_temp_dir` and `rename` do: it is over in microseconds on a local disk, less than handing it to libuv's thread pool takes, and an `await` would spread to every caller, as it cannot be written in a lazy comprehension. An asynchronous version can be added where a slow file system, such as a network one, calls for it.
-- `print` and `print_error` write at once, synchronously (see [builtins](../reference/builtins.md)), after what `stdout` and `stderr` hold in their buffers.
-- **`stdout` and `stderr` buffer and await**: `write`, `write_binary` and `flush` give a `Promise`. A write goes into a buffer, to a terminal or not, which is written out when it is full, on `flush`, before a `print` or `print_error`, and at exit; a write that fills the buffer resolves once it is written out, so a fast writer waits for a slow reader. A failed write out rejects the `Promise`; one at exit is reported by the exit code. SIGPIPE ends the program as now.
 - Parallel computation uses **workers that do not share a heap, with message passing** (Node's worker_threads / the Erlang approach).
 - Programs stay single-threaded (see [philosophy](../philosophy.md#safety)), with no thread API, to avoid the GIL path of Python and Ruby.
 

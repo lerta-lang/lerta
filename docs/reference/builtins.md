@@ -5,7 +5,7 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 - `panic(message: String): never` stops the program at once (see [panics](errors.md#panics)).
 - `CodePoint` is an alias of `UInt32` for a Unicode code point, which a `String` gives (see [String](types.md#string)).
 - `Error` is the interface of what `throw` takes, and the runtime's error types are builtins too (see [exceptions](errors.md#exceptions)).
-- `print<T: Stringable>(x: T)` writes `x.to_string()` followed by a newline to stdout, and `print_error<T: Stringable>(x: T)` to stderr. Each writes at once, unbuffered, so that what it prints is out even if a long computation follows, and after what `stdout` of [std:io](modules.md#stdio) holds in its buffer, so that the output keeps its order. A failed write to stdout is reported as `stdout.write` reports one.
+- `print<T: Stringable>(x: T)` writes `x.to_string()` followed by a newline to stdout, and `print_error<T: Stringable>(x: T)` to stderr. Each writes at once, unbuffered, so that what it prints is out even if a long computation follows, and after what the buffer of `stdout` and `stderr` of [std:io](modules.md#stdio) holds, once a write out of it in flight is done, so that the output keeps its order. A failed write to stdout is reported by the exit code, as [std:io](modules.md#stdio) states.
 
 ## Stringable
 

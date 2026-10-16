@@ -62,10 +62,15 @@ LertaString *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int6
 // Appends the C string to an array of strings, as a new string.
 void lerta_append_c_string(LertaArray *array, const char *text);
 
-// Output (io.c). For how stdout is buffered, which init decides, see docs/internals.md#output.
-void lerta_stdout_init(void);
-// Returns false if any output to stdout has failed.
-bool lerta_stdout_flush(void);
+// Output (io.c), buffered for stdout and stderr together (see docs/internals.md#output).
+void lerta_output_init(void);
+// Writes out what the buffer holds, waiting for a write out in flight, and settles the promises of
+// the writes.
+void lerta_output_flush(void);
+// The same, for a program that ends, which settles no promise: settling one may throw, and the end
+// may come while an exception is pending. A panic does not lock (see io.c). Returns false if any
+// output to stdout has failed.
+bool lerta_output_flush_at_end(bool panicking);
 void lerta_stderr_write(const uint8_t *bytes, int64_t length);
 
 // Errors (io.c, lerta.c). The message of the pending exception, owned, which the first entry of an
@@ -99,7 +104,6 @@ void lerta_stack_init(void);
 void lerta_os_arguments(int *argc, char ***argv);
 // Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
-bool lerta_os_is_terminal(int fd);
 // Has a write to a pipe whose reader is gone end the program, as SIGPIPE does by default on POSIX,
 // whatever the parent left it as (see docs/reference/modules.md); Windows has no such signal.
 void lerta_os_stdio_init(void);

@@ -92,16 +92,17 @@ const run_on_terminal = (executable: string): string => {
   return spawnSync('script', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).stdout
 }
 
-// Writes to stdout, then stderr, then stdout, and ends without flushing stdout.
-const interleaved_writes = [
-  '  LERTA_STATIC_STRING(first, "first\\n");',
-  '  LERTA_STATIC_STRING(second, "second\\n");',
-  '  LERTA_STATIC_STRING(third, "third\\n");',
-  '  lerta_writer_write(1, (const LertaString *)&first);',
-  '  lerta_writer_write(2, (const LertaString *)&second);',
-  '  lerta_writer_write(1, (const LertaString *)&third);',
-  '  _exit(0);',
-].join('\n')
+// Writes to stdout, then stderr, then stdout, through Writers, and ends as `ending` does.
+const interleaved_writes = (ending: string): string =>
+  [
+    '  LERTA_STATIC_STRING(first, "first\\n");',
+    '  LERTA_STATIC_STRING(second, "second\\n");',
+    '  LERTA_STATIC_STRING(third, "third\\n");',
+    '  lerta_release(lerta_stream_write(1, (const LertaString *)&first));',
+    '  lerta_release(lerta_stream_write(2, (const LertaString *)&second));',
+    '  lerta_release(lerta_stream_write(1, (const LertaString *)&third));',
+    ending,
+  ].join('\n')
 
 const leak = '  lerta_alloc(16, NULL);'
 
@@ -423,19 +424,16 @@ const checks: Check[] = [
     },
   },
   {
-    name: 'stdout to a pipe is buffered, and flushed before a write to stderr',
+    name: 'the writes of Writers stay in the buffer, for stderr too, until it is written out',
     run: () => {
-      const { stdout, stderr } = run_main('buffered', interleaved_writes, false)
-      return [
-        ...compare_text('stdout', 'first\n', stdout),
-        ...compare_text('stderr', 'second\n', stderr),
-      ]
+      const { stdout, stderr } = run_main('buffered', interleaved_writes('  _exit(0);'), false)
+      return [...compare_text('stdout', '', stdout), ...compare_text('stderr', '', stderr)]
     },
   },
   {
-    name: 'stdout to a terminal is not buffered',
+    name: 'the buffer is written out at exit, to a terminal too, in the order of the writes',
     run: () => {
-      const shown = run_on_terminal(build_main('terminal', interleaved_writes, false))
+      const shown = run_on_terminal(build_main('terminal', interleaved_writes(''), false))
       const expected = 'first\r\nsecond\r\nthird\r\n'
       return shown.endsWith(expected)
         ? []

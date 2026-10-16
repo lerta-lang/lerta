@@ -127,10 +127,6 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
 
 void lerta_os_stdio_init(void) {}
 
-bool lerta_os_is_terminal(int fd) {
-  return is_console(standard_handle(fd));
-}
-
 // A FILETIME counts 100-nanosecond intervals since 1601-01-01, 11644473600 seconds before 1970.
 double lerta_os_unix_time(void) {
   FILETIME now;

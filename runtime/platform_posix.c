@@ -81,10 +81,6 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
 
 void lerta_os_stdio_init(void) { signal(SIGPIPE, SIG_DFL); }
 
-bool lerta_os_is_terminal(int fd) {
-  return isatty(fd);
-}
-
 double lerta_os_unix_time(void) {
   struct timespec now;
   clock_gettime(CLOCK_REALTIME, &now);

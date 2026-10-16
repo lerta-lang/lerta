@@ -131,6 +131,57 @@ const program_cases: ProgramCase[] = [
     },
   },
   {
+    // Writes beyond the buffer's limit wait for it to be written out, and all keep their order.
+    source: 'tests/io/lib/write_much.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command(executable, [])
+      const line = `${'0123456789'.repeat(10)}\n`
+      return ran.status === 0 && ran.stdout === `${line.repeat(2000)}end\n`
+    },
+  },
+  {
+    // A failed write out rejects the promises of the writes, which a program can catch, and is
+    // reported by the exit code too.
+    source: 'tests/io/lib/write_closed.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', '"$0" >&-', executable])
+      return ran.status === 1 && ran.stderr === 'cannot write to stdout\n'.repeat(2)
+    },
+  },
+  {
+    // A failure of stderr rejects its writes too, but does not change the exit code.
+    source: 'tests/io/lib/write_closed_stderr.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', '"$0" 2>&-', executable])
+      return ran.status === 0 && ran.stdout === 'cannot write to stderr\n'
+    },
+  },
+  {
+    // A rejected write that nothing awaits ends the program as an uncaught exception does.
+    source: 'tests/io/lib/write_unawaited.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', '"$0" >&-', executable])
+      return ran.status === 1 && uncaught_message(ran.stderr) === 'cannot write to stdout\n'
+    },
+  },
+  {
+    // The writes to stdout and stderr keep their order where the two go to the same place.
+    source: 'tests/io/lib/write_both.lerta',
+    behaves: async (executable) => {
+      const ran = await run_command('sh', ['-c', '"$0" 2>&1', executable])
+      return ran.status === 0 && ran.stdout === 'abc\n'
+    },
+  },
+  {
+    // A write that waits for a slow reader leaves the event loop running.
+    source: 'tests/io/lib/write_slowly_read.lerta',
+    behaves: async (executable) => {
+      const script = '"$0" | { sleep 1; cat >/dev/null; }'
+      const ran = await run_command('sh', ['-c', script, executable])
+      return ran.status === 0 && ran.stderr === 'on time\n'
+    },
+  },
+  {
     // run captures through a pipe that may be fd 1, when the program starts with stdout closed.
     source: 'tests/process/lib/capture_without_stdout.lerta',
     behaves: async (executable) => {
