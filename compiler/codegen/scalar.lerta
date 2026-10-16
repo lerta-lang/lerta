@@ -1,6 +1,6 @@
 # The representation of the types whose values are not references, one row per type: the integer
-# types, whose bits and sign come from types, Float, Bool and enums, whose values are the places of
-# their members among them.
+# types, whose bits and sign come from types, Float, Float32, Bool and enums, whose values are the
+# places of their members among them.
 import IrBuilder from './ir_builder'
 import integer_bits, is_signed, kind_of, SimpleType, Type, TypeKind from '../types'
 
@@ -20,8 +20,9 @@ const UINT16 = integer_row('UInt16')
 const UINT32 = integer_row('UInt32')
 const UINT64 = integer_row('UInt64')
 const BOOL = Scalar(ir_type: 'i1', bits: 1, signed: false)
-# Its sign is that of no integer: it is a word already, and never extended.
+# Its sign is that of no integer: its bits are a word already, and a Float32's are zero-extended.
 const FLOAT = Scalar(ir_type: 'double', bits: 64, signed: false, is_float: true)
+const FLOAT32 = Scalar(ir_type: 'float', bits: 32, signed: false, is_float: true)
 # A place is never negative.
 const ENUM_VALUE = Scalar(ir_type: 'i64', bits: 64, signed: false)
 
@@ -37,18 +38,22 @@ export const scalar_of = (type: Type) ->
     when 'UInt64' then UINT64
     when 'Bool' then BOOL
     when 'Float' then FLOAT
+    when 'Float32' then FLOAT32
     when ENUM then ENUM_VALUE
     else nil
 
-# The value as an i64: a Float's bits, or another value extended by its sign.
+# The value as an i64: a float's bits, or another value, extended by its sign.
 export const widened_to_word = (ir: IrBuilder, operand: String, scalar: Scalar) ->
-  return ir.assign("bitcast double #{operand} to i64") if scalar.is_float
-  return operand if scalar.bits == 64
+  const bits_type = "i#{scalar.bits}"
+  const as_bits = -> ir.assign("bitcast #{scalar.ir_type} #{operand} to #{bits_type}")
+  const bits = scalar.is_float then as_bits() else operand
+  return bits if scalar.bits == 64
   const extension = scalar.signed then 'sext' else 'zext'
-  ir.assign "#{extension} #{scalar.ir_type} #{operand} to i64"
+  ir.assign "#{extension} #{bits_type} #{bits} to i64"
 
 # The value from an i64, as widened_to_word gives it.
 export const narrowed_from_word = (ir: IrBuilder, word: String, scalar: Scalar) ->
-  return ir.assign("bitcast i64 #{word} to double") if scalar.is_float
-  return word if scalar.bits == 64
-  ir.assign "trunc i64 #{word} to #{scalar.ir_type}"
+  const bits_type = "i#{scalar.bits}"
+  const bits = scalar.bits == 64 then word else ir.assign("trunc i64 #{word} to #{bits_type}")
+  return bits if not scalar.is_float
+  ir.assign "bitcast #{bits_type} #{bits} to #{scalar.ir_type}"

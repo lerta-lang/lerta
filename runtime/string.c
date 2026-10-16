@@ -109,19 +109,34 @@ int64_t lerta_float_literal_bits(const LertaString *text) {
   return bits;
 }
 
+int64_t lerta_float32_literal_bits(const LertaString *text) {
+  char *digits = lerta_c_string(text);
+  // Rounded to a float at once, rather than through a double, which could round it twice.
+  double value = strtof(digits, NULL);
+  free(digits);
+  if (!isfinite(value)) return -1;
+  int64_t bits;
+  memcpy(&bits, &value, sizeof bits);
+  return bits;
+}
+
 double lerta_float_from_bits(int64_t bits) {
   double value;
   memcpy(&value, &bits, sizeof value);
   return value;
 }
 
-LertaString *lerta_float_to_string(double value) {
-  // The fewest significant digits that read back as the value, at most 17 for a double.
+// The fewest significant digits that read back as the value, a double, or a float if is_float32,
+// at most 17 for a double and 9 for a float.
+static LertaString *shortest_text(double value, bool is_float32) {
   int digits = 1;
   char text[32];
   for (;; digits++) {
     snprintf(text, sizeof text, "%.*e", digits - 1, value);
-    if (digits == 17 || strtod(text, NULL) == value) break;
+    if (is_float32 ? digits == 9 || strtof(text, NULL) == (float)value
+                   : digits == 17 || strtod(text, NULL) == value) {
+      break;
+    }
   }
   int exponent = atoi(strchr(text, 'e') + 1);
   // As Python writes it: in positional notation from 1e-4 up to 1e16, with at least one digit
@@ -133,6 +148,20 @@ LertaString *lerta_float_to_string(double value) {
   }
   return lerta_string_from_bytes(text, (int64_t)strlen(text));
 }
+
+LertaString *lerta_float_to_string(double value) { return shortest_text(value, false); }
+
+LertaString *lerta_float32_to_string(float value) { return shortest_text(value, true); }
+
+LERTA_STATIC_STRING(float_overflow, "float overflow");
+
+float lerta_float_to_float32(double value) {
+  float narrowed = (float)value;
+  if (!isfinite(narrowed)) lerta_raise(LERTA_ARITHMETIC_ERROR, (const LertaString *)&float_overflow);
+  return narrowed;
+}
+
+double lerta_float32_to_float(float value) { return value; }
 
 LERTA_STATIC_STRING(float_to_int_overflow, "integer overflow");
 

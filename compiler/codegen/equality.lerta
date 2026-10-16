@@ -18,7 +18,7 @@ import call_runtime from './runtime_calls'
 import scalar_of, widened_to_word from './scalar'
 import emit_string_equals from './string'
 import
-  ArrayType, is_identity_type, is_kind, is_one_of_kinds, is_signed, ObjectType, OptionalType, Type,
+  ArrayType, is_float, is_identity_type, is_one_of_kinds, is_signed, ObjectType, OptionalType, Type,
   type_key, UnionType
 from '../types'
 
@@ -193,9 +193,9 @@ const combine = (ir: IrBuilder, hashes: String[]) ->
   result
 
 # Whether two values of a type that is neither a reference nor optional are equal: as bits, but a
-# Float's -0.0 equals 0.0.
+# float's -0.0 equals 0.0.
 export const emit_value_equals = (ir: IrBuilder, left: String, right: String, type: Type) ->
-  const comparison = is_kind(type, 'Float') then 'fcmp oeq' else 'icmp eq'
+  const comparison = is_float(type) then 'fcmp oeq' else 'icmp eq'
   ir.assign "#{comparison} #{ir_type(type)} #{left}, #{right}"
 
 # A value of a number, a Bool, a String, a Binary or an enum (see checker builtins).
@@ -205,15 +205,14 @@ const is_value_type = (type: Type) ->
 const emit_value_hash = (ir: IrBuilder, value: String, type: Type) ->
   if is_one_of_kinds(type, ['String', 'Binary'])
     return call_runtime(ir, 'i64 @lerta_string_hash(ptr)', "ptr #{value}")
-  # Equal Floats, as 0.0 and -0.0, hash alike.
-  return emit_float_word(ir, value) if is_kind(type, 'Float')
+  # Equal floats, as 0.0 and -0.0, hash alike.
+  return emit_float_word(ir, value, type) if is_float(type)
   widened_to_word ir, value, scalar_of(type)!
 
 # The Ordering of two numbers of the type, as an i64.
 export const emit_number_compare = (ir: IrBuilder, left: String, right: String, type: Type) ->
-  const is_float = is_kind(type, 'Float')
-  const signed = is_float or is_signed(type)
-  const less = is_float then 'fcmp olt' else "icmp #{signed then 'slt' else 'ult'}"
+  const signed = is_float(type) or is_signed(type)
+  const less = is_float(type) then 'fcmp olt' else "icmp #{signed then 'slt' else 'ult'}"
   const operands = "#{ir_type(type)} #{left}, #{right}"
   const is_less = ir.assign("#{less} #{operands}")
   const is_equal = emit_value_equals(ir, left, right, type)

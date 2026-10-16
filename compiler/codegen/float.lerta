@@ -4,18 +4,21 @@ import Generator from './generator'
 import hex, hex_digit_value from '../hex'
 import IrBuilder from './ir_builder'
 import DIVISION_BY_ZERO, FLOAT_OVERFLOW, throw_if from './runtime_errors'
+import scalar_of, widened_to_word from './scalar'
+import Type from '../types'
 
-# The bits of the largest double's successor, infinity, which no Float reaches.
+# The bits of the largest double's successor, infinity, which no Float reaches; the IR writes a
+# float's infinity, which no Float32 reaches, as the same double.
 const INFINITY = '0x7FF0000000000000'
 
 const INT_MIN = -9223372036854775808
 
 const PREDICATES = { '==': 'oeq', '!=': 'one', '<': 'olt', '<=': 'ole', '>': 'ogt', '>=': 'oge' }
 
-# The literal's double, written by its bits (see docs/internals.md#floats); the checker has found it
-# finite (see float_literal).
-export const float_constant = (text: String) ->
-  const bits = float_bits(text)!
+# The literal's value as the type, a Float or a Float32, written as a double by its bits (see
+# docs/internals.md#floats); the checker has found it finite (see float_literal).
+export const float_constant = (text: String, type: Type) ->
+  const bits = float_bits(text, type)!
   return "0x#{hex(bits, 16)}" if bits >= 0
   # A negative double's bits are a negative Int: its sign bit, the top one, is set apart from the
   # rest, which hex writes, as it writes no negative number.
@@ -23,12 +26,15 @@ export const float_constant = (text: String) ->
   const top = hex(hex_digit_value(rest[0])! + 8, 1)
   "0x#{top}#{rest.text(1)!}"
 
-# `+`, `-`, `*` or `/` of two Floats; division by zero throws, as does a result too large.
+# `+`, `-`, `*` or `/` of two floats of the type; division by zero throws, as does a result too
+# large.
 export const apply_float_arithmetic = (
-  g: Generator, operator: String, left: String, right: String
+  g: Generator, operator: String, left: String, right: String, type: Type
 ) ->
   const ir = g.ir
-  throw_if g, ir.assign("fcmp oeq double #{right}, 0.0"), DIVISION_BY_ZERO if operator == '/'
+  const scalar = scalar_of(type)!
+  const float = scalar.ir_type
+  throw_if g, ir.assign("fcmp oeq #{float} #{right}, 0.0"), DIVISION_BY_ZERO if operator == '/'
   const instruction =
     case operator
       when '+' then 'fadd'
@@ -36,20 +42,23 @@ export const apply_float_arithmetic = (
       when '*' then 'fmul'
       when '/' then 'fdiv'
       else panic("no Float operator #{operator}")
-  const result = ir.assign("#{instruction} double #{left}, #{right}")
-  ir.module.declare 'llvm.fabs.f64', 'declare double @llvm.fabs.f64(double)'
-  const size = ir.assign("call double @llvm.fabs.f64(double #{result})")
-  throw_if g, ir.assign("fcmp oge double #{size}, #{INFINITY}"), FLOAT_OVERFLOW
+  const result = ir.assign("#{instruction} #{float} #{left}, #{right}")
+  const fabs = "llvm.fabs.f#{scalar.bits}"
+  ir.module.declare fabs, "declare #{float} @#{fabs}(#{float})"
+  const size = ir.assign("call #{float} @#{fabs}(#{float} #{result})")
+  throw_if g, ir.assign("fcmp oge #{float} #{size}, #{INFINITY}"), FLOAT_OVERFLOW
   result
 
-export const emit_float_negation = (ir: IrBuilder, operand: String) ->
-  ir.assign "fneg double #{operand}"
+export const emit_float_negation = (ir: IrBuilder, operand: String, type: Type) ->
+  ir.assign "fneg #{scalar_of(type)!.ir_type} #{operand}"
 
-# A comparison of two Floats; no Float is NaN, so they are ordered.
+# A comparison of two floats of the type; none is NaN, so they are ordered.
 export const emit_float_comparison = (
-  ir: IrBuilder, operator: String, left: String, right: String
-) -> ir.assign("fcmp #{PREDICATES[operator]!} double #{left}, #{right}")
+  ir: IrBuilder, operator: String, left: String, right: String, type: Type
+) -> ir.assign("fcmp #{PREDICATES[operator]!} #{scalar_of(type)!.ir_type} #{left}, #{right}")
 
-export const emit_float_word = (ir: IrBuilder, value: String) ->
-  const positive_zero = ir.assign("fadd double #{value}, 0.0")
-  ir.assign "bitcast double #{positive_zero} to i64"
+# The float's bits as a word, with -0.0 made 0.0, so that equal floats give the same word.
+export const emit_float_word = (ir: IrBuilder, value: String, type: Type) ->
+  const scalar = scalar_of(type)!
+  const positive_zero = ir.assign("fadd #{scalar.ir_type} #{value}, 0.0")
+  widened_to_word ir, positive_zero, scalar

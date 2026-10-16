@@ -5,15 +5,15 @@ import fail from './diagnostics'
 import compares_by_contents, is_equatable, own_equality from './equality'
 import may_name_member from './enums'
 import expect_condition, expect_optional, expect_type, require_type, type_of from './expression'
-import is_contextual from './literals'
+import holds_float_literal, is_contextual from './literals'
 import where_right_operand from './narrowing'
 import Body from './shared'
 import
-  bool_type, format_type, inner_of, INTEGER_KINDS, is_identity_type, is_one_of_kinds, OptionalType,
-  ObjectType, same_type, SIGNED_INTEGER_KINDS, Type, TypeKind, UnionType
+  bool_type, FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_identity_type, is_one_of_kinds,
+  ObjectType, OptionalType, same_type, SIGNED_INTEGER_KINDS, Type, TypeKind, UnionType
 from '../types'
 
-const NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., 'Float']
+const NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS...]
 
 const EQUALITY_KINDS: TypeKind[] = [NUMERIC_KINDS..., 'Bool', 'String', 'Binary', ENUM]
 
@@ -57,7 +57,7 @@ export const type_of_unary = (body: Body, unary: UnaryOperation, expected: Type?
   type
 
 # The types that prefix `-` takes: not an unsigned one, whose negation throws unless it is 0.
-const SIGNED_KINDS: TypeKind[] = [SIGNED_INTEGER_KINDS..., 'Float']
+const SIGNED_KINDS: TypeKind[] = [SIGNED_INTEGER_KINDS..., FLOAT_KINDS...]
 
 const type_of_nil_test = (body: Body, binary: BinaryOperation) ->
   const left_is_nil = binary.left is NilLiteral
@@ -104,7 +104,9 @@ const type_of_operands = (
   const { left, right } = binary
   const takes_context = (operand: Expression) ->
     is_contextual(operand) or may_name_member(body, operand)
-  const right_first = takes_context(left) and not takes_context(right)
+  const decides_more = (operand: Expression, than: Expression) ->
+    not takes_context(operand) or (holds_float_literal(operand) and not holds_float_literal(than))
+  const right_first = takes_context(left) and decides_more(right, left)
   const first = right_first then right else left
   const second = right_first then left else right
   const type = type_of(body, first, expected)

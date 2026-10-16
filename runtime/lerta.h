@@ -38,8 +38,9 @@ typedef struct {
 // How arrays and maps hold their items. A plain item is 8 bytes, an Int as is; a reference is 8
 // bytes, its address, and is retained while it is held. An interface value is two pointers, its
 // data, a reference, then its itab. LERTA_NO_ITEMS take no bytes, as the values of a set, a map
-// without values, do. An integer narrower than 8 bytes, or a Bool, is LERTA_INTEGER_ITEMS with its
-// size in bytes in LERTA_ITEM_BYTES, and LERTA_SIGNED_ITEMS if it is signed, and takes that size.
+// without values, do. An integer narrower than 8 bytes, a Bool or a Float32's bits, is
+// LERTA_INTEGER_ITEMS with its size in bytes in LERTA_ITEM_BYTES, and LERTA_SIGNED_ITEMS if it is
+// signed, and takes that size.
 typedef enum {
   LERTA_PLAIN_ITEMS,
   LERTA_REFERENCE_ITEMS,
@@ -150,10 +151,18 @@ LertaString *lerta_uint64_to_string(uint64_t n);
 // compiler writes into the IR and String.parse_float reads back; -1, the bits of a NaN, which no
 // finite double has, if it is too large to be finite.
 int64_t lerta_float_literal_bits(const LertaString *text);
+// Likewise for a float, given as the bits of the same value as a double, as the IR writes a float
+// constant.
+int64_t lerta_float32_literal_bits(const LertaString *text);
 double lerta_float_from_bits(int64_t bits);
 // A Float's text: the fewest digits that read back as it, positional from 1e-4 up to 1e16, with
-// `.0` for a whole number, and scientific beyond (`1e+16`).
+// `.0` for a whole number, and scientific beyond (`1e+16`). A Float32's likewise, of the digits
+// that read back as it as a float.
 LertaString *lerta_float_to_string(double value);
+LertaString *lerta_float32_to_string(float value);
+// Throws an ArithmeticError unless the value is finite as a float.
+float lerta_float_to_float32(double value);
+double lerta_float32_to_float(float value);
 // Truncated toward zero; throws an ArithmeticError unless the result fits in an Int.
 int64_t lerta_float_to_int(double value);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.

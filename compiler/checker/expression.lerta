@@ -35,9 +35,9 @@ import Body from './shared'
 import type_of_tuple, type_of_tuple_item from './tuple'
 import resolve from './type_names'
 import
-  bool_type, format_type, format_types, FunctionType, inner_of, is_assignable, is_integer, is_kind,
-  is_one_of_kinds, never_type, nil_type, optional_type, OptionalType, RecordType, same_type,
-  string_type, Type, UnionType, void_type
+  bool_type, float_type, format_type, format_types, FunctionType, inner_of, is_assignable, is_float,
+  is_integer, is_kind, is_one_of_kinds, never_type, nil_type, optional_type, OptionalType,
+  RecordType, same_type, string_type, Type, UnionType, void_type
 from '../types'
 
 export const type_of = (body: Body, expression: Expression, expected: Type? = nil) ->
@@ -53,7 +53,7 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
   # An integer literal is an Int unless another integer type is expected.
   const wants_integer =
     literal_kind != nil and is_integer(literal_kind) and not is_kind(literal_kind, 'Int')
-  const wants_float = literal_kind != nil and is_kind(literal_kind, 'Float')
+  const wants_float = literal_kind != nil and is_float(literal_kind)
   const program = body.program
   case expression
     when StringLiteral
@@ -66,9 +66,10 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
     when IntegerLiteral
       case
         when wants_integer then integer_literal(program, expression, literal_kind!)
-        when wants_float then float_literal(program, expression)
+        when wants_float then float_literal(program, expression, literal_kind!)
         else int_literal(program, expression)
-    when FloatLiteral then float_literal(program, expression)
+    when FloatLiteral
+      float_literal program, expression, wants_float then literal_kind! else float_type
     when NilLiteral then nil_type
     when Throw
       check_throw body, expression

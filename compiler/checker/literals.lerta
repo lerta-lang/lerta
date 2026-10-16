@@ -7,18 +7,36 @@ import fail from './diagnostics'
 import is_numeric_operator from './operator'
 import ProgramWide from './shared'
 import float_bits, integer_float_text from '../float_literals'
-import float_type, format_type, int_type, integer_range, is_kind, Type from '../types'
+import format_type, int_type, integer_range, is_kind, Type from '../types'
 
 # Whether an expression takes its type from the context: a literal, or arithmetic on such
 # expressions, so that `1 + 2` is a Byte where one is expected.
 export const is_contextual = (expression: Expression): Bool ->
   case expression
-    when IntegerLiteral, StringLiteral then true
+    when IntegerLiteral, FloatLiteral, StringLiteral then true
     when UnaryOperation then expression.operator == '-' and is_contextual(expression.operand)
     when BinaryOperation
       const { operator, left, right } = expression
       is_numeric_operator(operator) and is_contextual(left) and is_contextual(right)
     else false
+
+# Whether a contextual expression holds a float literal, which is a Float unless a Float32 is
+# expected. It decides more of its type than other literals do, which an Int fits too, so it is
+# checked before them, as the operand, the item or the argument whose type the others take.
+export const holds_float_literal = (expression: Expression): Bool ->
+  case expression
+    when FloatLiteral then true
+    when UnaryOperation then holds_float_literal(expression.operand)
+    when BinaryOperation
+      holds_float_literal(expression.left) or holds_float_literal(expression.right)
+    else false
+
+# The items, those of contextual expressions that hold a float literal first (see
+# holds_float_literal), each in its order.
+export const float_first = <T>(items: T[], expression_of: (T) -> Expression) ->
+  const holds_float = (item: T) -> holds_float_literal(expression_of(item))
+  const floats = [item for item in items when holds_float(item)]
+  [floats..., [item for item in items when not holds_float(item)]...]
 
 # An integer literal where an integer type other than Int is expected, or a string literal of one
 # character where a Byte or a UInt32 is: one byte, or one code point.
@@ -42,21 +60,22 @@ export const integer_literal = (
   fail program, literal.position, message if message
   type
 
-# A float literal, or an integer one where a Float is expected, must be finite as a double: no
-# Float is infinite (see docs/reference/types.md#float). A hexadecimal integer one stands for the
+# A float literal, or an integer one where a Float or a Float32 is expected, must be finite as one:
+# none is infinite (see docs/reference/types.md#float). A hexadecimal integer one stands for the
 # bits of an Int, so it must fit in one.
-export const float_literal = (program: ProgramWide, literal: Expression) ->
+export const float_literal = (program: ProgramWide, literal: Expression, type: Type) ->
   const text =
     case literal
       when FloatLiteral then literal.text
       when IntegerLiteral
         if is_hexadecimal(literal)
           int_literal program, literal
-          return float_type
+          return type
         integer_float_text literal
       else panic('not a number literal')
-  fail program, literal.position, 'float literal does not fit in Float' if float_bits(text) == nil
-  float_type
+  if float_bits(text, type) == nil
+    fail program, literal.position, "float literal does not fit in #{format_type(type)}"
+  type
 
 export const int_literal = (program: ProgramWide, literal: IntegerLiteral) ->
   fail program, literal.position, 'integer literal does not fit in Int' if literal.value == nil

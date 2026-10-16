@@ -4,9 +4,9 @@ import is_equatable, is_hashable from './equality'
 import info_of from './object_types'
 import ProgramWide from './shared'
 import
-  ArrayType, bool_type, EnumType, float_type, FunctionType, int_type, INTEGER_KINDS, is_integer,
-  ObjectType, OptionalType, is_one_of_kinds, is_set, IterType, MapType, SimpleType, string_type,
-  TupleType, Type, TypeKind, void_type
+  ArrayType, bool_type, EnumType, FLOAT_KINDS, float_type, FunctionType, int_type, INTEGER_KINDS,
+  is_float, is_integer, is_one_of_kinds, is_set, IterType, MapType, ObjectType, OptionalType,
+  SimpleType, string_type, TupleType, Type, TypeKind, void_type
 from '../types'
 
 # The builtin methods, which the checker resolves a name to once, so that codegen generates each
@@ -57,7 +57,8 @@ export const builtin_method = (program: ProgramWide, receiver: Type, name: Strin
 # Whether the type's values are numbers, Bools, texts, Binaries or members of enums; numbers order
 # by their builtin compare (see Comparable).
 const is_value_type = (type: Type) ->
-  type is EnumType or is_one_of_kinds(type, [INTEGER_KINDS..., 'Float', 'Bool', 'String', 'Binary'])
+  const kinds: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS..., 'Bool', 'String', 'Binary']
+  type is EnumType or is_one_of_kinds(type, kinds)
 
 # The equals of a type that `==` compares, but by an equals of its own, and the hash of one that
 # can be a map key, but by a hash of its own; a compare of its own gives its equals.
@@ -71,7 +72,7 @@ const equality_method = (program: ProgramWide, receiver: Type, name: String): Bu
 const value_method = (program: ProgramWide, receiver: Type, name: String) ->
   case name
     when 'compare'
-      return nil if not is_one_of_kinds(receiver, [INTEGER_KINDS..., 'Float'])
+      return nil if not is_one_of_kinds(receiver, [INTEGER_KINDS..., FLOAT_KINDS...])
       method NUMBER_COMPARE, [receiver], ordering_type(program)
     else
       return method(ENUM_TO_STRING, [], string_type) if receiver is EnumType and name == 'to_string'
@@ -116,7 +117,7 @@ const array_method = (element: Type, name: String) ->
 # codegen array_text); arrays of other items are Stringable only through an extend.
 const is_text_item = (item: Type): Bool ->
   return is_text_item(item.element) if item is ArrayType
-  is_integer(item) or is_one_of_kinds(item, ['String', 'Float', 'Bool', ENUM])
+  is_integer(item) or is_float(item) or is_one_of_kinds(item, ['String', 'Bool', ENUM])
 
 const iter_method = (item: Type, name: String) ->
   case name

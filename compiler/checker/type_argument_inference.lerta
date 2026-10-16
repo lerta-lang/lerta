@@ -1,13 +1,14 @@
 # Finds the type arguments of a call of a generic function or method: those written, and those
 # inferred from the receiver, the arguments and the type the call is expected to have.
 import
-  ArrayLiteral, Call, Expression, FunctionLiteral, IntegerLiteral, MapLiteral, NilLiteral, Position,
-  RecordLiteral, StringLiteral, TupleLiteral
+  ArrayLiteral, Call, Expression, FloatLiteral, FunctionLiteral, IntegerLiteral, MapLiteral,
+  NilLiteral, Position, RecordLiteral, StringLiteral, TupleLiteral
 from '../ast'
 import fail from './diagnostics'
 import may_name_member from './enums'
 import expect_type, type_of from './expression'
 import GenericFunction from './generics'
+import float_first from './literals'
 import infer_through_members from './satisfaction'
 import Body from './shared'
 import resolve from './type_names'
@@ -80,8 +81,8 @@ export const infer_type_arguments = (
     check_argument i if not needs_context(body, arg)
   if const result = generic.result
     bind_from result, expected, call.position if expected
-  for i in 0...call.args.length
-    check_argument i if is_literal(i)
+  const literals = [i for i in 0...call.args.length when is_literal(i)]
+  check_argument i for i in float_first(literals, (i) -> call.args[i])
   # The type argument of a bounded type parameter gives those that its bound names, as `X:
   # Iterable<T>` gives T, before function literals take their parameters' types.
   const bind_from_bounds = ->
@@ -116,7 +117,7 @@ const written_bindings = (body: Body, call: Call, generic: GenericFunction) ->
 # member of an enum.
 export const needs_context = (body: Body, arg: Expression) ->
   case arg
-    when FunctionLiteral, NilLiteral, IntegerLiteral, StringLiteral then true
+    when FunctionLiteral, NilLiteral, IntegerLiteral, FloatLiteral, StringLiteral then true
     when ArrayLiteral, MapLiteral, RecordLiteral, TupleLiteral then true
     else may_name_member(body, arg)
 

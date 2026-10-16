@@ -34,6 +34,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `Int` | `equals`, `compare`, `hash`, `to_string`, `to_float`, the conversions to each integer type (see [sized integers](types.md#sized-integers)), `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
 | `Int8`, `Int16`, `Int32`, `UInt16`, `UInt32`, `UInt64` | `equals`, `compare`, `hash`, `to_string`, `to_float`, the conversions to each integer type, `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
 | `Float` | `equals`, `compare`, `hash`, `to_string`, `to_int` |
+| `Float32` | `equals`, `compare`, `hash` |
 | `Byte` | `equals`, `compare`, `hash`, `to_string`, `to_float`, the conversions to each integer type, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` |
 | `Bool` | `equals`, `hash`, `to_string` |
 | `String` | `equals`, `hash`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `compare` |

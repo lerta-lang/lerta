@@ -1,6 +1,6 @@
 # Types
 
-Type names: `Int`, `Byte`, `Float`, `Bool`, `String`, `Binary`, `T[]`, `Map<K, V>`, `Iter<T>`, `Promise<T>` and `Promise`, `T?`, unions `A | B`, function types, anonymous struct types such as `{ x: Int }`, tuple types such as `(Int, String)`, the names of classes, structs, enums, interfaces and `type` aliases, `Self` in an [interface](objects.md#interfaces) or an extend of one, the type parameters of a generic function or extend in it, and `void` and `never` as a return type. How they are written is in [the syntax](syntax.md#calls).
+Type names: `Int`, `Byte`, `Float`, `Float32`, `Bool`, `String`, `Binary`, `T[]`, `Map<K, V>`, `Iter<T>`, `Promise<T>` and `Promise`, `T?`, unions `A | B`, function types, anonymous struct types such as `{ x: Int }`, tuple types such as `(Int, String)`, the names of classes, structs, enums, interfaces and `type` aliases, `Self` in an [interface](objects.md#interfaces) or an extend of one, the type parameters of a generic function or extend in it, and `void` and `never` as a return type. How they are written is in [the syntax](syntax.md#calls).
 
 The methods of the builtin types are listed in [builtins](builtins.md#methods-of-the-builtin-types). Methods can only be called (see [function values](functions.md#function-values)).
 
@@ -47,6 +47,12 @@ print (flags >> 15).to_int() + offset.to_int()
 - There are no implicit conversions: `Float` and `Int` cannot be mixed in one operation. `n.to_float()` gives the nearest `Float` to an `Int`, and `x.to_int()` the `Int` of a `Float` truncated toward zero, throwing `integer overflow` unless it fits.
 - `x.to_string()`, which `print` and interpolation use, gives the fewest digits that read back as the value: positional from `1e-4` up to `1e16`, with `.0` for a whole number (`1.0`, `0.30000000000000004`, `-0.0`), and scientific beyond (`1e+16`, `5e-324`), as Python writes them.
 - Why no infinity and no NaN: a NaN goes on silently through arithmetic until a comparison much later gives a wrong answer, and makes `==` fail for a value and itself; an operation that has no finite result is an error as `Int` overflow is. Whether to allow infinities later is an [open question](../roadmap/language.md#open-questions); allowing them would break no program, while taking them away would.
+
+## Float32
+
+- `Float32` is a 32-bit IEEE 754 float, finite as `Float` is: its operations are in 32 bits and throw where the result would not be finite, it compares, is a map key and a set item, and is written by an array's `to_string`, and `case` cannot branch on it. It does not mix with `Float` in one operation. Its methods are only `equals`, `compare` and `hash` so far, so it is not Stringable.
+- Where a `Float32` or a `Float32?` is expected, a float literal, or an integer one, is a `Float32`: it rounds to the nearest `Float32` at once, and one too large to be finite as a `Float32` is an error.
+- A C function takes and gives a `Float32` as a `float`.
 
 ## Bool
 

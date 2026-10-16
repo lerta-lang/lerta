@@ -49,7 +49,7 @@ Interfaces and generics are in [objects](objects.md).
 
 - A `UInt64` literal above the largest `Int`, as `0xFFFFFFFFFFFFFFFF`.
 - Conversions from `Float` to the sized integer types, which now go through `to_int()`.
-- `Float32`, finite as `Float` is, whose operations throw where the result would not be finite. `x.to_float32()` converts a `Float`, throwing unless it is finite as a `Float32`, and `x.to_float()` back; a float literal is of the type that is expected. `to_string` gives the fewest digits that read back as the `Float32`.
+- The methods of `Float32` (see [Float32](../reference/types.md#float32)): `x.to_float32()` converts a `Float`, throwing unless it is finite as a `Float32`, and `x.to_float()` back. `to_string` gives the fewest digits that read back as the `Float32`.
 - `Int: Div<Int, Int>` (see [operator overloading](#operator-overloading)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
 
 ## Operator overloading
