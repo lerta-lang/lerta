@@ -53,10 +53,6 @@ Cause: `add_instance` and `instance_field` in `compiler/checker/object_types.ler
 
 `const Int = 3` is accepted, while `class Int` is rejected as already defined, though types and values share one namespace.
 
-### Diagnostics
-
-- `print 1e+` reports the literal as `'1e'` (`scan_number` in `compiler/lexer/tokens.lerta`).
-
 ## Runtime
 
 ### macOS fails to write or read 2 GiB or more at once
