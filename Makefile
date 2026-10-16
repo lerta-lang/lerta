@@ -134,7 +134,7 @@ $(BOOTSTRAP)/minilerta.ll: bin/lerta
 	bin/lerta build $(MINILERTA_MAIN) -o $(BOOTSTRAP)/minilerta -Werror
 	$(BOOTSTRAP)/minilerta $(MAIN) > $@
 
-check-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3$(EXE) \
+test-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3$(EXE) \
   $(BOOTSTRAP)/minilerta.ll
 	@cmp -s $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll \
 	  || { echo 'bootstrap: stage2 and stage3 have different IR' >&2; exit 1; }
@@ -142,14 +142,14 @@ check-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stag
 	  || { echo "bootstrap: minilerta's entry and dump-llvm print different IR" >&2; exit 1; }
 	@echo "bootstrap: stage2, stage3 and minilerta's entry print the same IR"
 
-# Written only from IR that check-bootstrap has found to be a fixed point.
+# Written only from IR that test-bootstrap has found to be a fixed point.
 # The seed is written from the host's bootstrap only, so that a target given by mistake cannot
 # change it.
 ifdef TARGET
 seed:
 	@echo 'make seed does not take TARGET' >&2; exit 2
 else
-seed: check-bootstrap
+seed: test-bootstrap
 	rm -rf build/seed
 	mkdir -p build/seed/build
 	cp -R compiler build/seed/compiler
@@ -169,28 +169,23 @@ test: bin/lerta
 	nice node test/cli.ts || status=1; \
 	nice node test/runtime.ts || status=1; \
 	nice node test/format.ts || status=1; \
-	nice $(MAKE) --no-print-directory check-bootstrap || status=1; \
+	nice $(MAKE) --no-print-directory test-bootstrap || status=1; \
 	exit $$status
 
 test-cross:
 	@tools/test_cross.sh
 endif
 
-# check checks that the .lerta files that git lists, those not added yet included, are in the style,
-# and runs pnpm check in test/. tests/ is left out, as it holds code that is not in the style on
-# purpose, and so is a file deleted but not yet from git (test -e). The files go to one run of
-# lerta fmt, which checks a program once for the files it holds, while pnpm check runs; xargs splits
-# a list that is too long into more runs.
+# check checks that the .lerta files that git lists, those not added yet included, are in the style.
+# tests/ is left out, as it holds code that is not in the style on purpose, and so is a file deleted
+# but not yet from git (test -e). The files go to one run of lerta fmt, which checks a program once
+# for the files it holds; xargs splits a list that is too long into more runs.
 check: bin/lerta
-	@status=0; \
-	git ls-files -z --cached --others --exclude-standard -- '*.lerta' ':!tests/' \
+	@git ls-files -z --cached --others --exclude-standard -- '*.lerta' ':!tests/' \
 	  | xargs -0 sh -c 'for f; do test -e "$$f" && printf "%s\0" "$$f"; done' sh \
-	  | nice xargs -0 bin/lerta fmt & fmt=$$!; \
-	(cd test && nice pnpm check) || status=1; \
-	wait $$fmt || status=1; \
-	exit $$status
+	  | nice xargs -0 bin/lerta fmt
 
 clean:
 	rm -rf build bin
 
-.PHONY: all check check-bootstrap seed test test-cross clean
+.PHONY: all check seed test test-bootstrap test-cross clean

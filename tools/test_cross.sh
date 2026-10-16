@@ -26,7 +26,7 @@ test_target() {
     skip "the bootstrap for $1" "needs a clang for Windows on Wine's PATH"
     return
   fi
-  nice make --no-print-directory check-bootstrap TARGET="$1"
+  nice make --no-print-directory test-bootstrap TARGET="$1"
 }
 
 # Wine updates a prefix that another version of it made, in place, as it starts, which test/wine.ts

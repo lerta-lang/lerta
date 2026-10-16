@@ -66,16 +66,16 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 
 ### Building and testing
 
-The tests run on Linux and macOS, and also need Node.js (22.18 or later in 22, or 23.6 or later, where type stripping is on by default) and, for `make check`, pnpm.
+The tests run on Linux and macOS, and also need Node.js (22.18 or later in 22, or 23.6 or later, where type stripping is on by default). `pnpm check` in `test/` (after `pnpm install`) checks the test scripts' types and style; run it when they change.
 
 ```
 make                   # bin/lerta, the compiler, built from the seed
 make TARGET=<triple>   # bin/lerta-<triple>, the compiler for another target
-make check-bootstrap   # the compiler builds itself to the same IR (TARGET builds the stages for it)
+make test-bootstrap    # the compiler builds itself to the same IR (TARGET builds the stages for it)
 make seed              # rewrites the seed, only when needed (see the bootstrap)
-make test              # builds bin/lerta, then runs the tests and check-bootstrap, on the host only
+make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
 make test-cross        # the tests for every environment but the host's own (see below)
-make check             # the code in the style (lerta fmt), and pnpm check in test/ (after pnpm install)
+make check             # the code in the style (lerta fmt)
 make clean
 ```
 
