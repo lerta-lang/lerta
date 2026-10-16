@@ -22,15 +22,6 @@ LertaPromise *lerta_stream_flush(int64_t fd) {
   return check_writer(fd) ? lerta_output_wait((int)fd) : NULL;
 }
 
-// The seed's IR calls these, which write at once, until the next refresh.
-void lerta_writer_write(int64_t fd, const LertaString *bytes) {
-  if (check_writer(fd)) lerta_output_write_now((int)fd, bytes->bytes, bytes->length);
-}
-
-void lerta_writer_flush(int64_t fd) {
-  if (check_writer(fd)) lerta_output_flush();
-}
-
 // print and print_error write at once, after what the buffer holds, so that the output keeps its
 // order.
 void lerta_print_stdout(const LertaString *text) {

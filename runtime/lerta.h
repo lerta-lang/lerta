@@ -297,9 +297,6 @@ void lerta_rename(const LertaString *from, const LertaString *to);
 // a buffer, written out on the event loop (output.c; see docs/internals.md#output).
 LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes);
 LertaPromise *lerta_stream_flush(int64_t fd);
-// For the seed's IR until the next refresh: written at once.
-void lerta_writer_write(int64_t fd, const LertaString *bytes);
-void lerta_writer_flush(int64_t fd);
 void lerta_print_stdout(const LertaString *text);
 void lerta_print_stderr(const LertaString *text);
 
