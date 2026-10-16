@@ -6,6 +6,7 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 - `CodePoint` is an alias of `UInt32` for a Unicode code point, which a `String` gives (see [String](types.md#string)).
 - `Error` is the interface of what `throw` takes, and the runtime's error types are builtins too (see [exceptions](errors.md#exceptions)).
 - `print<T: Stringable>(x: T)` writes `x.to_string()` followed by a newline to stdout, and `print_error<T: Stringable>(x: T)` to stderr. Each writes at once, unbuffered, so that what it prints is out even if a long computation follows, and after what the buffer of `stdout` and `stderr` of [std:io](modules.md#stdio) holds, once a write out of it in flight is done, so that the output keeps its order. A failed write to stdout is reported by the exit code, as [std:io](modules.md#stdio) states.
+- `min<T: Comparable>(first: T, rest: T...): T` gives the least of its arguments, and `max` the greatest, by their [compare](#equatable-comparable-and-hashable): `min(3, 1, 2)` is `1`, `max(0, xs...)` the greatest of `0` and the items of `xs`. Of values that are equal, it gives the first. `T` is that of the arguments, which [infer it](functions.md#generic-functions) as for any generic function, so `min(1.0, 2)` compares `Float`s while `min(1, 2.5)` is an error. A first value comes outside any spread, as `first` is no variadic parameter: `min(xs...)` alone is an error.
 
 ## Stringable
 
