@@ -258,6 +258,8 @@ export const cache_checks: Check[] = [
     name: 'lerta build goes on when it cannot remove a staging directory that a killed build left',
     wait: wait_for_runtime_name,
     run: async () => {
+      // root removes a directory whatever its mode, as in the Docker containers of test-cross.
+      if (process.getuid?.() === 0) return undefined
       const cache = new_cache_dir()
       const name = await cached_runtime_name()
       const ended = spawnSync(process.execPath, ['-e', '']).pid
