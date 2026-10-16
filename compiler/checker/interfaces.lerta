@@ -14,6 +14,7 @@ import
   has_type, is_taken_type_name, module_resolver, resolve, Resolver, with_type_parameters
 from './type_names'
 import placeholders, substitute from './type_patterns'
+import reject_invalid_instance from './type_validity'
 import bool_type, FunctionType, InterfaceType, Type, TypeParameterType from '../types'
 
 export struct InterfaceMember
@@ -188,7 +189,10 @@ const instantiate = (
     fail program, position, "'#{info.name}' takes #{count} type argument(s), got #{args.length}"
   const generic = info.type
   const resolved = [resolve(program, resolver, arg) for arg in args]
-  InterfaceType args: resolved, name: generic.name, symbol: generic.symbol, module: generic.module
+  const { name, symbol, module } = generic
+  const type = InterfaceType(name, symbol, module, args: resolved)
+  reject_invalid_instance program, resolver.module_index, type, position
+  type
 
 # Checks the type parameters and resolves the members of every interface of the module, so that
 # one that is never used is checked too.

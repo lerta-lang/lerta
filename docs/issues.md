@@ -6,9 +6,15 @@ Each entry says what goes wrong, a minimal program that shows it, and where the 
 
 ## Compiler
 
-### A generic interface is not checked for the member types its type arguments make
+### A generic class whose field holds a larger instance of itself hangs the compiler
 
-`Source<Int?>`, for an interface whose member returns `T[]`, is accepted where it is written, though an array cannot hold `Int?`; no class can satisfy it, so the error comes only where one is given for it.
+```
+class Node<T>
+  next: Node<Node<T>>? = nil
+const n: Node<Int>? = nil
+```
+
+The compiler never ends: the instances of the class it makes grow without end. It did so before the fields of instances were checked too. Checking each generic declaration once for what its type parameters must be, rather than each instance's fields, would also give the check of interface instances (`compiler/checker/type_validity.lerta`) the errors it skips for an instance nested in one of the same interface.
 
 ## Commands and tools
 

@@ -1,19 +1,24 @@
-# Checks a type that type arguments make, as the signature of a generic function's instance or the
-# fields of a generic class's, as a written type is checked (see type_names).
+# Checks a type that type arguments make, as the signature of a generic function's instance, the
+# fields of a generic class's or the members of a generic interface's, as a written type is checked
+# (see type_names).
 import Position from '../ast'
 import check_item_type, check_map_types, check_value_type, reject_map_key from './collection'
 import check_part, enter_module, leave_module from './diagnostics'
+import members_for from './interfaces'
 import info_of from './object_types'
 import EarlyInstance, ProgramWide from './shared'
 import has_type_parameters, parts_of from './type_patterns'
-import ArrayType, is_set, IterType, MapType, ObjectType, Type from '../types'
+import
+  ArrayType, InterfaceType, is_set, IterType, MapType, ObjectType, Type, type_key
+from '../types'
 
 # Fails at `at`, where the type is given, if a part of it is invalid.
 export const reject_invalid_type = (program: ProgramWide, type: Type, at: Position): void ->
   check_item_type program, type.element, at, 'an array' if type is ArrayType
   check_value_type program, type.item, at, 'an Iter' if type is IterType
   reject_invalid_map program, type, at if type is MapType
-  reject_invalid_fields program, type, at if type is ObjectType
+  reject_invalid_instance_types program, type, at if type is ObjectType
+  reject_invalid_instance_types program, type, at if type is InterfaceType
   reject_invalid_type program, part, at for part in parts_of(type)
 
 # A set's value type, void, is no map value.
@@ -21,31 +26,48 @@ const reject_invalid_map = (program: ProgramWide, type: MapType, at: Position) -
   return reject_map_key(program, type.key, at, 'a set item') if is_set(type)
   check_map_types program, type.key, type.value, at, at
 
-# Checks the field types of an instance of a generic class or struct where the module gives it,
-# once they are known.
+# Checks the field types of an instance of a generic class or struct, or the member types of one of
+# a generic interface, where the module gives it, once they are known.
 export const reject_invalid_instance = (
-  program: ProgramWide, module_index: Int, type: ObjectType, at: Position
+  program: ProgramWide, module_index: Int, type: ObjectType | InterfaceType, at: Position
 ) ->
-  if program.fields_known
-    reject_invalid_fields program, type, at
+  if program.members_known
+    reject_invalid_instance_types program, type, at
   else
     program.early_instances.push EarlyInstance(type, at, module_index)
 
-# Checks the instances given before the fields were known, each as a part of the program.
+# Checks the instances given before the fields and members were known, each as a part of the
+# program.
 export const check_early_instances = (program: ProgramWide) ->
-  program.fields_known = true
+  program.members_known = true
   for instance in program.early_instances
     const shared = program.shared[instance.module_index]
     enter_module shared
-    check_part program, -> reject_invalid_fields(program, instance.type, instance.at)
+    check_part program, -> reject_invalid_instance_types(program, instance.type, instance.at)
     leave_module shared
 
-# Reports each instance once, where it is first given; which also ends the check of a field that
-# holds the instance itself, as `next: Node<T>?` does.
-const reject_invalid_fields = (program: ProgramWide, type: ObjectType, at: Position) ->
+# Reports each instance once, where it is first given; which also ends the check of a field or a
+# member whose type holds the instance itself, as `next: Node<T>?` does.
+const reject_invalid_instance_types = (
+  program: ProgramWide, type: ObjectType | InterfaceType, at: Position
+) ->
   return if type.args.length == 0 or has_type_parameters(type)
-  const info = info_of(program, type)
-  return if info.fields_checked
-  info.fields_checked = true
-  for field in info.fields
-    reject_invalid_type program, field_type, at if const field_type = field.type
+  case type
+    when ObjectType
+      const info = info_of(program, type)
+      return if info.fields_checked
+      info.fields_checked = true
+      for field in info.fields
+        reject_invalid_type program, field_type, at if const field_type = field.type
+    when InterfaceType
+      const key = type_key(type)
+      return if program.checked_interfaces.has(key)
+      # A member whose type holds another instance of the interface, as `() -> Node<Node<T>>?`
+      # does, would lead to ever larger ones.
+      return if program.checking_interfaces.has(type.symbol)
+      program.checked_interfaces[key] = true
+      program.checking_interfaces[type.symbol] = true
+      try
+        reject_invalid_type program, member.type, at for member in members_for(program, type, type)
+      finally
+        program.checking_interfaces.remove type.symbol
