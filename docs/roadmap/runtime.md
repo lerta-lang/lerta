@@ -54,5 +54,5 @@ The size classes of the allocator ([internals](../internals.md#allocation)), the
 
 - Whether stack overflow should be an exception that can be caught instead of a panic. That needs the check at function entry described in [internals](../internals.md#stack-overflow).
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
-- Whether the runtime should collect cycles (as Nim's ORC does by trial deletion), to be decided once async/await shows whether the means above keep closure cycles in check.
+- Whether the runtime should collect cycles (as Nim's ORC does by trial deletion). It is decided by the leak check's report of cycles on a few programs driven by events, of the size of `examples/editor.lerta` or larger, written for it, since the shape of the APIs that keep callbacks is being set now (see [milestones](README.md#milestones)).
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).

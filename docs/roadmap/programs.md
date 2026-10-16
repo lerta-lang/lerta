@@ -36,7 +36,9 @@ The planned design of modules, FFI, the standard library and tools.
   - Keys are the field names as written. `encode_json(value, JsonKeys.camel_case)` and `decode_json<T>(text, JsonKeys.camel_case)` write `text_document` as `textDocument`, for formats such as the [LSP](#tools)'s.
   - Decoding throws a `JsonError` for text that is not JSON or does not fit `T`, whose message gives the path and what was found: `$.params.position.line: expected an Int, found a string`.
   - Unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
-- In `std:io`, reading stdin, for the [LSP](#tools).
+- In `std:io`, reading stdin, for the [LSP](#tools) and for small tools: first synchronously, all of it as a `Binary`, then by lines with a `Promise`.
+- Math: `abs`, `min` and `max` of `Int` and `Float`, and `sqrt`, `pow`, `floor`, `ceil`, `round` and the remainder of `Float`, through `extern`s to libm where C has them.
+- Random numbers, formatting dates and times, and the network.
 - `x.to_fixed(digits)` of a `Float`: the value rounded to that many digits after the point, as JavaScript's `toFixed` writes it, for tables of numbers.
 - What the [test harness](#tools) needs of the programs it runs and the files it checks:
   - `run` gives the program an input on stdin, captures its stderr as it does its stdout, runs it in a given directory with variables of the environment changed or removed, tells an exit by a signal from an exit status, and can kill the program.
@@ -45,6 +47,7 @@ The planned design of modules, FFI, the standard library and tools.
 ## Tools
 
 - `.ll`/bitcode output from `lerta build`.
+- Debug information in the generated IR (`!dbg`), at least the line tables, so that a debugger and a crash show the source; an option turns it off, as `--no-trace` turns off traces.
 - LLVM emits objects, and `lld` links them, on all platforms, through a C++ shim (see [internals](../internals.md#interface-with-llvm-planned)).
 - `lerta run` running directly with JIT, and `lerta repl`.
 - The rest of the style in [`lerta fmt`](../reference/compiler.md): reporting what it cannot fix, such as a name in the wrong case or a line it cannot bring within 100 columns; the rules that change the syntax tree, such as implicit return and the shorthand of named arguments; and, applied only when the file type-checks, the rules that need types, such as whether a `case` handles every member of its subject. The compiler reports only what concerns correctness, such as unused names.
@@ -63,6 +66,8 @@ The planned design of modules, FFI, the standard library and tools.
 - Whether the runtime checks keep running `script` for a terminal, or `std:process` gives one (a pty).
 - Extern properties, `extern lerta_array_length as length: Int` in an extend, which read a property by calling a C function with the receiver. They would move `length` and `s.binary` to std, but they are getters written in C, which [philosophy](../philosophy.md#non-goals) leaves out; allowing them only in `std:` modules, as a builtin special case, keeps that for users.
 - The ABI of `String` at the FFI boundary (pass as a 16-byte value, or box it in the heap representation; decide when small strings become immediate values).
+- What a C function declared to return `Float` does when it returns a value that is not finite: throw at the boundary, as an operation does, or leave it to the caller.
+- How to keep the repository small as the seed is refreshed (`seed/lerta.ll`, see [bootstrap](../internals.md#bootstrap)): refreshing only at milestones, or keeping the seed outside the history, as with Git LFS or as a release asset.
 - How to hold type information for separate compilation (interface files).
 - The package management approach (npm style vs Go's minimal version selection).
 - How `import 'module' as mod` resolves `mod.name` (in the parser as a qualified name, or in the checker as a member of a module value), and whether philosophy's `import *` should then read as the unqualified form only.
