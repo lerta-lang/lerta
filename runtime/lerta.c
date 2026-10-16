@@ -126,13 +126,24 @@ static void write_trace(void) {
   }
 }
 
-_Noreturn void lerta_exit_with_exception(void) {
+// The prefix, the pending exception's message and its trace, after flushing stdout.
+static void write_exception(const char *prefix) {
   LertaString *message = lerta_exception_message();
   lerta_stdout_flush();
+  write_text(prefix);
   write_string(message);
   write_text("\n");
   write_trace();
+}
+
+_Noreturn void lerta_exit_with_exception(void) {
+  write_exception("");
   lerta_os_exit(1);
+}
+
+_Noreturn void lerta_panic_with_exception(const char *prefix) {
+  write_exception(prefix);
+  lerta_os_abort();
 }
 
 int main(int argc, char **argv) {

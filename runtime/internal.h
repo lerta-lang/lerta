@@ -87,6 +87,8 @@ void lerta_raise_index_out_of_range(void);
 _Noreturn void lerta_exit_with_error(const LertaString *message);
 _Noreturn void lerta_panic(const char *message);
 _Noreturn void lerta_panic_with(const char *prefix, const LertaString *message);
+// Panics with the prefix and the pending exception's message, and its trace.
+_Noreturn void lerta_panic_with_exception(const char *prefix);
 
 // What differs between systems (see docs/internals.md#platforms). Paths and arguments are
 // NUL-terminated UTF-8, and a false or NULL result is a failure.

@@ -124,7 +124,7 @@ void lerta_run_deinit(void *object, void (*deinit)(void *object)) {
   lerta_exception = (LertaException){NULL, NULL};
   deinit(object);
   if (lerta_exception.data != NULL) {
-    lerta_panic_with("deinit threw an exception: ", lerta_exception_message());
+    lerta_panic_with_exception("deinit threw an exception: ");
   }
   lerta_exception = set_aside;
   if (set_aside_trace != NULL) lerta_trace_restore(set_aside_trace);
