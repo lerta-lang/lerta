@@ -149,6 +149,7 @@ ifdef TARGET
 seed:
 	@echo 'make seed does not take TARGET' >&2; exit 2
 else
+# The IR is written into build/seed first, so that a failed dump leaves the seed as it is.
 seed: test-bootstrap
 	rm -rf build/seed
 	mkdir -p build/seed/build
