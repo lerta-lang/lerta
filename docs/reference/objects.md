@@ -100,7 +100,7 @@ const shapes: Shape[] = [Square(side: 2), { name: 'dot', area: -> 0 }]
 print shape.area() for shape in shapes
 ```
 
-- `interface Name` at the top level, followed by an indented block of members, `name: Type`, one per line, declares what a type must have to satisfy it. Its name is in the namespace of types and values, as a class's is.
+- `interface Name` at the top level, followed by an indented block of members, `name: Type`, one per line, declares what a type must have to satisfy it. Its name is in the namespace of types and values, and cannot be that of a builtin type, as a class's.
 - **Generic interfaces.** `interface Source<T>` declares type parameters, which take no bound, and its type is written with as many type arguments, `Source<Int>`. A type satisfies it with the type arguments in the members' types.
 - **`Self`** in the members stands for the type that satisfies the interface: `equals: (Self) -> Bool` is satisfied by a `Point` with `equals: (Point) -> Bool`. An interface whose members name `Self` can only bound type parameters, not be a type of values, since its values could not tell which type `Self` is.
 - A type **satisfies** an interface when it has, for each member, a method, a field or a property of the member's name and of exactly its type. Nothing needs to declare that it does (structural typing). A method may come from an extend in effect where it is checked; one with type parameters of its own has no one type, and satisfies no member. A function member, such as `area: () -> Int`, is satisfied alike by a method and by a field that holds a function. A union satisfies a member by a field that every member of it has, of the member's type, as it is read through the union (see [unions](types.md#unions)).

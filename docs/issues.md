@@ -6,10 +6,6 @@ Each entry says what goes wrong, a minimal program that shows it, and where the 
 
 ## Compiler
 
-### A `const` may take the name of a builtin type
-
-`const Int = 3` is accepted, while `class Int` is rejected as already defined, though types and values share one namespace.
-
 ### An integer literal is not a Float where a `Float?` is expected
 
 `const e: Float? = 1` is rejected with `expected Float?, got Int`, though an integer literal is a Float where a Float is expected; so is `-0 as Float ? 1.0`. The reference does not say whether a `Float?` counts, so this may need deciding first.
