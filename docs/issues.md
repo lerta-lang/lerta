@@ -90,7 +90,6 @@ The program prints `leak: 1 object(s)`. `assign_through` in `compiler/codegen/as
 
 ### Diagnostics
 
-- `const r = d?.die()`, where `die` returns `never`, reports that nil alone does not give the type of the branches of `if`, which names neither `?.` nor `never` (`unify_values` in `compiler/checker/case.lerta`).
 - `print 1e+` reports the literal as `'1e'` (`scan_number` in `compiler/lexer/tokens.lerta`).
 
 ## Runtime
