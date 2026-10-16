@@ -1,7 +1,7 @@
 # Types arrays, maps and sets: their literals, `Map()`, `Set()`, and indexing (of a Binary too).
 import
-  ArrayLiteral, Call, Expression, Identifier, is_spread, Index, MapEntry, MapLiteral, NamedType,
-  Position, Throw
+  ArrayLiteral, Call, Expression, Identifier, Index, is_spread, MapLiteral, NamedType, Position,
+  Throw
 from '../ast'
 import fail from './diagnostics'
 import is_equatable, is_hashable from './equality'
@@ -71,14 +71,10 @@ export const type_of_array = (body: Body, array: ArrayLiteral, expected: Type?) 
     expect_element body, item, expected.element for item in array.elements
     return expected
   const elements = array.elements
-  const gives_value = (item: Expression) -> item is not Throw
   const empty = ->
     const message = 'the type of an empty array must be written, as in `const xs: Int[] = []`'
     fail body.program, array.position, message
-  const first = elements.first()
-  const is_anchor = (item: Expression) -> gives_value(item) and not is_contextual(item)
-  const valued = float_first([item for item in elements when gives_value(item)], (item) -> item)
-  const anchor = elements.find(is_anchor) ? valued.first() ? first ? empty()
+  const anchor = anchor_of(elements) ? empty()
   const anchor_type = type_of(body, anchor)
   const element_type = is_spread(anchor) then (anchor_type as ArrayType!).element else anchor_type
   const element = check_item_type(body.program, element_type, anchor.position, 'an array')
@@ -86,15 +82,35 @@ export const type_of_array = (body: Body, array: ArrayLiteral, expected: Type?) 
     expect_element body, item, element if item != anchor
   ArrayType element
 
+# The item whose type the others take: one that decides its own type rather than taking it from
+# the context, or else one that holds a float literal (see float_first), or else the first; a throw,
+# which gives no value, only if all are. Nil for no items.
+const anchor_of = (items: Expression[]) ->
+  const gives_value = (item: Expression) -> item is not Throw
+  const is_anchor = (item: Expression) -> gives_value(item) and not is_contextual(item)
+  const valued = float_first([item for item in items when gives_value(item)], (item) -> item)
+  return anchor if const anchor = items.find(is_anchor)
+  return anchor if const anchor = valued.first()
+  items.first()
+
 # A spread is checked as the array of its items, whose items must be of the type.
 const expect_element = (body: Body, item: Expression, element: Type) ->
   expect_type body, item, is_spread(item) then ArrayType(element) else element
 
+# The key and the value types come from the expected type if there is one; otherwise each from an
+# anchor among the keys and among the values, as an array's element type does.
 export const type_of_map = (body: Body, map: MapLiteral, expected: Type?) ->
-  const type = expected_map(expected) ? map_type_of_entry(body, map.entries[0])
+  if const type = expected_map(expected)
+    for entry in map.entries
+      expect_type body, entry.key, type.key
+      expect_type body, entry.value, type.value
+    return type
+  const key = anchor_of([entry.key for entry in map.entries])!
+  const value = anchor_of([entry.value for entry in map.entries])!
+  const type = map_type_of_anchors(body, key, value)
   for entry in map.entries
-    expect_type body, entry.key, type.key
-    expect_type body, entry.value, type.value
+    expect_type body, entry.key, type.key if entry.key != key
+    expect_type body, entry.value, type.value if entry.value != value
   type
 
 const expected_map = (expected: Type?) ->
@@ -107,11 +123,11 @@ const expected_set = (expected: Type?) ->
   const map = inner_of(type) as MapType ? return nil
   is_set(map) then map
 
-const map_type_of_entry = (body: Body, entry: MapEntry) ->
-  const key = type_of(body, entry.key)
-  const value = type_of(body, entry.value)
-  check_map_types body.program, key, value, entry.key.position, entry.value.position
-  MapType key, value
+const map_type_of_anchors = (body: Body, key: Expression, value: Expression) ->
+  const key_type = type_of(body, key)
+  const value_type = type_of(body, value)
+  check_map_types body.program, key_type, value_type, key.position, value.position
+  MapType key: key_type, value: value_type
 
 # A call of the builtin `Map` or `Set`, unless the name is taken in the program.
 export const is_builtin_call = (body: Body, callee: Expression, name: String) ->
