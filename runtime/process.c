@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <uv.h>
+
 #include "internal.h"
 
 LERTA_STATIC_STRING(exit_code_out_of_range, "exit code out of range (0 to 255)");
@@ -136,6 +138,15 @@ LertaString *lerta_env(const LertaString *name) {
 }
 
 int64_t lerta_cpu_count(void) { return lerta_os_cpu_count(); }
+
+int64_t lerta_process_id(void) { return uv_os_getpid(); }
+
+// Signal 0 only checks the process. The ID is checked first, since kill takes 0 and the negative
+// IDs for groups of processes. A process that the program may not signal is still running.
+bool lerta_is_running(int64_t id) {
+  if (id <= 0 || id > INT32_MAX) return false;
+  return uv_kill((int)id, 0) != UV_ESRCH;
+}
 
 LertaString *lerta_platform(void) {
   const char *name = lerta_os_platform();

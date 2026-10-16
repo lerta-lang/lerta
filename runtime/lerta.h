@@ -257,6 +257,10 @@ LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, Lert
 LertaString *lerta_platform(void);
 // The number of CPUs that are online, at least 1.
 int64_t lerta_cpu_count(void);
+// The ID of the program's process.
+int64_t lerta_process_id(void);
+// Whether a process with the ID is running.
+bool lerta_is_running(int64_t id);
 // The value of an environment variable, as a Binary, or NULL if it is not set.
 LertaString *lerta_env(const LertaString *name);
 

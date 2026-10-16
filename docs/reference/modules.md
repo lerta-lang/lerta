@@ -66,6 +66,8 @@ export const unit = 1
 | `env(name: String): String?` | The value of an environment variable, or nil if it is not set, including for a name that holds `=` or a NUL byte. Throws a `ValueError`, `the environment variable <name> is not valid UTF-8`, if the value is not. |
 | `platform: String` | The system the program runs on: `'linux'`, `'macos'` or `'windows'`. |
 | `cpu_count: Int` | The number of CPUs that are online when the module runs, at least 1. |
+| `process_id: Int` | The ID of the program's process. |
+| `is_running(id: Int): Bool` | Whether a process with the ID is running, including one that the program may not signal. An ID of 0 or below, or beyond those the system gives, is not. |
 
 ## std:time
 

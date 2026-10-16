@@ -1,5 +1,6 @@
 // The runtime that the compiler compiles once for each kind of build and target, and caches.
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -8,6 +9,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { basename, join } from 'node:path'
 import { compiler, host_libuv, root_dir } from '../lerta.ts'
 import { compare_text, expect_status, expect_success } from '../expect.ts'
@@ -225,16 +227,54 @@ export const cache_checks: Check[] = [
       ),
   },
   {
-    name: 'lerta build ignores a staging directory that a killed build left',
+    name: 'lerta build removes the staging directories that killed builds left',
     wait: wait_for_runtime_name,
     run: async () => {
       const cache = new_cache_dir()
       const name = await cached_runtime_name()
-      mkdirSync(join(cache, `${name}.staging-lerta-killed`))
-      writeFileSync(join(cache, `${name}.staging-lerta-killed`, 'array.o'), '')
+      const staging = (suffix: string) => `${name}.staging-${suffix}`
+      // A process that has ended, whose ID the system is unlikely to give another so soon.
+      const ended = spawnSync(process.execPath, ['-e', '']).pid
+      const kept = [
+        staging(`${process.pid}-lerta-running`),
+        staging('lerta-other'),
+        staging(`-${ended}-lerta-other`),
+        `other.staging-${ended}-lerta-other`,
+      ]
+      for (const dir of [staging(`${ended}-lerta-killed`), ...kept]) {
+        mkdirSync(join(cache, dir))
+        writeFileSync(join(cache, dir, 'array.o'), '')
+      }
+      writeFileSync(join(cache, staging(`${ended}-file`)), '')
       const { reasons } = await build_hello_with({ LERTA_CACHE_DIR: cache })
       if (reasons.length > 0) return reasons
-      return expect_cached_runtime(cache, name, 'debug', '.+')
+      return [
+        ...expect_cached_runtime(cache, name, 'debug', '.+'),
+        ...expect_left('the cache', [name, ...kept].sort(), readdirSync(cache)),
+      ]
+    },
+  },
+  {
+    name: 'lerta build goes on when it cannot remove a staging directory that a killed build left',
+    wait: wait_for_runtime_name,
+    run: async () => {
+      const cache = new_cache_dir()
+      const name = await cached_runtime_name()
+      const ended = spawnSync(process.execPath, ['-e', '']).pid
+      const locked = join(cache, `${name}.staging-${ended}-lerta-killed`, 'locked')
+      mkdirSync(locked, { recursive: true })
+      writeFileSync(join(locked, 'array.o'), '')
+      chmodSync(locked, 0o500)
+      try {
+        const { reasons } = await build_hello_with({ LERTA_CACHE_DIR: cache })
+        if (reasons.length > 0) return reasons
+        return [
+          ...(existsSync(locked) ? [] : ['the staging directory was removed, so nothing failed']),
+          ...expect_cached_runtime(cache, name, 'debug', '.+'),
+        ]
+      } finally {
+        chmodSync(locked, 0o700)
+      }
     },
   },
   {

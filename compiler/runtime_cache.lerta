@@ -1,7 +1,7 @@
 # Compiles the runtime, with libuv, once for each kind of build, and keeps its object files in a
 # cache directory, so that a build only links them (see docs/reference/compiler.md).
-import is_file, make_dir, read_file, remove_tree, rename, write_file from 'std:io'
-import env, platform, run from 'std:process'
+import is_file, list_dir, make_dir, read_file, remove_tree, rename, write_file from 'std:io'
+import env, is_running, platform, process_id, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
 import run_clang_jobs from './clang_jobs'
 import build_flags from './clang_flags'
@@ -27,12 +27,14 @@ export struct CachedRuntime
 
 # The runtime for a build with `optimize`, for `target` or else the host, compiled into the cache
 # first if it does not have it; nil if clang fails, after printing its messages. `temp_dir` is the
-# build's own temporary directory, whose name no other build has.
+# build's own temporary directory.
 export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String) ->
   reject_path_target target if target
   const clang_version = await clang_version_text() ? return nil
   const libuv = libuv_build(target)
-  const dir = join(cache_dir(), cached_runtime_name(optimize, target, clang_version, libuv))
+  const cache = cache_dir()
+  const runtime_name = cached_runtime_name(optimize, target, clang_version, libuv)
+  const dir = join(cache, runtime_name)
   const objects = [join(dir, name) for name in object_names(libuv)]
   const files = [join(dir, name) for name in cached_file_names(libuv)]
   const runtime = ->
@@ -51,7 +53,8 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
     # pull them from under a build that is linking with them.
     return runtime() if is_complete(files)
     throw CompileError(message: "the cached runtime #{dir} is incomplete: remove it")
-  const staging_dir = "#{dir}.staging-#{basename(temp_dir)}"
+  remove_abandoned_staging cache, runtime_name
+  const staging_dir = "#{dir}#{STAGING_INFIX}#{process_id}-#{basename(temp_dir)}"
   make_dir staging_dir
   const compiled = try
     await compile_runtime(optimize, target, libuv, staging_dir, temp_dir)
@@ -63,6 +66,26 @@ export const cached_runtime = (optimize: Bool, target: String?, temp_dir: String
     return nil
   move_into_place staging_dir, dir, files
   runtime()
+
+# Where a build compiles the runtime before it moves it into place:
+# `<dir>.staging-<process ID>-<name of the build's temporary directory>`. The ID tells a later build
+# whether the build has ended, and the temporary directory's name, which no other build has, keeps
+# the name unique.
+const STAGING_INFIX = '.staging-'
+
+# Removes the staging directories of the runtime `name` in `cache` that builds killed while they
+# compiled it left: those of a process that is no longer running.
+const remove_abandoned_staging = (cache: String, name: String) ->
+  const prefix = "#{name}#{STAGING_INFIX}"
+  for entry in list_dir(cache)
+    const suffix = entry.without_prefix(prefix) ? continue
+    const id = suffix.split('-')[0].parse_int() ? continue
+    continue if is_running(id)
+    try
+      remove_tree join(cache, entry)
+    catch _
+      # Another build may have removed it first, and one left in place only takes space.
+      continue
 
 # What `clang --version` prints, or nil if clang fails.
 const clang_version_text = ->
