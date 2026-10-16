@@ -4,9 +4,11 @@ import
   EnumDeclaration, Extend, Extern, Identifier, Import, ImportName, InterfaceDeclaration,
   MemberDeclaration, Position, Statement, StringLiteral, TypeAlias, TypeDeclaration, UnionTypeName
 from '../ast'
-import breaking, choice, Doc, indent, join, line_feed, separated, text, token from './doc'
+import
+  breaking, choice, Doc, indent, join, line_feed, one_line, rule, separated, text, token
+from './doc'
 import named_type, type_doc, type_parameters from './print_type'
-import LONG_LISTS, MULTI_LINE_LITERALS from './rules'
+import CONSTRUCTOR_ARGUMENTS, LONG_LISTS, MULTI_LINE_LITERALS from './rules'
 import expression_doc, string_doc from './print_expression'
 import value_after from './print_literal'
 import Context, Item, keyword, lines_of_items, removed_type from './printing'
@@ -20,8 +22,10 @@ export const declaration_doc = (statement: Statement, context: Context) ->
         keyword(word, statement.position)
         name_doc(statement.name)
         type_parameters(statement.type_params)
-      head.push join([text(': '), named_type(satisfies)]) if const satisfies = statement.satisfies
-      join [join(head), members_doc(statement.members, context)]
+      const interface_type = statement.satisfies
+      const satisfies =
+        interface_type then join([text(': '), named_type(interface_type)]) else text('')
+      type_declaration_doc join(head), satisfies, statement.members, context
     when InterfaceDeclaration
       const head = join(
         [
@@ -86,6 +90,22 @@ export const exported = (is_exported: Bool, at: Position, context: Context) ->
   text 'export '
 
 const name_doc = (name: Identifier) -> token(name.name, name.position)
+
+# The members in `(...)` on the line of the declaration, if all are constructor arguments and fit,
+# and in a block otherwise.
+const type_declaration_doc = (
+  head: Doc, satisfies: Doc, members: MemberDeclaration[], context: Context
+) ->
+  const block = join([satisfies, members_doc(members, context)])
+  const all_arguments = members.all((member) -> member.value == nil or member.has_default)
+  return join([head, block]) if members.length == 0 or not all_arguments
+  const arguments = separated([member_doc(member, context) for member in members], text(', '))
+  const in_parentheses =
+    rule(CONSTRUCTOR_ARGUMENTS, join([text('('), arguments, text(')'), satisfies]))
+  # The rule marks where the parentheses were left out, as the block may differ from the source
+  # only there.
+  const marked_block = join([rule(CONSTRUCTOR_ARGUMENTS, text('')), block])
+  join [head, one_line(in_parentheses, marked_block)]
 
 const members_doc = (members: MemberDeclaration[], context: Context) ->
   return text('') if members.length == 0

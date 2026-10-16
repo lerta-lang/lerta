@@ -35,6 +35,8 @@ export struct Choice
   # What must fit for `flat`, if not all of it: the start of `flat`, whose rest decides its own
   # breaks.
   measured: Doc? = default nil
+  # Whether all of `flat` must fit on the line, for a form that cannot go on to the lines below.
+  one_line = default false
 
 # A part whose form the rule of the style decides.
 export struct Rule
@@ -127,7 +129,7 @@ class Printer
         # Mid-line, a comment not printed yet would end the line inside `flat`.
         const from_line = @pending_indent then 0 else @source_line
         const measured = doc.measured ? doc.flat
-        const fitting = fits(measured, room, indent, steps, @comment_lines, from_line)
+        const fitting = fits(measured, room, indent, steps, @comment_lines, from_line, doc.one_line)
         if not fitting
           @start_rule breaking_rule, steps if const breaking_rule = doc.breaking_rule
         steps.push Work(indent, doc: fitting then doc.flat else doc.broken)
@@ -250,7 +252,8 @@ struct Measured
 # `flat` holds it, which breaks there itself; from `from_line` mid-line, as a comment not printed
 # yet would go before the first text.
 const fits = (
-  flat: Doc, room: Int, indent: Int, steps: Step[], comment_lines: Map<Int, Bool>, from_line: Int
+  flat: Doc, room: Int, indent: Int, steps: Step[], comment_lines: Map<Int, Bool>, from_line: Int,
+  one_line: Bool
 ) ->
   var left = room
   const pending = [Measured(doc: flat, depth: indent, nested: false)]
@@ -295,6 +298,7 @@ const fits = (
         if in_flat and not has_text
           left = WIDTH - depth * INDENT_WIDTH
         else
+          return false if in_flat and one_line
           return not in_flat or not comment_inside()
       when Indent then pending.push(inner(doc.doc, depth + 1, nested))
       when Concat
@@ -341,6 +345,9 @@ export const breaking = (style_rule: StyleRule, flat: Doc, broken: Doc): Doc ->
 # `rest` decides its own breaks.
 export const breaking_after = (style_rule: StyleRule, start: Doc, rest: Doc, broken: Doc): Doc ->
   Choice broken, flat: join([start, rest]), breaking_rule: style_rule, measured: start
+
+# A choice whose flat form must fit on the line as a whole.
+export const one_line = (flat: Doc, broken: Doc): Doc -> Choice(flat, broken, one_line: true)
 
 export const rule = (style_rule: StyleRule, doc: Doc): Doc -> Rule(doc, rule: style_rule)
 

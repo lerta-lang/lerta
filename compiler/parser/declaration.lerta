@@ -93,19 +93,36 @@ const parse_import_name = (tokens: TokenStream) ->
   expect_name tokens, "a name after 'as'"
   ImportName name, alias: parse_identifier(tokens)
 
-# `class Name` or `struct Name`, or `class Name<T>` with type parameters, and `: Interface` for an
-# interface it satisfies, followed by an indented block of members, one per line, which may be left
-# out after an interface.
+# `class Name` or `struct Name`, or `class Name<T>` with type parameters, then its constructor
+# arguments in parentheses, and `: Interface` for an interface it satisfies. Without parentheses,
+# an indented block of members, one per line, follows, which may be left out after an interface.
 export const parse_type_declaration = (tokens: TokenStream) ->
   const token = tokens.next()
   const name = parse_identifier(tokens)
   const type_params = parse_type_parameters(tokens)
+  const has_arguments = tokens.peek().kind == '('
+  const arguments = has_arguments then parse_constructor_arguments(tokens)
   const satisfies = tokens.accept(':') then parse_named_type(tokens)
-  const has_body = satisfies == nil or tokens.peek_at(1).kind == INDENT
-  const members: MemberDeclaration[] = has_body then parse_members(tokens) else []
+  const block_follows = tokens.peek_at(1).kind == INDENT
+  if arguments != nil and block_follows
+    tokens.fail token_position(tokens.peek_at(2)), 'write the members in () or in a block, not both'
+  const has_body = arguments == nil and (satisfies == nil or block_follows)
+  const members = has_body then parse_members(tokens) else arguments ? []
   const is_struct = token.kind == 'struct'
   const position = token_position(token)
   TypeDeclaration name, type_params, members, is_struct, position, satisfies
+
+# The members in `(...)`, each a constructor argument.
+const parse_constructor_arguments = (tokens: TokenStream) ->
+  const open = tokens.next()
+  const members = tokens.parse_list(')', -> parse_member(tokens))
+  if members.length == 0
+    tokens.fail token_position(open), 'write at least one constructor argument in ()'
+  for member in members
+    if member.value != nil and not member.has_default
+      const message = 'only constructor arguments, `name: Type` or `name = default value`, go in ()'
+      tokens.fail member.position, message
+  members
 
 # `interface Name`, or `interface Name<T>`, followed by an indented block of members, one per line,
 # written as a class's; the checker tells which an interface can have.
