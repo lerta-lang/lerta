@@ -32,8 +32,7 @@ static bool same_key(const LertaMap *map, int64_t a, int64_t b) {
 }
 
 static bool keys_are_references(const LertaMap *map) {
-  return map->key_kind != LERTA_INT_KEYS && map->key_kind != LERTA_BYTE_KEYS &&
-         !(map->key_kind & LERTA_INTEGER_KEYS);
+  return map->key_kind != LERTA_INT_KEYS && !(map->key_kind & LERTA_INTEGER_KEYS);
 }
 
 static size_t value_size(const LertaMap *map) { return (size_t)lerta_item_size(map->value_kind); }
@@ -166,7 +165,6 @@ void lerta_map_remove(LertaMap *map, int64_t key) {
 
 static LertaItemKind key_item_kind(const LertaMap *map) {
   if (keys_are_references(map)) return LERTA_REFERENCE_ITEMS;
-  if (map->key_kind == LERTA_BYTE_KEYS) return LERTA_BYTE_ITEMS;
   if (map->key_kind & LERTA_INTEGER_KEYS) return (LertaItemKind)map->key_kind;
   return LERTA_PLAIN_ITEMS;
 }

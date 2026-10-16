@@ -9,7 +9,6 @@ int64_t lerta_item_size(LertaItemKind kind) {
   if (kind & LERTA_INTEGER_ITEMS) return kind & LERTA_ITEM_BYTES;
   switch (kind) {
     case LERTA_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
-    case LERTA_BYTE_ITEMS: return 1;
     case LERTA_NO_ITEMS: return 0;
     default: return 8;
   }
@@ -40,7 +39,6 @@ static uint8_t *item_at(const LertaArray *array, int64_t index) {
 int64_t lerta_word_item(const LertaArray *array, int64_t index) {
   LertaItemKind kind = array->item_kind;
   const uint8_t *item = item_at(array, index);
-  if (kind == LERTA_BYTE_ITEMS) return *item;
   int64_t word;
   if (!(kind & LERTA_INTEGER_ITEMS)) {
     memcpy(&word, item, sizeof word);

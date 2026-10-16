@@ -40,14 +40,12 @@ typedef struct {
 // data, a reference, then its itab. LERTA_NO_ITEMS take no bytes, as the values of a set, a map
 // without values, do. An integer narrower than 8 bytes, or a Bool, is LERTA_INTEGER_ITEMS with its
 // size in bytes in LERTA_ITEM_BYTES, and LERTA_SIGNED_ITEMS if it is signed, and takes that size.
-// LERTA_BYTE_ITEMS, an unsigned byte, is passed only by the seed's IR, and goes at its next refresh
-// (see docs/internals.md#bootstrap).
 typedef enum {
   LERTA_PLAIN_ITEMS,
   LERTA_REFERENCE_ITEMS,
   LERTA_INTERFACE_ITEMS,
-  LERTA_BYTE_ITEMS,
-  LERTA_NO_ITEMS,
+  // 3 was the kind of bytes, before the integer items; 4 stays, as the seed's IR passes it.
+  LERTA_NO_ITEMS = 4,
   // The mask and the flags of a kind, not kinds.
   LERTA_ITEM_BYTES = 0x0F,
   LERTA_INTEGER_ITEMS = 0x10,
@@ -77,14 +75,12 @@ typedef struct {
 
 // How a map treats its keys (see docs/internals.md#maps). Int keys are words, an Int, a UInt64, a
 // Float or an enum, compared as they are; so are integer keys, LERTA_INTEGER_KEYS with the size and
-// the sign of the integer items that `keys()` gives, as in LertaItemKind. LERTA_BYTE_KEYS, keys of
-// unsigned bytes, is passed only by the seed's IR, and goes at its next refresh.
+// the sign of the integer items that `keys()` gives, as in LertaItemKind.
 typedef enum {
   LERTA_INT_KEYS,
   LERTA_STRING_KEYS,
   LERTA_OBJECT_KEYS,
   LERTA_VALUE_KEYS,
-  LERTA_BYTE_KEYS,
   LERTA_INTEGER_KEYS = LERTA_INTEGER_ITEMS
 } LertaKeyKind;
 
