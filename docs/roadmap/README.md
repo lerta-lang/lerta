@@ -34,7 +34,6 @@ An order within one area is stated in its file.
 
 - `examples/fizzbuzz.lerta` writes `else i.to_string()` because the arms of a `case` must have one type for now. Once unions and `print` of a union of `Stringable` types work, change it to `else i`.
 - The documents: a tour of the language of working examples only, a summary of the grammar, the builtin methods in [builtins](../reference/builtins.md) with their signatures and a line each rather than a list of names, and the longest items of the reference (as of generic classes in [objects](../reference/objects.md)) split under headings.
-- The error for a type that cannot be extended lists the kinds that can (`compiler/checker/extend_declarations.lerta`) apart from `EXTENDABLE_KINDS`, and leaves out `Float`: derive the list from it.
 
 ## Open questions
 

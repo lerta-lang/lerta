@@ -29,6 +29,24 @@ const EXTENDABLE_KINDS: TypeKind[] = [
   OBJECT
 ]
 
+# Names EXTENDABLE_KINDS for the error, the integer types together. Interfaces are added by hand:
+# declare_interface_extend takes their extends before the check of the kinds.
+const extendable_kinds_text = ->
+  const names: String[] = []
+  for kind in EXTENDABLE_KINDS
+    const is_integer_kind = INTEGER_KINDS.contains(kind)
+    continue if is_integer_kind and names.contains('the integer types')
+    const name =
+      case
+        when is_integer_kind then 'the integer types'
+        when kind == ARRAY then 'arrays'
+        when kind == MAP then 'maps, sets'
+        when kind == ITER then 'Iters'
+        when kind == OBJECT then 'classes, structs'
+        else kind.to_string()
+    names.push name
+  "#{names.join(', ')} and interfaces"
+
 # Puts the extend's methods in effect in the module, and adds them to its functions, which check
 # their bodies with `@` as the receiver, or makes them generic methods, whose instances are
 # checked so.
@@ -41,8 +59,7 @@ export const declare_extend = (shared: Shared, statement: Extend) ->
     return declare_interface_extend(shared, statement, written, resolver)
   const receiver = resolve(program, resolver, written)
   if not is_one_of_kinds(receiver, EXTENDABLE_KINDS)
-    const values = 'the integer types, String, Float, Float32, Bool, Binary, arrays, maps, Iters'
-    const so_far = "only #{values}, classes, structs and interfaces can be so far"
+    const so_far = "only #{extendable_kinds_text()} can be so far"
     const message = "#{format_type(receiver)} cannot be extended; #{so_far}"
     fail program, written.position, message
   reject_unused_type_parameters program, type_params, receiver
