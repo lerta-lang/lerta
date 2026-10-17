@@ -285,6 +285,10 @@ extend<T> Iterable<T>
     for x in @
       return x if test(x)
     nil
+  # The item whose key is the least, the first of those with equal keys, or nil if there is none.
+  min_by = <K: Comparable>(key: (T) -> K): T? -> extreme_by(@iter(), key, LESS)
+  # The item whose key is the greatest, the first of those with equal keys, or nil if there is none.
+  max_by = <K: Comparable>(key: (T) -> K): T? -> extreme_by(@iter(), key, GREATER)
   # It stops reading its source after them, which a comprehension could not.
   take = (n: Int): Iter<T> ->
     const source = @iter()
@@ -330,6 +334,24 @@ extend<T> Set<T>
   bit_xor = (other: Set<T>): Set<T> -> @ - other | (other - @)
   # Whether the other has every item of this set.
   is_subset = (other: Set<T>): Bool -> @iter().all((item) -> other.has(item))
+
+# The item whose key compares with every other key as `order` or equal, the first of such ones, or
+# nil if there is none (see min_by).
+const extreme_by = <T, K: Comparable>(items: Iter<T>, key: (T) -> K, order: Ordering): T? ->
+  var found: T?
+  var found_key: K?
+  for x in items
+    const k = key(x)
+    if found_key == nil or k.compare(found_key) == order
+      found = x
+      found_key = k
+  found
+
+extend<T: Comparable> Iterable<T>
+  # The least item, the first of equal ones, or nil if there is none.
+  min = (): T? -> @min_by((x) -> x)
+  # The greatest item, the first of equal ones, or nil if there is none.
+  max = (): T? -> @max_by((x) -> x)
 
 # Digits, an optional fraction and an optional exponent, after an optional `-` (see parse_float).
 const is_decimal_number = (bytes: Binary) ->
