@@ -13,7 +13,6 @@ The planned design of classes and structs, interfaces, generics and equality.
 
 What is implemented, interfaces as bounds and as types of values, is in [the reference](../reference/objects.md#interfaces). Planned:
 
-- Unions converted to interface values, each member with its itab, chosen when the value is converted.
 - Values of `Int`, `Bool`, `Byte` and enums in interface values, which are not references: the itab then tells whether the data is one.
 
 ## Generics
