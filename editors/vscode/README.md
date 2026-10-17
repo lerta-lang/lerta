@@ -6,10 +6,12 @@ It runs the language server of the compiler, `lerta lsp` (see [the reference](..
 
 ## Installing
 
-Link this directory into the extensions directory and reload VS Code:
+Link this directory into the extensions directory, from the repository root, and restart VS Code:
 
 ```
 ln -s "$PWD/editors/vscode" ~/.vscode/extensions/lerta
 ```
 
-Run it from the repository root.
+The link keeps the extension as the repository has it; the server is the `lerta` command that `lerta.path` names, so rebuild `bin/lerta` (`make`) to have its changes.
+
+VS Code registers an extension in `~/.vscode/extensions/extensions.json`. It ignores a linked one that is not there once it has been uninstalled, which it lists in `~/.vscode/extensions/.obsolete` and marks removed again at each start. To install it again then, with VS Code closed, remove the entry `lerta.lerta-0.0.1` from `.obsolete` and add one for it to `extensions.json`, as the others are written, with `"identifier": {"id": "lerta.lerta"}`, `"version": "0.0.1"`, the link's path as its `location` and `"relativeLocation": "lerta"`.
