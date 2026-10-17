@@ -163,11 +163,45 @@ static int64_t read_handle(void *file, uint8_t *buffer, int64_t size) {
   return ReadFile(file, buffer, chunk, &count, NULL) ? (int64_t)count : -1;
 }
 
+enum { CONSOLE_READ_UNITS = 8192 };
+
+// A high surrogate that the last read from a console ended in, which the next read completes, as
+// write_console keeps the start of a character, and whether the next read starts a line, as a
+// console gives a line longer than a read in pieces; only the thread that reads stdin touches them.
+static wchar_t console_high_surrogate = 0;
+static bool console_line_start = true;
+
+// A console is read as UTF-16, whatever its code page, and given as UTF-8, as write_console writes
+// to it: as many units as fit in `size` as UTF-8, at most 3 bytes each. A line that begins with
+// Ctrl-Z ends the input, as ReadFile reads it.
+static int64_t read_console(HANDLE console, uint8_t *buffer, int64_t size) {
+  wchar_t wide[CONSOLE_READ_UNITS];
+  int64_t fitting = size / 3 < CONSOLE_READ_UNITS ? size / 3 : CONSOLE_READ_UNITS;
+  for (;;) {
+    int start = 0;
+    if (console_high_surrogate != 0) {
+      wide[start++] = console_high_surrogate;
+      console_high_surrogate = 0;
+    }
+    DWORD count;
+    if (!ReadConsoleW(console, wide + start, (DWORD)(fitting - start), &count, NULL)) return -1;
+    if (start == 0 && count == 0) return 0;
+    if (console_line_start && wide[0] == 0x1A) return 0;
+    int total = start + (int)count;
+    console_line_start = wide[total - 1] == L'\n';
+    if (IS_HIGH_SURROGATE(wide[total - 1])) console_high_surrogate = wide[--total];
+    if (total == 0) continue;
+    int length = WideCharToMultiByte(CP_UTF8, 0, wide, total, (char *)buffer, (int)size, NULL, NULL);
+    return length > 0 ? length : -1;
+  }
+}
+
 // A pipe whose writer has closed it fails with ERROR_BROKEN_PIPE, which is its end; a program
 // without stdin reads it as empty, as on POSIX.
 int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size) {
   HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
   if (input == NULL || input == INVALID_HANDLE_VALUE) return 0;
+  if (is_console(input)) return read_console(input, buffer, size);
   int64_t count = read_handle(input, buffer, size);
   return count < 0 && GetLastError() == ERROR_BROKEN_PIPE ? 0 : count;
 }
