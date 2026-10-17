@@ -3,7 +3,7 @@
 # (see narrowable).
 import
   BinaryOperation, Condition, Expression, Identifier, If, IsTest, Member, NamedType, NilLiteral,
-  Statement, UnaryOperation
+  Statement, Try, UnaryOperation
 from '../ast'
 import FieldPath, narrowable from './narrowable'
 import Local, PathView from './scopes'
@@ -62,8 +62,16 @@ const nil_tested = (left: Expression, right: Expression) ->
 export const ends_with_jump = (statements: Statement[], is_never: (Expression) -> Bool): Bool ->
   return false if statements.length == 0
   const last = statements.last()!
+  const jumps = (block: Statement[]) -> ends_with_jump(block, is_never)
   if last is If
-    ends_with_jump(last.then_body, is_never) and ends_with_jump(last.else_body, is_never)
+    jumps(last.then_body) and jumps(last.else_body)
+  # A try statement is typed void, not never, so whether it jumps is read from its blocks: the block
+  # and every catch, or a finally, which can end only with a throw.
+  else if last is Try
+    const blocks = [last.body]
+    blocks.push clause.body for clause in last.catches
+    const finally_body = last.finally_body
+    blocks.all(jumps) or (finally_body != nil and jumps(finally_body))
   else
     const expression = last as Expression ? return false
     is_never expression

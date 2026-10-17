@@ -58,6 +58,7 @@ These apply when a value in statement position is not captured.
 - An [`Iter`](types.md#iter) (`xs.map(f)`) → error "an Iter does nothing until it is consumed".
 - A [`Promise`](functions.md#functions-that-await) (`fetch('a')`) → error "a Promise must be awaited".
 - A call, an `await`, or an expression with no value such as a `case` whose arms are calls to `void` functions → allowed.
+- A `try` → its blocks are checked as statements, as the branches of an `if` are, so the last statement of its block and of each catch is checked by these rules.
 
 ## Unused names
 

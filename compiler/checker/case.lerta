@@ -57,17 +57,29 @@ export const type_of_if = (body: Body, if_expression: If, expected: Type?): Type
   const unify = unify_unless_void(body, if_expression, description)
   type_of_branches body, branches, expected, unify
 
+# A try that is a statement gives no value: its blocks are checked as statements, as an if's
+# branches are, so that the values they end with are discarded by the same rules.
+export const check_try_statement = (body: Body, try_expression: Try) ->
+  const { catches, finally_body } = try_expression
+  check_block body, try_expression.body, nothing, nothing
+  check_block body, clause.body, catch_entry(body, clause), nothing for clause in catches
+  check_block body, finally_body, nothing, nothing if finally_body
+  body.facts.types[try_expression] = void_type
+
 export const type_of_try = (body: Body, try_expression: Try, expected: Type?) ->
   const branches = [Branch(statements: try_expression.body, enter: nothing)]
   for clause in try_expression.catches
-    const caught = caught_type(body, clause)
-    const define = -> define_local(body, Local(identifier: clause.name, type: caught))
-    branches.push Branch(statements: clause.body, enter: define)
+    branches.push Branch(statements: clause.body, enter: catch_entry(body, clause))
   const unify = unify_unless_void(body, try_expression, 'the values of try and catch')
   const type = type_of_branches(body, branches, expected, unify)
   if const finally_body = try_expression.finally_body
     check_block body, finally_body, nothing, nothing
   type
+
+# What entering a catch does: it defines the name of the exception it takes.
+const catch_entry = (body: Body, clause: Catch) ->
+  const caught = caught_type(body, clause)
+  -> define_local(body, Local(identifier: clause.name, type: caught))
 
 const caught_type = (body: Body, clause: Catch): Type ->
   const error = std_interface(body.shared, 'Error', clause.position).type
