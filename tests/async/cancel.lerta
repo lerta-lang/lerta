@@ -1,0 +1,101 @@
+# A cancel reaches the deepest body that a promise waits for, which a CancelledError throws in,
+# through its finally blocks, and stops the work it waits for; a promise cancelled and dropped ends
+# nothing.
+import Deferred from 'std:async'
+import read_file, write_file from 'std:io'
+import run from 'std:process'
+import sleep, time from 'std:time'
+
+const started = time()
+
+const outcome = <T>(promise: Promise<T>) ->
+  try
+    "#{await promise}"
+  catch error: CancelledError
+    error.message
+
+const nap = (seconds: Float) ->
+  try
+    await sleep(seconds)
+    'woke'
+  finally
+    print 'nap cleaned up'
+const inner = nap(5)
+const outer = -> await inner
+const waiting = outer()
+await sleep(0.01)
+waiting.cancel()
+print await outcome(waiting)
+
+# A body whose promise is settled but which has not resumed yet throws once it does.
+const gate = Deferred<Int>()
+const resuming = -> "#{await gate.promise()}"
+const late = resuming()
+gate.resolve 1
+late.cancel()
+print await outcome(late)
+# So does one whose promise is rejected, the error of which is dropped then.
+const failing_gate = Deferred<Int>()
+const failing = -> "#{await failing_gate.promise()}"
+const failed = failing()
+failing_gate.reject ValueError(message: 'failed')
+failed.cancel()
+print await outcome(failed)
+
+const deferred = Deferred<Int>()
+const deferred_promise = deferred.promise()
+deferred_promise.cancel()
+print await outcome(deferred_promise)
+
+write_file('big.txt', 'x'.binary).cancel()
+await write_file('a.txt', 'a'.binary)
+const reading = -> (await read_file('a.txt')).length
+const read = reading()
+read.cancel()
+print await outcome(read)
+
+
+# A body may take the CancelledError and give a value; a second cancel finds it settled.
+const stubborn = ->
+  try
+    await sleep(5)
+    'slept'
+  catch _: CancelledError
+    'stayed'
+const staying = stubborn()
+staying.cancel()
+staying.cancel()
+print await outcome(staying)
+
+# A promise that two bodies await is cancelled for both.
+const shared = nap(5)
+const first = -> await shared
+const second = -> await shared
+const first_waiting = first()
+const second_waiting = second()
+first_waiting.cancel()
+print await outcome(first_waiting)
+print await outcome(second_waiting)
+
+# The output of a program whose wait is cancelled is not given.
+const output: Byte[] = []
+const capturing = -> await run('print_after', ['0', 'captured'], output)
+const captured = capturing()
+captured.cancel()
+print await outcome(captured)
+await sleep(0.5)
+print output.length
+
+# Settled and resumed ones are not changed.
+const done = nap(0)
+print await done
+done.cancel()
+print await outcome(done)
+
+sleep(5).cancel()
+print time() - started < 4
+
+# The program run goes on, printing after this one has ended; only the wait for it ends.
+const running = run('print_after', ['1', 'printed'])
+running.cancel()
+print await outcome(running)

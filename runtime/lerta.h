@@ -252,6 +252,13 @@ bool lerta_promise_wait(LertaPromise *promise, void *coroutine);
 void *lerta_promise_slot(LertaPromise *promise);
 void lerta_promise_resolve(LertaPromise *promise);
 void lerta_promise_reject(LertaPromise *promise);
+// As lerta_promise_wait and lerta_promise_result, for the body of a function that awaits, whose own
+// promise is `own`: they record what it waits for, which cancel follows, and the result throws a
+// CancelledError instead if the body's promise has been cancelled meanwhile.
+bool lerta_promise_wait_in(LertaPromise *promise, void *coroutine, LertaPromise *own);
+void *lerta_promise_result_in(LertaPromise *promise, LertaPromise *own);
+// Cancels the work that the promise waits for (see async.c); nothing if it is settled.
+void lerta_promise_cancel(LertaPromise *promise);
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
 // A promise without a value that lerta_promise_fire resolves, unless it is settled already.
@@ -360,7 +367,8 @@ typedef enum {
   LERTA_WEAK_ERROR,
   LERTA_IO_ERROR,
   LERTA_VALUE_ERROR,
-  LERTA_INIT_ERROR
+  LERTA_INIT_ERROR,
+  LERTA_CANCELLED_ERROR
 } LertaErrorKind;
 
 // Throws an error of the kind with the message, borrowed (see docs/internals.md#exceptions): the

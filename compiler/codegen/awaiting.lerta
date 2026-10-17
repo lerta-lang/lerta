@@ -57,8 +57,9 @@ export const emit_await_owned = (g: Generator, promise: String, value: Type) ->
 const emit_await = (g: Generator, promise: String, value: Type) ->
   const ir = g.ir
   const handle = g.coroutine!.handle
-  const args = "ptr #{promise}, ptr #{handle}"
-  const is_pending = call_runtime(ir, 'i1 @lerta_promise_wait(ptr, ptr)', args)
+  # The body's own promise is given too, through which a cancel of it reaches what it waits for.
+  const args = "ptr #{promise}, ptr #{handle}, ptr %promise"
+  const is_pending = call_runtime(ir, 'i1 @lerta_promise_wait_in(ptr, ptr, ptr)', args)
   const wait_label = ir.fresh_label('await.wait')
   const settled_label = ir.fresh_label('await.settled')
   ir.emit "br i1 #{is_pending}, label %#{wait_label}, label %#{settled_label}"
@@ -66,7 +67,8 @@ const emit_await = (g: Generator, promise: String, value: Type) ->
   emit_wait g
   ir.emit "br label %#{settled_label}"
   ir.start_block settled_label
-  const slot = call_runtime(ir, 'ptr @lerta_promise_result(ptr)', "ptr #{promise}")
+  const result_args = "ptr #{promise}, ptr %promise"
+  const slot = call_runtime(ir, 'ptr @lerta_promise_result_in(ptr, ptr)', result_args)
   emit_exception_check g
   const result =
     returns_nothing(value) then '' else ir.assign("load #{ir_type(value)}, ptr #{slot}")

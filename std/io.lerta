@@ -44,6 +44,9 @@ export class Reader
   chunk = ''.binary
   start = 0
   reading = false
+  # The pieces that the read under way has sliced out of the chunks it went past, kept here rather
+  # than in it, so that a read that throws or is cancelled leaves them for the next.
+  taken: Binary[] = []
 
   # The next line, without its "\n" and a "\r" before it, or nil at the end.
   read_line = -> await @exclusive(-> await @line())
@@ -59,6 +62,7 @@ export class Reader
   exclusive = <T>(read: () -> Promise<T>): Promise<T> ->
     throw ValueError(message: 'a Reader is read by another read that has not ended') if @reading
     @reading = true
+    @put_back_taken()
     try
       await read()
     finally
@@ -72,28 +76,39 @@ export class Reader
     @start = 0
     true
 
+  # What a cancelled read took goes back before the rest of the chunk.
+  put_back_taken = ->
+    return if @taken.length == 0
+    @taken.push @chunk.slice(@start, @chunk.length)
+    @chunk = @taken_joined()
+    @start = 0
+
+  taken_joined = ->
+    const bytes = joined(@taken)
+    @taken = []
+    bytes
+
   # The pieces of a line, sliced out of the chunks it crosses, are joined once it ends.
   line = ->
-    const pieces: Binary[] = []
     while await @fill()
       var end = @start
       end += 1 while end < @chunk.length and @chunk[end] != "\n"
-      pieces.push @chunk.slice(@start, end)
+      @taken.push @chunk.slice(@start, end)
       if end < @chunk.length
         @start = end + 1
-        return ended_line_text(joined(pieces))
+        return ended_line_text(@taken_joined())
       @start = @chunk.length
-    return nil if pieces.length == 0
-    utf8_line joined(pieces)
+    return nil if @taken.length == 0
+    utf8_line @taken_joined()
 
   part = (count: Int) ->
     return nil if not await @fill()
-    const pieces = [@take(count)]
-    var taken = pieces[0].length
+    @taken.push @take(count)
+    var taken = @taken[0].length
     while taken < count and await @fill()
-      pieces.push @take(count - taken)
-      taken += pieces.last()!.length
-    joined pieces
+      @taken.push @take(count - taken)
+      taken += @taken.last()!.length
+    @taken_joined()
 
   # Up to `count` bytes of the chunk, from where it is read.
   take = (count: Int) ->

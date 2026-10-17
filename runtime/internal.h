@@ -35,6 +35,12 @@ void lerta_release_item(LertaItemKind kind, const void *item);
 // is extended by its sign, as the generated code widens it.
 int64_t lerta_word_item(const LertaArray *array, int64_t index);
 
+// What stops the work that settles a promise, which rejects it with a CancelledError, as
+// lerta_promise_reject_cancelled does; it is given `context`.
+typedef void (*LertaCancel)(void *context);
+void lerta_promise_on_cancel(LertaPromise *promise, LertaCancel cancel, void *context);
+void lerta_promise_reject_cancelled(LertaPromise *promise);
+
 // The event loop's backend (loop.c). Resolves the promise, which it holds meanwhile, once the
 // milliseconds have passed.
 void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise);
@@ -55,6 +61,9 @@ typedef void (*LertaChunkEnd)(void *context, uint8_t *bytes, int64_t length);
 // Reads a chunk of stdin on a thread of its own, and calls `end` with it on the loop. One read is
 // pending at most.
 void lerta_loop_read_stdin(LertaChunkEnd end, void *context);
+// Whether the read of stdin that is pending keeps the program running, as it does unless nothing
+// waits for its chunk any more.
+void lerta_loop_hold_stdin(bool held);
 // Runs `work` on libuv's thread pool, then `done` on the loop, both with `data`. `work` must not
 // touch what the main thread does, such as Lerta's allocator.
 void lerta_loop_work(void *data, void (*work)(void *data), void (*done)(void *data));

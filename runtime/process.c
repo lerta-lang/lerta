@@ -67,12 +67,22 @@ typedef struct {
   LertaPromise *promise;
   LertaString *command;
   LertaArray *output;
+  bool cancelled;
 } Run;
+
+// Cancelling a run stops waiting for the program, which goes on, as it is the program's to stop.
+static void cancel_run(void *context) {
+  Run *run = context;
+  run->cancelled = true;
+  lerta_promise_reject_cancelled(run->promise);
+}
 
 // The run holds the promise, the command and the array until the program ends.
 static void end_run(void *context, int64_t exit_code, LertaString *read_output) {
   Run *run = context;
-  if (run->output != NULL && read_output == NULL) {
+  if (run->cancelled) {
+    if (read_output != NULL) lerta_release(read_output);
+  } else if (run->output != NULL && read_output == NULL) {
     lerta_raise_with(LERTA_IO_ERROR, &cannot_read_output, run->command);
     lerta_promise_reject(run->promise);
   } else {
@@ -121,7 +131,8 @@ LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, Lert
   lerta_retain(promise);
   lerta_retain((void *)command);
   if (output != NULL) lerta_retain(output);
-  *run = (Run){promise, (LertaString *)command, output};
+  *run = (Run){promise, (LertaString *)command, output, false};
+  lerta_promise_on_cancel(promise, cancel_run, run);
   return promise;
 }
 

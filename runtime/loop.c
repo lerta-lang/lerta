@@ -23,6 +23,14 @@ static void end_sleep(uv_timer_t *handle) {
   uv_close((uv_handle_t *)handle, free_sleep);
 }
 
+static void cancel_sleep(void *context) {
+  SleepTimer *timer = context;
+  uv_timer_stop(&timer->handle);
+  lerta_promise_reject_cancelled(timer->promise);
+  lerta_release(timer->promise);
+  uv_close((uv_handle_t *)&timer->handle, free_sleep);
+}
+
 void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise) {
   SleepTimer *timer = lerta_checked_malloc(sizeof(SleepTimer));
   timer->promise = promise;
@@ -33,6 +41,7 @@ void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise) {
   // libuv counts from the time it last read, as it ran; the program may have run long since.
   uv_update_time(loop);
   uv_timer_start(&timer->handle, end_sleep, milliseconds, 0);
+  lerta_promise_on_cancel(promise, cancel_sleep, timer);
 }
 
 // stdin is read with blocking reads on a thread of its own, as Deno and Go read it, rather than as
@@ -97,6 +106,11 @@ static void start_stdin_thread(void) {
   if (uv_thread_create(&stdin_thread, read_stdin_chunks, NULL) != 0) {
     lerta_panic("cannot start the thread that reads stdin");
   }
+}
+
+void lerta_loop_hold_stdin(bool held) {
+  if (held) uv_ref((uv_handle_t *)&stdin_done);
+  else uv_unref((uv_handle_t *)&stdin_done);
 }
 
 void lerta_loop_read_stdin(LertaChunkEnd end, void *context) {

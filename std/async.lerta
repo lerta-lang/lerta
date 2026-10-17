@@ -1,5 +1,7 @@
 # Promises that the program settles, and promises made of others (see runtime/async.c).
 
+import sleep from 'std:time'
+
 extern lerta_promise_pending: () -> Promise
 extern lerta_promise_fire: (Promise) -> void
 
@@ -45,8 +47,22 @@ const settled_by = <T>(signal: Promise, outcome: Outcome<T>): Promise<T> ->
 export const all = <P>(promises: P[]) -> await promises.gathered()
 
 # The value or the error of the first of the promises to be settled, or nothing for promises
-# without a value.
+# without a value. The others are cancelled then.
 export const race = <P>(promises: P[]) -> await promises.first_settled()
+
+# The value or the error of the promise, or nothing for one without a value, if it is settled within
+# the seconds; a TimeoutError otherwise, which cancels it.
+export const timeout = <P>(promise: P, seconds: Float) -> await [promise].settled_within(seconds)
+
+export struct TimeoutError: Error
+
+# A TimeoutError, or the error of the sleep, rejects the outcome once the seconds have passed.
+const time_out = <T>(outcome: Deferred<T>, seconds: Float) ->
+  try
+    await sleep(seconds)
+    throw TimeoutError(message: "timed out after #{seconds} seconds")
+  catch error
+    outcome.reject error
 
 # The promises that have a value and those without one are awaited apart, as there is no value of
 # the latter to gather: the extend of Promise[] gives it its methods before the generic one does.
@@ -64,7 +80,13 @@ extend<T> Promise<T>[]
       catch error
         all_values.reject error
     const _settling = [settle(i, promise) for promise, i in @]
-    await all_values.promise()
+    try
+      await all_values.promise()
+    # Only a cancel of all cancels them: the error of one leaves the others, whose work may still
+    # be wanted, going on.
+    catch error: CancelledError
+      promise.cancel() for promise in @
+      throw error
 
   first_settled = (): Promise<T> ->
     const first = Deferred<T>()
@@ -74,7 +96,25 @@ extend<T> Promise<T>[]
       catch error
         first.reject error
     const _settling = [settle(promise) for promise in @]
-    await first.promise()
+    try
+      await first.promise()
+    finally
+      promise.cancel() for promise in @
+
+  settled_within = (seconds: Float): Promise<T> ->
+    const outcome = Deferred<T>()
+    const settle = ->
+      try
+        outcome.resolve await @[0]
+      catch error
+        outcome.reject error
+    const _settling = settle()
+    const timing = time_out(outcome, seconds)
+    try
+      await outcome.promise()
+    finally
+      @[0].cancel()
+      timing.cancel()
 
 extend Promise[]
   gathered = ->
@@ -89,7 +129,13 @@ extend Promise[]
       catch error
         all_done.reject error
     const _settling = [settle(promise) for promise in @]
-    const _done = await all_done.promise()
+    try
+      const _done = await all_done.promise()
+    # Only a cancel of all cancels them: the error of one leaves the others, whose work may still
+    # be wanted, going on.
+    catch error: CancelledError
+      promise.cancel() for promise in @
+      throw error
 
   first_settled = ->
     const first = Deferred<Bool>()
@@ -100,4 +146,23 @@ extend Promise[]
       catch error
         first.reject error
     const _settling = [settle(promise) for promise in @]
-    const _done = await first.promise()
+    try
+      const _done = await first.promise()
+    finally
+      promise.cancel() for promise in @
+
+  settled_within = (seconds: Float) ->
+    const outcome = Deferred<Bool>()
+    const settle = ->
+      try
+        await @[0]
+        outcome.resolve true
+      catch error
+        outcome.reject error
+    const _settling = settle()
+    const timing = time_out(outcome, seconds)
+    try
+      const _done = await outcome.promise()
+    finally
+      @[0].cancel()
+      timing.cancel()

@@ -31,6 +31,9 @@ struct LertaPromise {
   int32_t state;
   // Whether its result has been taken.
   bool observed;
+  // Whether a cancel has gone through it: a CancelledError that rejects it, dropped, ends nothing,
+  // as nothing need take that of work that was given up, while any other error does.
+  bool cancelled;
   LertaItemKind kind;
   LertaException exception;
   // The exception's trace, while it is rejected.
@@ -39,8 +42,31 @@ struct LertaPromise {
   void **waiters;
   int64_t waiter_count;
   int64_t waiter_capacity;
+  // For the promise of a function that awaits: the promise that its body waits for, which
+  // cancel follows, and whether the body is to throw a CancelledError as it resumes.
+  LertaPromise *awaiting;
+  bool cancel_requested;
+  // For a promise that the runtime settles: what stops the work that settles it, if anything can.
+  LertaCancel cancel;
+  void *cancel_context;
   _Alignas(8) uint8_t value[16];
 };
+
+LERTA_STATIC_STRING(cancelled, "cancelled");
+
+// The drop function of CancelledError, which tells its type, as the generated code's type tests do
+// (see emit_type_test); the first cancel gives it.
+static void (*cancelled_error_drop)(void *object) = NULL;
+
+static void raise_cancelled(void) {
+  lerta_raise(LERTA_CANCELLED_ERROR, (const LertaString *)&cancelled);
+  cancelled_error_drop = ((LertaHeader *)lerta_exception.data)->drop;
+}
+
+static bool is_given_up(const LertaPromise *promise) {
+  if (!promise->cancelled || cancelled_error_drop == NULL) return false;
+  return ((LertaHeader *)promise->exception.data)->drop == cancelled_error_drop;
+}
 
 static void drop_promise(void *object) {
   LertaPromise *promise = object;
@@ -48,7 +74,7 @@ static void drop_promise(void *object) {
   if (promise->state == RESOLVED) lerta_release_item(promise->kind, promise->value);
   if (promise->state != REJECTED) return;
   // An exception that nothing awaited would be lost: it ends the program, as an uncaught one does.
-  if (!promise->observed) {
+  if (!promise->observed && !is_given_up(promise)) {
     lerta_exception = promise->exception;
     lerta_trace_load(promise->trace);
     lerta_exit_with_exception();
@@ -67,6 +93,11 @@ LertaPromise *lerta_promise_new(LertaItemKind kind) {
   promise->waiters = NULL;
   promise->waiter_count = 0;
   promise->waiter_capacity = 0;
+  promise->awaiting = NULL;
+  promise->cancel_requested = false;
+  promise->cancelled = false;
+  promise->cancel = NULL;
+  promise->cancel_context = NULL;
   return promise;
 }
 
@@ -83,6 +114,7 @@ bool lerta_promise_wait(LertaPromise *promise, void *coroutine) {
 
 static void settle(LertaPromise *promise, int state) {
   promise->state = state;
+  promise->cancel = NULL;
   for (int64_t i = 0; i < promise->waiter_count; i++) push_ready(promise->waiters[i]);
   lerta_mem_free(promise->waiters);
   promise->waiters = NULL;
@@ -115,14 +147,64 @@ void *lerta_promise_result(LertaPromise *promise) {
   return promise->value;
 }
 
+static void reject_pending(void *promise) {
+  lerta_promise_reject_cancelled(promise);
+}
+
 // A Promise without a value that the program resolves, which std:async's Deferred awaits.
 LertaPromise *lerta_promise_pending(void) {
-  return lerta_promise_new(LERTA_PLAIN_ITEMS);
+  LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
+  lerta_promise_on_cancel(promise, reject_pending, promise);
+  return promise;
 }
 
 // Resolves the promise, unless it is settled already.
 void lerta_promise_fire(LertaPromise *promise) {
   if (promise->state == PENDING) lerta_promise_resolve(promise);
+}
+
+bool lerta_promise_wait_in(LertaPromise *promise, void *coroutine, LertaPromise *own) {
+  if (!lerta_promise_wait(promise, coroutine)) return false;
+  own->awaiting = promise;
+  return true;
+}
+
+void *lerta_promise_result_in(LertaPromise *promise, LertaPromise *own) {
+  own->awaiting = NULL;
+  if (!own->cancel_requested) return lerta_promise_result(promise);
+  own->cancel_requested = false;
+  raise_cancelled();
+  return promise->value;
+}
+
+void lerta_promise_on_cancel(LertaPromise *promise, LertaCancel cancel, void *context) {
+  promise->cancel = cancel;
+  promise->cancel_context = context;
+}
+
+void lerta_promise_reject_cancelled(LertaPromise *promise) {
+  raise_cancelled();
+  lerta_promise_reject(promise);
+}
+
+// The body that waits deepest, through the promises that the bodies wait for, throws a
+// CancelledError as it resumes; the work at the end, if it can be stopped, is, which rejects its
+// promise, so that the body resumes at once. Work that cannot be stopped ends first.
+void lerta_promise_cancel(LertaPromise *promise) {
+  if (promise->state != PENDING) return;
+  LertaPromise *deepest_body = NULL;
+  LertaPromise *end = promise;
+  end->cancelled = true;
+  while (end->awaiting != NULL) {
+    deepest_body = end;
+    end = end->awaiting;
+    end->cancelled = true;
+  }
+  if (deepest_body != NULL) deepest_body->cancel_requested = true;
+  LertaCancel cancel = end->cancel;
+  if (end->state != PENDING || cancel == NULL) return;
+  end->cancel = NULL;
+  cancel(end->cancel_context);
 }
 
 LERTA_STATIC_STRING(negative_sleep, "sleep for a negative time");

@@ -25,10 +25,18 @@ LertaPromise *lerta_stream_flush(int64_t fd) {
 
 LERTA_STATIC_STRING(cannot_read_stdin, "cannot read stdin");
 
-// On the loop, as a panic touches what only the main thread may: the chunk that the loop's thread
-// for stdin gives (see runtime/loop.c) settles the promise.
-static void end_stdin_read(void *context, uint8_t *bytes, int64_t length) {
-  LertaPromise *promise = context;
+// A read of stdin cannot be stopped once the loop's thread for stdin has started it (see
+// runtime/loop.c): a cancelled read leaves it going on, and the chunk it gives is kept for the
+// next read, so that no input is lost.
+static LertaPromise *stdin_receiver = NULL;
+static bool stdin_in_flight = false;
+static bool has_leftover = false;
+static uint8_t *leftover_bytes;
+static int64_t leftover_length;
+
+// On the loop, as a panic touches what only the main thread may: the chunk settles the promise,
+// which is taken.
+static void settle_stdin_read(LertaPromise *promise, uint8_t *bytes, int64_t length) {
   if (length == LERTA_OUT_OF_MEMORY) lerta_panic("out of memory");
   if (length < 0) {
     lerta_raise(LERTA_IO_ERROR, (const LertaString *)&cannot_read_stdin);
@@ -42,10 +50,44 @@ static void end_stdin_read(void *context, uint8_t *bytes, int64_t length) {
   free(bytes);
 }
 
+static void end_stdin_read(void *context, uint8_t *bytes, int64_t length) {
+  (void)context;
+  stdin_in_flight = false;
+  LertaPromise *promise = stdin_receiver;
+  stdin_receiver = NULL;
+  if (promise != NULL) {
+    settle_stdin_read(promise, bytes, length);
+    return;
+  }
+  has_leftover = true;
+  leftover_bytes = bytes;
+  leftover_length = length;
+}
+
+static void cancel_stdin_read(void *context) {
+  LertaPromise *promise = context;
+  stdin_receiver = NULL;
+  lerta_loop_hold_stdin(false);
+  lerta_promise_reject_cancelled(promise);
+  lerta_release(promise);
+}
+
 LertaPromise *lerta_stdin_read(void) {
   LertaPromise *promise = lerta_promise_new(LERTA_REFERENCE_ITEMS);
   lerta_retain(promise);
-  lerta_loop_read_stdin(end_stdin_read, promise);
+  if (has_leftover) {
+    has_leftover = false;
+    settle_stdin_read(promise, leftover_bytes, leftover_length);
+    return promise;
+  }
+  stdin_receiver = promise;
+  lerta_promise_on_cancel(promise, cancel_stdin_read, promise);
+  if (stdin_in_flight) {
+    lerta_loop_hold_stdin(true);
+  } else {
+    stdin_in_flight = true;
+    lerta_loop_read_stdin(end_stdin_read, NULL);
+  }
   return promise;
 }
 

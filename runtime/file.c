@@ -94,6 +94,7 @@ typedef struct {
   uint8_t *bytes;
   int64_t length;
   bool succeeded;
+  bool cancelled;
 } FileTask;
 
 static void read_work(void *data) {
@@ -112,11 +113,20 @@ static void remove_work(void *data) {
   task->succeeded = lerta_os_remove_tree(task->name);
 }
 
+// The work on the thread pool cannot be stopped: it goes on, and its end settles nothing.
+static void cancel_task(void *context) {
+  FileTask *task = context;
+  task->cancelled = true;
+  lerta_promise_reject_cancelled(task->promise);
+}
+
 static void end_task(void *data) {
   FileTask *task = data;
   // On the loop, as a panic touches what only the main thread may.
   if (task->length == LERTA_OUT_OF_MEMORY) lerta_panic("out of memory");
-  if (task->succeeded) {
+  if (task->cancelled) {
+    free(task->bytes);
+  } else if (task->succeeded) {
     if (task->bytes != NULL) {
       *(LertaString **)lerta_promise_slot(task->promise) =
           string_of_bytes(task->bytes, task->length);
@@ -150,6 +160,7 @@ static LertaPromise *start_task(LertaItemKind kind, const LertaString *path, con
   lerta_retain((void *)path);
   if (data != NULL) lerta_retain((void *)data);
   lerta_loop_work(task, work, end_task);
+  lerta_promise_on_cancel(promise, cancel_task, task);
   return promise;
 }
 
