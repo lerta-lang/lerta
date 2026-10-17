@@ -2,7 +2,7 @@
 # it exports for the modules that import it.
 import
   Declaration, EnumDeclaration, Exportable, exported_declaration, Extern, FunctionLiteral,
-  Identifier, Import, InterfaceDeclaration, Statement, TypeAlias, TypeDeclaration
+  Identifier, Import, InterfaceDeclaration, NamedType, Statement, TypeAlias, TypeDeclaration
 from '../ast'
 import fail, fail_already_defined from './diagnostics'
 import generic_function from './functions'
@@ -51,8 +51,17 @@ export class ImportedName
   # The local of an imported `const`, made once, as narrowed paths compare their roots by identity.
   local: Local? = nil
 
+# A module imported as a name, `import 'module' as name`.
+export class ModuleAlias
+  name: Identifier
+  module_index: Int
+  module: String
+  used = false
+
 export class Imports
   names: Map<String, ImportedName> = Map()
+  # The modules imported as names, by their names.
+  modules: Map<String, ModuleAlias> = Map()
   # The module that std:builtins is.
   builtins: Int? = nil
 
@@ -102,12 +111,16 @@ export const add_imports = (shared: Shared, statements: Statement[]) ->
 const add_import = (shared: Shared, statement: Import, exporter: Int) ->
   const program = shared.program
   const names = shared.imports.names
+  if const alias = statement.alias
+    const modules = shared.imports.modules
+    fail_already_defined program, alias if names.has(alias.name) or modules.has(alias.name)
+    modules[alias.name] = ModuleAlias(name: alias, module_index: exporter, module: statement.module)
   for imported in statement.names
     const { name } = imported
     if not program.shared[exporter].exported.has(name.name)
       fail program, name.position, "'#{statement.module}' has no export '#{name.name}'"
     const local = imported.alias ? name
-    fail_already_defined program, local if names.has(local.name)
+    fail_already_defined program, local if has_import(shared, local.name)
     const source = ExportRef(module_index: exporter, name: name.name)
     names[local.name] = ImportedName(source, name: local, used: false, module: statement.module)
 
@@ -129,11 +142,37 @@ const names_a_type = (statement: Exportable) ->
 # modules.
 export const add_extern = (shared: Shared, name: Identifier, type: Type, symbol: String) ->
   const names = shared.imports.names
-  fail_already_defined shared.program, name if names.has(name.name)
+  fail_already_defined shared.program, name if has_import(shared, name.name)
   const source = ExternExport(type, symbol)
   names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
 
-export const has_import = (shared: Shared, name: String) -> shared.imports.names.has(name)
+export const has_import = (shared: Shared, name: String) ->
+  shared.imports.names.has(name) or shared.imports.modules.has(name)
+
+# Imports the export that a written type's name `alias.export` names, so that the type is found by
+# that name, which this gives (see qualified_import).
+export const import_qualified_type = (shared: Shared, type_name: NamedType) ->
+  const parts = type_name.name.split_once('.') ? return nil
+  const (alias, name) = parts
+  qualified_import shared, alias, Identifier(name, position: type_name.position)
+
+# The name that the export of a module imported as `alias` is imported by, `alias.export`, which
+# this imports on its first use, marking the module's import as used; nil if no module is imported
+# as `alias`. An export that the module does not have is an error.
+export const qualified_import = (shared: Shared, alias: String, exported: Identifier) ->
+  const imported = shared.imports.modules[alias] ? return nil
+  imported.used = true
+  const program = shared.program
+  const name = exported.name
+  if not program.shared[imported.module_index].exported.has(name)
+    fail program, exported.position, "'#{imported.module}' has no export '#{name}'"
+  const qualified = "#{alias}.#{name}"
+  const names = shared.imports.names
+  if not names.has(qualified)
+    const source = ExportRef(module_index: imported.module_index, name: name)
+    const local = Identifier(name: qualified, position: exported.position)
+    names[qualified] = ImportedName(source, name: local, used: true, module: imported.module)
+  qualified
 
 # The imported name, marked as used.
 export const use_import = (shared: Shared, name: String) ->

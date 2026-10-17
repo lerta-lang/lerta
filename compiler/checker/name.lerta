@@ -1,12 +1,12 @@
 # Types the names that expressions use: locals, the module's functions, the names it imports and
 # the builtins, in that order.
-import Expression, FunctionLiteral, Identifier from '../ast'
+import Expression, FunctionLiteral, Identifier, Member from '../ast'
 import captured from './closure'
 import fail from './diagnostics'
 import function_type_of, generic_function, has_function from './functions'
 import
   builtin_export, Export, ExternExport, FunctionExport, GenericExport, imported_export,
-  InterfaceExport, TypeExport, use_import, value_local, ValueExport
+  InterfaceExport, qualified_import, TypeExport, use_import, value_local, ValueExport
 from './imports'
 import object_type from './object_types'
 import ExternReference, FunctionReference, Reference, ScopedLocal, TopLevelValue from './references'
@@ -64,9 +64,22 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
     return type_of_export(body, exported, identifier, is_callee)
   abort_if_failed shared.top_level, name
   reject_pending program, shared.top_level, identifier if body.sees_top_level
+  if shared.imports.modules.has(name)
+    fail program, position, "'#{name}' is a module, which is no value: write #{name}.<export>"
   const undefined_name = -> fail(program, position, "undefined name '#{name}'")
   const builtin = builtin_export(shared, name) ? undefined_name()
   type_of_export body, builtin, identifier, is_callee
+
+# `name.export` of a module imported as `name`, where no local takes the name, as the name that the
+# export is imported by (see qualified_import), recorded for codegen; nil for any other member.
+export const qualified_name = (body: Body, member: Member): Identifier? ->
+  return name if const name = body.facts.qualified[member]
+  const object = member.object
+  return nil if object is not Identifier or lookup(body, object.name) != nil
+  const qualified = qualified_import(body.shared, object.name, member.name) ? return nil
+  const name = Identifier(name: qualified, position: member.name.position)
+  body.facts.qualified[member] = name
+  name
 
 # The generic function that the callee names: one of the module, an imported one or a builtin,
 # unless a local or another name of the module takes the name.

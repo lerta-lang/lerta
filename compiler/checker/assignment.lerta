@@ -7,7 +7,7 @@ import warn_if_cycle from './cycles'
 import fail from './diagnostics'
 import require_type, type_of from './expression'
 import field_target from './fields'
-import local_reference, lookup, record_reference from './name'
+import local_reference, lookup, qualified_name, record_reference from './name'
 import
   describe_kinds, is_numeric_operator, operand_kinds, OPERATOR_METHODS, reject_text_and_bytes,
   type_of_operator_call
@@ -23,7 +23,10 @@ export const check_assignment = (body: Body, assignment: Assignment) ->
   const target_type =
     case target
       when Index then check_item_target(body, target, operator)
-      when Member then field_target(body, target)
+      when Member
+        # An export of a module imported as a name is no var, as an imported name is not.
+        const qualified = qualified_name(body, target)
+        qualified then check_variable_target(body, qualified) else field_target(body, target)
       when Identifier then check_variable_target(body, target)
   if operator != '='
     const kinds = operand_kinds(combining_operator(operator))

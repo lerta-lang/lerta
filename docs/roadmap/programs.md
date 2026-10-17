@@ -2,10 +2,6 @@
 
 The planned design of modules, FFI, the standard library and tools.
 
-## Modules
-
-- `import 'module' as mod` gives access as `mod.<exported_name>`, in values and in types (`x: mod.Point`). `mod` is not a value: it can only be followed by `.name`. This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which brings the names in unqualified; the design is open (see below).
-
 ## C ABI / FFI
 
 - An `extern` declaration may also refer to a C variable.
@@ -65,5 +61,4 @@ The planned design of modules, FFI, the standard library and tools.
 - How to keep the repository small as the seed is refreshed (`seed/minilerta.ll`, see [bootstrap](../internals.md#bootstrap)): refreshing only at milestones, or keeping the seed outside the history, as with Git LFS or as a release asset.
 - How to hold type information for separate compilation (interface files).
 - The package management approach (npm style vs Go's minimal version selection).
-- How `import 'module' as mod` resolves `mod.name` (in the parser as a qualified name, or in the checker as a member of a module value), and whether philosophy's `import *` should then read as the unqualified form only.
 - The formatter's configuration file, such as the line length. A file holding one bracketless literal, checked as the named arguments of a configuration type, reads like YAML without being run; decide it with the package manifest, which has the same need.

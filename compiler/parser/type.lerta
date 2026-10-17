@@ -10,7 +10,7 @@ import is_one_of, token_position, TokenStream from './token_stream'
 
 # The tokens that a type name is made of.
 const TYPE_TOKEN_KINDS: TokenKind[] =
-  IDENTIFIER, '<', '>', ',', '?', '|', '(', ')', '->', '{', '}', ':', '[', ']'
+  IDENTIFIER, '.', '<', '>', ',', '?', '|', '(', ')', '->', '{', '}', ':', '[', ']'
 
 # A named type, or a union of them: `A | B`.
 export const parse_type_name = (tokens: TokenStream) ->
@@ -99,10 +99,17 @@ export const parse_named_type = (tokens: TokenStream) ->
   type
 
 # A named type without the `?` that may follow it.
+# A name that a module imported as a name qualifies, `mod.Point`, is one name.
 export const parse_named_type_alone = (tokens: TokenStream) ->
   const { name, position } = parse_identifier(tokens)
+  const qualifies = tokens.peek().kind == '.' and tokens.peek_at(1).kind == IDENTIFIER
+  const full_name = qualifies then "#{name}.#{parse_qualified_rest(tokens)}" else name
   const args: TypeName[] = tokens.peek().kind == '<' then parse_type_arguments(tokens) else []
-  NamedType name, args, position
+  NamedType args, position, name: full_name
+
+const parse_qualified_rest = (tokens: TokenStream) ->
+  tokens.next()
+  parse_identifier(tokens).name
 
 # `<A, B>`.
 export const parse_type_arguments = (tokens: TokenStream) ->

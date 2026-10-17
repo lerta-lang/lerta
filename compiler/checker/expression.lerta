@@ -26,7 +26,7 @@ import float_literal, int_literal, integer_literal from './literals'
 import check_loop_jump, type_of_comprehension from './loop'
 import type_of_method_call, type_of_property from './member'
 import json_direction, type_of_json_call from './json'
-import generic_callee, named_function_literal, type_of_identifier from './name'
+import generic_callee, named_function_literal, qualified_name, type_of_identifier from './name'
 import narrowable from './narrowable'
 import constructed_type, type_of_construction, type_of_record, type_of_this from './object'
 import type_of_binary, type_of_coalesce, type_of_unary from './operator'
@@ -118,7 +118,9 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
     when Try then type_of_try(body, expression, expected)
     when If then type_of_if(body, expression, expected)
     when Conditional then type_of_conditional(body, expression, expected)
-    when Member then type_of_qualified_member(body, expression) ? type_of_property(body, expression)
+    when Member
+      return type_of(body, name) if const name = qualified_name(body, expression)
+      type_of_qualified_member(body, expression) ? type_of_property(body, expression)
     when ArrayLiteral then type_of_array(body, expression, expected)
     when MapLiteral then type_of_map(body, expression, expected)
     when Comprehension then type_of_comprehension(body, expression, expected)
@@ -132,6 +134,13 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
 
 const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
   const callee = call.callee
+  # A call of `name.export` is the call of the name that the export is imported by.
+  if callee is Member
+    if const name = qualified_name(body, callee)
+      const { args, named_args, type_args, position } = call
+      const qualified_call = Call(args, named_args, type_args, position, callee: name)
+      body.facts.qualified_calls[call] = qualified_call
+      return type_of(body, qualified_call, expected)
   if const generic = generic_callee(body, callee)
     return type_of_generic_call(body, call, generic, expected)
   if const object_type = constructed_type(body, callee)

@@ -6,7 +6,7 @@ import has_function from './functions'
 import builtin_export, builtin_type, has_import, imported_type from './imports'
 import record_member from './member'
 import EnumParse, EnumValue from './member_targets'
-import lookup, record_reference from './name'
+import lookup, qualified_name, record_reference from './name'
 import Body, module_symbol_name, Shared from './shared'
 import has_declared_type from './interfaces'
 import
@@ -56,9 +56,12 @@ export const enum_parse_type = (body: Body, member: Member) ->
   record_member body, member, EnumParse(type)
   FunctionType params: [string_type], result: optional_type(type)
 
-# The enum E of `E.x`, where no local takes its name.
+# The enum E of `E.x`, where no local takes its name, or of `mod.E.x` (see qualified_name).
 const qualifying_enum = (body: Body, member: Member) ->
   const object = member.object
+  if object is Member
+    return enum_type(body.shared, name.name) if const name = qualified_name(body, object)
+    return nil
   return nil if object is not Identifier
   return nil if lookup(body, object.name) != nil
   enum_type body.shared, object.name
