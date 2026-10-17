@@ -183,6 +183,36 @@ export const optional_type = (inner: Type): Type ->
 export const union_type = (members: Type[]) ->
   UnionType members: members.sorted((a, b) -> type_key(a).compare(type_key(b)))
 
+# The union of the types, each a member of a union, a union, or one of those optional, or nil: an
+# optional one if any of them is. Nil if one is none of those.
+export const union_of = (types: Type[]): Type? ->
+  const members: Type[] = []
+  var optional = false
+  for type in types
+    optional = true if type is OptionalType or is_kind(type, 'nil')
+    continue if is_kind(type, 'nil')
+    const inner = inner_of(type)
+    const added: Type[] = inner is UnionType then inner.members else [inner]
+    for member in added
+      return nil if not is_union_member(member)
+      members.push member if not members.any((other) -> same_type(other, member))
+  const union = members.length == 1 then members[0] else union_type(members)
+  optional then optional_type(union) else union
+
+# A type whose values a union may hold: a class or a struct, as it is, or a value of the others,
+# which a union holds boxed (see codegen boxes).
+export const is_union_member = (type: Type) ->
+  type is ObjectType or type is EnumType or is_one_of_kinds(type, UNION_VALUE_KINDS)
+
+const UNION_VALUE_KINDS: TypeKind[] = [
+  INTEGER_KINDS...
+  'Float'
+  'Float32'
+  'Bool'
+  'String'
+  'Binary'
+]
+
 # How a type is written in messages. A class, struct or enum is written by its name, and with its
 # module where `qualified` says so, or where a union holds another of the same name.
 export const format_type = (type: Type) -> format_qualified(type, false)
