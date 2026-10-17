@@ -16,17 +16,8 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Standard library
 
-- The rest of JSON, in [std:json](../reference/modules.md#stdjson): the types that it does not convert yet, each an error at the call until it does, as a function, a `Promise`, an `Iter`, an interface or a weak field stays.
-
-  | Lerta | JSON |
-  |---|---|
-  | `T?` | a field of an optional type may also be missing |
-  | tuples | array |
-  | `Map<String, V>` | object |
-  | classes, structs, anonymous structs | object, a key for each field, whose path is `.name`; a field with a default may be missing, and keys that are no field are ignored. Encoding throws a `JsonError` for an object that holds itself, through any of its parts, naming the path to where it does: `$.children[0].parent: a cycle back to $`; an object reached twice otherwise is written twice. |
-  | enums | the member's name, as a string |
-  | unions | the member, as it is: decoding takes the member that the JSON's kind of value tells, so the members must differ in it, as `Int \| String` does; members that are all objects are an error |
-
+- The rest of JSON, in [std:json](../reference/modules.md#stdjson):
+  - Unions: the member, as it is: decoding takes the member that the JSON's kind of value tells, so the members must differ in it, as `Int | String` does; members that are all objects are an error.
   - Keys are the field names as written. `encode_json(value, JsonKeys.camel_case)` and `decode_json<T>(text, JsonKeys.camel_case)` write `text_document` as `textDocument`, for formats such as the [LSP](#tools)'s.
   - Unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
 - Random numbers, formatting dates and times, and the network.

@@ -76,9 +76,9 @@ const xs = decode_json<Int[]>(text)
 | `encode_json<T: Jsonable>(value: T): String` | The value as JSON, with no whitespace. |
 | `decode_json<T: Jsonable>(text: String): T` | The value of type `T` that the text holds, with whitespace around its parts and nothing but whitespace after it. Throws a `JsonError` for text that is not JSON or does not fit `T`. |
 | `Jsonable` | The interface of the types that the two convert, which only bounds type parameters, as `<T: Jsonable>` of a function that passes its type on to them: a type of values would not tell which type to convert by. It has no members: the compiler tells the types that satisfy it by their parts, and generates the code that converts each, so no type declares anything for it. It is the only interface without members. |
-| `JsonError` | The error of `decode_json`, a struct of a `message`. |
+| `JsonError` | The error of `decode_json`, and of `encode_json` for a value that holds itself (below), a struct of a `message`. |
 
-The types convert so far as the table says, and a type that has a part of another type does not satisfy `Jsonable`, which is an error at the call that names its path, as JsonError's messages write it: `((Int) -> Int)[] does not satisfy Jsonable: $[] is of type (Int) -> Int, which std:json does not convert`.
+The types convert as the table says, and a type that has a part of another type, such as a function, a `Binary`, a `Promise`, an `Iter`, an interface, or a `weak` field, does not satisfy `Jsonable`, which is an error at the call that names its path, as JsonError's messages write it, with `$[]` for an item of an array and `$.*` for a value of a map: `Request does not satisfy Jsonable: $.handler is of type (Int) -> Int, which std:json does not convert`.
 
 | Lerta | JSON |
 |---|---|
@@ -88,8 +88,14 @@ The types convert so far as the table says, and a type that has a part of anothe
 | `String` | a string; `encode_json` escapes `"`, `\` and the control characters, and `decode_json` reads every escape of JSON, a surrogate pair as one code point, but no lone surrogate |
 | `T?` | `null` for nil, otherwise as `T` |
 | `T[]` | an array |
+| tuples | an array of as many items |
+| `Map<String, V>` | an object, of the entries in their order |
+| classes, structs, anonymous structs | an object, of a key for each field, as its name is written, in the order of the fields. `decode_json` reads the fields that the constructor takes, and constructs the object as a call does, running its `init`: a field with a default, or of an optional type, may be left out, and is then its default, or nil; a key that is no such field, as one of a field given by an initializer alone, is skipped. A key may not be given twice. |
+| enums | the member's name, as a string |
 
-The message of a `JsonError` gives the path to the value it is about, `$` for the whole value and `[i]` for an item of an array, and what was expected and found: `$[1][0]: expected an Int, found 2.5`. What is found is a number as it is written, `null`, `true`, `false`, `a string`, `an array`, `an object`, `a number that is not JSON`, a character in quotes, or `the end of the text`. A string that does not end, an escape that is not JSON, a lone surrogate and a control character in a string give messages of their own.
+The message of a `JsonError` gives the path to the value it is about, `$` for the whole value, `[i]` for an item of an array and `.name` for the value of a key, and what was expected and found: `$.items[1]: expected an Int, found 2.5`; for an object, `$.position: missing the key "line"`, `$.kind: the key "kind" twice`, and `$.color: expected a member of Color, found "BLUE"` for an enum. What is found is a number as it is written, `null`, `true`, `false`, `a string`, `an array`, `an object`, `a number that is not JSON`, a character in quotes, or `the end of the text`. A string that does not end, an escape that is not JSON, a lone surrogate and a control character in a string give messages of their own.
+
+`encode_json` throws a `JsonError` for a value that holds itself, through any of its parts, naming the path to where it does and the path it comes back to: `$.children[0].parent: a cycle back to $`. An object reached twice otherwise is written twice. Only the classes and structs whose types can hold themselves are looked for.
 
 ## std:math
 

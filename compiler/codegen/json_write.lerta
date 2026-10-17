@@ -1,0 +1,191 @@
+# The functions that write values of a type through a JsonWriter (see codegen/json), which borrow
+# the value. A writer that throws is let go of as it is, so a function releases only what it took.
+import info_of from '../checker/object_types'
+import ProgramWide from '../checker/shared'
+import emit_borrowed_item, emit_length, emit_load_item, emit_item_slot, from_item from './array'
+import emit_member_name from './enum'
+import emit_check_with, emit_return_thrown from './exceptions'
+import emit_field_pointer, emit_value_pointer, value_types from './heap_object'
+import emit_if_else, IrBuilder, IrModule from './ir_builder'
+import call_void_method, Coder, emit_count_up, emit_while, is_inline, SCALARS from './json'
+import emit_release, emit_release_value, ir_type, shared_string_constant from './lerta_ir'
+import emit_is_present, emit_unwrap from './optional'
+import call_runtime, call_void_runtime from './runtime_calls'
+import
+  ArrayType, EnumType, kind_of, MapType, ObjectType, OptionalType, RecordType, TupleType, Type,
+  type_key, void_type
+from '../types'
+
+# Writes the value, borrowed; the caller checks for an exception after it.
+export const emit_write_json = (
+  ir: IrBuilder, program: ProgramWide, writer_type: ObjectType, writer: String, value: String,
+  type: Type
+) -> emit_write_call(ir, Coder(program, type: writer_type, operand: writer), value, type)
+
+const emit_write_call = (ir: IrBuilder, writer: Coder, value: String, type: Type) ->
+  const symbol = write_function(ir.module, writer, type)
+  ir.emit "call void #{symbol}(ptr #{writer.operand}, #{ir_type(type)} #{value})"
+
+const write_function = (module: IrModule, writer: Coder, type: Type) ->
+  const define = (name: String, defined: IrModule) ->
+    const ir = IrBuilder(module: defined)
+    const own = Coder(program: writer.program, type: writer.type, operand: '%writer')
+    emit_write_parts ir, own, '%value', type
+    ir.emit 'ret void'
+    ir.finish "private void #{name}(ptr %writer, #{ir_type(type)} %value)"
+  module.named "json write #{type_key(type)}", '@lerta.json.write', define
+
+# The body of the function of a type: its parts, or the value itself for a type that others write
+# inline, which write_json may write too.
+const emit_write_parts = (ir: IrBuilder, writer: Coder, value: String, type: Type) ->
+  const unwind = -> emit_return_thrown(ir, void_type)
+  case type
+    when ArrayType then emit_write_array(ir, writer, value, type.element, unwind)
+    when MapType then emit_write_map(ir, writer, value, type)
+    when TupleType then emit_write_tuple(ir, writer, value, type, unwind)
+    when RecordType then emit_write_record(ir, writer, value, type, unwind)
+    when ObjectType then emit_write_object(ir, writer, value, type, unwind)
+    else emit_write(ir, writer, value, type, unwind)
+
+# Writes the value, borrowed; `unwind` releases what the function holds and returns.
+const emit_write = (
+  ir: IrBuilder, writer: Coder, value: String, type: Type, unwind: () -> void
+): void ->
+  if not is_inline(type)
+    emit_write_call ir, writer, value, type
+    emit_check_with ir, unwind
+    return
+  case type
+    when OptionalType
+      const write_inner = ->
+        emit_write ir, writer, emit_unwrap(ir, value, type), type.inner, unwind
+      const write_null = -> call_void_method(ir, writer, 'write_null', [], unwind)
+      emit_if_else ir, emit_is_present(ir, value, type), write_inner, write_null
+    when EnumType
+      const name = emit_member_name(ir, value, type)
+      call_void_method ir, writer, 'write_string', ["ptr #{name}"], unwind
+    else
+      const scalar = SCALARS[kind_of(type)]!
+      call_void_method ir, writer, scalar.write, ["#{ir_type(type)} #{value}"], unwind
+
+const emit_write_array = (
+  ir: IrBuilder, writer: Coder, array: String, element: Type, unwind: () -> void
+): void ->
+  call_void_method ir, writer, 'begin_array', [], unwind
+  const write_item = (index: String) ->
+    call_void_method ir, writer, 'next_item', [], unwind
+    emit_write ir, writer, emit_borrowed_item(ir, array, index, element), element, unwind
+  emit_count_up ir, emit_length(ir, array), write_item
+  call_void_method ir, writer, 'end_array', [], unwind
+
+# The entries in their order, through a cursor of the runtime, which gives each key and value
+# owned.
+const emit_write_map = (ir: IrBuilder, writer: Coder, map: String, type: MapType): void ->
+  const cursor = call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")
+  const release_cursor = ->
+    emit_release ir, cursor
+    emit_return_thrown ir, void_type
+  call_void_method ir, writer, 'begin_object', [], release_cursor
+  const more = -> call_runtime(ir, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
+  const write_entry = ->
+    const key_slot = ir.alloca('i64')
+    const value_slot = emit_item_slot(ir, type.value)
+    const args = "ptr #{cursor}, ptr #{key_slot}, ptr #{value_slot}"
+    call_void_runtime ir, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
+    const key = from_item(ir, ir.assign("load i64, ptr #{key_slot}"), type.key)
+    const value = emit_load_item(ir, value_slot, type.value)
+    const release_entry = ->
+      emit_release ir, key
+      emit_release_value ir, value, type.value
+    const unwind = ->
+      release_entry()
+      release_cursor()
+    call_void_method ir, writer, 'next_key', ["ptr #{key}"], unwind
+    emit_write ir, writer, value, type.value, unwind
+    release_entry()
+  emit_while ir, more, write_entry
+  emit_release ir, cursor
+  call_void_method ir, writer, 'end_object', [], -> emit_return_thrown(ir, void_type)
+
+const emit_write_tuple = (
+  ir: IrBuilder, writer: Coder, tuple: String, type: TupleType, unwind: () -> void
+): void ->
+  call_void_method ir, writer, 'begin_array', [], unwind
+  for item_type, i in type.items
+    call_void_method ir, writer, 'next_item', [], unwind
+    emit_write ir, writer, emit_borrowed_value(ir, tuple, type, i), item_type, unwind
+  call_void_method ir, writer, 'end_array', [], unwind
+
+const emit_write_record = (
+  ir: IrBuilder, writer: Coder, record: String, type: RecordType, unwind: () -> void
+): void ->
+  const write_field = (name: String, value: String, field_type: Type) ->
+    emit_write_key ir, writer, name, unwind
+    emit_write ir, writer, value, field_type, unwind
+  call_void_method ir, writer, 'begin_object', [], unwind
+  for field, i in type.fields
+    write_field field.name, emit_borrowed_value(ir, record, type, i), field.type
+  call_void_method ir, writer, 'end_object', [], unwind
+
+# A class or struct that may hold itself is entered, so that the writer finds a cycle.
+const emit_write_object = (
+  ir: IrBuilder, writer: Coder, object: String, type: ObjectType, unwind: () -> void
+): void ->
+  const info = info_of(writer.program, type)
+  const may_cycle = may_hold_itself(writer.program, type)
+  if may_cycle
+    const address = ir.assign("ptrtoint ptr #{object} to i64")
+    call_void_method ir, writer, 'enter', ["i64 #{address}"], unwind
+  call_void_method ir, writer, 'begin_object', [], unwind
+  for field in info.fields
+    const name = field.name.name
+    const field_type = field.type!
+    const pointer = emit_field_pointer(ir, object, info, name)
+    emit_write_key ir, writer, name, unwind
+    emit_write(
+      ir
+      writer
+      ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
+      field_type
+      unwind
+    )
+  call_void_method ir, writer, 'end_object', [], unwind
+  call_void_method ir, writer, 'leave', [], unwind if may_cycle
+
+const emit_write_key = (ir: IrBuilder, writer: Coder, name: String, unwind: () -> void) ->
+  const key = shared_string_constant(ir, name)
+  call_void_method ir, writer, 'next_key', ["ptr #{key}"], unwind
+
+# The value of an anonymous struct or a tuple at the index, borrowed.
+const emit_borrowed_value = (ir: IrBuilder, values: String, type: Type, index: Int) ->
+  const value_type = value_types(type)[index]
+  ir.assign "load #{ir_type(value_type)}, ptr #{emit_value_pointer(ir, values, type, index)}"
+
+# Whether a value of the class or struct may hold itself, through its parts and theirs.
+const may_hold_itself = (program: ProgramWide, type: ObjectType) ->
+  const reach = Reach(program, target: type_key(type))
+  info_of(program, type).fields.any((field) -> reach.reaches(field.type!))
+
+# The parts of types that lead to a value of the target, a class or struct by its key.
+class Reach
+  program: ProgramWide
+  target: String
+  # The classes and structs looked through already.
+  visited: Set<String> = Set()
+
+  reaches = (part: Type): Bool ->
+    case part
+      when OptionalType then @reaches(part.inner)
+      when ArrayType then @reaches(part.element)
+      when MapType then @reaches(part.value)
+      when TupleType then part.items.any((item) -> @reaches(item))
+      when RecordType then part.fields.any((field) -> @reaches(field.type))
+      when ObjectType then @reaches_object(part)
+      else false
+
+  reaches_object = (type: ObjectType) ->
+    const key = type_key(type)
+    return true if key == @target
+    return false if @visited.has(key)
+    @visited.add key
+    info_of(@program, type).fields.any((field) -> @reaches(field.type!))

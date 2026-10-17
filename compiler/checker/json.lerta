@@ -8,9 +8,10 @@ import lookup, record_reference from './name'
 import JsonConversion, JsonDirection from './references'
 import Body, ProgramWide, Shared from './shared'
 import names_type_or_import, resolve from './type_names'
+import field_type, info_of from './object_types'
 import
-  ArrayType, format_type, InterfaceType, is_one_of_kinds, ObjectType, OptionalType, Type, TypeKind,
-  void_type
+  ArrayType, EnumType, format_type, InterfaceType, is_kind, is_one_of_kinds, MapType, ObjectType,
+  OptionalType, RecordType, TupleType, Type, type_key, TypeKind, void_type
 from '../types'
 
 const JSON_MODULE = 'std:json'
@@ -27,23 +28,56 @@ const is_json_module = (shared: Shared) ->
   shared.name == JSON_MODULE or (shared.path == nil and shared.program.entry_path == JSON_MODULE)
 
 # Rejects a type that has a part std:json does not convert, naming the part by its path, as
-# JsonError does in std:json: `$[]` is an item of an array.
+# JsonError does in std:json: `$[]` is an item of an array, `$.*` a value of a map, and `$[0]` and
+# `$.name` an item of a tuple and a field.
 export const reject_unjsonable = (program: ProgramWide, type: Type, at: Position) ->
-  const part = unjsonable_part(type, '$') ? return
-  const part_type = format_type(part.type)
+  const finder = PartFinder(program, at)
+  const part = finder.unjsonable_part(type, '$') ? return
   const where = part.path == '$' then 'it' else part.path
-  const reason = "#{where} is of type #{part_type}, which std:json does not convert"
+  const reason = "#{where} #{part.problem}, which std:json does not convert"
   fail program, at, "#{format_type(type)} does not satisfy Jsonable: #{reason}"
 
-# A part of a type, and its path from it.
-struct Part(path: String, type: Type)
+# A part of a type, by its path from it, and what std:json does not convert in it.
+struct Part(path: String, problem: String)
 
-const unjsonable_part = (type: Type, path: String): Part? ->
-  case
-    when is_one_of_kinds(type, JSON_SCALAR_KINDS) then nil
-    when type is OptionalType then unjsonable_part(type.inner, path)
-    when type is ArrayType then unjsonable_part(type.element, "#{path}[]")
-    else Part(path, type)
+class PartFinder
+  program: ProgramWide
+  at: Position
+  # The classes and structs whose parts are being looked through, which a part of them that is
+  # of their own type does not look through again.
+  visited: Set<String> = Set()
+
+  unjsonable_part = (type: Type, path: String): Part? ->
+    case
+      when is_one_of_kinds(type, JSON_SCALAR_KINDS) or type is EnumType then nil
+      when type is OptionalType then @unjsonable_part(type.inner, path)
+      when type is ArrayType then @unjsonable_part(type.element, "#{path}[]")
+      when type is TupleType then @first_part([(item, "#{path}[#{i}]") for item, i in type.items])
+      when type is RecordType
+        @first_part [(field.type, "#{path}.#{field.name}") for field in type.fields]
+      when type is MapType
+        if not is_kind(type.key, 'String')
+          return Part(path, problem: "has keys of type #{format_type(type.key)}")
+        @unjsonable_part type.value, "#{path}.*"
+      when type is ObjectType then @object_part(type, path)
+      else Part(path, problem: "is of type #{format_type(type)}")
+
+  first_part = (parts: (Type, String)[]): Part? ->
+    for (type, path) in parts
+      return part if const part = @unjsonable_part(type, path)
+    nil
+
+  object_part = (type: ObjectType, path: String): Part? ->
+    const key = type_key(type)
+    return nil if @visited.has(key)
+    @visited.add key
+    const info = info_of(@program, type)
+    for field in info.fields
+      const field_path = "#{path}.#{field.name.name}"
+      return Part(path: field_path, problem: 'is weak') if field.weak
+      if const part = @unjsonable_part(field_type(@program, info, field, @at), field_path)
+        return part
+    nil
 
 const JSON_SCALAR_KINDS: TypeKind[] = ['Int', 'Float', 'Bool', 'String']
 

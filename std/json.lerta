@@ -1,6 +1,7 @@
 # JSON (see docs/reference/modules.md#stdjson). The compiler generates the code that writes and
-# reads each type (compiler/codegen/json.lerta), which `write_json` and `read_json` call: it goes
-# through the methods of a JsonWriter and a JsonReader.
+# reads each type (compiler/codegen/json_write.lerta and json_read.lerta), which `write_json` and
+# `read_json` call: it goes through the methods of a JsonWriter and a JsonReader, which write their
+# result types, since that code calls them with those types.
 
 # The types that encode_json and decode_json convert, which the compiler tells by their parts.
 export interface Jsonable
@@ -21,27 +22,67 @@ export const decode_json = <T: Jsonable>(text: String): T ->
 
 class JsonWriter
   parts: String[] = []
-  # Whether each array being written has an item yet, the innermost last.
-  has_items: Bool[] = []
+  # How many items or keys each array or object being written has, the innermost last.
+  counts: Int[] = []
+  # The steps from the root to the value being written, as `[0]` or `.name`, which errors give.
+  path: String[] = []
+  # The objects being written that may hold themselves, by their addresses, with their paths.
+  entered: Int[] = []
+  entered_paths: String[] = []
 
-  write_null = -> @parts.push('null')
-  write_bool = (value: Bool) -> @parts.push(value.to_string())
-  write_int = (value: Int) -> @parts.push(value.to_string())
-  write_float = (value: Float) -> @parts.push(value.to_string())
-  write_string = (value: String) -> @parts.push(quoted(value))
+  write_null = (): void -> @parts.push('null')
+  write_bool = (value: Bool): void -> @parts.push(value.to_string())
+  write_int = (value: Int): void -> @parts.push(value.to_string())
+  write_float = (value: Float): void -> @parts.push(value.to_string())
+  write_string = (value: String): void -> @parts.push(quoted(value))
 
-  begin_array = ->
-    @parts.push '['
-    @has_items.push false
+  begin_array = (): void -> @begin('[')
 
   # Starts an item of the innermost array.
-  next_item = ->
-    @parts.push ',' if @has_items.last()!
-    @has_items[@has_items.length - 1] = true
+  next_item = (): void -> @next("[#{@counts.last()!}]")
 
-  end_array = ->
-    @has_items.pop()
-    @parts.push ']'
+  end_array = (): void -> @end(']')
+
+  begin_object = (): void -> @begin('{')
+
+  # Starts the value of the key in the innermost object.
+  next_key = (key: String): void ->
+    @next ".#{key}"
+    @parts.push quoted(key)
+    @parts.push ':'
+
+  end_object = (): void -> @end('}')
+
+  # Starts writing an object that may hold itself, by its address, which must not be written
+  # already: JSON cannot hold a cycle.
+  enter = (address: Int): void ->
+    const path = @path_text()
+    if const index = @entered.find_index((each) -> each == address)
+      throw JsonError(message: "#{path}: a cycle back to #{@entered_paths[index]}")
+    @entered.push address
+    @entered_paths.push path
+
+  leave = (): void ->
+    @entered.pop()
+    @entered_paths.pop()
+
+  begin = (open: String) ->
+    @parts.push open
+    @counts.push 0
+    @path.push ''
+
+  next = (step: String) ->
+    const count = @counts.last()!
+    @parts.push ',' if count > 0
+    @counts[@counts.length - 1] = count + 1
+    @path[@path.length - 1] = step
+
+  end = (close: String) ->
+    @counts.pop()
+    @path.pop()
+    @parts.push close
+
+  path_text = -> "$#{@path.join('')}"
 
   text = -> @parts.join('')
 
@@ -76,8 +117,10 @@ class JsonReader
   at = 0
   # The steps from the root to the value being read, as `[0]` or `.name`, which errors give.
   path: String[] = []
-  # How many items each array being read has given, the innermost last.
-  item_counts: Int[] = []
+  # How many items or keys each array or object being read has given, the innermost last.
+  counts: Int[] = []
+  # The keys that each object being read has given, the innermost last.
+  keys: Set<String>[] = []
 
   # Whether the value is null, which it then reads.
   read_null = -> @read_literal('null')
@@ -117,32 +160,94 @@ class JsonReader
     bytes.to_binary().text()!
 
   # Reads `[` of an array, whose items next_item then starts.
-  begin_array = ->
+  begin_array = (): void -> @begin('[', 'an array')
+
+  # Whether another item of the innermost array follows, which it then starts reading.
+  next_item = ->
+    const count = @counts.last()!
+    return false if not @has_next(']')
+    @path[@path.length - 1] = "[#{count}]"
+    true
+
+  # Reads `{` of an object, whose keys next_key then gives.
+  begin_object = (): void ->
+    @begin '{', 'an object'
+    @keys.push Set<String>()
+
+  # The next key of the innermost object, whose value it then starts reading, or nil at its end.
+  next_key = (): String? ->
+    if not @has_next('}')
+      @keys.pop()
+      return nil
+    # An error before the key is read is the object's.
+    @path[@path.length - 1] = ''
     @skip_space()
-    @fail_expected 'an array' if @peek() != '['
+    @fail_expected 'a key' if @peek() != '"'
+    const key = @read_string()
+    @path[@path.length - 1] = ".#{key}"
+    @skip_space()
+    @fail_expected "':'" if @peek() != ':'
+    @at += 1
+    @fail "the key #{quoted(key)} twice" if @keys.last()!.has(key)
+    @keys.last()!.add(key)
+    key
+
+  # The value where the reader is, of whatever kind, as that of a key that is no field.
+  skip_value = (): void ->
+    @skip_space()
+    const byte = @peek()
+    if byte == '"'
+      @read_string()
+    else if byte == '['
+      @begin_array()
+      @skip_value() while @next_item()
+    else if byte == '{'
+      @begin_object()
+      @skip_value() while @next_key() != nil
+    else if not (@read_literal('null') or @read_literal('true') or @read_literal('false'))
+      const number = @number() ? @fail_expected('a value')
+      @at += number.binary.length
+
+  # The object just read has no key for a field that needs one.
+  fail_missing = (key: String): never -> @fail("missing the key #{quoted(key)}")
+
+  # Starts reading the next of the `count` items of a tuple, which must be there.
+  next_tuple_item = (count: Int): void ->
+    @fail "expected an array of #{count} items, found fewer" if not @next_item()
+
+  # Reads the end of a tuple of `count` items, which must have no more.
+  end_tuple = (count: Int): void ->
+    @fail "expected an array of #{count} items, found more" if @next_item()
+
+  # The string just read names no member of the enum.
+  fail_member = (enum_name: String, text: String): never ->
+    @fail "expected a member of #{enum_name}, found #{quoted(text)}"
+
+  begin = (open: Byte, expected: String) ->
+    @skip_space()
+    @fail_expected expected if @peek() != open
     @at += 1
     @path.push ''
-    @item_counts.push 0
+    @counts.push 0
 
-  # Whether another item of the innermost array follows, which it then starts reading; at the end
-  # of the array, it reads its `]`.
-  next_item = ->
+  # Whether another item or key of the innermost array or object follows, after the `,` that it
+  # reads; at the end, it reads `close`.
+  has_next = (close: Byte) ->
     @skip_space()
-    const count = @item_counts.last()!
-    if @peek() == ']'
+    const count = @counts.last()!
+    if @peek() == close
       @at += 1
       @path.pop()
-      @item_counts.pop()
+      @counts.pop()
       return false
     if count > 0
-      @fail_expected "',' or ']'" if @peek() != ','
+      @fail_expected "',' or '#{byte_text(close)}'" if @peek() != ','
       @at += 1
-    @path[@path.length - 1] = "[#{count}]"
-    @item_counts[@item_counts.length - 1] = count + 1
+    @counts[@counts.length - 1] = count + 1
     true
 
   # Nothing but whitespace follows the value.
-  end = ->
+  end = (): void ->
     @skip_space()
     @fail_expected 'the end of the text' if @at < @bytes.length
 
