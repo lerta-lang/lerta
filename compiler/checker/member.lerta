@@ -13,12 +13,16 @@ import
   builtin_property, FoundMember, InterfaceProperty, MemberTarget, Method, Property
 from './member_targets'
 import narrowed_field_type from './narrowable'
-import ExtensionSource, find_method, InterfaceMethod, MethodSource, OwnMethod from './methods'
+import
+  ExtensionSource, find_method, InterfaceMethod, MemberMethod, MethodSource, OwnMethod, UnionMethod
+from './methods'
 import method_owner, object_method_type from './object'
 import info_of from './object_types'
 import find_interface_extension from './satisfaction'
 import Body from './shared'
-import format_type, FunctionType, InterfaceType, Type, UnionType from '../types'
+import
+  format_member, format_type, format_types, FunctionType, InterfaceType, same_type, Type, UnionType
+from '../types'
 
 # The result of a call of the method that `member` names: a method of the object's type (see
 # find_method), or a field that holds a function.
@@ -57,23 +61,70 @@ const type_of_method = (body: Body, member: Member, receiver: Type, source: Meth
   const from_source = source then method_type(body, receiver, source, member.name, nil)
   const no_method = ->
     fail body.program, position, "type #{format_type(receiver)} has no method '#{name}'"
-  const field =
+  const field = ->
     if receiver is UnionType
-      common_field_type body, receiver, member
-    else
-      field_type body, receiver, member
-  const method = from_source ? field ? no_method()
+      if const problem = union_method_problem(body, receiver, member.name)
+        fail body.program, position, problem
+      return common_field_type(body, receiver, member)
+    field_type(body, receiver, member) ? no_method()
+  const method = from_source ? field()
   record_member body, member, from_source then Method(source: source!) else Property(kind: FIELD)
   set_type body, member, method
 
-const find = (body: Body, receiver: Type, name: String) ->
-  find_method body.program, receiver, name, body.extensions
+const find = (body: Body, receiver: Type, name: Identifier) ->
+  return union_method(body, receiver, name) if receiver is UnionType
+  find_method body.program, receiver, name.name, body.extensions
+
+# The method of the name that every member of the union has, of one type, or nil.
+const union_method = (body: Body, union: UnionType, name: Identifier): UnionMethod? ->
+  const found = find_union_method(body, union, name)
+  found.problem == nil then UnionMethod(type: found.type!, members: found.members)
+
+# Why no method of the name can be called on the union, or nil if one can or no member has one.
+export const union_method_problem = (body: Body, union: UnionType, name: Identifier) ->
+  return nil if union.members.all((member) -> find_callable(body, member, name) == nil)
+  find_union_method(body, union, name).problem
+
+struct UnionMethods
+  type: Type?
+  members: MemberMethod[]
+  # Why the method cannot be called on the union, if it cannot.
+  problem: String?
+
+# The method of the name in each member of the union, which must all have it, of one type, as a
+# call on the member would call it. A generic one would have an instance of each member.
+const find_union_method = (body: Body, union: UnionType, name: Identifier): UnionMethods ->
+  const members: MemberMethod[] = []
+  var first: Type?
+  for member in union.members
+    const member_name = format_member(member, union)
+    const of_member = "of #{member_name}, a member of #{format_type(union)}"
+    const failed = (problem: String) -> UnionMethods(type: nil, members: members, problem: problem)
+    const missing = "'#{name.name}' is no method #{of_member}"
+    const source = find_callable(body, member, name) ? return failed(missing)
+    return failed(generic_problem(source, name.name, of_member)) if generic_method(source) != nil
+    const type = method_type(body, member, source, name, nil)!
+    if first and not same_type(first, type)
+      const first_name = format_member(members[0].member, union)
+      const types = format_types(first, type)
+      const differing = "#{types.first} in #{first_name} but #{types.second} in #{member_name}"
+      return failed("'#{name.name}' has type #{differing}")
+    first = type
+    members.push MemberMethod(member, source)
+  UnionMethods type: first, members: members, problem: nil
+
+# Why the generic method cannot be called on the union: it has type parameters of its own or of its
+# type, or it comes from an extend of an interface, which has an instance for each type.
+const generic_problem = (source: MethodSource, name: String, of_member: String) ->
+  const bound = source is ExtensionSource then source.method.bound
+  return "'#{name}' #{of_member}, comes from an extend of #{format_type(bound)}" if bound
+  "'#{name}' is a generic method, or one of a generic type, #{of_member}"
 
 # The method that a call of the name calls: one of the receiver's type (see find_method), or one
 # that an extend of an interface it satisfies gives it, which codegen reads from the facts. A
 # member of the type of the same name would make the call ambiguous.
 const find_callable = (body: Body, receiver: Type, name: Identifier): MethodSource? ->
-  const own = find(body, receiver, name.name)
+  const own = find(body, receiver, name)
   const extended = find_interface_extension(body, receiver, name) ? return own
   if own != nil or field_type_by_name(body, receiver, name) != nil
     const from = "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
@@ -94,6 +145,7 @@ const method_type = (
     when OwnMethod then object_method_type(body, source.receiver, name)
     when BuiltinMethod then source.type
     when InterfaceMethod then source.type
+    when UnionMethod then source.type
     when ExtensionSource then plain_method_type(body.program, source.method, name.position)
 
 # The member of the type that an interface reads by the name: a method, or a field or a property,
@@ -105,7 +157,7 @@ export const find_member = (
   name: Identifier
   call: Call? = nil
 ): FoundMember? ->
-  if const source = find(body, type, name.name)
+  if const source = find(body, type, name)
     const method = method_type(body, type, source, name, call) ? return nil
     return FoundMember(target: Method(source), type: method)
   if type is UnionType
@@ -159,7 +211,7 @@ export const type_of_property = (body: Body, member: Member): Type ->
     record_member body, member, property.target
     return property.type
   const extended = find_interface_extension(body, object_type, member.name)
-  if find(body, object_type, name) != nil or extended != nil
+  if find(body, object_type, member.name) != nil or extended != nil
     fail body.program, position, "a method must be called: write `#{name}()`"
   fail body.program, position, "type #{format_type(object_type)} has no property '#{name}'"
 

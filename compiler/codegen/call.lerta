@@ -7,10 +7,13 @@ import
   CollectionMaker, Constructor, ExternReference, FunctionReference, JsonConversion, JsonDirection,
   ScopedLocal, TopLevelValue
 from '../checker/references'
-import ExtensionSource, InterfaceMethod, MethodSource, OwnMethod from '../checker/methods'
+import
+  ExtensionSource, InterfaceMethod, MethodSource, OwnMethod, UnionMethod
+from '../checker/methods'
 import info_of, is_argument from '../checker/object_types'
 import call_builtin_method, takes_object from './builtins'
 import emit_conversion from './checked_int'
+import emit_member_value from './boxes'
 import emit_closure_call, function_type_of from './closure'
 import emit_parse from './enum'
 import
@@ -19,6 +22,7 @@ from './expression'
 import function_reference_symbol from './references'
 import emit_exception_check, holding from './exceptions'
 import Generator from './generator'
+import emit_member_dispatch from './heap_object'
 import emit_interface_call from './interface'
 import IrBuilder from './ir_builder'
 import emit_read_json from './json_read'
@@ -31,7 +35,7 @@ import emit_add_items, emit_map_new from './map'
 import apply_operator_method from './operator'
 import nil_constant from './optional'
 import emit_runtime_call, emit_valueless_call from './runtime_calls'
-import FunctionType, MapType, ObjectType, Type from '../types'
+import MapType, ObjectType, same_type, Type from '../types'
 
 # A call of `name.export` of a module imported as `name` is the call of the name that the checker
 # made (see qualified_name).
@@ -111,41 +115,63 @@ const generate_member_call = (g: Generator, call: Call, member: Member) ->
 const generate_method_call = (g: Generator, call: Call, member: Member, source: MethodSource) ->
   const object_type = type_of(g, member.object)
   const object = generate(g, member.object)
-  const check = -> emit_exception_check(g)
   # An Iter's has_next and next run the code of its kind, which may throw.
   if source is BuiltinMethod and takes_object(source.member)
     # The object is held until the Iter's method takes it over.
+    const check = -> emit_exception_check(g)
     const call_iter = ->
       call_builtin_method g.ir, g.code.program, source.member, object, object_type, [], check
     const result = holding(g, object, object_type, call_iter)
     emit_exception_check g
     return result
-  # A conversion between integer types throws where the value does not fit.
-  if source is BuiltinMethod and source.member == INTEGER_CONVERSION
-    const target = (source.type as FunctionType!).result
-    return emit_conversion(g, object, object_type, target)
-  const call_written = (symbol: String) ->
-    const receiver = "#{ir_type(object_type)} #{object}"
-    call_function g, symbol, type_of(g, member), call.args, receiver
   const call_method = ->
-    case source
-      when BuiltinMethod
-        const emit_call = (args: String[]) ->
-          if source.member == OPERATOR
-            return apply_operator_method(g, member.name.name, object, args, object_type)
-          call_builtin_method g.ir, g.code.program, source.member, object, object_type, args, check
-        with_arguments g, call.args, emit_call
-      when InterfaceMethod
-        const emit_call = (operands: String[]) ->
-          const args = typed_arguments(g, call.args, operands)
-          emit_interface_call g.ir, object, source.index, source.type, args
-        with_arguments g, call.args, emit_call
-      when OwnMethod then call_written(own_method_symbol(g, source, member.name.name, call))
-      when ExtensionSource then call_written(extension_method_symbol(g, source, call))
+    const emit_call = (operands: String[]) ->
+      call_with_operands g, source, object, object_type, call, member, operands
+    with_arguments g, call.args, emit_call
   const result = holding(g, object, object_type, call_method)
   release_if_reference g, member.object, object
   emit_exception_check g
   result
+
+# Calls the method of the source on the object, with the operands of the call's arguments.
+const call_with_operands = (
+  g: Generator, source: MethodSource, object: String, object_type: Type, call: Call, member: Member,
+  operands: String[]
+): String ->
+  case source
+    when BuiltinMethod
+      if source.member == OPERATOR
+        return apply_operator_method(g, member.name.name, object, operands, object_type)
+      # A conversion between integer types throws where the value does not fit.
+      if source.member == INTEGER_CONVERSION
+        return emit_conversion(g, object, object_type, function_type_of(source.type).result)
+      const check = -> emit_exception_check(g)
+      call_builtin_method g.ir, g.code.program, source.member, object, object_type, operands, check
+    when InterfaceMethod
+      const args = typed_arguments(g, call.args, operands)
+      emit_interface_call g.ir, object, source.index, source.type, args
+    when OwnMethod
+      const symbol = own_method_symbol(g, source, member.name.name, call)
+      call_method_function g, symbol, object, object_type, call, member, operands
+    when ExtensionSource
+      const symbol = extension_method_symbol(g, source, call)
+      call_method_function g, symbol, object, object_type, call, member, operands
+    when UnionMethod
+      const of_member = (member_type: Type) ->
+        const found = source.members.find((each) -> same_type(each.member, member_type))!
+        const value = emit_member_value(g.ir, object, member_type)
+        call_with_operands g, found.source, value, member_type, call, member, operands
+      const result_type = ir_return_type(function_type_of(source.type).result)
+      const members = [each.member for each in source.members]
+      emit_member_dispatch g.ir, object, members, result_type, of_member
+
+# Calls a method written in Lerta by its symbol, with the object first.
+const call_method_function = (
+  g: Generator, symbol: String, object: String, object_type: Type, call: Call, member: Member,
+  operands: String[]
+) ->
+  const receiver = "#{ir_type(object_type)} #{object}"
+  emit_function_call g, symbol, type_of(g, member), call.args, operands, receiver
 
 # The symbol of a method written in Lerta: of a class or struct, or of an extend; or of the
 # instance of a generic method that the call calls.
@@ -163,17 +189,25 @@ const extension_method_symbol = (g: Generator, source: ExtensionSource, call: Ca
 const call_function = (
   g: Generator, symbol: String, type: Type, args: Expression[], receiver: String?
 ) ->
-  const left_out = args.length < function_type_of(type).params.length
-  const target = left_out then default_entry_symbol(symbol, args.length) else symbol
   const emit_call = (operands: String[]) ->
-    const all_args: String[] = []
-    all_args.push receiver if receiver
-    all_args.append typed_arguments(g, args, operands)
-    call_user_function g.ir, target, type, all_args.join(', ')
+    emit_function_call g, symbol, type, args, operands, receiver
   const result = with_arguments(g, args, emit_call)
   # A method's receiver is released after the check.
   emit_exception_check g if receiver == nil
   result
+
+# Calls the function by its symbol, or by the entry that computes the defaults of the arguments
+# left out, with the operands of the arguments, after `receiver` if given.
+const emit_function_call = (
+  g: Generator, symbol: String, type: Type, args: Expression[], operands: String[],
+  receiver: String?
+) ->
+  const left_out = args.length < function_type_of(type).params.length
+  const target = left_out then default_entry_symbol(symbol, args.length) else symbol
+  const all_args: String[] = []
+  all_args.push receiver if receiver
+  all_args.append typed_arguments(g, args, operands)
+  call_user_function g.ir, target, type, all_args.join(', ')
 
 # The arguments' operands with their IR types.
 const typed_arguments = (g: Generator, args: Expression[], operands: String[]) ->
