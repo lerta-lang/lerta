@@ -12,10 +12,10 @@ from './interfaces'
 import ProgramWide, Shared from './shared'
 import reject_invalid_instance from './type_validity'
 import
-  ArrayType, binary_type, bool_type, float32_type, float_type, format_type, FunctionType,
-  INTEGER_KINDS, is_kind, IterType, MapType, never_type, ObjectType, optional_type, OptionalType,
-  PromiseType, record_type, RecordField, same_type, set_of, SimpleType, string_type, TupleType,
-  Type, TypeKind, union_type, UnionType, void_type
+  ArrayType, binary_type, bool_type, EnumType, float32_type, float_type, format_type, FunctionType,
+  inner_of, INTEGER_KINDS, is_kind, is_one_of_kinds, IterType, MapType, never_type, ObjectType,
+  optional_type, OptionalType, PromiseType, record_type, RecordField, same_type, set_of, SimpleType,
+  string_type, TupleType, Type, TypeKind, union_type, UnionType, void_type
 from '../types'
 
 # Names of the types that the compiler declares, which the module's names shadow, but which a
@@ -175,20 +175,42 @@ const resolve_function = (
   const params = [resolve(program, resolver, param) for param in type_name.params]
   FunctionType params, result: resolve_result(program, resolver, type_name.result)
 
+# A member that is optional, as `String?` in `Int | String?`, makes the union optional: nil is one
+# of its values.
 const resolve_union = (program: ProgramWide, resolver: Resolver, type_name: UnionTypeName): Type ->
   const members: Type[] = []
+  var optional = false
   for member in type_name.members
-    const type = resolve(program, resolver, member)
+    const resolved = resolve(program, resolver, member)
+    optional = true if resolved is OptionalType
+    const type = inner_of(resolved)
     case type
       when UnionType then members.append(type.members)
-      when ObjectType then members.push(type)
       else
-        const message = "a union can only hold classes and structs so far, not #{format_type(type)}"
-        fail program, member.position, message
+        if not is_union_member(type)
+          const kinds = 'classes, structs, numbers, Bool, String, Binary and enums'
+          const message = "a union can only hold #{kinds} so far, not #{format_type(type)}"
+          fail program, member.position, message
+        members.push type
   const unique: Type[] = []
   for type in members
     unique.push type if not unique.any((other) -> same_type(other, type))
-  union_type unique
+  const union = union_type(unique)
+  optional then optional_type(union) else union
+
+# A type whose values a union may hold: a class or a struct, as it is, or a value of the others,
+# which a union holds boxed (see codegen boxes).
+const is_union_member = (type: Type) ->
+  type is ObjectType or type is EnumType or is_one_of_kinds(type, UNION_VALUE_KINDS)
+
+const UNION_VALUE_KINDS: TypeKind[] = [
+  INTEGER_KINDS...
+  'Float'
+  'Float32'
+  'Bool'
+  'String'
+  'Binary'
+]
 
 const resolve_alias = (program: ProgramWide, resolver: Resolver, name: String, at: Position) ->
   const shared = program.shared[resolver.module_index]

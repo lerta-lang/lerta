@@ -17,7 +17,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 Each milestone is a kind of program that can be written once it is reached, so that real programs, not only the compiler, find what the language lacks.
 
 1. **Small command-line tools**: the operations on [strings](strings.md#operations-and-representation).
-2. **Programs that read and write structured data**: [union members other than classes and structs](language.md#types) and `std:json`.
+2. **Programs that read and write structured data**: `std:json` ([programs](programs.md#standard-library)).
 3. **The LSP and the test harness in Lerta** ([tools](programs.md#tools)), then checking generic bodies at definition ([objects](objects.md#generics)).
 
 Whether the runtime collects cycles ([runtime](runtime.md#open-questions)) is decided during milestone 1, from programs driven by events, rather than after async/await is complete.
@@ -27,7 +27,6 @@ Whether the runtime collects cycles ([runtime](runtime.md#open-questions)) is de
 Where one part needs another first, across areas:
 
 - Checking a generic body at definition ([objects](objects.md#generics)) needs a bound to allow every operator the body uses, as `x * 2` needs `Mul` (see [operators](../reference/builtins.md#operators)).
-- Decoding JSON into a union of `Int` and `String` ([programs](programs.md#standard-library)), which the LSP needs for a request's `id`, needs [union members other than classes and structs](language.md#types).
 
 An order within one area is stated in its file.
 

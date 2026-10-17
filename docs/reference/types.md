@@ -200,7 +200,7 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 type Expr = Num | Add | Mul
 ```
 
-- `A | B` is a value of any of the member types, which are classes and structs so far. A discriminated union needs no tag: the member's type itself tells the members apart, with no `kind` field or enum (branch with `is` or `case`). A union whose member is itself a union is flattened, and the order of the members does not matter.
+- `A | B` is a value of any of the member types: classes and structs, the numbers, `Bool`, `String`, `Binary` and enums so far, as in `Int | String`. A member that is optional, as `String?` in `Int | String?` (`?` binds tighter than `|`), makes nil a value of the union, which is then optional. A discriminated union needs no tag: the member's type itself tells the members apart, with no `kind` field or enum (branch with `is` or `case`). A union whose member is itself a union is flattened, and the order of the members does not matter.
 - `type Name = ...` names a type at the top level. Aliases may refer to types and aliases declared later, but not to themselves.
 - After a `=` that ends the line, the indented lines below are the members of a union, one or more on each line:
   ```

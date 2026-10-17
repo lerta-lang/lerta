@@ -2,6 +2,7 @@
 # (see docs/internals.md#objects).
 import info_of, ObjectInfo from '../checker/object_types'
 import ProgramWide from '../checker/shared'
+import emit_box_test from './boxes'
 import emit_branch, IrBuilder, IrModule from './ir_builder'
 import
   drop_symbol, emit_release_stored, emit_retain_value, ir_type, object_ir_type, Ownership,
@@ -9,7 +10,7 @@ import
 from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
-  inner_of, members_of, ObjectType, OptionalType, RecordType, TupleType, Type, type_key
+  inner_of, is_boxed, members_of, ObjectType, OptionalType, RecordType, TupleType, Type, type_key
 from '../types'
 
 # The two header fields come before the object's own.
@@ -131,7 +132,9 @@ export const emit_type_test = (ir: IrBuilder, object: String, type: Type) ->
 
 # The drop function in the header tells the type, since every type has its own.
 const emit_object_test = (ir: IrBuilder, object: String, type: Type) ->
-  ir.assign "icmp eq ptr #{emit_drop_function(ir, object)}, #{drop_symbol(type as ObjectType!)}"
+  const drop = emit_drop_function(ir, object)
+  return emit_box_test(ir, drop, type) if is_boxed(type)
+  ir.assign "icmp eq ptr #{drop}, #{drop_symbol(type as ObjectType!)}"
 
 # The drop function in the object's header, which tells its type.
 export const emit_drop_function = (ir: IrBuilder, object: String) ->

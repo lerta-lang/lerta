@@ -35,18 +35,35 @@ import Body from './shared'
 import type_of_tuple, type_of_tuple_item from './tuple'
 import resolve from './type_names'
 import
-  bool_type, float_type, format_type, format_types, FunctionType, inner_of, is_assignable, is_float,
-  is_integer, is_kind, is_one_of_kinds, never_type, nil_type, optional_type, OptionalType,
-  RecordType, same_type, string_type, Type, UnionType, void_type
+  bool_type, boxes_into, float_type, format_type, format_types, FunctionType, inner_of,
+  is_assignable, is_float, is_integer, is_kind, is_one_of_kinds, never_type, nil_type,
+  optional_type, OptionalType, RecordType, same_type, string_type, Type, UnionType, void_type
 from '../types'
 
 export const type_of = (body: Body, expression: Expression, expected: Type? = nil) ->
   set_type body, expression, compute_type(body, expression, expected)
 
+# The type that a literal takes where the type is expected, as an Int8 where an `Int8 | String` is:
+# the union's one integer member, or one float member, if it has only one.
+const literal_hint = (expression: Expression, expected: Type?) ->
+  const given = expected ? return nil
+  const type = inner_of(given)
+  return type if type is not UnionType
+  const of_kind = (is_kind_of: (Type) -> Bool) ->
+    const members = [member for member in type.members when is_kind_of(member)]
+    members.length == 1 then members[0]
+  case expression
+    # An integer literal is a float where a float alone is expected.
+    when IntegerLiteral
+      return integer if const integer = of_kind(is_integer)
+      of_kind is_float
+    when FloatLiteral then of_kind(is_float)
+    else type
+
 # `expected` is a hint: the caller still checks that the type fits. A literal where a `T?` is
-# expected is a T, as where a T is.
+# expected is a T, as where a T is, and where a union is, of its one member of the literal's kind.
 const compute_type = (body: Body, expression: Expression, expected: Type?): Type ->
-  const literal_kind = expected != nil then inner_of(expected) else nil
+  const literal_kind = literal_hint(expression, expected)
   # A string literal of one character is a byte where a Byte is expected, a code point where a
   # UInt32 is.
   const wants_character = literal_kind != nil and is_one_of_kinds(literal_kind, ['Byte', 'UInt32'])
@@ -261,7 +278,8 @@ const check_throw = (body: Body, throw_expression: Throw) ->
   require_type body, value, type, std_interface(body.shared, 'Error', value.position).type
 
 # A T or nil where a T? is expected is converted, and so is a value where an interface or an Iter
-# is expected (see interface_values), which codegen does where it generates it.
+# is expected (see interface_values), or a union holds it in a box (see boxes_into), which codegen
+# does where it generates it.
 export const require_type = (body: Body, expression: Expression, type: Type, expected: Type) ->
   const assignable = is_assignable(type, expected)
   const through_itab = not assignable and converts_through_itab(body, expression, type, expected)
@@ -270,7 +288,8 @@ export const require_type = (body: Body, expression: Expression, type: Type, exp
     fail body.program, expression.position, "expected #{first}, got #{second}"
   const is_converted = not is_kind(type, 'never') and not same_type(type, expected)
   const to_optional = expected is OptionalType and is_converted
-  body.facts.conversions[expression] = expected if to_optional or through_itab
+  const to_box = is_converted and boxes_into(type, expected)
+  body.facts.conversions[expression] = expected if to_optional or through_itab or to_box
 
 export const expect_condition = (body: Body, expression: Expression) ->
   const type = type_of(body, expression)

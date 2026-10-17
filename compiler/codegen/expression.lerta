@@ -32,7 +32,8 @@ import
   emit_throw_error, generate_try, holding, pop_temporaries, push_temporary, while_holding
 from './exceptions'
 import emit_interface_read, emit_interface_value from './interface'
-import IrBuilder from './ir_builder'
+import emit_box, emit_unbox from './boxes'
+import emit_branch, IrBuilder from './ir_builder'
 import emit_adapter_iter from './iter'
 import
   emit_release, emit_release_value, emit_retain, emit_retain_value, ir_type, string_constant
@@ -45,8 +46,8 @@ import DEAD_OBJECT, FAILED_CAST, throw_if from './runtime_errors'
 import emit_initialized_check from './top_level'
 import generate_yield from './yielding'
 import
-  inner_of, InterfaceType, is_float, is_kind, IterType, ObjectType, OptionalType, RecordType,
-  string_type, Type, UnionType
+  boxes_into, inner_of, InterfaceType, is_boxed, is_float, is_kind, IterType, ObjectType,
+  optional_type, OptionalType, RecordType, string_type, Type, UnionType
 from '../types'
 
 # The type that the checker gave the node.
@@ -59,6 +60,8 @@ export const generate = (g: Generator, expression: Expression) ->
   return nil_constant(target!) if expression is NilLiteral
   const operand = generate_value(g, expression)
   return operand if target == nil
+  const source = type_of(g, expression)
+  return emit_box_value(g.ir, operand, source) if boxes_into(source, target)
   const itab = g.facts.itabs[expression] ? return emit_wrap(g.ir, operand, type_of(g, expression))
   const value = emit_interface_value(g, operand, itab)
   const converted = inner_of(target)
@@ -162,10 +165,19 @@ const generate_cast = (g: Generator, cast: Cast) ->
   const ir = g.ir
   const object = generate(g, cast.value)
   const holds = emit_member_test(g, object, cast.value, cast.type)
+  const member = type_of(g, cast.type)
   if cast.throws
     const fails = ir.assign("xor i1 #{holds}, true")
     while_holding g, object, type_of(g, cast.value), -> throw_if(g, fails, FAILED_CAST)
-    return object
+    return object if not is_boxed(member)
+    return emit_narrowed_owned(ir, object, type_of(g, cast.value), member)
+  if is_boxed(member)
+    const optional = optional_type(member)
+    const value = -> emit_wrap(ir, emit_unbox(ir, object, member), member)
+    const result = emit_branch(ir, ir_type(optional), holds, value, nil_constant(optional))
+    emit_retain_value ir, result, optional
+    emit_release ir, object
+    return result
   const result = ir.assign("select i1 #{holds}, ptr #{object}, ptr null")
   emit_retain ir, result
   emit_release ir, object
@@ -236,8 +248,7 @@ const generate_property = (g: Generator, member: Member) ->
       when EnumValue then panic('an enum value is read before its object')
   # A field narrowed where it is read (see checker narrowable FieldPath).
   const field_type = declared_field_type(g, object_type, name) ? return value
-  const is_narrowed = field_type is OptionalType and type is not OptionalType
-  is_narrowed then emit_unwrap(g.ir, value, field_type) else value
+  emit_narrowed_owned g.ir, value, field_type, type
 
 const declared_field_type = (g: Generator, object_type: Type, name: String) ->
   case object_type
@@ -335,14 +346,42 @@ const read_borrowed = (g: Generator, local: CodegenLocal, type: Type) ->
   const held = held_value(g, local)
   # A weak local's object, which may be gone, is never narrowed.
   const value = local.weak then emit_weak_object(ir, held) else held
-  const is_narrowed = local.type is OptionalType and type is not OptionalType
-  is_narrowed then emit_unwrap(ir, value, local.type) else value
+  emit_narrowed ir, value, local.type, type
 
 # What the local holds, borrowed: its value, or a weak local's box.
 export const held_value = (g: Generator, local: CodegenLocal) ->
   case local
     when SlotLocal then g.ir.assign("load #{ir_type(local.type)}, ptr #{slot_pointer(g, local)}")
     when ValueLocal then local.operand
+
+# The value of the declared type as the narrower one where it is narrowed: without nil, or as one
+# member of its union, out of its box if the union holds one; borrowed as `value` is.
+const emit_narrowed = (ir: IrBuilder, value: String, declared: Type, type: Type) ->
+  if not is_boxed_narrowing(declared, type)
+    const present = declared is OptionalType and type is not OptionalType
+    return present then emit_unwrap(ir, value, declared) else value
+  # A union value is a pointer, null for nil, whether optional or not.
+  return emit_unbox(ir, value, type) if type is not OptionalType
+  const member = -> emit_wrap(ir, emit_unbox(ir, value, type.inner), type.inner)
+  emit_branch ir, ir_type(type), ir.assign("icmp ne ptr #{value}, null"), member, nil_constant(type)
+
+# As emit_narrowed, of a value that is owned and given over.
+const emit_narrowed_owned = (ir: IrBuilder, value: String, declared: Type, type: Type) ->
+  return emit_narrowed(ir, value, declared, type) if not is_boxed_narrowing(declared, type)
+  const narrowed = emit_narrowed(ir, value, declared, type)
+  emit_retain_value ir, narrowed, type
+  emit_release ir, value
+  narrowed
+
+# Whether the value of the union narrowed to the type, one member, optional or not, is in a box.
+const is_boxed_narrowing = (declared: Type, type: Type) ->
+  inner_of(declared) is UnionType and is_boxed(inner_of(type))
+
+# A box of the value, owned, for a union, and of a T? a box or null.
+const emit_box_value = (ir: IrBuilder, value: String, type: Type) ->
+  return emit_box(ir, value, type) if type is not OptionalType
+  const box = -> emit_box(ir, emit_unwrap(ir, value, type), type.inner)
+  emit_branch ir, 'ptr', emit_is_present(ir, value, type), box, 'null'
 
 # The Error becomes the exception (see exceptions).
 const generate_throw = (g: Generator, throw_expression: Throw) ->

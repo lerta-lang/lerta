@@ -6,6 +6,7 @@ import compares_by_contents, has_own_hash, own_equality from '../checker/equalit
 import info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import from_item from './array'
+import emit_member_value from './boxes'
 import emit_own_equals, emit_own_hash, EQUAL, GREATER, LESS from './comparison_methods'
 import emit_float_word from './float'
 import
@@ -144,7 +145,9 @@ const emit_union_equals = (
   const left_type = emit_drop_function(ir, left)
   const same_type = ir.assign("icmp eq ptr #{left_type}, #{emit_drop_function(ir, right)}")
   const compare_members = ->
-    const of_member = (member: Type) -> emit_equals_by_contents(ir, program, left, right, member)
+    const of_member = (member: Type) ->
+      const values = [emit_member_value(ir, left, member), emit_member_value(ir, right, member)]
+      emit_equals_by_contents ir, program, values[0], values[1], member
     emit_member_dispatch ir, left, type.members, 'i1', of_member
   emit_branch ir, 'i1', same_type, compare_members, 'false'
 
@@ -181,7 +184,8 @@ const emit_hash = (ir: IrBuilder, program: ProgramWide, value: String, type: Typ
       const items = item_hash_function(ir.module, program, type.element)
       call_runtime ir, 'i64 @lerta_array_hash(ptr, ptr)', "ptr #{value}, ptr #{items}"
     when type is UnionType
-      const of_member = (member: Type) -> emit_hash_by_contents(ir, program, value, member)
+      const of_member = (member: Type) ->
+        emit_hash_by_contents ir, program, emit_member_value(ir, value, member), member
       emit_member_dispatch ir, value, type.members, 'i64', of_member
     else value
 
