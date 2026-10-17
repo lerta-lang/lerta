@@ -2,7 +2,7 @@
 
 Syntax highlighting, filetype detection, indentation settings and a compiler plugin for Vim and Neovim.
 
-In a Lerta buffer, `:make` runs `lerta dump-checked` on the current file and puts its errors and warnings (see [Diagnostics](../../docs/reference/compiler.md#diagnostics)) in the quickfix list, including those in the modules it imports. `g:lerta_path` names the `lerta` command, `lerta` on `PATH` by default; set it before the buffer is opened. As the compiler counts columns in code points, which Vim takes as screen columns, a column after a wide character, such as a CJK one, or a tab on the same line is off.
+In Neovim 0.8 or later, a Lerta buffer starts the compiler's language server, `lerta lsp` (see [the reference](../../docs/reference/compiler.md#lsp)), through Neovim's own LSP client, if the `lerta` command is there: as you type, it checks the program whose entry module is each open buffer and shows the errors and warnings of its files, as the reference says, and `:lua vim.lsp.buf.format()` writes the buffer in the style, as `lerta fmt --fix` would. In Vim, and in Neovim too, `:make` runs `lerta dump-checked` on the current file and puts its errors and warnings (see [Diagnostics](../../docs/reference/compiler.md#diagnostics)) in the quickfix list, including those in the modules it imports. `g:lerta_path` names the `lerta` command, `lerta` on `PATH` by default; set it before the buffer is opened. As the compiler counts columns in code points, which Vim takes as screen columns, a column after a wide character, such as a CJK one, or a tab on the same line is off.
 
 ## Installing
 
