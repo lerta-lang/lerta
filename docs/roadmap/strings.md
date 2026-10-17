@@ -5,7 +5,7 @@ The planned design of `String` and `Binary` beyond [the reference](../reference/
 ## Operations and representation
 
 - A separate iterator for graphemes, besides the code points that a `String` gives (see [the reference](../reference/types.md#string)).
-- `s.to_upper()`, `s.to_lower()` and the number of code points.
+- `s.to_upper()` and `s.to_lower()` of every letter, which change the ASCII letters only so far, through the case mappings of Unicode; and the number of code points.
 - A `StringBuilder` of the runtime, so that `join`, `to_string`, `repeat` and `pad` can be written in Lerta as efficiently as in C: `StringBuilder(capacity: n)` reserves room, `b.write(s)` copies the bytes of a `String` at once, and `b.to_string()` hands its storage over as the `String`, trimmed to its length and without a copy, leaving the builder empty. A `Byte[]` cannot serve, since `to_binary()` copies it again.
 - Ropes, so that `+` is O(1).
 - Small strings as immediate values.
