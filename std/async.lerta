@@ -56,16 +56,14 @@ export const timeout = <P>(promise: P, seconds: Float) -> await [promise].settle
 
 export struct TimeoutError: Error
 
-# A TimeoutError, or the error of the sleep, rejects the outcome once the seconds have passed.
-const time_out = <T>(outcome: Deferred<T>, seconds: Float) ->
-  try
-    await sleep(seconds)
-    throw TimeoutError(message: "timed out after #{seconds} seconds")
-  catch error
-    outcome.reject error
+# A promise that a TimeoutError, or the error of the sleep, rejects once the seconds have passed.
+const expired = <T>(seconds: Float): Promise<T> ->
+  await sleep(seconds)
+  throw TimeoutError(message: "timed out after #{seconds} seconds")
 
-# The promises that have a value and those without one are awaited apart, as there is no value of
-# the latter to gather: the extend of Promise[] gives it its methods before the generic one does.
+# The promises that have a value are awaited through the extend of Promise<T>[], and those without
+# one, by the extend of Promise[], which gives them its methods before the generic one does, as
+# promises of true that all_valued makes of them.
 extend<T> Promise<T>[]
   gathered = (): Promise<T[]> ->
     const all_values = Deferred<T[]>()
@@ -101,68 +99,21 @@ extend<T> Promise<T>[]
     finally
       promise.cancel() for promise in @
 
-  settled_within = (seconds: Float): Promise<T> ->
-    const outcome = Deferred<T>()
-    const settle = ->
-      try
-        outcome.resolve await @[0]
-      catch error
-        outcome.reject error
-    const _settling = settle()
-    const timing = time_out(outcome, seconds)
-    try
-      await outcome.promise()
-    finally
-      @[0].cancel()
-      timing.cancel()
+  settled_within = (seconds: Float) -> await [@[0], expired<T>(seconds)].first_settled()
 
 extend Promise[]
   gathered = ->
-    const all_done = Deferred<Bool>()
-    var left = @length
-    all_done.resolve true if left == 0
-    const settle = (promise: Promise) ->
-      try
-        await promise
-        left -= 1
-        all_done.resolve true if left == 0
-      catch error
-        all_done.reject error
-    const _settling = [settle(promise) for promise in @]
-    try
-      const _done = await all_done.promise()
-    # Only a cancel of all cancels them: the error of one leaves the others, whose work may still
-    # be wanted, going on.
-    catch error: CancelledError
-      promise.cancel() for promise in @
-      throw error
+    const _values = await all_valued(@).gathered()
 
   first_settled = ->
-    const first = Deferred<Bool>()
-    const settle = (promise: Promise) ->
-      try
-        await promise
-        first.resolve true
-      catch error
-        first.reject error
-    const _settling = [settle(promise) for promise in @]
-    try
-      const _done = await first.promise()
-    finally
-      promise.cancel() for promise in @
+    const _value = await all_valued(@).first_settled()
 
   settled_within = (seconds: Float) ->
-    const outcome = Deferred<Bool>()
-    const settle = ->
-      try
-        await @[0]
-        outcome.resolve true
-      catch error
-        outcome.reject error
-    const _settling = settle()
-    const timing = time_out(outcome, seconds)
-    try
-      const _done = await outcome.promise()
-    finally
-      @[0].cancel()
-      timing.cancel()
+    const _value = await all_valued(@).settled_within(seconds)
+
+const valued = (promise: Promise) ->
+  await promise
+  true
+
+# A cancel of one of these reaches the promise it awaits.
+const all_valued = (promises: Promise[]) -> [valued(promise) for promise in promises]
