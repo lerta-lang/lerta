@@ -152,8 +152,15 @@ export const generate_try = (g: Generator, try_expression: Try) ->
     const scope_depth = g.locals.depth()
     g.finallies.push Finally(scope_depth, body: finally_body, handler_depth: g.handlers.length)
   const incoming: String[] = []
+  # A try that gives no value runs its blocks as statements, which release the values they discard.
+  const gives_value = not is_kind(type, 'void')
   const generate_value = (body: Statement[], define: (Map<String, CodegenLocal>) -> void) ->
-    const value = generate_block_value(g, body, define)
+    const value =
+      if gives_value
+        generate_block_value g, body, define
+      else
+        generate_block g, body, define
+        ''
     incoming.push "[ #{value == '' then 'poison' else value}, %#{ir.current_block} ]"
     ir.emit "br label %#{done_label}"
   with_handler g, catches_label, -> generate_value(try_expression.body, no_locals)
