@@ -2,7 +2,8 @@
 # control_flow generates control flow, and assignment assignments.
 import
   Assignment, Declaration, EnumDeclaration, Expression, Extend, Extern, For, FunctionLiteral, If,
-  Import, InterfaceDeclaration, Jump, Pass, Return, Statement, TypeAlias, TypeDeclaration, While
+  Import, InterfaceDeclaration, Jump, NilLiteral, Pass, Return, Statement, TypeAlias,
+  TypeDeclaration, While
 from '../ast'
 import required_params from '../checker/functions'
 import FieldInfo, is_argument, ObjectInfo from '../checker/object_types'
@@ -409,7 +410,9 @@ export const generate_block_value = (
   generate_statement g, statement for statement in all_but_last(body)
   const last = body.last()!
   const expression = last as Expression?
-  const value = expression then generate(g, expression) else ''
+  # nil that ends a branch of an if or a try that gives no value has no type to be converted to.
+  const is_discarded_nil = expression is NilLiteral and g.facts.conversions[expression] == nil
+  const value = expression and not is_discarded_nil then generate(g, expression) else ''
   generate_statement g, last if expression == nil
   release_scope g, scope
   g.locals.pop()
@@ -461,6 +464,8 @@ const generate_statement_node = (g: Generator, statement: Statement): void ->
     when Assignment then generate_assignment(g, statement)
     when TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias then pass
     when Import, Extern, Extend, Pass then pass
+    # One that ends a branch of an if that gives no value, which the checker allows alone.
+    when NilLiteral then pass
     else release_if_reference(g, statement, generate(g, statement))
 
 const generate_declaration = (g: Generator, declaration: Declaration) ->
