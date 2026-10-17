@@ -17,7 +17,6 @@ The planned design of modules, FFI, the standard library and tools.
 ## Standard library
 
 - The rest of JSON, in [std:json](../reference/modules.md#stdjson):
-  - Unions: the member, as it is: decoding takes the member that the JSON's kind of value tells, so the members must differ in it, as `Int | String` does; members that are all objects are an error.
   - Keys are the field names as written. `encode_json(value, JsonKeys.camel_case)` and `decode_json<T>(text, JsonKeys.camel_case)` write `text_document` as `textDocument`, for formats such as the [LSP](#tools)'s.
   - Unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
 - Random numbers, formatting dates and times, and the network.

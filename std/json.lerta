@@ -208,6 +208,18 @@ class JsonReader
       const number = @number() ? @fail_expected('a value')
       @at += number.binary.length
 
+  # The kind of the value where the reader is, by the first byte that it can be told by, as one of
+  # the JSON_ kinds below, which tells the member of a union that it is.
+  peek_kind = (): Int ->
+    @skip_space()
+    const byte = @peek() ? return JSON_OTHER
+    case
+      when byte == 't' or byte == 'f' then JSON_BOOL
+      when byte == '-' or byte.is_digit() then JSON_NUMBER
+      when byte == '"' then JSON_STRING
+      when byte == '{' then JSON_OBJECT
+      else JSON_OTHER
+
   # The object just read has no key for a field that needs one.
   fail_missing = (key: String): never -> @fail("missing the key #{quoted(key)}")
 
@@ -330,6 +342,15 @@ class JsonReader
       when '{' then 'an object'
       else
         byte == '-' or byte.is_digit() then 'a number that is not JSON' else "'#{byte_text(byte)}'"
+
+# The kinds of values that peek_kind tells, by the numbers that json_kind in
+# compiler/checker/json.lerta gives them: null and an array are JSON_OTHER, as no member of a union
+# is either.
+const JSON_BOOL = 0
+const JSON_NUMBER = 1
+const JSON_STRING = 2
+const JSON_OBJECT = 3
+const JSON_OTHER = 4
 
 # JSON's whitespace, which has no form feed or vertical tab, unlike Byte.is_space.
 const is_json_space = (byte: Byte) -> byte == ' ' or byte == "\t" or byte == "\n" or byte == "\r"

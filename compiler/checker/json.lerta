@@ -11,7 +11,7 @@ import names_type_or_import, resolve from './type_names'
 import field_type, info_of from './object_types'
 import
   ArrayType, EnumType, format_type, InterfaceType, is_kind, is_one_of_kinds, MapType, ObjectType,
-  OptionalType, RecordType, TupleType, Type, type_key, TypeKind, void_type
+  OptionalType, RecordType, TupleType, Type, type_key, TypeKind, UnionType, void_type
 from '../types'
 
 const JSON_MODULE = 'std:json'
@@ -34,11 +34,14 @@ export const reject_unjsonable = (program: ProgramWide, type: Type, at: Position
   const finder = PartFinder(program, at)
   const part = finder.unjsonable_part(type, '$') ? return
   const where = part.path == '$' then 'it' else part.path
-  const reason = "#{where} #{part.problem}, which std:json does not convert"
+  const reason = "#{where} #{part.problem}"
   fail program, at, "#{format_type(type)} does not satisfy Jsonable: #{reason}"
 
-# A part of a type, by its path from it, and what std:json does not convert in it.
+# A part of a type, by its path from it, and why std:json does not convert it.
 struct Part(path: String, problem: String)
+
+const unconverted = (path: String, problem: String) ->
+  Part path, problem: "#{problem}, which std:json does not convert"
 
 class PartFinder
   program: ProgramWide
@@ -57,14 +60,31 @@ class PartFinder
         @first_part [(field.type, "#{path}.#{field.name}") for field in type.fields]
       when type is MapType
         if not is_kind(type.key, 'String')
-          return Part(path, problem: "has keys of type #{format_type(type.key)}")
+          return unconverted(path, "has keys of type #{format_type(type.key)}")
         @unjsonable_part type.value, "#{path}.*"
       when type is ObjectType then @object_part(type, path)
-      else Part(path, problem: "is of type #{format_type(type)}")
+      when type is UnionType then @union_part(type, path)
+      else unconverted(path, "is of type #{format_type(type)}")
 
   first_part = (parts: (Type, String)[]): Part? ->
     for (type, path) in parts
       return part if const part = @unjsonable_part(type, path)
+    nil
+
+  # The members, which decoding tells apart by the kind of JSON value that each is written as.
+  union_part = (type: UnionType, path: String): Part? ->
+    const members_by_kind = Map<Int, Type>()
+    for member in type.members
+      if const part = @unjsonable_part(member, path)
+        # The member itself, rather than a part of it, is named as one.
+        return part if part.path != path
+        return unconverted(path, "has a member of type #{format_type(member)}")
+      const kind = json_kind(member)
+      if const other = members_by_kind[kind]
+        const both = "#{format_type(other)} and #{format_type(member)}"
+        const problem = "has two members that JSON writes as #{JSON_KIND_WORDS[kind]}, #{both}"
+        return Part(path, problem: "#{problem}, which decoding could not tell apart")
+      members_by_kind[kind] = member
     nil
 
   object_part = (type: ObjectType, path: String): Part? ->
@@ -74,10 +94,23 @@ class PartFinder
     const info = info_of(@program, type)
     for field in info.fields
       const field_path = "#{path}.#{field.name.name}"
-      return Part(path: field_path, problem: 'is weak') if field.weak
+      return unconverted(field_path, 'is weak') if field.weak
       if const part = @unjsonable_part(field_type(@program, info, field, @at), field_path)
         return part
     nil
+
+# The kind of JSON value that a member of a union is written as, by its number, which
+# JsonReader.peek_kind gives in std:json for such a value.
+export const json_kind = (member: Type) ->
+  case
+    when is_kind(member, 'Bool') then 0
+    when is_one_of_kinds(member, ['Int', 'Float']) then 1
+    when is_kind(member, 'String') or member is EnumType then 2
+    when member is ObjectType then 3
+    else panic("no kind of JSON value for #{format_type(member)}")
+
+# The kinds as messages write them, by their numbers.
+const JSON_KIND_WORDS = ['Bool values', 'numbers', 'strings', 'objects']
 
 const JSON_SCALAR_KINDS: TypeKind[] = ['Int', 'Float', 'Bool', 'String']
 

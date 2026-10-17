@@ -5,7 +5,10 @@ import ProgramWide from '../checker/shared'
 import emit_borrowed_item, emit_length, emit_load_item, emit_item_slot, from_item from './array'
 import emit_member_name from './enum'
 import emit_check_with, emit_return_thrown from './exceptions'
-import emit_field_pointer, emit_value_pointer, value_types from './heap_object'
+import emit_member_value from './boxes'
+import
+  emit_field_pointer, emit_member_dispatch, emit_value_pointer, value_types
+from './heap_object'
 import emit_if_else, IrBuilder, IrModule from './ir_builder'
 import call_void_method, Coder, emit_count_up, emit_while, is_inline, SCALARS from './json'
 import emit_release, emit_release_value, ir_type, shared_string_constant from './lerta_ir'
@@ -13,7 +16,7 @@ import emit_is_present, emit_unwrap from './optional'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
   ArrayType, EnumType, kind_of, MapType, ObjectType, OptionalType, RecordType, TupleType, Type,
-  type_key, void_type
+  type_key, UnionType, void_type
 from '../types'
 
 # Writes the value, borrowed; the caller checks for an exception after it.
@@ -45,6 +48,7 @@ const emit_write_parts = (ir: IrBuilder, writer: Coder, value: String, type: Typ
     when TupleType then emit_write_tuple(ir, writer, value, type, unwind)
     when RecordType then emit_write_record(ir, writer, value, type, unwind)
     when ObjectType then emit_write_object(ir, writer, value, type, unwind)
+    when UnionType then emit_write_union(ir, writer, value, type, unwind)
     else emit_write(ir, writer, value, type, unwind)
 
 # Writes the value, borrowed; `unwind` releases what the function holds and returns.
@@ -152,6 +156,16 @@ const emit_write_object = (
   call_void_method ir, writer, 'end_object', [], unwind
   call_void_method ir, writer, 'leave', [], unwind if may_cycle
 
+# The member that the value is, as it is written alone.
+const emit_write_union = (
+  ir: IrBuilder, writer: Coder, union: String, type: UnionType, unwind: () -> void
+): void ->
+  const write_member = (member: Type) ->
+    emit_write ir, writer, emit_member_value(ir, union, member), member, unwind
+    # emit_member_dispatch joins the members' values, which writing has none of.
+    'true'
+  emit_member_dispatch ir, union, type.members, 'i1', write_member
+
 const emit_write_key = (ir: IrBuilder, writer: Coder, name: String, unwind: () -> void) ->
   const key = shared_string_constant(ir, name)
   call_void_method ir, writer, 'next_key', ["ptr #{key}"], unwind
@@ -181,6 +195,7 @@ class Reach
       when TupleType then part.items.any((item) -> @reaches(item))
       when RecordType then part.fields.any((field) -> @reaches(field.type))
       when ObjectType then @reaches_object(part)
+      when UnionType then part.members.any((member) -> @reaches(member))
       else false
 
   reaches_object = (type: ObjectType) ->

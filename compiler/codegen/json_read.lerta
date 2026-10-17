@@ -1,10 +1,12 @@
 # The functions that read values of a type through a JsonReader (see codegen/json), which give the
 # value owned, and release what they have read of it when a method throws.
+import json_kind from '../checker/json'
 import FieldInfo, info_of, is_argument from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import emit_array_new, emit_push from './array'
 import emit_parse from './enum'
 import emit_check_with, emit_return_thrown from './exceptions'
+import emit_box from './boxes'
 import emit_values from './heap_object'
 import emit_branch, emit_when, IrBuilder, IrModule from './ir_builder'
 import call_method, call_void_method, Coder, emit_while, is_inline, SCALARS from './json'
@@ -15,8 +17,8 @@ import emit_map_new, emit_map_set from './map'
 import emit_is_present, emit_unwrap, emit_wrap, nil_constant from './optional'
 import emit_string_equals from './string'
 import
-  ArrayType, bool_type, EnumType, format_type, kind_of, MapType, ObjectType, OptionalType,
-  RecordType, string_type, TupleType, Type, type_key
+  ArrayType, bool_type, EnumType, format_type, kind_of, MapType, ObjectType, OptionalType, int_type,
+  is_boxed, RecordType, string_type, TupleType, Type, type_key, UnionType
 from '../types'
 
 # The value read, owned; the caller checks for an exception after it.
@@ -45,6 +47,7 @@ const emit_read_parts = (ir: IrBuilder, reader: Coder, type: Type) ->
     when TupleType then emit_read_tuple(ir, reader, type)
     when RecordType then emit_read_record(ir, reader, type)
     when ObjectType then emit_read_object(ir, reader, type)
+    when UnionType then emit_read_union(ir, reader, type)
     else emit_read(ir, reader, type, -> emit_return_thrown(ir, type))
 
 # The value read, owned. `unwind` releases what the function holds and returns.
@@ -235,6 +238,29 @@ const emit_read_field_of_key = (
   call_void_method ir, reader, 'skip_value', [], unwind
   ir.emit "br label %#{done}"
   ir.start_block done
+
+# The member that the kind of the value tells (see checker/json), in its box if it has one.
+const emit_read_union = (ir: IrBuilder, reader: Coder, type: UnionType) ->
+  const unwind = -> emit_return_thrown(ir, type)
+  const kind = call_method(ir, reader, 'peek_kind', int_type, [], unwind)
+  const done = ir.fresh_label('json.member.done')
+  const other = ir.fresh_label('json.member.other')
+  const labels = [ir.fresh_label('json.member') for _ in type.members]
+  const cases = ["i64 #{json_kind(member)}, label %#{labels[i]}" for member, i in type.members]
+  ir.emit "switch i64 #{kind}, label %#{other} [ #{cases.join(' ')} ]"
+  const incoming: String[] = []
+  for member, i in type.members
+    ir.start_block labels[i]
+    const value = emit_read(ir, reader, member, unwind)
+    const boxed = is_boxed(member) then emit_box(ir, value, member) else value
+    incoming.push "[ #{boxed}, %#{ir.current_block} ]"
+    ir.emit "br label %#{done}"
+  ir.start_block other
+  const expected = shared_string_constant(ir, format_type(type))
+  call_void_method ir, reader, 'fail_expected', ["ptr #{expected}"], unwind
+  ir.emit 'unreachable'
+  ir.start_block done
+  ir.assign "phi ptr #{incoming.join(', ')}"
 
 const release_and_return = (ir: IrBuilder, value: String, type: Type) ->
   emit_release ir, value
