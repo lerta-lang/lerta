@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "internal.h"
 
@@ -24,14 +25,68 @@ void *lerta_checked_calloc(size_t count, size_t size) {
   return memory;
 }
 
-void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
-  LertaHeader *object = lerta_mem_alloc(size);
-  object->ref_count = 1;
-  object->drop = drop;
+#ifdef LERTA_DEBUG
+// What the debug runtime keeps before each object; its size keeps the object aligned as its place.
+typedef struct {
+  // Whether lerta_alloc made the object, as the code that the seed's compiler generates does: its
+  // header holds its drop function in place of its type.
+  _Alignas(16) bool legacy;
+} Prefix;
+
+static Prefix *prefix_of(const void *object) { return (Prefix *)object - 1; }
+#endif
+
+static LertaHeader *allocate_object(int64_t size) {
 #ifdef LERTA_DEBUG
   live_objects++;
+  Prefix *prefix = lerta_mem_alloc((int64_t)sizeof(Prefix) + size);
+  prefix->legacy = false;
+  LertaHeader *object = (LertaHeader *)(prefix + 1);
+#else
+  LertaHeader *object = lerta_mem_alloc(size);
 #endif
+  object->ref_count = 1;
   return object;
+}
+
+static void free_object(void *object) {
+  lerta_trace_forget(object);
+#ifdef LERTA_DEBUG
+  live_objects--;
+  // The allocator keeps the count of a free place at 0 (see docs/internals.md#allocation), but the
+  // prefix comes first in it.
+  ((LertaHeader *)object)->ref_count = 0;
+  lerta_mem_free(prefix_of(object));
+#else
+  lerta_mem_free(object);
+#endif
+}
+
+void *lerta_new(int64_t size, const LertaType *type) {
+  LertaHeader *object = allocate_object(size);
+  object->type = type;
+  return object;
+}
+
+#ifdef LERTA_DEBUG
+void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
+  LertaHeader *object = allocate_object(size);
+  prefix_of(object)->legacy = true;
+  memcpy(&object->type, &drop, sizeof drop);
+  return object;
+}
+#endif
+
+static void drop_object(LertaHeader *object) {
+#ifdef LERTA_DEBUG
+  if (prefix_of(object)->legacy) {
+    void (*drop)(void *object);
+    memcpy(&drop, &object->type, sizeof drop);
+    if (drop != NULL) drop(object);
+    return;
+  }
+#endif
+  if (object->type != NULL) object->type->drop(object);
 }
 
 void *lerta_frame_alloc(int64_t size) {
@@ -82,12 +137,8 @@ static void push_pending(void *object) {
 static void drain_to(int64_t length) {
   while (pending_length > length) {
     LertaHeader *dead = pending[--pending_length];
-    if (dead->drop != NULL) dead->drop(dead);
-#ifdef LERTA_DEBUG
-    live_objects--;
-#endif
-    lerta_trace_forget(dead);
-    lerta_mem_free(dead);
+    drop_object(dead);
+    free_object(dead);
   }
 }
 
@@ -110,11 +161,7 @@ void lerta_free_unfinished(void *object, void **weak_slot, int64_t mark) {
     lerta_panic_with_exception("init threw an exception after its object escaped: ");
   }
   if (weak_slot != NULL) lerta_weak_detach(weak_slot);
-  lerta_trace_forget(object);
-  lerta_mem_free(object);
-#ifdef LERTA_DEBUG
-  live_objects--;
-#endif
+  free_object(object);
 }
 
 void lerta_release(void *object) {
@@ -156,6 +203,16 @@ static void drop_weak_box(void *box) {
   if (weak->object != NULL) *weak->slot = NULL;
 }
 
+// A weak box does not count its object.
+static void visit_weak_box(void *box, LertaVisitor visitor) {
+  (void)box;
+  (void)visitor;
+}
+
+LERTA_STATIC_STRING(weak_box_name, "weak box");
+static const LertaType weak_box_type = {
+    drop_weak_box, visit_weak_box, (const LertaString *)&weak_box_name};
+
 // The slot of an object being dropped: its box, if it had one, no longer points at it, and a new
 // one would not either.
 static char dropping;
@@ -166,7 +223,7 @@ void *lerta_weak_box(void *object, void **slot) {
     lerta_retain(*slot);
     return *slot;
   }
-  LertaWeakBox *box = lerta_alloc(sizeof(LertaWeakBox), drop_weak_box);
+  LertaWeakBox *box = lerta_new(sizeof(LertaWeakBox), &weak_box_type);
   box->object = *slot == DROPPING ? NULL : object;
   box->slot = slot;
   if (*slot == NULL) *slot = box;

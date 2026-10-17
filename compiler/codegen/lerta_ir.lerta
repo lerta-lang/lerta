@@ -123,7 +123,7 @@ export const special_method_symbol = (program: ProgramWide, info: ObjectInfo, na
 # An instance of a generic class or struct is named by its type arguments too (see type_key).
 export const constructor_symbol = (type: ObjectType) -> quoted("lerta.new.#{type_key(type)}")
 
-export const drop_symbol = (type: ObjectType) -> quoted("lerta.drop.#{type_key(type)}")
+export const type_symbol = (type: ObjectType) -> quoted("lerta.type.#{type_key(type)}")
 
 # The LLVM struct type of a class or struct (see define_object).
 export const object_ir_type = (type: ObjectType) ->
@@ -159,7 +159,7 @@ export const shared_string_constant = (ir: IrBuilder, value: String) ->
 const string_definition = (value: String) ->
   const bytes = value.binary
   const bytes_type = "[#{bytes.length} x i8]"
-  # The header (reference count and drop function), the length and the bytes.
+  # The header (reference count and type, none), the length and the bytes.
   const type = "{ i64, ptr, i64, #{bytes_type} }"
   const bytes_init = "#{bytes_type} c\"#{ir_string_bytes(bytes)}\""
   const init = "{ i64 #{LERTA_IMMORTAL}, ptr null, i64 #{bytes.length}, #{bytes_init} }"
@@ -199,6 +199,15 @@ export const emit_release_as = (ir: IrBuilder, operand: String, owned: Ownership
       ir.emit "call void @llvm.coro.destroy(ptr #{operand})"
     when TRACE then call_void_runtime(ir, 'void @lerta_trace_free(ptr)', "ptr #{operand}")
     else emit_release(ir, reference) if const reference = reference_of(ir, operand, owned)
+
+# Whether the value holds a reference that is counted, as a COROUTINE or a TRACE is not.
+export const is_counted = (owned: Ownership) -> owned == REFERENCE or owned == INTERFACE
+
+# The reference that the value of the IR type at the pointer holds, which may be null; the value is
+# counted.
+export const emit_load_reference = (
+  ir: IrBuilder, pointer: String, value_type: String, owned: Ownership
+) -> reference_of(ir, ir.assign("load #{value_type}, ptr #{pointer}"), owned)!
 
 const reference_of = (ir: IrBuilder, operand: String, owned: Ownership) ->
   case owned

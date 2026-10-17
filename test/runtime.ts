@@ -105,7 +105,7 @@ const interleaved_writes = (ending: string): string =>
     ending,
   ].join('\n')
 
-const leak = '  lerta_alloc(16, NULL);'
+const leak = '  lerta_new(16, NULL);'
 
 // Whether the debug program, built as run_main builds it, stops with the message.
 const stops_with = (
@@ -125,41 +125,67 @@ const use_after_drop = (name: string, use: string): Check => ({
     stops_with(
       name,
       `${use} of a dropped object`,
-      `  void *object = lerta_alloc(16, NULL);\n  lerta_release(object);\n  lerta_${use}(object);`,
+      `  void *object = lerta_new(16, NULL);\n  lerta_release(object);\n  lerta_${use}(object);`,
     ),
 })
 // Sizes at the edges of the size classes, of slabs and of regions of their own.
-const sizes = `static const int64_t sizes[] = {16, 17, 24, 255, 256, 257, 320, 321, 16384, 16385, 100000};
+// 16368 and 16369 are the largest size that fits in a slab with the debug runtime's prefix of 16
+// bytes before it, and the smallest that does not.
+const sizes = `static const int64_t sizes[] = {
+  16, 17, 24, 255, 256, 257, 320, 321, 16368, 16369, 16384, 16385, 100000};
 #define SIZES (int)(sizeof sizes / sizeof sizes[0])
 `
 
-// Objects at the edges of the size classes, of slabs and of regions of their own, each filled
-// with bytes of its own, which must all be there once all are allocated; then more objects of one
-// size than the empty slabs that the allocator keeps hold, dropped and allocated again.
+const fill_of = 'static uint8_t fill_of(int s, int i) { return (uint8_t)(s * 31 + i); }\n'
+
+// Places at the edges of the size classes, of slabs and of regions of their own, each filled with
+// bytes of its own, which must all be there once all are allocated; then more places of one size
+// than the empty slabs that the allocator keeps hold, freed and allocated again. They come from the
+// allocator itself, since the debug runtime puts more before an object.
 const allocate_sizes_definitions = `#include <string.h>
-${sizes}#define PER_SIZE 200
+#include "internal.h"
+${sizes}${fill_of}#define PER_SIZE 200
 #define MANY 20000
-static uint8_t *objects[SIZES][PER_SIZE];
+static uint8_t *places[SIZES][PER_SIZE];
 static void *many[MANY];
-static uint8_t fill_of(int s, int i) { return (uint8_t)(s * 31 + i); }
 `
 const allocate_sizes = `  for (int s = 0; s < SIZES; s++) {
     for (int i = 0; i < PER_SIZE; i++) {
-      objects[s][i] = lerta_alloc(sizes[s], NULL);
-      memset(objects[s][i] + 16, fill_of(s, i), (size_t)sizes[s] - 16);
+      places[s][i] = lerta_mem_alloc(sizes[s]);
+      memset(places[s][i], fill_of(s, i), (size_t)sizes[s]);
     }
   }
   for (int s = 0; s < SIZES; s++) {
     for (int i = 0; i < PER_SIZE; i++) {
+      for (int64_t b = 0; b < sizes[s]; b++) {
+        if (places[s][i][b] != fill_of(s, i)) _exit(1);
+      }
+      lerta_mem_free(places[s][i]);
+    }
+  }
+  for (int round = 0; round < 2; round++) {
+    for (int i = 0; i < MANY; i++) many[i] = lerta_mem_alloc(32);
+    for (int i = 0; i < MANY; i++) lerta_mem_free(many[i]);
+  }`
+
+// Objects of the same sizes, which the debug runtime allocates with its prefix before each, each
+// filled after its header with bytes of its own, which must all be there once all are allocated.
+const new_objects_definitions = `#include <string.h>
+${sizes}${fill_of}`
+const new_objects = `  static uint8_t *objects[SIZES][4];
+  for (int s = 0; s < SIZES; s++) {
+    for (int i = 0; i < 4; i++) {
+      objects[s][i] = lerta_new(sizes[s], NULL);
+      memset(objects[s][i] + 16, fill_of(s, i), (size_t)sizes[s] - 16);
+    }
+  }
+  for (int s = 0; s < SIZES; s++) {
+    for (int i = 0; i < 4; i++) {
       for (int64_t b = 16; b < sizes[s]; b++) {
         if (objects[s][i][b] != fill_of(s, i)) _exit(1);
       }
       lerta_release(objects[s][i]);
     }
-  }
-  for (int round = 0; round < 2; round++) {
-    for (int i = 0; i < MANY; i++) many[i] = lerta_alloc(32, NULL);
-    for (int i = 0; i < MANY; i++) lerta_release(many[i]);
   }`
 
 // A buffer grown from none through the sizes, which keeps what it held each time; then grown within
@@ -229,7 +255,7 @@ const checks: Check[] = [
     run: () => {
       const { stderr, status } = run_main(
         'released',
-        '  lerta_release(lerta_alloc(16, NULL));',
+        '  lerta_release(lerta_new(16, NULL));',
         false,
       )
       return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
@@ -245,10 +271,10 @@ const checks: Check[] = [
         'release_after_allocation',
         'release of a dropped object',
         [
-          '  lerta_alloc(16, NULL);',
-          '  void *object = lerta_alloc(16, NULL);',
+          '  lerta_new(16, NULL);',
+          '  void *object = lerta_new(16, NULL);',
           '  lerta_release(object);',
-          '  lerta_alloc(16, NULL);',
+          '  lerta_new(16, NULL);',
           '  lerta_release(object);',
         ].join('\n'),
       ),
@@ -261,9 +287,9 @@ const checks: Check[] = [
         'retain_after_empty_slab',
         'retain of a dropped object',
         [
-          '  void *object = lerta_alloc(24, NULL);',
+          '  void *object = lerta_new(24, NULL);',
           '  lerta_release(object);',
-          '  for (int i = 0; i < 100; i++) lerta_alloc(24, NULL);',
+          '  for (int i = 0; i < 100; i++) lerta_new(24, NULL);',
           '  lerta_retain(object);',
         ].join('\n'),
       ),
@@ -275,10 +301,11 @@ const checks: Check[] = [
       const definitions = [
         'static void deinit(void *object) { (void)object; }',
         'static void drop_with_deinit(void *object) { lerta_run_deinit(object, deinit); }',
+        'static const LertaType with_deinit = {drop_with_deinit, NULL, NULL};',
         '',
       ].join('\n')
       const main_body = [
-        '  void *object = lerta_alloc(16, drop_with_deinit);',
+        '  void *object = lerta_new(16, &with_deinit);',
         '  lerta_release(object);',
         '  lerta_release(object);',
       ].join('\n')
@@ -286,13 +313,25 @@ const checks: Check[] = [
     },
   },
   ...[false, true].map((optimize): Check => ({
-    name: `the ${optimize ? 'optimized' : 'debug'} runtime allocates objects of every kind of size`,
+    name: `the ${optimize ? 'optimized' : 'debug'} runtime allocates places of every kind of size`,
     run: () => {
       const { stderr, status } = run_main(
         optimize ? 'sizes_optimized' : 'sizes_debug',
         allocate_sizes,
         optimize,
         allocate_sizes_definitions,
+      )
+      return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
+    },
+  })),
+  ...[false, true].map((optimize): Check => ({
+    name: `the ${optimize ? 'optimized' : 'debug'} runtime allocates objects of every kind of size`,
+    run: () => {
+      const { stderr, status } = run_main(
+        optimize ? 'objects_optimized' : 'objects_debug',
+        new_objects,
+        optimize,
+        new_objects_definitions,
       )
       return [...compare_text('stderr', '', stderr), ...expect_status(0, status)]
     },
@@ -320,11 +359,12 @@ const checks: Check[] = [
         '  lerta_release(child);',
         '  lerta_release(child);',
         '}',
+        'static const LertaType parent_type = {drop_parent, NULL, NULL};',
         '',
       ].join('\n')
       const main_body = [
-        '  void **parent = lerta_alloc(24, drop_parent);',
-        '  parent[2] = lerta_alloc(16, NULL);',
+        '  void **parent = lerta_new(24, &parent_type);',
+        '  parent[2] = lerta_new(16, NULL);',
         '  lerta_release(parent);',
       ].join('\n')
       return stops_with('release_queued', 'release of a dropped object', main_body, drop_parent)

@@ -1,11 +1,9 @@
 # Function values in the generated code (see docs/internals.md#objects).
 import
-  emit_heap_allocate, emit_heap_field_pointer, heap_object_type, HeapField, plain_field
+  define_type, emit_heap_allocate, emit_heap_field_pointer, heap_object_type, HeapField, plain_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
-import
-  emit_release_stored, ir_return_type, ir_type, LERTA_IMMORTAL, prefixed_symbol, suffixed_symbol
-from './lerta_ir'
+import ir_return_type, ir_type, LERTA_IMMORTAL, prefixed_symbol, suffixed_symbol from './lerta_ir'
 import emit_valueless_call from './runtime_calls'
 import FunctionType, Type from '../types'
 
@@ -67,28 +65,23 @@ export const emit_capture_pointer = (
   ir: IrBuilder, closure: String, slots: HeapField[], index: Int
 ) -> emit_heap_field_pointer(ir, closure_ir_type(slots), closure, 1 + index)
 
-# A new closure of the code `symbol`, which takes over the captured operands, owned, held in the
-# slots. Its drop function, defined with it, releases those that are references.
+# A new closure of the code `symbol`, the function `name`, which takes over the captured operands,
+# owned, held in the slots. Its type, defined with it, if it holds references, releases them.
 export const emit_closure = (
-  ir: IrBuilder, symbol: String, slots: HeapField[], operands: String[]
+  ir: IrBuilder, symbol: String, name: String, slots: HeapField[], operands: String[]
 ) ->
   const holds_reference = slots.any((slot) -> slot.owned != NONE)
-  const drop = holds_reference then suffixed_symbol(symbol, 'drop') else 'null'
-  define_closure_drop ir, drop, slots if holds_reference
-  const closure = emit_heap_allocate(ir, closure_ir_type(slots), drop)
+  const type = holds_reference then suffixed_symbol(symbol, 'type') else 'null'
+  define_closure_type ir, type, name, slots if holds_reference
+  const closure = emit_heap_allocate(ir, closure_ir_type(slots), type)
   ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}"
   for slot, i in slots
     const pointer = emit_capture_pointer(ir, closure, slots, i)
     ir.emit "store #{slot.ir_type} #{operands[i]}, ptr #{pointer}"
   closure
 
-const define_closure_drop = (ir: IrBuilder, drop: String, slots: HeapField[]) ->
+const define_closure_type = (ir: IrBuilder, type: String, name: String, slots: HeapField[]) ->
   const define = (module: IrModule) ->
-    const body = IrBuilder(module)
-    for slot, i in slots
-      continue if slot.owned == NONE
-      const pointer = emit_capture_pointer(body, '%closure', slots, i)
-      emit_release_stored body, pointer, slot.ir_type, slot.owned
-    body.emit 'ret void'
-    body.finish "private void #{drop}(ptr %closure)"
-  ir.module.define_once drop, define
+    const fields = [plain_field('ptr'), slots...]
+    define_type module, closure_ir_type(slots), type, 'private ', fields, name, nil, nil
+  ir.module.define_once type, define

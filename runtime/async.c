@@ -27,7 +27,7 @@ enum { PENDING, RESOLVED, REJECTED };
 
 struct LertaPromise {
   int64_t ref_count;
-  void (*drop)(void *object);
+  const LertaType *type;
   int32_t state;
   // Whether its result has been taken.
   bool observed;
@@ -54,37 +54,49 @@ struct LertaPromise {
 
 LERTA_STATIC_STRING(cancelled, "cancelled");
 
-// The drop function of CancelledError, which tells its type, as the generated code's type tests do
-// (see emit_type_test); the first cancel gives it.
-static void (*cancelled_error_drop)(void *object) = NULL;
+// The type of CancelledError, as the generated code's type tests tell it (see emit_type_test); the
+// first cancel gives it.
+static const LertaType *cancelled_error_type = NULL;
 
 static void raise_cancelled(void) {
   lerta_raise(LERTA_CANCELLED_ERROR, (const LertaString *)&cancelled);
-  cancelled_error_drop = ((LertaHeader *)lerta_exception.data)->drop;
+  cancelled_error_type = ((LertaHeader *)lerta_exception.data)->type;
 }
 
 static bool is_given_up(const LertaPromise *promise) {
-  if (!promise->cancelled || cancelled_error_drop == NULL) return false;
-  return ((LertaHeader *)promise->exception.data)->drop == cancelled_error_drop;
+  if (!promise->cancelled || cancelled_error_type == NULL) return false;
+  return ((LertaHeader *)promise->exception.data)->type == cancelled_error_type;
+}
+
+// Its waiters are coroutines, which hold it rather than it them.
+static inline void visit_promise(void *object, LertaVisitor visitor) {
+  LertaPromise *promise = object;
+  if (promise->state == RESOLVED) lerta_visit_item(promise->kind, promise->value, visitor);
+  if (promise->state == REJECTED) visitor(promise->exception.data);
 }
 
 static void drop_promise(void *object) {
   LertaPromise *promise = object;
   lerta_mem_free(promise->waiters);
-  if (promise->state == RESOLVED) lerta_release_item(promise->kind, promise->value);
-  if (promise->state != REJECTED) return;
-  // An exception that nothing awaited would be lost: it ends the program, as an uncaught one does.
-  if (!promise->observed && !is_given_up(promise)) {
-    lerta_exception = promise->exception;
-    lerta_trace_load(promise->trace);
-    lerta_exit_with_exception();
+  if (promise->state == REJECTED) {
+    // An exception that nothing awaited would be lost: it ends the program, as an uncaught one
+    // does.
+    if (!promise->observed && !is_given_up(promise)) {
+      lerta_exception = promise->exception;
+      lerta_trace_load(promise->trace);
+      lerta_exit_with_exception();
+    }
+    lerta_trace_free(promise->trace);
   }
-  lerta_trace_free(promise->trace);
-  lerta_release(promise->exception.data);
+  visit_promise(object, lerta_release);
 }
 
+LERTA_STATIC_STRING(promise_name, "Promise");
+static const LertaType promise_type = {
+    drop_promise, visit_promise, (const LertaString *)&promise_name};
+
 LertaPromise *lerta_promise_new(LertaItemKind kind) {
-  LertaPromise *promise = lerta_alloc(sizeof(LertaPromise), drop_promise);
+  LertaPromise *promise = lerta_new(sizeof(LertaPromise), &promise_type);
   promise->state = PENDING;
   promise->observed = false;
   promise->kind = kind;

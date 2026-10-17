@@ -19,7 +19,7 @@ int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]) {
 }
 
 LertaString *lerta_string_new(int64_t length) {
-  LertaString *s = lerta_alloc((int64_t)sizeof(LertaString) + length, NULL);
+  LertaString *s = lerta_new((int64_t)sizeof(LertaString) + length, NULL);
   s->length = length;
   return s;
 }

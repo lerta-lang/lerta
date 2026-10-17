@@ -7,16 +7,31 @@
 
 #define LERTA_IMMORTAL INT64_MIN
 
+typedef struct LertaString LertaString;
+
+// Called by a type's visit function with each reference that its object holds, which may be NULL.
+typedef void (*LertaVisitor)(void *reference);
+
+// What every object of a type shares: its drop function, which releases what the object owns
+// before it is freed, the function that gives the visitor the references it holds, which drop
+// releases through it, and the type's name, for the leak check's report. Each type has its own, so
+// that it tells the type. An object that holds nothing, as a String, has none.
 typedef struct {
-  int64_t ref_count;
   void (*drop)(void *object);
-} LertaHeader;
+  void (*visit)(void *object, LertaVisitor visitor);
+  const LertaString *name;
+} LertaType;
 
 typedef struct {
+  int64_t ref_count;
+  const LertaType *type;
+} LertaHeader;
+
+struct LertaString {
   LertaHeader header;
   int64_t length;  // in bytes
   uint8_t bytes[];  // UTF-8 for a String, not NUL-terminated
-} LertaString;
+};
 
 // Marks an array that holds no terminating NUL, which compilers that know the attribute would
 // otherwise warn about; older ones do not know it.
@@ -114,7 +129,7 @@ typedef struct {
 // LertaHeader would be padded to the alignment of its int64_t, which is 8 on 32-bit Windows.
 typedef struct LertaIter {
   int64_t ref_count;
-  void (*drop)(void *object);
+  const LertaType *type;
   bool (*has_next)(struct LertaIter *iter);
   void *next;
   // Whether a traversal has started; a second one throws.
@@ -127,9 +142,15 @@ typedef struct {
   int64_t value;
 } LertaOptionalInt;
 
-// Memory (memory.c). Release frees an object when its count reaches zero. Both accept NULL,
+// Memory (memory.c). lerta_new makes an object of the type, which is NULL for one that holds
+// nothing. Release frees an object when its count reaches zero. Retain and release accept NULL,
 // which is how nil is represented.
+void *lerta_new(int64_t size, const LertaType *type);
+#ifdef LERTA_DEBUG
+// As lerta_new, for the code that the seed's compiler generates, which gives the drop function in
+// place of the type; it runs only with the debug runtime (see docs/internals.md#bootstrap).
 void *lerta_alloc(int64_t size, void (*drop)(void *object));
+#endif
 void lerta_retain(void *object);
 void lerta_release(void *object);
 // Runs a class's deinit on its object, whose count has reached zero, from its drop function. The

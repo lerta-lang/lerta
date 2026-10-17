@@ -30,6 +30,10 @@ void lerta_release_item(LertaItemKind kind, const void *item) {
   lerta_release(reference_of(kind, item));
 }
 
+void lerta_visit_item(LertaItemKind kind, const void *item, LertaVisitor visitor) {
+  visitor(reference_of(kind, item));
+}
+
 static uint8_t *item_at(const LertaArray *array, int64_t index) {
   return array->items + index * lerta_item_size(array->item_kind);
 }
@@ -51,16 +55,23 @@ int64_t lerta_word_item(const LertaArray *array, int64_t index) {
   return (int64_t)(bits << unused_bits) >> unused_bits;
 }
 
-static void drop_array(void *object) {
+static inline void visit_array(void *object, LertaVisitor visitor) {
   LertaArray *array = object;
   for (int64_t i = 0; i < array->length; i++) {
-    lerta_release_item(array->item_kind, item_at(array, i));
+    lerta_visit_item(array->item_kind, item_at(array, i), visitor);
   }
-  lerta_mem_free(array->items);
 }
 
+static void drop_array(void *object) {
+  visit_array(object, lerta_release);
+  lerta_mem_free(((LertaArray *)object)->items);
+}
+
+LERTA_STATIC_STRING(array_name, "Array");
+static const LertaType array_type = {drop_array, visit_array, (const LertaString *)&array_name};
+
 LertaArray *lerta_array_create(LertaItemKind item_kind) {
-  LertaArray *array = lerta_alloc((int64_t)sizeof(LertaArray), drop_array);
+  LertaArray *array = lerta_new((int64_t)sizeof(LertaArray), &array_type);
   array->length = 0;
   array->capacity = 0;
   array->items = NULL;

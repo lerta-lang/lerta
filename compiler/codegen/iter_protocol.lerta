@@ -26,15 +26,15 @@ const symbol_of = (kind: IterKind, part: String) -> suffixed_symbol(kind.layout,
 
 const all_fields = (kind: IterKind) -> [PROTOCOL..., kind.state...]
 
-# The kind of `key`, defined with its drop function and code the first time it is given. Its next
-# does not check for the end: its callers ask has_next first (see emit_checked_next).
+# The kind of `key`, defined with the type of its Iters and code the first time it is given. Its
+# next does not check for the end: its callers ask has_next first (see emit_checked_next).
 export const define_kind = (
   ir: IrBuilder, key: String, state: HeapField[], item: Type, has_next: IterCode, next: IterCode
 ) ->
   const define = (layout: String, module: IrModule) ->
     const kind = IterKind(layout, state)
-    const drop = symbol_of(kind, 'drop')
-    define_heap_object module, layout, drop, 'private ', all_fields(kind), nil, nil
+    const type = symbol_of(kind, 'type')
+    define_heap_object module, layout, type, 'private ', all_fields(kind), 'Iter', nil, nil
     const has_next_body = IrBuilder(module)
     has_next has_next_body, kind
     has_next_body.finish "private i1 #{symbol_of(kind, 'has_next')}(ptr %iter)"
@@ -56,7 +56,7 @@ const emit_throw_unless = (ir: IrBuilder, condition: String, check: () -> void) 
 
 # A new Iter of the kind, not started, which takes over the values of its state.
 export const emit_iter = (ir: IrBuilder, kind: IterKind, state_values: String[]) ->
-  const iter = emit_heap_allocate(ir, kind.layout, symbol_of(kind, 'drop'))
+  const iter = emit_heap_allocate(ir, kind.layout, symbol_of(kind, 'type'))
   const values = [symbol_of(kind, 'has_next'), symbol_of(kind, 'next'), 'false', state_values...]
   const fields = all_fields(kind)
   for field, i in fields

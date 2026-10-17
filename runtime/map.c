@@ -48,23 +48,35 @@ static LertaMapEntry *entry_at(const LertaMap *map, int64_t position) {
 
 static void *value_of(LertaMapEntry *entry) { return (uint8_t *)entry + sizeof(LertaMapEntry); }
 
+static inline void visit_entry(const LertaMap *map, LertaMapEntry *entry, LertaVisitor visitor) {
+  if (keys_are_references(map)) visitor((void *)(intptr_t)entry->key);
+  lerta_visit_item(map->value_kind, value_of(entry), visitor);
+}
+
 static void release_entry(const LertaMap *map, LertaMapEntry *entry) {
-  if (keys_are_references(map)) lerta_release((void *)(intptr_t)entry->key);
-  lerta_release_item(map->value_kind, value_of(entry));
+  visit_entry(map, entry, lerta_release);
+}
+
+static inline void visit_map(void *object, LertaVisitor visitor) {
+  LertaMap *map = object;
+  for (int64_t i = 0; i < map->entry_count; i++) {
+    if (entry_at(map, i)->live) visit_entry(map, entry_at(map, i), visitor);
+  }
 }
 
 static void drop_map(void *object) {
+  visit_map(object, lerta_release);
   LertaMap *map = object;
-  for (int64_t i = 0; i < map->entry_count; i++) {
-    if (entry_at(map, i)->live) release_entry(map, entry_at(map, i));
-  }
   lerta_mem_free(map->entries);
   lerta_mem_free(map->slots);
 }
 
+LERTA_STATIC_STRING(map_name, "Map");
+static const LertaType map_type = {drop_map, visit_map, (const LertaString *)&map_name};
+
 LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, LertaHash hash,
                            LertaEquals equals) {
-  LertaMap *map = lerta_alloc((int64_t)sizeof(LertaMap), drop_map);
+  LertaMap *map = lerta_new((int64_t)sizeof(LertaMap), &map_type);
   map->length = 0;
   map->entry_count = 0;
   map->entry_capacity = 0;
@@ -170,14 +182,20 @@ struct LertaMapCursor {
   int64_t end;
 };
 
-static void drop_cursor(void *object) {
-  LertaMapCursor *cursor = object;
-  cursor->map->cursors--;
-  lerta_release(cursor->map);
+static inline void visit_cursor(void *object, LertaVisitor visitor) {
+  visitor(((LertaMapCursor *)object)->map);
 }
 
+static void drop_cursor(void *object) {
+  ((LertaMapCursor *)object)->map->cursors--;
+  visit_cursor(object, lerta_release);
+}
+
+LERTA_STATIC_STRING(cursor_name, "Map cursor");
+static const LertaType cursor_type = {drop_cursor, visit_cursor, (const LertaString *)&cursor_name};
+
 LertaMapCursor *lerta_map_cursor(LertaMap *map) {
-  LertaMapCursor *cursor = lerta_alloc((int64_t)sizeof(LertaMapCursor), drop_cursor);
+  LertaMapCursor *cursor = lerta_new((int64_t)sizeof(LertaMapCursor), &cursor_type);
   lerta_retain(map);
   map->cursors++;
   cursor->map = map;
