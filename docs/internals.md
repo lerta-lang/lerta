@@ -111,7 +111,7 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 - A debug runtime counts live objects (allocations minus releases, excluding immortal static objects).
 - At exit, a non-zero count is reported as a leak (see [the reference](reference/compiler.md#build)); a report of the cycles is [planned](roadmap/runtime.md#memory-management).
-- Release builds do not count. A build without `-O` uses the debug runtime. The run tests build so, and fail on any leak, as an unexpected line in stderr; so does the bootstrap, which checks stage2's stderr for it.
+- Release builds do not count. A build without `-O` uses the debug runtime. The run tests build so, and fail on any leak, as an unexpected line in stderr. The compiler's own builds that run with the debug runtime fail on one too: minilerta's, stage1's and the bootstrap's stage2's; and since the compiler's source exercises only some of the compiler, `test/leaks.ts` has stage1 print the IR of every source of the tests and examples and of every standard module, and fails on a leak of any that compiles (a compile error ends the compiler through `exit`, which reports nothing), so that `make test` finds one that only `bin/lerta`, a release build, would hide.
 
 ### Allocation
 

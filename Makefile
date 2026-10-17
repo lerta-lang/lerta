@@ -58,9 +58,18 @@ FORCE:
 build/seed.ll: seed/minilerta.ll build/host_llvm.sed
 	sed -f build/host_llvm.sed seed/minilerta.ll > $@
 
+# Runs the command line $(1) of a compiler built with the debug runtime (minilerta, stage1 or
+# stage2), which fails if the compiler reports objects that it leaked; $(2) keeps its stderr
+# meanwhile.
+define run_without_leaks
+($(1) 2> $(2); status=$$?; cat $(2) >&2; \
+  if grep -q '^leak: ' $(2); then status=1; fi; rm -f $(2); exit $$status)
+endef
+
 # What minilerta prints for the source $(1), into the IR file $(2).
 define minilerta_ir
-build/minilerta $(1) > $(2).unfixed || { rm -f $(2).unfixed; exit 1; }
+$(call run_without_leaks,build/minilerta $(1) > $(2).unfixed,$(2).stderr) \
+  || { rm -f $(2).unfixed; exit 1; }
 sed -f build/host_llvm.sed $(2).unfixed > $(2)
 rm $(2).unfixed
 endef
@@ -100,7 +109,7 @@ build/stage1: build/stage1.ll $(RUNTIME) build/libuv/built
 
 bin/lerta: build/stage1
 	@mkdir -p bin
-	build/stage1 build $(MAIN) -o $@ -O -Werror
+	$(call run_without_leaks,build/stage1 build $(MAIN) -o $@ -O -Werror,$@.stderr)
 
 ifdef TARGET
 $(COMPILER): bin/lerta
@@ -116,17 +125,11 @@ $(BOOTSTRAP)/stage2.ll: bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta dump-llvm $(MAIN) > $@
 
-# $(1) is the command line, $(2) the file that keeps its stderr meanwhile.
-define run_stage2_without_leaks
-$(RUN_STAGE2) $(1) 2> $(2); status=$$?; cat $(2) >&2; \
-  if grep -q '^leak: ' $(2); then status=1; fi; rm -f $(2); exit $$status
-endef
-
 $(BOOTSTRAP)/stage3$(EXE): $(STAGE2)
-	$(call run_stage2_without_leaks,build $(MAIN) -o $@ -Werror $(TARGET_FLAGS),$@.stderr)
+	$(call run_without_leaks,$(RUN_STAGE2) build $(MAIN) -o $@ -Werror $(TARGET_FLAGS),$@.stderr)
 
 $(BOOTSTRAP)/stage3.ll: $(STAGE2)
-	$(call run_stage2_without_leaks,dump-llvm $(MAIN) > $@,$@.stderr)
+	$(call run_without_leaks,$(RUN_STAGE2) dump-llvm $(MAIN) > $@,$@.stderr)
 
 # Built for the host, as the seed is only ever built there.
 $(BOOTSTRAP)/minilerta.ll: bin/lerta
@@ -170,6 +173,7 @@ test: bin/lerta
 	nice node test/cli.ts || status=1; \
 	nice node test/runtime.ts || status=1; \
 	nice node test/format.ts || status=1; \
+	nice node test/leaks.ts || status=1; \
 	nice $(MAKE) --no-print-directory test-bootstrap || status=1; \
 	exit $$status
 

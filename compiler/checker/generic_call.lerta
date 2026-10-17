@@ -9,7 +9,7 @@ import
   bindings, check_defaults, generic_of, GenericFunction, GenericRef, Instance, instantiate
 from './generics'
 import reject_unsatisfied from './satisfaction'
-import Body from './shared'
+import Body, InstanceLink from './shared'
 import infer_type_arguments, receiver_type_arguments, TypeBinding from './type_argument_inference'
 import substitute from './type_patterns'
 import reject_invalid_type from './type_validity'
@@ -38,7 +38,7 @@ export const receiver_instance = (
   return nil if type_arguments == nil
   reject_unsatisfied_bounds body, generic_function, type_arguments, [at for _ in type_arguments]
   const instance = instantiate_here(body, generic, type_arguments, at)
-  body.facts.instances[call] = instance if call
+  body.facts.instances[call] = InstanceLink(instance) if call
   instance
 
 # Each argument typed alone must fit its parameter once the type arguments are known.
@@ -59,7 +59,7 @@ const instance_of_call = (
   const instance = instantiate_here(body, ref, type_arguments, call.position)
   const type = function_type(instance)
   require_type body, each.arg, each.type, type.params[each.index] for each in inference.inferred
-  body.facts.instances[call] = instance
+  body.facts.instances[call] = InstanceLink(instance)
   # Leaving arguments out uses defaults, which are checked for the instance then.
   if call.args.length < generic.params.length
     check_defaults program, generic, instance, call.position
