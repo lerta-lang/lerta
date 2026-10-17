@@ -9,14 +9,15 @@ import emit_check_with, emit_return_thrown from './exceptions'
 import emit_box from './boxes'
 import emit_values from './heap_object'
 import emit_branch, emit_when, IrBuilder, IrModule from './ir_builder'
-import call_method, call_void_method, Coder, emit_while, is_inline, SCALARS from './json'
+import
+  call_method, call_void_method, Coder, field_name_args, emit_while, is_inline, SCALARS
+from './json'
 import
   constructor_symbol, emit_release, emit_release_value, ir_type, shared_string_constant
 from './lerta_ir'
 import emit_map_new, emit_map_set from './map'
 import emit_is_present, emit_unwrap, emit_wrap, nil_constant from './optional'
 import narrowed_from_word, scalar_of from './scalar'
-import emit_string_equals from './string'
 import
   ArrayType, bool_type, EnumType, format_type, kind_of, MapType, ObjectType, OptionalType, int_type,
   integer_range, is_boxed, RecordType, string_type, TupleType, Type, type_key, UnionType
@@ -226,21 +227,22 @@ const emit_read_fields = (
   for field, i in fields
     continue if not is_required(field)
     const fail = ->
-      const name = shared_string_constant(ir, field.name)
-      call_void_method ir, reader, 'fail_missing', ["ptr #{name}"], unwind
+      call_void_method ir, reader, 'fail_missing', field_name_args(ir, field.name), unwind
     emit_when ir, ir.assign("xor i1 #{values.given(i)}, true"), fail
   make values
 
-# Reads the value of the key into the field of its name, or skips it if no field has the name.
+# Reads the value of the key into the field whose key it is (see JsonKeys), or skips it if no
+# field has it as its key.
 const emit_read_field_of_key = (
   ir: IrBuilder, reader: Coder, values: FieldValues, key: String, unwind: () -> void
 ) ->
   const done = ir.fresh_label('json.key.done')
   for field, i in values.fields
-    const name = shared_string_constant(ir, field.name)
     const read = ir.fresh_label('json.key.field')
     const next = ir.fresh_label('json.key.next')
-    ir.emit "br i1 #{emit_string_equals(ir, key, name)}, label %#{read}, label %#{next}"
+    const args = ["ptr #{key}", field_name_args(ir, field.name)...]
+    const matches = call_method(ir, reader, 'is_field_key', bool_type, args, unwind)
+    ir.emit "br i1 #{matches}, label %#{read}, label %#{next}"
     ir.start_block read
     const value = emit_read(ir, reader, field.type, unwind)
     ir.emit "store #{ir_type(field.type)} #{value}, ptr #{values.slots[i]}"

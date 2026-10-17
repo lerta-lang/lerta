@@ -10,8 +10,10 @@ import
   emit_field_pointer, emit_member_dispatch, emit_value_pointer, value_types
 from './heap_object'
 import emit_if_else, IrBuilder, IrModule from './ir_builder'
-import call_void_method, Coder, emit_count_up, emit_while, is_inline, SCALARS from './json'
-import emit_release, emit_release_value, ir_type, shared_string_constant from './lerta_ir'
+import
+  call_void_method, Coder, field_name_args, emit_count_up, emit_while, is_inline, SCALARS
+from './json'
+import emit_release, emit_release_value, ir_type from './lerta_ir'
 import emit_is_present, emit_unwrap from './optional'
 import scalar_of, widened_to_word from './scalar'
 import call_runtime, call_void_runtime from './runtime_calls'
@@ -128,7 +130,7 @@ const emit_write_record = (
   ir: IrBuilder, writer: Coder, record: String, type: RecordType, unwind: () -> void
 ): void ->
   const write_field = (name: String, value: String, field_type: Type) ->
-    emit_write_key ir, writer, name, unwind
+    emit_write_field ir, writer, name, unwind
     emit_write ir, writer, value, field_type, unwind
   call_void_method ir, writer, 'begin_object', [], unwind
   for field, i in type.fields
@@ -149,7 +151,7 @@ const emit_write_object = (
     const name = field.name.name
     const field_type = field.type!
     const pointer = emit_field_pointer(ir, object, info, name)
-    emit_write_key ir, writer, name, unwind
+    emit_write_field ir, writer, name, unwind
     emit_write(
       ir
       writer
@@ -170,9 +172,8 @@ const emit_write_union = (
     'true'
   emit_member_dispatch ir, union, type.members, 'i1', write_member
 
-const emit_write_key = (ir: IrBuilder, writer: Coder, name: String, unwind: () -> void) ->
-  const key = shared_string_constant(ir, name)
-  call_void_method ir, writer, 'next_key', ["ptr #{key}"], unwind
+const emit_write_field = (ir: IrBuilder, writer: Coder, name: String, unwind: () -> void) ->
+  call_void_method ir, writer, 'next_field', field_name_args(ir, name), unwind
 
 # The value of an anonymous struct or a tuple at the index, borrowed.
 const emit_borrowed_value = (ir: IrBuilder, values: String, type: Type, index: Int) ->

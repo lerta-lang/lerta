@@ -41,6 +41,39 @@ export const reject_unjsonable = (program: ProgramWide, type: Type, at: Position
 # A part of a type, by its path from it, and why std:json does not convert it.
 struct Part(path: String, problem: String)
 
+# Two of the fields' names that camel case writes as one key (see JsonKeys in std:json), which
+# would give an object two values of one key.
+const same_camel_case = (names: String[], path: String) ->
+  const named = Map<String, String>()
+  for name in names
+    const key = camel_case(name)
+    if const other = named[key]
+      return Part(
+        path
+        problem: "has the fields #{other} and #{name}, which camel case writes as one key, #{key}"
+      )
+    named[key] = name
+  nil
+
+# The key of a field of the name in camel case: each `_` between another character and a lowercase
+# ASCII letter is left out, and the letter written in uppercase; a leading `_`, and one after
+# another, stay.
+export const camel_case = (name: String) ->
+  const bytes = name.binary
+  const written: Byte[] = []
+  var i = 0
+  while i < bytes.length
+    const byte = bytes[i]
+    const after: Byte = i + 1 < bytes.length then bytes[i + 1] else 0
+    const joins = byte == '_' and i > 0 and bytes[i - 1] != '_' and after >= 'a' and after <= 'z'
+    if joins
+      written.push after - 'a' + 'A'
+      i += 2
+    else
+      written.push byte
+      i += 1
+  written.to_binary().text()!
+
 const unconverted = (path: String, problem: String) ->
   Part path, problem: "#{problem}, which std:json does not convert"
 
@@ -58,6 +91,8 @@ class PartFinder
       when type is ArrayType then @unjsonable_part(type.element, "#{path}[]")
       when type is TupleType then @first_part([(item, "#{path}[#{i}]") for item, i in type.items])
       when type is RecordType
+        const names = [field.name for field in type.fields]
+        return part if const part = same_camel_case(names, path)
         @first_part [(field.type, "#{path}.#{field.name}") for field in type.fields]
       when type is MapType
         if not is_kind(type.key, 'String')
@@ -90,6 +125,7 @@ class PartFinder
     return nil if @visited.has(key)
     @visited.add key
     const info = info_of(@program, type)
+    return part if const part = same_camel_case([field.name.name for field in info.fields], path)
     for field in info.fields
       const field_path = "#{path}.#{field.name.name}"
       return unconverted(field_path, 'is weak') if field.weak

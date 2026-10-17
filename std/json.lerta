@@ -9,18 +9,28 @@ export interface Jsonable
 # The text is not JSON, or not of the type it is decoded as.
 export struct JsonError: Error
 
-export const encode_json = <T: Jsonable>(value: T) ->
-  const writer = JsonWriter()
+# How the keys of the fields of objects are written: as the fields' names, or in camel case, as
+# `textDocument` for `text_document`.
+export enum JsonKeys
+  AS_WRITTEN
+  CAMEL_CASE
+
+export const encode_json = <T: Jsonable>(value: T, keys: JsonKeys = JsonKeys.AS_WRITTEN) ->
+  const writer = JsonWriter(keys: keys)
   write_json writer, value
   writer.text()
 
-export const decode_json = <T: Jsonable>(text: String): T ->
-  const reader = JsonReader(bytes: text.binary)
+export const decode_json = <T: Jsonable>(text: String, keys: JsonKeys = JsonKeys.AS_WRITTEN): T ->
+  const reader = JsonReader(bytes: text.binary, keys: keys)
   const value = read_json<T>(reader)
   reader.end()
   value
 
+const field_key = (keys: JsonKeys, name: String, camel_case: String) ->
+  keys == JsonKeys.AS_WRITTEN then name else camel_case
+
 class JsonWriter
+  keys: JsonKeys
   parts: String[] = []
   # How many items or keys each array or object being written has, the innermost last.
   counts: Int[] = []
@@ -54,6 +64,11 @@ class JsonWriter
     @next ".#{key}"
     @parts.push quoted(key)
     @parts.push ':'
+
+  # Starts the value of a field in the innermost object, by its key: its name as written, or in
+  # camel case, which the compiler gives.
+  next_field = (name: String, camel_case: String): void ->
+    @next_key field_key(@keys, name, camel_case)
 
   end_object = (): void -> @end('}')
 
@@ -167,13 +182,14 @@ const HEX_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 
 
 class JsonReader
   bytes: Binary
+  keys: JsonKeys
   at = 0
   # The steps from the root to the value being read, as `[0]` or `.name`, which errors give.
   path: String[] = []
   # How many items or keys each array or object being read has given, the innermost last.
   counts: Int[] = []
   # The keys that each object being read has given, the innermost last.
-  keys: Set<String>[] = []
+  seen_keys: Set<String>[] = []
 
   # Whether the value is null, which it then reads.
   read_null = -> @read_literal('null')
@@ -258,12 +274,12 @@ class JsonReader
   # Reads `{` of an object, whose keys next_key then gives.
   begin_object = (): void ->
     @begin '{', 'an object'
-    @keys.push Set<String>()
+    @seen_keys.push Set<String>()
 
   # The next key of the innermost object, whose value it then starts reading, or nil at its end.
   next_key = (): String? ->
     if not @has_next('}')
-      @keys.pop()
+      @seen_keys.pop()
       return nil
     # An error before the key is read is the object's.
     @path[@path.length - 1] = ''
@@ -274,8 +290,8 @@ class JsonReader
     @skip_space()
     @fail_expected "':'" if @peek() != ':'
     @at += 1
-    @fail "the key #{quoted(key)} twice" if @keys.last()!.has(key)
-    @keys.last()!.add(key)
+    @fail "the key #{quoted(key)} twice" if @seen_keys.last()!.has(key)
+    @seen_keys.last()!.add(key)
     key
 
   # The value where the reader is, of whatever kind, as that of a key that is no field.
@@ -306,8 +322,13 @@ class JsonReader
       when byte == '{' then JSON_OBJECT
       else JSON_OTHER
 
-  # The object just read has no key for a field that needs one.
-  fail_missing = (key: String): never -> @fail("missing the key #{quoted(key)}")
+  # Whether the key read is that of the field, as next_field writes it.
+  is_field_key = (key: String, name: String, camel_case: String): Bool ->
+    key == field_key(@keys, name, camel_case)
+
+  # The object just read has no key for the field, which needs one.
+  fail_missing = (name: String, camel_case: String): never ->
+    @fail "missing the key #{quoted(field_key(@keys, name, camel_case))}"
 
   # Starts reading the next of the `count` items of a tuple, which must be there.
   next_tuple_item = (count: Int): void ->
