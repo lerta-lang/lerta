@@ -1,0 +1,26 @@
+# all and race of promises without a value give no value: all once all are resolved, race once the
+# first is settled; the first error rejects either.
+import all, race from 'std:async'
+import read_file, write_file from 'std:io'
+import sleep from 'std:time'
+
+const fail_after = (seconds: Float, message: String): Promise ->
+  await sleep(seconds)
+  throw ValueError(message)
+
+await all([write_file('a.txt', 'a'.binary), write_file('b.txt', 'b'.binary)])
+print (await read_file('a.txt')).text()! + (await read_file('b.txt')).text()!
+const none: Promise[] = []
+await all(none)
+try
+  await all([sleep(0.05), fail_after(0.01, 'failed')])
+catch error: ValueError
+  print error.message
+await race([sleep(0.01), fail_after(0.03, 'lost')])
+print 'raced'
+try
+  await race([sleep(0.03), fail_after(0.01, 'won')])
+catch error: ValueError
+  print error.message
+await sleep(0.05)
+print 'end'

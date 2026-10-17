@@ -1,0 +1,27 @@
+# all gives the values in order once all are resolved, or the first error at once; race gives the
+# first to be settled. The promises that lose are taken, so their errors end nothing.
+import all, race from 'std:async'
+import sleep from 'std:time'
+
+const after = (seconds: Float, value: Int) ->
+  await sleep(seconds)
+  value
+
+const fail_after = (seconds: Float, message: String): Promise<Int> ->
+  await sleep(seconds)
+  throw ValueError(message)
+
+print await all([after(0.03, 1), after(0.01, 2), after(0.02, 3)])
+const none: Promise<Int>[] = []
+print await all(none)
+try
+  print await all([after(0.05, 1), fail_after(0.01, 'first'), fail_after(0.02, 'second')])
+catch error: ValueError
+  print error.message
+print await race([after(0.03, 1), after(0.01, 2), fail_after(0.02, 'lost')])
+try
+  print await race([after(0.03, 1), fail_after(0.01, 'won')])
+catch error: ValueError
+  print error.message
+await sleep(0.05)
+print 'end'

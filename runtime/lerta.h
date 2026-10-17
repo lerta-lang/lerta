@@ -254,6 +254,9 @@ void lerta_promise_resolve(LertaPromise *promise);
 void lerta_promise_reject(LertaPromise *promise);
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
+// A promise without a value that lerta_promise_fire resolves, unless it is settled already.
+LertaPromise *lerta_promise_pending(void);
+void lerta_promise_fire(LertaPromise *promise);
 // A promise resolved once the seconds have passed; a negative time throws.
 LertaPromise *lerta_sleep(double seconds);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.

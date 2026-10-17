@@ -115,6 +115,16 @@ void *lerta_promise_result(LertaPromise *promise) {
   return promise->value;
 }
 
+// A Promise without a value that the program resolves, which std:async's Deferred awaits.
+LertaPromise *lerta_promise_pending(void) {
+  return lerta_promise_new(LERTA_PLAIN_ITEMS);
+}
+
+// Resolves the promise, unless it is settled already.
+void lerta_promise_fire(LertaPromise *promise) {
+  if (promise->state == PENDING) lerta_promise_resolve(promise);
+}
+
 LERTA_STATIC_STRING(negative_sleep, "sleep for a negative time");
 
 LertaPromise *lerta_sleep(double seconds) {
