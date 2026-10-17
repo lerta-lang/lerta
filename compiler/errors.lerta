@@ -1,8 +1,23 @@
 # A compile error ends the build, so it is thrown where it is found, as the line that reports it.
 
-# An error in the program being compiled, or in how the compiler is run, which ends the build with
-# its message.
-export struct CompileError: Error
+# A diagnostic where it is found: in the module that `location` names as diagnostics print it (see
+# module_location), at a line and a column, from 1, the column in code points.
+export struct Located(location: String, line: Int, column: Int, message: String)
 
-export const compile_error = (path: String, line: Int, column: Int, message: String) ->
-  throw CompileError(message: "#{path}:#{line}:#{column}: #{message}")
+# The line that reports the diagnostic, which `kind` introduces: `warning: `, or nothing for an
+# error.
+export const located_line = (located: Located, kind = '') ->
+  "#{located.location}:#{located.line}:#{located.column}: #{kind}#{located.message}"
+
+# An error in the program being compiled, or in how the compiler is run, which ends the build with
+# its message: the lines of the errors that it holds where they are found (see compile_errors), or,
+# holding none, a message of its own, for an error found in no module, as a file that cannot be
+# read.
+export struct CompileError(message: String, errors: Located[] = default []): Error
+
+# An error of the errors found, in their order.
+export const compile_errors = (errors: Located[]) ->
+  CompileError message: [located_line(each) for each in errors].join("\n"), errors: errors
+
+export const compile_error = (location: String, line: Int, column: Int, message: String) ->
+  throw compile_errors([Located(location, line, column, message)])

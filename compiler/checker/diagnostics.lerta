@@ -3,7 +3,7 @@
 # It ends the checking of the part of the program it is found in, and the errors of all the parts
 # end the build together, after the warnings (see check_part and report_errors).
 import compare_positions, Identifier, Position from '../ast'
-import CompileError from '../errors'
+import compile_errors, Located, located_line from '../errors'
 import is_standard_module, Module from '../loader'
 import is_nested_name, is_standard_name, module_location from '../source'
 import CheckError, Diagnostic, ProgramWide, Shared from './shared'
@@ -62,13 +62,13 @@ export const check_part = (program: ProgramWide, check: () -> void) ->
 export const report_errors = (program: ProgramWide) ->
   return if program.errors.length == 0
   if program.reports_warnings
-    print_error line for line in all_warnings(program)
-  const lines: String[] = []
+    print_error located_line(warning, 'warning: ') for warning in all_warnings(program)
+  const errors: Located[] = []
   for module in program.modules
     const path = module.display_path
-    const errors = [error.diagnostic for error in program.errors when error.path == path]
-    lines.append diagnostic_lines(program, path, errors, '')
-  throw CompileError(message: lines.join("\n"))
+    const diagnostics = [error.diagnostic for error in program.errors when error.path == path]
+    errors.append located_diagnostics(program, path, diagnostics)
+  throw compile_errors(errors)
 
 # The path of the innermost module being checked, which an error is in; nil for the entry module.
 export const error_module_path = (program: ProgramWide) ->
@@ -89,7 +89,7 @@ export const warn_if_unused = (shared: Shared, local: Local) ->
   return if not local.declared or local.used or name.starts_with('_')
   warn shared, position, "'#{name}' is never used"
 
-# The warnings of the program, as diagnostics print them. A program's author cannot act on the
+# The warnings of the program, where they are found. A program's author cannot act on the
 # warnings of the standard modules, which would warn, for example, about the names that only
 # generic functions the program never calls use. The unused names of a module are known once its
 # functions are checked, which may use them; not if a part has an error, as the names that only it
@@ -97,7 +97,7 @@ export const warn_if_unused = (shared: Shared, local: Local) ->
 export const all_warnings = (program: ProgramWide) ->
   if program.errors.length == 0
     warn_unused program.shared[index] for index in program.bodies_checked
-  const lines: String[] = []
+  const warnings: Located[] = []
   # A file of std's directories is of the standard modules that import it, whose own warnings it
   # gives when one of them is built on its own.
   const shows_std_files = is_standard_name(program.entry_path)
@@ -106,20 +106,16 @@ export const all_warnings = (program: ProgramWide) ->
     shows_std_files and is_nested_name(module.display_path!)
   for module in program.modules
     continue if not is_shown(module)
-    const { warnings } = program.shared[module.index]
-    lines.append diagnostic_lines(program, module.display_path, warnings, 'warning: ')
-  lines
+    const found = program.shared[module.index].warnings
+    warnings.append located_diagnostics(program, module.display_path, found)
+  warnings
 
-# The diagnostics of the module of the path, in source order, as `kind` (`warning: `, or empty for
-# errors) introduces them.
-const diagnostic_lines = (
-  program: ProgramWide, path: String?, diagnostics: Diagnostic[], kind: String
-) ->
+# The diagnostics of the module of the path, in source order.
+const located_diagnostics = (program: ProgramWide, path: String?, diagnostics: Diagnostic[]) ->
   const location = module_location(program.entry_path, path)
-  [
-    "#{location}:#{each.at.line}:#{each.at.column}: #{kind}#{each.message}"
-    for each in in_source_order(diagnostics)
-  ]
+  const located = (each: Diagnostic) ->
+    Located location, line: each.at.line, column: each.at.column, message: each.message
+  [located(each) for each in in_source_order(diagnostics)]
 
 # The names of the top-level code and the imports that are never used.
 const warn_unused = (shared: Shared) ->

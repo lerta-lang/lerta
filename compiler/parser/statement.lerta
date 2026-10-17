@@ -14,7 +14,7 @@ import
   parse_expression, parse_identifier, parse_loop_header, parse_tuple_names, parse_value,
   starts_block_arguments, take_apart, take_apart_item, tuple_holder
 from './expression'
-import CompileError from '../errors'
+import compile_errors, CompileError, Located from '../errors'
 import Token, TokenKind from '../lexer/tokens'
 import parse_primary from './primary'
 import is_one_of, token_position, TokenStream from './token_stream'
@@ -31,15 +31,19 @@ const COMMAND_ARGUMENT_STARTS: TokenKind[] =
 export const parse = (tokens: Token[], path: String) ->
   const stream = TokenStream(tokens, path)
   const statements: Statement[] = []
-  const errors: String[] = []
+  const errors: Located[] = []
   while stream.peek().kind != EOF
     const start = stream.index
     try
       parse_line stream, statements
     catch error: CompileError
-      errors.push error.message
+      # The lexer and the parser throw only errors where they are found (see compile_error); one of
+      # no module, if anything below threw it, ends the parsing as it ends the build, rather than
+      # being lost among them.
+      throw error if error.errors.length == 0
+      errors.append error.errors
       stream.skip_to_next_statement start
-  throw CompileError(message: errors.join("\n")) if errors.length > 0
+  throw compile_errors(errors) if errors.length > 0
   statements
 
 # Statements, one per line, up to the token that ends the block.
