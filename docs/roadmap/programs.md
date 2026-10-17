@@ -30,7 +30,6 @@ The planned design of modules, FFI, the standard library and tools.
   - Keys are the field names as written. `encode_json(value, JsonKeys.camel_case)` and `decode_json<T>(text, JsonKeys.camel_case)` write `text_document` as `textDocument`, for formats such as the [LSP](#tools)'s.
   - Unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
 - Random numbers, formatting dates and times, and the network.
-- `x.to_fixed(digits)` of a `Float`: the value rounded to that many digits after the point, as JavaScript's `toFixed` writes it, for tables of numbers.
 - What the [test harness](#tools) needs of the programs it runs and the files it checks:
   - `run` gives the program an input on stdin, captures its stderr as it does its stdout, runs it in a given directory with variables of the environment changed or removed, tells an exit by a signal from an exit status, and can kill the program.
   - In `std:io`: a file's modification time, making a symbolic link, and copying a file.

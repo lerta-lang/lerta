@@ -68,6 +68,23 @@ extend Float
   to_string = -> lerta_float_to_string(@)
   to_int = -> lerta_float_to_int(@)
   to_float32 = -> lerta_float_to_float32(@)
+  # The text with `digits` digits after the point, of the value times 10 to the `digits` rounded
+  # half away from zero to an Int, which it must fit in. The product may round, so a value just
+  # below a half may round up; the rest after truncating it is exact, so that rounding adds no
+  # error of its own, as adding 0.5 would.
+  to_fixed = (digits: Int) ->
+    if digits < 0 or digits > 18
+      throw ValueError(message: "to_fixed of #{digits} digits, not 0 to 18")
+    var scale = 1
+    scale *= 10 for _ in 0...digits
+    const size = @ < 0.0 then -@ else @
+    const product = size * scale.to_float()
+    const truncated = product.to_int()
+    const units = product - truncated.to_float() >= 0.5 then truncated + 1 else truncated
+    const sign = @ < 0.0 and units != 0 then '-' else ''
+    const whole = "#{sign}#{units / scale}"
+    return whole if digits == 0
+    "#{whole}.#{(units % scale).to_string().pad_start(digits, '0')}"
 
 extend Float32
   to_string = -> lerta_float32_to_string(@)
