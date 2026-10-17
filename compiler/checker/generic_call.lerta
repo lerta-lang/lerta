@@ -34,6 +34,7 @@ export const receiver_instance = (
   const generic_function = generic_of(body.program, generic)
   const type_arguments = receiver_type_arguments(body, generic_function, receiver, at)
   return nil if type_arguments == nil
+  reject_unsatisfied_bounds body, generic_function, type_arguments, [at for _ in type_arguments]
   const instance = instantiate_here(body, generic, type_arguments, at)
   body.facts.instances[call] = instance if call
   instance
@@ -79,13 +80,19 @@ const type_arguments_of = (
     inferred[name] ? cannot_infer()
   const given = [binding_of(param) for param in generic.type_params]
   const types = [each.type for each in given]
-  # A bound may name the type parameters, as in `X: Iterable<T>`.
-  const type_bindings = bindings(generic, types)
-  for (binding, written_bound) in given.zip(generic.bounds)
-    if const bound = written_bound
-      const bound_type = substitute(bound, type_bindings) as InterfaceType!
-      reject_unsatisfied body, binding.type, bound_type, binding.at
+  reject_unsatisfied_bounds body, generic, types, [each.at for each in given]
   types
+
+# Each type argument, given where `places` has it, must satisfy its bound, which may name the type
+# parameters, as in `X: Iterable<T>`.
+const reject_unsatisfied_bounds = (
+  body: Body, generic: GenericFunction, types: Type[], places: Position[]
+) ->
+  const type_bindings = bindings(generic, types)
+  for i in 0...types.length
+    if const bound = generic.bounds[i]
+      const bound_type = substitute(bound, type_bindings) as InterfaceType!
+      reject_unsatisfied body, types[i], bound_type, places[i]
 
 const function_type = (instance: Instance) -> instance.entry.type as FunctionType!
 
