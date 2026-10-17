@@ -1,0 +1,58 @@
+# The messages of the Language Server Protocol, which come on stdin and go on stdout, each after a
+# header that gives its length in bytes, as JSON whose keys are in camel case.
+import stdin, stdout from 'std:io'
+import encode_json, Jsonable, JsonKeys from 'std:json'
+
+# What the server reads of a message first, to tell what it is: a request has an id too, which its
+# response gives back.
+export struct Header(method: String?, id: Int | String?)
+
+export struct Request<P>(id: Int | String, params: P)
+
+export struct Notification<P>(params: P)
+
+struct Response<R>(jsonrpc: String, id: Int | String, result: R)
+
+# A parse error has no id, as the message that it answers could not be read.
+struct ErrorResponse(jsonrpc: String, id: Int | String?, error: ResponseError)
+
+struct ResponseError(code: Int, message: String)
+
+struct Outgoing<P>(jsonrpc: String, method: String, params: P)
+
+const JSONRPC = '2.0'
+
+# The code of an error response for a message that is not JSON, for a request of a method that the
+# server does not handle, for params that are not as the method takes them, and for a bug of the
+# server.
+export const PARSE_ERROR = -32700
+export const METHOD_NOT_FOUND = -32601
+export const INVALID_PARAMS = -32602
+export const INTERNAL_ERROR = -32603
+
+# The body of the next message, or nil at the end of the input.
+export const read_message = ->
+  var length: Int?
+  while true
+    const line = await stdin.read_line() ? return nil
+    break if line == ''
+    length = value.trim().parse_int() if const value = line.without_prefix('Content-Length:')
+  const count = length ? throw ValueError(message: 'an LSP message without its Content-Length')
+  # An empty body is no JSON, which the server answers as such.
+  return '' if count < 1
+  const body = await stdin.read(count) ? return nil
+  body.text() ? throw ValueError(message: 'an LSP message that is not valid UTF-8')
+
+export const respond = <R: Jsonable>(id: Int | String, result: R) ->
+  await write_message(encode_json(Response(id, result, jsonrpc: JSONRPC), JsonKeys.CAMEL_CASE))
+
+export const respond_error = (id: Int | String?, code: Int, message: String) ->
+  const response = ErrorResponse(id, jsonrpc: JSONRPC, error: ResponseError(code, message))
+  await write_message(encode_json(response, JsonKeys.CAMEL_CASE))
+
+export const notify = <P: Jsonable>(method: String, params: P) ->
+  await write_message(encode_json(Outgoing(method, params, jsonrpc: JSONRPC), JsonKeys.CAMEL_CASE))
+
+const write_message = (body: String) ->
+  await stdout.write("Content-Length: #{body.binary.length}\r\n\r\n#{body}")
+  await stdout.flush()

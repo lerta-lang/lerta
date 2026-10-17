@@ -67,6 +67,20 @@ checks that each file is in the [style](style.md).
 
 What of the style it does not apply yet, and its known faults, are in [the roadmap](../roadmap/programs.md#tools).
 
+### lsp
+
+```
+lerta lsp
+```
+
+is a language server, of the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), over stdin and stdout, for an editor to start; it takes no arguments.
+
+- **Documents.** It takes a document's whole text on each change (`TextDocumentSyncKind.Full`), and reads the open documents' texts in place of their files, for each program that holds them. A document of a URI that is not `file:` is left alone; one that is no file yet is formatted, but not checked.
+- **Diagnostics.** When a document is opened or changed, it checks the program whose entry module is that document, as `lerta build` does but without generating code, and publishes the errors and warnings of each file of the program, the standard modules left out, warnings once there are no errors, as `lerta build` gives them: a diagnostic's range is the one position of its message. It checks again the open documents whose programs hold the document, and does so too when a document is closed, then from its file. A file's diagnostics are those of all the open documents' programs that hold it; one that none finds any in is published empty.
+- **Positions.** In UTF-32 units, code points, as diagnostics count columns, if the client says it takes them (`general.positionEncodings`), and in UTF-16 units otherwise.
+- **Formatting.** `textDocument/formatting` gives the document as `lerta fmt --fix` would write it, as one edit of the whole text, or none if it is in the style already, and `null` if it does not parse.
+- **Other messages.** A request of another method is answered with the error `MethodNotFound`, one whose params are not of the method's shape with `InvalidParams` (with what `decode_json` found), a message that is not JSON with a parse error, and a bug of the server with `InternalError`, its message on stderr; another notification is ignored. A header without a length ends the server with status 1, as the next message cannot be found; `exit` ends it with 0 after `shutdown`, and with 1 otherwise.
+
 ### Dumps
 
 The commands below print what the lexer, the parser, the checker and codegen make of the source. They are there for debugging the compiler. Each takes one argument, the source: more, or one that starts with `-`, is a usage error.

@@ -1,12 +1,22 @@
 # Where modules are and how they are named, files and the standard modules, `std:name`, which the
 # compiler carries (see build/embedded.lerta); and reading their source text, which must be
 # valid UTF-8.
-import is_file, read_file from 'std:io'
+import is_file, read_file, real_path from 'std:io'
 import EMBEDDED_PATHS, embedded_source from '../build/embedded'
 import CompileError from './errors'
 import dirname, join from './paths'
 
+# The texts of the files that an editor holds, unsaved, which are read in place of the files, by
+# their keys (see text_key and compiler/lsp).
+export const open_texts = Map<String, String>()
+
+# The key of the text of the file at the path: its real path, or the path for a file that is not
+# there, as one not saved yet.
+export const text_key = (path: String) -> is_file(path) then real_path(path).text() ? path else path
+
 export const read_source = (path: String) ->
+  if open_texts.length > 0
+    return text if const text = open_texts[text_key(path)]
   throw CompileError(message: "'#{path}' is not a file") if not is_file(path)
   (await read_file(path)).text() ? throw CompileError(message: "'#{path}' is not valid UTF-8")
 

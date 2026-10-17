@@ -1,0 +1,186 @@
+# `lerta lsp`: a language server over stdin and stdout (see docs/reference/compiler.md#lsp). It
+# takes the whole text of a document on each change, publishes the diagnostics of the program
+# whose entry module is the document when it is opened or changed, and formats it as
+# `lerta fmt --fix` would write it.
+import is_file from 'std:io'
+import exit from 'std:process'
+import decode_json, JsonError, JsonKeys from 'std:json'
+import CompileError from '../errors'
+import removable_annotations from '../format/annotations'
+import format_source from '../format/format'
+import module_key from '../loader'
+import open_texts, text_key from '../source'
+import
+  characters, check_file, LspDiagnostic, LspPosition, LspRange, PositionEncoding
+from './diagnostics'
+import
+  Header, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, PARSE_ERROR, Notification, notify,
+  read_message, Request, respond, respond_error
+from './protocol'
+import path_of_uri, uri_of_path from './uri'
+
+struct InitializeParams(capabilities: ClientCapabilities)
+
+struct ClientCapabilities(general: { position_encodings: String[]? }?)
+
+struct InitializeResult(capabilities: ServerCapabilities, server_info: { name: String })
+
+# The document's whole text on each change (TextDocumentSyncKind.Full).
+struct ServerCapabilities
+  position_encoding: String
+  text_document_sync: Int
+  document_formatting_provider: Bool
+
+struct TextDocument(uri: String)
+
+struct OpenedDocument(uri: String, text: String)
+
+struct DidOpenParams(text_document: OpenedDocument)
+
+struct DidChangeParams(text_document: TextDocument, content_changes: { text: String }[])
+
+struct DocumentParams(text_document: TextDocument)
+
+struct PublishDiagnosticsParams(uri: String, diagnostics: LspDiagnostic[])
+
+struct TextEdit(range: LspRange, new_text: String)
+
+const FULL_SYNC = 1
+
+class Server
+  encoding = PositionEncoding.UTF16
+  shut_down = false
+  # What the last check of each open document found, by its path: the diagnostics of each file of
+  # its program (see check_file). A file's diagnostics are those of all the open documents'
+  # checks.
+  found: Map<String, Map<String, LspDiagnostic[]>> = Map()
+
+  # Handles each message until the input ends or an exit notification comes. A header that gives
+  # no length tells nothing of where the next message starts, so it ends the server.
+  run = ->
+    while true
+      const body = try
+        await read_message() ? return
+      catch error: ValueError
+        print_error error.message
+        exit 1
+      await @handle(body)
+
+  # A message that is not JSON, or not of a message's shape, is answered as a parse error, which
+  # has no id to answer.
+  handle = (body: String) ->
+    const header = try
+      decode_json<Header>(body, KEYS)
+    catch error: JsonError
+      return await respond_error(nil, PARSE_ERROR, error.message)
+    try
+      await @dispatch(header.method ? '', header.id, body)
+    catch error: JsonError
+      await respond_error(id, INVALID_PARAMS, error.message) if const id = header.id
+    catch error
+      # A bug of the server ends the message alone, as one message should not end the session.
+      print_error error.message
+      await respond_error(id, INTERNAL_ERROR, error.message) if const id = header.id
+
+  dispatch = (method: String, id: Int | String?, body: String) ->
+    case method
+      when 'initialize' then await @initialize(decode_json<Request<InitializeParams>>(body, KEYS))
+      when 'textDocument/didOpen'
+        const params = decode_json<Notification<DidOpenParams>>(body, KEYS).params
+        await @set_text(params.text_document.uri, params.text_document.text)
+      when 'textDocument/didChange'
+        const params = decode_json<Notification<DidChangeParams>>(body, KEYS).params
+        if const change = params.content_changes.last()
+          await @set_text(params.text_document.uri, change.text)
+      when 'textDocument/didClose'
+        await @close(decode_json<Notification<DocumentParams>>(body, KEYS).params.text_document.uri)
+      when 'textDocument/formatting'
+        const request = decode_json<Request<DocumentParams>>(body, KEYS)
+        await respond(
+          request.id
+          await formatting_edits(request.params.text_document.uri, @encoding)
+        )
+      when 'shutdown'
+        @shut_down = true
+        const none: Bool? = nil
+        await respond(given, none) if const given = id
+      when 'exit' then exit(@shut_down then 0 else 1)
+      else await respond_error(given, METHOD_NOT_FOUND, "no method #{method}") if const given = id
+
+  initialize = (request: Request<InitializeParams>) ->
+    const encodings = request.params.capabilities.general?.position_encodings ? []
+    @encoding = PositionEncoding.UTF32 if encodings.contains('utf-32')
+    const encoding = @encoding == PositionEncoding.UTF32 then 'utf-32' else 'utf-16'
+    const capabilities = ServerCapabilities(
+      position_encoding: encoding, text_document_sync: FULL_SYNC, document_formatting_provider: true
+    )
+    await respond(request.id, InitializeResult(capabilities, server_info: { name: 'lerta' }))
+
+  # A document that is no file yet is formatted, but not checked: a program's modules are files. One
+  # whose file is gone keeps what its last check found until it is closed.
+  set_text = (uri: String, text: String) ->
+    const path = path_of_uri(uri) ? return
+    open_texts[text_key(path)] = text
+    return if not is_file(path)
+    await @check(doc) for doc in [path, @importers(path)...]
+
+  # Its importers' checks, which took its text, are made again, from the file.
+  close = (uri: String) ->
+    const path = path_of_uri(uri) ? return
+    open_texts.remove text_key(path)
+    const files = @found[path]?.keys().to_array() ? []
+    @found.remove path
+    await @check(doc) for doc in @importers(path)
+    await @publish(file) for file in files
+
+  # The other open documents whose programs hold the document at the path.
+  importers = (path: String) ->
+    [doc for (doc, files) in @found.entries() when doc != path and files.has(path)]
+
+  # Checks the program whose entry module is the open document at the path, and publishes the
+  # diagnostics of the files of its program, as of this check and of the last one.
+  check = (path: String) ->
+    const before = @found[path]?.keys().to_array() ? []
+    const found = await check_file(path, @encoding)
+    @found[path] = found
+    const files = [file for file in before when not found.has(file)]
+    files.append found.keys().to_array()
+    await @publish(file) for file in files
+
+  # Publishes the diagnostics that the open documents' checks found in the file, each once.
+  publish = (file: String) ->
+    const diagnostics: LspDiagnostic[] = []
+    for found in @found.values()
+      for each in found[file] ? []
+        diagnostics.push each if not diagnostics.contains(each)
+    const params = PublishDiagnosticsParams(uri: uri_of_path(file), diagnostics: diagnostics)
+    await notify('textDocument/publishDiagnostics', params)
+
+const KEYS = JsonKeys.CAMEL_CASE
+
+# The edit that writes the document in the style, of its whole text, or none if it is so already;
+# nil if it does not parse.
+const formatting_edits = (uri: String, encoding: PositionEncoding) ->
+  const path = path_of_uri(uri) ? return nil
+  const text = open_texts[text_key(path)] ? return nil
+  try
+    const formatted = format_source(text, path, await removable_types(path)).text
+    const none: TextEdit[] = []
+    return none if formatted == text
+    const lines = text.split("\n")
+    const end = LspPosition(line: lines.length - 1, character: characters(lines.last()!, encoding))
+    const range = LspRange(start: LspPosition(line: 0, character: 0), end: end)
+    [TextEdit(range, new_text: formatted)]
+  catch _: CompileError
+    nil
+
+# The annotations that `lerta fmt --fix` leaves out of the file, which the checker tells; none for
+# a document that is no file yet, which no program holds.
+const removable_types = (path: String) ->
+  const none: String[] = []
+  return none if not is_file(path)
+  (await removable_annotations([path]))[module_key(path)] ? none
+
+export const lsp_command = (args: String[]) ->
+  throw CompileError(message: 'lerta lsp takes no arguments') if args.length > 0
+  await Server().run()

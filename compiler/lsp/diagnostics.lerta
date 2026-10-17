@@ -1,0 +1,72 @@
+# The errors and warnings of a program, as the LSP publishes them for each of its files: its entry
+# module is checked as `lerta build` checks it, without generating code.
+import check_modules from '../checker/modules'
+import CompileError, Located from '../errors'
+import load_modules from '../loader'
+import is_standard_name, module_location, read_source from '../source'
+
+# A position as the LSP takes it, from 0, its character counted in the units of the encoding that
+# the server and the client agree on (see PositionEncoding).
+export struct LspPosition(line: Int, character: Int)
+
+export struct LspRange(start: LspPosition, end: LspPosition)
+
+export struct LspDiagnostic(range: LspRange, severity: Int, source: String, message: String)
+
+const ERROR = 1
+const WARNING = 2
+
+# How a position counts the characters of a line: in code points, as diagnostics do, or in UTF-16
+# units, which the LSP takes unless the client says it takes code points.
+export enum PositionEncoding
+  UTF32
+  UTF16
+
+# The diagnostics of the program whose entry module is at the path, by the paths of its files,
+# every one of them, those without any too, but the standard modules; only the entry module's and
+# those that have some if the modules cannot be loaded. An error that is found in no module is the
+# entry module's, at its start.
+export const check_file = (path: String, encoding: PositionEncoding) ->
+  const by_path = Map<String, LspDiagnostic[]>()
+  by_path[path] = []
+  var warnings: Located[] = []
+  var errors: Located[] = []
+  const keep_warnings = (found: Located[]) -> warnings = found
+  try
+    const modules = await load_modules(path)
+    for module in modules
+      const location = module_location(path, module.display_path)
+      by_path[location] = [] if not is_standard_name(location)
+    check_modules path, modules, keep_warnings
+  catch error: CompileError
+    const placed = Located(location: path, line: 1, column: 1, message: error.message)
+    errors = error.errors.length > 0 then error.errors else [placed]
+  const add = (located: Located, severity: Int) ->
+    return if is_standard_name(located.location)
+    const at = await position(located, encoding)
+    const range = LspRange(start: at, end: at)
+    const diagnostic = LspDiagnostic(range, severity, source: 'lerta', message: located.message)
+    by_path.get_or_put(located.location, -> []).push(diagnostic)
+  await add(each, ERROR) for each in errors
+  await add(each, WARNING) for each in warnings
+  by_path
+
+# The position of the diagnostic, whose column counts code points: in UTF-16 units, those before
+# it on its line count 2 each above U+FFFF.
+const position = (located: Located, encoding: PositionEncoding) ->
+  const line = located.line - 1
+  const before = located.column - 1
+  return LspPosition(line, character: before) if encoding == PositionEncoding.UTF32
+  const lines = (await read_source(located.location)).split("\n")
+  const text = line < lines.length then lines[line] else ''
+  LspPosition line, character: characters(text, encoding, before)
+
+# The characters of the text, or of its first `count` code points, in the encoding's units.
+export const characters = (text: String, encoding: PositionEncoding, count: Int? = nil) ->
+  var units = 0
+  var counted = 0
+  for code in text
+    break if counted == count
+    units += encoding == PositionEncoding.UTF16 and code > 0xFFFF then 2 else 1
+    counted += 1
+  units

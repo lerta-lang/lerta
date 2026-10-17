@@ -1,9 +1,12 @@
 # Checks a program: the types of its expressions, its conversions and its warnings.
+import CompileError, Located from '../errors'
 import check_all_objects, check_pending_objects from './object_types'
 import
   complete_declarations, declare_extends, declare_later_extends, declare_names
 from './declarations'
-import check_part, enter_module, fail, leave_module, report_errors from './diagnostics'
+import
+  all_warnings, check_part, enter_module, fail, leave_module, report_errors
+from './diagnostics'
 import reject_growing_instances from './growing_instances'
 import Extensions from './extensions'
 import check_all_functions, function_type_of, method_key from './functions'
@@ -20,12 +23,19 @@ import module_resolver from './type_names'
 import FunctionType, is_kind from '../types'
 
 # Checks the modules step by step (see docs/internals.md#modules). The warnings of all the modules
-# are gathered at the end (see all_warnings), or with an error, since a module that calls a generic
-# function of another checks an instance of it there, which may find warnings and use names of that
-# module.
-export const check_modules = (entry_path: String, modules: Module[], reports_warnings: Bool) ->
-  const program = ProgramWide(entry_path, modules, reports_warnings)
-  check_program program
+# are gathered at the end (see all_warnings), also after an error, since a module that calls a
+# generic function of another checks an instance of it there, which may find warnings and use names
+# of that module. `on_warnings` takes them, with an error too, before it is thrown.
+export const check_modules = (
+  entry_path: String, modules: Module[], on_warnings: (Located[]) -> void
+) ->
+  const program = ProgramWide(entry_path, modules, finds_all_errors: true)
+  try
+    check_program program
+  catch error: CompileError
+    on_warnings all_warnings(program)
+    throw error
+  on_warnings all_warnings(program)
   program
 
 # Checks the program as check_modules does, into the ProgramWide given. Throws its errors as one

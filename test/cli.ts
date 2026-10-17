@@ -8,6 +8,7 @@ import { cache_checks } from './cli/cache.ts'
 import { runtime_flags, work_dir } from './cli/common.ts'
 import { extern_checks } from './cli/extern.ts'
 import { file_checks } from './cli/files.ts'
+import { lsp_checks } from './cli/lsp.ts'
 import { program_checks } from './cli/programs.ts'
 import { std_checks } from './cli/std.ts'
 
@@ -25,6 +26,7 @@ await run_suite(work_dir, async () => {
       ...build_checks,
       ...cache_checks,
       ...extern_checks,
+      ...lsp_checks,
     ],
     availableParallelism(),
   )

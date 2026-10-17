@@ -3,7 +3,7 @@
 # It ends the checking of the part of the program it is found in, and the errors of all the parts
 # end the build together, after the warnings (see check_part and report_errors).
 import compare_positions, Identifier, Position from '../ast'
-import compile_errors, Located, located_line from '../errors'
+import compile_errors, Located from '../errors'
 import is_standard_module, Module from '../loader'
 import is_nested_name, is_standard_name, module_location from '../source'
 import CheckError, Diagnostic, ProgramWide, Shared from './shared'
@@ -34,8 +34,8 @@ const report_error = (program: ProgramWide, at: Position, message: String) ->
 const report_error_in = (program: ProgramWide, path: String?, at: Position, message: String) ->
   const error = CheckError(path, diagnostic: Diagnostic(message, at))
   program.errors.push error
-  # The first error tells whether the program checks.
-  report_errors program if not program.reports_warnings
+  # A check that does not find all errors ends at the first.
+  report_errors program if not program.finds_all_errors
   abort_part()
 
 # Ends the checking of the part, without an error of its own: that of the part it needs is kept.
@@ -58,11 +58,10 @@ export const check_part = (program: ProgramWide, check: () -> void) ->
     program.annotated_call = annotated_call
     false
 
-# Prints the warnings and throws the errors of the program as one CompileError, if it has any.
+# Throws the errors of the program as one CompileError, if it has any; its warnings are left to
+# all_warnings.
 export const report_errors = (program: ProgramWide) ->
   return if program.errors.length == 0
-  if program.reports_warnings
-    print_error located_line(warning, 'warning: ') for warning in all_warnings(program)
   const errors: Located[] = []
   for module in program.modules
     const path = module.display_path
