@@ -1,0 +1,36 @@
+# The text of JSON that both the writer and the reader of std:json write: strings in quotes, the
+# keys of fields, and hex digits.
+import JsonKeys from '../json'
+
+# The key of a field: its name as written, or in camel case, which the compiler gives.
+export const field_key = (keys: JsonKeys, name: String, camel_case: String) ->
+  keys == JsonKeys.AS_WRITTEN then name else camel_case
+
+# The string in quotes, with the characters that JSON escapes escaped. A run of bytes that need no
+# escape is taken whole.
+export const quoted = (value: String) ->
+  const bytes = value.binary
+  const pieces = ['"']
+  var start = 0
+  for byte, i in bytes
+    const escape = escape_of(byte) ? continue
+    pieces.push bytes.text(start, i)!
+    pieces.push escape
+    start = i + 1
+  pieces.push bytes.text(start)!
+  pieces.push '"'
+  pieces.join ''
+
+const escape_of = (byte: Byte): String? ->
+  case byte
+    when '"' then '\"'
+    when '\' then '\\'
+    when "\n" then '\n'
+    when "\r" then '\r'
+    when "\t" then '\t'
+    else byte < 0x20 then "\\u#{hex_text(byte.to_int())}"
+
+const HEX_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
+
+export const hex_text = (code: Int) ->
+  [HEX_DIGITS[code >> shift & 0xF] for shift in [12, 8, 4, 0]].join('')

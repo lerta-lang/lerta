@@ -8,7 +8,11 @@ import type { Check } from '../report.ts'
 import { run_command, work_dir } from './common.ts'
 
 const std_dir = join(root_dir, 'std')
-const std_modules = readdirSync(std_dir).map((file) => `std:${file.replace(/\.lerta$/, '')}`)
+// The files of std/'s directories, as std/internal/, are no standard modules: those that import
+// them build with their warnings.
+const std_modules = readdirSync(std_dir)
+  .filter((file) => file.endsWith('.lerta'))
+  .map((file) => `std:${file.replace(/\.lerta$/, '')}`)
 
 export const std_checks: Check[] = std_modules.map((module) => ({
   name: `${module} builds without warnings`,

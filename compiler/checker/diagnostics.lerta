@@ -4,8 +4,8 @@
 # end the build together, after the warnings (see check_part and report_errors).
 import compare_positions, Identifier, Position from '../ast'
 import CompileError from '../errors'
-import is_standard_module from '../loader'
-import module_location from '../source'
+import is_standard_module, Module from '../loader'
+import is_nested_name, is_standard_name, module_location from '../source'
 import CheckError, Diagnostic, ProgramWide, Shared from './shared'
 import Local from './scopes'
 
@@ -98,8 +98,14 @@ export const all_warnings = (program: ProgramWide) ->
   if program.errors.length == 0
     warn_unused program.shared[index] for index in program.bodies_checked
   const lines: String[] = []
+  # A file of std's directories is of the standard modules that import it, whose own warnings it
+  # gives when one of them is built on its own.
+  const shows_std_files = is_standard_name(program.entry_path)
+  const is_shown = (module: Module) ->
+    return true if not is_standard_module(module)
+    shows_std_files and is_nested_name(module.display_path!)
   for module in program.modules
-    continue if is_standard_module(module)
+    continue if not is_shown(module)
     const { warnings } = program.shared[module.index]
     lines.append diagnostic_lines(program, module.display_path, warnings, 'warning: ')
   lines

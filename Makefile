@@ -15,7 +15,7 @@ host_libuv = $(shell awk -v kind=$(1) -v systems='$(HOST_LIBUV_SYSTEMS)' \
 LIBUV_HEADERS := $(shell find third_party/libuv/include third_party/libuv/src -name '*.h')
 LIBUV_SOURCES := $(shell awk '$$2 == "source" { print "third_party/libuv/" $$3 }' third_party/libuv.txt)
 LIBUV := third_party/libuv.txt $(LIBUV_HEADERS) $(LIBUV_SOURCES)
-EMBEDDED := $(sort $(wildcard std/*.lerta runtime/*.c runtime/*.h) $(LIBUV))
+EMBEDDED := $(sort $(wildcard std/*.lerta std/internal/*.lerta runtime/*.c runtime/*.h) $(LIBUV))
 SOURCES := $(shell find compiler -name '*.lerta') build/embedded.lerta
 RUNTIME_C := $(wildcard runtime/*.c)
 RUNTIME := $(RUNTIME_C) $(wildcard runtime/*.h)

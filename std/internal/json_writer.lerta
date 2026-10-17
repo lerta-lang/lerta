@@ -1,0 +1,80 @@
+# What std:json's generated code writes through (see std/json.lerta).
+import base64 from './base64'
+import field_key, quoted from './json_text'
+import JsonError, JsonKeys from '../json'
+
+export class JsonWriter
+  keys: JsonKeys
+  parts: String[] = []
+  # How many items or keys each array or object being written has, the innermost last.
+  counts: Int[] = []
+  # The steps from the root to the value being written, as `[0]` or `.name`, which errors give.
+  path: String[] = []
+  # The objects being written that may hold themselves, by their addresses, with their paths.
+  entered: Int[] = []
+  entered_paths: String[] = []
+
+  write_null = (): void -> @parts.push('null')
+  write_bool = (value: Bool): void -> @parts.push(value.to_string())
+  write_int = (value: Int): void -> @parts.push(value.to_string())
+  write_float = (value: Float): void -> @parts.push(value.to_string())
+  write_string = (value: String): void -> @parts.push(quoted(value))
+  write_uint64 = (value: UInt64): void -> @parts.push(value.to_string())
+  write_float32 = (value: Float32): void -> @parts.push(value.to_string())
+  # As base64 (RFC 4648), whose letters need no escape.
+  write_binary = (value: Binary): void -> @parts.push("\"#{base64(value)}\"")
+
+  begin_array = (): void -> @begin('[')
+
+  # Starts an item of the innermost array.
+  next_item = (): void -> @next("[#{@counts.last()!}]")
+
+  end_array = (): void -> @end(']')
+
+  begin_object = (): void -> @begin('{')
+
+  # Starts the value of the key in the innermost object.
+  next_key = (key: String): void ->
+    @next ".#{key}"
+    @parts.push quoted(key)
+    @parts.push ':'
+
+  # Starts the value of a field in the innermost object, by its key: its name as written, or in
+  # camel case, which the compiler gives.
+  next_field = (name: String, camel_case: String): void ->
+    @next_key field_key(@keys, name, camel_case)
+
+  end_object = (): void -> @end('}')
+
+  # Starts writing an object that may hold itself, by its address, which must not be written
+  # already: JSON cannot hold a cycle.
+  enter = (address: Int): void ->
+    const path = @path_text()
+    if const index = @entered.find_index((each) -> each == address)
+      throw JsonError(message: "#{path}: a cycle back to #{@entered_paths[index]}")
+    @entered.push address
+    @entered_paths.push path
+
+  leave = (): void ->
+    @entered.pop()
+    @entered_paths.pop()
+
+  begin = (open: String) ->
+    @parts.push open
+    @counts.push 0
+    @path.push ''
+
+  next = (step: String) ->
+    const count = @counts.last()!
+    @parts.push ',' if count > 0
+    @counts[@counts.length - 1] = count + 1
+    @path[@path.length - 1] = step
+
+  end = (close: String) ->
+    @counts.pop()
+    @path.pop()
+    @parts.push close
+
+  path_text = -> "$#{@path.join('')}"
+
+  text = -> @parts.join('')

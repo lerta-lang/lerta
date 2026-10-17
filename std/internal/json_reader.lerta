@@ -1,0 +1,324 @@
+# What std:json's generated code reads through (see std/json.lerta).
+import from_base64 from './base64'
+import field_key, hex_text, quoted from './json_text'
+import JsonError, JsonKeys from '../json'
+
+export class JsonReader
+  bytes: Binary
+  keys: JsonKeys
+  at = 0
+  # The steps from the root to the value being read, as `[0]` or `.name`, which errors give.
+  path: String[] = []
+  # How many items or keys each array or object being read has given, the innermost last.
+  counts: Int[] = []
+  # The keys that each object being read has given, the innermost last.
+  seen_keys: Set<String>[] = []
+
+  # Whether the value is null, which it then reads.
+  read_null = -> @read_literal('null')
+
+  read_bool = ->
+    return true if @read_literal('true')
+    return false if @read_literal('false')
+    @fail_expected 'a Bool'
+
+  # An integer of the type that `expected` names, as `an Int8`, from `least` to `most`.
+  read_integer = (expected: String, least: Int, most: Int): Int ->
+    const number = @number() ? @fail_expected(expected)
+    const value = number.parse_int() ? @fail("expected #{expected}, found #{number}")
+    @fail "expected #{expected}, found #{number}" if value < least or value > most
+    @at += number.binary.length
+    value
+
+  # Its digits are read on their own, as a UInt64 may be above the largest Int.
+  read_uint64 = (): UInt64 ->
+    const number = @number() ? @fail_expected('a UInt64')
+    const out_of_range = -> @fail("expected a UInt64, found #{number}")
+    var value = 0.to_uint64()
+    for byte in number.binary
+      out_of_range() if not byte.is_digit()
+      const digit = (byte - '0').to_uint64()
+      out_of_range() if value > (MAX_UINT64 - digit) / 10.to_uint64()
+      value = value * 10.to_uint64() + digit
+    @at += number.binary.length
+    value
+
+  # A number that is not finite as a Float32 is no Float32.
+  read_float32 = (): Float32 ->
+    const number = @number() ? @fail_expected('a Float32')
+    const not_float32 = -> @fail("expected a Float32, found #{number}")
+    const value = number.parse_float() ? not_float32()
+    not_float32() if value >= FLOAT32_LIMIT or value <= -FLOAT32_LIMIT
+    @at += number.binary.length
+    value.to_float32()
+
+  read_binary = (): Binary ->
+    @skip_space()
+    @fail_expected 'a Binary' if @peek() != '"'
+    const at = @at
+    const text = @read_string()
+    return bytes if const bytes = from_base64(text.binary)
+    @at = at
+    @fail 'expected a Binary, found a string that is not base64'
+
+  # A number that is not finite as a Float is no Float.
+  read_float = ->
+    const number = @number() ? @fail_expected('a Float')
+    const value = number.parse_float() ? @fail("expected a Float, found #{number}")
+    @at += number.binary.length
+    value
+
+  read_string = ->
+    @skip_space()
+    @fail_expected 'a String' if @peek() != '"'
+    @at += 1
+    const bytes: Byte[] = []
+    while @peek() ? @fail('a string that does not end') != '"'
+      const byte = @bytes[@at]
+      @at += 1
+      @fail "a control character in a string, #{byte_text(byte)}" if byte < 0x20
+      if byte == '\'
+        @read_escape bytes
+      else
+        bytes.push byte
+    @at += 1
+    bytes.to_binary().text()!
+
+  # Reads `[` of an array, whose items next_item then starts.
+  begin_array = (): void -> @begin('[', 'an array')
+
+  # Whether another item of the innermost array follows, which it then starts reading.
+  next_item = ->
+    const count = @counts.last()!
+    return false if not @has_next(']')
+    @path[@path.length - 1] = "[#{count}]"
+    true
+
+  # Reads `{` of an object, whose keys next_key then gives.
+  begin_object = (): void ->
+    @begin '{', 'an object'
+    @seen_keys.push Set<String>()
+
+  # The next key of the innermost object, whose value it then starts reading, or nil at its end.
+  next_key = (): String? ->
+    if not @has_next('}')
+      @seen_keys.pop()
+      return nil
+    # An error before the key is read is the object's.
+    @path[@path.length - 1] = ''
+    @skip_space()
+    @fail_expected 'a key' if @peek() != '"'
+    const key = @read_string()
+    @path[@path.length - 1] = ".#{key}"
+    @skip_space()
+    @fail_expected "':'" if @peek() != ':'
+    @at += 1
+    @fail "the key #{quoted(key)} twice" if @seen_keys.last()!.has(key)
+    @seen_keys.last()!.add(key)
+    key
+
+  # The value where the reader is, of whatever kind, as that of a key that is no field.
+  skip_value = (): void ->
+    @skip_space()
+    const byte = @peek()
+    if byte == '"'
+      @read_string()
+    else if byte == '['
+      @begin_array()
+      @skip_value() while @next_item()
+    else if byte == '{'
+      @begin_object()
+      @skip_value() while @next_key() != nil
+    else if not (@read_literal('null') or @read_literal('true') or @read_literal('false'))
+      const number = @number() ? @fail_expected('a value')
+      @at += number.binary.length
+
+  # The kind of the value where the reader is, by the first byte that it can be told by, as one of
+  # the JSON_ kinds below, which tells the member of a union that it is.
+  peek_kind = (): Int ->
+    @skip_space()
+    const byte = @peek() ? return JSON_OTHER
+    case
+      when byte == 't' or byte == 'f' then JSON_BOOL
+      when byte == '-' or byte.is_digit() then JSON_NUMBER
+      when byte == '"' then JSON_STRING
+      when byte == '{' then JSON_OBJECT
+      else JSON_OTHER
+
+  # Whether the key read is that of the field, as next_field writes it.
+  is_field_key = (key: String, name: String, camel_case: String): Bool ->
+    key == field_key(@keys, name, camel_case)
+
+  # The object just read has no key for the field, which needs one.
+  fail_missing = (name: String, camel_case: String): never ->
+    @fail "missing the key #{quoted(field_key(@keys, name, camel_case))}"
+
+  # Starts reading the next of the `count` items of a tuple, which must be there.
+  next_tuple_item = (count: Int): void ->
+    @fail "expected an array of #{count} items, found fewer" if not @next_item()
+
+  # Reads the end of a tuple of `count` items, which must have no more.
+  end_tuple = (count: Int): void ->
+    @fail "expected an array of #{count} items, found more" if @next_item()
+
+  # The string just read names no member of the enum.
+  fail_member = (enum_name: String, text: String): never ->
+    @fail "expected a member of #{enum_name}, found #{quoted(text)}"
+
+  begin = (open: Byte, expected: String) ->
+    @skip_space()
+    @fail_expected expected if @peek() != open
+    @at += 1
+    @path.push ''
+    @counts.push 0
+
+  # Whether another item or key of the innermost array or object follows, after the `,` that it
+  # reads; at the end, it reads `close`.
+  has_next = (close: Byte) ->
+    @skip_space()
+    const count = @counts.last()!
+    if @peek() == close
+      @at += 1
+      @path.pop()
+      @counts.pop()
+      return false
+    if count > 0
+      @fail_expected "',' or '#{byte_text(close)}'" if @peek() != ','
+      @at += 1
+    @counts[@counts.length - 1] = count + 1
+    true
+
+  # Nothing but whitespace follows the value.
+  end = (): void ->
+    @skip_space()
+    @fail_expected 'the end of the text' if @at < @bytes.length
+
+  read_literal = (literal: String) ->
+    @skip_space()
+    return false if not @bytes.occurs_at(@at, literal.binary)
+    @at += literal.binary.length
+    true
+
+  # Reads the escape after a backslash in a string, into its bytes.
+  read_escape = (bytes: Byte[]) ->
+    const byte = @peek() ? @fail('a string that does not end')
+    @at += 1
+    if byte == 'u'
+      bytes.append utf8_bytes(@read_escaped_code_point())
+      return
+    const escaped = unescaped(byte) ? @fail("an escape that is not JSON, \\#{byte_text(byte)}")
+    bytes.push escaped
+
+  # A surrogate pair is one code point, written as two escapes.
+  read_escaped_code_point = ->
+    const code = @read_hex_unit()
+    return code if code < 0xD800 or code > 0xDFFF
+    const lone = -> @fail("a lone surrogate in a string, \\u#{hex_text(code)}")
+    lone() if code > 0xDBFF or not @bytes.occurs_at(@at, '\u'.binary)
+    @at += 2
+    const low = @read_hex_unit()
+    lone() if low < 0xDC00 or low > 0xDFFF
+    0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)
+
+  read_hex_unit = ->
+    var code = 0
+    for _ in 0...4
+      const digit = hex_value(@peek() ? 0) ? @fail('an escape \u without four hex digits')
+      code = code * 16 + digit
+      @at += 1
+    code
+
+  # The number's text where the reader is, as JSON writes numbers, or nil if none is there.
+  number = (): String? ->
+    @skip_space()
+    const bytes = @bytes
+    var end = @at
+    const digits = ->
+      const start = end
+      end += 1 while end < bytes.length and bytes[end].is_digit()
+      end > start
+    end += 1 if end < bytes.length and bytes[end] == '-'
+    if end < bytes.length and bytes[end] == '0'
+      end += 1
+    else if not digits()
+      return nil
+    if end < bytes.length and bytes[end] == '.'
+      end += 1
+      return nil if not digits()
+    if end < bytes.length and (bytes[end] == 'e' or bytes[end] == 'E')
+      end += 1
+      end += 1 if end < bytes.length and (bytes[end] == '+' or bytes[end] == '-')
+      return nil if not digits()
+    bytes.text(@at, end)!
+
+  skip_space = -> @at += 1 while @at < @bytes.length and is_json_space(@bytes[@at])
+
+  peek = (): Byte? -> @at < @bytes.length then @bytes[@at]
+
+  fail_expected = (expected: String): never -> @fail("expected #{expected}, found #{@found()}")
+
+  fail = (message: String): never -> throw JsonError(message: "$#{@path.join('')}: #{message}")
+
+  # What is where the reader is, as an error says it.
+  found = ->
+    @skip_space()
+    const byte = @peek() ? return 'the end of the text'
+    return number if const number = @number()
+    for literal in ['null', 'true', 'false']
+      return literal if @bytes.occurs_at(@at, literal.binary)
+    case byte
+      when '"' then 'a string'
+      when '[' then 'an array'
+      when '{' then 'an object'
+      else
+        byte == '-' or byte.is_digit() then 'a number that is not JSON' else "'#{byte_text(byte)}'"
+
+# The kinds of values that peek_kind tells, by the numbers that json_kind in
+# compiler/checker/json.lerta gives them: null and an array are JSON_OTHER, as no member of a union
+# is either.
+const JSON_BOOL = 0
+const JSON_NUMBER = 1
+const JSON_STRING = 2
+const JSON_OBJECT = 3
+const JSON_OTHER = 4
+
+# JSON's whitespace, which has no form feed or vertical tab, unlike Byte.is_space.
+const is_json_space = (byte: Byte) -> byte == ' ' or byte == "\t" or byte == "\n" or byte == "\r"
+
+# The byte that an escape of one letter stands for.
+const unescaped = (byte: Byte): Byte? ->
+  case byte
+    when '"', '\', '/' then byte
+    when 'b' then 0x08
+    when 'f' then 0x0C
+    when 'n' then "\n"
+    when 'r' then "\r"
+    when 't' then "\t"
+    else nil
+
+const hex_value = (byte: Byte): Int? ->
+  case
+    when byte.is_digit() then (byte - '0').to_int()
+    when byte >= 'a' and byte <= 'f' then (byte - 'a').to_int() + 10
+    when byte >= 'A' and byte <= 'F' then (byte - 'A').to_int() + 10
+    else nil
+
+# The byte as it is written in an error: as itself if it is ASCII and visible.
+const byte_text = (byte: Byte) ->
+  byte > 0x20 and byte < 0x7F then [byte].to_binary().text()! else "byte #{byte}"
+
+# The UTF-8 sequence of a code point, which is not a surrogate.
+const utf8_bytes = (code: Int): Byte[] ->
+  const byte = (bits: Int) -> bits.to_byte()
+  const continuation = (shift: Int) -> byte(0x80 | code >> shift & 0x3F)
+  case
+    when code < 0x80 then [byte(code)]
+    when code < 0x800 then [byte(0xC0 | code >> 6), continuation(0)]
+    when code < 0x10000 then [byte(0xE0 | code >> 12), continuation(6), continuation(0)]
+    else [byte(0xF0 | code >> 18), continuation(12), continuation(6), continuation(0)]
+
+const MAX_UINT64 = 0.to_uint64().wrapping_sub(1.to_uint64())
+
+# The least magnitude that a Float rounds to an infinity at as a Float32: 2 to the 128 less 2 to
+# the 103, half way from the largest Float32 to the next power of 2.
+const FLOAT32_LIMIT = 3.4028235677973366e38

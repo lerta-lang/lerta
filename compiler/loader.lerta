@@ -7,7 +7,8 @@ import tokenize from './lexer/tokens'
 import parse from './parser/statement'
 import basename, dirname, join, relative from './paths'
 import
-  is_standard_name, module_location, read_entry_source, read_source, standard_names, standard_source
+  is_standard_name, module_location, read_entry_source, read_source, standard_import,
+  standard_names, standard_source
 from './source'
 
 export class Module
@@ -76,32 +77,37 @@ const load = (loader: Loader, key: String, source: String, display_path: String?
   loader.by_key[key] = id
   for statement in with_builtins
     if statement is Import
-      check_standard_import statement, key, location
-      module.imported[statement] = await visit(loader, statement, dirname(key), location)
+      module.imported[statement] = await visit(loader, statement, key, location)
   module.index = loader.order.length
   loader.order.push id
   id
-
-# A standard module has no directory for a relative import to start from.
-const check_standard_import = (statement: Import, key: String, location: String) ->
-  return if not is_standard_name(key) or is_standard_name(statement.module)
-  import_error statement, location, 'a standard module imports only standard modules'
 
 const builtins_import = (): Statement ->
   Import names: [], module: BUILTINS_MODULE, position: Position(line: 1, column: 1)
 
 # The module that an import names, loaded if it is not yet: `std:name` is a standard module, and a
-# path that starts with `./` or `../` is a file relative to `from`, the directory of the importing
-# file. Other names are reserved. `location` names the importing module in diagnostics.
+# path that starts with `./` or `../` is a file relative to the importing one, `from` by its key:
+# for a module of std, a file of std (see standard_import). Other names are reserved. `location`
+# names the importing module in diagnostics.
 const visit = (loader: Loader, statement: Import, from: String, location: String): Promise<Int> ->
   const module = statement.module
   if is_standard_name(module)
     const source = imported_standard_source(statement, location)
     return loaded(loader, module) ? await load(loader, module, source, module)
-  const path = imported_file(statement, from, location)
+  return await visit_standard_file(loader, statement, from, location) if is_standard_name(from)
+  const path = imported_file(statement, dirname(from), location)
   const real = real_path_text(path)
   const display_path = relative(loader.cwd, dirname(loader.entry_path), path)
   loaded(loader, real) ? await load(loader, real, await read_source(path), display_path)
+
+# A file of std that a standard module imports by a relative path.
+const visit_standard_file = (
+  loader: Loader, statement: Import, from: String, location: String
+): Promise<Int> ->
+  const missing = ->
+    import_error statement, location, "cannot find module '#{statement.module}' in std"
+  const { module, source } = standard_import(from, statement.module) ? missing()
+  loaded(loader, module) ? await load(loader, module, source, module)
 
 # The place of the module of `key` if it is loaded. An import of a module whose imports are being
 # loaded closes a cycle (see close_cycle).
