@@ -1,0 +1,167 @@
+# The code of std:json's builtin write_json and read_json (see checker/json): a function for each
+# type that writes or reads its values, defined at its first use, through the methods of the
+# JsonWriter or the JsonReader that it takes. A scalar or an optional value is written and read
+# inline, an array by its own function. An exception that a method throws is passed on at once,
+# releasing what the function holds.
+import emit_array_new, emit_borrowed_item, emit_length, emit_push from './array'
+import emit_check_with, emit_return_thrown from './exceptions'
+import emit_branch, emit_if_else, IrBuilder, IrModule from './ir_builder'
+import emit_release, emit_release_value, ir_return_type, ir_type, method_symbol from './lerta_ir'
+import emit_is_present, emit_unwrap, emit_wrap, nil_constant from './optional'
+import emit_valueless_call from './runtime_calls'
+import
+  ArrayType, bool_type, float_type, int_type, kind_of, ObjectType, OptionalType, string_type, Type,
+  type_key, TypeKind, void_type
+from '../types'
+
+# The JsonWriter or JsonReader, of its type, as the operand that the code holds.
+struct Coder(type: ObjectType, operand: String)
+
+# The methods that write and read a scalar of the type.
+struct ScalarMethods(write: String, read: String, type: Type)
+
+const SCALARS: Map<TypeKind, ScalarMethods> =
+  'Int': ScalarMethods(write: 'write_int', read: 'read_int', type: int_type)
+  'Float': ScalarMethods(write: 'write_float', read: 'read_float', type: float_type)
+  'Bool': ScalarMethods(write: 'write_bool', read: 'read_bool', type: bool_type)
+  'String': ScalarMethods(write: 'write_string', read: 'read_string', type: string_type)
+
+# Writes the value, borrowed; the caller checks for an exception after it.
+export const emit_write_json = (
+  ir: IrBuilder, writer_type: ObjectType, writer: String, value: String, type: Type
+) -> emit_write_call(ir, Coder(type: writer_type, operand: writer), value, type)
+
+# The value read, owned; the caller checks for an exception after it.
+export const emit_read_json = (
+  ir: IrBuilder, reader_type: ObjectType, reader: String, type: Type
+) -> emit_read_call(ir, Coder(type: reader_type, operand: reader), type)
+
+const emit_write_call = (ir: IrBuilder, writer: Coder, value: String, type: Type) ->
+  const symbol = write_function(ir.module, writer.type, type)
+  ir.emit "call void #{symbol}(ptr #{writer.operand}, #{ir_type(type)} #{value})"
+
+const emit_read_call = (ir: IrBuilder, reader: Coder, type: Type) ->
+  const symbol = read_function(ir.module, reader.type, type)
+  ir.assign "call #{ir_type(type)} #{symbol}(ptr #{reader.operand})"
+
+const write_function = (module: IrModule, writer_type: ObjectType, type: Type) ->
+  const define = (name: String, defined: IrModule) ->
+    const ir = IrBuilder(module: defined)
+    const writer = Coder(type: writer_type, operand: '%writer')
+    if type is ArrayType
+      emit_write_array ir, writer, '%value', type.element
+    else
+      emit_write ir, writer, '%value', type
+    ir.emit 'ret void'
+    ir.finish "private void #{name}(ptr %writer, #{ir_type(type)} %value)"
+  module.named "json write #{type_key(type)}", '@lerta.json.write', define
+
+const read_function = (module: IrModule, reader_type: ObjectType, type: Type) ->
+  const define = (name: String, defined: IrModule) ->
+    const ir = IrBuilder(module: defined)
+    const reader = Coder(type: reader_type, operand: '%reader')
+    const value =
+      if type is ArrayType
+        emit_read_array ir, reader, type
+      else
+        emit_read ir, reader, type, -> emit_return_thrown(ir, type)
+    ir.emit "ret #{ir_type(type)} #{value}"
+    ir.finish "private #{ir_type(type)} #{name}(ptr %reader)"
+  module.named "json read #{type_key(type)}", '@lerta.json.read', define
+
+# Writes the value, borrowed, from a function that holds nothing.
+const emit_write = (ir: IrBuilder, writer: Coder, value: String, type: Type): void ->
+  const unwind = -> emit_return_thrown(ir, void_type)
+  if const scalar = SCALARS[kind_of(type)]
+    call_method ir, writer, scalar.write, void_type, ["#{ir_type(type)} #{value}"], unwind
+    return
+  case
+    when type is OptionalType
+      const write_inner = -> emit_write(ir, writer, emit_unwrap(ir, value, type), type.inner)
+      # call_method gives the result's IR operand, a String, which this () -> void branch must not
+      # return.
+      const write_null = (): void -> call_method(ir, writer, 'write_null', void_type, [], unwind)
+      emit_if_else ir, emit_is_present(ir, value, type), write_inner, write_null
+    else
+      emit_write_call ir, writer, value, type
+      emit_check_with ir, unwind
+
+const emit_write_array = (ir: IrBuilder, writer: Coder, array: String, element: Type) ->
+  const unwind = -> emit_return_thrown(ir, void_type)
+  call_method ir, writer, 'begin_array', void_type, [], unwind
+  const write_item = (index: String) ->
+    call_method ir, writer, 'next_item', void_type, [], unwind
+    emit_write ir, writer, emit_borrowed_item(ir, array, index, element), element
+  emit_count_up ir, emit_length(ir, array), write_item
+  call_method ir, writer, 'end_array', void_type, [], unwind
+
+# The value read, owned. `unwind` releases what the function holds and returns.
+const emit_read = (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> void): String ->
+  if const scalar = SCALARS[kind_of(type)]
+    return call_method(ir, reader, scalar.read, scalar.type, [], unwind)
+  case
+    when type is OptionalType
+      const is_null = call_method(ir, reader, 'read_null', bool_type, [], unwind)
+      const present = ir.assign("xor i1 #{is_null}, true")
+      const read_inner = -> emit_wrap(ir, emit_read(ir, reader, type.inner, unwind), type.inner)
+      emit_branch ir, ir_type(type), present, read_inner, nil_constant(type)
+    else
+      const value = emit_read_call(ir, reader, type)
+      emit_check_with ir, unwind
+      value
+
+# The array, owned, which the function holds while it reads the items.
+const emit_read_array = (ir: IrBuilder, reader: Coder, type: ArrayType) ->
+  const element = type.element
+  const array = emit_array_new(ir, element)
+  const unwind = ->
+    emit_release ir, array
+    emit_return_thrown ir, type
+  call_method ir, reader, 'begin_array', void_type, [], unwind
+  const loop = ir.fresh_label('json.items')
+  const item_label = ir.fresh_label('json.item')
+  const done = ir.fresh_label('json.items.done')
+  ir.emit "br label %#{loop}"
+  ir.start_block loop
+  const more = call_method(ir, reader, 'next_item', bool_type, [], unwind)
+  ir.emit "br i1 #{more}, label %#{item_label}, label %#{done}"
+  ir.start_block item_label
+  const item = emit_read(ir, reader, element, unwind)
+  # The array retains the item, which this function owned.
+  emit_push ir, array, item, element
+  emit_release_value ir, item, element
+  ir.emit "br label %#{loop}"
+  ir.start_block done
+  array
+
+# Runs `body` with each index from 0 up to `count`, as an i64.
+const emit_count_up = (ir: IrBuilder, count: String, body: (String) -> void) ->
+  const counter = ir.alloca('i64')
+  ir.emit "store i64 0, ptr #{counter}"
+  const loop = ir.fresh_label('json.count')
+  const step = ir.fresh_label('json.count.step')
+  const done = ir.fresh_label('json.count.done')
+  ir.emit "br label %#{loop}"
+  ir.start_block loop
+  const index = ir.assign("load i64, ptr #{counter}")
+  const is_done = ir.assign("icmp eq i64 #{index}, #{count}")
+  ir.emit "br i1 #{is_done}, label %#{done}, label %#{step}"
+  ir.start_block step
+  body index
+  ir.emit "store i64 #{ir.assign("add i64 #{index}, 1")}, ptr #{counter}"
+  ir.emit "br label %#{loop}"
+  ir.start_block done
+
+# Calls the method of the writer or reader, of the result type, with the arguments after the
+# object; `unwind` runs if it throws.
+const call_method = (
+  ir: IrBuilder, coder: Coder, name: String, result: Type, args: String[], unwind: () -> void
+) ->
+  const operands = ["ptr #{coder.operand}", args...].join(', ')
+  const call = "call #{ir_return_type(result)} #{method_symbol(coder.type, name)}(#{operands})"
+  const value =
+    returns_value(result) then ir.assign(call) else emit_valueless_call(ir, call, result)
+  emit_check_with ir, unwind
+  value
+
+const returns_value = (result: Type) -> ir_return_type(result) != 'void'

@@ -1,0 +1,83 @@
+# The types that std:json converts, which satisfy Jsonable by their parts, and the calls in it of
+# the code that the compiler generates for each (see codegen/json).
+import Call, Expression, Identifier, Position from '../ast'
+import fail from './diagnostics'
+import type_of from './expression'
+import has_function from './functions'
+import lookup, record_reference from './name'
+import JsonConversion, JsonDirection from './references'
+import Body, ProgramWide, Shared from './shared'
+import names_type_or_import, resolve from './type_names'
+import
+  ArrayType, format_type, InterfaceType, is_one_of_kinds, ObjectType, OptionalType, Type, TypeKind,
+  void_type
+from '../types'
+
+const JSON_MODULE = 'std:json'
+
+export const is_jsonable_bound = (bound: InterfaceType) ->
+  bound.module == JSON_MODULE and bound.name == 'Jsonable'
+
+# Whether the interface of the name, declared in the module, is std:json's Jsonable.
+export const is_jsonable_declaration = (shared: Shared, name: String) ->
+  is_json_module(shared) and name == 'Jsonable'
+
+# std:json, also when it is the entry module, as when it is built on its own.
+const is_json_module = (shared: Shared) ->
+  shared.name == JSON_MODULE or (shared.path == nil and shared.program.entry_path == JSON_MODULE)
+
+# Rejects a type that has a part std:json does not convert, naming the part by its path, as
+# JsonError does in std:json: `$[]` is an item of an array.
+export const reject_unjsonable = (program: ProgramWide, type: Type, at: Position) ->
+  const part = unjsonable_part(type, '$') ? return
+  const part_type = format_type(part.type)
+  const where = part.path == '$' then 'it' else part.path
+  const reason = "#{where} is of type #{part_type}, which std:json does not convert"
+  fail program, at, "#{format_type(type)} does not satisfy Jsonable: #{reason}"
+
+# A part of a type, and its path from it.
+struct Part(path: String, type: Type)
+
+const unjsonable_part = (type: Type, path: String): Part? ->
+  case
+    when is_one_of_kinds(type, JSON_SCALAR_KINDS) then nil
+    when type is OptionalType then unjsonable_part(type.inner, path)
+    when type is ArrayType then unjsonable_part(type.element, "#{path}[]")
+    else Part(path, type)
+
+const JSON_SCALAR_KINDS: TypeKind[] = ['Int', 'Float', 'Bool', 'String']
+
+# A call in std:json of the builtin `write_json` or `read_json`, unless the name is taken there.
+export const json_direction = (body: Body, callee: Expression): JsonDirection? ->
+  return nil if callee is not Identifier or not is_json_module(body.shared)
+  const name = callee.name
+  const direction =
+    case name
+      when 'write_json' then JsonDirection.WRITE
+      when 'read_json' then JsonDirection.READ
+      else nil
+  return nil if lookup(body, name) != nil or has_function(body.shared, name)
+  not names_type_or_import(body.shared, name) then direction
+
+# `write_json(writer, value)` writes the value, of a Jsonable type, and `read_json<T>(reader)`
+# reads a T.
+export const type_of_json_call = (body: Body, call: Call, direction: JsonDirection) ->
+  const program = body.program
+  const callee = call.callee as Identifier!
+  const arity = direction == JsonDirection.WRITE then 2 else 1
+  if call.args.length != arity or call.named_args.length > 0
+    fail program, call.position, "#{callee.name} takes #{arity} arguments"
+  const arg_types = [type_of(body, arg) for arg in call.args]
+  const coder = direction == JsonDirection.WRITE then 'JsonWriter' else 'JsonReader'
+  const takes_coder = arg_types[0] is ObjectType and (arg_types[0] as ObjectType!).name == coder
+  fail program, call.args[0].position, "#{callee.name} takes a #{coder} first" if not takes_coder
+  const type =
+    case direction
+      when JsonDirection.WRITE then arg_types[1]
+      when JsonDirection.READ
+        const written =
+          call.type_args.first() ? fail(program, call.position, 'read_json<T> needs T')
+        resolve program, body.resolver, written
+  reject_unjsonable program, type, call.position
+  record_reference body, callee, JsonConversion(direction, type)
+  direction == JsonDirection.WRITE then void_type else type

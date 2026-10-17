@@ -14,7 +14,7 @@ import argv, exit from 'std:process'
   from './ast'
   ```
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'`, `'std:math'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:io'`, `'std:json'`, `'std:math'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
 - Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. Functions can be declared in any order (see [top-level values](functions.md#top-level-values)).
 
 ## Exports
@@ -60,6 +60,35 @@ export const unit = 1
 `Reader`, exported too, is a class that reads a stream in chunks through a buffer: its field `read_chunk: () -> Promise<Binary?>` gives the next chunk, or nil at the end. Its methods are `read_line(): Promise<String?>`, the next line without its `\n` and a `\r` before it, or nil at the end, which throws a `ValueError`, `a line is not valid UTF-8`, for one that is not; `read(count: Int): Promise<Binary?>`, `count` bytes, or as many as are left if the end comes first, or nil at the end, which throws a `ValueError` for a count below 1; and `read_all(): Promise<Binary>`, all that is left. A read must end before the next one starts: one that starts while another is pending throws a `ValueError`, `a Reader is read by another read that has not ended`. A read of `stdin` keeps the program running until it ends, as a timer does, even if nothing awaits it.
 
 `Writer`, exported too, is a struct of a file descriptor with the methods `write(s: String): Promise`, `write_binary(b: Binary): Promise` and `flush(): Promise`; a `Writer` of a file descriptor other than 1 (stdout) or 2 (stderr) throws when it is used. A write that leaves the buffer under 64 KiB is resolved at once; one that fills it is resolved once its bytes are written out, so that a program that writes faster than its reader reads waits for it, and `flush` once all that was written before it is. Once the bytes of a stream fail to be written out, the writes and flushes that wait for them, and every later write and flush of the stream, are rejected with an `IOError`, `cannot write to stdout` or `cannot write to stderr`; a write resolved at once is not.
+
+## std:json
+
+```
+import decode_json, encode_json from 'std:json'
+
+const text = encode_json([1, 2])     # '[1,2]'
+const xs = decode_json<Int[]>(text)
+```
+
+| Name | |
+|---|---|
+| `encode_json<T: Jsonable>(value: T): String` | The value as JSON, with no whitespace. |
+| `decode_json<T: Jsonable>(text: String): T` | The value of type `T` that the text holds, with whitespace around its parts and nothing but whitespace after it. Throws a `JsonError` for text that is not JSON or does not fit `T`. |
+| `Jsonable` | The interface of the types that the two convert, which only bounds type parameters, as `<T: Jsonable>` of a function that passes its type on to them: a type of values would not tell which type to convert by. It has no members: the compiler tells the types that satisfy it by their parts, and generates the code that converts each, so no type declares anything for it. It is the only interface without members. |
+| `JsonError` | The error of `decode_json`, a struct of a `message`. |
+
+The types convert so far as the table says, and a type that has a part of another type does not satisfy `Jsonable`, which is an error at the call that names its path, as JsonError's messages write it: `((Int) -> Int)[] does not satisfy Jsonable: $[] is of type (Int) -> Int, which std:json does not convert`.
+
+| Lerta | JSON |
+|---|---|
+| `Int` | a number written as an integer, without a fraction or an exponent, in the range of `Int` |
+| `Float` | a number, written as `Float`'s `to_string` writes it; one that is not finite as a `Float`, as `1e400`, is none |
+| `Bool` | `true` or `false` |
+| `String` | a string; `encode_json` escapes `"`, `\` and the control characters, and `decode_json` reads every escape of JSON, a surrogate pair as one code point, but no lone surrogate |
+| `T?` | `null` for nil, otherwise as `T` |
+| `T[]` | an array |
+
+The message of a `JsonError` gives the path to the value it is about, `$` for the whole value and `[i]` for an item of an array, and what was expected and found: `$[1][0]: expected an Int, found 2.5`. What is found is a number as it is written, `null`, `true`, `false`, `a string`, `an array`, `an object`, `a number that is not JSON`, a character in quotes, or `the end of the text`. A string that does not end, an escape that is not JSON, a lone surrogate and a control character in a string give messages of their own.
 
 ## std:math
 

@@ -1,0 +1,265 @@
+# JSON (see docs/reference/modules.md#stdjson). The compiler generates the code that writes and
+# reads each type (compiler/codegen/json.lerta), which `write_json` and `read_json` call: it goes
+# through the methods of a JsonWriter and a JsonReader.
+
+# The types that encode_json and decode_json convert, which the compiler tells by their parts.
+export interface Jsonable
+
+# The text is not JSON, or not of the type it is decoded as.
+export struct JsonError: Error
+
+export const encode_json = <T: Jsonable>(value: T) ->
+  const writer = JsonWriter()
+  write_json writer, value
+  writer.text()
+
+export const decode_json = <T: Jsonable>(text: String): T ->
+  const reader = JsonReader(bytes: text.binary)
+  const value = read_json<T>(reader)
+  reader.end()
+  value
+
+class JsonWriter
+  parts: String[] = []
+  # Whether each array being written has an item yet, the innermost last.
+  has_items: Bool[] = []
+
+  write_null = -> @parts.push('null')
+  write_bool = (value: Bool) -> @parts.push(value.to_string())
+  write_int = (value: Int) -> @parts.push(value.to_string())
+  write_float = (value: Float) -> @parts.push(value.to_string())
+  write_string = (value: String) -> @parts.push(quoted(value))
+
+  begin_array = ->
+    @parts.push '['
+    @has_items.push false
+
+  # Starts an item of the innermost array.
+  next_item = ->
+    @parts.push ',' if @has_items.last()!
+    @has_items[@has_items.length - 1] = true
+
+  end_array = ->
+    @has_items.pop()
+    @parts.push ']'
+
+  text = -> @parts.join('')
+
+# The string in quotes, with the characters that JSON escapes escaped. A run of bytes that need no
+# escape is taken whole.
+const quoted = (value: String) ->
+  const bytes = value.binary
+  const pieces = ['"']
+  var start = 0
+  for byte, i in bytes
+    const escape = escape_of(byte) ? continue
+    pieces.push bytes.text(start, i)!
+    pieces.push escape
+    start = i + 1
+  pieces.push bytes.text(start)!
+  pieces.push '"'
+  pieces.join ''
+
+const escape_of = (byte: Byte): String? ->
+  case byte
+    when '"' then '\"'
+    when '\' then '\\'
+    when "\n" then '\n'
+    when "\r" then '\r'
+    when "\t" then '\t'
+    else byte < 0x20 then "\\u#{hex_text(byte.to_int())}"
+
+const HEX_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
+
+class JsonReader
+  bytes: Binary
+  at = 0
+  # The steps from the root to the value being read, as `[0]` or `.name`, which errors give.
+  path: String[] = []
+  # How many items each array being read has given, the innermost last.
+  item_counts: Int[] = []
+
+  # Whether the value is null, which it then reads.
+  read_null = -> @read_literal('null')
+
+  read_bool = ->
+    return true if @read_literal('true')
+    return false if @read_literal('false')
+    @fail_expected 'a Bool'
+
+  read_int = ->
+    const number = @number() ? @fail_expected('an Int')
+    const value = number.parse_int() ? @fail("expected an Int, found #{number}")
+    @at += number.binary.length
+    value
+
+  # A number that is not finite as a Float is no Float.
+  read_float = ->
+    const number = @number() ? @fail_expected('a Float')
+    const value = number.parse_float() ? @fail("expected a Float, found #{number}")
+    @at += number.binary.length
+    value
+
+  read_string = ->
+    @skip_space()
+    @fail_expected 'a String' if @peek() != '"'
+    @at += 1
+    const bytes: Byte[] = []
+    while @peek() ? @fail('a string that does not end') != '"'
+      const byte = @bytes[@at]
+      @at += 1
+      @fail "a control character in a string, #{byte_text(byte)}" if byte < 0x20
+      if byte == '\'
+        @read_escape bytes
+      else
+        bytes.push byte
+    @at += 1
+    bytes.to_binary().text()!
+
+  # Reads `[` of an array, whose items next_item then starts.
+  begin_array = ->
+    @skip_space()
+    @fail_expected 'an array' if @peek() != '['
+    @at += 1
+    @path.push ''
+    @item_counts.push 0
+
+  # Whether another item of the innermost array follows, which it then starts reading; at the end
+  # of the array, it reads its `]`.
+  next_item = ->
+    @skip_space()
+    const count = @item_counts.last()!
+    if @peek() == ']'
+      @at += 1
+      @path.pop()
+      @item_counts.pop()
+      return false
+    if count > 0
+      @fail_expected "',' or ']'" if @peek() != ','
+      @at += 1
+    @path[@path.length - 1] = "[#{count}]"
+    @item_counts[@item_counts.length - 1] = count + 1
+    true
+
+  # Nothing but whitespace follows the value.
+  end = ->
+    @skip_space()
+    @fail_expected 'the end of the text' if @at < @bytes.length
+
+  read_literal = (literal: String) ->
+    @skip_space()
+    return false if not @bytes.occurs_at(@at, literal.binary)
+    @at += literal.binary.length
+    true
+
+  # Reads the escape after a backslash in a string, into its bytes.
+  read_escape = (bytes: Byte[]) ->
+    const byte = @peek() ? @fail('a string that does not end')
+    @at += 1
+    if byte == 'u'
+      bytes.append utf8_bytes(@read_escaped_code_point())
+      return
+    const escaped = unescaped(byte) ? @fail("an escape that is not JSON, \\#{byte_text(byte)}")
+    bytes.push escaped
+
+  # A surrogate pair is one code point, written as two escapes.
+  read_escaped_code_point = ->
+    const code = @read_hex_unit()
+    return code if code < 0xD800 or code > 0xDFFF
+    const lone = -> @fail("a lone surrogate in a string, \\u#{hex_text(code)}")
+    lone() if code > 0xDBFF or not @bytes.occurs_at(@at, '\u'.binary)
+    @at += 2
+    const low = @read_hex_unit()
+    lone() if low < 0xDC00 or low > 0xDFFF
+    0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)
+
+  read_hex_unit = ->
+    var code = 0
+    for _ in 0...4
+      const digit = hex_value(@peek() ? 0) ? @fail('an escape \u without four hex digits')
+      code = code * 16 + digit
+      @at += 1
+    code
+
+  # The number's text where the reader is, as JSON writes numbers, or nil if none is there.
+  number = (): String? ->
+    @skip_space()
+    const bytes = @bytes
+    var end = @at
+    const digits = ->
+      const start = end
+      end += 1 while end < bytes.length and bytes[end].is_digit()
+      end > start
+    end += 1 if end < bytes.length and bytes[end] == '-'
+    if end < bytes.length and bytes[end] == '0'
+      end += 1
+    else if not digits()
+      return nil
+    if end < bytes.length and bytes[end] == '.'
+      end += 1
+      return nil if not digits()
+    if end < bytes.length and (bytes[end] == 'e' or bytes[end] == 'E')
+      end += 1
+      end += 1 if end < bytes.length and (bytes[end] == '+' or bytes[end] == '-')
+      return nil if not digits()
+    bytes.text(@at, end)!
+
+  skip_space = -> @at += 1 while @at < @bytes.length and is_json_space(@bytes[@at])
+
+  peek = (): Byte? -> @at < @bytes.length then @bytes[@at]
+
+  fail_expected = (expected: String): never -> @fail("expected #{expected}, found #{@found()}")
+
+  fail = (message: String): never -> throw JsonError(message: "$#{@path.join('')}: #{message}")
+
+  # What is where the reader is, as an error says it.
+  found = ->
+    @skip_space()
+    const byte = @peek() ? return 'the end of the text'
+    return number if const number = @number()
+    for literal in ['null', 'true', 'false']
+      return literal if @bytes.occurs_at(@at, literal.binary)
+    case byte
+      when '"' then 'a string'
+      when '[' then 'an array'
+      when '{' then 'an object'
+      else
+        byte == '-' or byte.is_digit() then 'a number that is not JSON' else "'#{byte_text(byte)}'"
+
+# JSON's whitespace, which has no form feed or vertical tab, unlike Byte.is_space.
+const is_json_space = (byte: Byte) -> byte == ' ' or byte == "\t" or byte == "\n" or byte == "\r"
+
+# The byte that an escape of one letter stands for.
+const unescaped = (byte: Byte): Byte? ->
+  case byte
+    when '"', '\', '/' then byte
+    when 'b' then 0x08
+    when 'f' then 0x0C
+    when 'n' then "\n"
+    when 'r' then "\r"
+    when 't' then "\t"
+    else nil
+
+const hex_value = (byte: Byte): Int? ->
+  case
+    when byte.is_digit() then (byte - '0').to_int()
+    when byte >= 'a' and byte <= 'f' then (byte - 'a').to_int() + 10
+    when byte >= 'A' and byte <= 'F' then (byte - 'A').to_int() + 10
+    else nil
+
+const hex_text = (code: Int) ->
+  [HEX_DIGITS[code >> shift & 0xF] for shift in [12, 8, 4, 0]].join('')
+
+# The byte as it is written in an error: as itself if it is ASCII and visible.
+const byte_text = (byte: Byte) ->
+  byte > 0x20 and byte < 0x7F then [byte].to_binary().text()! else "byte #{byte}"
+
+# The UTF-8 sequence of a code point, which is not a surrogate.
+const utf8_bytes = (code: Int): Byte[] ->
+  const byte = (bits: Int) -> bits.to_byte()
+  const continuation = (shift: Int) -> byte(0x80 | code >> shift & 0x3F)
+  case
+    when code < 0x80 then [byte(code)]
+    when code < 0x800 then [byte(0xC0 | code >> 6), continuation(0)]
+    when code < 0x10000 then [byte(0xE0 | code >> 12), continuation(6), continuation(0)]
+    else [byte(0xF0 | code >> 18), continuation(12), continuation(6), continuation(0)]

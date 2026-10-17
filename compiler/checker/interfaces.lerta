@@ -6,6 +6,7 @@ import InterfaceDeclaration, NamedType, Position, TypeName from '../ast'
 import fail, fail_already_defined from './diagnostics'
 import reject_bad_type_parameters from './generics'
 import builtin_export, has_import, imported_export, InterfaceExport from './imports'
+import is_jsonable_bound, is_jsonable_declaration from './json'
 import module_symbol_name, ProgramWide, Shared from './shared'
 import
   has_type, module_resolver, named_in, resolve, Resolver, with_type_parameters
@@ -71,7 +72,7 @@ export const add_interfaces = (shared: Shared, declarations: InterfaceDeclaratio
   for declaration in declarations
     const { name } = declaration.name
     fail_already_defined program, declaration.name if has_declared_type(shared, name)
-    reject_invalid_members program, declaration
+    reject_invalid_members shared, declaration
     const type_params = [param.name.name for param in declaration.type_params]
     const args: Type[] = [TypeParameterType(name: param) for param in type_params]
     const symbol = "#{module_symbol_name(program, shared.index)}.#{name}"
@@ -90,7 +91,11 @@ export const add_interfaces = (shared: Shared, declarations: InterfaceDeclaratio
     program.interfaces[symbol] = info
 
 # A member is `name: Type`.
-const reject_invalid_members = (program: ProgramWide, declaration: InterfaceDeclaration) ->
+const reject_invalid_members = (shared: Shared, declaration: InterfaceDeclaration) ->
+  const program = shared.program
+  # std:json's Jsonable has none: the compiler tells the types that satisfy it.
+  if declaration.members.length == 0 and not is_jsonable_declaration(shared, declaration.name.name)
+    fail program, declaration.position, 'an interface needs at least one member'
   const seen = Set<String>()
   for member in declaration.members
     const { name, position } = member.name
@@ -144,8 +149,13 @@ export const interface_of = (program: ProgramWide, type: InterfaceType) ->
 export const value_interface_type = (
   program: ProgramWide, resolver: Resolver, info: InterfaceInfo, type_name: NamedType
 ) ->
-  if info.names_self
-    const reason = "its members name #{SELF}, which its values could not tell"
+  const reason =
+    case
+      when info.names_self then "its members name #{SELF}, which its values could not tell"
+      # std:json writes and reads a value by the type that the code gives it where it is called.
+      when is_jsonable_bound(info.type) then 'std:json converts a value by its type'
+      else nil
+  if reason
     fail program, type_name.position, "'#{info.name}' can only bound a type parameter: #{reason}"
   instantiate program, resolver, info, type_name
 
