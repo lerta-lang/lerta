@@ -6,6 +6,7 @@ import Extensions from '../checker/extensions'
 import NodeFacts, ProgramWide, Shared from '../checker/shared'
 import IrBuilder, IrModule from './ir_builder'
 import IterKind from './iter_protocol'
+import SourceScope from './source_lines'
 import Module from '../loader'
 import Ownership from './lerta_ir'
 import format_type, Type, void_type from '../types'
@@ -118,7 +119,7 @@ export class Generator
   facts: NodeFacts
   top_level_code: Bool
   function_name: String
-  ir = IrBuilder(module: @code.ir_module)
+  ir = IrBuilder(module: @code.ir_module, scope: source_scope(@code, @function_name))
   locals = Locals()
   loops: Loop[] = []
   # The result type of the function being generated; the top-level code returns nothing.
@@ -149,6 +150,17 @@ export class Generator
 export const function_generator = (
   code: ModuleCode, extensions: Extensions, facts: NodeFacts, function_name: String
 ) -> Generator(code, extensions, facts, function_name, top_level_code: false)
+
+# Where a function of the program is in the source, for the module's source lines; code that is no
+# function of the program has the name '' (see function_generator), and none.
+const source_scope = (code: ModuleCode, function_name: String) ->
+  return nil if function_name == '' or code.ir_module.source_lines == nil
+  SourceScope name: function_name, path: code.module.key
+
+# Moves the place of the code being generated in the source, for traces and source lines.
+export const locate = (g: Generator, position: Position?) ->
+  g.position = position
+  g.ir.location = position
 
 # How a trace names a function: a method by its type and its name, as `Point.length`.
 export const trace_name = (name: String, this_type: Type?) ->

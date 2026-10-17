@@ -1,0 +1,78 @@
+# The debug information of a module with `--source-lines`: where the instructions come from in the
+# source, as LLVM's line tables have it, for a debugger and the reports of crashes and panics.
+import Position from '../ast'
+import quoted_name from './lerta_ir'
+
+# A function of the program, by its name in traces, in the source file of the path.
+export struct SourceScope(name: String, path: String)
+
+# The metadata, `!<n> = ...`, made on demand, each node once.
+export class SourceLines
+  # As `-O` builds the program.
+  optimized: Bool
+  nodes: String[] = []
+  keys: Map<String, String> = Map()
+  # The places where each subprogram starts, by subprogram.
+  starts: Map<String, String> = Map()
+
+  # The node of the text, the same for the same text.
+  node = (text: String) ->
+    return existing if const existing = @keys[text]
+    const name = "!#{@nodes.length}"
+    @nodes.push "#{name} = #{text}"
+    @keys[text] = name
+    name
+
+  # A node of its own, as a subprogram is, which no other may share.
+  distinct = (text: String) ->
+    const name = "!#{@nodes.length}"
+    @nodes.push "#{name} = distinct #{text}"
+    name
+
+  file = (path: String) -> @node("!DIFile(filename: #{quoted_name(path)}, directory: \"\")")
+
+  unit = (path: String) ->
+    const file = @file(path)
+    const options = "emissionKind: LineTablesOnly, isOptimized: #{@optimized}, runtimeVersion: 0"
+    const text =
+      "!DICompileUnit(language: DW_LANG_C, file: #{file}, producer: \"lerta\", #{options})"
+    return existing if const existing = @keys[text]
+    const name = @distinct(text)
+    @keys[text] = name
+    name
+
+  # The function's node, starting at the line.
+  subprogram = (scope: SourceScope, line: Int) ->
+    const file = @file(scope.path)
+    const type = @node('!DISubroutineType(types: !{})')
+    const unit = @unit(scope.path)
+    const fields =
+      "name: #{quoted_name(scope.name)}"
+      "scope: #{file}"
+      "file: #{file}"
+      "line: #{line}"
+      "scopeLine: #{line}"
+      "type: #{type}"
+      'spFlags: DISPFlagDefinition'
+      "unit: #{unit}"
+    const text = "!DISubprogram(#{fields.join(', ')})"
+    const subprogram = @distinct(text)
+    @starts[subprogram] = @node("!DILocation(line: #{line}, column: 1, scope: #{subprogram})")
+    subprogram
+
+  location = (subprogram: String, position: Position) ->
+    const { line, column } = position
+    @node "!DILocation(line: #{line}, column: #{column}, scope: #{subprogram})"
+
+  start_of = (subprogram: String) -> @starts[subprogram]!
+
+  # The lines that end the module: its nodes, and those that name its compile units.
+  metadata = ->
+    const units = [name for (text, name) in @keys.entries() when text.starts_with('!DICompileUnit')]
+    const version = @node('!{i32 2, !"Debug Info Version", i32 3}')
+    const dwarf = @node('!{i32 7, !"Dwarf Version", i32 4}')
+    [
+      @nodes...
+      "!llvm.dbg.cu = !{#{units.join(', ')}}"
+      "!llvm.module.flags = !{#{version}, #{dwarf}}"
+    ]

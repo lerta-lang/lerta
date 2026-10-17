@@ -1,4 +1,6 @@
 # Accumulates the text of an LLVM IR module. It knows IR syntax only, not Lerta semantics.
+import Position from '../ast'
+import SourceLines, SourceScope from './source_lines'
 
 # A function or a global of a module.
 export struct Definition(symbol: String, text: String, declaration: String?)
@@ -21,6 +23,9 @@ export class IrModule
   defined: Set<String> = Set()
   symbol_count = 0
   names: Map<String, String> = Map()
+  # With `--source-lines`, the metadata of the debug information, where the instructions come
+  # from in the source, as LLVM's line tables have it; nil without.
+  source_lines: SourceLines? = nil
 
   # The name `<prefix>.<n>` given to `key`, the same for the same key; `define` runs when the name
   # is first given, to define what it names.
@@ -70,9 +75,13 @@ export class IrModule
 
   # Adds the function `define <signature>` with the lines of its body; without a linkage, the other
   # modules may use it (see Definition).
-  define_function = (signature: String, body: String[]) ->
+  define_function = (signature: String, body: String[]) -> @define_function_in(signature, body, nil)
+
+  # As define_function, with the debug information of the function, `!<n>`, if it has some.
+  define_function_in = (signature: String, body: String[], subprogram: String?) ->
     const attributes = @function_attributes == '' then '' else ' #0'
-    const text = ["define #{signature}#{attributes} {", body..., '}'].join("\n")
+    const debug = subprogram then " !dbg #{subprogram}" else ''
+    const text = ["define #{signature}#{attributes}#{debug} {", body..., '}'].join("\n")
     const has_linkage = LINKAGES.any((linkage) -> signature.starts_with(linkage))
     const declaration = has_linkage then nil else "declare #{signature}"
     const symbol = defined_symbol(signature)
@@ -90,6 +99,7 @@ export class IrModule
       [definition.text for definition in @functions]...
     ]
     lines.push "attributes #0 = { #{@function_attributes} }" if @function_attributes != ''
+    lines.append source_lines.metadata() if const source_lines = @source_lines
     "#{lines.join("\n")}\n"
 
 # The symbol that a function's signature defines: the first, after its result type and attributes.
@@ -108,6 +118,13 @@ export class IrBuilder
   label_count = 0
   # The block that instructions are being emitted into, as needed by `phi`.
   current_block = 'entry'
+  # Where the code being emitted is in the source, of the function of the name in the file, for
+  # the module's source lines; nil for code that is no function of the program.
+  scope: SourceScope? = default nil
+  location: Position? = nil
+  # Where the function is declared, which its subprogram starts at.
+  declared_at: Position? = nil
+  subprogram: String? = nil
 
   # Emits `%r<n> = <value>` and returns the register.
   assign = (value: String) ->
@@ -129,7 +146,17 @@ export class IrBuilder
     @stack_slots.push "  #{register} = alloca #{type}"
     register
 
-  emit = (instruction: String) -> @body.push("  #{instruction}")
+  emit = (instruction: String) -> @body.push("  #{instruction}#{@debug_location()}")
+
+  # `, !dbg !<n>`: where the instruction comes from, if the module has source lines and the
+  # function a place in the source.
+  debug_location = ->
+    const lines = @module.source_lines ? return ''
+    const scope = @scope ? return ''
+    const position = @location ? return ''
+    const subprogram = @subprogram ? lines.subprogram(scope, (@declared_at ? position).line)
+    @subprogram = subprogram
+    ", !dbg #{lines.location(subprogram, position)}"
 
   fresh_label = (prefix: String) ->
     const label = "#{prefix}.#{@label_count}"
@@ -145,7 +172,19 @@ export class IrBuilder
 
   # Adds the function `define <signature>`, holding everything emitted, to the module.
   finish = (signature: String) ->
-    @module.define_function signature, ['entry:', @stack_slots..., @body...]
+    const lines = ['entry:', @stack_slots..., @body...]
+    const subprogram = @subprogram ? return @module.define_function(signature, lines)
+    # Every instruction of a function that has debug information has a location, as LLVM requires
+    # of its calls: those before the first position get the function's own.
+    const start = @module.source_lines!.start_of(subprogram)
+    const located = (line: String) ->
+      const is_instruction = line.starts_with('  ') and not line.contains('!dbg')
+      is_instruction then "#{line}, !dbg #{start}" else line
+    # A private function has no symbol, which dsymutil finds the function's debug information by:
+    # an internal one does, and is the same otherwise.
+    const linked = signature.without_prefix('private ')
+    const kept = linked then "internal #{linked}" else signature
+    @module.define_function_in kept, [located(line) for line in lines], subprogram
 
 # Emits `body` to run only where the condition holds.
 export const emit_when = (ir: IrBuilder, condition: String, body: () -> void) ->

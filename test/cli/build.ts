@@ -1,6 +1,7 @@
 // Building programs, and what the compiler writes and leaves.
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -8,7 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { compiler, root_dir } from '../lerta.ts'
 import { compare_text, expect_status, expect_success } from '../expect.ts'
 import type { Check } from '../report.ts'
@@ -175,6 +176,54 @@ const output_checks: Check[] = [
       ]
     },
   },
+  // A debugger finds a function's file and lines in the debug information, which macOS keeps in a
+  // .dSYM beside the program, as the objects it would read it from are gone; elsewhere, the
+  // program holds it, in its .debug_line section. The rows of the line table are checked where a
+  // dwarfdump can read them.
+  ...[[], ['-O']].map((flags) => ({
+    name: `lerta build --source-lines ${[...flags, ''].join(' ')}gives the program line tables of its source`,
+    run: async () => {
+      const args = ['build', source_lines_program, '-o', 'lines', '--source-lines', ...flags]
+      const built = await build_in_new_dir(args)
+      const reasons = expect_success('build', built)
+      if (reasons.length > 0) return reasons
+      const executable = join(built.cwd, 'lines')
+      const ran = await run_command(executable, [])
+      const debug_info = debug_info_of(executable)
+      const rows = await line_table_rows(debug_info)
+      // A line of the function literal's body, the method's and the top level's; an optimized
+      // build may fold some away, but not all.
+      const expected = flags.length === 0 ? [12, 5, 16] : []
+      const missing = rows === null ? [] : expected.filter((line) => !rows.has(line))
+      const empty = rows !== null && rows.size === 0 ? ['the line table has no rows'] : []
+      return [
+        ...compare_text('stdout', '2\n7\n', ran.stdout),
+        ...expect_success('run', ran),
+        ...(holds_debug_info(debug_info) ? [] : ['no debug information']),
+        ...missing.map((line) => `no row of line ${line} in the line table`),
+        ...empty,
+      ]
+    },
+  })),
+  {
+    name: 'lerta build without --source-lines gives the program no debug information',
+    run: async () => {
+      const built = await build_in_new_dir(['build', source_lines_program, '-o', 'lines'])
+      const reasons = expect_success('build', built)
+      if (reasons.length > 0) return reasons
+      // On Windows, mingw's own libraries give every program a .debug_line section.
+      if (process.platform === 'win32') return []
+      const debug_info = debug_info_of(join(built.cwd, 'lines'))
+      return holds_debug_info(debug_info) ? ['debug information without --source-lines'] : []
+    },
+  },
+  {
+    name: 'lerta run --source-lines runs the program',
+    run: async () => {
+      const ran = await build_in_new_dir(['run', source_lines_program, '--source-lines'])
+      return [...compare_text('stdout', '2\n7\n', ran.stdout), ...expect_status(0, ran.status)]
+    },
+  },
   {
     name: 'lerta dump-llvm <source> prints the IR, and writes no file',
     run: async () => {
@@ -215,3 +264,26 @@ const output_checks: Check[] = [
 ]
 
 export const build_checks: Check[] = [...build_and_run_checks, ...output_checks]
+
+const source_lines_program = join(root_dir, 'tests/trace/lib/source_lines.lerta')
+
+// Where the program's debug information is: its .dSYM on macOS, the program itself elsewhere.
+const debug_info_of = (executable: string) =>
+  process.platform === 'darwin'
+    ? join(`${executable}.dSYM`, 'Contents', 'Resources', 'DWARF', basename(executable))
+    : executable
+
+const holds_debug_info = (path: string) =>
+  existsSync(path) &&
+  readFileSync(path).includes(process.platform === 'darwin' ? '__debug_line' : '.debug_line')
+
+// The lines of source_lines.lerta that the line table has rows of, or null without a dwarfdump.
+const line_table_rows = async (path: string): Promise<Set<number> | null> => {
+  for (const tool of ['dwarfdump', 'llvm-dwarfdump']) {
+    const dumped = await run_command(tool, ['--debug-line', path]).catch(() => null)
+    if (dumped === null || dumped.status !== 0) continue
+    const rows = dumped.stdout.split('\n').map((line) => line.match(/^0x[0-9a-f]+\s+(\d+)\s/))
+    return new Set(rows.flatMap((row) => (row ? [Number(row[1])] : [])))
+  }
+  return null
+}

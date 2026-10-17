@@ -44,7 +44,7 @@ The planned design of modules, FFI, the standard library and tools.
 ## Tools
 
 - `.ll`/bitcode output from `lerta build`.
-- Debug information in the generated IR (`!dbg`), at least the line tables, so that a debugger and a crash show the source; an option turns it off, as `--no-trace` turns off traces.
+- With `--source-lines` on Windows, a PDB beside the program (CodeView, which LLVM gives for mingw too, and lld writes), so that WinDbg and Visual Studio read the source lines, as gdb and lldb read the DWARF that it holds now.
 - LLVM emits objects, and `lld` links them, on all platforms, through a C++ shim (see [internals](../internals.md#interface-with-llvm-planned)).
 - `lerta run` running directly with JIT, and `lerta repl`.
 - The rest of the style in [`lerta fmt`](../reference/compiler.md): reporting what it cannot fix, such as a name in the wrong case or a line it cannot bring within 100 columns; the rules that change the syntax tree, such as implicit return and the shorthand of named arguments; and, applied only when the file type-checks, the rules that need types, such as whether a `case` handles every member of its subject. The compiler reports only what concerns correctness, such as unused names.

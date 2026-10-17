@@ -7,7 +7,8 @@
 ### build
 
 ```
-lerta build <source> [<file>...] [-o <output>] [-O] [-Werror] [--no-trace] [--target <triple>]
+lerta build <source> [<file>...] [-o <output>] [-O] [-Werror] [--no-trace] [--source-lines]
+            [--target <triple>]
 ```
 
 builds an executable. Usage errors are an unknown or repeated option, a missing source, a file after it of another kind than below, an option without its value, and, without `-o`, a source whose name does not end with `.lerta`, as `std:<name>` does not.
@@ -19,6 +20,7 @@ builds an executable. Usage errors are an unknown or repeated option, a missing 
 - `-O` optimizes, including across the modules and the runtime (link-time optimization, ThinLTO), each module on a thread of its own. The linker keeps what it has optimized in [the cache](#cache), so that a build optimizes again only the modules that have changed, and those that inline from them.
 - `-Werror` makes a warning stop the build, as an error does: the warnings are printed, and the exit code is 1. The bootstrap builds the compiler so (see [internals](../internals.md#bootstrap)).
 - `--no-trace` leaves out the trace that an uncaught exception prints (see [errors](errors.md#exceptions)), and with it the names of the functions and the files and the positions that the trace tells, which the program would otherwise hold. The symbols of the executable still name the functions, unless it is stripped.
+- `--source-lines` gives the program debug information of where its code comes from in the source, the file, the line and the column of each statement and expression, for a debugger and for the backtrace of a panic or a crash, as `f at main.lerta:3:3`; it holds no names of locals nor their values. A file is named by its absolute path, which a debugger may show as a directory and a name, and a standard module as `std:<name>`. On macOS, the information goes into `<output>.dSYM` beside the program, which `dsymutil` makes, as the objects that the program would read it from are removed. On Windows, it goes into the program itself, as on Linux, for gdb or lldb to read; WinDbg and Visual Studio read a PDB instead, which is not made. It is off by default, and changes nothing else of the program.
 - `--target <triple>` has clang build the executable for that target, such as `i686-linux-gnu` or `x86_64-w64-mingw32`; without it, the executable is for the host. A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it. The runtime is built for Linux targets with glibc or musl (`*-linux`, `*-linux-gnu*`, `*-linux-musl*`), macOS ones (`*-darwin*`, `*-macos*`) and Windows ones; another, such as `x86_64-unknown-freebsd` or `aarch64-linux-android`, is reported as `not a target that the runtime is built for: <triple>`, and the build exits with code 1. This tells only the system; what else a target lacks, such as its C library's headers, clang reports.
 - The build leaves no other file but [the cache](#cache): it writes the LLVM IR of each module to a temporary directory, which clang compiles, all modules at once, and links, and removes the directory after clang has built the executable, or failed to. An error while the directory is there removes it too: a file that cannot be written, or a program that cannot be started, clang or the one that `run` runs.
 
@@ -36,7 +38,7 @@ The runtime, with [libuv](../internals.md#platforms), which the compiler carries
 ### run
 
 ```
-lerta run <source> [<file>...] [-O] [-Werror] [--no-trace] [-- <arg>...]
+lerta run <source> [<file>...] [-O] [-Werror] [--no-trace] [--source-lines] [-- <arg>...]
 ```
 
 is provisional, until it runs the program directly with JIT (see [the roadmap](../roadmap/programs.md#tools)). It builds the program as `build` does, from the same source and files, in the temporary directory, and runs it, in the current directory, with the arguments after `--`, which go to the program as they are, even those that look like options; the program shares the standard streams. It then removes the directory, as `build` does, and exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](modules.md#stdprocess)). `-o` and `--target` are usage errors, and so is an argument for the program without `--`. A compile error or a failure of clang is reported as by `build`, and nothing runs.

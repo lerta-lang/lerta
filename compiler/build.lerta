@@ -26,6 +26,8 @@ export struct BuildRequest
   warnings_as_errors: Bool
   # Without `--no-trace`: an uncaught exception prints its trace (see generate).
   traces: Bool
+  # `--source-lines`: the program tells a debugger where its code comes from in the source.
+  source_lines: Bool
 
 export const build = (request: BuildRequest) -> build_then(request, nil)
 
@@ -65,19 +67,28 @@ const build_in_dir = (
 ) ->
   const runtime = await cached_runtime(request.optimize, request.target, dir) ? return 1
   const { function_attributes, coro_end_type } = runtime
-  const modules = generate(program, function_attributes, coro_end_type, true, request.traces)
+  const { traces, source_lines } = request
+  const { optimize } = request
+  const modules =
+    generate(program, function_attributes, coro_end_type, true, traces, source_lines, optimize)
   const flags = build_flags(request.optimize, request.target)
   const objects = await compile_modules(modules, flags, dir) ? return 1
   const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
   # libm, which runtime/math.c calls, is apart from libc on Linux; elsewhere -lm links nothing more.
   const libraries = ["-l#{library}" for library in ['m', runtime.libraries...]]
   const lto_cache = join(cache_dir(), 'thinlto')
-  const cache_flags =
-    request.optimize then lto_cache_flags(target_system(request.target), lto_cache)
+  const system = target_system(request.target)
+  const cache_flags = request.optimize then lto_cache_flags(system, lto_cache)
+  # dsymutil (below) reads the debug information from the objects, which the link-time optimizer
+  # makes in a directory that it removes unless told one.
+  const keeps_objects = source_lines and system == 'macos' and request.optimize
+  const lto_objects: String[] =
+    keeps_objects then ["-Wl,-object_path_lto,#{join(dir, 'lto')}"] else []
   const args = [
     objects...
     flags...
     (cache_flags ? [])...
+    lto_objects...
     runtime.objects...
     libraries...
     request.linked_files...
@@ -85,6 +96,10 @@ const build_in_dir = (
     executable
   ]
   return 1 if await run('clang', args) != 0
+  # On macOS, the debug information stays in the object files, which are removed, so dsymutil
+  # copies it beside the executable first.
+  if source_lines and system == 'macos'
+    return 1 if await run('dsymutil', [executable]) != 0
   const program_args = run_args ? return 0
   await run(executable, program_args)
 

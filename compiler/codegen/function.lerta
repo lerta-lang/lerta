@@ -21,7 +21,8 @@ import
   generate, held_value, read_local, release_if_reference, type_at_use, type_of
 from './expression'
 import
-  CellSlot, CodegenLocal, function_generator, Generator, SlotLocal, TopLevelGlobal, ValueLocal
+  CellSlot, CodegenLocal, function_generator, Generator, locate, SlotLocal, TopLevelGlobal,
+  ValueLocal
 from './generator'
 import
   emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of,
@@ -156,6 +157,7 @@ export const generate_function = (
   captures: Capture[]?
 ) ->
   const type = function_type_of(type_of(g, literal))
+  g.ir.declared_at = literal.position
   const params: String[] = []
   params.push 'ptr %closure' if captures != nil
   params.push "#{ir_type(this_type)} %this" if this_type
@@ -439,9 +441,9 @@ export const release_scope = (g: Generator, scope: Map<String, CodegenLocal>) ->
 
 export const generate_statement = (g: Generator, statement: Statement) ->
   const outer = g.position
-  g.position = statement.position
+  locate g, statement.position
   generate_statement_node g, statement
-  g.position = outer
+  locate g, outer
 
 const generate_statement_node = (g: Generator, statement: Statement): void ->
   case statement

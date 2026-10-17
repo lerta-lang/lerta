@@ -16,8 +16,9 @@ import dump_tokens from './token_dump'
 
 const USAGE =
   "usage: lerta build <source> [<file>...] [-o <output>] [-O] [-Werror] [--no-trace]\n"
-  "                   [--target <triple>]\n"
-  "       lerta run <source> [<file>...] [-O] [-Werror] [--no-trace] [-- <arg>...]\n"
+  "                   [--source-lines] [--target <triple>]\n"
+  "       lerta run <source> [<file>...] [-O] [-Werror] [--no-trace] [--source-lines]\n"
+  "                 [-- <arg>...]\n"
   "       lerta fmt [--fix] <path>...\n"
   "       lerta dump-tokens <source>\n"
   "       lerta dump-ast <source>\n"
@@ -50,6 +51,7 @@ const parse_build_arguments = (args: String[]) ->
   var optimize = false
   var warnings_as_errors = false
   var traces = true
+  var source_lines = false
   var program_args: String[]?
   var i = 0
   # The value is the next argument, even one that starts with `-`, as `-o -out` gives `-out`.
@@ -69,6 +71,9 @@ const parse_build_arguments = (args: String[]) ->
       when '--no-trace'
         fail_usage() if not traces
         traces = false
+      when '--source-lines'
+        fail_usage() if source_lines
+        source_lines = true
       when '-o' then output = take_value(output)
       when '--target' then target = take_value(target)
       when '--'
@@ -85,7 +90,7 @@ const parse_build_arguments = (args: String[]) ->
   const given_source = source ? fail_usage()
   {
     source: given_source, linked_files, output, target, optimize, warnings_as_errors, traces,
-    program_args
+    source_lines, program_args
   }
 
 const build_command = (args: String[]) ->
@@ -94,7 +99,14 @@ const build_command = (args: String[]) ->
   fail_usage() if parsed.program_args != nil
   const executable = output ? default_output(source, target)
   const request = BuildRequest(
-    source, linked_files, optimize, target, warnings_as_errors, traces, output: executable
+    source
+    linked_files
+    optimize
+    target
+    warnings_as_errors
+    traces
+    output: executable
+    source_lines: parsed.source_lines
   )
   build request
 
@@ -103,8 +115,16 @@ const run_command = (args: String[]) ->
   const parsed = parse_build_arguments(args)
   const { source, linked_files, output, target, optimize, warnings_as_errors, traces } = parsed
   fail_usage() if output != nil or target != nil
-  const request =
-    BuildRequest(source, linked_files, optimize, target, output, warnings_as_errors, traces)
+  const request = BuildRequest(
+    source
+    linked_files
+    optimize
+    target
+    output
+    warnings_as_errors
+    traces
+    source_lines: parsed.source_lines
+  )
   build_and_run request, parsed.program_args ? []
 
 const default_output = (source: String, target: String?) ->

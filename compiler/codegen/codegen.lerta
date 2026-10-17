@@ -17,20 +17,29 @@ from './lerta_ir'
 import Module from '../loader'
 import define_raise_error, emit_register_raise from './runtime_errors'
 import define_top_level_globals from './top_level'
+import SourceLines from './source_lines'
 import format_type, Type from '../types'
 
 # Emits LLVM IR for the checked program (see check_modules and docs/internals.md#per-module-output).
 # Every function has `function_attributes`, if any, and llvm.coro.end has the type `coro_end_type`
 # (see IrModule). Each module becomes an LLVM module of its own, if `separate`, or else all become
-# one. Exceptions are traced if `traces`.
+# one. Exceptions are traced if `traces`, and the instructions tell where they come from in the
+# source if `source_lines`, of a build that is `optimized` or not (see SourceLines).
 export const generate = (
-  program: ProgramWide, function_attributes: String, coro_end_type: String, separate: Bool,
+  program: ProgramWide
+  function_attributes: String
+  coro_end_type: String
+  separate: Bool
   traces: Bool
+  source_lines = false
+  optimized = false
 ) ->
   const modules = program.modules
   const ir_module_of = (module: Module) ->
     const source_filename = quoted_name(module.symbol_name)
-    IrModule source_filename, function_attributes, coro_end_type
+    const ir_module = IrModule(source_filename, function_attributes, coro_end_type)
+    ir_module.source_lines = SourceLines(optimized) if source_lines
+    ir_module
   # The entry module comes last (see load_modules).
   const entry = modules[modules.length - 1]
   const one = ir_module_of(entry)
