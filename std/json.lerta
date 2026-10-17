@@ -35,6 +35,10 @@ class JsonWriter
   write_int = (value: Int): void -> @parts.push(value.to_string())
   write_float = (value: Float): void -> @parts.push(value.to_string())
   write_string = (value: String): void -> @parts.push(quoted(value))
+  write_uint64 = (value: UInt64): void -> @parts.push(value.to_string())
+  write_float32 = (value: Float32): void -> @parts.push(value.to_string())
+  # As base64 (RFC 4648), whose letters need no escape.
+  write_binary = (value: Binary): void -> @parts.push("\"#{base64(value)}\"")
 
   begin_array = (): void -> @begin('[')
 
@@ -110,6 +114,55 @@ const escape_of = (byte: Byte): String? ->
     when "\t" then '\t'
     else byte < 0x20 then "\\u#{hex_text(byte.to_int())}"
 
+const MAX_UINT64 = 0.to_uint64().wrapping_sub(1.to_uint64())
+
+# The least magnitude that a Float rounds to an infinity at as a Float32: 2 to the 128 less 2 to
+# the 103, half way from the largest Float32 to the next power of 2.
+const FLOAT32_LIMIT = 3.4028235677973366e38
+
+const BASE64_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.binary
+
+# Each 3 bytes as 4 letters of 6 bits, the last group padded with `=`.
+const base64 = (bytes: Binary) ->
+  const letters: Byte[] = []
+  var i = 0
+  while i < bytes.length
+    const count = min(3, bytes.length - i)
+    var group = 0
+    group = group << 8 | (k < count then bytes[i + k].to_int() else 0) for k in 0...3
+    for k in 0...4
+      letters.push k <= count then BASE64_LETTERS[group >> (18 - 6 * k) & 0x3F] else '='
+    i += 3
+  letters.to_binary().text()!
+
+# The bytes of base64 with its padding, or nil for text that is not that.
+const from_base64 = (text: Binary): Binary? ->
+  return nil if text.length % 4 != 0
+  const bytes: Byte[] = []
+  var i = 0
+  while i < text.length
+    const padding = text[i + 3] != '=' then 0 else text[i + 2] != '=' then 1 else 2
+    return nil if padding > 0 and i + 4 < text.length
+    var group = 0
+    for k in 0...(4 - padding)
+      const value = base64_value(text[i + k]) ? return nil
+      group = group << 6 | value
+    # The bits that the padding leaves over must be zero, so that each Binary has one text.
+    return nil if group & (1 << (2 * padding) - 1) != 0
+    group = group << (6 * padding)
+    bytes.push (group >> (16 - 8 * k) & 0xFF).to_byte() for k in 0...(3 - padding)
+    i += 4
+  bytes.to_binary()
+
+const base64_value = (letter: Byte): Int? ->
+  case
+    when letter >= 'A' and letter <= 'Z' then (letter - 'A').to_int()
+    when letter >= 'a' and letter <= 'z' then (letter - 'a').to_int() + 26
+    when letter.is_digit() then (letter - '0').to_int() + 52
+    when letter == '+' then 62
+    when letter == '/' then 63
+    else nil
+
 const HEX_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
 
 class JsonReader
@@ -130,11 +183,44 @@ class JsonReader
     return false if @read_literal('false')
     @fail_expected 'a Bool'
 
-  read_int = ->
-    const number = @number() ? @fail_expected('an Int')
-    const value = number.parse_int() ? @fail("expected an Int, found #{number}")
+  # An integer of the type that `expected` names, as `an Int8`, from `least` to `most`.
+  read_integer = (expected: String, least: Int, most: Int): Int ->
+    const number = @number() ? @fail_expected(expected)
+    const value = number.parse_int() ? @fail("expected #{expected}, found #{number}")
+    @fail "expected #{expected}, found #{number}" if value < least or value > most
     @at += number.binary.length
     value
+
+  # Its digits are read on their own, as a UInt64 may be above the largest Int.
+  read_uint64 = (): UInt64 ->
+    const number = @number() ? @fail_expected('a UInt64')
+    const out_of_range = -> @fail("expected a UInt64, found #{number}")
+    var value = 0.to_uint64()
+    for byte in number.binary
+      out_of_range() if not byte.is_digit()
+      const digit = (byte - '0').to_uint64()
+      out_of_range() if value > (MAX_UINT64 - digit) / 10.to_uint64()
+      value = value * 10.to_uint64() + digit
+    @at += number.binary.length
+    value
+
+  # A number that is not finite as a Float32 is no Float32.
+  read_float32 = (): Float32 ->
+    const number = @number() ? @fail_expected('a Float32')
+    const not_float32 = -> @fail("expected a Float32, found #{number}")
+    const value = number.parse_float() ? not_float32()
+    not_float32() if value >= FLOAT32_LIMIT or value <= -FLOAT32_LIMIT
+    @at += number.binary.length
+    value.to_float32()
+
+  read_binary = (): Binary ->
+    @skip_space()
+    @fail_expected 'a Binary' if @peek() != '"'
+    const at = @at
+    const text = @read_string()
+    return bytes if const bytes = from_base64(text.binary)
+    @at = at
+    @fail 'expected a Binary, found a string that is not base64'
 
   # A number that is not finite as a Float is no Float.
   read_float = ->

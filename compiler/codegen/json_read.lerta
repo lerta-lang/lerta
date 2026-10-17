@@ -15,10 +15,11 @@ import
 from './lerta_ir'
 import emit_map_new, emit_map_set from './map'
 import emit_is_present, emit_unwrap, emit_wrap, nil_constant from './optional'
+import narrowed_from_word, scalar_of from './scalar'
 import emit_string_equals from './string'
 import
   ArrayType, bool_type, EnumType, format_type, kind_of, MapType, ObjectType, OptionalType, int_type,
-  is_boxed, RecordType, string_type, TupleType, Type, type_key, UnionType
+  integer_range, is_boxed, RecordType, string_type, TupleType, Type, type_key, UnionType
 from '../types'
 
 # The value read, owned; the caller checks for an exception after it.
@@ -64,8 +65,19 @@ const emit_read = (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> void)
       emit_branch ir, ir_type(type), present, read_inner, nil_constant(type)
     when EnumType then emit_read_member(ir, reader, type, unwind)
     else
-      const scalar = SCALARS[kind_of(type)]!
-      call_method ir, reader, scalar.read, scalar.type, [], unwind
+      if const scalar = SCALARS[kind_of(type)]
+        return call_method(ir, reader, scalar.read, scalar.type, [], unwind)
+      emit_read_integer ir, reader, type, unwind
+
+# An integer of a type that SCALARS has not, read as an Int in the type's range.
+const emit_read_integer = (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> void) ->
+  const { least, most } = integer_range(type)
+  const name = format_type(type)
+  const article = name.starts_with('I') then 'an' else 'a'
+  const expected = shared_string_constant(ir, "#{article} #{name}")
+  const args = ["ptr #{expected}", "i64 #{least}", "i64 #{most}"]
+  const word = call_method(ir, reader, 'read_integer', int_type, args, unwind)
+  narrowed_from_word ir, word, scalar_of(type)!
 
 # The member that the string read names.
 const emit_read_member = (ir: IrBuilder, reader: Coder, type: EnumType, unwind: () -> void) ->

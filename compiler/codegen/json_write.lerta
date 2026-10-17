@@ -13,6 +13,7 @@ import emit_if_else, IrBuilder, IrModule from './ir_builder'
 import call_void_method, Coder, emit_count_up, emit_while, is_inline, SCALARS from './json'
 import emit_release, emit_release_value, ir_type, shared_string_constant from './lerta_ir'
 import emit_is_present, emit_unwrap from './optional'
+import scalar_of, widened_to_word from './scalar'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
   ArrayType, EnumType, kind_of, MapType, ObjectType, OptionalType, RecordType, TupleType, Type,
@@ -69,8 +70,11 @@ const emit_write = (
       const name = emit_member_name(ir, value, type)
       call_void_method ir, writer, 'write_string', ["ptr #{name}"], unwind
     else
-      const scalar = SCALARS[kind_of(type)]!
-      call_void_method ir, writer, scalar.write, ["#{ir_type(type)} #{value}"], unwind
+      if const scalar = SCALARS[kind_of(type)]
+        call_void_method ir, writer, scalar.write, ["#{ir_type(type)} #{value}"], unwind
+      else
+        const word = widened_to_word(ir, value, scalar_of(type)!)
+        call_void_method ir, writer, 'write_int', ["i64 #{word}"], unwind
 
 const emit_write_array = (
   ir: IrBuilder, writer: Coder, array: String, element: Type, unwind: () -> void

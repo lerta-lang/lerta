@@ -10,25 +10,32 @@ import IrBuilder from './ir_builder'
 import ir_return_type, method_symbol from './lerta_ir'
 import emit_valueless_call from './runtime_calls'
 import
-  bool_type, EnumType, float_type, int_type, kind_of, ObjectType, OptionalType, string_type, Type,
-  TypeKind, void_type
+  binary_type, bool_type, EnumType, float32_type, float_type, is_integer, kind_of, ObjectType,
+  OptionalType, SimpleType, string_type, Type, TypeKind, void_type
 from '../types'
 
 # The JsonWriter or JsonReader, of its type, as the operand that the code holds.
 export struct Coder(program: ProgramWide, type: ObjectType, operand: String)
 
-# The methods that write and read a scalar of the type.
+# The methods that write and read a scalar of the type, which they take and give as it is; an
+# integer of another type goes through an Int (see json_write and json_read).
 export struct ScalarMethods(write: String, read: String, type: Type)
 
 export const SCALARS: Map<TypeKind, ScalarMethods> =
-  'Int': ScalarMethods(write: 'write_int', read: 'read_int', type: int_type)
+  'UInt64': ScalarMethods(
+    write: 'write_uint64'
+    read: 'read_uint64'
+    type: SimpleType(kind: 'UInt64')
+  )
   'Float': ScalarMethods(write: 'write_float', read: 'read_float', type: float_type)
+  'Float32': ScalarMethods(write: 'write_float32', read: 'read_float32', type: float32_type)
   'Bool': ScalarMethods(write: 'write_bool', read: 'read_bool', type: bool_type)
   'String': ScalarMethods(write: 'write_string', read: 'read_string', type: string_type)
+  'Binary': ScalarMethods(write: 'write_binary', read: 'read_binary', type: binary_type)
 
 # Whether the type is written and read inline rather than by a function of its own.
 export const is_inline = (type: Type) ->
-  SCALARS.has(kind_of(type)) or type is EnumType or type is OptionalType
+  SCALARS.has(kind_of(type)) or is_integer(type) or type is EnumType or type is OptionalType
 
 # Calls the method of the writer or reader, of the result type, with the arguments after the
 # object; `unwind` runs if it throws.

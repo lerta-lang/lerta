@@ -1,0 +1,83 @@
+import decode_json, encode_json from 'std:json'
+
+# Each integer type, at its limits, and Float32.
+struct Numbers(a: Int8, b: Byte, c: UInt16, d: Int32, e: UInt64, f: Float32)
+
+const max64 = 0.to_uint64().wrapping_sub(1.to_uint64())
+const numbers = Numbers(
+  a: -128.to_int8()
+  b: 255.to_byte()
+  c: 65535.to_uint16()
+  d: -5.to_int32()
+  e: max64
+  f: 1.5.to_float32()
+)
+const text = encode_json(numbers)
+print text
+const back = decode_json<Numbers>(text)
+print encode_json(back) == text
+# Base64 with its padding, and strings that are not base64.
+for each in [
+  '"aGk="', '""', '"YQ=="', '"YWI="', '"YWJj"', '"YW"', '"Y==="', '"YQ==YQ=="', '"a b="', '5'
+]
+  try
+    print decode_json<Binary>(each).text()!
+  catch e
+    print e.message
+print encode_json(['hi'.binary, ''.binary, 'abc'.binary, [0xFF.to_byte()].to_binary()])
+for each in ['128', '-129', '1.0']
+  try
+    print decode_json<Int8>(each)
+  catch e
+    print e.message
+for each in ['18446744073709551616', '-1', '1e2']
+  try
+    print decode_json<UInt64>(each)
+  catch e
+    print e.message
+for each in ['3.5e38', '-3.4e38', '1e-50']
+  try
+    print decode_json<Float32>(each)
+  catch e
+    print e.message
+print encode_json(decode_json<Int16 | String>('"x"'))
+
+const read = (decode: () -> String) ->
+  try
+    print decode()
+  catch e
+    print e.message
+
+# Padding bits that are not zero, escapes in base64, and Binary in a union and optional.
+read -> decode_json<Binary>('"YR=="').length.to_string()
+read -> decode_json<Binary>('"YW\u0049="').text()!
+read -> decode_json<Binary>('[1]').length.to_string()
+read -> "#{[byte for byte in decode_json<Binary>('"+/8="')]}"
+read -> decode_json<Binary>('"YWJjZA=="').text()!
+read -> decode_json<Binary>('"YWJ="').length.to_string()
+read -> decode_json<Binary>('"YQ="').length.to_string()
+read -> encode_json([decode_json<Int | Binary>('3'), decode_json<Int | Binary>('"YQ=="')])
+read -> encode_json(decode_json<Binary?>('null'))
+read -> encode_json(decode_json<Float32 | Bool>('2.5'))
+read -> encode_json(decode_json<UInt32 | String>('7'))
+read -> encode_json(decode_json<Int8?>('null'))
+read -> encode_json(decode_json<Float32?>('1.25'))
+read -> encode_json(decode_json<Map<String, UInt32>>('{"a": 4294967295}'))
+read -> encode_json(decode_json<Int8[]>('[-1, 127]'))
+
+# The limits of each integer type, and just past them.
+read -> encode_json(decode_json<Int[]>('[-9223372036854775808, 9223372036854775807]'))
+for text in ['256', '-1']
+  read -> encode_json(decode_json<Byte>(text))
+for text in ['65536', '-1']
+  read -> encode_json(decode_json<UInt16>(text))
+for text in ['-32769', '32768']
+  read -> encode_json(decode_json<Int16>(text))
+for text in ['-2147483649', '2147483648', '2147483647']
+  read -> encode_json(decode_json<Int32>(text))
+for text in ['4294967296', '4294967295']
+  read -> encode_json(decode_json<UInt32>(text))
+
+# Float32 at the limit, and just below it, which rounds to the largest Float32.
+read -> encode_json(decode_json<Float32>('3.4028235677973366e38'))
+read -> encode_json(decode_json<Float32>('3.4028235677973362e38'))
