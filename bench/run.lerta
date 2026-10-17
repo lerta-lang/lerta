@@ -3,12 +3,12 @@
 # seconds. C is built with clang, or else cc; Swift only where swiftc is; Node.js must be there.
 # Run it from the repository's root after `make`, as `bin/lerta run bench/run.lerta`; the programs
 # go to build/bench/.
-import make_dir from 'std:io'
+import is_dir, list_dir, make_dir from 'std:io'
 import exit, run from 'std:process'
 import time from 'std:time'
 
-# Listed, as std:io cannot list a directory yet.
-const BENCHMARKS = ['binary_trees', 'fib', 'mandelbrot', 'sieve', 'word_count']
+# The directories of bench/, one for each benchmark, in order.
+const BENCHMARKS = [name for name in list_dir('bench') when is_dir("bench/#{name}")]
 # The languages, in the order of the columns, and the extensions of their sources.
 const EXTENSIONS = { 'lerta': 'lerta', 'c': 'c', 'swift': 'swift', 'node': 'js' }
 const RUNS = 3
@@ -69,34 +69,18 @@ const measure = (label: String, command: Command) ->
     printed = output
   (best, printed)
 
-# Seconds with 2 digits after the point, as std has no way to format a Float so yet.
-const format_seconds = (seconds: Float) ->
-  const hundredths = (seconds * 100.0 + 0.5).to_int()
-  const fraction = hundredths % 100
-  "#{hundredths / 100}.#{fraction < 10 then '0' else ''}#{fraction}"
-
-const pad_start = (text: String, width: Int) ->
-  var padded = text
-  padded = " #{padded}" while padded.binary.length < width
-  padded
-
-const pad_end = (text: String, width: Int) ->
-  var padded = text
-  padded = "#{padded} " while padded.binary.length < width
-  padded
-
 make_dir OUT
 print "C: #{c_compiler}#{has_swift then '' else '; no swiftc, so no Swift'}"
-const headings = [pad_start(language, COLUMN) for language in EXTENSIONS.keys()]
-print [pad_end('benchmark', NAME_COLUMN), headings...].join(' ')
+const headings = [language.pad_start(COLUMN) for language in EXTENSIONS.keys()]
+print ['benchmark'.pad_end(NAME_COLUMN), headings...].join(' ')
 for name in BENCHMARKS
   var expected = ''
   var expected_language = ''
-  const cells = [pad_end(name, NAME_COLUMN)]
+  const cells = [name.pad_end(NAME_COLUMN)]
   for language in EXTENSIONS.keys()
     const command = await build(name, language)
     if command == nil
-      cells.push pad_start('-', COLUMN)
+      cells.push '-'.pad_start(COLUMN)
       continue
     const label = "#{name} in #{language}"
     const (seconds, output) = await measure(label, command)
@@ -105,5 +89,5 @@ for name in BENCHMARKS
       expected_language = language
     else if output != expected
       fail "#{label} printed:\n#{output}#{expected_language} printed:\n#{expected}"
-    cells.push pad_start(format_seconds(seconds), COLUMN)
+    cells.push seconds.to_fixed(2).pad_start(COLUMN)
   print cells.join(' ')

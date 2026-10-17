@@ -183,7 +183,8 @@ let wine_prefixes = NO_WINE_PREFIXES
 const RUN_TIMEOUT_SECONDS = target.windows ? 180 : 60
 
 // Runs a built program, whose exit status tells whether it failed, in a directory of its own, so
-// that files it writes do not meet those of the other runs.
+// that files it writes do not meet those of the other runs, with an empty standard input, so that
+// one that reads it ends.
 const run_program = (path: string): Promise<{ stdout: string; stderr: string; failed: boolean }> =>
   new Promise((resolve, reject) => {
     const cwd = mkdtempSync(join(work_dir, 'run-'))
@@ -192,7 +193,7 @@ const run_program = (path: string): Promise<{ stdout: string; stderr: string; fa
     const env = prefix === undefined ? command_env : { ...command_env, WINEPREFIX: prefix }
     const timeout = RUN_TIMEOUT_SECONDS * 1000
     const options = { cwd, env, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT, timeout } as const
-    execFile(file, args, options, (error, stdout, stderr) => {
+    const child = execFile(file, args, options, (error, stdout, stderr) => {
       if (prefix !== undefined) wine_prefixes.give_back(prefix)
       // Node kills the program only past the timeout, as maxBuffer gives an error of its own.
       if (error?.killed === true) {
@@ -208,6 +209,7 @@ const run_program = (path: string): Promise<{ stdout: string; stderr: string; fa
       if (!ended) reject(error)
       else resolve({ stdout, stderr, failed: error !== null })
     })
+    child.stdin?.end()
   })
 
 const run_test = async (test: TestCase, optimize: boolean): Promise<string[]> => {
