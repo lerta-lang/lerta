@@ -28,12 +28,16 @@ print add(
 )
 const total = (1 +
   2)
+const doubled = xs.map((x) ->
+  const y = x * 2
+  y + 1
+)
 ```
 
 - Lines inside brackets, `(` `[` `{`, continue the line that opened them, whatever their indentation, until the brackets close. The `<` `>` of type arguments are not brackets.
 - In a list (the brackets of an array or a map, the parentheses of a call's arguments or of a function's parameters), a line end separates items as a comma does. Items on one line are separated by commas, and a comma may also end a line, separating it from the next as the line end alone would. An item must follow a comma, so the last item does not end with one.
 - In grouping parentheses and an index, `xs[i]`, lines simply continue the expression; a line there cannot start with `.` or `?.` to continue it with a member (see [statements](#statements)).
-- So far, an item inside brackets cannot open an indented block (a `case`, a function body).
+- A line inside brackets that ends with `->`, followed by a line indented deeper than it, opens the function's body as an indented block, laid out as any block, `case`s, loops and brackets of its own inside it. A line no deeper than the one with `->` ends the block, and continues the brackets, whatever it starts with (`)`, the next item); so does a closing bracket of the brackets around the block, wherever it is in the block, as on the line of its last statement (`  y + 1)`). A comma cannot follow such a body, so an item that holds one is the last on its line. No other item inside brackets opens a block: a `case` as an argument goes in such a function, or before the call under a name.
 
 ## Bracketless blocks
 

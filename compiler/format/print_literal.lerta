@@ -6,8 +6,10 @@ import
   NamedValue, NilLiteral, Position, RecordLiteral, StringLiteral
 from '../ast'
 import
-  breaking, choice, closing, Doc, indent, join, line_feed, rule, separated, text, token
+  breaking, choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated, text,
+  token
 from './doc'
+import function_block_doc from './print_block'
 import columns from './source'
 import type_arguments from './print_type'
 import BRANCHES, INSIDE_BRACES, LINE_LENGTH, MULTI_LINE_LITERALS, SHORTHAND from './rules'
@@ -17,7 +19,9 @@ import bracketed, Context, Item, lines_of_items, opened_list from './printing'
 export const item = (expression: Expression, context: Context) ->
   const doc = expression_doc(expression, context)
   const after_comment = context.source.comment_before(expression.position)
-  Item doc, after_comment, simple: is_simple(expression), opened: opened_doc(expression, context)
+  const opened = opened_doc(expression, context)
+  const as_block = expression is FunctionLiteral then function_block_doc(expression, context)
+  Item doc, after_comment, opened, as_block, simple: is_simple(expression)
 
 # A literal list broken after its opening bracket (see Item.opened).
 const opened_doc = (expression: Expression, context: Context): Doc? ->
@@ -139,8 +143,10 @@ export const value_after = (value: Expression, context: Context) ->
         rule BRANCHES, indent(join([line_feed(), expression_doc(value, context)]))
     when ArrayLiteral, RecordLiteral, MapLiteral
       if const block = literal_block(value, context)
-        # On the line only if all of it fits there, without a comment inside.
+        # On the line only if all of it fits there, without a comment inside, nor a block that
+        # ends its line.
         const all_on_line = join([text(' '), flat_literal(value, context)])
+        return block if has_line_feed(all_on_line)
         breaking MULTI_LINE_LITERALS, all_on_line, block
       else
         on_line

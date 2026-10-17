@@ -1,6 +1,8 @@
 # The expressions that hold blocks: function literals, `case` and `try`.
 import Case, CaseArm, Expression, FunctionLiteral, Parameter, Position, Statement, Try from '../ast'
-import breaking_after, choice, indent, join, line_feed, rule, separated, text, token from './doc'
+import
+  breaking_after, choice, Doc, indent, join, line_feed, rule, separated, text, token
+from './doc'
 import result_type_doc, type_doc, type_parameters from './print_type'
 import block_doc, inline_statement, is_inline from './print_statement'
 import BRANCHES, FUNCTION_BODIES, FUNCTIONS_WITHOUT_PARAMETERS, LONG_LISTS from './rules'
@@ -19,12 +21,27 @@ export const function_doc = (function: FunctionLiteral, context: Context) ->
   const fits_line = body.length == 1 and is_inline(body[0], context) and not has_comments
   # The body goes on the line where the head ends, which its parameters may have broken.
   const on_line = fits_line then join([text(' '), inline_statement(body[0], context)])
-  return join([head, on_line ? join([text(' '), block_doc(body, context)])]) if context.in_brackets
-  const block = indent(join([line_feed(), block_doc(body, context)]))
+  const block = indent(join([line_feed(), block_doc(body, context.in_block())]))
+  # Inside brackets, a body that does not go on the line is a block all the same (see Layout). A
+  # single statement that would but for a comment of the source after it stays on the line of `->`
+  # if it is there, as a block would take the comment from the line it ends.
+  if context.in_brackets
+    return join([head, choice(line, block)]) if const line = on_line
+    const arrow = position_before(body[0].position, '->', context)
+    const on_arrow_line = arrow != nil and arrow.line == body[0].position.line
+    const stays = body.length == 1 and is_inline(body[0], context) and on_arrow_line
+    return join([head, text(' '), block_doc(body, context)]) if stays
+    return join([head, block])
   if const line = on_line
     join [head, rule(FUNCTION_BODIES, choice(line, block))]
   else
     join [head, block]
+
+# The function with its body as a block, below its head.
+export const function_block_doc = (function: FunctionLiteral, context: Context): Doc ->
+  const weak = function.weak then text('weak ') else text('')
+  const block = indent(join([line_feed(), block_doc(function.body, context.in_block())]))
+  join [weak, function_head(function, context), block]
 
 # What comes before `->`: `-> body` has no parentheses where it needs none (see Functions without
 # parameters).

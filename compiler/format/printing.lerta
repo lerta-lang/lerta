@@ -4,7 +4,8 @@ import Position from '../ast'
 import TokenKind from '../lexer/tokens'
 import annotation_key from './annotated'
 import
-  breaking, choice, closing, Doc, indent, join, line_feed, rule, separated, text, token
+  breaking, choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated, text,
+  token
 from './doc'
 import LONG_LISTS, TYPE_ANNOTATIONS from './rules'
 import SourceText from './source'
@@ -22,6 +23,9 @@ export struct Context
 
   inside_brackets = ->
     Context source: @source, removed_types: @removed_types, in_brackets: true, on_own_line: false
+
+  # In a block, on lines of its own, as a function's body is inside brackets too.
+  in_block = -> Context(source: @source, removed_types: @removed_types)
 
   # On the line of an arm or a function literal.
   after_head = ->
@@ -42,15 +46,33 @@ export struct Item
   opened: Doc? = default nil
   # Whether a comment of the source comes before it in the list, which ends the line there.
   after_comment = default false
+  # The item with its body as a block, if it is a function whose body may go on its line, which a
+  # list can end its line with when the item is last (see bracketed).
+  as_block: Doc? = default nil
 
 # A list in brackets: on one line if it fits, and otherwise on lines of their own inside the
 # brackets, as many on a line as fit if every item is simple, and one on each line otherwise (see
 # Long lists). `close_at` is where the closing bracket is in the source, if it is there.
+# An item that holds a block, a function's body, ends its line inside the brackets, which a comma
+# cannot then follow: only the last item may, and the closing bracket goes on a line of its own
+# (see Layout in the lexer); otherwise each item is on a line of its own.
 export const bracketed = (open: Doc, items: Item[], close: String, close_at: Position?) ->
   const closing_text = closing(close, close_at)
   return join([open, closing_text]) if items.length == 0
-  const flat = join([open, separated([item.doc for item in items], text(', ')), closing_text])
-  breaking LONG_LISTS, flat, opened_list(open, items, closing_text)
+  const opened = opened_list(open, items, closing_text)
+  const docs = [item.doc for item in items]
+  const holds_block = (item: Item) -> has_line_feed(item.doc)
+  const blocks = items.find_index(holds_block)
+  const ending_with = (last: Doc) ->
+    const leading = [doc for doc, i in docs when i < docs.length - 1]
+    join [open, separated([leading..., last], text(', ')), line_feed(), closing_text]
+  if const first_block = blocks
+    return opened if first_block < items.length - 1
+    return breaking(LONG_LISTS, ending_with(docs.last()!), opened)
+  const flat = join([open, separated(docs, text(', ')), closing_text])
+  # A function last whose body does not fit on its line takes the lines below for it.
+  const block = items.last()!.as_block ? return breaking(LONG_LISTS, flat, opened)
+  breaking LONG_LISTS, flat, breaking(LONG_LISTS, ending_with(block), opened)
 
 # The list broken after its opening bracket, with its items on the lines below.
 export const opened_list = (open: Doc, items: Item[], closing: Doc) ->
@@ -61,7 +83,8 @@ export const opened_list = (open: Doc, items: Item[], closing: Doc) ->
 # each line but the last, and otherwise one on each line, without commas.
 export const lines_of_items = (items: Item[]) ->
   # Lines that a comment ends would hold one item, which no comma ends.
-  const shares_lines = (item: Item) -> item.simple and not item.after_comment
+  const shares_lines = (item: Item) ->
+    item.simple and not item.after_comment and not has_line_feed(item.doc)
   const all_simple = items.find_index((item) -> not shares_lines(item)) == nil
   return separated([item.doc for item in items], line_feed()) if not all_simple
   const parts: Doc[] = []

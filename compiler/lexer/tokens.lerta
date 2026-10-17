@@ -118,8 +118,7 @@ export const tokenize = (source: String, path: String) -> lex(source, path).toke
 export const lex = (source: String, path: String) ->
   const tokens: Token[] = []
   const comments: Comment[] = []
-  const indents = [0]
-  const brackets = Brackets(path)
+  const layout = Layout(path, tokens)
   const lines = source.split("\n")
   for text, index in lines
     const ends_with_lf = index + 1 < lines.length
@@ -133,20 +132,12 @@ export const lex = (source: String, path: String) ->
       comments.push comment_at(indent, true)
       continue
     line.fail 'tabs are not allowed in indentation', indent if line.bytes[indent] == "\t"
-    emit_indentation tokens, indents, line, indent if not brackets.are_open()
+    layout.start_line line, indent
     const scanner = LineScanner(line, position: indent)
-    for token in scanner.run()
-      brackets.update token
-      tokens.push token
+    layout.add token for token in scanner.run()
     comments.push comment_at(index, false) if const index = scanner.comment_index
-    const kind: TokenKind = brackets.are_open() then LINE_BREAK else NEWLINE
-    tokens.push layout_token(kind, line.number, line.column(line.length))
-  brackets.check_closed()
-  const eof_line = lines.length
-  while indents.length > 1
-    indents.pop()
-    tokens.push layout_token(DEDENT, eof_line, 1)
-  tokens.push layout_token(EOF, eof_line, 1)
+    layout.end_line line, indent
+  layout.finish lines.length
   Lexed tokens, comments
 
 # The tokens of an interpolated expression, placed where it is in the source line.
@@ -167,37 +158,99 @@ const without_carriage_return = (line: String) ->
 const layout_token = (kind: TokenKind, line: Int, column: Int) ->
   Token kind, line, column, text: '', spaced: true
 
-# Lines inside brackets continue the line that opened them, whatever their indentation, and end
-# with a LINE_BREAK, which the parser reads as it reads the brackets: a separator in a list, and
-# nothing in a grouping.
-class Brackets
-  path: String
+# A level of the layout: the indentation of its blocks, from its base, and the brackets open in it.
+# The file is one; a line inside brackets that ends with `->` opens another, of an indented block
+# on the lines after it, whose base is that line's indentation (see Layout).
+class Frame
+  indents: Int[]
   open: Token[] = []
 
-  update = (token: Token) ->
+  # The indentation that ends the frame's block: no deeper than its base.
+  base = -> @indents[0]
+
+# Lines are laid out by indentation into blocks, which INDENT, NEWLINE and DEDENT mark. Lines inside
+# brackets continue the line that opened them, whatever their indentation, and end with a
+# LINE_BREAK, which the parser reads as it reads the brackets: a separator in a list, and nothing in
+# a grouping. A line inside brackets that ends with `->`, followed by a line indented deeper, opens
+# an indented block there, a function's body, laid out as any block, which a line no deeper than
+# the one with `->`, or a closing bracket of the brackets it is in, ends.
+class Layout
+  path: String
+  tokens: Token[]
+  frames = [Frame(indents: [0])]
+  # The indentation of the line inside brackets that ended with `->`, if the last one did.
+  arrow_indent: Int? = nil
+
+  frame = -> @frames.last()!
+
+  in_brackets = -> @frame().open.length > 0
+
+  start_line = (line: SourceLine, indent: Int) ->
+    const column = line.column(indent)
+    if const base = @arrow_indent
+      @arrow_indent = nil
+      if indent > base
+        # The line break after `->` ends the line that the block's body follows.
+        const arrow_end = @tokens.pop()
+        @tokens.push layout_token(NEWLINE, arrow_end.line, arrow_end.column)
+        @frames.push Frame(indents: [base, indent])
+        @tokens.push layout_token(INDENT, line.number, column)
+        return
+    while @frames.length > 1 and not @in_brackets() and indent <= @frame().base()
+      @close_frame line.number, column
+      @tokens.push layout_token(LINE_BREAK, line.number, column)
+    return if @in_brackets()
+    # A closing bracket that starts a line of a block closes the brackets around it, whatever its
+    # indentation (see add).
+    const first = line.bytes[indent]
+    return if @frames.length > 1 and (first == ')' or first == ']' or first == '}')
+    const indents = @frame().indents
+    if indent > indents.last()!
+      indents.push indent
+      @tokens.push layout_token(INDENT, line.number, column)
+      return
+    while indent < indents.last()!
+      indents.pop()
+      @tokens.push layout_token(DEDENT, line.number, column)
+    line.fail 'indentation does not match any outer block', indent if indent != indents.last()!
+
+  # A closing bracket in a block that has none open closes the brackets that the block is in,
+  # which ends the block first.
+  add = (token: Token) ->
+    const open = @frame().open
     case token.kind
-      when '(', '[', '{' then @open.push(token)
-      # An extra closing bracket is left to the parser to report.
-      when ')', ']', '}' then @open.pop() if @are_open()
+      when '(', '[', '{' then open.push(token)
+      when ')', ']', '}'
+        if open.length == 0 and @frames.length > 1
+          # A bracket at the start of a line follows the line end of the block's last line.
+          const after_line_end = @tokens.last()!.kind == NEWLINE
+          @tokens.push layout_token(NEWLINE, token.line, token.column) if not after_line_end
+          @close_frame token.line, token.column
+        # An extra closing bracket is left to the parser to report.
+        @frame().open.pop() if @in_brackets()
       else pass
+    @tokens.push token
 
-  are_open = -> @open.length > 0
+  end_line = (line: SourceLine, indent: Int) ->
+    const in_brackets = @in_brackets()
+    const ends_with_arrow = @tokens.length > 0 and @tokens.last()!.kind == '->'
+    @arrow_indent = indent if in_brackets and ends_with_arrow
+    const kind: TokenKind = in_brackets then LINE_BREAK else NEWLINE
+    @tokens.push layout_token(kind, line.number, line.column(line.length))
 
-  check_closed = ->
-    return if @open.length == 0
-    const unclosed = @open.last()!
-    compile_error @path, unclosed.line, unclosed.column, "'#{unclosed.kind}' is never closed"
+  # Ends the innermost frame's block, which leaves the line in the brackets around it.
+  close_frame = (line: Int, column: Int) ->
+    const frame = @frames.pop()
+    @tokens.push layout_token(DEDENT, line, column) for _ in 1...frame.indents.length
 
-const emit_indentation = (tokens: Token[], indents: Int[], line: SourceLine, indent: Int) ->
-  const column = line.column(indent)
-  if indent > indents.last()!
-    indents.push indent
-    tokens.push layout_token(INDENT, line.number, column)
-    return
-  while indent < indents.last()!
-    indents.pop()
-    tokens.push layout_token(DEDENT, line.number, column)
-  line.fail 'indentation does not match any outer block', indent if indent != indents.last()!
+  finish = (eof_line: Int) ->
+    const unclosed = @frames.find((frame) -> frame.open.length > 0)
+    if const frame = unclosed
+      const bracket = frame.open.last()!
+      compile_error @path, bracket.line, bracket.column, "'#{bracket.kind}' is never closed"
+    const indents = @frame().indents
+    @tokens.push layout_token(DEDENT, eof_line, 1) for _ in 1...indents.length
+    @tokens.push layout_token(EOF, eof_line, 1)
 
 # The tokens of one line, from `position`.
 class LineScanner
