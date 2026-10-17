@@ -201,15 +201,6 @@ const program_cases: ProgramCase[] = [
     },
   },
   {
-    // read_all reads past one chunk of 64 KiB.
-    source: 'tests/io/lib/read_much.lerta',
-    behaves: async (executable) => {
-      const script = `head -c 200000 /dev/zero | tr '\\0' x | "$0"`
-      const ran = await run_command('sh', ['-c', script, executable])
-      return ran.status === 0 && ran.stdout === '200000\n'
-    },
-  },
-  {
     // A count below 1, a read while another waits, and a line that is not UTF-8 throw, and the
     // reads go on after them.
     source: 'tests/io/lib/read_errors.lerta',
@@ -222,6 +213,15 @@ const program_cases: ProgramCase[] = [
         'rest',
       ]
       return ran.status === 0 && ran.stdout === lines(expected)
+    },
+  },
+  {
+    // read_all reads past one chunk of 64 KiB.
+    source: 'tests/io/lib/read_much.lerta',
+    behaves: async (executable) => {
+      const script = `head -c 200000 /dev/zero | tr '\\0' x | "$0"`
+      const ran = await run_command('sh', ['-c', script, executable])
+      return ran.status === 0 && ran.stdout === '200000\n'
     },
   },
   {
@@ -288,8 +288,10 @@ const program_cases: ProgramCase[] = [
   },
 ]
 
-export const program_checks: Check[] = program_cases.map(({ source, behaves }) => {
-  const executable = join(work_dir, basename(source, '.lerta'))
+// Each check builds an executable of its own, as the checks run at once and several may build one
+// source, or sources of one name.
+export const program_checks: Check[] = program_cases.map(({ source, behaves }, index) => {
+  const executable = join(work_dir, `${basename(source, '.lerta')}-${index}`)
   const args = ['build', join(root_dir, source), '-o', executable]
   return {
     name: `lerta ${args.map(shorten_path).join(' ')} and run it`,
