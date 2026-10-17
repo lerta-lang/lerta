@@ -218,7 +218,7 @@ What `std/builtins.lerta` cannot write in Lerta (see [the reference](reference/b
 
 ## Defaults
 
-A function with [defaults](reference/functions.md) takes every argument. For each number of arguments that a call may give, it has an entry, `<symbol>.given<k>`, which computes the defaults of the others and calls it; a call that leaves arguments out calls the entry. The function's value and the itabs refer to the function itself, which a default does not change. A constructor instead takes, after each argument with a [`default`](reference/objects.md), an `i1` of whether it is given, and computes the default in its place among the initializers.
+A function with [defaults](reference/functions.md) takes every argument. For each number of arguments that a call may give, it has an entry, `<symbol>.given<k>`, which computes the defaults of the others and calls it; an instance of a generic function has them only if a call leaves arguments out, as only such a call has its defaults checked (`defaults_checked`); a call that leaves arguments out calls the entry. The function's value and the itabs refer to the function itself, which a default does not change. A constructor instead takes, after each argument with a [`default`](reference/objects.md), an `i1` of whether it is given, and computes the default in its place among the initializers.
 
 ## Floats
 

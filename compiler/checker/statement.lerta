@@ -40,30 +40,42 @@ export const check_initializers = (body: Body, info: ObjectInfo, self: SelfConte
 
 # The parameters are borrowed locals. A method's body also has `@` as a local that cannot be
 # written in the source. `holds`, a condition known to hold where the body runs, narrows the
-# parameters it tests.
+# parameters it tests. The defaults are checked unless `checks_defaults` is false, as for an
+# instance of a generic function, whose defaults are checked apart (see check_instance_defaults).
 export const check_function_body = (
-  body: Body, literal: FunctionLiteral, params: Type[], holds: Expression?
+  body: Body
+  literal: FunctionLiteral
+  params: Type[]
+  holds: Expression?
+  checks_defaults = true
 ) ->
   const define_params = ->
-    if const self = body.self
-      const identifier = Identifier(name: '@', position: literal.position)
-      const object = Local(identifier, type: self.type, used: true)
-      body.scopes.define '@', object
-    const required = required_params(literal)
-    for declared, i in literal.params
-      const identifier = declared.name
-      if const default = declared.default
-        expect_type body, default, params[i]
-      else if i > required
-        const reason = 'as those before it have'
-        const message = "the parameter '#{identifier.name}' needs a default, #{reason}"
-        fail body.program, identifier.position, message
-      const param = Local(identifier, type: params[i])
-      define_local body, param
+    define_parameters body, literal, params, checks_defaults
     narrow_where_holds body, holds if holds
   const statements = literal.body
   const finish = -> check_last_statement(body, last) if const last = statements.last()
   check_block body, all_but_last(statements), define_params, finish
+
+# Defines `@` and the parameters in order, each default seeing those before it, checked if
+# `checks_defaults`.
+export const define_parameters = (
+  body: Body, literal: FunctionLiteral, params: Type[], checks_defaults: Bool
+) ->
+  if const self = body.self
+    const identifier = Identifier(name: '@', position: literal.position)
+    const object = Local(identifier, type: self.type, used: true)
+    body.scopes.define '@', object
+  const required = required_params(literal)
+  for declared, i in literal.params
+    const identifier = declared.name
+    if const default = declared.default
+      expect_type body, default, params[i] if checks_defaults
+    else if i > required
+      const reason = 'as those before it have'
+      const message = "the parameter '#{identifier.name}' needs a default, #{reason}"
+      fail body.program, identifier.position, message
+    const param = Local(identifier, type: params[i])
+    define_local body, param
 
 # The top-level code. Its names may be used by the functions, which are checked later, so its
 # scope is kept to warn about those never used once they are. An error ends the checking of its

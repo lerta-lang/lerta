@@ -1,6 +1,6 @@
 # Generic functions and methods: see docs/reference/functions.md#generic-functions.
 import FunctionLiteral, Identifier, Position, TypeParameter from '../ast'
-import check_instance from './bodies'
+import check_instance, check_instance_defaults from './bodies'
 import abort_part, check_part, fail, fail_already_defined, fail_in_context from './diagnostics'
 import ExtensionMethod, Extensions, with_methods from './extensions'
 import annotated_type, FunctionEntry, parameter_types from './functions'
@@ -30,6 +30,9 @@ export class Instance
   variant: Int
   # What is found of the nodes of its body, which it shares with the other instances.
   facts = NodeFacts()
+  # Whether its defaults are checked, which only a call that leaves arguments out asks for (see
+  # check_instance_defaults), so that a default need not fit every type argument.
+  defaults_checked = false
 
 # See docs/reference/functions.md#generic-functions.
 export const MAX_TYPE_DEPTH = 32
@@ -161,6 +164,15 @@ const check = (program: ProgramWide, generic: GenericFunction, instance: Instanc
     check_instance program, generic.module_index, instance
     program.contexts.pop()
   instance.entry.state = check_part(program, check_body) then CHECKED else FAILED
+
+# The defaults of the instance, for a call that leaves arguments out; an error in one says which
+# instance it was found in, as one in the body does.
+export const check_defaults = (
+  program: ProgramWide, generic: GenericFunction, instance: Instance
+) ->
+  program.contexts.push "in #{describe(generic, instance)}"
+  check_instance_defaults program, generic.module_index, instance
+  program.contexts.pop()
 
 # A written type that the type arguments make wrong, such as `T?` of an optional type, is the
 # call's error, as a type argument that misses its bound is.

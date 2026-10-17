@@ -151,10 +151,16 @@ const hold_weak_this = (g: Generator, scope: Map<String, CodegenLocal>) ->
 # literal its closure, from which it reads the values it captures. The last statement, if an
 # expression, gives the result. A function that yields returns an Iter that runs its body, and one
 # that awaits a Promise that the body settles (see yielding and awaiting). The function and its
-# entries for defaults have the linkage (see Definition).
+# entries for defaults have the linkage (see Definition), unless `with_defaults` is false, as for
+# an instance whose defaults no call uses (see check_instance_defaults).
 export const generate_function = (
-  g: Generator, linkage: String, symbol: String, literal: FunctionLiteral, this_type: Type?,
+  g: Generator
+  linkage: String
+  symbol: String
+  literal: FunctionLiteral
+  this_type: Type?
   captures: Capture[]?
+  with_defaults = true
 ) ->
   const type = function_type_of(type_of(g, literal))
   g.ir.declared_at = literal.position
@@ -174,7 +180,8 @@ export const generate_function = (
     g.result_type = type.result
     generate_body type.result
     finish g, "#{linkage}#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})"
-  for given in required_params(literal)...literal.params.length
+  const fewest = with_defaults then required_params(literal) else literal.params.length
+  for given in fewest...literal.params.length
     const entry_generator = function_generator(g.code, g.extensions, g.facts, g.function_name)
     generate_default_entry entry_generator, linkage, symbol, literal, this_type, given
 

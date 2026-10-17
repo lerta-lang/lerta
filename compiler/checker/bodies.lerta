@@ -13,7 +13,7 @@ import ObjectInfo from './object_types'
 import finish_function_type, function_context, reject_nil_result from './result'
 import Body, NodeFacts, ProgramWide, SelfContext, Shared from './shared'
 import reject_unsatisfied from './satisfaction'
-import check_function_body, check_initializers from './statement'
+import check_function_body, check_initializers, define_parameters from './statement'
 import module_resolver, Resolver from './type_names'
 import
   bool_type, format_qualified, format_type, FunctionType, int_type, same_type, Type
@@ -30,20 +30,37 @@ export const check_function = (program: ProgramWide, module_index: Int, entry: F
 # arguments, and the extends of the type arguments where it is called.
 export const check_instance = (program: ProgramWide, module_index: Int, instance: Instance) ->
   const { entry, resolver, extensions, facts } = instance
-  check_function_with program.shared[module_index], facts, entry, resolver, extensions
+  check_function_with program.shared[module_index], facts, entry, resolver, extensions, false
+
+# The defaults of an instance, once, for a call that leaves arguments out.
+export const check_instance_defaults = (
+  program: ProgramWide, module_index: Int, instance: Instance
+): void ->
+  return if instance.defaults_checked
+  instance.defaults_checked = true
+  const shared = program.shared[module_index]
+  const { entry, resolver, extensions, facts } = instance
+  enter_module shared
+  const checked = function_body(shared, facts, entry, resolver, extensions)
+  checked.body.scopes.push()
+  define_parameters checked.body, entry.literal, checked.params, true
+  checked.body.scopes.pop()
+  leave_module shared
 
 const check_function_with = (
-  shared: Shared, facts: NodeFacts, entry: FunctionEntry, resolver: Resolver, extensions: Extensions
+  shared: Shared
+  facts: NodeFacts
+  entry: FunctionEntry
+  resolver: Resolver
+  extensions: Extensions
+  checks_defaults = true
 ): void ->
   const program = shared.program
   enter_module shared
-  const { literal, this_type } = entry
+  const literal = entry.literal
   fail program, literal.position, 'a top-level function or a method cannot be weak' if literal.weak
-  const params = parameter_types(program, resolver, literal)
-  const context = function_context(program, literal, annotated_result(entry.type))
-  const self = this_type then SelfContext(type: this_type)
-  const body = Body(shared, resolver, extensions, facts, context, self)
-  check_function_body body, literal, params, nil
+  const { body, params, context } = function_body(shared, facts, entry, resolver, extensions)
+  check_function_body body, literal, params, nil, checks_defaults
   # The conversions of the results are recorded even if the type was known from its annotation.
   const finished = finish_function_type(context, params, facts)
   const checked_type = reject_nil_result(program, finished, literal)
@@ -53,6 +70,17 @@ const check_function_with = (
   leave_module shared
 
 const annotated_result = (type: Type?) -> (type as FunctionType?)?.result
+
+# The body in which the function's parameters, its defaults and its statements are checked, with
+# the parameters' types and the context of its results.
+const function_body = (
+  shared: Shared, facts: NodeFacts, entry: FunctionEntry, resolver: Resolver, extensions: Extensions
+) ->
+  const { literal, this_type } = entry
+  const params = parameter_types(shared.program, resolver, literal)
+  const context = function_context(shared.program, literal, annotated_result(entry.type))
+  const self = this_type then SelfContext(type: this_type)
+  { body: Body(shared, resolver, extensions, facts, context, self), params, context }
 
 export const check_object = (program: ProgramWide, info: ObjectInfo) ->
   const shared = program.shared[info.module_index]
