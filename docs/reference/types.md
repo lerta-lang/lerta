@@ -79,6 +79,7 @@ print (flags >> 15).to_int() + offset.to_int()
 - `Binary` is an immutable sequence of bytes; a mutable one is a `Byte[]`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.text()` goes back (see below).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`.
 - `==` and `!=` compare two `Binary`s byte by byte.
+- `+` joins two `Binary`s into a new one, and `+=` appends one to a variable, as they do `String`s. A `String` and a `Binary` are not joined (`cannot join a String and a Binary`): `s.binary` gives the bytes of the `String` without copying them. `parts.join(separator)` joins a `Binary[]` into one `Binary`; pieces gathered so and joined once are O(n), as for `String`s.
 - `b.occurs_at(index, part)` tells whether the bytes of `part` occur in `b` at `index`; it is false where `part` does not fit.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `bytes.to_binary()` copies the items of a `Byte[]` into a new `Binary`.
@@ -121,7 +122,7 @@ print xs[0] + xs.length
 - `==` and `!=` compare two arrays by their items, in order (see [equality](objects.md#classes-and-structs)).
 - `xs.push(item)` appends an item. `xs.pop()` removes and returns the last one; on an empty array it throws `pop from an empty array`. `xs.contains(x)` tells whether an item is `==` to `x`, for items that `==` compares (other items are an error), and `xs.find_index(f)` gives the place of the first item for which `f` is true, or nil. `xs.first()` and `xs.last()` return the first and the last item, or nil for an empty array; an array of optional items has neither, since its nil would be ambiguous. `xs.sorted(compare)` gives a new array of the items in the order that `compare` gives, an [`Ordering`](builtins.md#equatable-comparable-and-hashable) that is `LESS` when its first argument goes first, equal items keeping their order: `names.sorted((a, b) -> a.compare(b))`. `xs.append(ys)` pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`.
 - `xs.iter()` gives an [`Iter`](#iter) of the items, and `xs.map(f)`, `xs.filter(f)` and `xs.take(n)` one of the items as it maps, filters or takes them.
-- `strings.join(separator)` joins a `String[]` into one `String`.
+- `strings.join(separator)` joins a `String[]` into one `String`, and `parts.join(separator)` a `Binary[]` into one `Binary`.
 - Arrays cannot be printed.
 
 ## Map

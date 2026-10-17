@@ -37,13 +37,13 @@ const negate = (g: Generator, operand: String, type: Type) ->
   return emit_float_negation(g.ir, operand, type) if is_float(type)
   apply_integer_operator g, '-', '0', operand, type
 
-# The method of a number, `add` and so on, or a String's add, which applies its operator to the
-# object and the arguments, both borrowed.
+# The method of a number, `add` and so on, or a String's or a Binary's add, which applies its
+# operator to the object and the arguments, both borrowed.
 export const apply_operator_method = (
   g: Generator, name: String, object: String, args: String[], type: Type
 ) ->
   return negate(g, object, type) if name == 'neg'
-  if is_kind(type, 'String')
+  if is_one_of_kinds(type, ['String', 'Binary'])
     emit_retain g.ir, part for part in [object, args[0]]
     return emit_concat(g.ir, [object, args[0]])
   apply_numeric g, operator_of_method(name)!, object, args[0], type
@@ -58,8 +58,8 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   const left = generate(g, binary.left)
   const operand_type = type_at_use(g, binary.left)
   const right = holding(g, left, operand_type, -> generate(g, binary.right))
-  const is_string = is_kind(operand_type, 'String')
-  return emit_concat(g.ir, [left, right]) if is_string and operator == '+'
+  const is_bytes = is_one_of_kinds(operand_type, ['String', 'Binary'])
+  return emit_concat(g.ir, [left, right]) if is_bytes and operator == '+'
   const program = g.code.program
   const inner = inner_of(operand_type)
   const by_contents = compares_by_contents(program, inner)

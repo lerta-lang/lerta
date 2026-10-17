@@ -72,34 +72,28 @@ export class Reader
     @start = 0
     true
 
-  # A line within one chunk is sliced out of it; one that crosses chunks is gathered byte by byte,
-  # as a Binary cannot be joined to another.
+  # The pieces of a line, sliced out of the chunks it crosses, are joined once it ends.
   line = ->
-    const crossed: Byte[] = []
+    const pieces: Binary[] = []
     while await @fill()
       var end = @start
       end += 1 while end < @chunk.length and @chunk[end] != "\n"
+      pieces.push @chunk.slice(@start, end)
       if end < @chunk.length
-        const piece = @chunk.slice(@start, end)
         @start = end + 1
-        return ended_line_text(piece) if crossed.length == 0
-        crossed.push byte for byte in piece
-        return ended_line_text(crossed.to_binary())
-      crossed.push @chunk[i] for i in @start...@chunk.length
+        return ended_line_text(joined(pieces))
       @start = @chunk.length
-    return nil if crossed.length == 0
-    utf8_line crossed.to_binary()
+    return nil if pieces.length == 0
+    utf8_line joined(pieces)
 
-  # Bytes within one chunk are sliced out of it; those that cross chunks are gathered byte by byte,
-  # as a Binary cannot be joined to another.
   part = (count: Int) ->
     return nil if not await @fill()
-    const first = @take(count)
-    return first if first.length == count
-    const bytes = [byte for byte in first]
-    while bytes.length < count and await @fill()
-      bytes.push byte for byte in @take(count - bytes.length)
-    bytes.to_binary()
+    const pieces = [@take(count)]
+    var taken = pieces[0].length
+    while taken < count and await @fill()
+      pieces.push @take(count - taken)
+      taken += pieces.last()!.length
+    joined pieces
 
   # Up to `count` bytes of the chunk, from where it is read.
   take = (count: Int) ->
@@ -109,6 +103,9 @@ export class Reader
     bytes
 
   rest = -> await @part(MAX_INT) ? ''.binary
+
+# The pieces as one Binary, which is the one piece itself, as most reads fit in one chunk.
+const joined = (pieces: Binary[]) -> pieces.length == 1 then pieces[0] else pieces.join(''.binary)
 
 # A line that ended with "\n", without a "\r" before it.
 const ended_line_text = (bytes: Binary) ->

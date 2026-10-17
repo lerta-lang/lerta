@@ -44,7 +44,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `Bool` | `equals`, `hash`, `to_string` |
 | `String` | `equals`, `hash`, `add`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `contains`, `split_once`, `replace`, `trim`, `repeat`, `to_upper`, `to_lower`, `compare` |
 | `Binary` | `equals`, `hash`, `length`, `iter`, `slice`, `occurs_at`, `text` |
-| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` and `to_binary` of a `Byte[]` |
+| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
 | `Map<K, V>` | `length`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries` |
 | `Set<T>` | `length`, `has`, `add`, `remove`, `iter`, `bit_or`, `bit_and`, `sub`, `bit_xor`, `is_subset` |
 | `Iter<T>` | `has_next`, `next`, `iter` |

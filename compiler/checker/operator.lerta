@@ -13,8 +13,9 @@ import holds_float_literal, is_contextual from './literals'
 import where_right_operand from './narrowing'
 import Body from './shared'
 import
-  bool_type, FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_identity_type, is_one_of_kinds,
-  ObjectType, OptionalType, same_type, SIGNED_INTEGER_KINDS, Type, TypeKind, UnionType
+  bool_type, FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_identity_type, is_kind,
+  is_one_of_kinds, ObjectType, OptionalType, same_type, SIGNED_INTEGER_KINDS, Type, TypeKind,
+  UnionType
 from '../types'
 
 const NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS...]
@@ -111,7 +112,7 @@ export const type_of_coalesce = (body: Body, coalesce: Coalesce) ->
 
 export const operand_kinds = (operator: String): TypeKind[] ->
   case operator
-    when '+' then [NUMERIC_KINDS..., 'String']
+    when '+' then [NUMERIC_KINDS..., 'String', 'Binary']
     when '%', '&', '|', '^', '<<', '>>' then INTEGER_KINDS
     # Strings order by their compare.
     when '<', '<=', '>', '>=' then [NUMERIC_KINDS..., 'String']
@@ -192,8 +193,18 @@ const type_of_operands = (
       )
   fail body.program, first.position, reject(type) if not is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
-  expect_type body, second, type
+  const second_type = type_of(body, second, type)
+  reject_text_and_bytes body, second, type, second_type
+  require_type body, second, second_type, type
   type
+
+# `+` joins two Strings or two Binarys, but not one of each, whose bytes `.binary` gives.
+export const reject_text_and_bytes = (body: Body, operand: Expression, first: Type, second: Type) ->
+  const kinds: TypeKind[] = ['String', 'Binary']
+  const mixed = is_one_of_kinds(first, kinds) and is_one_of_kinds(second, kinds)
+  return if not mixed or is_kind(first, 'String') == is_kind(second, 'String')
+  const message = "cannot join a String and a Binary: write `.binary` for the String's bytes"
+  fail body.program, operand.position, message
 
 const type_of_equality_operand = (
   body: Body, first: Expression, second: Expression, first_type: Type
