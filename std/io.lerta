@@ -34,6 +34,9 @@ export const list_dir = (path: String) ->
 
 extern lerta_stdin_read: () -> Promise<Binary?>
 
+# As many bytes as a read can ask for, which reads all that is left.
+const MAX_INT = 9223372036854775807
+
 # A stream read in chunks through a buffer: `read_chunk` gives the next chunk, or nil at the end. A
 # read must end before the next one starts: one that starts while another is pending throws.
 export class Reader
@@ -45,7 +48,7 @@ export class Reader
   # The next line, without its "\n" and a "\r" before it, or nil at the end.
   read_line = -> await @exclusive(-> await @line())
 
-  # Up to `count` bytes, as many as one chunk holds at most, or nil at the end.
+  # `count` bytes, or as many as are left if the end comes first, or nil at the end.
   read = (count: Int) ->
     throw ValueError(message: "read a count of bytes below 1: #{count}") if count < 1
     await @exclusive(-> await @part(count))
@@ -87,20 +90,25 @@ export class Reader
     return nil if crossed.length == 0
     utf8_line crossed.to_binary()
 
+  # Bytes within one chunk are sliced out of it; those that cross chunks are gathered byte by byte,
+  # as a Binary cannot be joined to another.
   part = (count: Int) ->
     return nil if not await @fill()
+    const first = @take(count)
+    return first if first.length == count
+    const bytes = [byte for byte in first]
+    while bytes.length < count and await @fill()
+      bytes.push byte for byte in @take(count - bytes.length)
+    bytes.to_binary()
+
+  # Up to `count` bytes of the chunk, from where it is read.
+  take = (count: Int) ->
     const end = @start + min(count, @chunk.length - @start)
     const bytes = @chunk.slice(@start, end)
     @start = end
     bytes
 
-  # Gathered byte by byte, as a Binary cannot be joined to another.
-  rest = ->
-    const bytes: Byte[] = []
-    while await @fill()
-      bytes.push @chunk[i] for i in @start...@chunk.length
-      @start = @chunk.length
-    bytes.to_binary()
+  rest = -> await @part(MAX_INT) ? ''.binary
 
 # A line that ended with "\n", without a "\r" before it.
 const ended_line_text = (bytes: Binary) ->
