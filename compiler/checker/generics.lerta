@@ -1,7 +1,9 @@
 # Generic functions and methods: see docs/reference/functions.md#generic-functions.
 import FunctionLiteral, Identifier, Position, TypeParameter from '../ast'
 import check_instance, check_instance_defaults from './bodies'
-import abort_part, check_part, fail, fail_already_defined, fail_in_context from './diagnostics'
+import
+  abort_part, check_part, error_module_path, fail, fail_already_defined, fail_in_context
+from './diagnostics'
 import ExtensionMethod, Extensions, with_methods from './extensions'
 import annotated_type, FunctionEntry, parameter_types from './functions'
 import bound_interface from './interfaces'
@@ -165,24 +167,35 @@ const check = (program: ProgramWide, generic: GenericFunction, instance: Instanc
     program.contexts.pop()
   instance.entry.state = check_part(program, check_body) then CHECKED else FAILED
 
-# The defaults of the instance, for a call that leaves arguments out; an error in one says which
-# instance it was found in, as one in the body does.
+# The defaults of the instance, for the call at `at` that leaves arguments out; an error in one is
+# the call's, which says which instance's defaults it was found in. Inside the check of a call
+# already, as of another instance's defaults, the error is that outer call's, which the program's
+# own source makes.
 export const check_defaults = (
-  program: ProgramWide, generic: GenericFunction, instance: Instance
+  program: ProgramWide, generic: GenericFunction, instance: Instance, at: Position
 ) ->
-  program.contexts.push "in #{describe(generic, instance)}"
-  check_instance_defaults program, generic.module_index, instance
-  program.contexts.pop()
+  const context = "in the defaults of #{describe(generic, instance)}"
+  annotating program, at, context, ->
+    check_instance_defaults program, generic.module_index, instance
 
 # A written type that the type arguments make wrong, such as `T?` of an optional type, is the
 # call's error, as a type argument that misses its bound is.
 const resolve_annotation = (
   program: ProgramWide, generic: GenericFunction, instance: Instance, at: Position
 ) ->
-  program.annotated_call = AnnotatedCall(at, context: "in #{describe(generic, instance)}")
-  const type = annotated_type(program, instance.resolver, instance.entry.literal)
-  program.annotated_call = nil
+  var type: Type?
+  const resolve = -> type = annotated_type(program, instance.resolver, instance.entry.literal)
+  annotating program, at, "in #{describe(generic, instance)}", resolve
   type
+
+# Runs `check` with errors reported at the call at `at`, in the module being checked, unless an
+# outer call is annotated already, whose annotation is kept.
+const annotating = (program: ProgramWide, at: Position, context: String, check: () -> void) ->
+  const outer = program.annotated_call
+  if outer == nil
+    program.annotated_call = AnnotatedCall(at, context, path: error_module_path(program))
+  check()
+  program.annotated_call = outer
 
 # `print<Int>`, as messages write an instance; a method's, `Int[].map<String>`, by its
 # receiver and the type arguments of its own.

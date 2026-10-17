@@ -14,7 +14,8 @@ import Local from './scopes'
 export struct CheckAborted: Error
 
 export const fail = (program: ProgramWide, at: Position, message: String) ->
-  fail_in_context program, call.at, message, call.context if const call = program.annotated_call
+  if const call = program.annotated_call
+    report_error_in program, call.path, call.at, "#{message} (#{call.context})"
   const contexts = program.contexts
   report_error program, at, message if contexts.length == 0
   fail_in_context program, at, message, contexts.last()!
@@ -28,7 +29,10 @@ export const fail_in_context = (
 ) -> report_error(program, at, "#{message} (#{context})")
 
 const report_error = (program: ProgramWide, at: Position, message: String) ->
-  const error = CheckError(path: error_module_path(program), diagnostic: Diagnostic(message, at))
+  report_error_in program, error_module_path(program), at, message
+
+const report_error_in = (program: ProgramWide, path: String?, at: Position, message: String) ->
+  const error = CheckError(path, diagnostic: Diagnostic(message, at))
   program.errors.push error
   # The first error tells whether the program checks.
   report_errors program if not program.reports_warnings
@@ -66,8 +70,8 @@ export const report_errors = (program: ProgramWide) ->
     lines.append diagnostic_lines(program, path, errors, '')
   throw CompileError(message: lines.join("\n"))
 
-# The path of the innermost module being checked; nil for the entry module.
-const error_module_path = (program: ProgramWide) ->
+# The path of the innermost module being checked, which an error is in; nil for the entry module.
+export const error_module_path = (program: ProgramWide) ->
   const paths = program.module_paths
   # Not last(), which an array of optional items lacks.
   paths.length > 0 then paths[paths.length - 1]
