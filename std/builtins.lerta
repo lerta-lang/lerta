@@ -161,6 +161,11 @@ extend String
   to_lower = ->
     const bytes = [b >= 'A' and b <= 'Z' then b - 'A' + 'a' else b for b in @binary]
     lerta_binary_as_string bytes.to_binary()
+  # The String after as many of `fill`, one code point, as make it `width` code points long, or the
+  # String itself if it is no shorter.
+  pad_start = (width: Int, fill = ' ') -> padding(@, width, fill) + @
+  # Likewise, with the code points of `fill` after the String.
+  pad_end = (width: Int, fill = ' ') -> @ + padding(@, width, fill)
   repeat = (count: Int) ->
     throw ValueError(message: 'repeat a negative number of times') if count < 0
     [@ for _ in 0...count].join('')
@@ -187,6 +192,16 @@ extend Binary
   text = (start = 0, end: Int = @length): String? ->
     const bytes = start == 0 and end == @length then @ else @slice(start, end)
     lerta_is_utf8(bytes) then lerta_binary_as_string(bytes)
+
+# The copies of `fill` that make `text` `width` code points long (see pad_start).
+const padding = (text: String, width: Int, fill: String) ->
+  throw ValueError(message: 'a fill that is not one code point') if code_point_count(fill) != 1
+  fill.repeat max(0, width - code_point_count(text))
+
+const code_point_count = (text: String) ->
+  var count = 0
+  count += 1 for _ in text
+  count
 
 # The bits of a lead byte that hold a code point, by the length of its sequence.
 const UTF8_LEAD_BITS: Byte[] = [0x7F, 0x1F, 0x0F, 0x07]
