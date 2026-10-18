@@ -7,7 +7,7 @@ import fail from './diagnostics'
 import is_numeric_operator from './operator'
 import ProgramWide from './shared'
 import float_bits, integer_float_text from '../float_literals'
-import format_type, int_type, integer_range, is_kind, Type from '../types'
+import format_type, int_type, integer_range, is_one_of_kinds, Type from '../types'
 
 # Whether an expression takes its type from the context: a literal, or arithmetic on such
 # expressions, so that `1 + 2` is a Byte where one is expected.
@@ -39,7 +39,7 @@ export const float_first = <T>(items: T[], expression_of: (T) -> Expression) ->
   [floats..., [item for item in items when not holds_float(item)]...]
 
 # An integer literal where an integer type other than Int is expected, or a string literal of one
-# character where a Byte or a UInt32 is: one byte, or one code point.
+# character where a Byte, a Char or a UInt32 is: one byte, or one code point.
 export const integer_literal = (
   program: ProgramWide, literal: IntegerLiteral | StringLiteral, type: Type
 ) ->
@@ -51,9 +51,9 @@ export const integer_literal = (
         const fits = value != nil and value >= least and value <= most
         fits then nil else "integer literal does not fit in #{format_type(type)}"
       when StringLiteral
-        if is_kind(type, 'UInt32')
+        if is_one_of_kinds(type, ['Char', 'UInt32'])
           const one = [c for c in literal.value].length == 1
-          one then nil else 'a string literal used as a UInt32 must be one code point'
+          one then nil else "a string literal used as a #{format_type(type)} must be one code point"
         else
           const fits = literal.value.binary.length == 1
           fits then nil else 'a string literal used as a Byte must be one byte long'

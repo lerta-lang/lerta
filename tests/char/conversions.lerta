@@ -1,0 +1,46 @@
+# to_char from each integer type, at the edges of the surrogates, and Chars in a set, compared,
+# hashed and extended.
+const attempt = (label: String, convert: () -> Char) ->
+  try
+    print "#{label}: #{convert().to_int()}"
+  catch e: ValueError
+    print "#{label}: #{e.message}"
+
+const minus_one: Int8 = -1
+const huge = 0.to_uint64().wrapping_sub(1.to_uint64())
+attempt 'Int8 -1', -> minus_one.to_char()
+attempt 'UInt64 max', -> huge.to_char()
+const narrow_minus: Int32 = -1
+const wide: UInt32 = 0x1F600
+const half: Int16 = 0x41
+const unsigned_half: UInt16 = 0xFFFF
+attempt 'Int32 -1', -> narrow_minus.to_char()
+attempt 'UInt32 0x1F600', -> wide.to_char()
+attempt 'Int16 0x41', -> half.to_char()
+attempt 'UInt16 0xFFFF', -> unsigned_half.to_char()
+attempt '0xD7FF', -> 0xD7FF.to_char()
+attempt '0xDFFF', -> 0xDFFF.to_char()
+attempt '0xE000', -> 0xE000.to_char()
+attempt '0x110000', -> 0x110000.to_char()
+
+const seen = Set<Char>(['a', 'é', 'a'])
+print seen.length
+print [seen.has('é'), seen.has('b')]
+const a: Char = 'a'
+print [a.compare('b') == LESS, a.compare('a') == EQUAL, a.hash() == a.hash()]
+
+extend Char
+  is_vowel = -> @ == 'a' or @ == 'e' or @ == 'i' or @ == 'o' or @ == 'u'
+print [a.is_vowel(), 0x62.to_char().is_vowel()]
+
+# A string literal where a Char or a String may be is the String, as it is for a Byte.
+const either: Char | String = 'a'
+print either is String
+
+# The last Char orders after the others, and an optional Char is nil or one.
+const last = 0x10FFFF.to_char()
+print [last > a, last > 0xFFFF.to_char()]
+const maybe: Char? = nil
+const lookup: Map<String, Char> = { 'k': 'é' }
+const found = lookup['k']
+print [maybe == nil, found! == 'é', maybe ? 'x' == 'x']

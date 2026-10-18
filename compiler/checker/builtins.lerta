@@ -6,8 +6,8 @@ import operand_kinds, operator_of_method, SIGNED_KINDS from './operator'
 import ProgramWide from './shared'
 import
   ArrayType, bool_type, EnumType, FLOAT_KINDS, float_type, FunctionType, int_type, INTEGER_KINDS,
-  is_float, is_integer, is_one_of_kinds, is_set, IterType, MapType, ObjectType, OptionalType,
-  PromiseType, SimpleType, string_type, TupleType, Type, TypeKind, void_type
+  is_float, is_integer, is_kind, is_one_of_kinds, is_set, IterType, MapType, ObjectType,
+  OptionalType, PromiseType, SimpleType, string_type, TupleType, Type, TypeKind, void_type
 from '../types'
 
 # The builtin methods, which the checker resolves a name to once, so that codegen generates each
@@ -59,10 +59,10 @@ export const builtin_method = (program: ProgramWide, receiver: Type, name: Strin
     when PromiseType then name == 'cancel' then method(PROMISE_CANCEL, [], void_type)
     else nil
 
-# Whether the type's values are numbers, Bools, texts, Binaries or members of enums; numbers order
-# by their builtin compare (see Comparable).
+# Whether the type's values are numbers, Chars, Bools, texts, Binaries or members of enums; numbers
+# and Chars order by their builtin compare (see Comparable).
 const is_value_type = (type: Type) ->
-  const kinds: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS..., 'Bool', 'String', 'Binary']
+  const kinds: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS..., 'Char', 'Bool', 'String', 'Binary']
   type is EnumType or is_one_of_kinds(type, kinds)
 
 # The equals of a type that `==` compares, but by an equals of its own, and the hash of one that
@@ -77,11 +77,12 @@ const equality_method = (program: ProgramWide, receiver: Type, name: String): Bu
 const value_method = (program: ProgramWide, receiver: Type, name: String) ->
   case name
     when 'compare'
-      return nil if not is_one_of_kinds(receiver, [INTEGER_KINDS..., FLOAT_KINDS...])
+      return nil if not is_one_of_kinds(receiver, [INTEGER_KINDS..., FLOAT_KINDS..., 'Char'])
       method NUMBER_COMPARE, [receiver], ordering_type(program)
     else
       return method(ENUM_TO_STRING, [], string_type) if receiver is EnumType and name == 'to_string'
       return operator if const operator = operator_method(receiver, name)
+      return char_method(name) if is_kind(receiver, 'Char')
       is_integer(receiver) then integer_method(receiver, name)
 
 # The method that an operator calls, `add` for `+` and so on, of a type that the operator applies
@@ -111,10 +112,13 @@ const integer_method = (receiver: Type, name: String) ->
   const kind = CONVERSIONS[name] ? return nil
   method INTEGER_CONVERSION, [], SimpleType(kind)
 
-# The integer types that `to_int`, `to_byte`, `to_int8` and so on convert to.
+# The types that `to_int`, `to_byte`, `to_int8` and so on convert to: the integer types, and Char.
 const CONVERSIONS: Map<String, TypeKind> =
   'to_int': 'Int', 'to_byte': 'Byte', 'to_int8': 'Int8', 'to_int16': 'Int16', 'to_int32': 'Int32',
-  'to_uint16': 'UInt16', 'to_uint32': 'UInt32', 'to_uint64': 'UInt64'
+  'to_uint16': 'UInt16', 'to_uint32': 'UInt32', 'to_uint64': 'UInt64', 'to_char': 'Char'
+
+# A Char's number, which every Char has, as an Int.
+const char_method = (name: String) -> name == 'to_int' then method(INTEGER_CONVERSION, [], int_type)
 
 # Whether the builtin method keeps its argument, as an array's `push` does, which a cycle can go
 # through (see cycles).
