@@ -93,6 +93,16 @@ build/embed: build/embed.ll $(RUNTIME) build/libuv/built
 build/embedded.lerta: build/embed $(EMBEDDED)
 	build/embed $@ $(EMBEDDED)
 
+# The run tests' harness, which minilerta builds, as it builds the embedder, so that a change to the
+# compiler cannot break the harness that tests it (see docs/roadmap/programs.md#tools).
+HARNESS := $(shell find test -name '*.lerta')
+
+build/test_run.ll: build/minilerta build/host_llvm.sed $(HARNESS) $(EMBEDDED)
+	$(call minilerta_ir,test/run.lerta,$@)
+
+build/test_run: build/test_run.ll $(RUNTIME) build/libuv/built
+	$(call link_debug,$<,$@)
+
 build/stage1.ll: build/minilerta build/host_llvm.sed $(SOURCES) $(EMBEDDED)
 	$(call minilerta_ir,$(MAIN),$@)
 
@@ -156,12 +166,12 @@ endif
 
 ifdef TARGET
 test test-cross:
-	@echo 'make $@ does not take TARGET: run node test/run.ts --target <triple>' >&2; exit 2
+	@echo 'make $@ does not take TARGET: run build/test_run --target <triple>' >&2; exit 2
 else
 # Every suite runs even if one before it fails.
-test: bin/lerta
+test: bin/lerta build/test_run
 	@status=0; \
-	nice node test/run.ts || status=1; \
+	nice build/test_run || status=1; \
 	nice node test/cli.ts || status=1; \
 	nice node test/runtime.ts || status=1; \
 	nice node test/format.ts || status=1; \

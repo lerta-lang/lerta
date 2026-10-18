@@ -21,7 +21,7 @@ comma_list() { # <word>...
 }
 
 test_target() {
-  nice node test/run.ts --target "$1" || return 1
+  nice build/test_run --target "$1" || return 1
   if is_windows "$1" && ! has_windows_clang; then
     skip "the bootstrap for $1" "needs a clang for Windows on Wine's PATH"
     return
@@ -29,9 +29,10 @@ test_target() {
   nice make --no-print-directory test-bootstrap TARGET="$1"
 }
 
-# Wine updates a prefix that another version of it made, in place, as it starts, which test/wine.ts
-# does before a run copies it. Targets that run at the same time would update it while another
-# copies it, so it is updated once, before they start, and test/wine.ts is told so.
+# Wine updates a prefix that another version of it made, in place, as it starts, which
+# test/lib/wine.lerta does before a run copies it. Targets that run at the same time would update it
+# while another copies it, so it is updated once, before they start, and test/lib/wine.lerta is
+# told so.
 update_wine_prefix() {
   wine cmd /c exit && wineserver --wait \
     && export LERTA_WINE_PREFIX_UPDATED="${WINEPREFIX:-$HOME/.wine}"
@@ -165,7 +166,8 @@ EOF_JOBS
 }
 trap stop_jobs HUP INT TERM
 
-make --no-print-directory bin/lerta || exit 1
+# The harness too, once, as the jobs that run it at the same time would each build it.
+make --no-print-directory bin/lerta build/test_run || exit 1
 
 here=false
 if [ "${1-}" = --here ]; then

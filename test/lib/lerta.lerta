@@ -1,0 +1,68 @@
+# Where the tests find the repository and the compiler they check, bin/lerta, which `make` builds,
+# how they run it, and what they need of it before they start. The tests run from the repository's
+# root, as the Makefile runs them.
+import is_file, make_temp_dir, real_path, remove_tree from 'std:io'
+import exit, run from 'std:process'
+
+export const root_dir = real_path('.').text()!
+
+if not is_file("#{root_dir}/test/run.lerta")
+  print_error 'the tests run from the root of the repository'
+  exit 2
+
+export const compiler = "#{root_dir}/bin/lerta"
+if not is_file(compiler)
+  print_error "#{compiler} is missing: run make, or make test, which builds it first"
+  exit 2
+
+# The most output kept of each stream of a program that a test runs, far beyond what any test
+# prints; the limit only stops runaway output.
+export const OUTPUT_LIMIT = 1024 * 1024
+
+# The compiler caches the runtime it compiles; the tests give it a new cache, which the compilers
+# that the tests run inherit through LERTA_CACHE_DIR, so that no cache left by another build of the
+# compiler takes part. It is made once the tests start, and removed as they end.
+var cache_dir = ''
+
+export const make_cache = -> cache_dir = make_temp_dir().text()!
+
+export const remove_cache = -> await remove_tree(cache_dir) if cache_dir != ''
+
+# A run of a file to its end, whatever its exit status: `failure` tells how it ended, for messages.
+export struct FileRun(status: Int, failure: String, errors: String)
+
+export const run_file = (file: String, args: String[], cwd: String) ->
+  # Its standard output is dropped, as nothing that it would print there is checked.
+  const output: Byte[] = []
+  const errors: Byte[] = []
+  const env = { 'LERTA_CACHE_DIR': cache_dir }
+  const exit = await run(
+    file
+    args...
+    cwd: cwd
+    env: env
+    stdout: output
+    stderr: errors
+    output_limit: OUTPUT_LIMIT
+  )
+  const failure =
+    if const signal = exit.signal
+      "signal #{signal}"
+    else
+      "exit status #{exit.code}"
+  FileRun failure, status: exit.code, errors: errors.to_binary().text() ? '(not valid UTF-8)'
+
+# The error of a step that the tests need, such as a build, which fails the whole run.
+export struct SetupError: Error
+
+# Builds a program in `dir` with each of the sets of flags, so that the compiler caches each kind of
+# runtime before the tests start. Otherwise the tests started together would each compile the same
+# runtime, and each such compile runs as many clang processes as there are CPUs.
+export const build_runtimes = (dir: String, flag_sets: String[][]) ->
+  const build = (flags: String[], index: Int) ->
+    const args = ['build', 'tests/empty.lerta', '-o', "#{dir}/runtime#{index}", flags...]
+    const built = await run_file(compiler, args, root_dir)
+    if built.status != 0
+      const what = "tests/empty with [#{flags.join(' ')}]"
+      throw SetupError(message: "the build of #{what} failed (#{built.failure}):\n#{built.errors}")
+  await promise for promise in [build(flags, i) for flags, i in flag_sets]

@@ -1,0 +1,81 @@
+# Runs checks, several at once if asked, and prints each result in order as soon as it and those
+# before it have finished.
+import all, Deferred from 'std:async'
+import time from 'std:time'
+
+# A check gives why it failed; an empty list means it passed, and nil means it does not apply, so
+# it is neither shown nor counted. `wait` gives what to wait for before the check starts, which is
+# not counted in its time.
+export class Check
+  name: String
+  run: () -> Promise<String[]?>
+  wait: (() -> Promise)? = default nil
+
+# The run of a check whose reasons are known at once.
+export const at_once = (reasons: String[]): Promise<String[]?> ->
+  const deferred = Deferred<String[]?>()
+  deferred.resolve reasons
+  deferred.promise()
+
+# Names are padded to align the times, but only up to this width, so that one long name does not
+# push every line past the width of a terminal.
+const MAX_NAME_WIDTH = 72
+
+struct Result(reasons: String[]?, duration: Float)
+
+const milliseconds = -> time() * 1000.0
+
+# The code points of the text, which pad_end counts.
+const width = (text: String) -> [c for c in text].length
+
+const run_one = (check: Check) ->
+  await wait() if const wait = check.wait
+  const started = milliseconds()
+  const reasons =
+    try
+      await check.run()
+    catch error
+      ['threw:', ("  #{line}" for line in error.message.split("\n"))...]
+  Result reasons, duration: milliseconds() - started
+
+# The unit is chosen after rounding, so that 999.6ms shows as 1.0s rather than 1000ms.
+const format_duration = (duration: Float) ->
+  const microseconds = (duration * 1000.0 + 0.5).to_int()!
+  return "#{microseconds}µs" if microseconds < 1000
+  const rounded = (duration + 0.5).to_int()!
+  return "#{rounded}ms" if rounded < 1000
+  "#{(duration / 1000.0).to_fixed(1)}s"
+
+# The number of failed checks. At most `concurrency` checks run at once.
+export const run_checks = (title: String, checks: Check[], concurrency = 1) ->
+  # Results are printed as they come, so the width also counts checks that turn out not to apply.
+  const name_width = min(max(0, (width(check.name) for check in checks)...), MAX_NAME_WIDTH)
+  const started = milliseconds()
+  const failed: String[] = []
+  var run_count = 0
+  const report = (check: Check, result: Result) ->
+    const reasons = result.reasons ? return
+    run_count += 1
+    const status = reasons.length == 0 then 'ok  ' else 'FAIL'
+    const duration = format_duration(result.duration).pad_start(6)
+    print "#{status}  #{check.name.pad_end(name_width)}  #{duration}"
+    print "      #{reason}" for reason in reasons
+    failed.push check.name if reasons.length > 0
+  const results: Result?[] = [nil for _ in checks]
+  var next_to_print = 0
+  var next_to_start = 0
+  const worker = ->
+    while next_to_start < checks.length
+      const index = next_to_start
+      next_to_start += 1
+      results[index] = await run_one(checks[index])
+      while next_to_print < checks.length
+        const result = results[next_to_print] ? break
+        report checks[next_to_print], result
+        next_to_print += 1
+  await all([worker() for _ in 0...concurrency])
+  const total = format_duration(milliseconds() - started)
+  print "#{title}: #{run_count - failed.length} passed, #{failed.length} failed in #{total}"
+  print "  FAIL #{name}" for name in failed
+  print ''
+  failed.length
