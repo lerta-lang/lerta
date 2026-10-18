@@ -2,6 +2,7 @@
 # the builtins, in that order.
 import Expression, FunctionLiteral, Identifier, Member from '../ast'
 import captured from './closure'
+import COMPLETION_NAME, probe_locals, probe_module from './completion_probe'
 import fail from './diagnostics'
 import function_type_of, generic_function, has_function from './functions'
 import
@@ -67,6 +68,7 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
   reject_pending program, shared.top_level, identifier if body.sees_top_level
   if shared.imports.modules.has(name)
     fail program, position, "'#{name}' is a module, which is no value: write #{name}.<export>"
+  probe_locals body if name == COMPLETION_NAME
   const undefined_name = -> fail(program, position, "undefined name '#{name}'")
   const builtin = builtin_export(shared, name) ? undefined_name()
   type_of_export body, builtin, identifier, is_callee
@@ -77,6 +79,9 @@ export const qualified_name = (body: Body, member: Member): Identifier? ->
   return name if const name = body.facts.qualified[member]
   const object = member.object
   return nil if object is not Identifier or lookup(body, object.name) != nil
+  if member.name.name == COMPLETION_NAME
+    if const imported = body.shared.imports.modules[object.name]
+      probe_module body, imported.module_index
   const qualified = qualified_import(body.shared, object.name, member.name) ? return nil
   const name = Identifier(name: qualified, position: member.name.position)
   body.facts.qualified[member] = name

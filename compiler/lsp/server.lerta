@@ -16,6 +16,7 @@ import
   characters, check_file, LspDiagnostic, lsp_position, LspPosition, LspRange, PositionEncoding,
   source_position
 from './diagnostics'
+import completion_items, CompletionItem, probe_text, writing_at from './complete'
 import definition_of, hover_lines, location_of, module_at from './locate'
 import
   Header, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, PARSE_ERROR, Notification, notify,
@@ -36,6 +37,8 @@ struct ServerCapabilities
   document_formatting_provider: Bool
   hover_provider: Bool
   definition_provider: Bool
+  # Completion after a `.` as well as where a name starts.
+  completion_provider: { trigger_characters: String[] }
 
 struct TextDocument(uri: String)
 
@@ -123,6 +126,9 @@ class Server
       when 'textDocument/definition'
         const request = decode_json<Request<PositionParams>>(body, KEYS)
         await respond(request.id, await @definition(request.params))
+      when 'textDocument/completion'
+        const request = decode_json<Request<PositionParams>>(body, KEYS)
+        await respond(request.id, await @completion(request.params))
       when 'shutdown'
         @shut_down = true
         const none: Bool? = nil
@@ -135,8 +141,12 @@ class Server
     @encoding = PositionEncoding.UTF32 if encodings.contains('utf-32')
     const encoding = @encoding == PositionEncoding.UTF32 then 'utf-32' else 'utf-16'
     const capabilities = ServerCapabilities(
-      position_encoding: encoding, text_document_sync: FULL_SYNC,
-      document_formatting_provider: true, hover_provider: true, definition_provider: true
+      position_encoding: encoding
+      text_document_sync: FULL_SYNC
+      document_formatting_provider: true
+      hover_provider: true
+      definition_provider: true
+      completion_provider: { trigger_characters: ['.'] }
     )
     await respond(request.id, InitializeResult(capabilities, server_info: { name: 'lerta' }))
 
@@ -193,6 +203,27 @@ class Server
       @encoding
     )
     Location uri: uri_of_path(location), range: LspRange(start, end)
+
+  # What may be written where a name is being written, from a check of the document's text with
+  # the checker's own name there (see complete.lerta), whose diagnostics are not published.
+  completion = (params: PositionParams) ->
+    const none: CompletionItem[] = []
+    const path = path_of_uri(params.text_document.uri) ? return none
+    const key = text_key(path)
+    const text = open_texts[key] ? return none
+    return none if not is_file(path)
+    const at = await source_position(path, params.position, @encoding)
+    const lines = text.split("\n")
+    return none if at.line > lines.length
+    const writing = writing_at(lines[at.line - 1], at.column)
+    open_texts[key] = probe_text(text, at.line - 1, writing)
+    const checked = try
+      await check_file(path, @encoding)
+    finally
+      open_texts[key] = text
+    const program = checked.program ? return none
+    const module_index = module_at(program, path) ? return none
+    completion_items program, module_index, program.completion
 
   program_of = (path: String) ->
     return own if const own = @programs[path]

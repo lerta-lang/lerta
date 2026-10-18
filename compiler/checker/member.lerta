@@ -2,6 +2,7 @@
 # the member of a name that an interface reads.
 import Call, FunctionLiteral, Identifier, Member, This from '../ast'
 import BuiltinMethod from './builtins'
+import COMPLETION_NAME, probe_member from './completion_probe'
 import warn_if_kept from './cycles'
 import fail from './diagnostics'
 import check_arguments, reject_type_arguments, set_type, type_of from './expression'
@@ -28,6 +29,7 @@ from '../types'
 # find_method), or a field that holds a function.
 export const type_of_method_call = (body: Body, call: Call, member: Member, expected: Type?) ->
   const receiver = type_of(body, member.object)
+  probe_member body, receiver if member.name.name == COMPLETION_NAME
   const source = find_callable(body, receiver, member.name)
   const generic = generic_method(source)
   if generic == nil
@@ -200,6 +202,7 @@ const reject_deinit = (body: Body, object_type: Type, member: Member) ->
 export const type_of_property = (body: Body, member: Member): Type ->
   const object_type = type_of_object(body, member)
   const { name, position } = member.name
+  probe_member body, object_type if name == COMPLETION_NAME
   reject_deinit body, object_type, member
   if object_type is UnionType
     record_member body, member, Property(kind: FIELD)

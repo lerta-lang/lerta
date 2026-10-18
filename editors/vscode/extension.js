@@ -6,7 +6,8 @@ const vscode = require('vscode')
 // A client of `lerta lsp` (see docs/reference/compiler.md#lsp), written without the
 // vscode-languageclient package, so that the extension needs no install of its own: it sends the
 // Lerta documents' texts, shows the diagnostics that the server publishes, formats a document by
-// its edits, and asks the server for the types of a name and where it is declared. One server runs
+// its edits, and asks the server for the types of a name, where it is declared, and what may be
+// written where a name is being written. One server runs
 // for each lerta command, as each workspace folder may have its own.
 // A server that fails is started again only when a document is opened, not at each edit.
 function activate(context) {
@@ -168,6 +169,18 @@ function activate(context) {
     },
   }
 
+  // The server's kinds of items are the LSP's, which VS Code's number one less.
+  const completions = {
+    async provideCompletionItems(document, position) {
+      const items = (await askAt(document, position, 'textDocument/completion')) ?? []
+      return items.map(item => {
+        const shown = new vscode.CompletionItem(item.label, item.kind - 1)
+        shown.detail = item.detail ?? undefined
+        return shown
+      })
+    },
+  }
+
   function stop(server) {
     if (server.ended) return
     server.stopping = true
@@ -185,6 +198,7 @@ function activate(context) {
     vscode.languages.registerDocumentFormattingEditProvider({ language: 'lerta', scheme: 'file' }, formatter),
     vscode.languages.registerHoverProvider({ language: 'lerta', scheme: 'file' }, hovers),
     vscode.languages.registerDefinitionProvider({ language: 'lerta', scheme: 'file' }, definitions),
+    vscode.languages.registerCompletionItemProvider({ language: 'lerta', scheme: 'file' }, completions, '.'),
     { dispose: () => servers.forEach(stop) },
   )
   vscode.workspace.textDocuments.forEach(open)

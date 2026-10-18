@@ -8,7 +8,7 @@ import { compare_text, expect_status } from '../expect.ts'
 import type { Check } from '../report.ts'
 import { run_command, work_dir } from './common.ts'
 
-type Message = Record<string, unknown>
+export type Message = Record<string, unknown>
 
 const framed = (messages: Message[]): string =>
   messages
@@ -36,7 +36,7 @@ const unframed = (output: string): Message[] => {
 // a shutdown, unless `shuts_down` is false, and an exit, in a directory of the files given, by
 // their paths in it; `messages` takes the URIs of the files. `raw` is input as it is, between
 // those messages and the shutdown.
-const session = async (
+export const session = async (
   files: Record<string, string>,
   messages: (uri: (name: string) => string) => Message[],
   options: { capabilities?: Message; shuts_down?: boolean; raw?: string } = {},
@@ -63,12 +63,12 @@ const initialize = (capabilities: Message = {}): Message => ({
   params: { capabilities },
 })
 
-const open = (uri: string, text: string): Message => ({
+export const open = (uri: string, text: string): Message => ({
   method: 'textDocument/didOpen',
   params: { textDocument: { uri, languageId: 'lerta', version: 1, text } },
 })
 
-const change = (uri: string, text: string): Message => ({
+export const change = (uri: string, text: string): Message => ({
   method: 'textDocument/didChange',
   params: { textDocument: { uri, version: 2 }, contentChanges: [{ text }] },
 })
@@ -91,7 +91,7 @@ const published = (uri: string, diagnostics: unknown[]): Message => ({
   params: { uri, diagnostics },
 })
 
-const response = (id: unknown, result: unknown): Message => ({ jsonrpc: '2.0', id, result })
+export const response = (id: unknown, result: unknown): Message => ({ jsonrpc: '2.0', id, result })
 
 const capabilities = (encoding: string) => ({
   capabilities: {
@@ -100,18 +100,19 @@ const capabilities = (encoding: string) => ({
     documentFormattingProvider: true,
     hoverProvider: true,
     definitionProvider: true,
+    completionProvider: { triggerCharacters: ['.'] },
   },
   serverInfo: { name: 'lerta' },
 })
 
 // The messages received, as JSON lines, against those expected.
-const expect_received = (expected: Message[], received: Message[]): string[] => {
+export const expect_received = (expected: Message[], received: Message[]): string[] => {
   const as_lines = (messages: Message[]) => messages.map((each) => `${JSON.stringify(each)}\n`)
   return compare_text('messages', as_lines(expected).join(''), as_lines(received).join(''))
 }
 
 // Those after the response to initialize.
-const after_initialize = (received: Message[]): Message[] =>
+export const after_initialize = (received: Message[]): Message[] =>
   received.filter((message) => message.id !== 0)
 
 const end = response('end', null)
@@ -210,7 +211,7 @@ export const lsp_checks: Check[] = [
     name: 'lerta lsp answers a request of another method with an error, and ignores a notification',
     run: async () => {
       const ran = await session({}, () => [
-        { id: 1, method: 'textDocument/completion', params: {} },
+        { id: 1, method: 'textDocument/references', params: {} },
         { method: '$/setTrace', params: { value: 'off' } },
         { id: 2, method: 'textDocument/formatting', params: {} },
       ])
@@ -218,7 +219,7 @@ export const lsp_checks: Check[] = [
         {
           jsonrpc: '2.0',
           id: 1,
-          error: { code: -32601, message: 'no method textDocument/completion' },
+          error: { code: -32601, message: 'no method textDocument/references' },
         },
         {
           jsonrpc: '2.0',
