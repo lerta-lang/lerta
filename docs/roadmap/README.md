@@ -16,11 +16,9 @@ When a feature is implemented, its description moves to [the reference](../refer
 
 Each milestone is a kind of program that can be written once it is reached, so that real programs, not only the compiler, find what the language lacks.
 
-1. **Small command-line tools**: the operations on [strings](strings.md#operations-and-representation).
-2. **Programs that read and write structured data**: `std:json` ([programs](programs.md#standard-library)).
-3. **The LSP and the test harness in Lerta** ([tools](programs.md#tools)), then checking generic bodies at definition ([objects](objects.md#generics)).
+1. **The test harness in Lerta** ([tools](programs.md#tools)), with what it needs of the [standard library](programs.md#standard-library).
 
-Whether the runtime collects cycles ([runtime](runtime.md#open-questions)) is decided during milestone 1, from programs driven by events, rather than after async/await is complete.
+Whether the runtime collects cycles ([runtime](runtime.md#open-questions)) is decided before milestone 1 is reached, from programs driven by events, rather than after async/await is complete.
 
 ## Dependencies
 
