@@ -4,7 +4,7 @@
 # would write it, and gives the types of a name in it and where the name is declared.
 import is_file from 'std:io'
 import exit from 'std:process'
-import decode_json, JsonError, JsonKeys from 'std:json'
+import decode_json, JsonError from 'std:json'
 import Position from '../ast'
 import ProgramWide from '../checker/shared'
 import CompileError from '../errors'
@@ -90,7 +90,7 @@ class Server
   # has no id to answer.
   handle = (body: String) ->
     const header = try
-      decode_json<Header>(body, KEYS)
+      decode_json<Header>(body, CAMEL_CASE)
     catch error: JsonError
       return await respond_error(nil, PARSE_ERROR, error.message)
     try
@@ -104,30 +104,33 @@ class Server
 
   dispatch = (method: String, id: Int | String?, body: String) ->
     case method
-      when 'initialize' then await @initialize(decode_json<Request<InitializeParams>>(body, KEYS))
+      when 'initialize'
+        await @initialize(decode_json<Request<InitializeParams>>(body, CAMEL_CASE))
       when 'textDocument/didOpen'
-        const params = decode_json<Notification<DidOpenParams>>(body, KEYS).params
+        const params = decode_json<Notification<DidOpenParams>>(body, CAMEL_CASE).params
         await @set_text(params.text_document.uri, params.text_document.text)
       when 'textDocument/didChange'
-        const params = decode_json<Notification<DidChangeParams>>(body, KEYS).params
+        const params = decode_json<Notification<DidChangeParams>>(body, CAMEL_CASE).params
         if const change = params.content_changes.last()
           await @set_text(params.text_document.uri, change.text)
       when 'textDocument/didClose'
-        await @close(decode_json<Notification<DocumentParams>>(body, KEYS).params.text_document.uri)
+        await @close(
+          decode_json<Notification<DocumentParams>>(body, CAMEL_CASE).params.text_document.uri
+        )
       when 'textDocument/formatting'
-        const request = decode_json<Request<DocumentParams>>(body, KEYS)
+        const request = decode_json<Request<DocumentParams>>(body, CAMEL_CASE)
         await respond(
           request.id
           await formatting_edits(request.params.text_document.uri, @encoding)
         )
       when 'textDocument/hover'
-        const request = decode_json<Request<PositionParams>>(body, KEYS)
+        const request = decode_json<Request<PositionParams>>(body, CAMEL_CASE)
         await respond(request.id, await @hover(request.params))
       when 'textDocument/definition'
-        const request = decode_json<Request<PositionParams>>(body, KEYS)
+        const request = decode_json<Request<PositionParams>>(body, CAMEL_CASE)
         await respond(request.id, await @definition(request.params))
       when 'textDocument/completion'
-        const request = decode_json<Request<PositionParams>>(body, KEYS)
+        const request = decode_json<Request<PositionParams>>(body, CAMEL_CASE)
         await respond(request.id, await @completion(request.params))
       when 'shutdown'
         @shut_down = true
@@ -258,8 +261,6 @@ class Server
         diagnostics.push each if not diagnostics.contains(each)
     const params = PublishDiagnosticsParams(uri: uri_of_path(file), diagnostics: diagnostics)
     await notify('textDocument/publishDiagnostics', params)
-
-const KEYS = JsonKeys.CAMEL_CASE
 
 # The edit that writes the document in the style, of its whole text, or none if it is so already;
 # nil if it does not parse.
