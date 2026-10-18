@@ -25,7 +25,9 @@ export const inferable = (annotation: Annotation, shared: Shared, program: Progr
   const value = annotation.value!
   const declared = facts.types[name] ? field_type(program, name) ? return false
   const type = facts.types[value] ? return false
-  given_as_is(value, facts) and same_type(type, declared)
+  # A type that moves to the type arguments of a Map() or Set() is given there.
+  const is_given = annotation.moves_to_type_arguments or given_as_is(value, facts)
+  is_given and same_type(type, declared)
 
 # The type of the field of a class or struct that `name` declares.
 const field_type = (program: ProgramWide, name: Identifier) ->
@@ -156,9 +158,10 @@ const has_type_arguments = (type: Type?) ->
     when ObjectType then type.args.length > 0
     else false
 
-# `Map()` or `Set()`, whose type arguments give its type, or take those of its annotation (see
-# annotated). A local that takes the name passes too: this only picks the annotations to check
-# without, and that checking keeps them (see removable_annotations).
+# `Map<K, V>()` or `Set<T>()`, whose type arguments give its type; without them, it takes the type
+# from where it is, as a variable's annotation that moves to them (see annotated). A local that
+# takes the name passes too: this only picks the annotations to check without, and that checking
+# keeps them (see removable_annotations).
 const is_collection_call = (call: Call) ->
   const callee = call.callee as Identifier ? return false
-  callee.name == 'Map' or callee.name == 'Set'
+  call.type_args.length > 0 and (callee.name == 'Map' or callee.name == 'Set')
