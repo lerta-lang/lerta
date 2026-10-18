@@ -31,12 +31,9 @@ typedef struct Prefix {
   // The objects alive, in the order they were made, which the leak check walks.
   _Alignas(16) struct Prefix *previous;
   struct Prefix *next;
-  // Whether lerta_alloc made the object, as the code that the seed's compiler generates does: its
-  // header holds its drop function in place of its type.
-  bool legacy;
 } Prefix;
 
-static Prefix live = {&live, &live, false};
+static Prefix live = {&live, &live};
 
 static Prefix *prefix_of(const void *object) { return (Prefix *)object - 1; }
 
@@ -51,7 +48,6 @@ static LertaHeader *allocate_object(int64_t size) {
   prefix->next = &live;
   live.previous->next = prefix;
   live.previous = prefix;
-  prefix->legacy = false;
   LertaHeader *object = (LertaHeader *)(prefix + 1);
 #else
   LertaHeader *object = lerta_mem_alloc(size);
@@ -80,27 +76,6 @@ void *lerta_new(int64_t size, const LertaType *type) {
   LertaHeader *object = allocate_object(size);
   object->type = type;
   return object;
-}
-
-#ifdef LERTA_DEBUG
-void *lerta_alloc(int64_t size, void (*drop)(void *object)) {
-  LertaHeader *object = allocate_object(size);
-  prefix_of(object)->legacy = true;
-  memcpy(&object->type, &drop, sizeof drop);
-  return object;
-}
-#endif
-
-static void drop_object(LertaHeader *object) {
-#ifdef LERTA_DEBUG
-  if (prefix_of(object)->legacy) {
-    void (*drop)(void *object);
-    memcpy(&drop, &object->type, sizeof drop);
-    if (drop != NULL) drop(object);
-    return;
-  }
-#endif
-  if (object->type != NULL) object->type->drop(object);
 }
 
 void *lerta_frame_alloc(int64_t size) {
@@ -151,7 +126,7 @@ static void push_pending(void *object) {
 static void drain_to(int64_t length) {
   while (pending_length > length) {
     LertaHeader *dead = pending[--pending_length];
-    drop_object(dead);
+    if (dead->type != NULL) dead->type->drop(dead);
     free_object(dead);
   }
 }
@@ -279,10 +254,9 @@ static void reach(void *reference) {
   reached[reached_length++] = object;
 }
 
-// An object that lerta_alloc made, or that has no type, holds nothing that can be visited: what it
-// holds counts as held from outside the objects.
+// An object that has no type holds nothing.
 static void visit_object(LertaHeader *object, LertaVisitor visitor) {
-  if (!prefix_of(object)->legacy && object->type != NULL) object->type->visit(object, visitor);
+  if (object->type != NULL) object->type->visit(object, visitor);
 }
 
 // Leaves the count of each object alive above 0 if what holds it from outside the objects, as a
@@ -302,10 +276,8 @@ static void count_holders_outside(void) {
 }
 
 LERTA_STATIC_STRING(string_name, "String or Binary");
-LERTA_STATIC_STRING(legacy_name, "?");
 
 static const LertaString *name_of(LertaHeader *object) {
-  if (prefix_of(object)->legacy) return (const LertaString *)&legacy_name;
   if (object->type == NULL) return (const LertaString *)&string_name;
   return object->type->name;
 }

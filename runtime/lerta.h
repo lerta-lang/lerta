@@ -146,11 +146,6 @@ typedef struct {
 // nothing. Release frees an object when its count reaches zero. Retain and release accept NULL,
 // which is how nil is represented.
 void *lerta_new(int64_t size, const LertaType *type);
-#ifdef LERTA_DEBUG
-// As lerta_new, for the code that the seed's compiler generates, which gives the drop function in
-// place of the type; it runs only with the debug runtime (see docs/internals.md#bootstrap).
-void *lerta_alloc(int64_t size, void (*drop)(void *object));
-#endif
 void lerta_retain(void *object);
 void lerta_release(void *object);
 // Runs a class's deinit on its object, whose count has reached zero, from its drop function. The
