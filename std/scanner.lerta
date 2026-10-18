@@ -1,17 +1,17 @@
 # Reading a String by code points (see docs/reference/modules.md#stdscanner). The position is a
 # byte offset that only the closures of `scan` hold, so that it only ever stands at the start of a
 # code point, and every part taken is valid UTF-8 without a check.
-import code_point_at, sequence_length from './internal/utf8'
+import char_at, sequence_length from './internal/utf8'
 
 extern lerta_binary_as_string: (Binary) -> String
 
 export struct Scanner
   done: () -> Bool
-  peek: () -> CodePoint?
-  next: () -> CodePoint?
+  peek: () -> Char?
+  next: () -> Char?
   take: (String) -> Bool
-  skip_while: ((CodePoint) -> Bool) -> void
-  take_while: ((CodePoint) -> Bool) -> String
+  skip_while: ((Char) -> Bool) -> void
+  take_while: ((Char) -> Bool) -> String
   mark: () -> () -> String
   rest: () -> String
 
@@ -19,7 +19,7 @@ export const scan = (text: String) ->
   const bytes = text.binary
   var at = 0
   const done = -> at == bytes.length
-  const peek = -> not done() then code_point_at(bytes, at)
+  const peek = -> not done() then char_at(bytes, at)
   const next = ->
     const code = peek() ? return nil
     at += sequence_length(bytes[at])
@@ -28,14 +28,14 @@ export const scan = (text: String) ->
     return false if not bytes.occurs_at(at, prefix.binary)
     at += prefix.binary.length
     true
-  const skip_while = (test: (CodePoint) -> Bool) ->
+  const skip_while = (test: (Char) -> Bool) ->
     while const code = peek()
       return if not test(code)
       next()
   const mark = ->
     const start = at
     -> lerta_binary_as_string(bytes.slice(start, at))
-  const take_while = (test: (CodePoint) -> Bool) ->
+  const take_while = (test: (Char) -> Bool) ->
     const taken = mark()
     skip_while test
     taken()

@@ -155,11 +155,11 @@ print "#{name}: #{scanner.rest()}"
 |---|---|
 | `scan(text: String): Scanner` | A Scanner at the start of the text. |
 | `s.done(): Bool` | Whether it has passed over the whole text. |
-| `s.peek(): CodePoint?` | The next code point, which it stays before, or nil at the end. |
-| `s.next(): CodePoint?` | The next code point, which it passes over, or nil at the end. |
+| `s.peek(): Char?` | The next code point, which it stays before, or nil at the end. |
+| `s.next(): Char?` | The next code point, which it passes over, or nil at the end. |
 | `s.take(prefix: String): Bool` | Whether what follows starts with `prefix`, which it passes over if it does. Every text starts with `''`. |
-| `s.skip_while(test: (CodePoint) -> Bool)` | Passes over the code points that `test` holds for, up to the first that it does not, or to the end. |
-| `s.take_while(test: (CodePoint) -> Bool): String` | Likewise, and gives what it passed over, `''` if nothing. |
+| `s.skip_while(test: (Char) -> Bool)` | Passes over the code points that `test` holds for, up to the first that it does not, or to the end. |
+| `s.take_while(test: (Char) -> Bool): String` | Likewise, and gives what it passed over, `''` if nothing. |
 | `s.mark(): () -> String` | A function that gives what it has passed over since the mark, up to where it stands each time the function is called, so after `rest()` up to the end. |
 | `s.rest(): String` | What is left, which it passes over, `''` at the end. |
 

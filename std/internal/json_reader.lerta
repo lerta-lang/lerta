@@ -204,21 +204,21 @@ export class JsonReader
     const byte = @peek() ? @fail('a string that does not end')
     @at += 1
     if byte == 'u'
-      bytes.append utf8_bytes(@read_escaped_code_point())
+      bytes.push unit for unit in @read_escaped_char().to_string().binary
       return
     const escaped = unescaped(byte) ? @fail("an escape that is not JSON, \\#{byte_text(byte)}")
     bytes.push escaped
 
-  # A surrogate pair is one code point, written as two escapes.
-  read_escaped_code_point = ->
+  # A surrogate pair is one Char, written as two escapes.
+  read_escaped_char = ->
     const code = @read_hex_unit()
-    return code if code < 0xD800 or code > 0xDFFF
+    return code.to_char() if code < 0xD800 or code > 0xDFFF
     const lone = -> @fail("a lone surrogate in a string, \\u#{hex_text(code)}")
     lone() if code > 0xDBFF or not @bytes.occurs_at(@at, '\u'.binary)
     @at += 2
     const low = @read_hex_unit()
     lone() if low < 0xDC00 or low > 0xDFFF
-    0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)
+    (0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)).to_char()
 
   read_hex_unit = ->
     var code = 0
@@ -305,17 +305,7 @@ const hex_value = (byte: Byte): Int? ->
 
 # The byte as it is written in an error: as itself if it is ASCII and visible.
 const byte_text = (byte: Byte) ->
-  byte > 0x20 and byte < 0x7F then [byte].to_binary().text()! else "byte #{byte}"
-
-# The UTF-8 sequence of a code point, which is not a surrogate.
-const utf8_bytes = (code: Int): Byte[] ->
-  const byte = (bits: Int) -> bits.to_byte()
-  const continuation = (shift: Int) -> byte(0x80 | code >> shift & 0x3F)
-  case
-    when code < 0x80 then [byte(code)]
-    when code < 0x800 then [byte(0xC0 | code >> 6), continuation(0)]
-    when code < 0x10000 then [byte(0xE0 | code >> 12), continuation(6), continuation(0)]
-    else [byte(0xF0 | code >> 18), continuation(12), continuation(6), continuation(0)]
+  byte > 0x20 and byte < 0x7F then byte.to_char().to_string() else "byte #{byte}"
 
 const MAX_UINT64 = 0.to_uint64().wrapping_sub(1.to_uint64())
 

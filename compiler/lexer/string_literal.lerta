@@ -9,7 +9,7 @@ export struct CodePart(source: String, column: Int)
 
 export type TemplatePart = TextPart | CodePart
 
-const MAX_CODE_POINT: CodePoint = 0x10FFFF
+const MAX_CHAR = 0x10FFFF
 
 # Reads the literal whose opening quote is at `start`. Returns its parts and the index after it.
 export const scan_double_quoted = (line: SourceLine, start: Int) ->
@@ -48,8 +48,8 @@ const read_escape = (line: SourceLine, start: Int) ->
   line.fail 'invalid escape sequence', start if not line.bytes.occurs_at(start + 1, 'u{'.binary)
   const close = line.index_of('}', start + 3) ? line.fail('invalid unicode escape', start)
   const digits = line.bytes.slice(start + 3, close)
-  const code_point = parse_code_point(digits) ? line.fail('invalid unicode escape', start)
-  { value: encode_utf8(code_point), end: close + 1 }
+  const char = parse_char(digits) ? line.fail('invalid unicode escape', start)
+  { value: char.to_string().binary, end: close + 1 }
 
 const simple_escape = (kind: Byte) ->
   case kind
@@ -62,34 +62,15 @@ const simple_escape = (kind: Byte) ->
     when '#' then '#'
     else nil
 
-# The code point that 1 to 6 hexadecimal digits give, or nil if they do not give one.
-const parse_code_point = (digits: Binary) ->
+# The Char that 1 to 6 hexadecimal digits give, or nil if they give none.
+const parse_char = (digits: Binary) ->
   return nil if digits.length == 0 or digits.length > 6
-  var value: CodePoint = 0
+  var value = 0
   for digit in digits
     const digit_value = hex_digit_value(digit) ? return nil
-    value = value << 4 | digit_value.to_uint32()
+    value = value << 4 | digit_value
   const is_surrogate = value >= 0xD800 and value <= 0xDFFF
-  value <= MAX_CODE_POINT and not is_surrogate then value
-
-# A lead byte holds the high bits after the marks of the sequence's length, and each continuation
-# byte 6 bits after its mark.
-const encode_utf8 = (code_point: CodePoint) ->
-  const bytes =
-    case
-      when code_point < 0x80 then [code_point.to_byte()]
-      when code_point < 0x800 then [lead(0xC0, code_point >> 6), continuation(code_point)]
-      when code_point < 0x10000
-        [lead(0xE0, code_point >> 12), continuation(code_point >> 6), continuation(code_point)]
-      else
-        const high = [lead(0xF0, code_point >> 18), continuation(code_point >> 12)]
-        [high..., continuation(code_point >> 6), continuation(code_point)]
-  bytes.to_binary()
-
-const lead = (marks: UInt32, bits: UInt32) -> (marks | bits).to_byte()
-
-# The continuation byte of the low 6 bits.
-const continuation = (bits: UInt32) -> (0x80 | bits & 0x3F).to_byte()
+  value <= MAX_CHAR and not is_surrogate then value.to_char()
 
 # The index of the `}` that closes an interpolation, skipping nested braces and string literals.
 # Each arm moves past what it reads.
