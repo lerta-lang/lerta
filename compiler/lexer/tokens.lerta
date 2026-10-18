@@ -318,8 +318,8 @@ class LineScanner
     end = after_digits(end + 1) if is_decimal and ends_with_exponent and sign_follows
     const text = @line.text(@position, end)
     const digits = text.split('_').join('')
-    return @add(INTEGER, digits, end, nil) if is_integer_literal(text.binary)
-    return @add(FLOAT, digits, end, nil) if is_float_literal(text.binary)
+    return @add(INTEGER, digits, end, nil) if is_integer_literal(text)
+    return @add(FLOAT, digits, end, nil) if is_float_literal(text)
     @line.fail "invalid number literal '#{text}'", @position
 
   # The longest punctuation that starts here; `...` is the longest of all. What follows may not be
@@ -365,35 +365,33 @@ const is_identifier_start = (c: Byte) -> c.is_letter() or c == '_'
 const is_identifier_part = (c: Byte) -> is_identifier_start(c) or c.is_digit()
 const is_hex_digit = (c: Byte) -> hex_digit_value(c) != nil
 
-const is_float_literal = (text: Binary) ->
-  const parts = text.text()!.split('e').join('E').split('E')
+const is_float_literal = (text: String) ->
+  const parts = text.split('e').join('E').split('E')
   return false if parts.length > 2
   const significand = parts[0].split('.')
   return false if significand.length > 2 or (parts.length == 1 and significand.length == 1)
-  return false if not is_integer_literal(significand[0].binary) or significand[0].starts_with('0x')
-  return false if significand.length == 2 and not is_digit_run(significand[1].binary)
+  return false if not is_integer_literal(significand[0]) or significand[0].starts_with('0x')
+  return false if significand.length == 2 and not is_digit_run(significand[1])
   return true if parts.length == 1
   const exponent = parts[1].without_prefix('-') ? parts[1].without_prefix('+') ? parts[1]
-  is_digit_run exponent.binary
+  is_digit_run exponent
 
 # Digits, with separators between them.
-const is_digit_run = (text: Binary) ->
-  return false if text.length == 0 or not text[0].is_digit()
-  for i in 1...text.length
-    const c = text[i]
-    const separates_digits = c == '_' and i + 1 < text.length and text[i + 1].is_digit()
+const is_digit_run = (text: String) ->
+  const bytes = text.binary
+  return false if bytes.length == 0 or not bytes[0].is_digit()
+  for i in 1...bytes.length
+    const c = bytes[i]
+    const separates_digits = c == '_' and i + 1 < bytes.length and bytes[i + 1].is_digit()
     return false if not c.is_digit() and not separates_digits
   true
 
-const is_integer_literal = (text: Binary) ->
-  if text.occurs_at(0, '0x'.binary)
-    return false if text.length == 2
-    for i in 2...text.length
-      return false if not is_hex_digit(text[i])
+const is_integer_literal = (text: String) ->
+  const bytes = text.binary
+  if text.starts_with('0x')
+    return false if text == '0x'
+    for i in 2...bytes.length
+      return false if not is_hex_digit(bytes[i])
     return true
-  return text.length == 1 if text[0] == '0'
-  for i in 1...text.length
-    const c = text[i]
-    const separates_digits = c == '_' and i + 1 < text.length and text[i + 1].is_digit()
-    return false if not c.is_digit() and not separates_digits
-  true
+  return text == '0' if text.starts_with('0')
+  is_digit_run text

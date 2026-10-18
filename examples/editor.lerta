@@ -1,4 +1,6 @@
 # A tiny editor run by a script of commands, which can undo its changes.
+import scan from 'std:scanner'
+
 struct Insert(text: String)
 struct Delete(count: Int)
 struct Undo(steps: Int)
@@ -31,8 +33,10 @@ class Editor
     case command
       when Insert then @change(@text + command.text)
       when Delete
-        const end = @text.binary.length - command.count
-        @change @text.binary.text(0, max(end, 0))!
+        const scanner = scan(@text)
+        const kept = scanner.mark()
+        scanner.next() for _ in 0...max(@text.iter().to_array().length - command.count, 0)
+        @change kept()
       when Undo
         for _ in 0...command.steps
           @text = @history.pop() if @history.length > 0
@@ -69,4 +73,7 @@ edit [
   'undo x'
   'undo 2'
   'undo'
+  'insert  é😀'
+  'delete 1'
+  'delete 99'
 ]

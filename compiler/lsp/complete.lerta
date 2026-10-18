@@ -2,6 +2,7 @@
 # The text is checked with the name being written replaced by the checker's own COMPLETION_NAME,
 # which it meets where the name is: it records the locals that the code there sees, or, after `.`,
 # the type of the object (see checker/completion_probe).
+import scan from 'std:scanner'
 import builtin_method from '../checker/builtins'
 import COMPLETION_NAME, CompletionProbe from '../checker/completion_probe'
 import export_of, ExportRef, ExternExport from '../checker/imports'
@@ -29,37 +30,36 @@ const KEYWORD = 14
 const ENUM_MEMBER = 20
 const STRUCT = 22
 
-# Where a name is being written, in a line of the text: its bytes from `start` to `end`, around
-# the cursor. Whether it is a member is the checker's to tell (see completion_items).
-export struct Writing(start: Int, end: Int)
+# Where a name is being written, in a line of the text: what comes before the name and what comes
+# after it, around the cursor. Whether it is a member is the checker's to tell (see
+# completion_items).
+export struct Writing(before: String, after: String)
 
 # The name being written at the column of the line, in code points from 1, the cursor before it,
-# in it or after it. The bytes of a name are ASCII, as the lexer takes them.
+# in it or after it.
 export const writing_at = (line: String, column: Int) ->
-  const bytes = line.binary
-  const cursor = byte_offset(bytes, column)
-  var start = cursor
-  var end = cursor
-  end += 1 while end < bytes.length and is_name_byte(bytes[end])
-  start -= 1 while start > 0 and is_name_byte(bytes[start - 1])
-  Writing start, end
+  const start = name_start(line, column)
+  const scanner = scan(line)
+  const before = scanner.mark()
+  scanner.next() for _ in 1...start
+  const written_before = before()
+  scanner.skip_while is_name_character
+  Writing before: written_before, after: scanner.rest()
 
-# The place in the bytes of the code point of the column, or their end past it.
-const byte_offset = (bytes: Binary, column: Int) ->
-  var counted = 1
-  var i = 0
-  while i < bytes.length and counted < column
-    i += 1
-    i += 1 while i < bytes.length and bytes[i].is_utf8_continuation()
-    counted += 1
-  i
+# The column where the name that the column is in or after starts: after the last code point
+# before the column that no name holds.
+const name_start = (line: String, column: Int) ->
+  const scanner = scan(line)
+  var start = 1
+  for at in 1...column
+    const c = scanner.next() ? break
+    start = at + 1 if not is_name_character(c)
+  start
 
 # The text with the name being written, on the line of the index, replaced by the checker's own.
 export const probe_text = (text: String, line_index: Int, writing: Writing) ->
   const lines = text.split("\n")
-  const bytes = lines[line_index].binary
-  const before = bytes.text(0, writing.start)!
-  lines[line_index] = "#{before}#{COMPLETION_NAME}#{bytes.text(writing.end)!}"
+  lines[line_index] = "#{writing.before}#{COMPLETION_NAME}#{writing.after}"
   lines.join "\n"
 
 # The items that may be written there, from what the checker found of the probe text.
@@ -211,4 +211,4 @@ const formatted = (type: Type?) ->
   const known = type ? return nil
   format_type known
 
-const is_name_byte = (byte: Byte) -> byte.is_letter() or byte.is_digit() or byte == '_'
+const is_name_character = (c: CodePoint) -> c.is_letter() or c.is_digit() or c == '_'

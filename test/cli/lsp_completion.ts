@@ -101,6 +101,8 @@ const cases: Case[] = [
   },
   // After a character above U+FFFF on the line, which takes two UTF-16 units
   { here: "    print '😀' + tot", character: 20, holds: ['total'], keywords: true },
+  // Before a character beyond ASCII, which no name holds
+  { here: "    print tot + 'é'", character: 13, holds: ['total'], keywords: true },
   // An enum of a module
   { here: '    print m.Shade.', character: 18, labels: ['DARK', 'parse'] },
   // A field named as a module or an enum is a field
