@@ -1,6 +1,6 @@
 # `lerta fmt`: prints each file again in the style (docs/reference/style.md), and reports where the
 # file differs from that, by the rule that decides it there, or writes it with `--fix`.
-import compare_positions, Position, Statement from '../ast'
+import compare_positions, Import, Position, Statement from '../ast'
 import dump_ast from '../ast_dump'
 import CompileError from '../errors'
 import lex from '../lexer/tokens'
@@ -8,7 +8,7 @@ import parse from '../parser/statement'
 import left_out_candidates from './annotations'
 import hunks from './diff'
 import join, lay_out, line_feed, RulePlace, text from './doc'
-import block_doc from './print_statement'
+import block_doc, is_left_out_import, left_out_import_mark from './print_statement'
 import Context from './printing'
 import BLANK_LINES, COMMENTS, LAYOUT, SPACING, StyleRule from './rules'
 import columns, source_text, SourceText from './source'
@@ -29,12 +29,21 @@ export const format_source = (source: String, path: String, left_out: String[]) 
   const text_source = source_text(source, lexed)
   const context = Context(left_out, source: text_source)
   const body = block_doc(statements, context)
-  const doc = statements.length == 0 then text('') else join([body, line_feed()])
+  const ending = left_out_ending(statements, context)
+  const doc = statements.length == 0 then text('') else join([body, line_feed(), ending])
   const layout = lay_out(doc, text_source)
-  check_same_program statements, layout.text, path
+  const kept =
+    [statement for statement in statements when not is_left_out_import(statement, context)]
+  check_same_program kept, layout.text, path
   const found = findings(text_source, layout.text, layout.rules)
   const in_order = found.sorted((a, b) -> compare_positions(a.at, b.at))
   Formatted text: layout.text, findings: in_order
+
+# The imports left out last are reported where they were (see left_out_import_mark).
+const left_out_ending = (statements: Statement[], context: Context) ->
+  var first = statements.length
+  first -= 1 while first > 0 and is_left_out_import(statements[first - 1], context)
+  join [left_out_import_mark(statements[i] as Import!) for i in first...statements.length]
 
 const check_same_program = (statements: Statement[], formatted: String, path: String) ->
   const reparsed = parse(lex(formatted, path).tokens, path)

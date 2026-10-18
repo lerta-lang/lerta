@@ -8,10 +8,12 @@ import
   breaking, choice, Doc, indent, join, line_feed, one_line, rule, separated, text, token
 from './doc'
 import named_type, type_doc, type_parameters from './print_type'
-import CONSTRUCTOR_ARGUMENTS, LONG_LISTS, MULTI_LINE_LITERALS from './rules'
+import CONSTRUCTOR_ARGUMENTS, ENUM_MEMBERS, LONG_LISTS, MULTI_LINE_LITERALS from './rules'
 import expression_doc, string_doc from './print_expression'
 import value_after from './print_literal'
-import Context, Item, keyword, lines_of_items, optional_doc, removed_type from './printing'
+import
+  Context, has_left_out_names, Item, keyword, lines_of_items, optional_doc, removed_type
+from './printing'
 
 export const declaration_doc = (statement: Statement, context: Context) ->
   case statement
@@ -145,15 +147,19 @@ const aliased_type = (alias: TypeAlias) ->
   breaking LONG_LISTS, on_line, indent(join([line_feed(), join(parts)]))
 
 # `import a, b as c from 'module'`, with the names in an indented block when they do not fit on
-# the line (see Multi-line literals).
+# the line (see Multi-line literals). One that names were left out of is reported for them, as is
+# the layout that they change.
 const import_doc = (import_node: Import, context: Context) ->
+  const left_out = has_left_out_names(import_node, context)
+  const reported = left_out then ENUM_MEMBERS else MULTI_LINE_LITERALS
   const word = keyword('import', import_node.position)
   const module = module_doc(import_node, context)
   if import_node.names.length == 0
     const as_name = optional_doc(import_node.alias, (alias) ->
       join [text(' as '), token(alias.name, alias.position)]
     )
-    return join([word, text(' '), module, as_name])
+    const written = join([word, text(' '), module, as_name])
+    return left_out then rule(ENUM_MEMBERS, written) else written
   const item = (name: ImportName) ->
     const after_comment = context.source.comment_before(name.name.position)
     Item after_comment, doc: import_name(name), simple: true
@@ -163,7 +169,8 @@ const import_doc = (import_node: Import, context: Context) ->
   const block = join(
     [word, indent(join([line_feed(), lines_of_items(items)])), line_feed(), text('from '), module]
   )
-  breaking MULTI_LINE_LITERALS, on_line, block
+  const doc = breaking(reported, on_line, block)
+  left_out then rule(ENUM_MEMBERS, doc) else doc
 
 const import_name = (name: ImportName) ->
   if const alias = name.alias

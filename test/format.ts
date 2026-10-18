@@ -190,31 +190,48 @@ const command_checks: Check[] = [
     },
   },
   {
-    name: 'lerta fmt writes the members of enums alone, but one without which its import would be unused, through the checks of the calls that the checker rewrites',
+    name: 'lerta fmt --fix writes the members of enums alone, through the checks of the calls that the checker rewrites, and leaves out the imports of the enums that it leaves unused',
     run: () => {
       const dir = tree('members', {
         'kinds.lerta':
           'export enum Kind\n  A\n  B\n\nexport struct Field(name: String, kind: Kind)\n\nexport const count = (kinds: Kind...) -> kinds.length\n\nexport const pick = (n: Int, options: { kind: Kind }) -> options.kind\n',
         'made.lerta':
-          "import Field from './kinds'\nimport Kind from './kinds'\n\nexport const made = Field(name: 'a', kind: Kind.A)\n",
+          "import Field, Kind from './kinds'\n\nexport const made = Field(name: 'a', kind: Kind.A)\n",
         'named.lerta':
           "import Field from './kinds'\nimport Kind from './kinds'\n\nconst name = 'b'\nexport const named = Field(name, kind: Kind.B)\n",
         'counted.lerta':
           "import count from './kinds'\nimport Kind from './kinds'\n\nexport const counted = count(Kind.A, Kind.A)\n",
         'picked.lerta':
-          "import pick from './kinds'\nimport Kind from './kinds'\n\nexport const picked = pick(1, kind: Kind.A)\n",
+          "import Kind, pick from './kinds'\n\nexport const picked = pick(1, kind: Kind.A)\n",
         'test.lerta':
           "import Kind from './kinds'\n\nexport const is_b = (kind: Kind) -> kind == Kind.B\n",
+        'unused.lerta': "import Kind from './kinds'\n\nexport const one = 1\n",
+        'typed.lerta':
+          "import Kind, pick from './kinds'\n\nexport const typed = (n: Int) ->\n  const kind: Kind = pick(n, kind: A)\n  kind\n",
+        'parsed.lerta': "import Kind from './kinds'\n\nexport const parsed = Kind.parse('A')\n",
         'main.lerta':
-          "import counted from './counted'\nimport made from './made'\nimport named from './named'\nimport picked from './picked'\nimport is_b from './test'\n\nprint is_b(made.kind).to_string()\nprint counted\nprint is_b(picked).to_string()\nprint named.name\n",
+          "import counted from './counted'\nimport made from './made'\nimport named from './named'\nimport picked from './picked'\nimport is_b from './test'\nimport one from './unused'\nimport typed from './typed'\nimport parsed from './parsed'\n\nprint is_b(made.kind).to_string()\nprint counted\nprint is_b(picked).to_string()\nprint named.name\nprint one\nprint is_b(typed(1)).to_string()\nprint parsed == nil\n",
       })
-      const result = fmt(dir, ['.'])
-      const report = (at: string) =>
-        `${at}: write the member alone, where its enum is expected (Enum members)\n`
-      const expected = report('./counted.lerta:4:30') + report('./test.lerta:3:45')
+      const result = fmt(dir, ['--fix', '.'])
+      const expected: Record<string, string> = {
+        'made.lerta':
+          "import Field from './kinds'\n\nexport const made = Field(name: 'a', kind: A)\n",
+        'named.lerta':
+          "import Field from './kinds'\n\nconst name = 'b'\nexport const named = Field(name, kind: B)\n",
+        'counted.lerta': "import count from './kinds'\n\nexport const counted = count(A, A)\n",
+        'picked.lerta': "import pick from './kinds'\n\nexport const picked = pick(1, kind: A)\n",
+        'test.lerta':
+          "import Kind from './kinds'\n\nexport const is_b = (kind: Kind) -> kind == B\n",
+        'unused.lerta': "import Kind from './kinds'\n\nexport const one = 1\n",
+        'typed.lerta':
+          "import pick from './kinds'\n\nexport const typed = (n: Int) ->\n  const kind = pick(n, kind: A)\n  kind\n",
+        'parsed.lerta': "import Kind from './kinds'\n\nexport const parsed = Kind.parse('A')\n",
+      }
       return [
-        ...compare_text('stderr', expected, result.stderr),
-        ...expect_status(1, result.status),
+        ...expect_status(0, result.status),
+        ...Object.entries(expected).flatMap(([file, text]) =>
+          compare_text(file, text, readFileSync(join(dir, file), 'utf8')),
+        ),
       ]
     },
   },

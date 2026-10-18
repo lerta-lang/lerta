@@ -1,14 +1,14 @@
 # The members of enums written with their enums, `E.MEMBER`, that the checking may show can be
-# written alone (see Enum members in docs/reference/style.md), and how to write them so in the
-# syntax tree.
+# written alone (see Enum members in docs/reference/style.md), and the imports of the enums that
+# they then leave unused, and how to write them so in the syntax tree.
 import
   ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
   Comprehension, Condition, Conditional, Declaration, Expression, Extend, For, FunctionLiteral,
-  Identifier, If, Index, IsTest, MapEntry, MapLiteral, Member, MemberDeclaration, NamedValue,
-  Parameter, Range, RecordLiteral, Return, Statement, Throw, Try, TupleItem, TupleLiteral,
-  TypeDeclaration, UnaryOperation, Unwrap, While, Yield
+  Identifier, If, Import, ImportName, Index, IsTest, MapEntry, MapLiteral, Member,
+  MemberDeclaration, NamedValue, Parameter, Range, RecordLiteral, Return, Statement, Throw, Try,
+  TupleItem, TupleLiteral, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
 from '../ast'
-import Annotation, annotation_key from './annotated'
+import Annotation, annotation_key, import_key from './annotated'
 
 # What puts a value in the place of an expression in the syntax tree.
 type Place = (Expression) -> void
@@ -171,4 +171,28 @@ const unqualified = (member: Member, place: Place) ->
     key: annotation_key('member', member.position)
     remove: -> place(alone)
     restore: -> place(member)
+  )
+
+# The names that the module imports, of which those of enums that the members written alone leave
+# unused are left out (see unused_enum_imports).
+export const import_names_of = (program: Statement[]) ->
+  const found: Annotation[] = []
+  for statement in program
+    add_import_names found, statement if statement is Import
+  found
+
+const add_import_names = (found: Annotation[], import_node: Import) ->
+  found.push left_out_import(import_node, name) for name in import_node.names
+
+# The import without the name, which keeps the others in their order.
+const left_out_import = (import_node: Import, name: ImportName) ->
+  const all = import_node.names
+  const local = name.alias ? name.name
+  Annotation(
+    key: import_key(import_node, local.name)
+    remove: -> import_node.names = [each for each in import_node.names when each != name]
+    restore: ->
+      import_node.names =
+        [each for each in all when each == name or import_node.names.contains(each)]
+    imported: local
   )

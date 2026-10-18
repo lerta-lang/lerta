@@ -1,17 +1,20 @@
 # The types written in modules that their checking shows the checker can infer (see Type
-# annotations in docs/reference/style.md), and the enums of members that it shows are expected
-# (see Enum members there), which `lerta fmt` leaves out.
-import Node, Statement from '../ast'
+# annotations in docs/reference/style.md), the enums of members that it shows are expected (see
+# Enum members there), and the imports of enums that these leave unused, which `lerta fmt` leaves
+# out.
+import EnumDeclaration, Identifier, Node, Statement from '../ast'
 import Located from '../errors'
 import all_warnings from '../checker/diagnostics'
 import check_program from '../checker/modules'
 import ProgramWide, Shared from '../checker/shared'
+import ExportRef, ImportedName from '../checker/imports'
 import CompileError from '../errors'
+import module_location from '../source'
 import imported_files, is_standard_module, load_modules, Module, module_key from '../loader'
 import format_type from '../types'
 import Annotation, annotations_of from './annotated'
 import inferable from './inferable'
-import qualified_members_of from './qualified'
+import import_names_of, qualified_members_of from './qualified'
 
 # What the checking of a program gives that an annotation can change: the type of each node of the
 # modules that are not standard, with the type it is converted to, if any; the types of the fields,
@@ -42,9 +45,11 @@ const not_imported = (paths: String[]) ->
 
 # The written types and the enums of members that may be left out, in the order of the source.
 export const left_out_candidates = (program: Statement[]) ->
-  [annotations_of(program)..., qualified_members_of(program)...]
+  [annotations_of(program)..., qualified_members_of(program)..., import_names_of(program)...]
 
+# The imports are left out after the others, once these leave them unused (see unused_enum_imports).
 const can_leave_out = (annotation: Annotation, shared: Shared, program: ProgramWide) ->
+  return false if annotation.imported
   return shared.facts.unqualifiable.has(member) if const member = annotation.member
   inferable annotation, shared, program
 
@@ -82,9 +87,37 @@ const add_removable = (removable: Map<String, String[]>, entry: String, wanted: 
     const same = checks(tried) and same_result(result_of(tried), original)
     placed.annotation.restore() for placed in left_out
     same
-  for placed in removable_among([], inferred, checks_the_same)
+  const accepted = removable_among([], inferred, checks_the_same)
+  const imports = unused_enum_imports(accepted, held, checked, -> quiet_program(entry, modules))
+  for placed in [accepted..., imports...]
     const keys = removable[placed.key]!
     keys.push placed.annotation.key
+
+# The imports of enums that the program used, but that it does not once the annotations accepted
+# are left out, as the members of enums written alone or the types: the checking that accepts them
+# does not tell their warnings (see result_of).
+const unused_enum_imports = (
+  accepted: Placed[], held: Module[], checked: ProgramWide, program: () -> ProgramWide
+): Placed[] ->
+  return [] if accepted.length == 0
+  placed.annotation.remove() for placed in accepted
+  const tried = program()
+  checks tried
+  const found: Placed[] = []
+  for module in held
+    const before = checked.shared[module.index].imports.names
+    const after = tried.shared[module.index].imports.names
+    const left_unused = (imported: Identifier) ->
+      const name = imported.name
+      not after[name]!.used and before[name]!.used and imports_enum(tried, after[name]!)
+    for annotation in import_names_of(module.program)
+      found.push Placed(annotation, key: module.key) if left_unused(annotation.imported!)
+  placed.annotation.restore() for placed in accepted
+  found
+
+const imports_enum = (program: ProgramWide, imported: ImportedName) ->
+  const source = imported.source as ExportRef ? return false
+  program.shared[source.module_index].exported[source.name] is EnumDeclaration
 
 # `accepted` and those of `trying` that can be left out with them: all at once, or else found by
 # halving `trying` until the parts that cannot be left out are single annotations, so that a module
@@ -122,7 +155,21 @@ const result_of = (program: ProgramWide) ->
       const converted = facts.conversions[node]
       const conversion = converted then " => #{format_type(converted)}" else ''
       node_types[node] = format_type(type) + conversion
-  CheckResult node_types, field_types: field_types(program), warnings: all_warnings(program)
+  const warnings = [each for each in all_warnings(program) when not is_unused_enum(each, program)]
+  CheckResult node_types, warnings, field_types: field_types(program)
+
+# A warning of an import of an enum that is not used, which the members of the enum written alone
+# or the types left out may make, and which unused_enum_imports then leaves out: one at the name of such an import.
+const is_unused_enum = (warning: Located, program: ProgramWide) ->
+  const at_import = (shared: Shared, imported: ImportedName) ->
+    const { position } = imported.name
+    const location = module_location(program.entry_path, program.modules[shared.index].display_path)
+    const placed = location == warning.location and position.line == warning.line
+    placed and position.column == warning.column and imports_enum(program, imported)
+  const unused = 'is imported but never used'
+  return false if not warning.message.ends_with(unused)
+  program.shared.any (shared) ->
+    shared.imports.names.values().any((imported) -> at_import(shared, imported))
 
 # Whether the nodes that both results have have the same types. The checking makes nodes of its own,
 # such as the `iter()` call of a `for` over an object, new each time, so each result has some that

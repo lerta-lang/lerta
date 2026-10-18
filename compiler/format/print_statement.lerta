@@ -13,26 +13,46 @@ import
 from './doc'
 import declaration_doc, exported from './print_declaration'
 import type_doc from './print_type'
-import BRANCHES, CALLS_WITHOUT_PARENTHESES, NIL_INITIAL_VALUES, POSTFIX_FORMS from './rules'
+import
+  BRANCHES, CALLS_WITHOUT_PARENTHESES, ENUM_MEMBERS, NIL_INITIAL_VALUES, POSTFIX_FORMS
+from './rules'
 import arguments, call_doc, expression_doc, loop_header from './print_expression'
 import value_after from './print_literal'
 import function_doc from './print_block'
-import Context, keyword, removed_type, word_before from './printing'
+import Context, has_left_out_names, keyword, removed_type, word_before from './printing'
 
 # The statements, one on each line. The parts of a destructuring, which the parser declares one by
 # one after the declaration that holds the value, are written as the one statement of the source.
 export const block_doc = (statements: Statement[], context: Context) ->
   const lines: Doc[] = []
   var i = 0
+  # An import that all its names are left out of is left out, and reported where it was.
+  var left_out: Doc[] = []
   while i < statements.length
     const statement = statements[i]
     i += 1
-    if const holder = destructuring_holder(statement)
-      lines.push destructuring_doc(holder, context)
-      i += 1 while i < statements.length and takes_apart(statements[i], holder.name.name)
-    else
-      lines.push statement_doc(statement, context)
+    if is_left_out_import(statement, context)
+      left_out.push left_out_import_mark(statement as Import!)
+      continue
+    const doc =
+      if const holder = destructuring_holder(statement)
+        i += 1 while i < statements.length and takes_apart(statements[i], holder.name.name)
+        destructuring_doc holder, context
+      else
+        statement_doc statement, context
+    lines.push join([left_out..., doc])
+    left_out = []
   separated lines, line_feed()
+
+# Where an import was left out, after the comments before it, which an empty text at its position
+# prints: the place that reports it, which holds no text.
+export const left_out_import_mark = (import_node: Import) ->
+  join [token('', import_node.position), rule(ENUM_MEMBERS, text(''))]
+
+export const is_left_out_import = (statement: Statement, context: Context) ->
+  const import_node = statement as Import ? return false
+  const takes_none = import_node.names.length == 0 and import_node.alias == nil
+  takes_none and has_left_out_names(import_node, context)
 
 # The declaration that holds the value of a destructuring, whose name no source can write.
 const destructuring_holder = (statement: Statement) ->
