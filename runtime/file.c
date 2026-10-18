@@ -11,6 +11,9 @@ LERTA_STATIC_STRING(cannot_remove, "cannot remove: ");
 LERTA_STATIC_STRING(cannot_make_dir, "cannot make directory: ");
 LERTA_STATIC_STRING(cannot_rename, "cannot rename: ");
 LERTA_STATIC_STRING(cannot_list, "cannot list directory: ");
+LERTA_STATIC_STRING(cannot_stat, "cannot read the status of: ");
+LERTA_STATIC_STRING(cannot_make_link, "cannot make link: ");
+LERTA_STATIC_STRING(cannot_copy, "cannot copy file: ");
 
 // Takes the bytes, which may be NULL.
 static LertaString *string_of_bytes(uint8_t *bytes, int64_t length) {
@@ -20,18 +23,46 @@ static LertaString *string_of_bytes(uint8_t *bytes, int64_t length) {
   return string;
 }
 
-bool lerta_is_file(const LertaString *path) {
+// The status of what the path names, as lerta_os_stat gives it; a path that holds a NUL byte names
+// nothing.
+static int stat_of(const LertaString *path, LertaFileStatus *status) {
   char *name = lerta_c_string(path);
-  bool is_file = name != NULL && lerta_os_is_file(name);
+  int found = name == NULL ? 0 : lerta_os_stat(name, status);
   free(name);
-  return is_file;
+  return found;
+}
+
+bool lerta_is_file(const LertaString *path) {
+  LertaFileStatus status;
+  return stat_of(path, &status) == 1 && status.kind == LERTA_FILE_KIND;
 }
 
 bool lerta_is_dir(const LertaString *path) {
+  LertaFileStatus status;
+  return stat_of(path, &status) == 1 && status.kind == LERTA_DIR_KIND;
+}
+
+// Appends the kind, the size and the time to `fields`, if the path names something.
+bool lerta_stat_fields(const LertaString *path, LertaArray *fields) {
+  LertaFileStatus status;
+  int found = stat_of(path, &status);
+  if (found < 0) {
+    lerta_raise_with(LERTA_IO_ERROR, &cannot_stat, path);
+    return false;
+  }
+  if (found == 0) return false;
+  int64_t values[] = {status.kind, status.size, status.modified_time};
+  for (int i = 0; i < 3; i++) lerta_array_append(fields, &values[i]);
+  return true;
+}
+
+void lerta_make_link(const LertaString *target, const LertaString *path) {
+  char *target_name = lerta_c_string(target);
   char *name = lerta_c_string(path);
-  bool is_dir = name != NULL && lerta_os_is_dir(name);
+  bool made = target_name != NULL && name != NULL && lerta_os_make_link(target_name, name);
+  free(target_name);
   free(name);
-  return is_dir;
+  if (!made) lerta_raise_with(LERTA_IO_ERROR, &cannot_make_link, path);
 }
 
 // An empty path is refused here, as Windows would read `\*` in it as the root of the drive.
@@ -90,6 +121,7 @@ typedef struct {
   LertaString *path;
   const void *failure;
   char *name;
+  char *to_name;
   LertaString *data;
   uint8_t *bytes;
   int64_t length;
@@ -111,6 +143,11 @@ static void write_work(void *data) {
 static void remove_work(void *data) {
   FileTask *task = data;
   task->succeeded = lerta_os_remove_tree(task->name);
+}
+
+static void copy_work(void *data) {
+  FileTask *task = data;
+  task->succeeded = lerta_os_copy_file(task->name, task->to_name);
 }
 
 // The work on the thread pool cannot be stopped: it goes on, and its end settles nothing.
@@ -140,22 +177,27 @@ static void end_task(void *data) {
   lerta_release(task->path);
   if (task->data != NULL) lerta_release(task->data);
   free(task->name);
+  free(task->to_name);
   free(task);
 }
 
-// A path that holds a NUL byte fails at once.
+// A path that holds a NUL byte fails at once, as does a destination `to`, if given.
 static LertaPromise *start_task(LertaItemKind kind, const LertaString *path, const void *failure,
-                                const LertaString *data, void (*work)(void *data)) {
+                                const LertaString *data, const LertaString *to,
+                                void (*work)(void *data)) {
   LertaPromise *promise = lerta_promise_new(kind);
   char *name = lerta_c_string(path);
-  if (name == NULL) {
+  char *to_name = to == NULL ? NULL : lerta_c_string(to);
+  if (name == NULL || (to != NULL && to_name == NULL)) {
+    free(name);
+    free(to_name);
     lerta_raise_with(LERTA_IO_ERROR, failure, path);
     lerta_promise_reject(promise);
     return promise;
   }
   FileTask *task = lerta_checked_calloc(1, sizeof(FileTask));
   *task = (FileTask){.promise = promise, .path = (LertaString *)path, .failure = failure,
-                     .name = name, .data = (LertaString *)data};
+                     .name = name, .to_name = to_name, .data = (LertaString *)data};
   lerta_retain(promise);
   lerta_retain((void *)path);
   if (data != NULL) lerta_retain((void *)data);
@@ -165,15 +207,19 @@ static LertaPromise *start_task(LertaItemKind kind, const LertaString *path, con
 }
 
 LertaPromise *lerta_read_file_async(const LertaString *path) {
-  return start_task(LERTA_REFERENCE_ITEMS, path, &cannot_read, NULL, read_work);
+  return start_task(LERTA_REFERENCE_ITEMS, path, &cannot_read, NULL, NULL, read_work);
 }
 
 LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data) {
-  return start_task(LERTA_PLAIN_ITEMS, path, &cannot_write, data, write_work);
+  return start_task(LERTA_PLAIN_ITEMS, path, &cannot_write, data, NULL, write_work);
 }
 
 LertaPromise *lerta_remove_tree_async(const LertaString *path) {
-  return start_task(LERTA_PLAIN_ITEMS, path, &cannot_remove, NULL, remove_work);
+  return start_task(LERTA_PLAIN_ITEMS, path, &cannot_remove, NULL, NULL, remove_work);
+}
+
+LertaPromise *lerta_copy_file_async(const LertaString *from, const LertaString *to) {
+  return start_task(LERTA_PLAIN_ITEMS, from, &cannot_copy, NULL, to, copy_work);
 }
 
 // Each directory that ends before a separator is made first; only whether the whole path is a

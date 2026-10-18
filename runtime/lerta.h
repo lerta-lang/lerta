@@ -326,8 +326,14 @@ LertaString *lerta_env(const LertaString *name);
 LertaPromise *lerta_read_file_async(const LertaString *path);
 LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data);
 LertaPromise *lerta_remove_tree_async(const LertaString *path);
+LertaPromise *lerta_copy_file_async(const LertaString *from, const LertaString *to);
 bool lerta_is_file(const LertaString *path);
 bool lerta_is_dir(const LertaString *path);
+// Whether the path names something, through symbolic links; if it does, its kind (0 a file, 1 a
+// directory, 2 another), its size and the time it was last modified, in nanoseconds since the Unix
+// epoch, are appended to the array of Ints, which std:io makes a FileStatus of.
+bool lerta_stat_fields(const LertaString *path, LertaArray *fields);
+void lerta_make_link(const LertaString *target, const LertaString *path);
 // The names of the entries, unchecked and in no order (std:io checks and sorts them).
 LertaArray *lerta_list_dir_names(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);

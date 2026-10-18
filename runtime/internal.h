@@ -202,9 +202,21 @@ uint8_t *lerta_os_read_file(const char *path, int64_t *length);
 // failure.
 int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size);
 bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
-bool lerta_os_is_file(const char *path);
-// Whether the path names a directory, through symbolic links.
-bool lerta_os_is_dir(const char *path);
+// What lerta_os_stat writes of what a path names: its kind, its size in bytes and the time it was
+// last modified, in nanoseconds since the Unix epoch.
+enum { LERTA_FILE_KIND, LERTA_DIR_KIND, LERTA_OTHER_KIND };
+typedef struct {
+  int64_t kind;
+  int64_t size;
+  int64_t modified_time;
+} LertaFileStatus;
+// The status of what the path names, through symbolic links: 1 if it is there, 0 if nothing is,
+// as for a dangling link, and -1 if it cannot be read.
+int lerta_os_stat(const char *path, LertaFileStatus *status);
+// Makes a symbolic link at `path` to `target`, written as it is.
+bool lerta_os_make_link(const char *target, const char *path);
+// Copies the contents of a file, replacing a file at `to`.
+bool lerta_os_copy_file(const char *from, const char *to);
 // Appends the names of the entries of the directory, without `.` and `..`, in no order, to the array
 // of Binaries.
 bool lerta_os_list_dir(const char *path, LertaArray *names);

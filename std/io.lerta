@@ -9,6 +9,28 @@ export extern lerta_make_temp_dir as make_temp_dir: () -> Binary
 export extern lerta_remove_tree_async as remove_tree: (String) -> Promise
 export extern lerta_make_dir as make_dir: (String) -> void
 export extern lerta_rename as rename: (String, String) -> void
+export extern lerta_make_link as make_link: (String, String) -> void
+export extern lerta_copy_file_async as copy_file: (String, String) -> Promise
+
+extern lerta_stat_fields: (String, Int[]) -> Bool
+
+export enum FileKind
+  FILE
+  DIR
+  OTHER
+
+# What a path names: its kind, its size in bytes, and when it was last modified, in seconds since
+# the Unix epoch, as `time` of std:time tells them.
+export struct FileStatus(kind: FileKind, size: Int, modified_time: Float)
+
+# The status of what the path names, through symbolic links, or nil if nothing is there.
+export const stat = (path: String) ->
+  const fields: Int[] = []
+  return nil if not lerta_stat_fields(path, fields)
+  # In the order of the kinds that the runtime gives.
+  const kinds = [FileKind.FILE, DIR, OTHER]
+  const modified_time = fields[2].to_float() / 1000000000.0
+  FileStatus modified_time, kind: kinds[fields[0]], size: fields[1]
 
 extern lerta_stream_write: (Int, Binary) -> Promise
 extern lerta_stream_flush: (Int) -> Promise

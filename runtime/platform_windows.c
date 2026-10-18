@@ -224,27 +224,90 @@ bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length)
   return written;
 }
 
-// As POSIX's stat: opening follows links, so a dangling one fails, and a device such as NUL is not
-// a disk file, which this tells apart. The attributes of what the path names, if it is one.
-static bool disk_attributes(const char *path, DWORD *attributes) {
+// A FILETIME counts 100-nanosecond intervals since 1601-01-01, 11644473600 seconds before 1970.
+static int64_t nanoseconds_since_epoch(FILETIME time) {
+  int64_t intervals = (int64_t)(((uint64_t)time.dwHighDateTime << 32) | time.dwLowDateTime);
+  return (intervals - 116444736000000000) * 100;
+}
+
+// As POSIX's stat: opening follows links, so a dangling one is not there, and nothing is at a
+// name that Windows does not take, as nothing is at a missing one; a loop of links fails.
+int lerta_os_stat(const char *path, LertaFileStatus *status) {
   HANDLE file = open_file(path, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS);
-  if (file == INVALID_HANDLE_VALUE) return false;
+  if (file == INVALID_HANDLE_VALUE) {
+    DWORD error = GetLastError();
+    bool is_missing = error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ||
+                      error == ERROR_INVALID_NAME;
+    return is_missing ? 0 : -1;
+  }
   BY_HANDLE_FILE_INFORMATION information;
-  bool is_disk_file = GetFileType(file) == FILE_TYPE_DISK &&
-                      GetFileInformationByHandle(file, &information);
+  bool is_disk_file = GetFileType(file) == FILE_TYPE_DISK;
+  bool read = is_disk_file && GetFileInformationByHandle(file, &information);
   CloseHandle(file);
-  if (is_disk_file) *attributes = information.dwFileAttributes;
-  return is_disk_file;
+  // A device, such as NUL, is not a disk file.
+  if (!is_disk_file) {
+    *status = (LertaFileStatus){.kind = LERTA_OTHER_KIND};
+    return 1;
+  }
+  if (!read) return -1;
+  bool is_dir = information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+  status->kind = is_dir ? LERTA_DIR_KIND : LERTA_FILE_KIND;
+  status->size = (int64_t)(((uint64_t)information.nFileSizeHigh << 32) | information.nFileSizeLow);
+  status->modified_time = nanoseconds_since_epoch(information.ftLastWriteTime);
+  return 1;
 }
 
-bool lerta_os_is_file(const char *path) {
-  DWORD attributes;
-  return disk_attributes(path, &attributes) && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+#ifndef SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
+#define SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE 0x2
+#endif
+
+// Whether the target, relative to the link's directory unless it is absolute, is a directory, which
+// Windows must be told as the link is made.
+static bool links_to_dir(const wchar_t *target, const wchar_t *path) {
+  bool is_absolute = target[0] == L'\\' || (target[0] != L'\0' && target[1] == L':');
+  const wchar_t *end = path;
+  for (const wchar_t *c = path; *c != L'\0'; c++) {
+    if (*c == L'\\') end = c + 1;
+  }
+  size_t dir_length = is_absolute ? 0 : (size_t)(end - path);
+  size_t target_length = wcslen(target);
+  wchar_t *resolved = lerta_checked_malloc((dir_length + target_length + 1) * sizeof(wchar_t));
+  memcpy(resolved, path, dir_length * sizeof(wchar_t));
+  memcpy(resolved + dir_length, target, (target_length + 1) * sizeof(wchar_t));
+  DWORD attributes = GetFileAttributesW(resolved);
+  free(resolved);
+  return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-bool lerta_os_is_dir(const char *path) {
-  DWORD attributes;
-  return disk_attributes(path, &attributes) && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+// Windows reads only backslashes in a link's target. Making a link needs no privilege in
+// developer mode, which the flag asks for.
+bool lerta_os_make_link(const char *target, const char *path) {
+  wchar_t *wide_target = to_utf16(target);
+  wchar_t *wide_path = to_utf16(path);
+  bool made = false;
+  if (wide_target != NULL && wide_path != NULL) {
+    for (wchar_t *c = wide_target; *c != L'\0'; c++) {
+      if (*c == L'/') *c = L'\\';
+    }
+    for (wchar_t *c = wide_path; *c != L'\0'; c++) {
+      if (*c == L'/') *c = L'\\';
+    }
+    DWORD flags = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE;
+    if (links_to_dir(wide_target, wide_path)) flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
+    made = CreateSymbolicLinkW(wide_path, wide_target, flags);
+  }
+  free(wide_target);
+  free(wide_path);
+  return made;
+}
+
+bool lerta_os_copy_file(const char *from, const char *to) {
+  wchar_t *wide_from = to_utf16(from);
+  wchar_t *wide_to = to_utf16(to);
+  bool copied = wide_from != NULL && wide_to != NULL && CopyFileW(wide_from, wide_to, FALSE);
+  free(wide_from);
+  free(wide_to);
+  return copied;
 }
 
 // The final path is in the form \\?\C:\dir\file, or \\?\UNC\server\share\file for a network

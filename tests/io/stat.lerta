@@ -1,0 +1,29 @@
+# The status of a file, a directory and nothing, the time as time of std:time tells it.
+import copy_file, make_dir, read_file, stat, write_file from 'std:io'
+import time from 'std:time'
+
+await write_file('a.txt', 'hello'.binary)
+make_dir 'dir'
+const file = stat('a.txt')!
+print file.kind == FILE
+print file.size
+const age = time() - file.modified_time
+print age > -1.0 and age < 60.0
+print stat('dir')!.kind == DIR
+print stat('missing') == nil
+print stat('missing/below') == nil
+print stat("a\0b") == nil
+
+# A copy replaces a file there, and keeps the contents.
+await write_file('b.txt', 'old contents'.binary)
+await copy_file('a.txt', 'b.txt')
+print stat('b.txt')!.size
+
+# A copy larger than a chunk keeps the bytes, and an empty one empties what it replaces.
+const large = 'abcdefghij'.repeat(20000).binary
+await write_file('large.txt', large)
+await copy_file('large.txt', 'large_copy.txt')
+print await read_file('large_copy.txt') == large
+await write_file('empty.txt', ''.binary)
+await copy_file('empty.txt', 'b.txt')
+print [stat('empty.txt')!.size, stat('b.txt')!.size]

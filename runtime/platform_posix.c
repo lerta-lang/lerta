@@ -134,14 +134,51 @@ bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length)
   return written;
 }
 
-bool lerta_os_is_file(const char *path) {
-  struct stat status;
-  return stat(path, &status) == 0 && S_ISREG(status.st_mode);
+int lerta_os_stat(const char *path, LertaFileStatus *status) {
+  struct stat found;
+  if (stat(path, &found) != 0) return errno == ENOENT || errno == ENOTDIR ? 0 : -1;
+  status->kind = S_ISREG(found.st_mode)   ? LERTA_FILE_KIND
+                 : S_ISDIR(found.st_mode) ? LERTA_DIR_KIND
+                                          : LERTA_OTHER_KIND;
+  status->size = found.st_size;
+#ifdef __APPLE__
+  struct timespec modified = found.st_mtimespec;
+#else
+  struct timespec modified = found.st_mtim;
+#endif
+  status->modified_time = (int64_t)modified.tv_sec * 1000000000 + modified.tv_nsec;
+  return 1;
 }
 
-bool lerta_os_is_dir(const char *path) {
-  struct stat status;
-  return stat(path, &status) == 0 && S_ISDIR(status.st_mode);
+bool lerta_os_make_link(const char *target, const char *path) {
+  return symlink(target, path) == 0;
+}
+
+// The copy takes the permissions of the file, as CopyFileW takes its attributes on Windows. Both
+// files are opened without waiting, so that a FIFO with nothing at its other end fails rather than
+// blocks, and the destination is checked before it is changed, so that a copy found wrong before it
+// starts, as one onto the file itself, through a link too, which would empty it, leaves it as it was.
+bool lerta_os_copy_file(const char *from, const char *to) {
+  int in = open(from, O_RDONLY | O_NONBLOCK);
+  if (in < 0) return false;
+  struct stat found;
+  bool is_file = fstat(in, &found) == 0 && S_ISREG(found.st_mode);
+  int out = is_file ? open(to, O_WRONLY | O_CREAT | O_NONBLOCK, 0600) : -1;
+  struct stat existing;
+  bool is_other_file = out >= 0 && fstat(out, &existing) == 0 && S_ISREG(existing.st_mode) &&
+                       (existing.st_dev != found.st_dev || existing.st_ino != found.st_ino);
+  bool copied =
+    is_other_file && fchmod(out, found.st_mode & 07777) == 0 && ftruncate(out, 0) == 0;
+  uint8_t buffer[65536];
+  while (copied) {
+    ssize_t count = read(in, buffer, sizeof buffer);
+    if (count == 0) break;
+    if (count < 0) copied = errno == EINTR;
+    else copied = lerta_os_write(out, buffer, count);
+  }
+  if (out >= 0 && close(out) != 0) copied = false;
+  close(in);
+  return copied;
 }
 
 char *lerta_os_real_path(const char *path) {
