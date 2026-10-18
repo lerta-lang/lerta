@@ -30,9 +30,9 @@ The planned design of modules, FFI, the standard library and tools.
 - `lerta run` running directly with JIT, and `lerta repl`.
 - The rest of the style in [`lerta fmt`](../reference/compiler.md): reporting what it cannot fix, such as a name in the wrong case or a line it cannot bring within 100 columns; the rules that change the syntax tree, such as implicit return and the shorthand of named arguments; and, applied only when the file type-checks, the rules that need types, such as whether a `case` handles every member of its subject. The compiler reports only what concerns correctness, such as unused names.
 - `lerta fmt` reports each difference under the rule that it breaks, and each run of differing lines apart, as [the reference](../reference/compiler.md#fmt) states: now some are reported under another rule, as the shorthand of `{ x: x }` under **Layout**, and separate runs that differ may be reported as one. The formatter has no options, as it applies the style as written; settings wait for a configuration file (see [open questions](#open-questions)).
-- The rest of [`lerta lsp`](../reference/compiler.md#lsp), in order:
-  1. Hover, giving a node's type, and going to a definition, which need the checker to find a node by its position.
-  2. Completion.
+- The rest of [`lerta lsp`](../reference/compiler.md#lsp):
+  - Completion.
+  - Hover and going to a definition from a type name, as one in an annotation or the enum of `Color.RED`, and from a named argument's label.
   - A diagnostic's range over the whole token of its position, rather than the position alone.
   - Checking a document that is no file yet, which the loader takes a program's modules to be; and finding the open documents that import a file by real paths, so that two spellings of one directory through a symbolic link are one.
 - Package management.

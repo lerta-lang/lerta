@@ -98,6 +98,8 @@ const capabilities = (encoding: string) => ({
     positionEncoding: encoding,
     textDocumentSync: 1,
     documentFormattingProvider: true,
+    hoverProvider: true,
+    definitionProvider: true,
   },
   serverInfo: { name: 'lerta' },
 })
@@ -208,12 +210,16 @@ export const lsp_checks: Check[] = [
     name: 'lerta lsp answers a request of another method with an error, and ignores a notification',
     run: async () => {
       const ran = await session({}, () => [
-        { id: 1, method: 'textDocument/hover', params: {} },
+        { id: 1, method: 'textDocument/completion', params: {} },
         { method: '$/setTrace', params: { value: 'off' } },
         { id: 2, method: 'textDocument/formatting', params: {} },
       ])
       const expected = [
-        { jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'no method textDocument/hover' } },
+        {
+          jsonrpc: '2.0',
+          id: 1,
+          error: { code: -32601, message: 'no method textDocument/completion' },
+        },
         {
           jsonrpc: '2.0',
           id: 2,
@@ -395,6 +401,388 @@ export const lsp_checks: Check[] = [
         ...compare_text('stderr', 'lerta lsp takes no arguments\n', ran.stderr),
         ...expect_status(1, ran.status),
       ]
+    },
+  },
+  {
+    name: 'lerta lsp gives the types of a name, one for each instance, and where it is declared',
+    run: async () => {
+      const files = {
+        'lib.lerta':
+          'export struct Point(x: Int, y: Int)\nexport const make = (x: Int) -> Point(x, y: 0)\n',
+        'a.lerta': '',
+      }
+      const text = [
+        "import make from './lib'",
+        'const p = make(1)',
+        'print p.x',
+        'const id = <T>(v: T) -> v',
+        'print id(1) + id(2)',
+        "print id('a')",
+        '',
+      ].join('\n')
+      const at = (line: number, character: number, id: number, method: string) => ({
+        id,
+        method: `textDocument/${method}`,
+        params: { textDocument: { uri: '' }, position: { line, character } },
+      })
+      const asks: [number, number][] = [
+        [1, 10],
+        [2, 8],
+        [3, 24],
+        [4, 6],
+        [5, 6],
+        [0, 7],
+        [1, 4],
+      ]
+      const ran = await session(files, (uri) => [
+        open(uri('a.lerta'), text),
+        ...asks.flatMap(([line, character], i) =>
+          ['hover', 'definition'].map((method, j) => {
+            const message = at(line, character, 10 + 2 * i + j, method)
+            ;(message.params.textDocument as { uri: string }).uri = uri('a.lerta')
+            return message
+          }),
+        ),
+      ])
+      const hover = (...lines: string[]) => ({
+        contents: { kind: 'markdown', value: ['```lerta', ...lines, '```'].join('\n') },
+      })
+      const location = (name: string, line: number, start: number, end: number) => ({
+        uri: ran.uri(name),
+        range: { start: { line, character: start }, end: { line, character: end } },
+      })
+      const expected = [
+        // make, a function of another module
+        response(10, hover('make: (Int) -> Point')),
+        response(11, location('lib.lerta', 1, 13, 17)),
+        // x, a field
+        response(12, hover('x: Int')),
+        response(13, location('lib.lerta', 0, 20, 21)),
+        // v, in a generic body, of each instance
+        response(14, hover('v: Int', 'v: String')),
+        response(15, location('a.lerta', 3, 15, 16)),
+        // id, a generic function, as each call instantiates it
+        response(16, hover('id: (Int) -> Int')),
+        response(17, location('a.lerta', 3, 6, 8)),
+        response(18, hover('id: (String) -> String')),
+        response(19, location('a.lerta', 3, 6, 8)),
+        // make, as imported, which only goes to its declaration
+        response(20, null),
+        response(21, location('lib.lerta', 1, 13, 17)),
+        // no name
+        response(22, null),
+        response(23, null),
+      ]
+      const answers = ran.received.filter(
+        (message) => typeof message.id === 'number' && message.id >= 10,
+      )
+      return expect_received(expected, answers)
+    },
+  },
+  {
+    name: 'lerta lsp finds locals, assigned ones, methods, types, values and generic classes, in UTF-16 units',
+    run: async () => {
+      const text = [
+        "const s = '😀'",
+        'struct Box<T>(value: T)',
+        'extend Int',
+        '  twice = -> @ * 2',
+        'var n = 1',
+        'n = Box(value: 2).value.twice()',
+        'print s + n.to_string()',
+        "print '😀' + s",
+        '',
+      ].join('\n')
+      // [line, character], each asked for its hover and its definition.
+      const asks: [number, number][] = [
+        [6, 6],
+        [5, 0],
+        [5, 6],
+        [5, 18],
+        [5, 26],
+        [7, 13],
+        [7, 14],
+        [6, 15],
+      ]
+      const ran = await session({ 'a.lerta': '' }, (uri) => [
+        open(uri('a.lerta'), text),
+        ...asks.flatMap(([line, character], i) =>
+          ['hover', 'definition'].map((method, j) => ({
+            id: 10 + 2 * i + j,
+            method: `textDocument/${method}`,
+            params: { textDocument: { uri: uri('a.lerta') }, position: { line, character } },
+          })),
+        ),
+      ])
+      const hover = (...lines: string[]) => ({
+        contents: { kind: 'markdown', value: ['```lerta', ...lines, '```'].join('\n') },
+      })
+      const here = (line: number, start: number, end: number) => ({
+        uri: ran.uri('a.lerta'),
+        range: { start: { line, character: start }, end: { line, character: end } },
+      })
+      const expected = [
+        // s, a top-level value
+        response(10, hover('s: String')),
+        response(11, here(0, 6, 7)),
+        // n, as assigned
+        response(12, hover('n: Int')),
+        response(13, here(4, 4, 5)),
+        // Box, a generic struct, as the construction that the call makes
+        response(14, hover('Box: Box<Int>')),
+        response(15, here(1, 7, 10)),
+        // value, a field of an instance
+        response(16, hover('value: Int')),
+        response(17, here(1, 14, 19)),
+        // twice, a method of an extend
+        response(18, hover('twice: () -> Int')),
+        response(19, here(3, 2, 7)),
+        // s after an emoji, two UTF-16 units, and the column right after it
+        response(20, hover('s: String')),
+        response(21, here(0, 6, 7)),
+        response(22, hover('s: String')),
+        response(23, here(0, 6, 7)),
+        // to_string, a method of std:builtins, whose declaration is in no file
+        response(24, hover('to_string: () -> String')),
+        response(25, null),
+      ]
+      const answers = ran.received.filter(
+        (message) => typeof message.id === 'number' && message.id >= 10,
+      )
+      return expect_received(expected, answers)
+    },
+  },
+  {
+    name: 'lerta lsp answers about an open file from the program of an open document that imports it',
+    run: async () => {
+      const b_text = 'export const b = 1\n'
+      const files = { 'a.lerta': '', 'b.lerta': b_text }
+      const ran = await session(files, (uri) => [
+        open(uri('a.lerta'), "import b from './b'\nprint b\n"),
+        // b has a program of its own once it is opened, which is checked first; then a's is asked.
+        {
+          id: 10,
+          method: 'textDocument/hover',
+          params: { textDocument: { uri: uri('b.lerta') }, position: { line: 0, character: 13 } },
+        },
+        open(uri('b.lerta'), b_text),
+        { method: 'textDocument/didClose', params: { textDocument: { uri: uri('a.lerta') } } },
+        {
+          id: 11,
+          method: 'textDocument/hover',
+          params: { textDocument: { uri: uri('a.lerta') }, position: { line: 1, character: 6 } },
+        },
+      ])
+      const hover = { contents: { kind: 'markdown', value: '```lerta\nb: Int\n```' } }
+      const expected = [response(10, hover), response(11, null)]
+      const answers = ran.received.filter((message) => message.id === 10 || message.id === 11)
+      return expect_received(expected, answers)
+    },
+  },
+  {
+    name: 'lerta lsp finds a field through ?., @ and an interpolation, and nothing past a line or in a document not open',
+    run: async () => {
+      const text = [
+        'struct P(x: Int)',
+        'const f = (p: P?) -> p?.x',
+        'class C',
+        '  x: Int = 1',
+        '  get = -> @x',
+        'print C().get()',
+        'print f(nil) == nil',
+        'print "#{C().x}"',
+        'const g = (p: P?) -> p?.x.to_string()',
+        'const to_string_value = 1',
+        'print "#{to_string_value}"',
+        '',
+      ].join('\n')
+      const asks: [string, number, number][] = [
+        ['a.lerta', 7, 13],
+        ['a.lerta', 7, 15],
+        ['a.lerta', 8, 28],
+        ['a.lerta', 10, 10],
+        ['a.lerta', 1, 24],
+        ['a.lerta', 4, 12],
+        ['a.lerta', 5, 40],
+        ['a.lerta', 30, 0],
+        ['other.lerta', 0, 0],
+      ]
+      const ran = await session({ 'a.lerta': '' }, (uri) => [
+        open(uri('a.lerta'), text),
+        ...asks.flatMap(([file, line, character], i) =>
+          ['hover', 'definition'].map((method, j) => ({
+            id: 10 + 2 * i + j,
+            method: `textDocument/${method}`,
+            params: { textDocument: { uri: uri(file) }, position: { line, character } },
+          })),
+        ),
+      ])
+      const x = { contents: { kind: 'markdown', value: '```lerta\nx: Int\n```' } }
+      const here = (line: number, start: number, end: number) => ({
+        uri: ran.uri('a.lerta'),
+        range: { start: { line, character: start }, end: { line, character: end } },
+      })
+      const to_string = {
+        contents: { kind: 'markdown', value: '```lerta\nto_string: () -> String\n```' },
+      }
+      const expected = [
+        // In an interpolation, only the field, not the to_string that it calls, there or after it
+        response(10, x),
+        response(11, here(3, 2, 3)),
+        response(12, null),
+        response(13, null),
+        // A method through ?., which is in std:builtins
+        response(14, to_string),
+        response(15, null),
+        // A name that the to_string of its interpolation's name starts as
+        response(16, {
+          contents: { kind: 'markdown', value: '```lerta\nto_string_value: Int\n```' },
+        }),
+        response(17, here(9, 6, 21)),
+        // Only the field, not the name that the parser makes of `p?`
+        response(18, x),
+        response(19, here(0, 9, 10)),
+        response(20, x),
+        response(21, here(3, 2, 3)),
+        ...[22, 23, 24, 25, 26, 27].map((id) => response(id, null)),
+      ]
+      const answers = ran.received.filter(
+        (message) => typeof message.id === 'number' && message.id >= 10,
+      )
+      return expect_received(expected, answers)
+    },
+  },
+  {
+    name: 'lerta lsp goes to assigned fields, members of enums, catch variables and if const bindings',
+    run: async () => {
+      const text = [
+        "import Shade from './shades'",
+        'class K',
+        '  v: Int = 1',
+        '  inc = -> @v += 1',
+        'const k = K()',
+        'k.v = 3',
+        'enum Color',
+        '  RED',
+        'const c = Color.RED',
+        'const found: Int? = 1',
+        'if const n = found',
+        '  print n',
+        'try',
+        "  throw ValueError(message: 'x')",
+        'catch error',
+        '  print error.message',
+        'k.inc()',
+        'print c',
+        'extend K',
+        '  reset = -> @v = 0',
+        'k.reset()',
+        'print Shade.DARK',
+        '',
+      ].join('\n')
+      const asks: [number, number][] = [
+        [5, 2],
+        [3, 12],
+        [8, 16],
+        [11, 8],
+        [15, 8],
+        [19, 15],
+        [20, 2],
+        [16, 2],
+        [21, 12],
+      ]
+      const files = { 'a.lerta': '', 'shades.lerta': 'export enum Shade\n  LIGHT\n  DARK\n' }
+      const ran = await session(files, (uri) => [
+        open(uri('a.lerta'), text),
+        ...asks.map(([line, character], i) => ({
+          id: 10 + i,
+          method: 'textDocument/definition',
+          params: { textDocument: { uri: uri('a.lerta') }, position: { line, character } },
+        })),
+      ])
+      const here = (line: number, start: number, end: number) => ({
+        uri: ran.uri('a.lerta'),
+        range: { start: { line, character: start }, end: { line, character: end } },
+      })
+      const expected = [
+        // An assigned field, through an object and through @ in two ways
+        response(10, here(2, 2, 3)),
+        response(11, here(2, 2, 3)),
+        // A member of an enum, of this module and of an imported one
+        response(12, here(7, 2, 5)),
+        // An if const binding and a catch variable
+        response(13, here(10, 9, 10)),
+        response(14, here(14, 6, 11)),
+        response(15, here(2, 2, 3)),
+        // A method of an extend and one of the class
+        response(16, here(19, 2, 7)),
+        response(17, here(3, 2, 5)),
+        response(18, {
+          uri: ran.uri('shades.lerta'),
+          range: { start: { line: 2, character: 2 }, end: { line: 2, character: 6 } },
+        }),
+      ]
+      const answers = ran.received.filter(
+        (message) => typeof message.id === 'number' && message.id >= 10,
+      )
+      return expect_received(expected, answers)
+    },
+  },
+  {
+    name: 'lerta lsp finds names after an error, destructured, for and captured locals, and none where loading fails',
+    run: async () => {
+      const text = [
+        'const n = [1].length',
+        'print n + zz',
+        'const q = 2',
+        'print q',
+        'const (a, b) = (1, 2)',
+        'for item in [a]',
+        '  print item + b',
+        'const add = (x: Int) -> -> x + 1',
+        'print add(1)()',
+        '',
+      ].join('\n')
+      const asks: [number, number][] = [
+        [3, 6],
+        [6, 8],
+        [6, 15],
+        [7, 27],
+      ]
+      const ran = await session({ 'a.lerta': '' }, (uri) => [
+        open(uri('a.lerta'), text),
+        ...asks.map(([line, character], i) => ({
+          id: 10 + i,
+          method: 'textDocument/definition',
+          params: { textDocument: { uri: uri('a.lerta') }, position: { line, character } },
+        })),
+        // The name of the last check's program at the same place, which a kept program would answer for
+        change(uri('a.lerta'), "import x from './missing'\nprint n + zz\n"),
+        {
+          id: 20,
+          method: 'textDocument/hover',
+          params: { textDocument: { uri: uri('a.lerta') }, position: { line: 1, character: 6 } },
+        },
+      ])
+      const here = (line: number, start: number, end: number) => ({
+        uri: ran.uri('a.lerta'),
+        range: { start: { line, character: start }, end: { line, character: end } },
+      })
+      const expected = [
+        // q, after the error of zz
+        response(10, here(2, 6, 7)),
+        // item, of a for, and b, destructured
+        response(11, here(5, 4, 8)),
+        response(12, here(4, 10, 11)),
+        // x, captured by the inner function
+        response(13, here(7, 13, 14)),
+        // No program, as its modules cannot be loaded (check), and none of the last check
+        response(20, null),
+      ]
+      const answers = ran.received.filter(
+        (message) => typeof message.id === 'number' && message.id >= 10,
+      )
+      return expect_received(expected, answers)
     },
   },
 ]

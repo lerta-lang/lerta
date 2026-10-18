@@ -1,0 +1,196 @@
+# The names of a checked program by their positions, for an editor's hover and going to a
+# definition: what the checker found of the name at a place, its types and its declaration.
+import EnumDeclaration, Identifier, Member, Position from '../ast'
+import generic_of, GenericFunction from '../checker/generics'
+import ExportRef from '../checker/imports'
+import EnumValue, Method, Property, PropertyKind from '../checker/member_targets'
+import ExtensionSource, OwnMethod from '../checker/methods'
+import info_of from '../checker/object_types'
+import Constructor, FunctionReference, TopLevelValue from '../checker/references'
+import NodeFacts, ProgramWide, Shared from '../checker/shared'
+import module_location from '../source'
+import EnumType, format_type, ObjectType, Type from '../types'
+
+# A declaration: a name of a module, by the module's place.
+export struct Declared(module_index: Int, name: Identifier)
+
+# A name as it is written in the module's code, with its type if the checker found one, and its
+# declaration, found when asked.
+struct Candidate(name: Identifier, type: Type?, declaration: () -> Declared?)
+
+# The place among the program's modules of the module at the location, as diagnostics give it.
+export const module_at = (program: ProgramWide, location: String) ->
+  const is_at = (shared: Shared) -> location_of(program, shared.index) == location
+  program.shared.find(is_at)?.index
+
+# The location of the module of the place, as diagnostics give it.
+export const location_of = (program: ProgramWide, module_index: Int) ->
+  module_location program.entry_path, program.modules[module_index].display_path
+
+# The types that the name at the position of the module's source has, one for each instance of a
+# generic body it is in, written as `name: Type`; none if no name is there.
+export const hover_lines = (
+  program: ProgramWide, module_index: Int, source: String, at: Position
+) ->
+  const lines: String[] = []
+  for candidate in candidates_at(program, module_index, source, at)
+    const type = candidate.type ? continue
+    const line = "#{candidate.name.name}: #{format_type(type)}"
+    lines.push line if not lines.contains(line)
+  lines
+
+# The declaration of the name at the position, if the checker found one.
+export const definition_of = (
+  program: ProgramWide, module_index: Int, source: String, at: Position
+) ->
+  for candidate in candidates_at(program, module_index, source, at)
+    return declared if const declared = candidate.declaration()
+  nil
+
+# The names at the position in the module's code: those whose types and references its own facts
+# and those of the instances of its generic functions and classes hold, the callees of generic
+# functions, and the names it imports.
+const candidates_at = (program: ProgramWide, module_index: Int, source: String, at: Position) ->
+  const lines = source.split("\n")
+  const shared = program.shared[module_index]
+  const found: Candidate[] = []
+  const add = (candidate: Candidate) ->
+    found.push candidate if spans(candidate.name, at) and is_written(lines, candidate.name)
+  for facts in all_facts(shared)
+    for (node, type) in facts.types.entries()
+      if node is Identifier
+        add(
+          Candidate(
+            type
+            name: node
+            declaration: -> name_declaration(program, module_index, facts, node)
+          )
+        )
+      else if node is Member
+        add(
+          Candidate(type, name: node.name, declaration: -> member_declaration(program, facts, node))
+        )
+    for (call, link) in facts.instances.entries()
+      const callee = call.callee
+      continue if callee is not Identifier
+      const instance = link.instance
+      const generic = generic_of(program, instance.generic)
+      const declared = Declared(module_index: generic.module_index, name: generic.name)
+      add(
+        Candidate(name: callee as Identifier!, type: instance.entry.type, declaration: -> declared)
+      )
+  for imported in shared.imports.names.values()
+    const source = imported.source
+    continue if source is not ExportRef
+    const ref = source as ExportRef!
+    add(
+      Candidate(
+        name: imported.name
+        type: nil
+        declaration: -> top_level_declaration(program, ref.module_index, ref.name)
+      )
+    )
+  found
+
+# What the name refers to: a top-level value, a function, a class or struct, or else a local, whose
+# declaration the checker kept.
+const name_declaration = (
+  program: ProgramWide, module_index: Int, facts: NodeFacts, name: Identifier
+) ->
+  const reference = facts.references[name]
+  case reference
+    when TopLevelValue then top_level_declaration(program, reference.module_index, reference.name)
+    when FunctionReference
+      top_level_declaration program, reference.module_index, reference.name
+    when Constructor
+      const info = info_of(program, reference.type)
+      Declared module_index: info.module_index, name: info.declaration.name
+    else
+      const local = facts.local_declarations[name] ? return nil
+      Declared module_index, name: local
+
+# A top-level value, a function, a generic function or a type of the module, by its name there.
+const top_level_declaration = (program: ProgramWide, module_index: Int, name: String) ->
+  const shared = program.shared[module_index]
+  const declared = (identifier: Identifier) -> Declared(module_index, name: identifier)
+  return declared(local.identifier) if const local = shared.top_level.locals[name]
+  return declared(entry.name) if const entry = shared.functions.entries[name]
+  const is_generic = (each: GenericFunction) -> each.name.name == name and each.receiver == nil
+  return declared(generic.name) if const generic = shared.generics.find(is_generic)
+  return declared(info.declaration.name) if const info = shared.objects[name]
+  nil
+
+# The field or method that the member reads or calls, or the field that it assigns, for which the
+# checker keeps no target; or the member of an enum.
+const member_declaration = (program: ProgramWide, facts: NodeFacts, member: Member) ->
+  const name = member.name.name
+  const object_type = facts.types[member.object]
+  const target = facts.members[member]
+  if target == nil
+    return object_type is ObjectType then declared_member(program, object_type as ObjectType!, name)
+  case target
+    when Method
+      const source = target.source
+      case source
+        when OwnMethod then declared_member(program, source.receiver, name)
+        when ExtensionSource
+          Declared module_index: source.method.module_index, name: source.method.name
+        else nil
+    when Property
+      return nil if target.kind != PropertyKind.FIELD or object_type is not ObjectType
+      declared_member program, object_type as ObjectType!, name
+    when EnumValue then enum_member_declaration(program, facts.types[member]!, name)
+    else nil
+
+# The member of the enum by its name, as its declaration writes it, in the module that declares
+# the enum, the one whose own enum of its name is it.
+const enum_member_declaration = (program: ProgramWide, type: Type, name: String) ->
+  const enum_type = type as EnumType ? return nil
+  const declares = (shared: Shared) -> shared.enums[enum_type.name]?.symbol == enum_type.symbol
+  const module_index = program.shared.find(declares)?.index ? return nil
+  for statement in program.modules[module_index].program
+    continue if statement is not EnumDeclaration
+    const declaration = statement as EnumDeclaration!
+    continue if declaration.name.name != enum_type.name
+    for each in declaration.members
+      return Declared(module_index, name: each) if each is Identifier and each.name == name
+  nil
+
+const declared_member = (program: ProgramWide, type: ObjectType, name: String) ->
+  const info = info_of(program, type)
+  const member = info.declaration.members.find((each) -> each.name.name == name) ? return nil
+  Declared module_index: info.module_index, name: member.name
+
+# Whether the source, as its lines, writes the name at its position, rather than the parser or the
+# checker making it there, as `?2:3` for the object of `x?.y` or `to_string` for an interpolation.
+const is_written = (lines: String[], name: Identifier) ->
+  const { line, column } = name.position
+  return false if line > lines.length
+  const code_points = lines[line - 1].iter().to_array()
+  const written = name.name.iter().to_array()
+  return false if column - 1 + written.length > code_points.length
+  for code, i in written
+    return false if code_points[column - 1 + i] != code
+  # The whole name, which another one written there may start with.
+  const end = column - 1 + written.length
+  end == code_points.length or not is_name_part(code_points[end])
+
+const is_name_part = (code: CodePoint) ->
+  const between = (first: CodePoint, last: CodePoint) -> code >= first and code <= last
+  between('a', 'z') or between('A', 'Z') or between('0', '9') or code == '_'
+
+# Whether the name, which starts at its position, holds the column, both in code points: the column
+# right after it too, where a cursor that has just written it is.
+const spans = (name: Identifier, at: Position) ->
+  const start = name.position
+  const length = name.name.iter().to_array().length
+  start.line == at.line and at.column >= start.column and at.column <= start.column + length
+
+const all_facts = (shared: Shared) ->
+  const facts = [shared.facts]
+  for generic in shared.generics
+    facts.push instance.facts for instance in generic.instances
+  for info in shared.objects.values()
+    facts.push info.facts
+    facts.push instance.facts for instance in info.instances
+  facts

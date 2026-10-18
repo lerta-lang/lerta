@@ -1,6 +1,8 @@
 # The errors and warnings of a program, as the LSP publishes them for each of its files: its entry
 # module is checked as `lerta build` checks it, without generating code.
 import check_modules from '../checker/modules'
+import Position from '../ast'
+import ProgramWide from '../checker/shared'
 import CompileError, Located from '../errors'
 import load_modules from '../loader'
 import is_standard_name, module_location, read_source from '../source'
@@ -22,6 +24,10 @@ export enum PositionEncoding
   UTF32
   UTF16
 
+# What a check found: the diagnostics, by the paths of the files, and the program as far as it is
+# checked, if its modules could be loaded.
+export struct Checked(by_path: Map<String, LspDiagnostic[]>, program: ProgramWide?)
+
 # The diagnostics of the program whose entry module is at the path, by the paths of its files,
 # every one of them, those without any too, but the standard modules; only the entry module's and
 # those that have some if the modules cannot be loaded. An error that is found in no module is the
@@ -31,7 +37,10 @@ export const check_file = (path: String, encoding: PositionEncoding) ->
   by_path[path] = []
   var warnings: Located[] = []
   var errors: Located[] = []
-  const keep_warnings = (found: Located[]) -> warnings = found
+  var checked: ProgramWide?
+  const keep_warnings = (program: ProgramWide, found: Located[]) ->
+    checked = program
+    warnings = found
   try
     const modules = await load_modules(path)
     for module in modules
@@ -49,17 +58,41 @@ export const check_file = (path: String, encoding: PositionEncoding) ->
     by_path.get_or_put(located.location, -> []).push(diagnostic)
   await add(each, ERROR) for each in errors
   await add(each, WARNING) for each in warnings
-  by_path
+  Checked by_path, program: checked
 
 # The position of the diagnostic, whose column counts code points: in UTF-16 units, those before
 # it on its line count 2 each above U+FFFF.
 const position = (located: Located, encoding: PositionEncoding) ->
-  const line = located.line - 1
-  const before = located.column - 1
+  await lsp_position(
+    located.location
+    Position(line: located.line, column: located.column)
+    encoding
+  )
+
+# The position, of lines and columns from 1 and columns in code points, in the file at the
+# location, as the LSP takes it.
+export const lsp_position = (location: String, at: Position, encoding: PositionEncoding) ->
+  const line = at.line - 1
+  const before = at.column - 1
   return LspPosition(line, character: before) if encoding == PositionEncoding.UTF32
-  const lines = (await read_source(located.location)).split("\n")
-  const text = line < lines.length then lines[line] else ''
-  LspPosition line, character: characters(text, encoding, before)
+  LspPosition line, character: characters(await line_text(location, line), encoding, before)
+
+# The position that the LSP gives in the file at the location, of lines and columns from 1 and
+# columns in code points.
+export const source_position = (location: String, at: LspPosition, encoding: PositionEncoding) ->
+  const column = Position(line: at.line + 1, column: at.character + 1)
+  return column if encoding == PositionEncoding.UTF32
+  var units = 0
+  var counted = 0
+  for code in await line_text(location, at.line)
+    break if units >= at.character
+    units += code > 0xFFFF then 2 else 1
+    counted += 1
+  Position line: at.line + 1, column: counted + 1
+
+const line_text = (location: String, line: Int) ->
+  const lines = (await read_source(location)).split("\n")
+  line < lines.length then lines[line] else ''
 
 # The characters of the text, or of its first `count` code points, in the encoding's units.
 export const characters = (text: String, encoding: PositionEncoding, count: Int? = nil) ->

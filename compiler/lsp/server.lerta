@@ -1,18 +1,22 @@
 # `lerta lsp`: a language server over stdin and stdout (see docs/reference/compiler.md#lsp). It
 # takes the whole text of a document on each change, publishes the diagnostics of the program
-# whose entry module is the document when it is opened or changed, and formats it as
-# `lerta fmt --fix` would write it.
+# whose entry module is the document when it is opened or changed, formats it as `lerta fmt --fix`
+# would write it, and gives the types of a name in it and where the name is declared.
 import is_file from 'std:io'
 import exit from 'std:process'
 import decode_json, JsonError, JsonKeys from 'std:json'
+import Position from '../ast'
+import ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import removable_annotations from '../format/annotations'
 import format_source from '../format/format'
 import module_key from '../loader'
-import open_texts, text_key from '../source'
+import is_standard_name, open_texts, read_source, text_key from '../source'
 import
-  characters, check_file, LspDiagnostic, LspPosition, LspRange, PositionEncoding
+  characters, check_file, LspDiagnostic, lsp_position, LspPosition, LspRange, PositionEncoding,
+  source_position
 from './diagnostics'
+import definition_of, hover_lines, location_of, module_at from './locate'
 import
   Header, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, PARSE_ERROR, Notification, notify,
   read_message, Request, respond, respond_error
@@ -30,6 +34,8 @@ struct ServerCapabilities
   position_encoding: String
   text_document_sync: Int
   document_formatting_provider: Bool
+  hover_provider: Bool
+  definition_provider: Bool
 
 struct TextDocument(uri: String)
 
@@ -40,6 +46,14 @@ struct DidOpenParams(text_document: OpenedDocument)
 struct DidChangeParams(text_document: TextDocument, content_changes: { text: String }[])
 
 struct DocumentParams(text_document: TextDocument)
+
+struct PositionParams(text_document: TextDocument, position: LspPosition)
+
+struct MarkupContent(kind: String, value: String)
+
+struct Hover(contents: MarkupContent)
+
+struct Location(uri: String, range: LspRange)
 
 struct PublishDiagnosticsParams(uri: String, diagnostics: LspDiagnostic[])
 
@@ -54,6 +68,9 @@ class Server
   # its program (see check_file). A file's diagnostics are those of all the open documents'
   # checks.
   found: Map<String, Map<String, LspDiagnostic[]>> = Map()
+  # The program of each open document's last check, as far as it was checked, which hover and
+  # going to a definition read.
+  programs: Map<String, ProgramWide> = Map()
 
   # Handles each message until the input ends or an exit notification comes. A header that gives
   # no length tells nothing of where the next message starts, so it ends the server.
@@ -100,6 +117,12 @@ class Server
           request.id
           await formatting_edits(request.params.text_document.uri, @encoding)
         )
+      when 'textDocument/hover'
+        const request = decode_json<Request<PositionParams>>(body, KEYS)
+        await respond(request.id, await @hover(request.params))
+      when 'textDocument/definition'
+        const request = decode_json<Request<PositionParams>>(body, KEYS)
+        await respond(request.id, await @definition(request.params))
       when 'shutdown'
         @shut_down = true
         const none: Bool? = nil
@@ -112,16 +135,22 @@ class Server
     @encoding = PositionEncoding.UTF32 if encodings.contains('utf-32')
     const encoding = @encoding == PositionEncoding.UTF32 then 'utf-32' else 'utf-16'
     const capabilities = ServerCapabilities(
-      position_encoding: encoding, text_document_sync: FULL_SYNC, document_formatting_provider: true
+      position_encoding: encoding, text_document_sync: FULL_SYNC,
+      document_formatting_provider: true, hover_provider: true, definition_provider: true
     )
     await respond(request.id, InitializeResult(capabilities, server_info: { name: 'lerta' }))
 
   # A document that is no file yet is formatted, but not checked: a program's modules are files. One
-  # whose file is gone keeps what its last check found until it is closed.
+  # whose file is gone keeps the diagnostics of its last check until it is closed, but not its
+  # program, whose positions its new text no longer has; the open documents that import it are
+  # checked again, from its new text.
   set_text = (uri: String, text: String) ->
     const path = path_of_uri(uri) ? return
     open_texts[text_key(path)] = text
-    return if not is_file(path)
+    if not is_file(path)
+      @programs.remove path
+      await @check(doc) for doc in @importers(path)
+      return
     await @check(doc) for doc in [path, @importers(path)...]
 
   # Its importers' checks, which took its text, are made again, from the file.
@@ -130,8 +159,46 @@ class Server
     open_texts.remove text_key(path)
     const files = @found[path]?.keys().to_array() ? []
     @found.remove path
+    @programs.remove path
     await @check(doc) for doc in @importers(path)
     await @publish(file) for file in files
+
+  # The types of the name at the position, as a block of Lerta, from the program of the document's
+  # own check if it has one, or of another open document's that holds it.
+  hover = (params: PositionParams) ->
+    const path = path_of_uri(params.text_document.uri) ? return nil
+    const program = @program_of(path) ? return nil
+    const module_index = module_at(program, path) ? return nil
+    const at = await source_position(path, params.position, @encoding)
+    const lines = hover_lines(program, module_index, await read_source(path), at)
+    return nil if lines.length == 0
+    Hover contents: MarkupContent(kind: 'markdown', value: "```lerta\n#{lines.join("\n")}\n```")
+
+  # Where the name at the position is declared, if in a file.
+  definition = (params: PositionParams) ->
+    const path = path_of_uri(params.text_document.uri) ? return nil
+    const program = @program_of(path) ? return nil
+    const module_index = module_at(program, path) ? return nil
+    const at = await source_position(path, params.position, @encoding)
+    const declared = definition_of(program, module_index, await read_source(path), at) ? return nil
+    const location = location_of(program, declared.module_index)
+    return nil if is_standard_name(location)
+    const start = await lsp_position(location, declared.name.position, @encoding)
+    const end = await lsp_position(
+      location
+      Position(
+        line: declared.name.position.line
+        column: declared.name.position.column + declared.name.name.iter().to_array().length
+      )
+      @encoding
+    )
+    Location uri: uri_of_path(location), range: LspRange(start, end)
+
+  program_of = (path: String) ->
+    return own if const own = @programs[path]
+    for (doc, files) in @found.entries()
+      return @programs[doc] if files.has(path) and @programs.has(doc)
+    nil
 
   # The other open documents whose programs hold the document at the path.
   importers = (path: String) ->
@@ -141,8 +208,13 @@ class Server
   # diagnostics of the files of its program, as of this check and of the last one.
   check = (path: String) ->
     const before = @found[path]?.keys().to_array() ? []
-    const found = await check_file(path, @encoding)
+    const checked = await check_file(path, @encoding)
+    const found = checked.by_path
     @found[path] = found
+    if const program = checked.program
+      @programs[path] = program
+    else
+      @programs.remove path
     const files = [file for file in before when not found.has(file)]
     files.append found.keys().to_array()
     await @publish(file) for file in files

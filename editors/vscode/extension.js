@@ -5,8 +5,9 @@ const vscode = require('vscode')
 
 // A client of `lerta lsp` (see docs/reference/compiler.md#lsp), written without the
 // vscode-languageclient package, so that the extension needs no install of its own: it sends the
-// Lerta documents' texts, shows the diagnostics that the server publishes, and formats a document
-// by its edits. One server runs for each lerta command, as each workspace folder may have its own.
+// Lerta documents' texts, shows the diagnostics that the server publishes, formats a document by
+// its edits, and asks the server for the types of a name and where it is declared. One server runs
+// for each lerta command, as each workspace folder may have its own.
 // A server that fails is started again only when a document is opened, not at each edit.
 function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection('lerta')
@@ -145,6 +146,28 @@ function activate(context) {
     },
   }
 
+  // A request about a position in a document, of the server that holds it.
+  async function askAt(document, position, method) {
+    const server = holders.get(document.uri.toString())
+    if (!server) return null
+    const params = { textDocument: { uri: document.uri.toString() }, position: { line: position.line, character: position.character } }
+    return request(server, method, params).catch(() => null)
+  }
+
+  const hovers = {
+    async provideHover(document, position) {
+      const hover = await askAt(document, position, 'textDocument/hover')
+      return hover && new vscode.Hover(new vscode.MarkdownString(hover.contents.value))
+    },
+  }
+
+  const definitions = {
+    async provideDefinition(document, position) {
+      const location = await askAt(document, position, 'textDocument/definition')
+      return location && new vscode.Location(vscode.Uri.parse(location.uri), toRange(location.range))
+    },
+  }
+
   function stop(server) {
     if (server.ended) return
     server.stopping = true
@@ -160,6 +183,8 @@ function activate(context) {
     vscode.workspace.onDidCloseTextDocument(close),
     vscode.workspace.onDidGrantWorkspaceTrust(() => vscode.workspace.textDocuments.forEach(open)),
     vscode.languages.registerDocumentFormattingEditProvider({ language: 'lerta', scheme: 'file' }, formatter),
+    vscode.languages.registerHoverProvider({ language: 'lerta', scheme: 'file' }, hovers),
+    vscode.languages.registerDefinitionProvider({ language: 'lerta', scheme: 'file' }, definitions),
     { dispose: () => servers.forEach(stop) },
   )
   vscode.workspace.textDocuments.forEach(open)
