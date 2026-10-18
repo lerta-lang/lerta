@@ -730,6 +730,55 @@ export const lsp_checks: Check[] = [
     },
   },
   {
+    name: 'lerta lsp goes to externs, of the module and imported, by their names or others, and from their imports',
+    run: async () => {
+      const text = [
+        "import int_text, int_text as t from './conversions'",
+        'extern lerta_int_to_string as text_of: (Int) -> String',
+        'print text_of(1)',
+        'print int_text(2)',
+        'print t(3)',
+        '',
+      ].join('\n')
+      const asks: [number, number][] = [
+        [2, 6],
+        [3, 6],
+        [0, 7],
+        [4, 6],
+        [0, 30],
+      ]
+      const files = {
+        'a.lerta': '',
+        'conversions.lerta': 'export extern lerta_int_to_string as int_text: (Int) -> String\n',
+      }
+      const ran = await session(files, (uri) => [
+        open(uri('a.lerta'), text),
+        ...asks.map(([line, character], i) => ({
+          id: 10 + i,
+          method: 'textDocument/definition',
+          params: { textDocument: { uri: uri('a.lerta') }, position: { line, character } },
+        })),
+      ])
+      const location = (name: string, line: number, start: number, end: number) => ({
+        uri: ran.uri(name),
+        range: { start: { line, character: start }, end: { line, character: end } },
+      })
+      const expected = [
+        // An extern of the module, and one of another, from a call and from its import
+        response(10, location('a.lerta', 1, 30, 37)),
+        response(11, location('conversions.lerta', 0, 37, 45)),
+        response(12, location('conversions.lerta', 0, 37, 45)),
+        // Imported by another name, there and where it is imported
+        response(13, location('conversions.lerta', 0, 37, 45)),
+        response(14, location('conversions.lerta', 0, 37, 45)),
+      ]
+      const answers = ran.received.filter(
+        (message) => typeof message.id === 'number' && message.id >= 10,
+      )
+      return expect_received(expected, answers)
+    },
+  },
+  {
     name: 'lerta lsp finds names after an error, destructured, for and captured locals, and none where loading fails',
     run: async () => {
       const text = [
