@@ -1,0 +1,174 @@
+# The members of enums written with their enums, `E.MEMBER`, that the checking may show can be
+# written alone (see Enum members in docs/reference/style.md), and how to write them so in the
+# syntax tree.
+import
+  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
+  Comprehension, Condition, Conditional, Declaration, Expression, Extend, For, FunctionLiteral,
+  Identifier, If, Index, IsTest, MapEntry, MapLiteral, Member, MemberDeclaration, NamedValue,
+  Parameter, Range, RecordLiteral, Return, Statement, Throw, Try, TupleItem, TupleLiteral,
+  TypeDeclaration, UnaryOperation, Unwrap, While, Yield
+from '../ast'
+import Annotation, annotation_key from './annotated'
+
+# What puts a value in the place of an expression in the syntax tree.
+type Place = (Expression) -> void
+
+# The members that may be written alone, in the order of the source.
+export const qualified_members_of = (program: Statement[]) ->
+  const found: Annotation[] = []
+  add_statements found, program
+  found
+
+const add_statements = (found: Annotation[], statements: Statement[]): void ->
+  add_statement found, statements, i for i in 0...statements.length
+
+const add_statement = (found: Annotation[], statements: Statement[], i: Int) ->
+  const statement = statements[i]
+  case statement
+    when Declaration then add(found, statement.value, (value) -> statement.value = value)
+    when Assignment
+      add_expression found, statement.target
+      add found, statement.value, (value) -> statement.value = value
+    when While
+      add_condition found, statement.condition, (value) -> statement.condition = value
+      add_statements found, statement.body
+    when For
+      add found, statement.iterable, (value) -> statement.iterable = value
+      add_statements found, statement.body
+    when TypeDeclaration then add_members(found, statement.members)
+    when Extend then add_members(found, statement.members)
+    when Expression then add(found, statement, (value) -> statements[i] = value)
+    else pass
+
+const add_members = (found: Annotation[], members: MemberDeclaration[]) ->
+  add_member found, members, i for i in 0...members.length
+
+const add_member = (found: Annotation[], members: MemberDeclaration[], i: Int) ->
+  const value = members[i].value ? return
+  add found, value, (new_value) ->
+    const { name, modifier, type, has_default, position } = members[i]
+    members[i] = MemberDeclaration(name, modifier, type, has_default, position, value: new_value)
+
+# An expression in its place: a member of an enum is one that may be written alone.
+const add = (found: Annotation[], value: Expression, place: Place) ->
+  found.push unqualified(value, place) if value is Member
+  add_expression found, value
+
+const add_condition = (found: Annotation[], condition: Condition, place: Place) ->
+  case condition
+    when Binding then add(found, condition.value, (value) -> condition.value = value)
+    else add(found, condition, place)
+
+const add_all = (found: Annotation[], values: Expression[]) ->
+  add_at found, values, i for i in 0...values.length
+
+const add_at = (found: Annotation[], values: Expression[], i: Int) ->
+  add found, values[i], (value) -> values[i] = value
+
+const add_named = (found: Annotation[], values: NamedValue[]) ->
+  add_named_at found, values, i for i in 0...values.length
+
+const add_named_at = (found: Annotation[], values: NamedValue[], i: Int) ->
+  add found, values[i].value, (value) -> values[i] = NamedValue(value, name: values[i].name)
+
+# The checking of a call writes its arguments in new lists, as a construction's named ones each
+# time, so their places reach them through the call.
+const add_arguments = (found: Annotation[], call: Call) ->
+  add_argument found, call, i for i in 0...call.args.length
+  add_named_argument found, call, i for i in 0...call.named_args.length
+
+const add_argument = (found: Annotation[], call: Call, i: Int) ->
+  add found, call.args[i], (value) -> call.args[i] = value
+
+const add_named_argument = (found: Annotation[], call: Call, i: Int) ->
+  add found, call.named_args[i].value, (value) ->
+    call.named_args[i] = NamedValue(value, name: call.named_args[i].name)
+
+const add_entries = (found: Annotation[], entries: MapEntry[]) ->
+  add_entry found, entries, i for i in 0...entries.length
+
+const add_entry = (found: Annotation[], entries: MapEntry[], i: Int) ->
+  add found, entries[i].key, (key) -> entries[i] = MapEntry(key, value: entries[i].value)
+  add found, entries[i].value, (value) -> entries[i] = MapEntry(value, key: entries[i].key)
+
+const add_function = (found: Annotation[], literal: FunctionLiteral) ->
+  add_default found, literal.params, i for i in 0...literal.params.length
+  add_statements found, literal.body
+
+const add_default = (found: Annotation[], params: Parameter[], i: Int) ->
+  const default = params[i].default ? return
+  add found, default, (value) ->
+    const { name, type, variadic } = params[i]
+    params[i] = Parameter(name, type, variadic, default: value)
+
+# The parts of an expression. The element and the guard of a comprehension are not places: its
+# lazy functions share them (see Comprehension). Nor are the values of an interpolation, which is
+# printed as written.
+const add_expression = (found: Annotation[], expression: Expression): void ->
+  case expression
+    when FunctionLiteral then add_function(found, expression)
+    when Throw then add(found, expression.message, (value) -> expression.message = value)
+    when Yield then add(found, expression.value, (value) -> expression.value = value)
+    when Await then add(found, expression.operand, (value) -> expression.operand = value)
+    when Unwrap then add(found, expression.operand, (value) -> expression.operand = value)
+    when UnaryOperation then add(found, expression.operand, (value) -> expression.operand = value)
+    when Coalesce
+      add found, expression.value, (value) -> expression.value = value
+      add found, expression.fallback, (value) -> expression.fallback = value
+    when ArrayLiteral then add_all(found, expression.elements)
+    when MapLiteral then add_entries(found, expression.entries)
+    when Comprehension
+      add found, expression.iterable, (value) -> expression.iterable = value
+      add_expression found, guard if const guard = expression.guard
+      add_expression found, expression.element
+    when RecordLiteral then add_named(found, expression.fields)
+    when TupleLiteral then add_all(found, expression.items)
+    when TupleItem then add_expression(found, expression.tuple)
+    when Index
+      add found, expression.object, (value) -> expression.object = value
+      add found, expression.index, (value) -> expression.index = value
+    when Call
+      add_expression found, expression.callee
+      add_arguments found, expression
+    when Member then add_expression(found, expression.object)
+    when BinaryOperation
+      add found, expression.left, (value) -> expression.left = value
+      add found, expression.right, (value) -> expression.right = value
+    when Range
+      add found, expression.start, (value) -> expression.start = value
+      add found, expression.end, (value) -> expression.end = value
+    when IsTest then add_expression(found, expression.value)
+    when Cast then add_expression(found, expression.value)
+    when Conditional
+      add found, expression.condition, (value) -> expression.condition = value
+      add found, expression.then_value, (value) -> expression.then_value = value
+      add found, expression.else_value, (value) -> expression.else_value = value
+    when Case
+      if const subject = expression.subject
+        add found, subject, (value) -> expression.subject = value
+      for arm in expression.arms
+        add_all found, arm.patterns
+        add_statements found, arm.body
+      add_statements found, otherwise if const otherwise = expression.otherwise
+    when If
+      add_condition found, expression.condition, (value) -> expression.condition = value
+      add_statements found, expression.then_body
+      add_statements found, expression.else_body
+    when Return
+      if const value = expression.value
+        add found, value, (new_value) -> expression.value = new_value
+    when Try
+      add_statements found, expression.body
+      add_statements found, catch_clause.body for catch_clause in expression.catches
+      add_statements found, finally_body if const finally_body = expression.finally_body
+    else pass
+
+# The member written alone, as a name at its place.
+const unqualified = (member: Member, place: Place) ->
+  const alone = Identifier(name: member.name.name, position: member.position)
+  Annotation(
+    member
+    key: annotation_key('member', member.position)
+    remove: -> place(alone)
+    restore: -> place(member)
+  )

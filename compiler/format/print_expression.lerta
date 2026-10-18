@@ -10,7 +10,10 @@ from '../ast'
 import breaking, choice, Doc, indent, join, line_feed, rule, separated, text, token from './doc'
 import named_type, type_arguments from './print_type'
 import if_doc from './print_statement'
-import CAST_FALLBACKS, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, STRING_LITERALS from './rules'
+import annotation_key from './annotated'
+import
+  CAST_FALLBACKS, ENUM_MEMBERS, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, STRING_LITERALS
+from './rules'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
 from './print_literal'
@@ -97,7 +100,7 @@ const runs_to_end = (expression: Expression): Bool ->
 
 const bare_doc = (expression: Expression, context: Context): Doc ->
   case expression
-    when Identifier then identifier(expression)
+    when Identifier then identifier(expression, context)
     when StringLiteral then string_doc(expression, context)
     when Interpolation then spelled(expression.position, context)
     when IntegerLiteral, FloatLiteral then spelled(expression.position, context)
@@ -168,8 +171,13 @@ const bare_doc = (expression: Expression, context: Context): Doc ->
 
 # A name that the parser makes for `x?.rest` stands for what is before `?.`, which is printed
 # instead.
-const identifier = (name: Identifier) ->
-  name.name.starts_with('?') then text('') else token(name.name, name.position)
+# A member of an enum written alone in place of `E.MEMBER` (see qualified_members_of) is reported
+# there.
+const identifier = (name: Identifier, context: Context) ->
+  return text('') if name.name.starts_with('?')
+  const written = token(name.name, name.position)
+  const key = annotation_key('member', name.position)
+  context.left_out.contains(key) then rule(ENUM_MEMBERS, written) else written
 
 # The literal as written in the source; `-1` is two tokens there.
 const spelled = (at: Position, context: Context) ->

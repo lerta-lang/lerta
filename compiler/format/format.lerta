@@ -5,7 +5,7 @@ import dump_ast from '../ast_dump'
 import CompileError from '../errors'
 import lex from '../lexer/tokens'
 import parse from '../parser/statement'
-import annotations_of from './annotated'
+import left_out_candidates from './annotations'
 import hunks from './diff'
 import join, lay_out, line_feed, RulePlace, text from './doc'
 import block_doc from './print_statement'
@@ -18,16 +18,16 @@ export struct Finding(at: Position, rule: StyleRule)
 
 export struct Formatted(text: String, findings: Finding[])
 
-# The source in the style, without the annotations of `removed_types` (see annotation_key), and
+# The source in the style, without the annotations of `left_out` (see annotation_key), and
 # where it differs from it. Throws a CompileError if the source does not parse, or if the text in
 # the style would not parse to the same program, which would be a bug.
-export const format_source = (source: String, path: String, removed_types: String[]) ->
+export const format_source = (source: String, path: String, left_out: String[]) ->
   const lexed = lex(source, path)
   const statements = parse(lexed.tokens, path)
-  for annotation in annotations_of(statements)
-    annotation.remove() if removed_types.contains(annotation.key)
+  for annotation in left_out_candidates(statements)
+    annotation.remove() if left_out.contains(annotation.key)
   const text_source = source_text(source, lexed)
-  const context = Context(removed_types, source: text_source)
+  const context = Context(left_out, source: text_source)
   const body = block_doc(statements, context)
   const doc = statements.length == 0 then text('') else join([body, line_feed()])
   const layout = lay_out(doc, text_source)

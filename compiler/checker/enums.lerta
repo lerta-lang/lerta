@@ -42,13 +42,15 @@ export const enum_type = (shared: Shared, name: String) ->
   exported.type as EnumType?
 
 # `E.MEMBER`, where no local takes the name of the enum E.
-export const type_of_qualified_member = (body: Body, member: Member): Type? ->
+export const type_of_qualified_member = (body: Body, member: Member, expected: Type?): Type? ->
   const type = qualifying_enum(body, member) ? return nil
   const { name, position } = member.name
   probe_enum body, type if name == COMPLETION_NAME
   fail body.program, position, "#{type.name}.parse must be called" if name == 'parse'
   const no_member = -> fail(body.program, position, "#{type.name} has no member '#{name}'")
   record_member body, member, EnumValue(index: name_index(type, name) ? no_member())
+  const where_expected = expected_enum(expected)?.symbol == type.symbol
+  body.facts.unqualifiable.add member if where_expected and not is_name_taken(body, name)
   type
 
 # `E.parse`, the member whose to_string gives a String, or nil.

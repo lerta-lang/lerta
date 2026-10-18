@@ -5,27 +5,28 @@ import
   Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern,
   For, FunctionLiteral, Identifier, If, Import, Index, InterfaceDeclaration, Interpolation, IsTest,
   MapLiteral, Member, MemberDeclaration, NamedType, Parameter, Pass, Position, Range, RecordLiteral,
-  Return, Statement, Throw, Try, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration,
+  Return, Statement, Throw, Try, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration, TypeName,
   UnaryOperation, Unwrap, While, Yield
 from '../ast'
 
-# A written type, named by `key` (see annotation_key), which `remove` takes out of the syntax tree
-# and `restore` puts back.
+# A written type, or the enum of a member (see qualified_members_of), named by `key` (see
+# annotation_key), which `remove` takes out of the syntax tree and `restore` puts back.
 export struct Annotation
   key: String
   remove: () -> void
   restore: () -> void
   # What the type is given to, which tells whether it can be inferred (see inferable): the name of a
   # variable or a field, with its value; the function, with its last value, for its return type; or
-  # the name of a parameter.
+  # the name of a parameter. Or the member, which tells whether it can be written alone.
   name: Identifier? = default nil
   value: Expression? = default nil
   function: FunctionLiteral? = default nil
   parameter: Identifier? = default nil
+  member: Member? = default nil
 
 # The checking and the printer find an annotation in syntax trees parsed apart, by what it annotates
 # (`return`, `parameter`, `variable` or `field`) and where that is: the function literal, or the
-# name.
+# name; or by `member` and where the member is.
 export const annotation_key = (kind: String, at: Position) -> "#{kind} #{at.line}:#{at.column}"
 
 # The annotations that may be left out, in the order of the source. Those in generic functions and
@@ -175,13 +176,18 @@ const last_value = (body: Statement[]) ->
   const last = body.last() ? return nil
   last as Expression?
 
+# The parameter's type is put in a Parameter of the default it has then, which may be a member
+# written alone (see qualified_members_of).
 const parameter_annotation = (literal: FunctionLiteral, i: Int) ->
-  const param = literal.params[i]
+  const { name, type } = literal.params[i]
+  const typed = (new_type: TypeName?) ->
+    const { variadic, default } = literal.params[i]
+    literal.params[i] = Parameter(name, variadic, default, type: new_type)
   Annotation(
-    key: annotation_key('parameter', param.name.position)
-    remove: -> literal.params[i] = Parameter(name: param.name, type: nil, default: param.default)
-    restore: -> literal.params[i] = param
-    parameter: param.name
+    key: annotation_key('parameter', name.position)
+    remove: -> typed(nil)
+    restore: -> typed(type)
+    parameter: name
   )
 
 # The type of `Map()` or `Set()` moves to its type arguments: `const s = Set<String>()`.
@@ -211,14 +217,24 @@ const collection_call = (declaration: Declaration) ->
   const matches = is_collection and callee.name == type.name and not type.optional
   matches and call.type_args.length == 0 then { call, args: type.args }
 
+# The field's type is put in a MemberDeclaration of the value it has then, which may be a member
+# written alone (see qualified_members_of).
 const field_annotation = (members: MemberDeclaration[], i: Int) ->
-  const member = members[i]
-  const { name, modifier, value, has_default, position } = member
+  const { name, type, value } = members[i]
+  const typed = (new_type: TypeName?) ->
+    const { modifier, has_default, position } = members[i]
+    members[i] = MemberDeclaration(
+      name
+      modifier
+      has_default
+      position
+      value: members[i].value
+      type: new_type
+    )
   Annotation(
     name
     value
     key: annotation_key('field', name.position)
-    remove: ->
-      members[i] = MemberDeclaration(name, modifier, value, has_default, position, type: nil)
-    restore: -> members[i] = member
+    remove: -> typed(nil)
+    restore: -> typed(type)
   )

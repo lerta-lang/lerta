@@ -1,15 +1,17 @@
 # The types written in modules that their checking shows the checker can infer (see Type
-# annotations in docs/reference/style.md), which `lerta fmt` leaves out.
-import Node from '../ast'
+# annotations in docs/reference/style.md), and the enums of members that it shows are expected
+# (see Enum members there), which `lerta fmt` leaves out.
+import Node, Statement from '../ast'
 import Located from '../errors'
 import all_warnings from '../checker/diagnostics'
 import check_program from '../checker/modules'
-import ProgramWide from '../checker/shared'
+import ProgramWide, Shared from '../checker/shared'
 import CompileError from '../errors'
 import imported_files, is_standard_module, load_modules, Module, module_key from '../loader'
 import format_type from '../types'
 import Annotation, annotations_of from './annotated'
 import inferable from './inferable'
+import qualified_members_of from './qualified'
 
 # What the checking of a program gives that an annotation can change: the type of each node of the
 # modules that are not standard, with the type it is converted to, if any; the types of the fields,
@@ -38,7 +40,15 @@ const not_imported = (paths: String[]) ->
     imported.add key for key in keys
   [path for path in paths when not imported.has(module_key(path))]
 
-# A written type of the module of `key`.
+# The written types and the enums of members that may be left out, in the order of the source.
+export const left_out_candidates = (program: Statement[]) ->
+  [annotations_of(program)..., qualified_members_of(program)...]
+
+const can_leave_out = (annotation: Annotation, shared: Shared, program: ProgramWide) ->
+  return shared.facts.unqualifiable.has(member) if const member = annotation.member
+  inferable annotation, shared, program
+
+# A written type, or the enum of a member, of the module of `key`.
 struct Placed(key: String, annotation: Annotation)
 
 # Adds the removable annotations of the modules `wanted` that the program of `entry` holds and that
@@ -62,8 +72,8 @@ const add_removable = (removable: Map<String, String[]>, entry: String, wanted: 
     const { key } = module
     removable[key] = []
     const shared = checked.shared[module.index]
-    for annotation in annotations_of(module.program)
-      inferred.push Placed(key, annotation) if inferable(annotation, shared, checked)
+    for annotation in left_out_candidates(module.program)
+      inferred.push Placed(key, annotation) if can_leave_out(annotation, shared, checked)
   return if inferred.length == 0
   const original = result_of(checked)
   const checks_the_same = (left_out: Placed[]) ->

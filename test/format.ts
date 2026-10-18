@@ -190,6 +190,35 @@ const command_checks: Check[] = [
     },
   },
   {
+    name: 'lerta fmt writes the members of enums alone, but one without which its import would be unused, through the checks of the calls that the checker rewrites',
+    run: () => {
+      const dir = tree('members', {
+        'kinds.lerta':
+          'export enum Kind\n  A\n  B\n\nexport struct Field(name: String, kind: Kind)\n\nexport const count = (kinds: Kind...) -> kinds.length\n\nexport const pick = (n: Int, options: { kind: Kind }) -> options.kind\n',
+        'made.lerta':
+          "import Field from './kinds'\nimport Kind from './kinds'\n\nexport const made = Field(name: 'a', kind: Kind.A)\n",
+        'named.lerta':
+          "import Field from './kinds'\nimport Kind from './kinds'\n\nconst name = 'b'\nexport const named = Field(name, kind: Kind.B)\n",
+        'counted.lerta':
+          "import count from './kinds'\nimport Kind from './kinds'\n\nexport const counted = count(Kind.A, Kind.A)\n",
+        'picked.lerta':
+          "import pick from './kinds'\nimport Kind from './kinds'\n\nexport const picked = pick(1, kind: Kind.A)\n",
+        'test.lerta':
+          "import Kind from './kinds'\n\nexport const is_b = (kind: Kind) -> kind == Kind.B\n",
+        'main.lerta':
+          "import counted from './counted'\nimport made from './made'\nimport named from './named'\nimport picked from './picked'\nimport is_b from './test'\n\nprint is_b(made.kind).to_string()\nprint counted\nprint is_b(picked).to_string()\nprint named.name\n",
+      })
+      const result = fmt(dir, ['.'])
+      const report = (at: string) =>
+        `${at}: write the member alone, where its enum is expected (Enum members)\n`
+      const expected = report('./counted.lerta:4:30') + report('./test.lerta:3:45')
+      return [
+        ...compare_text('stderr', expected, result.stderr),
+        ...expect_status(1, result.status),
+      ]
+    },
+  },
+  {
     name: 'lerta fmt checks once the files that a program holds through others, beside a file whose import is missing',
     run: () => {
       const dir = tree('chain', {
