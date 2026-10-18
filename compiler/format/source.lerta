@@ -1,5 +1,6 @@
 # What the formatter reads from the source by position, as the AST does not keep it: the spelling
 # of tokens, the text of comments and which lines are blank.
+import scan from 'std:scanner'
 import Position from '../ast'
 import Comment, Lexed, Token, TokenKind from '../lexer/tokens'
 
@@ -114,19 +115,13 @@ const is_opening = (kind: TokenKind) -> kind == '(' or kind == '[' or kind == '{
 const is_closing = (kind: TokenKind) -> kind == ')' or kind == ']' or kind == '}'
 
 # The part of the line from the column `start` up to `end`, which is exclusive, counted in code
-# points from 1.
+# points from 1; columns past the end of the line add nothing.
 const slice_columns = (line: String, start: Int, end: Int) ->
-  const bytes = line.binary
-  bytes.text(byte_index(bytes, start), byte_index(bytes, end))!
-
-# The index of the byte where the column starts, or the length after the last one.
-const byte_index = (bytes: Binary, column: Int) ->
-  var seen = 0
-  for byte, index in bytes
-    if not byte.is_utf8_continuation()
-      seen += 1
-      return index if seen == column
-  bytes.length
+  const scanner = scan(line)
+  scanner.next() for _ in 1...start
+  const taken = scanner.mark()
+  scanner.next() for _ in start...end
+  taken()
 
 # The columns that the text takes, one for each code point.
 export const columns = (text: String) ->

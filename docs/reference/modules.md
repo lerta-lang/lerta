@@ -15,7 +15,7 @@ import argv, exit from 'std:process'
   ```
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
 - `import 'module' as mod` gives its exports as `mod.<export>`, in values (`mod.distance(p, q)`, `mod.ORIGIN`, `mod.Point(x: 1, y: 2)`, `mod.Color.RED`) and in types (`p: mod.Point`, `<T: mod.Shaped>`), alongside any names imported from it by name. `mod` itself is no value (`'mod' is a module, which is no value: write mod.<export>`), and a local of the name hides it in values, as it hides any other name, though not in types, whose names are apart from those of values. An export the module does not have is an error where `mod.<export>` names it, and an unused `mod` warns as an unused name does. This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which would bring the names in unqualified.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:async'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:process'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, `import JsonWriter from './internal/json_writer'`, as a file imports another; those files are not standard modules: a program cannot import them as `std:...`, and their warnings show only when a standard module that imports them is built on its own. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:async'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:process'`, `'std:scanner'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, `import JsonWriter from './internal/json_writer'`, as a file imports another; those files are not standard modules: a program cannot import them as `std:...`, and their warnings show only when a standard module that imports them is built on its own. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
 - Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. Functions can be declared in any order (see [top-level values](functions.md#top-level-values)).
 
 ## Exports
@@ -137,6 +137,31 @@ Functions of `Float`s, which throw an `ArithmeticError` where the result would n
 | `cpu_count: Int` | The number of CPUs that are online when the module runs, at least 1. |
 | `process_id: Int` | The ID of the program's process. |
 | `is_running(id: Int): Bool` | Whether a process with the ID is running, including one that the program may not signal. An ID of 0 or below, or beyond those the system gives, is not. |
+
+## std:scanner
+
+A `Scanner` reads a `String` by code points, as a lexer does: it looks at the next one before passing over it, and takes the text of what it has passed over, without byte offsets, which only `Binary` has (see [String](types.md#string)). It only ever stands at the start of a code point, so what it gives is a `String` without a check. It is a struct of functions that share where it stands, which only the functions that `scan` makes see and move.
+
+```lerta
+import scan from 'std:scanner'
+
+const scanner = scan('width = 42')
+const name = scanner.take_while((c) -> c != ' ')
+scanner.take ' = '
+print "#{name}: #{scanner.rest()}"
+```
+
+| Name | |
+|---|---|
+| `scan(text: String): Scanner` | A Scanner at the start of the text. |
+| `s.done(): Bool` | Whether it has passed over the whole text. |
+| `s.peek(): CodePoint?` | The next code point, which it stays before, or nil at the end. |
+| `s.next(): CodePoint?` | The next code point, which it passes over, or nil at the end. |
+| `s.take(prefix: String): Bool` | Whether what follows starts with `prefix`, which it passes over if it does. Every text starts with `''`. |
+| `s.skip_while(test: (CodePoint) -> Bool)` | Passes over the code points that `test` holds for, up to the first that it does not, or to the end. |
+| `s.take_while(test: (CodePoint) -> Bool): String` | Likewise, and gives what it passed over, `''` if nothing. |
+| `s.mark(): () -> String` | A function that gives what it has passed over since the mark, up to where it stands each time the function is called, so after `rest()` up to the end. |
+| `s.rest(): String` | What is left, which it passes over, `''` at the end. |
 
 ## std:time
 

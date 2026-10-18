@@ -1,34 +1,32 @@
 # Splits a source text into tokens.
+import scan from 'std:scanner'
 import CalcError from './syntax'
 
 export struct Token(kind: String, text: String)
 
-const is_name_byte = (c: Byte) -> c.is_letter() or c == '_'
+const is_digit = (c: CodePoint) -> c >= '0' and c <= '9'
+const is_letter = (c: CodePoint) -> (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
+const is_name_character = (c: CodePoint) -> is_letter(c) or c == '_'
 
 const SYMBOLS = Set(['+', '-', '*', '/', '(', ')', '=', ';'])
 
 export const tokenize = (source: String) ->
   const tokens: Token[] = []
-  const bytes = source.binary
-  var i = 0
-  while i < bytes.length
-    const c = bytes[i]
+  const scanner = scan(source)
+  while const c = scanner.peek()
     if c == ' '
-      i += 1
-      continue
-    var end = i + 1
-    if c.is_digit()
-      end += 1 while end < bytes.length and bytes[end].is_digit()
-      tokens.push Token(kind: 'number', text: bytes.text(i, end)!)
-    else if is_name_byte(c)
-      end += 1 while end < bytes.length and is_name_byte(bytes[end])
-      const word = bytes.text(i, end)!
+      scanner.next()
+    else if is_digit(c)
+      tokens.push Token(kind: 'number', text: scanner.take_while(is_digit))
+    else if is_name_character(c)
+      const word = scanner.take_while(is_name_character)
       const kind = word == 'let' or word == 'print' then word else 'name'
       tokens.push Token(kind, text: word)
     else
-      const symbol = bytes.text(i, end)!
+      const taken = scanner.mark()
+      scanner.next()
+      const symbol = taken()
       throw CalcError(message: "unexpected character '#{symbol}'") if not SYMBOLS.has(symbol)
       tokens.push Token(kind: symbol, text: symbol)
-    i = end
   tokens.push Token(kind: 'end', text: '')
   tokens

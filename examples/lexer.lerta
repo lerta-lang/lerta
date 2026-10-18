@@ -1,6 +1,7 @@
 # The first step of a Lerta compiler written in Lerta: it splits a source into tokens, with the
 # indentation as indent and dedent tokens, and prints them. It covers a subset of Lerta: names,
 # keywords, integers, '...' strings and some punctuation, but not "..." strings or tabs.
+import scan, Scanner from 'std:scanner'
 
 # An error in the source, with its line.
 struct LexError: Error
@@ -12,37 +13,38 @@ const KEYWORDS = Set(['const', 'var', 'if', 'else', 'for', 'in'])
 const PUNCTUATIONS =
   '...', '->', '==', '+=', '(', ')', ':', ',', '=', '+', '-', '*', '%', '<', '>'
 
-const is_name_byte = (c: Byte) -> c.is_letter() or c == '_'
+const is_digit = (c: CodePoint) -> c >= '0' and c <= '9'
+const is_letter = (c: CodePoint) -> (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
+const is_name_start = (c: CodePoint) -> is_letter(c) or c == '_'
+const is_name_character = (c: CodePoint) -> is_name_start(c) or is_digit(c)
 
 class Lexer
-  source: Binary
+  source: Scanner
   tokens: Token[] = []
   indents = [0]
-  position = 0
   line = 1
 
   add = (kind: String, text: String) -> @tokens.push(Token(kind, text, line: @line))
-  peek = (): Byte -> @position < @source.length then @source[@position] else "\n"
-  text = (start: Int, end: Int) -> @source.text(start, end)!
+  peek = -> @source.peek() ? "\n"
   top_indent = -> @indents.last()!
   fail = (problem: String) -> throw LexError(message: "#{@line}: #{problem}")
 
   run = ->
-    @scan_line() while @position < @source.length
+    @scan_line() while not @source.done()
     @add 'dedent', '' for _ in 0...(@indents.length - 1)
     @tokens
 
   # A line that is blank or holds only a comment gives no tokens, so it does not change the
   # indentation.
   scan_line = ->
-    const start = @position
-    @position += 1 while @peek() == ' '
+    var width = 0
+    width += 1 while @source.take(' ')
     if @peek() != "\n" and @peek() != '#'
-      @indent @position - start
+      @indent width
       @scan_token() while @peek() != "\n" and @peek() != '#'
       @add 'newline', ''
-    @position += 1 while @peek() != "\n"
-    @position += 1
+    @source.skip_while (c) -> c != "\n"
+    @source.next()
     @line += 1
 
   indent = (width: Int) ->
@@ -55,32 +57,23 @@ class Lexer
     @fail 'the indentation matches no outer block' if width != @top_indent()
 
   scan_token = ->
-    const start = @position
     const c = @peek()
     case
-      when c == ' ' then @position += 1
-      when c.is_digit()
-        @position += 1 while @peek().is_digit()
-        @add 'integer', @text(start, @position)
-      when is_name_byte(c)
-        @position += 1 while is_name_byte(@peek()) or @peek().is_digit()
-        const word = @text(start, @position)
+      when c == ' ' then @source.skip_while((c) -> c == ' ')
+      when is_digit(c) then @add('integer', @source.take_while(is_digit))
+      when is_name_start(c)
+        const word = @source.take_while(is_name_character)
         @add KEYWORDS.has(word) then word else 'name', word
-      when c == "'"
-        @position += 1
-        @position += 1 while @peek() != "'" and @peek() != "\n"
-        @fail 'the string is not closed' if @peek() != "'"
-        @position += 1
-        @add 'string', @text(start + 1, @position - 1)
+      when @source.take("'")
+        const text = @source.take_while((c) -> c != "'" and c != "\n")
+        @fail 'the string is not closed' if not @source.take("'")
+        @add 'string', text
       else @scan_punctuation()
 
   scan_punctuation = ->
-    const punctuation = PUNCTUATIONS.find((p) -> @at(p)) ? @fail('unexpected character')
-    @position += punctuation.binary.length
-    @add punctuation, punctuation
-
-  # Compares bytes, since the next ones may not be a whole character.
-  at = (punctuation: String) -> @source.occurs_at(@position, punctuation.binary)
+    for punctuation in PUNCTUATIONS
+      return @add(punctuation, punctuation) if @source.take(punctuation)
+    @fail 'unexpected character'
 
 const source =
   '# sums the squares of the even numbers'
@@ -99,6 +92,6 @@ const source =
   ''
 .join("\n")
 
-for token in Lexer(source: source.binary).run()
+for token in Lexer(source: scan(source)).run()
   const shown = token.text == '' then '' else " #{token.text}"
   print "#{token.line} #{token.kind}#{shown}"
