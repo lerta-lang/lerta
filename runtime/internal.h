@@ -5,10 +5,11 @@
 // files linked with a program use.
 #include "lerta.h"
 
-// Memory (memory.c). The debug runtime's leak check, as the program ends: of what is left alive, and,
-// as `exit` ends it, which holds what is still in use, of the objects that nothing in use holds.
-void lerta_report_leaks(void);
-void lerta_report_unreachable(void);
+// Memory (memory.c).
+#ifdef LERTA_DEBUG
+// Gives the visitor each object queued to be dropped.
+void lerta_visit_pending(LertaVisitor visitor);
+#endif
 // malloc, realloc and calloc that panic when out of memory instead of returning NULL.
 void *lerta_checked_malloc(size_t size);
 void *lerta_checked_realloc(void *memory, size_t size);
@@ -19,6 +20,25 @@ void lerta_mem_free(void *memory);
 // Keeps the place when it holds `size` bytes and is not more than twice as large; else moves what
 // it holds, as far as it fits, to a new one. NULL is none.
 void *lerta_mem_realloc(void *memory, int64_t size);
+
+// The leak check (leaks.c), of the debug runtime, as the program ends: of what is left alive, and,
+// as `exit` ends it, which holds what is still in use, of the objects that nothing in use holds.
+void lerta_report_leaks(void);
+void lerta_report_unreachable(void);
+#ifdef LERTA_DEBUG
+// What the debug runtime keeps before each object, by which the leak check tracks it; its size
+// keeps the object aligned as its place.
+typedef struct LertaPrefix {
+  _Alignas(16) struct LertaPrefix *previous;
+  struct LertaPrefix *next;
+} LertaPrefix;
+// Adds an object, by its prefix, to the objects alive, as it is made, and takes it away as it is
+// freed; and counts the frames of coroutines alive likewise, which have no prefix.
+void lerta_track(LertaPrefix *prefix);
+void lerta_untrack(LertaPrefix *prefix);
+void lerta_track_frame(void);
+void lerta_untrack_frame(void);
+#endif
 
 // Strings (string.c). A new string or Binary value whose bytes the caller fills.
 LertaString *lerta_string_new(int64_t length);
