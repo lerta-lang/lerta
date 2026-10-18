@@ -15,10 +15,11 @@ const is_windows = platform == 'windows'
 struct SplitPath(root: String, names: String[])
 
 const split_path = (path: String) ->
-  const bytes = path.binary
-  const names = names_of(path)
-  const starts_at_separator = bytes.length > 0 and is_separator(bytes[0])
-  const is_share = starts_at_separator and bytes.length > 1 and is_separator(bytes[1])
+  const slashed = is_windows then path.replace('\', '/') else path
+  const bytes = slashed.binary
+  const names = [name for name in slashed.split('/') when name != '']
+  const starts_at_separator = bytes.length > 0 and bytes[0] == '/'
+  const is_share = starts_at_separator and bytes.length > 1 and bytes[1] == '/'
   case
     when is_windows and is_drive(bytes)
       SplitPath root: "#{upper_case_letter(bytes[0])}:/", names: names_after(names, 1)
@@ -30,23 +31,11 @@ const split_path = (path: String) ->
 # Whether the path starts with a drive and a separator, as `C:\`: `C:` alone names the current
 # directory of that drive, which is relative.
 const is_drive = (bytes: Binary) ->
-  bytes.length >= 3 and bytes[0].is_letter() and bytes[1] == ':' and is_separator(bytes[2])
+  bytes.length >= 3 and bytes[0].is_letter() and bytes[1] == ':' and bytes[2] == '/'
 
 const upper_case_letter = (letter: Byte) ->
   const upper = letter >= 'a' then letter - 'a' + 'A' else letter
   [upper].to_binary().text()!
-
-const is_separator = (byte: Byte) -> byte == '/' or (is_windows and byte == '\')
-
-const names_of = (path: String) ->
-  const bytes = path.binary
-  const names: String[] = []
-  var start = 0
-  for i in 0...(bytes.length + 1)
-    continue if i < bytes.length and not is_separator(bytes[i])
-    names.push bytes.text(start, i)! if i > start
-    start = i + 1
-  names
 
 const names_after = (names: String[], count: Int) -> [names[i] for i in count...names.length]
 
