@@ -23,9 +23,6 @@ export class ExtensionMethod
   # declaring module's functions hold another's type by `key`.
   generic: GenericRef?
   key: String
-  # Whether the receiver matches the type of each key, which every generic call that reaches the
-  # type asks again (see methods_reachable_from).
-  matched: Map<String, Bool> = Map()
 
 export class Extensions
   module_index: Int
@@ -85,6 +82,7 @@ export const add_own = (shared: Shared, method: ExtensionMethod) ->
     fail shared.program, name.position, message
   add_in_effect extensions, method
   shared.own_methods.push method
+  shared.program.methods_matching = Map()
 
 # The extends in effect here, with `methods` before them, as an instance of a generic function
 # sees them (see GenericFunction).
@@ -108,11 +106,12 @@ export const methods_reachable_from = (
   const reach = Reach()
   visit_reachable program, reach, type for type in types
   # A generic extend's methods, as those of T[], may be in effect for several of the types.
-  const methods: ExtensionMethod[] = []
+  const in_effect = Set<ExtensionMethod>(extensions.in_effect)
+  const found = Set<ExtensionMethod>()
   for (reached, type) in reach.seen.entries()
-    for method in extensions.in_effect
-      continue if not method.matched.get_or_put(reached, -> matches(method.receiver, type))
-      methods.push method if not methods.contains(method)
+    for method in methods_matching(program, reached, type)
+      found.add method if in_effect.has(method)
+  const methods = [method for method in found]
   # Until then, the classes and structs may get more fields (see ProgramWide.members_known).
   if program.members_known
     const inferred_fields = reach.is_complete then nil else program.inferred_fields
@@ -124,6 +123,15 @@ export const methods_reachable_from = (
 class Reach
   seen: Map<String, Type> = Map()
   is_complete = true
+
+# The methods of every module's extends whose receivers match the type of the key.
+const methods_matching = (program: ProgramWide, key: String, type: Type) ->
+  const find = ->
+    const found: ExtensionMethod[] = []
+    for shared in program.shared
+      found.append [method for method in shared.own_methods when matches(method.receiver, type)]
+    found
+  program.methods_matching.get_or_put key, find
 
 const add_in_effect = (extensions: Extensions, method: ExtensionMethod) ->
   extensions.in_effect.push method
