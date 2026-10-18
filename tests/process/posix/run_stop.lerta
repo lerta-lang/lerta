@@ -1,0 +1,62 @@
+# A cancel stops the program with SIGTERM, and kills one that ignores it once kill_after has
+# passed; the wait ends once the program has.
+import run from 'std:process'
+import sleep, time from 'std:time'
+
+const started = time()
+const stopped = run('sh', '-c', 'exec sleep 5')
+stopped.cancel()
+try
+  await stopped
+catch error: CancelledError
+  print error.message
+print time() - started < 4
+
+const kept = run('sh', '-c', 'trap "" TERM; exec sleep 5', kill_after: 0.2)
+kept.cancel()
+try
+  await kept
+catch error: CancelledError
+  print error.message
+print time() - started < 4
+
+# The signal that ended a program is told apart from its exit code.
+const exit = await run('sh', '-c', 'kill -TERM $$')
+print [exit.code, exit.signal ? 0]
+
+# A cancel with kill_after of 0 kills at once, and the output read meanwhile is not given.
+const output: Byte[] = []
+const errors: Byte[] = []
+const script = 'echo out; echo err >&2; trap "" TERM; exec sleep 5'
+const killed = run('sh', '-c', script, stdout: output, stderr: errors, kill_after: 0.0)
+await sleep(0.3)
+killed.cancel()
+try
+  await killed
+catch error: CancelledError
+  print error.message
+print [output.length, errors.length]
+print time() - started < 4
+
+# A cancel after the program has exited, while a program it started holds its output open, ends
+# the wait at once.
+const held: Byte[] = []
+const exited = run('sh', '-c', 'sleep 5 2> /dev/null & exit 0', stdout: held)
+await sleep(0.3)
+exited.cancel()
+try
+  await exited
+catch error: CancelledError
+  print error.message
+print time() - started < 4
+
+# A program that ends by itself as it is stopped, with code 0, still has its wait cancelled; so
+# does one that was given input.
+const ending = run('sh', '-c', 'trap "exit 0" TERM; sleep 5 & wait', stdin: 'input'.binary)
+await sleep(0.3)
+ending.cancel()
+try
+  await ending
+catch error: CancelledError
+  print error.message
+print time() - started < 4

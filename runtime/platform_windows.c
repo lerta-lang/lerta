@@ -1,5 +1,7 @@
 #ifdef _WIN32
 
+#include <fcntl.h>
+#include <io.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -307,6 +309,53 @@ char *lerta_os_make_temp_dir(void) {
     if (GetLastError() != ERROR_ALREADY_EXISTS) return NULL;
   }
   return NULL;
+}
+
+// The file is removed once the last handle to it, the program's, is closed.
+int lerta_os_input_file(const uint8_t *bytes, int64_t length) {
+  wchar_t dir[MAX_PATH + 1];
+  wchar_t path[MAX_PATH + 1];
+  DWORD dir_length = GetTempPathW(MAX_PATH + 1, dir);
+  if (dir_length == 0 || dir_length > MAX_PATH) return -1;
+  if (GetTempFileNameW(dir, L"lin", 0, path) == 0) return -1;
+  DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+  DWORD flags = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE;
+  HANDLE file =
+    CreateFileW(path, GENERIC_READ | GENERIC_WRITE, share, NULL, OPEN_EXISTING, flags, NULL);
+  if (file == INVALID_HANDLE_VALUE) {
+    DeleteFileW(path);
+    return -1;
+  }
+  bool written = true;
+  for (int64_t done = 0; written && done < length;) {
+    int64_t left = length - done;
+    DWORD chunk = left > 0x40000000 ? 0x40000000 : (DWORD)left;
+    DWORD count = 0;
+    written = WriteFile(file, bytes + done, chunk, &count, NULL);
+    done += count;
+  }
+  LARGE_INTEGER start = {0};
+  int fd = -1;
+  if (written && SetFilePointerEx(file, start, NULL, FILE_BEGIN)) {
+    fd = _open_osfhandle((intptr_t)file, _O_RDONLY);
+  }
+  if (fd < 0) CloseHandle(file);
+  return fd;
+}
+
+void lerta_os_close_input_file(int fd) {
+  _close(fd);
+}
+
+// Windows compares the names of variables without case.
+bool lerta_os_same_env_name(const char *a, const char *b) {
+  wchar_t *wide_a = to_utf16(a);
+  wchar_t *wide_b = to_utf16(b);
+  bool same = wide_a != NULL && wide_b != NULL &&
+              CompareStringOrdinal(wide_a, -1, wide_b, -1, TRUE) == CSTR_EQUAL;
+  free(wide_a);
+  free(wide_b);
+  return same;
 }
 
 bool lerta_os_make_dir(const char *path) {

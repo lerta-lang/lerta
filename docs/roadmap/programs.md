@@ -19,7 +19,6 @@ The planned design of modules, FFI, the standard library and tools.
 - In [std:json](../reference/modules.md#stdjson), unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
 - Random numbers, formatting dates and times, and the network.
 - What the [test harness](#tools) needs of the programs it runs and the files it checks:
-  - `run` gives the program an input on stdin, captures its stderr as it does its stdout, runs it in a given directory with variables of the environment changed or removed, tells an exit by a signal from an exit status, and can kill the program.
   - In `std:io`: a file's modification time, making a symbolic link, and copying a file.
 
 ## Tools
@@ -41,7 +40,9 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Open questions
 
-- How the test harness limits the output of a program it runs: by an argument of `run`, or by itself.
+- How the test harness limits the output of a program it runs: by an option of `run`, or by itself.
+- Whether `race`, `timeout` and `all` of [std:async](../reference/modules.md#stdasync) await the promises that they cancel before they settle, so that a program that `run` started has ended once `timeout(run(...), seconds)` is rejected; now they settle at once, and `p.cancel()` followed by `await p` waits for it.
+- Whether a cancel of `run` stops the programs that the program started too, through a group of processes (a job object on Windows).
 - Whether the runtime checks keep running `script` for a terminal, or `std:process` gives one (a pty).
 - Extern properties, `extern lerta_array_length as length: Int` in an extend, which read a property by calling a C function with the receiver. They would move `length` and `s.binary` to std, but they are getters written in C, which [philosophy](../philosophy.md#non-goals) leaves out; allowing them only in `std:` modules, as a builtin special case, keeps that for users.
 - The ABI of `String` at the FFI boundary (pass as a 16-byte value, or box it in the heap representation; decide when small strings become immediate values).

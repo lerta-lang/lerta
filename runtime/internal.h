@@ -74,14 +74,31 @@ void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise);
 // Waits for what settles promises, and settles them, once; false, without waiting, if nothing is
 // left to wait for.
 bool lerta_loop_wait(void);
-// What is called once a program has exited and its output, if read, has ended: the output, owned,
-// or NULL if it is not read or cannot be.
-typedef void (*LertaProgramEnd)(void *context, int64_t exit_code, LertaString *output);
-// Starts the program `file` with `args`, which end with NULL, as lerta_os_program_file and
-// lerta_os_program_argument give them, sharing this program's standard streams but for its standard
-// output when `reads_output`; false if it cannot start, and `end` is not called.
-bool lerta_loop_run_program(char *file, char **args, bool reads_output, LertaProgramEnd end,
-                            void *context);
+// What is called once a program has exited and the streams that are read have ended: its exit
+// code, or minus the signal that ended it; and its standard output and error, owned, or NULL for
+// one that is not read or cannot be.
+typedef void (*LertaProgramEnd)(void *context, int64_t status, LertaString *output,
+                                LertaString *errors);
+// How a program starts: the file `file` with `args`, which end with NULL, as lerta_os_program_file
+// and lerta_os_program_argument give them; with the variables `env`, as NAME=VALUE ending with NULL,
+// or else this program's; in the directory `cwd`, or else this program's; reading `stdin_fd`, or
+// else this program's standard input; its standard output and error, `reads[0]` and `reads[1]`,
+// read, or else shared with this program.
+typedef struct {
+  char *file;
+  char **args;
+  char **env;
+  const char *cwd;
+  int stdin_fd;
+  bool reads[2];
+} LertaProgramSpec;
+typedef struct LertaRunningProgram LertaRunningProgram;
+// Starts the program, which calls `end` once; NULL if it cannot start, and `end` is not called.
+LertaRunningProgram *lerta_loop_run_program(const LertaProgramSpec *spec, LertaProgramEnd end,
+                                            void *context);
+// Asks the program to end, then kills it if it has not ended after the milliseconds; its output
+// after it exits is dropped. Only before `end` is called.
+void lerta_loop_stop_program(LertaRunningProgram *program, uint64_t kill_after);
 // What is called with a chunk that a read gives: its bytes, which it takes, allocated with malloc,
 // and their count; or NULL and 0 at the end, -1 on failure, or LERTA_OUT_OF_MEMORY.
 typedef void (*LertaChunkEnd)(void *context, uint8_t *bytes, int64_t length);
@@ -211,6 +228,12 @@ const char *lerta_os_platform(void);
 int64_t lerta_os_cpu_count(void);
 // The value of an environment variable, which the caller frees, or NULL if it is not set.
 char *lerta_os_env(const char *name);
+// A file that holds the bytes, read from its start, for a program's standard input, which
+// lerta_os_close_input_file closes and which is removed once closed; -1 if it cannot be made.
+int lerta_os_input_file(const uint8_t *bytes, int64_t length);
+void lerta_os_close_input_file(int fd);
+// Whether two names of environment variables name the same variable.
+bool lerta_os_same_env_name(const char *a, const char *b);
 // The file of a command for lerta_loop_run_program, which on Windows is searched for on PATH if it
 // holds no directory (see docs/reference/modules.md#stdprocess); NULL if there is none. The caller
 // frees it.

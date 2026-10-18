@@ -167,6 +167,34 @@ char *lerta_os_make_temp_dir(void) {
   return NULL;
 }
 
+// The file is removed at once, so that it is gone however the programs end, and is not inherited
+// by a program but where it is passed.
+int lerta_os_input_file(const uint8_t *bytes, int64_t length) {
+  const char *dir = getenv("TMPDIR");
+  char *path = join_path(dir == NULL || *dir == '\0' ? "/tmp" : dir, "lerta-input-XXXXXX");
+  int fd = mkstemp(path);
+  if (fd >= 0) unlink(path);
+  free(path);
+  if (fd < 0) return -1;
+  bool written = fcntl(fd, F_SETFD, FD_CLOEXEC) == 0;
+  for (int64_t done = 0; written && done < length;) {
+    ssize_t count = write(fd, bytes + done, (size_t)(length - done));
+    if (count >= 0) done += count;
+    else written = errno == EINTR;
+  }
+  if (written && lseek(fd, 0, SEEK_SET) == 0) return fd;
+  close(fd);
+  return -1;
+}
+
+void lerta_os_close_input_file(int fd) {
+  close(fd);
+}
+
+bool lerta_os_same_env_name(const char *a, const char *b) {
+  return strcmp(a, b) == 0;
+}
+
 bool lerta_os_make_dir(const char *path) {
   struct stat status;
   return mkdir(path, 0777) == 0 || (stat(path, &status) == 0 && S_ISDIR(status.st_mode));

@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <stdlib.h>
 
 #include <uv.h>
@@ -126,97 +127,140 @@ void lerta_loop_read_stdin(LertaChunkEnd end, void *context) {
   uv_mutex_unlock(&stdin_mutex);
 }
 
-// A program that runs, and the output it writes to the pipe, if it is read, which ends with it.
+// A stream of a program that runs which is read into a buffer until it ends.
 typedef struct {
-  uv_process_t process;
   uv_pipe_t pipe;
-  bool reads_output;
+  bool is_read;
+  bool ended;
+  bool failed;
+  uint8_t *bytes;
+  size_t length;
+  size_t capacity;
+} ProgramOutput;
+
+// A program that runs, its standard output and error, of which those that are read, and the timer
+// that kills it once a stop has waited long enough. Each handle's data is the program.
+struct LertaRunningProgram {
+  uv_process_t process;
+  ProgramOutput outputs[2];
+  uv_timer_t kill_timer;
+  bool stopping;
   bool exited;
-  bool output_ended;
-  int64_t exit_code;
-  uint8_t *output;
-  size_t output_length;
-  size_t output_capacity;
-  bool output_failed;
+  int64_t status;
   int open_handles;
   LertaProgramEnd end;
   void *context;
-} RunningProgram;
+};
 
 static void free_program(uv_handle_t *handle) {
-  RunningProgram *program = handle->data;
+  LertaRunningProgram *program = handle->data;
   if (--program->open_handles > 0) return;
-  free(program->output);
+  for (int i = 0; i < 2; i++) free(program->outputs[i].bytes);
   free(program);
 }
 
-// Once the program has exited and its output, if read, has ended.
-static void end_program_if_done(RunningProgram *program) {
-  if (!program->exited || (program->reads_output && !program->output_ended)) return;
-  LertaString *output = NULL;
-  if (program->reads_output && !program->output_failed) {
-    const char *bytes = (const char *)program->output;
-    output = lerta_string_from_bytes(bytes, (int64_t)program->output_length);
-  }
-  program->end(program->context, program->exit_code, output);
-  uv_close((uv_handle_t *)&program->process, free_program);
-  if (program->reads_output) uv_close((uv_handle_t *)&program->pipe, free_program);
+static void close_handle(void *handle) {
+  uv_close((uv_handle_t *)handle, free_program);
 }
 
+// The bytes that were read, owned, or NULL if the stream is not read or its read failed.
+static LertaString *output_text(const ProgramOutput *output) {
+  if (!output->is_read || output->failed) return NULL;
+  return lerta_string_from_bytes((const char *)output->bytes, (int64_t)output->length);
+}
+
+static void stop_reading(ProgramOutput *output) {
+  if (!output->is_read || output->ended) return;
+  output->ended = true;
+  uv_read_stop((uv_stream_t *)&output->pipe);
+}
+
+// Once the program has exited and the streams that are read have ended.
+static void end_program_if_done(LertaRunningProgram *program) {
+  if (!program->exited) return;
+  for (int i = 0; i < 2; i++) {
+    if (program->outputs[i].is_read && !program->outputs[i].ended) return;
+  }
+  LertaString *output = output_text(&program->outputs[0]);
+  LertaString *errors = output_text(&program->outputs[1]);
+  program->end(program->context, program->status, output, errors);
+  if (program->stopping) close_handle(&program->kill_timer);
+  close_handle(&program->process);
+  for (int i = 0; i < 2; i++) {
+    if (program->outputs[i].is_read) close_handle(&program->outputs[i].pipe);
+  }
+}
+
+// A stopped program's output is not wanted, and a program that it started may hold its pipes
+// open, so they are not waited for.
 static void exit_program(uv_process_t *process, int64_t exit_status, int term_signal) {
-  RunningProgram *program = process->data;
+  LertaRunningProgram *program = process->data;
   program->exited = true;
-  program->exit_code = term_signal != 0 ? 128 + term_signal : exit_status;
+  program->status = term_signal != 0 ? -term_signal : exit_status;
+  if (program->stopping) {
+    uv_timer_stop(&program->kill_timer);
+    for (int i = 0; i < 2; i++) stop_reading(&program->outputs[i]);
+  }
   end_program_if_done(program);
 }
 
+static ProgramOutput *output_of(uv_handle_t *handle) {
+  LertaRunningProgram *program = handle->data;
+  bool is_output = handle == (uv_handle_t *)&program->outputs[0].pipe;
+  return &program->outputs[is_output ? 0 : 1];
+}
+
 static void allocate_output(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buffer) {
-  RunningProgram *program = handle->data;
-  if (program->output_capacity - program->output_length < suggested_size) {
-    program->output_capacity = 2 * program->output_capacity + suggested_size;
-    program->output = lerta_checked_realloc(program->output, program->output_capacity);
+  ProgramOutput *output = output_of(handle);
+  if (output->capacity - output->length < suggested_size) {
+    output->capacity = 2 * output->capacity + suggested_size;
+    output->bytes = lerta_checked_realloc(output->bytes, output->capacity);
   }
-  *buffer = uv_buf_init((char *)program->output + program->output_length,
-                        (unsigned int)(program->output_capacity - program->output_length));
+  *buffer = uv_buf_init((char *)output->bytes + output->length,
+                        (unsigned int)(output->capacity - output->length));
 }
 
 static void read_output(uv_stream_t *stream, ssize_t count, const uv_buf_t *buffer) {
   (void)buffer;
-  RunningProgram *program = stream->data;
-  if (count > 0) program->output_length += (size_t)count;
+  ProgramOutput *output = output_of((uv_handle_t *)stream);
+  if (count > 0) output->length += (size_t)count;
   if (count >= 0) return;
-  program->output_failed = count != UV_EOF;
-  program->output_ended = true;
-  uv_read_stop(stream);
-  end_program_if_done(program);
+  output->failed = count != UV_EOF;
+  stop_reading(output);
+  end_program_if_done(stream->data);
 }
 
-bool lerta_loop_run_program(char *file, char **args, bool reads_output, LertaProgramEnd end,
-                            void *context) {
+LertaRunningProgram *lerta_loop_run_program(const LertaProgramSpec *spec, LertaProgramEnd end,
+                                            void *context) {
   uv_loop_t *loop = uv_default_loop();
-  RunningProgram *program = lerta_checked_calloc(1, sizeof(RunningProgram));
-  program->reads_output = reads_output;
+  LertaRunningProgram *program = lerta_checked_calloc(1, sizeof(LertaRunningProgram));
   program->end = end;
   program->context = context;
   program->process.data = program;
-  program->pipe.data = program;
+  int stdin_fd = spec->stdin_fd >= 0 ? spec->stdin_fd : 0;
   uv_stdio_container_t stdio[3] = {
-    {.flags = UV_INHERIT_FD, .data.fd = 0},
+    {.flags = UV_INHERIT_FD, .data.fd = stdin_fd},
     {.flags = UV_INHERIT_FD, .data.fd = 1},
     {.flags = UV_INHERIT_FD, .data.fd = 2},
   };
-  if (reads_output) {
-    uv_pipe_init(loop, &program->pipe, 0);
+  for (int i = 0; i < 2; i++) {
+    if (!spec->reads[i]) continue;
+    ProgramOutput *output = &program->outputs[i];
+    output->is_read = true;
+    uv_pipe_init(loop, &output->pipe, 0);
+    output->pipe.data = program;
     program->open_handles++;
-    stdio[1] = (uv_stdio_container_t){.flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE,
-                                      .data.stream = (uv_stream_t *)&program->pipe};
+    stdio[i + 1] = (uv_stdio_container_t){.flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE,
+                                          .data.stream = (uv_stream_t *)&output->pipe};
   }
   // On Windows, the arguments come quoted (see lerta_os_program_argument) and the file found;
   // libuv would quote them its own way and search the current directory first.
   uv_process_options_t options = {
     .exit_cb = exit_program,
-    .file = file,
-    .args = args,
+    .file = spec->file,
+    .args = spec->args,
+    .env = spec->env,
+    .cwd = spec->cwd,
     .flags = UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS | UV_PROCESS_WINDOWS_FILE_PATH_EXACT_NAME,
     .stdio_count = 3,
     .stdio = stdio,
@@ -224,14 +268,38 @@ bool lerta_loop_run_program(char *file, char **args, bool reads_output, LertaPro
   // A failed spawn still has its handle closed, as libuv asks.
   program->open_handles++;
   bool spawned = uv_spawn(loop, &program->process, &options) == 0;
-  if (spawned && reads_output) {
-    uv_read_start((uv_stream_t *)&program->pipe, allocate_output, read_output);
+  for (int i = 0; i < 2; i++) {
+    ProgramOutput *output = &program->outputs[i];
+    if (!output->is_read) continue;
+    if (spawned) uv_read_start((uv_stream_t *)&output->pipe, allocate_output, read_output);
+    else close_handle(&output->pipe);
   }
-  if (!spawned) {
-    uv_close((uv_handle_t *)&program->process, free_program);
-    if (reads_output) uv_close((uv_handle_t *)&program->pipe, free_program);
+  if (spawned) return program;
+  close_handle(&program->process);
+  return NULL;
+}
+
+static void kill_program(uv_timer_t *timer) {
+  LertaRunningProgram *program = timer->data;
+  uv_process_kill(&program->process, SIGKILL);
+}
+
+// SIGTERM lets the program end as it chooses, and SIGKILL ends it if it does not in time. On
+// Windows, either one terminates it at once. A program that has exited already has only its
+// output left, which is not waited for, as at its exit after a stop.
+void lerta_loop_stop_program(LertaRunningProgram *program, uint64_t kill_after) {
+  if (program->stopping) return;
+  if (program->exited) {
+    for (int i = 0; i < 2; i++) stop_reading(&program->outputs[i]);
+    end_program_if_done(program);
+    return;
   }
-  return spawned;
+  program->stopping = true;
+  uv_timer_init(uv_default_loop(), &program->kill_timer);
+  program->kill_timer.data = program;
+  program->open_handles++;
+  uv_process_kill(&program->process, SIGTERM);
+  uv_timer_start(&program->kill_timer, kill_program, kill_after, 0);
 }
 
 bool lerta_loop_wait(void) {

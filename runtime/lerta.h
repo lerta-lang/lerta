@@ -297,10 +297,18 @@ LertaArray *lerta_argv(void);
 // leaks, and a leak ends it with LERTA_LEAK_EXIT_CODE in place of `code`. A code out of 0 to 255
 // throws a ValueError instead, and the call returns.
 void lerta_exit(int64_t code);
-// A promise of the program's exit code, settled once it ends; with `output`, an array of bytes,
-// its standard output is appended to it first. It is rejected if the output cannot be read, and a
-// program that cannot start throws at once.
-LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output);
+// A promise of the program's exit code, or minus the signal that ended it, settled once it ends.
+// It reads `input` as its standard input, if given; its standard output and error are appended to
+// `output` and `errors`, arrays of bytes, if given; it runs in `cwd`, if given, with the variables
+// of this program but those that `unset` names, and those that `set` names with `values`. It is
+// rejected if an output cannot be read, and a program that cannot start throws at once. A cancel
+// stops the program, killing it after `kill_after` seconds, and rejects the promise once it ends.
+LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
+                        const LertaString *input, LertaArray *output, LertaArray *errors,
+                        const LertaString *cwd, const LertaArray *set, const LertaArray *values,
+                        const LertaArray *unset, double kill_after);
+// Whether two names of environment variables name the same variable.
+bool lerta_same_env_name(const LertaString *a, const LertaString *b);
 // The system's name: linux, macos or windows.
 LertaString *lerta_platform(void);
 // The number of CPUs that are online, at least 1.

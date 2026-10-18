@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -67,33 +68,52 @@ static void free_c_args(char **c_args, int64_t count) {
 typedef struct {
   LertaPromise *promise;
   LertaString *command;
-  LertaArray *output;
+  LertaArray *outputs[2];
+  LertaRunningProgram *program;
+  uint64_t kill_after;
   bool cancelled;
 } Run;
 
-// Cancelling a run stops waiting for the program, which goes on, as it is the program's to stop.
+// Cancelling a run stops the program, and the run ends once it has (see end_run).
 static void cancel_run(void *context) {
   Run *run = context;
   run->cancelled = true;
-  lerta_promise_reject_cancelled(run->promise);
+  lerta_loop_stop_program(run->program, run->kill_after);
 }
 
-// The run holds the promise, the command and the array until the program ends.
-static void end_run(void *context, int64_t exit_code, LertaString *read_output) {
+// The streams that the run reads, read or not, their bytes appended to the arrays where they are.
+static bool append_outputs(Run *run, LertaString *read[2]) {
+  bool all_read = true;
+  for (int i = 0; i < 2; i++) {
+    if (run->outputs[i] != NULL && read[i] == NULL) all_read = false;
+  }
+  for (int i = 0; i < 2; i++) {
+    if (read[i] == NULL) continue;
+    if (all_read && !run->cancelled) append_bytes(run->outputs[i], read[i]);
+    else lerta_release(read[i]);
+  }
+  return all_read;
+}
+
+// The run holds the promise, the command and the arrays until the program ends.
+static void end_run(void *context, int64_t status, LertaString *output, LertaString *errors) {
   Run *run = context;
+  LertaString *read[2] = {output, errors};
+  bool all_read = append_outputs(run, read);
   if (run->cancelled) {
-    if (read_output != NULL) lerta_release(read_output);
-  } else if (run->output != NULL && read_output == NULL) {
+    lerta_promise_reject_cancelled(run->promise);
+  } else if (!all_read) {
     lerta_raise_with(LERTA_IO_ERROR, &cannot_read_output, run->command);
     lerta_promise_reject(run->promise);
   } else {
-    if (run->output != NULL) append_bytes(run->output, read_output);
-    *(int64_t *)lerta_promise_slot(run->promise) = exit_code;
+    *(int64_t *)lerta_promise_slot(run->promise) = status;
     lerta_promise_resolve(run->promise);
   }
   lerta_release(run->promise);
   lerta_release(run->command);
-  if (run->output != NULL) lerta_release(run->output);
+  for (int i = 0; i < 2; i++) {
+    if (run->outputs[i] != NULL) lerta_release(run->outputs[i]);
+  }
   free(run);
 }
 
@@ -107,23 +127,128 @@ static char **program_args(char **c_args, int64_t count, char **file) {
   return args;
 }
 
-LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, LertaArray *output) {
+static const LertaString *string_item(const LertaArray *array, int64_t index) {
+  return (const LertaString *)(intptr_t)lerta_word_item(array, index);
+}
+
+static bool is_named(const LertaArray *names, const char *name) {
+  for (int64_t i = 0; i < names->length; i++) {
+    char *each = lerta_c_string(string_item(names, i));
+    bool same = each != NULL && lerta_os_same_env_name(each, name);
+    free(each);
+    if (same) return true;
+  }
+  return false;
+}
+
+// `name=value`, which the caller frees.
+static char *env_entry(const char *name, const char *value) {
+  size_t name_length = strlen(name);
+  size_t value_length = strlen(value);
+  char *entry = lerta_checked_malloc(name_length + value_length + 2);
+  memcpy(entry, name, name_length);
+  entry[name_length] = '=';
+  memcpy(entry + name_length + 1, value, value_length + 1);
+  return entry;
+}
+
+// `name=value` of the strings, which the caller frees, or NULL if either holds a NUL byte.
+static char *given_env_entry(const LertaString *name, const LertaString *value) {
+  char *c_name = lerta_c_string(name);
+  char *c_value = lerta_c_string(value);
+  char *entry = c_name != NULL && c_value != NULL ? env_entry(c_name, c_value) : NULL;
+  free(c_name);
+  free(c_value);
+  return entry;
+}
+
+// The variables of this program but those that `set` names, which it gives, or that `unset`
+// names, as NAME=VALUE ending with NULL; NULL if they cannot be read or a name or a value holds a
+// NUL byte. With neither, NULL also stands for this program's own, as libuv takes it.
+static char **program_env(const LertaArray *set, const LertaArray *values, const LertaArray *unset,
+                          bool *valid) {
+  *valid = true;
+  if (set->length == 0 && unset->length == 0) return NULL;
+  uv_env_item_t *items;
+  int count;
+  if (uv_os_environ(&items, &count) != 0) {
+    *valid = false;
+    return NULL;
+  }
+  char **env = lerta_checked_calloc((size_t)count + (size_t)set->length + 1, sizeof(char *));
+  int64_t length = 0;
+  for (int i = 0; i < count; i++) {
+    const char *name = items[i].name;
+    if (is_named(set, name) || is_named(unset, name)) continue;
+    env[length++] = env_entry(name, items[i].value);
+  }
+  uv_os_free_environ(items, count);
+  for (int64_t i = 0; i < set->length; i++) {
+    char *entry = given_env_entry(string_item(set, i), string_item(values, i));
+    *valid = *valid && entry != NULL;
+    env[length++] = entry;
+  }
+  if (*valid) return env;
+  free_c_args(env, length);
+  return NULL;
+}
+
+// What the run gives the program, which free_spec frees; whether all can be given is written to
+// `valid`.
+static LertaProgramSpec program_spec(const LertaString *command, const LertaArray *args,
+                                     const LertaString *input, const LertaString *cwd,
+                                     const LertaArray *set, const LertaArray *values,
+                                     const LertaArray *unset, bool *valid) {
   int64_t count = args->length + 1;
+  LertaProgramSpec spec = {.stdin_fd = -1};
+  bool args_valid;
+  char **c_args = c_args_of(command, args, &args_valid);
+  // NULL if an argument holds a NUL byte, or the command is not found.
+  if (args_valid) spec.args = program_args(c_args, count, &spec.file);
+  free_c_args(c_args, count);
+  *valid = spec.args != NULL;
+  bool env_valid;
+  spec.env = program_env(set, values, unset, &env_valid);
+  *valid = *valid && env_valid;
+  if (cwd != NULL) {
+    spec.cwd = lerta_c_string(cwd);
+    *valid = *valid && spec.cwd != NULL;
+  }
+  if (input != NULL) {
+    spec.stdin_fd = lerta_os_input_file(input->bytes, input->length);
+    *valid = *valid && spec.stdin_fd >= 0;
+  }
+  return spec;
+}
+
+static void free_spec(LertaProgramSpec *spec, int64_t count) {
+  if (spec->args != NULL) free_c_args(spec->args, count);
+  free(spec->file);
+  if (spec->env != NULL) {
+    int64_t length = 0;
+    while (spec->env[length] != NULL) length++;
+    free_c_args(spec->env, length);
+  }
+  free((char *)spec->cwd);
+  if (spec->stdin_fd >= 0) lerta_os_close_input_file(spec->stdin_fd);
+}
+
+// The promise is resolved with the exit code, or minus the signal that ended the program.
+LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
+                        const LertaString *input, LertaArray *output, LertaArray *errors,
+                        const LertaString *cwd, const LertaArray *set, const LertaArray *values,
+                        const LertaArray *unset, double kill_after) {
   bool valid;
-  char **c_args = c_args_of(command, args, &valid);
+  LertaProgramSpec spec = program_spec(command, args, input, cwd, set, values, unset, &valid);
+  spec.reads[0] = output != NULL;
+  spec.reads[1] = errors != NULL;
   // Without this, the child's output could come before what this program printed first. A failed
   // flush is remembered and reported by the exit code, as for any other write to stdout.
   lerta_output_flush();
-  char *file = NULL;
-  char **spawned_args = valid ? program_args(c_args, count, &file) : NULL;
-  Run *run = lerta_checked_malloc(sizeof(Run));
-  bool reads_output = output != NULL;
-  bool started = spawned_args != NULL &&
-                 lerta_loop_run_program(file, spawned_args, reads_output, end_run, run);
-  free_c_args(c_args, count);
-  if (spawned_args != NULL) free_c_args(spawned_args, count);
-  free(file);
-  if (!started) {
+  Run *run = lerta_checked_calloc(1, sizeof(Run));
+  LertaRunningProgram *program = valid ? lerta_loop_run_program(&spec, end_run, run) : NULL;
+  free_spec(&spec, args->length + 1);
+  if (program == NULL) {
     free(run);
     lerta_raise_with(LERTA_IO_ERROR, &cannot_run, command);
     return NULL;
@@ -132,9 +257,23 @@ LertaPromise *lerta_run(const LertaString *command, const LertaArray *args, Lert
   lerta_retain(promise);
   lerta_retain((void *)command);
   if (output != NULL) lerta_retain(output);
-  *run = (Run){promise, (LertaString *)command, output, false};
+  if (errors != NULL) lerta_retain(errors);
+  // Rounded up, so as not to kill early; std:process checks that the time is not negative.
+  double milliseconds = ceil(kill_after * 1000);
+  uint64_t kill_milliseconds = milliseconds < 0x1p63 ? (uint64_t)milliseconds : UINT64_MAX;
+  *run = (Run){promise, (LertaString *)command, {output, errors}, program, kill_milliseconds, false};
   lerta_promise_on_cancel(promise, cancel_run, run);
   return promise;
+}
+
+// Names that hold a NUL byte are not compared, as std:process rejects them first.
+bool lerta_same_env_name(const LertaString *a, const LertaString *b) {
+  char *c_a = lerta_c_string(a);
+  char *c_b = lerta_c_string(b);
+  bool same = c_a != NULL && c_b != NULL && lerta_os_same_env_name(c_a, c_b);
+  free(c_a);
+  free(c_b);
+  return same;
 }
 
 // No variable's name holds `=`, which the system would take as the end of the name.
