@@ -38,6 +38,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 |---|---|
 | `Int` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type (see [sized integers](types.md#sized-integers)), `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
 | `Int8`, `Int16`, `Int32`, `UInt16`, `UInt32`, `UInt64` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type, `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
+| `UInt32`, as `CodePoint` | `is_digit`, `is_letter`, `is_space` |
 | `Float` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_fixed`, `to_int`, `to_float32` |
 | `Float32` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float` |
 | `Byte` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` |
