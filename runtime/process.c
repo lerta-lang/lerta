@@ -9,6 +9,7 @@
 LERTA_STATIC_STRING(exit_code_out_of_range, "exit code out of range (0 to 255)");
 LERTA_STATIC_STRING(cannot_run, "cannot run: ");
 LERTA_STATIC_STRING(cannot_read_output, "cannot read the output of: ");
+LERTA_STATIC_STRING(output_too_long, "the output is too long: ");
 
 static int argument_count = 0;
 static char **arguments = NULL;
@@ -70,7 +71,6 @@ typedef struct {
   LertaString *command;
   LertaArray *outputs[2];
   LertaRunningProgram *program;
-  uint64_t kill_after;
   bool cancelled;
 } Run;
 
@@ -78,30 +78,35 @@ typedef struct {
 static void cancel_run(void *context) {
   Run *run = context;
   run->cancelled = true;
-  lerta_loop_stop_program(run->program, run->kill_after);
+  lerta_loop_stop_program(run->program);
 }
 
-// The streams that the run reads, read or not, their bytes appended to the arrays where they are.
-static bool append_outputs(Run *run, LertaString *read[2]) {
+// The streams that the run reads, read or not, their bytes appended to the arrays where they are,
+// if they are all read and kept.
+static bool append_outputs(Run *run, LertaString *read[2], bool kept) {
   bool all_read = true;
   for (int i = 0; i < 2; i++) {
     if (run->outputs[i] != NULL && read[i] == NULL) all_read = false;
   }
   for (int i = 0; i < 2; i++) {
     if (read[i] == NULL) continue;
-    if (all_read && !run->cancelled) append_bytes(run->outputs[i], read[i]);
+    if (all_read && kept) append_bytes(run->outputs[i], read[i]);
     else lerta_release(read[i]);
   }
   return all_read;
 }
 
 // The run holds the promise, the command and the arrays until the program ends.
-static void end_run(void *context, int64_t status, LertaString *output, LertaString *errors) {
+static void end_run(void *context, int64_t status, LertaString *output, LertaString *errors,
+                    bool too_long) {
   Run *run = context;
   LertaString *read[2] = {output, errors};
-  bool all_read = append_outputs(run, read);
+  bool all_read = append_outputs(run, read, !run->cancelled && !too_long);
   if (run->cancelled) {
     lerta_promise_reject_cancelled(run->promise);
+  } else if (too_long) {
+    lerta_raise_with(LERTA_IO_ERROR, &output_too_long, run->command);
+    lerta_promise_reject(run->promise);
   } else if (!all_read) {
     lerta_raise_with(LERTA_IO_ERROR, &cannot_read_output, run->command);
     lerta_promise_reject(run->promise);
@@ -237,11 +242,16 @@ static void free_spec(LertaProgramSpec *spec, int64_t count) {
 LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
                         const LertaString *input, LertaArray *output, LertaArray *errors,
                         const LertaString *cwd, const LertaArray *set, const LertaArray *values,
-                        const LertaArray *unset, double kill_after) {
+                        const LertaArray *unset, int64_t output_limit,
+                        double kill_after) {
   bool valid;
   LertaProgramSpec spec = program_spec(command, args, input, cwd, set, values, unset, &valid);
   spec.reads[0] = output != NULL;
   spec.reads[1] = errors != NULL;
+  spec.output_limit = output_limit;
+  // Rounded up, so as not to kill early; std:process checks that the time is not negative.
+  double milliseconds = ceil(kill_after * 1000);
+  spec.kill_after = milliseconds < 0x1p63 ? (uint64_t)milliseconds : UINT64_MAX;
   // Without this, the child's output could come before what this program printed first. A failed
   // flush is remembered and reported by the exit code, as for any other write to stdout.
   lerta_output_flush();
@@ -258,10 +268,7 @@ LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
   lerta_retain((void *)command);
   if (output != NULL) lerta_retain(output);
   if (errors != NULL) lerta_retain(errors);
-  // Rounded up, so as not to kill early; std:process checks that the time is not negative.
-  double milliseconds = ceil(kill_after * 1000);
-  uint64_t kill_milliseconds = milliseconds < 0x1p63 ? (uint64_t)milliseconds : UINT64_MAX;
-  *run = (Run){promise, (LertaString *)command, {output, errors}, program, kill_milliseconds, false};
+  *run = (Run){promise, (LertaString *)command, {output, errors}, program, false};
   lerta_promise_on_cancel(promise, cancel_run, run);
   return promise;
 }

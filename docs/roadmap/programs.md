@@ -4,6 +4,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## C ABI / FFI
 
+- An `Int?` parameter of an extern, a `LertaOptionalInt` of 16 bytes, passed as C takes it on Windows, by a pointer to a copy: now it is passed by value, which a C function there misreads, so std passes an `Int` with -1 for nil instead, as `run` does its `output_limit`. The x86-64 ABI of the other systems takes it by value, in two registers.
 - An `extern` declaration may also refer to a C variable.
 - Generic externs, `extern lerta_map_remove: <K, V>(Map<K, V>, K) -> void`, for C functions that take a value of any type as a pointer, as an array, a map or a String is. With them, the method `remove`, built into the compiler now (see [internals](../internals.md#builtins)), moves to `std/builtins.lerta`, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)); `push`, `pop` and indexing stay built in, since their code depends on the items' kind. Using them in std needs a seed refresh.
 - C headers are imported with libclang.
@@ -40,7 +41,6 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Open questions
 
-- How the test harness limits the output of a program it runs: by an option of `run`, or by itself.
 - Whether `race`, `timeout` and `all` of [std:async](../reference/modules.md#stdasync) await the promises that they cancel before they settle, so that a program that `run` started has ended once `timeout(run(...), seconds)` is rejected; now they settle at once, and `p.cancel()` followed by `await p` waits for it.
 - Whether a cancel of `run` stops the programs that the program started too, through a group of processes (a job object on Windows).
 - Whether the runtime checks keep running `script` for a terminal, or `std:process` gives one (a pty).

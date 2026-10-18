@@ -1,7 +1,7 @@
 # The running program: its arguments, how it ends, and the programs it runs (see runtime/process.c).
 
 export extern lerta_exit as exit: (Int) -> never
-extern lerta_run: (String, String[], Binary?, Byte[]?, Byte[]?, String?, String[], String[], String[], Float) -> Promise<Int>
+extern lerta_run: (String, String[], Binary?, Byte[]?, Byte[]?, String?, String[], String[], String[], Int, Float) -> Promise<Int>
 extern lerta_argv: () -> Binary[]
 # Windows compares the names of variables without case.
 extern lerta_same_env_name as same_env_name: (String, String) -> Bool
@@ -15,8 +15,9 @@ export const argv = [
 ]
 
 # How `run` runs a program: what it reads as its standard input, the arrays that its standard
-# output and error are appended to, its directory, the environment variables set and removed, and
-# how long a cancel waits for it to end before it is killed.
+# output and error are appended to, its directory, the environment variables set and removed, the
+# most bytes that it may write to each of those arrays, and how long a cancel waits for it to end
+# before it is killed.
 export struct RunOptions
   stdin: Binary?
   stdout: Byte[]?
@@ -24,6 +25,7 @@ export struct RunOptions
   cwd: String?
   env: Map<String, String> = default Map()
   unset_env: String[] = default []
+  output_limit: Int?
   kill_after = default 5.0
 
 # How a program ended: its exit code, which a signal makes 128 plus its number, as shells do, and
@@ -32,15 +34,20 @@ export struct Exit(code: Int, signal: Int?)
 
 export const run = (command: String, args: String..., options: RunOptions) ->
   check_options options
-  const { stdin, stdout, stderr, cwd, env, unset_env, kill_after } = options
+  const { stdin, stdout, stderr, cwd, env, unset_env, output_limit, kill_after } = options
   const names = [name for name in env.keys()]
   const values = [env[name]! for name in names]
-  const status =
-    await lerta_run(command, args, stdin, stdout, stderr, cwd, names, values, unset_env, kill_after)
+  # An Int, as an Int? passed to C on Windows is not yet as C takes it; -1 is no limit.
+  const limit = output_limit ? -1
+  const status = await lerta_run(
+    command, args, stdin, stdout, stderr, cwd, names, values, unset_env, limit, kill_after
+  )
   status >= 0 then Exit(code: status) else Exit(code: 128 - status, signal: -status)
 
 const check_options = (options: RunOptions) ->
   throw ValueError(message: 'kill a program after a negative time') if options.kill_after < 0
+  if options.output_limit ? 0 < 0
+    throw ValueError(message: "a negative limit of output: #{options.output_limit!}")
   const set_names = [name for name in options.env.keys()]
   for name in [set_names..., options.unset_env...]
     if name == '' or name.contains('=') or name.contains("\0")

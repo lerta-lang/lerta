@@ -307,12 +307,14 @@ void lerta_exit(int64_t code);
 // It reads `input` as its standard input, if given; its standard output and error are appended to
 // `output` and `errors`, arrays of bytes, if given; it runs in `cwd`, if given, with the variables
 // of this program but those that `unset` names, and those that `set` names with `values`. It is
-// rejected if an output cannot be read, and a program that cannot start throws at once. A cancel
-// stops the program, killing it after `kill_after` seconds, and rejects the promise once it ends.
+// rejected if an output cannot be read, or one goes past `output_limit` bytes, if not -1, which stops
+// the program, and a program that cannot start throws at once. A cancel stops the program, killing
+// it after `kill_after` seconds, and rejects the promise once it ends.
 LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
                         const LertaString *input, LertaArray *output, LertaArray *errors,
                         const LertaString *cwd, const LertaArray *set, const LertaArray *values,
-                        const LertaArray *unset, double kill_after);
+                        const LertaArray *unset, int64_t output_limit,
+                        double kill_after);
 // Whether two names of environment variables name the same variable.
 bool lerta_same_env_name(const LertaString *a, const LertaString *b);
 // The system's name: linux, macos or windows.

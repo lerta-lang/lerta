@@ -82,15 +82,16 @@ void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise);
 // left to wait for.
 bool lerta_loop_wait(void);
 // What is called once a program has exited and the streams that are read have ended: its exit
-// code, or minus the signal that ended it; and its standard output and error, owned, or NULL for
-// one that is not read or cannot be.
+// code, or minus the signal that ended it; its standard output and error, owned, or NULL for one
+// that is not read or cannot be; and whether one of them went past the limit, which stopped it.
 typedef void (*LertaProgramEnd)(void *context, int64_t status, LertaString *output,
-                                LertaString *errors);
+                                LertaString *errors, bool too_long);
 // How a program starts: the file `file` with `args`, which end with NULL, as lerta_os_program_file
 // and lerta_os_program_argument give them; with the variables `env`, as NAME=VALUE ending with NULL,
 // or else this program's; in the directory `cwd`, or else this program's; reading `stdin_fd`, or
 // else this program's standard input; its standard output and error, `reads[0]` and `reads[1]`,
-// read, or else shared with this program.
+// read, or else shared with this program; the most bytes that each read stream may give, or -1 for
+// no limit; and the milliseconds that a stop waits before it kills the program.
 typedef struct {
   char *file;
   char **args;
@@ -98,14 +99,16 @@ typedef struct {
   const char *cwd;
   int stdin_fd;
   bool reads[2];
+  int64_t output_limit;
+  uint64_t kill_after;
 } LertaProgramSpec;
 typedef struct LertaRunningProgram LertaRunningProgram;
 // Starts the program, which calls `end` once; NULL if it cannot start, and `end` is not called.
 LertaRunningProgram *lerta_loop_run_program(const LertaProgramSpec *spec, LertaProgramEnd end,
                                             void *context);
-// Asks the program to end, then kills it if it has not ended after the milliseconds; its output
-// after it exits is dropped. Only before `end` is called.
-void lerta_loop_stop_program(LertaRunningProgram *program, uint64_t kill_after);
+// Asks the program to end, then kills it if it has not ended after `kill_after`; its output after it
+// exits is dropped. Only before `end` is called.
+void lerta_loop_stop_program(LertaRunningProgram *program);
 // What is called with a chunk that a read gives: its bytes, which it takes, allocated with malloc,
 // and their count; or NULL and 0 at the end, -1 on failure, or LERTA_OUT_OF_MEMORY.
 typedef void (*LertaChunkEnd)(void *context, uint8_t *bytes, int64_t length);

@@ -144,6 +144,9 @@ struct LertaRunningProgram {
   uv_process_t process;
   ProgramOutput outputs[2];
   uv_timer_t kill_timer;
+  uint64_t kill_after;
+  int64_t output_limit;
+  bool too_long;
   bool stopping;
   bool exited;
   int64_t status;
@@ -183,7 +186,7 @@ static void end_program_if_done(LertaRunningProgram *program) {
   }
   LertaString *output = output_text(&program->outputs[0]);
   LertaString *errors = output_text(&program->outputs[1]);
-  program->end(program->context, program->status, output, errors);
+  program->end(program->context, program->status, output, errors, program->too_long);
   if (program->stopping) close_handle(&program->kill_timer);
   close_handle(&program->process);
   for (int i = 0; i < 2; i++) {
@@ -220,10 +223,19 @@ static void allocate_output(uv_handle_t *handle, size_t suggested_size, uv_buf_t
                         (unsigned int)(output->capacity - output->length));
 }
 
+// Output past the limit stops the program, as a cancel does, and the output, which is dropped, is
+// read no more, so that a program that does not stop at once cannot fill the memory meanwhile.
 static void read_output(uv_stream_t *stream, ssize_t count, const uv_buf_t *buffer) {
   (void)buffer;
+  LertaRunningProgram *program = stream->data;
   ProgramOutput *output = output_of((uv_handle_t *)stream);
   if (count > 0) output->length += (size_t)count;
+  bool is_too_long = program->output_limit >= 0 && output->length > (size_t)program->output_limit;
+  if (is_too_long && !program->too_long) {
+    program->too_long = true;
+    for (int i = 0; i < 2; i++) stop_reading(&program->outputs[i]);
+    lerta_loop_stop_program(program);
+  }
   if (count >= 0) return;
   output->failed = count != UV_EOF;
   stop_reading(output);
@@ -236,6 +248,8 @@ LertaRunningProgram *lerta_loop_run_program(const LertaProgramSpec *spec, LertaP
   LertaRunningProgram *program = lerta_checked_calloc(1, sizeof(LertaRunningProgram));
   program->end = end;
   program->context = context;
+  program->kill_after = spec->kill_after;
+  program->output_limit = spec->output_limit;
   program->process.data = program;
   int stdin_fd = spec->stdin_fd >= 0 ? spec->stdin_fd : 0;
   uv_stdio_container_t stdio[3] = {
@@ -287,7 +301,7 @@ static void kill_program(uv_timer_t *timer) {
 // SIGTERM lets the program end as it chooses, and SIGKILL ends it if it does not in time. On
 // Windows, either one terminates it at once. A program that has exited already has only its
 // output left, which is not waited for, as at its exit after a stop.
-void lerta_loop_stop_program(LertaRunningProgram *program, uint64_t kill_after) {
+void lerta_loop_stop_program(LertaRunningProgram *program) {
   if (program->stopping) return;
   if (program->exited) {
     for (int i = 0; i < 2; i++) stop_reading(&program->outputs[i]);
@@ -299,7 +313,7 @@ void lerta_loop_stop_program(LertaRunningProgram *program, uint64_t kill_after) 
   program->kill_timer.data = program;
   program->open_handles++;
   uv_process_kill(&program->process, SIGTERM);
-  uv_timer_start(&program->kill_timer, kill_program, kill_after, 0);
+  uv_timer_start(&program->kill_timer, kill_program, program->kill_after, 0);
 }
 
 bool lerta_loop_wait(void) {
