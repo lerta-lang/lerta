@@ -70,7 +70,10 @@ const gives_its_type = (function: FunctionLiteral, last: Expression?, facts: Nod
   is_kind type, 'void'
 
 # The type that values of their own types give together, as the branches of a conditional do; nil
-# if there are none, or one takes its type from where it is.
+# if there are none, or one takes its type from where it is. Nil too if a value of another type,
+# other than one that gives no value such as a throw, is not converted to it: the checking converts
+# a member of a union, as `A` for `A | B`, where the values give the type but not where the type is
+# written, so leaving the type out would change the checking.
 const unified_own_type = (values: Expression[], facts: NodeFacts) ->
   var unified: Type?
   for value in values
@@ -79,7 +82,11 @@ const unified_own_type = (values: Expression[], facts: NodeFacts) ->
     const before = unified
     unified = before then unify(before, type) else type
     return nil if unified == nil
-  unified
+  const whole = unified ? return nil
+  const is_converted = (value: Expression) ->
+    const type = facts.types[value]!
+    facts.conversions[value] != nil or same_type(type, whole) or is_kind(type, 'never')
+  values.all(is_converted) then whole
 
 # A value whose type does not come from where it is, given where its own type is wanted.
 const given_as_is = (value: Expression, facts: NodeFacts) ->
