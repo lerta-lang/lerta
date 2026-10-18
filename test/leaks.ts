@@ -1,9 +1,9 @@
 // The compiler's own leaks: build/stage1, the compiler that the Makefile builds with the debug
 // runtime, which reports the objects left at its end (see docs/internals.md#bootstrap), prints
 // the IR of each Lerta source of the repository's tests and examples and of each standard module,
-// and must report none. The tests run bin/lerta, which is optimized and reports none. Only the
-// sources that compile are checked: for one with errors, the compiler exits with status 1 through
-// `exit`, which ends the program before the report, since what is alive then is not released.
+// and must report none. The tests run bin/lerta, which is optimized and reports none. For a source
+// with errors, the compiler exits with status 1 through `exit`, where the report is only of the
+// objects that nothing in use holds, since what is in use then is not released.
 import { mkdtempSync, readdirSync, statSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
 import { join, relative } from 'node:path'

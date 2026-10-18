@@ -1,0 +1,31 @@
+# Leaks a cycle, then exits from a function that awaits while another waits, holding a cycle of its
+# own, as test/cli.ts runs it: the debug runtime reports only the objects of the leaked cycle, and
+# not those still in use, as the waiting function's.
+import exit from 'std:process'
+import sleep from 'std:time'
+
+class Node
+  next: Node? = nil
+  name: String
+
+const make_cycle = ->
+  const a = Node(name: 'a')
+  const b = Node(name: 'b')
+  a.next = b
+  b.next = a
+  a
+
+const wait_long = (): Promise ->
+  const held = make_cycle()
+  await sleep(1000.0)
+  print held.name
+
+const exit_soon = (node: Node): Promise ->
+  await sleep(0.01)
+  exit 3
+
+make_cycle()
+const kept = Node(name: 'kept')
+kept.next = Node(name: 'also kept')
+const _waiting = wait_long()
+await exit_soon(kept)

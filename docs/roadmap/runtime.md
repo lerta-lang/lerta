@@ -26,9 +26,8 @@ What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is i
 
 ## Memory management
 
-For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-structs)). The plan is to make them hard to write, and to report the ones that are written:
+For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-structs)), and the debug runtime reports the objects that only cycles hold, by their types ([the reference](../reference/compiler.md#build)), which is left to catch the cycles across libraries. The plan is to make them hard to write:
 
-- Cycles across libraries are left to the leak check of the debug runtime ([internals](../internals.md#leak-checking)), which reports the cycles that remain at exit by their types, traversing the objects still alive.
 - The warning of a literal that captures `@` and is stored where `@` holds it ([errors](../reference/errors.md#cycles)) extends, with input and output, to a literal given to a method that keeps its argument where its object holds it, as `@button.listen(-> @count += 1)` does if `listen` stores it: a method's parameters that reach a field or a collection are found once, as the method is checked. Callbacks kept by C functions need a way to say so.
 
 ### Reference count operations

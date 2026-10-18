@@ -5,8 +5,10 @@
 // files linked with a program use.
 #include "lerta.h"
 
-// Memory (memory.c).
+// Memory (memory.c). The debug runtime's leak check, as the program ends: of what is left alive, and,
+// as `exit` ends it, which holds what is still in use, of the objects that nothing in use holds.
 void lerta_report_leaks(void);
+void lerta_report_unreachable(void);
 // malloc, realloc and calloc that panic when out of memory instead of returning NULL.
 void *lerta_checked_malloc(size_t size);
 void *lerta_checked_realloc(void *memory, size_t size);

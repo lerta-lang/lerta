@@ -129,10 +129,11 @@ const use_after_drop = (name: string, use: string): Check => ({
     ),
 })
 // Sizes at the edges of the size classes, of slabs and of regions of their own.
-// 16368 and 16369 are the largest size that fits in a slab with the debug runtime's prefix of 16
-// bytes before it, and the smallest that does not.
+// 16352 and 16353 are the largest size that fits in a slab with the debug runtime's prefix before
+// it, of 32 bytes on 64-bit systems, and the smallest that does not; 16368 and 16369 are those of
+// its 16 bytes on 32-bit ones.
 const sizes = `static const int64_t sizes[] = {
-  16, 17, 24, 255, 256, 257, 320, 321, 16368, 16369, 16384, 16385, 100000};
+  16, 17, 24, 255, 256, 257, 320, 321, 16352, 16353, 16368, 16369, 16384, 16385, 100000};
 #define SIZES (int)(sizeof sizes / sizeof sizes[0])
 `
 
