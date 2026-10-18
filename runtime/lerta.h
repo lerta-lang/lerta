@@ -176,7 +176,8 @@ double lerta_float_from_bits(int64_t bits);
 // that read back as it as a float.
 LertaString *lerta_float_to_string(double value);
 LertaString *lerta_float32_to_string(float value);
-// Throws an ArithmeticError unless the value is finite as a float.
+// Whether the value is finite as a float, which only then is it converted to.
+bool lerta_float_fits_float32(double value);
 float lerta_float_to_float32(double value);
 double lerta_float32_to_float(float value);
 
@@ -185,7 +186,8 @@ double lerta_math_sqrt(double x);
 double lerta_math_pow(double x, double y);
 double lerta_math_remainder(double x, double y);
 
-// Truncated toward zero; throws an ArithmeticError unless the result fits in an Int.
+// Whether the value truncated toward zero fits in an Int, which only then is it converted to.
+bool lerta_float_fits_int(double value);
 int64_t lerta_float_to_int(double value);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);

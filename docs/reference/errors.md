@@ -25,13 +25,13 @@ const n =
   | Type | Thrown by |
   |---|---|
   | `IndexError` | an index or a slice out of range, `pop` of an empty array |
-  | `ArithmeticError` | integer overflow, float overflow, division by zero, `to_byte` of an Int out of 0 to 255, `to_int` of a Float that does not fit in an Int |
+  | `ArithmeticError` | integer overflow, float overflow, division by zero |
   | `NilError` | `x!` of nil |
   | `CastError` | `x as T!` of a value of another type |
   | `IterError` | a second traversal of an `Iter`, `next` past its end, reading an `Iter` from within its own function |
   | `WeakError` | a `weak!` field whose object is gone |
   | `IOError` | a file that cannot be read or written, a command that cannot be run |
-  | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, `sleep(-1)`, and `zip` of Iterables of different lengths |
+  | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, `sleep(-1)`, `zip` of Iterables of different lengths, and `c + n` or `c - n` of a `Char` past the Unicode scalar values |
   | `InitError` | a top-level value used before it is initialized (see [top-level values](functions.md#top-level-values)) |
   | `CancelledError` | the `await` of a promise that is cancelled (see [functions that await](functions.md#functions-that-await)) |
 - A `String` cannot be thrown: `throw` takes an `Error`, so that a `catch` can tell errors apart by type.

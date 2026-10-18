@@ -153,24 +153,19 @@ LertaString *lerta_float_to_string(double value) { return shortest_text(value, f
 
 LertaString *lerta_float32_to_string(float value) { return shortest_text(value, true); }
 
-LERTA_STATIC_STRING(float_overflow, "float overflow");
+bool lerta_float_fits_float32(double value) { return isfinite((float)value); }
 
-float lerta_float_to_float32(double value) {
-  float narrowed = (float)value;
-  if (!isfinite(narrowed)) lerta_raise(LERTA_ARITHMETIC_ERROR, (const LertaString *)&float_overflow);
-  return narrowed;
-}
+float lerta_float_to_float32(double value) { return (float)value; }
 
 double lerta_float32_to_float(float value) { return value; }
 
-LERTA_STATIC_STRING(float_to_int_overflow, "integer overflow");
-
-int64_t lerta_float_to_int(double value) {
+bool lerta_float_fits_int(double value) {
   // -2^63 is a double, the lowest Int; 2^63 is the first double past the highest.
-  if (value >= -9223372036854775808.0 && value < 9223372036854775808.0) return (int64_t)value;
-  lerta_raise(LERTA_ARITHMETIC_ERROR, (const LertaString *)&float_to_int_overflow);
-  return 0;
+  return value >= -9223372036854775808.0 && value < 9223372036854775808.0;
 }
+
+// C's conversion of a value that does not fit is undefined.
+int64_t lerta_float_to_int(double value) { return (int64_t)value; }
 
 LERTA_STATIC_STRING(true_text, "true");
 LERTA_STATIC_STRING(false_text, "false");

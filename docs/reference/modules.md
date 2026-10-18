@@ -119,7 +119,7 @@ Functions of `Float`s, which throw an `ArithmeticError` where the result would n
 | Name | |
 |---|---|
 | `abs(x: Float): Float` | The value without its sign. |
-| `floor(x: Float): Float`, `ceil(x: Float): Float` | The greatest integer not above `x`, and the least not below it, as `Float`s; `.to_int()` makes an `Int` of one. |
+| `floor(x: Float): Float`, `ceil(x: Float): Float` | The greatest integer not above `x`, and the least not below it, as `Float`s; `.to_int()` makes an `Int?` of one, nil beyond an `Int`. |
 | `round(x: Float): Float` | The nearest integer, half way between two away from zero: `round(2.5)` is `3.0`, `round(-2.5)` is `-3.0`. |
 | `sqrt(x: Float): Float` | The square root. Throws `square root of a negative number` for one below 0. |
 | `pow(x: Float, y: Float): Float` | `x` to the power `y`. Throws `float overflow` where the result is too large, `division by zero` for 0 to a negative power, and `a negative number to a fractional power` for a negative `x` and a `y` that is no integer. |

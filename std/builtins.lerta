@@ -1,4 +1,5 @@
 # See docs/reference/builtins.md and docs/internals.md#builtins.
+import scalar from './internal/conversions'
 import char_at, sequence_length, utf8_of from './internal/utf8'
 # Writes at once, unlike std:io's Writer (see runtime/io.c).
 extern lerta_print_stdout: (String) -> void
@@ -15,7 +16,9 @@ extern lerta_string_join: (String[], String) -> String
 # representation (see docs/internals.md).
 extern lerta_string_join as lerta_binary_join: (Binary[], Binary) -> Binary
 extern lerta_float_to_string: (Float) -> String
+extern lerta_float_fits_int: (Float) -> Bool
 extern lerta_float_to_int: (Float) -> Int
+extern lerta_float_fits_float32: (Float) -> Bool
 extern lerta_float_to_float32: (Float) -> Float32
 extern lerta_float32_to_string: (Float32) -> String
 extern lerta_float32_to_float: (Float32) -> Float
@@ -64,8 +67,10 @@ const print_stderr_line = (text: String) -> lerta_print_stderr(text + "\n")
 
 extend Float
   to_string = -> lerta_float_to_string(@)
-  to_int = -> lerta_float_to_int(@)
-  to_float32 = -> lerta_float_to_float32(@)
+  # The Int of the value truncated toward zero, or nil where it is beyond an Int.
+  to_int = (): Int? -> lerta_float_fits_int(@) then lerta_float_to_int(@)
+  # The nearest Float32, or nil where that is an infinity.
+  to_float32 = (): Float32? -> lerta_float_fits_float32(@) then lerta_float_to_float32(@)
   # The text with `digits` digits after the point, of the value times 10 to the `digits` rounded
   # half away from zero to an Int, which it must fit in. The product may round, so a value just
   # below a half may round up; the rest after truncating it is exact, so that rounding adds no
@@ -77,7 +82,7 @@ extend Float
     scale *= 10 for _ in 0...digits
     const size = @ < 0.0 then -@ else @
     const product = size * scale.to_float()
-    const truncated = product.to_int()
+    const truncated = product.to_int() ? throw ArithmeticError(message: 'integer overflow')
     const units = product - truncated.to_float() >= 0.5 then truncated + 1 else truncated
     const sign = @ < 0.0 and units != 0 then '-' else ''
     const whole = "#{sign}#{units / scale}"
@@ -106,8 +111,8 @@ extend Char
   is_letter = -> (@ >= 'a' and @ <= 'z') or (@ >= 'A' and @ <= 'Z')
   is_space = -> @ == ' ' or @ == "\t" or @ == "\n" or @ == "\r"
   # The Char that many places on, or back, which throws where no Char is.
-  add = (count: Int) -> (@to_int() + count).to_char()
-  sub = (count: Int) -> (@to_int() - count).to_char()
+  add = (count: Int) -> scalar((@to_int() + count).to_char())
+  sub = (count: Int) -> scalar((@to_int() - count).to_char())
 
 extend String
   to_string = -> @

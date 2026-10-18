@@ -1,5 +1,6 @@
 # What std:json's generated code reads through (see std/json.lerta).
 import from_base64 from './base64'
+import fitted from './conversions'
 import field_key, hex_text, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
@@ -34,12 +35,12 @@ export class JsonReader
   read_uint64 = (): UInt64 ->
     const number = @number() ? @fail_expected('a UInt64')
     const out_of_range = -> @fail("expected a UInt64, found #{number}")
-    var value = 0.to_uint64()
+    var value: UInt64 = 0
     for byte in number.binary
       out_of_range() if not byte.is_digit()
       const digit = (byte - '0').to_uint64()
-      out_of_range() if value > (MAX_UINT64 - digit) / 10.to_uint64()
-      value = value * 10.to_uint64() + digit
+      out_of_range() if value > (MAX_UINT64 - digit) / TEN
+      value = value * TEN + digit
     @at += number.binary.length
     value
 
@@ -48,9 +49,9 @@ export class JsonReader
     const number = @number() ? @fail_expected('a Float32')
     const not_float32 = -> @fail("expected a Float32, found #{number}")
     const value = number.parse_float() ? not_float32()
-    not_float32() if value >= FLOAT32_LIMIT or value <= -FLOAT32_LIMIT
+    const narrowed = value.to_float32() ? not_float32()
     @at += number.binary.length
-    value.to_float32()
+    narrowed
 
   read_binary = (): Binary ->
     @skip_space()
@@ -212,13 +213,13 @@ export class JsonReader
   # A surrogate pair is one Char, written as two escapes.
   read_escaped_char = ->
     const code = @read_hex_unit()
-    return code.to_char() if code < 0xD800 or code > 0xDFFF
+    return fitted(code.to_char()) if code < 0xD800 or code > 0xDFFF
     const lone = -> @fail("a lone surrogate in a string, \\u#{hex_text(code)}")
     lone() if code > 0xDBFF or not @bytes.occurs_at(@at, '\u'.binary)
     @at += 2
     const low = @read_hex_unit()
     lone() if low < 0xDC00 or low > 0xDFFF
-    (0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)).to_char()
+    fitted (0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)).to_char()
 
   read_hex_unit = ->
     var code = 0
@@ -307,8 +308,7 @@ const hex_value = (byte: Byte): Int? ->
 const byte_text = (byte: Byte) ->
   byte > 0x20 and byte < 0x7F then byte.to_char().to_string() else "byte #{byte}"
 
-const MAX_UINT64 = 0.to_uint64().wrapping_sub(1.to_uint64())
-
-# The least magnitude that a Float rounds to an infinity at as a Float32: 2 to the 128 less 2 to
-# the 103, half way from the largest Float32 to the next power of 2.
-const FLOAT32_LIMIT = 3.4028235677973366e38
+const ZERO: UInt64 = 0
+const ONE: UInt64 = 1
+const TEN: UInt64 = 10
+const MAX_UINT64 = ZERO.wrapping_sub(ONE)

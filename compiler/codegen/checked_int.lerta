@@ -4,8 +4,10 @@ import Generator from './generator'
 import IrBuilder from './ir_builder'
 import ir_type from './lerta_ir'
 import call_runtime from './runtime_calls'
-import DIVISION_BY_ZERO, NOT_A_CHAR, OVERFLOW, SHIFT_OUT_OF_RANGE, throw_if from './runtime_errors'
-import char_type, int_type, integer_bits, integer_range, is_kind, is_signed, Type from '../types'
+import DIVISION_BY_ZERO, OVERFLOW, SHIFT_OUT_OF_RANGE, throw_if from './runtime_errors'
+import
+  char_type, int_type, integer_bits, integer_range, is_kind, is_signed, OptionalType, Type
+from '../types'
 
 # An arithmetic operator, `+`, `-`, `*`, `/` or `%`, or a bitwise one, `&`, `|`, `^`, `<<` or `>>`,
 # applied to two values of an integer type, by its bits and its sign.
@@ -92,34 +94,46 @@ export const emit_integer_text = (ir: IrBuilder, value: String, type: Type) ->
 export const emit_integer_to_float = (ir: IrBuilder, value: String, type: Type) ->
   ir.assign "#{is_signed(type) then 'sitofp' else 'uitofp'} #{ir_type(type)} #{value} to double"
 
-# `x.to_int8()` and the like, which throw unless the value fits in the type: converted there and
-# back, it must come back the same, and with the same sign, as a value of one sign that is
-# negative as one of the other is no value of it.
-export const emit_conversion = (g: Generator, value: String, from: Type, to: Type) ->
-  return emit_char_conversion(g, value, from) if is_kind(to, 'Char')
-  const ir = g.ir
+# `x.to_int8()` and the like, to `result`: the type, where it holds every value of the type
+# converted, or else its optional type, nil where the value does not fit.
+export const emit_conversion = (ir: IrBuilder, value: String, from: Type, result: Type) ->
+  const to = result is OptionalType then result.inner else result
+  const conversion =
+    if is_kind(to, 'Char')
+      char_conversion ir, value, from
+    else
+      integer_conversion ir, value, from, to
+  return conversion.value if result is not OptionalType
+  const flagged = ir.assign("insertvalue #{ir_type(result)} undef, i1 #{conversion.fits}, 0")
+  ir.assign "insertvalue #{ir_type(result)} #{flagged}, #{ir_type(to)} #{conversion.value}, 1"
+
+# The value converted, and an i1 of whether it fits there.
+struct Conversion(value: String, fits: String)
+
+# Converted there and back, a value that fits comes back the same, and with the same sign, as a
+# value of one sign that is negative as one of the other is no value of it.
+const integer_conversion = (ir: IrBuilder, value: String, from: Type, to: Type) ->
   const converted = resized(ir, value, from, to, is_signed(from))
   const back = resized(ir, converted, to, from, is_signed(to))
-  const changed = ir.assign("icmp ne #{ir_type(from)} #{back}, #{value}")
+  const same = ir.assign("icmp eq #{ir_type(from)} #{back}, #{value}")
   const is_negative = (operand: String, type: Type) ->
     is_signed(type) then ir.assign("icmp slt #{ir_type(type)} #{operand}, 0") else 'false'
   const negative = is_signed(from) then is_negative(value, from) else is_negative(converted, to)
-  const lost =
-    is_signed(from) == is_signed(to) then changed else ir.assign("or i1 #{changed}, #{negative}")
-  throw_if g, lost, OVERFLOW
-  converted
+  const signs_agree = ir.assign("xor i1 #{negative}, true")
+  const fits =
+    is_signed(from) == is_signed(to) then same else ir.assign("and i1 #{same}, #{signs_agree}")
+  Conversion fits, value: converted
 
-# `n.to_char()`, which throws unless the number is a Unicode scalar value: from 0 to 0x10FFFF, but
-# for the surrogates, from 0xD800 to 0xDFFF. The number is compared as a word, where no value of a
-# narrower type is out of place.
-const emit_char_conversion = (g: Generator, value: String, from: Type) ->
-  const ir = g.ir
+# A number fits in a Char where it is a Unicode scalar value: from 0 to 0x10FFFF, but for the
+# surrogates, from 0xD800 to 0xDFFF. It is compared as a word, where no value of a narrower type
+# is out of place.
+const char_conversion = (ir: IrBuilder, value: String, from: Type) ->
   const word = resized(ir, value, from, int_type, is_signed(from))
-  const beyond = ir.assign("icmp ugt i64 #{word}, #{MAX_CHAR}")
+  const within = ir.assign("icmp ule i64 #{word}, #{MAX_CHAR}")
   const above_surrogates = ir.assign("sub i64 #{word}, #{FIRST_SURROGATE}")
-  const is_surrogate = ir.assign("icmp ult i64 #{above_surrogates}, #{SURROGATE_COUNT}")
-  throw_if g, ir.assign("or i1 #{beyond}, #{is_surrogate}"), NOT_A_CHAR
-  resized ir, word, int_type, char_type, false
+  const beside_surrogates = ir.assign("icmp uge i64 #{above_surrogates}, #{SURROGATE_COUNT}")
+  const fits = ir.assign("and i1 #{within}, #{beside_surrogates}")
+  Conversion fits, value: resized(ir, word, int_type, char_type, false)
 
 const MAX_CHAR = 0x10FFFF
 const FIRST_SURROGATE = 0xD800

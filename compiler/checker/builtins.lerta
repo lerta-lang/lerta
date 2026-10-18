@@ -5,9 +5,10 @@ import info_of from './object_types'
 import operand_kinds, operator_of_method, SIGNED_KINDS from './operator'
 import ProgramWide from './shared'
 import
-  ArrayType, bool_type, EnumType, FLOAT_KINDS, float_type, FunctionType, int_type, INTEGER_KINDS,
-  is_float, is_integer, is_kind, is_one_of_kinds, is_set, IterType, MapType, ObjectType,
-  OptionalType, PromiseType, SimpleType, string_type, TupleType, Type, TypeKind, void_type
+  ArrayType, bool_type, EnumType, FLOAT_KINDS, float_type, FunctionType, int_type, integer_bits,
+  INTEGER_KINDS, is_float, is_integer, is_kind, is_one_of_kinds, is_set, is_signed, IterType,
+  MapType, ObjectType, optional_type, OptionalType, PromiseType, SimpleType, string_type, TupleType,
+  Type, TypeKind, void_type
 from '../types'
 
 # The builtin methods, which the checker resolves a name to once, so that codegen generates each
@@ -110,7 +111,18 @@ const integer_method = (receiver: Type, name: String) ->
   return method(INTEGER_TO_STRING, [], string_type) if name == 'to_string'
   return method(INTEGER_TO_FLOAT, [], float_type) if name == 'to_float'
   const kind = CONVERSIONS[name] ? return nil
-  method INTEGER_CONVERSION, [], SimpleType(kind)
+  const target = SimpleType(kind)
+  method INTEGER_CONVERSION, [], holds_all(target, receiver) then target else optional_type(target)
+
+# Whether every value of the integer type `from` is one of `to`, which converting to it gives,
+# where it gives nil for a value that it does not hold: a type of no fewer bits and of no other
+# sign, or an unsigned type into a signed one of more bits; and only Bytes are all Chars, the
+# numbers below the surrogates.
+const holds_all = (to: Type, from: Type) ->
+  return is_kind(from, 'Byte') if is_kind(to, 'Char')
+  const wider = integer_bits(to) > integer_bits(from)
+  const as_wide = integer_bits(to) >= integer_bits(from)
+  is_signed(from) == is_signed(to) then as_wide else not is_signed(from) and wider
 
 # The types that `to_int`, `to_byte`, `to_int8` and so on convert to: the integer types, and Char.
 const CONVERSIONS: Map<String, TypeKind> =
