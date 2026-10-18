@@ -1,0 +1,138 @@
+# Checks the conditions or patterns of a `case`, and how they narrow its subject in each arm.
+import Case, CaseArm, Expression, Identifier, NamedType, NilLiteral from '../ast'
+import fail from './diagnostics'
+import expect_condition, expect_type, set_type, type_of, unnarrowed_type from './expression'
+import narrowable from './narrowable'
+import Narrowing, narrowings_of from './narrowing'
+import Body, enum_value_of from './shared'
+import has_type, resolve from './type_names'
+import
+  EnumType, format_enum_member, format_member, format_type, inner_of, INTEGER_KINDS, is_assignable,
+  is_kind, is_one_of_kinds, members_of, other_members, optional_type, OptionalType, Type, type_key,
+  TypeKind, union_type, UnionType
+from '../types'
+
+const VALUE_KINDS: TypeKind[] = [INTEGER_KINDS..., 'Bool', 'String', ENUM]
+
+# A condition of a case without a subject is one of an `if`, which narrows locals in its arm.
+const check_condition = (body: Body, condition: Expression) ->
+  expect_condition body, condition
+  narrowings_of(body, condition).where_true
+
+# How the subject is narrowed in each arm, and in the else arm.
+struct CaseNarrowings(arms: Narrowing[][], otherwise: Narrowing[])
+
+# Checks the conditions or patterns, and returns how they narrow.
+export const check_patterns = (body: Body, case_expression: Case): CaseNarrowings ->
+  const { arms } = case_expression
+  const subject = case_expression.subject
+  if subject == nil
+    const conditions = [check_condition(body, arm.patterns[0]) for arm in arms]
+    return CaseNarrowings(arms: conditions, otherwise: [])
+  const subject_type = type_of(body, subject)
+  const is_optional = subject_type is OptionalType
+  const is_nil_arm = (arm: CaseArm) -> is_optional and arm.patterns.any(is_nil_pattern)
+  const unhandled_nil = is_optional and not check_nil_arms(body, arms)
+  const missing: String[] = unhandled_nil then ['nil'] else []
+  const type = inner_of(subject_type)
+  # As `is` does, the patterns take the members of the type that the subject was declared with.
+  const declared = inner_of(unnarrowed_type(body, subject, subject_type))
+  if declared is UnionType
+    return check_type_patterns(body, case_expression, is_nil_arm, subject, declared, type, missing)
+  if not is_one_of_kinds(type, VALUE_KINDS)
+    const message = "cannot branch on a value of type #{format_type(subject_type)}"
+    fail body.program, subject.position, message
+  const value_patterns = [arm.patterns for arm in arms when not is_nil_arm(arm)]
+  for patterns in value_patterns
+    expect_type body, pattern, type for pattern in patterns
+  if type is EnumType
+    check_member_patterns body, case_expression, type, missing
+  else if case_expression.otherwise == nil
+    fail body.program, case_expression.position, 'a case on values needs an else arm'
+  const no_narrowings: Narrowing[] = []
+  const narrowed = is_optional then subject_narrowings(body, subject, type) else no_narrowings
+  const arm_narrowings = [is_nil_arm(arm) then no_narrowings else narrowed for arm in arms]
+  CaseNarrowings arms: arm_narrowings, otherwise: unhandled_nil then no_narrowings else narrowed
+
+const is_nil_pattern = (pattern: Expression) -> pattern is NilLiteral
+
+const check_nil_arms = (body: Body, arms: CaseArm[]) ->
+  var handled = false
+  for arm in arms
+    for pattern in arm.patterns
+      continue if not is_nil_pattern(pattern)
+      if arm.patterns.length > 1
+        fail body.program, pattern.position, 'nil must be the only pattern of its arm'
+      fail_handled_twice body, pattern, 'nil' if handled
+      type_of body, pattern
+      handled = true
+  handled
+
+const check_type_patterns = (
+  body: Body, case_expression: Case, is_nil_arm: (CaseArm) -> Bool, subject: Expression,
+  union: UnionType, narrowed: Type, missing_nil: String[]
+) ->
+  const handled = Set<String>()
+  const arm_narrowings: Narrowing[][] = []
+  for arm in case_expression.arms
+    if is_nil_arm(arm)
+      arm_narrowings.push []
+      continue
+    const types = [type_pattern(body, pattern, union) for pattern in arm.patterns]
+    for (pattern_type, pattern) in types.zip(arm.patterns)
+      for member in members_of(pattern_type)
+        const key = type_key(member)
+        fail_handled_twice body, pattern, format_member(member, union) if handled.has(key)
+        handled.add key
+    arm_narrowings.push types.length == 1 then subject_narrowings(body, subject, types[0]) else []
+  const is_unhandled = (member: Type) -> not handled.has(type_key(member))
+  const unhandled_members = members_of(narrowed).filter(is_unhandled)
+  const missing = [format_member(member, union) for member in unhandled_members]
+  fail_unhandled body, case_expression, [missing..., missing_nil...]
+  # Where nil is handled, the else arm does not see it.
+  const unhandled = missing_nil.length > 0 then optional_type(narrowed) else narrowed
+  const handled_members = [member for member in union.members when handled.has(type_key(member))]
+  const others = other_members(unhandled, union_type(handled_members))
+  const otherwise: Narrowing[] = others then subject_narrowings(body, subject, others) else []
+  CaseNarrowings otherwise, arms: arm_narrowings
+
+const check_member_patterns = (
+  body: Body, case_expression: Case, type: EnumType, missing_nil: String[]
+) ->
+  const handled = Set<Int>()
+  for arm in case_expression.arms
+    for pattern in arm.patterns
+      const index = enum_value_of(body.facts, pattern) ? continue
+      if handled.has(index)
+        fail_handled_twice body, pattern, format_enum_member(type.members[index])
+      handled.add index
+  const members = type.members
+  const missing = [format_enum_member(member) for member, i in members when not handled.has(i)]
+  fail_unhandled body, case_expression, [missing..., missing_nil...]
+
+const fail_handled_twice = (body: Body, pattern: Expression, handled: String) ->
+  fail body.program, pattern.position, "#{handled} is already handled by an earlier arm"
+
+# Without an else arm, a case must handle each of the `missing`.
+const fail_unhandled = (body: Body, case_expression: Case, missing: String[]) ->
+  return if case_expression.otherwise != nil or missing.length == 0
+  const message = "case does not handle #{missing.join(', ')}; add them or an else arm"
+  fail body.program, case_expression.position, message
+
+# The pattern's type, recorded on the pattern for codegen: a member of the union, or a union of some
+# of its members, which a type alias names.
+const type_pattern = (body: Body, pattern: Expression, union: UnionType) ->
+  const fail_pattern = ->
+    const types = "the types #{format_type(union)} or a union of them"
+    fail body.program, pattern.position, "expected one of #{types}"
+  const { program, resolver } = body
+  const name = pattern is Identifier then pattern.name else fail_pattern()
+  fail_pattern() if not has_type(program, resolver, name)
+  const type_name = NamedType(name, args: [], position: pattern.position)
+  const type = resolve(program, resolver, type_name)
+  fail_pattern() if not is_assignable(type, union) or is_kind(type, 'never')
+  set_type body, pattern, type
+
+const subject_narrowings = (body: Body, subject: Expression, type: Type): Narrowing[] ->
+  const value = narrowable(body, subject) ? return []
+  [Narrowing(type, subject: value.subject)]

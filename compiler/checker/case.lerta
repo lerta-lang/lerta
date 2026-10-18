@@ -1,35 +1,18 @@
-# Types `case` (its conditions or patterns, and the values of its arms) and `then`/`else`.
-import
-  Case, CaseArm, Catch, Conditional, Expression, Identifier, If, NamedType, NilLiteral, Statement,
-  Try
-from '../ast'
+# Types `case`, `if` with `else`, `try` and `then`/`else`, whose values their branches give (see
+# branches), and a `case`'s conditions or patterns (see case_patterns).
+import Case, Catch, Conditional, If, Statement, Try from '../ast'
 import fail from './diagnostics'
-import expect_condition, expect_type, set_type, type_of, unnarrowed_type from './expression'
-import narrowable from './narrowable'
-import narrow, Narrowing, narrowings_of from './narrowing'
-import Body, enum_value_of from './shared'
-import
-  check_block, check_if, check_if_condition, define_local, nothing, type_of_block
-from './statement'
+import expect_condition, set_type from './expression'
+import narrow, narrowings_of from './narrowing'
+import Body from './shared'
+import check_block, check_if, check_if_condition, define_local, nothing from './statement'
 import std_interface from './interfaces'
 import reject_unsatisfied from './satisfaction'
 import Local from './scopes'
-import has_type, resolve from './type_names'
-import
-  EnumType, FLOAT_KINDS, format_enum_member, format_member, format_type, inner_of, INTEGER_KINDS,
-  is_assignable, is_kind, is_one_of_kinds, members_of, ObjectType, other_members, optional_type,
-  OptionalType, same_type, Type, type_key, TypeKind, unify, union_of, union_type, UnionType,
-  void_type
-from '../types'
-
-const VALUE_KINDS: TypeKind[] = [INTEGER_KINDS..., 'Bool', 'String', ENUM]
-
-# The body of a case arm, of then/else or of an if, and what entering it does: narrowing locals, or
-# defining one.
-struct Branch(statements: Statement[], enter: () -> void)
-
-# The last statement of a branch, and the type of its value.
-struct BranchValue(last: Statement, type: Type)
+import resolve from './type_names'
+import format_type, is_kind, members_of, ObjectType, same_type, Type, void_type from '../types'
+import Branch, BranchValue, type_of_branches, unify_unless_void, unify_values from './branches'
+import check_patterns from './case_patterns'
 
 export const type_of_case = (body: Body, case_expression: Case, expected: Type?) ->
   const narrowings = check_patterns(body, case_expression)
@@ -96,11 +79,6 @@ const caught_type = (body: Body, clause: Catch): Type ->
     reject_unsatisfied body, member, error, type_name.position
   type
 
-# A condition of a case without a subject is one of an `if`, which narrows locals in its arm.
-const check_condition = (body: Body, condition: Expression) ->
-  expect_condition body, condition
-  narrowings_of(body, condition).where_true
-
 # The condition narrows a local as `if` does: in the value for when it holds, or the other.
 export const type_of_conditional = (body: Body, conditional: Conditional, expected: Type?) ->
   expect_condition body, conditional.condition
@@ -118,197 +96,3 @@ export const type_of_conditional = (body: Body, conditional: Conditional, expect
     const description = without_else then 'then without else' else 'the values of then and else'
     unify_values body, values, conditional, description
   type_of_branches body, branches, expected, unify_then_else
-
-# The type of the values the branches give: the expected type, or else the one that `unify_all`
-# makes of them. Each value is typed as its branch is entered, which may narrow a local.
-const type_of_branches = (
-  body: Body, branches: Branch[], expected: Type?, unify_all: (BranchValue[]) -> Type
-) ->
-  # Each body is a block, which sees the locals its branch narrows.
-  const type_of_body = (branch: Branch, type_of_last: (Expression) -> Type) ->
-    type_of_block body, branch.statements, branch.enter, type_of_last
-  if expected
-    const check_value = (value: Expression) ->
-      expect_type body, value, expected
-      expected
-    for branch in branches
-      const type = type_of_body(branch, check_value)
-      if is_kind(type, 'void')
-        const message = "expected #{format_type(expected)}, got void"
-        fail body.program, branch.statements.last()!.position, message
-    return expected
-  const type_of_value = (value: Expression) -> type_of(body, value)
-  const value_of = (branch: Branch) ->
-    BranchValue last: branch.statements.last()!, type: type_of_body(branch, type_of_value)
-  unify_all [value_of(branch) for branch in branches]
-
-# Unifies the values of branches, as unify_values does. Statements give no value, so neither do
-# branches with one among them.
-const unify_unless_void = (body: Body, at: Expression, description: String) ->
-  (values: BranchValue[]) ->
-    return void_type if values.any((value) -> is_kind(value.type, 'void'))
-    unify_values body, values, at, description
-
-# The values, the last statements of the bodies, are converted to the type they unify to.
-const unify_values = (body: Body, values: BranchValue[], at: Expression, description: String) ->
-  var type = values[0].type
-  for value in values
-    type = unify(type, value.type) ? union_of([type, value.type]) ? mismatch(
-      body, type, value, description
-    )
-  reject_mixed_numbers body, type, values, description
-  if is_kind(type, 'nil')
-    const message = "nil alone does not give the type of #{description}; write it in an annotation"
-    fail body.program, at.position, message
-  for value in values
-    const is_converted = not is_kind(value.type, 'never') and not same_type(value.type, type)
-    body.facts.conversions[value.last] = type if is_converted and value.last is Expression
-  type
-
-const mismatch = (body: Body, type: Type, value: BranchValue, description: String) ->
-  const gives_none = is_kind(type, 'void') or is_kind(value.type, 'void')
-  const rule = gives_none then 'one type' else 'one type, or types that a union can hold'
-  const types = "the ones before give #{format_type(type)}, this one #{format_type(value.type)}"
-  fail body.program, value.last.position, "#{description} must have #{rule}: #{types}"
-
-# Rejects a type of the values that brings together number types of different values, whatever
-# other types it holds: it could not be used in arithmetic, and a literal among them was meant to
-# have the type of the others. A value already of such a union may give it. The failure is at the
-# last value that adds a number type.
-const reject_mixed_numbers = (body: Body, type: Type, values: BranchValue[], description: String) ->
-  const numbers = numbers_of(type)
-  const gives_all = (value: BranchValue) -> numbers_of(value.type).length == numbers.length
-  return if numbers.length < 2 or values.any(gives_all)
-  const seen = Set<String>()
-  var last_adding = values[0]
-  for value in values
-    const added = [number for number in numbers_of(value.type) when not seen.has(type_key(number))]
-    last_adding = value if seen.length > 0 and added.length > 0
-    seen.add type_key(number) for number in added
-  const names = [format_type(number) for number in numbers].join(', ')
-  const message =
-    "#{description} cannot mix the number types #{names}; write the type where it is meant"
-  fail body.program, last_adding.last.position, message
-
-# The number types among the members of the type, a union or not, optional or not.
-const numbers_of = (type: Type) ->
-  const kinds = [INTEGER_KINDS..., FLOAT_KINDS...]
-  [member for member in members_of(inner_of(type)) when is_one_of_kinds(member, kinds)]
-
-# How the subject is narrowed in each arm, and in the else arm.
-struct CaseNarrowings(arms: Narrowing[][], otherwise: Narrowing[])
-
-# Checks the conditions or patterns, and returns how they narrow.
-const check_patterns = (body: Body, case_expression: Case): CaseNarrowings ->
-  const { arms } = case_expression
-  const subject = case_expression.subject
-  if subject == nil
-    const conditions = [check_condition(body, arm.patterns[0]) for arm in arms]
-    return CaseNarrowings(arms: conditions, otherwise: [])
-  const subject_type = type_of(body, subject)
-  const is_optional = subject_type is OptionalType
-  const is_nil_arm = (arm: CaseArm) -> is_optional and arm.patterns.any(is_nil_pattern)
-  const unhandled_nil = is_optional and not check_nil_arms(body, arms)
-  const missing: String[] = unhandled_nil then ['nil'] else []
-  const type = inner_of(subject_type)
-  # As `is` does, the patterns take the members of the type that the subject was declared with.
-  const declared = inner_of(unnarrowed_type(body, subject, subject_type))
-  if declared is UnionType
-    return check_type_patterns(body, case_expression, is_nil_arm, subject, declared, type, missing)
-  if not is_one_of_kinds(type, VALUE_KINDS)
-    const message = "cannot branch on a value of type #{format_type(subject_type)}"
-    fail body.program, subject.position, message
-  const value_patterns = [arm.patterns for arm in arms when not is_nil_arm(arm)]
-  for patterns in value_patterns
-    expect_type body, pattern, type for pattern in patterns
-  if type is EnumType
-    check_member_patterns body, case_expression, type, missing
-  else if case_expression.otherwise == nil
-    fail body.program, case_expression.position, 'a case on values needs an else arm'
-  const no_narrowings: Narrowing[] = []
-  const narrowed = is_optional then subject_narrowings(body, subject, type) else no_narrowings
-  const arm_narrowings = [is_nil_arm(arm) then no_narrowings else narrowed for arm in arms]
-  CaseNarrowings arms: arm_narrowings, otherwise: unhandled_nil then no_narrowings else narrowed
-
-const is_nil_pattern = (pattern: Expression) -> pattern is NilLiteral
-
-const check_nil_arms = (body: Body, arms: CaseArm[]) ->
-  var handled = false
-  for arm in arms
-    for pattern in arm.patterns
-      continue if not is_nil_pattern(pattern)
-      if arm.patterns.length > 1
-        fail body.program, pattern.position, 'nil must be the only pattern of its arm'
-      fail_handled_twice body, pattern, 'nil' if handled
-      type_of body, pattern
-      handled = true
-  handled
-
-const check_type_patterns = (
-  body: Body, case_expression: Case, is_nil_arm: (CaseArm) -> Bool, subject: Expression,
-  union: UnionType, narrowed: Type, missing_nil: String[]
-) ->
-  const handled = Set<String>()
-  const arm_narrowings: Narrowing[][] = []
-  for arm in case_expression.arms
-    if is_nil_arm(arm)
-      arm_narrowings.push []
-      continue
-    const types = [type_pattern(body, pattern, union) for pattern in arm.patterns]
-    for (pattern_type, pattern) in types.zip(arm.patterns)
-      for member in members_of(pattern_type)
-        const key = type_key(member)
-        fail_handled_twice body, pattern, format_member(member, union) if handled.has(key)
-        handled.add key
-    arm_narrowings.push types.length == 1 then subject_narrowings(body, subject, types[0]) else []
-  const is_unhandled = (member: Type) -> not handled.has(type_key(member))
-  const unhandled_members = members_of(narrowed).filter(is_unhandled)
-  const missing = [format_member(member, union) for member in unhandled_members]
-  fail_unhandled body, case_expression, [missing..., missing_nil...]
-  # Where nil is handled, the else arm does not see it.
-  const unhandled = missing_nil.length > 0 then optional_type(narrowed) else narrowed
-  const handled_members = [member for member in union.members when handled.has(type_key(member))]
-  const others = other_members(unhandled, union_type(handled_members))
-  const otherwise: Narrowing[] = others then subject_narrowings(body, subject, others) else []
-  CaseNarrowings otherwise, arms: arm_narrowings
-
-const check_member_patterns = (
-  body: Body, case_expression: Case, type: EnumType, missing_nil: String[]
-) ->
-  const handled = Set<Int>()
-  for arm in case_expression.arms
-    for pattern in arm.patterns
-      const index = enum_value_of(body.facts, pattern) ? continue
-      if handled.has(index)
-        fail_handled_twice body, pattern, format_enum_member(type.members[index])
-      handled.add index
-  const members = type.members
-  const missing = [format_enum_member(member) for member, i in members when not handled.has(i)]
-  fail_unhandled body, case_expression, [missing..., missing_nil...]
-
-const fail_handled_twice = (body: Body, pattern: Expression, handled: String) ->
-  fail body.program, pattern.position, "#{handled} is already handled by an earlier arm"
-
-# Without an else arm, a case must handle each of the `missing`.
-const fail_unhandled = (body: Body, case_expression: Case, missing: String[]) ->
-  return if case_expression.otherwise != nil or missing.length == 0
-  const message = "case does not handle #{missing.join(', ')}; add them or an else arm"
-  fail body.program, case_expression.position, message
-
-# The pattern's type, recorded on the pattern for codegen: a member of the union, or a union of some
-# of its members, which a type alias names.
-const type_pattern = (body: Body, pattern: Expression, union: UnionType) ->
-  const fail_pattern = ->
-    const types = "the types #{format_type(union)} or a union of them"
-    fail body.program, pattern.position, "expected one of #{types}"
-  const { program, resolver } = body
-  const name = pattern is Identifier then pattern.name else fail_pattern()
-  fail_pattern() if not has_type(program, resolver, name)
-  const type_name = NamedType(name, args: [], position: pattern.position)
-  const type = resolve(program, resolver, type_name)
-  fail_pattern() if not is_assignable(type, union) or is_kind(type, 'never')
-  set_type body, pattern, type
-
-const subject_narrowings = (body: Body, subject: Expression, type: Type): Narrowing[] ->
-  const value = narrowable(body, subject) ? return []
-  [Narrowing(type, subject: value.subject)]

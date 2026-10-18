@@ -1,0 +1,96 @@
+# The type of the values that branches give: of the arms of a `case`, of an `if`'s branches, of
+# `then` and `else` and of a `try` and its catches.
+import Expression, Statement from '../ast'
+import fail from './diagnostics'
+import expect_type, type_of from './expression'
+import Body from './shared'
+import type_of_block from './statement'
+import
+  FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_kind, is_one_of_kinds, members_of,
+  same_type, Type, type_key, unify, union_of, void_type
+from '../types'
+
+# The body of a case arm, of then/else or of an if, and what entering it does: narrowing locals, or
+# defining one.
+export struct Branch(statements: Statement[], enter: () -> void)
+
+# The last statement of a branch, and the type of its value.
+export struct BranchValue(last: Statement, type: Type)
+
+# The type of the values the branches give: the expected type, or else the one that `unify_all`
+# makes of them. Each value is typed as its branch is entered, which may narrow a local.
+export const type_of_branches = (
+  body: Body, branches: Branch[], expected: Type?, unify_all: (BranchValue[]) -> Type
+) ->
+  # Each body is a block, which sees the locals its branch narrows.
+  const type_of_body = (branch: Branch, type_of_last: (Expression) -> Type) ->
+    type_of_block body, branch.statements, branch.enter, type_of_last
+  if expected
+    const check_value = (value: Expression) ->
+      expect_type body, value, expected
+      expected
+    for branch in branches
+      const type = type_of_body(branch, check_value)
+      if is_kind(type, 'void')
+        const message = "expected #{format_type(expected)}, got void"
+        fail body.program, branch.statements.last()!.position, message
+    return expected
+  const type_of_value = (value: Expression) -> type_of(body, value)
+  const value_of = (branch: Branch) ->
+    BranchValue last: branch.statements.last()!, type: type_of_body(branch, type_of_value)
+  unify_all [value_of(branch) for branch in branches]
+
+# Unifies the values of branches, as unify_values does. Statements give no value, so neither do
+# branches with one among them.
+export const unify_unless_void = (body: Body, at: Expression, description: String) ->
+  (values: BranchValue[]) ->
+    return void_type if values.any((value) -> is_kind(value.type, 'void'))
+    unify_values body, values, at, description
+
+# The values, the last statements of the bodies, are converted to the type they unify to.
+export const unify_values = (
+  body: Body, values: BranchValue[], at: Expression, description: String
+) ->
+  var type = values[0].type
+  for value in values
+    type = unify(type, value.type) ? union_of([type, value.type]) ? mismatch(
+      body, type, value, description
+    )
+  reject_mixed_numbers body, type, values, description
+  if is_kind(type, 'nil')
+    const message = "nil alone does not give the type of #{description}; write it in an annotation"
+    fail body.program, at.position, message
+  for value in values
+    const is_converted = not is_kind(value.type, 'never') and not same_type(value.type, type)
+    body.facts.conversions[value.last] = type if is_converted and value.last is Expression
+  type
+
+const mismatch = (body: Body, type: Type, value: BranchValue, description: String) ->
+  const gives_none = is_kind(type, 'void') or is_kind(value.type, 'void')
+  const rule = gives_none then 'one type' else 'one type, or types that a union can hold'
+  const types = "the ones before give #{format_type(type)}, this one #{format_type(value.type)}"
+  fail body.program, value.last.position, "#{description} must have #{rule}: #{types}"
+
+# Rejects a type of the values that brings together number types of different values, whatever
+# other types it holds: it could not be used in arithmetic, and a literal among them was meant to
+# have the type of the others. A value already of such a union may give it. The failure is at the
+# last value that adds a number type.
+const reject_mixed_numbers = (body: Body, type: Type, values: BranchValue[], description: String) ->
+  const numbers = numbers_of(type)
+  const gives_all = (value: BranchValue) -> numbers_of(value.type).length == numbers.length
+  return if numbers.length < 2 or values.any(gives_all)
+  const seen = Set<String>()
+  var last_adding = values[0]
+  for value in values
+    const added = [number for number in numbers_of(value.type) when not seen.has(type_key(number))]
+    last_adding = value if seen.length > 0 and added.length > 0
+    seen.add type_key(number) for number in added
+  const names = [format_type(number) for number in numbers].join(', ')
+  const message =
+    "#{description} cannot mix the number types #{names}; write the type where it is meant"
+  fail body.program, last_adding.last.position, message
+
+# The number types among the members of the type, a union or not, optional or not.
+const numbers_of = (type: Type) ->
+  const kinds = [INTEGER_KINDS..., FLOAT_KINDS...]
+  [member for member in members_of(inner_of(type)) when is_one_of_kinds(member, kinds)]
