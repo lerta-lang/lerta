@@ -15,7 +15,8 @@ host_libuv = $(shell awk -v kind=$(1) -v systems='$(HOST_LIBUV_SYSTEMS)' \
 LIBUV_HEADERS := $(shell find third_party/libuv/include third_party/libuv/src -name '*.h')
 LIBUV_SOURCES := $(shell awk '$$2 == "source" { print "third_party/libuv/" $$3 }' third_party/libuv.txt)
 LIBUV := third_party/libuv.txt $(LIBUV_HEADERS) $(LIBUV_SOURCES)
-EMBEDDED := $(sort $(wildcard std/*.lerta std/internal/*.lerta runtime/*.c runtime/*.h) $(LIBUV))
+# std's files at any depth, as the seed finds them (see tools/embed.lerta).
+EMBEDDED := $(sort $(shell find std -name '*.lerta') $(wildcard runtime/*.c runtime/*.h) $(LIBUV))
 SOURCES := $(shell find compiler -name '*.lerta') build/embedded.lerta
 RUNTIME_C := $(wildcard runtime/*.c)
 RUNTIME := $(RUNTIME_C) $(wildcard runtime/*.h)
@@ -157,7 +158,7 @@ seed: test-bootstrap
 	rm -rf build/seed
 	mkdir -p build/seed/build
 	cp -R compiler build/seed/compiler
-	build/embed --seed build/seed/build/embedded.lerta $(EMBEDDED)
+	build/embed --seed build/seed/build/embedded.lerta
 	bin/lerta dump-llvm build/seed/$(MINILERTA_MAIN) > build/seed/minilerta.ll
 	cp build/seed/minilerta.ll seed/minilerta.ll
 endif
