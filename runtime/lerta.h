@@ -191,6 +191,10 @@ bool lerta_float_fits_int(double value);
 int64_t lerta_float_to_int(double value);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
+// `*slot += part`, for a String or a Binary: `old` is what the slot held when `+=` began, owned,
+// and taken; `part` is borrowed. When the slot still holds `old` and nothing else does, the bytes
+// are appended in place, so that a loop of `+=` is O(n).
+void lerta_string_append(LertaString **slot, LertaString *old, const LertaString *part);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
 // -1, 0 or 1 as `a` goes before, with or after `b` in the order of their bytes: `String.compare` and
 // `<` and the like of Strings.

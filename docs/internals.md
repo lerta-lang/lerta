@@ -243,6 +243,7 @@ A function with [defaults](reference/functions.md) takes every argument. For eac
 ## Strings
 
 - String interpolation is expanded at compile time into a call to the runtime variadic function `lerta_string_concat(a, b, ...)` (this expansion is internal to the compiler, so user-facing variadic parameters are not needed). The total length is computed and allocated once.
+- `+=` of a String or a Binary in a variable or a field calls `lerta_string_append` with the slot, the value it held as `+=` began and the part. When the slot still holds that value and nothing else does, its count being that of the slot and of `+=`, the bytes are appended in place: `lerta_grow` keeps the object's place while the allocator's place has room (`lerta_mem_capacity`), and else moves it to one of twice the size, so that a loop of `+=` copies O(n) bytes in all. Moving is safe, since a String or a Binary is never held weakly nor thrown, which are what know an object by its place. Otherwise, as for a literal or a String that another holds, a new one is made. `+=` on an array item makes a new one.
 - Strings are flat only, for now. A `Binary` has the representation of a `String` (`LertaString` in `runtime/lerta.h`) without the UTF-8 guarantee, so `s.binary` and `b.text()` pass the object on.
 - **Planned:** the set of representations (in priority order):
   1. Small strings as immediate values (String is a 16-byte value with 15 bytes inline)

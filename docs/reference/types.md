@@ -90,7 +90,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `==` and `!=` compare two `String`s byte by byte.
 - A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as [Char](#char)s, in order, so `'é'` gives the `Char` of 233; its bytes are `s.binary`.
 - Why code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
-- Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `push` onto a `String[]` and `join` is O(n) (the Python approach), an idiom that stays valid once ropes make `+` O(1).
+- Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `+=` appends in place to a `String` that nothing else holds, so that a loop of `+=` is O(n) in all (see [internals](../internals.md#strings)).
 
 ## Binary
 

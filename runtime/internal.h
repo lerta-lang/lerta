@@ -17,6 +17,8 @@ void *lerta_checked_calloc(size_t count, size_t size);
 // The allocator (allocator.c), which frees with no size, and NULL as free does.
 void *lerta_mem_alloc(int64_t size);
 void lerta_mem_free(void *memory);
+// The bytes that the place of `memory` holds, which may be more than were asked for.
+int64_t lerta_mem_capacity(void *memory);
 // Keeps the place when it holds `size` bytes and is not more than twice as large; else moves what
 // it holds, as far as it fits, to a new one. NULL is none.
 void *lerta_mem_realloc(void *memory, int64_t size);
@@ -43,6 +45,11 @@ void lerta_untrack(LertaPrefix *prefix);
 void lerta_track_frame(void);
 void lerta_untrack_frame(void);
 #endif
+
+// Gives an object that no other holds room for `size` bytes, keeping its place when it has the
+// room, else moving it to one of twice the size, so that growing it step by step copies it
+// O(log n) times. The caller ensures that no weak box or trace knows the object by its place.
+void *lerta_grow(void *object, int64_t size);
 
 // Strings (string.c). A new string or Binary value whose bytes the caller fills.
 LertaString *lerta_string_new(int64_t length);

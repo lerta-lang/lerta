@@ -13,7 +13,7 @@ import emit_field_pointer, emit_member_dispatch, field_named from './heap_object
 import emit_release, emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
 import emit_map_set from './map'
 import apply_numeric from './operator'
-import emit_concat from './string'
+import emit_append, emit_concat from './string'
 import is_one_of_kinds, MapType, ObjectType, Type, UnionType from '../types'
 
 # The new value is stored before the old one is released, which is safe even if they are the
@@ -138,6 +138,8 @@ const assign_through = (g: Generator, assignment: Assignment, pointer: String, t
     old = load()
     emit_retain_value ir, old, type
   const value = generate_holding_old(g, old, type, assignment.value)
+  const is_append = old != '' and is_one_of_kinds(type, ['String', 'Binary'])
+  return emit_append(ir, pointer, old, value) if is_append
   const result = combine(g, assignment.operator, old, value, type)
   const replaced = holds_reference then load() else ''
   ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}"

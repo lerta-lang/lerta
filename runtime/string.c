@@ -66,6 +66,29 @@ LertaString *lerta_string_concat(int64_t count, ...) {
   return result;
 }
 
+void lerta_string_append(LertaString **slot, LertaString *old, const LertaString *part) {
+  int64_t start = old->length;
+  int64_t length = start + part->length;
+  // The counts of the slot and the caller's, and no other.
+  bool is_unique = *slot == old && old->header.ref_count == 2;
+  LertaString *result;
+  // A String or a Binary is never held weakly nor thrown, so it may move.
+  if (is_unique) {
+    old->header.ref_count = 1;
+    result = lerta_grow(old, (int64_t)sizeof(LertaString) + length);
+  } else {
+    result = lerta_string_new(length);
+    memcpy(result->bytes, old->bytes, (size_t)start);
+  }
+  memcpy(result->bytes + start, part->bytes, (size_t)part->length);
+  result->length = length;
+  if (!is_unique) {
+    lerta_release(old);
+    lerta_release(*slot);
+  }
+  *slot = result;
+}
+
 // FNV-1a over the bytes.
 uint64_t lerta_string_hash(const LertaString *s) {
   uint64_t hash = 0xCBF29CE484222325u;

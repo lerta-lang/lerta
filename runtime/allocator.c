@@ -185,8 +185,7 @@ void lerta_mem_free(void *memory) {
   if (--region->live == 0 && !is_last_with_room) free_slab(region, size_class);
 }
 
-// The bytes that the place of `memory` holds, which may be more than were asked for.
-static int64_t capacity_of(void *memory) {
+int64_t lerta_mem_capacity(void *memory) {
   Region *region = region_of(memory);
   return region->is_large ? region->place_size - PLACES_START : region->place_size;
 }
@@ -194,7 +193,7 @@ static int64_t capacity_of(void *memory) {
 // A place more than twice as large as needed is given up for a smaller one, as realloc may.
 void *lerta_mem_realloc(void *memory, int64_t size) {
   if (memory == NULL) return lerta_mem_alloc(size);
-  int64_t capacity = capacity_of(memory);
+  int64_t capacity = lerta_mem_capacity(memory);
   if (size <= capacity && size > capacity / 2) return memory;
   void *moved = lerta_mem_alloc(size);
   memcpy(moved, memory, (size_t)(size < capacity ? size : capacity));

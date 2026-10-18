@@ -46,6 +46,22 @@ static void free_object(void *object) {
 #endif
 }
 
+void *lerta_grow(void *object, int64_t size) {
+#ifdef LERTA_DEBUG
+  LertaPrefix *prefix = (LertaPrefix *)object - 1;
+  int64_t needed = (int64_t)sizeof(LertaPrefix) + size;
+  if (needed <= lerta_mem_capacity(prefix)) return object;
+  // The neighbours in the list of objects alive point at the prefix, which may move.
+  lerta_untrack(prefix);
+  prefix = lerta_mem_realloc(prefix, 2 * needed);
+  lerta_track(prefix);
+  return prefix + 1;
+#else
+  if (size <= lerta_mem_capacity(object)) return object;
+  return lerta_mem_realloc(object, 2 * size);
+#endif
+}
+
 void *lerta_new(int64_t size, const LertaType *type) {
   LertaHeader *object = allocate_object(size);
   object->type = type;
