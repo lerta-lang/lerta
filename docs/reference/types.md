@@ -248,7 +248,7 @@ const { quotient, remainder } = divide(17, 5)
 - `{ x: 1, y: 'a' }` is a value of the anonymous struct type `{ x: Int, y: String }`; `{ x, y }` is short for `{ x: x, y: y }`. Where an anonymous struct type (or an optional one) is expected, each field the type has takes its type from it; the others, and all fields elsewhere, take the types of their values. A field cannot be nil alone. `?` after the type makes it optional: `{ a: Int }?`.
 - Two anonymous struct types are the same if their fields have the same names and types, in any order. An anonymous struct is a different type from any class or struct.
 - Its fields are read with `.` and cannot be changed. It is useful to return several values.
-- A call may give the last argument, when its parameter is of an anonymous struct type, as named arguments without `{}`: `draw('a', x: 1, y: 2)` is `draw('a', { x: 1, y: 2 })`. Named arguments come after the others, as in the construction of a class or struct.
+- A call may give the last argument, when its parameter is of an anonymous struct type, as named arguments without `{}`, as for a [struct](functions.md): `draw('a', x: 1, y: 2)` is `draw('a', { x: 1, y: 2 })`. Named arguments come after the others, as in the construction of a class or struct.
 - `const { a, b } = value` (or `var`) declares `a` and `b` from the fields of those names of an anonymous struct, a class or a struct; the value is evaluated once. It must be on a line of its own.
 
 ## Tuples

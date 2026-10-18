@@ -3,8 +3,8 @@
 # end. A generic function's are checked per instance (see
 # GenericFunction).
 import
-  BooleanLiteral, Expression, FloatLiteral, FunctionLiteral, Identifier, IntegerLiteral, Position,
-  StringLiteral
+  BooleanLiteral, Expression, FloatLiteral, FunctionLiteral, Identifier, IntegerLiteral, NamedType,
+  Position, StringLiteral
 from '../ast'
 import check_function from './bodies'
 import abort_part, check_part, fail, fail_already_defined from './diagnostics'
@@ -12,7 +12,7 @@ import GenericFunction, GenericRef from './generics'
 import ProgramWide, Shared from './shared'
 import module_resolver, resolve, resolve_result, Resolver from './type_names'
 import
-  ArrayType, bool_type, float_type, FunctionType, int_type, same_type, string_type, Type
+  ArrayType, bool_type, float_type, FunctionType, int_type, ObjectType, same_type, string_type, Type
 from '../types'
 
 # Where the checking of a function or a type is, so that a cycle is found when it reaches one
@@ -49,7 +49,6 @@ export const parameter_types = (
   expected: Type?[] = []
 ) ->
   const types: Type[] = []
-  reject_misplaced_variadic program, literal
   for param, i in literal.params
     const expected_type = i < expected.length then expected[i]
     const unwritten = expected_type then expected_type else literal_type(param.default)
@@ -63,17 +62,52 @@ export const parameter_types = (
     const { name, position } = param.name
     const message = "the type of the parameter '#{name}' must be written"
     types.push unwritten ? fail(program, position, message)
+  const last_is_struct = ends_with_struct(resolver, literal, types)
+  reject_misplaced_variadic program, literal, last_is_struct
+  reject_struct_default program, literal, last_is_struct
   types
 
-# A variadic parameter comes last, and its function has no defaults, so that the arguments that it
-# takes are those after the others.
-const reject_misplaced_variadic = (program: ProgramWide, literal: FunctionLiteral) ->
+# Whether the type is a struct, which a last parameter of the type lets a call construct from its
+# named arguments, or leave out, constructing it from none (see gather_named_args).
+export const is_struct_type = (type: Type?) -> type is ObjectType and type.is_struct
+
+# Whether the last parameter is of a struct type as declared, not through a type parameter that an
+# instance binds to a struct, so that every instance of a generic function agrees.
+const ends_with_struct = (resolver: Resolver, literal: FunctionLiteral, types: Type[]) ->
+  const written = literal.params.last()?.type ? return false
+  const is_type_parameter = written is NamedType and resolver.type_parameters.has(written.name)
+  not is_type_parameter and is_struct_type(types.last())
+
+# A variadic parameter comes last, or before a last parameter of a struct type, which named
+# arguments alone then give, and its function has no defaults, so that the arguments that it takes
+# are those after the others.
+const reject_misplaced_variadic = (
+  program: ProgramWide, literal: FunctionLiteral, last_is_struct: Bool
+) ->
   const params = literal.params
   const found = params.find_index((param) -> param.variadic) ? return
   const name = params[found].name
-  fail program, name.position, 'a variadic parameter must be the last' if found != params.length - 1
+  const last = params.length - 1
+  const is_placed = found == last or (found == last - 1 and last_is_struct)
+  if not is_placed
+    const before_struct = 'or only before a last parameter of a struct type'
+    fail program, name.position, "a variadic parameter must be the last, #{before_struct}"
   if const param = params.find((each) -> each.default != nil)
     fail program, param.default!.position, 'a variadic function cannot have defaults so far'
+
+# A last parameter of a struct type has no default, as a call that leaves it out constructs it, and
+# neither do the others so far: a call would have to construct it at its place after the defaults.
+const reject_struct_default = (
+  program: ProgramWide, literal: FunctionLiteral, last_is_struct: Bool
+) ->
+  return if not last_is_struct
+  const param = literal.params.find((each) -> each.default != nil) ? return
+  const value = param.default!
+  if param == literal.params.last()
+    const reason = 'a call that leaves it out constructs it'
+    fail program, value.position, "a last parameter of a struct type has no default; #{reason}"
+  const message = 'a function with a last parameter of a struct type has no defaults so far'
+  fail program, value.position, message
 
 # The type of a default that is a literal of one type alone.
 const literal_type = (value: Expression?): Type? ->

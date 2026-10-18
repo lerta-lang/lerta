@@ -15,7 +15,7 @@ import
   type_of_new_set
 from './collection'
 import fail from './diagnostics'
-import required_params from './functions'
+import is_struct_type, required_params from './functions'
 import
   enum_parse_type, type_of_elided_member, type_of_literal_member, type_of_qualified_member
 from './enums'
@@ -29,6 +29,7 @@ import json_direction, type_of_json_call from './json'
 import generic_callee, named_function_literal, qualified_name, type_of_identifier from './name'
 import narrowable from './narrowable'
 import constructed_type, type_of_construction, type_of_record, type_of_this from './object'
+import info_of from './object_types'
 import type_of_binary, type_of_coalesce, type_of_unary from './operator'
 import check_return, check_yield, type_of_await from './result'
 import check_interpolated from './satisfaction'
@@ -37,7 +38,7 @@ import type_of_tuple, type_of_tuple_item from './tuple'
 import resolve from './type_names'
 import
   bool_type, boxes_into, float_type, format_type, format_types, FunctionType, inner_of,
-  is_assignable, is_float, is_integer, is_kind, is_one_of_kinds, never_type, nil_type,
+  is_assignable, is_float, is_integer, is_kind, is_one_of_kinds, never_type, nil_type, ObjectType,
   optional_type, OptionalType, RecordType, same_type, string_type, Type, UnionType, void_type
 from '../types'
 
@@ -133,6 +134,20 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
       fail program, expression.position, "a range can only be used after 'in' of a 'for'"
 
 const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
+  if call.constructs_expected
+    # The parameter's type was a struct where the call was rewritten (see gather_named_args), whose
+    # declaration is constructed as a name of it would be, its type arguments inferred from the
+    # parameter's. In another instance of a generic function, a type parameter in the callee's type
+    # may make it no struct, or an optional one, which a call does not leave out.
+    const parameter_type = inner_of(expected ? never_type)
+    const is_left_out = call.named_args.length == 0
+    const fits = is_left_out then is_struct_type(expected) else is_struct_type(parameter_type)
+    if not fits
+      const message = 'the last parameter has another type in another instance of the generic'
+      fail body.program, call.position, "#{message}; give it as an argument"
+    const info = info_of(body.program, parameter_type as ObjectType!)
+    const declared = info.generic?.type ? info.type
+    return type_of_construction(body, call, declared, expected)
   const callee = call.callee
   # A call of `name.export` is the call of the name that the export is imported by.
   if callee is Member
@@ -178,7 +193,8 @@ export const check_arguments = (
     fail program, call.position, "cannot call a value of type #{format_type(callee_type)}"
   const params = callee_type.params
   pack_variadic body, call, declaration
-  gather_named_args body, call, params.last() if call.named_args.length > 0
+  const leaves_out_struct = call.args.length == params.length - 1 and is_struct_type(params.last())
+  gather_named_args body, call, params.last() if call.named_args.length > 0 or leaves_out_struct
   check_argument_count body, call, params.length, declaration
   expect_type body, arg, params[i] for arg, i in call.args
   callee_type.result
@@ -202,9 +218,8 @@ export const check_argument_count = (
 export const pack_variadic = (body: Body, call: Call, declaration: FunctionLiteral?) ->
   const program = body.program
   const params = declaration?.params ? []
-  const place = params.length - 1
-  const is_variadic = params.length > 0 and params[place].variadic
-  if is_variadic and not call.packed
+  const place = params.find_index((param) -> param.variadic)
+  if place != nil and not call.packed
     const fixed = [arg for arg, i in call.args when i < place]
     if const spread = fixed.find(is_spread)
       const rest = params[place].name.name
@@ -215,8 +230,6 @@ export const pack_variadic = (body: Body, call: Call, declaration: FunctionLiter
       )
     if call.args.length < place
       fail program, call.position, "expected at least #{place} argument(s), got #{call.args.length}"
-    if call.named_args.length > 0
-      fail program, call.named_args[0].name.position, 'a variadic function takes no named arguments'
     call.packed = true
     const elements = [arg for arg, i in call.args when i >= place]
     const position = elements.first()?.position ? call.position
@@ -229,23 +242,29 @@ export const pack_variadic = (body: Body, call: Call, declaration: FunctionLiter
       'a spread `xs...` can only be an item of an array or an argument of a variadic parameter'
     )
 
-# Named arguments are rewritten into an anonymous struct so that codegen, which reads named
-# arguments only as a construction, generates the call as any other. Every pass reading the
-# arguments (jump_positions, codegen) visits the same values in either form. The instances of a
-# generic function share its literal, so later ones see the rewritten form, which checks as the
-# named one does.
+# Named arguments, none where a last parameter of a struct type is left out, are rewritten into an
+# argument of that parameter: an anonymous struct, or a construction of the struct, so that codegen,
+# which reads named arguments only as a construction, generates the call as any other. Every pass
+# reading the arguments (jump_positions, codegen) visits the same values in either form. The
+# instances of a generic function share its literal, so later ones see the rewritten form, which
+# checks as the named one does, unless a type parameter makes the struct another type there (see
+# type_of_call).
 const gather_named_args = (body: Body, call: Call, last_param: Type?) ->
-  const name = call.named_args[0].name
-  if not is_record_parameter(last_param)
-    const uses = 'construct a class or struct, or give a last parameter of an anonymous struct type'
-    fail body.program, name.position, "named arguments #{uses}"
-  const fields = [NamedValue(name: arg.name, value: arg.value) for arg in call.named_args]
-  call.args.push RecordLiteral(fields, position: name.position)
+  const position = call.named_args.first()?.name.position ? call.position
+  const type = inner_of(last_param ? nil_type)
+  if type is RecordType
+    const fields = [NamedValue(name: arg.name, value: arg.value) for arg in call.named_args]
+    call.args.push RecordLiteral(fields, position)
+  else if is_struct_type(type)
+    const callee = Identifier(position, name: (type as ObjectType!).name)
+    const construction =
+      Call(callee, position, args: [], named_args: call.named_args, type_args: [])
+    construction.constructs_expected = true
+    call.args.push construction
+  else
+    const uses = 'construct a class or struct, or give a last parameter of a struct type'
+    fail body.program, position, "named arguments #{uses}"
   call.named_args = []
-
-const is_record_parameter = (param: Type?) ->
-  const type = param ? return false
-  inner_of(type) is RecordType
 
 export const expect_type = (body: Body, expression: Expression, expected: Type) ->
   require_type body, expression, type_of(body, expression, expected), expected
