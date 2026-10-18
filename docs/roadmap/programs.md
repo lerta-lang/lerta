@@ -18,6 +18,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 - In [std:json](../reference/modules.md#stdjson), unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
 - Random numbers, formatting dates and times, and the network.
+- A `start` in `std:process` beside `run`, which gives a running program at once: its standard output and error to read as they come, through a `Reader` of `std:io`, its standard input to write through a `Writer`, and a `wait(): Promise<Exit>`. A write to a pipe that the program has closed must then fail rather than end this program by SIGPIPE, which is why `run` gives its input through a file.
 - What the [test harness](#tools) needs of the programs it runs and the files it checks:
   - In `std:io`: a file's modification time, making a symbolic link, and copying a file.
 
