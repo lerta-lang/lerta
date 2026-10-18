@@ -293,8 +293,9 @@ void lerta_finish_top_level(LertaPromise *promise);
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.
 LertaArray *lerta_argv(void);
-// Flushes stdout and ends the program; leaks are not checked, as for a throw. A code out of 0 to
-// 255 throws a ValueError instead, and the call returns.
+// Flushes stdout and ends the program; only the objects that nothing in use holds are checked for
+// leaks, and a leak ends it with LERTA_LEAK_EXIT_CODE in place of `code`. A code out of 0 to 255
+// throws a ValueError instead, and the call returns.
 void lerta_exit(int64_t code);
 // A promise of the program's exit code, settled once it ends; with `output`, an array of bytes,
 // its standard output is appended to it first. It is rejected if the output cannot be read, and a

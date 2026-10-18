@@ -23,8 +23,12 @@ void *lerta_mem_realloc(void *memory, int64_t size);
 
 // The leak check (leaks.c), of the debug runtime, as the program ends: of what is left alive, and,
 // as `exit` ends it, which holds what is still in use, of the objects that nothing in use holds.
-void lerta_report_leaks(void);
-void lerta_report_unreachable(void);
+// Each returns whether it reported any, which ends the program with LERTA_LEAK_EXIT_CODE.
+bool lerta_report_leaks(void);
+bool lerta_report_unreachable(void);
+// Apart from the codes that the runtime and the compiler use, so that a leak is told from them; a
+// program may still exit with it itself.
+#define LERTA_LEAK_EXIT_CODE 23
 #ifdef LERTA_DEBUG
 // What the debug runtime keeps before each object, by which the leak check tracks it; its size
 // keeps the object aligned as its place.

@@ -159,7 +159,6 @@ int main(int argc, char **argv) {
   lerta_main();
   if (lerta_exception.data != NULL) lerta_exit_with_exception();
   bool flushed = lerta_output_flush_at_end(false);
-  // A leak is only a warning (see docs/reference/compiler.md).
-  lerta_report_leaks();
+  if (lerta_report_leaks()) return LERTA_LEAK_EXIT_CODE;
   return flushed ? 0 : 1;
 }

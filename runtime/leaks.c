@@ -137,18 +137,24 @@ static int64_t report_unreachable(void) {
 }
 #endif
 
-void lerta_report_leaks(void) {
+bool lerta_report_leaks(void) {
 #ifdef LERTA_DEBUG
-  int64_t held = live_count - report_unreachable();
-  if (held == 0) return;
+  int64_t unreachable = report_unreachable();
+  int64_t held = live_count - unreachable;
+  if (held == 0) return unreachable > 0;
   write_text("leak: ");
   write_count(held);
   write_text(" object(s)\n");
+  return true;
+#else
+  return false;
 #endif
 }
 
-void lerta_report_unreachable(void) {
+bool lerta_report_unreachable(void) {
 #ifdef LERTA_DEBUG
-  report_unreachable();
+  return report_unreachable() > 0;
+#else
+  return false;
 #endif
 }

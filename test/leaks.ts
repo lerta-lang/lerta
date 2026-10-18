@@ -1,9 +1,10 @@
 // The compiler's own leaks: build/stage1, the compiler that the Makefile builds with the debug
 // runtime, which reports the objects left at its end (see docs/internals.md#bootstrap), prints
 // the IR of each Lerta source of the repository's tests and examples and of each standard module,
-// and must report none. The tests run bin/lerta, which is optimized and reports none. For a source
-// with errors, the compiler exits with status 1 through `exit`, where the report is only of the
-// objects that nothing in use holds, since what is in use then is not released.
+// and must report none; a report ends it with the exit status of a leak, which fails the check. The
+// tests run bin/lerta, which is optimized and reports none. For a source with errors, the
+// compiler exits with status 1 through `exit`, where the report is only of the objects that
+// nothing in use holds, since what is in use then is not released.
 import { mkdtempSync, readdirSync, statSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
@@ -34,9 +35,8 @@ const checks: Check[] = sources.map((source) => ({
   name: source,
   run: async () => {
     const { status, failure, stderr } = await run_file(stage1, ['dump-llvm', source], root_dir)
-    // A source with errors ends with exit status 1, and anything else, as a crash, is a failure.
-    const ended = status === 0 || status === 1 ? [] : [`ended with ${failure}:`, stderr]
-    return [...ended, ...stderr.split('\n').filter((line) => line.startsWith('leak: '))]
+    // A source with errors ends with exit status 1, and anything else, as a leak, is a failure.
+    return status === 0 || status === 1 ? [] : [`ended with ${failure}:`, stderr]
   },
 }))
 

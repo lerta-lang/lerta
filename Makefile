@@ -59,18 +59,9 @@ FORCE:
 build/seed.ll: seed/minilerta.ll build/host_llvm.sed
 	sed -f build/host_llvm.sed seed/minilerta.ll > $@
 
-# Runs the command line $(1) of a compiler built with the debug runtime (minilerta, stage1 or
-# stage2), which fails if the compiler reports objects that it leaked; $(2) keeps its stderr
-# meanwhile.
-define run_without_leaks
-($(1) 2> $(2); status=$$?; cat $(2) >&2; \
-  if grep -q '^leak: ' $(2); then status=1; fi; rm -f $(2); exit $$status)
-endef
-
 # What minilerta prints for the source $(1), into the IR file $(2).
 define minilerta_ir
-$(call run_without_leaks,build/minilerta $(1) > $(2).unfixed,$(2).stderr) \
-  || { rm -f $(2).unfixed; exit 1; }
+build/minilerta $(1) > $(2).unfixed || { rm -f $(2).unfixed; exit 1; }
 sed -f build/host_llvm.sed $(2).unfixed > $(2)
 rm $(2).unfixed
 endef
@@ -110,7 +101,7 @@ build/stage1: build/stage1.ll $(RUNTIME) build/libuv/built
 
 bin/lerta: build/stage1
 	@mkdir -p bin
-	$(call run_without_leaks,build/stage1 build $(MAIN) -o $@ -O -Werror,$@.stderr)
+	build/stage1 build $(MAIN) -o $@ -O -Werror
 
 ifdef TARGET
 $(COMPILER): bin/lerta
@@ -127,10 +118,10 @@ $(BOOTSTRAP)/stage2.ll: bin/lerta
 	bin/lerta dump-llvm $(MAIN) > $@
 
 $(BOOTSTRAP)/stage3$(EXE): $(STAGE2)
-	$(call run_without_leaks,$(RUN_STAGE2) build $(MAIN) -o $@ -Werror $(TARGET_FLAGS),$@.stderr)
+	$(RUN_STAGE2) build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
 
 $(BOOTSTRAP)/stage3.ll: $(STAGE2)
-	$(call run_without_leaks,$(RUN_STAGE2) dump-llvm $(MAIN) > $@,$@.stderr)
+	$(RUN_STAGE2) dump-llvm $(MAIN) > $@
 
 # Built for the host, as the seed is only ever built there.
 $(BOOTSTRAP)/minilerta.ll: bin/lerta

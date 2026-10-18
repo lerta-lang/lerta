@@ -35,7 +35,7 @@ void lerta_exit(int64_t code) {
     return;
   }
   bool flushed = lerta_output_flush_at_end(false);
-  lerta_report_unreachable();
+  if (lerta_report_unreachable()) lerta_os_exit(LERTA_LEAK_EXIT_CODE);
   lerta_os_exit(flushed || code != 0 ? (int)code : 1);
 }
 
