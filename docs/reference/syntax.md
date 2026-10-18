@@ -52,7 +52,7 @@ draw 'p'
   y: 20
 ```
 
-- After a trailing `=` (of a declaration, an assignment or a field), a trailing `key:` or a `return`, an indented block on the next lines is a literal. Its items, one or more on each line separated by commas as inside brackets, decide its kind: all `name: value` make an anonymous struct, all `key: value` (a key that is not a name) a map, and all plain values an array. Mixing them is an error. A value may take the lines below, as an `if`, a `case` or a function literal does. A block of one plain value is that value itself, not an array of it, so that a value can start on the next line; an array of one item is written `[x]`.
+- After a trailing `=` (of a declaration, a destructuring one among them, an assignment or a field), a trailing `key:` or a `return`, an indented block on the next lines is a literal. Its items, one or more on each line separated by commas as inside brackets, decide its kind: all `name: value` make an anonymous struct, all `key: value` (a key that is not a name) a map, and all plain values an array. Mixing them is an error. A value may take the lines below, as an `if`, a `case` or a function literal does. A block of one plain value is that value itself, not an array of it, so that a value can start on the next line; an array of one item is written `[x]`.
 - A statement that is a call, a name or a method, followed by an indented block whose first line is `name: value` gives the block as its named arguments (see [anonymous structs](types.md#anonymous-structs)). An array cannot be passed this way, and an array inside an array cannot be written without brackets.
 
 ## Declarations and assignment
