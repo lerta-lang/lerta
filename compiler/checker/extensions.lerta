@@ -31,6 +31,14 @@ export class Extensions
   module_index: Int
   module_name: String
   in_effect: ExtensionMethod[] = []
+  # methods_reachable_from's results by the type arguments' keys, which every generic call asks
+  # again; a method added to those in effect may change them (see add_in_effect).
+  reachable: Map<String, ReachableMethods> = Map()
+
+# The methods, which hold for good if `inferred_fields` is nil, or else only while
+# ProgramWide.inferred_fields is still the same: a field whose type its initializer gives has none
+# until the initializer is checked, so the methods reached before then may be more afterwards.
+struct ReachableMethods(methods: ExtensionMethod[], inferred_fields: Int?)
 
 # The type of a method that is not generic, checking its body first if needed.
 export const plain_method_type = (program: ProgramWide, method: ExtensionMethod, at: Position) ->
@@ -49,7 +57,7 @@ export const add_imported = (
       const gets = "gets #{method_name} from extends in both #{modules}"
       const message = "#{format_type(extended_type(method))} #{gets}"
       fail program, statement.position, message
-    extensions.in_effect.push method
+    add_in_effect extensions, method
 
 # The type that the method's extend extends: an interface, or a type, which may be a pattern.
 export const extended_type = (method: ExtensionMethod) ->
@@ -75,7 +83,7 @@ export const add_own = (shared: Shared, method: ExtensionMethod) ->
         const gives = "an extend in #{where} gives one to #{other_extended}, #{also}"
         "#{extended} cannot get #{method_name}: #{gives}"
     fail shared.program, name.position, message
-  extensions.in_effect.push method
+  add_in_effect extensions, method
   shared.own_methods.push method
 
 # The extends in effect here, with `methods` before them, as an instance of a generic function
@@ -93,24 +101,45 @@ export const with_methods = (extensions: Extensions, methods: ExtensionMethod[])
 export const methods_reachable_from = (
   program: ProgramWide, extensions: Extensions, types: Type[]
 ) ->
-  const seen = Map<String, Type>()
-  visit_reachable program, seen, type for type in types
+  const key = [type_key(type) for type in types].join("\n")
+  if const cached = extensions.reachable[key]
+    const inferred_fields = cached.inferred_fields
+    return cached.methods if inferred_fields == nil or inferred_fields == program.inferred_fields
+  const reach = Reach()
+  visit_reachable program, reach, type for type in types
   # A generic extend's methods, as those of T[], may be in effect for several of the types.
   const methods: ExtensionMethod[] = []
-  for (key, type) in seen.entries()
+  for (reached, type) in reach.seen.entries()
     for method in extensions.in_effect
-      continue if not method.matched.get_or_put(key, -> matches(method.receiver, type))
+      continue if not method.matched.get_or_put(reached, -> matches(method.receiver, type))
       methods.push method if not methods.contains(method)
+  # Until then, the classes and structs may get more fields (see ProgramWide.members_known).
+  if program.members_known
+    const inferred_fields = reach.is_complete then nil else program.inferred_fields
+    extensions.reachable[key] = ReachableMethods(methods, inferred_fields)
   methods
 
-const visit_reachable = (program: ProgramWide, seen: Map<String, Type>, type: Type): void ->
+# The types visit_reachable has reached by their keys, and whether it has reached every field's
+# type.
+class Reach
+  seen: Map<String, Type> = Map()
+  is_complete = true
+
+const add_in_effect = (extensions: Extensions, method: ExtensionMethod) ->
+  extensions.in_effect.push method
+  extensions.reachable = Map()
+
+const visit_reachable = (program: ProgramWide, reach: Reach, type: Type): void ->
   const key = type_key(type)
-  return if seen.has(key)
-  seen[key] = type
-  visit_reachable program, seen, part for part in parts_of(type)
+  return if reach.seen.has(key)
+  reach.seen[key] = type
+  visit_reachable program, reach, part for part in parts_of(type)
   if type is ObjectType
     for field in info_of(program, type).fields
-      visit_reachable program, seen, field_type if const field_type = field.type
+      if const field_type = field.type
+        visit_reachable program, reach, field_type
+      else
+        reach.is_complete = false
 
 # The method of the name that an extend of a type in effect gives the receiver: that of an extend of
 # the type itself, if there is one, before that of a generic extend of the same module that matches
