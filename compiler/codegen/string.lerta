@@ -2,7 +2,8 @@
 # and runtime/binary.c).
 import IrBuilder from './ir_builder'
 import emit_release from './lerta_ir'
-import call_runtime, call_void_runtime from './runtime_calls'
+import call_runtime from './runtime_calls'
+import is_kind, Type from '../types'
 
 # A new String holding the parts, which are owned Strings, one after another; the parts are
 # released.
@@ -14,12 +15,15 @@ export const emit_concat = (ir: IrBuilder, parts: String[]) ->
   emit_release ir, part for part in parts
   result
 
-# `+=` of a String or a Binary in the slot at `pointer`, which held `old` as it began: the runtime
-# appends in place when nothing else holds `old`. `old` and `value` are owned and released.
-export const emit_append = (ir: IrBuilder, pointer: String, old: String, value: String) ->
-  const signature = 'void @lerta_string_append(ptr, ptr, ptr)'
-  call_void_runtime ir, signature, "ptr #{pointer}, ptr #{old}, ptr #{value}"
-  emit_release ir, value
+# `left + right` of a String or a Binary, both owned and released, `right` being one of the same
+# type or a Byte: the runtime appends in place when nothing else holds `left`.
+export const emit_extend = (ir: IrBuilder, left: String, right: String, right_type: Type) ->
+  if is_kind(right_type, 'Byte')
+    const push = 'ptr @lerta_binary_push(ptr, i8 zeroext)'
+    return call_runtime(ir, push, "ptr #{left}, i8 zeroext #{right}")
+  const result = call_runtime(ir, 'ptr @lerta_string_extend(ptr, ptr)', "ptr #{left}, ptr #{right}")
+  emit_release ir, right
+  result
 
 # Whether two Strings have the same bytes; both are borrowed.
 export const emit_string_equals = (ir: IrBuilder, left: String, right: String) ->

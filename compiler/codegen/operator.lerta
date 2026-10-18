@@ -1,5 +1,7 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
-import BinaryOperation, Coalesce, is_nil_test, NilLiteral, UnaryOperation, Unwrap from '../ast'
+import
+  BinaryOperation, Coalesce, Expression, is_nil_test, NilLiteral, UnaryOperation, Unwrap
+from '../ast'
 import compares_by_contents, own_equality from '../checker/equality'
 import is_numeric_operator, operator_of_method from '../checker/operator'
 import apply_integer_operator from './checked_int'
@@ -13,7 +15,7 @@ import emit_branch, IrBuilder from './ir_builder'
 import call_runtime from './runtime_calls'
 import emit_release, emit_retain, ir_type from './lerta_ir'
 import emit_is_nil, emit_is_present, emit_unwrap from './optional'
-import emit_concat, emit_equals, emit_string_equals from './string'
+import emit_concat, emit_equals, emit_extend, emit_string_equals from './string'
 import throw_if, UNWRAPPED_NIL from './runtime_errors'
 import
   inner_of, is_float, is_identity_type, is_integer, is_kind, is_one_of_kinds, is_reference_type,
@@ -48,6 +50,12 @@ export const apply_operator_method = (
     return emit_concat(g.ir, [object, args[0]])
   apply_numeric g, operator_of_method(name)!, object, args[0], type
 
+# What `+` appends: the operand, or the call of `to_string()` that gives the text of a Char that the
+# checker made (see appends_unit).
+export const appended = (g: Generator, operand: Expression) ->
+  return call if const call = g.facts.appended_texts[operand]
+  operand
+
 # An operator that applies through a method is the call of it that the checker made (see
 # type_of_operator_call).
 export const generate_binary = (g: Generator, binary: BinaryOperation) ->
@@ -57,9 +65,11 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   return generate_nil_test(g, binary) if is_nil_test(binary)
   const left = generate(g, binary.left)
   const operand_type = type_at_use(g, binary.left)
-  const right = holding(g, left, operand_type, -> generate(g, binary.right))
+  const right_operand = appended(g, binary.right)
+  const right = holding(g, left, operand_type, -> generate(g, right_operand))
   const is_bytes = is_one_of_kinds(operand_type, ['String', 'Binary'])
-  return emit_concat(g.ir, [left, right]) if is_bytes and operator == '+'
+  if is_bytes and operator == '+'
+    return emit_extend(g.ir, left, right, type_at_use(g, right_operand))
   const program = g.code.program
   const inner = inner_of(operand_type)
   const by_contents = compares_by_contents(program, inner)

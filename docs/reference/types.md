@@ -81,7 +81,8 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 ## String
 
 - A `String` is immutable text in UTF-8.
-- `+` concatenates two `String`s into a new one.
+- `+` concatenates two `String`s into a new one, and `s + c` of a [Char](#char) `c` appends its UTF-8: a string literal there is a `String`, as `+` expects one. `+=` appends to a variable.
+  - `+=` appends in place to a `String` that nothing else holds, so that a loop of `+=` is O(n) in all. One that something else holds, as another variable, an array, a closure or a `for` going through it, is copied first, once: the copy is held by the variable alone. A loop that shares the `String` again at each step, as one that pushes it onto an array before each `+=`, copies it each time, which is O(n²).
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in a `String[]`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`, and `s.ends_with(suffix)` whether it ends with those of `suffix`.
 - `s.without_prefix(prefix)` gives what follows `prefix` in `s`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. `s.without_suffix(suffix)` gives what comes before `suffix`, or nil.
@@ -97,7 +98,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `Binary` is an immutable sequence of bytes; a mutable one is a `Byte[]`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.text()` goes back (see below).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`.
 - `==` and `!=` compare two `Binary`s byte by byte.
-- `+` joins two `Binary`s into a new one, and `+=` appends one to a variable, as they do `String`s. A `String` and a `Binary` are not joined (`cannot join a String and a Binary`): `s.binary` gives the bytes of the `String` without copying them. `parts.join(separator)` joins a `Binary[]` into one `Binary`; pieces gathered so and joined once are O(n), as for `String`s.
+- `+` joins two `Binary`s into a new one, `b + byte` appends a `Byte`, and `+=` appends to a variable, as they do to `String`s; an integer literal there is no `Byte`, as `+` expects a `Binary`. A `String` and a `Binary` are not joined (`cannot join a String and a Binary`): `s.binary` gives the bytes of the `String` without copying them. `parts.join(separator)` joins a `Binary[]` into one `Binary`; pieces gathered so and joined once are O(n), as for `String`s.
 - `b.occurs_at(index, part)` tells whether the bytes of `part` occur in `b` at `index`; it is false where `part` does not fit.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `bytes.to_binary()` copies the items of a `Byte[]` into a new `Binary`.

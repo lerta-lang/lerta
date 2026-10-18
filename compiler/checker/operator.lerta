@@ -2,7 +2,7 @@
 import all_but_last from '../arrays'
 import
   Assignment, BinaryOperation, Call, Coalesce, Expression, Identifier, is_nil_test, Member,
-  NilLiteral, UnaryOperation
+  NilLiteral, StringLiteral, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
 import compares_by_contents, is_equatable, own_equality from './equality'
@@ -14,8 +14,8 @@ import where_right_operand from './narrowing'
 import Body from './shared'
 import
   bool_type, FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_identity_type, is_kind,
-  is_one_of_kinds, ObjectType, OptionalType, same_type, SIGNED_INTEGER_KINDS, Type, TypeKind,
-  UnionType
+  is_one_of_kinds, ObjectType, OptionalType, same_type, SIGNED_INTEGER_KINDS, string_type, Type,
+  TypeKind, UnionType
 from '../types'
 
 const NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS...]
@@ -151,9 +151,14 @@ const type_of_operands = (
   const second = right_first then left else right
   const type = type_of(body, first, expected)
   const program = body.program
+  const operator = binary.operator
+  # A string literal on the left of a Char, which no Char's method takes, is the String it appends to.
+  if right_first and operator == '+' and is_kind(type, 'Char') and second is StringLiteral
+    expect_type body, second, string_type
+    appends_unit body, first, string_type, type
+    return string_type
   # An operator on a value of a type it does not apply to calls the type's method, which is that of
   # its left operand.
-  const operator = binary.operator
   if is_numeric_operator(operator) and not is_one_of_kinds(type, allowed_kinds)
     const name = OPERATOR_METHODS[operator]!
     if right_first
@@ -194,9 +199,25 @@ const type_of_operands = (
   fail body.program, first.position, reject(type) if not is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
   const second_type = type_of(body, second, type)
+  const is_unit =
+    not right_first and operator == '+' and appends_unit(body, second, type, second_type)
+  return type if is_unit
   reject_text_and_bytes body, second, type, second_type
   require_type body, second, second_type, type
   type
+
+# `+` appends a Char to a String, as the text of the call of its `to_string()`, which the facts
+# record for codegen to generate in its place (see appended_texts), and a Byte to a Binary.
+export const appends_unit = (body: Body, value: Expression, target: Type, value_type: Type) ->
+  if is_kind(target, 'String') and is_kind(value_type, 'Char')
+    const at = value.position
+    const name = Identifier(name: 'to_string', position: at)
+    const callee = Member(object: value, name: name, position: at)
+    const call = Call(callee: callee, args: [], named_args: [], type_args: [], position: at)
+    body.facts.appended_texts[value] = call
+    type_of body, call
+    return true
+  is_kind(target, 'Binary') and is_kind(value_type, 'Byte')
 
 # `+` joins two Strings or two Binarys, but not one of each, whose bytes `.binary` gives.
 export const reject_text_and_bytes = (body: Body, operand: Expression, first: Type, second: Type) ->

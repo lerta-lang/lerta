@@ -66,27 +66,34 @@ LertaString *lerta_string_concat(int64_t count, ...) {
   return result;
 }
 
-void lerta_string_append(LertaString **slot, LertaString *old, const LertaString *part) {
-  int64_t start = old->length;
-  int64_t length = start + part->length;
-  // The counts of the slot and the caller's, and no other.
-  bool is_unique = *slot == old && old->header.ref_count == 2;
+// `s`, taken, with room for `extra` more bytes after its own, which the caller fills: in place
+// when nothing else holds it, which a String or a Binary may move to, as none is held weakly nor
+// thrown; else in a copy.
+static LertaString *extended(LertaString *s, int64_t extra) {
+  int64_t length = s->length + extra;
   LertaString *result;
-  // A String or a Binary is never held weakly nor thrown, so it may move.
-  if (is_unique) {
-    old->header.ref_count = 1;
-    result = lerta_grow(old, (int64_t)sizeof(LertaString) + length);
+  if (s->header.ref_count == 1) {
+    result = lerta_grow(s, (int64_t)sizeof(LertaString) + length);
   } else {
     result = lerta_string_new(length);
-    memcpy(result->bytes, old->bytes, (size_t)start);
+    memcpy(result->bytes, s->bytes, (size_t)s->length);
+    lerta_release(s);
   }
-  memcpy(result->bytes + start, part->bytes, (size_t)part->length);
   result->length = length;
-  if (!is_unique) {
-    lerta_release(old);
-    lerta_release(*slot);
-  }
-  *slot = result;
+  return result;
+}
+
+LertaString *lerta_string_extend(LertaString *s, const LertaString *part) {
+  int64_t start = s->length;
+  LertaString *result = extended(s, part->length);
+  memcpy(result->bytes + start, part->bytes, (size_t)part->length);
+  return result;
+}
+
+LertaString *lerta_binary_push(LertaString *binary, uint8_t byte) {
+  LertaString *result = extended(binary, 1);
+  result->bytes[result->length - 1] = byte;
+  return result;
 }
 
 // FNV-1a over the bytes.

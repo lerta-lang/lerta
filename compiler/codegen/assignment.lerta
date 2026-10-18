@@ -12,8 +12,8 @@ import Generator, SlotLocal from './generator'
 import emit_field_pointer, emit_member_dispatch, field_named from './heap_object'
 import emit_release, emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
 import emit_map_set from './map'
-import apply_numeric from './operator'
-import emit_append, emit_concat from './string'
+import appended, apply_numeric from './operator'
+import emit_extend from './string'
 import is_one_of_kinds, MapType, ObjectType, Type, UnionType from '../types'
 
 # The new value is stored before the old one is released, which is safe even if they are the
@@ -100,9 +100,10 @@ const generate_index_assignment = (g: Generator, assignment: Assignment, target:
   # An index out of range throws.
   emit_exception_check g if old != ''
   push_temporary g, old, element if old != ''
-  const value = generate(g, assignment.value)
+  const operand = appended(g, assignment.value)
+  const value = generate(g, operand)
   pop_temporaries g, depth
-  const result = combine(g, assignment.operator, old, value, element)
+  const result = combine(g, assignment.operator, old, value, element, type_at_use(g, operand))
   emit_set ir, array, index, result, element
   emit_release_value ir, result, element
   emit_release ir, array if is_owned
@@ -137,13 +138,16 @@ const assign_through = (g: Generator, assignment: Assignment, pointer: String, t
   if assignment.operator != '='
     old = load()
     emit_retain_value ir, old, type
-  const value = generate_holding_old(g, old, type, assignment.value)
-  const is_append = old != '' and is_one_of_kinds(type, ['String', 'Binary'])
-  return emit_append(ir, pointer, old, value) if is_append
-  const result = combine(g, assignment.operator, old, value, type)
-  const replaced = holds_reference then load() else ''
+  const operand = appended(g, assignment.value)
+  const value = generate_holding_old(g, old, type, operand)
+  # A String or a Binary grows in place when nothing else holds it, so the target lets go of it
+  # first, as it is after the value, which may have assigned it.
+  const extends_old = old != '' and is_one_of_kinds(type, ['String', 'Binary'])
+  emit_release_value ir, load(), type if extends_old
+  const result = combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
+  const replaced = holds_reference and not extends_old then load() else ''
   ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}"
-  emit_release_value ir, replaced, type
+  emit_release_value ir, replaced, type if replaced != ''
 
 # The value, generated while the old value, if any, is held in a scope; `combine` consumes the old
 # value, so the scope is left without releasing it.
@@ -156,8 +160,10 @@ const generate_holding_old = (g: Generator, old: String, type: Type, value: Expr
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
 # Both are owned.
-const combine = (g: Generator, operator: String, old: String, value: String, type: Type) ->
+const combine = (
+  g: Generator, operator: String, old: String, value: String, type: Type, value_type: Type
+) ->
   case
     when operator == '=' then value
-    when is_one_of_kinds(type, ['String', 'Binary']) then emit_concat(g.ir, [old, value])
+    when is_one_of_kinds(type, ['String', 'Binary']) then emit_extend(g.ir, old, value, value_type)
     else apply_numeric(g, combining_operator(operator), old, value, type)

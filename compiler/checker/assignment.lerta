@@ -9,8 +9,8 @@ import require_type, type_of from './expression'
 import field_target from './fields'
 import local_reference, lookup, qualified_name, record_reference from './name'
 import
-  describe_kinds, is_numeric_operator, operand_kinds, OPERATOR_METHODS, reject_text_and_bytes,
-  type_of_operator_call
+  appends_unit, describe_kinds, is_numeric_operator, operand_kinds, OPERATOR_METHODS,
+  reject_text_and_bytes, type_of_operator_call
 from './operator'
 import Body from './shared'
 import abort_if_failed, reject_pending from './top_level_values'
@@ -37,8 +37,10 @@ export const check_assignment = (body: Body, assignment: Assignment) ->
       const message = "expected #{describe_kinds(kinds)}, got #{format_type(target_type)}"
       fail body.program, target.position, message
   const value_type = type_of(body, assignment.value, target_type)
-  reject_text_and_bytes body, assignment.value, target_type, value_type if operator == '+='
-  require_type body, assignment.value, value_type, target_type
+  const is_unit = operator == '+=' and appends_unit(body, assignment.value, target_type, value_type)
+  if not is_unit
+    reject_text_and_bytes body, assignment.value, target_type, value_type if operator == '+='
+    require_type body, assignment.value, value_type, target_type
   # The value is read where the variable is still narrowed, as it is evaluated first.
   forget_narrowing body, target if target is Identifier
   warn_if_cycle body, target, assignment.value
