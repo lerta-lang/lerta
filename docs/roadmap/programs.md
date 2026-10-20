@@ -36,8 +36,9 @@ The planned design of modules, FFI, the standard library and tools.
   - A diagnostic's range over the whole token of its position, rather than the position alone.
   - Checking a document that is no file yet, which the loader takes a program's modules to be; and finding the open documents that import a file by real paths, so that two spellings of one directory through a symbolic link are one.
 - Package management.
-- The rest of the test harness, `test/`, written in Lerta, as the run tests are (`test/run.lerta`, see [README](../../README.md#tests)), so that the tests need no Node.js and the [standard library](#standard-library) is used for real work: the command-line checks (`cli.ts`), which then run on Windows too (the bootstrap runs there already: see [platforms](../internals.md#platforms)), the runtime checks (`runtime.ts`), the formatter's (`format.ts`) and the compiler's leaks (`leaks.ts`).
+- The rest of the test harness, `test/`, written in Lerta, as the run tests are (`test/run.lerta`, see [README](../../README.md#tests)), so that the tests need no Node.js and the [standard library](#standard-library) is used for real work: the runtime checks (`runtime.ts`), the formatter's (`format.ts`) and the compiler's leaks (`leaks.ts`).
   - minilerta reads `std/` and `runtime/` from the working tree (see [bootstrap](../internals.md#bootstrap)), so a change to them still reaches the harness; it checks itself for that: tests that must fail, by their output, a leak or an abort, must be reported as failed, and the number of tests run must be the number found in the directories.
+- The command-line checks (`test/cli.lerta`) run on Windows too, through `make test-cross` (the bootstrap runs there already: see [platforms](../internals.md#platforms)), with those that run a shell made to run without one.
 
 ## Open questions
 

@@ -1,4 +1,4 @@
-// The C side of sized.lerta, which test/cli.ts links with it: each type as C has it, so that a
+// The C side of sized.lerta, which test/cli.lerta links with it: each type as C has it, so that a
 // value comes and goes extended by its sign.
 #include <stdint.h>
 

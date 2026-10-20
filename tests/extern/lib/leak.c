@@ -1,4 +1,4 @@
-// The C side of leak.lerta, which test/cli.ts links with it: an object that is never released.
+// The C side of leak.lerta, which test/cli.lerta links with it: an object that is never released.
 #include <stdint.h>
 
 void *lerta_new(int64_t size, const void *type);

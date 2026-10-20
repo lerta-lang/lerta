@@ -1,0 +1,172 @@
+# The command line: each invocation runs in an empty directory and checks its output and leftovers.
+# The invocations given by the files in tests/cli must leave no file there, nor in the directory for
+# temporary files:
+#   <name>.args    the arguments, one per line
+#   <name>.in      stdin; none means empty
+#   <name>.status  the expected exit status; none means 0
+#   <name>.out     the expected stdout; none means empty
+#   <name>.err     the expected stderr; none means empty
+#   status.txt     invocations checked only by their exit status, one per line: the status, then
+#                  the arguments, separated by spaces
+# In the files of arguments, empty lines are skipped and lines that start with `#` are comments,
+# so no argument is empty or starts with `#`, and none in status.txt has a space. In the arguments
+# and the expected output, <root> stands for the repository, <tmp> for the work directory and
+# <host> for the host's triple.
+import at_once, Check, run_checks from './lib/report'
+import compare_output from './lib/expect'
+import
+  cli_work_dir, expect_left, expect_status, host_triple, read_optional, runtime_flags,
+  run_in_new_dir
+from './lib/cli'
+import build_runtimes, compiler, make_cache, remove_cache, root_dir from './lib/lerta'
+import cpu_count, exit from 'std:process'
+import is_file, list_dir, make_dir, read_file, remove_tree from 'std:io'
+import checks as std_checks from './cli/std'
+import checks as build_checks from './cli/build'
+import checks as extern_checks from './cli/extern'
+import checks as lsp_checks from './cli/lsp'
+import checks as cache_checks from './cli/cache'
+import checks as program_checks from './cli/programs'
+
+const cases_dir = "#{root_dir}/tests/cli"
+
+const replace_all = (text: String, from: String, to: String) -> text.split(from).join(to)
+
+const expand = (text: String) ->
+  replace_all(
+    replace_all(replace_all(text, '<root>', root_dir), '<tmp>', cli_work_dir)
+    '<host>'
+    host_triple
+  )
+
+const content_lines = (text: String) ->
+  [line for line in text.split("\n") when line != '' and not line.starts_with('#')]
+
+const parse_status = (text: String, where: String) ->
+  const parts = text.split("\n")
+  if parts.length > 2 or (parts.length == 2 and parts[1] != '')
+    throw ValueError(message: "not an exit status in #{where}: #{text}")
+  const digits = parts[0]
+  throw ValueError(message: "not an exit status in #{where}: #{text}") if digits.binary.length == 0
+  var value = 0
+  for char in digits
+    const digit = char.to_int() - 48
+    throw ValueError(message: "not an exit status in #{where}: #{text}") if digit < 0 or digit > 9
+    value = value * 10 + digit
+  value
+
+const case_names =
+  [file.without_suffix('.args')! for file in list_dir(cases_dir) when file.ends_with('.args')]
+
+struct FileCase
+  # The invocation as the files give it, with <root> and the others unexpanded.
+  title: String
+  args: String[]
+  input: Binary
+  status: Int
+  stdout: Binary
+  stderr: Binary
+
+const read_text = (path: String) ->
+  const bytes = await read_file(path)
+  bytes.text() ? throw ValueError(message: "#{path} is not valid UTF-8")
+
+const read_expected_text = (name: String, extension: String) ->
+  const path = "#{cases_dir}/#{name}.#{extension}"
+  is_file(path) then expand(await read_text(path)) else ''
+
+const file_case = (name: String) ->
+  const args = content_lines(await read_text("#{cases_dir}/#{name}.args"))
+  const input = await read_optional("#{cases_dir}/#{name}.in") ? ''.binary
+  const status_text =
+    if is_file("#{cases_dir}/#{name}.status")
+      await read_text("#{cases_dir}/#{name}.status")
+    else
+      '0'
+  const status = parse_status(status_text, "#{name}.status")
+  FileCase(
+    title: "lerta #{args.join(' ')}"
+    args: [expand(arg) for arg in args]
+    input: input
+    status: status
+    stdout: (await read_expected_text(name, 'out')).binary
+    stderr: (await read_expected_text(name, 'err')).binary
+  )
+
+const file_check = (test: FileCase) -> Check(name: test.title, run: ->
+  const ran = await run_in_new_dir(compiler, test.args, test.input)
+  const { result, left, left_in_temp } = ran
+  [
+    expect_status(test.status, result.status)...
+    compare_output('stdout', test.stdout, result.stdout)...
+    compare_output('stderr', test.stderr, result.stderr)...
+    expect_left('files left', [], left)...
+    expect_left('files left in the temporary directory', [], left_in_temp)...
+  ]
+)
+
+const status_checks = ->
+  const contents = await read_text("#{cases_dir}/status.txt")
+  const checks: Check[] = []
+  for line in content_lines(contents)
+    const parts = line.split(' ')
+    const status = parse_status(parts[0], 'status.txt')
+    const args = [parts[i] for i in 1...parts.length]
+    checks.push Check(name: "lerta #{args.join(' ')}", run: ->
+      const ran = await run_in_new_dir(compiler, [expand(arg) for arg in args])
+      [
+        expect_status(status, ran.result.status)...
+        expect_left('files left', [], ran.left)...
+        expect_left('files left in the temporary directory', [], ran.left_in_temp)...
+      ]
+    )
+  checks
+
+const stray_files = ->
+  const files = list_dir(cases_dir)
+  [
+    "stray file: tests/cli/#{file}"
+    for file in files
+    when file != 'status.txt' and not case_names.any((name) ->
+      ['args', 'in', 'status', 'out', 'err'].any((extension) -> file == "#{name}.#{extension}")
+    )
+  ]
+
+const run_cli_checks = ->
+  const runtime_setup_errors: String[] =
+    try
+      make_dir "#{cli_work_dir}/runtimes"
+      await build_runtimes("#{cli_work_dir}/runtimes", runtime_flags)
+      []
+    catch error
+      ["building the CLI runtime cache failed: #{error.message}"]
+  const cases = [await file_case(name) for name in case_names]
+  const checks = [file_check(test) for test in cases]
+  const statuses = await status_checks()
+  const extras =
+    Check(name: 'CLI runtime setup', run: -> await at_once(runtime_setup_errors))
+    Check(name: 'tests/cli has no file that no case reads', run: -> await at_once(stray_files()))
+  await run_checks(
+    'CLI checks'
+    [
+      checks...
+      statuses...
+      std_checks...
+      build_checks...
+      program_checks...
+      extern_checks...
+      lsp_checks...
+      cache_checks...
+      extras...
+    ]
+    cpu_count
+  )
+
+const failed_count =
+  try
+    make_cache()
+    await run_cli_checks()
+  finally
+    await remove_tree(cli_work_dir)
+    await remove_cache()
+exit failed_count == 0 then 0 else 1

@@ -1,0 +1,1469 @@
+# The language server speaks JSON-RPC messages framed by their UTF-8 byte length.
+import Check from '../lib/report'
+import compare_text from '../lib/expect'
+import compiler, root_dir from '../lib/lerta'
+import cli_work_dir, expect_status, host_platform, new_cli_dir, run_command from '../lib/cli'
+import make_dir, read_file, real_path, write_file from 'std:io'
+import decode_json, encode_json from 'std:json'
+
+const real_work_dir =
+  host_platform == 'windows' then cli_work_dir else real_path(cli_work_dir).text()!
+
+struct CompletionItem(label: String, kind: Int, detail: String?)
+
+struct CompletionResponse(id: Int, result: CompletionItem[])
+
+struct ResponseHeader(id: Int | String)
+
+struct CompletionCase
+  here: String
+  character: Int
+  labels: String[]?
+  holds: String[]
+  lacks: String[]
+  keywords: Bool
+
+const no_completion_labels: String[] = []
+
+const unreserved_marks = [mark for mark in '-._~/:'.binary]
+
+const uri_of = (path: String) ->
+  const in_work_dir = path.without_prefix(cli_work_dir)
+  const canonical_path = in_work_dir != nil then "#{real_work_dir}#{in_work_dir}" else path
+  const portable = canonical_path.split('\').join('/')
+  const hexadecimal = '0123456789ABCDEF'.binary
+  const bytes: Byte[] = []
+  for byte in portable.binary
+    if byte.is_letter() or byte.is_digit() or unreserved_marks.contains(byte)
+      bytes.push byte
+    else
+      bytes.push '%'
+      bytes.push hexadecimal[byte.to_int() >> 4]
+      bytes.push hexadecimal[byte.to_int() & 0xF]
+  const prefix = host_platform == 'windows' then 'file:///' else 'file://'
+  "#{prefix}#{bytes.to_binary().text()!}"
+
+const frame = (json: String) -> "Content-Length: #{json.binary.length}\r\n\r\n#{json}"
+
+const did_open = (uri: String, text: String) ->
+  frame(
+    "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":#{encode_json(text)}}}}"
+  )
+
+const did_change = (uri: String, text: String) -> did_change_at(uri, text, 2)
+
+const did_change_at = (uri: String, text: String, version: Int) ->
+  frame(
+    "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":#{version}},\"contentChanges\":[{\"text\":#{encode_json(text)}}]}}"
+  )
+
+const completion_request = (uri: String, line: Int, character: Int, id = 1) ->
+  frame(
+    "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/completion\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line},\"character\":#{character}}}}"
+  )
+
+const definition_request = (uri: String, line: Int, character: Int, id: Int) ->
+  frame(
+    "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/definition\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line},\"character\":#{character}}}}"
+  )
+
+const hover_request = (uri: String, line: Int, character: Int, id: Int) ->
+  frame(
+    "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line},\"character\":#{character}}}}"
+  )
+
+const location_fragment = (id: Int, uri: String, line: Int, start: Int, end: Int) ->
+  "\"id\":#{id},\"result\":{\"uri\":\"#{uri}\",\"range\":{\"start\":{\"line\":#{line},\"character\":#{start}},\"end\":{\"line\":#{line},\"character\":#{end}}}}"
+
+const hover_fragment = (id: Int, text: String) ->
+  "\"id\":#{id},\"result\":{\"contents\":{\"kind\":\"markdown\",\"value\":#{encode_json("```lerta\n#{text}\n```")}}}"
+
+const initialize = '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{}}}'
+const finish =
+  frame('{"jsonrpc":"2.0","id":"end","method":"shutdown"}')
+  frame('{"jsonrpc":"2.0","method":"exit"}')
+.join('')
+
+const session_with_initialize = (dir: String, init: String, messages: String) ->
+  const input = frame(init) + messages + finish
+  await run_command(compiler, ['lsp'], dir, input.binary)
+
+const session = (dir: String, messages: String) ->
+  await session_with_initialize(dir, initialize, messages)
+
+const contains_reasons = (output: String, expected: String[]) ->
+  ["missing #{token}" for token in expected when not output.contains(token)]
+
+const check_reason = (condition: Bool, reason: String): String[] -> condition then [] else [reason]
+
+const excludes = (output: String, token: String, reason: String): String[] ->
+  output.contains(token) then [reason] else []
+
+const message_bodies = (output: String) ->
+  const parts = output.split("\r\n\r\n")
+  const messages: String[] = []
+  var header = parts[0]
+  for section in 1...parts.length
+    const length_text = header.without_prefix('Content-Length:') ? throw ValueError(
+      message: "an LSP response without its Content-Length: #{header}"
+    )
+    const length = length_text.trim().parse_int() ? throw ValueError(
+      message: "an LSP response with an invalid length: #{header}"
+    )
+    const chunk = parts[section].binary
+    const body = chunk.slice(0, length).text()!
+    messages.push body
+    header = chunk.slice(length, chunk.length).text()!
+  messages
+
+const response_bodies = (output: String) ->
+  [body for body in message_bodies(output) when body.starts_with('{"jsonrpc":"2.0","id":')]
+
+const response_body = (output: String, id: Int) ->
+  const prefix = "{\"jsonrpc\":\"2.0\",\"id\":#{id},"
+  response_bodies(output).find((each) -> each.starts_with(prefix)) ? throw ValueError(
+    message: "no response with id #{id}"
+  )
+
+const response_ids = (output: String) ->
+  ["#{decode_json<ResponseHeader>(body).id}" for body in response_bodies(output)]
+
+const diagnostic_body = (line: Int, character: Int, severity: Int, message: String) ->
+  const position = "{\"line\":#{line},\"character\":#{character}}"
+  "{\"range\":{\"start\":#{position},\"end\":#{position}},\"severity\":#{severity},\"source\":\"lerta\",\"message\":#{encode_json(message)}}"
+
+const published_diagnostics = (uri: String, diagnostics: String[]) ->
+  "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":#{encode_json(uri)},\"diagnostics\":[#{diagnostics.join(',')}]}}"
+
+const completion_items = (output: String, id: Int) ->
+  decode_json<CompletionResponse>(response_body(output, id)).result
+
+const completion_item_text = (item: CompletionItem) ->
+  "#{item.label} #{item.kind} #{item.detail ? 'null'}"
+
+const completion_labels = (items: CompletionItem[]) -> [item.label for item in items].join(' ')
+
+const completion_items_named = (items: CompletionItem[], label: String) ->
+  [completion_item_text(item) for item in items when item.label == label].join(', ')
+
+const keyword_from_line = (line: String) ->
+  return nil if not line.starts_with("  '") or not line.ends_with("'")
+  const word = line.split("'")[1]
+  return nil if word == ''
+  for character in word
+    return nil if character < 'a' or character > 'z'
+  word
+
+const compiler_keywords = ->
+  const source = (await read_file("#{root_dir}/compiler/lexer/tokens.lerta")).text()!
+  const keywords: String[] = []
+  for line in source.split("\n")
+    keywords.push keyword if const keyword = keyword_from_line(line)
+  keywords
+
+const initialize_response = (encoding: String) ->
+  "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"positionEncoding\":\"#{encoding}\",\"textDocumentSync\":1,\"documentFormattingProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\"]}},\"serverInfo\":{\"name\":\"lerta\"}}}"
+
+const shutdown_response = '{"jsonrpc":"2.0","id":"end","result":null}'
+
+const response_from_fragment = (fragment: String) -> "{\"jsonrpc\":\"2.0\",#{fragment}}"
+
+const exact_responses = (output: String, fragments: String[]) ->
+  const expected = [initialize_response('utf-16')]
+  expected.append [response_from_fragment(fragment) for fragment in fragments]
+  expected.push shutdown_response
+  compare_text 'responses', expected.join("\n"), response_bodies(output).join("\n")
+
+const exact_messages = (output: String, messages: String[]) ->
+  const expected = [initialize_response('utf-16'), messages..., shutdown_response]
+  compare_text 'messages', expected.join("\n"), message_bodies(output).join("\n")
+
+const initialize_check = ->
+  Check name: 'lerta lsp negotiates UTF-16 positions and exits after shutdown', run: ->
+    const dir = new_cli_dir('lsp-initialize')
+    const ran = await session(dir, '')
+    const utf32_init = '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{"general":{"positionEncodings":["utf-16","utf-32"]}}}}'
+    const utf32_dir = new_cli_dir('lsp-utf32-no-shutdown')
+    const utf32 = await run_command(
+      compiler
+      ['lsp']
+      utf32_dir
+      (frame(utf32_init) + frame('{"jsonrpc":"2.0","method":"exit"}')).binary
+    )
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'responses'
+        [initialize_response('utf-16'), shutdown_response].join("\n")
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+      expect_status(1, utf32.status)...
+      compare_text(
+        'responses'
+        initialize_response('utf-32')
+        message_bodies(utf32.stdout.text()!).join("\n")
+      )...
+    ]
+
+const error_request_check = ->
+  Check name: 'lerta lsp rejects an unsupported request but ignores its notification', run: ->
+    const dir = new_cli_dir('lsp-error-request')
+    const messages =
+      frame('{"jsonrpc":"2.0","id":1,"method":"textDocument/references","params":{}}')
+      frame('{"jsonrpc":"2.0","method":"$/setTrace","params":{"value":"off"}}')
+      frame('{"jsonrpc":"2.0","id":2,"method":"textDocument/formatting","params":{}}')
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'responses'
+        [
+          initialize_response('utf-16')
+          '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"no method textDocument/references"}}'
+          "{\"jsonrpc\":\"2.0\",\"id\":2,\"error\":{\"code\":-32602,\"message\":#{encode_json('$.params: missing the key "textDocument"')}}}"
+          shutdown_response
+        ].join(
+          "\n"
+        )
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+    ]
+
+const diagnostic_check = ->
+  Check name: 'lerta lsp reports diagnostics for an opened document', run: ->
+    const dir = new_cli_dir('lsp-diagnostics')
+    const path = "#{dir}/a.lerta"
+    await write_file(path, ''.binary)
+    const uri = uri_of(path)
+    const message = frame(
+      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"print missing\\n\"}}}"
+    )
+    const ran = await session(dir, message)
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'messages'
+        [
+          initialize_response('utf-16')
+          published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])
+          shutdown_response
+        ].join(
+          "\n"
+        )
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+    ]
+
+const diagnostic_lifecycle_check = ->
+  Check name: 'lerta lsp updates and clears document diagnostics', run: ->
+    const dir = new_cli_dir('lsp-diagnostic-lifecycle')
+    const path = "#{dir}/a.lerta"
+    await write_file(path, ''.binary)
+    const uri = uri_of(path)
+    const messages =
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"print missing\\n\"}}}"
+      )
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":2},\"contentChanges\":[{\"text\":\"const unused = 1\\n\"}]}}"
+      )
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":3},\"contentChanges\":[{\"text\":\"print 1\\n\"}]}}"
+      )
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+      )
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'messages'
+        [
+          initialize_response('utf-16')
+          published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])
+          published_diagnostics(uri, [diagnostic_body(0, 6, 2, "'unused' is never used")])
+          published_diagnostics(uri, [])
+          published_diagnostics(uri, [])
+          shutdown_response
+        ].join(
+          "\n"
+        )
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+    ]
+
+const imported_diagnostic_check = ->
+  Check name: 'lerta lsp reports imported diagnostics in UTF-16 positions', run: ->
+    const dir = new_cli_dir('lsp-imported-diagnostic')
+    const path = "#{dir}/a.lerta"
+    const imported = "#{dir}/b.lerta"
+    await write_file(path, ''.binary)
+    await write_file(imported, "export const b = '😀' + nothing\n".binary)
+    const uri = uri_of(path)
+    const message = frame(
+      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"import b from './b'\\nprint b\\n\"}}}"
+    )
+    const ran = await session(dir, message)
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'messages'
+        [
+          initialize_response('utf-16')
+          published_diagnostics(uri, [])
+          published_diagnostics(
+            uri_of(imported)
+            [diagnostic_body(0, 24, 1, "undefined name 'nothing'")]
+          )
+          shutdown_response
+        ].join(
+          "\n"
+        )
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+    ]
+
+const uri_import_check = ->
+  Check name: 'lerta lsp imports through parent paths in percent-encoded URIs', run: ->
+    const dir = new_cli_dir('lsp-uri-import')
+    const nested = "#{dir}/folder"
+    const path = "#{nested}/é file.lerta"
+    const imported = uri_of("#{dir}/lib.lerta")
+    make_dir nested
+    await write_file(path, ''.binary)
+    await write_file("#{dir}/lib.lerta", "export const x = missing\n".binary)
+    const uri = uri_of(path)
+    const message = frame(
+      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"import x from '../lib'\\nprint x\\n\"}}}"
+    )
+    const other_uri = did_open('untitled:Untitled-1', 'print missing\n')
+    const formatting = frame(
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{imported}\"}}}"
+    )
+    const ran = await session(dir, message + other_uri + formatting)
+    [
+      expect_status(0, ran.status)...
+      exact_messages(
+        ran.stdout.text()!
+        [
+          published_diagnostics(uri, [])
+          published_diagnostics(imported, [diagnostic_body(0, 17, 1, "undefined name 'missing'")])
+          '{"jsonrpc":"2.0","id":1,"result":null}'
+        ]
+      )...
+    ]
+
+const malformed_message_check = ->
+  Check name: 'lerta lsp reports a malformed JSON message and continues', run: ->
+    const dir = new_cli_dir('lsp-malformed-message')
+    const ran = await session(dir, frame('{bad}'))
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'responses'
+        [
+          initialize_response('utf-16')
+          "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":#{encode_json("$: expected a key, found 'b'")}}}"
+          shutdown_response
+        ].join(
+          "\n"
+        )
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+    ]
+
+const lsp_input_errors_check = ->
+  Check name: 'lerta lsp rejects arguments and a message without Content-Length', run: ->
+    const args = await run_command(compiler, ['lsp', 'extra'], new_cli_dir('lsp-arguments'))
+    const missing_length = await run_command(
+      compiler
+      ['lsp']
+      new_cli_dir('lsp-no-content-length')
+      "Content-Length: x\r\n\r\n{}".binary
+    )
+    [
+      expect_status(1, args.status)...
+      compare_text('stderr', "lerta lsp takes no arguments\n", args.stderr.text()!)...
+      expect_status(1, missing_length.status)...
+      compare_text(
+        'stderr'
+        "an LSP message without its Content-Length\n"
+        missing_length.stderr.text()!
+      )...
+    ]
+
+const empty_body_check = ->
+  Check name: 'lerta lsp reports empty message bodies as parse errors', run: ->
+    const dir = new_cli_dir('lsp-empty-body')
+    const path = "#{dir}/a.lerta"
+    await write_file(path, ''.binary)
+    const input =
+      frame(initialize)
+      frame('{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":1}}}')
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri_of(path)}\"},\"contentChanges\":[]}}"
+      )
+      "Content-Length: 0\r\n\r\nContent-Length: -1\r\n\r\n"
+      finish
+    .join('')
+    const ran = await run_command(compiler, ['lsp'], dir, input.binary)
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'responses'
+        [
+          initialize_response('utf-16')
+          '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, found the end of the text"}}'
+          '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, found the end of the text"}}'
+          shutdown_response
+        ].join(
+          "\n"
+        )
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+    ]
+
+const formatting_check = -> Check(name: 'lerta lsp formats an open document', run: ->
+  const dir = new_cli_dir('lsp-formatting')
+  const path = "#{dir}/a.lerta"
+  await write_file(path, ''.binary)
+  const uri = uri_of(path)
+  const messages =
+    frame(
+      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"const  value = 1\\nprint value\\n\"}}}"
+    )
+    frame(
+      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+    )
+    did_change_at(uri, "const value = 1\nprint value\n", 2)
+    frame(
+      "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+    )
+    did_change_at(uri, "print (\n", 3)
+    frame(
+      "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+    )
+  .join('')
+  const ran = await session(dir, messages)
+  [
+    expect_status(0, ran.status)...
+    exact_messages(
+      ran.stdout.text()!
+      [
+        published_diagnostics(uri, [])
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":2,\"character\":0}},\"newText\":#{encode_json("const value = 1\nprint value\n")}}]}"
+        published_diagnostics(uri, [])
+        '{"jsonrpc":"2.0","id":2,"result":[]}'
+        published_diagnostics(uri, [diagnostic_body(0, 6, 1, "'(' is never closed")])
+        '{"jsonrpc":"2.0","id":3,"result":null}'
+      ]
+    )...
+  ]
+)
+
+const formatting_new_document_check = ->
+  Check name: 'lerta lsp formats a document that does not exist yet', run: ->
+    const dir = new_cli_dir('lsp-format-new')
+    const uri = uri_of("#{dir}/new.lerta")
+    const emoji = "\u{1F600}"
+    const text = "print  '#{emoji}'"
+    const messages =
+      did_open(uri, text)
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+      )
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'responses'
+        [
+          initialize_response('utf-16')
+          "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":11}},\"newText\":#{encode_json("print '#{emoji}'\n")}}]}"
+          shutdown_response
+        ].join(
+          "\n"
+        )
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+    ]
+
+const shared_import_check = ->
+  Check name: 'lerta lsp checks shared imports for each open document', run: ->
+    const dir = new_cli_dir('lsp-shared-import')
+    await write_file("#{dir}/b.lerta", "export const b: Int = 'text'\n".binary)
+    const c = uri_of("#{dir}/c.lerta")
+    const d = uri_of("#{dir}/d.lerta")
+    await write_file("#{dir}/c.lerta", ''.binary)
+    await write_file("#{dir}/d.lerta", ''.binary)
+    const imports = "import b from './b'\nprint b\n"
+    const messages =
+      did_open(c, imports)
+      did_open(d, imports)
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{c}\"}}}"
+      )
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_messages(
+        ran.stdout.text()!
+        [
+          published_diagnostics(c, [])
+          published_diagnostics(
+            uri_of("#{dir}/b.lerta")
+            [diagnostic_body(0, 22, 1, 'expected Int, got String')]
+          )
+          published_diagnostics(d, [])
+          published_diagnostics(
+            uri_of("#{dir}/b.lerta")
+            [diagnostic_body(0, 22, 1, 'expected Int, got String')]
+          )
+          published_diagnostics(c, [])
+          published_diagnostics(
+            uri_of("#{dir}/b.lerta")
+            [diagnostic_body(0, 22, 1, 'expected Int, got String')]
+          )
+        ]
+      )...
+    ]
+
+const changed_import_check = ->
+  Check name: 'lerta lsp rechecks open importers when an imported document changes', run: ->
+    const dir = new_cli_dir('lsp-changed-import')
+    await write_file("#{dir}/a.lerta", ''.binary)
+    await write_file("#{dir}/b.lerta", ''.binary)
+    const a = uri_of("#{dir}/a.lerta")
+    const b = uri_of("#{dir}/b.lerta")
+    const messages =
+      did_open(b, "export const b = 'text'\n")
+      did_open(a, "import b from './b'\nprint b\n")
+      did_change(b, "export const c = 1\n")
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_messages(
+        ran.stdout.text()!
+        [
+          published_diagnostics(b, [])
+          published_diagnostics(a, [])
+          published_diagnostics(b, [])
+          published_diagnostics(b, [])
+          published_diagnostics(a, [diagnostic_body(0, 7, 1, "'./b' has no export 'b'")])
+          published_diagnostics(b, [])
+        ]
+      )...
+    ]
+
+const close_unsaved_import_check = ->
+  Check name: 'lerta lsp uses an imported document file again when it closes', run: ->
+    const dir = new_cli_dir('lsp-close-unsaved-import')
+    await write_file("#{dir}/a.lerta", ''.binary)
+    await write_file("#{dir}/b.lerta", "export const f = -> 1\n".binary)
+    const a = uri_of("#{dir}/a.lerta")
+    const b = uri_of("#{dir}/b.lerta")
+    const messages =
+      did_open(a, "import f from './b'\nprint f()\n")
+      did_open(b, "export const f = -> 1\n")
+      did_change(b, "export const f = -> zzz\n")
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{b}\"}}}"
+      )
+    .join('')
+    const ran = await session(dir, messages)
+    const last =
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":\"#{b}\",\"diagnostics\":[]}}"
+      )
+      frame('{"jsonrpc":"2.0","id":"end","result":null}')
+    .join('')
+    [
+      expect_status(0, ran.status)...
+      check_reason(
+        ran.stdout.text()!.ends_with(last)
+        'closing the unsaved import did not clear diagnostics from its disk contents'
+      )...
+    ]
+
+const hover_definition_check = ->
+  Check name: 'lerta lsp gives a value type and its declaration location', run: ->
+    const dir = new_cli_dir('lsp-hover-definition')
+    const path = "#{dir}/a.lerta"
+    const text = "const value = 1\nprint value\n"
+    await write_file(path, text.binary)
+    const uri = uri_of(path)
+    const messages =
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"const value = 1\\nprint value\\n\"}}}"
+      )
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
+      )
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/definition\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
+      )
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout.text()!
+        [hover_fragment(1, 'value: Int'), location_fragment(2, uri, 0, 6, 11)]
+      )...
+    ]
+
+const generic_hover_check = ->
+  Check name: 'lerta lsp gives generic values the types of their instances', run: ->
+    const dir = new_cli_dir('lsp-generic-hover')
+    const path = "#{dir}/a.lerta"
+    const text = "const id = <T>(v: T) -> v\nprint id(1)\nprint id('a')\n"
+    await write_file(path, text.binary)
+    const uri = uri_of(path)
+    const messages =
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"const id = <T>(v: T) -> v\\nprint id(1)\\nprint id('a')\\n\"}}}"
+      )
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
+      )
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":2,\"character\":6}}}"
+      )
+      hover_request(uri, 0, 24, 3)
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout.text()!
+        [
+          hover_fragment(1, 'id: (Int) -> Int')
+          hover_fragment(2, 'id: (String) -> String')
+          hover_fragment(3, "v: Int\nv: String")
+        ]
+      )...
+    ]
+
+const definition_contexts_check = ->
+  Check name: 'lerta lsp finds assigned fields, enum members, bindings, and methods', run: ->
+    const dir = new_cli_dir('lsp-definition-contexts')
+    const path = "#{dir}/a.lerta"
+    const shades = "#{dir}/shades.lerta"
+    const text =
+      "import Shade from './shades'"
+      'class K'
+      '  v: Int = 1'
+      '  inc = -> @v += 1'
+      'const k = K()'
+      'k.v = 3'
+      'enum Color'
+      '  RED'
+      'const c = Color.RED'
+      'const found: Int? = 1'
+      'if const n = found'
+      '  print n'
+      'try'
+      "  throw ValueError(message: 'x')"
+      'catch error'
+      '  print error.message'
+      'k.inc()'
+      'print c'
+      'extend K'
+      '  reset = -> @v = 0'
+      'k.reset()'
+      'print Shade.DARK'
+      ''
+    .join("\n")
+    await write_file(path, ''.binary)
+    await write_file(shades, "export enum Shade\n  LIGHT\n  DARK\n".binary)
+    const uri = uri_of(path)
+    const imported_uri = uri_of(shades)
+    const messages =
+      did_open(uri, text)
+      definition_request(uri, 5, 2, 10)
+      definition_request(uri, 3, 12, 11)
+      definition_request(uri, 8, 16, 12)
+      definition_request(uri, 11, 8, 13)
+      definition_request(uri, 15, 8, 14)
+      definition_request(uri, 19, 15, 15)
+      definition_request(uri, 20, 2, 16)
+      definition_request(uri, 16, 2, 17)
+      definition_request(uri, 21, 12, 18)
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout.text()!
+        [
+          location_fragment(10, uri, 2, 2, 3)
+          location_fragment(11, uri, 2, 2, 3)
+          location_fragment(12, uri, 7, 2, 5)
+          location_fragment(13, uri, 10, 9, 10)
+          location_fragment(14, uri, 14, 6, 11)
+          location_fragment(15, uri, 2, 2, 3)
+          location_fragment(16, uri, 19, 2, 7)
+          location_fragment(17, uri, 3, 2, 5)
+          location_fragment(18, imported_uri, 2, 2, 6)
+        ]
+      )...
+    ]
+
+const hover_contexts_check = ->
+  Check name: 'lerta lsp finds assigned, generic, and UTF-16 names with their definitions', run: ->
+    const dir = new_cli_dir('lsp-hover-contexts')
+    const path = "#{dir}/a.lerta"
+    const emoji = "\u{1F600}"
+    const text =
+      "const s = '#{emoji}'"
+      'struct Box<T>(value: T)'
+      'extend Int'
+      '  twice = -> @ * 2'
+      'var n = 1'
+      'n = Box(value: 2).value.twice()'
+      'print s + n.to_string()'
+      "print '#{emoji}' + s"
+      ''
+    .join("\n")
+    await write_file(path, ''.binary)
+    const uri = uri_of(path)
+    const messages =
+      did_open(uri, text)
+      hover_request(uri, 6, 6, 10)
+      definition_request(uri, 6, 6, 11)
+      hover_request(uri, 5, 0, 12)
+      definition_request(uri, 5, 0, 13)
+      hover_request(uri, 5, 6, 14)
+      definition_request(uri, 5, 6, 15)
+      hover_request(uri, 5, 18, 16)
+      definition_request(uri, 5, 18, 17)
+      hover_request(uri, 5, 26, 18)
+      definition_request(uri, 5, 26, 19)
+      hover_request(uri, 7, 13, 20)
+      definition_request(uri, 7, 13, 21)
+      hover_request(uri, 7, 14, 22)
+      definition_request(uri, 7, 14, 23)
+      hover_request(uri, 6, 15, 24)
+      definition_request(uri, 6, 15, 25)
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout.text()!
+        [
+          hover_fragment(10, 's: String')
+          location_fragment(11, uri, 0, 6, 7)
+          hover_fragment(12, 'n: Int')
+          location_fragment(13, uri, 4, 4, 5)
+          hover_fragment(14, 'Box: Box<Int>')
+          location_fragment(15, uri, 1, 7, 10)
+          hover_fragment(16, 'value: Int')
+          location_fragment(17, uri, 1, 14, 19)
+          hover_fragment(18, 'twice: () -> Int')
+          location_fragment(19, uri, 3, 2, 7)
+          hover_fragment(20, 's: String')
+          location_fragment(21, uri, 0, 6, 7)
+          hover_fragment(22, 's: String')
+          location_fragment(23, uri, 0, 6, 7)
+          hover_fragment(24, 'to_string: () -> String')
+          '"id":25,"result":null'
+        ]
+      )...
+    ]
+
+const optional_and_interpolation_check = ->
+  Check(
+    name: 'lerta lsp finds optional fields and interpolation names, not unrelated positions'
+    run: ->
+      const dir = new_cli_dir('lsp-optional-interpolation')
+      const path = "#{dir}/a.lerta"
+      const text =
+        'struct P(x: Int)'
+        'const f = (p: P?) -> p?.x'
+        'class C'
+        '  x: Int = 1'
+        '  get = -> @x'
+        'print C().get()'
+        'print f(nil) == nil'
+        'print "#{C().x}"'
+        'const g = (p: P?) -> p?.x.to_string()'
+        'const to_string_value = 1'
+        'print "#{to_string_value}"'
+        ''
+      .join("\n")
+      await write_file(path, ''.binary)
+      const uri = uri_of(path)
+      const other = uri_of("#{dir}/other.lerta")
+      const messages =
+        did_open(uri, text)
+        hover_request(uri, 7, 13, 10)
+        definition_request(uri, 7, 13, 11)
+        hover_request(uri, 7, 15, 12)
+        definition_request(uri, 7, 15, 13)
+        hover_request(uri, 8, 28, 14)
+        definition_request(uri, 8, 28, 15)
+        hover_request(uri, 10, 10, 16)
+        definition_request(uri, 10, 10, 17)
+        hover_request(uri, 1, 24, 18)
+        definition_request(uri, 1, 24, 19)
+        hover_request(uri, 4, 12, 20)
+        definition_request(uri, 4, 12, 21)
+        hover_request(uri, 5, 40, 22)
+        definition_request(uri, 5, 40, 23)
+        hover_request(uri, 30, 0, 24)
+        definition_request(uri, 30, 0, 25)
+        hover_request(other, 0, 0, 26)
+        definition_request(other, 0, 0, 27)
+      .join('')
+      const ran = await session(dir, messages)
+      [
+        expect_status(0, ran.status)...
+        exact_responses(
+          ran.stdout.text()!
+          [
+            hover_fragment(10, 'x: Int')
+            location_fragment(11, uri, 3, 2, 3)
+            '"id":12,"result":null'
+            '"id":13,"result":null'
+            hover_fragment(14, 'to_string: () -> String')
+            '"id":15,"result":null'
+            hover_fragment(16, 'to_string_value: Int')
+            location_fragment(17, uri, 9, 6, 21)
+            hover_fragment(18, 'x: Int')
+            location_fragment(19, uri, 0, 9, 10)
+            hover_fragment(20, 'x: Int')
+            location_fragment(21, uri, 3, 2, 3)
+            '"id":22,"result":null'
+            '"id":23,"result":null'
+            '"id":24,"result":null'
+            '"id":25,"result":null'
+            '"id":26,"result":null'
+            '"id":27,"result":null'
+          ]
+        )...
+      ]
+  )
+
+const open_import_hover_check = ->
+  Check name: 'lerta lsp answers for an imported file in an open program', run: ->
+    const dir = new_cli_dir('lsp-open-import-hover')
+    const a_path = "#{dir}/a.lerta"
+    const b_path = "#{dir}/b.lerta"
+    const b_text = "export const b = 1\n"
+    await write_file(a_path, ''.binary)
+    await write_file(b_path, b_text.binary)
+    const a = uri_of(a_path)
+    const b = uri_of(b_path)
+    const messages =
+      did_open(a, "import b from './b'\nprint b\n")
+      hover_request(b, 0, 13, 10)
+      did_open(b, b_text)
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{a}\"}}}"
+      )
+      hover_request(a, 1, 6, 11)
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout.text()!
+        [hover_fragment(10, 'b: Int'), '"id":11,"result":null']
+      )...
+    ]
+
+const definitions_after_error_check = ->
+  Check name: 'lerta lsp finds locals after errors, destructured, loop, and captured names', run: ->
+    const dir = new_cli_dir('lsp-definitions-after-error')
+    const path = "#{dir}/a.lerta"
+    const text =
+      'const n = [1].length'
+      'print n + zz'
+      'const q = 2'
+      'print q'
+      'const (a, b) = (1, 2)'
+      'for item in [a]'
+      '  print item + b'
+      'const add = (x: Int) -> -> x + 1'
+      'print add(1)()'
+      ''
+    .join("\n")
+    await write_file(path, ''.binary)
+    const uri = uri_of(path)
+    const messages =
+      did_open(uri, text)
+      definition_request(uri, 3, 6, 10)
+      definition_request(uri, 6, 8, 11)
+      definition_request(uri, 6, 15, 12)
+      definition_request(uri, 7, 27, 13)
+      did_change(uri, "import x from './missing'\nprint n + zz\n")
+      hover_request(uri, 1, 6, 20)
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout.text()!
+        [
+          location_fragment(10, uri, 2, 6, 7)
+          location_fragment(11, uri, 5, 4, 8)
+          location_fragment(12, uri, 4, 10, 11)
+          location_fragment(13, uri, 7, 13, 14)
+          '"id":20,"result":null'
+        ]
+      )...
+    ]
+
+const imported_hover_definition_check = ->
+  Check(
+    name: 'lerta lsp gives imported, field, and generic values their types and definitions'
+    run: ->
+      const dir = new_cli_dir('lsp-imported-hover-definition')
+      const lib = "#{dir}/lib.lerta"
+      const path = "#{dir}/a.lerta"
+      const text = "import make from './lib'\nconst p = make(1)\nprint p.x\nconst id = <T>(v: T) -> v\nprint id(1) + id(2)\nprint id('a')\n"
+      await write_file(
+        lib
+        "export struct Point(x: Int, y: Int)\nexport const make = (x: Int) -> Point(x, y: 0)\n".binary
+      )
+      await write_file(path, ''.binary)
+      const uri = uri_of(path)
+      const asks = [(1, 10), (2, 8), (3, 24), (4, 6), (5, 6), (0, 7), (1, 4)]
+      const messages = [did_open(uri, text)]
+      for ask, i in asks
+        const (line, character) = ask
+        messages.push hover_request(uri, line, character, 10 + 2 * i)
+        messages.push definition_request(uri, line, character, 11 + 2 * i)
+      const ran = await session(dir, messages.join(''))
+      [
+        expect_status(0, ran.status)...
+        exact_responses(
+          ran.stdout.text()!
+          [
+            hover_fragment(10, 'make: (Int) -> Point')
+            location_fragment(11, uri_of(lib), 1, 13, 17)
+            hover_fragment(12, 'x: Int')
+            location_fragment(13, uri_of(lib), 0, 20, 21)
+            hover_fragment(14, "v: Int\nv: String")
+            location_fragment(15, uri, 3, 15, 16)
+            hover_fragment(16, 'id: (Int) -> Int')
+            location_fragment(17, uri, 3, 6, 8)
+            hover_fragment(18, 'id: (String) -> String')
+            location_fragment(19, uri, 3, 6, 8)
+            '"id":20,"result":null'
+            location_fragment(21, uri_of(lib), 1, 13, 17)
+            '"id":22,"result":null'
+            '"id":23,"result":null'
+          ]
+        )...
+      ]
+  )
+
+const extern_definition_check = ->
+  Check name: 'lerta lsp finds extern definitions in the current and imported modules', run: ->
+    const dir = new_cli_dir('lsp-extern-definition')
+    const path = "#{dir}/a.lerta"
+    const text = "import int_text, int_text as t from './conversions'\nextern lerta_int_to_string as text_of: (Int) -> String\nprint text_of(1)\nprint int_text(2)\nprint t(3)\n"
+    await write_file(path, ''.binary)
+    await write_file(
+      "#{dir}/conversions.lerta"
+      "export extern lerta_int_to_string as int_text: (Int) -> String\n".binary
+    )
+    const uri = uri_of(path)
+    const messages =
+      did_open(uri, text)
+      definition_request(uri, 2, 6, 1)
+      definition_request(uri, 3, 6, 2)
+      definition_request(uri, 0, 7, 3)
+      definition_request(uri, 4, 6, 4)
+      definition_request(uri, 0, 30, 5)
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout.text()!
+        [
+          location_fragment(1, uri, 1, 30, 37)
+          location_fragment(2, uri_of("#{dir}/conversions.lerta"), 0, 37, 45)
+          location_fragment(3, uri_of("#{dir}/conversions.lerta"), 0, 37, 45)
+          location_fragment(4, uri_of("#{dir}/conversions.lerta"), 0, 37, 45)
+          location_fragment(5, uri_of("#{dir}/conversions.lerta"), 0, 37, 45)
+        ]
+      )...
+    ]
+
+const completion_check = -> Check(name: 'lerta lsp completes members after a dot', run: ->
+  const dir = new_cli_dir('lsp-completion')
+  const path = "#{dir}/a.lerta"
+  const text =
+    "struct Point(x: Int, y: Int)\nconst f = (p: Point) ->\n  print p.\n  const later = 2\n"
+  await write_file(path, text.binary)
+  const uri = uri_of(path)
+  const messages =
+    did_open(uri, text)
+    did_change(uri, text)
+    completion_request(uri, 2, 10)
+  .join('')
+  const ran = await session(dir, messages)
+  const items = completion_items(ran.stdout.text()!, 1)
+  [
+    expect_status(0, ran.status)...
+    compare_text(
+      'completion items'
+      "x 5 Int\ny 5 Int\nequals 2 (Point) -> Bool\nhash 2 () -> Int"
+      [completion_item_text(item) for item in items].join("\n")
+    )...
+    compare_text('response order', '0 1 end', response_ids(ran.stdout.text()!).join(' '))...
+  ]
+)
+
+const completion_names_check = ->
+  Check name: 'lerta lsp completes locals, module names, and keywords', run: ->
+    const dir = new_cli_dir('lsp-completion-names')
+    const path = "#{dir}/a.lerta"
+    const text = "struct Point(x: Int)\nconst top = 1\nconst f = (p: Point) ->\n  const local = 1\n  print lo\n  const later = 2\n"
+    await write_file(path, text.binary)
+    const uri = uri_of(path)
+    const messages =
+      did_open(uri, text)
+      did_change(uri, text)
+      completion_request(uri, 4, 10)
+    .join('')
+    const ran = await session(dir, messages)
+    const output = ran.stdout.text()!
+    const items = completion_items(output, 1)
+    const labels = [item.label for item in items when item.kind != 14]
+    const words = [item.label for item in items when item.kind == 14]
+    const keywords = await compiler_keywords()
+    const expected_names = ['local', 'p', 'top', 'Point']
+    const missing_names = [name for name in expected_names when not labels.contains(name)]
+    [
+      expect_status(0, ran.status)...
+      compare_text('keywords', keywords.join(' '), words.join(' '))...
+      ["missing completion name #{name}" for name in missing_names]...
+      check_reason(
+        not labels.contains('later')
+        'completion exposed a local declared after the cursor'
+      )...
+      compare_text('response order', '0 1 end', response_ids(output).join(' '))...
+    ]
+
+const completion_enum_check = -> Check(name: 'lerta lsp completes enum members after a dot', run: ->
+  const dir = new_cli_dir('lsp-completion-enum')
+  const path = "#{dir}/a.lerta"
+  const text = "enum Color\n  RED\nconst f = ->\n  print Color.\n  const later = 1\n"
+  await write_file(path, text.binary)
+  const uri = uri_of(path)
+  const messages =
+    did_open(uri, text)
+    did_change(uri, text)
+    completion_request(uri, 3, 14)
+  .join('')
+  const ran = await session(dir, messages)
+  const output = ran.stdout.text()!
+  const items = completion_items(output, 1)
+  [
+    expect_status(0, ran.status)...
+    compare_text('completion labels', 'RED parse', completion_labels(items))...
+    compare_text('response order', '0 1 end', response_ids(output).join(' '))...
+  ]
+)
+
+const completion_contexts_check = ->
+  Check name: 'lerta lsp completes methods, optional members, and members of @', run: ->
+    const dir = new_cli_dir('lsp-completion-contexts')
+    const path = "#{dir}/a.lerta"
+    const point_text =
+      "struct Point(x: Int, y: Int)\nconst f = (p: Point) ->\n  print p.eq()\n  const later = 1\n"
+    const optional_text =
+      "struct Point(x: Int, y: Int)\nconst f = (q: Point?) ->\n  print q?.\n  const later = 1\n"
+    const counter_text = "class Counter\n  count = 0\n  bump = ->\n    @count += 1\n    print @co\n"
+    const bare_at_text = "class Counter\n  count = 0\n  bump = ->\n    @count += 1\n    print @\n"
+    const parameter_text = (here: String) ->
+      "struct Point(x: Int, y: Int)\nconst p = 3\nconst f = (p: Point, q: Point?) ->\n#{here}\n"
+    await write_file(path, point_text.binary)
+    const uri = uri_of(path)
+    const messages =
+      did_open(uri, point_text)
+      did_change(uri, point_text)
+      completion_request(uri, 2, 11, 1)
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+      )
+      did_change(uri, optional_text)
+      completion_request(uri, 2, 11, 2)
+      did_change(uri, counter_text)
+      completion_request(uri, 4, 13, 3)
+      did_change(uri, bare_at_text)
+      completion_request(uri, 4, 11, 5)
+      did_change(uri, parameter_text('  print p'))
+      completion_request(uri, 3, 9, 6)
+      completion_request(uri, 40, 0, 7)
+      did_change(uri, parameter_text('  print [i for i in 0...p]'))
+      completion_request(uri, 3, 24, 8)
+    .join('')
+    const ran = await session(dir, messages)
+    const output = ran.stdout.text()!
+    const name_labels = (id: Int) ->
+      [item.label for item in completion_items(output, id) when item.kind != 14]
+    const parameters = [
+      "#{item.label} #{item.detail ? 'null'}"
+      for item in completion_items(output, 6)
+      when item.label == 'p'
+    ]
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'completion labels'
+        'x y equals hash|x y equals hash|count bump equals hash'
+        [
+          completion_labels(completion_items(output, 1))
+          completion_labels(completion_items(output, 2))
+          completion_labels(completion_items(output, 3))
+        ].join(
+          '|'
+        )
+      )...
+      compare_text(
+        'formatting response'
+        '{"jsonrpc":"2.0","id":4,"result":[]}'
+        response_body(output, 4)
+      )...
+      compare_text(
+        '@ alone'
+        'count bump equals hash'
+        completion_labels(completion_items(output, 5))
+      )...
+      compare_text('local over a top-level name', 'p Point', parameters.join(' '))...
+      compare_text('past the end', '', name_labels(7).join(' '))...
+      compare_text('after a range', 'p q', [name_labels(8)[i] for i in 0...2].join(' '))...
+      compare_text('response order', '0 1 4 2 3 5 6 7 8 end', response_ids(output).join(' '))...
+      excludes(output, '__lerta_completion__', 'completion changed the open document')...
+    ]
+
+const completion_imports_check = ->
+  Check name: 'lerta lsp completes imported values and standard-library functions', run: ->
+    const dir = new_cli_dir('lsp-completion-imports')
+    const path = "#{dir}/a.lerta"
+    const text = "import helper, Pair as Couple from './lib'\nimport sqrt from 'std:math'\nconst print = (n: Int) -> n\nconst x = he\nconst later = 1\nconst g = -> later\n"
+    await write_file(path, ''.binary)
+    await write_file(
+      "#{dir}/lib.lerta"
+      "export const helper = -> 1\nexport struct Pair(a: Int)\n".binary
+    )
+    const uri = uri_of(path)
+    const messages =
+      did_open(uri, text)
+      did_change(uri, text)
+      completion_request(uri, 3, 12)
+    .join('')
+    const ran = await session(dir, messages)
+    const output = ran.stdout.text()!
+    const items = completion_items(output, 1)
+    [
+      expect_status(0, ran.status)...
+      compare_text('helper', 'helper 3 () -> Int', completion_items_named(items, 'helper'))...
+      compare_text('imported alias', 'Couple 22 null', completion_items_named(items, 'Couple'))...
+      compare_text('unimported name', '', completion_items_named(items, 'Pair'))...
+      compare_text('sqrt', 'sqrt 3 (Float) -> Float', completion_items_named(items, 'sqrt'))...
+      compare_text('panic', 'panic 3 (String) -> never', completion_items_named(items, 'panic'))...
+      compare_text(
+        'shadowing builtin'
+        'print 3 (Int) -> Int'
+        completion_items_named(items, 'print')
+      )...
+      compare_text('later name', '', completion_items_named(items, 'later'))...
+      compare_text('response order', '0 1 end', response_ids(output).join(' '))...
+    ]
+
+const completion_coverage_check = ->
+  Check name: 'lerta lsp completes the same member and name contexts as the CLI reference', run: ->
+    const completion_text = (here: String) ->
+      [
+        "import './m' as m"
+        'struct Point(x: Int, y: Int)'
+        'struct Named(m: Int, Color: Int)'
+        'class Counter'
+        '  count = 0'
+        '  bump = -> @count += 1'
+        '  same = <T>(v: T) -> v'
+        'interface Shape'
+        '  area: () -> Int'
+        '  name: String'
+        'enum Color'
+        '  RED'
+        'extend Point'
+        '  sum = -> @x + @y'
+        'const _hidden = 1'
+        'const total = 1'
+        'const f = (p: Point, shape: Shape, r: { a: Int }, c: Counter, count: Int, n: Named) ->'
+        '  const local = 1'
+        '  if true'
+        "    const local = 'shadowing'"
+        here
+        '  const later = 2'
+        '  print local'
+        ''
+      ].join(
+        "\n"
+      )
+    const cases =
+      CompletionCase(
+        here: '    print p.'
+        character: 12
+        labels: ['x', 'y', 'equals', 'hash', 'sum']
+        holds: no_completion_labels
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print p.x'
+        character: 12
+        labels: ['x', 'y', 'equals', 'hash', 'sum']
+        holds: no_completion_labels
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print c.'
+        character: 12
+        labels: nil
+        holds: ['count', 'bump', 'same']
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print shape.'
+        character: 16
+        labels: ['area', 'name']
+        holds: no_completion_labels
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print r.'
+        character: 12
+        labels: nil
+        holds: ['a']
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print Color.'
+        character: 16
+        labels: ['RED', 'parse']
+        holds: no_completion_labels
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print m.'
+        character: 12
+        labels: ['helper', 'Shade']
+        holds: no_completion_labels
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print [1].'
+        character: 14
+        labels: nil
+        holds: ['length', 'push', 'pop', 'first', 'contains']
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print lo'
+        character: 12
+        labels: nil
+        holds: [
+          '_hidden', 'local', 'p', 'count', 'total', 'f', 'Point', 'Counter', 'Color', 'm', 'print',
+          'min'
+        ]
+        lacks: ['later', '__lerta_completion__', 'Point.sum', 'Shape', 'Stringable']
+        keywords: true
+      )
+      CompletionCase(
+        here: "    print '😀' + tot"
+        character: 20
+        labels: nil
+        holds: ['total']
+        lacks: no_completion_labels
+        keywords: true
+      )
+      CompletionCase(
+        here: "    print tot + 'é'"
+        character: 13
+        labels: nil
+        holds: ['total']
+        lacks: no_completion_labels
+        keywords: true
+      )
+      CompletionCase(
+        here: '    print m.Shade.'
+        character: 18
+        labels: ['DARK', 'parse']
+        holds: no_completion_labels
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print n.m.'
+        character: 14
+        labels: nil
+        holds: ['to_string', 'compare']
+        lacks: ['helper']
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print n.Color.'
+        character: 18
+        labels: nil
+        holds: ['to_string']
+        lacks: ['RED']
+        keywords: false
+      )
+      CompletionCase(
+        here: '    print 1 # m.'
+        character: 16
+        labels: no_completion_labels
+        holds: no_completion_labels
+        lacks: no_completion_labels
+        keywords: false
+      )
+      CompletionCase(
+        here: '    # tot', character: 9, labels: no_completion_labels, holds: no_completion_labels,
+        lacks: no_completion_labels, keywords: false
+      )
+    const dir = new_cli_dir('lsp-completion-coverage')
+    const path = "#{dir}/a.lerta"
+    await write_file(path, ''.binary)
+    await write_file(
+      "#{dir}/m.lerta"
+      "export const helper = -> 1\nexport enum Shade\n  DARK\nconst private_one = 2\n".binary
+    )
+    const uri = uri_of(path)
+    const other = uri_of("#{dir}/other.lerta")
+    const messages = [did_open(uri, completion_text('    print local'))]
+    for each, i in cases
+      messages.push did_change(uri, completion_text(each.here))
+      messages.push completion_request(uri, 20, each.character, 10 + i)
+    messages.push did_change(uri, completion_text('    print  lo'))
+    messages.push completion_request(uri, 20, 13, 97)
+    messages.push(
+      frame(
+        "{\"jsonrpc\":\"2.0\",\"id\":98,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+      )
+    )
+    messages.push completion_request(other, 0, 0, 99)
+    const ran = await session(dir, messages.join(''))
+    const output = ran.stdout.text()!
+    const keywords = await compiler_keywords()
+    const reasons: String[] = []
+    for each, i in cases
+      const items = completion_items(output, 10 + i)
+      const words = [item for item in items when item.kind == 14]
+      const expected_words: String[] = each.keywords then keywords else []
+      const actual_keyword_text = [completion_item_text(item) for item in words].join("\n")
+      const expected_keyword_text = ["#{word} 14 null" for word in expected_words].join("\n")
+      if actual_keyword_text != expected_keyword_text
+        reasons.push "unexpected keywords for #{each.here}"
+      const labels = [item.label for item in items when item.kind != 14]
+      if const expected = each.labels
+        if expected.join(' ') != labels.join(' ')
+          reasons.push "unexpected completion labels for #{each.here}: #{labels.join(' ')}"
+      for label in each.holds
+        reasons.push "missing completion #{label} for #{each.here}" if not labels.contains(label)
+      for label in each.lacks
+        reasons.push "unexpected completion #{label} for #{each.here}" if labels.contains(label)
+      const seen: String[] = []
+      for label in labels
+        if seen.contains(label)
+          reasons.push "duplicate completion label #{label} for #{each.here}"
+        else
+          seen.push label
+    const member_items = completion_items(output, 10)
+    const expected_member_items = "x 5 Int\nequals 2 (Point) -> Bool\nsum 2 null"
+    const named_items = completion_items(output, 18)
+    const expected_named_items =
+      "local 6 String\nf 3 null\nPoint 22 null\nCounter 7 null\nColor 13 null\nconst 14 null"
+    const expected_ids = ['0', ["#{10 + i}" for i in 0...cases.length]..., '97', '98', '99', 'end']
+    const formatting_response = response_body(output, 98)
+    const preserved = formatting_response.contains(
+      'print lo\n'
+    ) and not formatting_response.contains('__lerta_completion__')
+    [
+      expect_status(0, ran.status)...
+      reasons...
+      compare_text(
+        'member item kinds and types'
+        expected_member_items
+        [
+          completion_items_named(member_items, 'x')
+          completion_items_named(member_items, 'equals')
+          completion_items_named(member_items, 'sum')
+        ].join(
+          "\n"
+        )
+      )...
+      compare_text(
+        'completion item kinds and types'
+        expected_named_items
+        [
+          completion_items_named(named_items, 'local')
+          completion_items_named(named_items, 'f')
+          completion_items_named(named_items, 'Point')
+          completion_items_named(named_items, 'Counter')
+          completion_items_named(named_items, 'Color')
+          completion_items_named(named_items, 'const')
+        ].join(
+          "\n"
+        )
+      )...
+      compare_text('response order', expected_ids.join(' '), response_ids(output).join(' '))...
+      compare_text(
+        'completion of an unopened document'
+        '{"jsonrpc":"2.0","id":99,"result":[]}'
+        response_body(output, 99)
+      )...
+      check_reason(preserved, "formatting after completion returned #{formatting_response}")...
+      excludes(output, '__lerta_completion__', 'the probe name in published diagnostics')...
+    ]
+
+export const checks =
+  initialize_check()
+  error_request_check()
+  diagnostic_check()
+  diagnostic_lifecycle_check()
+  imported_diagnostic_check()
+  uri_import_check()
+  malformed_message_check()
+  lsp_input_errors_check()
+  empty_body_check()
+  formatting_check()
+  formatting_new_document_check()
+  shared_import_check()
+  changed_import_check()
+  close_unsaved_import_check()
+  hover_definition_check()
+  generic_hover_check()
+  definition_contexts_check()
+  hover_contexts_check()
+  optional_and_interpolation_check()
+  open_import_hover_check()
+  definitions_after_error_check()
+  imported_hover_definition_check()
+  extern_definition_check()
+  completion_check()
+  completion_names_check()
+  completion_enum_check()
+  completion_contexts_check()
+  completion_imports_check()
+  completion_coverage_check()

@@ -1,0 +1,60 @@
+# A Lerta program links with a C function given as source, IR, an object or an archive.
+import Check from '../lib/report'
+import compare_text from '../lib/expect'
+import compiler, root_dir from '../lib/lerta'
+import executable_suffix, expect_success, run_command, new_cli_dir from '../lib/cli'
+import read_file, write_file from 'std:io'
+
+const source_dir = "#{root_dir}/tests/extern/lib"
+const source = "#{source_dir}/twice.lerta"
+const c_source = "#{source_dir}/twice.c"
+
+const run_tool = (command: String, args: String[], cwd: String) ->
+  const ran = await run_command(command, args, cwd)
+  const reasons = expect_success(command, ran)
+  throw ValueError(message: reasons.join("\n")) if reasons.length > 0
+
+const compile_c = (kind: String, output: String, cwd: String) ->
+  const flags = kind == '.o' then ['-c'] else ['-S', '-emit-llvm']
+  await run_tool('clang', [flags..., c_source, '-o', output], cwd)
+  output
+
+const archive = (object: String, output: String, cwd: String) ->
+  await run_tool('ar', ['rcs', output, object], cwd)
+  output
+
+const input_file = (extension: String, name: String, cwd: String) ->
+  return c_source if extension == '.c'
+  const output = "#{cwd}/twice-#{name}#{extension}"
+  if extension == '.a'
+    const object = await compile_c('.o', "#{cwd}/twice-#{name}.o", cwd)
+    return await archive(object, output, cwd)
+  await compile_c(extension, output, cwd)
+
+const build_twice = (file: String, flags: String[], cwd: String, name: String) ->
+  const executable = "#{cwd}/#{name}#{executable_suffix}"
+  const built =
+    await run_command(compiler, ['build', source, file, '-o', executable, flags...], cwd)
+  const reasons = expect_success('build', built)
+  return reasons if reasons.length > 0
+  const ran = await run_command(executable, [], cwd)
+  [compare_text('stdout', "42\n", ran.stdout.text()!)..., expect_success('run', ran)...]
+
+const link_check = (extension: String, flags: String[]) ->
+  Check name: "lerta build <source> <file#{extension}> #{flags.join(' ')} links the file", run: ->
+    const dir = new_cli_dir("extern-#{extension}-#{flags.join('_')}")
+    const file = await input_file(extension, "input-#{flags.join('_')}", dir)
+    await build_twice(file, flags, dir, "twice-#{extension}-#{flags.join('_')}")
+
+const inputs = ['.c', '.o', '.ll', '.a']
+const optimizations: String[][] = [[], ['-O']]
+const relative_link_check = ->
+  Check name: 'lerta build links a file given by a relative path', run: ->
+    const dir = new_cli_dir('extern-relative')
+    await write_file("#{dir}/twice.c", await read_file(c_source))
+    await build_twice('twice.c', [], dir, 'twice-relative')
+
+export const checks: Check[] = []
+for extension in inputs
+  checks.push link_check(extension, flags) for flags in optimizations
+checks.push relative_link_check()

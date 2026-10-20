@@ -1,0 +1,409 @@
+# Runtime caches are isolated, complete, reused, and selected from the documented environment.
+import Check from '../lib/report'
+import compare_text from '../lib/expect'
+import compiler, root_dir from '../lib/lerta'
+import
+  CliRun, cli_work_dir, expect_left, expect_status, expect_success, host_platform, host_triple,
+  new_cli_dir, run_command, run_in_new_dir
+from '../lib/cli'
+import is_dir, list_dir, make_dir, read_file, remove_tree, stat, write_file from 'std:io'
+import process_id from 'std:process'
+
+const hello = "#{root_dir}/examples/hello.lerta"
+
+const check_reason = (condition: Bool, reason: String): String[] -> condition then [] else [reason]
+
+# A path as the compiler prints it, which joins its parts with one `/` where the work directory,
+# under a TMPDIR that ends in `/`, has two.
+const printed_path = (path: String) -> path.split('//').join('/')
+
+# What a cache holds but the linker's ThinLTO cache, which only optimized builds have.
+const runtimes_in = (cache: String) -> [entry for entry in list_dir(cache) when entry != 'thinlto']
+
+const is_hex_digit = (character: Char) ->
+  character.is_digit() or ('A' <= character and character <= 'F')
+
+const runtime_name_reasons = (name: String, kind: String) ->
+  const prefix = "runtime-#{kind}-#{host_triple}-clang"
+  const suffix = name.without_prefix(prefix) ? return [
+    "the cached runtime #{name} does not start with #{prefix}"
+  ]
+  const parts = suffix.split('-')
+  return ["the cached runtime #{name} has no clang version and hash"] if parts.length != 2
+  const version = parts[0]
+  const hash = parts[1]
+  [
+    check_reason(
+      version != '' and [character for character in version].all((character) ->
+        character.is_digit()
+      )
+      "the cached runtime #{name} has an invalid clang version"
+    )...
+    check_reason(
+      hash.binary.length == 8 and [character for character in hash].all(is_hex_digit)
+      "the cached runtime #{name} has an invalid hash"
+    )...
+  ]
+
+const runtime_file_names = ->
+  const runtime = [
+    "#{file.without_suffix('.c')!}.o"
+    for file in list_dir("#{root_dir}/runtime")
+    when file.ends_with('.c')
+  ]
+  const systems =
+    host_platform == 'windows' then ['all', 'windows'] else ['all', 'posix', host_platform]
+  const libuv_text = (await read_file("#{root_dir}/third_party/libuv.txt")).text()!
+  const libuv: String[] = []
+  for line in libuv_text.split("\n")
+    continue if line == '' or line.starts_with('#')
+    const fields = line.split(' ')
+    continue if fields.length != 3 or not systems.contains(fields[0])
+    continue if fields[1] != 'source' or not fields[2].ends_with('.c')
+    libuv.push "libuv-#{fields[2].without_suffix('.c')!.split('/').join('-')}.o"
+  [runtime..., libuv..., 'function_attributes.txt', 'coro_end_type.txt'].sorted((a, b) ->
+    a.compare b
+  )
+
+const thinlto_entries = (cache: String): String[] ->
+  const directory = "#{cache}/thinlto"
+  return [] if not is_dir(directory)
+  const entries: String[] = []
+  for entry in list_dir(directory)
+    continue if entry == 'llvmcache.timestamp'
+    const path = "#{directory}/#{entry}"
+    const details = stat(path) ? throw ValueError(message: "no ThinLTO cache entry: #{path}")
+    entries.push "#{entry} #{details.modified_time.to_fixed(9)}"
+  entries.sorted (a, b) -> a.compare(b)
+
+const build_in_cache = (cache: String, flags: String[]) ->
+  const env = Map<String, String>()
+  env['LERTA_CACHE_DIR'] = cache
+  await run_in_new_dir(compiler, ['build', hello, '-o', 'hello', flags...], ''.binary, env)
+
+const complete_runtime = (cache: String, name: String) ->
+  const dir = "#{cache}/#{name}"
+  const expected_files = await runtime_file_names()
+  const files = list_dir(dir)
+  const file_reasons = expect_left("the files of #{name}", expected_files, files)
+  return file_reasons if file_reasons.length > 0
+  const attributes = (await read_file("#{dir}/function_attributes.txt")).text()!
+  const coro_end_type = (await read_file("#{dir}/coro_end_type.txt")).text()!
+  [
+    check_reason(
+      attributes.contains('"target-cpu"=')
+      "no target-cpu in function_attributes.txt: #{attributes}"
+    )...
+    check_reason(
+      ['i1', 'void'].contains(coro_end_type)
+      "not a type in coro_end_type.txt: #{coro_end_type}"
+    )...
+  ]
+
+# The ID of a process that has ended, which the system is unlikely to give another so soon.
+const ended_process_id = ->
+  const dir = new_cli_dir("ended-process-#{next_ended_process}")
+  next_ended_process += 1
+  const program = "#{dir}/pid.lerta"
+  await write_file(program, "import process_id from 'std:process'\nprint process_id\n".binary)
+  const ran = await run_command(compiler, ['run', program], dir)
+  if ran.status != 0
+    throw ValueError(message: "the program could not report its process id: #{ran.stderr.text()!}")
+  ran.stdout.text()!.split("\n")[0]
+
+var next_ended_process = 0
+
+# The name of the runtime that a build with no flags caches, which only such a build tells, as the
+# shared cache also holds a debug runtime for `--target <host>`; one build finds it for every check.
+var plain_runtime_name: Promise<String>?
+
+const find_plain_runtime_name = ->
+  const cache = new_cli_dir('cache-plain')
+  const built = await build_in_cache(cache, [])
+  const reasons = expect_success('build', built.result)
+  throw ValueError(message: reasons[0]) if reasons.length > 0
+  const entries = runtimes_in(cache)
+  throw ValueError(message: "expected one cached runtime, found: #{entries}") if entries.length != 1
+  entries[0]
+
+const debug_runtime_name = ->
+  plain_runtime_name = find_plain_runtime_name() if plain_runtime_name == nil
+  await plain_runtime_name!
+
+const cached_runtime_check = (flags: String[], kind: String) ->
+  Check name: "lerta build #{flags.join(' ')} caches and reuses the #{kind} runtime", run: ->
+    const cache = new_cli_dir("cache-#{kind}")
+    const first = await build_in_cache(cache, flags)
+    const reasons = expect_success('build', first.result)
+    return reasons if reasons.length > 0
+    const entries = runtimes_in(cache)
+    return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
+    const name = entries[0]
+    const name_reasons = runtime_name_reasons(name, kind)
+    return name_reasons if name_reasons.length > 0
+    const incomplete = await complete_runtime(cache, name)
+    return incomplete if incomplete.length > 0
+    const optimized = thinlto_entries(cache)
+    if (kind == 'release') != (optimized.length > 0)
+      return ["#{flags.join(' ')} left the ThinLTO cache with: #{optimized}"]
+    const object = "#{cache}/#{name}/allocator.o"
+    const written = stat(object) ? throw ValueError(message: "no cached object: #{object}")
+    const second = await build_in_cache(cache, flags)
+    [
+      expect_success('second build', second.result)...
+      check_reason(
+        stat(object)!.modified_time == written.modified_time
+        'the second build recompiled the runtime'
+      )...
+      check_reason(
+        thinlto_entries(cache).join("\n") == optimized.join("\n")
+        'the second build optimized again'
+      )...
+      check_reason(runtimes_in(cache).length == 1, 'the second build changed the cache')...
+    ]
+
+const incomplete_runtime_check = (flags: String[], kind: String) ->
+  Check name: "lerta build reports an incomplete cached #{kind} runtime", run: ->
+    const cache = new_cli_dir("cache-incomplete-#{kind}")
+    const first = await build_in_cache(cache, flags)
+    const reasons = expect_success('build', first.result)
+    return reasons if reasons.length > 0
+    const entries = runtimes_in(cache)
+    return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
+    const dir = printed_path("#{cache}/#{entries[0]}")
+    await remove_tree("#{dir}/function_attributes.txt")
+    const second = await build_in_cache(cache, flags)
+    [
+      expect_status(1, second.result.status)...
+      compare_text(
+        'stderr'
+        "the cached runtime #{dir} is incomplete: remove it\n"
+        second.result.stderr.text()!
+      )...
+    ]
+
+const invalid_target_check = ->
+  Check name: 'lerta build rejects unsupported and path-like runtime targets', run: ->
+    const beside_cache = new_cli_dir('cache-invalid-path')
+    const path_target = await build_in_cache("#{beside_cache}/inner", ['--target', '../outside'])
+    const windows_path_cache = new_cli_dir('cache-invalid-windows-path')
+    const windows_path = await build_in_cache(windows_path_cache, ['--target', '..\outside'])
+    const unsupported_cache = new_cli_dir('cache-unsupported')
+    const unsupported =
+      await build_in_cache(unsupported_cache, ['--target', 'x86_64-unknown-freebsd'])
+    [
+      expect_status(1, path_target.result.status)...
+      compare_text('stderr', "not a target: ../outside\n", path_target.result.stderr.text()!)...
+      expect_status(1, windows_path.result.status)...
+      compare_text('stderr', "not a target: ..\\outside\n", windows_path.result.stderr.text()!)...
+      expect_status(1, unsupported.result.status)...
+      compare_text(
+        'stderr'
+        "not a target that the runtime is built for: x86_64-unknown-freebsd\n"
+        unsupported.result.stderr.text()!
+      )...
+      expect_left('files beside the cache', [], list_dir(beside_cache))...
+      check_reason(
+        runtimes_in(windows_path_cache).length == 0
+        'invalid target created a runtime cache'
+      )...
+      expect_left('files left in the cache', [], list_dir(unsupported_cache))...
+    ]
+
+const host_target_check = ->
+  Check name: 'lerta build caches a runtime named for the host target', run: ->
+    const cache = new_cli_dir('cache-host-target')
+    const ran = await build_in_cache(cache, ['--target', host_triple])
+    const reasons = expect_success('build', ran.result)
+    return reasons if reasons.length > 0
+    const entries = runtimes_in(cache)
+    return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
+    const name = entries[0]
+    [runtime_name_reasons(name, 'debug')..., await complete_runtime(cache, name)...]
+
+const cache_location_check = ->
+  Check name: 'lerta build uses XDG_CACHE_HOME and then HOME for its runtime cache', run: ->
+    return nil if host_platform == 'windows'
+    const xdg = new_cli_dir('cache-xdg-home')
+    const xdg_env = Map<String, String>()
+    xdg_env['LERTA_CACHE_DIR'] = ''
+    xdg_env['XDG_CACHE_HOME'] = xdg
+    const xdg_build =
+      await run_in_new_dir(compiler, ['build', hello, '-o', 'hello'], ''.binary, xdg_env)
+    const home = new_cli_dir('cache-home')
+    const home_env = Map<String, String>()
+    home_env['XDG_CACHE_HOME'] = ''
+    home_env['HOME'] = home
+    const home_build = await run_in_new_dir(
+      compiler
+      ['build', hello, '-o', 'hello']
+      ''.binary
+      home_env
+      ['LERTA_CACHE_DIR']
+    )
+    [
+      await one_cached_runtime('XDG cache build', xdg_build.result, "#{xdg}/lerta")...
+      await one_cached_runtime('HOME cache build', home_build.result, "#{home}/.cache/lerta")...
+    ]
+
+const one_cached_runtime = (what: String, built: CliRun, cache: String) ->
+  const reasons = expect_success(what, built)
+  return reasons if reasons.length > 0
+  const no_entries: String[] = []
+  const entries = is_dir(cache) then runtimes_in(cache) else no_entries
+  return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
+  [runtime_name_reasons(entries[0], 'debug')..., await complete_runtime(cache, entries[0])...]
+
+const no_cache_location_check = ->
+  Check name: 'lerta build reports when no cache location is available', run: ->
+    const cwd = new_cli_dir('cache-no-location')
+    const ran = await run_command(
+      compiler
+      ['build', hello, '-o', 'hello']
+      cwd
+      ''.binary
+      Map<String, String>()
+      ['HOME', 'XDG_CACHE_HOME', 'LOCALAPPDATA', 'LERTA_CACHE_DIR']
+    )
+    [
+      expect_status(1, ran.status)...
+      compare_text(
+        'stderr'
+        "no cache directory: set #{host_platform == 'windows' then 'LOCALAPPDATA' else 'HOME'} or LERTA_CACHE_DIR\n"
+        ran.stderr.text()!
+      )...
+    ]
+
+const cache_creation_failure_check = ->
+  Check name: 'lerta build reports when its cache directory cannot be made', run: ->
+    const file = "#{new_cli_dir('cache-blocker')}/file"
+    await write_file(file, ''.binary)
+    const blocked = "#{file}/cache"
+    const flags: String[] = []
+    const ran = await build_in_cache(blocked, flags)
+    [
+      expect_status(1, ran.result.status)...
+      compare_text(
+        'stderr'
+        "cannot make the cache directory: #{blocked}\n"
+        ran.result.stderr.text()!
+      )...
+    ]
+
+const concurrent_builds_check = ->
+  Check name: 'lerta builds started together leave one complete runtime in the cache', run: ->
+    const cache = new_cli_dir('cache-concurrent')
+    const env = Map<String, String>()
+    env['LERTA_CACHE_DIR'] = cache
+    const builds = [
+      run_in_new_dir(
+        compiler
+        ['build', hello, '-o', "#{cli_work_dir}/concurrent-#{i}"]
+        ''.binary
+        env
+      )
+      for i in 0...4
+    ]
+    const results = [await build for build in builds]
+    for ran in results
+      return expect_success('build', ran.result) if ran.result.status != 0
+    const entries = runtimes_in(cache)
+    return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
+    [runtime_name_reasons(entries[0], 'debug')..., await complete_runtime(cache, entries[0])...]
+
+const empty_runtime_directory_check = ->
+  Check name: 'lerta build fills an empty directory named for the runtime', run: ->
+    const cache = new_cli_dir('cache-empty-runtime')
+    const name = await debug_runtime_name()
+    make_dir "#{cache}/#{name}"
+    const built = await build_in_cache(cache, [])
+    const reasons = expect_success('build', built.result)
+    return reasons if reasons.length > 0
+    await complete_runtime(cache, name)
+
+const occupied_runtime_directory_check = ->
+  Check name: 'lerta build reports a runtime cache directory with other files', run: ->
+    const cache = new_cli_dir('cache-occupied-runtime')
+    const name = await debug_runtime_name()
+    const dir = printed_path("#{cache}/#{name}")
+    make_dir dir
+    await write_file("#{dir}/other", ''.binary)
+    const built = await build_in_cache(cache, [])
+    [
+      expect_status(1, built.result.status)...
+      compare_text(
+        'stderr'
+        "cannot move the compiled runtime into the cache: #{dir}\n"
+        built.result.stderr.text()!
+      )...
+    ]
+
+const abandoned_staging_check = ->
+  Check name: 'lerta build removes staging directories of killed builds', run: ->
+    const cache = new_cli_dir('cache-abandoned-staging')
+    const name = await debug_runtime_name()
+    const staging = (suffix: String) -> "#{name}.staging-#{suffix}"
+    const stale_id = await ended_process_id()
+    const kept =
+      staging("#{process_id}-lerta-running")
+      staging('lerta-other')
+      staging("-#{stale_id}-lerta-other")
+      "other.staging-#{stale_id}-lerta-other"
+    for entry in [staging("#{stale_id}-lerta-killed"), kept...]
+      make_dir "#{cache}/#{entry}"
+      await write_file("#{cache}/#{entry}/array.o", ''.binary)
+    const file = staging("#{stale_id}-file")
+    await write_file("#{cache}/#{file}", ''.binary)
+    const built = await build_in_cache(cache, [])
+    const reasons = expect_success('build', built.result)
+    return reasons if reasons.length > 0
+    const expected = [name, kept...].sorted((a, b) -> a.compare(b))
+    [
+      await complete_runtime(cache, name)...
+      expect_left('cache contents', expected, list_dir(cache))...
+    ]
+
+const unremovable_staging_check = ->
+  Check name: 'lerta build continues when a stale staging directory cannot be removed', run: ->
+    return nil if host_platform == 'windows'
+    const uid = await run_command('id', ['-u'], cli_work_dir)
+    return ["id -u failed: #{uid.stderr.text()!}"] if uid.status != 0
+    return nil if uid.stdout.text()!.split("\n")[0] == '0'
+    const cache = new_cli_dir('cache-unremovable-staging')
+    const name = await debug_runtime_name()
+    const staging = "#{cache}/#{name}.staging-#{await ended_process_id()}-lerta-killed"
+    const locked = "#{staging}/locked"
+    make_dir staging
+    make_dir locked
+    await write_file("#{locked}/array.o", ''.binary)
+    const restricted = await run_command('chmod', ['500', locked], cli_work_dir)
+    return ["chmod failed: #{restricted.stderr.text()!}"] if restricted.status != 0
+    const built =
+      try
+        await build_in_cache(cache, [])
+      finally
+        const restored = await run_command('chmod', ['700', locked], cli_work_dir)
+        if restored.status != 0
+          throw ValueError(message: "chmod could not restore #{locked}: #{restored.stderr.text()!}")
+    const reasons = expect_success('build', built.result)
+    return reasons if reasons.length > 0
+    [
+      check_reason(is_dir(locked), 'the unremovable staging directory was removed')...
+      await complete_runtime(cache, name)...
+    ]
+
+export const checks =
+  cached_runtime_check([], 'debug')
+  cached_runtime_check(['-O'], 'release')
+  incomplete_runtime_check([], 'debug')
+  incomplete_runtime_check(['-O'], 'release')
+  invalid_target_check()
+  host_target_check()
+  cache_location_check()
+  no_cache_location_check()
+  cache_creation_failure_check()
+  concurrent_builds_check()
+  empty_runtime_directory_check()
+  occupied_runtime_directory_check()
+  abandoned_staging_check()
+  unremovable_staging_check()

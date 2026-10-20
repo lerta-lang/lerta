@@ -1,0 +1,17 @@
+# Each standard module builds on its own, where its warnings are not hidden by an importer.
+import Check from '../lib/report'
+import compare_text from '../lib/expect'
+import compiler, root_dir from '../lib/lerta'
+import cli_work_dir, expect_success, run_command from '../lib/cli'
+import list_dir from 'std:io'
+
+const check = (file: String) ->
+  const module = "std:#{file.without_suffix('.lerta')!}"
+  const output = "#{cli_work_dir}/#{module.replace(':', '_')}"
+  Check name: "#{module} builds without warnings", run: ->
+    const built = await run_command(compiler, ['build', module, '-o', output, '-Werror'], root_dir)
+    return expect_success('build', built) if built.status != 0
+    compare_text 'stderr', '', built.stderr.text()!
+
+export const checks: Check[] =
+  [check(file) for file in list_dir("#{root_dir}/std") when file.ends_with('.lerta')]
