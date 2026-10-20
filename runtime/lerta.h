@@ -237,6 +237,11 @@ bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals eq
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
 LertaString *lerta_array_text(const LertaArray *array, LertaItemText text_of);
 LertaString *lerta_string_quoted(const LertaString *s);
+// The Char, a Unicode scalar value (at most 0x10FFFF and no surrogate), as the literal that
+// gives it, quoted as a String is. It is made in C, as calling Char's to_string for
+// lerta_array_text would need its symbol from std:builtins and a check of what Lerta code throws
+// when C calls it (see compiler/codegen/array_text.lerta).
+LertaString *lerta_char_text(uint32_t code);
 LertaString *lerta_bool_text(bool value);
 
 // Maps (map.c). Keys and values in are borrowed; values are passed through pointers to them. get

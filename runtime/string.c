@@ -222,6 +222,22 @@ static const char *escape_of(uint8_t byte) {
   }
 }
 
+LertaString *lerta_char_text(uint32_t code) {
+  // UTF-8: a lead byte that holds the high bits after the marks of the sequence's length, then a
+  // continuation byte of each 6 bits.
+  int64_t length = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  static const uint8_t marks[] = {0, 0, 0xC0, 0xE0, 0xF0};
+  LertaString *one = lerta_string_new(length);
+  for (int64_t i = length - 1; i > 0; i--) {
+    one->bytes[i] = (uint8_t)(0x80 | (code & 0x3F));
+    code >>= 6;
+  }
+  one->bytes[0] = (uint8_t)(marks[length] | code);
+  LertaString *quoted = lerta_string_quoted(one);
+  lerta_release(one);
+  return quoted;
+}
+
 // The string as a literal that gives it: '...' if that can hold it, as it has no escapes, and
 // otherwise "...", with escapes, a control character as \u{...}.
 LertaString *lerta_string_quoted(const LertaString *s) {
