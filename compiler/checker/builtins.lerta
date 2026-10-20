@@ -26,6 +26,7 @@ export enum BuiltinMember
   ITER_HAS_NEXT
   ITER_NEXT
   ENUM_TO_STRING
+  ENUM_TO_LITERAL
   WRAPPING_ADD
   WRAPPING_SUB
   WRAPPING_MUL
@@ -49,7 +50,7 @@ const method = (member: BuiltinMember, params: Type[], result: Type) ->
   BuiltinMethod member, type: FunctionType(params, result)
 
 # The method of a generic builtin type, an enum or an integer type by the name, if it has one: an
-# enum's to_string gives the member's text.
+# enum's to_string gives the member's text, and its to_literal the member as declared.
 export const builtin_method = (program: ProgramWide, receiver: Type, name: String) ->
   return equality_method(program, receiver, name) if name == 'equals' or name == 'hash'
   return value_method(program, receiver, name) if is_value_type(receiver)
@@ -81,7 +82,9 @@ const value_method = (program: ProgramWide, receiver: Type, name: String) ->
       return nil if not is_one_of_kinds(receiver, [INTEGER_KINDS..., FLOAT_KINDS..., 'Char'])
       method NUMBER_COMPARE, [receiver], ordering_type(program)
     else
-      return method(ENUM_TO_STRING, [], string_type) if receiver is EnumType and name == 'to_string'
+      if receiver is EnumType
+        return method(ENUM_TO_STRING, [], string_type) if name == 'to_string'
+        return method(ENUM_TO_LITERAL, [], string_type) if name == 'to_literal'
       return operator if const operator = operator_method(receiver, name)
       return char_method(name) if is_kind(receiver, 'Char')
       is_integer(receiver) then integer_method(receiver, name)

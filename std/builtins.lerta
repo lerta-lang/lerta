@@ -27,6 +27,11 @@ const MIN_INT = -9223372036854775808
 export interface Stringable
   to_string: () -> String
 
+# The types that have `to_literal()`, the text of the literal that gives the value, as an array's
+# text writes its items: `'a'` for a String, where `to_string()` gives `a`.
+export interface Literal
+  to_literal: () -> String
+
 # Stops the program at once, for a bug that no caller could handle (see docs/reference/errors.md).
 export extern lerta_panic_string as panic: (String) -> never
 
@@ -61,6 +66,7 @@ const print_stderr_line = (text: String) -> lerta_print_stderr(text + "\n")
 
 extend Float
   to_string = -> lerta_float_to_string(@)
+  to_literal = -> @to_string()
   # The Int of the value truncated toward zero, or nil where it is beyond an Int.
   to_int = (): Int? -> lerta_float_fits_int(@) then lerta_float_to_int(@)
   # The nearest Float32, or nil where that is an infinity.
@@ -85,13 +91,37 @@ extend Float
 
 extend Float32
   to_string = -> lerta_float32_to_string(@)
+  to_literal = -> @to_string()
   to_float = -> lerta_float32_to_float(@)
 
 extend Bool
   to_string = -> @ then 'true' else 'false'
+  to_literal = -> @to_string()
+
+extend Int
+  to_literal = -> @to_string()
+
+extend Int8
+  to_literal = -> @to_string()
+
+extend Int16
+  to_literal = -> @to_string()
+
+extend Int32
+  to_literal = -> @to_string()
+
+extend UInt16
+  to_literal = -> @to_string()
+
+extend UInt32
+  to_literal = -> @to_string()
+
+extend UInt64
+  to_literal = -> @to_string()
 
 # A byte's classes are those of the Char of the same number.
 extend Byte
+  to_literal = -> @to_string()
   is_digit = -> @to_char().is_digit()
   is_letter = -> @to_char().is_letter()
   is_space = -> @to_char().is_space()
@@ -99,6 +129,8 @@ extend Byte
 
 extend Char
   to_string = -> lerta_binary_as_string(utf8_of(@))
+  # Quoted as a String of the one Char is.
+  to_literal = -> @to_string().to_literal()
   # True only for ASCII characters: a digit, letter or space beyond them, as `０`, `é` or U+3000,
   # is in no class.
   is_digit = -> @ >= '0' and @ <= '9'
@@ -108,10 +140,43 @@ extend Char
   add = (count: Int) -> (@to_int() + count).to_char() ? throw not_a_char()
   sub = (count: Int) -> (@to_int() - count).to_char() ? throw not_a_char()
 
+const is_control = (c: Char) -> c.to_int() < 0x20 or c.to_int() == 0x7F
+
+# The escape of a Char in a "..." literal (see docs/reference/syntax.md), or nil if it needs none.
+const escape_in_double_quotes = (c: Char): String? ->
+  case c
+    when '\' then '\\'
+    when '"' then '\"'
+    when '#' then '\#'
+    when "\n" then '\n'
+    when "\t" then '\t'
+    when "\r" then '\r'
+    when "\0" then '\0'
+    else is_control(c) then "\\u{#{upper_hex(c.to_int())}}"
+
+const UPPER_HEX_DIGITS = '0123456789ABCDEF'.binary
+
+# The digits of a number below 256 in upper-case hex, without leading zeros.
+const upper_hex = (n: Int) ->
+  var hex = ''
+  hex += UPPER_HEX_DIGITS[n >> 4].to_char() if n >= 16
+  hex + UPPER_HEX_DIGITS[n & 0xF].to_char()
+
 const not_a_char = -> ValueError(message: 'not a Unicode scalar value')
 
 extend String
   to_string = -> @
+  # In single quotes, or, for a String that holds a single quote or a control character, in
+  # double quotes, with what they would take otherwise escaped.
+  to_literal = ->
+    return "'#{@}'" if not @any((c) -> c == "'" or is_control(c))
+    var literal = '"'
+    for c in @
+      if const escape = escape_in_double_quotes(c)
+        literal += escape
+      else
+        literal += c
+    literal + '"'
   # The Chars.
   iter = (): Iter<Char> ->
     const bytes = @binary
