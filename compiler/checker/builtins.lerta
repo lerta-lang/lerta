@@ -6,9 +6,9 @@ import operand_kinds, operator_of_method, SIGNED_KINDS from './operator'
 import ProgramWide from './shared'
 import
   ArrayType, bool_type, EnumType, FLOAT_KINDS, float_type, FunctionType, int_type, integer_bits,
-  INTEGER_KINDS, is_float, is_integer, is_kind, is_one_of_kinds, is_set, is_signed, IterType,
-  MapType, ObjectType, optional_type, OptionalType, PromiseType, SimpleType, string_type, TupleType,
-  Type, TypeKind, void_type
+  INTEGER_KINDS, is_integer, is_kind, is_one_of_kinds, is_set, is_signed, IterType, MapType,
+  ObjectType, optional_type, OptionalType, PromiseType, SimpleType, string_type, TupleType, Type,
+  TypeKind, void_type
 from '../types'
 
 # The builtin methods, which the checker resolves a name to once, so that codegen generates each
@@ -16,7 +16,6 @@ from '../types'
 export enum BuiltinMember
   ARRAY_PUSH
   ARRAY_POP
-  ARRAY_TO_STRING
   MAP_REMOVE
   MAP_KEYS
   MAP_ENTRIES
@@ -35,7 +34,6 @@ export enum BuiltinMember
   EQUALS
   HASH
   NUMBER_COMPARE
-  INTEGER_TO_STRING
   INTEGER_TO_FLOAT
   # A conversion to the integer type that the method's type gives (see integer_method).
   INTEGER_CONVERSION
@@ -102,7 +100,7 @@ export const ordering_type = (program: ProgramWide) ->
   program.shared[program.builtins!].enums['Ordering']!
 
 # `x.wrapping_add(y)` and so on, which wrap around where the operators throw; the conversions to
-# the integer types and to Float; and to_string.
+# the integer types and to Float.
 const integer_method = (receiver: Type, name: String) ->
   const wrapping: BuiltinMember? =
     case name
@@ -111,7 +109,6 @@ const integer_method = (receiver: Type, name: String) ->
       when 'wrapping_mul' then WRAPPING_MUL
       else nil
   return method(wrapping, [receiver], receiver) if wrapping
-  return method(INTEGER_TO_STRING, [], string_type) if name == 'to_string'
   return method(INTEGER_TO_FLOAT, [], float_type) if name == 'to_float'
   const kind = CONVERSIONS[name] ? return nil
   const target = SimpleType(kind)
@@ -143,14 +140,7 @@ const array_method = (element: Type, name: String) ->
   case name
     when 'push' then method(ARRAY_PUSH, [element], void_type)
     when 'pop' then method(ARRAY_POP, [], element)
-    when 'to_string' then is_text_item(element) then method(ARRAY_TO_STRING, [], string_type)
     else nil
-
-# An item type that the text of an array can show, as the compiler knows how to write it (see
-# codegen array_text); arrays of other items are Stringable only through an extend.
-const is_text_item = (item: Type): Bool ->
-  return is_text_item(item.element) if item is ArrayType
-  is_integer(item) or is_float(item) or is_one_of_kinds(item, ['String', 'Char', 'Bool', ENUM])
 
 const iter_method = (item: Type, name: String) ->
   case name

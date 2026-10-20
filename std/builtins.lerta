@@ -99,28 +99,51 @@ extend Bool
   to_literal = -> @to_string()
 
 extend Int
+  # The digits are taken from the value made negative, which can hold the minimum Int.
+  to_string = ->
+    var rest = @ < 0 then @ else -@
+    var digits = ''
+    while true
+      digits = digit_text(-(rest % 10)) + digits
+      rest /= 10
+      break if rest == 0
+    @ < 0 then '-' + digits else digits
   to_literal = -> @to_string()
 
 extend Int8
+  to_string = -> @to_int().to_string()
   to_literal = -> @to_string()
 
 extend Int16
+  to_string = -> @to_int().to_string()
   to_literal = -> @to_string()
 
 extend Int32
+  to_string = -> @to_int().to_string()
   to_literal = -> @to_string()
 
 extend UInt16
+  to_string = -> @to_int().to_string()
   to_literal = -> @to_string()
 
 extend UInt32
+  to_string = -> @to_int().to_string()
   to_literal = -> @to_string()
 
 extend UInt64
+  to_string = ->
+    var rest = @
+    var digits = ''
+    while true
+      digits = digit_text((rest % 10).to_int()!) + digits
+      rest /= 10
+      break if rest == 0
+    digits
   to_literal = -> @to_string()
 
 # A byte's classes are those of the Char of the same number.
 extend Byte
+  to_string = -> @to_int().to_string()
   to_literal = -> @to_string()
   is_digit = -> @to_char().is_digit()
   is_letter = -> @to_char().is_letter()
@@ -161,6 +184,11 @@ const upper_hex = (n: Int) ->
   var hex = ''
   hex += UPPER_HEX_DIGITS[n >> 4].to_char() if n >= 16
   hex + UPPER_HEX_DIGITS[n & 0xF].to_char()
+
+const ZERO: Char = '0'
+
+# The decimal digit of a number from 0 to 9.
+const digit_text = (digit: Int) -> (ZERO + digit).to_string()
 
 const not_a_char = -> ValueError(message: 'not a Unicode scalar value')
 
@@ -331,6 +359,11 @@ extend Byte[]
     var bytes = ''.binary
     bytes += byte for byte in @
     bytes
+
+# `[1, 2]`, with each item as the literal that gives it, `['a']`.
+extend<T: Literal> T[]
+  to_string = -> "[#{[item.to_literal() for item in @].join(', ')}]"
+  to_literal = -> @to_string()
 
 extend<T> T[]
   # The items, read as the Iter is.
