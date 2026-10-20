@@ -177,10 +177,8 @@ bool lerta_float_fits_float32(double value);
 float lerta_float_to_float32(double value);
 double lerta_float32_to_float(float value);
 
-// std:math's sqrt, pow and remainder, which throw where libm's result would not be finite.
-double lerta_math_sqrt(double x);
+// std:math's pow, which throws where libm's result would not be finite.
 double lerta_math_pow(double x, double y);
-double lerta_math_remainder(double x, double y);
 
 // Whether the value truncated toward zero fits in an Int, which only then is it converted to.
 bool lerta_float_fits_int(double value);
@@ -199,19 +197,10 @@ uint64_t lerta_string_hash(const LertaString *s);
 // The place of `text` among an enum's `count` member texts, or -1 if none has it (`E.parse`).
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);
 
-// Binary (binary.c): the same representation as String, without the UTF-8 guarantee. An index or
-// a slice out of range throws.
+// Binary (binary.c): the same representation as String, without the UTF-8 guarantee. An index out
+// of range throws.
 int64_t lerta_binary_length(const LertaString *binary);
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
-LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
-// The place of the first occurrence of `part`, which is not empty, at `from` (not negative) or
-// after, or -1 if there is none.
-int64_t lerta_binary_find(const LertaString *binary, const LertaString *part, int64_t from);
-// UTF-8, which builtins reads through these, so that its rules are written once. The number of
-// bytes of the sequence that `lead` starts, or 0 if it cannot start one.
-int64_t lerta_utf8_sequence_length(uint8_t lead);
-bool lerta_is_utf8_continuation(uint8_t byte);
-bool lerta_is_utf8(const LertaString *binary);
 // The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
 LertaString *lerta_binary_as_string(LertaString *binary);
 
