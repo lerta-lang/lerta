@@ -103,8 +103,6 @@ typedef enum {
 // The hash and the equality of two items of a type that compares by its contents.
 typedef uint64_t (*LertaHash)(int64_t item);
 typedef bool (*LertaEquals)(int64_t a, int64_t b);
-// The text of an item, owned, as `to_string` of an array gives each (see lerta_array_text).
-typedef LertaString *(*LertaItemText)(int64_t item);
 
 // See docs/internals.md#maps.
 typedef struct {
@@ -161,8 +159,6 @@ void lerta_weak_detach(void **slot);
 
 // Strings (string.c). Also the constructors of Binary values, which share the representation.
 LertaString *lerta_string_from_bytes(const void *bytes, int64_t length);
-LertaString *lerta_int_to_string(int64_t n);
-LertaString *lerta_uint64_to_string(uint64_t n);
 // The bits of the double that a float literal's text, such as `1.5e3`, rounds to, which the
 // compiler writes into the IR and String.parse_float reads back; -1, the bits of a NaN, which no
 // finite double has, if it is too large to be finite.
@@ -235,14 +231,6 @@ uint8_t *lerta_array_pushed_items(LertaArray *array);
 // Whether two arrays hold equal items in the same order, and a hash of the items in order.
 bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals);
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
-LertaString *lerta_array_text(const LertaArray *array, LertaItemText text_of);
-LertaString *lerta_string_quoted(const LertaString *s);
-// The Char, a Unicode scalar value (at most 0x10FFFF and no surrogate), as the literal that
-// gives it, quoted as a String is. It is made in C, as calling Char's to_string for
-// lerta_array_text would need its symbol from std:builtins and a check of what Lerta code throws
-// when C calls it (see compiler/codegen/array_text.lerta).
-LertaString *lerta_char_text(uint32_t code);
-LertaString *lerta_bool_text(bool value);
 
 // Maps (map.c). Keys and values in are borrowed; values are passed through pointers to them. get
 // returns whether the key is there, and writes its value owned (zeros otherwise); keys returns

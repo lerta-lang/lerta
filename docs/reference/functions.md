@@ -130,7 +130,7 @@ const xs = empty<String>()
 ## C functions
 
 ```
-extern lerta_int_to_string as text_of: (Int) -> String
+extern lerta_float_to_string as text_of: (Float) -> String
 export extern lerta_rename as rename: (String, String) -> void
 ```
 

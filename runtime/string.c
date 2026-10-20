@@ -30,23 +30,6 @@ LertaString *lerta_string_from_bytes(const void *bytes, int64_t length) {
   return s;
 }
 
-LertaString *lerta_int_to_string(int64_t n) {
-  uint8_t text[LERTA_INT_TEXT_MAX];
-  int64_t start = lerta_format_int(n, text);
-  return lerta_string_from_bytes(text + start, LERTA_INT_TEXT_MAX - start);
-}
-
-// A UInt64, whose values above the largest Int an Int's text would show as negative.
-LertaString *lerta_uint64_to_string(uint64_t n) {
-  uint8_t text[LERTA_INT_TEXT_MAX];
-  int64_t start = LERTA_INT_TEXT_MAX;
-  do {
-    text[--start] = (uint8_t)('0' + n % 10);
-    n /= 10;
-  } while (n != 0);
-  return lerta_string_from_bytes(text + start, LERTA_INT_TEXT_MAX - start);
-}
-
 LertaString *lerta_string_concat(int64_t count, ...) {
   va_list args;
   va_start(args, count);
@@ -196,81 +179,3 @@ bool lerta_float_fits_int(double value) {
 
 // C's conversion of a value that does not fit is undefined.
 int64_t lerta_float_to_int(double value) { return (int64_t)value; }
-
-LERTA_STATIC_STRING(true_text, "true");
-LERTA_STATIC_STRING(false_text, "false");
-
-// Immortal, so that the caller's release of it does nothing.
-LertaString *lerta_bool_text(bool value) {
-  const void *text = value ? (const void *)&true_text : (const void *)&false_text;
-  return (LertaString *)(intptr_t)text;
-}
-
-static bool is_control(uint8_t byte) { return byte < 0x20 || byte == 0x7F; }
-
-// The escape of a byte in a "..." literal (see docs/reference/syntax.md), or NULL if it needs none.
-static const char *escape_of(uint8_t byte) {
-  switch (byte) {
-    case '\\': return "\\\\";
-    case '"': return "\\\"";
-    case '#': return "\\#";
-    case '\n': return "\\n";
-    case '\t': return "\\t";
-    case '\r': return "\\r";
-    case '\0': return "\\0";
-    default: return NULL;
-  }
-}
-
-LertaString *lerta_char_text(uint32_t code) {
-  // UTF-8: a lead byte that holds the high bits after the marks of the sequence's length, then a
-  // continuation byte of each 6 bits.
-  int64_t length = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
-  static const uint8_t marks[] = {0, 0, 0xC0, 0xE0, 0xF0};
-  LertaString *one = lerta_string_new(length);
-  for (int64_t i = length - 1; i > 0; i--) {
-    one->bytes[i] = (uint8_t)(0x80 | (code & 0x3F));
-    code >>= 6;
-  }
-  one->bytes[0] = (uint8_t)(marks[length] | code);
-  LertaString *quoted = lerta_string_quoted(one);
-  lerta_release(one);
-  return quoted;
-}
-
-// The string as a literal that gives it: '...' if that can hold it, as it has no escapes, and
-// otherwise "...", with escapes, a control character as \u{...}.
-LertaString *lerta_string_quoted(const LertaString *s) {
-  bool plain = true;
-  for (int64_t i = 0; i < s->length; i++) {
-    if (s->bytes[i] == '\'' || is_control(s->bytes[i])) plain = false;
-  }
-  if (plain) {
-    LertaString *result = lerta_string_new(s->length + 2);
-    result->bytes[0] = '\'';
-    memcpy(result->bytes + 1, s->bytes, (size_t)s->length);
-    result->bytes[s->length + 1] = '\'';
-    return result;
-  }
-  // Each byte takes at most 7 bytes, as \u{7F}.
-  char *buffer = lerta_mem_alloc(s->length * 7 + 2);
-  int64_t length = 0;
-  buffer[length++] = '"';
-  for (int64_t i = 0; i < s->length; i++) {
-    uint8_t byte = s->bytes[i];
-    const char *escape = escape_of(byte);
-    if (escape) {
-      size_t size = strlen(escape);
-      memcpy(buffer + length, escape, size);
-      length += (int64_t)size;
-    } else if (is_control(byte)) {
-      length += (int64_t)snprintf(buffer + length, 8, "\\u{%X}", byte);
-    } else {
-      buffer[length++] = (char)byte;
-    }
-  }
-  buffer[length++] = '"';
-  LertaString *result = lerta_string_from_bytes(buffer, length);
-  lerta_mem_free(buffer);
-  return result;
-}
