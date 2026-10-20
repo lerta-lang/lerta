@@ -21,6 +21,8 @@ export struct BuildRequest
   linked_files: String[]
   output: String?
   optimize: Bool
+  # `--memory-checks`, or no `-O`: the program checks for leaks and for the use of dropped objects.
+  memory_checks: Bool
   target: String?
   # `-Werror`: a warning stops the build, as an error does.
   warnings_as_errors: Bool
@@ -66,13 +68,13 @@ const reject_input_as_output = (request: BuildRequest, program: ProgramWide) ->
 const build_in_dir = (
   request: BuildRequest, program: ProgramWide, dir: String, run_args: String[]?
 ) ->
-  const runtime = await cached_runtime(request.optimize, request.target, dir) ? return 1
+  const { optimize, memory_checks, target } = request
+  const runtime = await cached_runtime(optimize, memory_checks, target, dir) ? return 1
   const { function_attributes, coro_end_type } = runtime
   const { traces, source_lines } = request
-  const { optimize } = request
   const modules =
     generate(program, function_attributes, coro_end_type, true, traces, source_lines, optimize)
-  const flags = build_flags(request.optimize, request.target)
+  const flags = build_flags(optimize, memory_checks, target)
   const objects = await compile_modules(modules, flags, dir) ? return 1
   const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
   # libm, which runtime/math.c calls, is apart from libc on Linux; elsewhere -lm links nothing more.

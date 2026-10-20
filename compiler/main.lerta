@@ -16,10 +16,10 @@ import read_entry_source, SOURCE_EXTENSION from './source'
 import dump_tokens from './token_dump'
 
 const USAGE =
-  "usage: lerta build <source> [<file>...] [-o <output>] [-O] [-Werror] [--no-trace]\n"
-  "                   [--source-lines] [--target <triple>]\n"
-  "       lerta run <source> [<file>...] [-O] [-Werror] [--no-trace] [--source-lines]\n"
-  "                 [-- <arg>...]\n"
+  "usage: lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror]\n"
+  "                   [--no-trace] [--source-lines] [--target <triple>]\n"
+  "       lerta run <source> [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace]\n"
+  "                 [--source-lines] [-- <arg>...]\n"
   "       lerta fmt [--fix] <path>...\n"
   "       lerta lsp\n"
   "       lerta dump-tokens <source>\n"
@@ -51,6 +51,7 @@ const parse_build_arguments = (args: String[]) ->
   var output: String?
   var target: String?
   var optimize = false
+  var memory_checks = false
   var warnings_as_errors = false
   var traces = true
   var source_lines = false
@@ -67,6 +68,9 @@ const parse_build_arguments = (args: String[]) ->
       when '-O'
         fail_usage() if optimize
         optimize = true
+      when '--memory-checks'
+        fail_usage() if memory_checks
+        memory_checks = true
       when '-Werror'
         fail_usage() if warnings_as_errors
         warnings_as_errors = true
@@ -91,19 +95,29 @@ const parse_build_arguments = (args: String[]) ->
     i += 1
   const given_source = source ? fail_usage()
   {
-    source: given_source, linked_files, output, target, optimize, warnings_as_errors, traces,
-    source_lines, program_args
+    source: given_source
+    linked_files
+    output
+    target
+    optimize
+    memory_checks: memory_checks or not optimize
+    warnings_as_errors
+    traces
+    source_lines
+    program_args
   }
 
 const build_command = (args: String[]) ->
   const parsed = parse_build_arguments(args)
-  const { source, linked_files, output, target, optimize, warnings_as_errors, traces } = parsed
+  const { source, linked_files, output, target, optimize, memory_checks } = parsed
+  const { warnings_as_errors, traces } = parsed
   fail_usage() if parsed.program_args != nil
   const executable = output ? default_output(source, target)
   const request = BuildRequest(
     source
     linked_files
     optimize
+    memory_checks
     target
     warnings_as_errors
     traces
@@ -115,12 +129,14 @@ const build_command = (args: String[]) ->
 # The program is built in the temporary directory, for the host.
 const run_command = (args: String[]) ->
   const parsed = parse_build_arguments(args)
-  const { source, linked_files, output, target, optimize, warnings_as_errors, traces } = parsed
+  const { source, linked_files, output, target, optimize, memory_checks } = parsed
+  const { warnings_as_errors, traces } = parsed
   fail_usage() if output != nil or target != nil
   const request = BuildRequest(
     source
     linked_files
     optimize
+    memory_checks
     target
     output
     warnings_as_errors

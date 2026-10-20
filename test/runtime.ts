@@ -36,8 +36,8 @@ execFileSync(
 )
 const libuv_objects = readdirSync(libuv_objects_dir).map((file) => join(libuv_objects_dir, file))
 
-// The flags of optimization_flags in compiler/clang_flags.lerta, which the compiler cannot apply
-// to C alone.
+// The flags of build_flags in compiler/clang_flags.lerta, for a build with -O or without it and its
+// default memory checks, which the compiler cannot apply to C alone.
 const runtime_clang_args = (optimize: boolean): string[] => [
   ...(optimize ? ['-O2', '-flto'] : ['-D', 'LERTA_DEBUG']),
   `-I${join(libuv_dir, 'include')}`,
