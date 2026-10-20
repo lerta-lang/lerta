@@ -72,17 +72,22 @@ export class JsonReader
     @skip_space()
     @fail_expected 'a String' if @peek() != '"'
     @at += 1
-    const bytes: Byte[] = []
+    # The bytes from `start` up to an escape or the end need no change, and are taken whole.
+    var text = ''
+    var start = @at
     while @peek() ? @fail('a string that does not end') != '"'
       const byte = @bytes[@at]
-      @at += 1
       @fail "a control character in a string, #{byte_text(byte)}" if byte < 0x20
       if byte == '\'
-        @read_escape bytes
+        text += @bytes.text(start, @at)!
+        @at += 1
+        text += @read_escape()
+        start = @at
       else
-        bytes.push byte
+        @at += 1
+    text += @bytes.text(start, @at)!
     @at += 1
-    bytes.to_binary().text()!
+    text
 
   # Reads `[` of an array, whose items next_item then starts.
   begin_array = (): void -> @begin('[', 'an array')
@@ -199,15 +204,13 @@ export class JsonReader
     @at += literal.binary.length
     true
 
-  # Reads the escape after a backslash in a string, into its bytes.
-  read_escape = (bytes: Byte[]) ->
+  # Reads the escape after a backslash in a string, as the Char it gives.
+  read_escape = (): Char ->
     const byte = @peek() ? @fail('a string that does not end')
     @at += 1
-    if byte == 'u'
-      bytes.push unit for unit in @read_escaped_char().to_string().binary
-      return
+    return @read_escaped_char() if byte == 'u'
     const escaped = unescaped(byte) ? @fail("an escape that is not JSON, \\#{byte_text(byte)}")
-    bytes.push escaped
+    escaped.to_char()
 
   # A surrogate pair is one Char, written as two escapes.
   read_escaped_char = ->
