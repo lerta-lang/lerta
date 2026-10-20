@@ -124,26 +124,6 @@ void lerta_array_take_last(LertaArray *array, void *item) {
   memcpy(item, item_at(array, array->length), (size_t)lerta_item_size(array->item_kind));
 }
 
-LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator) {
-  int64_t length = 0;
-  for (int64_t i = 0; i < strings->length; i++) {
-    length += ((const LertaString *)(intptr_t)lerta_word_item(strings, i))->length;
-  }
-  if (strings->length > 0) length += separator->length * (strings->length - 1);
-  LertaString *result = lerta_string_new(length);
-  int64_t offset = 0;
-  for (int64_t i = 0; i < strings->length; i++) {
-    if (i > 0) {
-      memcpy(result->bytes + offset, separator->bytes, (size_t)separator->length);
-      offset += separator->length;
-    }
-    const LertaString *part = (const LertaString *)(intptr_t)lerta_word_item(strings, i);
-    memcpy(result->bytes + offset, part->bytes, (size_t)part->length);
-    offset += part->length;
-  }
-  return result;
-}
-
 // `[a, b]`, of the texts of the items.
 LertaString *lerta_array_text(const LertaArray *array, LertaItemText text_of) {
   int64_t count = array->length;

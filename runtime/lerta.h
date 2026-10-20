@@ -208,7 +208,6 @@ int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const L
 int64_t lerta_binary_length(const LertaString *binary);
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
-LertaString *lerta_binary_from_bytes(const LertaArray *bytes);
 // The place of the first occurrence of `part`, which is not empty, at `from` (not negative) or
 // after, or -1 if there is none.
 int64_t lerta_binary_find(const LertaString *binary, const LertaString *part, int64_t from);
@@ -236,7 +235,6 @@ uint8_t *lerta_array_pushed_items(LertaArray *array);
 // Whether two arrays hold equal items in the same order, and a hash of the items in order.
 bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals);
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
-LertaString *lerta_string_join(const LertaArray *strings, const LertaString *separator);
 LertaString *lerta_array_text(const LertaArray *array, LertaItemText text_of);
 LertaString *lerta_string_quoted(const LertaString *s);
 LertaString *lerta_bool_text(bool value);

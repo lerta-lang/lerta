@@ -32,12 +32,6 @@ int64_t lerta_binary_find(const LertaString *binary, const LertaString *part, in
   return -1;
 }
 
-LertaString *lerta_binary_from_bytes(const LertaArray *bytes) {
-  LertaString *binary = lerta_string_new(bytes->length);
-  for (int64_t i = 0; i < bytes->length; i++) binary->bytes[i] = (uint8_t)lerta_word_item(bytes, i);
-  return binary;
-}
-
 int64_t lerta_utf8_sequence_length(uint8_t lead) {
   if (lead < 0x80) return 1;
   if (lead >= 0xC2 && lead <= 0xDF) return 2;
