@@ -90,9 +90,9 @@ make clean
 
 Every language feature gets run tests in `tests/`: a Lerta source file and its expected output, as described at the top of `test/run.lerta`. Programs in `examples/` are run as tests too.
 
-The run tests' harness is written in Lerta: `test/run.lerta`, with its modules in `test/lib/`, which minilerta builds into `build/test_run`, as it builds `tools/embed.lerta`, so that a change to `compiler/` cannot break the harness that tests it. `build/test_run --target <triple>` builds the tests for another target. Its modules are `lerta` (where the repository and the compiler are, running it, and caching the runtimes before the tests), `report` (running and reporting checks), `expect` (what checks expect of the programs they run), `target` (`--target`), `wine` (running Windows programs under Wine) and `cli` (running the compiler for the CLI checks in directories of their own).
+The run tests' harness is written in Lerta: `test/run.lerta`, with its modules in `test/lib/`, which minilerta builds into `build/test_run`, as it builds `tools/embed.lerta`, so that a change to `compiler/` cannot break the harness that tests it. `build/test_run --target <triple>` builds the tests for another target. Its modules are `lerta` (where the repository and the compiler are, running it, and caching the runtimes before the tests), `report` (running and reporting checks), `expect` (what checks expect of the programs they run), `target` (`--target`) and `wine` (running Windows programs under Wine).
 
-The CLI checks have a Lerta harness, `test/cli.lerta`, with its checks in `test/cli/*.lerta`; minilerta builds it as `build/test_cli`.
+The CLI checks have a Lerta harness, `test/cli.lerta`, with its checks in `test/cli/*.lerta`; minilerta builds it as `build/test_cli`. It also has the modules `cli` (running the compiler in directories of its own) and `lsp` (sessions with the language server).
 
 The other test scripts, in `test/`, are TypeScript that Node.js runs directly, with no build step, at a low priority (`nice`):
 
