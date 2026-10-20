@@ -15,7 +15,6 @@ extern lerta_float32_to_float: (Float32) -> Float
 # The bits of the double that a decimal text rounds to, or -1 if it is too large to be finite.
 extern lerta_float_literal_bits: (String) -> Int
 extern lerta_float_from_bits: (Int) -> Float
-extern lerta_string_compare: (String, String) -> Int
 
 const MIN_INT = -9223372036854775808
 
@@ -257,7 +256,12 @@ extend String
     @starts_with(prefix) then @binary.text(prefix.binary.length)!
   without_suffix = (suffix: String): String? ->
     @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)!
-  compare = (other: String) -> lerta_string_compare(@, other).compare(0)
+  # By the first byte that differs, or else by length, so that a prefix goes first.
+  compare = (other: String) ->
+    const (bytes, other_bytes) = (@binary, other.binary)
+    for i in 0...min(bytes.length, other_bytes.length)
+      return bytes[i].compare(other_bytes[i]) if bytes[i] != other_bytes[i]
+    bytes.length.compare other_bytes.length
   # The empty String occurs in every one; index_of takes no empty part.
   contains = (part: String) -> part == '' or index_of(@binary, part.binary, 0) >= 0
   # Without the whitespace at both ends: the ASCII spaces of Byte.is_space, which no byte of a

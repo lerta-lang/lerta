@@ -12,14 +12,13 @@ import emit_own_compare, GREATER, LESS from './comparison_methods'
 import emit_equals_by_contents, emit_value_equals from './equality'
 import Generator from './generator'
 import emit_branch, IrBuilder from './ir_builder'
-import call_runtime from './runtime_calls'
 import emit_release, emit_retain, ir_type from './lerta_ir'
 import emit_is_nil, emit_is_present, emit_unwrap from './optional'
 import emit_concat, emit_equals, emit_extend, emit_string_equals from './string'
 import throw_if, UNWRAPPED_NIL from './runtime_errors'
 import
-  inner_of, is_float, is_identity_type, is_integer, is_kind, is_one_of_kinds, is_reference_type,
-  is_signed, OptionalType, Type
+  inner_of, is_float, is_identity_type, is_integer, is_one_of_kinds, is_reference_type, is_signed,
+  OptionalType, Type
 from '../types'
 
 # The predicates of `icmp` for the comparisons of signed integers; unsigned ones, as Byte, are
@@ -60,6 +59,8 @@ export const appended = (g: Generator, operand: Expression) ->
 # type_of_operator_call).
 export const generate_binary = (g: Generator, binary: BinaryOperation) ->
   return generate(g, call) if const call = g.facts.operator_calls[binary]
+  if const call = g.facts.order_calls[binary]
+    return emit_order_test(g.ir, binary.operator, generate(g, call))
   const operator = binary.operator
   return generate_logical(g, binary) if operator == 'and' or operator == 'or'
   return generate_nil_test(g, binary) if is_nil_test(binary)
@@ -88,11 +89,6 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
     return negate_if_unequal(g, operator, released(equal))
   if operand_type is OptionalType
     return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
-  if is_kind(operand_type, 'String') and not is_equality(operator)
-    const args = "ptr #{left}, ptr #{right}"
-    const sign = call_runtime(g.ir, 'i64 @lerta_string_compare(ptr, ptr)', args)
-    const predicate = SIGNED_PREDICATES[operator]!
-    return released(g.ir.assign("icmp #{predicate} i64 #{sign}, 0"))
   if is_one_of_kinds(operand_type, ['String', 'Binary'])
     return negate_if_unequal(g, operator, emit_equals(g.ir, left, right))
   return apply_numeric(g, operator, left, right, operand_type) if is_numeric_operator(operator)

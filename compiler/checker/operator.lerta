@@ -133,7 +133,8 @@ export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Ty
   const allowed = operand_kinds(operator)
   const reject = (type: Type) -> "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if not is_numeric_operator(operator)
-    type_of_operands body, binary, nil, allowed, reject
+    const type = type_of_operands(body, binary, nil, allowed, reject)
+    order_by_compare body, binary if is_kind(type, 'String')
     return bool_type
   type_of_operands body, binary, hint_of(expected, allowed), allowed, reject
 
@@ -205,6 +206,17 @@ const type_of_operands = (
   reject_text_and_bytes body, second, type, second_type
   require_type body, second, second_type, type
   type
+
+# `<` and the like of two Strings test the Ordering of the left one's compare, by the call of it,
+# which the facts record for codegen to generate in place of the operation (see order_calls).
+const order_by_compare = (body: Body, binary: BinaryOperation) ->
+  const at = binary.position
+  const callee =
+    Member(object: binary.left, name: Identifier(name: 'compare', position: at), position: at)
+  const call =
+    Call(callee: callee, args: [binary.right], named_args: [], type_args: [], position: at)
+  body.facts.order_calls[binary] = call
+  type_of body, call
 
 # `+` appends a Char to a String, as the text of the call of its `to_string()`, which the facts
 # record for codegen to generate in its place (see appended_texts), and a Byte to a Binary.
