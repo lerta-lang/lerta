@@ -1,12 +1,8 @@
 # See docs/reference/builtins.md and docs/internals.md#builtins.
-import char_at, sequence_length, utf8_of from './internal/utf8'
+import char_at, is_continuation, is_utf8, sequence_length, utf8_of from './internal/utf8'
 # Writes at once, unlike std:io's Writer (see runtime/io.c).
 extern lerta_print_stdout: (String) -> void
 extern lerta_print_stderr: (String) -> void
-extern lerta_binary_slice: (Binary, Int, Int) -> Binary
-extern lerta_binary_find: (Binary, Binary, Int) -> Int
-extern lerta_is_utf8: (Binary) -> Bool
-extern lerta_is_utf8_continuation: (Byte) -> Bool
 # The same object as a String, for bytes that are valid UTF-8.
 extern lerta_binary_as_string: (Binary) -> String
 extern lerta_float_to_string: (Float) -> String
@@ -148,7 +144,7 @@ extend Byte
   is_digit = -> @to_char().is_digit()
   is_letter = -> @to_char().is_letter()
   is_space = -> @to_char().is_space()
-  is_utf8_continuation = -> lerta_is_utf8_continuation(@)
+  is_utf8_continuation = -> is_continuation(@)
 
 extend Char
   to_string = -> lerta_binary_as_string(utf8_of(@))
@@ -189,6 +185,12 @@ const ZERO: Char = '0'
 
 # The decimal digit of a number from 0 to 9.
 const digit_text = (digit: Int) -> (ZERO + digit).to_string()
+
+# The place of the first occurrence of `part`, which is not empty, at `from` or after it, or -1.
+const index_of = (bytes: Binary, part: Binary, from: Int) ->
+  for i in from...max(from, bytes.length - part.length + 1)
+    return i if bytes.occurs_at(i, part)
+  -1
 
 const not_a_char = -> ValueError(message: 'not a Unicode scalar value')
 
@@ -241,11 +243,11 @@ extend String
     const separator_bytes = separator.binary
     const pieces: String[] = []
     var start = 0
-    var found = lerta_binary_find(bytes, separator_bytes, 0)
+    var found = index_of(bytes, separator_bytes, 0)
     while found >= 0
       pieces.push lerta_binary_as_string(bytes.slice(start, found))
       start = found + separator_bytes.length
-      found = lerta_binary_find(bytes, separator_bytes, start)
+      found = index_of(bytes, separator_bytes, start)
     pieces.push lerta_binary_as_string(bytes.slice(start, bytes.length))
     pieces
   starts_with = (prefix: String) -> @binary.occurs_at(0, prefix.binary)
@@ -256,8 +258,8 @@ extend String
   without_suffix = (suffix: String): String? ->
     @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)!
   compare = (other: String) -> lerta_string_compare(@, other).compare(0)
-  # The empty String occurs in every one; lerta_binary_find takes no empty part.
-  contains = (part: String) -> part == '' or lerta_binary_find(@binary, part.binary, 0) >= 0
+  # The empty String occurs in every one; index_of takes no empty part.
+  contains = (part: String) -> part == '' or index_of(@binary, part.binary, 0) >= 0
   # Without the whitespace at both ends: the ASCII spaces of Byte.is_space, which no byte of a
   # multi-byte character is, so that what is left is valid UTF-8.
   trim = ->
@@ -306,7 +308,7 @@ extend String
   split_once = (separator: String): (String, String)? ->
     throw ValueError(message: 'split by an empty separator') if separator == ''
     const bytes = @binary
-    const found = lerta_binary_find(bytes, separator.binary, 0)
+    const found = index_of(bytes, separator.binary, 0)
     return nil if found < 0
     const before = lerta_binary_as_string(bytes.slice(0, found))
     const after = found + separator.binary.length
@@ -315,7 +317,12 @@ extend String
 extend Binary
   # The bytes, read as the Iter is.
   iter = (): Iter<Byte> -> (b for b in @)
-  slice = (start: Int, end: Int) -> lerta_binary_slice(@, start, end)
+  # The bytes from `start` up to `end`, which it does not hold.
+  slice = (start: Int, end: Int) ->
+    throw IndexError(message: 'slice out of range') if start < 0 or start > end or end > @length
+    var part = ''.binary
+    part += @[i] for i in start...end
+    part
   occurs_at = (index: Int, part: Binary) ->
     return false if index < 0 or index > @length - part.length
     for byte, k in part
@@ -323,7 +330,7 @@ extend Binary
     true
   text = (start = 0, end: Int = @length): String? ->
     const bytes = start == 0 and end == @length then @ else @slice(start, end)
-    lerta_is_utf8(bytes) then lerta_binary_as_string(bytes)
+    is_utf8(bytes) then lerta_binary_as_string(bytes)
 
 # The copies of `fill` that make `text` `width` code points long (see pad_start).
 const padding = (text: String, width: Int, fill: String) ->
