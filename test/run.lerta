@@ -12,6 +12,7 @@
 #   tests/bin/<name>.lerta commands that tests run, the same on every platform, unlike those of the
 #                          system; they are built first and found on PATH
 #   tests/cli/             not run tests, but the files of the CLI checks (see cli.lerta)
+#   tests/harness/         tests that must fail, run only by the self checks (see self.lerta)
 #   tests/**/posix/        tests of what only POSIX systems have, such as signals, which are not
 #                          run for Windows
 #   tests/**/windows/      tests of what only Windows has, such as drives, which are run only for
@@ -50,6 +51,8 @@ const EXPECTED_EXTENSIONS = ['out', 'err', 'warn']
 const EXAMPLES_EXPECTED_DIR = 'tests/examples'
 const COMMANDS_DIR = 'tests/bin'
 const CLI_DIR = 'tests/cli'
+# Tests that must fail, which only the self checks run (see self_check_dir).
+const HARNESS_DIR = 'tests/harness'
 
 # `dir` and its subdirectories, relative to the root, except `excluded` and lib/ directories.
 const directory_tree = (dir: String, excluded: String[]): String[] ->
@@ -64,11 +67,25 @@ const directory_tree = (dir: String, excluded: String[]): String[] ->
     tree.push path for path in directory_tree(path, excluded)
   tree
 
-const test_dirs = directory_tree('tests', [EXAMPLES_EXPECTED_DIR, COMMANDS_DIR, CLI_DIR])
+# A directory, relative to the root, whose tests run in place of those of tests/ and examples/, so
+# that the self checks can see how tests that must fail are reported (see self.lerta).
+const self_check_dir = env('LERTA_TEST_RUN_DIR')
+
+const test_dirs =
+  if const dir = self_check_dir
+    directory_tree dir, []
+  else
+    directory_tree 'tests', [EXAMPLES_EXPECTED_DIR, COMMANDS_DIR, CLI_DIR, HARNESS_DIR]
+
+# Examples are living documentation: they must compile and run.
+const examples =
+  Suite(source_dir: 'examples', expected_dir: EXAMPLES_EXPECTED_DIR, extensions: ['out'])
 
 const skipped_dirs = ->
   const skipped_kind = target.windows then 'posix' else 'windows'
   [dir for dir in test_dirs when dir.split('/').contains(skipped_kind)]
+
+const no_suites: Suite[] = []
 
 const suites = (skipped: String[]) ->
   [
@@ -77,8 +94,7 @@ const suites = (skipped: String[]) ->
       for dir in test_dirs
       when not skipped.contains(dir)
     )...
-    # Examples are living documentation: they must compile and run.
-    Suite(source_dir: 'examples', expected_dir: EXAMPLES_EXPECTED_DIR, extensions: ['out'])
+    (self_check_dir then no_suites else [examples])...
   ]
 
 const names_with_extension = (dir: String, extension: String) ->

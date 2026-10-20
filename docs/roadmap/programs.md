@@ -36,7 +36,6 @@ The planned design of modules, FFI, the standard library and tools.
   - A diagnostic's range over the whole token of its position, rather than the position alone.
   - Checking a document that is no file yet, which the loader takes a program's modules to be; and finding the open documents that import a file by real paths, so that two spellings of one directory through a symbolic link are one.
 - Package management.
-- The test harnesses (`test/`, see [README](../../README.md#tests)) checking themselves, since minilerta builds them with `std/` and `runtime/` of the working tree (see [bootstrap](../internals.md#bootstrap)), so that a change to those reaches them too: tests that must fail, by their output, a leak or an abort, must be reported as failed, and the number of tests run must be the number found in the directories.
 - The command-line checks (`test/cli.lerta`) run on Windows too, through `make test-cross` (the bootstrap runs there already: see [platforms](../internals.md#platforms)), with those that run a shell made to run without one.
 
 ## Open questions

@@ -1,8 +1,8 @@
 # The test driver, bin/test, which runs the suites, all of them by default, from the root of the
 # repository:
 #   bin/test [<suite>...] [-k <text>] [--target <triple>] [--list] [--failed] [-j <count>] [-q]
-#   <suite>            run (run.lerta), cli (cli.lerta), format (format.lerta) or runtime
-#                      (runtime.lerta)
+#   <suite>            run (run.lerta), cli (cli.lerta), format (format.lerta), runtime
+#                      (runtime.lerta) or self (self.lerta)
 #   -k <text>          only the checks whose names hold the text
 #   --target <triple>  the run tests' programs built for another target (see lib/target); only the
 #                      run suite takes it, which it then selects by default
@@ -11,21 +11,25 @@
 #   -j <count>         how many checks of a suite run at once; by default, the number of CPUs
 #   -q                 only the failures and the summaries
 # It exits with 0 if no check failed, 1 if one did or a suite could not run them, and 2 for wrong
-# arguments or when no check is selected, as when -k is mistyped.
+# arguments or when no check is selected, as when -k is mistyped. The self checks (self.lerta) run
+# it with LERTA_TEST_RUN_DIR, which has the run tests be those of another directory (see run.lerta),
+# and LERTA_TEST_FAILED_FILE, which names another file than FAILED_FILE.
 import remove_work_root, root_dir from './lib/lerta'
 import failed_keys, known_keys, Options, ran_keys, selected_keys, set_options from './lib/report'
 import host_target, target_of from './lib/target'
 import is_file, read_file, write_file from 'std:io'
-import argv, cpu_count, exit from 'std:process'
+import argv, cpu_count, env, exit from 'std:process'
 import suite as run_suite from './run'
 import suite as cli_suite from './cli'
 import suite as format_suite from './format'
 import suite as runtime_suite from './runtime'
+import suite as self_suite from './self'
 
-const SUITE_NAMES = ['run', 'cli', 'format', 'runtime']
+const SUITE_NAMES = ['run', 'cli', 'format', 'runtime', 'self']
 
-# The keys of the checks that failed when they last ran, one per line (see key in lib/report).
-const FAILED_FILE = "#{root_dir}/build/test-failed.txt"
+# The keys of the checks that failed when they last ran, one per line (see key in lib/report);
+# LERTA_TEST_FAILED_FILE names another file, for the self checks (see self.lerta).
+const FAILED_FILE = env('LERTA_TEST_FAILED_FILE') ? "#{root_dir}/build/test-failed.txt"
 
 struct Arguments(suites: String[], triple: String?, failed: Bool, options: Options)
 
@@ -101,7 +105,8 @@ const run_suites = (names: String[], triple: String?) ->
           when 'run' then await run_suite(triple then target_of(triple) else host_target)
           when 'cli' then await cli_suite()
           when 'format' then await format_suite()
-          else await runtime_suite()
+          when 'runtime' then await runtime_suite()
+          else await self_suite()
       catch error
         print "#{name}: the suite could not run its checks: #{error.message}"
         print ''
