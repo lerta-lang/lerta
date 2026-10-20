@@ -190,9 +190,6 @@ LertaString *lerta_string_concat(int64_t count, ...);
 LertaString *lerta_string_extend(LertaString *s, const LertaString *part);
 LertaString *lerta_binary_push(LertaString *binary, uint8_t byte);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
-// -1, 0 or 1 as `a` goes before, with or after `b` in the order of their bytes: `String.compare` and
-// `<` and the like of Strings.
-int64_t lerta_string_compare(const LertaString *a, const LertaString *b);
 uint64_t lerta_string_hash(const LertaString *s);
 // The place of `text` among an enum's `count` member texts, or -1 if none has it (`E.parse`).
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);
