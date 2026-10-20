@@ -99,7 +99,6 @@ The formatter's checks, whose cases are the exact specification of the style, ha
 The other test scripts, in `test/`, are TypeScript that Node.js runs directly, with no build step, at a low priority (`nice`):
 
 - `runtime.ts`: runtime checks that no Lerta program can trigger
-- `leaks.ts`: the compiler's own leaks, as the debug build of it, `build/stage1`, prints the IR of each source of `tests/` and `examples/` and of each standard module
 - Shared by them: `lerta.ts`, `report.ts` and `expect.ts`, as the modules of the same names of the run tests
 
 ### Changing the language

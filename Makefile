@@ -121,16 +121,20 @@ build/stage1.ll: build/minilerta build/host_llvm.sed $(SOURCES) $(EMBEDDED)
 build/stage1: build/stage1.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,$<,$@)
 
+# The compiler keeps the memory checks, so that the tests, which run it on every source of the tests
+# and examples, those for other systems in make test-cross, find its own leaks and uses of dropped
+# objects (see docs/internals.md#leak-checking).
 bin/lerta: build/stage1
 	@mkdir -p bin
-	build/stage1 build $(MAIN) -o $@ -O -Werror
+	build/stage1 build $(MAIN) -o $@ -O --memory-checks -Werror
 
 ifdef TARGET
 $(COMPILER): bin/lerta
 	bin/lerta build $(MAIN) -o $@ -O -Werror $(TARGET_FLAGS)
 endif
 
-# stage2 is unoptimized, so that its runs, which build stage3 and print its IR, check for leaks.
+# stage2 is unoptimized, which clang builds far faster, and its runs, which build stage3 and print
+# its IR, check for leaks.
 $(STAGE2): bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
@@ -187,7 +191,6 @@ test: bin/lerta build/test_run build/test_cli build/test_format
 	nice build/test_cli || status=1; \
 	nice build/test_format || status=1; \
 	nice node test/runtime.ts || status=1; \
-	nice node test/leaks.ts || status=1; \
 	nice $(MAKE) --no-print-directory test-bootstrap || status=1; \
 	exit $$status
 
