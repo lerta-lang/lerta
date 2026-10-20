@@ -65,7 +65,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 
 ### Building and testing
 
-The tests run on Linux and macOS, and also need Node.js (22.18 or later in 22, or 23.6 or later, where type stripping is on by default). `pnpm check` in `test/` (after `pnpm install`) checks the test scripts' types and style; run it when they change.
+The tests run on Linux and macOS.
 
 ```
 make                   # bin/lerta, the compiler, built from the seed
@@ -96,10 +96,7 @@ The CLI checks have a Lerta harness, `test/cli.lerta`, with its checks in `test/
 
 The formatter's checks, whose cases are the exact specification of the style, have a Lerta harness too, `test/format.lerta`, which minilerta builds as `build/test_format`.
 
-The other test scripts, in `test/`, are TypeScript that Node.js runs directly, with no build step, at a low priority (`nice`):
-
-- `runtime.ts`: runtime checks that no Lerta program can trigger
-- Shared by them: `lerta.ts`, `report.ts` and `expect.ts`, as the modules of the same names of the run tests
+The runtime checks, of what no Lerta program can trigger, have one too, `test/runtime.lerta`, built as `build/test_runtime`: each links a C program of `test/runtime/`, which stands in for the generated code, with the runtime.
 
 ### Changing the language
 
