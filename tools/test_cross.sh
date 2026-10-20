@@ -21,7 +21,7 @@ comma_list() { # <word>...
 }
 
 test_target() {
-  nice build/test_run --target "$1" || return 1
+  nice bin/test --target "$1" || return 1
   if is_windows "$1" && ! has_windows_clang; then
     skip "the bootstrap for $1" "needs a clang for Windows on Wine's PATH"
     return
@@ -167,7 +167,7 @@ EOF_JOBS
 trap stop_jobs HUP INT TERM
 
 # The harness too, once, as the jobs that run it at the same time would each build it.
-make --no-print-directory bin/lerta build/test_run || exit 1
+make --no-print-directory bin/lerta bin/test || exit 1
 
 here=false
 if [ "${1-}" = --here ]; then

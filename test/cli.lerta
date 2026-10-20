@@ -12,14 +12,13 @@
 # so no argument is empty or starts with `#`, and none in status.txt has a space. In the arguments
 # and the expected output, <root> stands for the repository, <tmp> for the work directory and
 # <host> for the host's triple.
-import at_once, Check, run_checks from './lib/report'
+import at_once, Check, run_checks, select from './lib/report'
 import compare_output, expect_status from './lib/expect'
 import
   cli_work_dir, expect_left, host_triple, read_optional, runtime_flags, run_in_new_dir
 from './lib/cli'
-import build_runtimes, compiler, make_cache, read_text, remove_cache, root_dir from './lib/lerta'
-import cpu_count, exit from 'std:process'
-import is_file, list_dir, make_dir, remove_tree from 'std:io'
+import build_runtimes, compiler, read_text, root_dir from './lib/lerta'
+import is_file, list_dir, make_dir from 'std:io'
 import checks as std_checks from './cli/std'
 import checks as build_checks from './cli/build'
 import checks as extern_checks from './cli/extern'
@@ -128,42 +127,31 @@ const stray_files = ->
     )
   ]
 
-const run_cli_checks = ->
-  const runtime_setup_errors: String[] =
-    try
-      make_dir "#{cli_work_dir}/runtimes"
-      await build_runtimes("#{cli_work_dir}/runtimes", runtime_flags)
-      []
-    catch error
-      ["building the CLI runtime cache failed: #{error.message}"]
+# The number of the checks that failed. The runtimes are cached before the checks start, which a
+# check of its own reports a failure of.
+export const suite = ->
+  const title = 'CLI checks'
   const cases = [await file_case(name) for name in case_names]
-  const checks = [file_check(test) for test in cases]
-  const statuses = await status_checks()
+  var runtime_setup_errors: String[] = []
   const extras =
     Check(name: 'CLI runtime setup', run: -> await at_once(runtime_setup_errors))
     Check(name: 'tests/cli has no file that no case reads', run: -> await at_once(stray_files()))
-  await run_checks(
-    'CLI checks'
-    [
-      checks...
-      statuses...
-      std_checks...
-      build_checks...
-      program_checks...
-      extern_checks...
-      lsp_checks...
-      lsp_completion_checks...
-      cache_checks...
-      extras...
-    ]
-    cpu_count
-  )
-
-const failed_count =
+  const all_checks = [
+    (file_check(test) for test in cases)...
+    await status_checks()...
+    std_checks...
+    build_checks...
+    program_checks...
+    extern_checks...
+    lsp_checks...
+    lsp_completion_checks...
+    cache_checks...
+    extras...
+  ]
+  const checks = select(title, all_checks) ? return 0
   try
-    make_cache()
-    await run_cli_checks()
-  finally
-    await remove_tree(cli_work_dir)
-    await remove_cache()
-exit failed_count == 0 then 0 else 1
+    make_dir "#{cli_work_dir}/runtimes"
+    await build_runtimes("#{cli_work_dir}/runtimes", runtime_flags)
+  catch error
+    runtime_setup_errors = ["building the CLI runtime cache failed: #{error.message}"]
+  await run_checks(title, checks)

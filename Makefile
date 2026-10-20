@@ -97,28 +97,11 @@ build/embedded.lerta: build/embed $(EMBEDDED)
 # the compiler cannot break the harness that tests it (see docs/roadmap/programs.md#tools).
 HARNESS := $(shell find test -name '*.lerta')
 
-build/test_run.ll: build/minilerta build/host_llvm.sed $(HARNESS) $(EMBEDDED)
-	$(call minilerta_ir,test/run.lerta,$@)
+build/test.ll: build/minilerta build/host_llvm.sed $(HARNESS) compiler/clang_flags.lerta $(EMBEDDED)
+	$(call minilerta_ir,test/main.lerta,$@)
 
-build/test_run: build/test_run.ll $(RUNTIME) build/libuv/built
-	$(call link_debug,$<,$@)
-
-build/test_cli.ll: build/minilerta build/host_llvm.sed $(HARNESS) $(EMBEDDED)
-	$(call minilerta_ir,test/cli.lerta,$@)
-
-build/test_cli: build/test_cli.ll $(RUNTIME) build/libuv/built
-	$(call link_debug,$<,$@)
-
-build/test_format.ll: build/minilerta build/host_llvm.sed $(HARNESS) $(EMBEDDED)
-	$(call minilerta_ir,test/format.lerta,$@)
-
-build/test_format: build/test_format.ll $(RUNTIME) build/libuv/built
-	$(call link_debug,$<,$@)
-
-build/test_runtime.ll: build/minilerta build/host_llvm.sed $(HARNESS) compiler/clang_flags.lerta $(EMBEDDED)
-	$(call minilerta_ir,test/runtime.lerta,$@)
-
-build/test_runtime: build/test_runtime.ll $(RUNTIME) build/libuv/built
+bin/test: build/test.ll $(RUNTIME) build/libuv/built
+	@mkdir -p bin
 	$(call link_debug,$<,$@)
 
 build/stage1.ll: build/minilerta build/host_llvm.sed $(SOURCES) $(EMBEDDED)
@@ -188,15 +171,12 @@ endif
 
 ifdef TARGET
 test test-cross:
-	@echo 'make $@ does not take TARGET: run build/test_run --target <triple>' >&2; exit 2
+	@echo 'make $@ does not take TARGET: run bin/test --target <triple>' >&2; exit 2
 else
 # Every suite runs even if one before it fails.
-test: bin/lerta build/test_run build/test_cli build/test_format build/test_runtime
+test: bin/lerta bin/test
 	@status=0; \
-	nice build/test_run || status=1; \
-	nice build/test_cli || status=1; \
-	nice build/test_format || status=1; \
-	nice build/test_runtime || status=1; \
+	nice bin/test || status=1; \
 	nice $(MAKE) --no-print-directory test-bootstrap || status=1; \
 	exit $$status
 

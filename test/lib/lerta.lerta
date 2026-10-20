@@ -1,12 +1,12 @@
 # Where the tests find the repository and the compiler they check, bin/lerta, which `make` builds,
 # how they run it, and what they need of it before they start. The tests run from the repository's
 # root, as the Makefile runs them.
-import is_file, make_temp_dir, read_file, real_path, remove_tree from 'std:io'
+import is_file, make_dir, make_temp_dir, read_file, real_path, remove_tree from 'std:io'
 import exit, run from 'std:process'
 
 export const root_dir = real_path('.').text()!
 
-if not is_file("#{root_dir}/test/run.lerta")
+if not is_file("#{root_dir}/test/main.lerta")
   print_error 'the tests run from the root of the repository'
   exit 2
 
@@ -23,16 +23,21 @@ export const OUTPUT_LIMIT = 1024 * 1024
 export const read_text = (path: String) ->
   (await read_file(path)).text() ? throw ValueError(message: "#{path} is not valid UTF-8")
 
+# The directory of what the tests make, made as they start and removed as they end (see
+# remove_work_root); each suite works in a directory of its own in it.
+const work_root = make_temp_dir().text()!
+
+export const suite_dir = (name: String) ->
+  const path = "#{work_root}/#{name}"
+  make_dir path
+  path
+
+export const remove_work_root = -> await remove_tree(work_root)
+
 # The compiler caches the runtime it compiles; the tests give it a new cache, which the compilers
 # that the tests run inherit through LERTA_CACHE_DIR, so that no cache left by another build of the
-# compiler takes part. It is made once the tests start, and removed as they end.
-var cache_dir = ''
-
-export const make_cache = -> cache_dir = make_temp_dir().text()!
-
-export const get_cache_dir = -> cache_dir
-
-export const remove_cache = -> await remove_tree(cache_dir) if cache_dir != ''
+# compiler takes part.
+export const cache_dir = suite_dir('cache')
 
 # A run of a file to its end, whatever its exit status: `failure` tells how it ended, for messages.
 export struct FileRun(status: Int, failure: String, errors: String)

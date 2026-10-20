@@ -1,11 +1,11 @@
-# Run tests: each source is compiled by the compiler (see lib/lerta), for the target of `--target` if
-# given (see lib/target), and run, and its output is compared with <name>.out (stdout), <name>.err
-# (stderr: the compile errors or an uncaught throw) and <name>.warn (compile warnings). A missing
-# file means empty output, but at least one must exist. The run must fail exactly when <name>.err
-# exists.
-# Tests run in parallel, up to the number of cores, and are reported in order; each program runs in
-# an empty directory of its own, where it may write files. Every test that compiles runs twice,
-# without and with optimization, to catch code whose behavior changes when optimized.
+# Run tests: each source is compiled by the compiler (see lib/lerta), for the target that the driver
+# gives (see main and lib/target), and run, and its output is compared with <name>.out (stdout),
+# <name>.err (stderr: the compile errors or an uncaught throw) and <name>.warn (compile warnings). A
+# missing file means empty output, but at least one must exist. The run must fail exactly when
+# <name>.err exists.
+# Tests run in parallel, as many at once as the driver says, and are reported in order; each program
+# runs in an empty directory of its own, where it may write files. Every test that compiles runs
+# twice, without and with optimization, to catch code whose behavior changes when optimized.
 #   tests/**/<name>.lerta  expected files next to it; a lib/ directory holds modules that tests
 #                          import, which are checked only through those tests
 #   examples/<name>.lerta  only .out, in tests/examples/ to keep examples/ clean
@@ -17,21 +17,21 @@
 #   tests/**/windows/      tests of what only Windows has, such as drives, which are run only for
 #                          Windows
 import timeout, TimeoutError from 'std:async'
-import is_dir, is_file, list_dir, make_dir, make_temp_dir, read_file, remove_tree from 'std:io'
-import cpu_count, env, exit, platform, run from 'std:process'
+import is_dir, is_file, list_dir, make_dir, read_file from 'std:io'
+import env, platform, run from 'std:process'
 import compare_output, compare_text, lines from './lib/expect'
 import
-  build_runtimes, compiler, make_cache, OUTPUT_LIMIT, remove_cache, root_dir, run_file, SetupError
+  build_runtimes, compiler, OUTPUT_LIMIT, root_dir, run_file, SetupError, suite_dir
 from './lib/lerta'
-import at_once, Check, run_checks from './lib/report'
-import parse_target from './lib/target'
+import at_once, Check, jobs, run_checks, select from './lib/report'
+import host_target, Target from './lib/target'
 import no_wine_prefixes, start_wine_prefixes, WINE_DLL_OVERRIDES from './lib/wine'
 
-const target = parse_target('build/test_run')
+# The target that the suite was given.
+var target = host_target
 
-const work_dir = make_temp_dir().text()!
-make_cache()
-const executable_suffix = target.windows then '.exe' else ''
+const work_dir = suite_dir('run')
+const executable_suffix = -> target.windows then '.exe' else ''
 
 # `label` is shown in failures, such as `examples/hello`. The expected files are read before the
 # checks start, so that a check reaches its first wait only in its build (see unoptimized_runs).
@@ -65,18 +65,21 @@ const directory_tree = (dir: String, excluded: String[]): String[] ->
   tree
 
 const test_dirs = directory_tree('tests', [EXAMPLES_EXPECTED_DIR, COMMANDS_DIR, CLI_DIR])
-const skipped_kind = target.windows then 'posix' else 'windows'
-const skipped_dirs = [dir for dir in test_dirs when dir.split('/').contains(skipped_kind)]
 
-const suites = [
-  (
-    Suite(source_dir: dir, expected_dir: dir, extensions: EXPECTED_EXTENSIONS)
-    for dir in test_dirs
-    when not skipped_dirs.contains(dir)
-  )...
-  # Examples are living documentation: they must compile and run.
-  Suite(source_dir: 'examples', expected_dir: EXAMPLES_EXPECTED_DIR, extensions: ['out'])
-]
+const skipped_dirs = ->
+  const skipped_kind = target.windows then 'posix' else 'windows'
+  [dir for dir in test_dirs when dir.split('/').contains(skipped_kind)]
+
+const suites = (skipped: String[]) ->
+  [
+    (
+      Suite(source_dir: dir, expected_dir: dir, extensions: EXPECTED_EXTENSIONS)
+      for dir in test_dirs
+      when not skipped.contains(dir)
+    )...
+    # Examples are living documentation: they must compile and run.
+    Suite(source_dir: 'examples', expected_dir: EXAMPLES_EXPECTED_DIR, extensions: ['out'])
+  ]
 
 const names_with_extension = (dir: String, extension: String) ->
   const suffix = ".#{extension}"
@@ -140,7 +143,7 @@ const is_warning = (line: String) -> after_place(line)?.starts_with('warning: ')
 const compile_and_run = (test: TestCase, optimize: Bool) ->
   const source_file = "#{test.name}.lerta"
   const name = "#{test.label.replace('/', '_')}#{optimize then '_O' else ''}"
-  const executable = "#{work_dir}/#{name}#{executable_suffix}"
+  const executable = "#{work_dir}/#{name}#{executable_suffix()}"
   const optimize_args: String[] = optimize then ['-O'] else []
   const args = ['build', source_file, '-o', executable, optimize_args..., target.args...]
   const built = await run_file(compiler, args, "#{root_dir}/#{test.source_dir}")
@@ -181,7 +184,7 @@ const command_env = (prefix: String?) ->
 const build_commands = ->
   const cwd = "#{root_dir}/#{COMMANDS_DIR}"
   for name in names_with_extension(COMMANDS_DIR, 'lerta')
-    const executable = "#{work_dir}/#{name}#{executable_suffix}"
+    const executable = "#{work_dir}/#{name}#{executable_suffix()}"
     const args = ['build', "#{name}.lerta", '-o', executable, '-O', target.args...]
     const built = await run_file(compiler, args, cwd)
     if built.status != 0
@@ -189,14 +192,12 @@ const build_commands = ->
         "the build of #{COMMANDS_DIR}/#{name} failed (#{built.failure}):\n#{built.errors}"
       throw SetupError(message)
 
-const concurrency = cpu_count
-
 # Wine runs a Windows program in a prefix of its own, when there are such prefixes (see lib/wine).
 var wine_prefixes = no_wine_prefixes()
 
 # The longest a program may run, far beyond what any test takes, so that one that does not end
 # fails instead of holding up the run; Wine starts a program much more slowly.
-const RUN_TIMEOUT_SECONDS = target.windows then 180.0 else 60.0
+const run_timeout_seconds = -> target.windows then 180.0 else 60.0
 
 struct ProgramRun(stdout: Binary, stderr: Binary, failed: Bool)
 
@@ -225,10 +226,10 @@ const run_program = (path: String) ->
       stderr: stderr
       output_limit: OUTPUT_LIMIT
     )
-    const exit = await timeout(ran, RUN_TIMEOUT_SECONDS)
+    const exit = await timeout(ran, run_timeout_seconds())
     ProgramRun stdout: stdout.to_binary(), stderr: stderr.to_binary(), failed: exit.code != 0
   catch _: TimeoutError
-    throw SetupError(message: "the program did not end in #{RUN_TIMEOUT_SECONDS.to_fixed(0)}s")
+    throw SetupError(message: "the program did not end in #{run_timeout_seconds().to_fixed(0)}s")
   finally
     wine_prefixes.give_back prefix if prefix
 
@@ -272,32 +273,29 @@ const optimized_check = (test: TestCase) ->
     await run_test(test, true)
   Check name: "#{test.label} (-O)", run: check, wait: wait
 
-const run_all = ->
+# The number of the checks that failed, of the programs built for `given`.
+export const suite = (given: Target) ->
+  target = given
+  const title = 'run tests'
+  const skipped = skipped_dirs()
+  # A stray file fails the run as a check of its own, so the summary lists it.
+  const all_checks: Check[] = []
+  for group in suites(skipped)
+    for file in stray_files(group)
+      all_checks.push Check(name: file, run: -> at_once(['stray file: no test reads it']))
+  for group in suites(skipped)
+    for test in await collect(group)
+      all_checks.push Check(name: test.label, run: -> await run_test(test, false))
+      all_checks.push optimized_check(test)
+  const checks = select(title, all_checks) ? return 0
   # Not in work_dir itself, which is on the PATH of the tested programs.
   const runtime_dir = "#{work_dir}/runtime"
   make_dir runtime_dir
   await build_runtimes(runtime_dir, [target.args, ['-O', target.args...]])
   await build_commands()
-  print "not run for this target: #{dir}" for dir in skipped_dirs
-  wine_prefixes = await start_wine_prefixes(work_dir, concurrency) if target.windows
-  # A stray file fails the run as a check of its own, so the summary lists it.
-  const checks: Check[] = []
-  for suite in suites
-    for file in stray_files(suite)
-      checks.push Check(name: file, run: -> at_once(['stray file: no test reads it']))
-  for suite in suites
-    for test in await collect(suite)
-      checks.push Check(name: test.label, run: -> await run_test(test, false))
-      checks.push optimized_check(test)
+  print "not run for this target: #{dir}" for dir in skipped
+  wine_prefixes = await start_wine_prefixes(work_dir, jobs()) if target.windows
   try
-    await run_checks('run tests', checks, concurrency)
+    await run_checks(title, checks)
   finally
     await wine_prefixes.stop()
-
-const failed_count =
-  try
-    await run_all()
-  finally
-    await remove_tree(work_dir)
-    await remove_cache()
-exit failed_count == 0 then 0 else 1

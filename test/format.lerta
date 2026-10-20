@@ -5,13 +5,12 @@
 # nothing, as the formatted text is in the style. Then the command line: the paths it takes, and
 # what it does with a file that does not parse. Whether the code of the repository is in the style
 # is checked by `make check`.
-import Check, run_checks from './lib/report'
+import Check, run_checks, select from './lib/report'
 import compare_text, expect_status from './lib/expect'
-import compiler, FileRun, read_text, root_dir, run_file from './lib/lerta'
-import cpu_count, exit from 'std:process'
-import is_file, list_dir, make_dir, make_temp_dir, remove_tree, stat, write_file from 'std:io'
+import compiler, FileRun, read_text, root_dir, run_file, suite_dir from './lib/lerta'
+import is_file, list_dir, make_dir, stat, write_file from 'std:io'
 
-const work_dir = make_temp_dir().text()!
+const work_dir = suite_dir('format')
 const cases_dir = "#{root_dir}/tests/format"
 
 const fmt = (cwd: String, args: String[]) -> await run_file(compiler, ['fmt', args...], cwd)
@@ -228,13 +227,9 @@ const command_checks =
 const names =
   [file.without_suffix('.in')! for file in list_dir(cases_dir) when file.ends_with('.in')]
 
-const failed_count =
-  try
-    await run_checks(
-      'format checks'
-      [(case_check(name) for name in names)..., command_checks...]
-      cpu_count
-    )
-  finally
-    await remove_tree(work_dir)
-exit failed_count == 0 then 0 else 1
+# The number of the checks that failed.
+export const suite = ->
+  const title = 'format checks'
+  const checks =
+    select(title, [(case_check(name) for name in names)..., command_checks...]) ? return 0
+  await run_checks(title, checks)

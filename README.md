@@ -90,13 +90,22 @@ make clean
 
 Every language feature gets run tests in `tests/`: a Lerta source file and its expected output, as described at the top of `test/run.lerta`. Programs in `examples/` are run as tests too.
 
-The run tests' harness is written in Lerta: `test/run.lerta`, with its modules in `test/lib/`, which minilerta builds into `build/test_run`, as it builds `tools/embed.lerta`, so that a change to `compiler/` cannot break the harness that tests it. `build/test_run --target <triple>` builds the tests for another target. Its modules are `lerta` (where the repository and the compiler are, running it, and caching the runtimes before the tests), `report` (running and reporting checks), `expect` (what checks expect of the programs they run), `target` (`--target`) and `wine` (running Windows programs under Wine).
+The tests are written in Lerta: `test/main.lerta`, the driver, which minilerta builds into `bin/test`, as it builds `tools/embed.lerta`, so that a change to `compiler/` cannot break the harness that tests it. `make test` builds and runs it; it runs all the suites, or those named, and the top of `test/main.lerta` lists its options, such as `-k <text>` for the checks whose names hold the text, `--failed` for those that failed when they last ran, and `--target <triple>`, which builds the run tests for another target:
 
-The CLI checks have a Lerta harness, `test/cli.lerta`, with its checks in `test/cli/*.lerta`; minilerta builds it as `build/test_cli`. It also has the modules `cli` (running the compiler in directories of its own) and `lsp` (sessions with the language server).
+```
+bin/test runtime            # the runtime checks alone
+bin/test -k tests/string    # the checks whose names hold tests/string
+bin/test --failed           # the checks that failed when they last ran
+```
 
-The formatter's checks, whose cases are the exact specification of the style, have a Lerta harness too, `test/format.lerta`, which minilerta builds as `build/test_format`.
+The suites:
 
-The runtime checks, of what no Lerta program can trigger, have one too, `test/runtime.lerta`, built as `build/test_runtime`: each links a C program of `test/runtime/`, which stands in for the generated code, with the runtime.
+- `run` (`test/run.lerta`): the run tests.
+- `cli` (`test/cli.lerta`, with its checks in `test/cli/*.lerta`): the command line.
+- `format` (`test/format.lerta`): the formatter, whose cases are the exact specification of the style.
+- `runtime` (`test/runtime.lerta`): what no Lerta program can trigger; each check links a C program of `test/runtime/`, which stands in for the generated code, with the runtime.
+
+Their modules, in `test/lib/`, are `lerta` (where the repository and the compiler are, running it, the directories of the run and caching the runtimes before the tests), `report` (selecting, running and reporting checks), `expect` (what checks expect of the programs they run), `target` (`--target`), `wine` (running Windows programs under Wine), `cli` (running the compiler in directories of its own) and `lsp` (sessions with the language server).
 
 ### Changing the language
 

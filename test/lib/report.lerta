@@ -1,5 +1,6 @@
-# Runs checks, several at once if asked, and prints each result in order as soon as it and those
-# before it have finished.
+# Selects the checks of a suite, runs them, several at once, and prints each result in order as soon
+# as it and those before it have finished; and keeps which checks ran and which failed, for the
+# driver (see main).
 import all, Deferred from 'std:async'
 import time from 'std:time'
 
@@ -16,6 +17,48 @@ export const at_once = (reasons: String[]): Promise<String[]?> ->
   const deferred = Deferred<String[]?>()
   deferred.resolve reasons
   deferred.promise()
+
+# What the driver asks of the suites: the checks whose names hold `pattern`, and, unless `only` is
+# nil, are among those it names by their keys (see key); whether to list them rather than run them;
+# whether to print only the failures; and how many checks of a suite run at once.
+export struct Options(pattern: String, only: Set<String>?, listing: Bool, quiet: Bool, jobs: Int)
+
+# Set by the driver before any suite selects its checks.
+var given_options: Options?
+
+export const set_options = (given: Options) -> given_options = given
+
+const options = -> given_options!
+
+export const jobs = -> options().jobs
+
+# The keys of the checks that the suites have, selected or not, of those that they selected, of
+# those that ran, those that turned out not to apply too, and of those that failed.
+export const known_keys = Set<String>()
+export const selected_keys: String[] = []
+export const ran_keys: String[] = []
+export const failed_keys: String[] = []
+
+# What names a check among those of every suite: the suite's title and the check's name.
+export const key = (title: String, name: String) -> "#{title}\t#{name}"
+
+# The checks to run of a suite, or nil if there are none, which is also the case when they are only
+# listed, so that the suite skips what it would do before it runs them.
+export const select = (title: String, checks: Check[]) ->
+  known_keys.add key(title, check.name) for check in checks
+  const selected = [
+    check
+    for check in checks
+    when check.name.contains(options().pattern) and options().only?.has(
+      key(title, check.name)
+    ) ? true
+  ]
+  selected_keys.push key(title, check.name) for check in selected
+  if options().listing
+    print "#{title}:" if selected.length > 0
+    print "  #{check.name}" for check in selected
+    return nil
+  selected.length > 0 then selected
 
 # Names are padded to align the times, but only up to this width, so that one long name does not
 # push every line past the width of a terminal.
@@ -46,21 +89,25 @@ const format_duration = (duration: Float) ->
   return "#{rounded}ms" if rounded < 1000
   "#{(duration / 1000.0).to_fixed(1)}s"
 
-# The number of failed checks. At most `concurrency` checks run at once.
-export const run_checks = (title: String, checks: Check[], concurrency = 1) ->
+# Runs the checks that select gave, and gives the number of those that failed.
+export const run_checks = (title: String, checks: Check[]) ->
   # Results are printed as they come, so the width also counts checks that turn out not to apply.
   const name_width = min(max(0, (width(check.name) for check in checks)...), MAX_NAME_WIDTH)
   const started = milliseconds()
   const failed: String[] = []
   var run_count = 0
   const report = (check: Check, result: Result) ->
+    ran_keys.push key(title, check.name)
     const reasons = result.reasons ? return
     run_count += 1
+    if reasons.length > 0
+      failed.push check.name
+      failed_keys.push key(title, check.name)
+    return if options().quiet and reasons.length == 0
     const status = reasons.length == 0 then 'ok  ' else 'FAIL'
     const duration = format_duration(result.duration).pad_start(6)
     print "#{status}  #{check.name.pad_end(name_width)}  #{duration}"
     print "      #{reason}" for reason in reasons
-    failed.push check.name if reasons.length > 0
   const results: Result?[] = [nil for _ in checks]
   var next_to_print = 0
   var next_to_start = 0
@@ -73,7 +120,7 @@ export const run_checks = (title: String, checks: Check[], concurrency = 1) ->
         const result = results[next_to_print] ? break
         report checks[next_to_print], result
         next_to_print += 1
-  await all([worker() for _ in 0...concurrency])
+  await all([worker() for _ in 0...jobs()])
   const total = format_duration(milliseconds() - started)
   print "#{title}: #{run_count - failed.length} passed, #{failed.length} failed in #{total}"
   print "  FAIL #{name}" for name in failed
