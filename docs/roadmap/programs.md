@@ -18,7 +18,14 @@ The planned design of modules, FFI, the standard library and tools.
 ## Standard library
 
 - In [std:json](../reference/modules.md#stdjson), unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
-- Random numbers, formatting dates and times, and the network.
+- Random numbers, and formatting dates and times.
+- `std:net`, TCP over IPv4 and IPv6 on the [event loop](../reference/functions.md#functions-that-await), where every wait is a `Promise` and no function keeps a callback, so that it adds no cycle of its own (see [cycles](runtime.md#open-questions)). UDP, TLS and Unix domain sockets come later.
+  - `listen(host: String, port = 0): Listener` listens at once, throwing an `IOError` if it cannot, and port 0 takes a free port, which `listener.port` gives. `listener.accept(): Promise<Socket>` gives the next connection, and `listener.close()` stops listening.
+  - `connect(host: String, port: Int): Promise<Socket>` resolves the name, on libuv's thread pool, and connects.
+  - A socket's `reader` is a `Reader` of [std:io](../reference/modules.md#stdio), so that `read_line`, `read` and `read_all` read it, nil at the peer's end, and a cancelled read keeps what has come for the next. `socket.write(data)`, of a `String` or a `Binary`, resolves once the data has been handed to the system, so that a writer faster than the network waits; `socket.end()` closes the writing side, which the peer reads as its end, and `socket.close()` closes both.
+  - A socket or a listener closes once nothing holds it, and keeps the program running only while one of its operations waits, as `stdin` does, so that one left open does not keep it from ending.
+  - A failure rejects with an `IOError` that names it and the address, as `cannot connect to <host>:<port>`.
+  - A server serves each connection in a function of its own that it does not await, which must catch what it throws until exceptions are caught at the task boundary ([exceptions](runtime.md#exceptions)), since a rejected promise that nothing awaits ends the program.
 - `make_link` of [std:io](../reference/modules.md#stdio) followed on Windows itself: Wine, which the tests run under, makes the links but does not follow them.
 - A `start` in `std:process` beside `run`, which gives a running program at once: its standard output and error to read as they come, through a `Reader` of `std:io`, its standard input to write through a `Writer`, and a `wait(): Promise<Exit>`. A write to a pipe that the program has closed must then fail rather than end this program by SIGPIPE, which is why `run` gives its input through a file.
 
