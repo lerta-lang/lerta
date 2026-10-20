@@ -5,7 +5,7 @@ import JsonError, JsonKeys from '../json'
 
 export class JsonWriter
   keys: JsonKeys
-  parts: String[] = []
+  written = ''
   # How many items or keys each array or object being written has, the innermost last.
   counts: Int[] = []
   # The steps from the root to the value being written, as `[0]` or `.name`, which errors give.
@@ -14,15 +14,15 @@ export class JsonWriter
   entered: Int[] = []
   entered_paths: String[] = []
 
-  write_null = (): void -> @parts.push('null')
-  write_bool = (value: Bool): void -> @parts.push(value.to_string())
-  write_int = (value: Int): void -> @parts.push(value.to_string())
-  write_float = (value: Float): void -> @parts.push(value.to_string())
-  write_string = (value: String): void -> @parts.push(quoted(value))
-  write_uint64 = (value: UInt64): void -> @parts.push(value.to_string())
-  write_float32 = (value: Float32): void -> @parts.push(value.to_string())
+  write_null = (): void -> @written += 'null'
+  write_bool = (value: Bool): void -> @written += value.to_string()
+  write_int = (value: Int): void -> @written += value.to_string()
+  write_float = (value: Float): void -> @written += value.to_string()
+  write_string = (value: String): void -> @written += quoted(value)
+  write_uint64 = (value: UInt64): void -> @written += value.to_string()
+  write_float32 = (value: Float32): void -> @written += value.to_string()
   # As base64 (RFC 4648), whose letters need no escape.
-  write_binary = (value: Binary): void -> @parts.push("\"#{base64(value)}\"")
+  write_binary = (value: Binary): void -> @written += "\"#{base64(value)}\""
 
   begin_array = (): void -> @begin('[')
 
@@ -36,8 +36,8 @@ export class JsonWriter
   # Starts the value of the key in the innermost object.
   next_key = (key: String): void ->
     @next ".#{key}"
-    @parts.push quoted(key)
-    @parts.push ':'
+    @written += quoted(key)
+    @written += ':'
 
   # Starts the value of a field in the innermost object, by its key: its name as written, or in
   # camel case, which the compiler gives.
@@ -60,21 +60,21 @@ export class JsonWriter
     @entered_paths.pop()
 
   begin = (open: String) ->
-    @parts.push open
+    @written += open
     @counts.push 0
     @path.push ''
 
   next = (step: String) ->
     const count = @counts.last()!
-    @parts.push ',' if count > 0
+    @written += ',' if count > 0
     @counts[@counts.length - 1] = count + 1
     @path[@path.length - 1] = step
 
   end = (close: String) ->
     @counts.pop()
     @path.pop()
-    @parts.push close
+    @written += close
 
   path_text = -> "$#{@path.join('')}"
 
-  text = -> @parts.join('')
+  text = -> @written

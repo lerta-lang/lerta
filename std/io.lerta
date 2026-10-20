@@ -66,9 +66,9 @@ export class Reader
   chunk = ''.binary
   start = 0
   reading = false
-  # The pieces that the read under way has sliced out of the chunks it went past, kept here rather
-  # than in it, so that a read that throws or is cancelled leaves them for the next.
-  taken: Binary[] = []
+  # What the read under way has sliced out of the chunks it went past, kept here rather than in
+  # it, so that a read that throws or is cancelled leaves it for the next.
+  taken = ''.binary
 
   # The next line, without its "\n" and a "\r" before it, or nil at the end.
   read_line = -> await @exclusive(-> await @line())
@@ -101,36 +101,32 @@ export class Reader
   # What a cancelled read took goes back before the rest of the chunk.
   put_back_taken = ->
     return if @taken.length == 0
-    @taken.push @chunk.slice(@start, @chunk.length)
-    @chunk = @taken_joined()
+    @taken += @chunk.slice(@start, @chunk.length)
+    @chunk = @taken_out()
     @start = 0
 
-  taken_joined = ->
-    const bytes = joined(@taken)
-    @taken = []
+  taken_out = ->
+    const bytes = @taken
+    @taken = ''.binary
     bytes
 
-  # The pieces of a line, sliced out of the chunks it crosses, are joined once it ends.
   line = ->
     while await @fill()
       var end = @start
       end += 1 while end < @chunk.length and @chunk[end] != "\n"
-      @taken.push @chunk.slice(@start, end)
+      @taken += @chunk.slice(@start, end)
       if end < @chunk.length
         @start = end + 1
-        return ended_line_text(@taken_joined())
+        return ended_line_text(@taken_out())
       @start = @chunk.length
     return nil if @taken.length == 0
-    utf8_line @taken_joined()
+    utf8_line @taken_out()
 
   part = (count: Int) ->
     return nil if not await @fill()
-    @taken.push @take(count)
-    var taken = @taken[0].length
-    while taken < count and await @fill()
-      @taken.push @take(count - taken)
-      taken += @taken.last()!.length
-    @taken_joined()
+    @taken += @take(count)
+    @taken += @take(count - @taken.length) while @taken.length < count and await @fill()
+    @taken_out()
 
   # Up to `count` bytes of the chunk, from where it is read.
   take = (count: Int) ->
@@ -140,9 +136,6 @@ export class Reader
     bytes
 
   rest = -> await @part(MAX_INT) ? ''.binary
-
-# The pieces as one Binary, which is the one piece itself, as most reads fit in one chunk.
-const joined = (pieces: Binary[]) -> pieces.length == 1 then pieces[0] else pieces.join(''.binary)
 
 # A line that ended with "\n", without a "\r" before it.
 const ended_line_text = (bytes: Binary) ->
