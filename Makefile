@@ -109,6 +109,12 @@ build/test_cli.ll: build/minilerta build/host_llvm.sed $(HARNESS) $(EMBEDDED)
 build/test_cli: build/test_cli.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,$<,$@)
 
+build/test_format.ll: build/minilerta build/host_llvm.sed $(HARNESS) $(EMBEDDED)
+	$(call minilerta_ir,test/format.lerta,$@)
+
+build/test_format: build/test_format.ll $(RUNTIME) build/libuv/built
+	$(call link_debug,$<,$@)
+
 build/stage1.ll: build/minilerta build/host_llvm.sed $(SOURCES) $(EMBEDDED)
 	$(call minilerta_ir,$(MAIN),$@)
 
@@ -175,12 +181,12 @@ test test-cross:
 	@echo 'make $@ does not take TARGET: run build/test_run --target <triple>' >&2; exit 2
 else
 # Every suite runs even if one before it fails.
-test: bin/lerta build/test_run build/test_cli
+test: bin/lerta build/test_run build/test_cli build/test_format
 	@status=0; \
 	nice build/test_run || status=1; \
 	nice build/test_cli || status=1; \
+	nice build/test_format || status=1; \
 	nice node test/runtime.ts || status=1; \
-	nice node test/format.ts || status=1; \
 	nice node test/leaks.ts || status=1; \
 	nice $(MAKE) --no-print-directory test-bootstrap || status=1; \
 	exit $$status

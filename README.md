@@ -94,10 +94,11 @@ The run tests' harness is written in Lerta: `test/run.lerta`, with its modules i
 
 The CLI checks have a Lerta harness, `test/cli.lerta`, with its checks in `test/cli/*.lerta`; minilerta builds it as `build/test_cli`. It also has the modules `cli` (running the compiler in directories of its own) and `lsp` (sessions with the language server).
 
+The formatter's checks, whose cases are the exact specification of the style, have a Lerta harness too, `test/format.lerta`, which minilerta builds as `build/test_format`.
+
 The other test scripts, in `test/`, are TypeScript that Node.js runs directly, with no build step, at a low priority (`nice`):
 
 - `runtime.ts`: runtime checks that no Lerta program can trigger
-- `format.ts`: the formatter, whose cases are the exact specification of the style
 - `leaks.ts`: the compiler's own leaks, as the debug build of it, `build/stage1`, prints the IR of each source of `tests/` and `examples/` and of each standard module
 - Shared by them: `lerta.ts`, `report.ts` and `expect.ts`, as the modules of the same names of the run tests
 

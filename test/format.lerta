@@ -1,0 +1,240 @@
+# Formatter checks. Each tests/format/<name>.in is copied to <name>.lerta in a directory of its own,
+# where `lerta fmt <name>.lerta` must report <name>.report on stderr, failing exactly when that is
+# not empty (a missing file means empty); `lerta fmt --fix <name>.lerta` must then succeed and leave
+# <name>.formatted (the input itself if it is missing); and `lerta fmt <name>.lerta` must then report
+# nothing, as the formatted text is in the style. Then the command line: the paths it takes, and
+# what it does with a file that does not parse. Whether the code of the repository is in the style
+# is checked by `make check`.
+import Check, run_checks from './lib/report'
+import compare_text, expect_status from './lib/expect'
+import compiler, FileRun, read_text, root_dir, run_file from './lib/lerta'
+import cpu_count, exit from 'std:process'
+import is_file, list_dir, make_dir, make_temp_dir, remove_tree, stat, write_file from 'std:io'
+
+const work_dir = make_temp_dir().text()!
+const cases_dir = "#{root_dir}/tests/format"
+
+const fmt = (cwd: String, args: String[]) -> await run_file(compiler, ['fmt', args...], cwd)
+
+const read_or = (path: String, fallback: String) ->
+  is_file(path) then await read_text(path) else fallback
+
+const case_check = (name: String) -> Check(name: "tests/format/#{name}", run: ->
+  const dir = "#{work_dir}/#{name}"
+  make_dir dir
+  const input = await read_text("#{cases_dir}/#{name}.in")
+  const file = "#{name}.lerta"
+  await write_file("#{dir}/#{file}", input.binary)
+  const expected_report = await read_or("#{cases_dir}/#{name}.report", '')
+  const checked = await fmt(dir, [file])
+  const fixed = await fmt(dir, ['--fix', file])
+  const formatted = await read_text("#{dir}/#{file}")
+  const rechecked = await fmt(dir, [file])
+  [
+    expect_run(checked, expected_report, expected_report == '' then 0 else 1, 'report')...
+    expect_run(fixed, '', 0, '--fix stderr')...
+    compare_text('formatted', await read_or("#{cases_dir}/#{name}.formatted", input), formatted)...
+    expect_run(rechecked, '', 0, 'report on the formatted file')...
+  ]
+)
+
+# A directory of files, made fresh for a check. Making each file's directory makes `dir` too, but
+# it is made first for a tree of no files.
+const tree = (name: String, files: Map<String, String>) ->
+  const dir = "#{work_dir}/#{name}"
+  make_dir dir
+  for (path, text) in files.entries()
+    const parts = "#{dir}/#{path}".split('/')
+    const parent = [part for part, i in parts when i < parts.length - 1].join('/')
+    make_dir parent
+    await write_file("#{dir}/#{path}", text.binary)
+  dir
+
+# The stderr of a run of `lerta fmt`, named `what` in a failure, and its exit status, as expected.
+const expect_run = (result: FileRun, stderr: String, status: Int, what = 'stderr') ->
+  [compare_text(what, stderr, result.errors)..., expect_status(status, result.status)...]
+
+const expect_files = (dir: String, files: Map<String, String>) ->
+  var reasons: String[] = []
+  for (file, text) in files.entries()
+    reasons = [reasons..., compare_text(file, text, await read_text("#{dir}/#{file}"))...]
+  reasons
+
+const modified_time = (path: String) -> stat(path)!.modified_time
+
+const expect_unchanged = (path: String, time: Float): String[] ->
+  modified_time(path) == time then [] else ["#{path} was written"]
+
+const unformatted = "print(1)\n"
+# What `lerta fmt` reports on it.
+const calls_report = 'call without parentheses at the start of a statement, with them after `then` or `->` (Calls without parentheses)'
+
+const type_report = (at: String) ->
+  "#{at}: leave out the type, which can be inferred (Type annotations)\n"
+
+const command_checks =
+  Check(
+    name: 'lerta fmt without a path is a usage error'
+    run: -> expect_status(2, (await fmt(work_dir, [])).status)
+  )
+  Check(name: 'lerta fmt reports a path that names nothing, and goes on with the others', run: ->
+    const dir = await tree('missing', { 'a.lerta': unformatted })
+    const result = await fmt(dir, ['missing.lerta', 'a.lerta'])
+    const expected = "'missing.lerta' is not a file or a directory\na.lerta:1:6: #{calls_report}\n"
+    expect_run result, expected, 1
+  )
+  Check(
+    name: 'lerta fmt takes the .lerta files of a directory, in order, but not in . directories'
+    run: ->
+      const dir = await tree(
+        'walk'
+        {
+          'src/b.lerta': unformatted
+          'src/a.lerta': unformatted
+          'src/notes.txt': unformatted
+          'src/inner/c.lerta': unformatted
+          'src/.hidden/d.lerta': unformatted
+        }
+      )
+      const result = await fmt(dir, ['src/'])
+      const paths = ['src/a.lerta', 'src/b.lerta', 'src/inner/c.lerta']
+      expect_run result, ["#{path}:1:6: #{calls_report}\n" for path in paths].join(''), 1
+  )
+  Check(name: 'lerta fmt reports a file that is not valid UTF-8', run: ->
+    const dir = await tree('utf8', Map())
+    const bytes: Byte[] = [0x70, 0xff, 0x0a]
+    await write_file("#{dir}/bad.lerta", bytes.to_binary())
+    const result = await fmt(dir, ['bad.lerta'])
+    expect_run result, "bad.lerta: the file is not valid UTF-8\n", 1
+  )
+  Check(
+    name: 'lerta fmt leaves out the types of the files that a program holds, checked once, or alone where it does not check'
+    run: ->
+      const dir = await tree(
+        'programs'
+        {
+          'lib.lerta': "export const one = (): Int -> 1\n"
+          'main.lerta': "import one from './lib'\nconst two: Int = one() + 1\nprint two\n"
+          'broken.lerta': "import one from './lib'\nconst three: String = one()\n"
+        }
+      )
+      const held = await fmt(dir, ['.'])
+      const alone = await fmt(dir, ['broken.lerta', 'lib.lerta'])
+      [
+        expect_run(held, type_report('./lib.lerta:1:20') + type_report('./main.lerta:2:10'), 1)...
+        expect_run(alone, type_report('lib.lerta:1:20'), 1, 'stderr alone')...
+      ]
+  )
+  Check(
+    name: 'lerta fmt takes a file given twice once, files that import each other, and keeps the types where an import does not parse'
+    run: ->
+      const dir = await tree(
+        'cycles'
+        {
+          'a.lerta': "import b from './b'\nexport const a = (): Int -> 1\nprint b()\n"
+          'b.lerta': "import a from './a'\nexport const b = (): Int -> a()\n"
+          'c.lerta': "(\n"
+          'd.lerta': "import c from './c'\nconst d: Int = 1\nprint d\n"
+        }
+      )
+      const result = await fmt(dir, ['a.lerta', './a.lerta', 'b.lerta', 'c.lerta', 'd.lerta'])
+      const expected =
+        type_report('a.lerta:2:18')
+        type_report('./a.lerta:2:18')
+        type_report('b.lerta:2:18')
+        "c.lerta:1:1: '(' is never closed\n"
+      expect_run result, expected.join(''), 1
+  )
+  Check(
+    name: 'lerta fmt --fix leaves out the types of the files of one program, but one that alone uses an import'
+    run: ->
+      const dir = await tree(
+        'fix_program'
+        {
+          'lib.lerta': "export const one = (): Int -> 1\n"
+          'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nconst out: Writer = stdout\nconst two: Int = one() + 1\nprint two\n"
+        }
+      )
+      const result = await fmt(dir, ['--fix', '.'])
+      const expected =
+        'lib.lerta': "export const one = -> 1\n"
+        'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nconst out: Writer = stdout\nconst two = one() + 1\nprint two\n"
+      [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
+  )
+  Check(
+    name: 'lerta fmt --fix writes the members of enums alone, through the checks of the calls that the checker rewrites, and leaves out the imports of the enums that it leaves unused'
+    run: ->
+      const dir = await tree(
+        'members'
+        {
+          'kinds.lerta': "export enum Kind\n  A\n  B\n\nexport struct Field(name: String, kind: Kind)\n\nexport const count = (kinds: Kind...) -> kinds.length\n\nexport const pick = (n: Int, options: { kind: Kind }) -> options.kind\n"
+          'made.lerta': "import Field, Kind from './kinds'\n\nexport const made = Field(name: 'a', kind: Kind.A)\n"
+          'named.lerta': "import Field from './kinds'\nimport Kind from './kinds'\n\nconst name = 'b'\nexport const named = Field(name, kind: Kind.B)\n"
+          'counted.lerta': "import count from './kinds'\nimport Kind from './kinds'\n\nexport const counted = count(Kind.A, Kind.A)\n"
+          'picked.lerta': "import Kind, pick from './kinds'\n\nexport const picked = pick(1, kind: Kind.A)\n"
+          'test.lerta': "import Kind from './kinds'\n\nexport const is_b = (kind: Kind) -> kind == Kind.B\n"
+          'unused.lerta': "import Kind from './kinds'\n\nexport const one = 1\n"
+          'typed.lerta': "import Kind, pick from './kinds'\n\nexport const typed = (n: Int) ->\n  const kind: Kind = pick(n, kind: A)\n  kind\n"
+          'parsed.lerta': "import Kind from './kinds'\n\nexport const parsed = Kind.parse('A')\n"
+          'main.lerta': "import counted from './counted'\nimport made from './made'\nimport named from './named'\nimport picked from './picked'\nimport is_b from './test'\nimport one from './unused'\nimport typed from './typed'\nimport parsed from './parsed'\n\nprint is_b(made.kind).to_string()\nprint counted\nprint is_b(picked).to_string()\nprint named.name\nprint one\nprint is_b(typed(1)).to_string()\nprint parsed == nil\n"
+        }
+      )
+      const result = await fmt(dir, ['--fix', '.'])
+      const expected =
+        'made.lerta': "import Field from './kinds'\n\nexport const made = Field(name: 'a', kind: A)\n"
+        'named.lerta': "import Field from './kinds'\n\nconst name = 'b'\nexport const named = Field(name, kind: B)\n"
+        'counted.lerta': "import count from './kinds'\n\nexport const counted = count(A, A)\n"
+        'picked.lerta': "import pick from './kinds'\n\nexport const picked = pick(1, kind: A)\n"
+        'test.lerta': "import Kind from './kinds'\n\nexport const is_b = (kind: Kind) -> kind == B\n"
+        'unused.lerta': "import Kind from './kinds'\n\nexport const one = 1\n"
+        'typed.lerta': "import pick from './kinds'\n\nexport const typed = (n: Int) ->\n  const kind = pick(n, kind: A)\n  kind\n"
+        'parsed.lerta': "import Kind from './kinds'\n\nexport const parsed = Kind.parse('A')\n"
+      [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
+  )
+  Check(
+    name: 'lerta fmt checks once the files that a program holds through others, beside a file whose import is missing'
+    run: ->
+      const dir = await tree(
+        'chain'
+        {
+          'a.lerta': "import b from './b'\nprint b()\n"
+          'b.lerta': "import c from './c'\nexport const b = (): Int -> c()\n"
+          'c.lerta': "export const c = (): Int -> 1\n"
+          'e.lerta': "import nope from './nope'\nimport c from './c'\nprint c()\n"
+        }
+      )
+      const result = await fmt(dir, ['a.lerta', 'b.lerta', 'c.lerta', 'e.lerta'])
+      expect_run result, type_report('b.lerta:2:18') + type_report('c.lerta:1:18'), 1
+  )
+  Check(
+    name: 'lerta fmt --fix writes only the files that change, and fails on one that does not parse'
+    run: ->
+      const dir =
+        await tree('fix', { 'a.lerta': unformatted, 'b.lerta': "print 1\n", 'c.lerta': "(\n" })
+      const (b, c) = ("#{dir}/b.lerta", "#{dir}/c.lerta")
+      const (b_time, c_time) = (modified_time(b), modified_time(c))
+      const result = await fmt(dir, ['--fix', '.'])
+      [
+        expect_run(result, "./c.lerta:1:1: '(' is never closed\n", 1)...
+        await expect_files(
+          dir
+          { 'a.lerta': "print 1\n", 'b.lerta': "print 1\n", 'c.lerta': "(\n" }
+        )...
+        expect_unchanged(b, b_time)...
+        expect_unchanged(c, c_time)...
+      ]
+  )
+
+const names =
+  [file.without_suffix('.in')! for file in list_dir(cases_dir) when file.ends_with('.in')]
+
+const failed_count =
+  try
+    await run_checks(
+      'format checks'
+      [(case_check(name) for name in names)..., command_checks...]
+      cpu_count
+    )
+  finally
+    await remove_tree(work_dir)
+exit failed_count == 0 then 0 else 1
