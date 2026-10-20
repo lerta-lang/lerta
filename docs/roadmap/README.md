@@ -1,6 +1,6 @@
 # Roadmap
 
-This directory holds the planned design of what is not implemented yet, by area. Within an area, the parts are in no order; across areas, [Milestones](#milestones) sets what comes first. What is implemented is in [the reference](../reference/README.md).
+This directory holds the planned design of what is not implemented yet, by area. The parts are in no order, but for [the dependencies](#dependencies) between areas. What is implemented is in [the reference](../reference/README.md).
 
 When a feature is implemented, its description moves to [the reference](../reference/README.md), or for the internal design to [the internals](../internals.md), and is removed from here.
 
@@ -11,14 +11,6 @@ When a feature is implemented, its description moves to [the reference](../refer
 | [objects.md](objects.md) | Classes and structs, interfaces, generics, equality |
 | [runtime.md](runtime.md) | Safety, errors and exceptions, memory management, concurrency |
 | [programs.md](programs.md) | Modules, FFI, the standard library, tools |
-
-## Milestones
-
-Each milestone is a kind of program that can be written once it is reached, so that real programs, not only the compiler, find what the language lacks.
-
-1. **The test harness in Lerta** ([tools](programs.md#tools)), with what it needs of the [standard library](programs.md#standard-library).
-
-Whether the runtime collects cycles ([runtime](runtime.md#open-questions)) is decided before milestone 1 is reached, from programs driven by events, rather than after async/await is complete.
 
 ## Dependencies
 
