@@ -7,9 +7,11 @@ import
   RecordLiteral, Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation,
   Unwrap, Yield
 from '../ast'
-import breaking, choice, Doc, indent, join, line_feed, rule, separated, text, token from './doc'
+import
+  breaking, choice, closing, Doc, indent, join, line_feed, rule, separated, text, token
+from './doc'
 import named_type, type_arguments from './print_type'
-import if_doc from './print_statement'
+import if_doc, is_command_callee from './print_statement'
 import annotation_key from './annotated'
 import
   CAST_FALLBACKS, ENUM_MEMBERS, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, STRING_LITERALS
@@ -18,7 +20,9 @@ import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
 from './print_literal'
 import case_doc, function_doc, try_doc from './print_block'
-import bracketed, Context, is_layout, keyword, word_before from './printing'
+import
+  bracketed, bracketed_or, Context, is_layout, keyword, lines_of_items, opened_list, word_before
+from './printing'
 
 # Precedence levels, weakest first (see Operators in docs/reference/syntax.md).
 const CONDITIONAL = 1
@@ -113,7 +117,7 @@ const bare_doc = (expression: Expression, context: Context): Doc ->
       const index = expression_doc(expression.index, context.inside_brackets())
       join [object, text('['), index, text(']')]
     when Unwrap then join([operand(expression.operand, context, POSTFIX, false), text('!')])
-    when Call then call_doc(expression, context)
+    when Call then call_doc(expression, context, false)
     when UnaryOperation then unary_doc(expression, context)
     when BinaryOperation then binary_doc(expression, context)
     when Range
@@ -273,12 +277,28 @@ const nil_safe_doc = (nil_safe: If, context: Context) ->
   const rest = nil_safe.then_body[0] as Expression!
   join [object, text('?'), bare_doc(rest, context)]
 
-export const call_doc = (call: Call, context: Context) ->
+# `whole` tells that the call is a statement or a whole value, which may take its arguments in a
+# block (see takes_block_arguments).
+export const call_doc = (call: Call, context: Context, whole: Bool) ->
   const callee = operand(call.callee, context, POSTFIX, false)
   const inside = context.inside_brackets()
   const items = arguments(call, inside)
   const open = join([callee, type_arguments(call.type_args), text('(')])
-  bracketed open, items, ')', arguments_closing_at(call, context)
+  const closing_text = closing(')', arguments_closing_at(call, context))
+  const opened =
+    if whole and takes_block_arguments(call, context)
+      indent join([callee, line_feed(), lines_of_items(items)])
+    else
+      opened_list open, items, closing_text
+  bracketed_or open, items, closing_text, opened
+
+# Whether a call whose arguments do not fit on its line can take them in a block below it, without
+# parentheses (see Long lists): one on a line of its own, outside brackets, with arguments and the
+# callee of a call without parentheses, which `f<T>`, `g(x)` or `fs[0]` is not.
+export const takes_block_arguments = (call: Call, context: Context) ->
+  const has_arguments = call.args.length > 0 or call.named_args.length > 0
+  const plain_callee = call.type_args.length == 0 and is_command_callee(call.callee)
+  context.on_own_line and not context.in_brackets and plain_callee and has_arguments
 
 # Where the parenthesis that closes the arguments is in the source: the one that closes the
 # parenthesis before the first argument, if the source has the arguments in parentheses.

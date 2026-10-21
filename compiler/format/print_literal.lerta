@@ -13,7 +13,9 @@ import function_block_doc from './print_block'
 import columns from './source'
 import type_arguments from './print_type'
 import BRANCHES, INSIDE_BRACES, LINE_LENGTH, MULTI_LINE_LITERALS, SHORTHAND from './rules'
-import arguments, clarified, comprehension_forms, expression_doc from './print_expression'
+import
+  arguments, call_doc, clarified, comprehension_forms, expression_doc, takes_block_arguments
+from './print_expression'
 import bracketed, Context, Item, lines_of_items, opened_list from './printing'
 
 export const item = (expression: Expression, context: Context) ->
@@ -154,9 +156,13 @@ export const value_after = (value: Expression, context: Context) ->
     else
       if const block = literal_block_with_members(value, context)
         return breaking(MULTI_LINE_LITERALS, on_line, block)
-      # On the next line, deeper, if it fits there and not on this one.
+      # On the next line, deeper, if it fits there and not on this one; otherwise on this line, a
+      # call with its arguments in a block below it if it can take them so.
       const next_line = indent(join([line_feed(), expression_doc(value, context)]))
-      breaking LINE_LENGTH, on_line, choice(next_line, on_line)
+      const in_block = value is Call and takes_block_arguments(value, context)
+      const broken =
+        in_block then join([text(' '), call_doc(value as Call!, context, true)]) else on_line
+      breaking LINE_LENGTH, on_line, choice(next_line, broken)
 
 # The items of a literal in an indented block, without brackets, if it can be written so: a block
 # reads one element as the element itself, and takes no spread.
