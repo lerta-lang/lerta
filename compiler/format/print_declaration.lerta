@@ -29,34 +29,31 @@ export const declaration_doc = (statement: Statement, context: Context) ->
         interface_type then join([text(': '), named_type(interface_type)]) else text('')
       type_declaration_doc join(head), satisfies, statement.members, context
     when InterfaceDeclaration
-      const head = join(
+      const head = join
         [
           exported(statement.exported, statement.position, context)
           keyword('interface ', statement.position)
           name_doc(statement.name)
           type_parameters(statement.type_params)
         ]
-      )
       join [head, members_doc(statement.members, context)]
     when EnumDeclaration
-      const head = join(
+      const head = join
         [
           exported(statement.exported, statement.position, context)
           keyword('enum ', statement.position)
           name_doc(statement.name)
         ]
-      )
       const members = [enum_member(member, context) for member in statement.members]
       join [head, indent(join([line_feed(), separated(members, line_feed())]))]
     when TypeAlias
-      const head = join(
+      const head = join
         [
           exported(statement.exported, statement.position, context)
           keyword('type ', statement.position)
           name_doc(statement.name)
           text(' =')
         ]
-      )
       join [head, aliased_type(statement)]
     when Extern
       const parts =
@@ -69,14 +66,13 @@ export const declaration_doc = (statement: Statement, context: Context) ->
       parts.push join([text(': '), type_doc(statement.type)])
       join parts
     when Extend
-      const head = join(
+      const head = join
         [
           keyword('extend', statement.position)
           type_parameters(statement.type_params)
           text(' ')
           type_doc(statement.type)
         ]
-      )
       join [head, members_doc(statement.members, context)]
     when Import then import_doc(statement, context)
     else text('')
@@ -116,7 +112,7 @@ const members_doc = (members: MemberDeclaration[], context: Context) ->
 
 # `[const | var | weak | weak!] name[: Type][ = [default] value]`.
 const member_doc = (member: MemberDeclaration, context: Context) ->
-  const parts: Doc[] = []
+  const parts: Doc[]
   parts.push keyword("#{modifier} ", member.position) if const modifier = member.modifier
   parts.push name_doc(member.name)
   parts.push removed_type('field', member.name.position, context)
@@ -139,11 +135,10 @@ const aliased_type = (alias: TypeAlias) ->
   const on_line = join([text(' '), type_doc(type)])
   return on_line if type is not UnionTypeName
   const members = [type_doc(member) for member in type.members]
-  const parts: Doc[] = []
+  const parts: Doc[]
   for member, i in members
-    parts.push(
+    parts.push
       i == 0 then member else choice(join([text(' | '), member]), join([line_feed(), member]))
-    )
   breaking LONG_LISTS, on_line, indent(join([line_feed(), join(parts)]))
 
 # `import a, b as c from 'module'`, or `export` before them, with the names in an indented block
@@ -166,9 +161,8 @@ const import_doc = (import_node: Import, context: Context) ->
   const items = [item(name) for name in import_node.names]
   const names = separated([item.doc for item in items], text(', '))
   const on_line = join([word, text(' '), names, text(' from '), module])
-  const block = join(
+  const block = join
     [word, indent(join([line_feed(), lines_of_items(items)])), line_feed(), text('from '), module]
-  )
   const doc = breaking(reported, on_line, block)
   left_out then rule(ENUM_MEMBERS, doc) else doc
 
@@ -185,8 +179,7 @@ const module_doc = (import_node: Import, context: Context) ->
   const end = source.tokens.length
   const index = source.find(STRING, start, end) ? return text("'#{import_node.module}'")
   const module = source.tokens[index]
-  const literal = StringLiteral(
+  const literal = StringLiteral
     value: import_node.module
     position: Position(line: module.line, column: module.column)
-  )
   string_doc literal, context

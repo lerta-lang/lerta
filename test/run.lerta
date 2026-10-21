@@ -85,7 +85,7 @@ const skipped_dirs = ->
   const skipped_kind = target.windows then 'posix' else 'windows'
   [dir for dir in test_dirs when dir.split('/').contains(skipped_kind)]
 
-const no_suites: Suite[] = []
+const no_suites: Suite[]
 
 const suites = (skipped: String[]) ->
   [
@@ -106,23 +106,22 @@ const names_with_extension = (dir: String, extension: String) ->
   ]
 
 const collect = (suite: Suite) ->
-  const tests: TestCase[] = []
+  const tests: TestCase[]
   for name in names_with_extension(suite.source_dir, 'lerta')
-    const expected = Map<String, Binary>()
+    const expected: Map<String, Binary>
     for extension in suite.extensions
       const path = "#{root_dir}/#{suite.expected_dir}/#{name}.#{extension}"
       expected[extension] = await read_file(path) if is_file(path)
     const { source_dir, expected_dir, extensions } = suite
-    tests.push(
+    tests.push
       TestCase(name, source_dir, expected_dir, extensions, expected, label: "#{source_dir}/#{name}")
-    )
   tests
 
 # Files in the expected directory that no test would read, such as the expected output of a
 # deleted source.
 const stray_files = (suite: Suite) ->
   const sources = names_with_extension(suite.source_dir, 'lerta')
-  const expected_files: String[] = []
+  const expected_files: String[]
   for extension in EXPECTED_EXTENSIONS
     for name in names_with_extension(suite.expected_dir, extension)
       if not sources.contains(name) or not suite.extensions.contains(extension)
@@ -171,13 +170,12 @@ const compile_and_run = (test: TestCase, optimize: Bool) ->
   ) == nil
   if is_compile_error
     const stderr = lines(others).binary
-    return Outcome(
+    return Outcome
       stderr
       stdout: ''.binary
       warnings: lines(warnings)
       failed: true
       compile_error: true
-    )
   if built.status != 0 or others.length > 0
     throw SetupError(message: "the build failed (#{built.failure}):\n#{built.errors}")
   const ran = await run_program(executable)
@@ -226,13 +224,13 @@ const run_program = (path: String) ->
   program_runs += 1
   const cwd = "#{work_dir}/run-#{program_runs}"
   make_dir cwd
-  const no_args: String[] = []
+  const no_args: String[]
   const (file, args) = target.windows then ('wine', [path]) else (path, no_args)
   const prefix = wine_prefixes.take()
-  const stdout: Byte[] = []
-  const stderr: Byte[] = []
+  const stdout: Byte[]
+  const stderr: Byte[]
   try
-    const ran = run(
+    const ran = run
       file
       args...
       cwd: cwd
@@ -241,7 +239,6 @@ const run_program = (path: String) ->
       stdout: stdout
       stderr: stderr
       output_limit: OUTPUT_LIMIT
-    )
     const exit = await timeout(ran, run_timeout_seconds())
     ProgramRun stdout: stdout.to_binary(), stderr: stderr.to_binary(), failed: exit.code != 0
   catch _: TimeoutError
@@ -251,7 +248,7 @@ const run_program = (path: String) ->
 
 # A compile error happens before any optimization, so a test that fails to compile without -O is
 # not repeated with it: the -O check waits for the unoptimized one.
-const unoptimized_runs = Map<String, Promise<Outcome>>()
+const unoptimized_runs: Map<String, Promise<Outcome>>
 
 const run_test = (test: TestCase, optimize: Bool): Promise<String[]?> ->
   const expected = test.expected
@@ -295,7 +292,7 @@ export const suite = (given: Target) ->
   const title = 'run tests'
   const skipped = skipped_dirs()
   # A stray file fails the run as a check of its own, so the summary lists it.
-  const all_checks: Check[] = []
+  const all_checks: Check[]
   for group in suites(skipped)
     for file in stray_files(group)
       all_checks.push Check(name: file, run: -> at_once(['stray file: no test reads it']))

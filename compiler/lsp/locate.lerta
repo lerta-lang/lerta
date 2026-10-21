@@ -33,7 +33,7 @@ export const location_of = (program: ProgramWide, module_index: Int) ->
 export const hover_lines = (
   program: ProgramWide, module_index: Int, source: String, at: Position
 ) ->
-  const lines: String[] = []
+  const lines: String[]
   for candidate in candidates_at(program, module_index, source, at)
     const type = candidate.type ? continue
     const line = "#{candidate.name.name}: #{format_type(type)}"
@@ -54,43 +54,39 @@ export const definition_of = (
 const candidates_at = (program: ProgramWide, module_index: Int, source: String, at: Position) ->
   const lines = source.split("\n")
   const shared = program.shared[module_index]
-  const found: Candidate[] = []
+  const found: Candidate[]
   const add = (candidate: Candidate) ->
     found.push candidate if spans(candidate.name, at) and is_written(lines, candidate.name)
   for facts in all_facts(shared)
     for (node, type) in facts.types.entries()
       if node is Identifier
-        add(
+        add
           Candidate(
             type
             name: node
             declaration: -> name_declaration(program, module_index, facts, node)
           )
-        )
       else if node is Member
-        add(
+        add
           Candidate(type, name: node.name, declaration: -> member_declaration(program, facts, node))
-        )
     for (call, link) in facts.instances.entries()
       const callee = call.callee
       continue if callee is not Identifier
       const instance = link.instance
       const generic = generic_of(program, instance.generic)
       const declared = Declared(module_index: generic.module_index, name: generic.name)
-      add(
+      add
         Candidate(name: callee as Identifier!, type: instance.entry.type, declaration: -> declared)
-      )
   for imported in shared.imports.names.values()
     const source = imported.source
     continue if source is not ExportRef
     const ref = source as ExportRef!
-    add(
+    add
       Candidate(
         name: imported.name
         type: nil
         declaration: -> top_level_declaration(program, ref.module_index, ref.name)
       )
-    )
   add_reexported_names add, program, module_index
   found
 
@@ -107,13 +103,12 @@ const add_reexported_names = (add: (Candidate) -> void, program: ProgramWide, mo
       const names = [exported.name]
       names.push alias if const alias = exported.alias
       for name in names
-        add(
+        add
           Candidate(
             name
             type: nil
             declaration: -> top_level_declaration(program, ref.module_index, ref.name)
           )
-        )
 
 # What the name refers to: a top-level value, a function, a class or struct, an extern, or else a
 # local, whose declaration the checker kept.

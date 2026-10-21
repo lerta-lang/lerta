@@ -56,7 +56,7 @@ export const import_prefix = (import_node: Import) ->
 # Parameter), but those with a default. This only spares checks that would fail: the checking
 # decides which can be left out (see removable_annotations).
 export const annotations_of = (program: Statement[]) ->
-  const found: Annotation[] = []
+  const found: Annotation[]
   add_statements found, program
   found
 
@@ -108,7 +108,7 @@ const add_function = (found: Annotation[], literal: FunctionLiteral, expected: B
   add_statements found, literal.body
 
 const default_values = (params: Parameter[]) ->
-  const values: Expression[] = []
+  const values: Expression[]
   for param in params
     values.push value if const value = param.default
   values
@@ -139,13 +139,12 @@ const add_expression = (found: Annotation[], expression: Expression): void ->
 
 const return_annotation = (literal: FunctionLiteral) ->
   const type = literal.return_type
-  Annotation(
+  Annotation
     key: annotation_key('return', literal.position)
     remove: -> literal.return_type = nil
     restore: -> literal.return_type = type
     value: last_value(literal.body)
     function: literal
-  )
 
 const last_value = (body: Statement[]) ->
   const last = body.last() ? return nil
@@ -158,12 +157,11 @@ const parameter_annotation = (literal: FunctionLiteral, i: Int) ->
   const typed = (new_type: TypeName?) ->
     const { variadic, default } = literal.params[i]
     literal.params[i] = Parameter(name, variadic, default, type: new_type)
-  Annotation(
+  Annotation
     key: annotation_key('parameter', name.position)
     remove: -> typed(nil)
     restore: -> typed(type)
     parameter: name
-  )
 
 # The type of `Map()` or `Set()` moves to its type arguments: `const s = Set<String>()`.
 const variable_annotation = (declaration: Declaration) ->
@@ -175,14 +173,13 @@ const variable_annotation = (declaration: Declaration) ->
   const restore = ->
     declaration.type = type
     collection.call.type_args = [] if collection
-  Annotation(
+  Annotation
     remove
     restore
     key: annotation_key('variable', declaration.name.position)
     name: declaration.name
     value: declaration.value
     moves_to_type_arguments: collection != nil
-  )
 
 # A call of Map or Set without type arguments, with those of the type that the declaration writes.
 const collection_call = (declaration: Declaration) ->
@@ -199,18 +196,16 @@ const field_annotation = (members: MemberDeclaration[], i: Int) ->
   const { name, type, value } = members[i]
   const typed = (new_type: TypeName?) ->
     const { modifier, has_default, position } = members[i]
-    members[i] = MemberDeclaration(
+    members[i] = MemberDeclaration
       name
       modifier
       has_default
       position
       value: members[i].value
       type: new_type
-    )
-  Annotation(
+  Annotation
     name
     value
     key: annotation_key('field', name.position)
     remove: -> typed(nil)
     restore: -> typed(type)
-  )
