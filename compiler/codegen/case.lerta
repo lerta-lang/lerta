@@ -4,7 +4,7 @@ import Case, CaseArm, Conditional, Expression, If, NilLiteral, Statement from '.
 import generate_condition_of, generate_if from './control_flow'
 import generate, generate_condition, type_of from './expression'
 import generate_block_value, hold, no_locals from './function'
-import CodegenLocal, Generator from './generator'
+import Generator from './generator'
 import emit_type_test from './heap_object'
 import emit_release, ir_type, ownership from './lerta_ir'
 import emit_is_nil, emit_present_test from './optional'
@@ -52,22 +52,10 @@ export const generate_case = (g: Generator, case_expression: Case) ->
 # The condition is tested as an `if` tests it; both values jump to one end block that merges
 # them.
 export const generate_conditional = (g: Generator, conditional: Conditional) ->
-  const ir = g.ir
   const test = generate_condition(g, conditional.condition)
-  const then_label = ir.fresh_label('then')
-  const else_label = ir.fresh_label('else')
-  const end_label = ir.fresh_label('then.end')
-  ir.emit "br i1 #{test}, label %#{then_label}, label %#{else_label}"
-  const branch = (label: String, value: Expression) ->
-    ir.start_block label
-    const operand = generate_block_value(g, [value], no_locals)
-    const from = ir.current_block
-    ir.emit "br label %#{end_label}"
-    "[ #{operand == '' then 'poison' else operand}, %#{from} ]"
+  const value_of = (value: Expression) -> -> generate_block_value(g, [value], no_locals)
   const incoming =
-    branch(then_label, conditional.then_value)
-    branch(else_label, conditional.else_value)
-  ir.start_block end_label
+    branch_values(g, test, value_of(conditional.then_value), value_of(conditional.else_value))
   merge g, type_of(g, conditional), incoming
 
 # An `if` that gives a value merges those of its branches as then/else does; one that gives none
@@ -76,23 +64,30 @@ export const generate_if_value = (g: Generator, if_expression: If) ->
   if is_kind(type_of(g, if_expression), 'void')
     generate_if g, if_expression
     return ''
-  const ir = g.ir
   const condition = generate_condition_of(g, if_expression.condition)
-  const then_label = ir.fresh_label('if.then')
-  const else_label = ir.fresh_label('if.else')
-  const end_label = ir.fresh_label('if.end')
-  ir.emit "br i1 #{condition.test}, label %#{then_label}, label %#{else_label}"
-  const branch = (label: String, body: Statement[], define: (Map<String, CodegenLocal>) -> void) ->
+  const then_value = -> generate_block_value(g, if_expression.then_body, condition.define)
+  const else_value = -> generate_block_value(g, if_expression.else_body, no_locals)
+  merge g, type_of(g, if_expression), branch_values(g, condition.test, then_value, else_value)
+
+# Branches on the test to the two values, each generated in a block of its own that then jumps to
+# one end block: the incoming values of that block, which merge takes.
+const branch_values = (
+  g: Generator, test: String, then_value: () -> String, else_value: () -> String
+) ->
+  const ir = g.ir
+  const then_label = ir.fresh_label('branch.then')
+  const else_label = ir.fresh_label('branch.else')
+  const end_label = ir.fresh_label('branch.end')
+  ir.emit "br i1 #{test}, label %#{then_label}, label %#{else_label}"
+  const branch = (label: String, value: () -> String) ->
     ir.start_block label
-    const operand = generate_block_value(g, body, define)
+    const operand = value()
     const from = ir.current_block
     ir.emit "br label %#{end_label}"
     "[ #{operand == '' then 'poison' else operand}, %#{from} ]"
-  const incoming =
-    branch(then_label, if_expression.then_body, condition.define)
-    branch(else_label, if_expression.else_body, no_locals)
+  const incoming = [branch(then_label, then_value), branch(else_label, else_value)]
   ir.start_block end_label
-  merge g, type_of(g, if_expression), incoming
+  incoming
 
 # The value of the arms at their end block: none for void, and none that comes for never.
 export const merge = (g: Generator, type: Type, incoming: String[]) ->

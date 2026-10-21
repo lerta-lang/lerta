@@ -162,20 +162,10 @@ const generate_nil_test = (g: Generator, binary: BinaryOperation) ->
 const generate_logical = (g: Generator, binary: BinaryOperation) ->
   const ir = g.ir
   const left = generate_condition(g, binary.left)
-  const left_block = ir.current_block
-  const right_label = ir.fresh_label('logical.right')
-  const end_label = ir.fresh_label('logical.end')
   const is_and = binary.operator == 'and'
-  const if_true = is_and then right_label else end_label
-  const if_false = is_and then end_label else right_label
-  ir.emit "br i1 #{left}, label %#{if_true}, label %#{if_false}"
-  ir.start_block right_label
-  const right = generate_condition(g, binary.right)
-  const right_block = ir.current_block
-  ir.emit "br label %#{end_label}"
-  ir.start_block end_label
-  const decided = is_and then 'false' else 'true'
-  ir.assign "phi i1 [ #{decided}, %#{left_block} ], [ #{right}, %#{right_block} ]"
+  const undecided = is_and then left else ir.assign("xor i1 #{left}, true")
+  const right = -> generate_condition(g, binary.right)
+  emit_branch ir, 'i1', undecided, right, is_and then 'false' else 'true'
 
 # `x!` throws if x is nil.
 export const generate_unwrap = (g: Generator, unwrap: Unwrap) ->
@@ -189,16 +179,7 @@ export const generate_coalesce = (g: Generator, coalesce: Coalesce) ->
   const ir = g.ir
   const operand = generate(g, coalesce.value)
   const type = type_of(g, coalesce.value)
-  const present = emit_is_present(ir, operand, type)
+  const is_nil = emit_is_nil(ir, operand, type)
   const unwrapped = emit_unwrap(ir, operand, type)
-  const value_block = ir.current_block
-  const fallback_label = ir.fresh_label('coalesce.fallback')
-  const end_label = ir.fresh_label('coalesce.end')
-  ir.emit "br i1 #{present}, label %#{end_label}, label %#{fallback_label}"
-  ir.start_block fallback_label
-  const fallback = generate(g, coalesce.fallback)
-  const fallback_block = ir.current_block
-  ir.emit "br label %#{end_label}"
-  ir.start_block end_label
-  const incoming = "[ #{unwrapped}, %#{value_block} ], [ #{fallback}, %#{fallback_block} ]"
-  ir.assign "phi #{ir_type(type_of(g, coalesce))} #{incoming}"
+  const fallback = -> generate(g, coalesce.fallback)
+  emit_branch ir, ir_type(type_of(g, coalesce)), is_nil, fallback, unwrapped
