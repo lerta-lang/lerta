@@ -130,7 +130,7 @@ export const object_ir_type = (type: ObjectType) ->
   "%#{quoted_name("lerta.object.#{type_key(type)}")}"
 
 # The name without its sigil, `@` or `%`, to build other names from it.
-export const without_sigil = (name: String) -> name.without_prefix('@') ? name.without_prefix('%')!
+const without_sigil = (name: String) -> name.without_prefix('@') ? name.without_prefix('%')!
 
 # Bytes other than printable ASCII, '"' and '\' are written as \XX in IR strings.
 const ir_string_bytes = (bytes: Binary) ->
@@ -189,9 +189,7 @@ const emit_retain_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
 
 export const emit_release_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
   case owned
-    when COROUTINE
-      ir.module.declare 'llvm.coro.destroy', 'declare void @llvm.coro.destroy(ptr)'
-      ir.emit "call void @llvm.coro.destroy(ptr #{operand})"
+    when COROUTINE then call_void_runtime(ir, 'void @llvm.coro.destroy(ptr)', "ptr #{operand}")
     when TRACE then call_void_runtime(ir, 'void @lerta_trace_free(ptr)', "ptr #{operand}")
     else emit_release(ir, reference) if const reference = reference_of(ir, operand, owned)
 

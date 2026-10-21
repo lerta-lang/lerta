@@ -62,34 +62,3 @@ export const call_void_method = (
 ): void -> call_method(ir, coder, name, void_type, args, unwind)
 
 const returns_value = (result: Type) -> ir_return_type(result) != 'void'
-
-# Runs `body` with each index from 0 up to `count`, as an i64.
-export const emit_count_up = (ir: IrBuilder, count: String, body: (String) -> void) ->
-  const counter = ir.alloca('i64')
-  ir.emit "store i64 0, ptr #{counter}"
-  const loop = ir.fresh_label('json.count')
-  const step = ir.fresh_label('json.count.step')
-  const done = ir.fresh_label('json.count.done')
-  ir.emit "br label %#{loop}"
-  ir.start_block loop
-  const index = ir.assign("load i64, ptr #{counter}")
-  const is_done = ir.assign("icmp eq i64 #{index}, #{count}")
-  ir.emit "br i1 #{is_done}, label %#{done}, label %#{step}"
-  ir.start_block step
-  body index
-  ir.emit "store i64 #{ir.assign("add i64 #{index}, 1")}, ptr #{counter}"
-  ir.emit "br label %#{loop}"
-  ir.start_block done
-
-# Runs `body` while `more`, which it emits at the start of each turn, gives true.
-export const emit_while = (ir: IrBuilder, more: () -> String, body: () -> void) ->
-  const loop = ir.fresh_label('json.loop')
-  const step = ir.fresh_label('json.loop.step')
-  const done = ir.fresh_label('json.loop.done')
-  ir.emit "br label %#{loop}"
-  ir.start_block loop
-  ir.emit "br i1 #{more()}, label %#{step}, label %#{done}"
-  ir.start_block step
-  body()
-  ir.emit "br label %#{loop}"
-  ir.start_block done
