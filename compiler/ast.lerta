@@ -107,13 +107,6 @@ export class Call
   named_args: NamedValue[]
   type_args: TypeName[]
   position: Position
-  # Whether its arguments are packed for a variadic parameter (see pack_variadic), which the call
-  # keeps however many times it is checked, as by `lerta fmt`.
-  packed = false
-  # Whether it constructs the struct that its parameter expects, from the named arguments of the
-  # call that holds it (see gather_named_args), rather than the class or struct that the callee
-  # names in its scope.
-  constructs_expected = false
 
 # `@` inside a method or a field initializer: the object itself. `@x` is its member x.
 export class This(position: Position)
@@ -181,7 +174,7 @@ export struct Parameter
   type: TypeName?
   # `y = 0`, which a call may leave out (see required_params).
   default: Expression?
-  # `rest: T...`, which takes the arguments after the others as a `T[]` (see pack_variadic).
+  # `rest: T...`, which takes the arguments after the others as a `T[]` (see packed_arguments).
   variadic = default false
 
 # `T` in `<T>(x: T) -> x`, or `T: Shape`, whose type arguments must satisfy the interface Shape,
@@ -399,6 +392,13 @@ export type Node = Statement | Binding | TypeName
 # A new node of the same name, so that each place where a name is used has a node of its own.
 export const copy_identifier = (identifier: Identifier) ->
   Identifier name: identifier.name, position: identifier.position
+
+# The named arguments of a construction, of a class or struct, whose names alone, as in `Point(x)`,
+# are those of the same names, `Point(x: x)`, first.
+export const construction_arguments = (call: Call) ->
+  const from_names =
+    [NamedValue(name: copy_identifier(arg as Identifier!), value: arg) for arg in call.args]
+  [from_names..., call.named_args...]
 
 # The else branch of an `if` that is a statement. That of `x?.rest` gives the nil of its value,
 # which a statement has none of.

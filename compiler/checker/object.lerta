@@ -1,7 +1,7 @@
 # Types classes and structs: construction, `@` and methods; and anonymous struct literals. Their
 # fields are in fields.
 import
-  Call, copy_identifier, Expression, FunctionLiteral, Identifier, NamedType, NamedValue,
+  Call, construction_arguments, Expression, FunctionLiteral, Identifier, NamedType, NamedValue,
   RecordLiteral
 from '../ast'
 import fail from './diagnostics'
@@ -34,15 +34,16 @@ export const type_of_construction = (
   body: Body, call: Call, declared: ObjectType, expected: Type?
 ) ->
   const program = body.program
-  name_shorthand_args body, call, declared
+  reject_positional_args body, call, declared
+  const named_args = construction_arguments(call)
   const typed = Map<Expression, Type>()
-  const type = constructed_instance(body, call, declared, expected, typed)
+  const type = constructed_instance(body, call, named_args, declared, expected, typed)
   body.facts.types[call.callee] = type
   # The callee is a name (see constructed_type).
   record_reference body, call.callee as Identifier!, Constructor(type)
   const info = info_of(program, type)
   const given = Set<String>()
-  for arg in call.named_args
+  for arg in named_args
     const { name, position } = arg.name
     fail program, position, "the argument '#{name}' is given twice" if given.has(name)
     given.add name
@@ -73,10 +74,11 @@ const argument_type = (body: Body, info: ObjectInfo, arg: NamedValue) ->
 
 # The type that the call constructs: the declared class or struct, or an instance of a generic
 # one. Its type arguments are those written, or else those that the expected type gives, then the
-# arguments typed alone, as for a generic function (see infer_type_arguments), whose types `typed`
-# keeps.
+# named arguments typed alone, as for a generic function (see infer_type_arguments), whose types
+# `typed` keeps.
 const constructed_instance = (
-  body: Body, call: Call, declared: ObjectType, expected: Type?, typed: Map<Expression, Type>
+  body: Body, call: Call, named_args: NamedValue[], declared: ObjectType, expected: Type?,
+  typed: Map<Expression, Type>
 ) ->
   const program = body.program
   if declared.args.length == 0
@@ -96,10 +98,10 @@ const constructed_instance = (
     typed[arg.value] = type
     infer argument_type(body, info, arg), type, bind
   const is_literal = (arg: NamedValue) -> needs_context(body, arg.value)
-  for arg in call.named_args
+  for arg in named_args
     infer_from arg, nil if not is_literal(arg)
   # A literal whose field's type is still unknown gives its own type, as `1` an Int.
-  const literals = [arg for arg in call.named_args when is_literal(arg)]
+  const literals = [arg for arg in named_args when is_literal(arg)]
   for arg in float_first(literals, (arg) -> arg.value)
     const pattern = substitute(argument_type(body, info, arg), type_bindings)
     continue if not has_type_parameters(pattern)
@@ -166,14 +168,9 @@ const expected_record_fields = (expected: Type?): RecordField[] ->
   const record = inner_of(type)
   record is RecordType then record.fields else []
 
-# The call is rewritten into the named form, which every later pass reads, as do the later
-# instances of a generic function that holds the call.
-const name_shorthand_args = (body: Body, call: Call, type: ObjectType) ->
+# A construction's arguments are named, or names alone (see construction_arguments).
+const reject_positional_args = (body: Body, call: Call, type: ObjectType) ->
   if const not_named = call.args.find((arg) -> arg is not Identifier)
     const example = 'Point(x: 1) or Point(x)'
     const message = "#{format_type(type)} is constructed with named arguments, as in #{example}"
     fail body.program, not_named.position, message
-  const names = [arg as Identifier! for arg in call.args]
-  const from_args = [NamedValue(name: copy_identifier(name), value: name) for name in names]
-  call.named_args = [from_args..., call.named_args...]
-  call.args = []

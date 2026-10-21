@@ -40,9 +40,10 @@ export const receiver_type_arguments = (
   return nil if generic.type_params.any((param) -> not bindings.has(param.name.name))
   [bindings[param.name.name]! for param in generic.type_params]
 
-# The call has as many arguments as the generic has parameters.
+# The call's arguments, as it passes them, are as many as the generic has parameters.
 export const infer_type_arguments = (
-  body: Body, call: Call, generic: GenericFunction, expected: Type?, receiver: TypeBinding?
+  body: Body, call: Call, args: Expression[], generic: GenericFunction, expected: Type?,
+  receiver: TypeBinding?
 ) ->
   const params = generic.params
   const bindings = written_bindings(body, call, generic)
@@ -65,7 +66,7 @@ export const infer_type_arguments = (
       infer_through_members body, target, value_type, at, bind_at(at)
   bind_from generic.receiver!.type, receiver.type, receiver.at if receiver
   const check_argument = (index: Int) ->
-    const arg = call.args[index]
+    const arg = args[index]
     const param = substitute(params[index], types_of(bindings))
     # A parameter whose type names no type parameter takes its argument as in any call.
     const declared_alone = not has_type_parameters(params[index])
@@ -77,14 +78,14 @@ export const infer_type_arguments = (
     fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
     bind_from params[index], type, arg.position
     inferred.push InferredArgument(arg, type, index)
-  const is_function = (i: Int) -> call.args[i] is FunctionLiteral
-  const is_literal = (i: Int) -> needs_context(body, call.args[i]) and not is_function(i)
-  for arg, i in call.args
+  const is_function = (i: Int) -> args[i] is FunctionLiteral
+  const is_literal = (i: Int) -> needs_context(body, args[i]) and not is_function(i)
+  for arg, i in args
     check_argument i if not needs_context(body, arg)
   if const result = generic.result
     bind_from result, expected, call.position if expected
-  const literals = [i for i in 0...call.args.length when is_literal(i)]
-  check_argument i for i in float_first(literals, (i) -> call.args[i])
+  const literals = [i for i in 0...args.length when is_literal(i)]
+  check_argument i for i in float_first(literals, (i) -> args[i])
   # The type argument of a bounded type parameter gives those that its bound names, as `X:
   # Iterable<T>` gives T, before function literals take their parameters' types.
   const bind_from_bounds = ->
@@ -93,7 +94,7 @@ export const infer_type_arguments = (
       const known = bindings[type_param.name.name] ? continue
       infer_through_members body, bound, known.type, known.at, bind_at(known.at)
   bind_from_bounds()
-  for i in 0...call.args.length
+  for i in 0...args.length
     check_argument i if is_function(i)
   Inference bindings, inferred
 
