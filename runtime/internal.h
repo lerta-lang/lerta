@@ -167,9 +167,12 @@ void lerta_output_flush(void);
 bool lerta_output_flush_at_end(bool panicking);
 // Writes to stderr at once, for reports, whose failure cannot be reported (io.c).
 void lerta_stderr_write(const uint8_t *bytes, int64_t length);
+void lerta_stderr_write_text(const char *text);
+void lerta_stderr_write_string(const LertaString *s);
+void lerta_stderr_write_int(int64_t n);
 
-// Errors (io.c, lerta.c). The message of the pending exception, owned, which the first entry of an
-// Error's itab gives.
+// Errors (errors.c, lerta.c). The message of the pending exception, owned, which the first entry of
+// an Error's itab gives.
 LertaString *lerta_exception_message(void);
 // Prints the pending exception's message and trace to stderr, after flushing stdout, and exits with
 // status 1.

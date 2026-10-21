@@ -9,6 +9,20 @@ void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
   lerta_os_write(STDERR_FD, bytes, length);
 }
 
+void lerta_stderr_write_text(const char *text) {
+  lerta_stderr_write((const uint8_t *)text, (int64_t)strlen(text));
+}
+
+void lerta_stderr_write_string(const LertaString *s) {
+  lerta_stderr_write(s->bytes, s->length);
+}
+
+void lerta_stderr_write_int(int64_t n) {
+  uint8_t buffer[LERTA_INT_TEXT_MAX];
+  int64_t start = lerta_format_int(n, buffer);
+  lerta_stderr_write(buffer + start, LERTA_INT_TEXT_MAX - start);
+}
+
 static bool check_writer(int64_t fd) {
   if (fd == STDOUT_FD || fd == STDERR_FD) return true;
   lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&unknown_writer);
@@ -99,51 +113,5 @@ void lerta_print_stdout(const LertaString *text) {
 
 void lerta_print_stderr(const LertaString *text) {
   lerta_output_flush();
-  lerta_stderr_write(text->bytes, text->length);
-}
-
-static const uint8_t newline = '\n';
-
-// Writes the prefix and the bytes to stderr as a line, after what the buffer holds, so that the
-// output appears in program order.
-static void write_error_line(const char *prefix, const uint8_t *bytes, int64_t length,
-                             bool panicking) {
-  lerta_output_flush_at_end(panicking);
-  lerta_stderr_write((const uint8_t *)prefix, (int64_t)strlen(prefix));
-  lerta_stderr_write(bytes, length);
-  lerta_stderr_write(&newline, 1);
-}
-
-void lerta_exit_with_error(const LertaString *message) {
-  write_error_line("", message->bytes, message->length, false);
-  lerta_os_exit(1);
-}
-
-static void (*registered_raise)(int32_t kind, const LertaString *message) = NULL;
-
-void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message)) {
-  registered_raise = raise;
-}
-
-void lerta_raise(LertaErrorKind kind, const LertaString *message) {
-  if (registered_raise == NULL) lerta_exit_with_error(message);
-  registered_raise((int32_t)kind, message);
-}
-
-void lerta_raise_with(LertaErrorKind kind, const void *prefix, const LertaString *detail) {
-  LertaString *message = lerta_string_concat(2, prefix, detail);
-  lerta_raise(kind, message);
-  lerta_release(message);
-}
-
-void lerta_panic(const char *message) {
-  write_error_line(message, (const uint8_t *)"", 0, true);
-  lerta_os_abort();
-}
-
-void lerta_panic_string(const LertaString *message) { lerta_panic_with("", message); }
-
-void lerta_panic_with(const char *prefix, const LertaString *message) {
-  write_error_line(prefix, message->bytes, message->length, true);
-  lerta_os_abort();
+  lerta_stderr_write_string(text);
 }

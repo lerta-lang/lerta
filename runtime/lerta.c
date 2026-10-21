@@ -84,31 +84,17 @@ void lerta_trace_free(LertaTrace *saved) {
   free(saved);
 }
 
-static void write_text(const char *text) {
-  lerta_stderr_write((const uint8_t *)text, (int64_t)strlen(text));
-}
-
-static void write_string(const LertaString *s) {
-  lerta_stderr_write(s->bytes, s->length);
-}
-
-static void write_int(int64_t n) {
-  uint8_t buffer[LERTA_INT_TEXT_MAX];
-  int64_t start = lerta_format_int(n, buffer);
-  lerta_stderr_write(buffer + start, LERTA_INT_TEXT_MAX - start);
-}
-
 // `  at f (main.lerta:3:5)`
 static void write_trace_entry(const LertaTraceSite *site) {
-  write_text("  at ");
-  write_string(site->function);
-  write_text(" (");
-  write_string(site->file);
-  write_text(":");
-  write_int(site->line);
-  write_text(":");
-  write_int(site->column);
-  write_text(")\n");
+  lerta_stderr_write_text("  at ");
+  lerta_stderr_write_string(site->function);
+  lerta_stderr_write_text(" (");
+  lerta_stderr_write_string(site->file);
+  lerta_stderr_write_text(":");
+  lerta_stderr_write_int(site->line);
+  lerta_stderr_write_text(":");
+  lerta_stderr_write_int(site->column);
+  lerta_stderr_write_text(")\n");
 }
 
 // The entries kept of the pending exception's trace, innermost first, with how many are left out
@@ -118,9 +104,9 @@ static void write_trace(void) {
   int64_t first_end = trace_count <= TRACE_KEPT ? trace_count : TRACE_ENDS;
   for (int64_t i = 0; i < first_end; i++) write_trace_entry(trace_entries[i]);
   if (trace_count <= TRACE_KEPT) return;
-  write_text("  ... ");
-  write_int(trace_count - TRACE_KEPT);
-  write_text(" more\n");
+  lerta_stderr_write_text("  ... ");
+  lerta_stderr_write_int(trace_count - TRACE_KEPT);
+  lerta_stderr_write_text(" more\n");
   for (int64_t i = trace_count - TRACE_ENDS; i < trace_count; i++) {
     write_trace_entry(trace_entries[trace_slot(i)]);
   }
@@ -130,9 +116,9 @@ static void write_trace(void) {
 static void write_exception(const char *prefix, bool panicking) {
   LertaString *message = lerta_exception_message();
   lerta_output_flush_at_end(panicking);
-  write_text(prefix);
-  write_string(message);
-  write_text("\n");
+  lerta_stderr_write_text(prefix);
+  lerta_stderr_write_string(message);
+  lerta_stderr_write_text("\n");
   write_trace();
 }
 

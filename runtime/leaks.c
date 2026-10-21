@@ -84,16 +84,6 @@ static bool same_name(const LertaString *a, const LertaString *b) {
   return a->length == b->length && memcmp(a->bytes, b->bytes, (size_t)a->length) == 0;
 }
 
-static void write_text(const char *text) {
-  lerta_stderr_write((const uint8_t *)text, (int64_t)strlen(text));
-}
-
-static void write_count(int64_t count) {
-  uint8_t text[LERTA_INT_TEXT_MAX];
-  int64_t start = lerta_format_int(count, text);
-  lerta_stderr_write(text + start, LERTA_INT_TEXT_MAX - start);
-}
-
 typedef struct {
   const LertaString *name;
   int64_t count;
@@ -120,17 +110,17 @@ static int64_t report_unreachable(void) {
     names[i].count++;
   }
   if (unreachable > 0) {
-    write_text("leak: ");
-    write_count(unreachable);
-    write_text(" unreachable object(s): ");
+    lerta_stderr_write_text("leak: ");
+    lerta_stderr_write_int(unreachable);
+    lerta_stderr_write_text(" unreachable object(s): ");
     for (int64_t i = 0; i < name_count; i++) {
-      if (i > 0) write_text(", ");
-      lerta_stderr_write(names[i].name->bytes, names[i].name->length);
-      write_text(" (");
-      write_count(names[i].count);
-      write_text(")");
+      if (i > 0) lerta_stderr_write_text(", ");
+      lerta_stderr_write_string(names[i].name);
+      lerta_stderr_write_text(" (");
+      lerta_stderr_write_int(names[i].count);
+      lerta_stderr_write_text(")");
     }
-    write_text("\n");
+    lerta_stderr_write_text("\n");
   }
   free(names);
   return unreachable;
@@ -142,9 +132,9 @@ bool lerta_report_leaks(void) {
   int64_t unreachable = report_unreachable();
   int64_t held = live_count - unreachable;
   if (held == 0) return unreachable > 0;
-  write_text("leak: ");
-  write_count(held);
-  write_text(" object(s)\n");
+  lerta_stderr_write_text("leak: ");
+  lerta_stderr_write_int(held);
+  lerta_stderr_write_text(" object(s)\n");
   return true;
 #else
   return false;
