@@ -7,6 +7,17 @@
 - Float literals are decimal, with a fraction after `.`, an exponent after `e` or `E` with an optional sign, or both: `1.5`, `1e9`, `2.5E-3`. `_` may separate digits in each part. A `.` starts a fraction only before a digit or `_`, so `1.` is an error and `0...3` is a range (see [Float](types.md#float)), while `1._5`, and `0x1.5` after a hexadecimal one, are each one invalid number literal. Only a decimal literal has an exponent, so `0xE+1` is an addition. A `-` joins a float literal as it joins an integer one (`-1.5`).
 - `'...'` string literals have no escapes and no interpolation. They are single line only and cannot contain `'`.
 - `"..."` string literals are single line and have escapes, `\n` `\t` `\r` `\0` `\\` `\"` `\#` and `\u{1F600}` (a code point in hex, not a surrogate), and interpolation `"#{expression}"`, which inserts the value's text, `expression.to_string()` (see [Stringable](builtins.md#stringable)). An interpolated expression cannot contain a function literal.
+- `"""` string literals span lines. The opening `"""` ends its line, and the text is that of the lines after it, up to the closing `"""`, joined by line feeds. The closing `"""` may end the last line of the text, or stand on a line of its own after spaces, which keeps the line feed before it:
+
+  ```
+  const name = 'app'
+  const usage = """
+    Usage:
+      build "#{name}"
+    """
+  ```
+
+  This is `"Usage:\n  build \"app\"\n"`; with the closing `"""` at the end of the `build` line, it would end without the line feed. The first `"""` closes, so a text that ends with `"` before the closing `"""` writes it `\"`. The text leaves out the indentation that its lines share: the least number of leading spaces of the lines that are not blank, wherever the closing `"""` is. A blank line, of spaces only, is empty. A tab is never indentation, but text. The literal has the escapes and the interpolation of `"..."`, each within a line, and holds `"` and `""` as they are; `\"""` writes `"""`. A CRLF line end is a line feed.
 
 ## Indentation
 

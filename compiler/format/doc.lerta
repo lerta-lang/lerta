@@ -43,7 +43,12 @@ export struct Rule(rule: StyleRule, doc: Doc)
 # is printed, and the lines after it as much deeper or shallower as they were.
 export struct Verbatim(at: Position, last_line: Int)
 
-export type Doc = Text | Newline | Indent | Concat | Choice | Rule | Verbatim
+# The lines of a `"""` literal after its first, each one level deeper than the doc, the last ending
+# with the closing quotes, after which what follows goes on. They are taken as written, never
+# broken, and only the last is measured. `end_line` is where the literal ends in the source.
+export struct LiteralLines(lines: String[], end_line: Int)
+
+export type Doc = Text | Newline | Indent | Concat | Choice | Rule | Verbatim | LiteralLines
 
 export const WIDTH = 100
 const INDENT = '  '
@@ -130,6 +135,11 @@ class Printer
         @start_rule doc.rule, steps
         steps.push inner(doc.doc, indent)
       when Verbatim then @print_verbatim(doc, indent)
+      when LiteralLines
+        for line in doc.lines
+          @new_lines 1, indent + 1
+          @write line
+        @source_line = doc.end_line
 
   # The part of the rule ends after what is on `steps` next, and starts at its first text.
   start_rule = (style_rule: StyleRule, steps: Step[]) ->
@@ -335,6 +345,9 @@ const fits = (
       when Rule then pending.push(inner(doc.doc, depth, nested))
       # Its lines are those of a statement, which a line feed comes before.
       when Verbatim then return not in_flat
+      when LiteralLines
+        left = WIDTH - (depth + 1) * INDENT_WIDTH - columns(doc.lines.last()!)
+        return false if left < 0
   true
 
 # Whether a comment, or one on a line of its own if `own_line`, is from the line `first` up to
@@ -354,6 +367,7 @@ export const has_line_feed = (doc: Doc): Bool ->
     when Concat then doc.docs.any(has_line_feed)
     when Indent then has_line_feed(doc.doc)
     when Rule then has_line_feed(doc.doc)
+    when LiteralLines then false
     when Choice then has_line_feed(doc.flat) and has_line_feed(doc.broken)
     when Text then false
     when Verbatim then doc.last_line > doc.at.line

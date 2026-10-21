@@ -4,7 +4,9 @@
 import compile_error from '../errors'
 import hex, hex_digit_value from '../hex'
 import SourceLine from './source_line'
-import scan_double_quoted, TemplatePart, TextPart from './string_literal'
+import
+  MultilineLiteral, scan_double_quoted, scan_multiline, TemplatePart, TextPart
+from './string_literal'
 
 # A keyword or a punctuation is its own kind, whose text is its own. The others are named:
 # INTERPOLATED is a string with interpolations, LINE_BREAK a line end inside brackets (see
@@ -101,8 +103,9 @@ export struct Token
   column: Int
   # The parts of an interpolated string.
   parts: TemplatePart[]?
-  # The column after it, where the formatter reads its spelling up to; that of its start for a
-  # layout token.
+  # The line and the column after it, where the formatter reads its spelling up to; those of its
+  # start for a layout token. Only a `"""` literal ends on a later line.
+  end_line = default @line
   end_column = default @column
 
 # A comment, which runs from its `#` to the end of its line, alone on it if `own_line`. The
@@ -119,31 +122,48 @@ export const lex = (source: String, path: String) ->
   const tokens: Token[] = []
   const comments: Comment[] = []
   const layout = Layout(path, tokens)
-  const lines = source.split("\n")
-  for text, index in lines
-    const ends_with_lf = index + 1 < lines.length
-    const bytes = ends_with_lf then without_carriage_return(text) else text.binary
-    const line = SourceLine(path, bytes, number: index + 1, column_offset: 0)
+  const lines = source_lines(source, path)
+  # The lines up to this number are inside a `"""` literal.
+  var literal_end = 0
+  for line in lines
+    continue if line.number <= literal_end
     const indent = line.scan_while(0, is_space)
     continue if indent == line.length
-    const comment_at = (index: Int, own_line: Bool) ->
-      Comment own_line, line: line.number, column: line.column(index)
     if line.bytes[indent] == '#'
-      comments.push comment_at(indent, true)
+      comments.push Comment(own_line: true, line: line.number, column: line.column(indent))
       continue
     line.fail 'tabs are not allowed in indentation', indent if line.bytes[indent] == "\t"
     layout.start_line line, indent
-    const scanner = LineScanner(line, position: indent)
-    layout.add token for token in scanner.run()
-    comments.push comment_at(index, false) if const index = scanner.comment_index
-    layout.end_line line, indent
+    var scanner = LineScanner(line, position: indent)
+    while true
+      layout.add token for token in scanner.run()
+      const start = scanner.multiline_start ? break
+      const literal = scan_multiline(lines, scanner.line.number - 1, start)
+      layout.add multiline_token(scanner.line, start, literal)
+      scanner = LineScanner(line: literal.line, position: literal.end)
+      literal_end = literal.line.number
+    const last = scanner.line
+    if const index = scanner.comment_index
+      comments.push Comment(own_line: false, line: last.number, column: last.column(index))
+    layout.end_line last, indent
   layout.finish lines.length
   Lexed tokens, comments
+
+const source_lines = (source: String, path: String) ->
+  const texts = source.split("\n")
+  const lines: SourceLine[] = []
+  for text, index in texts
+    const ends_with_lf = index + 1 < texts.length
+    const bytes = ends_with_lf then without_carriage_return(text) else text.binary
+    lines.push SourceLine(path, bytes, number: index + 1, column_offset: 0)
+  lines
 
 # The tokens of an interpolated expression, placed where it is in the source line.
 export const tokenize_fragment = (source: String, path: String, line: Int, column: Int) ->
   const fragment = SourceLine(path, bytes: source.binary, number: line, column_offset: column - 1)
-  const tokens = LineScanner(line: fragment, position: 0).run()
+  const scanner = LineScanner(line: fragment, position: 0)
+  const tokens = scanner.run()
+  fragment.fail 'unterminated string literal', start if const start = scanner.multiline_start
   const end = fragment.column(fragment.length)
   tokens.push layout_token(NEWLINE, line, end)
   tokens.push layout_token(EOF, line, end)
@@ -259,6 +279,9 @@ class LineScanner
   tokens: Token[] = []
   # Where the comment that ends the line starts, if any; scanning stops at it.
   comment_index: Int? = nil
+  # Where the `"""` that opens a literal on the lines after it starts, if the line ends with one;
+  # scanning stops at it, and the caller reads the literal.
+  multiline_start: Int? = nil
 
   run = ->
     while @position < @line.length
@@ -267,6 +290,10 @@ class LineScanner
         when c == ' ' then @position += 1
         when c == '#'
           @comment_index = @position
+          break
+        when @line.bytes.occurs_at(@position, '"""'.binary)
+          @line.fail "'\"\"\"' must end its line", @position if @position + 3 != @line.length
+          @multiline_start = @position
           break
         when is_identifier_start(c) then @scan_word()
         when c == "'" then @scan_raw_string()
@@ -345,6 +372,22 @@ class LineScanner
       else
         "U+#{hex(number, 4)}"
     @line.fail "unexpected character #{shown}", @position
+
+# The token of the `"""` literal that starts at `start` on the line.
+const multiline_token = (line: SourceLine, start: Int, literal: MultilineLiteral) ->
+  const plain = plain_text(literal.parts)
+  const kind: TokenKind = plain != nil then STRING else INTERPOLATED
+  const parts = plain != nil then nil else literal.parts
+  Token(
+    kind
+    parts
+    text: plain ? ''
+    spaced: start == 0 or line.bytes[start - 1] == ' '
+    line: line.number
+    column: line.column(start)
+    end_line: literal.line.number
+    end_column: literal.line.column(literal.end)
+  )
 
 # The text of a literal without interpolations, or nil.
 const plain_text = (parts: TemplatePart[]) ->

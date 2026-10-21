@@ -7,8 +7,11 @@ import
   RecordLiteral, Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation,
   Unwrap, Yield
 from '../ast'
+import Token from '../lexer/tokens'
+import common_indentation, is_blank from '../lexer/string_literal'
 import
-  breaking, choice, closing, Doc, indent, join, line_feed, rule, separated, text, token
+  breaking, choice, closing, Doc, indent, join, line_feed, LiteralLines, rule, separated, text,
+  token
 from './doc'
 import named_type, type_arguments from './print_type'
 import if_doc, is_command_callee from './print_statement'
@@ -189,7 +192,22 @@ const spelled = (at: Position, context: Context) ->
   const index = literal_token(at, context) ? return text('')
   const first = source.tokens[index]
   return token("-#{source.spelling(source.tokens[index + 1])}", at) if first.kind == '-'
+  return multiline_string_doc(first, context) if first.end_line > first.line
   token source.spelling(first), at
+
+# A `"""` literal, whose lines go one level deeper than the line that it starts on, without the
+# indentation that they share in the source, and a blank one empty.
+const multiline_string_doc = (literal: Token, context: Context) ->
+  const source = context.source
+  const lines = [source.lines[line - 1] for line in (literal.line + 1)...literal.end_line]
+  const quotes_column = literal.end_column - 3
+  lines.push source.slice(literal.end_line, 1, quotes_column)
+  const width = common_indentation(lines)
+  const dedented =
+    [is_blank(line) then '' else line.binary.text(width, line.binary.length)! for line in lines]
+  dedented.push "#{dedented.pop()}\"\"\""
+  const first = token('"""', Position(line: literal.line, column: literal.column))
+  join [first, LiteralLines(lines: dedented, end_line: literal.end_line)]
 
 # The index of the literal's token at the position, past the parentheses that it was written in,
 # which give it their position.
@@ -204,7 +222,9 @@ const literal_token = (at: Position, context: Context) ->
 export const string_doc = (literal: StringLiteral, context: Context) ->
   const source = context.source
   const index = literal_token(literal.position, context) ? return text("'#{literal.value}'")
-  const written = source.spelling(source.tokens[index])
+  const first = source.tokens[index]
+  return multiline_string_doc(first, context) if first.end_line > first.line
+  const written = source.spelling(first)
   const is_double = written.starts_with('"')
   # A `\u{...}` escape writes a character that would not be seen, or told apart, as it is.
   const keeps_escapes = written.split('\u{').length > 1

@@ -4,7 +4,6 @@ The planned syntax, control flow, types and operators.
 
 ## Syntax
 
-- Multi-line strings use `"""..."""`. The common leading indentation is removed, measured from the position of the closing `"""` (the Swift approach).
 - A function literal held by a local `const` may have [defaults](../reference/functions.md), as a top-level function does. Its defaults may use the locals it captures, so each is computed by a closure.
 - A function literal held by a local `const` may call itself by that name, its return type written as for any recursive function. It does not capture itself, which would make a cycle that is never freed, but calls its own code with its own captures.
 - An error in a [call without parentheses](../reference/syntax.md#calls) suggests the fix: `f g x` suggests `f g(x)`, and a callee that is not a name with `.name`s, as `xs[i].push x`, suggests `xs[i].push(x)`. An undefined name that is a word only in its place, as `default` in `default - 1`, says so.
