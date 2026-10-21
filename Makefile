@@ -184,12 +184,12 @@ test-cross:
 	@tools/test_cross.sh
 endif
 
-# check checks that the .lerta files that git lists, those not added yet included, are in the style.
-# tests/ is left out, as it holds code that is not in the style on purpose, and so is a file deleted
-# but not yet from git (test -e). The files go to one run of lerta fmt, which checks a program once
-# for the files it holds; xargs splits a list that is too long into more runs.
+# check checks that the .lerta files that git lists, those not added yet included, are in the style,
+# tests/ too, where `# fmt: skip` and `# fmt: off` keep the code that breaks it on purpose. A file
+# deleted but not yet from git (test -e) is left out. The files go to one run of lerta fmt, which
+# checks a program once for the files it holds; xargs splits a list that is too long into more runs.
 check: bin/lerta
-	@git ls-files -z --cached --others --exclude-standard -- '*.lerta' ':!tests/' \
+	@git ls-files -z --cached --others --exclude-standard -- '*.lerta' \
 	  | xargs -0 sh -c 'for f; do test -e "$$f" && printf "%s\0" "$$f"; done' sh \
 	  | nice xargs -0 bin/lerta fmt
 

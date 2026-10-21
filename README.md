@@ -88,7 +88,7 @@ make clean
 
 ### Tests
 
-Every language feature gets run tests in `tests/`: a Lerta source file and its expected output, as described at the top of `test/run.lerta`. Programs in `examples/` are run as tests too.
+Every language feature gets run tests in `tests/`: a Lerta source file and its expected output, as described at the top of `test/run.lerta`. Programs in `examples/` are run as tests too. `make check` checks the tests' style as well: code that breaks it on purpose, as a test of the form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)), and a file that does not parse starts with `# fmt: off`.
 
 The tests are written in Lerta: `test/main.lerta`, the driver, which minilerta builds into `bin/test`, as it builds `tools/embed.lerta`, so that a change to `compiler/` cannot break the harness that tests it. `make test` builds and runs it; it runs all the suites, or those named, and the top of `test/main.lerta` lists its options, such as `-k <text>` for the checks whose names hold the text, `--failed` for those that failed when they last ran, and `--target <triple>`, which builds the run tests for another target:
 
