@@ -1,8 +1,8 @@
 # The names of a checked program by their positions, for an editor's hover and going to a
 # definition: what the checker found of the name at a place, its types and its declaration.
-import EnumDeclaration, Identifier, Member, Position from '../ast'
+import EnumDeclaration, Identifier, Import, Member, Position from '../ast'
 import generic_of, GenericFunction from '../checker/generics'
-import ExportRef, ExternExport from '../checker/imports'
+import export_ref, ExportRef, ExternExport from '../checker/imports'
 import EnumValue, Method, Property from '../checker/member_targets'
 import ExtensionSource, OwnMethod from '../checker/methods'
 import info_of from '../checker/object_types'
@@ -90,7 +90,29 @@ const candidates_at = (program: ProgramWide, module_index: Int, source: String, 
         declaration: -> top_level_declaration(program, ref.module_index, ref.name)
       )
     )
+  add_reexported_names add, program, module_index
   found
+
+# The names that the module exports from other modules, which lead to their declarations.
+const add_reexported_names = (add: (Candidate) -> void, program: ProgramWide, module_index: Int) ->
+  const module = program.modules[module_index]
+  for statement in module.program
+    continue if statement is not Import
+    const reexport = statement as Import!
+    continue if not reexport.exported
+    const exporter = module.imported[reexport]!
+    for exported in reexport.names
+      const ref = export_ref(program, exporter, exported.name.name) ? continue
+      const names = [exported.name]
+      names.push alias if const alias = exported.alias
+      for name in names
+        add(
+          Candidate(
+            name
+            type: nil
+            declaration: -> top_level_declaration(program, ref.module_index, ref.name)
+          )
+        )
 
 # What the name refers to: a top-level value, a function, a class or struct, an extern, or else a
 # local, whose declaration the checker kept.

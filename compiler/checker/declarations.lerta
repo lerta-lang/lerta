@@ -14,7 +14,7 @@ import make_generic_function from './generics'
 import add_imports, has_import from './imports'
 import add_interfaces, resolve_interfaces from './interfaces'
 import add_members, add_objects from './object_types'
-import Shared from './shared'
+import ProgramWide, Shared from './shared'
 import add_alias, names_type_or_import, resolve_aliases from './type_names'
 
 # The module's types (classes, structs and enums), interfaces, aliases and imports, which the
@@ -61,10 +61,24 @@ const add_imported_extends = (shared: Shared, run_before: Bool) ->
   const module = program.modules[shared.index]
   for statement in module.program
     if statement is Import
-      const imported = module.imported[statement]!
-      const is_added = run_before then imported < module.index else imported > module.index
-      if is_added
-        add_imported program, shared.extensions, program.shared[imported].own_methods, statement
+      for imported in extending_modules(program, module.imported[statement]!)
+        continue if imported == module.index
+        const is_added = run_before then imported < module.index else imported > module.index
+        if is_added
+          add_imported program, shared.extensions, program.shared[imported].own_methods, statement
+
+# The imported module, and those whose extends it passes on: those it exports from, and theirs.
+const extending_modules = (program: ProgramWide, imported: Int) ->
+  const found = [imported]
+  var i = 0
+  while i < found.length
+    const module = program.modules[found[i]]
+    i += 1
+    for statement in module.program
+      if statement is Import and statement.exported
+        const passed = module.imported[statement]!
+        found.push passed if not found.contains(passed)
+  found
 
 # A class, struct, enum, interface or type alias cannot have the name of an import; the error points
 # at it.

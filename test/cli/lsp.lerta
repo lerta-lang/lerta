@@ -833,6 +833,37 @@ const extern_definition_check = ->
       )...
     ]
 
+const reexport_definition_check = ->
+  Check name: 'lerta lsp finds the declarations of names that modules export from others', run: ->
+    const dir = new_cli_dir('lsp-reexport-definition')
+    const path = "#{dir}/a.lerta"
+    const shapes = "#{dir}/shapes.lerta"
+    const text = "import n from './facade'\nexport norm as m from './shapes'\nprint n(1)\n"
+    await write_file(path, ''.binary)
+    await write_file(shapes, "export const norm = (x: Int) -> x\n".binary)
+    await write_file("#{dir}/facade.lerta", "export norm as n from './shapes'\n".binary)
+    const uri = uri_of(path)
+    const messages =
+      did_open(uri, text)
+      definition_request(uri, 0, 7, 1)
+      definition_request(uri, 1, 8, 2)
+      definition_request(uri, 1, 16, 3)
+      definition_request(uri, 2, 6, 4)
+    .join('')
+    const ran = await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout.text()!
+        [
+          location_fragment(1, uri_of(shapes), 0, 13, 17)
+          location_fragment(2, uri_of(shapes), 0, 13, 17)
+          location_fragment(3, uri_of(shapes), 0, 13, 17)
+          location_fragment(4, uri_of(shapes), 0, 13, 17)
+        ]
+      )...
+    ]
+
 export const checks =
   initialize_check()
   error_request_check()
@@ -857,3 +888,4 @@ export const checks =
   definitions_after_error_check()
   imported_hover_definition_check()
   extern_definition_check()
+  reexport_definition_check()

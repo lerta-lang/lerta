@@ -102,8 +102,8 @@ From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!
 - `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `break` `continue` `return` `case` `then` `class` `struct` `throw` `import` `export` `extern` `extend` `enum` `interface` `try` `catch` `finally` `yield` `await` are keywords and cannot be used as names. These words are not keywords, and act as one only where they are written so, staying usable as names elsewhere:
   - `in` and `when` after the variables of a `for` (`for x in xs when c`, also in comprehensions) and `when` at the start of a `case` arm, so `for x in in` reads a variable `in`;
   - `pass` alone as an arm's body (see [case](control-flow.md#case-without-a-subject));
-  - `is` and `as` after an operand (see [unions](types.md#unions)), and `as` in an [import](modules.md) or an [extern](functions.md#c-functions);
-  - `from` in an [import](modules.md);
+  - `is` and `as` after an operand (see [unions](types.md#unions)), and `as` in an [import](modules.md), an [export](modules.md#exports) or an [extern](functions.md#c-functions);
+  - `from` in an [import](modules.md) or an [export](modules.md#exports);
   - `type` before an alias's name and `=` (see [unions](types.md#unions));
   - `default` before an operand in a field (see [members](objects.md#classes-and-structs)): `default -1` is a default, and `default - 1` a subtraction;
   - `weak` before a function literal, a field, `const` or `var` (see [weak function literals](functions.md#function-literals) and [weak fields and locals](objects.md#classes-and-structs)), and `weak!` before a field; a function named `weak` is called with parentheses.

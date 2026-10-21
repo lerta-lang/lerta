@@ -5,7 +5,7 @@
 import scan from 'std:scanner'
 import builtin_method from '../checker/builtins'
 import COMPLETION_NAME, CompletionProbe from '../checker/completion_probe'
-import export_of, ExportRef, ExternExport from '../checker/imports'
+import export_of, export_ref, ExportRef, ExternExport from '../checker/imports'
 import find_extension from '../checker/extensions'
 import members_for from '../checker/interfaces'
 import builtin_property from '../checker/member_targets'
@@ -164,8 +164,9 @@ const module_items = (program: ProgramWide, shared: Shared, in_top_level: Bool) 
       items.push item if not items.any((each) -> each.label == item.label)
   items
 
-# The names that the module exports: its own, and C functions, as `panic` of std:builtins.
-const exported_items = (program: ProgramWide, shared: Shared) ->
+# The names that the module exports: its own, C functions, as `panic` of std:builtins, and those
+# it exports from other modules.
+const exported_items = (program: ProgramWide, shared: Shared): CompletionItem[] ->
   const items = [item for item in names_of(program, shared) when shared.exported.has(item.label)]
   for name in shared.exported.keys()
     continue if items.any((each) -> each.label == name)
@@ -173,6 +174,11 @@ const exported_items = (program: ProgramWide, shared: Shared) ->
     if exported is ExternExport
       const item = extern_item((exported as ExternExport!).type)
       items.push CompletionItem(label: name, kind: item.kind, detail: item.detail)
+  for name in shared.reexported.keys()
+    const ref = export_ref(program, shared.index, name) ? continue
+    const declared = exported_items(program, program.shared[ref.module_index])
+    const item = declared.find((each) -> each.label == ref.name) ? continue
+    items.push CompletionItem(label: name, kind: item.kind, detail: item.detail)
   items
 
 const extern_item = (type: Type) ->

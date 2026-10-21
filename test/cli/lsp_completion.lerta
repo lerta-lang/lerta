@@ -234,6 +234,28 @@ const completion_imports_check = ->
       compare_text('response order', '0 1 end', response_ids(output).join(' '))...
     ]
 
+const completion_reexports_check = ->
+  Check name: 'lerta lsp completes the names that a module exports from another', run: ->
+    const dir = new_cli_dir('lsp-completion-reexports')
+    const path = "#{dir}/a.lerta"
+    const text = "import './facade' as f\nconst x = f.h\n"
+    await write_file(path, ''.binary)
+    await write_file("#{dir}/lib.lerta", "export const helper = -> 1\n".binary)
+    await write_file("#{dir}/facade.lerta", "export helper as h from './lib'\n".binary)
+    const uri = uri_of(path)
+    const messages =
+      did_open(uri, text)
+      did_change(uri, text)
+      completion_request(uri, 1, 13)
+    .join('')
+    const ran = await session(dir, messages)
+    const items = completion_items(ran.stdout.text()!, 1)
+    [
+      expect_status(0, ran.status)...
+      compare_text('exported from another', 'h 3 () -> Int', completion_items_named(items, 'h'))...
+      compare_text('name in its module', '', completion_items_named(items, 'helper'))...
+    ]
+
 const completion_coverage_check = ->
   Check name: 'lerta lsp completes the same member and name contexts as the CLI reference', run: ->
     const completion_text = (here: String) ->
@@ -494,4 +516,5 @@ export const checks =
   completion_enum_check()
   completion_contexts_check()
   completion_imports_check()
+  completion_reexports_check()
   completion_coverage_check()

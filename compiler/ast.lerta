@@ -362,11 +362,14 @@ export class TypeAlias
 export struct ImportName(name: Identifier, alias: Identifier?)
 
 # `import 'module' as name`, which takes no names, gives the module's exports as `name.export`.
+# `export a, b as c from 'module'` exports the names as the module's own, and `export 'module'`
+# exports none: both pass the module's extends on to the modules that import this one.
 export class Import
   names: ImportName[]
   module: String
   position: Position
   alias: Identifier? = default nil
+  exported = false
 
 # `extern lerta_write as write: (Int, String) -> Int`: a C function, by its symbol, known in the
 # module by the name after `as`, or by its symbol without one.
@@ -409,7 +412,10 @@ export const statement_else_body = (if_statement: If): Statement[] ->
   if_statement.nil_safe then [] else if_statement.else_body
 
 # Whether `export` precedes the statement.
-export const is_exported = (statement: Statement) -> exported_declaration(statement) != nil
+export const is_exported = (statement: Statement) ->
+  case statement
+    when Import then statement.exported
+    else exported_declaration(statement) != nil
 
 # A declaration that `export` can precede.
 export type Exportable =
