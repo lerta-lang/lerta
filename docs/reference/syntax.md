@@ -50,10 +50,13 @@ const config =
 draw 'p'
   x: 10
   y: 20
+const total = sum
+  1, 2
+  3
 ```
 
 - After a trailing `=` (of a declaration, a destructuring one among them, an assignment or a field), a trailing `key:` or a `return`, an indented block on the next lines is a literal. Its items, one or more on each line separated by commas as inside brackets, decide its kind: all `name: value` make an anonymous struct, all `key: value` (a key that is not a name) a map, and all plain values an array. Mixing them is an error. A value may take the lines below, as an `if`, a `case` or a function literal does. A block of one plain value is that value itself, not an array of it, so that a value can start on the next line; an array of one item is written `[x]`.
-- A statement that is a call, a name or a method, followed by an indented block whose first line is `name: value` gives the block as its named arguments (see [anonymous structs](types.md#anonymous-structs)). An array cannot be passed this way, and an array inside an array cannot be written without brackets.
+- **Arguments in a block.** A callee, the name, `@name` or member of a [call without parentheses](#calls), or a call, followed by an indented block, gives the block as the call's arguments, after those on its line: `sum` above is `sum(1, 2, 3)`, and `draw 'p'` is `draw('p', x: 10, y: 20)`. It is written as a statement, or as a whole value where a block literal may be, after `=`, `key:` or a `return`, and as the operand of `throw` or `yield`; a callee inside an operation, as in `1 + f` or `await f`, takes no block. Its items are separated as a literal's are, with the positional arguments before the named ones (`name: value`, see [anonymous structs](types.md#anonymous-structs)), and `xs...` a spread; a key that is not a name is an error. A positional item is an expression, as on the line, that may take a block of arguments of its own and the member lines below it; an `if` is not one, but `c then a else b` is. Named arguments are all on the line or all in the block. An array inside an array cannot be written without brackets.
 
 ## Declarations and assignment
 
@@ -73,7 +76,7 @@ draw 'p'
     'b'
   .join('')
   ```
-  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `const g = (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead (see [lines inside brackets](#lines-inside-brackets)). After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with named arguments in a block, the line is an error.
+  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `const g = (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead (see [lines inside brackets](#lines-inside-brackets)). After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with [arguments in a block](#bracketless-blocks), the line is an error; a value that ends with arguments in a block takes it, as it takes one after a literal.
 
 ## Calls
 
@@ -84,7 +87,7 @@ draw 'p'
   3. There are no nested parenthesis-free calls. (`f g x` is an error; write `f g(x)`.)
   4. At the start of a statement, whitespace after the callee marks the start of the arguments: `f (a), b` is `f((a), b)`, while `f(a)` is a call with parentheses. `f -1` is `f(-1)`; if there is also whitespace after the operator, as in `f - 1`, it is a binary operator. In the middle of an expression there are no parenthesis-free calls, so `x -1` is `x - 1`.
   5. **A call with zero arguments requires parentheses**: `f()`. A bare `f` is the function value.
-  6. If the last argument is a function literal, its body may continue as an indented block on the next lines: `each xs, (x) ->` followed by the body. With parentheses it cannot, as an item inside brackets cannot open a block (see [lines inside brackets](#lines-inside-brackets)).
+  6. If the last argument is a function literal, its body may continue as an indented block on the next lines: `each xs, (x) ->` followed by the body. With parentheses it cannot, as an item inside brackets cannot open a block (see [lines inside brackets](#lines-inside-brackets)); give the arguments in a block instead (see [arguments in a block](#bracketless-blocks)).
 - Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
 - `(x)` groups an expression.
 - Arguments may be named, `f(name: value)`, after the positional ones: those of a constructor and the fields of an [anonymous struct](types.md#anonymous-structs) parameter.

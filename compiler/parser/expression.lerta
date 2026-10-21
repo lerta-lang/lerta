@@ -3,12 +3,12 @@
 import
   Await, BinaryOperation, Binding, Call, Cast, Conditional, Coalesce, copy_identifier, Declaration,
   Expression, FloatLiteral, Identifier, If, Index, IsTest, Member, NamedValue, NilLiteral, Position,
-  Range, RecordLiteral, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
+  Range, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
 from '../ast'
 import TokenKind from '../lexer/tokens'
-import parse_block_literal, starts_block, starts_field_block from './block_literal'
+import parse_block_literal, starts_block from './block_literal'
 import integer_literal, parse_primary from './primary'
-import parse_element from './compound'
+import parse_element, spread_of from './compound'
 import parse_if from './statement'
 import is_one_of, token_position, TokenStream from './token_stream'
 import
@@ -45,13 +45,20 @@ const parse_if_value = (tokens: TokenStream) ->
   if_expression
 
 # A value that may take lines: a block literal, an `if` (see if_value) or an expression.
-export const parse_value = (tokens: TokenStream) ->
+export const parse_value = (tokens: TokenStream): Expression ->
   const value: Expression =
     case
       when starts_block(tokens) then parse_block_literal(tokens)
       when tokens.peek().kind == 'if' then parse_if_value(tokens)
-      else parse_expression(tokens)
+      else parse_call_value(tokens)
   continue_with_members tokens, value
+
+# An expression, which is a call when it is a callee followed by its arguments in an indented block;
+# the operand of `return`, `throw` or `yield` is one too.
+export const parse_call_value = (tokens: TokenStream): Expression ->
+  const expression = parse_expression(tokens)
+  return expression if not starts_block_arguments(tokens, expression)
+  parse_block_arguments tokens, expression
 
 # The value with the members that the lines after it take, those that start with `.` or `?.` at
 # the indentation of its first line, so that a member applies to the whole value, however many
@@ -81,20 +88,35 @@ const parse_member_line = (tokens: TokenStream, object: Expression): Expression 
   const position = object.position
   parse_postfix tokens, Member(position, object, name: parse_identifier(tokens))
 
-# `f`, or `f x`, followed by an indented block of `name: value` lines: its named arguments.
+# `f`, `f x` or `f(x)`, followed by an indented block of the arguments after those on the line.
 export const parse_block_arguments = (tokens: TokenStream, callee: Expression) ->
   const no_arguments = Arguments(args: [], named_args: [])
   const call = callee is Call then callee else call_of(callee, no_arguments, [])
-  const block = parse_block_literal(tokens)
-  # The block starts with a `name:` line, so it is an anonymous struct.
-  const record = block as RecordLiteral!
-  if call.named_args.length > 0
+  const items: Argument[] = []
+  tokens.read_block_items -> items.push(parse_block_argument(tokens))
+  const { args, named_args } = to_arguments(tokens, items)
+  if call.named_args.length > 0 and named_args.length > 0
     const message = 'named arguments are all on the line or all in the indented block'
-    tokens.fail record.position, message
-  call.named_args = record.fields
+    tokens.fail named_args[0].name.position, message
+  if call.named_args.length > 0 and args.length > 0
+    tokens.fail args[0].position, POSITIONAL_AFTER_NAMED
+  call.args.push arg for arg in args
+  call.named_args.push named for named in named_args
   call
 
-export const starts_block_arguments = (tokens: TokenStream) -> starts_field_block(tokens)
+# An argument as on the line, but a positional one may take its own block of arguments and the
+# member lines after it, as a named one's value may; a key, as of a map's entry, is not taken for a
+# name.
+const parse_block_argument = (tokens: TokenStream) ->
+  return parse_argument(tokens) if starts_named_argument(tokens)
+  const value = spread_of(tokens, continue_with_members(tokens, parse_call_value(tokens)))
+  const message = 'an argument is named by a name, not by a key'
+  tokens.fail value.position, message if tokens.peek().kind == ':'
+  Argument value: value
+
+export const starts_block_arguments = (tokens: TokenStream, expression: Expression) ->
+  const is_callee = expression is Call or expression is Identifier or expression is Member
+  is_callee and starts_block(tokens)
 
 export const call_of = (callee: Expression, arguments: Arguments, type_args: TypeName[]) ->
   const { args, named_args } = arguments
@@ -378,10 +400,14 @@ export const parse_arguments = (tokens: TokenStream) ->
 
 struct Argument(name: Identifier?, value: Expression)
 
+const starts_named_argument = (tokens: TokenStream) ->
+  tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':'
+
+const POSITIONAL_AFTER_NAMED = 'a positional argument cannot follow a named one'
+
 const parse_argument = (tokens: TokenStream) ->
-  const is_named = tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':'
   # A spread, `xs...`, gives its items to a variadic parameter (see packed_arguments).
-  return Argument(value: parse_element(tokens)) if not is_named
+  return Argument(value: parse_element(tokens)) if not starts_named_argument(tokens)
   const name = parse_identifier(tokens)
   tokens.next()
   Argument name, value: parse_value(tokens)
@@ -394,7 +420,7 @@ const to_arguments = (tokens: TokenStream, items: Argument[]) ->
     if const name = item.name
       named_args.push NamedValue(name, value: item.value)
     else if named_args.length > 0
-      tokens.fail item.value.position, 'a positional argument cannot follow a named one'
+      tokens.fail item.value.position, POSITIONAL_AFTER_NAMED
     else
       args.push item.value
   Arguments args, named_args
