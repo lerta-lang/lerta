@@ -49,7 +49,7 @@ print c.count
 ```
 class File
   path: String
-  deinit = -> print "closing #{@path}"
+  deinit = -> print("closing #{@path}")
 ```
 
 - A class's `deinit` runs when its object is released, when the last reference to it goes, before the references its fields hold are released. It cannot be called otherwise, and cannot throw (`deinit cannot throw`); an exception that a call in it throws makes a panic, `deinit threw an exception`, since no code that releases the object could take it. A struct has no `deinit`.
@@ -92,9 +92,9 @@ interface Shape
 struct Square
   side: Int
   name = 'square'
-  area = (): Int -> @side * @side
+  area = -> @side * @side
 
-const describe = <T: Shape>(shape: T) -> print "#{shape.name}: #{shape.area()}"
+const describe = <T: Shape>(shape: T) -> print("#{shape.name}: #{shape.area()}")
 
 describe Square(side: 3)
 describe { name: 'dot', area: -> 0 }

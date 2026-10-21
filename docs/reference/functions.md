@@ -3,10 +3,10 @@
 ```
 const gcd = (a: Int, b: Int): Int ->
   return a if b == 0
-  gcd(b, a % b)
+  gcd b, a % b
 
 const square = (x: Int) -> x * x
-const greet = -> print 'hello'
+const greet = -> print('hello')
 ```
 
 - A function is declared as a top-level `const` whose value is a [function literal](#function-literals) `(<parameters>): <return type> -> <body>`. One held by a local `const` is a [function value](#function-values) instead: unlike a top-level function, it cannot be used before its declaration, call itself or be generic.
@@ -63,8 +63,7 @@ const countdown = (n: Int) ->
     yield i
     i -= 1
 
-for x in countdown(3)
-  print x
+print x for x in countdown(3)
 ```
 
 - A function whose body has a `yield <value>` of its own, outside the function literals in it, returns an [`Iter`](types.md#iter) of the values it yields. Calling it runs none of the body; asking the `Iter` for an item runs the body from where it stopped to its next `yield`, which gives the item, or to its end, which ends the `Iter`.
@@ -89,7 +88,7 @@ const main = ->
   const b = fetch('b')
   print "#{await a}, #{await b}"
 
-const _done = main()
+await main()
 ```
 
 - A function whose body has an `await <promise>` of its own, outside the function literals in it, returns a `Promise` of its result; so does a function literal whose body has one. Calling it runs the body at once, up to an `await` of a promise that is not settled yet; the body then waits, and the call returns the `Promise`. So `a` and `b` above wait at the same time.
@@ -109,14 +108,14 @@ const _done = main()
 struct Point
   x: Int
   y: Int
-  to_string = (): String -> "(#{@x}, #{@y})"
+  to_string = -> "(#{@x}, #{@y})"
 
 const first = <T>(xs: T[]): T -> xs[0]
-const show = <T: Stringable>(label: String, x: T) -> print "#{label}: #{x}"
+const show = <T: Stringable>(label: String, x: T) -> print("#{label}: #{x}")
 const empty = <T>(): T[] -> []
 
 print first(['a', 'b'])
-show('point', Point(x: 1, y: 2))
+show 'point', Point(x: 1, y: 2)
 const xs = empty<String>()
 ```
 

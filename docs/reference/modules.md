@@ -21,13 +21,9 @@ import argv, exit from 'std:process'
 ## Exports
 
 ```
-export struct Point
-  x: Int
-  y: Int
+export struct Point(x: Int, y: Int)
 
-export struct Circle
-  center: Point
-  radius: Int
+export struct Circle(center: Point, radius: Int)
 
 export type Shape = Point | Circle
 
@@ -84,7 +80,7 @@ export const unit = 1
 ```
 import decode_json, encode_json from 'std:json'
 
-const text = encode_json([1, 2])     # '[1,2]'
+const text = encode_json([1, 2])  # '[1,2]'
 const xs = decode_json<Int[]>(text)
 ```
 

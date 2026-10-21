@@ -5,13 +5,13 @@
 ```
 struct NotFound: Error
 
-const find = (key: String): Int ->
+const find = (key: String) ->
   throw NotFound(message: "no #{key}") if key != 'a'
   1
 
 const n =
   try
-    find('b')
+    find 'b'
   catch e: NotFound
     print e.message
     0

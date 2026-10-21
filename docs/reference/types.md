@@ -109,10 +109,9 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 ## Optional values
 
 ```
-var name: String? = nil
+var name: String?
 print name ? 'nobody'
-if const n = '42'.parse_int()
-  print n + 1
+print n + 1 if const n = '42'.parse_int()
 ```
 
 - `T?` is a `T` or `nil`, where `T` is not itself optional: `T?` of an optional type, such as `Name?` after `type Name = String?`, is an error, since its nil would be ambiguous. A `T` or `nil` fits where a `T?` is expected. `nil` has no type of its own, so `const x = nil` needs a type (`const x: String? = nil`).
@@ -129,7 +128,7 @@ if const n = '42'.parse_int()
 ```
 const xs = [3, 1, 2]
 const names: String[] = []
-names.push('a')
+names.push 'a'
 print xs[0] + xs.length
 ```
 
@@ -178,8 +177,7 @@ print primes.has(4)
 
 ```
 const squares = (x * x for x in 0...10 when x % 2 == 0)
-for square in squares.take(3)
-  print square
+print square for square in squares.take(3)
 const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 ```
 
