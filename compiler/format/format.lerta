@@ -24,6 +24,7 @@ export struct Formatted(text: String, findings: Finding[])
 # where it differs from it. Throws a CompileError if the source does not parse, or if the text in
 # the style would not parse to the same program, which would be a bug.
 export const format_source = (source: String, path: String, left_out: String[]) ->
+  return Formatted(text: source, findings: []) if is_off_throughout(source)
   const lexed = lex(source, path)
   const text_source = source_text(source, lexed)
   const first = printed(lexed, text_source, path, left_out)
@@ -38,6 +39,18 @@ export const format_source = (source: String, path: String, left_out: String[]) 
   const found = findings(text_source, result.layout.text, result.layout.rules)
   const in_order = found.sorted((a, b) -> compare_positions(a.at, b.at))
   Formatted text: result.layout.text, findings: in_order
+
+# Whether `# fmt: off` comes before the code, and no `# fmt: on` after it: the file is kept as it is
+# written without being parsed, as one that does not parse may be. The lines are read as text, as
+# such a file may not even lex: a line that ends with `# fmt: on` counts as one, which a comment or
+# a string that merely ends so takes for it too, and the file is then parsed.
+const is_off_throughout = (source: String) ->
+  const lines = [line.trim() for line in source.split("\n")]
+  const is_code = (line: String) -> line != '' and not line.starts_with('#')
+  const code_start = lines.find_index(is_code) ? lines.length
+  const off = lines.find_index((line) -> line == '# fmt: off') ? return false
+  const after = [line for line, i in lines when i > off]
+  off < code_start and not after.any((line) -> line.ends_with('# fmt: on'))
 
 # The statements printed, those of them that are not left out, and the lines of those printed on
 # lines of their own.
