@@ -1,12 +1,13 @@
 # Statements and blocks: declarations, assignments, `if`, `while` and `for` in their block and
 # postfix forms (see Postfix forms), and calls without parentheses (see Calls without parentheses).
 import
-  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Coalesce,
-  Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern,
-  FloatLiteral, For, FunctionLiteral, Identifier, If, Import, IntegerLiteral, InterfaceDeclaration,
-  Interpolation, IsTest, Cast, MapLiteral, Member, NilLiteral, Pass, Position, Range, RecordLiteral,
-  Return, Statement, StringLiteral, This, Throw, Try, TupleLiteral, TupleItem, TypeAlias,
-  TypeDeclaration, UnaryOperation, UnionTypeName, Unwrap, While, Yield, Index
+  ArrayLiteral, ArrayTypeName, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call,
+  Case, Coalesce, Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression,
+  Extend, Extern, FloatLiteral, For, FunctionLiteral, Identifier, If, Import, IntegerLiteral,
+  InterfaceDeclaration, Interpolation, IsTest, Cast, MapLiteral, Member, NamedType, NilLiteral,
+  Pass, Position, Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw, Try,
+  TupleLiteral, TupleItem, TypeAlias, TypeDeclaration, TypeName, UnaryOperation, UnionTypeName,
+  Unwrap, While, Yield, Index
 from '../ast'
 import
   choice, Doc, has_line_feed, indent, join, line_feed, rule, separated, text, token
@@ -14,7 +15,8 @@ from './doc'
 import declaration_doc, exported from './print_declaration'
 import type_doc from './print_type'
 import
-  BRANCHES, CALLS_WITHOUT_PARENTHESES, ENUM_MEMBERS, NIL_INITIAL_VALUES, POSTFIX_FORMS
+  BRANCHES, CALLS_WITHOUT_PARENTHESES, EMPTY_INITIAL_VALUES, ENUM_MEMBERS, NIL_INITIAL_VALUES,
+  POSTFIX_FORMS
 from './rules'
 import arguments, call_doc, expression_doc, loop_header from './print_expression'
 import value_after from './print_literal'
@@ -157,6 +159,11 @@ const const_doc = (declaration: Declaration, context: Context) ->
   parts.push keyword(declaration.mutable then 'var ' else 'const ', declaration.position)
   parts.push token(declaration.name.name, declaration.name.position)
   parts.push removed_type('variable', declaration.name.position, context)
+  # A const of an array, Map or Set type is empty at first without its value (see Empty initial
+  # values), and the type of an empty Map or Set moves from its type arguments.
+  if const empty_type = starts_empty(declaration)
+    const written = join([text(': '), type_doc(empty_type), rule(EMPTY_INITIAL_VALUES, text(''))])
+    return join([parts..., rule(EMPTY_INITIAL_VALUES, written)])
   parts.push join([text(': '), type_doc(type)]) if const type = declaration.type
   # `var x: T?` is nil at first without `= nil` (see Nil initial values).
   return join([parts..., rule(NIL_INITIAL_VALUES, text(''))]) if starts_nil(declaration)
@@ -172,6 +179,21 @@ const starts_nil = (declaration: Declaration) ->
   const written = type ? return false
   const optional = written is not UnionTypeName and written.optional
   mutable and optional and value is NilLiteral
+
+# The type that a const of `[]`, or of `Map<K, V>()` or `Set<T>()`, is written with alone: the type
+# of the array, or that of the type arguments.
+const starts_empty = (declaration: Declaration): TypeName? ->
+  return nil if declaration.mutable
+  const { type, value } = declaration
+  if value is ArrayLiteral
+    const array = type as ArrayTypeName ? return nil
+    return value.elements.length == 0 and not array.optional then array
+  const call = value as Call ? return nil
+  const callee = call.callee as Identifier ? return nil
+  const is_collection = callee.name == 'Map' or callee.name == 'Set'
+  const empty = call.args.length == 0 and call.named_args.length == 0
+  return nil if type or not is_collection or not empty or call.type_args.length == 0
+  NamedType name: callee.name, args: call.type_args, position: callee.position
 
 const assignment_doc = (assignment: Assignment, context: Context) ->
   const target = expression_doc(assignment.target, context)

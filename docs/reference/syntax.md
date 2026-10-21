@@ -57,7 +57,7 @@ draw 'p'
 
 ## Declarations and assignment
 
-- `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`const xs: Int[] = []`). A `var` of an optional type may leave out its value, which is then nil: `var found: String?`.
+- `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`var xs: Int[] = []`). A `var` of an optional type may leave out its value, which is then nil: `var found: String?`. A `const` variable (not a field) whose type is written as an array, `Map<K, V>` or `Set<T>` (not optional, nor through an alias) may leave out its value, which is then empty, a new one each time the declaration runs: `const names: String[]` is `const names: String[] = []`, and `const seen: Set<String>` is `const seen = Set<String>()`.
 - `name = value` assigns to a `var`, `xs[i] = value` to an item of an array, `m[k] = value` to a value of a map and `c.name = value` to a field of a class that is not `const` (see [mutability](objects.md#classes-and-structs)).
 - `+=` `-=` `*=` `/=` `%=` `&=` `|=` `^=` `<<=` `>>=` combine a target with a value as their binary operator does, for the types it takes (`Int`, `Byte` and `Float`; see [types](types.md)), and `+=` also appends a `String` to a `String`. A map's value takes none of them (see [Map](types.md#map)).
 - An assignment is a statement, not an expression.

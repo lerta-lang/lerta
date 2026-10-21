@@ -1,8 +1,9 @@
 # Statements: the program, blocks, `const` and `var` declarations, assignments, control flow and
 # calls without parentheses; `declaration` reads the other declarations.
 import
-  Assignment, AssignmentTarget, Binding, Call, Condition, copy_identifier, Declaration, Expression,
-  For, Identifier, If, Index, Jump, Member, NilLiteral, Return, Statement, Throw, While, Yield
+  ArrayLiteral, ArrayTypeName, Assignment, AssignmentTarget, Binding, Call, Condition,
+  copy_identifier, Declaration, Expression, For, Identifier, If, Index, Jump, Member, NamedType,
+  NilLiteral, Return, Statement, Throw, TypeName, While, Yield
 from '../ast'
 import starts_weak_function_literal from './compound'
 import
@@ -198,9 +199,25 @@ const parse_declaration = (tokens: TokenStream) ->
       )
     const value = NilLiteral(position: name.position)
     return Declaration(name, type, value, mutable, position, weak, omits_value: true)
+  if type and tokens.peek().kind == NEWLINE
+    const types = 'T[], Map<K, V> or Set<T>'
+    const message = "expected '=': only a const whose type is written as #{types} starts empty"
+    const value = empty_value(type) ? tokens.fail(token_position(tokens.peek()), message)
+    # The type of an empty Map or Set goes to its type arguments, as the formatter writes it.
+    const written = value is Call then nil else type
+    return Declaration(name, value, mutable, position, weak, type: written)
   tokens.expect '=', "'='"
   const value = parse_value(tokens)
   Declaration name, type, value, mutable, position, weak
+
+# `[]`, or `Map<K, V>()` or `Set<T>()`, for a const of the type that is written without a value.
+const empty_value = (type: TypeName): Expression? ->
+  const at = type.position
+  return ArrayLiteral(position: at, elements: []) if type is ArrayTypeName and not type.optional
+  const named = type as NamedType ? return nil
+  return nil if named.optional or not ['Map', 'Set'].contains(named.name)
+  const callee = Identifier(position: at, name: named.name)
+  Call callee, position: at, args: [], named_args: [], type_args: named.args, makes_builtin: true
 
 # `const { a, b } = value`, as the declarations it stands for.
 export const parse_destructuring_statement = (tokens: TokenStream) ->
