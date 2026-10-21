@@ -64,6 +64,14 @@ checks that each file is in the [style](style.md).
   It does not leave out the other types that the checker could infer, such as those of functions that call each other. To be sure, it checks the program without them, and keeps those without which it does not check to the same types, conversions and warnings, such as a type that alone uses an import other than an enum's (see **Imports of enums left out**), found by halving them.
 - **Enum members written alone.** It writes alone a member of an enum written with its enum, `E.MEMBER`, where the checking of its program shows that E is expected (see **Enum members** in the style) and nothing takes the name, but not in the body of a generic function, nor where the expected type comes from the member only as it is written, as the left operand of `==`, the first item of an array and an argument of a call of a generic function for a parameter whose type names a type parameter. It checks the program without them, with the types it leaves out, and keeps those without which it does not check the same.
 - **Imports of enums left out.** That an import of an enum is no longer used once the types and the enums of members are left out does not count in those checks: it leaves out the name from the import, and the import if it takes no other name, and reports it under **Enum members**.
+- **Code kept as written.** A comment `# fmt: skip` that ends a line keeps that line as it is written, and one on a line of its own the next line of code; the lines from a comment `# fmt: off` up to a comment `# fmt: on`, or to the end of the file, are kept likewise. A line of a statement on lines of its own keeps all the lines of the statement, or of the innermost one, where statements in its blocks hold it: a line of an `if`'s block keeps that statement alone, but one of a list keeps all of it, and so does an arm on the line of its `when` keep the whole `case`, and a member the whole class. The statement is printed as it is written, with its comments, its types and the enums of its members, and with the imports that it uses, but indented as its block is, and its lines after the first as much deeper or shallower than the first as they were, but none shallower than the first column. The blank lines and the comments between such statements are printed as elsewhere.
+
+  ```
+  const identity = [  # fmt: skip
+    1, 0
+    0, 1
+  ]
+  ```
 - **`--fix`** writes the files that differ instead, and reports nothing else.
 - **What it keeps.** The comments, and the blank lines, at most one in a row; the spelling of literals, such as `0xFF` and the escapes of a string, but `'...'` for a string that can be written so; and the names of a destructuring.
 - **Exit code.** 1 if a file differs (without `--fix`), and if a path names nothing (`'<path>' is not a file or a directory`), a file is not valid UTF-8 or does not parse (its compile error), and 0 otherwise; the other files are still taken.

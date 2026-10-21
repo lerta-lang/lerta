@@ -1,5 +1,6 @@
 # What the formatter reads from the source by position, as the AST does not keep it: the spelling
-# of tokens, the text of comments and which lines are blank.
+# of tokens, the text of comments, which lines are blank and which the comments mark to keep as
+# they are written.
 import scan from 'std:scanner'
 import Position from '../ast'
 import Comment, Lexed, Token, TokenKind from '../lexer/tokens'
@@ -13,14 +14,14 @@ export class SourceText
   # The index in `tokens` of the token that starts at each position.
   token_indexes = index_tokens(@tokens)
   comment_lines = lines_of(@comments)
+  # The lines that hold tokens that `# fmt: skip` and `# fmt: off` mark (see lines_marked).
+  marked_lines = lines_marked(@lines, @tokens, @comments)
 
   # The text of the token as written.
   spelling = (token: Token) -> @slice(token.line, token.column, token.end_column)
 
   # The text of the comment as written, without the spaces after it.
-  comment_text = (comment: Comment) ->
-    const line = @lines[comment.line - 1]
-    slice_columns(line, comment.column, columns(line) + 1).trim_end()
+  comment_text = (comment: Comment) -> text_of(comment, @lines)
 
   is_blank = (line: Int) -> @lines[line - 1].trim_end() == ''
 
@@ -67,6 +68,35 @@ export class SourceText
     previous -= 1 while previous > 0 and LAYOUT_KINDS.contains(@tokens[previous].kind)
     previous >= 0 and @has_comment(@tokens[previous].line, at.line - 1)
 
+  # Whether the token at the position starts a line of a block, as a statement on lines of its own
+  # does.
+  starts_line = (at: Position) ->
+    const index = @token_at(at) ? return false
+    index == 0 or LINE_STARTS_AFTER.contains(@tokens[index - 1].kind)
+
+  # The last line that holds a token of the statement that starts at `start`, which ends at the
+  # line end that ends it, at the end of its block, or before `next`, where the statement after it
+  # in its block starts, past the blocks of its own and the clauses after them, as an `else`.
+  statement_last_line = (start: Position, next: Position?) ->
+    const first = @token_at(start)!
+    const stop = (next then @token_at(next)) ? @tokens.length
+    var depth = 0
+    var last = first
+    for index in first...stop
+      const kind = @tokens[index].kind
+      if kind == INDENT
+        depth += 1
+      else if kind == DEDENT
+        depth -= 1
+        break if depth < 0
+      else if kind == NEWLINE
+        break if depth == 0 and @tokens[index + 1].kind != INDENT
+      else if kind == EOF
+        break
+      else if kind != LINE_BREAK
+        last = index
+    @tokens[last].line
+
   # The index of the token that starts at the position, if one does.
   token_at = (position: Position) -> @token_indexes[position]
 
@@ -110,6 +140,42 @@ const index_tokens = (tokens: Token[]) ->
   indexes
 
 const LAYOUT_KINDS: TokenKind[] = [NEWLINE, LINE_BREAK, INDENT, DEDENT, EOF]
+const LINE_STARTS_AFTER: TokenKind[] = [NEWLINE, INDENT, DEDENT]
+
+# The text of the comment as written, without the spaces after it.
+const text_of = (comment: Comment, lines: String[]) ->
+  const line = lines[comment.line - 1]
+  slice_columns(line, comment.column, columns(line) + 1).trim_end()
+
+# The lines that hold tokens that the comments mark: the line that `# fmt: skip` ends, or the next
+# that holds a token after `# fmt: skip` on a line of its own, and those from `# fmt: off` up to
+# `# fmt: on`, or to the end of the file.
+const lines_marked = (lines: String[], tokens: Token[], comments: Comment[]) ->
+  const token_lines = Set<Int>()
+  for token in tokens
+    token_lines.add token.line if not LAYOUT_KINDS.contains(token.kind)
+  const marked = Set<Int>()
+  const mark = (first: Int, last: Int) ->
+    for line in first...(last + 1)
+      marked.add line if token_lines.has(line)
+  var off_line: Int?
+  for comment in comments
+    const text = text_of(comment, lines)
+    if text == '# fmt: skip'
+      if comment.own_line
+        var line = comment.line + 1
+        line += 1 while line <= lines.length and not token_lines.has(line)
+        marked.add line
+      else
+        marked.add comment.line
+    else if text == '# fmt: off'
+      off_line = comment.line if off_line == nil
+    else if text == '# fmt: on'
+      if const off = off_line
+        mark off + 1, comment.line - 1
+        off_line = nil
+  mark off + 1, lines.length if const off = off_line
+  marked
 
 const is_opening = (kind: TokenKind) -> kind == '(' or kind == '[' or kind == '{'
 const is_closing = (kind: TokenKind) -> kind == ')' or kind == ']' or kind == '}'

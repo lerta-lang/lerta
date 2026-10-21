@@ -3,11 +3,13 @@
 import compare_positions, Import, Position, Statement from '../ast'
 import dump_ast from '../ast_dump'
 import CompileError from '../errors'
-import lex from '../lexer/tokens'
+import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
+import imported_name, key_line from './annotated'
 import left_out_candidates from './annotations'
 import hunks from './diff'
-import join, lay_out, line_feed, RulePlace, text from './doc'
+import join, lay_out, Layout, line_feed, RulePlace, text from './doc'
+import StatementLines from './kept'
 import block_doc, is_left_out_import, left_out_import_mark from './print_statement'
 import Context from './printing'
 import BLANK_LINES, COMMENTS, LAYOUT, SPACING, StyleRule from './rules'
@@ -23,21 +25,47 @@ export struct Formatted(text: String, findings: Finding[])
 # the style would not parse to the same program, which would be a bug.
 export const format_source = (source: String, path: String, left_out: String[]) ->
   const lexed = lex(source, path)
+  const text_source = source_text(source, lexed)
+  const first = printed(lexed, text_source, path, left_out)
+  # Which statements are kept as written shows once they are printed, and their annotations stay.
+  const kept_lines = first.lines.kept
+  const result =
+    if kept_lines.length == 0
+      first
+    else
+      printed lexed, text_source, path, outside(left_out, kept_lines, text_source)
+  check_same_program result.statements, result.layout.text, path
+  const found = findings(text_source, result.layout.text, result.layout.rules)
+  const in_order = found.sorted((a, b) -> compare_positions(a.at, b.at))
+  Formatted text: result.layout.text, findings: in_order
+
+# The statements printed, those of them that are not left out, and the lines of those printed on
+# lines of their own.
+struct Printed(statements: Statement[], layout: Layout, lines: StatementLines)
+
+const printed = (lexed: Lexed, source: SourceText, path: String, left_out: String[]) ->
   const statements = parse(lexed.tokens, path)
   for annotation in left_out_candidates(statements)
     annotation.remove() if left_out.contains(annotation.key)
-  const text_source = source_text(source, lexed)
-  const context = Context(left_out, source: text_source)
+  const lines = StatementLines()
+  const context = Context(left_out, source, lines)
   const body = block_doc(statements, context)
   const ending = left_out_ending(statements, context)
   const doc = statements.length == 0 then text('') else join([body, line_feed(), ending])
-  const layout = lay_out(doc, text_source)
   const kept =
     [statement for statement in statements when not is_left_out_import(statement, context)]
-  check_same_program kept, layout.text, path
-  const found = findings(text_source, layout.text, layout.rules)
-  const in_order = found.sorted((a, b) -> compare_positions(a.at, b.at))
-  Formatted text: layout.text, findings: in_order
+  Printed lines, statements: kept, layout: lay_out(doc, source)
+
+# The annotations of `left_out` that are not on the lines kept as written, but for the names of
+# imports that those lines use.
+const outside = (left_out: String[], kept_lines: Set<Int>, source: SourceText) ->
+  const used = Set<String>()
+  for token in source.tokens
+    used.add source.spelling(token) if token.kind == IDENTIFIER and kept_lines.has(token.line)
+  const leaves_out = (key: String) ->
+    const name = imported_name(key)
+    not kept_lines.has(key_line(key)) and not (name != nil and used.has(name))
+  [key for key in left_out when leaves_out(key)]
 
 # The imports left out last are reported where they were (see left_out_import_mark).
 const left_out_ending = (statements: Statement[], context: Context) ->

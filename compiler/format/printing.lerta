@@ -7,6 +7,7 @@ import
   breaking, choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated, text,
   token
 from './doc'
+import StatementLines from './kept'
 import LONG_LISTS, TYPE_ANNOTATIONS from './rules'
 import SourceText from './source'
 
@@ -18,18 +19,20 @@ export struct Context
   # The keys of the annotations left out of the syntax tree (see annotation_key), which are reported
   # where they were.
   left_out: String[]
+  lines: StatementLines
   in_brackets = default false
   on_own_line = default true
 
-  inside_brackets = ->
-    Context source: @source, left_out: @left_out, in_brackets: true, on_own_line: false
+  inside_brackets = -> @with(true, false)
 
   # In a block, on lines of its own, as a function's body is inside brackets too.
-  in_block = -> Context(source: @source, left_out: @left_out)
+  in_block = -> @with(false, true)
 
   # On the line of an arm or a function literal.
-  after_head = ->
-    Context source: @source, left_out: @left_out, in_brackets: @in_brackets, on_own_line: false
+  after_head = -> @with(@in_brackets, false)
+
+  with = (in_brackets: Bool, on_own_line: Bool) ->
+    Context in_brackets, on_own_line, source: @source, left_out: @left_out, lines: @lines
 
 # The item of a list, and whether it is simple: a name, a literal, or `name: value` or a parameter
 # `name: Type` of such, which share a line with others when the list does not fit on one.

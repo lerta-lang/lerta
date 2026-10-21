@@ -21,30 +21,59 @@ from './rules'
 import arguments, call_doc, expression_doc, loop_header from './print_expression'
 import value_after from './print_literal'
 import function_doc from './print_block'
+import kept_or_printed from './kept'
 import Context, has_left_out_names, keyword, removed_type, word_before from './printing'
 
-# The statements, one on each line. The parts of a destructuring, which the parser declares one by
-# one after the declaration that holds the value, are written as the one statement of the source.
+# The statements, one on each line, or as they are written where they are kept (see
+# kept_or_printed).
 export const block_doc = (statements: Statement[], context: Context) ->
   const lines: Doc[] = []
-  var i = 0
   # An import that all its names are left out of is left out, and reported where it was.
   var left_out: Doc[] = []
+  const written = written_statements(statements)
+  const starts = [start_of(statement, context) for statement in written]
+  for statement, i in written
+    const next = i + 1 < starts.length then starts[i + 1]
+    const printed = -> written_doc(statement, context)
+    if const doc = kept_or_printed(starts[i], next, context.source, context.lines, printed)
+      lines.push join([left_out..., doc])
+      left_out = []
+    else
+      left_out.push left_out_import_mark(statement as Import!)
+  separated lines, line_feed()
+
+# The statements as the source writes them: the parts of a destructuring, which the parser declares
+# one by one after the declaration that holds the value, are the one statement of that.
+const written_statements = (statements: Statement[]) ->
+  const written: Statement[] = []
+  var i = 0
   while i < statements.length
     const statement = statements[i]
+    written.push statement
     i += 1
-    if is_left_out_import(statement, context)
-      left_out.push left_out_import_mark(statement as Import!)
-      continue
-    const doc =
-      if const holder = destructuring_holder(statement)
-        i += 1 while i < statements.length and takes_apart(statements[i], holder.name.name)
-        destructuring_doc holder, context
-      else
-        statement_doc statement, context
-    lines.push join([left_out..., doc])
-    left_out = []
-  separated lines, line_feed()
+    if const holder = destructuring_holder(statement)
+      i += 1 while i < statements.length and takes_apart(statements[i], holder.name.name)
+  written
+
+# Nothing for an import that is left out.
+const written_doc = (statement: Statement, context: Context): Doc? ->
+  return nil if is_left_out_import(statement, context)
+  if const holder = destructuring_holder(statement)
+    destructuring_doc holder, context
+  else
+    statement_doc statement, context
+
+# Where the first token of the statement is in the source, which may come before its position, as
+# `export` and the word of a destructuring.
+const start_of = (statement: Statement, context: Context) ->
+  const source = context.source
+  var index = source.token_at(statement.position) ? return statement.position
+  if const holder = destructuring_holder(statement)
+    const open = destructuring_open(holder, context) ? return statement.position
+    index = open - 1
+  index -= 1 if index > 0 and source.spelling(source.tokens[index - 1]) == 'export'
+  const first = source.tokens[index]
+  Position line: first.line, column: first.column
 
 # Where an import was left out, after the comments before it, which an empty text at its position
 # prints: the place that reports it, which holds no text.
@@ -76,19 +105,8 @@ const takes_apart = (statement: Statement, holder: String) ->
 # `const (a, b) = value` or `var { a, b } = value`, as the source names them.
 const destructuring_doc = (holder: Declaration, context: Context) ->
   const source = context.source
-  const value_index = source.token_at(holder.value.position) ? return text('')
-  # The value may start on a line below the `=`.
-  var equals = value_index - 1
-  equals -= 1 while source.tokens[equals].kind != '='
-  const close = equals - 1
-  var open = close
-  var depth = 0
-  while true
-    const kind = source.tokens[open].kind
-    depth += 1 if kind == ')' or kind == '}'
-    depth -= 1 if kind == '(' or kind == '{'
-    break if depth == 0
-    open -= 1
+  const open = destructuring_open(holder, context) ? return text('')
+  const close = source.closing(open)
   const word_token = source.tokens[open - 1]
   const word = token(source.spelling(word_token), at_token(word_token.line, word_token.column))
   const names = [
@@ -105,6 +123,23 @@ const destructuring_doc = (holder: Declaration, context: Context) ->
   join [word, text(' '), pattern, text(' ='), value_after(holder.value, context)]
 
 const at_token = (line: Int, column: Int) -> Position(line, column)
+
+# The index of the bracket that the names of the destructuring are in.
+const destructuring_open = (holder: Declaration, context: Context) ->
+  const source = context.source
+  const value_index = source.token_at(holder.value.position) ? return nil
+  # The value may start on a line below the `=`.
+  var equals = value_index - 1
+  equals -= 1 while source.tokens[equals].kind != '='
+  var open = equals - 1
+  var depth = 0
+  while true
+    const kind = source.tokens[open].kind
+    depth += 1 if kind == ')' or kind == '}'
+    depth -= 1 if kind == '(' or kind == '{'
+    break if depth == 0
+    open -= 1
+  open
 
 export const statement_doc = (statement: Statement, context: Context): Doc ->
   case statement

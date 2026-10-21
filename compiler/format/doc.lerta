@@ -38,7 +38,12 @@ export struct Choice
 # A part whose form the rule of the style decides.
 export struct Rule(rule: StyleRule, doc: Doc)
 
-export type Doc = Text | Newline | Indent | Concat | Choice | Rule
+# The lines of the source from that of `at`, where the first token of a statement is, through
+# `last_line`, as they are written, with the comments in them, but indented as deep as the first
+# is printed, and the lines after it as much deeper or shallower as they were.
+export struct Verbatim(at: Position, last_line: Int)
+
+export type Doc = Text | Newline | Indent | Concat | Choice | Rule | Verbatim
 
 export const WIDTH = 100
 const INDENT = '  '
@@ -124,6 +129,7 @@ class Printer
       when Rule
         @start_rule doc.rule, steps
         steps.push inner(doc.doc, indent)
+      when Verbatim then @print_verbatim(doc, indent)
 
   # The part of the rule ends after what is on `steps` next, and starts at its first text.
   start_rule = (style_rule: StyleRule, steps: Step[]) ->
@@ -140,6 +146,25 @@ class Printer
         @keep_blank_line at.line
       @source_line = at.line if at.line > @source_line
     @write text.text
+
+  # The lines after the first are written as they are, but for the indentation that the first
+  # loses or gains.
+  print_verbatim = (verbatim: Verbatim, indent: Int) ->
+    const { at, last_line } = verbatim
+    @print_comments_before at, indent
+    @keep_blank_line at.line
+    const lines = @source.lines
+    @write lines[at.line - 1].trim_start()
+    const shift = indent * INDENT_WIDTH + 1 - at.column
+    for line in (at.line + 1)...(last_line + 1)
+      const written = shifted(lines[line - 1], shift)
+      @pieces.push "\n#{written}"
+      @line += 1
+      @column = columns(written) + 1
+    const comments = @source.comments
+    while @next_comment < comments.length and comments[@next_comment].line <= last_line
+      @next_comment += 1
+    @source_line = last_line
 
   own_line_comment_before = (at: Position) ->
     const comments = @source.comments
@@ -215,6 +240,18 @@ class Printer
     if const depth = @pending_indent
       return Position(line: @line + @breaks, column: depth * INDENT_WIDTH + 1)
     Position line: @line, column: @column
+
+# The line with `shift` spaces more at its start, or fewer, as many as it has; a blank line stays
+# empty.
+const shifted = (line: String, shift: Int) ->
+  return line if line.trim_end() == ''
+  return ' '.repeat(shift) + line if shift >= 0
+  var removed = 0
+  var rest = line
+  while removed < -shift and rest.starts_with(' ')
+    rest = rest.without_prefix(' ')!
+    removed += 1
+  rest
 
 # Whether the comment on each line that holds one is on a line of its own.
 const lines_of = (comments: Comment[]) ->
@@ -296,6 +333,8 @@ const fits = (
         else
           pending.push inner(doc.broken, depth, nested)
       when Rule then pending.push(inner(doc.doc, depth, nested))
+      # Its lines are those of a statement, which a line feed comes before.
+      when Verbatim then return not in_flat
   true
 
 # Whether a comment, or one on a line of its own if `own_line`, is from the line `first` up to
@@ -317,11 +356,14 @@ export const has_line_feed = (doc: Doc): Bool ->
     when Rule then has_line_feed(doc.doc)
     when Choice then has_line_feed(doc.flat) and has_line_feed(doc.broken)
     when Text then false
+    when Verbatim then doc.last_line > doc.at.line
 
 export const token = (value: String, at: Position): Doc -> Text(at, text: value)
 
 # A closing bracket, at its position in the source if it is there (see Text.closes).
 export const closing = (value: String, at: Position?): Doc -> Text(at, text: value, closes: true)
+
+export const verbatim = (at: Position, last_line: Int): Doc -> Verbatim(at, last_line)
 
 export const join = (docs: Doc[]): Doc -> Concat(docs)
 

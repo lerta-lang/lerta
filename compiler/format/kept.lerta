@@ -1,0 +1,37 @@
+# The statements that the comments mark to keep as they are written (see lines_marked): each that
+# holds a marked line on lines of its own, not on those of a statement inside it.
+import Position from '../ast'
+import Doc, verbatim from './doc'
+import SourceText from './source'
+
+# The lines of the statements printed so far on lines of their own, and of those kept. Whether a
+# statement is kept is decided once, by where it starts, as a part that a choice takes two forms of
+# prints its statements twice, when its lines are claimed already.
+export class StatementLines
+  printed = Set<Int>()
+  kept = Set<Int>()
+  decided = Map<Position, Bool>()
+
+# The statement that starts at `start`, before `next`, where the statement after it in its block
+# starts, as it is written if it is kept, and otherwise `printed`, which prints the statements
+# inside it first.
+export const kept_or_printed = (
+  start: Position, next: Position?, source: SourceText, lines: StatementLines, printed: () -> Doc?
+) ->
+  return printed() if not source.starts_line(start)
+  const last_line = source.statement_last_line(start, next)
+  const doc = printed()
+  const kept = lines.decided[start] ? claimed(start.line, last_line, source, lines)
+  lines.decided[start] = kept
+  kept then verbatim(start, last_line) else doc
+
+# Whether the lines hold a marked line that no statement inside claims, which they claim then.
+const claimed = (first: Int, last: Int, source: SourceText, lines: StatementLines) ->
+  const own = (line: Int) -> source.marked_lines.has(line) and not lines.printed.has(line)
+  var kept = false
+  for line in first...(last + 1)
+    kept = kept or own(line)
+    lines.printed.add line
+  if kept
+    lines.kept.add line for line in first...(last + 1)
+  kept
