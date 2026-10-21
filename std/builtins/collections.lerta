@@ -1,0 +1,153 @@
+# Arrays, Iters, Iterables, maps and sets (see docs/reference/builtins.md#iterable).
+
+# The types that `for` and comprehensions go through, by the Iter of `iter()`.
+export interface Iterable<T>
+  iter: () -> Iter<T>
+
+# `[1, 2]`, with each item as the literal that gives it, `['a']`.
+extend<T: Literal> T[]
+  to_string = -> "[#{[item.to_literal() for item in @].join(', ')}]"
+  to_literal = -> @to_string()
+
+extend<T> T[]
+  # The items, read as the Iter is.
+  iter = (): Iter<T> -> (x for x in @)
+  # A loop rather than `@any`, which would allocate a closure, and an Iter of the array, per call.
+  contains = (item: T): Bool ->
+    for each in @
+      return true if each == item
+    false
+  find_index = (test: (T) -> Bool): Int? ->
+    for item, i in @
+      return i if test(item)
+    nil
+  first = (): T? -> @length > 0 then @[0]
+  last = (): T? -> @length > 0 then @[@length - 1]
+  # The items in the order that `compare` gives (LESS when its first argument goes first), equal
+  # items keeping their order.
+  # A merge sort: runs of `width` items, sorted, are merged in pairs, doubling it.
+  sorted = (compare: (T, T) -> Ordering): T[] ->
+    var runs = [item for item in @]
+    var width = 1
+    while width < runs.length
+      const merged: T[]
+      var start = 0
+      while start < runs.length
+        const middle = start + width < runs.length then start + width else runs.length
+        const end = middle + width < runs.length then middle + width else runs.length
+        var left = start
+        var right = middle
+        while left < middle or right < end
+          # The left item goes first when equal, keeping the order of equal items.
+          if right == end or (left < middle and compare(runs[left], runs[right]) != GREATER)
+            merged.push runs[left]
+            left += 1
+          else
+            merged.push runs[right]
+            right += 1
+        start = end
+      runs = merged
+      width *= 2
+    runs
+  # Pushes the items of another array, one by one; those of the array itself, if it is that, once.
+  append = (items: T[]) ->
+    const count = items.length
+    @push items[i] for i in 0...count
+
+extend<T> Iter<T>
+  # Itself, so that an Iter is Iterable.
+  iter = (): Iter<T> -> @
+
+# The methods of whatever `for` goes through: they read its items as it does, through `iter()`.
+extend<T> Iterable<T>
+  map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)
+  filter = (keep: (T) -> Bool): Iter<T> -> (x for x in @ when keep(x))
+  to_array = (): T[] -> [x for x in @]
+  any = (test: (T) -> Bool): Bool ->
+    for x in @
+      return true if test(x)
+    false
+  # A loop rather than `not @any`, which would allocate a closure per call.
+  all = (test: (T) -> Bool): Bool ->
+    for x in @
+      return false if not test(x)
+    true
+  find = (test: (T) -> Bool): T? ->
+    for x in @
+      return x if test(x)
+    nil
+  # The item whose key is the least, the first of those with equal keys, or nil if there is none.
+  min_by = <K: Comparable>(key: (T) -> K): T? -> extreme_by(@iter(), key, LESS)
+  # The item whose key is the greatest, the first of those with equal keys, or nil if there is none.
+  max_by = <K: Comparable>(key: (T) -> K): T? -> extreme_by(@iter(), key, GREATER)
+  # It stops reading its source after them, which a comprehension could not.
+  take = (n: Int): Iter<T> ->
+    const source = @iter()
+    var left = n
+    const has_next = -> left > 0 and source.has_next()
+    const next = (): T ->
+      left -= 1
+      source.next()
+    { has_next, next }
+  zip = <U>(other: Iterable<U>): Iter<(T, U)> ->
+    const left = @iter()
+    const right = other.iter()
+    const has_next = ->
+      const more = left.has_next()
+      throw ValueError(message: 'zip of Iterables of different lengths') if right.has_next() != more
+      more
+    const next = (): (T, U) -> (left.next(), right.next())
+    { has_next, next }
+
+extend<K, V> Map<K, V>
+  has = (key: K): Bool -> @[key] != nil
+  # The values of the entries, as `entries()` gives them.
+  values = (): Iter<V> -> (value for (_, value) in @entries())
+  get_or_put = (key: K, make: () -> V): V ->
+    return found if const found = @[key]
+    const made = make()
+    @[key] = made
+    made
+
+# The operations of sets, by the operators: `a | b`, `a & b`, `a - b` and `a ^ b` give new sets, of
+# the items in the order of `a`, then of `b`.
+extend<T> Set<T>
+  # The items of either.
+  bit_or = (other: Set<T>): Set<T> ->
+    const union = Set<T>([item for item in @])
+    union.add item for item in other
+    union
+  # The items of this set that the other has too.
+  bit_and = (other: Set<T>): Set<T> -> Set<T>([item for item in @ when other.has(item)])
+  # The items of this set that the other has not.
+  sub = (other: Set<T>): Set<T> -> Set<T>([item for item in @ when not other.has(item)])
+  # The items of one set that the other has not.
+  bit_xor = (other: Set<T>): Set<T> -> @ - other | (other - @)
+  # Whether the other has every item of this set.
+  is_subset = (other: Set<T>): Bool -> @iter().all((item) -> other.has(item))
+
+# The item whose key compares with every other key as `order` or equal, the first of such ones, or
+# nil if there is none (see min_by).
+const extreme_by = <T, K: Comparable>(items: Iter<T>, key: (T) -> K, order: Ordering): T? ->
+  var found: T?
+  var found_key: K?
+  for x in items
+    const k = key(x)
+    if found_key == nil or k.compare(found_key) == order
+      found = x
+      found_key = k
+  found
+
+extend<T: Comparable> Iterable<T>
+  # The least item, the first of equal ones, or nil if there is none.
+  min = (): T? -> @min_by((x) -> x)
+  # The greatest item, the first of equal ones, or nil if there is none.
+  max = (): T? -> @max_by((x) -> x)
+
+extend<T: Add<T, T>> Iterable<T>
+  # The items added to `zero` one after another, from the first: 0 for numbers, and for other
+  # types their own, as `''` for Strings.
+  sum = (zero: T = 0): T ->
+    var total = zero
+    total += x for x in @
+    total

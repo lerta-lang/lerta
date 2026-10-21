@@ -1,6 +1,6 @@
 # Builtins
 
-Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the module `'std:builtins'`, which every other module imports as `import 'std:builtins'` (see [modules](modules.md)); what it exports is a builtin, and a module's own names shadow them.
+Builtins need no import. Most are written in Lerta, in the files of `std/builtins/`, by topic, which `std/builtins.lerta`, the module `'std:builtins'`, exports from (see [exports](modules.md#exports)); every other module imports it as `import 'std:builtins'` (see [modules](modules.md)). What it exports is a builtin, and a module's own names shadow them.
 
 - `panic(message: String): never` stops the program at once (see [panics](errors.md#panics)).
 - `Error` is the interface of what `throw` takes, and the runtime's error types are builtins too (see [exceptions](errors.md#exceptions)).
@@ -9,19 +9,19 @@ Builtins need no import. Most are written in Lerta, in `std/builtins.lerta`, the
 
 ## Stringable
 
-`Stringable` is a builtin [interface](objects.md#interfaces), declared in `std/builtins.lerta`, with one member, `to_string: () -> String`. `String`, `Int`, `Float`, `Byte`, `Char`, `Bool` and enums satisfy it, and so does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect; a `to_string` with parameters or another result does not. A module's own name `Stringable` shadows it. An array is `Stringable` when its items are [Literal](#literal), each written as the literal that gives it: `[1, 2]`, `[[1], []]`, `['a', "it's"]`. Its `to_string` comes from an extend of std, which no other extend can declare again: a type whose arrays should read otherwise gives its items a `to_literal` of their own. `Int?` and the arrays of other items are not `Stringable`. String interpolation goes through it (see [syntax](syntax.md)).
+`Stringable` is a builtin [interface](objects.md#interfaces), of `std:builtins`, with one member, `to_string: () -> String`. `String`, `Int`, `Float`, `Byte`, `Char`, `Bool` and enums satisfy it, and so does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect; a `to_string` with parameters or another result does not. A module's own name `Stringable` shadows it. An array is `Stringable` when its items are [Literal](#literal), each written as the literal that gives it: `[1, 2]`, `[[1], []]`, `['a', "it's"]`. Its `to_string` comes from an extend of std, which no other extend can declare again: a type whose arrays should read otherwise gives its items a `to_literal` of their own. `Int?` and the arrays of other items are not `Stringable`. String interpolation goes through it (see [syntax](syntax.md)).
 
 ## Literal
 
-`Literal` is a builtin interface, declared in `std/builtins.lerta`, with one member, `to_literal: () -> String`: the text of the literal that gives the value, as the text of an array writes its items. A `String` is in single quotes if it has no `'` and no control character, and otherwise in double quotes, with `\\`, `\"`, `\#`, `\n`, `\t`, `\r` and `\0` escaped and the other control characters as `\u{7F}`; a `Char` is the `String` of it; an enum value is its member as declared, its name or the literal of its text; the numbers and `Bool` are their `to_string()`, and so is an array of `Literal` items, `[1, 2]`. Any type that declares `to_literal` satisfies it, as one does `Stringable`, with a text that writes its value as the program would.
+`Literal` is a builtin interface, of `std:builtins`, with one member, `to_literal: () -> String`: the text of the literal that gives the value, as the text of an array writes its items. A `String` is in single quotes if it has no `'` and no control character, and otherwise in double quotes, with `\\`, `\"`, `\#`, `\n`, `\t`, `\r` and `\0` escaped and the other control characters as `\u{7F}`; a `Char` is the `String` of it; an enum value is its member as declared, its name or the literal of its text; the numbers and `Bool` are their `to_string()`, and so is an array of `Literal` items, `[1, 2]`. Any type that declares `to_literal` satisfies it, as one does `Stringable`, with a text that writes its value as the program would.
 
 ## Iterable
 
-`Iterable<T>` is a builtin [interface](objects.md#interfaces), declared in `std/builtins.lerta`, with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). An extend of it gives every Iterable `map`, `filter`, `take`, `zip`, `any`, `all`, `find`, `min_by`, `max_by` and `to_array`, one of `Iterable<T>` where `T` is [Comparable](#equatable-comparable-and-hashable) `min` and `max`, and one where `T` is [Add<T, T>](#operators) `sum`, which work as those of [Iter](types.md#iter) do. Arrays, `String`s, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
+`Iterable<T>` is a builtin [interface](objects.md#interfaces), of `std:builtins`, with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). An extend of it gives every Iterable `map`, `filter`, `take`, `zip`, `any`, `all`, `find`, `min_by`, `max_by` and `to_array`, one of `Iterable<T>` where `T` is [Comparable](#equatable-comparable-and-hashable) `min` and `max`, and one where `T` is [Add<T, T>](#operators) `sum`, which work as those of [Iter](types.md#iter) do. Arrays, `String`s, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
 
 ## Equatable, Comparable and Hashable
 
-Builtin [interfaces](objects.md#interfaces), declared in `std/builtins.lerta`, for bounds such as `<T: Comparable>`:
+Builtin [interfaces](objects.md#interfaces), of `std:builtins`, for bounds such as `<T: Comparable>`:
 
 - `Equatable`: `equals: (Self) -> Bool`.
 - `Comparable`: `compare: (Self) -> Ordering`, where the builtin enum `Ordering` has the members `LESS`, `EQUAL` and `GREATER`.
@@ -31,7 +31,7 @@ Every type that `==` compares has `equals`, which compares as `==` does, and eve
 
 ## Operators
 
-Builtin [interfaces](objects.md#interfaces), declared in `std/builtins.lerta`, for bounds such as `<T: Add<T, T>>`, of the methods that the arithmetic and bitwise operators call (see [operators](objects.md#classes-and-structs)): `Add<Rhs, Out>` (`add: (Rhs) -> Out`), `Sub`, `Mul`, `Div`, `Rem`, `BitAnd`, `BitOr`, `BitXor`, `Shl` and `Shr` likewise, and `Neg<Out>` (`neg: () -> Out`). The numbers have the methods of the operators that apply to them, which apply the operators, throwing as they do (`3.add(4)` is 7), and `String` has `add`, so that `<T: Add<T, T>>` takes an `Int` or a `String` as well as a type that declares `add`.
+Builtin [interfaces](objects.md#interfaces), of `std:builtins`, for bounds such as `<T: Add<T, T>>`, of the methods that the arithmetic and bitwise operators call (see [operators](objects.md#classes-and-structs)): `Add<Rhs, Out>` (`add: (Rhs) -> Out`), `Sub`, `Mul`, `Div`, `Rem`, `BitAnd`, `BitOr`, `BitXor`, `Shl` and `Shr` likewise, and `Neg<Out>` (`neg: () -> Out`). The numbers have the methods of the operators that apply to them, which apply the operators, throwing as they do (`3.add(4)` is 7), and `String` has `add`, so that `<T: Add<T, T>>` takes an `Int` or a `String` as well as a type that declares `add`.
 
 ## Methods of the builtin types
 

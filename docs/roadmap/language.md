@@ -28,7 +28,7 @@ The planned syntax, control flow, types and operators.
 - More methods of `Array` and `Iter<T>` besides [those there are](../reference/types.md#iter).
 - `to_string` of the arrays of other items, as of a class with a `to_string`, and of maps, sets, tuples and anonymous structs; now an array is `Stringable` only when the compiler can write its items ([the reference](../reference/builtins.md#stringable)).
 - A comprehension may have several `for`s, the later ones nested in the earlier: `[f(x, y) for x in xs for y in ys]`.
-- Later, `Iter<T>` moves to `std/builtins.lerta` as a generic class that holds such a value and the started flag, once generic classes exist, so that the compiler no longer builds `Iter`s in itself (see [internals](../internals.md#iter)) and `take` is written in Lerta. Code that uses `Iter`s does not change.
+- Later, `Iter<T>` moves to `std/builtins/collections.lerta` as a generic class that holds such a value and the started flag, once generic classes exist, so that the compiler no longer builds `Iter`s in itself (see [internals](../internals.md#iter)) and `take` is written in Lerta. Code that uses `Iter`s does not change.
 
 ## Types
 
