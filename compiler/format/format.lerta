@@ -1,7 +1,7 @@
 # `lerta fmt`: prints each file again in the style (docs/reference/style.md), and reports where the
 # file differs from that, by the rule that decides it there, or writes it with `--fix`.
 import compare_positions, Import, Position, Statement from '../ast'
-import dump_ast from '../ast_dump'
+import dump_ast_without_positions from '../ast_dump'
 import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
@@ -88,39 +88,8 @@ const left_out_ending = (statements: Statement[], context: Context) ->
 
 const check_same_program = (statements: Statement[], formatted: String, path: String) ->
   const reparsed = parse(lex(formatted, path).tokens, path)
-  if without_positions(dump_ast(reparsed)) != without_positions(dump_ast(statements))
+  if dump_ast_without_positions(reparsed) != dump_ast_without_positions(statements)
     throw CompileError(message: "#{path}: the formatter would change the program, which is a bug")
-
-# The dump of a syntax tree without the positions of its nodes, which the formatter moves, also in
-# the names that the parser makes of them, such as `_tuple.3.5` and `?3:5`.
-const without_positions = (dump: String) ->
-  [without_position(line) for line in dump.split("\n") when not is_position_field(line)].join("\n")
-
-# A node's line, `<kind> <line>:<column>`, without its position, and a field that holds a name that
-# the parser makes of a position, such as `_tuple.3.5` or `?3:5`, without that.
-const without_position = (line: String) ->
-  const field = line.split(': ')
-  const words = line.split(' ')
-  if field.length == 1 and is_position(words[words.length - 1])
-    return [word for word, i in words when i < words.length - 1].join(' ')
-  const value = field[field.length - 1]
-  # Only a name can be one that the parser makes; a string's value can start the same way.
-  return line if without_spaces(field[0]) != 'name'
-  const made = GENERATED_PREFIXES.find((prefix) -> value.starts_with(prefix)) ? return line
-  [part for part, i in field when i < field.length - 1].join(': ') + ": #{made}#\""
-
-# `<line>:<column>`.
-const is_position = (word: String) ->
-  const parts = word.split(':')
-  const is_number = (part: String) -> part != '' and part.parse_int() != nil
-  parts.length == 2 and is_number(parts[0]) and is_number(parts[1])
-
-const GENERATED_PREFIXES = ['"_tuple.', '"destructured.', '"?']
-
-# A group of fields without a kind writes its position as fields.
-const is_position_field = (line: String) ->
-  const field = without_spaces(line)
-  field.starts_with('line:') or field.starts_with('column:')
 
 # Where the formatted text differs from the source: at the first difference of each run of lines
 # that differ, with the innermost rule whose part holds that place in the formatted text, or else

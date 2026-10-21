@@ -5,7 +5,7 @@ import
   Expression, Extend, Extern, FloatLiteral, For, FunctionLiteral, FunctionTypeName, Identifier, If,
   Import, ImportName, Index, IntegerLiteral, InterfaceDeclaration, Interpolation, InterpolationPart,
   IsTest, Jump, LazyFunctions, MapEntry, MapLiteral, Member, MemberDeclaration, NamedType,
-  NamedValue, NilLiteral, Node, Parameter, Pass, Range, RecordLiteral, RecordTypeField,
+  NamedValue, NilLiteral, Node, Parameter, Pass, Position, Range, RecordLiteral, RecordTypeField,
   RecordTypeName, Return, Statement, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral,
   TupleTypeName, TypeAlias, TypeDeclaration, TypeName, TypeParameter, UnaryOperation, UnionTypeName,
   Unwrap, While, Yield
@@ -16,42 +16,53 @@ import quote from './token_dump'
 const INDENT = '  '
 
 # The dump is built as a tree of these, then written out.
-struct Scalar(text: String)
+
+# `positionless`, if given, is the text where positions are left out.
+struct Scalar(text: String, positionless: String? = default nil)
 
 # A node, whose head is its kind and position, or a group of fields without a kind.
 struct Group(head: Head?, fields: Field[])
 
 # The line of a node's kind and position, which the dump may annotate.
-struct Head(text: String, node: Node)
+struct Head(kind: String, position: Position, node: Node)
 
 struct List(items: Item[])
 
 type Value = Scalar | Group | List
 type Item = Scalar | Group
 
-struct Field(name: String, value: Value)
+# A field of a position, which is left out where positions are.
+struct Field(name: String, value: Value, is_position = default false)
 
 const NONE = Scalar(text: '-')
 
 export const dump_ast = (program: Statement[]) -> dump_annotated(program, (_) -> '')
 
+# The dump without the positions of the nodes, nor in the names that the parser makes of them (see
+# name_text), which compares two trees whatever their layout.
+export const dump_ast_without_positions = (program: Statement[]) ->
+  write_dump program, (_) -> '', false
+
 # The text after a node's header line, such as its type.
 export type Annotate = (Node) -> String
 
 export const dump_annotated = (program: Statement[], annotate: Annotate) ->
+  write_dump program, annotate, true
+
+const write_dump = (program: Statement[], annotate: Annotate, positions: Bool) ->
   const lines: String[]
-  const writer = Writer(lines, annotate)
+  const writer = Writer(lines, annotate, positions)
   write_items writer, statements(program).items, ''
   [line + "\n" for line in lines].join('')
 
-struct Writer(lines: String[], annotate: Annotate)
+struct Writer(lines: String[], annotate: Annotate, positions: Bool)
 
 const write_items = (writer: Writer, items: Item[], indent: String) ->
   write_item writer, item, indent for item in items
 
 const write_item = (writer: Writer, item: Item, indent: String) ->
   case item
-    when Scalar then writer.lines.push("#{indent}- #{item.text}")
+    when Scalar then writer.lines.push("#{indent}- #{scalar_text(writer, item)}")
     when Group
       writer.lines.push "#{indent}-"
       write_group writer, item, indent + INDENT
@@ -59,18 +70,21 @@ const write_item = (writer: Writer, item: Item, indent: String) ->
 const write_group = (writer: Writer, group: Group, indent: String) ->
   const field_indent =
     if const head = group.head
-      writer.lines.push indent + head.text + writer.annotate(head.node)
+      const { line, column } = head.position
+      const position = writer.positions then " #{line}:#{column}" else ''
+      writer.lines.push indent + head.kind + position + writer.annotate(head.node)
       indent + INDENT
     else
       indent
-  write_field writer, field, field_indent for field in group.fields
+  for field in group.fields
+    write_field writer, field, field_indent if writer.positions or not field.is_position
 
 const write_field = (writer: Writer, field: Field, indent: String): void ->
   const value = field.value
   const name = indent + field.name
   const lines = writer.lines
   case value
-    when Scalar then lines.push("#{name}: #{value.text}")
+    when Scalar then lines.push("#{name}: #{scalar_text(writer, value)}")
     when Group
       lines.push "#{name}:"
       write_group writer, value, indent + INDENT
@@ -81,9 +95,19 @@ const write_field = (writer: Writer, field: Field, indent: String): void ->
         lines.push "#{name}:"
         write_items writer, value.items, indent + INDENT
 
+const scalar_text = (writer: Writer, scalar: Scalar) ->
+  writer.positions then scalar.text else scalar.positionless ? scalar.text
+
 const node = (kind: String, of: Node, fields: Field[]) ->
-  const { line, column } = of.position
-  Group fields, head: Head(text: "#{kind} #{line}:#{column}", node: of)
+  Group fields, head: Head(kind, position: of.position, node: of)
+
+# A group without a kind writes its position as fields.
+const position_fields = (position: Position) ->
+  const { line, column } = position
+  [
+    Field(name: 'column', value: number(column), is_position: true)
+    Field(name: 'line', value: number(line), is_position: true)
+  ]
 
 const group = (fields: Field[]) -> Group(fields)
 
@@ -190,7 +214,16 @@ const dump_float = (literal: FloatLiteral) ->
   node 'float', literal, [field('value', text(literal.text))]
 
 const dump_identifier = (identifier: Identifier) ->
-  node 'identifier', identifier, [field('name', text(identifier.name))]
+  node 'identifier', identifier, [field('name', name_text(identifier))]
+
+# A name that the parser makes of the identifier's position, as `_tuple.3.5`, `destructured.3.5` or
+# `?3:5`, ends with it, which a written name cannot.
+const name_text = (identifier: Identifier) ->
+  const { name, position } = identifier
+  const { line, column } = position
+  const made = ["#{line}.#{column}", "#{line}:#{column}"].find((end) -> name.ends_with(end))
+  const positionless = made then quote(name.without_suffix(made)!)
+  Scalar positionless, text: quote(name)
 
 const dump_array = (array: ArrayLiteral): Group ->
   node 'array', array, [field('elements', expressions(array.elements))]
@@ -328,8 +361,7 @@ const dump_try = (expression: Try): Group ->
 const dump_catch = (clause: Catch) ->
   group [
     field('body', statements(clause.body))
-    field('column', number(clause.position.column))
-    field('line', number(clause.position.line))
+    position_fields(clause.position)...
     field('name', dump_node(clause.name))
     field('type', optional_node(clause.type))
   ]
@@ -384,8 +416,7 @@ const members = (values: MemberDeclaration[]) ->
 # A member has a position but no kind, so its position is written as fields.
 const dump_member_declaration = (member: MemberDeclaration) ->
   group [
-    field('column', number(member.position.column))
-    field('line', number(member.position.line))
+    position_fields(member.position)...
     field('modifier', optional_text(member.modifier?.to_string()))
     field('name', dump_node(member.name))
     field('type', optional_node(member.type))
