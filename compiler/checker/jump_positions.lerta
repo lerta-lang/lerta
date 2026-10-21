@@ -3,12 +3,10 @@
 # where nothing evaluated before them is still held, so that jumping away leaves nothing to
 # release. A `yield` jumps away for good if its Iter is dropped there.
 import
-  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast,
-  Coalesce, Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend,
-  Extern, FloatLiteral, For, FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral,
-  InterfaceDeclaration, Interpolation, IsTest, Jump, MapLiteral, Member, MemberDeclaration,
-  NilLiteral, Pass, Position, Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw,
-  Try, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
+  Assignment, Binding, Case, Coalesce, Condition, Conditional, Declaration, EnumDeclaration,
+  Expression, Extend, Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration,
+  Jump, MemberDeclaration, operands_of, Pass, Position, Return, Statement, Try, TypeAlias,
+  TypeDeclaration, While, Yield
 from '../ast'
 import fail from './diagnostics'
 import ProgramWide from './shared'
@@ -119,43 +117,7 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
       for param in expression.params
         visit program, default, in_default if const default = param.default
       visit_statements program, expression.body, all_jumps
-    when Interpolation
-      for part in expression.parts
-        operand part if part is Call
-    when ArrayLiteral then operand(element) for element in expression.elements
-    when Comprehension
-      operand expression.element
-      operand expression.iterable
-      operand guard if const guard = expression.guard
-    when RecordLiteral then operand(field.value) for field in expression.fields
-    when TupleLiteral then operand(item) for item in expression.items
-    when TupleItem then operand(expression.tuple)
-    when MapLiteral
-      for entry in expression.entries
-        operand entry.key
-        operand entry.value
-    when Call
-      operand expression.callee
-      operand arg for arg in expression.args
-      operand arg.value for arg in expression.named_args
-    when Index
-      operand expression.object
-      operand expression.index
-    when Member then operand(expression.object)
-    when UnaryOperation then operand(expression.operand)
-    when Unwrap then operand(expression.operand)
-    when BinaryOperation
-      operand expression.left
-      operand expression.right
-    when Range
-      operand expression.start
-      operand expression.end
-    when Throw then operand(expression.message)
-    when Await then operand(expression.operand)
-    when IsTest then operand(expression.value)
-    when Cast then operand(expression.value)
-    when StringLiteral, IntegerLiteral, FloatLiteral, BooleanLiteral, NilLiteral then pass
-    when Identifier, This then pass
+    else operand(each) for each in operands_of(expression)
 
 const check_jump = (
   program: ProgramWide, keyword: String, allowed: Bool, reason: String?, at: Position

@@ -430,3 +430,44 @@ export const as_exportable = (statement: Statement): Exportable? ->
 export const exported_declaration = (statement: Statement) ->
   const declaration = as_exportable(statement) ? return nil
   declaration.exported then declaration
+
+# The expressions directly under the expression, in the order of the source, whether it evaluates
+# them always, as the operands of `+`, or not, as the branches of `then`/`else` and the element of a
+# comprehension. Those of a function literal, an `if`, a `case` and a `try`, which hold statements,
+# are left to the passes that go through the syntax tree, as each treats them otherwise.
+export const operands_of = (expression: Expression): Expression[] ->
+  case expression
+    when Interpolation then [part for part in expression.parts when part is Call]
+    when ArrayLiteral then expression.elements
+    when Comprehension
+      const parts = [expression.element, expression.iterable]
+      parts.push guard if const guard = expression.guard
+      parts
+    when MapLiteral
+      const parts: Expression[] = []
+      for entry in expression.entries
+        parts.push entry.key
+        parts.push entry.value
+      parts
+    when RecordLiteral then [field.value for field in expression.fields]
+    when TupleLiteral then expression.items
+    when TupleItem then [expression.tuple]
+    when UnaryOperation then [expression.operand]
+    when BinaryOperation then [expression.left, expression.right]
+    when Range then [expression.start, expression.end]
+    when IsTest then [expression.value]
+    when Cast then [expression.value]
+    when Conditional then [expression.condition, expression.then_value, expression.else_value]
+    when Unwrap then [expression.operand]
+    when Await then [expression.operand]
+    when Member then [expression.object]
+    when Index then [expression.object, expression.index]
+    when Call
+      [expression.callee, expression.args..., [arg.value for arg in expression.named_args]...]
+    when Coalesce then [expression.value, expression.fallback]
+    when Throw then [expression.message]
+    when Yield then [expression.value]
+    when Return
+      const value = expression.value
+      value then [value] else []
+    else []

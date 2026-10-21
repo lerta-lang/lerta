@@ -71,19 +71,6 @@ const add_named = (found: Annotation[], values: NamedValue[]) ->
 const add_named_at = (found: Annotation[], values: NamedValue[], i: Int) ->
   add found, values[i].value, (value) -> values[i] = NamedValue(value, name: values[i].name)
 
-# The checking of a call writes its arguments in new lists, as a construction's named ones each
-# time, so their places reach them through the call.
-const add_arguments = (found: Annotation[], call: Call) ->
-  add_argument found, call, i for i in 0...call.args.length
-  add_named_argument found, call, i for i in 0...call.named_args.length
-
-const add_argument = (found: Annotation[], call: Call, i: Int) ->
-  add found, call.args[i], (value) -> call.args[i] = value
-
-const add_named_argument = (found: Annotation[], call: Call, i: Int) ->
-  add found, call.named_args[i].value, (value) ->
-    call.named_args[i] = NamedValue(value, name: call.named_args[i].name)
-
 const add_entries = (found: Annotation[], entries: MapEntry[]) ->
   add_entry found, entries, i for i in 0...entries.length
 
@@ -118,9 +105,9 @@ const add_expression = (found: Annotation[], expression: Expression): void ->
     when ArrayLiteral then add_all(found, expression.elements)
     when MapLiteral then add_entries(found, expression.entries)
     when Comprehension
+      add_expression found, expression.element
       add found, expression.iterable, (value) -> expression.iterable = value
       add_expression found, guard if const guard = expression.guard
-      add_expression found, expression.element
     when RecordLiteral then add_named(found, expression.fields)
     when TupleLiteral then add_all(found, expression.items)
     when TupleItem then add_expression(found, expression.tuple)
@@ -129,7 +116,8 @@ const add_expression = (found: Annotation[], expression: Expression): void ->
       add found, expression.index, (value) -> expression.index = value
     when Call
       add_expression found, expression.callee
-      add_arguments found, expression
+      add_all found, expression.args
+      add_named found, expression.named_args
     when Member then add_expression(found, expression.object)
     when BinaryOperation
       add found, expression.left, (value) -> expression.left = value

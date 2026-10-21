@@ -1,12 +1,10 @@
 # The types written in a syntax tree that the checker may be able to infer, and how to take them out
 # of it.
 import
-  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
-  Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern,
-  For, FunctionLiteral, Identifier, If, Import, Index, InterfaceDeclaration, Interpolation, IsTest,
-  MapLiteral, Member, MemberDeclaration, NamedType, Parameter, Pass, Position, Range, RecordLiteral,
-  Return, Statement, Throw, Try, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration, TypeName,
-  UnaryOperation, Unwrap, While, Yield
+  Assignment, Binding, Call, Case, Condition, Declaration, EnumDeclaration, Expression, Extend,
+  Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration, Member,
+  MemberDeclaration, NamedType, operands_of, Parameter, Pass, Position, Statement, Try, TypeAlias,
+  TypeDeclaration, TypeName, While
 from '../ast'
 
 # A written type, the enum of a member (see qualified_members_of) or a name that an import gives,
@@ -113,68 +111,23 @@ const add_condition = (found: Annotation[], condition: Condition) ->
     else add_expression(found, condition)
 
 const add_expression = (found: Annotation[], expression: Expression): void ->
-  const add = (value: Expression) -> add_expression(found, value)
   case expression
     when FunctionLiteral then add_function(found, expression, true)
-    when Interpolation
-      for part in expression.parts
-        add part if part is Call
-    when Throw then add(expression.message)
-    when Yield then add(expression.value)
-    when Await then add(expression.operand)
-    when Unwrap then add(expression.operand)
-    when UnaryOperation then add(expression.operand)
-    when Coalesce
-      add expression.value
-      add expression.fallback
-    when ArrayLiteral then add(element) for element in expression.elements
-    when MapLiteral
-      for entry in expression.entries
-        add entry.key
-        add entry.value
-    when Comprehension
-      add expression.iterable
-      add guard if const guard = expression.guard
-      add expression.element
-    when RecordLiteral then add(field.value) for field in expression.fields
-    when TupleLiteral then add(item) for item in expression.items
-    when TupleItem then add(expression.tuple)
-    when Index
-      add expression.object
-      add expression.index
-    when Call
-      add expression.callee
-      add arg for arg in expression.args
-      add arg.value for arg in expression.named_args
-    when Member then add(expression.object)
-    when BinaryOperation
-      add expression.left
-      add expression.right
-    when Range
-      add expression.start
-      add expression.end
-    when IsTest then add(expression.value)
-    when Cast then add(expression.value)
-    when Conditional
-      add expression.condition
-      add expression.then_value
-      add expression.else_value
     when Case
-      add subject if const subject = expression.subject
+      add_expression found, subject if const subject = expression.subject
       for arm in expression.arms
-        add pattern for pattern in arm.patterns
+        add_expression found, pattern for pattern in arm.patterns
         add_statements found, arm.body
       add_statements found, otherwise if const otherwise = expression.otherwise
     when If
       add_condition found, expression.condition
       add_statements found, expression.then_body
       add_statements found, expression.else_body
-    when Return then add(value) if const value = expression.value
     when Try
       add_statements found, expression.body
       add_statements found, catch_clause.body for catch_clause in expression.catches
       add_statements found, finally_body if const finally_body = expression.finally_body
-    else pass
+    else add_expression(found, operand) for operand in operands_of(expression)
 
 const return_annotation = (literal: FunctionLiteral) ->
   const type = literal.return_type
