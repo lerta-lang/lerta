@@ -59,6 +59,8 @@ int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
 // The string as a NUL-terminated C string, which the caller frees; NULL if it holds a NUL byte,
 // which C would take as its end.
 char *lerta_c_string(const LertaString *s);
+// The String of the C string's bytes, which end at its NUL.
+LertaString *lerta_string_from_c(const char *text);
 
 // Items (array.c): the size of an item of the kind, and the counting of the reference it holds.
 int64_t lerta_item_size(LertaItemKind kind);
@@ -68,12 +70,19 @@ void lerta_visit_item(LertaItemKind kind, const void *item, LertaVisitor visitor
 // The item at the index of an array of any kind but interface values, as 8 bytes: an integer item
 // is extended by its sign, as the generated code widens it.
 int64_t lerta_word_item(const LertaArray *array, int64_t index);
+// Arrays (array.c): the generated code pushes in place.
+void lerta_array_append(LertaArray *array, const void *item);
 
 // What stops the work that settles a promise, which rejects it with a CancelledError, as
 // lerta_promise_reject_cancelled does; it is given `context`.
 typedef void (*LertaCancel)(void *context);
 void lerta_promise_on_cancel(LertaPromise *promise, LertaCancel cancel, void *context);
 void lerta_promise_reject_cancelled(LertaPromise *promise);
+// Whether the coroutine is to wait for the promise, which is pending; it is resumed once the
+// promise is settled.
+bool lerta_promise_wait(LertaPromise *promise, void *coroutine);
+// The slot of a settled promise; if it holds an exception, throws it.
+void *lerta_promise_result(LertaPromise *promise);
 
 // The event loop's backend (loop.c). Resolves the promise, which it holds meanwhile, once the
 // milliseconds have passed.
@@ -168,6 +177,8 @@ _Noreturn void lerta_exit_with_exception(void);
 // Called as an object is freed: a trace of it is of no exception any more, so that one made later
 // at its address starts its own.
 void lerta_trace_forget(void *object);
+// Makes the saved trace the current one, keeping it (see lerta_trace_restore).
+void lerta_trace_load(const LertaTrace *saved);
 // As lerta_raise, with the message made of a prefix, a LertaString such as a LERTA_STATIC_STRING,
 // and the detail.
 void lerta_raise_with(LertaErrorKind kind, const void *prefix, const LertaString *detail);

@@ -80,14 +80,14 @@ LertaArray *lerta_list_dir_names(const LertaString *path) {
 }
 
 void lerta_append_c_string(LertaArray *array, const char *text) {
-  LertaString *string = lerta_string_from_bytes(text, (int64_t)strlen(text));
+  LertaString *string = lerta_string_from_c(text);
   lerta_array_append(array, &string);
   lerta_release(string);
 }
 
 // Takes a C string that the platform allocated.
 static LertaString *string_from_os(char *text) {
-  LertaString *result = lerta_string_from_bytes(text, (int64_t)strlen(text));
+  LertaString *result = lerta_string_from_c(text);
   free(text);
   return result;
 }

@@ -205,8 +205,6 @@ LertaString *lerta_binary_as_string(LertaString *binary);
 // the item owned.
 LertaArray *lerta_array_create(LertaItemKind item_kind);
 int64_t lerta_array_length(const LertaArray *array);
-// For the runtime's own code: the generated code pushes in place (below).
-void lerta_array_append(LertaArray *array, const void *item);
 void lerta_array_take_last(LertaArray *array, void *item);
 // These two give all the items, not the one at hand, whose place the generated code computes, as
 // only it knows the item size without a branch on the kind (see compiler/codegen/array.lerta).
@@ -244,22 +242,19 @@ void lerta_raise_iter_running(void);
 // Promises and the event loop (async.c).
 typedef struct LertaPromise LertaPromise;
 LertaPromise *lerta_promise_new(LertaItemKind kind);
-// Whether the coroutine is to wait for the promise, which is pending; it is resumed once the
-// promise is settled.
-bool lerta_promise_wait(LertaPromise *promise, void *coroutine);
 // Where the value goes, before lerta_promise_resolve; where it is read once the promise is settled.
 void *lerta_promise_slot(LertaPromise *promise);
 void lerta_promise_resolve(LertaPromise *promise);
 void lerta_promise_reject(LertaPromise *promise);
-// As lerta_promise_wait and lerta_promise_result, for the body of a function that awaits, whose own
-// promise is `own`: they record what it waits for, which cancel follows, and the result throws a
-// CancelledError instead if the body's promise has been cancelled meanwhile.
+// For the body of a function that awaits, whose own promise is `own`: whether the coroutine is to
+// wait for the promise, which is pending, to be resumed once it is settled; and the slot of the
+// settled promise, which throws its exception if it holds one. They record what the body waits
+// for, which cancel follows, and the result throws a CancelledError instead if the body's promise
+// has been cancelled meanwhile.
 bool lerta_promise_wait_in(LertaPromise *promise, void *coroutine, LertaPromise *own);
 void *lerta_promise_result_in(LertaPromise *promise, LertaPromise *own);
 // Cancels the work that the promise waits for (see async.c); nothing if it is settled.
 void lerta_promise_cancel(LertaPromise *promise);
-// The slot of a settled promise; if it holds an exception, throws it.
-void *lerta_promise_result(LertaPromise *promise);
 // A promise without a value that lerta_promise_fire resolves, unless it is settled already.
 LertaPromise *lerta_promise_pending(void);
 void lerta_promise_fire(LertaPromise *promise);
@@ -357,7 +352,6 @@ void lerta_trace_push(const LertaTraceSite *site);
 void lerta_trace_start(const LertaTraceSite *site);
 typedef struct LertaTrace LertaTrace;
 LertaTrace *lerta_trace_save(void);
-void lerta_trace_load(const LertaTrace *saved);
 void lerta_trace_restore(LertaTrace *saved);
 void lerta_trace_free(LertaTrace *saved);
 

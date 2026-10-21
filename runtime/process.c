@@ -23,7 +23,7 @@ void lerta_set_arguments(int argc, char **argv) {
 LertaArray *lerta_argv(void) {
   LertaArray *result = lerta_array_create(LERTA_REFERENCE_ITEMS);
   for (int i = 1; i < argument_count; i++) {
-    LertaString *argument = lerta_string_from_bytes(arguments[i], (int64_t)strlen(arguments[i]));
+    LertaString *argument = lerta_string_from_c(arguments[i]);
     lerta_array_append(result, &argument);
     lerta_release(argument);
   }
@@ -290,7 +290,7 @@ LertaString *lerta_env(const LertaString *name) {
   char *value = can_be_set ? lerta_os_env(c_name) : NULL;
   free(c_name);
   if (value == NULL) return NULL;
-  LertaString *result = lerta_string_from_bytes(value, (int64_t)strlen(value));
+  LertaString *result = lerta_string_from_c(value);
   free(value);
   return result;
 }
@@ -308,5 +308,5 @@ bool lerta_is_running(int64_t id) {
 
 LertaString *lerta_platform(void) {
   const char *name = lerta_os_platform();
-  return lerta_string_from_bytes(name, (int64_t)strlen(name));
+  return lerta_string_from_c(name);
 }

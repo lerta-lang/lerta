@@ -30,6 +30,10 @@ LertaString *lerta_string_from_bytes(const void *bytes, int64_t length) {
   return s;
 }
 
+LertaString *lerta_string_from_c(const char *text) {
+  return lerta_string_from_bytes(text, (int64_t)strlen(text));
+}
+
 LertaString *lerta_string_concat(int64_t count, ...) {
   va_list args;
   va_start(args, count);
@@ -152,7 +156,7 @@ static LertaString *shortest_text(double value, bool is_float32) {
     snprintf(text, sizeof text, "%.*f", decimals > 0 ? decimals : 0, value);
     if (strchr(text, '.') == NULL) strcat(text, ".0");
   }
-  return lerta_string_from_bytes(text, (int64_t)strlen(text));
+  return lerta_string_from_c(text);
 }
 
 LertaString *lerta_float_to_string(double value) { return shortest_text(value, false); }
