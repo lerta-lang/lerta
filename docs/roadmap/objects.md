@@ -18,6 +18,11 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 ## Generics
 
 - The body of a generic function or method is **checked at definition** against its bounds, instead of per instance (avoiding the C++ template "error deep inside").
+  - A type parameter is then a type of its own that has the members of its bounds alone: operators, `==`, ordering and interpolation apply to it through the builtin interfaces that already give them (`Add`, `Equatable`, `Comparable`, `Stringable` and the like), with no new kind of bound. `x * 2` for both `Int` and `Float`, which `Mul` cannot say, is left out.
+  - A call checks that the type arguments satisfy the bounds and records which member satisfies each bound's member (the witnesses, as an itab's entries are found). An instance is the type arguments with those witnesses, which replace telling instances apart by the extends that the call sees.
+  - An instance is no longer checked: its facts are the generic's with the type arguments put in and the bounds' members resolved by the witnesses, which codegen generates as it does now. A default is still checked for the instance of a call that leaves it out, and a type that the body writes is still checked to be valid for the type arguments, as `Set<T>` for a `T` without hash.
+  - It shortens nothing: what goes (the per-instance checking, the variants by extends) is less than what comes (members through bounds, instances from the generic's facts). It is for the errors at the definition, the checking of bodies never called, and `lerta fmt` and the editor inside generic bodies.
+  - In steps that each keep the tests passing, with no new syntax and so no refresh of the seed: check the bodies at definition besides per instance, giving the bodies that use what no bound gives (`T[]`'s `contains`, by `==`) the bounds they need; then instances by witnesses; then instances from the generic's facts in place of checking them.
 - Generic function literals outside the top level.
 - Bounds on the type parameters of generic classes and structs, `class Sorted<T: Comparable>`, checked wherever the type is written.
 
@@ -27,6 +32,7 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 ## Open questions
 
+- With generic bodies checked at definition ([generics](#generics)): whether an optional type argument stays allowed, which a type that the body writes may not take, as a `Set<T>`'s key; whether bounds on the type parameters of generic classes and structs come first, so that their bodies are checked at definition too; and whether a `Numeric` bound, under which a number literal is a `T`, is worth a new implicit conversion.
 - Whether an extend should be in effect beyond the modules that import its module directly.
 - Whether a class or struct may name several interfaces it satisfies (`struct S: A, B`), and what it does when two give a field of the same name.
 - Whether an interface may declare a writable member (`var count: Int`, satisfied only by a class's `var` field). Its members are read-only for now (see [the reference](../reference/objects.md#interfaces) for why); reconsider if that proves limiting.
