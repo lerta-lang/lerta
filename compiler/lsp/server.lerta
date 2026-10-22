@@ -5,7 +5,6 @@
 import is_file from 'std:io'
 import exit from 'std:process'
 import decode_json, JsonError from 'std:json'
-import Position from '../ast'
 import ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import removable_annotations from '../format/annotations'
@@ -186,7 +185,7 @@ class Server
     at := await source_position(path, params.position, @encoding)
     lines := hover_lines(program, module_index, await read_source(path), at)
     return nil if lines.length == 0
-    Hover contents: MarkupContent(kind: 'markdown', value: "```lerta\n#{lines.join("\n")}\n```")
+    Hover contents: { kind: 'markdown', value: "```lerta\n#{lines.join("\n")}\n```" }
 
   # Where the name at the position is declared, if in a file.
   definition = (params: PositionParams) ->
@@ -200,13 +199,13 @@ class Server
     start := await lsp_position(location, declared.name.position, @encoding)
     end := await lsp_position(
       location
-      Position(
+      {
         line: declared.name.position.line
         column: declared.name.position.column + declared.name.name.iter().to_array().length
-      )
+      }
       @encoding
     )
-    Location uri: uri_of_path(location), range: LspRange(start, end)
+    Location uri: uri_of_path(location), range: { start, end }
 
   # What may be written where a name is being written, from a check of the document's text with
   # the checker's own name there (see complete.lerta), whose diagnostics are not published.
@@ -275,7 +274,7 @@ formatting_edits := (uri: String, encoding: PositionEncoding) ->
     return none if formatted == text
     lines := text.split("\n")
     end := LspPosition(line: lines.length - 1, character: characters(lines.last()!, encoding))
-    range := LspRange(start: LspPosition(line: 0, character: 0), end: end)
+    range := LspRange(start: { line: 0, character: 0 }, end: end)
     [TextEdit(range, new_text: formatted)]
   catch _: CompileError
     nil

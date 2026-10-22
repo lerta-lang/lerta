@@ -81,7 +81,7 @@ find := (body: Body, receiver: Type, name: Identifier) ->
 # The method of the name that every member of the union has, of one type, or nil.
 union_method := (body: Body, union: UnionType, name: Identifier): UnionMethod? ->
   found := find_union_method(body, union, name)
-  found.problem == nil then UnionMethod(type: found.type!, members: found.members)
+  found.problem == nil then { type: found.type!, members: found.members }
 
 # Why no method of the name can be called on the union, or nil if one can or no member has one.
 export union_method_problem := (body: Body, union: UnionType, name: Identifier) ->
@@ -113,8 +113,8 @@ find_union_method := (body: Body, union: UnionType, name: Identifier): UnionMeth
       differing := "#{types.first} in #{first_name} but #{types.second} in #{member_name}"
       return failed("'#{name.name}' has type #{differing}")
     first = type
-    members.push MemberMethod(member, source)
-  UnionMethods type: first, members: members, problem: nil
+    members.push { member, source }
+  { type: first, members, problem: nil }
 
 # Why the generic method cannot be called on the union: it has type parameters of its own or of its
 # type, or it comes from an extend of an interface, which has an instance for each type.
@@ -155,12 +155,12 @@ method_type := (body: Body, receiver: Type, source: MethodSource, name: Identifi
 export find_member := (body: Body, type: Type, name: Identifier, call: Call? = nil): FoundMember? ->
   if source := find(body, type, name)
     method := method_type(body, type, source, name, call) ? return nil
-    return FoundMember(target: Method(source), type: method)
+    return { target: Method(source), type: method }
   if type is UnionType
     common := common_field_type_by_name(body, type, name) ? return nil
-    return FoundMember(target: Property(kind: FIELD), type: common)
+    return { target: Property(kind: FIELD), type: common }
   if field := field_type_by_name(body, type, name)
-    return FoundMember(target: Property(kind: FIELD), type: field)
+    return { target: Property(kind: FIELD), type: field }
   property_of body, type, name.name
 
 # A property of a builtin type, or of an interface value, by the name.

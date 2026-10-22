@@ -112,8 +112,14 @@ collect := (suite: Suite) ->
       path := "#{root_dir}/#{suite.expected_dir}/#{name}.#{extension}"
       expected[extension] = await read_file(path) if is_file(path)
     { source_dir, expected_dir, extensions } := suite
-    tests.push
-      TestCase(name, source_dir, expected_dir, extensions, expected, label: "#{source_dir}/#{name}")
+    tests.push {
+      name
+      source_dir
+      expected_dir
+      extensions
+      expected
+      label: "#{source_dir}/#{name}"
+    }
   tests
 
 # Files in the expected directory that no test would read, such as the expected output of a
@@ -293,10 +299,10 @@ export suite := (given: Target) ->
   all_checks: Check[]
   for group in suites(skipped)
     for file in stray_files(group)
-      all_checks.push Check(name: file, run: -> at_once(['stray file: no test reads it']))
+      all_checks.push { name: file, run: -> at_once(['stray file: no test reads it']) }
   for group in suites(skipped)
     for test in await collect(group)
-      all_checks.push Check(name: test.label, run: -> await run_test(test, false))
+      all_checks.push { name: test.label, run: -> await run_test(test, false) }
       all_checks.push optimized_check(test)
   checks := select(title, all_checks) ? return 0
   # Not in work_dir itself, which is on the PATH of the tested programs.

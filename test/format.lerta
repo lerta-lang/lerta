@@ -71,18 +71,18 @@ calls_report := 'call without parentheses at the start of a statement, with them
 type_report := (at: String) ->
   "#{at}: leave out the type, which can be inferred (Type annotations)\n"
 
-command_checks :=
-  Check(
+command_checks: Check[] =
+  {
     name: 'lerta fmt without a path is a usage error'
     run: -> expect_status(2, (await fmt(work_dir, [])).status)
-  )
-  Check(name: 'lerta fmt reports a path that names nothing, and goes on with the others', run: ->
+  }
+  { name: 'lerta fmt reports a path that names nothing, and goes on with the others', run: ->
     dir := await tree('missing', { 'a.lerta': unformatted })
     result := await fmt(dir, ['missing.lerta', 'a.lerta'])
     expected := "'missing.lerta' is not a file or a directory\na.lerta:1:6: #{calls_report}\n"
     expect_run result, expected, 1
-  )
-  Check(
+  }
+  {
     name: 'lerta fmt takes the .lerta files of a directory, in order, but not in . directories'
     run: ->
       dir := await tree(
@@ -98,15 +98,15 @@ command_checks :=
       result := await fmt(dir, ['src/'])
       paths := ['src/a.lerta', 'src/b.lerta', 'src/inner/c.lerta']
       expect_run result, ["#{path}:1:6: #{calls_report}\n" for path in paths].join(''), 1
-  )
-  Check(name: 'lerta fmt reports a file that is not valid UTF-8', run: ->
+  }
+  { name: 'lerta fmt reports a file that is not valid UTF-8', run: ->
     dir := await tree('utf8', Map())
     bytes: Byte[] = [0x70, 0xff, 0x0a]
     await write_file("#{dir}/bad.lerta", bytes.to_binary())
     result := await fmt(dir, ['bad.lerta'])
     expect_run result, "bad.lerta: the file is not valid UTF-8\n", 1
-  )
-  Check(
+  }
+  {
     name: 'lerta fmt leaves out the types of the files that a program holds, checked once, or alone where it does not check'
     run: ->
       dir := await tree(
@@ -123,8 +123,8 @@ command_checks :=
         expect_run(held, type_report('./lib.lerta:1:15') + type_report('./main.lerta:2:4'), 1)...
         expect_run(alone, type_report('lib.lerta:1:15'), 1, 'stderr alone')...
       ]
-  )
-  Check(
+  }
+  {
     name: 'lerta fmt takes a file given twice once, files that import each other, and keeps the types where an import does not parse'
     run: ->
       dir := await tree(
@@ -143,8 +143,8 @@ command_checks :=
         type_report('b.lerta:2:13')
         "c.lerta:1:1: '(' is never closed\n"
       expect_run result, expected.join(''), 1
-  )
-  Check(
+  }
+  {
     name: 'lerta fmt --fix leaves out the types of the files of one program, but one that alone uses an import'
     run: ->
       dir := await tree(
@@ -159,8 +159,8 @@ command_checks :=
         'lib.lerta': "export one := -> 1\n"
         'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nout: Writer = stdout\ntwo := one() + 1\nprint two\n"
       [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
-  )
-  Check(
+  }
+  {
     name: 'lerta fmt --fix writes the members of enums alone, through the checks of the calls that the checker rewrites, and leaves out the imports of the enums that it leaves unused'
     run: ->
       dir := await tree(
@@ -189,8 +189,8 @@ command_checks :=
         'typed.lerta': "import pick from './kinds'\n\nexport typed := (n: Int) ->\n  kind := pick(n, kind: A)\n  kind\n"
         'parsed.lerta': "import Kind from './kinds'\n\nexport parsed := Kind.parse('A')\n"
       [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
-  )
-  Check(
+  }
+  {
     name: 'lerta fmt checks once the files that a program holds through others, beside a file whose import is missing'
     run: ->
       dir := await tree(
@@ -204,8 +204,8 @@ command_checks :=
       )
       result := await fmt(dir, ['a.lerta', 'b.lerta', 'c.lerta', 'e.lerta'])
       expect_run result, type_report('b.lerta:2:13') + type_report('c.lerta:1:13'), 1
-  )
-  Check(
+  }
+  {
     name: 'lerta fmt --fix writes only the files that change, and fails on one that does not parse'
     run: ->
       dir := await tree('fix', { 'a.lerta': unformatted, 'b.lerta': "print 1\n", 'c.lerta': "(\n" })
@@ -221,7 +221,7 @@ command_checks :=
         expect_unchanged(b, b_time)...
         expect_unchanged(c, c_time)...
       ]
-  )
+  }
 
 names := [file.without_suffix('.in')! for file in list_dir(cases_dir) when file.ends_with('.in')]
 

@@ -99,7 +99,7 @@ member_items := (program: ProgramWide, shared: Shared, probe: CompletionProbe, r
   type := inner_of(read_type)
   items: CompletionItem[]
   add := (label: String, kind: Int, detail: String?) ->
-    items.push CompletionItem(label, kind, detail) if not items.any((each) -> each.label == label)
+    items.push { label, kind, detail } if not items.any((each) -> each.label == label)
   if type is ObjectType
     info := info_of(program, type)
     add field.name.name, FIELD, formatted(field.type) for field in info.fields
@@ -143,8 +143,7 @@ module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
   declared_later := (item: CompletionItem) ->
     in_top_level and shared.top_level.locals.has(item.label)
   items := [item for item in own when not declared_later(item)]
-  for name in shared.imports.modules.keys()
-    items.push CompletionItem(label: name, kind: MODULE, detail: nil)
+  items.push { label: name, kind: MODULE, detail: nil } for name in shared.imports.modules.keys()
   # An imported name is as its module declares it, under the name it is imported by; a name of a
   # module imported as a name, `m.x`, is no name of its own.
   for (name, imported) in shared.imports.names.entries()
@@ -156,7 +155,7 @@ module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
           declared := exported_items(program, program.shared[source.module_index])
           declared.find((each) -> each.label == source.name) ? continue
         when ExternExport then extern_item(source.type)
-    items.push CompletionItem(label: name, kind: item.kind, detail: item.detail)
+    items.push { label: name, kind: item.kind, detail: item.detail }
   if builtins := shared.imports.builtins
     for item in exported_items(program, program.shared[builtins])
       items.push item if not items.any((each) -> each.label == item.label)
@@ -171,12 +170,12 @@ exported_items := (program: ProgramWide, shared: Shared): CompletionItem[] ->
     exported := export_of(program, shared.index, name)
     if exported is ExternExport
       item := extern_item((exported as ExternExport!).type)
-      items.push CompletionItem(label: name, kind: item.kind, detail: item.detail)
+      items.push { label: name, kind: item.kind, detail: item.detail }
   for name in shared.reexported.keys()
     ref := export_ref(program, shared.index, name) ? continue
     declared := exported_items(program, program.shared[ref.module_index])
     item := declared.find((each) -> each.label == ref.name) ? continue
-    items.push CompletionItem(label: name, kind: item.kind, detail: item.detail)
+    items.push { label: name, kind: item.kind, detail: item.detail }
   items
 
 extern_item := (type: Type) -> CompletionItem(label: '', kind: FUNCTION, detail: format_type(type))
@@ -185,18 +184,16 @@ extern_item := (type: Type) -> CompletionItem(label: '', kind: FUNCTION, detail:
 names_of := (program: ProgramWide, shared: Shared) ->
   items: CompletionItem[]
   for (name, local) in shared.top_level.locals.entries()
-    items.push CompletionItem(label: name, kind: VARIABLE, detail: format_type(local.type))
+    items.push { label: name, kind: VARIABLE, detail: format_type(local.type) }
   # A method's entry is named by its receiver too, as `Point.sum`.
   for (name, entry) in shared.functions.entries.entries()
     continue if name.contains('.')
-    items.push CompletionItem(label: name, kind: FUNCTION, detail: formatted(entry.type))
+    items.push { label: name, kind: FUNCTION, detail: formatted(entry.type) }
   for generic in shared.generics
-    if generic.receiver == nil
-      items.push CompletionItem(label: generic.name.name, kind: FUNCTION, detail: nil)
+    items.push { label: generic.name.name, kind: FUNCTION, detail: nil } if generic.receiver == nil
   for (name, info) in shared.objects.entries()
-    items.push
-      CompletionItem(label: name, kind: info.type.is_struct then STRUCT else CLASS, detail: nil)
-  items.push CompletionItem(label: name, kind: ENUM, detail: nil) for name in shared.enums.keys()
+    items.push { label: name, kind: info.type.is_struct then STRUCT else CLASS, detail: nil }
+  items.push { label: name, kind: ENUM, detail: nil } for name in shared.enums.keys()
   items
 
 # The keywords, those of TokenKind in compiler/lexer/tokens.lerta, wherever a name is written: the

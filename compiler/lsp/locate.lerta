@@ -56,33 +56,29 @@ candidates_at := (program: ProgramWide, module_index: Int, source: String, at: P
   for facts in all_facts(shared)
     for (node, type) in facts.types.entries()
       if node is Identifier
-        add
-          Candidate(
-            type
-            name: node
-            declaration: -> name_declaration(program, module_index, facts, node)
-          )
+        add {
+          type
+          name: node
+          declaration: -> name_declaration(program, module_index, facts, node)
+        }
       else if node is Member
-        add
-          Candidate(type, name: node.name, declaration: -> member_declaration(program, facts, node))
+        add { type, name: node.name, declaration: -> member_declaration(program, facts, node) }
     for (call, link) in facts.instances.entries()
       callee := call.callee
       continue if callee is not Identifier
       instance := link.instance
       generic := generic_of(program, instance.generic)
       declared := Declared(module_index: generic.module_index, name: generic.name)
-      add
-        Candidate(name: callee as Identifier!, type: instance.entry.type, declaration: -> declared)
+      add { name: callee as Identifier!, type: instance.entry.type, declaration: -> declared }
   for imported in shared.imports.names.values()
     source := imported.source
     continue if source is not ExportRef
     ref := source as ExportRef!
-    add
-      Candidate(
-        name: imported.name
-        type: nil
-        declaration: -> top_level_declaration(program, ref.module_index, ref.name)
-      )
+    add {
+      name: imported.name
+      type: nil
+      declaration: -> top_level_declaration(program, ref.module_index, ref.name)
+    }
   add_reexported_names add, program, module_index
   found
 
@@ -99,12 +95,11 @@ add_reexported_names := (add: (Candidate) -> void, program: ProgramWide, module_
       names := [exported.name]
       names.push alias if alias := exported.alias
       for name in names
-        add
-          Candidate(
-            name
-            type: nil
-            declaration: -> top_level_declaration(program, ref.module_index, ref.name)
-          )
+        add {
+          name
+          type: nil
+          declaration: -> top_level_declaration(program, ref.module_index, ref.name)
+        }
 
 # What the name refers to: a top-level value, a function, a class or struct, an extern, or else a
 # local, whose declaration the checker kept.

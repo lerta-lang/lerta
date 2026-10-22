@@ -21,7 +21,7 @@ export type_of_case := (body: Body, case_expression: Case, expected: Type?) ->
     Branch statements: arms[i].body, enter: -> narrow(body, narrowings.arms[i])
   branches := [arm_branch(i) for i in 0...arms.length]
   if otherwise := case_expression.otherwise
-    branches.push Branch(statements: otherwise, enter: -> narrow(body, narrowings.otherwise))
+    branches.push { statements: otherwise, enter: -> narrow(body, narrowings.otherwise) }
   unify_arms := (values: BranchValue[]) -> unify_values(body, values, case_expression, 'case arms')
   type_of_branches body, branches, expected, unify_arms
 
@@ -31,9 +31,9 @@ export type_of_if := (body: Body, if_expression: If, expected: Type?): Type ->
     check_if body, if_expression
     return void_type
   entries := check_if_condition(body, if_expression)
-  branches :=
-    Branch(statements: then_body, enter: entries.enter_then)
-    Branch(statements: else_body, enter: entries.enter_else)
+  branches: Branch[] =
+    { statements: then_body, enter: entries.enter_then }
+    { statements: else_body, enter: entries.enter_else }
   # A `?.` is an if only after parsing, so its error names what the source has.
   nil_safe := "'?.', whose chain gives no value"
   description := if_expression.nil_safe then nil_safe else 'the branches of if'
@@ -52,7 +52,7 @@ export check_try_statement := (body: Body, try_expression: Try) ->
 export type_of_try := (body: Body, try_expression: Try, expected: Type?) ->
   branches := [Branch(statements: try_expression.body, enter: nothing)]
   for clause in try_expression.catches
-    branches.push Branch(statements: clause.body, enter: catch_entry(body, clause))
+    branches.push { statements: clause.body, enter: catch_entry(body, clause) }
   unify := unify_unless_void(body, try_expression, 'the values of try and catch')
   type := type_of_branches(body, branches, expected, unify)
   check_block body, finally_body, nothing, nothing if finally_body := try_expression.finally_body
@@ -83,9 +83,9 @@ export type_of_conditional := (body: Body, conditional: Conditional, expected: T
   narrowings := narrowings_of(body, conditional.condition)
   then_body: Statement[] = [conditional.then_value]
   else_body: Statement[] = [conditional.else_value]
-  branches :=
-    Branch(statements: then_body, enter: -> narrow(body, narrowings.where_true))
-    Branch(statements: else_body, enter: -> narrow(body, narrowings.where_false))
+  branches: Branch[] =
+    { statements: then_body, enter: -> narrow(body, narrowings.where_true) }
+    { statements: else_body, enter: -> narrow(body, narrowings.where_false) }
   unify_then_else := (values: BranchValue[]) ->
     if valueless := values.find((value) -> is_kind(value.type, 'void'))
       message := 'then and else must give values; to run statements, write an if'

@@ -105,14 +105,14 @@ status_checks := ->
     parts := line.split(' ')
     status := parse_status(parts[0], 'status.txt')
     args := [parts[i] for i in 1...parts.length]
-    checks.push Check(name: "lerta #{args.join(' ')}", run: ->
+    checks.push { name: "lerta #{args.join(' ')}", run: ->
       ran := await run_in_new_dir(compiler, [expand(arg) for arg in args])
       [
         expect_status(status, ran.result.status)...
         expect_left('files left', [], ran.left)...
         expect_left('files left in the temporary directory', [], ran.left_in_temp)...
       ]
-    )
+    }
   checks
 
 stray_files := ->
@@ -131,9 +131,9 @@ export suite := ->
   title := 'CLI checks'
   cases := [await file_case(name) for name in case_names]
   var runtime_setup_errors: String[] = []
-  extras :=
-    Check(name: 'CLI runtime setup', run: -> await at_once(runtime_setup_errors))
-    Check(name: 'tests/cli has no file that no case reads', run: -> await at_once(stray_files()))
+  extras: Check[] =
+    { name: 'CLI runtime setup', run: -> await at_once(runtime_setup_errors) }
+    { name: 'tests/cli has no file that no case reads', run: -> await at_once(stray_files()) }
   all_checks := [
     (file_check(test) for test in cases)...
     await status_checks()...

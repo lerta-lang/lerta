@@ -6,7 +6,7 @@ import
   NamedType, NilLiteral, Statement, Try, UnaryOperation
 from '../ast'
 import FieldPath, narrowable from './narrowable'
-import Local, PathView from './scopes'
+import Local from './scopes'
 import Body from './shared'
 import resolve from './type_names'
 import inner_of, is_kind, other_members, OptionalType, Type, UnionType from '../types'
@@ -86,7 +86,7 @@ narrowed_view := (local: Local, type: Type) ->
 export narrowings_of := (body: Body, condition: Condition): ConditionNarrowings ->
   if condition is UnaryOperation and condition.operator == 'not'
     inner := narrowings_of(body, condition.operand)
-    return ConditionNarrowings(where_true: inner.where_false, where_false: inner.where_true)
+    return { where_true: inner.where_false, where_false: inner.where_true }
   if condition is BinaryOperation
     operator := condition.operator
     return narrowings_of_logical(body, condition) if operator == 'and' or operator == 'or'
@@ -123,7 +123,7 @@ export narrow := (body: Body, narrowings: Narrowing[]) ->
         origin := subject.original()
         origin.narrowed_in_loops.append body.loops if origin.mutable
         body.scopes.narrow subject.identifier.name, narrowed_view(subject, type)
-      when FieldPath then body.scopes.narrow_path(subject.key, PathView(type, root: subject.root))
+      when FieldPath then body.scopes.narrow_path(subject.key, { type, root: subject.root })
 
 # How a test such as `x != nil` or `x is T` narrows the local or the path it tests.
 tested_narrowings := (body: Body, condition: Condition) ->
@@ -134,8 +134,8 @@ tested_narrowings := (body: Body, condition: Condition) ->
     return nil if inner_of(value.declared) is not UnionType
     type := resolve(body.program, body.resolver, is_type)
     others := other_members(value.current, type)
-    where_false: Narrowing[] = others then [Narrowing(subject, type: others)] else []
-    return ConditionNarrowings(where_false, where_true: [Narrowing(subject, type)])
+    where_false: Narrowing[] = others then [{ subject, type: others }] else []
+    return ConditionNarrowings(where_false, where_true: [{ subject, type }])
   type := value.current
   return nil if type is not OptionalType
-  narrowings_only_where [Narrowing(subject, type: type.inner)], test.condition_value
+  narrowings_only_where [{ subject, type: type.inner }], test.condition_value
