@@ -33,15 +33,17 @@ syn match lertaEscape "\\\%([ntr0\\\"#]\|u{\x\+}\)" contained
 syn region lertaBraces start="{" end="}" contained transparent contains=@lertaCode,lertaBraces
 syn region lertaInterpolation matchgroup=lertaInterpolationDelimiter start="#{" end="}" contained contains=@lertaCode,lertaBraces
 syn region lertaString start=+"+ end=+"\|$+ contains=lertaEscape,lertaInvalidEscape,lertaInterpolation
+syn region lertaMultilineString start=+"""+ end=+"""+ contains=lertaEscape,lertaInvalidEscape,lertaInterpolation
 syn match lertaRawString "'[^']*'"
 
 syn match lertaComment "#.*$" contains=@Spell
 
-syn cluster lertaCode contains=lertaComment,lertaRawString,lertaString,lertaNumber,lertaFloat,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
+syn cluster lertaCode contains=lertaComment,lertaRawString,lertaString,lertaMultilineString,lertaNumber,lertaFloat,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
 
 hi def link lertaComment Comment
 hi def link lertaRawString String
 hi def link lertaString String
+hi def link lertaMultilineString String
 hi def link lertaEscape SpecialChar
 hi def link lertaInvalidEscape Error
 hi def link lertaInterpolationDelimiter Delimiter
