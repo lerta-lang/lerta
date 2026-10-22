@@ -7,6 +7,7 @@ The planned syntax, control flow, types and operators.
 - A function literal held by a local `const` may have [defaults](../reference/functions.md), as a top-level function does. Its defaults may use the locals it captures, so each is computed by a closure.
 - A function literal held by a local `const` may call itself by that name, its return type written as for any recursive function. It does not capture itself, which would make a cycle that is never freed, but calls its own code with its own captures.
 - An error in a [call without parentheses](../reference/syntax.md#calls) suggests the fix: `f g x` suggests `f g(x)`, and a callee that is not a name with `.name`s, as `xs[i].push x`, suggests `xs[i].push(x)`. An undefined name that is a word only in its place, as `default` in `default - 1`, says so.
+- A method bound to its object (`other.has`), a C function and a generic function are function values where a function type is expected, as a top-level function is (see [function values](../reference/functions.md#function-values)): `files.all(is_file)`, `@exclusive(@line)`. Each is the function literal that calls it, which takes its type from the one expected, as a generic function's type arguments do too; a bound method captures its object, so one of `@` that the object holds is a cycle, as a literal that captures `@` is.
 - An `if` or a `case` value may start on the next line, one level deeper, also as the argument of a call without brackets (`print`, then `case` on the next line) and after the `then` of a `case` arm, as it may after `=`, so that the [style](../reference/style.md) can always put it there.
 
 ## Control flow
@@ -25,7 +26,7 @@ The planned syntax, control flow, types and operators.
 
 ### Iterables
 
-- More methods of `Array` and `Iter<T>` besides [those there are](../reference/types.md#iter).
+- More methods of `Array` and `Iter<T>` besides [those there are](../reference/types.md#iter), among them `xs.is_empty()` for `xs.length == 0`, which the compiler and std write well over a hundred times, `xs.index_of(x)` for a `find_index` by `==`, and setting the last item, `xs[xs.length - 1] = x` now.
 - `to_string` of the arrays of other items, as of a class with a `to_string`, and of maps, sets, tuples and anonymous structs; now an array is `Stringable` only when the compiler can write its items ([the reference](../reference/builtins.md#stringable)).
 - A comprehension may have several `for`s, the later ones nested in the earlier: `[f(x, y) for x in xs for y in ys]`.
 - Later, `Iter<T>` moves to `std/builtins/collections.lerta` as a generic class that holds such a value and the started flag, once generic classes exist, so that the compiler no longer builds `Iter`s in itself (see [internals](../internals.md#iter)) and `take` is written in Lerta. Code that uses `Iter`s does not change.
