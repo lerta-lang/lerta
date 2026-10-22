@@ -45,35 +45,38 @@ const import_line = seed_mode then "import is_dir, list_dir, read_file from 'std
 # holding their paths, so that no file of std or of the runtime added, removed or renamed needs a
 # refresh of it. Every file is read up front, as the module runs, since read_file awaits, so that
 # embedded_source is the same function in both modes.
-const seed_part = ->
-  return
-    "# The files of std under the directory, as paths from the repository's root.\n"
-    "const std_files = (dir: String): String[] ->\n"
-    "  const files: String[] = []\n"
-    "  for name in list_dir(dir)\n"
-    "    const path = \"\#{dir}/\#{name}\"\n"
-    "    if is_dir(path)\n"
-    "      files.append std_files(path)\n"
-    "    else if path.ends_with('.lerta')\n"
-    "      files.push path\n"
-    "  files\n"
-    "\n"
-    "export const EMBEDDED_PATHS = std_files('std')\n"
-    "\n"
-    "const CONTENTS = Map<String, String>()\n"
-    "for path in EMBEDDED_PATHS\n"
-    "  const bytes = await read_file(path)\n"
-    "  CONTENTS[path] = bytes.text() ? throw ValueError(message: \"'\#{path}' is not valid UTF-8\")\n"
-    "\n"
-    "export const embedded_source = (path: String) -> CONTENTS[path]\n"
-  .join('')
+const SEED_PART = """
+  # The files of std under the directory, as paths from the repository's root.
+  const std_files = (dir: String): String[] ->
+    const files: String[] = []
+    for name in list_dir(dir)
+      const path = "\#{dir}/\#{name}"
+      if is_dir(path)
+        files.append std_files(path)
+      else if path.ends_with('.lerta')
+        files.push path
+    files
+
+  export const EMBEDDED_PATHS = std_files('std')
+
+  const CONTENTS = Map<String, String>()
+  for path in EMBEDDED_PATHS
+    const bytes = await read_file(path)
+    CONTENTS[path] = bytes.text() ? throw ValueError(message: "'\#{path}' is not valid UTF-8")
+
+  export const embedded_source = (path: String) -> CONTENTS[path]
+  """
 const normal_part = ->
   const path_list = ["  #{path_literal(path)}\n" for path in paths].join('')
   const contents = ["  #{path_literal(path)}: #{await contents_literal(path)}\n" for path in paths]
-  return
-    "export const EMBEDDED_PATHS = [\n#{path_list}]\n\n"
-    "const CONTENTS: Map<String, String> = {\n#{contents.join('')}}\n\n"
-    "export const embedded_source = (path: String) -> CONTENTS[path]\n"
-  .join('')
-const mode_part = seed_mode then seed_part() else await normal_part()
+  return """
+    export const EMBEDDED_PATHS = [
+    #{path_list}]
+
+    const CONTENTS: Map<String, String> = {
+    #{contents.join('')}}
+
+    export const embedded_source = (path: String) -> CONTENTS[path]
+    """
+const mode_part = seed_mode then SEED_PART else await normal_part()
 await write_file(output, [header, import_line, mode_part].join('').binary)
