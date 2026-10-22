@@ -1,19 +1,21 @@
 # The members of enums written with their enums, `E.MEMBER`, that the checking may show can be
-# written alone (see Enum members in docs/reference/style.md), and the imports of the enums that
-# they then leave unused, and how to write them so in the syntax tree.
+# written alone, and the constructions of structs, `S(x: 1)`, that it may show can be written as
+# records, `{ x: 1 }` (see Expected types in docs/reference/style.md); the imports of the enums and
+# the structs that they then leave unused; and how to write them so in the syntax tree.
 import
   ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
-  Comprehension, Condition, Conditional, Declaration, Expression, Extend, For, FunctionLiteral,
-  Identifier, If, Import, ImportName, Index, IsTest, MapEntry, MapLiteral, Member,
-  MemberDeclaration, NamedValue, Parameter, Range, RecordLiteral, Return, Statement, Throw, Try,
-  TupleItem, TupleLiteral, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
+  Comprehension, Condition, Conditional, construction_arguments, Declaration, Expression, Extend,
+  For, FunctionLiteral, Identifier, If, Import, ImportName, Index, IsTest, MapEntry, MapLiteral,
+  Member, MemberDeclaration, NamedValue, Parameter, Range, RecordLiteral, Return, Statement, Throw,
+  Try, TupleItem, TupleLiteral, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
 from '../ast'
 import Annotation, annotation_key, import_key from './annotated'
 
 # What puts a value in the place of an expression in the syntax tree.
 type Place = (Expression) -> void
 
-# The members that may be written alone, in the order of the source.
+# The members that may be written alone and the constructions that may be written as records, in
+# the order of the source, but for a construction after those inside it (see recorded).
 export qualified_members_of := (program: Statement[]) ->
   found: Annotation[]
   add_statements found, program
@@ -49,10 +51,12 @@ add_member := (found: Annotation[], members: MemberDeclaration[], i: Int) ->
     { name, modifier, type, has_default, position } := members[i]
     members[i] = MemberDeclaration(name, modifier, type, has_default, position, value: new_value)
 
-# An expression in its place: a member of an enum is one that may be written alone.
+# An expression in its place: a member of an enum is one that may be written alone, and a call one
+# that may be written as a record.
 add := (found: Annotation[], value: Expression, place: Place) ->
   found.push unqualified(value, place) if value is Member
   add_expression found, value
+  found.push recorded(value, place) if value is Call
 
 add_condition := (found: Annotation[], condition: Condition, place: Place) ->
   case condition
@@ -159,6 +163,15 @@ unqualified := (member: Member, place: Place) ->
     key: annotation_key('member', member.position)
     remove: -> place(alone)
     restore: -> place(member)
+
+# The construction written as a record of its arguments as they are then: those inside it, which
+# come before it (see qualified_members_of), are written so by then, in their places among them.
+recorded := (call: Call, place: Place) ->
+  Annotation
+    construction: call
+    key: annotation_key('record', call.position)
+    remove: -> place(RecordLiteral(fields: construction_arguments(call), position: call.position))
+    restore: -> place(call)
 
 # The names that the module imports, of which those of enums that the members written alone leave
 # unused are left out (see unused_enum_imports).

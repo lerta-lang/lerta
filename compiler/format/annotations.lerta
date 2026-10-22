@@ -1,8 +1,8 @@
 # The types written in modules that their checking shows the checker can infer (see Type
-# annotations in docs/reference/style.md), the enums of members that it shows are expected (see
-# Enum members there), and the imports of enums that these leave unused, which `lerta fmt` leaves
-# out.
-import EnumDeclaration, Identifier, Node, Statement from '../ast'
+# annotations in docs/reference/style.md), the enums of members and the names of the constructions
+# of structs that it shows are expected (see Expected types there), and the imports of the enums and
+# the structs that these leave unused, which `lerta fmt` leaves out.
+import EnumDeclaration, Identifier, Node, Statement, TypeDeclaration from '../ast'
 import Located from '../errors'
 import all_warnings from '../checker/diagnostics'
 import check_program from '../checker/modules'
@@ -44,23 +44,27 @@ not_imported := (paths: String[]) ->
     imported.add key for key in keys
   [path for path in paths when not imported.has(module_key(path))]
 
-# The written types and the enums of members that may be left out, in the order of the source.
+# The written types, the enums of members and the names of constructions that may be left out, in
+# the order of the source.
 export left_out_candidates := (program: Statement[]) ->
   [annotations_of(program)..., qualified_members_of(program)..., import_names_of(program)...]
 
-# The imports are left out after the others, once these leave them unused (see unused_enum_imports).
+# The imports are left out after the others, once these leave them unused (see unused_type_imports).
 can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) ->
   return false if annotation.imported
   return shared.facts.unqualifiable.has(member) if member := annotation.member
+  return shared.facts.recordable.has(call) if call := annotation.construction
   inferable annotation, shared, program
 
-# A written type, or the enum of a member, of the module of `key`.
+# A written type, the enum of a member or the name of a construction, of the module of `key`.
 struct Placed(key: String, annotation: Annotation)
 
 # Adds the removable annotations of the modules `wanted` that the program of `entry` holds and that
 # have none yet, or none for `entry` if the program does not check. Those that the checking shows
 # can be inferred are checked without them, to be sure: a type that alone uses an import, for one,
-# still uses it (the import would be warned about without it).
+# still uses it (the import would be warned about without it). The names of constructions are left
+# out first, so that a type that gives the type expected of them is kept, as they would no longer
+# show it; an import of a struct that only they use does not count then.
 add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<String>) ->
   modules :=
     try
@@ -82,23 +86,30 @@ add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<S
     for annotation in left_out_candidates(module.program)
       inferred.push Placed(key, annotation) if can_leave_out(annotation, shared, checked)
   return if inferred.length == 0
-  original := result_of(checked)
-  checks_the_same := (left_out: Placed[]) ->
+  # The result of the program without the annotations, if it checks (see is_unused_type).
+  result_without := (left_out: Placed[], structs: Bool) ->
     placed.annotation.remove() for placed in left_out
     tried := quiet_program(entry, modules)
-    same := checks(tried) and same_result(result_of(tried), original)
+    result := checks(tried) then result_of(tried, structs)
     placed.annotation.restore() for placed in left_out
-    same
-  accepted := removable_among([], inferred, checks_the_same)
-  imports := unused_enum_imports(accepted, held, checked, -> quiet_program(entry, modules))
+    result
+  checks_the_same := (original: CheckResult, structs: Bool) -> (left_out: Placed[]) ->
+    result := result_without(left_out, structs) ? return false
+    same_result result, original
+  constructions := [placed for placed in inferred when placed.annotation.construction]
+  others := [placed for placed in inferred when not placed.annotation.construction]
+  recorded := removable_among([], constructions, checks_the_same(result_of(checked, true), true))
+  with_records := result_without(recorded, false)!
+  accepted := removable_among(recorded, others, checks_the_same(with_records, false))
+  imports := unused_type_imports(accepted, held, checked, -> quiet_program(entry, modules))
   for placed in [accepted..., imports...]
     keys := removable[placed.key]!
     keys.push placed.annotation.key
 
-# The imports of enums that the program used, but that it does not once the annotations accepted
-# are left out, as the members of enums written alone or the types: the checking that accepts them
-# does not tell their warnings (see result_of).
-unused_enum_imports := (
+# The imports of enums and structs that the program used, but that it does not once the annotations
+# accepted are left out, as the members of enums written alone, the constructions written as records
+# or the types: the checking that accepts them does not tell their warnings (see result_of).
+unused_type_imports := (
   accepted: Placed[], held: Module[], checked: ProgramWide, program: () -> ProgramWide
 ): Placed[] ->
   return [] if accepted.length == 0
@@ -111,15 +122,17 @@ unused_enum_imports := (
     after := tried.shared[module.index].imports.names
     left_unused := (imported: Identifier) ->
       name := imported.name
-      not after[name]!.used and before[name]!.used and imports_enum(tried, after[name]!)
+      not after[name]!.used and before[name]!.used and imports_type(tried, after[name]!, true)
     for annotation in import_names_of(module.program)
       found.push Placed(annotation, key: module.key) if left_unused(annotation.imported!)
   placed.annotation.restore() for placed in accepted
   found
 
-imports_enum := (program: ProgramWide, imported: ImportedName) ->
+# Whether the name imports an enum, or a struct if `structs`.
+imports_type := (program: ProgramWide, imported: ImportedName, structs: Bool) ->
   source := imported.source as ExportRef ? return false
-  program.shared[source.module_index].exported[source.name] is EnumDeclaration
+  exported := program.shared[source.module_index].exported[source.name]
+  exported is EnumDeclaration or (structs and exported is TypeDeclaration and exported.is_struct)
 
 # `accepted` and those of `trying` that can be left out with them: all at once, or else found by
 # halving `trying` until the parts that cannot be left out are single annotations, so that a module
@@ -148,7 +161,9 @@ checks := (program: ProgramWide) ->
   catch _: CompileError
     false
 
-result_of := (program: ProgramWide) ->
+# The imports of enums, and those of structs if `structs`, that are not used do not count in the
+# warnings (see is_unused_type).
+result_of := (program: ProgramWide, structs: Bool) ->
   node_types: Map<Node, String>
   for shared in program.shared
     continue if is_standard_module(program.modules[shared.index])
@@ -157,17 +172,19 @@ result_of := (program: ProgramWide) ->
       converted := facts.conversions[node]
       conversion := converted then " => #{format_type(converted)}" else ''
       node_types[node] = format_type(type) + conversion
-  warnings := [each for each in all_warnings(program) when not is_unused_enum(each, program)]
+  counts := (warning: Located) -> not is_unused_type(warning, program, structs)
+  warnings := [each for each in all_warnings(program) when counts(each)]
   CheckResult node_types, warnings, field_types: field_types(program)
 
-# A warning of an import of an enum that is not used, which the members of the enum written alone
-# or the types left out may make, and which unused_enum_imports then leaves out: one at the name of such an import.
-is_unused_enum := (warning: Located, program: ProgramWide) ->
+# A warning of an import of an enum or a struct that is not used, which the members of the enum
+# written alone, the constructions of the struct written as records or the types left out may make,
+# and which unused_type_imports then leaves out: one at the name of such an import.
+is_unused_type := (warning: Located, program: ProgramWide, structs: Bool) ->
   at_import := (shared: Shared, imported: ImportedName) ->
     { position } := imported.name
     location := module_location(program.entry_path, program.modules[shared.index].display_path)
     placed := location == warning.location and position.line == warning.line
-    placed and position.column == warning.column and imports_enum(program, imported)
+    placed and position.column == warning.column and imports_type(program, imported, structs)
   unused := 'is imported but never used'
   return false if not warning.message.ends_with(unused)
   program.shared.any (shared) ->

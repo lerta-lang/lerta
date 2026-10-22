@@ -1,0 +1,69 @@
+# A record where a struct is expected constructs the struct, as a call of its name with the same
+# named arguments does.
+import stdout from 'std:io'
+import sleep from 'std:time'
+
+struct Point(x: Int, y = default 0)
+
+struct Pair<A, B>(first: A, second: B)
+
+struct Line(from: Point, to: Point)
+
+struct Counted
+  count: Int
+  doubled = @count * 2
+  init = -> print("init #{@count}")
+
+show := (p: Point) -> "#{p.x},#{p.y}"
+
+# As the items of an array, a variable's value, an argument and a result.
+points: Point[] = [{ x: 1 }, { x: 2, y: 3 }]
+print [show(p) for p in points].join(' ')
+single: Point = { x: 4 }
+print show(single)
+print show({ x: 5, y: 6 })
+origin := (): Point -> { x: 0 }
+print show(origin())
+
+# A name alone is short for a field of that name.
+x := 7
+print show({ x })
+
+# Where the struct is optional, nested in the fields of another, and in a map's values.
+maybe: Point? = { x: 8 }
+print show(maybe!)
+line: Line = { from: { x: 1 }, to: { x: 2, y: 2 } }
+print "#{show(line.from)} #{show(line.to)}"
+named: Map<String, Point> = { 'a': { x: 9 } }
+print show(named['a']!)
+
+# The type arguments of a generic struct come from the expected type.
+pair: Pair<Int, String> = { first: 1, second: 'one' }
+print "#{pair.first} #{pair.second}"
+
+# The initializers and init run as for a construction by name, and the struct is the same.
+counted: Counted = { count: 3 }
+print counted.doubled
+print (Point(x: 4) == single).to_string()
+
+# In a generic function, for each instance.
+wrapped := <T>(value: T): Pair<T, Int> -> { first: value, second: 0 }
+print wrapped('w').first
+
+# A field's value may await.
+later := (): Promise<Point> ->
+  await sleep(1)
+  { x: 10, y: await delayed(11) }
+delayed := (n: Int) ->
+  await sleep(1)
+  n
+print show(await later())
+
+# The struct need not be imported where the record is.
+var out = stdout
+out = { fd: 1 }
+await out.write("fd #{out.fd}\n")
+
+# Without an expected struct, it is an anonymous struct.
+anonymous := { x: 1, y: 2 }
+print anonymous.y

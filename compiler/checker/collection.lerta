@@ -1,7 +1,7 @@
 # Types arrays, maps and sets: their literals, `Map()`, `Set()`, and indexing (of a Binary too).
 import
   ArrayLiteral, Call, Expression, Identifier, Index, is_spread, MapLiteral, NamedType, Position,
-  Throw
+  RecordLiteral, Throw, TupleLiteral
 from '../ast'
 import fail from './diagnostics'
 import is_equatable, is_hashable from './equality'
@@ -76,6 +76,7 @@ export type_of_array := (body: Body, array: ArrayLiteral, expected: Type?) ->
   element := check_item_type(body.program, element_type, anchor.position, 'an array')
   for item in elements
     expect_element body, item, element if item != anchor
+  keep_constructions body, elements
   ArrayType element
 
 # The item whose type the others take: one that decides its own type rather than taking it from
@@ -93,6 +94,21 @@ anchor_of := (items: Expression[]) ->
 expect_element := (body: Body, item: Expression, element: Type) ->
   expect_type body, item, is_spread(item) then ArrayType(element) else element
 
+# Values whose type others gave, such as the items that take the type of their anchor, keep their
+# constructions, and so do the literals in them, which show that type as the others do, rather than
+# being written as records (see NodeFacts.recordable).
+export keep_constructions := (body: Body, items: Expression[]): void ->
+  for item in items
+    case item
+      when Call then body.facts.recordable.remove(item)
+      when ArrayLiteral then keep_constructions(body, item.elements)
+      when TupleLiteral then keep_constructions(body, item.items)
+      when RecordLiteral then keep_constructions(body, [field.value for field in item.fields])
+      when MapLiteral
+        keep_constructions body, [entry.key for entry in item.entries]
+        keep_constructions body, [entry.value for entry in item.entries]
+      else pass
+
 # The key and the value types come from the expected type if there is one; otherwise each from an
 # anchor among the keys and among the values, as an array's element type does.
 export type_of_map := (body: Body, map: MapLiteral, expected: Type?) ->
@@ -107,6 +123,8 @@ export type_of_map := (body: Body, map: MapLiteral, expected: Type?) ->
   for entry in map.entries
     expect_type body, entry.key, type.key if entry.key != key
     expect_type body, entry.value, type.value if entry.value != value
+  keep_constructions body, [entry.key for entry in map.entries]
+  keep_constructions body, [entry.value for entry in map.entries]
   type
 
 expected_map := (expected: Type?) ->

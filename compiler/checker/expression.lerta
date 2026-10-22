@@ -29,7 +29,9 @@ import type_of_method_call, type_of_property from './member'
 import json_direction, type_of_json_call from './json'
 import generic_callee, named_function_literal, qualified_name, type_of_identifier from './name'
 import narrowable from './narrowable'
-import constructed_type, type_of_construction, type_of_record, type_of_this from './object'
+import
+  constructed_type, expected_struct, type_of_construction, type_of_record, type_of_this
+from './object'
 import type_of_binary, type_of_coalesce, type_of_unary from './operator'
 import check_return, check_yield, type_of_await from './result'
 import check_interpolated from './satisfaction'
@@ -148,7 +150,12 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
   if generic := generic_callee(body, callee)
     return type_of_generic_call(body, call, generic, expected)
   if object_type := constructed_type(body, callee)
-    return type_of_construction(body, call, object_type, expected)
+    type := type_of_construction(body, call, object_type, expected)
+    struct_type := expected_struct(expected) ? return type
+    # `{}` is no record but an empty map.
+    has_arguments := call.args.length > 0 or call.named_args.length > 0
+    body.facts.recordable.add call if has_arguments and same_type(type, struct_type)
+    return type
   return type_of_json_call(body, call, direction) if direction := json_direction(body, callee)
   if callee is Member
     if parse := enum_parse_type(body, callee)

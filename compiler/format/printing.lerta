@@ -59,8 +59,15 @@ export bracketed := (open: Doc, items: Item[], close: String, close_at: Position
   bracketed_or open, items, closing_text, opened_list(open, items, closing_text)
 
 # The list in brackets as `bracketed` lays it out, with `opened` where its items would go on lines
-# of their own inside the brackets.
-export bracketed_or := (open: Doc, items: Item[], closing_text: Doc, opened: Doc) ->
+# of their own inside the brackets, and `flat` where they would go on its line, if that is not the
+# brackets and the items alone, as with the spaces inside `{}`.
+export bracketed_or := (
+  open: Doc
+  items: Item[]
+  closing_text: Doc
+  opened: Doc
+  flat: Doc? = nil
+) ->
   return join([open, closing_text]) if items.length == 0
   docs := [item.doc for item in items]
   holds_block := (item: Item) -> has_line_feed(item.doc)
@@ -71,10 +78,10 @@ export bracketed_or := (open: Doc, items: Item[], closing_text: Doc, opened: Doc
   if first_block := blocks
     return opened if first_block < items.length - 1
     return breaking(LONG_LISTS, ending_with(docs.last()!), opened)
-  flat := join([open, separated(docs, text(', ')), closing_text])
+  on_line := flat ? join([open, separated(docs, text(', ')), closing_text])
   # A function last whose body does not fit on its line takes the lines below for it.
-  block := items.last()!.as_block ? return breaking(LONG_LISTS, flat, opened)
-  breaking LONG_LISTS, flat, breaking(LONG_LISTS, ending_with(block), opened)
+  block := items.last()!.as_block ? return breaking(LONG_LISTS, on_line, opened)
+  breaking LONG_LISTS, on_line, breaking(LONG_LISTS, ending_with(block), opened)
 
 # The list broken after its opening bracket, with its items on the lines below.
 export opened_list := (open: Doc, items: Item[], closing: Doc) ->

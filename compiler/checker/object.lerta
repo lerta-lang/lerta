@@ -2,10 +2,10 @@
 # fields are in fields.
 import
   Call, construction_arguments, Expression, FunctionLiteral, Identifier, NamedType, NamedValue,
-  RecordLiteral
+  Position, RecordLiteral
 from '../ast'
 import fail, fail_cannot_infer from './diagnostics'
-import expect_type, reject_type_arguments, require_type, type_of from './expression'
+import expect_type, reject_type_arguments, require_type, set_type, type_of from './expression'
 import function_type_of, has_function, method_key from './functions'
 import float_first from './literals'
 import lookup, record_reference from './name'
@@ -29,6 +29,26 @@ export constructed_type := (body: Body, callee: Expression) ->
   type := object_type(body.shared, name) ? return nil
   body.facts.types[callee] = type
   type
+
+# A construction of the struct, with the named arguments: a call of its name, which may name nothing
+# or another type where the call is made, as type_of_expected_construction finds the struct by its
+# type.
+export struct_construction := (type: ObjectType, named_args: NamedValue[], position: Position) ->
+  callee := Identifier(position, name: type.name)
+  Call callee, position, named_args, args: [], type_args: []
+
+# The struct that the expected type is, or makes optional.
+export expected_struct := (expected: Type?) ->
+  given := expected ? return nil
+  type := inner_of(given)
+  type is ObjectType and type.is_struct then type
+
+# A construction of the struct that is expected (see struct_construction), whose type arguments are
+# inferred from the expected type's.
+export type_of_expected_construction := (body: Body, call: Call, expected: Type) ->
+  info := info_of(body.program, inner_of(expected) as ObjectType!)
+  declared := info.generic?.type ? info.type
+  set_type body, call, type_of_construction(body, call, declared, expected)
 
 export type_of_construction := (body: Body, call: Call, declared: ObjectType, expected: Type?) ->
   program := body.program
@@ -139,8 +159,13 @@ export type_of_this := (body: Body, at: Expression) ->
       "'@' can only be used in a method, a function literal in a method, or a field initializer"
   fail body.program, at.position, message
 
+# A record where a struct is expected constructs it (see NodeFacts.constructions).
 export type_of_record := (body: Body, record: RecordLiteral, expected: Type?) ->
   program := body.program
+  if struct_type := expected_struct(expected)
+    construction := struct_construction(struct_type, record.fields, record.position)
+    body.facts.constructions[record] = construction
+    return type_of_expected_construction(body, construction, expected!)
   names: Set<String>
   for field in record.fields
     { name, position } := field.name
