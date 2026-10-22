@@ -35,8 +35,8 @@ export struct Exit(code: Int, signal: Int?)
 export run := (command: String, args: String..., options: RunOptions) ->
   check_options options
   { stdin, stdout, stderr, cwd, env, unset_env, output_limit, kill_after } := options
-  names := [name for name in env.keys()]
-  values := [env[name]! for name in names]
+  names := env.keys().to_array()
+  values := env.values().to_array()
   # An Int, as an Int? passed to C on Windows is not yet as C takes it; -1 is no limit.
   limit := output_limit ? -1
   status := await lerta_run(
@@ -48,7 +48,7 @@ check_options := (options: RunOptions) ->
   throw ValueError(message: 'kill a program after a negative time') if options.kill_after < 0
   if options.output_limit ? 0 < 0
     throw ValueError(message: "a negative limit of output: #{options.output_limit!}")
-  set_names := [name for name in options.env.keys()]
+  set_names := options.env.keys().to_array()
   for name in [set_names..., options.unset_env...]
     if name == '' or name.contains('=') or name.contains("\0")
       throw ValueError(message: "not a name of an environment variable: '#{name}'")
@@ -56,7 +56,7 @@ check_options := (options: RunOptions) ->
     if set_names.find_index((each) -> same_env_name(each, name))! < i
       throw ValueError(message: "the environment variable #{name} is set twice")
   for name in options.unset_env
-    if set_names.find((each) -> same_env_name(each, name)) != nil
+    if set_names.any((each) -> same_env_name(each, name))
       throw ValueError(message: "the environment variable #{name} is both set and removed")
 
 export env := (name: String) ->

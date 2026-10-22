@@ -16,6 +16,11 @@ is_windows() {
   case $1 in *-w64-mingw32) ;; *) return 1 ;; esac
 }
 
+record_failure() { # <what>
+  summary="$summary  FAILED:  $1\n"
+  failed=1
+}
+
 comma_list() { # <word>...
   echo "$*" | sed 's/ /, /g'
 }
@@ -51,8 +56,7 @@ start_targets() { # <label> <triple>...
       if ! $wine_ready; then
         # Printed too, as the summary of --here is not.
         echo "cannot update the Wine prefix for $triple" >&2
-        summary="$summary  FAILED:  $triple$label (cannot update the Wine prefix)\n"
-        failed=1
+        record_failure "$triple$label (cannot update the Wine prefix)"
         continue
       fi
     fi
@@ -86,8 +90,7 @@ runs_here() {
 start_in_docker() { # <what> <image> <command>
   for name in linux "$2"; do
     if ! docker build --quiet --tag "lerta-test-$name" "tools/docker/$name" >/dev/null; then
-      summary="$summary  FAILED:  $1 (cannot build the image)\n"
-      failed=1
+      record_failure "$1 (cannot build the image)"
       return
     fi
   done
@@ -138,7 +141,7 @@ finish() {
   while read -r pid log what; do
     [ -n "$pid" ] || continue
     if wait "$pid"; then summary="$summary  passed:  $what\n"
-    else summary="$summary  FAILED:  $what\n"; failed=1; fi
+    else record_failure "$what"; fi
     # --here keeps them for its caller, which reports them.
     if $here; then cat "$log"; else sed "/^$SKIP_MARK/d" "$log"; fi
     skipped=$(sed -n "s/^$SKIP_MARK/  skipped: /p" "$log")

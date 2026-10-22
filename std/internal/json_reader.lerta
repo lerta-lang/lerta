@@ -22,13 +22,18 @@ export class JsonReader
     return false if @read_literal('false')
     @fail_expected 'a Bool'
 
-  # An integer of the type that `expected` names, as `an Int8`, from `least` to `most`.
-  read_integer = (expected: String, least: Int, most: Int): Int ->
+  # A number that `parse` reads as what `expected` names, as `an Int8`, or gives nil for.
+  read_number = <T>(expected: String, parse: (String) -> T?): T ->
     number := @number() ? @fail_expected(expected)
-    value := number.parse_int() ? @fail("expected #{expected}, found #{number}")
-    @fail "expected #{expected}, found #{number}" if value < least or value > most
+    value := parse(number) ? @fail("expected #{expected}, found #{number}")
     @at += number.binary.length
     value
+
+  # An integer of the type that `expected` names, from `least` to `most`.
+  read_integer = (expected: String, least: Int, most: Int): Int ->
+    @read_number expected, (number) ->
+      value := number.parse_int()
+      value != nil and least <= value and value <= most then value
 
   # Its digits are read on their own, as a UInt64 may be above the largest Int.
   read_uint64 = (): UInt64 ->
@@ -44,13 +49,7 @@ export class JsonReader
     value
 
   # A number that is not finite as a Float32 is no Float32.
-  read_float32 = (): Float32 ->
-    number := @number() ? @fail_expected('a Float32')
-    not_float32 := -> @fail("expected a Float32, found #{number}")
-    value := number.parse_float() ? not_float32()
-    narrowed := value.to_float32() ? not_float32()
-    @at += number.binary.length
-    narrowed
+  read_float32 = -> @read_number('a Float32', (number) -> number.parse_float()?.to_float32())
 
   read_binary = (): Binary ->
     @skip_space()
@@ -62,11 +61,7 @@ export class JsonReader
     @fail 'expected a Binary, found a string that is not base64'
 
   # A number that is not finite as a Float is no Float.
-  read_float = ->
-    number := @number() ? @fail_expected('a Float')
-    value := number.parse_float() ? @fail("expected a Float, found #{number}")
-    @at += number.binary.length
-    value
+  read_float = -> @read_number('a Float', (number) -> number.parse_float())
 
   read_string = ->
     @skip_space()

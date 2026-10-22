@@ -143,24 +143,12 @@ extend String
   # Without the whitespace at both ends: the ASCII spaces of Byte.is_space, which no byte of a
   # multi-byte character is, so that what is left is valid UTF-8.
   trim = ->
-    bytes := @binary
-    var start = 0
-    start += 1 while start < bytes.length and bytes[start].is_space()
-    var end = bytes.length
-    end -= 1 while end > start and bytes[end - 1].is_space()
-    lerta_binary_as_string bytes.slice(start, end)
+    start := text_start(@binary)
+    lerta_binary_as_string @binary.slice(start, text_end(@binary, start))
   # Likewise, at the start only.
-  trim_start = ->
-    bytes := @binary
-    var start = 0
-    start += 1 while start < bytes.length and bytes[start].is_space()
-    lerta_binary_as_string bytes.slice(start, bytes.length)
+  trim_start = -> lerta_binary_as_string(@binary.slice(text_start(@binary), @binary.length))
   # Likewise, at the end only.
-  trim_end = ->
-    bytes := @binary
-    var end = bytes.length
-    end -= 1 while end > 0 and bytes[end - 1].is_space()
-    lerta_binary_as_string bytes.slice(0, end)
+  trim_end = -> lerta_binary_as_string(@binary.slice(0, text_end(@binary, 0)))
   # Each occurrence of the part, from the start and without overlapping, replaced.
   replace = (part: String, by: String) ->
     throw ValueError(message: 'replace of an empty part') if part == ''
@@ -211,6 +199,18 @@ extend Binary
   text = (start = 0, end: Int = @length): String? ->
     bytes := start == 0 and end == @length then @ else @slice(start, end)
     is_utf8(bytes) then lerta_binary_as_string(bytes)
+
+# The start of the bytes without the spaces at it.
+text_start := (bytes: Binary) ->
+  var start = 0
+  start += 1 while start < bytes.length and bytes[start].is_space()
+  start
+
+# The end of the bytes without the spaces at it, which is no earlier than `start`.
+text_end := (bytes: Binary, start: Int) ->
+  var end = bytes.length
+  end -= 1 while end > start and bytes[end - 1].is_space()
+  end
 
 # The copies of `fill` that make `text` `width` code points long (see pad_start).
 padding := (text: String, width: Int, fill: String) ->
