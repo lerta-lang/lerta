@@ -1,7 +1,7 @@
 # Types unary and binary operators, nil tests and `?`.
 import all_but_last from '../arrays'
 import
-  Assignment, BinaryOperation, Call, Coalesce, Expression, Identifier, is_nil_test, Member,
+  Assignment, BinaryOperation, Coalesce, Expression, Identifier, is_nil_test, method_call,
   NilLiteral, StringLiteral, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
@@ -55,8 +55,7 @@ export type_of_operator_call := (
     return nil if object_type is not ObjectType
     message := "#{format_type(object_type)} has no #{name}, by which #{written} applies"
     fail body.program, object.position, message
-  member := Member(object: object, name: method_name, position: at)
-  call := Call(callee: member, args: args, named_args: [], type_args: [], position: at)
+  call := method_call(object, name, args, at)
   body.facts.operator_calls[operation] = call
   type_of body, call
 
@@ -202,10 +201,7 @@ type_of_operands := (
 # `<` and the like of two Strings test the Ordering of the left one's compare, by the call of it,
 # which the facts record for codegen to generate in place of the operation (see order_calls).
 order_by_compare := (body: Body, binary: BinaryOperation) ->
-  at := binary.position
-  callee :=
-    Member(object: binary.left, name: Identifier(name: 'compare', position: at), position: at)
-  call := Call(callee: callee, args: [binary.right], named_args: [], type_args: [], position: at)
+  call := method_call(binary.left, 'compare', [binary.right], binary.position)
   body.facts.order_calls[binary] = call
   type_of body, call
 
@@ -213,10 +209,7 @@ order_by_compare := (body: Body, binary: BinaryOperation) ->
 # record for codegen to generate in its place (see appended_texts), and a Byte to a Binary.
 export appends_unit := (body: Body, value: Expression, target: Type, value_type: Type) ->
   if is_kind(target, 'String') and is_kind(value_type, 'Char')
-    at := value.position
-    name := Identifier(name: 'to_string', position: at)
-    callee := Member(object: value, name: name, position: at)
-    call := Call(callee: callee, args: [], named_args: [], type_args: [], position: at)
+    call := method_call(value, 'to_string', [], value.position)
     body.facts.appended_texts[value] = call
     type_of body, call
     return true

@@ -1,7 +1,7 @@
 # Checks the bodies of the module's functions, methods, instances of generic functions and
 # initializers of fields, each on demand (see functions, generics and object_types).
 import Identifier from '../ast'
-import enter_module, fail, leave_module from './diagnostics'
+import fail, in_module from './diagnostics'
 import Extensions from './extensions'
 import ordering_type from './builtins'
 import receiver_instance from './generic_call'
@@ -40,12 +40,11 @@ export check_instance_defaults := (
   instance.defaults_checked = true
   shared := program.shared[module_index]
   { entry, resolver, extensions, facts } := instance
-  enter_module shared
-  checked := function_body(shared, facts, entry, resolver, extensions)
-  checked.body.scopes.push()
-  define_parameters checked.body, entry.literal, checked.params, true
-  checked.body.scopes.pop()
-  leave_module shared
+  in_module shared, ->
+    checked := function_body(shared, facts, entry, resolver, extensions)
+    checked.body.scopes.push()
+    define_parameters checked.body, entry.literal, checked.params, true
+    checked.body.scopes.pop()
 
 check_function_with := (
   shared: Shared
@@ -56,18 +55,18 @@ check_function_with := (
   checks_defaults = true
 ): void ->
   program := shared.program
-  enter_module shared
-  literal := entry.literal
-  fail program, literal.position, 'a top-level function or a method cannot be weak' if literal.weak
-  { body, params, context } := function_body(shared, facts, entry, resolver, extensions)
-  check_function_body body, literal, params, nil, checks_defaults
-  # The conversions of the results are recorded even if the type was known from its annotation.
-  finished := finish_function_type(context, params, facts)
-  checked_type := reject_nil_result(program, finished, literal)
-  type := entry.type ? checked_type
-  entry.type = type
-  facts.types[literal] = type
-  leave_module shared
+  in_module shared, ->
+    literal := entry.literal
+    if literal.weak
+      fail program, literal.position, 'a top-level function or a method cannot be weak'
+    { body, params, context } := function_body(shared, facts, entry, resolver, extensions)
+    check_function_body body, literal, params, nil, checks_defaults
+    # The conversions of the results are recorded even if the type was known from its annotation.
+    finished := finish_function_type(context, params, facts)
+    checked_type := reject_nil_result(program, finished, literal)
+    type := entry.type ? checked_type
+    entry.type = type
+    facts.types[literal] = type
 
 annotated_result := (type: Type?) -> (type as FunctionType?)?.result
 
@@ -82,24 +81,22 @@ function_body := (
   self := this_type then SelfContext(type: this_type)
   { body: Body(shared, resolver, extensions, facts, context, self), params, context }
 
-export check_object := (program: ProgramWide, info: ObjectInfo) ->
+# The body in which code of the object's declaration is checked, in its module.
+in_object := (program: ProgramWide, info: ObjectInfo, self: SelfContext?, check: (Body) -> void) ->
   shared := program.shared[info.module_index]
-  enter_module shared
-  self := SelfContext(type: info.type)
   { extensions } := shared
-  body := Body(shared, extensions, self, resolver: info.resolver, facts: info.facts)
-  check_initializers body, info, self
-  leave_module shared
+  in_module shared, ->
+    check Body(shared, extensions, self, resolver: info.resolver, facts: info.facts)
+
+export check_object := (program: ProgramWide, info: ObjectInfo) ->
+  self := SelfContext(type: info.type)
+  in_object program, info, self, (body) -> check_initializers(body, info, self)
 
 # Once the type is checked, as its methods' types may need its fields'.
 export check_satisfies := (program: ProgramWide, info: ObjectInfo): void ->
   satisfies := info.satisfies ? return
-  shared := program.shared[info.module_index]
-  enter_module shared
-  { extensions } := shared
-  body := Body(shared, extensions, resolver: info.resolver, facts: info.facts)
-  reject_unsatisfied body, info.type, satisfies, info.declaration.satisfies!.position
-  leave_module shared
+  at := info.declaration.satisfies!.position
+  in_object program, info, nil, (body) -> reject_unsatisfied(body, info.type, satisfies, at)
 
 # Rejects a class or struct whose own equals, compare or hash is not of its type, that has both
 # equals and compare, or that has a hash but neither, by which equal values would be told.
@@ -107,38 +104,34 @@ export check_equality_methods := (program: ProgramWide, info: ObjectInfo): void 
   methods := info.methods
   has := (name: String) -> methods.has(name)
   return if not has('equals') and not has('compare') and not has('hash')
-  shared := program.shared[info.module_index]
-  enter_module shared
-  { extensions } := shared
-  body := Body(shared, extensions, resolver: info.resolver, facts: info.facts)
-  type := info.type
-  name := format_type(type)
-  at := (method: String) -> methods[method]!.position
-  if has('equals') and has('compare')
-    fail
-      program
-      at('equals')
-      "#{name} has both equals and compare, which gives its == too; leave out equals"
-  if has('hash') and not has('equals') and not has('compare')
-    fail program, at('hash'), "#{name} has a hash but neither equals nor compare"
-  expect_method := (method: String, expected: FunctionType) ->
-    return if not has(method)
-    name_at := Identifier(name: method, position: at(method))
-    found := find_member(body, type, name_at)
-    if found and same_type(found.type, expected)
-      target := found.target
-      generic := target is Method then generic_method(target.source)
-      if generic
-        instance := receiver_instance(body, generic, type, name_at.position, nil)
-        info.comparison_instances[method] = instance!
-      return
-    must := "#{method} of #{name} must be of type"
-    got := found?.type ? return fail(program, at(method), "#{must} #{format_type(expected)}")
-    # A type of the module may take the name of the builtin one: they are told apart by module.
-    qualified := format_type(got) == format_type(expected)
-    show := (each: Type) -> format_qualified(each, qualified)
-    fail program, at(method), "#{must} #{show(expected)}, not #{show(got)}"
-  expect_method 'equals', FunctionType(params: [type], result: bool_type)
-  expect_method 'compare', FunctionType(params: [type], result: ordering_type(program))
-  expect_method 'hash', FunctionType(params: [], result: int_type)
-  leave_module shared
+  in_object program, info, nil, (body) ->
+    type := info.type
+    name := format_type(type)
+    at := (method: String) -> methods[method]!.position
+    if has('equals') and has('compare')
+      fail
+        program
+        at('equals')
+        "#{name} has both equals and compare, which gives its == too; leave out equals"
+    if has('hash') and not has('equals') and not has('compare')
+      fail program, at('hash'), "#{name} has a hash but neither equals nor compare"
+    expect_method := (method: String, expected: FunctionType) ->
+      return if not has(method)
+      name_at := Identifier(name: method, position: at(method))
+      found := find_member(body, type, name_at)
+      if found and same_type(found.type, expected)
+        target := found.target
+        generic := target is Method then generic_method(target.source)
+        if generic
+          instance := receiver_instance(body, generic, type, name_at.position, nil)
+          info.comparison_instances[method] = instance!
+        return
+      must := "#{method} of #{name} must be of type"
+      got := found?.type ? return fail(program, at(method), "#{must} #{format_type(expected)}")
+      # A type of the module may take the name of the builtin one: they are told apart by module.
+      qualified := format_type(got) == format_type(expected)
+      show := (each: Type) -> format_qualified(each, qualified)
+      fail program, at(method), "#{must} #{show(expected)}, not #{show(got)}"
+    expect_method 'equals', FunctionType(params: [type], result: bool_type)
+    expect_method 'compare', FunctionType(params: [type], result: ordering_type(program))
+    expect_method 'hash', FunctionType(params: [], result: int_type)
