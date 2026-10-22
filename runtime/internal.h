@@ -92,8 +92,8 @@ bool lerta_loop_wait(void);
 // that is not read or cannot be; and whether one of them went past the limit, which stopped it.
 typedef void (*LertaProgramEnd)(void *context, int64_t status, LertaString *output,
                                 LertaString *errors, bool too_long);
-// How a program starts: the file `file` with `args`, which end with NULL, as lerta_os_program_file
-// and lerta_os_program_argument give them; with the variables `env`, as NAME=VALUE ending with NULL,
+// How a program starts: the file `file`, as lerta_os_program_file gives it, with `args`, which
+// start with the command and end with NULL; with the variables `env`, as NAME=VALUE ending with NULL,
 // or else this program's; in the directory `cwd`, or else this program's; reading `stdin_fd`, or
 // else this program's standard input; its standard output and error, `reads[0]` and `reads[1]`,
 // read, or else shared with this program; the most bytes that each read stream may give, or -1 for
@@ -192,7 +192,8 @@ _Noreturn void lerta_panic_with(const char *prefix, const LertaString *message);
 // Panics with the prefix and the pending exception's message, and its trace.
 _Noreturn void lerta_panic_with_exception(const char *prefix);
 
-// What differs between systems (see docs/internals.md#platforms). Paths and arguments are
+// What differs between systems (see docs/internals.md#platforms): platform.c implements through
+// libuv what it can, and platform_posix.c or platform_windows.c the rest. Paths and arguments are
 // NUL-terminated UTF-8, and a false or NULL result is a failure.
 // Stack overflow: reported as a panic. Called first thing in main.
 void lerta_stack_init(void);
@@ -246,6 +247,8 @@ char *lerta_os_real_path(const char *path);
 // A new, empty directory in the system's directory for temporary files, whose path the caller
 // frees.
 char *lerta_os_make_temp_dir(void);
+// The path of `name` in the system's directory for temporary files, which the caller frees.
+char *lerta_os_temp_path(const char *name);
 // Removes a file, or a directory with everything in it; a symbolic link is removed, not followed.
 bool lerta_os_remove_tree(const char *path);
 // Makes the directory, whose parent must be there; true if it is a directory afterwards, made now
@@ -253,11 +256,13 @@ bool lerta_os_remove_tree(const char *path);
 bool lerta_os_make_dir(const char *path);
 // Whether the byte separates the directories of a path.
 bool lerta_os_is_separator(char c);
+// The byte that the system writes between the directories of a path.
+char lerta_os_separator(void);
 // Moves a file or a directory, replacing a file at `to`.
 bool lerta_os_rename(const char *from, const char *to);
 // The system's name: linux, macos or windows.
 const char *lerta_os_platform(void);
-// The number of CPUs that are online, at least 1.
+// The number of CPUs that the program may run on, at least 1.
 int64_t lerta_os_cpu_count(void);
 // The value of an environment variable, which the caller frees, or NULL if it is not set.
 char *lerta_os_env(const char *name);
@@ -273,10 +278,8 @@ void lerta_os_close_input_file(int fd);
 // Whether two names of environment variables name the same variable.
 bool lerta_os_same_env_name(const char *a, const char *b);
 // The file of a command for lerta_loop_run_program, which on Windows is searched for on PATH if it
-// holds no directory (see docs/reference/modules.md#stdprocess); NULL if there is none. The caller
-// frees it.
+// holds no directory, as libuv would look in the directory that the program runs in first (see
+// docs/reference/modules.md#stdprocess); NULL if there is none. The caller frees it.
 char *lerta_os_program_file(const char *command);
-// An argument as lerta_loop_run_program takes it, which the caller frees.
-char *lerta_os_program_argument(const char *argument);
 
 #endif

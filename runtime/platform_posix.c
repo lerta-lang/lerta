@@ -1,6 +1,3 @@
-#ifndef _WIN32
-
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -11,7 +8,7 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
-#include <time.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 
 #include "internal.h"
@@ -89,12 +86,6 @@ void lerta_os_stdio_init(void) {
   if (closed && open("/dev/null", O_RDONLY) != STDIN_FILENO) lerta_panic("cannot open /dev/null");
 }
 
-double lerta_os_unix_time(void) {
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME, &now);
-  return (double)now.tv_sec + (double)now.tv_nsec / 1e9;
-}
-
 void lerta_os_exit(int code) {
   _exit(code);
 }
@@ -116,38 +107,6 @@ int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size) {
     bool is_empty = count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
     if (!is_empty || !wait_ready(STDIN_FILENO, POLLIN)) return count;
   }
-}
-
-uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
-  int fd = open(path, O_RDONLY);
-  if (fd < 0) return NULL;
-  uint8_t *contents = lerta_read_chunks(read_fd, (void *)(intptr_t)fd, length);
-  close(fd);
-  return contents;
-}
-
-bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length) {
-  int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  if (fd < 0) return false;
-  bool written = lerta_os_write(fd, bytes, length);
-  close(fd);
-  return written;
-}
-
-int lerta_os_stat(const char *path, LertaFileStatus *status) {
-  struct stat found;
-  if (stat(path, &found) != 0) return errno == ENOENT || errno == ENOTDIR ? 0 : -1;
-  status->kind = S_ISREG(found.st_mode)   ? LERTA_FILE_KIND
-                 : S_ISDIR(found.st_mode) ? LERTA_DIR_KIND
-                                          : LERTA_OTHER_KIND;
-  status->size = found.st_size;
-#ifdef __APPLE__
-  struct timespec modified = found.st_mtimespec;
-#else
-  struct timespec modified = found.st_mtim;
-#endif
-  status->modified_time = (int64_t)modified.tv_sec * 1000000000 + modified.tv_nsec;
-  return 1;
 }
 
 bool lerta_os_make_link(const char *target, const char *path) {
@@ -181,34 +140,11 @@ bool lerta_os_copy_file(const char *from, const char *to) {
   return copied;
 }
 
-char *lerta_os_real_path(const char *path) {
-  return realpath(path, NULL);
-}
-
-// The path of `name` in the directory `dir`, which the caller frees.
-static char *join_path(const char *dir, const char *name) {
-  size_t dir_length = strlen(dir);
-  size_t name_length = strlen(name);
-  char *path = lerta_checked_malloc(dir_length + name_length + 2);
-  memcpy(path, dir, dir_length);
-  path[dir_length] = '/';
-  memcpy(path + dir_length + 1, name, name_length + 1);
-  return path;
-}
-
-char *lerta_os_make_temp_dir(void) {
-  const char *dir = getenv("TMPDIR");
-  char *path = join_path(dir == NULL || *dir == '\0' ? "/tmp" : dir, "lerta-XXXXXX");
-  if (mkdtemp(path) != NULL) return path;
-  free(path);
-  return NULL;
-}
-
 // The file is removed at once, so that it is gone however the programs end, and is not inherited
 // by a program but where it is passed.
 int lerta_os_input_file(const uint8_t *bytes, int64_t length) {
-  const char *dir = getenv("TMPDIR");
-  char *path = join_path(dir == NULL || *dir == '\0' ? "/tmp" : dir, "lerta-input-XXXXXX");
+  char *path = lerta_os_temp_path("lerta-input-XXXXXX");
+  if (path == NULL) return -1;
   int fd = mkstemp(path);
   if (fd >= 0) unlink(path);
   free(path);
@@ -227,35 +163,16 @@ bool lerta_os_same_env_name(const char *a, const char *b) {
   return strcmp(a, b) == 0;
 }
 
-bool lerta_os_make_dir(const char *path) {
-  struct stat status;
-  return mkdir(path, 0777) == 0 || (stat(path, &status) == 0 && S_ISDIR(status.st_mode));
-}
-
 bool lerta_os_is_separator(char c) {
   return c == '/';
 }
 
-bool lerta_os_rename(const char *from, const char *to) {
-  return rename(from, to) == 0;
-}
-
-int64_t lerta_os_cpu_count(void) {
-  long count = sysconf(_SC_NPROCESSORS_ONLN);
-  return count > 0 ? count : 1;
-}
+char lerta_os_separator(void) { return '/'; }
 
 const char *lerta_os_platform(void) {
-#ifdef __APPLE__
-  return "macos";
-#else
-  return "linux";
-#endif
-}
-
-char *lerta_os_env(const char *name) {
-  const char *value = getenv(name);
-  return value == NULL ? NULL : strdup(value);
+  struct utsname name;
+  if (uname(&name) != 0) lerta_panic("cannot read the system's name");
+  return strcmp(name.sysname, "Darwin") == 0 ? "macos" : "linux";
 }
 
 extern char **environ;
@@ -273,62 +190,9 @@ bool lerta_os_is_running(int id) {
   return kill(id, 0) == 0 || errno != ESRCH;
 }
 
-static bool is_dot_or_dot_dot(const char *name) {
-  return strcmp(name, ".") == 0 || strcmp(name, "..") == 0;
-}
-
-// readdir tells its end from a failure only by errno, which appending may change.
-bool lerta_os_list_dir(const char *path, LertaArray *names) {
-  DIR *dir = opendir(path);
-  if (dir == NULL) return false;
-  for (;;) {
-    errno = 0;
-    struct dirent *entry = readdir(dir);
-    if (entry == NULL) break;
-    if (!is_dot_or_dot_dot(entry->d_name)) lerta_append_c_string(names, entry->d_name);
-  }
-  bool listed = errno == 0;
-  closedir(dir);
-  return listed;
-}
-
-// readdir may miss entries when the directory changes while it is read, so the directory is read
-// again until a reading finds nothing to remove.
-static bool remove_entries(const char *path) {
-  DIR *dir = opendir(path);
-  if (dir == NULL) return false;
-  bool removed = true;
-  bool found = true;
-  while (removed && found) {
-    found = false;
-    rewinddir(dir);
-    struct dirent *entry;
-    while (removed && (entry = readdir(dir)) != NULL) {
-      if (is_dot_or_dot_dot(entry->d_name)) continue;
-      found = true;
-      char *child = join_path(path, entry->d_name);
-      removed = lerta_os_remove_tree(child);
-      free(child);
-    }
-  }
-  closedir(dir);
-  return removed;
-}
-
-bool lerta_os_remove_tree(const char *path) {
-  struct stat status;
-  if (lstat(path, &status) != 0) return false;
-  if (!S_ISDIR(status.st_mode)) return unlink(path) == 0;
-  return remove_entries(path) && rmdir(path) == 0;
-}
-
 // The system searches PATH when it runs the program.
 char *lerta_os_program_file(const char *command) {
   return strdup(command);
-}
-
-char *lerta_os_program_argument(const char *argument) {
-  return strdup(argument);
 }
 
 void *lerta_os_map_region(int64_t size) {
@@ -347,5 +211,3 @@ void *lerta_os_map_region(int64_t size) {
 }
 
 void lerta_os_unmap_region(void *region, int64_t size) { munmap(region, (size_t)size); }
-
-#endif

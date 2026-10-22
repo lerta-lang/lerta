@@ -14,9 +14,9 @@ SOURCE_ROOT := 'third_party/libuv/'
 export LIBUV_PATHS :=
   [path for path in EMBEDDED_PATHS when path == DESCRIPTION_PATH or path.starts_with(SOURCE_ROOT)]
 
-# What one system builds libuv with: its source files, relative to libuv's root, the flags of the
-# compiler, and the libraries to link with.
-export struct LibuvBuild(sources: String[], flags: String[], libraries: String[])
+# What one system, as target_system names it, builds libuv with: its source files, relative to
+# libuv's root, the flags of the compiler, and the libraries to link with.
+export struct LibuvBuild(system: String, sources: String[], flags: String[], libraries: String[])
 
 # The build for the target, or for the host without one.
 export libuv_build := (target: String?) ->
@@ -35,7 +35,7 @@ export libuv_build := (target: String?) ->
       when 'flag' then flags.push(words[2])
       when 'library' then libraries.push(words[2])
       else throw CompileError(message: "#{DESCRIPTION_PATH}: not a kind of line: #{words[1]}")
-  LibuvBuild sources, flags, libraries
+  LibuvBuild system, sources, flags, libraries
 
 # The system of a target triple, as `platform` names the host's: one of those that
 # third_party/libuv.txt describes.
@@ -52,7 +52,8 @@ export target_system := (target: String?) ->
     return 'linux' if environment.starts_with('gnu') or environment.starts_with('musl')
   throw CompileError(message: "not a target that the runtime is built for: #{triple}")
 
-is_for := (systems: String, system: String) ->
+# Whether `systems`, as a line of third_party/libuv.txt names them, take in `system`.
+export is_for := (systems: String, system: String) ->
   case systems
     when 'all' then true
     when 'posix' then system != 'windows'

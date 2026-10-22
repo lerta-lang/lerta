@@ -267,15 +267,14 @@ LertaRunningProgram *lerta_loop_run_program(const LertaProgramSpec *spec, LertaP
     stdio[i + 1] = (uv_stdio_container_t){.flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE,
                                           .data.stream = (uv_stream_t *)&output->pipe};
   }
-  // On Windows, the arguments come quoted (see lerta_os_program_argument) and the file found;
-  // libuv would quote them its own way and search the current directory first.
+  // On Windows, the file comes found (see lerta_os_program_file), and libuv quotes the arguments.
   uv_process_options_t options = {
     .exit_cb = exit_program,
     .file = spec->file,
     .args = spec->args,
     .env = spec->env,
     .cwd = spec->cwd,
-    .flags = UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS | UV_PROCESS_WINDOWS_FILE_PATH_EXACT_NAME,
+    .flags = UV_PROCESS_WINDOWS_FILE_PATH_EXACT_NAME,
     .stdio_count = 3,
     .stdio = stdio,
   };

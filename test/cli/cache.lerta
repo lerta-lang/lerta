@@ -1,7 +1,7 @@
 # Runtime caches are isolated, complete, reused, and selected from the documented environment.
 import Check from '../lib/report'
 import compare_text, expect_status from '../lib/expect'
-import compiler, read_text, root_dir from '../lib/lerta'
+import compiler, host_systems, read_text, root_dir from '../lib/lerta'
 import
   CliRun, cli_work_dir, expect_left, expect_success, host_platform, host_triple, new_cli_dir,
   run_command, run_in_new_dir
@@ -45,18 +45,16 @@ runtime_name_reasons := (name: String, kind: String) ->
   ]
 
 runtime_file_names := ->
-  runtime := [
-    "#{file.without_suffix('.c')!}.o"
-    for file in list_dir("#{root_dir}/runtime")
-    when file.ends_with('.c')
-  ]
-  systems := host_platform == 'windows' then ['all', 'windows'] else ['all', 'posix', host_platform]
+  # platform_<systems>.c is only for those systems.
+  is_for_host := (name: String) -> host_systems.contains(name.without_prefix('platform_') ? 'all')
+  names := [file.without_suffix('.c') for file in list_dir("#{root_dir}/runtime")]
+  runtime := ["#{name}.o" for name in names when name and is_for_host(name)]
   libuv_text := await read_text("#{root_dir}/third_party/libuv.txt")
   libuv: String[]
   for line in libuv_text.split("\n")
     continue if line == '' or line.starts_with('#')
     fields := line.split(' ')
-    continue if fields.length != 3 or not systems.contains(fields[0])
+    continue if fields.length != 3 or not host_systems.contains(fields[0])
     continue if fields[1] != 'source' or not fields[2].ends_with('.c')
     libuv.push "libuv-#{fields[2].without_suffix('.c')!.split('/').join('-')}.o"
   [runtime..., libuv..., 'function_attributes.txt', 'coro_end_type.txt'].sorted((a, b) ->

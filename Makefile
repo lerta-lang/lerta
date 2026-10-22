@@ -18,8 +18,11 @@ LIBUV := third_party/libuv.txt $(LIBUV_HEADERS) $(LIBUV_SOURCES)
 # std's files at any depth, as the seed finds them (see tools/embed.lerta).
 EMBEDDED := $(sort $(shell find std -name '*.lerta') $(wildcard runtime/*.c runtime/*.h) $(LIBUV))
 SOURCES := $(shell find compiler -name '*.lerta') build/embedded.lerta
-RUNTIME_C := $(wildcard runtime/*.c)
-RUNTIME := $(RUNTIME_C) $(wildcard runtime/*.h)
+# The host's: platform_<systems>.c only for the host's systems, as compiler/runtime_cache.lerta
+# takes them.
+RUNTIME_C := $(filter-out runtime/platform_%.c,$(wildcard runtime/*.c)) \
+  $(foreach systems,$(HOST_LIBUV_SYSTEMS),$(wildcard runtime/platform_$(systems).c))
+RUNTIME := $(wildcard runtime/*.c runtime/*.h)
 MAIN := compiler/main.lerta
 MINILERTA_MAIN := compiler/minilerta.lerta
 ifdef TARGET

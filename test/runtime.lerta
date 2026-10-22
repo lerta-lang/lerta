@@ -3,7 +3,7 @@
 import build_flags from '../compiler/clang_flags'
 import Check, run_checks, select from './lib/report'
 import compare_text, expect_status, reason_if from './lib/expect'
-import read_text, root_dir, SetupError, suite_dir from './lib/lerta'
+import host_systems, read_text, root_dir, SetupError, suite_dir from './lib/lerta'
 import timeout from 'std:async'
 import encode_json from 'std:json'
 import platform, run from 'std:process'
@@ -64,9 +64,8 @@ set_up_libuv := ->
     for line in (await read_text("#{root_dir}/third_party/libuv.txt")).split("\n")
     when line != '' and not line.starts_with('#')
   ]
-  systems := platform == 'windows' then ['all', platform] else ['all', platform, 'posix']
   listed := (kind: String) ->
-    [words[2] for words in lines when words[1] == kind and systems.contains(words[0])]
+    [words[2] for words in lines when words[1] == kind and host_systems.contains(words[0])]
   objects_dir := "#{work_dir}/libuv"
   make_dir objects_dir
   await clang(
@@ -84,8 +83,14 @@ set_up_libuv := ->
     objects: ["#{objects_dir}/#{file}" for file in list_dir(objects_dir)]
     libraries: listed('library')
 
+# The host's: platform_<systems>.c only for the host's systems, as compiler/runtime_cache.lerta
+# takes them.
+is_host_c_file := (file: String) ->
+  name := file.without_suffix('.c') ? return false
+  host_systems.contains name.without_prefix('platform_') ? 'all'
+
 runtime_c_files :=
-  ["#{runtime_dir}/#{file}" for file in list_dir(runtime_dir) when file.ends_with('.c')]
+  ["#{runtime_dir}/#{file}" for file in list_dir(runtime_dir) when is_host_c_file(file)]
 
 # What `build` gives clang for the runtime's sources on the host, with -O or without it and its
 # default memory checks; libuv is compiled once, without them, by set_up_libuv.

@@ -112,16 +112,6 @@ static void end_run(void *context, int64_t status, LertaString *output, LertaStr
   free(run);
 }
 
-// The program's arguments as lerta_loop_run_program takes them: the file of the command first,
-// then the arguments as the system takes them; NULL if the command is not found.
-static char **program_args(char **c_args, int64_t count, char **file) {
-  *file = lerta_os_program_file(c_args[0]);
-  if (*file == NULL) return NULL;
-  char **args = lerta_checked_calloc((size_t)count + 1, sizeof(char *));
-  for (int64_t i = 0; i < count; i++) args[i] = lerta_os_program_argument(c_args[i]);
-  return args;
-}
-
 // The strings as C strings, ending with NULL, which free_c_args frees.
 static char **c_strings_of(const LertaArray *strings) {
   char **c_strings = lerta_checked_calloc((size_t)strings->length + 1, sizeof(char *));
@@ -139,9 +129,10 @@ static LertaProgramSpec program_spec(const LertaString *command, const LertaArra
   int64_t count = args->length + 1;
   LertaProgramSpec spec = {.stdin_fd = -1};
   char **c_args = c_args_of(command, args);
-  spec.args = program_args(c_args, count, &spec.file);
-  free_c_args(c_args, count);
-  *valid = spec.args != NULL;
+  spec.file = lerta_os_program_file(c_args[0]);
+  if (spec.file != NULL) spec.args = c_args;
+  else free_c_args(c_args, count);
+  *valid = spec.file != NULL;
   if (env != NULL) spec.env = c_strings_of(env);
   if (cwd != NULL) spec.cwd = lerta_c_string(cwd);
   if (input != NULL) {

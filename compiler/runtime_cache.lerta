@@ -7,7 +7,7 @@ import run_clang_jobs from './clang_jobs'
 import build_flags from './clang_flags'
 import CompileError from './errors'
 import hex from './hex'
-import libuv_build, LibuvBuild, LIBUV_PATHS, write_libuv_sources from './libuv'
+import is_for, libuv_build, LibuvBuild, LIBUV_PATHS, write_libuv_sources from './libuv'
 import basename, join from './paths'
 
 RUNTIME_PATHS := [path for path in EMBEDDED_PATHS when path.starts_with('runtime/')]
@@ -170,7 +170,13 @@ runtime_hash := (texts_besides_sources: String[]) ->
     hash = hash * 257 % HASH_MODULUS
   hash
 
-c_paths := -> [path for path in RUNTIME_PATHS when path.ends_with('.c')]
+# The runtime's C files for `system`: platform_<systems>.c only for those systems, named as in
+# third_party/libuv.txt, and the others for all.
+c_paths := (system: String) ->
+  [path for path in RUNTIME_PATHS when path.ends_with('.c') and is_for(c_systems(path), system)]
+
+c_systems := (path: String) ->
+  basename(path).without_suffix('.c')!.without_prefix('platform_') ? 'all'
 
 object_name := (c_path: String) -> "#{basename(c_path).without_suffix('.c')!}.o"
 
@@ -180,7 +186,7 @@ libuv_object_name := (source: String) ->
   "libuv-#{source.without_suffix('.c')!.split('/').join('-')}.o"
 
 object_names := (libuv: LibuvBuild) ->
-  runtime := [object_name(path) for path in c_paths()]
+  runtime := [object_name(path) for path in c_paths(libuv.system)]
   [runtime..., [libuv_object_name(path) for path in libuv.sources]...]
 
 cached_file_names := (libuv: LibuvBuild) -> [object_names(libuv)..., ATTRIBUTES_FILE, CORO_END_FILE]
@@ -207,7 +213,7 @@ compile_runtime := (
     object := join(staging_dir, libuv_object_name(path))
     ['-c', libuv_flags..., join(libuv_dir, path), '-o', object]
   jobs := [
-    [runtime_job(path) for path in c_paths()]...
+    [runtime_job(path) for path in c_paths(libuv.system)]...
     [libuv_job(path) for path in libuv.sources]...
   ]
   return false if not await run_clang_jobs(jobs)

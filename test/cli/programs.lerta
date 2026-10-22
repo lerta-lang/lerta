@@ -385,6 +385,20 @@ environment_check := (
     []
     unset_env
 
+# An empty TMPDIR counts as unset, so the directory is made in /tmp, not at the root.
+empty_temp_dir_check := ->
+  env: Map<String, String>
+  env['TMPDIR'] = ''
+  check := program_check
+    'a built program makes a temporary directory under an empty TMPDIR'
+    "#{root_dir}/tests/io/lib/make_temp_dir.lerta"
+    ''.binary
+    "true\n"
+    env
+  Check name: check.name, run: ->
+    return nil if host_platform == 'windows'
+    await check.run()
+
 argv_check := ->
   program_check
     'lerta build runs a program with non-ASCII command-line arguments'
@@ -399,6 +413,10 @@ empty_env: Map<String, String>
 empty_env['LERTA_TEST_VALUE'] = ''
 value_env: Map<String, String>
 value_env['LERTA_TEST_VALUE'] = 'héllo'
+# Longer than the first buffer that the runtime reads a value into.
+long_value := 'x'.repeat(1000)
+long_env: Map<String, String>
+long_env['LERTA_TEST_VALUE'] = long_value
 
 export checks :=
   read_lines_check()
@@ -416,6 +434,7 @@ export checks :=
   merged_output_order_check()
   wc_check()
   argv_check()
+  empty_temp_dir_check()
   invalid_argument_check()
   decode_argument_bytes_check()
   invalid_environment_check()
@@ -440,4 +459,9 @@ export checks :=
     'lerta build runs a program with a non-ASCII environment value'
     value_env
     "héllo\n"
+  )
+  environment_check(
+    'lerta build runs a program with a long environment value'
+    long_env
+    "#{long_value}\n"
   )
