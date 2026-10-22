@@ -40,11 +40,11 @@ opened_doc := (expression: Expression, context: Context): Doc? ->
       opened_list token('[', at), items, closing_of(']')
     when MapLiteral
       items := [entry_item(entry, inside) for entry in expression.entries]
-      opened_list token('{', at), items, closing_of('}')
+      opened_list opening_brace(expression, '{', context), items, closing_of('}')
     when RecordLiteral
       return nil if expression.fields.length == 0
       items := [field_item(field, inside) for field in expression.fields]
-      opened_list token('{', at), items, closing_of('}')
+      opened_list opening_brace(expression, '{', context), items, closing_of('}')
     when Comprehension
       return nil if expression.spread or expression.lazy != nil
       comprehension_forms(expression, context).broken
@@ -54,19 +54,15 @@ opened_doc := (expression: Expression, context: Context): Doc? ->
 flat_literal := (literal: Expression, context: Context) ->
   inside := context.inside_brackets()
   at := literal.position
-  flat := (opening: Doc, items: Item[], close: String) ->
-    closing_bracket := closing(close, closing_at(at, context))
-    join [opening, separated([item.doc for item in items], text(', ')), closing_bracket]
   case literal
     when ArrayLiteral
-      flat token('[', at), [item(element, inside) for element in literal.elements], ']'
+      items := [item(element, inside) for element in literal.elements]
+      closing_bracket := closing(']', closing_at(at, context))
+      join [token('[', at), separated([item.doc for item in items], text(', ')), closing_bracket]
     when MapLiteral
-      flat token('{ ', at), [entry_item(entry, inside) for entry in literal.entries], ' }'
+      flat_braces literal, [entry_item(entry, inside) for entry in literal.entries], context
     when RecordLiteral
-      flat
-        record_opening(literal, '{ ', context)
-        [field_item(field, inside) for field in literal.fields]
-        ' }'
+      flat_braces literal, [field_item(field, inside) for field in literal.fields], context
     else expression_doc(literal, context)
 
 export named_item := (named: NamedValue, context: Context) ->
@@ -102,7 +98,7 @@ export array_doc := (array: ArrayLiteral, context: Context) ->
 
 export map_doc := (map: MapLiteral, context: Context) ->
   items := [entry_item(entry, context.inside_brackets()) for entry in map.entries]
-  braced map.position, items, context, (spelling) -> token(spelling, map.position)
+  braced map, items, context
 
 # A map's key that is a name is written in parentheses, as it would be a field's name otherwise.
 entry_item := (entry: MapEntry, context: Context) ->
@@ -117,14 +113,7 @@ entry_item := (entry: MapEntry, context: Context) ->
 
 export record_doc := (record: RecordLiteral, context: Context) ->
   items := [field_item(field, context.inside_brackets()) for field in record.fields]
-  braced record.position, items, context, (spelling) -> record_opening(record, spelling, context)
-
-# The opening brace of a record; that of a construction written as one (see qualified_members_of)
-# reports it.
-record_opening := (record: RecordLiteral, spelling: String, context: Context) ->
-  brace := token(spelling, record.position)
-  recorded := context.left_out.contains(annotation_key('record', record.position))
-  recorded then rule(EXPECTED_TYPES, brace) else brace
+  braced record, items, context
 
 # `{ x }` for `{ x: x }` (see Shorthand).
 field_item := (field: NamedValue, context: Context) ->
@@ -141,14 +130,32 @@ is_shorthand := (field: NamedValue) ->
   value := field.value
   value is Identifier and value.name == field.name.name
 
-# Braces with spaces inside them on one line (see Inside `{}`), opened by `opening` of `{ ` or `{`.
-braced := (open_at: Position, items: Item[], context: Context, opening: (String) -> Doc) ->
-  close_at := closing_at(open_at, context)
-  flat_items := separated([item.doc for item in items], text(', '))
-  flat := rule(INSIDE_BRACES, join([opening('{ '), flat_items, closing(' }', close_at)]))
-  closing_brace := closing('}', close_at)
-  opened := opened_list(opening('{'), items, closing_brace)
-  bracketed_or opening('{ '), items, closing_brace, opened, flat
+type Braced = MapLiteral | RecordLiteral
+
+# Braces with spaces inside them on one line (see Inside `{}`).
+braced := (literal: Braced, items: Item[], context: Context) ->
+  flat := rule(INSIDE_BRACES, flat_braces(literal, items, context))
+  closing_brace := closing('}', closing_at(literal.position, context))
+  opened := opened_list(opening_brace(literal, '{', context), items, closing_brace)
+  bracketed_or opening_brace(literal, '{ ', context), items, closing_brace, opened, flat
+
+# The items on one line between braces, with a space inside each.
+flat_braces := (literal: Braced, items: Item[], context: Context) ->
+  closing_brace := closing(' }', closing_at(literal.position, context))
+  join [
+    opening_brace(literal, '{ ', context)
+    separated([item.doc for item in items], text(', '))
+    closing_brace
+  ]
+
+# The opening brace, `{ ` or `{`; that of a construction written as a record (see
+# qualified_members_of) reports it. Only a record can be one: a map is never written in place
+# of a construction.
+opening_brace := (literal: Braced, spelling: String, context: Context) ->
+  brace := token(spelling, literal.position)
+  key := annotation_key('record', literal.position)
+  recorded := literal is RecordLiteral and context.left_out.contains(key)
+  recorded then rule(EXPECTED_TYPES, brace) else brace
 
 # The value after `=`, `key:` or `return`, with the space before it. A literal of several items
 # that does not fit on the line goes in a block below it without brackets (see Multi-line literals),
