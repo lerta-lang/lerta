@@ -10,9 +10,7 @@ import
   parse_array_literal, parse_case, parse_function_literal, parse_map_literal, parse_parenthesized,
   parse_try, starts_function_literal, starts_weak_function_literal
 from './compound'
-import
-  continue_with_members, parse_call_value, parse_expression, parse_identifier, parse_value
-from './expression'
+import parse_continued_value, parse_expression, parse_identifier, parse_value from './expression'
 import Token, tokenize_fragment, TokenKind from '../lexer/tokens'
 import CodePart, TemplatePart, TextPart from '../lexer/string_literal'
 import is_one_of, token_position, TokenStream from './token_stream'
@@ -41,12 +39,12 @@ export parse_primary := (tokens: TokenStream): Expression ->
         case
           when starts_block(tokens) then parse_value(tokens)
           when ends_expression(tokens) then nil
-          else parse_operand(tokens)
+          else parse_continued_value(tokens)
       Return value, position
-    when 'throw' then Throw(position, message: parse_operand(tokens))
+    when 'throw' then Throw(position, message: parse_continued_value(tokens))
     when 'yield'
       marks.yields = true if marks := tokens.innermost_function()
-      Yield position, value: parse_operand(tokens)
+      Yield position, value: parse_continued_value(tokens)
     when '@' then parse_this(tokens, position)
     when 'true', 'false' then BooleanLiteral(position, value: token.kind == 'true')
     when 'case' then parse_case(tokens, position)
@@ -118,7 +116,3 @@ parse_interpolated_code := (outer: TokenStream, source: String, line: Int, colum
   expression := parse_expression(tokens)
   tokens.expect NEWLINE, 'end of interpolation'
   expression
-
-# The operand of `return`, `throw` or `yield`, which takes the member lines after it, as a value
-# does, rather than leaving them to the statement.
-parse_operand := (tokens: TokenStream) -> continue_with_members(tokens, parse_call_value(tokens))

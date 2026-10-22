@@ -60,6 +60,11 @@ export parse_call_value := (tokens: TokenStream): Expression ->
   return expression if not starts_block_arguments(tokens, expression)
   parse_block_arguments tokens, expression
 
+# The value of `return`, `throw` or `yield`, or an argument in a block, which takes the member
+# lines after it, as a value does, rather than leaving them to the statement.
+export parse_continued_value := (tokens: TokenStream) ->
+  continue_with_members tokens, parse_call_value(tokens)
+
 # The value with the members that the lines after it take, those that start with `.` or `?.` at
 # the indentation of its first line, so that a member applies to the whole value, however many
 # lines it took.
@@ -109,7 +114,7 @@ export parse_block_arguments := (tokens: TokenStream, callee: Expression) ->
 # name.
 parse_block_argument := (tokens: TokenStream) ->
   return parse_argument(tokens) if starts_named_argument(tokens)
-  value := spread_of(tokens, continue_with_members(tokens, parse_call_value(tokens)))
+  value := spread_of(tokens, parse_continued_value(tokens))
   message := 'an argument is named by a name, not by a key'
   tokens.fail value.position, message if tokens.peek().kind == ':'
   Argument value: value
@@ -153,15 +158,18 @@ parse_not := (tokens: TokenStream): Expression ->
   tokens.next()
   UnaryOperation operator: 'not', operand: parse_not(tokens), position: token_position(token)
 
+at_comparison_start := (tokens: TokenStream) ->
+  tokens.continues_with_word('is') or tokens.continues_with_word('as') or at_comparison(tokens)
+
 parse_comparison := (tokens: TokenStream) ->
   left := parse_coalesce(tokens)
+  return left if not at_comparison_start(tokens)
   comparison :=
     case
       when tokens.continues_with_word('is') then parse_is(tokens, left)
       when tokens.continues_with_word('as') then parse_cast(tokens, left)
-      when at_comparison(tokens) then parse_binary_comparison(tokens, left)
-      else return left
-  if tokens.continues_with_word('is') or tokens.continues_with_word('as') or at_comparison(tokens)
+      else parse_binary_comparison(tokens, left)
+  if at_comparison_start(tokens)
     tokens.fail token_position(tokens.peek()), 'comparisons, is tests and casts cannot be chained'
   comparison
 
@@ -340,13 +348,13 @@ extend_by_postfix := (tokens: TokenStream, expression: Expression): Expression? 
 parse_index := (tokens: TokenStream) ->
   parse_contents := ->
     expression := parse_expression(tokens)
-    tokens.expect ']', "']'"
+    tokens.expect ']'
     expression
   tokens.inside SKIP, parse_contents
 
 # `in` and `when` are not keywords, so that they stay usable as names.
 export parse_loop_header := (tokens: TokenStream) ->
-  tokens.expect 'for', "'for'"
+  tokens.expect 'for'
   position := token_position(tokens.peek())
   parts: Identifier[] = tokens.peek().kind == '(' then parse_tuple_names(tokens) else []
   variable := parts.length > 0 then tuple_holder(position) else parse_identifier(tokens)
