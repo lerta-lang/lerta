@@ -214,13 +214,8 @@ void lerta_promise_cancel(LertaPromise *promise) {
   cancel(end->cancel_context);
 }
 
-LERTA_STATIC_STRING(negative_sleep, "sleep for a negative time");
-
+// std:time checks that the time is not negative.
 LertaPromise *lerta_sleep(double seconds) {
-  if (seconds < 0) {
-    lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&negative_sleep);
-    return NULL;
-  }
   // Rounded up, and one more, so as not to end early: libuv's time is in whole milliseconds, so a
   // timer may fire up to one before its time. A sleep of 0 only lets others go first. A time past
   // what milliseconds hold is the longest they do.

@@ -1,6 +1,6 @@
 # The running program: its arguments, how it ends, and the programs it runs (see runtime/process.c).
 
-export extern lerta_exit as exit: (Int) -> never
+extern lerta_exit: (Int) -> never
 extern lerta_run: (String, String[], Binary?, Byte[]?, Byte[]?, String?, String[], String[], String[], Int, Float) -> Promise<Int>
 extern lerta_argv: () -> Binary[]
 # Windows compares the names of variables without case.
@@ -32,11 +32,23 @@ export struct RunOptions
 # that signal.
 export struct Exit(code: Int, signal: Int?)
 
+# The system reads a text only up to a NUL byte, so none that it is given may hold one.
+holds_nul := (text: String) -> text.contains("\0")
+
+# POSIX systems keep only 8 bits of an exit code, so a code outside 0 to 255 would be misread.
+export exit := (code: Int) ->
+  throw ValueError(message: 'exit code out of range (0 to 255)') if code < 0 or code > 255
+  lerta_exit code
+
 export run := (command: String, args: String..., options: RunOptions) ->
   check_options options
   { stdin, stdout, stderr, cwd, env, unset_env, output_limit, kill_after } := options
   names := env.keys().to_array()
   values := env.values().to_array()
+  # A program cannot start with a text that holds a NUL byte, as it cannot without its command; a
+  # name that holds one is no name, which check_options refuses.
+  texts := [command, args..., cwd ? '', values...]
+  throw IOError(message: "cannot run: #{command}") if texts.any(holds_nul)
   # An Int, as an Int? passed to C on Windows is not yet as C takes it; -1 is no limit.
   limit := output_limit ? -1
   status := await lerta_run(
@@ -50,7 +62,7 @@ check_options := (options: RunOptions) ->
     throw ValueError(message: "a negative limit of output: #{options.output_limit!}")
   set_names := options.env.keys().to_array()
   for name in [set_names..., options.unset_env...]
-    if name == '' or name.contains('=') or name.contains("\0")
+    if name == '' or name.contains('=') or holds_nul(name)
       throw ValueError(message: "not a name of an environment variable: '#{name}'")
   for name, i in set_names
     if set_names.find_index((each) -> same_env_name(each, name))! < i
@@ -59,7 +71,9 @@ check_options := (options: RunOptions) ->
     if set_names.any((each) -> same_env_name(each, name))
       throw ValueError(message: "the environment variable #{name} is both set and removed")
 
+# No variable's name holds `=`, which the system would take as the end of the name, nor a NUL byte.
 export env := (name: String) ->
+  return nil if name.contains('=') or holds_nul(name)
   value := lerta_env(name)
   return nil if not value
   value.text() ? throw ValueError(message: "the environment variable #{name} is not valid UTF-8")

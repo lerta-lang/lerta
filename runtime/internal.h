@@ -56,8 +56,8 @@ LertaString *lerta_string_new(int64_t length);
 enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign
 // Writes the decimal text of n at the end of buffer and returns where it starts.
 int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
-// The string as a NUL-terminated C string, which the caller frees; NULL if it holds a NUL byte,
-// which C would take as its end.
+// The string as a NUL-terminated C string, which the caller frees. It must hold no NUL byte, which C
+// would take as its end: std refuses those first.
 char *lerta_c_string(const LertaString *s);
 // The String of the C string's bytes, which end at its NUL.
 LertaString *lerta_string_from_c(const char *text);

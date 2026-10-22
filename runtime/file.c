@@ -23,11 +23,10 @@ static LertaString *string_of_bytes(uint8_t *bytes, int64_t length) {
   return string;
 }
 
-// The status of what the path names, as lerta_os_stat gives it; a path that holds a NUL byte names
-// nothing.
+// The status of what the path names, as lerta_os_stat gives it.
 static int stat_of(const LertaString *path, LertaFileStatus *status) {
   char *name = lerta_c_string(path);
-  int found = name == NULL ? 0 : lerta_os_stat(name, status);
+  int found = lerta_os_stat(name, status);
   free(name);
   return found;
 }
@@ -59,17 +58,17 @@ bool lerta_stat_fields(const LertaString *path, LertaArray *fields) {
 void lerta_make_link(const LertaString *target, const LertaString *path) {
   char *target_name = lerta_c_string(target);
   char *name = lerta_c_string(path);
-  bool made = target_name != NULL && name != NULL && lerta_os_make_link(target_name, name);
+  bool made = lerta_os_make_link(target_name, name);
   free(target_name);
   free(name);
   if (!made) lerta_raise_with(LERTA_IO_ERROR, &cannot_make_link, path);
 }
 
-// An empty path is refused here, as Windows would read `\*` in it as the root of the drive.
+// std:io refuses an empty path, which Windows would read `\*` in as the root of the drive.
 LertaArray *lerta_list_dir_names(const LertaString *path) {
   char *name = lerta_c_string(path);
   LertaArray *names = lerta_array_create(LERTA_REFERENCE_ITEMS);
-  bool listed = name != NULL && name[0] != '\0' && lerta_os_list_dir(name, names);
+  bool listed = lerta_os_list_dir(name, names);
   free(name);
   if (!listed) {
     lerta_release(names);
@@ -94,7 +93,7 @@ static LertaString *string_from_os(char *text) {
 
 LertaString *lerta_real_path(const LertaString *path) {
   char *name = lerta_c_string(path);
-  char *resolved = name == NULL ? NULL : lerta_os_real_path(name);
+  char *resolved = lerta_os_real_path(name);
   free(name);
   if (resolved == NULL) {
     lerta_raise_with(LERTA_IO_ERROR, &cannot_resolve, path);
@@ -181,20 +180,12 @@ static void end_task(void *data) {
   free(task);
 }
 
-// A path that holds a NUL byte fails at once, as does a destination `to`, if given.
 static LertaPromise *start_task(LertaItemKind kind, const LertaString *path, const void *failure,
                                 const LertaString *data, const LertaString *to,
                                 void (*work)(void *data)) {
   LertaPromise *promise = lerta_promise_new(kind);
   char *name = lerta_c_string(path);
   char *to_name = to == NULL ? NULL : lerta_c_string(to);
-  if (name == NULL || (to != NULL && to_name == NULL)) {
-    free(name);
-    free(to_name);
-    lerta_raise_with(LERTA_IO_ERROR, failure, path);
-    lerta_promise_reject(promise);
-    return promise;
-  }
   FileTask *task = lerta_checked_calloc(1, sizeof(FileTask));
   *task = (FileTask){.promise = promise, .path = (LertaString *)path, .failure = failure,
                      .name = name, .to_name = to_name, .data = (LertaString *)data};
@@ -236,9 +227,10 @@ static bool make_dir_and_parents(char *path) {
   return lerta_os_make_dir(path);
 }
 
+// std:io refuses an empty path.
 void lerta_make_dir(const LertaString *path) {
   char *name = lerta_c_string(path);
-  bool made = name != NULL && name[0] != '\0' && make_dir_and_parents(name);
+  bool made = make_dir_and_parents(name);
   free(name);
   if (!made) lerta_raise_with(LERTA_IO_ERROR, &cannot_make_dir, path);
 }
@@ -246,7 +238,7 @@ void lerta_make_dir(const LertaString *path) {
 void lerta_rename(const LertaString *from, const LertaString *to) {
   char *from_name = lerta_c_string(from);
   char *to_name = lerta_c_string(to);
-  bool renamed = from_name != NULL && to_name != NULL && lerta_os_rename(from_name, to_name);
+  bool renamed = lerta_os_rename(from_name, to_name);
   free(from_name);
   free(to_name);
   if (!renamed) lerta_raise_with(LERTA_IO_ERROR, &cannot_rename, from);

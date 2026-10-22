@@ -3,8 +3,6 @@
 
 #include "internal.h"
 
-LERTA_STATIC_STRING(unknown_writer, "a Writer writes to stdout (1) or stderr (2) only");
-
 void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
   lerta_os_write(STDERR_FD, bytes, length);
 }
@@ -23,18 +21,13 @@ void lerta_stderr_write_int(int64_t n) {
   lerta_stderr_write(buffer + start, LERTA_INT_TEXT_MAX - start);
 }
 
-static bool check_writer(int64_t fd) {
-  if (fd == STDOUT_FD || fd == STDERR_FD) return true;
-  lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&unknown_writer);
-  return false;
-}
-
+// std:io checks that the descriptor is stdout's or stderr's.
 LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes) {
-  return check_writer(fd) ? lerta_output_write((int)fd, bytes->bytes, bytes->length) : NULL;
+  return lerta_output_write((int)fd, bytes->bytes, bytes->length);
 }
 
 LertaPromise *lerta_stream_flush(int64_t fd) {
-  return check_writer(fd) ? lerta_output_wait((int)fd) : NULL;
+  return lerta_output_wait((int)fd);
 }
 
 LERTA_STATIC_STRING(cannot_read_stdin, "cannot read stdin");

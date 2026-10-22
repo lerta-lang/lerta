@@ -102,7 +102,7 @@ int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const L
 }
 
 char *lerta_c_string(const LertaString *s) {
-  if (memchr(s->bytes, '\0', (size_t)s->length) != NULL) return NULL;
+  if (memchr(s->bytes, '\0', (size_t)s->length) != NULL) lerta_panic("a C string with a NUL byte");
   char *result = lerta_checked_malloc((size_t)s->length + 1);
   memcpy(result, s->bytes, (size_t)s->length);
   result[s->length] = '\0';
