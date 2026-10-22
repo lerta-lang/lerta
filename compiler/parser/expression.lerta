@@ -10,7 +10,7 @@ import parse_block_literal, starts_block from './block_literal'
 import integer_literal, parse_primary from './primary'
 import parse_element, spread_of from './compound'
 import parse_if from './statement'
-import is_one_of, token_position, TokenStream from './token_stream'
+import is_one_of, TokenStream from './token_stream'
 import
   parse_named_type, parse_named_type_alone, parse_type_arguments, starts_type_arguments
 from './type'
@@ -156,7 +156,7 @@ parse_not := (tokens: TokenStream): Expression ->
   token := tokens.peek()
   return parse_comparison(tokens) if token.kind != 'not'
   tokens.next()
-  UnaryOperation operator: 'not', operand: parse_not(tokens), position: token_position(token)
+  UnaryOperation operator: 'not', operand: parse_not(tokens), position: token.position()
 
 at_comparison_start := (tokens: TokenStream) ->
   tokens.continues_with_word('is') or tokens.continues_with_word('as') or at_comparison(tokens)
@@ -170,7 +170,7 @@ parse_comparison := (tokens: TokenStream) ->
       when tokens.continues_with_word('as') then parse_cast(tokens, left)
       else parse_binary_comparison(tokens, left)
   if at_comparison_start(tokens)
-    tokens.fail token_position(tokens.peek()), 'comparisons, is tests and casts cannot be chained'
+    tokens.fail tokens.peek().position(), 'comparisons, is tests and casts cannot be chained'
   comparison
 
 # `x is not T` is read as `not (x is T)`.
@@ -192,7 +192,7 @@ parse_cast := (tokens: TokenStream, value: Expression): Expression ->
   falls_back := next.kind == '?' and next.spaced
   if not optional and not throws and not falls_back
     forms := "'as T?' for nil where it is no T, 'as T ? y' for y, or 'as T!' to throw"
-    tokens.fail token_position(as_token), "write #{forms}"
+    tokens.fail as_token.position(), "write #{forms}"
   tokens.next()
   type.optional = not throws
   cast := Cast(value, type, throws, position: value.position)
@@ -220,12 +220,12 @@ parse_range := (tokens: TokenStream): Expression ->
   start := parse_arithmetic(tokens, 0)
   return start if tokens.peek_continuation() != '...'
   if at_spread(tokens)
-    tokens.spread = token_position(tokens.peek())
+    tokens.spread = tokens.peek().position()
     return start
   tokens.next()
   end := parse_arithmetic(tokens, 0)
   if tokens.peek_continuation() == '...'
-    tokens.fail token_position(tokens.peek()), 'ranges cannot be chained'
+    tokens.fail tokens.peek().position(), 'ranges cannot be chained'
   Range start, end, position: start.position
 
 # `xs...` with nothing after it that could end a range, which spreads it rather than a range. An
@@ -280,13 +280,13 @@ parse_unary := (tokens: TokenStream): Expression ->
   token := tokens.peek()
   if token.kind == 'await'
     tokens.next()
-    position := token_position(token)
+    position := token.position()
     marks := tokens.innermost_function()
     marks.await_at = position if marks and marks.await_at == nil
     return Await(position, operand: parse_unary(tokens))
   return parse_postfix(tokens, parse_primary(tokens)) if token.kind != '-'
   tokens.next()
-  position := token_position(token)
+  position := token.position()
   # `-1` with no space is a negative literal, so that the minimum Int can be written; `-1.5` is one
   # too, so that a member applies to it as it does to `-1`.
   literal := tokens.peek()
@@ -302,7 +302,7 @@ export parse_identifier := (tokens: TokenStream) ->
   token := tokens.peek()
   tokens.fail_expecting token, 'name' if token.kind != IDENTIFIER
   tokens.next()
-  Identifier name: token.text, position: token_position(token)
+  Identifier name: token.text, position: token.position()
 
 parse_postfix := (tokens: TokenStream, primary: Expression): Expression ->
   var expression = primary
@@ -317,7 +317,7 @@ at_nil_safe := (tokens: TokenStream) ->
 # `x?.rest`, nil if x is nil and otherwise x with the rest of the postfix chain: an `if` that binds
 # x to a name of its position, which no source can write.
 parse_nil_safe := (tokens: TokenStream, object: Expression) ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   name := Identifier(position, name: "?#{position.line}:#{position.column}")
   rest := parse_postfix(tokens, copy_identifier(name))
   condition := Binding(name, position, value: object)
@@ -355,7 +355,7 @@ parse_index := (tokens: TokenStream) ->
 # `in` and `when` are not keywords, so that they stay usable as names.
 export parse_loop_header := (tokens: TokenStream) ->
   tokens.expect 'for'
-  position := token_position(tokens.peek())
+  position := tokens.peek().position()
   parts: Identifier[] = tokens.peek().kind == '(' then parse_tuple_names(tokens) else []
   variable := parts.length > 0 then tuple_holder(position) else parse_identifier(tokens)
   index := tokens.accept(',') then parse_identifier(tokens)
@@ -368,7 +368,7 @@ export parse_loop_header := (tokens: TokenStream) ->
 export parse_tuple_names := (tokens: TokenStream) ->
   open := tokens.next()
   names := tokens.parse_list(')', -> parse_identifier(tokens))
-  tokens.fail token_position(open), 'a tuple has two or more items' if names.length < 2
+  tokens.fail open.position(), 'a tuple has two or more items' if names.length < 2
   names
 
 # The name of what holds a tuple while it is taken apart: it cannot be written (`.` is not allowed

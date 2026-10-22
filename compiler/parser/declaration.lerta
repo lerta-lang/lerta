@@ -10,7 +10,7 @@ import
   at_destructuring, parse_destructuring_statement, parse_statement, starts_spaced_operand
 from './statement'
 import Token from '../lexer/tokens'
-import is_one_of, token_position, TokenStream from './token_stream'
+import is_one_of, TokenStream from './token_stream'
 import
   parse_aliased_type, parse_named_type, parse_type_annotation, parse_type_name,
   parse_type_parameters
@@ -21,7 +21,7 @@ export starts_type_alias := (tokens: TokenStream) ->
   tokens.at_word('type') and name_follows and tokens.peek_at(2).kind == '='
 
 export parse_type_alias := (tokens: TokenStream) ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   name := parse_identifier(tokens)
   tokens.expect '='
   TypeAlias name, position, type: parse_aliased_type(tokens)
@@ -30,11 +30,11 @@ export parse_type_alias := (tokens: TokenStream) ->
 # the module alone; the checker tells whether it is at the top level.
 export parse_export := (tokens: TokenStream): Statement ->
   token := tokens.next()
-  return parse_reexport(tokens, token_position(token)) if at_reexport(tokens)
+  return parse_reexport(tokens, token.position()) if at_reexport(tokens)
   fail := ->
     types := 'a class, a struct, an enum, an interface, a type alias'
     exportable := "a const, #{types} or an extern"
-    tokens.fail token_position(token), "only #{exportable} can be exported"
+    tokens.fail token.position(), "only #{exportable} can be exported"
   if at_destructuring(tokens)
     parse_destructuring_statement tokens
     fail()
@@ -46,7 +46,7 @@ export parse_export := (tokens: TokenStream): Statement ->
 
 # `extern symbol as name: (A) -> R`.
 export parse_extern := (tokens: TokenStream) ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   symbol := parse_identifier(tokens)
   has_name := tokens.accept_word('as')
   name := has_name then parse_identifier(tokens) else symbol
@@ -73,8 +73,7 @@ parse_reexport := (tokens: TokenStream, position: Position) ->
   statement.exported = true
   statement
 
-export parse_import := (tokens: TokenStream) ->
-  parse_import_after tokens, token_position(tokens.next())
+export parse_import := (tokens: TokenStream) -> parse_import_after(tokens, tokens.next().position())
 
 # What follows `import`, or `export` before a module's names.
 parse_import_after := (tokens: TokenStream, position: Position) ->
@@ -133,11 +132,11 @@ export parse_type_declaration := (tokens: TokenStream) ->
   satisfies := tokens.accept(':') then parse_named_type(tokens)
   block_follows := tokens.peek_at(1).kind == INDENT
   if arguments != nil and block_follows
-    tokens.fail token_position(tokens.peek_at(2)), 'write the members in () or in a block, not both'
+    tokens.fail tokens.peek_at(2).position(), 'write the members in () or in a block, not both'
   has_body := arguments == nil and (satisfies == nil or block_follows)
   members := has_body then parse_members(tokens) else arguments ? []
   is_struct := token.kind == 'struct'
-  position := token_position(token)
+  position := token.position()
   TypeDeclaration name, type_params, members, is_struct, position, satisfies
 
 # The members in `(...)`, each a constructor argument.
@@ -145,7 +144,7 @@ parse_constructor_arguments := (tokens: TokenStream) ->
   open := tokens.next()
   members := tokens.parse_list(')', -> parse_member(tokens))
   if members.length == 0
-    tokens.fail token_position(open), 'write at least one constructor argument in ()'
+    tokens.fail open.position(), 'write at least one constructor argument in ()'
   for member in members
     if member.value != nil and not member.has_default
       message := 'only constructor arguments, `name: Type` or `name = default value`, go in ()'
@@ -156,7 +155,7 @@ parse_constructor_arguments := (tokens: TokenStream) ->
 # written as a class's; the checker tells which an interface can have, and whether it can have
 # none, without the block.
 export parse_interface := (tokens: TokenStream) ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   name := parse_identifier(tokens)
   type_params := parse_type_parameters(tokens)
   has_members := tokens.peek_at(1).kind == INDENT
@@ -168,7 +167,7 @@ export parse_interface := (tokens: TokenStream) ->
 
 # `enum Name` followed by an indented block of its members, one per line.
 export parse_enum := (tokens: TokenStream) ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   name := parse_identifier(tokens)
   has_members := tokens.peek().kind != NEWLINE or tokens.peek_at(1).kind == INDENT
   tokens.fail position, 'an enum needs at least one member' if not has_members
@@ -178,7 +177,7 @@ export parse_enum := (tokens: TokenStream) ->
 # A name, or a string literal, whose text must be known without running the program.
 parse_enum_member := (tokens: TokenStream): Identifier | StringLiteral ->
   token := tokens.peek()
-  position := token_position(token)
+  position := token.position()
   case token.kind
     when STRING
       tokens.next()
@@ -189,7 +188,7 @@ parse_enum_member := (tokens: TokenStream): Identifier | StringLiteral ->
 # `extend Type`, or `extend<T> T[]` for a generic one, followed by an indented block of
 # methods, one per line.
 export parse_extend := (tokens: TokenStream) ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   type_params := parse_type_parameters(tokens)
   type := parse_type_name(tokens)
   Extend type_params, type, position, members: parse_members(tokens)
@@ -205,7 +204,7 @@ parse_member_modifier := (tokens: TokenStream) ->
   is_weak := at_weak and next.kind == IDENTIFIER
   if at_weak and is_one_of(next.kind, ['const', 'var'])
     form := '`weak name: Type?`, without const or var'
-    tokens.fail token_position(token), "a weak field is written #{form}"
+    tokens.fail token.position(), "a weak field is written #{form}"
   text :=
     case
       when is_weak_bang then 'weak!'
@@ -227,7 +226,7 @@ parse_member := (tokens: TokenStream) ->
   has_default := has_value and at_default(tokens)
   tokens.next() if has_default
   value := has_value then parse_value(tokens)
-  MemberDeclaration name, modifier, type, value, has_default, position: token_position(token)
+  MemberDeclaration name, modifier, type, value, has_default, position: token.position()
 
 # `default` marks a default when an operand follows it, as the argument of a call without
 # parentheses would.

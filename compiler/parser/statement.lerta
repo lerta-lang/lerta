@@ -18,7 +18,7 @@ from './expression'
 import compile_errors, CompileError, Located from '../errors'
 import Token, TokenKind from '../lexer/tokens'
 import parse_primary from './primary'
-import is_one_of, token_position, TokenStream from './token_stream'
+import is_one_of, TokenStream from './token_stream'
 import parse_type_annotation from './type'
 
 ASSIGNMENT_OPERATORS: TokenKind[] = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=']
@@ -114,7 +114,7 @@ export at_destructuring := (tokens: TokenStream) ->
 reject_const := (tokens: TokenStream) ->
   token := tokens.peek_at(tokens.at_word('weak') then 1 else 0)
   return if token.kind != 'const'
-  tokens.fail token_position(token), 'a const is declared as `name := value`, without `const`'
+  tokens.fail token.position(), 'a const is declared as `name := value`, without `const`'
 
 # `{ a, b } := value` or `(a, b) := value`, which only `:=` after the names tells from an
 # expression.
@@ -133,7 +133,7 @@ is_name_list_token := (kind: TokenKind) ->
 export parse_simple_statement := (tokens: TokenStream): Statement ->
   reject_const tokens
   if at_destructuring(tokens)
-    position := token_position(tokens.peek())
+    position := tokens.peek().position()
     parse_destructuring tokens
     tokens.fail position, 'a destructuring declaration must be on a line of its own'
   return parse_declaration(tokens) if at_declaration(tokens)
@@ -172,7 +172,7 @@ export parse_line_statement := (tokens: TokenStream): Statement ->
 reject_postfix := (tokens: TokenStream) ->
   kind := tokens.peek_continuation()
   return if kind != 'if' and kind != 'while'
-  tokens.fail token_position(tokens.peek()), "a declaration cannot have a postfix '#{kind}'"
+  tokens.fail tokens.peek().position(), "a declaration cannot have a postfix '#{kind}'"
 
 # `statement if condition`, `statement while condition` and `statement for x in xs when guard`,
 # applied from left to right.
@@ -208,7 +208,7 @@ wrap_in_for := (tokens: TokenStream, statement: Statement) ->
 
 # `[weak] name := value` or `[weak] name: Type = value`, or `var` before a name, which takes `=`.
 parse_declaration := (tokens: TokenStream) ->
-  position := token_position(tokens.peek())
+  position := tokens.peek().position()
   weak := at_weak_declaration(tokens) and tokens.accept_word('weak')
   mutable := tokens.accept('var')
   if weak and is_one_of(tokens.peek().kind, ['{', '('])
@@ -220,15 +220,13 @@ parse_declaration := (tokens: TokenStream) ->
   if mutable and tokens.peek().kind != '='
     if type == nil
       why := 'only one of an optional type starts at nil'
-      tokens.fail
-        token_position(tokens.peek())
-        "a var without a type needs an initial value: #{why}"
+      tokens.fail tokens.peek().position(), "a var without a type needs an initial value: #{why}"
     value := NilLiteral(position: name.position)
     return Declaration(name, type, value, mutable, position, weak, omits_value: true)
   if type and tokens.peek().kind == NEWLINE
     types := 'T[], Map<K, V> or Set<T>'
     message := "expected '=': only a const whose type is written as #{types} starts empty"
-    value := empty_value(type) ? tokens.fail(token_position(tokens.peek()), message)
+    value := empty_value(type) ? tokens.fail(tokens.peek().position(), message)
     # The type of an empty Map or Set goes to its type arguments, as the formatter writes it.
     written := value is Call then nil else type
     return Declaration(name, value, mutable, position, weak, type: written)
@@ -257,7 +255,7 @@ export parse_destructuring_statement := (tokens: TokenStream) ->
 # the value, then `a` and `b`, each from the field of its name. `(a, b) := value` takes a tuple
 # apart likewise, by position. `var` before the names declares them so, and takes `=`.
 parse_destructuring := (tokens: TokenStream) ->
-  position := token_position(tokens.peek())
+  position := tokens.peek().position()
   mutable := tokens.accept('var')
   operator: TokenKind = mutable then '=' else ':='
   if tokens.peek().kind == '('
@@ -343,7 +341,7 @@ parse_command_call := (tokens: TokenStream) ->
 
 # `for` and its loop header (see LoopHeader), followed by an indented block.
 parse_for := (tokens: TokenStream) ->
-  position := token_position(tokens.peek())
+  position := tokens.peek().position()
   header := parse_loop_header(tokens)
   { variable, index, iterable, guard } := header
   if guard
@@ -360,16 +358,16 @@ parse_condition := (tokens: TokenStream): Condition ->
   return parse_expression(tokens) if not binds_name
   name := parse_identifier(tokens)
   tokens.next()
-  Binding name, value: parse_expression(tokens), position: token_position(token)
+  Binding name, value: parse_expression(tokens), position: token.position()
 
 parse_while := (tokens: TokenStream) ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   condition := parse_condition(tokens)
   While condition, position, body: parse_block(tokens)
 
 # `if` with an optional `else` block; `else if` chains further.
 export parse_if := (tokens: TokenStream): If ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   condition := parse_condition(tokens)
   then_body := parse_block(tokens)
   return If(condition, then_body, position, else_body: []) if tokens.peek().kind != 'else'

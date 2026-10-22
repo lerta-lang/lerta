@@ -206,7 +206,7 @@ multiline_string_doc := (literal: Token, context: Context) ->
   dedented :=
     [is_blank(line) then '' else line.binary.text(width, line.binary.length)! for line in lines]
   dedented.push "#{dedented.pop()}#{quotes}"
-  first := token(quotes, Position(line: literal.line, column: literal.column))
+  first := token(quotes, literal.position())
   join [first, LiteralLines(lines: dedented, end_line: literal.end_line)]
 
 # The index of the literal's token at the position, past the parentheses that it was written in,
@@ -336,7 +336,7 @@ arguments_closing_at := (call: Call, context: Context) ->
   index -= 1
   return nil if index < 0 or source.tokens[index].kind != '('
   open := source.tokens[index]
-  closing_at Position(line: open.line, column: open.column), context
+  closing_at open.position(), context
 
 export arguments := (call: Call, context: Context) ->
   positional := [item(arg, context) for arg in call.args]
@@ -389,10 +389,7 @@ tuple_names := (open_at: Position, context: Context) ->
   open := source.token_at(open_at) ? return text('()')
   close := source.closing(open)
   names := [
-    token(
-      source.spelling(source.tokens[i])
-      Position(line: source.tokens[i].line, column: source.tokens[i].column)
-    )
+    token(source.spelling(source.tokens[i]), source.tokens[i].position())
     for i in (open + 1)...close
     when source.tokens[i].kind == IDENTIFIER
   ]

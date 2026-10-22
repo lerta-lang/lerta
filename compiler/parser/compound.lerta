@@ -11,7 +11,7 @@ import
   at_spread, parse_expression, parse_identifier, parse_loop_header, parse_or, take_apart_item
 from './expression'
 import at_declaration, parse_block, parse_line_statement, parse_simple_statement from './statement'
-import is_one_of, token_position, TokenStream from './token_stream'
+import is_one_of, TokenStream from './token_stream'
 import parse_result_annotation, parse_type_annotation, parse_type_parameters from './type'
 
 # `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
@@ -72,7 +72,7 @@ export parse_function_literal := (tokens: TokenStream, weak = false) ->
   { body, marks } := tokens.in_function(parse_body)
   yields := marks.yields
   awaits := marks.await_at != nil
-  position := token_position(token)
+  position := token.position()
   FunctionLiteral type_params, params, return_type, body, yields, awaits, position, weak
 
 # `name[: Type][ = default]`, or `name: Type...`.
@@ -160,7 +160,7 @@ parse_map_entry := (tokens: TokenStream) ->
     token := tokens.peek()
     name := token.text
     message := "a map's keys are values: for the value of '#{name}', write (#{name})"
-    tokens.fail token_position(token), message
+    tokens.fail token.position(), message
   key := parse_expression(tokens)
   tokens.expect ':'
   MapEntry key, value: parse_expression(tokens)
@@ -178,7 +178,7 @@ parse_record_literal := (tokens: TokenStream, position: Position) ->
 parse_record_field := (tokens: TokenStream) ->
   if not starts_record_field(tokens)
     message := 'an anonymous struct and a map cannot be mixed'
-    tokens.fail token_position(tokens.peek()), message
+    tokens.fail tokens.peek().position(), message
   name := parse_identifier(tokens)
   has_value := tokens.accept(':')
   value: Expression = has_value then parse_expression(tokens) else copy_identifier(name)
@@ -210,7 +210,7 @@ export parse_try := (tokens: TokenStream, position: Position) ->
   Try body, catches, finally_body, position
 
 parse_catch := (tokens: TokenStream) ->
-  position := token_position(tokens.next())
+  position := tokens.next().position()
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
   Catch name, type, position, body: parse_block(tokens)
@@ -255,12 +255,12 @@ parse_arm_body := (tokens: TokenStream, arm: TokenKind) ->
 # mean nothing else there.
 parse_pass := (tokens: TokenStream): Statement? ->
   return nil if not tokens.at_word('pass') or tokens.peek_at(1).kind != NEWLINE
-  Pass position: token_position(tokens.next())
+  Pass position: tokens.next().position()
 
 # A declaration's scope would end with the line, so none may follow `then` or `else`.
 parse_inline_arm := (tokens: TokenStream) ->
   message := 'a declaration in an arm must be in an indented block'
-  tokens.fail token_position(tokens.peek()), message if at_declaration(tokens)
+  tokens.fail tokens.peek().position(), message if at_declaration(tokens)
   parse_line_statement tokens
 
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
