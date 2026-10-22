@@ -78,9 +78,6 @@ void lerta_array_append(LertaArray *array, const void *item);
 typedef void (*LertaCancel)(void *context);
 void lerta_promise_on_cancel(LertaPromise *promise, LertaCancel cancel, void *context);
 void lerta_promise_reject_cancelled(LertaPromise *promise);
-// Whether the coroutine is to wait for the promise, which is pending; it is resumed once the
-// promise is settled.
-bool lerta_promise_wait(LertaPromise *promise, void *coroutine);
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
 

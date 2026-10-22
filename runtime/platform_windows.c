@@ -389,14 +389,7 @@ int lerta_os_input_file(const uint8_t *bytes, int64_t length) {
     DeleteFileW(path);
     return -1;
   }
-  bool written = true;
-  for (int64_t done = 0; written && done < length;) {
-    int64_t left = length - done;
-    DWORD chunk = left > 0x40000000 ? 0x40000000 : (DWORD)left;
-    DWORD count = 0;
-    written = WriteFile(file, bytes + done, chunk, &count, NULL);
-    done += count;
-  }
+  bool written = write_all(file, bytes, length);
   LARGE_INTEGER start = {0};
   int fd = -1;
   if (written && SetFilePointerEx(file, start, NULL, FILE_BEGIN)) {

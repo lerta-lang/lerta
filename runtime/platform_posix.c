@@ -213,12 +213,7 @@ int lerta_os_input_file(const uint8_t *bytes, int64_t length) {
   if (fd >= 0) unlink(path);
   free(path);
   if (fd < 0) return -1;
-  bool written = fcntl(fd, F_SETFD, FD_CLOEXEC) == 0;
-  for (int64_t done = 0; written && done < length;) {
-    ssize_t count = write(fd, bytes + done, (size_t)(length - done));
-    if (count >= 0) done += count;
-    else written = errno == EINTR;
-  }
+  bool written = fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 && lerta_os_write(fd, bytes, length);
   if (written && lseek(fd, 0, SEEK_SET) == 0) return fd;
   close(fd);
   return -1;

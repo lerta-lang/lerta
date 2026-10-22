@@ -1,7 +1,6 @@
 // The debug runtime's leak check (see docs/internals.md#leak-checking). It runs as the program ends
 // and spends the counts of the objects alive, which nothing may use after it.
 #include <stdlib.h>
-#include <string.h>
 
 #include "internal.h"
 
@@ -80,10 +79,6 @@ static const LertaString *name_of(LertaHeader *object) {
   return object->type->name;
 }
 
-static bool same_name(const LertaString *a, const LertaString *b) {
-  return a->length == b->length && memcmp(a->bytes, b->bytes, (size_t)a->length) == 0;
-}
-
 typedef struct {
   const LertaString *name;
   int64_t count;
@@ -102,7 +97,7 @@ static int64_t report_unreachable(void) {
     unreachable++;
     const LertaString *name = name_of(object);
     int64_t i = 0;
-    while (i < name_count && !same_name(names[i].name, name)) i++;
+    while (i < name_count && !lerta_string_equals(names[i].name, name)) i++;
     if (i == name_count) {
       names = lerta_checked_realloc(names, (size_t)(name_count + 1) * sizeof(NameCount));
       names[name_count++] = (NameCount){name, 0};

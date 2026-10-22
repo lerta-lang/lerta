@@ -113,7 +113,7 @@ LertaPromise *lerta_promise_new(LertaItemKind kind) {
   return promise;
 }
 
-bool lerta_promise_wait(LertaPromise *promise, void *coroutine) {
+bool lerta_promise_wait_in(LertaPromise *promise, void *coroutine, LertaPromise *own) {
   if (promise->state != PENDING) return false;
   if (promise->waiter_count == promise->waiter_capacity) {
     promise->waiter_capacity = promise->waiter_capacity == 0 ? 1 : promise->waiter_capacity * 2;
@@ -121,6 +121,7 @@ bool lerta_promise_wait(LertaPromise *promise, void *coroutine) {
     promise->waiters = lerta_mem_realloc(promise->waiters, (int64_t)size);
   }
   promise->waiters[promise->waiter_count++] = coroutine;
+  own->awaiting = promise;
   return true;
 }
 
@@ -173,12 +174,6 @@ LertaPromise *lerta_promise_pending(void) {
 // Resolves the promise, unless it is settled already.
 void lerta_promise_fire(LertaPromise *promise) {
   if (promise->state == PENDING) lerta_promise_resolve(promise);
-}
-
-bool lerta_promise_wait_in(LertaPromise *promise, void *coroutine, LertaPromise *own) {
-  if (!lerta_promise_wait(promise, coroutine)) return false;
-  own->awaiting = promise;
-  return true;
 }
 
 void *lerta_promise_result_in(LertaPromise *promise, LertaPromise *own) {
