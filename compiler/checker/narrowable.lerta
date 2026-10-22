@@ -22,7 +22,7 @@ export struct Narrowable(subject: Local | FieldPath, current: Type, declared: Ty
 export narrowable := (body: Body, value: Expression) ->
   if value is Identifier
     local := narrowable_local(body, value) ? return nil
-    return Narrowable(subject: local, current: local.type, declared: (local.origin ? local).type)
+    return Narrowable(subject: local, current: local.type, declared: local.original().type)
   path := field_path(body, value) ? return nil
   current := body.facts.types[value] ? return nil
   Narrowable current, subject: path, declared: path.declared
@@ -32,7 +32,7 @@ export narrowable := (body: Body, value: Expression) ->
 # the literal (see forget_narrowing).
 narrowable_local := (body: Body, name: Identifier) ->
   local := lookup(body, name.name) ? return nil
-  origin := local.origin ? local
+  origin := local.original()
   return nil if origin.weak or origin.assigned_by_literal
   return nil if origin.mutable and is_module_value(body, name.name, origin)
   local
@@ -40,7 +40,7 @@ narrowable_local := (body: Body, name: Identifier) ->
 # A path of fields starts from a local that cannot be reassigned, whose paths no assignment ends.
 path_root := (body: Body, name: Identifier) ->
   local := narrowable_local(body, name) ? return nil
-  (local.origin ? local).mutable then nil else local
+  local.original().mutable then nil else local
 
 is_module_value := (body: Body, name: String, origin: Local) ->
   return true if origin == body.shared.top_level.locals[name]
@@ -59,7 +59,7 @@ field_path := (body: Body, value: Expression): FieldPath? ->
     when This then path_from(nil, '@')
     when Identifier
       local := path_root(body, object) ? return nil
-      path_from local.origin ? local, object.name
+      path_from local.original(), object.name
     when Member
       outer := field_path(body, object) ? return nil
       path_from outer.root, outer.key

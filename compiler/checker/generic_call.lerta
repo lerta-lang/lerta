@@ -3,7 +3,7 @@
 # (see generics).
 import Call, Member, Position, TypeParameter from '../ast'
 import check_argument_count, packed_arguments from './arguments'
-import fail from './diagnostics'
+import fail, fail_cannot_infer from './diagnostics'
 import require_type from './expression'
 import methods_reachable_from from './extensions'
 import
@@ -78,12 +78,8 @@ type_arguments_of := (
   callee := generic.name.name
   binding_of := (param: TypeParameter) ->
     name := param.name.name
-    cannot_infer := ->
-      written := generic.receiver then "x.#{callee}" else callee
-      advice := "write it, as in #{written}<...>(...)"
-      message := "cannot infer the type argument #{name} of '#{callee}'; #{advice}"
-      fail body.program, call.position, message
-    inferred[name] ? cannot_infer()
+    written := generic.receiver then "x.#{callee}" else callee
+    inferred[name] ? fail_cannot_infer(body.program, call.position, name, callee, written)
   given := [binding_of(param) for param in generic.type_params]
   types := [each.type for each in given]
   reject_unsatisfied_bounds body, generic, types, [each.at for each in given]

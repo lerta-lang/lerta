@@ -4,7 +4,7 @@ import
   Call, construction_arguments, Expression, FunctionLiteral, Identifier, NamedType, NamedValue,
   RecordLiteral
 from '../ast'
-import fail from './diagnostics'
+import fail, fail_cannot_infer from './diagnostics'
 import expect_type, reject_type_arguments, require_type, type_of from './expression'
 import function_type_of, has_function, method_key from './functions'
 import float_first from './literals'
@@ -62,7 +62,7 @@ argument_field := (body: Body, info: ObjectInfo, arg: NamedValue) ->
   { name, position } := arg.name
   type := format_type(info.type)
   no_field := -> fail(body.program, position, "#{type} has no field '#{name}'")
-  field := info.fields.find((each) -> each.name.name == name) ? no_field()
+  field := info.field_named(name) ? no_field()
   fail body.program, position, "#{type} computes its field '#{name}'" if not is_argument(field)
   field
 
@@ -105,13 +105,11 @@ constructed_instance := (
     continue if not has_type_parameters(pattern)
     infer_from arg, arg.value is FunctionLiteral then pattern
   args: Type[]
+  type_name := declared.name
   for param in info.declaration.type_params
     name := param.name.name
-    cannot_infer := ->
-      advice := "write it, as in #{declared.name}<...>(...)"
-      message := "cannot infer the type argument #{name} of '#{declared.name}'; #{advice}"
-      fail program, call.position, message
-    args.push type_bindings[name] ? cannot_infer()
+    args.push
+      type_bindings[name] ? fail_cannot_infer(program, call.position, name, type_name, type_name)
   { name, symbol, module, is_struct } := declared
   type := ObjectType(name, symbol, module, is_struct, args)
   reject_invalid_instance program, body.resolver.module_index, type, call.position

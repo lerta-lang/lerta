@@ -23,6 +23,9 @@ export class Local
   # The loops that a narrowing of this `var` was made in (see in_loop).
   narrowed_in_loops: Int[] = []
 
+  # The local itself, of which this may be a view.
+  original = -> @origin ? @
+
 # The narrower type of a path of fields (see narrowable FieldPath), from the local it starts from, or
 # from `@` if nil.
 export struct PathView(root: Local?, type: Type)
@@ -57,13 +60,13 @@ export class Scopes
     for overlays in @overlays
       for name in overlays.keys()
         current := @lookup_local(name) ? continue
-        origin := current.origin ? current
+        origin := current.original()
         hidden[name] = origin if current != origin and origin.mutable
 
   # The local is assigned: its narrowed views end, in every scope.
   forget_views = (local: Local) ->
     for overlays in @overlays
-      names := [name for (name, view) in overlays.entries() when view.origin ? view == local]
+      names := [name for (name, view) in overlays.entries() when view.original() == local]
       overlays.remove name for name in names
 
   narrow_path = (key: String, view: PathView) -> @paths.last()![key] = view

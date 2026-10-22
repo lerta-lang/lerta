@@ -42,6 +42,12 @@ export MAX_TYPE_DEPTH := 32
 # before any reached MAX_TYPE_DEPTH.
 export MAX_INSTANCES := 1000
 
+# Why the generic `name` is stopped: its type arguments nest past MAX_TYPE_DEPTH, or its instances
+# number past MAX_INSTANCES.
+export endless_instances := (name: String, too_deep: Bool) ->
+  return "'#{name}' needs instances without end, each with type arguments nested deeper" if too_deep
+  "'#{name}' needs more than #{MAX_INSTANCES} instances"
+
 export class GenericFunction
   name: Identifier
   literal: FunctionLiteral
@@ -108,13 +114,11 @@ export instantiate := (
   same_arguments :=
     [instance for instance in generic.instances when arguments_key(instance.type_arguments) == key]
   found := same_arguments.find((instance) -> same_methods(instance.methods, methods))
-  if found == nil and type_arguments.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
-    name := generic.name.name
-    message := "'#{name}' needs instances without end, each with type arguments nested deeper"
-    fail_in_context program, at, message, "from #{describe(generic, generic.instances[0])}"
-  if found == nil and generic.instances.length >= MAX_INSTANCES
-    message := "'#{generic.name.name}' needs more than #{MAX_INSTANCES} instances"
-    fail_in_context program, at, message, "from #{describe(generic, generic.instances[0])}"
+  if found == nil
+    too_deep := type_arguments.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
+    if too_deep or generic.instances.length >= MAX_INSTANCES
+      message := endless_instances(generic.name.name, too_deep)
+      fail_in_context program, at, message, "from #{describe(generic, generic.instances[0])}"
   variant := same_arguments.length
   instance := found ? add_instance(program, ref, type_arguments, methods, variant, at)
   check program, generic, instance if found == nil and instance.entry.type == nil

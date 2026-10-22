@@ -7,12 +7,13 @@ import
 from '../ast'
 import check_equality_methods, check_object, check_satisfies from './bodies'
 import
-  abort_part, check_part, enter_module, fail, fail_already_defined, fail_in_context
+  abort_part, check_part, enter_module, fail, fail_already_defined, fail_already_member,
+  fail_in_context
 from './diagnostics'
 import add_function, add_generic, CheckState, method_key from './functions'
 import
-  GenericRef, Instance, instantiate, make_generic_function, MAX_INSTANCES, MAX_TYPE_DEPTH, Receiver,
-  reject_bad_type_parameters
+  endless_instances, GenericRef, Instance, instantiate, make_generic_function, MAX_INSTANCES,
+  MAX_TYPE_DEPTH, Receiver, reject_bad_type_parameters
 from './generics'
 import builtin_type, imported_type from './imports'
 import bound_interface, has_declared_type, InterfaceMember, members_for from './interfaces'
@@ -68,6 +69,8 @@ export class ObjectInfo
   # Of an instance: whether its written field types are checked (see reject_invalid_type).
   fields_checked = false
 
+  field_named = (name: String) -> @fields.find((each) -> each.name.name == name)
+
 # A field without an initializer, or with a default, is a constructor argument.
 export is_argument := (field: FieldInfo) -> field.value == nil or field.has_default
 
@@ -109,9 +112,7 @@ export add_members := (shared: Shared) ->
     seen: Set<String>
     for member in info.declaration.members
       { name, position } := member.name
-      if seen.has(name)
-        message := "'#{name}' is already a member of #{info.declaration.name.name}"
-        fail program, position, message
+      fail_already_member program, position, name, info.declaration.name.name if seen.has(name)
       seen.add name
       if literal := method_literal(member)
         add_method shared, info, member, literal
@@ -310,6 +311,8 @@ reject_endless_instance := (program: ProgramWide, info: ObjectInfo): void ->
   shared := program.shared[info.module_index]
   enter_module shared
   { name, position } := info.declaration.name
-  endless := "'#{name}' needs instances without end, each with type arguments nested deeper"
-  message := too_deep then endless else "'#{name}' needs more than #{MAX_INSTANCES} instances"
-  fail_in_context program, position, message, "from #{format_type(generic.instances[0].type)}"
+  fail_in_context
+    program
+    position
+    endless_instances(name, too_deep)
+    "from #{format_type(generic.instances[0].type)}"
