@@ -10,7 +10,7 @@ from '../types'
 
 # An arithmetic operator, `+`, `-`, `*`, `/` or `%`, or a bitwise one, `&`, `|`, `^`, `<<` or `>>`,
 # applied to two values of an integer type, by its bits and its sign.
-export const apply_integer_operator = (
+export apply_integer_operator := (
   g: Generator, operator: String, left: String, right: String, type: Type
 ) ->
   return bitwise(g, operator, left, right, type) if BITWISE_INSTRUCTIONS.has(operator)
@@ -19,80 +19,80 @@ export const apply_integer_operator = (
   checked g, operator, left, right, type
 
 # An unsigned type overflows below 0, as 0 - 1 does, as it does above its largest value.
-const checked = (g: Generator, operator: String, left: String, right: String, type: Type) ->
-  const sign = is_signed(type) then 's' else 'u'
-  const operation =
+checked := (g: Generator, operator: String, left: String, right: String, type: Type) ->
+  sign := is_signed(type) then 's' else 'u'
+  operation :=
     case operator
       when '+' then 'add'
       when '-' then 'sub'
       when '*' then 'mul'
       else panic("no arithmetic operator #{operator}")
-  const width = ir_type(type)
-  const intrinsic = "llvm.#{sign}#{operation}.with.overflow.#{width}"
-  const result_type = "{ #{width}, i1 }"
-  const ir = g.ir
+  width := ir_type(type)
+  intrinsic := "llvm.#{sign}#{operation}.with.overflow.#{width}"
+  result_type := "{ #{width}, i1 }"
+  ir := g.ir
   ir.module.declare intrinsic, "declare #{result_type} @#{intrinsic}(#{width}, #{width})"
-  const args = "#{width} #{left}, #{width} #{right}"
-  const result = ir.assign("call #{result_type} @#{intrinsic}(#{args})")
-  const overflowed = ir.assign("extractvalue #{result_type} #{result}, 1")
+  args := "#{width} #{left}, #{width} #{right}"
+  result := ir.assign("call #{result_type} @#{intrinsic}(#{args})")
+  overflowed := ir.assign("extractvalue #{result_type} #{result}, 1")
   throw_if g, overflowed, OVERFLOW
   ir.assign "extractvalue #{result_type} #{result}, 0"
 
-const BITWISE_INSTRUCTIONS = { '&': 'and', '|': 'or', '^': 'xor' }
+BITWISE_INSTRUCTIONS := { '&': 'and', '|': 'or', '^': 'xor' }
 
-const bitwise = (g: Generator, operator: String, left: String, right: String, type: Type) ->
+bitwise := (g: Generator, operator: String, left: String, right: String, type: Type) ->
   g.ir.assign "#{BITWISE_INSTRUCTIONS[operator]!} #{ir_type(type)} #{left}, #{right}"
 
 # A shift by a negative amount, or by the type's bits or more, throws: compared as unsigned, a
 # negative amount is above the bits. `<<` of a signed type throws unless shifting the result back
 # gives the value, as it does when no bit that differs from the sign is shifted out.
-const shift = (g: Generator, operator: String, left: String, right: String, type: Type) ->
-  const ir = g.ir
-  const signed = is_signed(type)
-  const width = ir_type(type)
-  const out_of_range = ir.assign("icmp uge #{width} #{right}, #{integer_bits(type)}")
+shift := (g: Generator, operator: String, left: String, right: String, type: Type) ->
+  ir := g.ir
+  signed := is_signed(type)
+  width := ir_type(type)
+  out_of_range := ir.assign("icmp uge #{width} #{right}, #{integer_bits(type)}")
   throw_if g, out_of_range, SHIFT_OUT_OF_RANGE
   if operator == '>>'
     return ir.assign("#{signed then 'ashr' else 'lshr'} #{width} #{left}, #{right}")
-  const shifted = ir.assign("shl #{width} #{left}, #{right}")
+  shifted := ir.assign("shl #{width} #{left}, #{right}")
   return shifted if not signed
-  const back = ir.assign("ashr #{width} #{shifted}, #{right}")
+  back := ir.assign("ashr #{width} #{shifted}, #{right}")
   throw_if g, ir.assign("icmp ne #{width} #{back}, #{left}"), OVERFLOW
   shifted
 
 # The least value of a signed type / -1 overflows; its % -1 is rejected too, since LLVM leaves it
 # undefined.
-const division = (g: Generator, operator: String, left: String, right: String, type: Type) ->
-  const ir = g.ir
-  const width = ir_type(type)
+division := (g: Generator, operator: String, left: String, right: String, type: Type) ->
+  ir := g.ir
+  width := ir_type(type)
   throw_if g, ir.assign("icmp eq #{width} #{right}, 0"), DIVISION_BY_ZERO
-  const is_quotient = operator == '/'
+  is_quotient := operator == '/'
   if not is_signed(type)
     return ir.assign("#{is_quotient then 'udiv' else 'urem'} #{width} #{left}, #{right}")
-  const is_min = ir.assign("icmp eq #{width} #{left}, #{integer_range(type).least}")
-  const is_minus_one = ir.assign("icmp eq #{width} #{right}, -1")
+  is_min := ir.assign("icmp eq #{width} #{left}, #{integer_range(type).least}")
+  is_minus_one := ir.assign("icmp eq #{width} #{right}, -1")
   throw_if g, ir.assign("and i1 #{is_min}, #{is_minus_one}"), OVERFLOW
   ir.assign "#{is_quotient then 'sdiv' else 'srem'} #{width} #{left}, #{right}"
 
 # `x.wrapping_add(y)` and the like: the operation without the check, modulo 2 to the type's bits.
-export const emit_wrapping = (
+export emit_wrapping := (
   ir: IrBuilder, instruction: String, left: String, right: String, type: Type
 ) -> ir.assign("#{instruction} #{ir_type(type)} #{left}, #{right}")
 
-export const emit_integer_to_float = (ir: IrBuilder, value: String, type: Type) ->
+export emit_integer_to_float := (ir: IrBuilder, value: String, type: Type) ->
   ir.assign "#{is_signed(type) then 'sitofp' else 'uitofp'} #{ir_type(type)} #{value} to double"
 
 # `x.to_int8()` and the like, to `result`: the type, where it holds every value of the type
 # converted, or else its optional type, nil where the value does not fit.
-export const emit_conversion = (ir: IrBuilder, value: String, from: Type, result: Type) ->
-  const to = result is OptionalType then result.inner else result
-  const conversion =
+export emit_conversion := (ir: IrBuilder, value: String, from: Type, result: Type) ->
+  to := result is OptionalType then result.inner else result
+  conversion :=
     if is_kind(to, 'Char')
       char_conversion ir, value, from
     else
       integer_conversion ir, value, from, to
   return conversion.value if result is not OptionalType
-  const flagged = ir.assign("insertvalue #{ir_type(result)} undef, i1 #{conversion.fits}, 0")
+  flagged := ir.assign("insertvalue #{ir_type(result)} undef, i1 #{conversion.fits}, 0")
   ir.assign "insertvalue #{ir_type(result)} #{flagged}, #{ir_type(to)} #{conversion.value}, 1"
 
 # The value converted, and an i1 of whether it fits there.
@@ -100,37 +100,37 @@ struct Conversion(value: String, fits: String)
 
 # Converted there and back, a value that fits comes back the same, and with the same sign, as a
 # value of one sign that is negative as one of the other is no value of it.
-const integer_conversion = (ir: IrBuilder, value: String, from: Type, to: Type) ->
-  const converted = resized(ir, value, from, to, is_signed(from))
-  const back = resized(ir, converted, to, from, is_signed(to))
-  const same = ir.assign("icmp eq #{ir_type(from)} #{back}, #{value}")
-  const is_negative = (operand: String, type: Type) ->
+integer_conversion := (ir: IrBuilder, value: String, from: Type, to: Type) ->
+  converted := resized(ir, value, from, to, is_signed(from))
+  back := resized(ir, converted, to, from, is_signed(to))
+  same := ir.assign("icmp eq #{ir_type(from)} #{back}, #{value}")
+  is_negative := (operand: String, type: Type) ->
     is_signed(type) then ir.assign("icmp slt #{ir_type(type)} #{operand}, 0") else 'false'
-  const negative = is_signed(from) then is_negative(value, from) else is_negative(converted, to)
-  const signs_agree = ir.assign("xor i1 #{negative}, true")
-  const fits =
+  negative := is_signed(from) then is_negative(value, from) else is_negative(converted, to)
+  signs_agree := ir.assign("xor i1 #{negative}, true")
+  fits :=
     is_signed(from) == is_signed(to) then same else ir.assign("and i1 #{same}, #{signs_agree}")
   Conversion fits, value: converted
 
 # A number fits in a Char where it is a Unicode scalar value: from 0 to 0x10FFFF, but for the
 # surrogates, from 0xD800 to 0xDFFF. It is compared as a word, where no value of a narrower type
 # is out of place.
-const char_conversion = (ir: IrBuilder, value: String, from: Type) ->
-  const word = resized(ir, value, from, int_type, is_signed(from))
-  const within = ir.assign("icmp ule i64 #{word}, #{MAX_CHAR}")
-  const above_surrogates = ir.assign("sub i64 #{word}, #{FIRST_SURROGATE}")
-  const beside_surrogates = ir.assign("icmp uge i64 #{above_surrogates}, #{SURROGATE_COUNT}")
-  const fits = ir.assign("and i1 #{within}, #{beside_surrogates}")
+char_conversion := (ir: IrBuilder, value: String, from: Type) ->
+  word := resized(ir, value, from, int_type, is_signed(from))
+  within := ir.assign("icmp ule i64 #{word}, #{MAX_CHAR}")
+  above_surrogates := ir.assign("sub i64 #{word}, #{FIRST_SURROGATE}")
+  beside_surrogates := ir.assign("icmp uge i64 #{above_surrogates}, #{SURROGATE_COUNT}")
+  fits := ir.assign("and i1 #{within}, #{beside_surrogates}")
   Conversion fits, value: resized(ir, word, int_type, char_type, false)
 
-const MAX_CHAR = 0x10FFFF
-const FIRST_SURROGATE = 0xD800
-const SURROGATE_COUNT = 0x800
+MAX_CHAR := 0x10FFFF
+FIRST_SURROGATE := 0xD800
+SURROGATE_COUNT := 0x800
 
 # The value with the bits of `to`: cut, or extended by its sign if `signed`.
-const resized = (ir: IrBuilder, value: String, from: Type, to: Type, signed: Bool) ->
-  const from_bits = integer_bits(from)
-  const to_bits = integer_bits(to)
+resized := (ir: IrBuilder, value: String, from: Type, to: Type, signed: Bool) ->
+  from_bits := integer_bits(from)
+  to_bits := integer_bits(to)
   return value if from_bits == to_bits
-  const instruction = to_bits < from_bits then 'trunc' else signed then 'sext' else 'zext'
+  instruction := to_bits < from_bits then 'trunc' else signed then 'sext' else 'zext'
   ir.assign "#{instruction} #{ir_type(from)} #{value} to #{ir_type(to)}"

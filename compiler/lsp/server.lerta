@@ -62,7 +62,7 @@ struct PublishDiagnosticsParams(uri: String, diagnostics: LspDiagnostic[])
 
 struct TextEdit(range: LspRange, new_text: String)
 
-const FULL_SYNC = 1
+FULL_SYNC := 1
 
 class Server
   encoding = PositionEncoding.UTF16
@@ -79,7 +79,7 @@ class Server
   # no length tells nothing of where the next message starts, so it ends the server.
   run = ->
     while true
-      const body =
+      body :=
         try
           await read_message() ? return
         catch error: ValueError
@@ -90,7 +90,7 @@ class Server
   # A message that is not JSON, or not of a message's shape, is answered as a parse error, which
   # has no id to answer.
   handle = (body: String) ->
-    const header =
+    header :=
       try
         decode_json<Header>(body, CAMEL_CASE)
       catch error: JsonError
@@ -98,54 +98,54 @@ class Server
     try
       await @dispatch(header.method ? '', header.id, body)
     catch error: JsonError
-      await respond_error(id, INVALID_PARAMS, error.message) if const id = header.id
+      await respond_error(id, INVALID_PARAMS, error.message) if id := header.id
     catch error
       # A bug of the server ends the message alone, as one message should not end the session.
       print_error error.message
-      await respond_error(id, INTERNAL_ERROR, error.message) if const id = header.id
+      await respond_error(id, INTERNAL_ERROR, error.message) if id := header.id
 
   dispatch = (method: String, id: Int | String?, body: String) ->
     case method
       when 'initialize'
         await @initialize(decode_json<Request<InitializeParams>>(body, CAMEL_CASE))
       when 'textDocument/didOpen'
-        const params = decode_json<Notification<DidOpenParams>>(body, CAMEL_CASE).params
+        params := decode_json<Notification<DidOpenParams>>(body, CAMEL_CASE).params
         await @set_text(params.text_document.uri, params.text_document.text)
       when 'textDocument/didChange'
-        const params = decode_json<Notification<DidChangeParams>>(body, CAMEL_CASE).params
-        if const change = params.content_changes.last()
+        params := decode_json<Notification<DidChangeParams>>(body, CAMEL_CASE).params
+        if change := params.content_changes.last()
           await @set_text(params.text_document.uri, change.text)
       when 'textDocument/didClose'
         await @close(
           decode_json<Notification<DocumentParams>>(body, CAMEL_CASE).params.text_document.uri
         )
       when 'textDocument/formatting'
-        const request = decode_json<Request<DocumentParams>>(body, CAMEL_CASE)
+        request := decode_json<Request<DocumentParams>>(body, CAMEL_CASE)
         await respond(
           request.id
           await formatting_edits(request.params.text_document.uri, @encoding)
         )
       when 'textDocument/hover'
-        const request = decode_json<Request<PositionParams>>(body, CAMEL_CASE)
+        request := decode_json<Request<PositionParams>>(body, CAMEL_CASE)
         await respond(request.id, await @hover(request.params))
       when 'textDocument/definition'
-        const request = decode_json<Request<PositionParams>>(body, CAMEL_CASE)
+        request := decode_json<Request<PositionParams>>(body, CAMEL_CASE)
         await respond(request.id, await @definition(request.params))
       when 'textDocument/completion'
-        const request = decode_json<Request<PositionParams>>(body, CAMEL_CASE)
+        request := decode_json<Request<PositionParams>>(body, CAMEL_CASE)
         await respond(request.id, await @completion(request.params))
       when 'shutdown'
         @shut_down = true
-        const none: Bool? = nil
-        await respond(given, none) if const given = id
+        none: Bool? = nil
+        await respond(given, none) if given := id
       when 'exit' then exit(@shut_down then 0 else 1)
-      else await respond_error(given, METHOD_NOT_FOUND, "no method #{method}") if const given = id
+      else await respond_error(given, METHOD_NOT_FOUND, "no method #{method}") if given := id
 
   initialize = (request: Request<InitializeParams>) ->
-    const encodings = request.params.capabilities.general?.position_encodings ? []
+    encodings := request.params.capabilities.general?.position_encodings ? []
     @encoding = UTF32 if encodings.contains('utf-32')
-    const encoding = @encoding == UTF32 then 'utf-32' else 'utf-16'
-    const capabilities = ServerCapabilities
+    encoding := @encoding == UTF32 then 'utf-32' else 'utf-16'
+    capabilities := ServerCapabilities
       position_encoding: encoding
       text_document_sync: FULL_SYNC
       document_formatting_provider: true
@@ -159,7 +159,7 @@ class Server
   # program, whose positions its new text no longer has; the open documents that import it are
   # checked again, from its new text.
   set_text = (uri: String, text: String) ->
-    const path = path_of_uri(uri) ? return
+    path := path_of_uri(uri) ? return
     open_texts[text_key(path)] = text
     if not is_file(path)
       @programs.remove path
@@ -169,9 +169,9 @@ class Server
 
   # Its importers' checks, which took its text, are made again, from the file.
   close = (uri: String) ->
-    const path = path_of_uri(uri) ? return
+    path := path_of_uri(uri) ? return
     open_texts.remove text_key(path)
-    const files = @found[path]?.keys().to_array() ? []
+    files := @found[path]?.keys().to_array() ? []
     @found.remove path
     @programs.remove path
     await @check(doc) for doc in @importers(path)
@@ -180,25 +180,25 @@ class Server
   # The types of the name at the position, as a block of Lerta, from the program of the document's
   # own check if it has one, or of another open document's that holds it.
   hover = (params: PositionParams) ->
-    const path = path_of_uri(params.text_document.uri) ? return nil
-    const program = @program_of(path) ? return nil
-    const module_index = module_at(program, path) ? return nil
-    const at = await source_position(path, params.position, @encoding)
-    const lines = hover_lines(program, module_index, await read_source(path), at)
+    path := path_of_uri(params.text_document.uri) ? return nil
+    program := @program_of(path) ? return nil
+    module_index := module_at(program, path) ? return nil
+    at := await source_position(path, params.position, @encoding)
+    lines := hover_lines(program, module_index, await read_source(path), at)
     return nil if lines.length == 0
     Hover contents: MarkupContent(kind: 'markdown', value: "```lerta\n#{lines.join("\n")}\n```")
 
   # Where the name at the position is declared, if in a file.
   definition = (params: PositionParams) ->
-    const path = path_of_uri(params.text_document.uri) ? return nil
-    const program = @program_of(path) ? return nil
-    const module_index = module_at(program, path) ? return nil
-    const at = await source_position(path, params.position, @encoding)
-    const declared = definition_of(program, module_index, await read_source(path), at) ? return nil
-    const location = location_of(program, declared.module_index)
+    path := path_of_uri(params.text_document.uri) ? return nil
+    program := @program_of(path) ? return nil
+    module_index := module_at(program, path) ? return nil
+    at := await source_position(path, params.position, @encoding)
+    declared := definition_of(program, module_index, await read_source(path), at) ? return nil
+    location := location_of(program, declared.module_index)
     return nil if is_standard_name(location)
-    const start = await lsp_position(location, declared.name.position, @encoding)
-    const end = await lsp_position(
+    start := await lsp_position(location, declared.name.position, @encoding)
+    end := await lsp_position(
       location
       Position(
         line: declared.name.position.line
@@ -211,27 +211,27 @@ class Server
   # What may be written where a name is being written, from a check of the document's text with
   # the checker's own name there (see complete.lerta), whose diagnostics are not published.
   completion = (params: PositionParams) ->
-    const none: CompletionItem[]
-    const path = path_of_uri(params.text_document.uri) ? return none
-    const key = text_key(path)
-    const text = open_texts[key] ? return none
+    none: CompletionItem[]
+    path := path_of_uri(params.text_document.uri) ? return none
+    key := text_key(path)
+    text := open_texts[key] ? return none
     return none if not is_file(path)
-    const at = await source_position(path, params.position, @encoding)
-    const lines = text.split("\n")
+    at := await source_position(path, params.position, @encoding)
+    lines := text.split("\n")
     return none if at.line > lines.length
-    const writing = writing_at(lines[at.line - 1], at.column)
+    writing := writing_at(lines[at.line - 1], at.column)
     open_texts[key] = probe_text(text, at.line - 1, writing)
-    const checked =
+    checked :=
       try
         await check_file(path, @encoding)
       finally
         open_texts[key] = text
-    const program = checked.program ? return none
-    const module_index = module_at(program, path) ? return none
+    program := checked.program ? return none
+    module_index := module_at(program, path) ? return none
     completion_items program, module_index, program.completion
 
   program_of = (path: String) ->
-    return own if const own = @programs[path]
+    return own if own := @programs[path]
     for (doc, files) in @found.entries()
       return @programs[doc] if files.has(path) and @programs.has(doc)
     nil
@@ -243,50 +243,50 @@ class Server
   # Checks the program whose entry module is the open document at the path, and publishes the
   # diagnostics of the files of its program, as of this check and of the last one.
   check = (path: String) ->
-    const before = @found[path]?.keys().to_array() ? []
-    const checked = await check_file(path, @encoding)
-    const found = checked.by_path
+    before := @found[path]?.keys().to_array() ? []
+    checked := await check_file(path, @encoding)
+    found := checked.by_path
     @found[path] = found
-    if const program = checked.program
+    if program := checked.program
       @programs[path] = program
     else
       @programs.remove path
-    const files = [file for file in before when not found.has(file)]
+    files := [file for file in before when not found.has(file)]
     files.append found.keys().to_array()
     await @publish(file) for file in files
 
   # Publishes the diagnostics that the open documents' checks found in the file, each once.
   publish = (file: String) ->
-    const diagnostics: LspDiagnostic[]
+    diagnostics: LspDiagnostic[]
     for found in @found.values()
       for each in found[file] ? []
         diagnostics.push each if not diagnostics.contains(each)
-    const params = PublishDiagnosticsParams(uri: uri_of_path(file), diagnostics: diagnostics)
+    params := PublishDiagnosticsParams(uri: uri_of_path(file), diagnostics: diagnostics)
     await notify('textDocument/publishDiagnostics', params)
 
 # The edit that writes the document in the style, of its whole text, or none if it is so already;
 # nil if it does not parse.
-const formatting_edits = (uri: String, encoding: PositionEncoding) ->
-  const path = path_of_uri(uri) ? return nil
-  const text = open_texts[text_key(path)] ? return nil
+formatting_edits := (uri: String, encoding: PositionEncoding) ->
+  path := path_of_uri(uri) ? return nil
+  text := open_texts[text_key(path)] ? return nil
   try
-    const formatted = format_source(text, path, await removable_types(path)).text
-    const none: TextEdit[]
+    formatted := format_source(text, path, await removable_types(path)).text
+    none: TextEdit[]
     return none if formatted == text
-    const lines = text.split("\n")
-    const end = LspPosition(line: lines.length - 1, character: characters(lines.last()!, encoding))
-    const range = LspRange(start: LspPosition(line: 0, character: 0), end: end)
+    lines := text.split("\n")
+    end := LspPosition(line: lines.length - 1, character: characters(lines.last()!, encoding))
+    range := LspRange(start: LspPosition(line: 0, character: 0), end: end)
     [TextEdit(range, new_text: formatted)]
   catch _: CompileError
     nil
 
 # The annotations that `lerta fmt --fix` leaves out of the file, which the checker tells; none for
 # a document that is no file yet, which no program holds.
-const removable_types = (path: String) ->
-  const none: String[]
+removable_types := (path: String) ->
+  none: String[]
   return none if not is_file(path)
   (await removable_annotations([path]))[module_key(path)] ? none
 
-export const lsp_command = (args: String[]) ->
+export lsp_command := (args: String[]) ->
   throw CompileError(message: 'lerta lsp takes no arguments') if args.length > 0
   await Server().run()

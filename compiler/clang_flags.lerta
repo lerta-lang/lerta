@@ -2,27 +2,27 @@
 # checks (test/runtime.lerta), which minilerta builds, import it too, so that they compile the
 # runtime's sources as `build` does.
 
-export const build_flags = (optimize: Bool, memory_checks: Bool, target: String?) ->
+export build_flags := (optimize: Bool, memory_checks: Bool, target: String?) ->
   [optimization_flags(optimize)..., memory_check_flags(memory_checks)..., target_flags(target)...]
 
-const optimization_flags = (optimize: Bool): String[] -> optimize then ['-O2', '-flto=thin'] else []
+optimization_flags := (optimize: Bool): String[] -> optimize then ['-O2', '-flto=thin'] else []
 
-const memory_check_flags = (memory_checks: Bool): String[] ->
+memory_check_flags := (memory_checks: Bool): String[] ->
   memory_checks then ['-D', 'LERTA_DEBUG'] else []
 
 # For Linux, the options are GNU ld's LLVM plugin's, which clang uses by default there, as lld takes
 # none of them.
-export const lto_cache_flags = (system: String, dir: String) ->
+export lto_cache_flags := (system: String, dir: String) ->
   case system
     when 'macos' then ["-Wl,-cache_path_lto,#{dir}"]
     when 'windows' then ["-Wl,--thinlto-cache-dir=#{dir}"]
     else ["-Wl,-plugin-opt,cache-dir=#{dir}"]
 
-export const is_mingw = (target: String) -> target.ends_with('-w64-mingw32')
+export is_mingw := (target: String) -> target.ends_with('-w64-mingw32')
 
-const target_flags = (target: String?): String[] ->
+target_flags := (target: String?): String[] ->
   return [] if not target
-  const flags = ["--target=#{target}"]
+  flags := ["--target=#{target}"]
   # GNU ld, which clang uses for mingw by default, cannot link the bitcode of -flto.
   flags.push '-fuse-ld=lld' if is_mingw(target)
   # 32-bit x86 computes doubles on the x87 by default, in more precision, which hides a result too
@@ -30,12 +30,11 @@ const target_flags = (target: String?): String[] ->
   flags.append ['-msse2', '-mfpmath=sse'] if is_32_bit_x86(target)
   flags
 
-const is_32_bit_x86 = (target: String) ->
-  const arch = target.split('-')[0]
+is_32_bit_x86 := (target: String) ->
+  arch := target.split('-')[0]
   arch == 'i386' or arch == 'i486' or arch == 'i586' or arch == 'i686'
 
 # What the name of an executable for the target ends with: `.exe` for Windows. Without a target, it
 # is nothing, which is enough on Windows too: the linker and libuv's spawn add `.exe` to a name
 # without an extension.
-export const executable_suffix = (target: String?) ->
-  target and is_mingw(target) then '.exe' else ''
+export executable_suffix := (target: String?) -> target and is_mingw(target) then '.exe' else ''

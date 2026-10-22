@@ -28,48 +28,48 @@ struct Edge
 struct Declaration(symbol: String, name: String, params: String[], module_index: Int)
 
 # Whether it rejected any, after which checking the instances would not end.
-export const reject_growing_instances = (program: ProgramWide) ->
-  const edges = edges_of(program)
-  const components = components_of(edges)
-  const reported: Set<String>
+export reject_growing_instances := (program: ProgramWide) ->
+  edges := edges_of(program)
+  components := components_of(edges)
+  reported: Set<String>
   for edge in edges
     continue if not edge.grows or components[edge.from] != components[edge.to]
-    const place = "#{edge.module_index}:#{edge.at.line}:#{edge.at.column}"
+    place := "#{edge.module_index}:#{edge.at.line}:#{edge.at.column}"
     continue if reported.has(place)
     reported.add place
-    const shared = program.shared[edge.module_index]
+    shared := program.shared[edge.module_index]
     enter_module shared
     check_part program, -> fail(program, edge.at, message_of(edge))
     leave_module shared
   reported.length > 0
 
-const message_of = (edge: Edge) ->
-  const grows = 'whose instances would grow without end'
+message_of := (edge: Edge) ->
+  grows := 'whose instances would grow without end'
   if edge.holder == edge.held
     return "'#{edge.holder}' cannot hold a larger instance of itself, #{grows}"
-  const back = "which leads back to '#{edge.holder}'"
+  back := "which leads back to '#{edge.holder}'"
   "'#{edge.holder}' cannot hold a larger instance of '#{edge.held}', #{back}, #{grows}"
 
-const edges_of = (program: ProgramWide) ->
-  const edges: Edge[]
+edges_of := (program: ProgramWide) ->
+  edges: Edge[]
   for info in program.infos.values()
     continue if info.generic != nil or not is_generic_object(info)
-    const { type, module_index } = info
-    const params = [param.name.name for param in info.declaration.type_params]
-    const declaration = Declaration(params, module_index, symbol: type.symbol, name: type.name)
+    { type, module_index } := info
+    params := [param.name.name for param in info.declaration.type_params]
+    declaration := Declaration(params, module_index, symbol: type.symbol, name: type.name)
     for member in info.declaration.members
       # A method's own type parameters, which it has an instance for each of, do not count, nor do
       # the declaration's that they would shadow, which is reported apart.
-      const method_params = [param.name.name for param in method_literal(member)?.type_params ? []]
+      method_params := [param.name.name for param in method_literal(member)?.type_params ? []]
       for written in written_types(member)
         add_edges program, edges, declaration, method_params, written
     # The interface that it satisfies gives its members to it. Its type counts as written whether
     # the members use its type arguments or not, which is simpler than following them there.
     add_edges program, edges, declaration, [], info.declaration.satisfies
   for interface_info in program.interfaces.values()
-    const written = interface_info.declaration ? continue
+    written := interface_info.declaration ? continue
     continue if interface_info.type_params.length == 0
-    const declaration = Declaration
+    declaration := Declaration
       params: interface_info.type_params
       module_index: interface_info.module_index!
       symbol: interface_info.type.symbol
@@ -77,16 +77,16 @@ const edges_of = (program: ProgramWide) ->
     add_edges program, edges, declaration, [], member.type for member in written.members
   edges
 
-const add_edges = (
+add_edges := (
   program: ProgramWide, edges: Edge[], declaration: Declaration, method_params: String[],
   written: TypeName?
 ) ->
-  const { params, module_index } = declaration
-  const shared = program.shared[module_index]
-  const is_parameter = (name: String) -> params.contains(name) or method_params.contains(name)
+  { params, module_index } := declaration
+  shared := program.shared[module_index]
+  is_parameter := (name: String) -> params.contains(name) or method_params.contains(name)
   for named in named_types_in(written)
     continue if named.args.length == 0 or is_parameter(named.name)
-    const held = generic_symbol(named_type(shared, named.name)) ? continue
+    held := generic_symbol(named_type(shared, named.name)) ? continue
     for arg, i in named.args
       for param, index in params
         continue if method_params.contains(param) or named_in(arg, param).length == 0
@@ -101,25 +101,25 @@ const add_edges = (
             at: named.position
           )
 
-const vertex = (symbol: String, index: Int) -> "#{symbol} #{index}"
+vertex := (symbol: String, index: Int) -> "#{symbol} #{index}"
 
-const generic_symbol = (named: Type?) ->
-  const type = named ? return nil
+generic_symbol := (named: Type?) ->
+  type := named ? return nil
   case type
     when ObjectType then type.args.length > 0 then type.symbol
     when InterfaceType then type.args.length > 0 then type.symbol
     else nil
 
 # Whether the type argument is the type parameter itself, as in `next: Node<T>?`.
-const is_alone = (arg: TypeName, param: String) ->
+is_alone := (arg: TypeName, param: String) ->
   arg is NamedType and arg.name == param and arg.args.length == 0 and not arg.optional
 
 # The strongly connected components of the graph, by Tarjan's algorithm, as a number for each
 # vertex: two vertices have the same one when each leads to the other.
-const components_of = (edges: Edge[]) ->
-  const search = Search()
+components_of := (edges: Edge[]) ->
+  search := Search()
   for edge in edges
-    if const next = search.successors[edge.from]
+    if next := search.successors[edge.from]
       next.push edge.to
     else
       search.successors[edge.from] = [edge.to]
@@ -136,8 +136,8 @@ class Search
   on_stack: Set<String> = Set()
   component: Map<String, Int> = Map()
 
-const visit = (search: Search, vertex: String): void ->
-  const number = search.order.length
+visit := (search: Search, vertex: String): void ->
+  number := search.order.length
   search.order[vertex] = number
   search.low[vertex] = number
   search.stack.push vertex
@@ -150,10 +150,10 @@ const visit = (search: Search, vertex: String): void ->
       lower search, vertex, search.order[next]!
   return if search.low[vertex] != number
   while true
-    const member = search.stack.pop()
+    member := search.stack.pop()
     search.on_stack.remove member
     search.component[member] = number
     break if member == vertex
 
-const lower = (search: Search, vertex: String, low: Int) ->
+lower := (search: Search, vertex: String, low: Int) ->
   search.low[vertex] = low if low < search.low[vertex]!

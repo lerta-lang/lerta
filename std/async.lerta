@@ -21,8 +21,8 @@ export class Deferred<T>
   waiting: Promise<T>? = nil
 
   promise = ->
-    return waiting if const waiting = @waiting
-    const started = settled_by(@signal, @outcome)
+    return waiting if waiting := @waiting
+    started := settled_by(@signal, @outcome)
     @waiting = started
     started
 
@@ -36,28 +36,28 @@ export class Deferred<T>
     @outcome.error = error
     lerta_promise_fire @signal
 
-const settled_by = <T>(signal: Promise, outcome: Outcome<T>): Promise<T> ->
+settled_by := <T>(signal: Promise, outcome: Outcome<T>): Promise<T> ->
   await signal
-  throw error if const error = outcome.error
-  const value = outcome.value!
+  throw error if error := outcome.error
+  value := outcome.value!
   value()
 
 # The value of each promise, in their order, once all are resolved, or nothing for promises without
 # a value; the error of the first that is rejected, at once.
-export const all = <P>(promises: P[]) -> await promises.gathered()
+export all := <P>(promises: P[]) -> await promises.gathered()
 
 # The value or the error of the first of the promises to be settled, or nothing for promises
 # without a value. The others are cancelled then.
-export const race = <P>(promises: P[]) -> await promises.first_settled()
+export race := <P>(promises: P[]) -> await promises.first_settled()
 
 # The value or the error of the promise, or nothing for one without a value, if it is settled within
 # the seconds; a TimeoutError otherwise, which cancels it.
-export const timeout = <P>(promise: P, seconds: Float) -> await [promise].settled_within(seconds)
+export timeout := <P>(promise: P, seconds: Float) -> await [promise].settled_within(seconds)
 
 export struct TimeoutError: Error
 
 # A promise that a TimeoutError, or the error of the sleep, rejects once the seconds have passed.
-const expired = <T>(seconds: Float): Promise<T> ->
+expired := <T>(seconds: Float): Promise<T> ->
   await sleep(seconds)
   throw TimeoutError(message: "timed out after #{seconds} seconds")
 
@@ -66,18 +66,18 @@ const expired = <T>(seconds: Float): Promise<T> ->
 # promises of true that all_valued makes of them.
 extend<T> Promise<T>[]
   gathered = (): Promise<T[]> ->
-    const all_values = Deferred<T[]>()
-    const boxes: T[][] = [[] for _ in @]
+    all_values := Deferred<T[]>()
+    boxes: T[][] = [[] for _ in @]
     var left = @length
     all_values.resolve [] if left == 0
-    const settle = (index: Int, promise: Promise<T>) ->
+    settle := (index: Int, promise: Promise<T>) ->
       try
         boxes[index].push(await promise)
         left -= 1
         all_values.resolve [box[0] for box in boxes] if left == 0
       catch error
         all_values.reject error
-    const _settling = [settle(i, promise) for promise, i in @]
+    _settling := [settle(i, promise) for promise, i in @]
     try
       await all_values.promise()
     # Only a cancel of all cancels them: the error of one leaves the others, whose work may still
@@ -87,13 +87,13 @@ extend<T> Promise<T>[]
       throw error
 
   first_settled = (): Promise<T> ->
-    const first = Deferred<T>()
-    const settle = (promise: Promise<T>) ->
+    first := Deferred<T>()
+    settle := (promise: Promise<T>) ->
       try
         first.resolve await promise
       catch error
         first.reject error
-    const _settling = [settle(promise) for promise in @]
+    _settling := [settle(promise) for promise in @]
     try
       await first.promise()
     finally
@@ -103,17 +103,17 @@ extend<T> Promise<T>[]
 
 extend Promise[]
   gathered = ->
-    const _values = await all_valued(@).gathered()
+    _values := await all_valued(@).gathered()
 
   first_settled = ->
-    const _value = await all_valued(@).first_settled()
+    _value := await all_valued(@).first_settled()
 
   settled_within = (seconds: Float) ->
-    const _value = await all_valued(@).settled_within(seconds)
+    _value := await all_valued(@).settled_within(seconds)
 
-const valued = (promise: Promise) ->
+valued := (promise: Promise) ->
   await promise
   true
 
 # A cancel of one of these reaches the promise it awaits.
-const all_valued = (promises: Promise[]) -> [valued(promise) for promise in promises]
+all_valued := (promises: Promise[]) -> [valued(promise) for promise in promises]

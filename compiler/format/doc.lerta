@@ -50,17 +50,17 @@ export struct LiteralLines(lines: String[], end_line: Int)
 
 export type Doc = Text | Newline | Indent | Concat | Choice | Rule | Verbatim | LiteralLines
 
-export const WIDTH = 100
-const INDENT = '  '
-const INDENT_WIDTH = 2
+export WIDTH := 100
+INDENT := '  '
+INDENT_WIDTH := 2
 
 # Where the part of a rule is in the output: from `start` up to `end`, which is exclusive.
 export struct RulePlace(rule: StyleRule, start: Position, end: Position)
 
 export struct Layout(text: String, rules: RulePlace[])
 
-export const lay_out = (doc: Doc, source: SourceText) ->
-  const printer = Printer(source)
+export lay_out := (doc: Doc, source: SourceText) ->
+  printer := Printer(source)
   printer.run doc
   printer.finish()
   Layout text: printer.pieces.join(''), rules: printer.rules
@@ -98,12 +98,12 @@ class Printer
   comment_lines = lines_of(@source.comments)
 
   run = (doc: Doc) ->
-    const steps: Step[] = [Work(doc, indent: 0)]
+    steps: Step[] = [Work(doc, indent: 0)]
     while steps.length > 0
-      const step = steps.pop()
+      step := steps.pop()
       case step
         when RuleEnd
-          const end = @place()
+          end := @place()
           @rules.push RulePlace(end, rule: step.rule, start: step.start ? end)
         when Work then @print(step, steps)
 
@@ -114,8 +114,8 @@ class Printer
 
   # Prints the step, or puts what it holds on `steps`, the first of them last.
   print = (work: Work, steps: Step[]) ->
-    const { doc, indent } = work
-    const inner = (part: Doc, depth: Int) -> Work(doc: part, indent: depth)
+    { doc, indent } := work
+    inner := (part: Doc, depth: Int) -> Work(doc: part, indent: depth)
     case doc
       when Text then @print_text(doc, indent)
       when Newline then @new_lines(doc.count, indent)
@@ -123,13 +123,13 @@ class Printer
       when Concat
         steps.push inner(doc.docs[doc.docs.length - 1 - i], indent) for i in 0...doc.docs.length
       when Choice
-        const room = WIDTH + 1 - @place().column
+        room := WIDTH + 1 - @place().column
         # Mid-line, a comment not printed yet would end the line inside `flat`.
-        const from_line = @pending_indent then 0 else @source_line
-        const measured = doc.measured ? doc.flat
-        const fitting = fits(measured, room, indent, steps, @comment_lines, from_line, doc.one_line)
+        from_line := @pending_indent then 0 else @source_line
+        measured := doc.measured ? doc.flat
+        fitting := fits(measured, room, indent, steps, @comment_lines, from_line, doc.one_line)
         if not fitting
-          @start_rule breaking_rule, steps if const breaking_rule = doc.breaking_rule
+          @start_rule breaking_rule, steps if breaking_rule := doc.breaking_rule
         steps.push Work(indent, doc: fitting then doc.flat else doc.broken)
       when Rule
         @start_rule doc.rule, steps
@@ -143,14 +143,14 @@ class Printer
 
   # The part of the rule ends after what is on `steps` next, and starts at its first text.
   start_rule = (style_rule: StyleRule, steps: Step[]) ->
-    const rule_end = RuleEnd(rule: style_rule)
+    rule_end := RuleEnd(rule: style_rule)
     @unstarted.push rule_end
     steps.push rule_end
 
   # A text of a token comes after the comments before it, and after a blank line where the source
   # has one before it and the output starts a line with it.
   print_text = (text: Text, indent: Int) ->
-    if const at = text.at
+    if at := text.at
       if not text.closes or @own_line_comment_before(at)
         @print_comments_before at, indent
         @keep_blank_line at.line
@@ -160,24 +160,24 @@ class Printer
   # The lines after the first are written as they are, but for the indentation that the first
   # loses or gains.
   print_verbatim = (verbatim: Verbatim, indent: Int) ->
-    const { at, last_line } = verbatim
+    { at, last_line } := verbatim
     @print_comments_before at, indent
     @keep_blank_line at.line
-    const lines = @source.lines
+    lines := @source.lines
     @write lines[at.line - 1].trim_start()
-    const shift = indent * INDENT_WIDTH + 1 - at.column
+    shift := indent * INDENT_WIDTH + 1 - at.column
     for line in (at.line + 1)...(last_line + 1)
-      const written = shifted(lines[line - 1], shift)
+      written := shifted(lines[line - 1], shift)
       @pieces.push "\n#{written}"
       @line += 1
       @column = columns(written) + 1
-    const comments = @source.comments
+    comments := @source.comments
     while @next_comment < comments.length and comments[@next_comment].line <= last_line
       @next_comment += 1
     @source_line = last_line
 
   own_line_comment_before = (at: Position) ->
-    const comments = @source.comments
+    comments := @source.comments
     for i in @next_comment...comments.length
       return false if comments[i].line >= at.line
       return true if comments[i].own_line
@@ -188,17 +188,17 @@ class Printer
   # it deeper, as at the end of a block. One that ends a line ends the output's line that holds
   # the last text of its line.
   print_comments_before = (at: Position?, indent: Int) ->
-    const comments = @source.comments
+    comments := @source.comments
     while @next_comment < comments.length
-      const comment = comments[@next_comment]
+      comment := comments[@next_comment]
       return if at and comment.line >= at.line
       @next_comment += 1
-      const text = @source.comment_text(comment)
-      const after_text = @pieces.length > 0
+      text := @source.comment_text(comment)
+      after_text := @pieces.length > 0
       if comment.own_line or not after_text
         # At the end of the file, the next line would start at the first column.
-        const next_column = at?.column ? 1
-        const deeper = comment.column > next_column
+        next_column := at?.column ? 1
+        deeper := comment.column > next_column
         @end_line indent if @pending_indent == nil
         @keep_blank_line comment.line
         @pending_indent = deeper then @last_indent else indent
@@ -223,7 +223,7 @@ class Printer
   write = (text: String) ->
     return if text == ''
     @feed_lines()
-    if const depth = @pending_indent
+    if depth := @pending_indent
       @pieces.push INDENT for _ in 0...depth
       @column += depth * INDENT_WIDTH
       @last_indent = depth
@@ -247,13 +247,13 @@ class Printer
 
   # Where the next text goes. A line that has no text yet starts after its indentation.
   place = ->
-    if const depth = @pending_indent
+    if depth := @pending_indent
       return Position(line: @line + @breaks, column: depth * INDENT_WIDTH + 1)
     Position line: @line, column: @column
 
 # The line with `shift` spaces more at its start, or fewer, as many as it has; a blank line stays
 # empty.
-const shifted = (line: String, shift: Int) ->
+shifted := (line: String, shift: Int) ->
   return line if line.trim_end() == ''
   return ' '.repeat(shift) + line if shift >= 0
   var removed = 0
@@ -264,8 +264,8 @@ const shifted = (line: String, shift: Int) ->
   rest
 
 # Whether the comment on each line that holds one is on a line of its own.
-const lines_of = (comments: Comment[]) ->
-  const lines: Map<Int, Bool>
+lines_of := (comments: Comment[]) ->
+  lines: Map<Int, Bool>
   lines[comment.line] = comment.own_line for comment in comments
   lines
 
@@ -283,12 +283,12 @@ struct Measured(doc: Doc, depth: Int, nested: Bool)
 # and the last texts of that line does not fit either, as it ends a line, unless a choice inside
 # `flat` holds it, which breaks there itself; from `from_line` mid-line, as a comment not printed
 # yet would go before the first text.
-const fits = (
+fits := (
   flat: Doc, room: Int, indent: Int, steps: Step[], comment_lines: Map<Int, Bool>, from_line: Int,
   one_line: Bool
 ) ->
   var left = room
-  const pending = [Measured(doc: flat, depth: indent, nested: false)]
+  pending := [Measured(doc: flat, depth: indent, nested: false)]
   var next_step = steps.length - 1
   var in_flat = true
   var has_text = false
@@ -296,9 +296,9 @@ const fits = (
   var last_line = 0
   var closing_line = 0
   # A comment between the texts, or one on a line of its own before a closing bracket after them.
-  const comment_inside = ->
-    const start = from_line > 0 then from_line else first_line
-    const between = has_comment_line(comment_lines, start, last_line, false)
+  comment_inside := ->
+    start := from_line > 0 then from_line else first_line
+    between := has_comment_line(comment_lines, start, last_line, false)
     between or has_comment_line(comment_lines, last_line, closing_line, true)
   while true
     if pending.length == 0
@@ -306,13 +306,13 @@ const fits = (
         in_flat = false
         return false if comment_inside()
       return true if next_step < 0
-      const step = steps[next_step]
+      step := steps[next_step]
       next_step -= 1
       pending.push Measured(doc: step.doc, depth: step.indent, nested: false) if step is Work
       continue
-    const measured = pending.pop()
-    const { doc, depth, nested } = measured
-    const inner = (part: Doc, part_depth: Int, part_nested: Bool) ->
+    measured := pending.pop()
+    { doc, depth, nested } := measured
+    inner := (part: Doc, part_depth: Int, part_nested: Bool) ->
       Measured doc: part, depth: part_depth, nested: part_nested
     case doc
       when Text
@@ -320,7 +320,7 @@ const fits = (
         return false if left < 0
         has_text = has_text or doc.text != ''
         if in_flat and not nested
-          if const at = doc.at
+          if at := doc.at
             if doc.closes
               closing_line = at.line if at.line > closing_line
             else
@@ -352,16 +352,16 @@ const fits = (
 
 # Whether a comment, or one on a line of its own if `own_line`, is from the line `first` up to
 # `last`.
-const has_comment_line = (comment_lines: Map<Int, Bool>, first: Int, last: Int, own_line: Bool) ->
+has_comment_line := (comment_lines: Map<Int, Bool>, first: Int, last: Int, own_line: Bool) ->
   for line in first...last
-    if const is_own_line = comment_lines[line]
+    if is_own_line := comment_lines[line]
       return true if is_own_line or not own_line
   false
 
-export const text = (value: String): Doc -> Text(text: value)
+export text := (value: String): Doc -> Text(text: value)
 
 # Whether the doc breaks its line in every form it may take, as a block does.
-export const has_line_feed = (doc: Doc): Bool ->
+export has_line_feed := (doc: Doc): Bool ->
   case doc
     when Newline then true
     when Concat then doc.docs.any(has_line_feed)
@@ -372,39 +372,39 @@ export const has_line_feed = (doc: Doc): Bool ->
     when Text then false
     when Verbatim then doc.last_line > doc.at.line
 
-export const token = (value: String, at: Position): Doc -> Text(at, text: value)
+export token := (value: String, at: Position): Doc -> Text(at, text: value)
 
 # A closing bracket, at its position in the source if it is there (see Text.closes).
-export const closing = (value: String, at: Position?): Doc -> Text(at, text: value, closes: true)
+export closing := (value: String, at: Position?): Doc -> Text(at, text: value, closes: true)
 
-export const verbatim = (at: Position, last_line: Int): Doc -> Verbatim(at, last_line)
+export verbatim := (at: Position, last_line: Int): Doc -> Verbatim(at, last_line)
 
-export const join = (docs: Doc[]): Doc -> Concat(docs)
+export join := (docs: Doc[]): Doc -> Concat(docs)
 
-export const line_feed = (): Doc -> Newline(count: 1)
+export line_feed := (): Doc -> Newline(count: 1)
 
-export const indent = (doc: Doc): Doc -> Indent(doc)
+export indent := (doc: Doc): Doc -> Indent(doc)
 
-export const choice = (flat: Doc, broken: Doc): Doc -> Choice(flat, broken)
+export choice := (flat: Doc, broken: Doc): Doc -> Choice(flat, broken)
 
 # A choice whose broken form the rule decides: a part that fits on its line is left to the rules
 # inside it.
-export const breaking = (style_rule: StyleRule, flat: Doc, broken: Doc): Doc ->
+export breaking := (style_rule: StyleRule, flat: Doc, broken: Doc): Doc ->
   Choice flat, broken, breaking_rule: style_rule
 
 # A breaking choice whose flat form is `start` and then `rest`, where only `start` must fit, and
 # `rest` decides its own breaks.
-export const breaking_after = (style_rule: StyleRule, start: Doc, rest: Doc, broken: Doc): Doc ->
+export breaking_after := (style_rule: StyleRule, start: Doc, rest: Doc, broken: Doc): Doc ->
   Choice broken, flat: join([start, rest]), breaking_rule: style_rule, measured: start
 
 # A choice whose flat form must fit on the line as a whole.
-export const one_line = (flat: Doc, broken: Doc): Doc -> Choice(flat, broken, one_line: true)
+export one_line := (flat: Doc, broken: Doc): Doc -> Choice(flat, broken, one_line: true)
 
-export const rule = (style_rule: StyleRule, doc: Doc): Doc -> Rule(doc, rule: style_rule)
+export rule := (style_rule: StyleRule, doc: Doc): Doc -> Rule(doc, rule: style_rule)
 
 # The docs with `separator` between them.
-export const separated = (docs: Doc[], separator: Doc): Doc ->
-  const parts: Doc[]
+export separated := (docs: Doc[], separator: Doc): Doc ->
+  parts: Doc[]
   for doc, i in docs
     parts.push separator if i > 0
     parts.push doc

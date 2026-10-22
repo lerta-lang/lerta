@@ -19,8 +19,8 @@ from '../types'
 
 # The values of LertaKeyKind in runtime/lerta.h: a key narrower than a word is of the integer keys
 # of the kind of its items.
-const key_kind = (program: ProgramWide, key: Type) ->
-  const narrow = narrow_item_kind(key)
+key_kind := (program: ProgramWide, key: Type) ->
+  narrow := narrow_item_kind(key)
   case
     when narrow != nil then narrow
     when is_integer(key) or is_float(key) or is_one_of_kinds(key, ['Char', ENUM]) then 0
@@ -28,93 +28,91 @@ const key_kind = (program: ProgramWide, key: Type) ->
     when is_identity_type(key) and not compares_by_contents(program, key) then 2
     else 3
 
-const key_word = (ir: IrBuilder, key: String, type: Type) ->
+key_word := (ir: IrBuilder, key: String, type: Type) ->
   is_float(type) then emit_float_word(ir, key, type) else to_item(ir, key, type)
 
 # Keys that compare by their contents come with the functions that hash and compare them.
-export const emit_map_new = (ir: IrBuilder, program: ProgramWide, type: MapType) ->
-  const kind = key_kind(program, type.key)
-  const functions = kind == 3 then item_functions(ir.module, program, type.key)
-  const hash = functions?.hash ? 'null'
-  const equals = functions?.equals ? 'null'
-  const args = "i32 #{kind}, i32 #{item_kind(type.value)}, ptr #{hash}, ptr #{equals}"
+export emit_map_new := (ir: IrBuilder, program: ProgramWide, type: MapType) ->
+  kind := key_kind(program, type.key)
+  functions := kind == 3 then item_functions(ir.module, program, type.key)
+  hash := functions?.hash ? 'null'
+  equals := functions?.equals ? 'null'
+  args := "i32 #{kind}, i32 #{item_kind(type.value)}, ptr #{hash}, ptr #{equals}"
   call_runtime ir, 'ptr @lerta_map_create(i32, i32, ptr, ptr)', args
 
-export const emit_map_length = (ir: IrBuilder, map: String) ->
+export emit_map_length := (ir: IrBuilder, map: String) ->
   call_runtime ir, 'i64 @lerta_map_length(ptr)', "ptr #{map}"
 
 # The value as a V?, owned; a missing reference, or interface value, reads as zeros, which are
 # nil.
-export const emit_map_get = (ir: IrBuilder, map: String, key: String, type: MapType) ->
-  const slot = emit_item_slot(ir, type.value)
-  const args = "ptr #{map}, i64 #{key_word(ir, key, type.key)}, ptr #{slot}"
-  const found = call_runtime(ir, 'i1 @lerta_map_read(ptr, i64, ptr)', args)
-  const value = emit_load_item(ir, slot, type.value)
-  const optional = optional_type(type.value)
+export emit_map_get := (ir: IrBuilder, map: String, key: String, type: MapType) ->
+  slot := emit_item_slot(ir, type.value)
+  args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}, ptr #{slot}"
+  found := call_runtime(ir, 'i1 @lerta_map_read(ptr, i64, ptr)', args)
+  value := emit_load_item(ir, slot, type.value)
+  optional := optional_type(type.value)
   return value if is_nil_by_null(optional)
-  const optional_ir = ir_type(optional)
-  const flagged = ir.assign("insertvalue #{optional_ir} undef, i1 #{found}, 0")
+  optional_ir := ir_type(optional)
+  flagged := ir.assign("insertvalue #{optional_ir} undef, i1 #{found}, 0")
   ir.assign "insertvalue #{optional_ir} #{flagged}, #{ir_type(type.value)} #{value}, 1"
 
 # The map retains the key and the value, which stay owned by the caller.
-export const emit_map_set = (
-  ir: IrBuilder, map: String, key: String, value: String, type: MapType
-) ->
-  const key_item = key_word(ir, key, type.key)
-  const args = "ptr #{map}, i64 #{key_item}, ptr #{emit_item_pointer(ir, value, type.value)}"
+export emit_map_set := (ir: IrBuilder, map: String, key: String, value: String, type: MapType) ->
+  key_item := key_word(ir, key, type.key)
+  args := "ptr #{map}, i64 #{key_item}, ptr #{emit_item_pointer(ir, value, type.value)}"
   call_void_runtime ir, 'void @lerta_map_write(ptr, i64, ptr)', args
 
 # The builtin methods of maps and sets (see codegen builtins), of borrowed arguments.
-export const emit_map_remove = (ir: IrBuilder, map: String, key: String, type: MapType) ->
-  const args = "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
+export emit_map_remove := (ir: IrBuilder, map: String, key: String, type: MapType) ->
+  args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
   call_void_runtime ir, 'void @lerta_map_remove(ptr, i64)', args
 
-export const emit_map_keys = (ir: IrBuilder, map: String, type: MapType) ->
+export emit_map_keys := (ir: IrBuilder, map: String, type: MapType) ->
   emit_cursor_iter ir, map, type, true
 
-export const emit_map_entries = (ir: IrBuilder, map: String, type: MapType) ->
+export emit_map_entries := (ir: IrBuilder, map: String, type: MapType) ->
   emit_cursor_iter ir, map, type, false
 
-export const emit_set_has = (ir: IrBuilder, set: String, item: String, type: MapType) ->
+export emit_set_has := (ir: IrBuilder, set: String, item: String, type: MapType) ->
   call_runtime ir, 'i1 @lerta_map_read(ptr, i64, ptr)', set_item(ir, set, item, type)
 
-export const emit_set_add = (ir: IrBuilder, set: String, item: String, type: MapType) ->
+export emit_set_add := (ir: IrBuilder, set: String, item: String, type: MapType) ->
   call_void_runtime ir, 'void @lerta_map_write(ptr, i64, ptr)', set_item(ir, set, item, type)
 
-export const emit_set_iter = (ir: IrBuilder, set: String, type: MapType) ->
+export emit_set_iter := (ir: IrBuilder, set: String, type: MapType) ->
   emit_cursor_iter ir, set, type, true
 
 # The arguments that give the runtime an item of a set and its value, which takes no bytes, so that
 # the slot for it is neither read nor written.
-const set_item = (ir: IrBuilder, set: String, item: String, type: MapType) ->
+set_item := (ir: IrBuilder, set: String, item: String, type: MapType) ->
   "ptr #{set}, i64 #{key_word(ir, item, type.key)}, ptr #{ir.alloca('i64')}"
 
 # The entries of a borrowed map, which the Iter traverses by a cursor (LertaMapCursor in
 # runtime/lerta.h): the keys alone, as a set gives its items, or as tuples of a key and a value.
-const emit_cursor_iter = (ir: IrBuilder, map: String, type: MapType, keys_only: Bool) ->
-  const item = keys_only then type.key else TupleType(items: [type.key, type.value])
-  const has_next = (body: IrBuilder, kind: IterKind) ->
-    const cursor = load_state(body, kind, 0)
-    const more = call_runtime(body, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
+emit_cursor_iter := (ir: IrBuilder, map: String, type: MapType, keys_only: Bool) ->
+  item := keys_only then type.key else TupleType(items: [type.key, type.value])
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    cursor := load_state(body, kind, 0)
+    more := call_runtime(body, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
     body.emit "ret i1 #{more}"
-  const next = (body: IrBuilder, kind: IterKind) ->
-    const key_slot = body.alloca('i64')
+  next := (body: IrBuilder, kind: IterKind) ->
+    key_slot := body.alloca('i64')
     # The keys alone take no value from the cursor.
-    const value_slot = keys_only then 'null' else emit_item_slot(body, type.value)
-    const args = "ptr #{load_state(body, kind, 0)}, ptr #{key_slot}, ptr #{value_slot}"
+    value_slot := keys_only then 'null' else emit_item_slot(body, type.value)
+    args := "ptr #{load_state(body, kind, 0)}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime body, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
-    const key = from_item(body, body.assign("load i64, ptr #{key_slot}"), type.key)
+    key := from_item(body, body.assign("load i64, ptr #{key_slot}"), type.key)
     return body.emit("ret #{ir_type(item)} #{key}") if keys_only
-    const entry = emit_values(body, item, [key, emit_load_item(body, value_slot, type.value)])
+    entry := emit_values(body, item, [key, emit_load_item(body, value_slot, type.value)])
     body.emit "ret ptr #{entry}"
-  const state = [HeapField(ir_type: 'ptr', owned: REFERENCE)]
-  const traversed = keys_only then 'keys' else 'entries'
-  const kind = define_kind(ir, "map #{traversed} #{type_key(type)}", state, item, has_next, next)
+  state := [HeapField(ir_type: 'ptr', owned: REFERENCE)]
+  traversed := keys_only then 'keys' else 'entries'
+  kind := define_kind(ir, "map #{traversed} #{type_key(type)}", state, item, has_next, next)
   emit_iter ir, kind, [call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")]
 
 # Adds the items of a borrowed array to the set, in order, as `Set(xs)` does.
-export const emit_add_items = (ir: IrBuilder, set: String, array: String, type: MapType) ->
+export emit_add_items := (ir: IrBuilder, set: String, array: String, type: MapType) ->
   emit_count_up ir, emit_length(ir, array), (index) ->
-    const item = emit_get(ir, array, index, type.key)
+    item := emit_get(ir, array, index, type.key)
     emit_set_add ir, set, item, type
     emit_release_value ir, item, type.key

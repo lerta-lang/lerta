@@ -21,46 +21,46 @@ import FunctionType, InterfaceType, Type, type_key from '../types'
 
 # The value converted to the interface value that the itab gives; the value's reference passes to
 # it.
-export const emit_interface_value = (g: Generator, value: String, itab: Itab) ->
-  const ir = g.ir
-  const with_data = ir.assign("insertvalue #{INTERFACE_IR_TYPE} undef, ptr #{value}, 0")
+export emit_interface_value := (g: Generator, value: String, itab: Itab) ->
+  ir := g.ir
+  with_data := ir.assign("insertvalue #{INTERFACE_IR_TYPE} undef, ptr #{value}, 0")
   ir.assign "insertvalue #{INTERFACE_IR_TYPE} #{with_data}, ptr #{define_itab(g, itab)}, 1"
 
 # Calls the member at the index through the interface value's itab, with the arguments, typed IR
 # operands, which stay owned by the caller, as the value does.
-export const emit_interface_call = (
+export emit_interface_call := (
   ir: IrBuilder, value: String, index: Int, type: Type, args: String[]
 ) ->
-  const itab = ir.assign("extractvalue #{INTERFACE_IR_TYPE} #{value}, 1")
-  const slot = ir.assign("getelementptr ptr, ptr #{itab}, i64 #{index}")
-  const entry = ir.assign("load ptr, ptr #{slot}")
-  const all_args = ["ptr #{emit_interface_data(ir, value)}", args...]
+  itab := ir.assign("extractvalue #{INTERFACE_IR_TYPE} #{value}, 1")
+  slot := ir.assign("getelementptr ptr, ptr #{itab}, i64 #{index}")
+  entry := ir.assign("load ptr, ptr #{slot}")
+  all_args := ["ptr #{emit_interface_data(ir, value)}", args...]
   call_user_function ir, entry, type, all_args.join(', ')
 
 # The member of the interface value that is no method, which is released.
-export const emit_interface_read = (
+export emit_interface_read := (
   g: Generator, value: String, type: InterfaceType, index: Int, member_type: Type
 ) ->
-  const getter = FunctionType(params: [], result: member_type)
-  const result = emit_interface_call(g.ir, value, index, getter, [])
+  getter := FunctionType(params: [], result: member_type)
+  result := emit_interface_call(g.ir, value, index, getter, [])
   emit_release_value g.ir, value, type
   result
 
 # The itab's global, defined in the module at its first use.
-const define_itab = (g: Generator, itab: Itab) ->
-  const entries = [entry_function(g, itab, entry) for entry in itab.entries]
-  const key = "itab #{type_key(itab.type)} #{type_key(itab.target)} #{entries.join(' ')}"
-  const define = (name: String) ->
-    const array_type = "[#{entries.length} x ptr]"
-    const init = ["ptr #{entry}" for entry in entries].join(', ')
+define_itab := (g: Generator, itab: Itab) ->
+  entries := [entry_function(g, itab, entry) for entry in itab.entries]
+  key := "itab #{type_key(itab.type)} #{type_key(itab.target)} #{entries.join(' ')}"
+  define := (name: String) ->
+    array_type := "[#{entries.length} x ptr]"
+    init := ["ptr #{entry}" for entry in entries].join(', ')
     g.ir.module.define_global name, "private unnamed_addr constant #{array_type} [#{init}]"
   g.ir.module.named key, '@lerta.itab', (name, module) -> define(name)
 
 # The function of the entry: the method that gives the member, if it is written in Lerta, which
 # takes its object first; otherwise a function that reads the member, defined once.
-const entry_function = (g: Generator, itab: Itab, entry: ItabEntry) ->
-  return instance_symbol(g.code.program, instance) if const instance = entry.instance
-  const source = entry.target is Method then entry.target.source
+entry_function := (g: Generator, itab: Itab, entry: ItabEntry) ->
+  return instance_symbol(g.code.program, instance) if instance := entry.instance
+  source := entry.target is Method then entry.target.source
   case source
     when OwnMethod then method_symbol(source.receiver, entry.member.name)
     when ExtensionSource then extension_symbol(g.code.program, source.method)
@@ -68,38 +68,37 @@ const entry_function = (g: Generator, itab: Itab, entry: ItabEntry) ->
 
 # A function that gives the member of a value of the type: calls a builtin method or a field that
 # holds a function, or reads a field or a property.
-const define_reader = (g: Generator, type: Type, entry: ItabEntry) ->
-  const member_type = entry.member.type
-  const key = "reader #{type_key(type)} #{entry.member.name}"
-  const define = (symbol: String) ->
-    const reader = function_generator(g.code, g.extensions, g.facts, '')
-    const function_type = member_type is FunctionType then member_type
-    const params = function_type?.params ? []
-    const operands = ["%p#{i}" for i in 0...params.length]
-    const result_type = function_type?.result ? member_type
+define_reader := (g: Generator, type: Type, entry: ItabEntry) ->
+  member_type := entry.member.type
+  key := "reader #{type_key(type)} #{entry.member.name}"
+  define := (symbol: String) ->
+    reader := function_generator(g.code, g.extensions, g.facts, '')
+    function_type := member_type is FunctionType then member_type
+    params := function_type?.params ? []
+    operands := ["%p#{i}" for i in 0...params.length]
+    result_type := function_type?.result ? member_type
     # What the reader returns when it passes an exception on.
     reader.result_type = result_type
-    const result = generate_reading(reader, type, entry, operands)
-    const return_type = ir_return_type(result_type)
+    result := generate_reading(reader, type, entry, operands)
+    return_type := ir_return_type(result_type)
     reader.ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
-    const args = ["#{ir_type(param)} %p#{i}" for param, i in params]
-    const params_list = ['ptr %data', args...]
+    args := ["#{ir_type(param)} %p#{i}" for param, i in params]
+    params_list := ['ptr %data', args...]
     finish reader, "private #{return_type} #{symbol}(#{params_list.join(', ')})"
   g.ir.module.named key, '@lerta.reader', (symbol, module) -> define(symbol)
 
 # The reader's result, computed from its data, `%data`, and its parameters, `operands`.
-const generate_reading = (reader: Generator, type: Type, entry: ItabEntry, operands: String[]) ->
-  const { name } = entry.member
-  const member_type = entry.member.type
-  const target = entry.target
+generate_reading := (reader: Generator, type: Type, entry: ItabEntry, operands: String[]) ->
+  { name } := entry.member
+  member_type := entry.member.type
+  target := entry.target
   case target
     when Property
-      const call = -> call_field(reader, type, name, member_type, operands)
-      const read = ->
-        read_property reader, take_data(reader.ir), type, target.kind, name, member_type
+      call := -> call_field(reader, type, name, member_type, operands)
+      read := -> read_property(reader, take_data(reader.ir), type, target.kind, name, member_type)
       member_type is FunctionType then call() else read()
     when Method
-      const source = target.source
+      source := target.source
       return call_union_method(reader, type, name, source, operands) if source is UnionMethod
       # The other methods are written in Lerta (see entry_function).
       call_builtin reader, type, source as BuiltinMethod!, operands
@@ -107,42 +106,40 @@ const generate_reading = (reader: Generator, type: Type, entry: ItabEntry, opera
       panic 'a reader reads a field, a property or a builtin method'
 
 # Calls the method of the name of the member that the union, `%data`, is.
-const call_union_method = (
+call_union_method := (
   reader: Generator, type: Type, name: String, method: UnionMethod, operands: String[]
 ) ->
-  const params = function_type_of(method.type).params
-  const args = ["#{ir_type(param)} #{operands[i]}" for param, i in params]
-  const check = -> emit_exception_check(reader)
-  const call =
+  params := function_type_of(method.type).params
+  args := ["#{ir_type(param)} #{operands[i]}" for param, i in params]
+  check := -> emit_exception_check(reader)
+  call :=
     MethodCall(name, type: method.type, operands: operands, args: args, instance: nil, check: check)
   emit_method_call reader, method, '%data', type, call
 
 # `%data`, retained: the reader borrows its data, while reading a field or a property, or an Iter's
 # method, takes the object over.
-const take_data = (ir: IrBuilder) ->
+take_data := (ir: IrBuilder) ->
   emit_retain ir, '%data'
   '%data'
 
 # Calls the field that holds a function with the operands, returning what it throws.
-const call_field = (
-  reader: Generator, type: Type, name: String, field_type: Type, operands: String[]
-) ->
-  const ir = reader.ir
-  const closure = read_any_field(reader, take_data(ir), type, name, field_type)
-  const value = emit_closure_call(ir, closure, field_type, operands)
+call_field := (reader: Generator, type: Type, name: String, field_type: Type, operands: String[]) ->
+  ir := reader.ir
+  closure := read_any_field(reader, take_data(ir), type, name, field_type)
+  value := emit_closure_call(ir, closure, field_type, operands)
   emit_release ir, closure
   emit_check_or_return_thrown ir, reader.result_type
   value
 
 # Calls the builtin method on the data, releasing the data if an Iter's next throws before it
 # takes the data over.
-const call_builtin = (reader: Generator, type: Type, builtin: BuiltinMethod, operands: String[]) ->
-  const ir = reader.ir
-  const program = reader.code.program
-  const release_and_return = ->
+call_builtin := (reader: Generator, type: Type, builtin: BuiltinMethod, operands: String[]) ->
+  ir := reader.ir
+  program := reader.code.program
+  release_and_return := ->
     emit_release ir, '%data'
     emit_return_thrown ir, reader.result_type
   # Only an Iter's next calls it, past the end, before it takes the object over.
-  const check = -> emit_check_with(ir, release_and_return)
-  const object = takes_object(builtin.member) then take_data(ir) else '%data'
+  check := -> emit_check_with(ir, release_and_return)
+  object := takes_object(builtin.member) then take_data(ir) else '%data'
   call_builtin_method ir, program, builtin.member, object, type, operands, check

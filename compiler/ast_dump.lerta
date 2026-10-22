@@ -13,7 +13,7 @@ from './ast'
 import TextPart from './lexer/string_literal'
 import quote from './token_dump'
 
-const INDENT = '  '
+INDENT := '  '
 
 # The dump is built as a tree of these, then written out.
 
@@ -34,44 +34,43 @@ type Item = Scalar | Group
 # A field of a position, which is left out where positions are.
 struct Field(name: String, value: Value, is_position = default false)
 
-const NONE = Scalar(text: '-')
+NONE := Scalar(text: '-')
 
-export const dump_ast = (program: Statement[]) -> dump_annotated(program, (_) -> '')
+export dump_ast := (program: Statement[]) -> dump_annotated(program, (_) -> '')
 
 # The dump without the positions of the nodes, nor in the names that the parser makes of them (see
 # name_text), which compares two trees whatever their layout.
-export const dump_ast_without_positions = (program: Statement[]) ->
-  write_dump program, (_) -> '', false
+export dump_ast_without_positions := (program: Statement[]) -> write_dump(program, (_) -> '', false)
 
 # The text after a node's header line, such as its type.
 export type Annotate = (Node) -> String
 
-export const dump_annotated = (program: Statement[], annotate: Annotate) ->
+export dump_annotated := (program: Statement[], annotate: Annotate) ->
   write_dump program, annotate, true
 
-const write_dump = (program: Statement[], annotate: Annotate, positions: Bool) ->
-  const lines: String[]
-  const writer = Writer(lines, annotate, positions)
+write_dump := (program: Statement[], annotate: Annotate, positions: Bool) ->
+  lines: String[]
+  writer := Writer(lines, annotate, positions)
   write_items writer, statements(program).items, ''
   [line + "\n" for line in lines].join('')
 
 struct Writer(lines: String[], annotate: Annotate, positions: Bool)
 
-const write_items = (writer: Writer, items: Item[], indent: String) ->
+write_items := (writer: Writer, items: Item[], indent: String) ->
   write_item writer, item, indent for item in items
 
-const write_item = (writer: Writer, item: Item, indent: String) ->
+write_item := (writer: Writer, item: Item, indent: String) ->
   case item
     when Scalar then writer.lines.push("#{indent}- #{scalar_text(writer, item)}")
     when Group
       writer.lines.push "#{indent}-"
       write_group writer, item, indent + INDENT
 
-const write_group = (writer: Writer, group: Group, indent: String) ->
-  const field_indent =
-    if const head = group.head
-      const { line, column } = head.position
-      const position = writer.positions then " #{line}:#{column}" else ''
+write_group := (writer: Writer, group: Group, indent: String) ->
+  field_indent :=
+    if head := group.head
+      { line, column } := head.position
+      position := writer.positions then " #{line}:#{column}" else ''
       writer.lines.push indent + head.kind + position + writer.annotate(head.node)
       indent + INDENT
     else
@@ -79,10 +78,10 @@ const write_group = (writer: Writer, group: Group, indent: String) ->
   for field in group.fields
     write_field writer, field, field_indent if writer.positions or not field.is_position
 
-const write_field = (writer: Writer, field: Field, indent: String): void ->
-  const value = field.value
-  const name = indent + field.name
-  const lines = writer.lines
+write_field := (writer: Writer, field: Field, indent: String): void ->
+  value := field.value
+  name := indent + field.name
+  lines := writer.lines
   case value
     when Scalar then lines.push("#{name}: #{scalar_text(writer, value)}")
     when Group
@@ -95,44 +94,44 @@ const write_field = (writer: Writer, field: Field, indent: String): void ->
         lines.push "#{name}:"
         write_items writer, value.items, indent + INDENT
 
-const scalar_text = (writer: Writer, scalar: Scalar) ->
+scalar_text := (writer: Writer, scalar: Scalar) ->
   writer.positions then scalar.text else scalar.positionless ? scalar.text
 
-const node = (kind: String, of: Node, fields: Field[]) ->
+node := (kind: String, of: Node, fields: Field[]) ->
   Group fields, head: Head(kind, position: of.position, node: of)
 
 # A group without a kind writes its position as fields.
-const position_fields = (position: Position) ->
-  const { line, column } = position
+position_fields := (position: Position) ->
+  { line, column } := position
   [
     Field(name: 'column', value: number(column), is_position: true)
     Field(name: 'line', value: number(line), is_position: true)
   ]
 
-const group = (fields: Field[]) -> Group(fields)
+group := (fields: Field[]) -> Group(fields)
 
-const field = (name: String, value: Value) -> Field(name, value)
+field := (name: String, value: Value) -> Field(name, value)
 
-const text = (value: String) -> Scalar(text: quote(value))
+text := (value: String) -> Scalar(text: quote(value))
 
-const number = (value: Int) -> Scalar(text: value.to_string())
+number := (value: Int) -> Scalar(text: value.to_string())
 
-const flag = (value: Bool) -> Scalar(text: value.to_string())
+flag := (value: Bool) -> Scalar(text: value.to_string())
 
 # Generic, since an optional node is not an optional Node.
-const optional_node = <T>(value: T?): Value -> value then dump_node(value) else NONE
+optional_node := <T>(value: T?): Value -> value then dump_node(value) else NONE
 
-const optional_text = (value: String?) -> value then text(value) else NONE
+optional_text := (value: String?) -> value then text(value) else NONE
 
-const optional_statements = (body: Statement[]?): Value -> body then statements(body) else NONE
+optional_statements := (body: Statement[]?): Value -> body then statements(body) else NONE
 
-const statements = (body: Statement[]) -> List(items: [dump_node(s) for s in body])
+statements := (body: Statement[]) -> List(items: [dump_node(s) for s in body])
 
-const expressions = (values: Expression[]) -> List(items: [dump_node(e) for e in values])
+expressions := (values: Expression[]) -> List(items: [dump_node(e) for e in values])
 
-const types = (values: TypeName[]) -> List(items: [dump_node(t) for t in values])
+types := (values: TypeName[]) -> List(items: [dump_node(t) for t in values])
 
-const dump_node = (node: Node) ->
+dump_node := (node: Node) ->
   case node
     when StringLiteral then dump_string(node)
     when Interpolation then dump_interpolation(node)
@@ -188,47 +187,47 @@ const dump_node = (node: Node) ->
     when TupleTypeName then dump_tuple_type(node)
     when ArrayTypeName then dump_array_type(node)
 
-const dump_string = (literal: StringLiteral) ->
+dump_string := (literal: StringLiteral) ->
   node 'string', literal, [field('value', text(literal.value))]
 
-const dump_interpolation = (interpolation: Interpolation) ->
-  const parts = List(items: [dump_interpolation_part(part) for part in interpolation.parts])
+dump_interpolation := (interpolation: Interpolation) ->
+  parts := List(items: [dump_interpolation_part(part) for part in interpolation.parts])
   node 'interpolation', interpolation, [field('parts', parts)]
 
-const dump_interpolation_part = (part: InterpolationPart): Item ->
+dump_interpolation_part := (part: InterpolationPart): Item ->
   case part
     when TextPart then text(part.text)
     when Call then dump_call(part)
 
-const dump_boolean = (literal: BooleanLiteral) ->
+dump_boolean := (literal: BooleanLiteral) ->
   node 'boolean', literal, [field('value', flag(literal.value))]
 
-const dump_nil = (literal: NilLiteral) -> node('nil', literal, [])
+dump_nil := (literal: NilLiteral) -> node('nil', literal, [])
 
-const dump_integer = (literal: IntegerLiteral) ->
-  const integer = literal.value
-  const value = integer then number(integer) else text(literal.text)
+dump_integer := (literal: IntegerLiteral) ->
+  integer := literal.value
+  value := integer then number(integer) else text(literal.text)
   node 'integer', literal, [field('value', value)]
 
-const dump_float = (literal: FloatLiteral) ->
+dump_float := (literal: FloatLiteral) ->
   node 'float', literal, [field('value', text(literal.text))]
 
-const dump_identifier = (identifier: Identifier) ->
+dump_identifier := (identifier: Identifier) ->
   node 'identifier', identifier, [field('name', name_text(identifier))]
 
 # A name that the parser makes of the identifier's position, as `_tuple.3.5`, `destructured.3.5` or
 # `?3:5`, ends with it, which a written name cannot.
-const name_text = (identifier: Identifier) ->
-  const { name, position } = identifier
-  const { line, column } = position
-  const made = ["#{line}.#{column}", "#{line}:#{column}"].find((end) -> name.ends_with(end))
-  const positionless = made then quote(name.without_suffix(made)!)
+name_text := (identifier: Identifier) ->
+  { name, position } := identifier
+  { line, column } := position
+  made := ["#{line}.#{column}", "#{line}:#{column}"].find((end) -> name.ends_with(end))
+  positionless := made then quote(name.without_suffix(made)!)
   Scalar positionless, text: quote(name)
 
-const dump_array = (array: ArrayLiteral): Group ->
+dump_array := (array: ArrayLiteral): Group ->
   node 'array', array, [field('elements', expressions(array.elements))]
 
-const dump_comprehension = (comprehension: Comprehension): Group ->
+dump_comprehension := (comprehension: Comprehension): Group ->
   node 'comprehension', comprehension, [
     field('bindings', statements(comprehension.bindings))
     field('element', dump_node(comprehension.element))
@@ -239,37 +238,36 @@ const dump_comprehension = (comprehension: Comprehension): Group ->
     field('index', optional_node(comprehension.index))
   ]
 
-const dump_lazy = (lazy: LazyFunctions?): Value ->
+dump_lazy := (lazy: LazyFunctions?): Value ->
   return NONE if lazy == nil
   group [field('element', dump_node(lazy.element)), field('guard', optional_node(lazy.guard))]
 
-const dump_map = (map: MapLiteral) ->
-  const entries = List(items: [dump_map_entry(entry) for entry in map.entries])
+dump_map := (map: MapLiteral) ->
+  entries := List(items: [dump_map_entry(entry) for entry in map.entries])
   node 'map', map, [field('entries', entries)]
 
-const dump_map_entry = (entry: MapEntry): Group ->
+dump_map_entry := (entry: MapEntry): Group ->
   group [field('key', dump_node(entry.key)), field('value', dump_node(entry.value))]
 
-const dump_record = (record: RecordLiteral) ->
+dump_record := (record: RecordLiteral) ->
   node 'record', record, [field('fields', named_values(record.fields))]
 
-const dump_tuple = (tuple: TupleLiteral): Group ->
+dump_tuple := (tuple: TupleLiteral): Group ->
   node 'tuple', tuple, [field('items', expressions(tuple.items))]
 
-const dump_tuple_item = (item: TupleItem): Group ->
+dump_tuple_item := (item: TupleItem): Group ->
   node 'tuple_item', item, [
     field('count', number(item.count))
     field('index', number(item.index))
     field('tuple', dump_node(item.tuple))
   ]
 
-const named_values = (values: NamedValue[]) ->
-  List items: [dump_named_value(value) for value in values]
+named_values := (values: NamedValue[]) -> List(items: [dump_named_value(value) for value in values])
 
-const dump_named_value = (value: NamedValue): Group ->
+dump_named_value := (value: NamedValue): Group ->
   group [field('name', dump_node(value.name)), field('value', dump_node(value.value))]
 
-const dump_conditional = (conditional: Conditional): Group ->
+dump_conditional := (conditional: Conditional): Group ->
   node 'conditional', conditional, [
     field('condition', dump_node(conditional.condition))
     field('else_value', dump_node(conditional.else_value))
@@ -277,13 +275,13 @@ const dump_conditional = (conditional: Conditional): Group ->
     field('without_else', flag(conditional.without_else))
   ]
 
-const dump_index = (index: Index): Group ->
+dump_index := (index: Index): Group ->
   node 'index', index, [
     field('index', dump_node(index.index))
     field('object', dump_node(index.object))
   ]
 
-const dump_call = (call: Call): Group ->
+dump_call := (call: Call): Group ->
   node 'call', call, [
     field('args', expressions(call.args))
     field('callee', dump_node(call.callee))
@@ -291,66 +289,66 @@ const dump_call = (call: Call): Group ->
     field('type_args', types(call.type_args))
   ]
 
-const dump_this = (this: This) -> node('this', this, [])
+dump_this := (this: This) -> node('this', this, [])
 
-const dump_member = (member: Member): Group ->
+dump_member := (member: Member): Group ->
   node 'member', member, [
     field('name', dump_node(member.name))
     field('object', dump_node(member.object))
   ]
 
-const dump_unary = (unary: UnaryOperation): Group ->
+dump_unary := (unary: UnaryOperation): Group ->
   node 'unary', unary, [
     field('operand', dump_node(unary.operand))
     field('operator', text(unary.operator))
   ]
 
-const dump_binary = (binary: BinaryOperation): Group ->
+dump_binary := (binary: BinaryOperation): Group ->
   node 'binary', binary, [
     field('left', dump_node(binary.left))
     field('operator', text(binary.operator))
     field('right', dump_node(binary.right))
   ]
 
-const dump_unwrap = (unwrap: Unwrap): Group ->
+dump_unwrap := (unwrap: Unwrap): Group ->
   node 'unwrap', unwrap, [field('operand', dump_node(unwrap.operand))]
 
-const dump_coalesce = (coalesce: Coalesce): Group ->
+dump_coalesce := (coalesce: Coalesce): Group ->
   node 'coalesce', coalesce, [
     field('fallback', dump_node(coalesce.fallback))
     field('value', dump_node(coalesce.value))
   ]
 
-const dump_throw = (expression: Throw): Group ->
+dump_throw := (expression: Throw): Group ->
   node 'throw', expression, [field('message', dump_node(expression.message))]
 
-const dump_yield = (expression: Yield): Group ->
+dump_yield := (expression: Yield): Group ->
   node 'yield', expression, [field('value', dump_node(expression.value))]
 
-const dump_await = (expression: Await): Group ->
+dump_await := (expression: Await): Group ->
   node 'await', expression, [field('operand', dump_node(expression.operand))]
 
-const dump_jump = (jump: Jump) -> node(jump.kind.to_string(), jump, [])
+dump_jump := (jump: Jump) -> node(jump.kind.to_string(), jump, [])
 
-const dump_pass = (statement: Pass) -> node('pass', statement, [])
+dump_pass := (statement: Pass) -> node('pass', statement, [])
 
-const dump_return = (expression: Return) ->
+dump_return := (expression: Return) ->
   node 'return', expression, [field('value', optional_node(expression.value))]
 
-const dump_range = (range: Range): Group ->
+dump_range := (range: Range): Group ->
   node 'range', range, [field('end', dump_node(range.end)), field('start', dump_node(range.start))]
 
-const dump_case = (expression: Case) ->
+dump_case := (expression: Case) ->
   node 'case', expression, [
     field('arms', List(items: [dump_case_arm(arm) for arm in expression.arms]))
     field('otherwise', optional_statements(expression.otherwise))
     field('subject', optional_node(expression.subject))
   ]
 
-const dump_case_arm = (arm: CaseArm): Group ->
+dump_case_arm := (arm: CaseArm): Group ->
   group [field('body', statements(arm.body)), field('patterns', expressions(arm.patterns))]
 
-const dump_try = (expression: Try): Group ->
+dump_try := (expression: Try): Group ->
   node 'try', expression, [
     field('body', statements(expression.body))
     field('catches', List(items: [dump_catch(each) for each in expression.catches]))
@@ -358,7 +356,7 @@ const dump_try = (expression: Try): Group ->
   ]
 
 # A catch clause has a position but no kind, so its position is written as fields.
-const dump_catch = (clause: Catch) ->
+dump_catch := (clause: Catch) ->
   group [
     field('body', statements(clause.body))
     position_fields(clause.position)...
@@ -366,14 +364,14 @@ const dump_catch = (clause: Catch) ->
     field('type', optional_node(clause.type))
   ]
 
-const dump_is = (test: IsTest): Group ->
+dump_is := (test: IsTest): Group ->
   node 'is', test, [field('type', dump_node(test.type)), field('value', dump_node(test.value))]
 
-const dump_cast = (cast: Cast): Group ->
-  const fields = [field('type', dump_node(cast.type)), field('value', dump_node(cast.value))]
+dump_cast := (cast: Cast): Group ->
+  fields := [field('type', dump_node(cast.type)), field('value', dump_node(cast.value))]
   node cast.throws then 'as!' else 'as?', cast, fields
 
-const dump_function = (function: FunctionLiteral): Group ->
+dump_function := (function: FunctionLiteral): Group ->
   node 'function', function, [
     field('body', statements(function.body))
     field('params', List(items: [dump_parameter(param) for param in function.params]))
@@ -381,26 +379,26 @@ const dump_function = (function: FunctionLiteral): Group ->
     field('type_params', type_parameters(function.type_params))
   ]
 
-const dump_parameter = (param: Parameter) ->
+dump_parameter := (param: Parameter) ->
   group [field('name', dump_node(param.name)), field('type', optional_node(param.type))]
 
-const type_parameters = (params: TypeParameter[]) ->
+type_parameters := (params: TypeParameter[]) ->
   List items: [dump_type_parameter(param) for param in params]
 
-const dump_type_parameter = (param: TypeParameter) ->
+dump_type_parameter := (param: TypeParameter) ->
   group [field('bound', optional_node(param.bound)), field('name', dump_node(param.name))]
 
-const dump_import = (statement: Import) ->
+dump_import := (statement: Import) ->
   node 'import', statement, [
     field('exported', flag(statement.exported))
     field('module', text(statement.module))
     field('names', List(items: [dump_import_name(name) for name in statement.names]))
   ]
 
-const dump_import_name = (name: ImportName): Group ->
+dump_import_name := (name: ImportName): Group ->
   group [field('alias', optional_node(name.alias)), field('name', dump_node(name.name))]
 
-const dump_type_declaration = (declaration: TypeDeclaration): Group ->
+dump_type_declaration := (declaration: TypeDeclaration): Group ->
   node 'type_declaration', declaration, [
     field('exported', flag(declaration.exported))
     field('is_struct', flag(declaration.is_struct))
@@ -410,11 +408,11 @@ const dump_type_declaration = (declaration: TypeDeclaration): Group ->
     field('type_params', type_parameters(declaration.type_params))
   ]
 
-const members = (values: MemberDeclaration[]) ->
+members := (values: MemberDeclaration[]) ->
   List items: [dump_member_declaration(member) for member in values]
 
 # A member has a position but no kind, so its position is written as fields.
-const dump_member_declaration = (member: MemberDeclaration) ->
+dump_member_declaration := (member: MemberDeclaration) ->
   group [
     position_fields(member.position)...
     field('modifier', optional_text(member.modifier?.to_string()))
@@ -423,14 +421,14 @@ const dump_member_declaration = (member: MemberDeclaration) ->
     field('value', optional_node(member.value))
   ]
 
-const dump_enum = (declaration: EnumDeclaration): Group ->
+dump_enum := (declaration: EnumDeclaration): Group ->
   node 'enum', declaration, [
     field('exported', flag(declaration.exported))
     field('members', List(items: [dump_node(member) for member in declaration.members]))
     field('name', dump_node(declaration.name))
   ]
 
-const dump_interface = (declaration: InterfaceDeclaration): Group ->
+dump_interface := (declaration: InterfaceDeclaration): Group ->
   node 'interface', declaration, [
     field('exported', flag(declaration.exported))
     field('members', members(declaration.members))
@@ -438,14 +436,14 @@ const dump_interface = (declaration: InterfaceDeclaration): Group ->
     field('type_params', type_parameters(declaration.type_params))
   ]
 
-const dump_type_alias = (alias: TypeAlias): Group ->
+dump_type_alias := (alias: TypeAlias): Group ->
   node 'type_alias', alias, [
     field('exported', flag(alias.exported))
     field('name', dump_node(alias.name))
     field('type', dump_node(alias.type))
   ]
 
-const dump_extern = (declaration: Extern): Group ->
+dump_extern := (declaration: Extern): Group ->
   node 'extern', declaration, [
     field('exported', flag(declaration.exported))
     field('name', dump_node(declaration.name))
@@ -453,14 +451,14 @@ const dump_extern = (declaration: Extern): Group ->
     field('type', dump_node(declaration.type))
   ]
 
-const dump_extend = (declaration: Extend): Group ->
+dump_extend := (declaration: Extend): Group ->
   node 'extend', declaration, [
     field('members', members(declaration.members))
     field('type', dump_node(declaration.type))
     field('type_params', type_parameters(declaration.type_params))
   ]
 
-const dump_declaration = (declaration: Declaration): Group ->
+dump_declaration := (declaration: Declaration): Group ->
   node 'declaration', declaration, [
     field('exported', flag(declaration.exported))
     field('mutable', flag(declaration.mutable))
@@ -469,27 +467,27 @@ const dump_declaration = (declaration: Declaration): Group ->
     field('value', dump_node(declaration.value))
   ]
 
-const dump_assignment = (assignment: Assignment): Group ->
+dump_assignment := (assignment: Assignment): Group ->
   node 'assignment', assignment, [
     field('operator', text(assignment.operator))
     field('target', dump_node(assignment.target))
     field('value', dump_node(assignment.value))
   ]
 
-const dump_if = (statement: If): Group ->
+dump_if := (statement: If): Group ->
   node 'if', statement, [
     field('condition', dump_node(statement.condition))
     field('else_body', statements(statement.else_body))
     field('then_body', statements(statement.then_body))
   ]
 
-const dump_while = (statement: While): Group ->
+dump_while := (statement: While): Group ->
   node 'while', statement, [
     field('body', statements(statement.body))
     field('condition', dump_node(statement.condition))
   ]
 
-const dump_for = (statement: For): Group ->
+dump_for := (statement: For): Group ->
   node 'for', statement, [
     field('body', statements(statement.body))
     field('iterable', dump_node(statement.iterable))
@@ -497,45 +495,45 @@ const dump_for = (statement: For): Group ->
     field('index', optional_node(statement.index))
   ]
 
-const dump_binding = (binding: Binding): Group ->
+dump_binding := (binding: Binding): Group ->
   node 'binding', binding, [
     field('name', dump_node(binding.name))
     field('value', dump_node(binding.value))
   ]
 
-const dump_named_type = (type: NamedType): Group ->
+dump_named_type := (type: NamedType): Group ->
   node 'type_name', type, [
     field('args', types(type.args))
     field('name', text(type.name))
     field('optional', flag(type.optional))
   ]
 
-const dump_union_type = (type: UnionTypeName): Group ->
-  const member_list = List(items: [dump_node(member) for member in type.members])
+dump_union_type := (type: UnionTypeName): Group ->
+  member_list := List(items: [dump_node(member) for member in type.members])
   node 'union_type', type, [field('members', member_list)]
 
-const dump_function_type = (type: FunctionTypeName): Group ->
+dump_function_type := (type: FunctionTypeName): Group ->
   node 'function_type', type, [
     field('optional', flag(type.optional))
     field('params', types(type.params))
     field('result', dump_node(type.result))
   ]
 
-const dump_record_type = (type: RecordTypeName) ->
-  const fields = List(items: [dump_record_type_field(each) for each in type.fields])
+dump_record_type := (type: RecordTypeName) ->
+  fields := List(items: [dump_record_type_field(each) for each in type.fields])
   node 'record_type', type, [field('fields', fields), field('optional', flag(type.optional))]
 
-const dump_tuple_type = (type: TupleTypeName): Group ->
+dump_tuple_type := (type: TupleTypeName): Group ->
   node 'tuple_type', type, [
     field('items', types(type.items))
     field('optional', flag(type.optional))
   ]
 
-const dump_array_type = (type: ArrayTypeName): Group ->
+dump_array_type := (type: ArrayTypeName): Group ->
   node 'array_type', type, [
     field('element', dump_node(type.element))
     field('optional', flag(type.optional))
   ]
 
-const dump_record_type_field = (type_field: RecordTypeField): Group ->
+dump_record_type_field := (type_field: RecordTypeField): Group ->
   group [field('name', dump_node(type_field.name)), field('type', dump_node(type_field.type))]

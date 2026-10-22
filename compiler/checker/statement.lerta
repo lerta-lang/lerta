@@ -24,17 +24,17 @@ import
 from '../types'
 
 # Does nothing, where a block has nothing more to define or check.
-export const nothing = -> return
+export nothing := -> return
 
 # Each initializer sees the constructor arguments and the fields initialized before it.
-export const check_initializers = (body: Body, info: ObjectInfo, self: SelfContext) ->
+export check_initializers := (body: Body, info: ObjectInfo, self: SelfContext) ->
   for field in info.fields
-    const value = field.value ? continue
+    value := field.value ? continue
     self.initializing = field
-    if const field_type = field.type
+    if field_type := field.type
       expect_type body, value, field_type
       continue
-    const type = type_of(body, value)
+    type := type_of(body, value)
     reject_if_not_storable body, type, value
     field.type = type
     body.program.inferred_fields += 1
@@ -44,63 +44,63 @@ export const check_initializers = (body: Body, info: ObjectInfo, self: SelfConte
 # written in the source. `holds`, a condition known to hold where the body runs, narrows the
 # parameters it tests. The defaults are checked unless `checks_defaults` is false, as for an
 # instance of a generic function, whose defaults are checked apart (see check_instance_defaults).
-export const check_function_body = (
+export check_function_body := (
   body: Body
   literal: FunctionLiteral
   params: Type[]
   holds: Expression?
   checks_defaults = true
 ) ->
-  const define_params = ->
+  define_params := ->
     define_parameters body, literal, params, checks_defaults
     narrow_where_holds body, holds if holds
-  const statements = literal.body
-  const finish = -> check_last_statement(body, last) if const last = statements.last()
+  statements := literal.body
+  finish := -> check_last_statement(body, last) if last := statements.last()
   check_block body, all_but_last(statements), define_params, finish
 
 # Defines `@` and the parameters in order, each default seeing those before it, checked if
 # `checks_defaults`.
-export const define_parameters = (
+export define_parameters := (
   body: Body, literal: FunctionLiteral, params: Type[], checks_defaults: Bool
 ) ->
-  if const self = body.self
-    const identifier = Identifier(name: '@', position: literal.position)
-    const object = Local(identifier, type: self.type, used: true)
+  if self := body.self
+    identifier := Identifier(name: '@', position: literal.position)
+    object := Local(identifier, type: self.type, used: true)
     body.scopes.define '@', object
-  const required = required_params(literal)
+  required := required_params(literal)
   for declared, i in literal.params
-    const identifier = declared.name
-    if const default = declared.default
+    identifier := declared.name
+    if default := declared.default
       expect_type body, default, params[i] if checks_defaults
     else if i > required
-      const reason = 'as those before it have'
-      const message = "the parameter '#{identifier.name}' needs a default, #{reason}"
+      reason := 'as those before it have'
+      message := "the parameter '#{identifier.name}' needs a default, #{reason}"
       fail body.program, identifier.position, message
-    const param = Local(identifier, type: params[i])
+    param := Local(identifier, type: params[i])
     define_local body, param
 
 # The top-level code. Its names may be used by the functions, which are checked later, so its
 # scope is kept to warn about those never used once they are. An error ends the checking of its
 # statement alone, leaving the scopes and loops that the statement was in.
-export const check_top_level_code = (body: Body, statements: Statement[]) ->
+export check_top_level_code := (body: Body, statements: Statement[]) ->
   body.scopes.push()
   for statement in statements
     continue if check_part(body.program, -> check_statement(body, statement))
     body.scopes.pop() while body.scopes.depth() > 1
     body.loop_depth = 0
-    if const declaration = top_level_value(statement)
+    if declaration := top_level_value(statement)
       body.shared.top_level.failed.add declaration.name.name
   body.scopes.pop()
 
 # A block that gives a value: its last statement, typed in its scope by `type_of_last` if it is an
 # expression; the block is void if it ends with another statement, and never if with a jump.
-export const type_of_block = (
+export type_of_block := (
   body: Body, statements: Statement[], define: () -> void, type_of_last: (Expression) -> Type
 ) ->
-  const last = statements.last()!
+  last := statements.last()!
   var type: Type = void_type
-  const finish = ->
-    if const value = last as Expression?
+  finish := ->
+    if value := last as Expression?
       type = type_of_last(value)
       return
     check_statement body, last
@@ -109,29 +109,29 @@ export const type_of_block = (
   type
 
 # Whether the expression was typed `never`.
-const is_never_typed = (body: Body, expression: Expression) ->
-  const type = body.facts.types[expression] ? return false
+is_never_typed := (body: Body, expression: Expression) ->
+  type := body.facts.types[expression] ? return false
   is_kind type, 'never'
 
 # A block is a scope; `define` declares the names that belong to it besides its statements, and
 # `finish` checks more before the scope ends. A compile error ends the checking of the body, or of
 # the top-level statement, that the block is in, so the scope needs no cleanup on the way out (see
 # check_top_level_code).
-export const check_block = (
+export check_block := (
   body: Body, statements: Statement[], define: () -> void, finish: () -> void
 ) ->
   body.scopes.push()
   define()
   check_statement body, statement for statement in statements
   finish()
-  const scope = body.scopes.pop()
+  scope := body.scopes.pop()
   warn_if_unused body.shared, local for local in scope.values()
 
-export const check_statement = (body: Body, statement: Statement): void ->
-  const is_top_level = body.is_top_level()
+export check_statement := (body: Body, statement: Statement): void ->
+  is_top_level := body.is_top_level()
   if is_exported(statement) and not is_top_level
     fail body.program, statement.position, 'export can only be at the top level'
-  const require_top_level = (message: String) ->
+  require_top_level := (message: String) ->
     fail body.program, statement.position, message if not is_top_level
   case statement
     when For then check_for(body, statement)
@@ -152,109 +152,109 @@ export const check_statement = (body: Body, statement: Statement): void ->
       require_top_level 'a class or struct can only be declared at the top level'
     else check_expression_statement(body, statement)
 
-export const check_if = (body: Body, if_statement: If) ->
-  const { then_body } = if_statement
-  const else_body = statement_else_body(if_statement)
-  const entries = check_if_condition(body, if_statement)
+export check_if := (body: Body, if_statement: If) ->
+  { then_body } := if_statement
+  else_body := statement_else_body(if_statement)
+  entries := check_if_condition(body, if_statement)
   check_block body, then_body, entries.enter_then, nothing
   check_block body, else_body, entries.enter_else, nothing
-  const is_never = (expression: Expression) -> is_never_typed(body, expression)
+  is_never := (expression: Expression) -> is_never_typed(body, expression)
   entries.enter_else() if else_body.length == 0 and ends_with_jump(then_body, is_never)
 
 # Checks the condition, and returns what entering each branch does: the then branch defines the
 # name that the condition binds, and each narrows the locals that the condition tests.
-export const check_if_condition = (body: Body, if_statement: If) ->
-  const condition = if_statement.condition
-  const define = check_condition(body, condition)
-  const narrowings = narrowings_of(body, condition)
-  const narrow_where = (value: Bool) -> narrow(body, narrowings_where(narrowings, value))
-  const enter_then = ->
+export check_if_condition := (body: Body, if_statement: If) ->
+  condition := if_statement.condition
+  define := check_condition(body, condition)
+  narrowings := narrowings_of(body, condition)
+  narrow_where := (value: Bool) -> narrow(body, narrowings_where(narrowings, value))
+  enter_then := ->
     define()
     narrow_where true
   { enter_then, enter_else: -> narrow_where(false) }
 
 # Checks the condition, and returns what it defines in the body: the name of `const name = value`.
-export const check_condition = (body: Body, condition: Condition) ->
+export check_condition := (body: Body, condition: Condition) ->
   if condition is Binding
-    const inner = expect_optional(body, condition.value)
-    const identifier = condition.name
-    const local = Local(identifier, type: inner, declared: true)
+    inner := expect_optional(body, condition.value)
+    identifier := condition.name
+    local := Local(identifier, type: inner, declared: true)
     -> define_local(body, local)
   else
     expect_condition body, condition
     nothing
 
 # Narrows, in the current scope, the locals that the condition tests, where it holds.
-export const narrow_where_holds = (body: Body, condition: Expression) ->
+export narrow_where_holds := (body: Body, condition: Expression) ->
   narrow body, narrowings_of(body, condition).where_true
 
 # A top-level function was added to the module's functions before checking started.
-const check_declaration = (body: Body, declaration: Declaration) ->
-  const value = declaration.value
+check_declaration := (body: Body, declaration: Declaration) ->
+  value := declaration.value
   return if value is FunctionLiteral and body.is_top_level()
-  const type_name = declaration.type
-  const annotated = type_name then resolve(body.program, body.resolver, type_name)
+  type_name := declaration.type
+  annotated := type_name then resolve(body.program, body.resolver, type_name)
   reject_omitted_value body, declaration, annotated
   expect_type body, value, annotated if annotated
-  const value_type = annotated ? type_of(body, value)
+  value_type := annotated ? type_of(body, value)
   reject_if_not_storable body, value_type, value
   # An exported value is for other modules to use.
-  const { name, mutable, exported, weak } = declaration
-  const type = weak then weak_local_type(body, declaration, value_type) else value_type
-  const declared = not declaration.of_loop
-  const is_this = value is This and not mutable and not weak
+  { name, mutable, exported, weak } := declaration
+  type := weak then weak_local_type(body, declaration, value_type) else value_type
+  declared := not declaration.of_loop
+  is_this := value is This and not mutable and not weak
   define_local body, Local(type, mutable, declared, weak, is_this, identifier: name, used: exported)
 
 # `var x: T` without a value, which is nil.
-const reject_omitted_value = (body: Body, declaration: Declaration, type: Type?) ->
-  const written = type ? return
+reject_omitted_value := (body: Body, declaration: Declaration, type: Type?) ->
+  written := type ? return
   return if not declaration.omits_value or is_assignable(nil_type, written)
-  const needs = "a var of type #{format_type(written)} needs an initial value"
-  const message = "#{needs}: only one of an optional type starts at nil"
+  needs := "a var of type #{format_type(written)} needs an initial value"
+  message := "#{needs}: only one of an optional type starts at nil"
   fail body.program, declaration.type!.position, message
 
 # A weak local holds an object of a class, or nil, and is no top-level value, which would stay
 # for good.
-const weak_local_type = (body: Body, declaration: Declaration, value_type: Type) ->
-  const program = body.program
-  const at = declaration.position
+weak_local_type := (body: Body, declaration: Declaration, value_type: Type) ->
+  program := body.program
+  at := declaration.position
   fail program, at, 'a weak const or var can only be a local' if body.is_top_level()
   if declaration.type != nil and value_type is not OptionalType
-    const written = "#{format_type(value_type)}?"
+    written := "#{format_type(value_type)}?"
     fail program, at, "a weak const or var may hold nil: write its type as #{written}"
-  const object = inner_of(value_type) as ObjectType?
-  const holds_class = object?.is_struct == false
+  object := inner_of(value_type) as ObjectType?
+  holds_class := object?.is_struct == false
   fail program, at, 'a weak const or var holds an object of a class' if not holds_class
   optional_type value_type
 
-const reject_if_not_storable = (body: Body, type: Type, value: Expression) ->
+reject_if_not_storable := (body: Body, type: Type, value: Expression) ->
   if is_one_of_kinds(type, ['void', 'never', 'nil'])
     fail body.program, value.position, "cannot store a value of type #{format_type(type)}"
 
-export const define_local = (body: Body, local: Local) ->
-  const { name, position } = local.identifier
-  const { program, shared } = body
-  const is_top_level = body.is_top_level()
-  const is_taken = has_function(shared, name) or names_type_or_import(shared, name)
+export define_local := (body: Body, local: Local) ->
+  { name, position } := local.identifier
+  { program, shared } := body
+  is_top_level := body.is_top_level()
+  is_taken := has_function(shared, name) or names_type_or_import(shared, name)
   fail_already_defined program, local.identifier if is_top_level and is_taken
   if not body.scopes.define(name, local)
     fail program, position, "'#{name}' is already defined in this scope"
   define_top_level shared.top_level, local if is_top_level
   body.facts.types[local.identifier] = local.type
 
-const check_expression_statement = (body: Body, statement: Expression) ->
+check_expression_statement := (body: Body, statement: Expression) ->
   check_discarded body, statement, type_of(body, statement)
 
 # See the rules for discarded values in docs/reference/errors.md.
-export const check_discarded = (body: Body, statement: Expression, type: Type) ->
-  const program = body.program
-  const at = statement.position
+export check_discarded := (body: Body, statement: Expression, type: Type) ->
+  program := body.program
+  at := statement.position
   fail program, at, 'an Iter does nothing until it is consumed' if type is IterType
   fail program, at, 'a Promise must be awaited' if type is PromiseType
   return if statement is Call or statement is Await or is_one_of_kinds(type, ['void', 'never'])
   # `x ? return` is a guard: its value is the reason to stop, not something to use.
   return if statement is Coalesce and is_never_typed(body, statement.fallback)
   if statement is Identifier and type is FunctionType
-    const message = "function value is unused; to call it, write `#{statement.name}()`"
+    message := "function value is unused; to call it, write `#{statement.name}()`"
     fail program, at, message
   fail program, at, 'value is unused'

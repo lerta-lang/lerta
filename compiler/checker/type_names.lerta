@@ -22,22 +22,22 @@ from '../types'
 
 # Names of the types that the compiler declares, which the module's names shadow, but which a
 # type parameter cannot take.
-const is_core_type_name = (name: String) ->
+is_core_type_name := (name: String) ->
   simple_type(name) != nil or ['Iter', 'Promise', 'Map', 'Set', 'void', 'never'].contains(name)
 
 # The parts of the written type that name the type of the name, wherever they are in it.
-export const named_in = (type_name: TypeName?, name: String) ->
+export named_in := (type_name: TypeName?, name: String) ->
   [named for named in named_types_in(type_name) when named.name == name]
 
 # The names in the written type, in all its parts, outer ones first.
-export const named_types_in = (type_name: TypeName?) ->
-  const found: NamedType[]
+export named_types_in := (type_name: TypeName?) ->
+  found: NamedType[]
   collect_named type_name, found
   found
 
-const collect_named = (type_name: TypeName?, found: NamedType[]): void ->
-  const written = type_name ? return
-  const collect = (part: TypeName) -> collect_named(part, found)
+collect_named := (type_name: TypeName?, found: NamedType[]): void ->
+  written := type_name ? return
+  collect := (part: TypeName) -> collect_named(part, found)
   case written
     when NamedType
       found.push written
@@ -50,7 +50,7 @@ const collect_named = (type_name: TypeName?, found: NamedType[]): void ->
     when UnionTypeName then collect(member) for member in written.members
     when ArrayTypeName then collect(written.element)
 
-const simple_type = (name: String) ->
+simple_type := (name: String) ->
   case name
     when 'Float' then float_type
     when 'Float32' then float32_type
@@ -59,7 +59,7 @@ const simple_type = (name: String) ->
     when 'Binary' then binary_type
     when 'Char' then char_type
     else
-      const kind = TypeKind.parse(name) ? return nil
+      kind := TypeKind.parse(name) ? return nil
       INTEGER_KINDS.contains(kind) then SimpleType(kind)
 
 export class AliasEntry
@@ -70,86 +70,84 @@ export class AliasEntry
 # names of type parameters stand for the given types, as in the body of a generic function.
 export struct Resolver(module_index: Int, type_parameters: Map<String, Type>)
 
-export const module_resolver = (module_index: Int) -> Resolver(module_index, type_parameters: Map())
+export module_resolver := (module_index: Int) -> Resolver(module_index, type_parameters: Map())
 
-export const with_type_parameters = (resolver: Resolver, type_parameters: Map<String, Type>) ->
+export with_type_parameters := (resolver: Resolver, type_parameters: Map<String, Type>) ->
   Resolver type_parameters, module_index: resolver.module_index
 
 # A class, struct, enum or imported type of the name, or else a type that std:builtins exports
 # unless an alias takes the name, marking its import as used.
-export const named_type = (shared: Shared, name: String): Type? ->
-  return info.type if const info = shared.objects[name]
-  return own if const own = shared.enums[name]
-  return declared.type if const declared = shared.interfaces[name]
-  return exported.type if const exported = imported_type(shared, name)
-  return imported.type if const imported = imported_interface(shared, name)
+export named_type := (shared: Shared, name: String): Type? ->
+  return info.type if info := shared.objects[name]
+  return own if own := shared.enums[name]
+  return declared.type if declared := shared.interfaces[name]
+  return exported.type if exported := imported_type(shared, name)
+  return imported.type if imported := imported_interface(shared, name)
   return nil if has_alias(shared, name)
-  return builtin.type if const builtin = builtin_type(shared, name)
+  return builtin.type if builtin := builtin_type(shared, name)
   nil
 
 # Whether the name is that of a type, which a type parameter cannot take.
-export const has_type = (program: ProgramWide, resolver: Resolver, name: String) ->
-  const shared = program.shared[resolver.module_index]
+export has_type := (program: ProgramWide, resolver: Resolver, name: String) ->
+  shared := program.shared[resolver.module_index]
   return true if is_core_type_name(name) or named_type(shared, name) != nil
   has_alias shared, name
 
-export const add_alias = (shared: Shared, alias: TypeAlias) ->
-  const program = shared.program
-  const { name } = alias.name
-  const is_taken = shared.aliases.has(name) or has_declared_type(shared, name)
+export add_alias := (shared: Shared, alias: TypeAlias) ->
+  program := shared.program
+  { name } := alias.name
+  is_taken := shared.aliases.has(name) or has_declared_type(shared, name)
   fail_already_defined program, alias.name if is_taken
   shared.aliases[name] = AliasEntry(alias)
 
 # Resolves every alias, so that an alias that is never used is checked too.
-export const resolve_aliases = (shared: Shared) ->
-  const resolver = module_resolver(shared.index)
+export resolve_aliases := (shared: Shared) ->
+  resolver := module_resolver(shared.index)
   for (name, declared) in shared.aliases.entries()
     resolve_alias shared.program, resolver, name, declared.alias.name.position
 
-export const alias_type = (shared: Shared, name: Identifier) ->
+export alias_type := (shared: Shared, name: Identifier) ->
   resolve_alias(shared.program, module_resolver(shared.index), name.name, name.position)!
 
-export const has_alias = (shared: Shared, name: String) -> shared.aliases.has(name)
+export has_alias := (shared: Shared, name: String) -> shared.aliases.has(name)
 
 # Whether a type, an alias or an import of the module takes the name, which a top-level function
 # or value cannot then take.
-export const names_type_or_import = (shared: Shared, name: String) ->
+export names_type_or_import := (shared: Shared, name: String) ->
   has_declared_type(shared, name) or has_alias(shared, name) or has_import(shared, name)
 
 # Whether a top-level value or function of the module, or a value it imports, takes the name,
 # which then names no type in the module, as types and values share one namespace.
-const names_value = (shared: Shared, name: String) ->
-  const { names, function_names } = shared.top_level
+names_value := (shared: Shared, name: String) ->
+  { names, function_names } := shared.top_level
   names.has(name) or function_names.has(name) or imports_value(shared, name)
 
-export const resolve = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
+export resolve := (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
   resolve_type program, resolver, type_name, false
 
-export const resolve_result = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
+export resolve_result := (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
   resolve_type program, resolver, type_name, true
 
-const resolve_type = (
-  program: ProgramWide, resolver: Resolver, type_name: TypeName, is_result: Bool
-) ->
+resolve_type := (program: ProgramWide, resolver: Resolver, type_name: TypeName, is_result: Bool) ->
   case type_name
     when UnionTypeName then resolve_union(program, resolver, type_name)
     when RecordTypeName
-      const type = resolve_record(program, resolver, type_name)
+      type := resolve_record(program, resolver, type_name)
       optional_if program, type, type_name.position, type_name.optional
     when FunctionTypeName
-      const type = resolve_function(program, resolver, type_name)
+      type := resolve_function(program, resolver, type_name)
       optional_if program, type, type_name.position, type_name.optional
     when TupleTypeName
-      const type = resolve_tuple(program, resolver, type_name)
+      type := resolve_tuple(program, resolver, type_name)
       optional_if program, type, type_name.position, type_name.optional
     when NamedType
-      const type = resolve_name(program, resolver, type_name, is_result)
+      type := resolve_name(program, resolver, type_name, is_result)
       optional_if program, type, type_name.position, type_name.optional
     when ArrayTypeName
-      const type = ArrayType(element: resolve_element(program, resolver, type_name.element))
+      type := ArrayType(element: resolve_element(program, resolver, type_name.element))
       optional_if program, type, type_name.position, type_name.optional
 
-const optional_if = (program: ProgramWide, type: Type, at: Position, optional: Bool) ->
+optional_if := (program: ProgramWide, type: Type, at: Position, optional: Bool) ->
   return type if not optional
   if is_kind(type, 'void') or is_kind(type, 'never')
     fail program, at, "#{format_type(type)} cannot be optional"
@@ -157,68 +155,64 @@ const optional_if = (program: ProgramWide, type: Type, at: Position, optional: B
     fail program, at, "#{format_type(type)} cannot be optional again: its nil would be ambiguous"
   optional_type type
 
-const resolve_record = (
-  program: ProgramWide, resolver: Resolver, type_name: RecordTypeName
-): Type ->
-  const names: Set<String>
+resolve_record := (program: ProgramWide, resolver: Resolver, type_name: RecordTypeName): Type ->
+  names: Set<String>
   for field in type_name.fields
-    const { name, position } = field.name
+    { name, position } := field.name
     fail program, position, "'#{name}' is already a field" if names.has(name)
     names.add name
-  const resolve_field = (field: RecordTypeField) ->
+  resolve_field := (field: RecordTypeField) ->
     RecordField name: field.name.name, type: resolve(program, resolver, field.type)
   record_type [resolve_field(field) for field in type_name.fields]
 
-const resolve_tuple = (program: ProgramWide, resolver: Resolver, type_name: TupleTypeName): Type ->
+resolve_tuple := (program: ProgramWide, resolver: Resolver, type_name: TupleTypeName): Type ->
   TupleType items: [resolve(program, resolver, item) for item in type_name.items]
 
-const resolve_function = (
-  program: ProgramWide, resolver: Resolver, type_name: FunctionTypeName
-): Type ->
-  const params = [resolve(program, resolver, param) for param in type_name.params]
+resolve_function := (program: ProgramWide, resolver: Resolver, type_name: FunctionTypeName): Type ->
+  params := [resolve(program, resolver, param) for param in type_name.params]
   FunctionType params, result: resolve_result(program, resolver, type_name.result)
 
 # A member that is optional, as `String?` in `Int | String?`, makes the union optional: nil is one
 # of its values.
-const resolve_union = (program: ProgramWide, resolver: Resolver, type_name: UnionTypeName): Type ->
-  const resolve_member = (member: TypeName) ->
-    const resolved = resolve(program, resolver, member)
-    const type = inner_of(resolved)
+resolve_union := (program: ProgramWide, resolver: Resolver, type_name: UnionTypeName): Type ->
+  resolve_member := (member: TypeName) ->
+    resolved := resolve(program, resolver, member)
+    type := inner_of(resolved)
     if type is not UnionType and not is_union_member(type)
-      const kinds = 'classes, structs, numbers, Bool, String, Binary and enums'
-      const message = "a union can only hold #{kinds} so far, not #{format_type(type)}"
+      kinds := 'classes, structs, numbers, Bool, String, Binary and enums'
+      message := "a union can only hold #{kinds} so far, not #{format_type(type)}"
       fail program, member.position, message
     resolved
   union_of([resolve_member(member) for member in type_name.members])!
 
-const resolve_alias = (program: ProgramWide, resolver: Resolver, name: String, at: Position) ->
-  const shared = program.shared[resolver.module_index]
-  const entry = shared.aliases[name] ? return nil
-  return type if const type = entry.type
+resolve_alias := (program: ProgramWide, resolver: Resolver, name: String, at: Position) ->
+  shared := program.shared[resolver.module_index]
+  entry := shared.aliases[name] ? return nil
+  return type if type := entry.type
   fail program, at, "the type '#{name}' refers to itself" if shared.resolving.has(name)
   shared.resolving.add name
-  const type = resolve(program, resolver, entry.alias.type)
+  type := resolve(program, resolver, entry.alias.type)
   entry.type = type
   shared.resolving.remove name
   type
 
-const resolve_name = (
+resolve_name := (
   program: ProgramWide, resolver: Resolver, type_name: NamedType, is_result: Bool
 ): Type ->
-  const { name, args, position } = type_name
-  const fail_here = (message: String) -> fail(program, position, message)
-  const shared = program.shared[resolver.module_index]
+  { name, args, position } := type_name
+  fail_here := (message: String) -> fail(program, position, message)
+  shared := program.shared[resolver.module_index]
   import_qualified_type shared, type_name
-  if const parameter = resolver.type_parameters[name]
+  if parameter := resolver.type_parameters[name]
     fail_here "'#{name}' takes no type arguments" if args.length > 0
     return parameter
   fail_here "'#{name}' is a value, not a type" if names_value(shared, name)
   if not names_type_or_import(shared, name) and is_core_type_name(name)
     return resolve_core_type(program, resolver, type_name, is_result)
-  const interface_info = named_interface(program, resolver, name)
-  const named = named_type(shared, name)
-  const generic_object = named is ObjectType and named.args.length > 0
-  const takes_arguments = interface_info != nil or generic_object
+  interface_info := named_interface(program, resolver, name)
+  named := named_type(shared, name)
+  generic_object := named is ObjectType and named.args.length > 0
+  takes_arguments := interface_info != nil or generic_object
   fail_here "'#{name}' takes no type arguments" if args.length > 0 and not takes_arguments
   return value_interface_type(program, resolver, interface_info, type_name) if interface_info
   return instantiate_object(program, resolver, named as ObjectType!, type_name) if generic_object
@@ -226,11 +220,11 @@ const resolve_name = (
   resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
 
 # A type of a name that is_core_type_name accepts.
-const resolve_core_type = (
+resolve_core_type := (
   program: ProgramWide, resolver: Resolver, type_name: NamedType, is_result: Bool
 ): Type ->
-  const { name, args, position } = type_name
-  const fail_here = (message: String) -> fail(program, position, message)
+  { name, args, position } := type_name
+  fail_here := (message: String) -> fail(program, position, message)
   case name
     when 'Iter'
       fail_here 'Iter takes one type argument' if args.length != 1
@@ -241,7 +235,7 @@ const resolve_core_type = (
       return PromiseType(value: resolve(program, resolver, args[0]))
     when 'Map'
       fail_here 'Map takes two type arguments' if args.length != 2
-      const key = resolve_key(program, resolver, args[0])
+      key := resolve_key(program, resolver, args[0])
       return MapType(key, value: resolve_map_value(program, resolver, args[1]))
     when 'Set'
       fail_here 'Set takes one type argument' if args.length != 1
@@ -253,34 +247,34 @@ const resolve_core_type = (
   simple_type(name) ? fail_here("unknown type '#{name}'")
 
 # The written generic class or struct, with its type arguments.
-export const instantiate_object = (
+export instantiate_object := (
   program: ProgramWide, resolver: Resolver, generic: ObjectType, type_name: NamedType
 ) ->
-  const { args, position } = type_name
-  const count = generic.args.length
+  { args, position } := type_name
+  count := generic.args.length
   if args.length != count
     fail program, position, "'#{generic.name}' takes #{count} type argument(s), got #{args.length}"
-  const resolved = [resolve(program, resolver, arg) for arg in args]
-  const { name, symbol, module, is_struct } = generic
-  const type = ObjectType(name, symbol, module, is_struct, args: resolved)
+  resolved := [resolve(program, resolver, arg) for arg in args]
+  { name, symbol, module, is_struct } := generic
+  type := ObjectType(name, symbol, module, is_struct, args: resolved)
   reject_invalid_instance program, resolver.module_index, type, position
   type
 
 # A type parameter's type argument is checked where it is given (see generic_call).
-const resolve_key = (
+resolve_key := (
   program: ProgramWide
   resolver: Resolver
   type_name: TypeName
   role = 'a map key'
 ) ->
-  const type = resolve(program, resolver, type_name)
+  type := resolve(program, resolver, type_name)
   reject_map_key program, type, type_name.position, role if not is_kind(type, TYPE_PARAMETER)
   type
 
-const resolve_map_value = (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
-  const type = resolve(program, resolver, type_name)
+resolve_map_value := (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
+  type := resolve(program, resolver, type_name)
   check_map_value program, type, type_name.position
   type
 
-const resolve_element = (program: ProgramWide, resolver: Resolver, type_name: TypeName): Type ->
+resolve_element := (program: ProgramWide, resolver: Resolver, type_name: TypeName): Type ->
   check_item_type program, resolve(program, resolver, type_name), type_name.position, 'an array'

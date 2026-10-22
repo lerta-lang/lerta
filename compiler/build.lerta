@@ -31,22 +31,22 @@ export struct BuildRequest
   # `--source-lines`: the program tells a debugger where its code comes from in the source.
   source_lines: Bool
 
-export const build = (request: BuildRequest) -> build_then(request, nil)
+export build := (request: BuildRequest) -> build_then(request, nil)
 
 # Builds the program in the temporary directory and runs it there with `args`, exiting with its
 # exit code.
-export const build_and_run = (request: BuildRequest, args: String[]) -> build_then(request, args)
+export build_and_run := (request: BuildRequest, args: String[]) -> build_then(request, args)
 
 # Builds the executable, then runs it with `run_args`, if given, while the temporary directory,
 # which holds the IR and, without an output, the executable, is still there. Exits with 0 or the
 # code that the executable exits with. clang's messages go to stderr as clang writes them, and its
 # failure exits with code 1.
-const build_then = (request: BuildRequest, run_args: String[]?) ->
-  const program = await check_program(request.source, request.warnings_as_errors)
+build_then := (request: BuildRequest, run_args: String[]?) ->
+  program := await check_program(request.source, request.warnings_as_errors)
   reject_input_as_output request, program
-  const not_utf8 = CompileError(message: 'the temporary directory is not valid UTF-8')
-  const dir = make_temp_dir().text() ? throw not_utf8
-  const code =
+  not_utf8 := CompileError(message: 'the temporary directory is not valid UTF-8')
+  dir := make_temp_dir().text() ? throw not_utf8
+  code :=
     try
       await build_in_dir(request, program, dir, run_args)
     finally
@@ -55,39 +55,36 @@ const build_then = (request: BuildRequest, run_args: String[]?) ->
 
 # The output would replace a file that the build reads, which another path may name: a module,
 # whose key is its real path, or a linked file.
-const reject_input_as_output = (request: BuildRequest, program: ProgramWide) ->
-  const output = request.output ? return
+reject_input_as_output := (request: BuildRequest, program: ProgramWide) ->
+  output := request.output ? return
   return if not is_file(output)
-  const real_output = real_path_text(output)
-  const linked = [real_path_text(file) for file in request.linked_files when is_file(file)]
-  const inputs = [[module.key for module in program.modules]..., linked...]
+  real_output := real_path_text(output)
+  linked := [real_path_text(file) for file in request.linked_files when is_file(file)]
+  inputs := [[module.key for module in program.modules]..., linked...]
   return if not inputs.any((input) -> input == real_output)
   throw CompileError(message: "the output '#{output}' is an input of the build")
 
 # What build_then exits with: 1 if clang fails.
-const build_in_dir = (
-  request: BuildRequest, program: ProgramWide, dir: String, run_args: String[]?
-) ->
-  const { optimize, memory_checks, target } = request
-  const runtime = await cached_runtime(optimize, memory_checks, target, dir) ? return 1
-  const { function_attributes, coro_end_type } = runtime
-  const { traces, source_lines } = request
-  const modules =
+build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_args: String[]?) ->
+  { optimize, memory_checks, target } := request
+  runtime := await cached_runtime(optimize, memory_checks, target, dir) ? return 1
+  { function_attributes, coro_end_type } := runtime
+  { traces, source_lines } := request
+  modules :=
     generate(program, function_attributes, coro_end_type, true, traces, source_lines, optimize)
-  const flags = build_flags(optimize, memory_checks, target)
-  const objects = await compile_modules(modules, flags, dir) ? return 1
-  const executable = request.output ? join(dir, "program#{executable_suffix(request.target)}")
+  flags := build_flags(optimize, memory_checks, target)
+  objects := await compile_modules(modules, flags, dir) ? return 1
+  executable := request.output ? join(dir, "program#{executable_suffix(request.target)}")
   # libm, which runtime/math.c calls, is apart from libc on Linux; elsewhere -lm links nothing more.
-  const libraries = ["-l#{library}" for library in ['m', runtime.libraries...]]
-  const lto_cache = join(cache_dir(), 'thinlto')
-  const system = target_system(request.target)
-  const cache_flags = request.optimize then lto_cache_flags(system, lto_cache)
+  libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
+  lto_cache := join(cache_dir(), 'thinlto')
+  system := target_system(request.target)
+  cache_flags := request.optimize then lto_cache_flags(system, lto_cache)
   # dsymutil (below) reads the debug information from the objects, which the link-time optimizer
   # makes in a directory that it removes unless told one.
-  const keeps_objects = source_lines and system == 'macos' and request.optimize
-  const lto_objects: String[] =
-    keeps_objects then ["-Wl,-object_path_lto,#{join(dir, 'lto')}"] else []
-  const args = [
+  keeps_objects := source_lines and system == 'macos' and request.optimize
+  lto_objects: String[] = keeps_objects then ["-Wl,-object_path_lto,#{join(dir, 'lto')}"] else []
+  args := [
     objects...
     flags...
     (cache_flags ? [])...
@@ -106,17 +103,16 @@ const build_in_dir = (
   # copies it beside the executable first.
   if source_lines and system == 'macos'
     return 1 if (await run('dsymutil', executable)).code != 0
-  const program_args = run_args ? return 0
+  program_args := run_args ? return 0
   (await run(executable, program_args...)).code
 
 # Has clang compile the IR of each module, written to `dir`, into an object file there, as many at
 # once as there are CPUs; nil if it fails for any.
-const compile_modules = (modules: String[], flags: String[], dir: String) ->
-  const paths = [join(dir, "module#{i}") for _, i in modules]
+compile_modules := (modules: String[], flags: String[], dir: String) ->
+  paths := [join(dir, "module#{i}") for _, i in modules]
   await write_file("#{path}.ll", text.binary) for (path, text) in paths.zip(modules)
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
-  const job = (path: String) ->
-    ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]
-  const jobs = [job(path) for path in paths]
+  job := (path: String) -> ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]
+  jobs := [job(path) for path in paths]
   return nil if not await run_clang_jobs(jobs)
   ["#{path}.o" for path in paths]

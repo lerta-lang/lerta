@@ -11,19 +11,19 @@ import format_type, int_type, integer_range, is_kind, Type from '../types'
 
 # Whether an expression takes its type from the context: a literal, or arithmetic on such
 # expressions, so that `1 + 2` is a Byte where one is expected.
-export const is_contextual = (expression: Expression): Bool ->
+export is_contextual := (expression: Expression): Bool ->
   case expression
     when IntegerLiteral, FloatLiteral, StringLiteral then true
     when UnaryOperation then expression.operator == '-' and is_contextual(expression.operand)
     when BinaryOperation
-      const { operator, left, right } = expression
+      { operator, left, right } := expression
       is_numeric_operator(operator) and is_contextual(left) and is_contextual(right)
     else false
 
 # Whether a contextual expression holds a float literal, which is a Float unless a Float32 is
 # expected. It decides more of its type than other literals do, which an Int fits too, so it is
 # checked before them, as the operand, the item or the argument whose type the others take.
-export const holds_float_literal = (expression: Expression): Bool ->
+export holds_float_literal := (expression: Expression): Bool ->
   case expression
     when FloatLiteral then true
     when UnaryOperation then holds_float_literal(expression.operand)
@@ -33,29 +33,29 @@ export const holds_float_literal = (expression: Expression): Bool ->
 
 # The items, those of contextual expressions that hold a float literal first (see
 # holds_float_literal), each in its order.
-export const float_first = <T>(items: T[], expression_of: (T) -> Expression) ->
-  const holds_float = (item: T) -> holds_float_literal(expression_of(item))
-  const floats = [item for item in items when holds_float(item)]
+export float_first := <T>(items: T[], expression_of: (T) -> Expression) ->
+  holds_float := (item: T) -> holds_float_literal(expression_of(item))
+  floats := [item for item in items when holds_float(item)]
   [floats..., [item for item in items when not holds_float(item)]...]
 
 # An integer literal where an integer type other than Int is expected, or a string literal of one
 # character where a Byte or a Char is: one byte, or one code point.
-export const integer_literal = (
+export integer_literal := (
   program: ProgramWide, literal: IntegerLiteral | StringLiteral, type: Type
 ) ->
-  const message =
+  message :=
     case literal
       when IntegerLiteral
-        const { least, most } = integer_range(type)
-        const value = literal.value
-        const fits = value != nil and value >= least and value <= most
+        { least, most } := integer_range(type)
+        value := literal.value
+        fits := value != nil and value >= least and value <= most
         fits then nil else "integer literal does not fit in #{format_type(type)}"
       when StringLiteral
         if is_kind(type, 'Char')
-          const one = [c for c in literal.value].length == 1
+          one := [c for c in literal.value].length == 1
           one then nil else 'a string literal used as a Char must be one code point'
         else
-          const fits = literal.value.binary.length == 1
+          fits := literal.value.binary.length == 1
           fits then nil else 'a string literal used as a Byte must be one byte long'
   fail program, literal.position, message if message
   type
@@ -63,8 +63,8 @@ export const integer_literal = (
 # A float literal, or an integer one where a Float or a Float32 is expected, must be finite as one:
 # none is infinite (see docs/reference/types.md#float). A hexadecimal integer one stands for the
 # bits of an Int, so it must fit in one.
-export const float_literal = (program: ProgramWide, literal: Expression, type: Type) ->
-  const text =
+export float_literal := (program: ProgramWide, literal: Expression, type: Type) ->
+  text :=
     case literal
       when FloatLiteral then literal.text
       when IntegerLiteral
@@ -77,9 +77,9 @@ export const float_literal = (program: ProgramWide, literal: Expression, type: T
     fail program, literal.position, "float literal does not fit in #{format_type(type)}"
   type
 
-export const int_literal = (program: ProgramWide, literal: IntegerLiteral) ->
+export int_literal := (program: ProgramWide, literal: IntegerLiteral) ->
   fail program, literal.position, 'integer literal does not fit in Int' if literal.value == nil
   int_type
 
-const is_hexadecimal = (literal: IntegerLiteral) ->
+is_hexadecimal := (literal: IntegerLiteral) ->
   (literal.text.without_prefix('-') ? literal.text).starts_with('0x')

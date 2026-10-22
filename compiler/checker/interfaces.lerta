@@ -19,7 +19,7 @@ import bool_type, FunctionType, InterfaceType, Type, TypeParameterType from '../
 
 export struct InterfaceMember(name: String, type: Type)
 
-export const SELF = 'Self'
+export SELF := 'Self'
 
 export class InterfaceInfo
   name: String
@@ -35,14 +35,14 @@ export class InterfaceInfo
   module_index: Int?
   declaration: InterfaceDeclaration?
 
-const iter_item = TypeParameterType(name: 'T')
-const gives_bool = FunctionType(params: [], result: bool_type)
-const has_next = InterfaceMember(name: 'has_next', type: gives_bool)
-const next = InterfaceMember(name: 'next', type: FunctionType(params: [], result: iter_item))
+iter_item := TypeParameterType(name: 'T')
+gives_bool := FunctionType(params: [], result: bool_type)
+has_next := InterfaceMember(name: 'has_next', type: gives_bool)
+next := InterfaceMember(name: 'next', type: FunctionType(params: [], result: iter_item))
 
 # What a value must have to convert to an Iter<T>, as an `Iter<T>` in messages (see
 # converts_to_iter); the compiler declares it, and it cannot be named.
-const iter_source = InterfaceInfo
+iter_source := InterfaceInfo
   name: 'Iter'
   type_params: [iter_item.name]
   names_self: false
@@ -52,34 +52,34 @@ const iter_source = InterfaceInfo
   type: InterfaceType(name: 'Iter', symbol: 'IterSource', module: 'std:builtins', args: [iter_item])
 
 # The interface type that a value must satisfy to convert to an Iter of the items.
-export const iter_source_type = (item: Type) ->
-  const { name, symbol, module } = iter_source.type
+export iter_source_type := (item: Type) ->
+  { name, symbol, module } := iter_source.type
   InterfaceType name, symbol, module, args: [item]
 
 # The interface of the name that std:builtins declares, as Stringable, which interpolation
 # requires, or Iterable, which `for` goes through, whatever the module's own names.
-export const std_interface = (shared: Shared, name: String, at: Position) ->
-  const fail_missing = ->
-    const where = 'std:builtins, which this module does not import'
+export std_interface := (shared: Shared, name: String, at: Position) ->
+  fail_missing := ->
+    where := 'std:builtins, which this module does not import'
     fail shared.program, at, "#{name} is declared in #{where}"
   # std:builtins does not import itself.
   return shared.interfaces[name] ? fail_missing() if shared.imports.builtins == nil
-  const exported = builtin_export(shared, name)
+  exported := builtin_export(shared, name)
   exported is InterfaceExport then exported.info else fail_missing()
 
 # Registers the module's interfaces, after its classes, structs and enums (see add_enums).
-export const add_interfaces = (shared: Shared, declarations: InterfaceDeclaration[]) ->
-  const program = shared.program
+export add_interfaces := (shared: Shared, declarations: InterfaceDeclaration[]) ->
+  program := shared.program
   for declaration in declarations
-    const { name } = declaration.name
+    { name } := declaration.name
     fail_already_defined program, declaration.name if has_declared_type(shared, name)
     reject_invalid_members shared, declaration
-    const type_params = [param.name.name for param in declaration.type_params]
-    const args: Type[] = [TypeParameterType(name: param) for param in type_params]
-    const symbol = declared_symbol(shared, name)
-    const type = InterfaceType(name, symbol, args, module: shared.name)
-    const names_self = declaration.members.any((member) -> names_type(member.type, SELF))
-    const info = InterfaceInfo
+    type_params := [param.name.name for param in declaration.type_params]
+    args: Type[] = [TypeParameterType(name: param) for param in type_params]
+    symbol := declared_symbol(shared, name)
+    type := InterfaceType(name, symbol, args, module: shared.name)
+    names_self := declaration.members.any((member) -> names_type(member.type, SELF))
+    info := InterfaceInfo
       name
       type
       type_params
@@ -91,65 +91,65 @@ export const add_interfaces = (shared: Shared, declarations: InterfaceDeclaratio
     program.interfaces[symbol] = info
 
 # A member is `name: Type`.
-const reject_invalid_members = (shared: Shared, declaration: InterfaceDeclaration) ->
-  const program = shared.program
+reject_invalid_members := (shared: Shared, declaration: InterfaceDeclaration) ->
+  program := shared.program
   # std:json's Jsonable has none: the compiler tells the types that satisfy it.
   if declaration.members.length == 0 and not is_jsonable_declaration(shared, declaration.name.name)
     fail program, declaration.position, 'an interface needs at least one member'
-  const seen: Set<String>
+  seen: Set<String>
   for member in declaration.members
-    const { name, position } = member.name
+    { name, position } := member.name
     if seen.has(name)
       fail program, position, "'#{name}' is already a member of #{declaration.name.name}"
     seen.add name
-    if const modifier = member.modifier
+    if modifier := member.modifier
       fail program, member.position, "an interface member cannot be #{modifier}"
     if member.value != nil
       fail program, member.position, 'an interface member has a type and no value'
 
 # As a generic function's (see reject_bad_type_parameters), besides Self, and without bounds.
-const reject_invalid_type_parameters = (program: ProgramWide, info: InterfaceInfo) ->
-  const type_params = info.declaration!.type_params
+reject_invalid_type_parameters := (program: ProgramWide, info: InterfaceInfo) ->
+  type_params := info.declaration!.type_params
   reject_bad_type_parameters program, module_resolver(info.module_index!), type_params
   for param in type_params
-    const { name } = param.name
+    { name } := param.name
     fail_already_defined program, param.name if name == SELF
-    if const bound = param.bound
+    if bound := param.bound
       fail program, bound.position, "an interface's type parameter takes no bound"
 
 # Whether the written type names the type of the name, in any of its parts.
-const names_type = (type_name: TypeName?, name: String) -> named_in(type_name, name).length > 0
+names_type := (type_name: TypeName?, name: String) -> named_in(type_name, name).length > 0
 
 # Whether the module declares a class, struct, enum or interface of the name.
-export const has_declared_type = (shared: Shared, name: String) ->
+export has_declared_type := (shared: Shared, name: String) ->
   shared.objects.has(name) or shared.enums.has(name) or shared.interfaces.has(name)
 
 # The interface that the module imports by the name, marking its import as used.
-export const imported_interface = (shared: Shared, name: String) ->
-  const imported = shared.imports.names[name] ? return nil
-  const exported = imported_export(shared.program, imported) as InterfaceExport ? return nil
+export imported_interface := (shared: Shared, name: String) ->
+  imported := shared.imports.names[name] ? return nil
+  exported := imported_export(shared.program, imported) as InterfaceExport ? return nil
   imported.used = true
   exported.info
 
 # The interface of the name where the resolver resolves names: one of the module, an imported one,
 # or one that std:builtins exports, unless another type takes its name.
-export const named_interface = (program: ProgramWide, resolver: Resolver, name: String) ->
-  const shared = program.shared[resolver.module_index]
-  return own if const own = shared.interfaces[name]
-  return imported if const imported = imported_interface(shared, name)
-  const is_other_name = has_type(program, resolver, name) or has_import(shared, name)
+export named_interface := (program: ProgramWide, resolver: Resolver, name: String) ->
+  shared := program.shared[resolver.module_index]
+  return own if own := shared.interfaces[name]
+  return imported if imported := imported_interface(shared, name)
+  is_other_name := has_type(program, resolver, name) or has_import(shared, name)
   return nil if is_other_name
-  const exported = builtin_export(shared, name)
+  exported := builtin_export(shared, name)
   exported is InterfaceExport then exported.info
 
-export const interface_of = (program: ProgramWide, type: InterfaceType) ->
+export interface_of := (program: ProgramWide, type: InterfaceType) ->
   return iter_source if type.symbol == iter_source.type.symbol
   program.interfaces[type.symbol] ? panic("no interface #{type.symbol}")
 
-export const value_interface_type = (
+export value_interface_type := (
   program: ProgramWide, resolver: Resolver, info: InterfaceInfo, type_name: NamedType
 ) ->
-  const reason =
+  reason :=
     case
       when info.names_self then "its members name #{SELF}, which its values could not tell"
       # std:json writes and reads a value by the type that the code gives it where it is called.
@@ -161,52 +161,52 @@ export const value_interface_type = (
 
 # The interface that bounds a type parameter, or that a class or struct says it satisfies, with its
 # type arguments.
-export const bound_interface = (program: ProgramWide, resolver: Resolver, bound: NamedType) ->
-  const { name, position } = bound
+export bound_interface := (program: ProgramWide, resolver: Resolver, bound: NamedType) ->
+  { name, position } := bound
   import_qualified_type program.shared[resolver.module_index], bound
-  if const info = named_interface(program, resolver, name)
+  if info := named_interface(program, resolver, name)
     fail program, position, 'a bound cannot be optional' if bound.optional
     return instantiate(program, resolver, info, bound)
-  const shared = program.shared[resolver.module_index]
-  const is_other_name = has_type(program, resolver, name) or has_import(shared, name)
-  const message =
+  shared := program.shared[resolver.module_index]
+  is_other_name := has_type(program, resolver, name) or has_import(shared, name)
+  message :=
     if is_other_name
       "'#{name}' is not an interface"
     else
       "unknown interface '#{name}'"
   fail program, position, message
 
-const instantiate = (
+instantiate := (
   program: ProgramWide, resolver: Resolver, info: InterfaceInfo, type_name: NamedType
 ) ->
-  const { args, position } = type_name
-  const count = info.type_params.length
+  { args, position } := type_name
+  count := info.type_params.length
   if args.length != count
     fail program, position, "'#{info.name}' takes #{count} type argument(s), got #{args.length}"
-  const generic = info.type
-  const resolved = [resolve(program, resolver, arg) for arg in args]
-  const { name, symbol, module } = generic
-  const type = InterfaceType(name, symbol, module, args: resolved)
+  generic := info.type
+  resolved := [resolve(program, resolver, arg) for arg in args]
+  { name, symbol, module } := generic
+  type := InterfaceType(name, symbol, module, args: resolved)
   reject_invalid_instance program, resolver.module_index, type, position
   type
 
 # Checks the type parameters and resolves the members of every interface of the module, so that
 # one that is never used is checked too.
-export const resolve_interfaces = (shared: Shared) ->
-  const program = shared.program
+export resolve_interfaces := (shared: Shared) ->
+  program := shared.program
   for info in shared.interfaces.values()
     # Once the module's names are declared, which the type parameters cannot take.
     reject_invalid_type_parameters program, info
     interface_members program, info
 
 # The members, in which the type parameters and Self stand for themselves.
-export const interface_members = (program: ProgramWide, info: InterfaceInfo) ->
-  return members if const members = info.members
-  const declaration = info.declaration!
-  const own = placeholders(declaration.type_params)
+export interface_members := (program: ProgramWide, info: InterfaceInfo) ->
+  return members if members := info.members
+  declaration := info.declaration!
+  own := placeholders(declaration.type_params)
   own[SELF] = TypeParameterType(name: SELF)
-  const resolver = with_type_parameters(module_resolver(info.module_index!), own)
-  const members = [
+  resolver := with_type_parameters(module_resolver(info.module_index!), own)
+  members := [
     InterfaceMember(name: member.name.name, type: resolve(program, resolver, member.type!))
     for member in declaration.members
   ]
@@ -215,20 +215,20 @@ export const interface_members = (program: ProgramWide, info: InterfaceInfo) ->
 
 # The members of the interface type, with its type arguments, for the type that satisfies it, which
 # Self stands for.
-export const members_for = (program: ProgramWide, type: InterfaceType, satisfying: Type) ->
-  const info = interface_of(program, type)
-  const bindings: Map<String, Type>
+export members_for := (program: ProgramWide, type: InterfaceType, satisfying: Type) ->
+  info := interface_of(program, type)
+  bindings: Map<String, Type>
   bindings[name] = arg for (name, arg) in info.type_params.zip(type.args)
   bindings[SELF] = satisfying
-  const substituted = (member: InterfaceMember) ->
+  substituted := (member: InterfaceMember) ->
     InterfaceMember name: member.name, type: substitute(member.type, bindings)
   [substituted(member) for member in interface_members(program, info)]
 
 # The member of a value of the interface type by the name, and its place among the members, which
 # is its place in an itab.
-export const interface_member = (program: ProgramWide, type: InterfaceType, name: String) ->
-  const members = members_for(program, type, type)
-  const index = members.find_index((member) -> member.name == name) ? return nil
+export interface_member := (program: ProgramWide, type: InterfaceType, name: String) ->
+  members := members_for(program, type, type)
+  index := members.find_index((member) -> member.name == name) ? return nil
   IndexedMember index, member: members[index]
 
 export struct IndexedMember(index: Int, member: InterfaceMember)

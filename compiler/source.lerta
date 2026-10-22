@@ -8,62 +8,61 @@ import dirname, join from './paths'
 
 # The texts of the files that an editor holds, unsaved, which are read in place of the files, by
 # their keys (see text_key and compiler/lsp).
-export const open_texts: Map<String, String>
+export open_texts: Map<String, String>
 
 # The key of the text of the file at the path: its real path, or the path for a file that is not
 # there, as one not saved yet.
-export const text_key = (path: String) -> is_file(path) then real_path(path).text() ? path else path
+export text_key := (path: String) -> is_file(path) then real_path(path).text() ? path else path
 
-export const read_source = (path: String) ->
+export read_source := (path: String) ->
   if open_texts.length > 0
-    return text if const text = open_texts[text_key(path)]
+    return text if text := open_texts[text_key(path)]
   throw CompileError(message: "'#{path}' is not a file") if not is_file(path)
   (await read_file(path)).text() ? throw CompileError(message: "'#{path}' is not valid UTF-8")
 
-export const SOURCE_EXTENSION = '.lerta'
+export SOURCE_EXTENSION := '.lerta'
 
 # A standard module is named `std:name`, and is the file std/<name>.lerta. The files in the
 # directories of std/, as std/internal/, are no standard modules: only std's own modules import
 # them, by relative paths (see standard_import), and they are named alike, `std:internal/name`.
-const STD_PREFIX = 'std:'
-const STD_DIR = 'std/'
+STD_PREFIX := 'std:'
+STD_DIR := 'std/'
 
-export const is_standard_name = (module: String) -> module.starts_with(STD_PREFIX)
+export is_standard_name := (module: String) -> module.starts_with(STD_PREFIX)
 
-export const is_nested_name = (module: String) -> module.without_prefix(STD_PREFIX)!.contains('/')
+export is_nested_name := (module: String) -> module.without_prefix(STD_PREFIX)!.contains('/')
 
-const file_of = (module: String) ->
-  "#{STD_DIR}#{module.without_prefix(STD_PREFIX)!}#{SOURCE_EXTENSION}"
+file_of := (module: String) -> "#{STD_DIR}#{module.without_prefix(STD_PREFIX)!}#{SOURCE_EXTENSION}"
 
 # The source of the standard module, or nil if there is none.
-export const standard_source = (module: String) ->
+export standard_source := (module: String) ->
   is_nested_name(module) then nil else embedded_source(file_of(module))
 
 # The name of the file of std that a module of std imports by the relative path, and its source,
 # or nil if there is no such file in std.
-export const standard_import = (from: String, relative: String) ->
-  const path = join(dirname(file_of(from)), "#{relative}#{SOURCE_EXTENSION}")
-  const name = path.without_prefix(STD_DIR)?.without_suffix(SOURCE_EXTENSION) ? return nil
-  const module = "#{STD_PREFIX}#{name}"
-  const source = embedded_source(file_of(module)) ? return nil
+export standard_import := (from: String, relative: String) ->
+  path := join(dirname(file_of(from)), "#{relative}#{SOURCE_EXTENSION}")
+  name := path.without_prefix(STD_DIR)?.without_suffix(SOURCE_EXTENSION) ? return nil
+  module := "#{STD_PREFIX}#{name}"
+  source := embedded_source(file_of(module)) ? return nil
   { module, source }
 
 # The names of the standard modules, from their embedded paths.
-export const standard_names = ->
-  const name_of = (path: String) ->
+export standard_names := ->
+  name_of := (path: String) ->
     "#{STD_PREFIX}#{path.without_prefix(STD_DIR)!.without_suffix(SOURCE_EXTENSION)!}"
-  const names = [name_of(path) for path in EMBEDDED_PATHS when path.starts_with(STD_DIR)]
+  names := [name_of(path) for path in EMBEDDED_PATHS when path.starts_with(STD_DIR)]
   [name for name in names when not is_nested_name(name)]
 
 # The source that the command line names: a file, or a standard module as `std:name`.
-export const read_entry_source = (path: String) ->
+export read_entry_source := (path: String) ->
   return await read_source(path) if not is_standard_name(path)
   standard_source(path) ? throw CompileError(message: "unknown standard module '#{path}'")
 
 # The path that diagnostics give for a module, from its path as the loader keeps it (see Module):
 # the entry module's path as given for the entry module, the name of a standard module, `std:io`,
 # or else the module's path, relative to the entry module's directory, joined to that directory.
-export const module_location = (entry_path: String, module_path: String?) ->
+export module_location := (entry_path: String, module_path: String?) ->
   return entry_path if module_path == nil
   return module_path if is_standard_name(module_path)
   join dirname(entry_path), module_path

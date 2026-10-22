@@ -21,20 +21,20 @@ import parse_primary from './primary'
 import is_one_of, token_position, TokenStream from './token_stream'
 import parse_type_annotation from './type'
 
-const ASSIGNMENT_OPERATORS: TokenKind[] = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=']
+ASSIGNMENT_OPERATORS: TokenKind[] = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=']
 
-const COMMAND_ARGUMENT_STARTS: TokenKind[] =
+COMMAND_ARGUMENT_STARTS: TokenKind[] =
   '(', '[', '{', IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, 'true', 'false', 'nil', 'not',
   'case', '->', '@', 'throw', 'await'
 
 # `path` names the source in diagnostics. An error ends the parsing of its top-level statement
 # alone, so that those after it are parsed for their errors too; the errors are thrown together.
-export const parse = (tokens: Token[], path: String) ->
-  const stream = TokenStream(tokens, path)
-  const statements: Statement[]
-  const errors: Located[]
+export parse := (tokens: Token[], path: String) ->
+  stream := TokenStream(tokens, path)
+  statements: Statement[]
+  errors: Located[]
   while stream.peek().kind != EOF
-    const start = stream.index
+    start := stream.index
     try
       parse_line stream, statements
     catch error: CompileError
@@ -48,13 +48,13 @@ export const parse = (tokens: Token[], path: String) ->
   statements
 
 # Statements, one per line, up to the token that ends the block.
-const parse_statements = (tokens: TokenStream, end: TokenKind) ->
-  const statements: Statement[]
+parse_statements := (tokens: TokenStream, end: TokenKind) ->
+  statements: Statement[]
   parse_line tokens, statements while tokens.peek().kind != end and tokens.peek().kind != EOF
   statements
 
 # The statements of a line, into `statements`: one, or the declarations of a destructuring.
-const parse_line = (tokens: TokenStream, statements: Statement[]) ->
+parse_line := (tokens: TokenStream, statements: Statement[]) ->
   if at_destructuring(tokens)
     statements.append parse_destructuring_statement(tokens)
   else
@@ -62,15 +62,15 @@ const parse_line = (tokens: TokenStream, statements: Statement[]) ->
   tokens.expect_line_end()
 
 # A newline and an indented block of statements.
-export const parse_block = (tokens: TokenStream) ->
+export parse_block := (tokens: TokenStream) ->
   tokens.expect NEWLINE, 'end of line'
   tokens.expect INDENT, 'indented block'
-  const statements = parse_statements(tokens, DEDENT)
+  statements := parse_statements(tokens, DEDENT)
   tokens.expect DEDENT, 'end of block'
   statements
 
 # A statement other than a destructuring declaration (see parse_destructuring_statement).
-export const parse_statement = (tokens: TokenStream): Statement ->
+export parse_statement := (tokens: TokenStream): Statement ->
   case tokens.peek().kind
     when 'for' then parse_for(tokens)
     when 'while' then parse_while(tokens)
@@ -86,168 +86,168 @@ export const parse_statement = (tokens: TokenStream): Statement ->
       case
         when starts_type_alias(tokens) then parse_type_alias(tokens)
         when at_declaration(tokens)
-          const declaration = parse_declaration(tokens)
+          declaration := parse_declaration(tokens)
           reject_postfix tokens
           declaration
         else parse_postfix_conditions(tokens, parse_simple_statement(tokens))
 
-export const at_declaration = (tokens: TokenStream) ->
-  const at_keyword = is_one_of(tokens.peek().kind, ['const', 'var'])
-  const at_bare = at_named_declaration(tokens, 0) or at_bare_destructuring(tokens, 0)
+export at_declaration := (tokens: TokenStream) ->
+  at_keyword := is_one_of(tokens.peek().kind, ['const', 'var'])
+  at_bare := at_named_declaration(tokens, 0) or at_bare_destructuring(tokens, 0)
   at_keyword or at_weak_declaration(tokens) or at_bare
 
 # `weak` before a declaration, or before a destructuring, which parse_declaration rejects.
-const at_weak_declaration = (tokens: TokenStream) ->
-  const at_keyword = is_one_of(tokens.peek_at(1).kind, ['const', 'var'])
-  const at_bare = at_named_declaration(tokens, 1) or at_bare_destructuring(tokens, 1)
+at_weak_declaration := (tokens: TokenStream) ->
+  at_keyword := is_one_of(tokens.peek_at(1).kind, ['const', 'var'])
+  at_bare := at_named_declaration(tokens, 1) or at_bare_destructuring(tokens, 1)
   tokens.at_word('weak') and (at_keyword or at_bare)
 
 # `name := value`, `name: Type = value` or `name: Type`, at `offset`.
-const at_named_declaration = (tokens: TokenStream, offset: Int) ->
-  const name_follows = tokens.peek_at(offset).kind == IDENTIFIER
+at_named_declaration := (tokens: TokenStream, offset: Int) ->
+  name_follows := tokens.peek_at(offset).kind == IDENTIFIER
   name_follows and is_one_of(tokens.peek_at(offset + 1).kind, [':=', ':'])
 
-export const at_destructuring = (tokens: TokenStream) ->
-  const at_keyword = is_one_of(tokens.peek().kind, ['const', 'var'])
-  const after_keyword = at_keyword and is_one_of(tokens.peek_at(1).kind, ['{', '('])
+export at_destructuring := (tokens: TokenStream) ->
+  at_keyword := is_one_of(tokens.peek().kind, ['const', 'var'])
+  after_keyword := at_keyword and is_one_of(tokens.peek_at(1).kind, ['{', '('])
   after_keyword or at_bare_destructuring(tokens, 0)
 
 # `{ a, b } := value` or `(a, b) := value`, which only `:=` after the names tells from an
 # expression.
-const at_bare_destructuring = (tokens: TokenStream, offset: Int) ->
-  const open = tokens.peek_at(offset).kind
+at_bare_destructuring := (tokens: TokenStream, offset: Int) ->
+  open := tokens.peek_at(offset).kind
   return false if not is_one_of(open, ['{', '('])
-  const close: TokenKind = open == '{' then '}' else ')'
-  const closing = tokens.closing_offset(open, close, is_name_list_token, offset) ? return false
+  close: TokenKind = open == '{' then '}' else ')'
+  closing := tokens.closing_offset(open, close, is_name_list_token, offset) ? return false
   tokens.peek_at(closing + 1).kind == ':='
 
-const is_name_list_token = (kind: TokenKind) ->
+is_name_list_token := (kind: TokenKind) ->
   is_one_of kind, [IDENTIFIER, ',', LINE_BREAK, '{', '}', '(', ')']
 
 # A statement that fits on one line, which postfix `if` and `while` can follow, unless it is a
 # declaration.
-export const parse_simple_statement = (tokens: TokenStream): Statement ->
+export parse_simple_statement := (tokens: TokenStream): Statement ->
   if at_destructuring(tokens)
-    const position = token_position(tokens.peek())
+    position := token_position(tokens.peek())
     parse_destructuring tokens
     tokens.fail position, 'a destructuring declaration must be on a line of its own'
   return parse_declaration(tokens) if at_declaration(tokens)
-  const is_command_call = starts_command_argument(tokens)
-  const line_expression: Expression =
+  is_command_call := starts_command_argument(tokens)
+  line_expression: Expression =
     if is_command_call
       parse_command_call tokens
     else
       parse_expression tokens
-  const expression =
+  expression :=
     if takes_no_member_lines(line_expression)
       line_expression
     else
       continue_with_members tokens, line_expression
   return parse_block_arguments(tokens, expression) if starts_block_arguments(tokens, expression)
   return expression if is_command_call
-  const operator = operator_at(tokens, ASSIGNMENT_OPERATORS, '=') ? return expression
+  operator := operator_at(tokens, ASSIGNMENT_OPERATORS, '=') ? return expression
   parse_assignment tokens, expression, operator
 
 # The operand of `return`, `throw` or `yield` has taken the member lines after it already, and a
 # jump has no value to continue.
-const takes_no_member_lines = (expression: Expression) ->
-  const takes_operand = expression is Return or expression is Throw or expression is Yield
+takes_no_member_lines := (expression: Expression) ->
+  takes_operand := expression is Return or expression is Throw or expression is Yield
   takes_operand or expression is Jump
 
 # A simple statement with the postfix `if`, `while` and `for` that follow it, as on a line of its
 # own; a declaration can have none.
-export const parse_line_statement = (tokens: TokenStream): Statement ->
-  const statement = parse_simple_statement(tokens)
+export parse_line_statement := (tokens: TokenStream): Statement ->
+  statement := parse_simple_statement(tokens)
   return parse_postfix_conditions(tokens, statement) if statement is not Declaration
   reject_postfix tokens
   statement
 
 # A declaration declares its names for the rest of the block, so no postfix `if` or `while` can
 # apply to it.
-const reject_postfix = (tokens: TokenStream) ->
-  const kind = tokens.peek_continuation()
+reject_postfix := (tokens: TokenStream) ->
+  kind := tokens.peek_continuation()
   return if kind != 'if' and kind != 'while'
   tokens.fail token_position(tokens.peek()), "a declaration cannot have a postfix '#{kind}'"
 
 # `statement if condition`, `statement while condition` and `statement for x in xs when guard`,
 # applied from left to right.
-const parse_postfix_conditions = (tokens: TokenStream, statement: Statement) ->
+parse_postfix_conditions := (tokens: TokenStream, statement: Statement) ->
   var result = statement
-  result = wrapped while const wrapped = wrap_in_postfix_condition(tokens, result)
+  result = wrapped while wrapped := wrap_in_postfix_condition(tokens, result)
   result
 
 # The statement in the postfix `if`, `while` or `for` that follows it, or nil if none does.
-const wrap_in_postfix_condition = (tokens: TokenStream, statement: Statement): Statement? ->
-  const kind = tokens.peek_continuation()
+wrap_in_postfix_condition := (tokens: TokenStream, statement: Statement): Statement? ->
+  kind := tokens.peek_continuation()
   return wrap_in_for(tokens, statement) if kind == 'for'
   return nil if kind != 'if' and kind != 'while'
   tokens.next()
-  const condition = parse_condition(tokens)
-  const position = statement.position
+  condition := parse_condition(tokens)
+  position := statement.position
   if kind == 'if'
     If condition, position, then_body: [statement], else_body: []
   else
     While condition, position, body: [statement]
 
-const wrap_in_for = (tokens: TokenStream, statement: Statement) ->
-  const header = parse_loop_header(tokens)
-  const { variable, index, iterable, guard } = header
-  const position = statement.position
-  const guarded: Statement =
+wrap_in_for := (tokens: TokenStream, statement: Statement) ->
+  header := parse_loop_header(tokens)
+  { variable, index, iterable, guard } := header
+  position := statement.position
+  guarded: Statement =
     if guard
       If position, condition: guard, then_body: [statement], else_body: []
     else
       statement
-  const body = [take_apart_item(header)..., guarded]
+  body := [take_apart_item(header)..., guarded]
   For variable, iterable, body, position, index
 
 # `[weak] name := value` or `[weak] name: Type = value`, or `var` before a name, which takes `=`;
 # `const` before a name, which the formatter leaves out, takes `=` too.
-const parse_declaration = (tokens: TokenStream) ->
-  const position = token_position(tokens.peek())
-  const weak = at_weak_declaration(tokens) and tokens.accept_word('weak')
-  const has_keyword = is_one_of(tokens.peek().kind, ['const', 'var'])
-  const mutable = tokens.peek().kind == 'var'
+parse_declaration := (tokens: TokenStream) ->
+  position := token_position(tokens.peek())
+  weak := at_weak_declaration(tokens) and tokens.accept_word('weak')
+  has_keyword := is_one_of(tokens.peek().kind, ['const', 'var'])
+  mutable := tokens.peek().kind == 'var'
   tokens.next() if has_keyword
   if weak and is_one_of(tokens.peek().kind, ['{', '('])
     tokens.fail position, 'a destructuring declaration cannot be weak'
-  const name = parse_identifier(tokens)
-  const type = parse_type_annotation(tokens)
+  name := parse_identifier(tokens)
+  type := parse_type_annotation(tokens)
   tokens.fail_expecting tokens.peek(), "'='" if has_keyword and tokens.peek().kind == ':='
   # `var x: T?` without a value is nil at first; the checker rejects a type that nil does not fit.
   if mutable and tokens.peek().kind != '='
     if type == nil
-      const why = 'only one of an optional type starts at nil'
+      why := 'only one of an optional type starts at nil'
       tokens.fail
         token_position(tokens.peek())
         "a var without a type needs an initial value: #{why}"
-    const value = NilLiteral(position: name.position)
+    value := NilLiteral(position: name.position)
     return Declaration(name, type, value, mutable, position, weak, omits_value: true)
   if type and tokens.peek().kind == NEWLINE
-    const types = 'T[], Map<K, V> or Set<T>'
-    const message = "expected '=': only a const whose type is written as #{types} starts empty"
-    const value = empty_value(type) ? tokens.fail(token_position(tokens.peek()), message)
+    types := 'T[], Map<K, V> or Set<T>'
+    message := "expected '=': only a const whose type is written as #{types} starts empty"
+    value := empty_value(type) ? tokens.fail(token_position(tokens.peek()), message)
     # The type of an empty Map or Set goes to its type arguments, as the formatter writes it.
-    const written = value is Call then nil else type
+    written := value is Call then nil else type
     return Declaration(name, value, mutable, position, weak, type: written)
   # A type, as `const` and `var` do, tells a declaration from an assignment; `:=` does without.
-  const operator: TokenKind = has_keyword or type then '=' else ':='
+  operator: TokenKind = has_keyword or type then '=' else ':='
   tokens.expect operator, "'#{operator}'"
-  const value = parse_value(tokens)
+  value := parse_value(tokens)
   Declaration name, type, value, mutable, position, weak
 
 # `[]`, or `Map<K, V>()` or `Set<T>()`, for a const of the type that is written without a value.
-const empty_value = (type: TypeName): Expression? ->
-  const at = type.position
+empty_value := (type: TypeName): Expression? ->
+  at := type.position
   return ArrayLiteral(position: at, elements: []) if type is ArrayTypeName and not type.optional
-  const named = type as NamedType ? return nil
+  named := type as NamedType ? return nil
   return nil if named.optional or not ['Map', 'Set'].contains(named.name)
-  const callee = Identifier(position: at, name: named.name)
+  callee := Identifier(position: at, name: named.name)
   Call callee, position: at, args: [], named_args: [], type_args: named.args, makes_builtin: true
 
 # `{ a, b } := value`, as the declarations it stands for.
-export const parse_destructuring_statement = (tokens: TokenStream) ->
-  const declarations = parse_destructuring(tokens)
+export parse_destructuring_statement := (tokens: TokenStream) ->
+  declarations := parse_destructuring(tokens)
   reject_postfix tokens
   declarations
 
@@ -255,47 +255,47 @@ export const parse_destructuring_statement = (tokens: TokenStream) ->
 # the value, then `a` and `b`, each from the field of its name. `(a, b) := value` takes a tuple
 # apart likewise, by position. `var` before the names declares them so, and takes `=`, as `const`
 # does, which the formatter leaves out.
-const parse_destructuring = (tokens: TokenStream) ->
-  const position = token_position(tokens.peek())
-  const has_keyword = is_one_of(tokens.peek().kind, ['const', 'var'])
-  const mutable = tokens.peek().kind == 'var'
+parse_destructuring := (tokens: TokenStream) ->
+  position := token_position(tokens.peek())
+  has_keyword := is_one_of(tokens.peek().kind, ['const', 'var'])
+  mutable := tokens.peek().kind == 'var'
   tokens.next() if has_keyword
-  const operator: TokenKind = has_keyword then '=' else ':='
+  operator: TokenKind = has_keyword then '=' else ':='
   if tokens.peek().kind == '('
-    const names = parse_tuple_names(tokens)
-    const value = parse_held_value(tokens, operator)
+    names := parse_tuple_names(tokens)
+    value := parse_held_value(tokens, operator)
     # Where the value is, for the message when it is no tuple of as many items.
-    const holder = tuple_holder(value.position)
+    holder := tuple_holder(value.position)
     return [holding(holder, value), take_apart(holder, names, mutable, false)...]
   tokens.next()
-  const names = tokens.parse_list('}', -> parse_identifier(tokens))
+  names := tokens.parse_list('}', -> parse_identifier(tokens))
   tokens.fail_expecting tokens.peek(), 'a name' if names.length == 0
-  const value = parse_held_value(tokens, operator)
-  const holder = Identifier(position, name: "destructured.#{position.line}.#{position.column}")
-  const field_of = (name: Identifier) ->
-    const object = copy_identifier(holder)
+  value := parse_held_value(tokens, operator)
+  holder := Identifier(position, name: "destructured.#{position.line}.#{position.column}")
+  field_of := (name: Identifier) ->
+    object := copy_identifier(holder)
     Member object, name: copy_identifier(name), position: name.position
-  const declare = (name: Identifier): Statement ->
+  declare := (name: Identifier): Statement ->
     Declaration mutable, name, value: field_of(name), position: name.position
-  const declarations = [declare(name) for name in names]
+  declarations := [declare(name) for name in names]
   [holding(holder, value), declarations...]
 
 # `= value` or `:= value`, after the names of a destructuring, which may take lines as that of a
 # declaration.
-const parse_held_value = (tokens: TokenStream, operator: TokenKind) ->
+parse_held_value := (tokens: TokenStream, operator: TokenKind) ->
   tokens.expect operator, "'#{operator}'"
   parse_value tokens
 
-const holding = (holder: Identifier, value: Expression): Statement ->
+holding := (holder: Identifier, value: Expression): Statement ->
   Declaration value, mutable: false, name: holder, position: holder.position
 
-const parse_assignment = (tokens: TokenStream, target: Expression, operator: String) ->
-  const message = 'only a name, an indexed item or a field can be assigned to'
-  const assigned = assignment_target(target) ? tokens.fail(target.position, message)
-  const value = parse_value(tokens)
+parse_assignment := (tokens: TokenStream, target: Expression, operator: String) ->
+  message := 'only a name, an indexed item or a field can be assigned to'
+  assigned := assignment_target(target) ? tokens.fail(target.position, message)
+  value := parse_value(tokens)
   Assignment value, operator, target: assigned, position: target.position
 
-const assignment_target = (expression: Expression): AssignmentTarget? ->
+assignment_target := (expression: Expression): AssignmentTarget? ->
   case expression
     when Identifier then expression
     when Index then expression
@@ -303,15 +303,15 @@ const assignment_target = (expression: Expression): AssignmentTarget? ->
     else nil
 
 # `weak ->` starts a weak function literal, not a call of `weak`.
-const starts_command_argument = (tokens: TokenStream) ->
+starts_command_argument := (tokens: TokenStream) ->
   return false if starts_weak_function_literal(tokens)
-  const callee_length = command_callee_length(tokens)
+  callee_length := command_callee_length(tokens)
   callee_length > 0 and starts_spaced_operand(tokens, callee_length)
 
 # Whether the token at the offset, after a word, starts an operand of it rather than continuing an
 # expression with the word: spaced from it, and no binary operator.
-export const starts_spaced_operand = (tokens: TokenStream, offset: Int) ->
-  const token = tokens.peek_at(offset)
+export starts_spaced_operand := (tokens: TokenStream, offset: Int) ->
+  token := tokens.peek_at(offset)
   return false if not token.spaced
   return not tokens.peek_at(offset + 1).spaced if token.kind == '-'
   # `is` and `as` are not keywords, but `x is T` is a test and `x as T?` a cast, not calls of x.
@@ -320,8 +320,8 @@ export const starts_spaced_operand = (tokens: TokenStream, offset: Int) ->
 
 # The number of tokens of the callee of a call without parentheses at the next token: a name or
 # `@name`, followed by any number of `.name`, all without spaces; 0 if there is none.
-const command_callee_length = (tokens: TokenStream) ->
-  const first = tokens.peek().kind
+command_callee_length := (tokens: TokenStream) ->
+  first := tokens.peek().kind
   var length =
     case
       when first == IDENTIFIER then 1
@@ -333,50 +333,50 @@ const command_callee_length = (tokens: TokenStream) ->
     length += 2
   length
 
-const is_attached_name = (token: Token) -> token.kind == IDENTIFIER and not token.spaced
+is_attached_name := (token: Token) -> token.kind == IDENTIFIER and not token.spaced
 
 # `f x, y`: the arguments run to the end of the line.
-const parse_command_call = (tokens: TokenStream) ->
+parse_command_call := (tokens: TokenStream) ->
   var callee = parse_primary(tokens)
-  const position = callee.position
+  position := callee.position
   callee = Member(position, object: callee, name: parse_identifier(tokens)) while tokens.accept('.')
   call_of callee, parse_arguments(tokens), []
 
 # `for` and its loop header (see LoopHeader), followed by an indented block.
-const parse_for = (tokens: TokenStream) ->
-  const position = token_position(tokens.peek())
-  const header = parse_loop_header(tokens)
-  const { variable, index, iterable, guard } = header
+parse_for := (tokens: TokenStream) ->
+  position := token_position(tokens.peek())
+  header := parse_loop_header(tokens)
+  { variable, index, iterable, guard } := header
   if guard
-    const message = "a for loop with a block has no 'when'; write an if in the block"
+    message := "a for loop with a block has no 'when'; write an if in the block"
     tokens.fail guard.position, message
-  const body = [take_apart_item(header)..., parse_block(tokens)...]
+  body := [take_apart_item(header)..., parse_block(tokens)...]
   For variable, iterable, position, index, body
 
 # A condition, or `name := value` or `const name = value`, which holds when the value is not nil.
-const parse_condition = (tokens: TokenStream): Condition ->
-  const token = tokens.peek()
-  const binds_name = token.kind == IDENTIFIER and tokens.peek_at(1).kind == ':='
+parse_condition := (tokens: TokenStream): Condition ->
+  token := tokens.peek()
+  binds_name := token.kind == IDENTIFIER and tokens.peek_at(1).kind == ':='
   return parse_expression(tokens) if token.kind != 'const' and not binds_name
   tokens.next() if token.kind == 'const'
-  const name = parse_identifier(tokens)
-  const operator: TokenKind = binds_name then ':=' else '='
+  name := parse_identifier(tokens)
+  operator: TokenKind = binds_name then ':=' else '='
   tokens.expect operator, "'#{operator}'"
   Binding name, value: parse_expression(tokens), position: token_position(token)
 
-const parse_while = (tokens: TokenStream) ->
-  const position = token_position(tokens.next())
-  const condition = parse_condition(tokens)
+parse_while := (tokens: TokenStream) ->
+  position := token_position(tokens.next())
+  condition := parse_condition(tokens)
   While condition, position, body: parse_block(tokens)
 
 # `if` with an optional `else` block; `else if` chains further.
-export const parse_if = (tokens: TokenStream): If ->
-  const position = token_position(tokens.next())
-  const condition = parse_condition(tokens)
-  const then_body = parse_block(tokens)
+export parse_if := (tokens: TokenStream): If ->
+  position := token_position(tokens.next())
+  condition := parse_condition(tokens)
+  then_body := parse_block(tokens)
   return If(condition, then_body, position, else_body: []) if tokens.peek().kind != 'else'
   tokens.next()
-  const else_body: Statement[] =
+  else_body: Statement[] =
     if tokens.peek().kind == 'if'
       [parse_if(tokens)]
     else

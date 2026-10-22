@@ -11,12 +11,12 @@ import ir_type, ownership, suffixed_symbol from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import bool_type, Type, type_key from '../types'
 
-const HANDLE = 0
-const RUNNING = 1
-const HELD = 2
-const ITEM = 3
+HANDLE := 0
+RUNNING := 1
+HELD := 2
+ITEM := 3
 
-const generator_state = (item: Type) ->
+generator_state := (item: Type) ->
   return
     HeapField(ir_type: 'ptr', owned: COROUTINE)
     plain_field('i1')
@@ -26,49 +26,49 @@ const generator_state = (item: Type) ->
 # The function `symbol`, of the linkage and the parameters, as in `i64 %p0`: it makes the Iter and
 # runs the body, which `generate_body` generates, up to its first suspension. The body gets the
 # Iter first.
-export const generate_yielding_function = (
+export generate_yielding_function := (
   g: Generator, linkage: String, symbol: String, params: String[], item: Type,
   generate_body: () -> void
 ) ->
-  const kind = generator_kind(g.ir, item)
-  const body_symbol = suffixed_symbol(symbol, 'coroutine')
+  kind := generator_kind(g.ir, item)
+  body_symbol := suffixed_symbol(symbol, 'coroutine')
   g.yield_kind = kind
-  const generate_with_handle = ->
+  generate_with_handle := ->
     store_state g.ir, kind, HANDLE, g.coroutine!.handle
     generate_body()
-  const params_with_iter = ['ptr %iter', params...]
+  params_with_iter := ['ptr %iter', params...]
   generate_coroutine g, body_symbol, params_with_iter, generate_with_handle, ->
     emit_final_suspension g
-  const ir = IrBuilder(module: g.ir.module)
-  const iter = emit_iter(ir, kind, ['null', 'false', 'false', 'zeroinitializer'])
+  ir := IrBuilder(module: g.ir.module)
+  iter := emit_iter(ir, kind, ['null', 'false', 'false', 'zeroinitializer'])
   ir.emit "call void #{body_symbol}(#{["ptr #{iter}", params...].join(', ')})"
   ir.emit "ret ptr #{iter}"
   ir.finish "#{linkage}ptr #{symbol}(#{params.join(', ')})"
 
 # The value becomes the Iter's next item, which has_next finds held once the body suspends.
-export const generate_yield = (g: Generator, yield_expression: Yield) ->
-  const kind = g.yield_kind!
+export generate_yield := (g: Generator, yield_expression: Yield) ->
+  kind := g.yield_kind!
   store_state g.ir, kind, ITEM, generate(g, yield_expression.value)
   store_state g.ir, kind, HELD, 'true'
   emit_suspend g
   ''
 
 # The generator kind of Iter of the item type.
-const generator_kind = (ir: IrBuilder, item: Type) ->
-  const has_next = (body: IrBuilder, kind: IterKind) ->
-    const look_label = body.fresh_label('generator.look')
-    const check_label = body.fresh_label('generator.check')
-    const reject_label = body.fresh_label('generator.reject')
-    const resume_label = body.fresh_label('generator.resume')
-    const held_label = body.fresh_label('generator.held')
-    const ended_label = body.fresh_label('generator.ended')
+generator_kind := (ir: IrBuilder, item: Type) ->
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    look_label := body.fresh_label('generator.look')
+    check_label := body.fresh_label('generator.check')
+    reject_label := body.fresh_label('generator.reject')
+    resume_label := body.fresh_label('generator.resume')
+    held_label := body.fresh_label('generator.held')
+    ended_label := body.fresh_label('generator.ended')
     body.emit "br i1 #{load_state(body, kind, HELD)}, label %#{held_label}, label %#{look_label}"
     body.start_block look_label
-    const handle = load_state(body, kind, HANDLE)
-    const is_done = call_runtime(body, 'i1 @llvm.coro.done(ptr)', "ptr #{handle}")
+    handle := load_state(body, kind, HANDLE)
+    is_done := call_runtime(body, 'i1 @llvm.coro.done(ptr)', "ptr #{handle}")
     body.emit "br i1 #{is_done}, label %#{ended_label}, label %#{check_label}"
     body.start_block check_label
-    const is_running = load_state(body, kind, RUNNING)
+    is_running := load_state(body, kind, RUNNING)
     body.emit "br i1 #{is_running}, label %#{reject_label}, label %#{resume_label}"
     body.start_block reject_label
     call_void_runtime body, 'void @lerta_raise_iter_running()', ''
@@ -85,9 +85,9 @@ const generator_kind = (ir: IrBuilder, item: Type) ->
     body.emit 'ret i1 false'
   # The held item passes to the caller; a reference is cleared, so that the drop does not release
   # it.
-  const next = (body: IrBuilder, kind: IterKind) ->
+  next := (body: IrBuilder, kind: IterKind) ->
     store_state body, kind, HELD, 'false'
-    const value = load_state(body, kind, ITEM)
+    value := load_state(body, kind, ITEM)
     store_state body, kind, ITEM, 'zeroinitializer' if ownership(item) != NONE
     body.emit "ret #{ir_type(item)} #{value}"
   define_kind ir, "generator #{type_key(item)}", generator_state(item), item, has_next, next

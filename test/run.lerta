@@ -31,8 +31,8 @@ import no_wine_prefixes, start_wine_prefixes, WINE_DLL_OVERRIDES from './lib/win
 # The target that the suite was given.
 var target = host_target
 
-const work_dir = suite_dir('run')
-const executable_suffix = -> target.windows then '.exe' else ''
+work_dir := suite_dir('run')
+executable_suffix := -> target.windows then '.exe' else ''
 
 # `label` is shown in failures, such as `examples/hello`. The expected files are read before the
 # checks start, so that a check reaches its first wait only in its build (see unoptimized_runs).
@@ -46,22 +46,22 @@ struct TestCase
 
 struct Suite(source_dir: String, expected_dir: String, extensions: String[])
 
-const EXPECTED_EXTENSIONS = ['out', 'err', 'warn']
+EXPECTED_EXTENSIONS := ['out', 'err', 'warn']
 
-const EXAMPLES_EXPECTED_DIR = 'tests/examples'
-const COMMANDS_DIR = 'tests/bin'
-const CLI_DIR = 'tests/cli'
+EXAMPLES_EXPECTED_DIR := 'tests/examples'
+COMMANDS_DIR := 'tests/bin'
+CLI_DIR := 'tests/cli'
 # Tests that must fail, which only the self checks run (see self_check_dir).
-const HARNESS_DIR = 'tests/harness'
+HARNESS_DIR := 'tests/harness'
 
 # `dir` and its subdirectories, relative to the root, except `excluded` and lib/ directories.
-const directory_tree = (dir: String, excluded: String[]): String[] ->
-  const subdirs = [
+directory_tree := (dir: String, excluded: String[]): String[] ->
+  subdirs := [
     "#{dir}/#{entry}"
     for entry in list_dir("#{root_dir}/#{dir}")
     when entry != 'lib' and is_dir("#{root_dir}/#{dir}/#{entry}")
   ]
-  const tree = [dir]
+  tree := [dir]
   for path in subdirs
     continue if excluded.contains(path)
     tree.push path for path in directory_tree(path, excluded)
@@ -69,25 +69,24 @@ const directory_tree = (dir: String, excluded: String[]): String[] ->
 
 # A directory, relative to the root, whose tests run in place of those of tests/ and examples/, so
 # that the self checks can see how tests that must fail are reported (see self.lerta).
-const self_check_dir = env('LERTA_TEST_RUN_DIR')
+self_check_dir := env('LERTA_TEST_RUN_DIR')
 
-const test_dirs =
-  if const dir = self_check_dir
+test_dirs :=
+  if dir := self_check_dir
     directory_tree dir, []
   else
     directory_tree 'tests', [EXAMPLES_EXPECTED_DIR, COMMANDS_DIR, CLI_DIR, HARNESS_DIR]
 
 # Examples are living documentation: they must compile and run.
-const examples =
-  Suite(source_dir: 'examples', expected_dir: EXAMPLES_EXPECTED_DIR, extensions: ['out'])
+examples := Suite(source_dir: 'examples', expected_dir: EXAMPLES_EXPECTED_DIR, extensions: ['out'])
 
-const skipped_dirs = ->
-  const skipped_kind = target.windows then 'posix' else 'windows'
+skipped_dirs := ->
+  skipped_kind := target.windows then 'posix' else 'windows'
   [dir for dir in test_dirs when dir.split('/').contains(skipped_kind)]
 
-const no_suites: Suite[]
+no_suites: Suite[]
 
-const suites = (skipped: String[]) ->
+suites := (skipped: String[]) ->
   [
     (
       Suite(source_dir: dir, expected_dir: dir, extensions: EXPECTED_EXTENSIONS)
@@ -97,36 +96,36 @@ const suites = (skipped: String[]) ->
     (self_check_dir then no_suites else [examples])...
   ]
 
-const names_with_extension = (dir: String, extension: String) ->
-  const suffix = ".#{extension}"
+names_with_extension := (dir: String, extension: String) ->
+  suffix := ".#{extension}"
   [
     file.without_suffix(suffix)!
     for file in list_dir("#{root_dir}/#{dir}")
     when file.ends_with(suffix)
   ]
 
-const collect = (suite: Suite) ->
-  const tests: TestCase[]
+collect := (suite: Suite) ->
+  tests: TestCase[]
   for name in names_with_extension(suite.source_dir, 'lerta')
-    const expected: Map<String, Binary>
+    expected: Map<String, Binary>
     for extension in suite.extensions
-      const path = "#{root_dir}/#{suite.expected_dir}/#{name}.#{extension}"
+      path := "#{root_dir}/#{suite.expected_dir}/#{name}.#{extension}"
       expected[extension] = await read_file(path) if is_file(path)
-    const { source_dir, expected_dir, extensions } = suite
+    { source_dir, expected_dir, extensions } := suite
     tests.push
       TestCase(name, source_dir, expected_dir, extensions, expected, label: "#{source_dir}/#{name}")
   tests
 
 # Files in the expected directory that no test would read, such as the expected output of a
 # deleted source.
-const stray_files = (suite: Suite) ->
-  const sources = names_with_extension(suite.source_dir, 'lerta')
-  const expected_files: String[]
+stray_files := (suite: Suite) ->
+  sources := names_with_extension(suite.source_dir, 'lerta')
+  expected_files: String[]
   for extension in EXPECTED_EXTENSIONS
     for name in names_with_extension(suite.expected_dir, extension)
       if not sources.contains(name) or not suite.extensions.contains(extension)
         expected_files.push "#{suite.expected_dir}/#{name}.#{extension}"
-  const misplaced_sources: String[] =
+  misplaced_sources: String[] =
     if suite.expected_dir == suite.source_dir
       []
     else
@@ -140,9 +139,9 @@ struct Outcome(stdout: Binary, stderr: Binary, warnings: String, failed: Bool, c
 
 # A diagnostic names its place first, as `<file>:<line>:<column>: `; anything else, such as clang's
 # messages, is a failure of the build itself. What follows the place, or nil.
-const after_place = (line: String) ->
-  const parts = line.split(':')
-  const is_number = (part: String) -> part != '' and [c for c in part].all((c) -> c.is_digit())
+after_place := (line: String) ->
+  parts := line.split(':')
+  is_number := (part: String) -> part != '' and [c for c in part].all((c) -> c.is_digit())
   # The file's name is not empty, and may hold `:` itself, as C:\dir does.
   for i in 1...(parts.length - 2)
     continue if i == 1 and parts[0] == ''
@@ -150,26 +149,26 @@ const after_place = (line: String) ->
       return [part for part, j in parts when j >= i + 2].join(':').without_prefix(' ')!
   nil
 
-const is_diagnostic = (line: String) -> after_place(line) != nil
-const is_warning = (line: String) -> after_place(line)?.starts_with('warning: ') ? false
+is_diagnostic := (line: String) -> after_place(line) != nil
+is_warning := (line: String) -> after_place(line)?.starts_with('warning: ') ? false
 
 # Diagnostics are reported as the CLI prints them for a bare file name, so that the expected files
 # do not depend on where the test directory is.
-const compile_and_run = (test: TestCase, optimize: Bool) ->
-  const source_file = "#{test.name}.lerta"
-  const name = "#{test.label.replace('/', '_')}#{optimize then '_O' else ''}"
-  const executable = "#{work_dir}/#{name}#{executable_suffix()}"
-  const optimize_args: String[] = optimize then ['-O'] else []
-  const args = ['build', source_file, '-o', executable, optimize_args..., target.args...]
-  const built = await run_file(compiler, args, "#{root_dir}/#{test.source_dir}")
-  const diagnostics = [line for line in built.errors.split("\n") when line != '']
-  const warnings = [line for line in diagnostics when is_warning(line)]
-  const others = [line for line in diagnostics when not is_warning(line)]
-  const is_compile_error = built.status == 1 and others.length > 0 and others.find((line) ->
+compile_and_run := (test: TestCase, optimize: Bool) ->
+  source_file := "#{test.name}.lerta"
+  name := "#{test.label.replace('/', '_')}#{optimize then '_O' else ''}"
+  executable := "#{work_dir}/#{name}#{executable_suffix()}"
+  optimize_args: String[] = optimize then ['-O'] else []
+  args := ['build', source_file, '-o', executable, optimize_args..., target.args...]
+  built := await run_file(compiler, args, "#{root_dir}/#{test.source_dir}")
+  diagnostics := [line for line in built.errors.split("\n") when line != '']
+  warnings := [line for line in diagnostics when is_warning(line)]
+  others := [line for line in diagnostics when not is_warning(line)]
+  is_compile_error := built.status == 1 and others.length > 0 and others.find((line) ->
     not is_diagnostic(line)
   ) == nil
   if is_compile_error
-    const stderr = lines(others).binary
+    stderr := lines(others).binary
     return Outcome
       stderr
       stdout: ''.binary
@@ -178,32 +177,31 @@ const compile_and_run = (test: TestCase, optimize: Bool) ->
       compile_error: true
   if built.status != 0 or others.length > 0
     throw SetupError(message: "the build failed (#{built.failure}):\n#{built.errors}")
-  const ran = await run_program(executable)
-  const { stdout, stderr, failed } = ran
+  ran := await run_program(executable)
+  { stdout, stderr, failed } := ran
   Outcome stdout, stderr, failed, warnings: lines(warnings), compile_error: false
 
-const path_delimiter = platform == 'windows' then ';' else ':'
+path_delimiter := platform == 'windows' then ';' else ':'
 
 # The commands of tests/bin are built next to the tested programs, and `run` finds them on PATH: a
 # POSIX program on the PATH given here, and a Windows program under Wine on its Windows PATH, to
 # which Wine adds WINEPATH (Z: is the root of the Unix file system).
-const command_env = (prefix: String?) ->
-  const variables =
+command_env := (prefix: String?) ->
+  variables :=
     'PATH': "#{work_dir}#{path_delimiter}#{env('PATH') ? ''}"
     'WINEPATH': "Z:#{work_dir}"
     'WINEDLLOVERRIDES': WINE_DLL_OVERRIDES
   variables['WINEPREFIX'] = prefix if prefix
   variables
 
-const build_commands = ->
-  const cwd = "#{root_dir}/#{COMMANDS_DIR}"
+build_commands := ->
+  cwd := "#{root_dir}/#{COMMANDS_DIR}"
   for name in names_with_extension(COMMANDS_DIR, 'lerta')
-    const executable = "#{work_dir}/#{name}#{executable_suffix()}"
-    const args = ['build', "#{name}.lerta", '-o', executable, '-O', target.args...]
-    const built = await run_file(compiler, args, cwd)
+    executable := "#{work_dir}/#{name}#{executable_suffix()}"
+    args := ['build', "#{name}.lerta", '-o', executable, '-O', target.args...]
+    built := await run_file(compiler, args, cwd)
     if built.status != 0
-      const message =
-        "the build of #{COMMANDS_DIR}/#{name} failed (#{built.failure}):\n#{built.errors}"
+      message := "the build of #{COMMANDS_DIR}/#{name} failed (#{built.failure}):\n#{built.errors}"
       throw SetupError(message)
 
 # Wine runs a Windows program in a prefix of its own, when there are such prefixes (see lib/wine).
@@ -211,7 +209,7 @@ var wine_prefixes = no_wine_prefixes()
 
 # The longest a program may run, far beyond what any test takes, so that one that does not end
 # fails instead of holding up the run; Wine starts a program much more slowly.
-const run_timeout_seconds = -> target.windows then 180.0 else 60.0
+run_timeout_seconds := -> target.windows then 180.0 else 60.0
 
 struct ProgramRun(stdout: Binary, stderr: Binary, failed: Bool)
 
@@ -220,17 +218,17 @@ var program_runs = 0
 # Runs a built program, whose exit status tells whether it failed, in a directory of its own, so
 # that files it writes do not meet those of the other runs, with an empty standard input, so that
 # one that reads it ends.
-const run_program = (path: String) ->
+run_program := (path: String) ->
   program_runs += 1
-  const cwd = "#{work_dir}/run-#{program_runs}"
+  cwd := "#{work_dir}/run-#{program_runs}"
   make_dir cwd
-  const no_args: String[]
-  const (file, args) = target.windows then ('wine', [path]) else (path, no_args)
-  const prefix = wine_prefixes.take()
-  const stdout: Byte[]
-  const stderr: Byte[]
+  no_args: String[]
+  (file, args) := target.windows then ('wine', [path]) else (path, no_args)
+  prefix := wine_prefixes.take()
+  stdout: Byte[]
+  stderr: Byte[]
   try
-    const ran = run
+    ran := run
       file
       args...
       cwd: cwd
@@ -239,7 +237,7 @@ const run_program = (path: String) ->
       stdout: stdout
       stderr: stderr
       output_limit: OUTPUT_LIMIT
-    const exit = await timeout(ran, run_timeout_seconds())
+    exit := await timeout(ran, run_timeout_seconds())
     ProgramRun stdout: stdout.to_binary(), stderr: stderr.to_binary(), failed: exit.code != 0
   catch _: TimeoutError
     throw SetupError(message: "the program did not end in #{run_timeout_seconds().to_fixed(0)}s")
@@ -248,23 +246,23 @@ const run_program = (path: String) ->
 
 # A compile error happens before any optimization, so a test that fails to compile without -O is
 # not repeated with it: the -O check waits for the unoptimized one.
-const unoptimized_runs: Map<String, Promise<Outcome>>
+unoptimized_runs: Map<String, Promise<Outcome>>
 
-const run_test = (test: TestCase, optimize: Bool): Promise<String[]?> ->
-  const expected = test.expected
+run_test := (test: TestCase, optimize: Bool): Promise<String[]?> ->
+  expected := test.expected
   if expected.length == 0
-    const candidates = ["#{test.name}.#{extension}" for extension in test.extensions]
+    candidates := ["#{test.name}.#{extension}" for extension in test.extensions]
     return ["needs #{candidates.join(' or ')} in #{test.expected_dir}"]
-  const pending = compile_and_run(test, optimize)
+  pending := compile_and_run(test, optimize)
   unoptimized_runs[test.label] = pending if not optimize
-  const outcome = await pending
-  const expects_failure = expected.has('err')
-  const status_reasons: String[] =
+  outcome := await pending
+  expects_failure := expected.has('err')
+  status_reasons: String[] =
     if outcome.failed == expects_failure
       []
     else
       ["expected the run to #{expects_failure then 'fail' else 'succeed'}, but it did not"]
-  const none = ''.binary
+  none := ''.binary
   [
     compare_output('stdout', expected['out'] ? none, outcome.stdout)...
     compare_output('stderr', expected['err'] ? none, outcome.stderr)...
@@ -272,27 +270,27 @@ const run_test = (test: TestCase, optimize: Bool): Promise<String[]?> ->
     status_reasons...
   ]
 
-const optimized_check = (test: TestCase) ->
-  const wait = ->
-    const unoptimized = unoptimized_runs[test.label] ? return
+optimized_check := (test: TestCase) ->
+  wait := ->
+    unoptimized := unoptimized_runs[test.label] ? return
     try
-      const _outcome = await unoptimized
+      _outcome := await unoptimized
     catch _
       # The unoptimized check reports the error.
       return
-  const check = ->
-    if const unoptimized = unoptimized_runs[test.label]
+  check := ->
+    if unoptimized := unoptimized_runs[test.label]
       return nil if (await unoptimized).compile_error
     await run_test(test, true)
   Check name: "#{test.label} (-O)", run: check, wait: wait
 
 # The number of the checks that failed, of the programs built for `given`.
-export const suite = (given: Target) ->
+export suite := (given: Target) ->
   target = given
-  const title = 'run tests'
-  const skipped = skipped_dirs()
+  title := 'run tests'
+  skipped := skipped_dirs()
   # A stray file fails the run as a check of its own, so the summary lists it.
-  const all_checks: Check[]
+  all_checks: Check[]
   for group in suites(skipped)
     for file in stray_files(group)
       all_checks.push Check(name: file, run: -> at_once(['stray file: no test reads it']))
@@ -300,9 +298,9 @@ export const suite = (given: Target) ->
     for test in await collect(group)
       all_checks.push Check(name: test.label, run: -> await run_test(test, false))
       all_checks.push optimized_check(test)
-  const checks = select(title, all_checks) ? return 0
+  checks := select(title, all_checks) ? return 0
   # Not in work_dir itself, which is on the PATH of the tested programs.
-  const runtime_dir = "#{work_dir}/runtime"
+  runtime_dir := "#{work_dir}/runtime"
   make_dir runtime_dir
   await build_runtimes(runtime_dir, [target.args, ['-O', target.args...]])
   await build_commands()

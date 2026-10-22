@@ -19,63 +19,62 @@ export struct FieldPath
 # declared with.
 export struct Narrowable(subject: Local | FieldPath, current: Type, declared: Type)
 
-export const narrowable = (body: Body, value: Expression) ->
+export narrowable := (body: Body, value: Expression) ->
   if value is Identifier
-    const local = narrowable_local(body, value) ? return nil
+    local := narrowable_local(body, value) ? return nil
     return Narrowable(subject: local, current: local.type, declared: (local.origin ? local).type)
-  const path = field_path(body, value) ? return nil
-  const current = body.facts.types[value] ? return nil
+  path := field_path(body, value) ? return nil
+  current := body.facts.types[value] ? return nil
   Narrowable current, subject: path, declared: path.declared
 
 # A local that cannot be emptied as a weak one, nor be assigned where it is read: a `var` of a
 # module's top level may be assigned by any function, and one that a function literal assigns by
 # the literal (see forget_narrowing).
-const narrowable_local = (body: Body, name: Identifier) ->
-  const local = lookup(body, name.name) ? return nil
-  const origin = local.origin ? local
+narrowable_local := (body: Body, name: Identifier) ->
+  local := lookup(body, name.name) ? return nil
+  origin := local.origin ? local
   return nil if origin.weak or origin.assigned_by_literal
   return nil if origin.mutable and is_module_value(body, name.name, origin)
   local
 
 # A path of fields starts from a local that cannot be reassigned, whose paths no assignment ends.
-const path_root = (body: Body, name: Identifier) ->
-  const local = narrowable_local(body, name) ? return nil
+path_root := (body: Body, name: Identifier) ->
+  local := narrowable_local(body, name) ? return nil
   (local.origin ? local).mutable then nil else local
 
-const is_module_value = (body: Body, name: String, origin: Local) ->
+is_module_value := (body: Body, name: String, origin: Local) ->
   return true if origin == body.shared.top_level.locals[name]
   local_reference(body, name, origin) is TopLevelValue
 
 # The path of fields that a member reads, if each of them cannot change.
-const field_path = (body: Body, value: Expression): FieldPath? ->
-  const member = value as Member ? return nil
-  const object = member.object
-  const object_type = body.facts.types[object] ? return nil
-  const name = member.name
+field_path := (body: Body, value: Expression): FieldPath? ->
+  member := value as Member ? return nil
+  object := member.object
+  object_type := body.facts.types[object] ? return nil
+  name := member.name
   return nil if not is_fixed_field(body, object_type, name.name)
-  const declared = field_type_by_name(body, object_type, name) ? return nil
-  const path_from = (root: Local?, key: String) ->
-    FieldPath root, declared, key: "#{key}.#{name.name}"
+  declared := field_type_by_name(body, object_type, name) ? return nil
+  path_from := (root: Local?, key: String) -> FieldPath(root, declared, key: "#{key}.#{name.name}")
   case object
     when This then path_from(nil, '@')
     when Identifier
-      const local = path_root(body, object) ? return nil
+      local := path_root(body, object) ? return nil
       path_from local.origin ? local, object.name
     when Member
-      const outer = field_path(body, object) ? return nil
+      outer := field_path(body, object) ? return nil
       path_from outer.root, outer.key
     else nil
 
 # The narrower type that the member has where it is, if it reads a narrowed path.
-export const narrowed_field_type = (body: Body, member: Member) ->
-  const path = field_path(body, member) ? return nil
-  const view = path_view(body, path.key) ? return nil
+export narrowed_field_type := (body: Body, member: Member) ->
+  path := field_path(body, member) ? return nil
+  view := path_view(body, path.key) ? return nil
   # A local of the same name, defined in an inner scope, starts another path.
   view.root == path.root then view.type
 
 # The narrowed path, in the body or, as a function literal sees a narrowed local it captures, in
 # the bodies around it.
-const path_view = (body: Body, key: String): PathView? ->
-  return view if const view = body.scopes.lookup_path(key)
-  const enclosing = body.enclosing ? return nil
+path_view := (body: Body, key: String): PathView? ->
+  return view if view := body.scopes.lookup_path(key)
+  enclosing := body.enclosing ? return nil
   path_view enclosing, key

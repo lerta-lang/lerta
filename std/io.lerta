@@ -24,12 +24,12 @@ export enum FileKind
 export struct FileStatus(kind: FileKind, size: Int, modified_time: Float)
 
 # The status of what the path names, through symbolic links, or nil if nothing is there.
-export const stat = (path: String) ->
-  const fields: Int[]
+export stat := (path: String) ->
+  fields: Int[]
   return nil if not lerta_stat_fields(path, fields)
   # In the order of the kinds that the runtime gives.
-  const kinds = [FileKind.FILE, DIR, OTHER]
-  const modified_time = fields[2].to_float() / 1000000000.0
+  kinds := [FileKind.FILE, DIR, OTHER]
+  modified_time := fields[2].to_float() / 1000000000.0
   FileStatus modified_time, kind: kinds[fields[0]], size: fields[1]
 
 extern lerta_stream_write: (Int, Binary) -> Promise
@@ -42,13 +42,13 @@ export struct Writer
   write_binary = (b: Binary) -> lerta_stream_write(@fd, b)
   flush = -> lerta_stream_flush(@fd)
 
-export const stdout = Writer(fd: 1)
-export const stderr = Writer(fd: 2)
+export stdout := Writer(fd: 1)
+export stderr := Writer(fd: 2)
 
 extern lerta_list_dir_names: (String) -> Binary[]
 
-export const list_dir = (path: String) ->
-  const names = [
+export list_dir := (path: String) ->
+  names := [
     name.text() ? throw ValueError(message: "a name is not valid UTF-8 in the directory: #{path}")
     for name in lerta_list_dir_names(path)
   ]
@@ -57,7 +57,7 @@ export const list_dir = (path: String) ->
 extern lerta_stdin_read: () -> Promise<Binary?>
 
 # As many bytes as a read can ask for, which reads all that is left.
-const MAX_INT = 9223372036854775807
+MAX_INT := 9223372036854775807
 
 # A stream read in chunks through a buffer: `read_chunk` gives the next chunk, or nil at the end. A
 # read must end before the next one starts: one that starts while another is pending throws.
@@ -93,7 +93,7 @@ export class Reader
   # Whether a chunk is there to read, read in place of the one read up if needed.
   fill = ->
     return true if @start < @chunk.length
-    const next = await @read_chunk() ? return false
+    next := await @read_chunk() ? return false
     @chunk = next
     @start = 0
     true
@@ -106,7 +106,7 @@ export class Reader
     @start = 0
 
   taken_out = ->
-    const bytes = @taken
+    bytes := @taken
     @taken = ''.binary
     bytes
 
@@ -130,19 +130,19 @@ export class Reader
 
   # Up to `count` bytes of the chunk, from where it is read.
   take = (count: Int) ->
-    const end = @start + min(count, @chunk.length - @start)
-    const bytes = @chunk.slice(@start, end)
+    end := @start + min(count, @chunk.length - @start)
+    bytes := @chunk.slice(@start, end)
     @start = end
     bytes
 
   rest = -> await @part(MAX_INT) ? ''.binary
 
 # A line that ended with "\n", without a "\r" before it.
-const ended_line_text = (bytes: Binary) ->
-  const ends_with_return = bytes.length > 0 and bytes[bytes.length - 1] == "\r"
+ended_line_text := (bytes: Binary) ->
+  ends_with_return := bytes.length > 0 and bytes[bytes.length - 1] == "\r"
   utf8_line ends_with_return then bytes.slice(0, bytes.length - 1) else bytes
 
-const utf8_line = (bytes: Binary) ->
+utf8_line := (bytes: Binary) ->
   bytes.text() ? throw ValueError(message: 'a line is not valid UTF-8')
 
-export const stdin = Reader(read_chunk: -> lerta_stdin_read())
+export stdin := Reader(read_chunk: -> lerta_stdin_read())

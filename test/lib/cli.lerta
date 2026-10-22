@@ -7,7 +7,7 @@ import platform, run from 'std:process'
 
 export struct CliRun(status: Int, stdout: Binary, stderr: Binary)
 
-export const run_command = (
+export run_command := (
   command: String
   args: String[]
   cwd: String
@@ -15,12 +15,12 @@ export const run_command = (
   env: Map<String, String> = Map()
   unset_env: String[] = []
 ) ->
-  const stdout: Byte[]
-  const stderr: Byte[]
-  const environment: Map<String, String>
+  stdout: Byte[]
+  stderr: Byte[]
+  environment: Map<String, String>
   environment['LERTA_CACHE_DIR'] = cache_dir if not unset_env.contains('LERTA_CACHE_DIR')
   environment[key] = env[key]! for key in env.keys()
-  const result = await run(
+  result := await run(
     command
     args...
     cwd: cwd
@@ -33,29 +33,29 @@ export const run_command = (
   )
   CliRun status: result.code, stdout: stdout.to_binary(), stderr: stderr.to_binary()
 
-const host_triple_run = await run_command('clang', ['-print-target-triple'], '.')
+host_triple_run := await run_command('clang', ['-print-target-triple'], '.')
 if host_triple_run.status != 0
   throw ValueError(message: "clang -print-target-triple failed: #{host_triple_run.status}")
-export const host_triple = host_triple_run.stdout.text()!.split("\n")[0]
-export const runtime_flags: String[][] = [[], ['-O'], ['--target', host_triple]]
-export const host_platform = platform
-export const executable_suffix = platform == 'windows' then '.exe' else ''
-export const hello_output = await read_file("#{root_dir}/tests/examples/hello.out")
-export const cli_work_dir = suite_dir('cli')
+export host_triple := host_triple_run.stdout.text()!.split("\n")[0]
+export runtime_flags: String[][] = [[], ['-O'], ['--target', host_triple]]
+export host_platform := platform
+export executable_suffix := platform == 'windows' then '.exe' else ''
+export hello_output := await read_file("#{root_dir}/tests/examples/hello.out")
+export cli_work_dir := suite_dir('cli')
 
 var next_run_dir = 0
 
-export const new_cli_dirs = ->
-  const index = next_run_dir
+export new_cli_dirs := ->
+  index := next_run_dir
   next_run_dir += 1
   (new_cli_dir("cwd-#{index}"), new_cli_dir("temp-#{index}"))
 
-export const new_cli_dir = (name: String) ->
-  const path = "#{cli_work_dir}/#{name}"
+export new_cli_dir := (name: String) ->
+  path := "#{cli_work_dir}/#{name}"
   make_dir path
   path
 
-export const run_in_dir = (
+export run_in_dir := (
   compiler: String
   args: String[]
   cwd: String
@@ -64,30 +64,30 @@ export const run_in_dir = (
   env: Map<String, String> = Map()
   unset_env: String[] = []
 ) ->
-  const environment: Map<String, String>
+  environment: Map<String, String>
   environment['TMPDIR'] = temp
   environment['TEMP'] = temp
   environment['TMP'] = temp
   environment[key] = env[key]! for key in env.keys()
-  const result = await run_command(compiler, args, cwd, input, environment, unset_env)
+  result := await run_command(compiler, args, cwd, input, environment, unset_env)
   { result, cwd, left: list_dir(cwd), left_in_temp: list_dir(temp) }
 
-export const run_in_new_dir = (
+export run_in_new_dir := (
   compiler: String
   args: String[]
   input: Binary = ''.binary
   env: Map<String, String> = Map()
   unset_env: String[] = []
 ) ->
-  const (cwd, temp) = new_cli_dirs()
+  (cwd, temp) := new_cli_dirs()
   await run_in_dir(compiler, args, cwd, temp, input, env, unset_env)
 
-export const expect_success = (what: String, result: CliRun): String[] ->
+export expect_success := (what: String, result: CliRun): String[] ->
   return [] if result.status == 0
-  const stderr = result.stderr.text() ? '(not valid UTF-8)'
+  stderr := result.stderr.text() ? '(not valid UTF-8)'
   ["#{what} failed (exit status #{result.status}), stderr:\n#{stderr}"]
 
-export const expect_left = (what: String, expected: String[], actual: String[]) ->
+export expect_left := (what: String, expected: String[], actual: String[]) ->
   compare_text what, lines(expected), lines(actual)
 
-export const read_optional = (path: String) -> not is_file(path) then nil else await read_file(path)
+export read_optional := (path: String) -> not is_file(path) then nil else await read_file(path)

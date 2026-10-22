@@ -20,12 +20,12 @@ import emit_iter_loop, emit_iter_start from './iter_protocol'
 import emit_is_present, emit_unwrap from './optional'
 import ArrayType, int_type, iterable_item, IterType, OptionalType, Type from '../types'
 
-export const generate_if = (g: Generator, if_statement: If) ->
-  const ir = g.ir
-  const condition = generate_condition_of(g, if_statement.condition)
-  const then_label = ir.fresh_label('if.then')
-  const else_label = ir.fresh_label('if.else')
-  const end_label = ir.fresh_label('if.end')
+export generate_if := (g: Generator, if_statement: If) ->
+  ir := g.ir
+  condition := generate_condition_of(g, if_statement.condition)
+  then_label := ir.fresh_label('if.then')
+  else_label := ir.fresh_label('if.else')
+  end_label := ir.fresh_label('if.end')
   ir.emit "br i1 #{condition.test}, label %#{then_label}, label %#{else_label}"
   ir.start_block then_label
   generate_block g, if_statement.then_body, condition.define
@@ -37,65 +37,65 @@ export const generate_if = (g: Generator, if_statement: If) ->
 
 # The test of a condition, and what it defines in the body: for `const name = value`, the value
 # without nil, which the body's scope owns.
-export const generate_condition_of = (g: Generator, condition: Condition) ->
+export generate_condition_of := (g: Generator, condition: Condition) ->
   if condition is Binding
-    const value = generate(g, condition.value)
-    const optional = type_of(g, condition.value) as OptionalType!
-    const define = (scope: Map<String, CodegenLocal>) ->
-      const unwrapped = emit_unwrap(g.ir, value, optional)
+    value := generate(g, condition.value)
+    optional := type_of(g, condition.value) as OptionalType!
+    define := (scope: Map<String, CodegenLocal>) ->
+      unwrapped := emit_unwrap(g.ir, value, optional)
       scope[condition.name.name] = store_in_slot(g, unwrapped, optional.inner)
     { test: emit_is_present(g.ir, value, optional), define }
   else
     { test: generate_condition(g, condition), define: no_locals }
 
-export const generate_while = (g: Generator, while_statement: While) ->
-  const ir = g.ir
-  const header_label = ir.fresh_label('while.header')
-  const body_label = ir.fresh_label('while.body')
-  const exit_label = ir.fresh_label('while.exit')
+export generate_while := (g: Generator, while_statement: While) ->
+  ir := g.ir
+  header_label := ir.fresh_label('while.header')
+  body_label := ir.fresh_label('while.body')
+  exit_label := ir.fresh_label('while.exit')
   ir.emit "br label %#{header_label}"
   ir.start_block header_label
-  const condition = generate_condition_of(g, while_statement.condition)
+  condition := generate_condition_of(g, while_statement.condition)
   ir.emit "br i1 #{condition.test}, label %#{body_label}, label %#{exit_label}"
   ir.start_block body_label
-  const body = statements_code(g, while_statement.body)
+  body := statements_code(g, while_statement.body)
   generate_loop_body g, body, exit_label, header_label, condition.define
   ir.emit "br label %#{header_label}"
   ir.start_block exit_label
 
 # A range's bounds are evaluated once. An array, a Binary or an Iter is held for the whole loop
 # in a scope of its own, so a `return` from the body releases it too.
-export const generate_for = (g: Generator, for_statement: For) ->
-  const { variable, index } = for_statement
-  const iterable = iterated(g, for_statement.iterable)
+export generate_for := (g: Generator, for_statement: For) ->
+  { variable, index } := for_statement
+  iterable := iterated(g, for_statement.iterable)
   generate_iteration g, iterable, variable, index, statements_code(g, for_statement.body)
 
 # A new array, of the comprehension's elements, which the loop pushes. Its loop can be the target
 # of no `break` or `continue`, which its element and guard cannot hold (see jump_positions).
-export const generate_comprehension = (g: Generator, comprehension: Comprehension) ->
-  const iterable = iterated(g, comprehension.iterable)
-  return generate_iter_comprehension(g, iterable, lazy) if const lazy = comprehension.lazy
-  const array_type = type_of(g, comprehension) as ArrayType!
-  const result = emit_array_new(g.ir, array_type.element)
-  const push = -> push_comprehension(g, comprehension, result)
+export generate_comprehension := (g: Generator, comprehension: Comprehension) ->
+  iterable := iterated(g, comprehension.iterable)
+  return generate_iter_comprehension(g, iterable, lazy) if lazy := comprehension.lazy
+  array_type := type_of(g, comprehension) as ArrayType!
+  result := emit_array_new(g.ir, array_type.element)
+  push := -> push_comprehension(g, comprehension, result)
   while_holding g, result, array_type, push
   result
 
 # Pushes the comprehension's elements to `result`, an array of them, which may hold others, as
 # for a spread in an array literal.
-export const push_comprehension = (g: Generator, comprehension: Comprehension, result: String) ->
-  const { element, variable, index, guard, bindings } = comprehension
-  const iterable = iterated(g, comprehension.iterable)
-  const element_type = (type_of(g, comprehension) as ArrayType!).element
-  const ir = g.ir
-  const body = ->
+export push_comprehension := (g: Generator, comprehension: Comprehension, result: String) ->
+  { element, variable, index, guard, bindings } := comprehension
+  iterable := iterated(g, comprehension.iterable)
+  element_type := (type_of(g, comprehension) as ArrayType!).element
+  ir := g.ir
+  body := ->
     statements_code(g, bindings)()
-    const push_label = ir.fresh_label('comprehension.push')
-    const next_label = ir.fresh_label('comprehension.next')
-    const test = guard then generate_condition(g, guard) else 'true'
+    push_label := ir.fresh_label('comprehension.push')
+    next_label := ir.fresh_label('comprehension.next')
+    test := guard then generate_condition(g, guard) else 'true'
     ir.emit "br i1 #{test}, label %#{push_label}, label %#{next_label}"
     ir.start_block push_label
-    const value = generate(g, element)
+    value := generate(g, element)
     emit_push ir, result, value, element_type
     release_if_reference g, element, value
     ir.emit "br label %#{next_label}"
@@ -104,76 +104,76 @@ export const push_comprehension = (g: Generator, comprehension: Comprehension, r
 
 # What a `for` or a comprehension goes through: the iterable, or the call of its `iter()` that
 # the checker made (see type_of_iterated).
-const iterated = (g: Generator, iterable: Expression) ->
-  return call if const call = g.facts.iter_calls[iterable]
+iterated := (g: Generator, iterable: Expression) ->
+  return call if call := g.facts.iter_calls[iterable]
   iterable
 
 # The source is evaluated first, then the closures, which capture the values they see then.
-const generate_iter_comprehension = (g: Generator, iterable: Expression, lazy: LazyFunctions) ->
-  const ir = g.ir
-  const source =
+generate_iter_comprehension := (g: Generator, iterable: Expression, lazy: LazyFunctions) ->
+  ir := g.ir
+  source :=
     if iterable is Range
       emit_range_iter ir, generate(g, iterable.start), generate(g, iterable.end)
     else
-      const type = type_of(g, iterable)
-      const iter = emit_source_iter(ir, generate(g, iterable), type)
+      type := type_of(g, iterable)
+      iter := emit_source_iter(ir, generate(g, iterable), type)
       # An Iter's traversal starts here, which throws if one has.
       while_holding g, iter, type, -> emit_exception_check(g)
       iter
-  const item: Type = iterable is Range then int_type else iterable_item(type_of(g, iterable))!
-  const lazy_guard = lazy.guard
-  const guard = lazy_guard then generate_closure(g, lazy_guard)
-  const element = generate_closure(g, lazy.element)
+  item: Type = iterable is Range then int_type else iterable_item(type_of(g, iterable))!
+  lazy_guard := lazy.guard
+  guard := lazy_guard then generate_closure(g, lazy_guard)
+  element := generate_closure(g, lazy.element)
   emit_comprehension_iter ir, source, item, guard, element, type_of(g, lazy.element)
 
 # The body generates the loop's code in its scope, where the loop variable, and the index if the
 # loop names it, are defined.
-const generate_iteration = (
+generate_iteration := (
   g: Generator, iterable: Expression, variable: Identifier, index: Identifier?, body: () -> void
 ) ->
-  const define_index = (scope: Map<String, CodegenLocal>, place: String) ->
+  define_index := (scope: Map<String, CodegenLocal>, place: String) ->
     scope[index.name] = ValueLocal(operand: place, type: int_type) if index
   if iterable is Range
-    const start = generate(g, iterable.start)
-    const end = generate(g, iterable.end)
-    const define = (scope: Map<String, CodegenLocal>, current: String) ->
+    start := generate(g, iterable.start)
+    end := generate(g, iterable.end)
+    define := (scope: Map<String, CodegenLocal>, current: String) ->
       scope[variable.name] = ValueLocal(operand: current, type: int_type)
       define_index scope, g.ir.assign("sub i64 #{current}, #{start}") if index
     generate_counting_loop g, start, -> end, body, define
     return
-  const type = type_of(g, iterable)
+  type := type_of(g, iterable)
   return generate_iter_loop(g, iterable, type, variable, define_index, body) if type is IterType
-  const item_type = iterable_item(type)!
-  const sequence_scope = g.locals.push()
-  const sequence = generate(g, iterable)
+  item_type := iterable_item(type)!
+  sequence_scope := g.locals.push()
+  sequence := generate(g, iterable)
   sequence_scope[' iterated sequence'] = store_in_slot(g, sequence, type)
-  const define = (scope: Map<String, CodegenLocal>, current: String) ->
-    const item = emit_sequence_get(g.ir, sequence, current, type)
+  define := (scope: Map<String, CodegenLocal>, current: String) ->
+    item := emit_sequence_get(g.ir, sequence, current, type)
     scope[variable.name] = store_in_slot(g, item, item_type)
     define_index scope, current
-  const end = -> emit_sequence_length(g.ir, sequence, type)
+  end := -> emit_sequence_length(g.ir, sequence, type)
   generate_counting_loop g, '0', end, body, define
   release_scope g, sequence_scope
   g.locals.pop()
 
 # The items' places are counted in a slot, which each round reads and increments first.
-const generate_iter_loop = (
+generate_iter_loop := (
   g: Generator, iterable: Expression, type: Type, variable: Identifier,
   define_index: (Map<String, CodegenLocal>, String) -> void, body: () -> void
 ) ->
-  const item = iterable_item(type)!
-  const iter_scope = g.locals.push()
-  const iter = generate(g, iterable)
+  item := iterable_item(type)!
+  iter_scope := g.locals.push()
+  iter := generate(g, iterable)
   iter_scope[' iterated Iter'] = store_in_slot(g, iter, type)
   emit_iter_start g.ir, iter
   emit_exception_check g
-  const counter = g.ir.alloca('i64')
+  counter := g.ir.alloca('i64')
   g.ir.emit "store i64 0, ptr #{counter}"
-  const loop_body = (value: String, exit_label: String, next_label: String) ->
-    const place = g.ir.assign("load i64, ptr #{counter}")
-    const next_place = g.ir.assign("add i64 #{place}, 1")
+  loop_body := (value: String, exit_label: String, next_label: String) ->
+    place := g.ir.assign("load i64, ptr #{counter}")
+    next_place := g.ir.assign("add i64 #{place}, 1")
     g.ir.emit "store i64 #{next_place}, ptr #{counter}"
-    const define = (scope: Map<String, CodegenLocal>) ->
+    define := (scope: Map<String, CodegenLocal>) ->
       scope[variable.name] = store_in_slot(g, value, item)
       define_index scope, place
     generate_loop_body g, body, exit_label, next_label, define
@@ -184,27 +184,27 @@ const generate_iter_loop = (
 # Counts from start while the counter is below the end, which is evaluated in the header. The
 # counter is a phi in the header, incremented in the latch block; it cannot overflow there, since
 # it is below the end.
-const generate_counting_loop = (
+generate_counting_loop := (
   g: Generator, start: String, end: () -> String, body: () -> void,
   define: (Map<String, CodegenLocal>, String) -> void
 ) ->
-  const ir = g.ir
-  const preheader_label = ir.current_block
-  const header_label = ir.fresh_label('for.header')
-  const body_label = ir.fresh_label('for.body')
-  const latch_label = ir.fresh_label('for.latch')
-  const exit_label = ir.fresh_label('for.exit')
-  const next = ir.fresh_register()
+  ir := g.ir
+  preheader_label := ir.current_block
+  header_label := ir.fresh_label('for.header')
+  body_label := ir.fresh_label('for.body')
+  latch_label := ir.fresh_label('for.latch')
+  exit_label := ir.fresh_label('for.exit')
+  next := ir.fresh_register()
   ir.emit "br label %#{header_label}"
 
   ir.start_block header_label
-  const incoming = "[ #{start}, %#{preheader_label} ], [ #{next}, %#{latch_label} ]"
-  const current = ir.assign("phi i64 #{incoming}")
-  const in_range = ir.assign("icmp slt i64 #{current}, #{end()}")
+  incoming := "[ #{start}, %#{preheader_label} ], [ #{next}, %#{latch_label} ]"
+  current := ir.assign("phi i64 #{incoming}")
+  in_range := ir.assign("icmp slt i64 #{current}, #{end()}")
   ir.emit "br i1 #{in_range}, label %#{body_label}, label %#{exit_label}"
 
   ir.start_block body_label
-  const define_current = (scope: Map<String, CodegenLocal>) -> define(scope, current)
+  define_current := (scope: Map<String, CodegenLocal>) -> define(scope, current)
   generate_loop_body g, body, exit_label, latch_label, define_current
   ir.emit "br label %#{latch_label}"
 
@@ -214,7 +214,7 @@ const generate_counting_loop = (
 
   ir.start_block exit_label
 
-const generate_loop_body = (
+generate_loop_body := (
   g: Generator, body: () -> void, break_label: String, continue_label: String,
   define: (Map<String, CodegenLocal>) -> void
 ): void ->
@@ -224,9 +224,9 @@ const generate_loop_body = (
 
 # Leaving the loop's scopes early releases their references, as their ends would, and runs the
 # finally blocks inside the loop.
-export const generate_control_jump = (g: Generator, jump: Jump) ->
-  const loop = g.loops.last()!
+export generate_control_jump := (g: Generator, jump: Jump) ->
+  loop := g.loops.last()!
   leave_scopes g, loop.scope_depth
-  const target = jump.kind == 'break' then loop.break_label else loop.continue_label
+  target := jump.kind == 'break' then loop.break_label else loop.continue_label
   g.ir.emit "br label %#{target}"
   g.ir.start_unreachable()

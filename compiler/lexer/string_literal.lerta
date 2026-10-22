@@ -12,10 +12,10 @@ export struct CodePart(source: String, line: Int, column: Int)
 export type TemplatePart = TextPart | CodePart
 
 # Reads the literal whose opening quote is at `start`. Returns its parts and the index after it.
-export const scan_double_quoted = (line: SourceLine, start: Int) ->
-  const template = Template()
-  const at_end = (i: Int) -> i == line.length or line.bytes[i] == '"'
-  const close = read_template(line, start + 1, template, at_end)
+export scan_double_quoted := (line: SourceLine, start: Int) ->
+  template := Template()
+  at_end := (i: Int) -> i == line.length or line.bytes[i] == '"'
+  close := read_template(line, start + 1, template, at_end)
   line.fail 'unterminated string literal', start if close == line.length
   { parts: template.finish(), end: close + 1 }
 
@@ -25,22 +25,22 @@ export struct MultilineLiteral(parts: TemplatePart[], line: SourceLine, end: Int
 # Reads the literal whose opening quotes, `"""` or `'''`, end the line `lines[first]`, at `start`.
 # Its text is that of the lines after it, up to its closing quotes, without their common
 # indentation, joined by line feeds.
-export const scan_multiline = (lines: SourceLine[], first: Int, start: Int) ->
-  const is_raw = lines[first].bytes[start] == "'"
+export scan_multiline := (lines: SourceLine[], first: Int, start: Int) ->
+  is_raw := lines[first].bytes[start] == "'"
   var last = first
   var close: Int?
   while close == nil
     last += 1
     lines[first].fail('unterminated string literal', start) if last == lines.length
     close = is_raw then closing_raw_quotes(lines[last]) else closing_quotes(lines[last])
-  const ends = [i == last then close! else lines[i].length for i in (first + 1)...(last + 1)]
-  const texts = [lines[first + 1 + i].text(0, end) for end, i in ends]
-  const width = common_indentation(texts)
-  const template = Template()
+  ends := [i == last then close! else lines[i].length for i in (first + 1)...(last + 1)]
+  texts := [lines[first + 1 + i].text(0, end) for end, i in ends]
+  width := common_indentation(texts)
+  template := Template()
   for end, i in ends
     template.text += "\n" if i > 0
     continue if is_blank(texts[i])
-    const line = lines[first + 1 + i]
+    line := lines[first + 1 + i]
     if is_raw
       template.text += line.text(width, end)
     else
@@ -49,37 +49,37 @@ export const scan_multiline = (lines: SourceLine[], first: Int, start: Int) ->
 
 # The least of the leading spaces of the lines that are not blank, which a `"""` or `'''` literal
 # leaves out of each.
-export const common_indentation = (lines: String[]) ->
+export common_indentation := (lines: String[]) ->
   var width: Int?
   for line in lines
     continue if is_blank(line)
-    const spaces = leading_spaces(line)
+    spaces := leading_spaces(line)
     width = spaces if width == nil or spaces < width
   width ? 0
 
 # Whether the line of a `"""` or `'''` literal is blank, which makes it empty, whatever its
 # indentation.
-export const is_blank = (line: String) -> leading_spaces(line) == line.binary.length
+export is_blank := (line: String) -> leading_spaces(line) == line.binary.length
 
-const leading_spaces = (line: String) ->
+leading_spaces := (line: String) ->
   var count = 0
   count += 1 while count < line.binary.length and line.binary[count] == ' '
   count
 
 # The index of the `'''` that closes a `'''` literal on the line, if one does: the first there.
-const closing_raw_quotes = (line: SourceLine) ->
+closing_raw_quotes := (line: SourceLine) ->
   for i in 0...line.length
     return i if line.bytes.occurs_at(i, "'''".binary)
   nil
 
 # The index of the `"""` that closes a `"""` literal on the line, if one does. A `\` escapes the
 # character after it, so `\"""` is no closing, nor is one in an interpolation.
-const closing_quotes = (line: SourceLine) ->
+closing_quotes := (line: SourceLine) ->
   var i = 0
   while i < line.length
     return i if line.bytes.occurs_at(i, '"""'.binary)
     if line.bytes.occurs_at(i, '#{'.binary)
-      const brace = find_interpolation_end(line, i + 2)
+      brace := find_interpolation_end(line, i + 2)
       i = (brace ? line.fail('unterminated interpolation', i)) + 1
     else
       i += line.bytes[i] == '\' then 2 else 1
@@ -102,25 +102,25 @@ class Template
 
 # Reads the text from `start` into the template, up to where `at_end` holds, which it holds at the
 # end of the line, if not before. Returns the index there.
-const read_template = (line: SourceLine, start: Int, template: Template, at_end: (Int) -> Bool) ->
+read_template := (line: SourceLine, start: Int, template: Template, at_end: (Int) -> Bool) ->
   # The bytes from `plain` on need no change and are taken whole; escapes and interpolations split
   # them only between whole characters.
   var i = start
   var plain = i
   while not at_end(i)
-    const c = line.bytes[i]
+    c := line.bytes[i]
     case
       when c == '\'
-        const escape = read_escape(line, i)
+        escape := read_escape(line, i)
         template.text += line.text(plain, i)
         template.text += escape.value
         i = escape.end
         plain = i
       when c == '#' and line.bytes.occurs_at(i + 1, '{'.binary)
-        const brace = find_interpolation_end(line, i + 2)
-        const close = brace ? line.fail('unterminated interpolation', i)
+        brace := find_interpolation_end(line, i + 2)
+        close := brace ? line.fail('unterminated interpolation', i)
         template.text += line.text(plain, i)
-        const source = line.text(i + 2, close)
+        source := line.text(i + 2, close)
         template.add_code CodePart(source, line: line.number, column: line.column(i + 2))
         i = close + 1
         plain = i
@@ -128,17 +128,17 @@ const read_template = (line: SourceLine, start: Int, template: Template, at_end:
   template.text += line.text(plain, i)
   i
 
-const read_escape = (line: SourceLine, start: Int) ->
-  const kind: Byte = start + 1 < line.length then line.bytes[start + 1] else 0
-  const simple = simple_escape(kind)
+read_escape := (line: SourceLine, start: Int) ->
+  kind: Byte = start + 1 < line.length then line.bytes[start + 1] else 0
+  simple := simple_escape(kind)
   return { value: simple, end: start + 2 } if simple
   line.fail 'invalid escape sequence', start if not line.bytes.occurs_at(start + 1, 'u{'.binary)
-  const close = line.index_of('}', start + 3) ? line.fail('invalid unicode escape', start)
-  const digits = line.bytes.slice(start + 3, close)
-  const char = parse_char(digits) ? line.fail('invalid unicode escape', start)
+  close := line.index_of('}', start + 3) ? line.fail('invalid unicode escape', start)
+  digits := line.bytes.slice(start + 3, close)
+  char := parse_char(digits) ? line.fail('invalid unicode escape', start)
   { value: char.to_string(), end: close + 1 }
 
-const simple_escape = (kind: Byte) ->
+simple_escape := (kind: Byte) ->
   case kind
     when 'n' then "\n"
     when 't' then "\t"
@@ -150,24 +150,24 @@ const simple_escape = (kind: Byte) ->
     else nil
 
 # The Char that 1 to 6 hexadecimal digits give, or nil if they give none.
-const parse_char = (digits: Binary) ->
+parse_char := (digits: Binary) ->
   return nil if digits.length == 0 or digits.length > 6
   var value = 0
   for digit in digits
-    const digit_value = hex_digit_value(digit) ? return nil
+    digit_value := hex_digit_value(digit) ? return nil
     value = value << 4 | digit_value
   value.to_char()
 
 # The index of the `}` that closes an interpolation, skipping nested braces and string literals.
 # Each arm moves past what it reads.
-const find_interpolation_end = (line: SourceLine, start: Int): Int? ->
+find_interpolation_end := (line: SourceLine, start: Int): Int? ->
   var depth = 0
   var i = start
   while i < line.length
     case line.bytes[i]
       when '"' then i = scan_double_quoted(line, i).end
       when "'"
-        const close = line.index_of("'", i + 1) ? return nil
+        close := line.index_of("'", i + 1) ? return nil
         i = close + 1
       when '{'
         depth += 1

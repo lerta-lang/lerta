@@ -31,7 +31,7 @@ export class Module
 
 # Every module but std:builtins itself imports it, as `import 'std:builtins'`, for the builtin
 # functions and the methods of the builtin types that it gives.
-export const BUILTINS_MODULE = 'std:builtins'
+export BUILTINS_MODULE := 'std:builtins'
 
 # A module as it is loaded: its imports refer to the modules by their places in the loading order,
 # since a module's index is known only once its imports are loaded.
@@ -57,9 +57,9 @@ class Loader
 
 # The modules, each after those it imports unless they import it back, so the entry module comes
 # last. The standard modules are those embedded in the compiler.
-export const load_modules = (entry_path: String) ->
-  const loader = Loader(entry_path, cwd: real_path_text('.'))
-  const source = await read_entry_source(entry_path)
+export load_modules := (entry_path: String) ->
+  loader := Loader(entry_path, cwd: real_path_text('.'))
+  source := await read_entry_source(entry_path)
   await load(loader, module_key(entry_path), source, nil)
   [finished_module(loader, id) for id in loader.order]
 
@@ -67,12 +67,12 @@ export const load_modules = (entry_path: String) ->
 # path, so that one file reached by different paths loads once, and its imports are relative to
 # where it really is. Diagnostics name a file by a path from the entry module's directory as
 # given. Returns the module's place in the loading order.
-const load = (loader: Loader, key: String, source: String, display_path: String?): Promise<Int> ->
-  const location = module_location(loader.entry_path, display_path)
-  const program = parse(tokenize(source, location), location)
-  const with_builtins = key == BUILTINS_MODULE then program else [builtins_import(), program...]
-  const id = loader.loaded.length
-  const module = LoadingModule(key, display_path, program: with_builtins)
+load := (loader: Loader, key: String, source: String, display_path: String?): Promise<Int> ->
+  location := module_location(loader.entry_path, display_path)
+  program := parse(tokenize(source, location), location)
+  with_builtins := key == BUILTINS_MODULE then program else [builtins_import(), program...]
+  id := loader.loaded.length
+  module := LoadingModule(key, display_path, program: with_builtins)
   loader.loaded.push module
   loader.by_key[key] = id
   for statement in with_builtins
@@ -82,102 +82,100 @@ const load = (loader: Loader, key: String, source: String, display_path: String?
   loader.order.push id
   id
 
-const builtins_import = (): Statement ->
+builtins_import := (): Statement ->
   Import names: [], module: BUILTINS_MODULE, position: Position(line: 1, column: 1)
 
 # The module that an import names, loaded if it is not yet: `std:name` is a standard module, and a
 # path that starts with `./` or `../` is a file relative to the importing one, `from` by its key:
 # for a module of std, a file of std (see standard_import). Other names are reserved. `location`
 # names the importing module in diagnostics.
-const visit = (loader: Loader, statement: Import, from: String, location: String): Promise<Int> ->
-  const module = statement.module
+visit := (loader: Loader, statement: Import, from: String, location: String): Promise<Int> ->
+  module := statement.module
   if is_standard_name(module)
-    const source = imported_standard_source(statement, location)
+    source := imported_standard_source(statement, location)
     return loaded(loader, module) ? await load(loader, module, source, module)
   return await visit_standard_file(loader, statement, from, location) if is_standard_name(from)
-  const path = imported_file(statement, dirname(from), location)
-  const real = real_path_text(path)
-  const display_path = relative(loader.cwd, dirname(loader.entry_path), path)
+  path := imported_file(statement, dirname(from), location)
+  real := real_path_text(path)
+  display_path := relative(loader.cwd, dirname(loader.entry_path), path)
   loaded(loader, real) ? await load(loader, real, await read_source(path), display_path)
 
 # A file of std that a standard module imports by a relative path.
-const visit_standard_file = (
+visit_standard_file := (
   loader: Loader, statement: Import, from: String, location: String
 ): Promise<Int> ->
-  const missing = ->
-    import_error statement, location, "cannot find module '#{statement.module}' in std"
-  const { module, source } = standard_import(from, statement.module) ? missing()
+  missing := -> import_error(statement, location, "cannot find module '#{statement.module}' in std")
+  { module, source } := standard_import(from, statement.module) ? missing()
   loaded(loader, module) ? await load(loader, module, source, module)
 
 # The place of the module of `key` if it is loaded. An import of a module whose imports are being
 # loaded closes a cycle (see close_cycle).
-const loaded = (loader: Loader, key: String) ->
-  const id = loader.by_key[key] ? return nil
+loaded := (loader: Loader, key: String) ->
+  id := loader.by_key[key] ? return nil
   close_cycle loader, id if loader.loaded[id].index == -1
   id
 
 # An import of a module whose imports are being loaded closes a cycle: that module and those that
 # started loading after it and are still loading, which import each other in turn. Cycles that
 # share a module are one.
-const close_cycle = (loader: Loader, back: Int) ->
-  const members: Int[]
+close_cycle := (loader: Loader, back: Int) ->
+  members: Int[]
   for id in back...loader.loaded.length
-    const module = loader.loaded[id]
+    module := loader.loaded[id]
     continue if module.index != -1
-    const ids = module.cycle.length > 0 then module.cycle else [id]
+    ids := module.cycle.length > 0 then module.cycle else [id]
     for each in ids
       members.push each if not members.contains(each)
   loader.loaded[id].cycle = members for id in members
 
-const imported_standard_source = (statement: Import, location: String) ->
-  return source if const source = standard_source(statement.module)
-  const list = standard_names().join(', ')
-  const message = "unknown module '#{statement.module}'; the standard modules are #{list}"
+imported_standard_source := (statement: Import, location: String) ->
+  return source if source := standard_source(statement.module)
+  list := standard_names().join(', ')
+  message := "unknown module '#{statement.module}'; the standard modules are #{list}"
   import_error statement, location, message
 
-const imported_file = (statement: Import, from: String, location: String) ->
-  const module = statement.module
+imported_file := (statement: Import, from: String, location: String) ->
+  module := statement.module
   if not module.starts_with('./') and not module.starts_with('../')
-    const rule = 'a file is imported by a path that starts with ./ or ../'
+    rule := 'a file is imported by a path that starts with ./ or ../'
     import_error statement, location, "unknown module '#{module}'; #{rule}"
-  const path = join(from, "#{module}.lerta")
+  path := join(from, "#{module}.lerta")
   import_error statement, location, "cannot find module '#{module}'" if not is_file(path)
   path
 
-const import_error = (statement: Import, location: String, message: String) ->
-  const { line, column } = statement.position
+import_error := (statement: Import, location: String, message: String) ->
+  { line, column } := statement.position
   compile_error location, line, column, message
 
-const finished_module = (loader: Loader, id: Int) ->
-  const loading = loader.loaded[id]
-  const index_of = (place: Int) -> loader.loaded[place].index
-  const imported: Map<Import, Int>
+finished_module := (loader: Loader, id: Int) ->
+  loading := loader.loaded[id]
+  index_of := (place: Int) -> loader.loaded[place].index
+  imported: Map<Import, Int>
   imported[statement] = index_of(place) for (statement, place) in loading.imported.entries()
-  const { index, key, display_path, program } = loading
-  const symbol_name = display_path ? "./#{basename(loader.entry_path)}"
-  const cycle = [index_of(place) for place in loading.cycle]
+  { index, key, display_path, program } := loading
+  symbol_name := display_path ? "./#{basename(loader.entry_path)}"
+  cycle := [index_of(place) for place in loading.cycle]
   Module index, display_path, symbol_name, key, program, imported, cycle
 
-export const is_standard_module = (module: Module) ->
-  return is_standard_name(path) if const path = module.display_path
+export is_standard_module := (module: Module) ->
+  return is_standard_name(path) if path := module.display_path
   false
 
 # The key of the module at the path (see load).
-export const module_key = (path: String) ->
-  is_standard_name(path) then path else real_path_text(path)
+export module_key := (path: String) -> is_standard_name(path) then path else real_path_text(path)
 
 # The keys of the files that the file at the path imports, read without loading them.
-export const imported_files = (path: String) ->
-  const location = module_location(path, nil)
-  const program = parse(tokenize(await read_source(path), location), location)
-  const from = dirname(module_key(path))
-  const files: String[]
+export imported_files := (path: String) ->
+  location := module_location(path, nil)
+  program := parse(tokenize(await read_source(path), location), location)
+  from := dirname(module_key(path))
+  files: String[]
   for statement in program
     if statement is Import and not is_standard_name(statement.module)
       files.push real_path_text(imported_file(statement, from, location))
   files
 
 # Paths are compared as text, so a real path must be UTF-8.
-export const real_path_text = (path: String) ->
-  const message = "the real path of '#{path}' is not valid UTF-8"
+export real_path_text := (path: String) ->
+  message := "the real path of '#{path}' is not valid UTF-8"
   real_path(path).text() ? throw CompileError(message)

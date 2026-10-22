@@ -22,155 +22,153 @@ import
 from '../types'
 
 # A call to the name of a class or struct, not shadowed by a local or a function, constructs one.
-export const constructed_type = (body: Body, callee: Expression) ->
+export constructed_type := (body: Body, callee: Expression) ->
   return nil if callee is not Identifier
-  const name = callee.name
+  name := callee.name
   return nil if lookup(body, name) != nil or has_function(body.shared, name)
-  const type = object_type(body.shared, name) ? return nil
+  type := object_type(body.shared, name) ? return nil
   body.facts.types[callee] = type
   type
 
-export const type_of_construction = (
-  body: Body, call: Call, declared: ObjectType, expected: Type?
-) ->
-  const program = body.program
+export type_of_construction := (body: Body, call: Call, declared: ObjectType, expected: Type?) ->
+  program := body.program
   reject_positional_args body, call, declared
-  const named_args = construction_arguments(call)
-  const typed: Map<Expression, Type>
-  const type = constructed_instance(body, call, named_args, declared, expected, typed)
+  named_args := construction_arguments(call)
+  typed: Map<Expression, Type>
+  type := constructed_instance(body, call, named_args, declared, expected, typed)
   body.facts.types[call.callee] = type
   # The callee is a name (see constructed_type).
   record_reference body, call.callee as Identifier!, Constructor(type)
-  const info = info_of(program, type)
-  const given: Set<String>
+  info := info_of(program, type)
+  given: Set<String>
   for arg in named_args
-    const { name, position } = arg.name
+    { name, position } := arg.name
     fail program, position, "the argument '#{name}' is given twice" if given.has(name)
     given.add name
-    const field_type = argument_type(body, info, arg)
-    const value = arg.value
-    if const value_type = typed[value]
+    field_type := argument_type(body, info, arg)
+    value := arg.value
+    if value_type := typed[value]
       require_type body, value, value_type, field_type
     else
       expect_type body, value, field_type
   for field in info.fields
-    const is_required = field.value == nil and field.type! is not OptionalType
+    is_required := field.value == nil and field.type! is not OptionalType
     if is_required and not given.has(field.name.name)
       fail program, call.position, "missing argument '#{field.name.name}'"
   type
 
 # The field that a named argument gives, which must be an argument (see is_argument).
-const argument_field = (body: Body, info: ObjectInfo, arg: NamedValue) ->
-  const { name, position } = arg.name
-  const type = format_type(info.type)
-  const no_field = -> fail(body.program, position, "#{type} has no field '#{name}'")
-  const field = info.fields.find((each) -> each.name.name == name) ? no_field()
+argument_field := (body: Body, info: ObjectInfo, arg: NamedValue) ->
+  { name, position } := arg.name
+  type := format_type(info.type)
+  no_field := -> fail(body.program, position, "#{type} has no field '#{name}'")
+  field := info.fields.find((each) -> each.name.name == name) ? no_field()
   fail body.program, position, "#{type} computes its field '#{name}'" if not is_argument(field)
   field
 
 # The type of the field that a named argument gives, which its default alone may give.
-const argument_type = (body: Body, info: ObjectInfo, arg: NamedValue) ->
+argument_type := (body: Body, info: ObjectInfo, arg: NamedValue) ->
   field_type body.program, info, argument_field(body, info, arg), arg.name.position
 
 # The type that the call constructs: the declared class or struct, or an instance of a generic
 # one. Its type arguments are those written, or else those that the expected type gives, then the
 # named arguments typed alone, as for a generic function (see infer_type_arguments), whose types
 # `typed` keeps.
-const constructed_instance = (
+constructed_instance := (
   body: Body, call: Call, named_args: NamedValue[], declared: ObjectType, expected: Type?,
   typed: Map<Expression, Type>
 ) ->
-  const program = body.program
+  program := body.program
   if declared.args.length == 0
     reject_type_arguments body, call
     return declared
-  const info = info_of(program, declared)
+  info := info_of(program, declared)
   if call.type_args.length > 0
-    const type_name = NamedType(name: declared.name, args: call.type_args, position: call.position)
+    type_name := NamedType(name: declared.name, args: call.type_args, position: call.position)
     return instantiate_object(program, body.resolver, declared, type_name)
-  const type_bindings: Map<String, Type>
-  const bind = (name: String, type: Type) ->
+  type_bindings: Map<String, Type>
+  bind := (name: String, type: Type) ->
     return if is_kind(type, 'nil') or is_kind(type, 'never')
     type_bindings[name] = type if not type_bindings.has(name)
   infer declared, inner_of(expected), bind if expected
-  const infer_from = (arg: NamedValue, expected_type: Type?) ->
-    const type = type_of(body, arg.value, expected_type)
+  infer_from := (arg: NamedValue, expected_type: Type?) ->
+    type := type_of(body, arg.value, expected_type)
     typed[arg.value] = type
     infer argument_type(body, info, arg), type, bind
-  const is_literal = (arg: NamedValue) -> needs_context(body, arg.value)
+  is_literal := (arg: NamedValue) -> needs_context(body, arg.value)
   for arg in named_args
     infer_from arg, nil if not is_literal(arg)
   # A literal whose field's type is still unknown gives its own type, as `1` an Int.
-  const literals = [arg for arg in named_args when is_literal(arg)]
+  literals := [arg for arg in named_args when is_literal(arg)]
   for arg in float_first(literals, (arg) -> arg.value)
-    const pattern = substitute(argument_type(body, info, arg), type_bindings)
+    pattern := substitute(argument_type(body, info, arg), type_bindings)
     continue if not has_type_parameters(pattern)
     infer_from arg, arg.value is FunctionLiteral then pattern
-  const args: Type[]
+  args: Type[]
   for param in info.declaration.type_params
-    const name = param.name.name
-    const cannot_infer = ->
-      const advice = "write it, as in #{declared.name}<...>(...)"
-      const message = "cannot infer the type argument #{name} of '#{declared.name}'; #{advice}"
+    name := param.name.name
+    cannot_infer := ->
+      advice := "write it, as in #{declared.name}<...>(...)"
+      message := "cannot infer the type argument #{name} of '#{declared.name}'; #{advice}"
       fail program, call.position, message
     args.push type_bindings[name] ? cannot_infer()
-  const { name, symbol, module, is_struct } = declared
-  const type = ObjectType(name, symbol, module, is_struct, args)
+  { name, symbol, module, is_struct } := declared
+  type := ObjectType(name, symbol, module, is_struct, args)
   reject_invalid_instance program, body.resolver.module_index, type, call.position
   type
 
 # The class or struct of the type, if it has a method of the name.
-export const method_owner = (body: Body, object_type: Type, name: String) ->
+export method_owner := (body: Body, object_type: Type, name: String) ->
   return nil if object_type is not ObjectType
   info_of(body.program, object_type).methods.has(name) then object_type
 
 # The type of the method `name` of an object, or nil if the type is no class or struct with that
 # method.
-export const object_method_type = (body: Body, object_type: Type, name: Identifier) ->
-  const owner = method_owner(body, object_type, name.name) ? return nil
-  const module_index = info_of(body.program, owner).module_index
+export object_method_type := (body: Body, object_type: Type, name: Identifier) ->
+  owner := method_owner(body, object_type, name.name) ? return nil
+  module_index := info_of(body.program, owner).module_index
   function_type_of body.program, module_index, method_key(owner.name, name.name), name.position
 
 # `@` is a local of a method's body (see check_function_body), which a function literal in it
 # captures like any other. An initializer has no such local, so `@` can only read fields there (see
 # field_of).
-export const type_of_this = (body: Body, at: Expression) ->
-  return local.type if const local = lookup(body, '@')
-  const message =
+export type_of_this := (body: Body, at: Expression) ->
+  return local.type if local := lookup(body, '@')
+  message :=
     if body.self
       'an initializer can only use `@` to read a field, as in `@name`'
     else
       "'@' can only be used in a method, a function literal in a method, or a field initializer"
   fail body.program, at.position, message
 
-export const type_of_record = (body: Body, record: RecordLiteral, expected: Type?) ->
-  const program = body.program
-  const names: Set<String>
+export type_of_record := (body: Body, record: RecordLiteral, expected: Type?) ->
+  program := body.program
+  names: Set<String>
   for field in record.fields
-    const { name, position } = field.name
+    { name, position } := field.name
     fail program, position, "'#{name}' is already a field" if names.has(name)
     names.add name
-  const expected_fields = expected_record_fields(expected)
-  const type_of_field = (field: NamedValue) ->
-    const name = field.name.name
-    const value = field.value
-    if const expected_field = expected_fields.find((each) -> each.name == name)
+  expected_fields := expected_record_fields(expected)
+  type_of_field := (field: NamedValue) ->
+    name := field.name.name
+    value := field.value
+    if expected_field := expected_fields.find((each) -> each.name == name)
       expect_type body, value, expected_field.type
       return RecordField(name, type: expected_field.type)
-    const type = type_of(body, value)
+    type := type_of(body, value)
     if is_one_of_kinds(type, ['void', 'never', 'nil'])
       fail program, value.position, "a field cannot hold a value of type #{format_type(type)}"
     RecordField name, type
   record_type [type_of_field(field) for field in record.fields]
 
-const expected_record_fields = (expected: Type?): RecordField[] ->
-  const type = expected ? return []
-  const record = inner_of(type)
+expected_record_fields := (expected: Type?): RecordField[] ->
+  type := expected ? return []
+  record := inner_of(type)
   record is RecordType then record.fields else []
 
 # A construction's arguments are named, or names alone (see construction_arguments).
-const reject_positional_args = (body: Body, call: Call, type: ObjectType) ->
-  if const not_named = call.args.find((arg) -> arg is not Identifier)
-    const example = 'Point(x: 1) or Point(x)'
-    const message = "#{format_type(type)} is constructed with named arguments, as in #{example}"
+reject_positional_args := (body: Body, call: Call, type: ObjectType) ->
+  if not_named := call.args.find((arg) -> arg is not Identifier)
+    example := 'Point(x: 1) or Point(x)'
+    message := "#{format_type(type)} is constructed with named arguments, as in #{example}"
     fail body.program, not_named.position, message

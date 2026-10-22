@@ -16,44 +16,44 @@ import
   parse_type_parameters
 from './type'
 
-export const starts_type_alias = (tokens: TokenStream) ->
-  const name_follows = tokens.peek_at(1).kind == IDENTIFIER
+export starts_type_alias := (tokens: TokenStream) ->
+  name_follows := tokens.peek_at(1).kind == IDENTIFIER
   tokens.at_word('type') and name_follows and tokens.peek_at(2).kind == '='
 
-export const parse_type_alias = (tokens: TokenStream) ->
-  const position = token_position(tokens.next())
-  const name = parse_identifier(tokens)
+export parse_type_alias := (tokens: TokenStream) ->
+  position := token_position(tokens.next())
+  name := parse_identifier(tokens)
   tokens.expect '=', "'='"
   TypeAlias name, position, type: parse_aliased_type(tokens)
 
 # `export` before a `const` (a function or a value) or a type, or before the names of a module or
 # the module alone; the checker tells whether it is at the top level.
-export const parse_export = (tokens: TokenStream): Statement ->
-  const token = tokens.next()
+export parse_export := (tokens: TokenStream): Statement ->
+  token := tokens.next()
   return parse_reexport(tokens, token_position(token)) if at_reexport(tokens)
-  const fail = ->
-    const types = 'a class, a struct, an enum, an interface, a type alias'
-    const exportable = "a const, #{types} or an extern"
+  fail := ->
+    types := 'a class, a struct, an enum, an interface, a type alias'
+    exportable := "a const, #{types} or an extern"
     tokens.fail token_position(token), "only #{exportable} can be exported"
   if at_destructuring(tokens)
     parse_destructuring_statement tokens
     fail()
-  const statement = parse_statement(tokens)
-  const declaration = as_exportable(statement) ? fail()
+  statement := parse_statement(tokens)
+  declaration := as_exportable(statement) ? fail()
   fail() if declaration is Declaration and declaration.mutable
   declaration.exported = true
   statement
 
 # `extern symbol as name: (A) -> R`.
-export const parse_extern = (tokens: TokenStream) ->
-  const position = token_position(tokens.next())
-  const symbol = parse_identifier(tokens)
-  const has_name = tokens.accept_word('as')
-  const name = has_name then parse_identifier(tokens) else symbol
+export parse_extern := (tokens: TokenStream) ->
+  position := token_position(tokens.next())
+  symbol := parse_identifier(tokens)
+  has_name := tokens.accept_word('as')
+  name := has_name then parse_identifier(tokens) else symbol
   tokens.expect ':', "':'"
   Extern symbol, name, position, type: parse_type_name(tokens)
 
-const at_reexport = (tokens: TokenStream) ->
+at_reexport := (tokens: TokenStream) ->
   case tokens.peek().kind
     when STRING then true
     when NEWLINE then tokens.peek_at(1).kind == INDENT
@@ -62,61 +62,61 @@ const at_reexport = (tokens: TokenStream) ->
 
 # Whether the token can follow the first of the names that `export` takes from a module, which
 # tells them from a declaration such as `export type Name = ...`.
-const follows_exported_name = (token: Token) ->
-  const is_word = token.kind == IDENTIFIER and (token.text == 'as' or token.text == 'from')
+follows_exported_name := (token: Token) ->
+  is_word := token.kind == IDENTIFIER and (token.text == 'as' or token.text == 'from')
   token.kind == ',' or is_word
 
-const parse_reexport = (tokens: TokenStream, position: Position) ->
-  const statement = parse_import_after(tokens, position)
-  if const alias = statement.alias
+parse_reexport := (tokens: TokenStream, position: Position) ->
+  statement := parse_import_after(tokens, position)
+  if alias := statement.alias
     tokens.fail alias.position, 'a module is exported by its names, or alone, not as a name'
   statement.exported = true
   statement
 
-export const parse_import = (tokens: TokenStream) ->
+export parse_import := (tokens: TokenStream) ->
   parse_import_after tokens, token_position(tokens.next())
 
 # What follows `import`, or `export` before a module's names.
-const parse_import_after = (tokens: TokenStream, position: Position) ->
+parse_import_after := (tokens: TokenStream, position: Position) ->
   if tokens.peek().kind == STRING
-    const module = parse_module_name(tokens)
+    module := parse_module_name(tokens)
     return Import(position, module, names: []) if not tokens.accept_word('as')
     expect_name tokens, "a name after 'as'"
     return Import(position, module, names: [], alias: parse_identifier(tokens))
-  const ends_line = tokens.peek().kind == NEWLINE
-  const names = ends_line then parse_name_block(tokens) else parse_name_line(tokens)
+  ends_line := tokens.peek().kind == NEWLINE
+  names := ends_line then parse_name_block(tokens) else parse_name_line(tokens)
   tokens.expect_word 'from'
   Import names, position, module: parse_module_name(tokens)
 
 # The names on the line, separated by commas; `from` follows the last one, which no comma does.
-const parse_name_line = (tokens: TokenStream) ->
+parse_name_line := (tokens: TokenStream) ->
   expect_name tokens, 'a name, end of line or module name'
-  const names = [parse_import_name(tokens)]
+  names := [parse_import_name(tokens)]
   while tokens.accept(',')
     expect_name tokens, "a name after ','"
     names.push parse_import_name(tokens)
   names
 
 # `from` may be a name, unless the module follows it.
-const expect_name = (tokens: TokenStream, expected: String) ->
-  const at_module = tokens.at_word('from') and tokens.peek_at(1).kind == STRING
-  const at_name = tokens.peek().kind == IDENTIFIER and not at_module
+expect_name := (tokens: TokenStream, expected: String) ->
+  at_module := tokens.at_word('from') and tokens.peek_at(1).kind == STRING
+  at_name := tokens.peek().kind == IDENTIFIER and not at_module
   tokens.fail_expecting tokens.peek(), expected if not at_name
 
 # The names on the indented lines below `import`; `from` follows on the line after them.
-const parse_name_block = (tokens: TokenStream) ->
-  const names: ImportName[]
+parse_name_block := (tokens: TokenStream) ->
+  names: ImportName[]
   tokens.read_block_items -> names.push(parse_import_name(tokens))
   names
 
-const parse_module_name = (tokens: TokenStream) ->
-  const module = tokens.peek()
+parse_module_name := (tokens: TokenStream) ->
+  module := tokens.peek()
   tokens.fail_expecting module, 'module name' if module.kind != STRING
   tokens.next()
   module.text
 
-const parse_import_name = (tokens: TokenStream) ->
-  const name = parse_identifier(tokens)
+parse_import_name := (tokens: TokenStream) ->
+  name := parse_identifier(tokens)
   return ImportName(name) if not tokens.accept_word('as')
   expect_name tokens, "a name after 'as'"
   ImportName name, alias: parse_identifier(tokens)
@@ -124,42 +124,42 @@ const parse_import_name = (tokens: TokenStream) ->
 # `class Name` or `struct Name`, or `class Name<T>` with type parameters, then its constructor
 # arguments in parentheses, and `: Interface` for an interface it satisfies. Without parentheses,
 # an indented block of members, one per line, follows, which may be left out after an interface.
-export const parse_type_declaration = (tokens: TokenStream) ->
-  const token = tokens.next()
-  const name = parse_identifier(tokens)
-  const type_params = parse_type_parameters(tokens)
-  const has_arguments = tokens.peek().kind == '('
-  const arguments = has_arguments then parse_constructor_arguments(tokens)
-  const satisfies = tokens.accept(':') then parse_named_type(tokens)
-  const block_follows = tokens.peek_at(1).kind == INDENT
+export parse_type_declaration := (tokens: TokenStream) ->
+  token := tokens.next()
+  name := parse_identifier(tokens)
+  type_params := parse_type_parameters(tokens)
+  has_arguments := tokens.peek().kind == '('
+  arguments := has_arguments then parse_constructor_arguments(tokens)
+  satisfies := tokens.accept(':') then parse_named_type(tokens)
+  block_follows := tokens.peek_at(1).kind == INDENT
   if arguments != nil and block_follows
     tokens.fail token_position(tokens.peek_at(2)), 'write the members in () or in a block, not both'
-  const has_body = arguments == nil and (satisfies == nil or block_follows)
-  const members = has_body then parse_members(tokens) else arguments ? []
-  const is_struct = token.kind == 'struct'
-  const position = token_position(token)
+  has_body := arguments == nil and (satisfies == nil or block_follows)
+  members := has_body then parse_members(tokens) else arguments ? []
+  is_struct := token.kind == 'struct'
+  position := token_position(token)
   TypeDeclaration name, type_params, members, is_struct, position, satisfies
 
 # The members in `(...)`, each a constructor argument.
-const parse_constructor_arguments = (tokens: TokenStream) ->
-  const open = tokens.next()
-  const members = tokens.parse_list(')', -> parse_member(tokens))
+parse_constructor_arguments := (tokens: TokenStream) ->
+  open := tokens.next()
+  members := tokens.parse_list(')', -> parse_member(tokens))
   if members.length == 0
     tokens.fail token_position(open), 'write at least one constructor argument in ()'
   for member in members
     if member.value != nil and not member.has_default
-      const message = 'only constructor arguments, `name: Type` or `name = default value`, go in ()'
+      message := 'only constructor arguments, `name: Type` or `name = default value`, go in ()'
       tokens.fail member.position, message
   members
 
 # `interface Name`, or `interface Name<T>`, followed by an indented block of members, one per line,
 # written as a class's; the checker tells which an interface can have, and whether it can have
 # none, without the block.
-export const parse_interface = (tokens: TokenStream) ->
-  const position = token_position(tokens.next())
-  const name = parse_identifier(tokens)
-  const type_params = parse_type_parameters(tokens)
-  const has_members = tokens.peek_at(1).kind == INDENT
+export parse_interface := (tokens: TokenStream) ->
+  position := token_position(tokens.next())
+  name := parse_identifier(tokens)
+  type_params := parse_type_parameters(tokens)
+  has_members := tokens.peek_at(1).kind == INDENT
   InterfaceDeclaration
     name
     type_params
@@ -167,18 +167,18 @@ export const parse_interface = (tokens: TokenStream) ->
     members: has_members then parse_members(tokens) else []
 
 # `enum Name` followed by an indented block of its members, one per line.
-export const parse_enum = (tokens: TokenStream) ->
-  const position = token_position(tokens.next())
-  const name = parse_identifier(tokens)
-  const has_members = tokens.peek().kind != NEWLINE or tokens.peek_at(1).kind == INDENT
+export parse_enum := (tokens: TokenStream) ->
+  position := token_position(tokens.next())
+  name := parse_identifier(tokens)
+  has_members := tokens.peek().kind != NEWLINE or tokens.peek_at(1).kind == INDENT
   tokens.fail position, 'an enum needs at least one member' if not has_members
-  const members = tokens.parse_lines('indented members', -> parse_enum_member(tokens))
+  members := tokens.parse_lines('indented members', -> parse_enum_member(tokens))
   EnumDeclaration name, members, position
 
 # A name, or a string literal, whose text must be known without running the program.
-const parse_enum_member = (tokens: TokenStream): Identifier | StringLiteral ->
-  const token = tokens.peek()
-  const position = token_position(token)
+parse_enum_member := (tokens: TokenStream): Identifier | StringLiteral ->
+  token := tokens.peek()
+  position := token_position(token)
   case token.kind
     when STRING
       tokens.next()
@@ -188,48 +188,48 @@ const parse_enum_member = (tokens: TokenStream): Identifier | StringLiteral ->
 
 # `extend Type`, or `extend<T> T[]` for a generic one, followed by an indented block of
 # methods, one per line.
-export const parse_extend = (tokens: TokenStream) ->
-  const position = token_position(tokens.next())
-  const type_params = parse_type_parameters(tokens)
-  const type = parse_type_name(tokens)
+export parse_extend := (tokens: TokenStream) ->
+  position := token_position(tokens.next())
+  type_params := parse_type_parameters(tokens)
+  type := parse_type_name(tokens)
   Extend type_params, type, position, members: parse_members(tokens)
 
-const parse_members = (tokens: TokenStream) ->
+parse_members := (tokens: TokenStream) ->
   tokens.parse_lines 'indented members', -> parse_member(tokens)
 
-const parse_member_modifier = (tokens: TokenStream) ->
-  const token = tokens.peek()
-  const next = tokens.peek_at(1)
-  const at_weak = tokens.at_word('weak')
-  const is_weak_bang = at_weak and next.kind == '!' and not next.spaced
-  const is_weak = at_weak and next.kind == IDENTIFIER
+parse_member_modifier := (tokens: TokenStream) ->
+  token := tokens.peek()
+  next := tokens.peek_at(1)
+  at_weak := tokens.at_word('weak')
+  is_weak_bang := at_weak and next.kind == '!' and not next.spaced
+  is_weak := at_weak and next.kind == IDENTIFIER
   if at_weak and is_one_of(next.kind, ['const', 'var'])
-    const form = '`weak name: Type?`, without const or var'
+    form := '`weak name: Type?`, without const or var'
     tokens.fail token_position(token), "a weak field is written #{form}"
-  const text =
+  text :=
     case
       when is_weak_bang then 'weak!'
       when is_weak then 'weak'
       else token.kind.to_string()
-  const modifier = MemberModifier.parse(text)
+  modifier := MemberModifier.parse(text)
   tokens.next() if modifier
   tokens.next() if is_weak_bang
   modifier
 
 # `[const | var | weak | weak!] name[: Type][ = [default] value]`, with a type, a value or both.
-const parse_member = (tokens: TokenStream) ->
-  const token = tokens.peek()
-  const modifier = parse_member_modifier(tokens)
-  const name = parse_identifier(tokens)
-  const type = parse_type_annotation(tokens)
-  const has_value = type == nil or tokens.peek().kind == '='
+parse_member := (tokens: TokenStream) ->
+  token := tokens.peek()
+  modifier := parse_member_modifier(tokens)
+  name := parse_identifier(tokens)
+  type := parse_type_annotation(tokens)
+  has_value := type == nil or tokens.peek().kind == '='
   tokens.expect '=', type == nil then "':' or '='" else "'='" if has_value
-  const has_default = has_value and at_default(tokens)
+  has_default := has_value and at_default(tokens)
   tokens.next() if has_default
-  const value = has_value then parse_value(tokens)
+  value := has_value then parse_value(tokens)
   MemberDeclaration name, modifier, type, value, has_default, position: token_position(token)
 
 # `default` marks a default when an operand follows it, as the argument of a call without
 # parentheses would.
-const at_default = (tokens: TokenStream) ->
+at_default := (tokens: TokenStream) ->
   tokens.at_word('default') and starts_spaced_operand(tokens, 1)

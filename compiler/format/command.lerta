@@ -6,20 +6,20 @@ import module_key from '../loader'
 import removable_annotations from './annotations'
 import format_source from './format'
 
-export const format_command = (paths: String[], fix: Bool) ->
+export format_command := (paths: String[], fix: Bool) ->
   var status = 0
   for path in paths
     if not is_file(path) and not is_dir(path)
       print_error "'#{path}' is not a file or a directory"
       status = 1
-  const files = source_files(paths)
-  const removable = await removable_annotations(files)
+  files := source_files(paths)
+  removable := await removable_annotations(files)
   for file in files
     status = 1 if not await format_file(file, fix, removable[module_key(file)] ? [])
   status
 
-const source_files = (paths: String[]) ->
-  const files: String[]
+source_files := (paths: String[]) ->
+  files: String[]
   for path in paths
     if is_file(path)
       files.push path
@@ -27,9 +27,9 @@ const source_files = (paths: String[]) ->
       add_sources files, path.without_suffix('/') ? path
   files
 
-const add_sources = (files: String[], dir: String): void ->
+add_sources := (files: String[], dir: String): void ->
   for name in list_dir(dir)
-    const path = "#{dir}/#{name}"
+    path := "#{dir}/#{name}"
     if is_dir(path)
       add_sources files, path if not name.starts_with('.')
     else if name.ends_with('.lerta')
@@ -37,10 +37,9 @@ const add_sources = (files: String[], dir: String): void ->
 
 # Whether the file is in the style, without the annotations of `removable`, or is written so with
 # `fix`.
-const format_file = (path: String, fix: Bool, removable: String[]) ->
-  const source =
-    (await read_file(path)).text() ? return failed("#{path}: the file is not valid UTF-8")
-  const formatted =
+format_file := (path: String, fix: Bool, removable: String[]) ->
+  source := (await read_file(path)).text() ? return failed("#{path}: the file is not valid UTF-8")
+  formatted :=
     try
       format_source source, path, removable
     catch error: CompileError
@@ -49,10 +48,10 @@ const format_file = (path: String, fix: Bool, removable: String[]) ->
     await write_file(path, formatted.text.binary) if formatted.text != source
     return true
   for finding in formatted.findings
-    const { at, rule } = finding
+    { at, rule } := finding
     print_error "#{path}:#{at.line}:#{at.column}: #{rule.message} (#{rule.label})"
   formatted.findings.length == 0
 
-const failed = (message: String) ->
+failed := (message: String) ->
   print_error message
   false

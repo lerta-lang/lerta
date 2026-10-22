@@ -23,24 +23,22 @@ from '../types'
 
 # The predicates of `icmp` for the comparisons of signed integers; unsigned ones, as Byte, are
 # ordered as unsigned.
-const SIGNED_PREDICATES =
-  '==': 'eq', '!=': 'ne', '<': 'slt', '<=': 'sle', '>': 'sgt', '>=': 'sge'
-const UNSIGNED_PREDICATES =
-  '==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': 'ugt', '>=': 'uge'
+SIGNED_PREDICATES := { '==': 'eq', '!=': 'ne', '<': 'slt', '<=': 'sle', '>': 'sgt', '>=': 'sge' }
+UNSIGNED_PREDICATES := { '==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': 'ugt', '>=': 'uge' }
 
-export const generate_unary = (g: Generator, unary: UnaryOperation) ->
-  return generate(g, call) if const call = g.facts.operator_calls[unary]
+export generate_unary := (g: Generator, unary: UnaryOperation) ->
+  return generate(g, call) if call := g.facts.operator_calls[unary]
   if unary.operator == 'not'
     return g.ir.assign("xor i1 #{generate_condition(g, unary.operand)}, true")
   negate g, generate(g, unary.operand), type_of(g, unary)
 
-const negate = (g: Generator, operand: String, type: Type) ->
+negate := (g: Generator, operand: String, type: Type) ->
   return emit_float_negation(g.ir, operand, type) if is_float(type)
   apply_integer_operator g, '-', '0', operand, type
 
 # The method of a number, `add` and so on, or a String's or a Binary's add, which applies its
 # operator to the object and the arguments, both borrowed.
-export const apply_operator_method = (
+export apply_operator_method := (
   g: Generator, name: String, object: String, args: String[], type: Type
 ) ->
   return negate(g, object, type) if name == 'neg'
@@ -51,41 +49,41 @@ export const apply_operator_method = (
 
 # What `+` appends: the operand, or the call of `to_string()` that gives the text of a Char that the
 # checker made (see appends_unit).
-export const appended = (g: Generator, operand: Expression) ->
-  return call if const call = g.facts.appended_texts[operand]
+export appended := (g: Generator, operand: Expression) ->
+  return call if call := g.facts.appended_texts[operand]
   operand
 
 # An operator that applies through a method is the call of it that the checker made (see
 # type_of_operator_call).
-export const generate_binary = (g: Generator, binary: BinaryOperation) ->
-  return generate(g, call) if const call = g.facts.operator_calls[binary]
-  if const call = g.facts.order_calls[binary]
+export generate_binary := (g: Generator, binary: BinaryOperation) ->
+  return generate(g, call) if call := g.facts.operator_calls[binary]
+  if call := g.facts.order_calls[binary]
     return emit_order_test(g.ir, binary.operator, generate(g, call))
-  const operator = binary.operator
+  operator := binary.operator
   return generate_logical(g, binary) if operator == 'and' or operator == 'or'
   return generate_nil_test(g, binary) if is_nil_test(binary)
-  const left = generate(g, binary.left)
-  const operand_type = type_at_use(g, binary.left)
-  const right_operand = appended(g, binary.right)
-  const right = holding(g, left, operand_type, -> generate(g, right_operand))
-  const is_bytes = is_one_of_kinds(operand_type, ['String', 'Binary'])
+  left := generate(g, binary.left)
+  operand_type := type_at_use(g, binary.left)
+  right_operand := appended(g, binary.right)
+  right := holding(g, left, operand_type, -> generate(g, right_operand))
+  is_bytes := is_one_of_kinds(operand_type, ['String', 'Binary'])
   if is_bytes and operator == '+'
     return emit_extend(g.ir, left, right, type_at_use(g, right_operand))
-  const program = g.code.program
-  const inner = inner_of(operand_type)
-  const by_contents = compares_by_contents(program, inner)
+  program := g.code.program
+  inner := inner_of(operand_type)
+  by_contents := compares_by_contents(program, inner)
   # nil is the null pointer, so optional objects compare as pointers too.
   if is_identity_type(inner) and not by_contents
     return negate_if_unequal(g, operator, generate_same_object(g, left, right))
-  const released = (result: String) ->
+  released := (result: String) ->
     emit_release g.ir, left
     emit_release g.ir, right
     result
   if own_equality(program, operand_type) == 'compare' and not is_equality(operator)
-    const ordering = emit_own_compare(g.ir, program, left, right, operand_type)
+    ordering := emit_own_compare(g.ir, program, left, right, operand_type)
     return released(emit_order_test(g.ir, operator, ordering))
   if by_contents
-    const equal = emit_equals_by_contents(g.ir, program, left, right, operand_type)
+    equal := emit_equals_by_contents(g.ir, program, left, right, operand_type)
     return negate_if_unequal(g, operator, released(equal))
   if operand_type is OptionalType
     return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
@@ -93,22 +91,20 @@ export const generate_binary = (g: Generator, binary: BinaryOperation) ->
     return negate_if_unequal(g, operator, emit_equals(g.ir, left, right))
   return apply_numeric(g, operator, left, right, operand_type) if is_numeric_operator(operator)
   return emit_float_comparison(g.ir, operator, left, right, operand_type) if is_float(operand_type)
-  const is_unsigned = is_integer(operand_type) and not is_signed(operand_type)
-  const predicate = (is_unsigned then UNSIGNED_PREDICATES else SIGNED_PREDICATES)[operator]!
+  is_unsigned := is_integer(operand_type) and not is_signed(operand_type)
+  predicate := (is_unsigned then UNSIGNED_PREDICATES else SIGNED_PREDICATES)[operator]!
   g.ir.assign "icmp #{predicate} #{ir_type(operand_type)} #{left}, #{right}"
 
 # An arithmetic operator applied to two numbers of the type: floats, or integers.
-export const apply_numeric = (
-  g: Generator, operator: String, left: String, right: String, type: Type
-) ->
+export apply_numeric := (g: Generator, operator: String, left: String, right: String, type: Type) ->
   return apply_float_arithmetic(g, operator, left, right, type) if is_float(type)
   apply_integer_operator g, operator, left, right, type
 
-const is_equality = (operator: String) -> operator == '==' or operator == '!='
+is_equality := (operator: String) -> operator == '==' or operator == '!='
 
 # Whether the Ordering, an i64, is one that the operator, `<` or the like, holds for.
-const emit_order_test = (ir: IrBuilder, operator: String, ordering: String) ->
-  const test =
+emit_order_test := (ir: IrBuilder, operator: String, ordering: String) ->
+  test :=
     case operator
       when '<' then "eq i64 #{ordering}, #{LESS}"
       when '<=' then "ne i64 #{ordering}, #{GREATER}"
@@ -117,69 +113,69 @@ const emit_order_test = (ir: IrBuilder, operator: String, ordering: String) ->
   ir.assign "icmp #{test}"
 
 # `!=` is the negation of the equality.
-const negate_if_unequal = (g: Generator, operator: String, equal: String) ->
+negate_if_unequal := (g: Generator, operator: String, equal: String) ->
   operator == '!=' then g.ir.assign("xor i1 #{equal}, true") else equal
 
 # Whether two optional values are both nil, or hold equal values; releases them. Strings and
 # Binaries, which are null for nil, are compared only where both are present.
-const generate_optional_equals = (g: Generator, left: String, right: String, type: OptionalType) ->
-  const ir = g.ir
-  const inner = type.inner
-  const left_present = emit_is_present(ir, left, type)
-  const right_present = emit_is_present(ir, right, type)
-  const same_presence = ir.assign("icmp eq i1 #{left_present}, #{right_present}")
+generate_optional_equals := (g: Generator, left: String, right: String, type: OptionalType) ->
+  ir := g.ir
+  inner := type.inner
+  left_present := emit_is_present(ir, left, type)
+  right_present := emit_is_present(ir, right, type)
+  same_presence := ir.assign("icmp eq i1 #{left_present}, #{right_present}")
   if not is_reference_type(inner)
     # A nil's value is unspecified (see docs/internals.md#memory-management), so the values count
     # only where present.
-    const left_value = emit_unwrap(ir, left, type)
-    const right_value = emit_unwrap(ir, right, type)
-    const same_value = emit_value_equals(ir, left_value, right_value, inner)
-    const values_agree = ir.assign("select i1 #{left_present}, i1 #{same_value}, i1 true")
+    left_value := emit_unwrap(ir, left, type)
+    right_value := emit_unwrap(ir, right, type)
+    same_value := emit_value_equals(ir, left_value, right_value, inner)
+    values_agree := ir.assign("select i1 #{left_present}, i1 #{same_value}, i1 true")
     return ir.assign("and i1 #{same_presence}, #{values_agree}")
-  const both_present = ir.assign("and i1 #{left_present}, #{right_present}")
-  const same_bytes = -> emit_string_equals(ir, left, right)
-  const equal = emit_branch(ir, 'i1', both_present, same_bytes, same_presence)
+  both_present := ir.assign("and i1 #{left_present}, #{right_present}")
+  same_bytes := -> emit_string_equals(ir, left, right)
+  equal := emit_branch(ir, 'i1', both_present, same_bytes, same_presence)
   emit_release ir, left
   emit_release ir, right
   equal
 
 # Whether two references are to one object; releases them.
-const generate_same_object = (g: Generator, left: String, right: String) ->
-  const same = g.ir.assign("icmp eq ptr #{left}, #{right}")
+generate_same_object := (g: Generator, left: String, right: String) ->
+  same := g.ir.assign("icmp eq ptr #{left}, #{right}")
   emit_release g.ir, left
   emit_release g.ir, right
   same
 
 # `x == nil` or `x != nil`.
-const generate_nil_test = (g: Generator, binary: BinaryOperation) ->
-  const value = binary.left is NilLiteral then binary.right else binary.left
-  const operand = generate(g, value)
-  const present = emit_is_present(g.ir, operand, type_of(g, value))
+generate_nil_test := (g: Generator, binary: BinaryOperation) ->
+  value := binary.left is NilLiteral then binary.right else binary.left
+  operand := generate(g, value)
+  present := emit_is_present(g.ir, operand, type_of(g, value))
   release_if_reference g, value, operand
   binary.operator == '!=' then present else g.ir.assign("xor i1 #{present}, true")
 
 # Short-circuit: the right operand is evaluated only when the left one does not decide.
-const generate_logical = (g: Generator, binary: BinaryOperation) ->
-  const ir = g.ir
-  const left = generate_condition(g, binary.left)
-  const is_and = binary.operator == 'and'
-  const undecided = is_and then left else ir.assign("xor i1 #{left}, true")
-  const right = -> generate_condition(g, binary.right)
+generate_logical := (g: Generator, binary: BinaryOperation) ->
+  ir := g.ir
+  left := generate_condition(g, binary.left)
+  is_and := binary.operator == 'and'
+  undecided := is_and then left else ir.assign("xor i1 #{left}, true")
+  right := -> generate_condition(g, binary.right)
   emit_branch ir, 'i1', undecided, right, is_and then 'false' else 'true'
 
 # `x!` throws if x is nil.
-export const generate_unwrap = (g: Generator, unwrap: Unwrap) ->
-  const operand = generate(g, unwrap.operand)
-  const type = type_of(g, unwrap.operand)
+export generate_unwrap := (g: Generator, unwrap: Unwrap) ->
+  operand := generate(g, unwrap.operand)
+  type := type_of(g, unwrap.operand)
   throw_if g, emit_is_nil(g.ir, operand, type), UNWRAPPED_NIL
   emit_unwrap g.ir, operand, type
 
 # The fallback is only evaluated when the value is nil.
-export const generate_coalesce = (g: Generator, coalesce: Coalesce) ->
-  const ir = g.ir
-  const operand = generate(g, coalesce.value)
-  const type = type_of(g, coalesce.value)
-  const is_nil = emit_is_nil(ir, operand, type)
-  const unwrapped = emit_unwrap(ir, operand, type)
-  const fallback = -> generate(g, coalesce.fallback)
+export generate_coalesce := (g: Generator, coalesce: Coalesce) ->
+  ir := g.ir
+  operand := generate(g, coalesce.value)
+  type := type_of(g, coalesce.value)
+  is_nil := emit_is_nil(ir, operand, type)
+  unwrapped := emit_unwrap(ir, operand, type)
+  fallback := -> generate(g, coalesce.fallback)
   emit_branch ir, ir_type(type_of(g, coalesce)), is_nil, fallback, unwrapped

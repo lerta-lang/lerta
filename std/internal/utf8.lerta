@@ -5,7 +5,7 @@
 export extern lerta_binary_as_string: (Binary) -> String
 
 # The length of the sequence that the lead byte starts, or 0 for a byte that leads none.
-export const sequence_length = (lead: Byte) ->
+export sequence_length := (lead: Byte) ->
   case
     when lead < 0x80 then 1
     when lead >= 0xC2 and lead <= 0xDF then 2
@@ -13,15 +13,15 @@ export const sequence_length = (lead: Byte) ->
     when lead >= 0xF0 and lead <= 0xF4 then 4
     else 0
 
-export const is_continuation = (byte: Byte) -> byte >= 0x80 and byte <= 0xBF
+export is_continuation := (byte: Byte) -> byte >= 0x80 and byte <= 0xBF
 
 # Whether the bytes are UTF-8. Overlong forms, surrogates and code points above U+10FFFF are not,
 # as the standard requires: the leads 0xE0, 0xED, 0xF0 and 0xF4 limit the byte after them.
-export const is_utf8 = (bytes: Binary) ->
+export is_utf8 := (bytes: Binary) ->
   var i = 0
   while i < bytes.length
-    const lead = bytes[i]
-    const length = sequence_length(lead)
+    lead := bytes[i]
+    length := sequence_length(lead)
     return false if length == 0 or i + length > bytes.length
     for k in 1...length
       return false if not is_continuation(bytes[i + k])
@@ -29,7 +29,7 @@ export const is_utf8 = (bytes: Binary) ->
     i += length
   true
 
-const may_follow = (lead: Byte, second: Byte) ->
+may_follow := (lead: Byte, second: Byte) ->
   case lead
     when 0xE0 then second >= 0xA0
     when 0xED then second <= 0x9F
@@ -38,23 +38,23 @@ const may_follow = (lead: Byte, second: Byte) ->
     else true
 
 # The bits of a lead byte that hold a code point, by the length of its sequence.
-const LEAD_BITS: Byte[] = [0x7F, 0x1F, 0x0F, 0x07]
+LEAD_BITS: Byte[] = [0x7F, 0x1F, 0x0F, 0x07]
 
 # The Char whose sequence starts at `i`: the bits of the lead byte that its length leaves, then 6
 # of each byte that continues it.
-export const char_at = (bytes: Binary, i: Int) ->
-  const length = sequence_length(bytes[i])
+export char_at := (bytes: Binary, i: Int) ->
+  length := sequence_length(bytes[i])
   var code = (bytes[i] & LEAD_BITS[length - 1]).to_int()
   code = code << 6 | (bytes[i + k] & 0x3F).to_int() for k in 1...length
   code.to_char()!
 
 # The sequence of the Char: a lead byte that holds the high bits after the marks of the sequence's
 # length, then a continuation byte of each 6 bits after its mark.
-export const utf8_of = (c: Char) ->
-  const code = c.to_int()
-  const byte = (bits: Int) -> bits.to_byte()!
-  const continuation = (shift: Int) -> byte(0x80 | code >> shift & 0x3F)
-  const empty = ''.binary
+export utf8_of := (c: Char) ->
+  code := c.to_int()
+  byte := (bits: Int) -> bits.to_byte()!
+  continuation := (shift: Int) -> byte(0x80 | code >> shift & 0x3F)
+  empty := ''.binary
   case
     when code < 0x80 then empty + byte(code)
     when code < 0x800 then empty + byte(0xC0 | code >> 6) + continuation(0)

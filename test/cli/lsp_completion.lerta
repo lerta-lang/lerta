@@ -22,48 +22,43 @@ struct CompletionCase
   lacks: String[]
   keywords: Bool
 
-const no_completion_labels: String[]
+no_completion_labels: String[]
 
-const completion_items = (output: String, id: Int) ->
+completion_items := (output: String, id: Int) ->
   decode_json<CompletionResponse>(response_body(output, id)).result
 
-const completion_item_text = (item: CompletionItem) ->
+completion_item_text := (item: CompletionItem) ->
   "#{item.label} #{item.kind} #{item.detail ? 'null'}"
 
-const completion_labels = (items: CompletionItem[]) -> [item.label for item in items].join(' ')
+completion_labels := (items: CompletionItem[]) -> [item.label for item in items].join(' ')
 
-const completion_items_named = (items: CompletionItem[], label: String) ->
+completion_items_named := (items: CompletionItem[], label: String) ->
   [completion_item_text(item) for item in items when item.label == label].join(', ')
 
-const keyword_from_line = (line: String) ->
+keyword_from_line := (line: String) ->
   return nil if not line.starts_with("  '") or not line.ends_with("'")
-  const word = line.split("'")[1]
+  word := line.split("'")[1]
   return nil if word == ''
   for character in word
     return nil if character < 'a' or character > 'z'
   word
 
-const compiler_keywords = ->
-  const source = await read_text("#{root_dir}/compiler/lexer/tokens.lerta")
-  const keywords: String[]
+compiler_keywords := ->
+  source := await read_text("#{root_dir}/compiler/lexer/tokens.lerta")
+  keywords: String[]
   for line in source.split("\n")
-    keywords.push keyword if const keyword = keyword_from_line(line)
+    keywords.push keyword if keyword := keyword_from_line(line)
   keywords
 
-const completion_check = -> Check(name: 'lerta lsp completes members after a dot', run: ->
-  const dir = new_cli_dir('lsp-completion')
-  const path = "#{dir}/a.lerta"
-  const text =
-    "struct Point(x: Int, y: Int)\nconst f = (p: Point) ->\n  print p.\n  const later = 2\n"
+completion_check := -> Check(name: 'lerta lsp completes members after a dot', run: ->
+  dir := new_cli_dir('lsp-completion')
+  path := "#{dir}/a.lerta"
+  text := "struct Point(x: Int, y: Int)\nconst f = (p: Point) ->\n  print p.\n  const later = 2\n"
   await write_file(path, text.binary)
-  const uri = uri_of(path)
-  const messages =
-    did_open(uri, text)
-    did_change(uri, text)
-    completion_request(uri, 2, 10)
-  .join('')
-  const ran = await session(dir, messages)
-  const items = completion_items(ran.stdout.text()!, 1)
+  uri := uri_of(path)
+  messages := [did_open(uri, text), did_change(uri, text), completion_request(uri, 2, 10)].join('')
+  ran := await session(dir, messages)
+  items := completion_items(ran.stdout.text()!, 1)
   [
     expect_status(0, ran.status)...
     compare_text(
@@ -75,26 +70,26 @@ const completion_check = -> Check(name: 'lerta lsp completes members after a dot
   ]
 )
 
-const completion_names_check = ->
+completion_names_check := ->
   Check name: 'lerta lsp completes locals, module names, and keywords', run: ->
-    const dir = new_cli_dir('lsp-completion-names')
-    const path = "#{dir}/a.lerta"
-    const text = "struct Point(x: Int)\nconst top = 1\nconst f = (p: Point) ->\n  const local = 1\n  print lo\n  const later = 2\n"
+    dir := new_cli_dir('lsp-completion-names')
+    path := "#{dir}/a.lerta"
+    text := "struct Point(x: Int)\nconst top = 1\nconst f = (p: Point) ->\n  const local = 1\n  print lo\n  const later = 2\n"
     await write_file(path, text.binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       did_open(uri, text)
       did_change(uri, text)
       completion_request(uri, 4, 10)
     .join('')
-    const ran = await session(dir, messages)
-    const output = ran.stdout.text()!
-    const items = completion_items(output, 1)
-    const labels = [item.label for item in items when item.kind != 14]
-    const words = [item.label for item in items when item.kind == 14]
-    const keywords = await compiler_keywords()
-    const expected_names = ['local', 'p', 'top', 'Point']
-    const missing_names = [name for name in expected_names when not labels.contains(name)]
+    ran := await session(dir, messages)
+    output := ran.stdout.text()!
+    items := completion_items(output, 1)
+    labels := [item.label for item in items when item.kind != 14]
+    words := [item.label for item in items when item.kind == 14]
+    keywords := await compiler_keywords()
+    expected_names := ['local', 'p', 'top', 'Point']
+    missing_names := [name for name in expected_names when not labels.contains(name)]
     [
       expect_status(0, ran.status)...
       compare_text('keywords', keywords.join(' '), words.join(' '))...
@@ -106,20 +101,16 @@ const completion_names_check = ->
       compare_text('response order', '0 1 end', response_ids(output).join(' '))...
     ]
 
-const completion_enum_check = -> Check(name: 'lerta lsp completes enum members after a dot', run: ->
-  const dir = new_cli_dir('lsp-completion-enum')
-  const path = "#{dir}/a.lerta"
-  const text = "enum Color\n  RED\nconst f = ->\n  print Color.\n  const later = 1\n"
+completion_enum_check := -> Check(name: 'lerta lsp completes enum members after a dot', run: ->
+  dir := new_cli_dir('lsp-completion-enum')
+  path := "#{dir}/a.lerta"
+  text := "enum Color\n  RED\nconst f = ->\n  print Color.\n  const later = 1\n"
   await write_file(path, text.binary)
-  const uri = uri_of(path)
-  const messages =
-    did_open(uri, text)
-    did_change(uri, text)
-    completion_request(uri, 3, 14)
-  .join('')
-  const ran = await session(dir, messages)
-  const output = ran.stdout.text()!
-  const items = completion_items(output, 1)
+  uri := uri_of(path)
+  messages := [did_open(uri, text), did_change(uri, text), completion_request(uri, 3, 14)].join('')
+  ran := await session(dir, messages)
+  output := ran.stdout.text()!
+  items := completion_items(output, 1)
   [
     expect_status(0, ran.status)...
     compare_text('completion labels', 'RED parse', completion_labels(items))...
@@ -127,21 +118,20 @@ const completion_enum_check = -> Check(name: 'lerta lsp completes enum members a
   ]
 )
 
-const completion_contexts_check = ->
+completion_contexts_check := ->
   Check name: 'lerta lsp completes methods, optional members, and members of @', run: ->
-    const dir = new_cli_dir('lsp-completion-contexts')
-    const path = "#{dir}/a.lerta"
-    const point_text =
-      "struct Point(x: Int, y: Int)\nf := (p: Point) ->\n  print p.eq()\n  later := 1\n"
-    const optional_text =
+    dir := new_cli_dir('lsp-completion-contexts')
+    path := "#{dir}/a.lerta"
+    point_text := "struct Point(x: Int, y: Int)\nf := (p: Point) ->\n  print p.eq()\n  later := 1\n"
+    optional_text :=
       "struct Point(x: Int, y: Int)\nconst f = (q: Point?) ->\n  print q?.\n  const later = 1\n"
-    const counter_text = "class Counter\n  count = 0\n  bump = ->\n    @count += 1\n    print @co\n"
-    const bare_at_text = "class Counter\n  count = 0\n  bump = ->\n    @count += 1\n    print @\n"
-    const parameter_text = (here: String) ->
+    counter_text := "class Counter\n  count = 0\n  bump = ->\n    @count += 1\n    print @co\n"
+    bare_at_text := "class Counter\n  count = 0\n  bump = ->\n    @count += 1\n    print @\n"
+    parameter_text := (here: String) ->
       "struct Point(x: Int, y: Int)\nconst p = 3\nconst f = (p: Point, q: Point?) ->\n#{here}\n"
     await write_file(path, point_text.binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       did_open(uri, point_text)
       did_change(uri, point_text)
       completion_request(uri, 2, 11, 1)
@@ -160,11 +150,11 @@ const completion_contexts_check = ->
       did_change(uri, parameter_text('  print [i for i in 0...p]'))
       completion_request(uri, 3, 24, 8)
     .join('')
-    const ran = await session(dir, messages)
-    const output = ran.stdout.text()!
-    const name_labels = (id: Int) ->
+    ran := await session(dir, messages)
+    output := ran.stdout.text()!
+    name_labels := (id: Int) ->
       [item.label for item in completion_items(output, id) when item.kind != 14]
-    const parameters = [
+    parameters := [
       "#{item.label} #{item.detail ? 'null'}"
       for item in completion_items(output, 6)
       when item.label == 'p'
@@ -199,25 +189,25 @@ const completion_contexts_check = ->
       excludes(output, '__lerta_completion__', 'completion changed the open document')...
     ]
 
-const completion_imports_check = ->
+completion_imports_check := ->
   Check name: 'lerta lsp completes imported values and standard-library functions', run: ->
-    const dir = new_cli_dir('lsp-completion-imports')
-    const path = "#{dir}/a.lerta"
-    const text = "import helper, Pair as Couple from './lib'\nimport sqrt from 'std:math'\nconst print = (n: Int) -> n\nconst x = he\nconst later = 1\nconst g = -> later\n"
+    dir := new_cli_dir('lsp-completion-imports')
+    path := "#{dir}/a.lerta"
+    text := "import helper, Pair as Couple from './lib'\nimport sqrt from 'std:math'\nconst print = (n: Int) -> n\nconst x = he\nconst later = 1\nconst g = -> later\n"
     await write_file(path, ''.binary)
     await write_file(
       "#{dir}/lib.lerta"
       "export const helper = -> 1\nexport struct Pair(a: Int)\n".binary
     )
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       did_open(uri, text)
       did_change(uri, text)
       completion_request(uri, 3, 12)
     .join('')
-    const ran = await session(dir, messages)
-    const output = ran.stdout.text()!
-    const items = completion_items(output, 1)
+    ran := await session(dir, messages)
+    output := ran.stdout.text()!
+    items := completion_items(output, 1)
     [
       expect_status(0, ran.status)...
       compare_text('helper', 'helper 3 () -> Int', completion_items_named(items, 'helper'))...
@@ -234,31 +224,31 @@ const completion_imports_check = ->
       compare_text('response order', '0 1 end', response_ids(output).join(' '))...
     ]
 
-const completion_reexports_check = ->
+completion_reexports_check := ->
   Check name: 'lerta lsp completes the names that a module exports from another', run: ->
-    const dir = new_cli_dir('lsp-completion-reexports')
-    const path = "#{dir}/a.lerta"
-    const text = "import './facade' as f\nconst x = f.h\n"
+    dir := new_cli_dir('lsp-completion-reexports')
+    path := "#{dir}/a.lerta"
+    text := "import './facade' as f\nconst x = f.h\n"
     await write_file(path, ''.binary)
     await write_file("#{dir}/lib.lerta", "export const helper = -> 1\n".binary)
     await write_file("#{dir}/facade.lerta", "export helper as h from './lib'\n".binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       did_open(uri, text)
       did_change(uri, text)
       completion_request(uri, 1, 13)
     .join('')
-    const ran = await session(dir, messages)
-    const items = completion_items(ran.stdout.text()!, 1)
+    ran := await session(dir, messages)
+    items := completion_items(ran.stdout.text()!, 1)
     [
       expect_status(0, ran.status)...
       compare_text('exported from another', 'h 3 () -> Int', completion_items_named(items, 'h'))...
       compare_text('name in its module', '', completion_items_named(items, 'helper'))...
     ]
 
-const completion_coverage_check = ->
+completion_coverage_check := ->
   Check name: 'lerta lsp completes the same member and name contexts as the CLI reference', run: ->
-    const completion_text = (here: String) ->
+    completion_text := (here: String) ->
       [
         "import './m' as m"
         'struct Point(x: Int, y: Int)'
@@ -287,7 +277,7 @@ const completion_coverage_check = ->
       ].join(
         "\n"
       )
-    const cases =
+    cases :=
       CompletionCase(
         here: '    print p.'
         character: 12
@@ -415,16 +405,16 @@ const completion_coverage_check = ->
         here: '    # tot', character: 9, labels: no_completion_labels, holds: no_completion_labels,
         lacks: no_completion_labels, keywords: false
       )
-    const dir = new_cli_dir('lsp-completion-coverage')
-    const path = "#{dir}/a.lerta"
+    dir := new_cli_dir('lsp-completion-coverage')
+    path := "#{dir}/a.lerta"
     await write_file(path, ''.binary)
     await write_file(
       "#{dir}/m.lerta"
       "export const helper = -> 1\nexport enum Shade\n  DARK\nconst private_one = 2\n".binary
     )
-    const uri = uri_of(path)
-    const other = uri_of("#{dir}/other.lerta")
-    const messages = [did_open(uri, completion_text('    print local'))]
+    uri := uri_of(path)
+    other := uri_of("#{dir}/other.lerta")
+    messages := [did_open(uri, completion_text('    print local'))]
     for each, i in cases
       messages.push did_change(uri, completion_text(each.here))
       messages.push completion_request(uri, 20, each.character, 10 + i)
@@ -435,42 +425,42 @@ const completion_coverage_check = ->
         "{\"jsonrpc\":\"2.0\",\"id\":98,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
       )
     messages.push completion_request(other, 0, 0, 99)
-    const ran = await session(dir, messages.join(''))
-    const output = ran.stdout.text()!
-    const keywords = await compiler_keywords()
-    const reasons: String[]
+    ran := await session(dir, messages.join(''))
+    output := ran.stdout.text()!
+    keywords := await compiler_keywords()
+    reasons: String[]
     for each, i in cases
-      const items = completion_items(output, 10 + i)
-      const words = [item for item in items when item.kind == 14]
-      const expected_words: String[] = each.keywords then keywords else []
-      const actual_keyword_text = [completion_item_text(item) for item in words].join("\n")
-      const expected_keyword_text = ["#{word} 14 null" for word in expected_words].join("\n")
+      items := completion_items(output, 10 + i)
+      words := [item for item in items when item.kind == 14]
+      expected_words: String[] = each.keywords then keywords else []
+      actual_keyword_text := [completion_item_text(item) for item in words].join("\n")
+      expected_keyword_text := ["#{word} 14 null" for word in expected_words].join("\n")
       if actual_keyword_text != expected_keyword_text
         reasons.push "unexpected keywords for #{each.here}"
-      const labels = [item.label for item in items when item.kind != 14]
-      if const expected = each.labels
+      labels := [item.label for item in items when item.kind != 14]
+      if expected := each.labels
         if expected.join(' ') != labels.join(' ')
           reasons.push "unexpected completion labels for #{each.here}: #{labels.join(' ')}"
       for label in each.holds
         reasons.push "missing completion #{label} for #{each.here}" if not labels.contains(label)
       for label in each.lacks
         reasons.push "unexpected completion #{label} for #{each.here}" if labels.contains(label)
-      const seen: String[]
+      seen: String[]
       for label in labels
         if seen.contains(label)
           reasons.push "duplicate completion label #{label} for #{each.here}"
         else
           seen.push label
-    const member_items = completion_items(output, 10)
-    const expected_member_items = "x 5 Int\nequals 2 (Point) -> Bool\nsum 2 null"
-    const named_items = completion_items(output, 18)
-    const expected_named_items =
+    member_items := completion_items(output, 10)
+    expected_member_items := "x 5 Int\nequals 2 (Point) -> Bool\nsum 2 null"
+    named_items := completion_items(output, 18)
+    expected_named_items :=
       "local 6 String\nf 3 null\nPoint 22 null\nCounter 7 null\nColor 13 null\nconst 14 null"
-    const expected_ids = ['0', ["#{10 + i}" for i in 0...cases.length]..., '97', '98', '99', 'end']
-    const formatting_response = response_body(output, 98)
-    const preserved = formatting_response.contains(
-      'print lo\n'
-    ) and not formatting_response.contains('__lerta_completion__')
+    expected_ids := ['0', ["#{10 + i}" for i in 0...cases.length]..., '97', '98', '99', 'end']
+    formatting_response := response_body(output, 98)
+    preserved := formatting_response.contains('print lo\n') and not formatting_response.contains(
+      '__lerta_completion__'
+    )
     [
       expect_status(0, ran.status)...
       reasons...
@@ -509,7 +499,7 @@ const completion_coverage_check = ->
       excludes(output, '__lerta_completion__', 'the probe name in published diagnostics')...
     ]
 
-export const checks =
+export checks :=
   completion_check()
   completion_names_check()
   completion_enum_check()

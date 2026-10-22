@@ -12,13 +12,13 @@ import
   exact_messages
 from '../lib/lsp'
 
-const initialize_check = ->
+initialize_check := ->
   Check name: 'lerta lsp negotiates UTF-16 positions and exits after shutdown', run: ->
-    const dir = new_cli_dir('lsp-initialize')
-    const ran = await session(dir, '')
-    const utf32_init = '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{"general":{"positionEncodings":["utf-16","utf-32"]}}}}'
-    const utf32_dir = new_cli_dir('lsp-utf32-no-shutdown')
-    const utf32 = await run_command(
+    dir := new_cli_dir('lsp-initialize')
+    ran := await session(dir, '')
+    utf32_init := '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{"general":{"positionEncodings":["utf-16","utf-32"]}}}}'
+    utf32_dir := new_cli_dir('lsp-utf32-no-shutdown')
+    utf32 := await run_command(
       compiler
       ['lsp']
       utf32_dir
@@ -39,15 +39,15 @@ const initialize_check = ->
       )...
     ]
 
-const error_request_check = ->
+error_request_check := ->
   Check name: 'lerta lsp rejects an unsupported request but ignores its notification', run: ->
-    const dir = new_cli_dir('lsp-error-request')
-    const messages =
+    dir := new_cli_dir('lsp-error-request')
+    messages :=
       frame('{"jsonrpc":"2.0","id":1,"method":"textDocument/references","params":{}}')
       frame('{"jsonrpc":"2.0","method":"$/setTrace","params":{"value":"off"}}')
       frame('{"jsonrpc":"2.0","id":2,"method":"textDocument/formatting","params":{}}')
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       compare_text(
@@ -64,37 +64,37 @@ const error_request_check = ->
       )...
     ]
 
-const diagnostic_check = ->
-  Check name: 'lerta lsp reports diagnostics for an opened document', run: ->
-    const dir = new_cli_dir('lsp-diagnostics')
-    const path = "#{dir}/a.lerta"
-    await write_file(path, ''.binary)
-    const uri = uri_of(path)
-    const message = frame
-      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"print missing\\n\"}}}"
-    const ran = await session(dir, message)
-    [
-      expect_status(0, ran.status)...
-      compare_text(
-        'messages'
-        [
-          initialize_response('utf-16')
-          published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])
-          shutdown_response
-        ].join(
-          "\n"
-        )
-        message_bodies(ran.stdout.text()!).join("\n")
-      )...
-    ]
+diagnostic_check := -> Check(name: 'lerta lsp reports diagnostics for an opened document', run: ->
+  dir := new_cli_dir('lsp-diagnostics')
+  path := "#{dir}/a.lerta"
+  await write_file(path, ''.binary)
+  uri := uri_of(path)
+  message := frame
+    "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"print missing\\n\"}}}"
+  ran := await session(dir, message)
+  [
+    expect_status(0, ran.status)...
+    compare_text(
+      'messages'
+      [
+        initialize_response('utf-16')
+        published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])
+        shutdown_response
+      ].join(
+        "\n"
+      )
+      message_bodies(ran.stdout.text()!).join("\n")
+    )...
+  ]
+)
 
-const diagnostic_lifecycle_check = ->
+diagnostic_lifecycle_check := ->
   Check name: 'lerta lsp updates and clears document diagnostics', run: ->
-    const dir = new_cli_dir('lsp-diagnostic-lifecycle')
-    const path = "#{dir}/a.lerta"
+    dir := new_cli_dir('lsp-diagnostic-lifecycle')
+    path := "#{dir}/a.lerta"
     await write_file(path, ''.binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       frame(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"print missing\\n\"}}}"
       )
@@ -108,7 +108,7 @@ const diagnostic_lifecycle_check = ->
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
       )
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       compare_text(
@@ -127,17 +127,17 @@ const diagnostic_lifecycle_check = ->
       )...
     ]
 
-const imported_diagnostic_check = ->
+imported_diagnostic_check := ->
   Check name: 'lerta lsp reports imported diagnostics in UTF-16 positions', run: ->
-    const dir = new_cli_dir('lsp-imported-diagnostic')
-    const path = "#{dir}/a.lerta"
-    const imported = "#{dir}/b.lerta"
+    dir := new_cli_dir('lsp-imported-diagnostic')
+    path := "#{dir}/a.lerta"
+    imported := "#{dir}/b.lerta"
     await write_file(path, ''.binary)
     await write_file(imported, "export const b = '😀' + nothing\n".binary)
-    const uri = uri_of(path)
-    const message = frame
+    uri := uri_of(path)
+    message := frame
       "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"import b from './b'\\nprint b\\n\"}}}"
-    const ran = await session(dir, message)
+    ran := await session(dir, message)
     [
       expect_status(0, ran.status)...
       compare_text(
@@ -157,22 +157,22 @@ const imported_diagnostic_check = ->
       )...
     ]
 
-const uri_import_check = ->
+uri_import_check := ->
   Check name: 'lerta lsp imports through parent paths in percent-encoded URIs', run: ->
-    const dir = new_cli_dir('lsp-uri-import')
-    const nested = "#{dir}/folder"
-    const path = "#{nested}/é file.lerta"
-    const imported = uri_of("#{dir}/lib.lerta")
+    dir := new_cli_dir('lsp-uri-import')
+    nested := "#{dir}/folder"
+    path := "#{nested}/é file.lerta"
+    imported := uri_of("#{dir}/lib.lerta")
     make_dir nested
     await write_file(path, ''.binary)
     await write_file("#{dir}/lib.lerta", "export const x = missing\n".binary)
-    const uri = uri_of(path)
-    const message = frame
+    uri := uri_of(path)
+    message := frame
       "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"import x from '../lib'\\nprint x\\n\"}}}"
-    const other_uri = did_open('untitled:Untitled-1', 'print missing\n')
-    const formatting = frame
+    other_uri := did_open('untitled:Untitled-1', 'print missing\n')
+    formatting := frame
       "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{imported}\"}}}"
-    const ran = await session(dir, message + other_uri + formatting)
+    ran := await session(dir, message + other_uri + formatting)
     [
       expect_status(0, ran.status)...
       exact_messages(
@@ -185,10 +185,10 @@ const uri_import_check = ->
       )...
     ]
 
-const malformed_message_check = ->
+malformed_message_check := ->
   Check name: 'lerta lsp reports a malformed JSON message and continues', run: ->
-    const dir = new_cli_dir('lsp-malformed-message')
-    const ran = await session(dir, frame('{bad}'))
+    dir := new_cli_dir('lsp-malformed-message')
+    ran := await session(dir, frame('{bad}'))
     [
       expect_status(0, ran.status)...
       compare_text(
@@ -204,10 +204,10 @@ const malformed_message_check = ->
       )...
     ]
 
-const lsp_input_errors_check = ->
+lsp_input_errors_check := ->
   Check name: 'lerta lsp rejects arguments and a message without Content-Length', run: ->
-    const args = await run_command(compiler, ['lsp', 'extra'], new_cli_dir('lsp-arguments'))
-    const missing_length = await run_command(
+    args := await run_command(compiler, ['lsp', 'extra'], new_cli_dir('lsp-arguments'))
+    missing_length := await run_command(
       compiler
       ['lsp']
       new_cli_dir('lsp-no-content-length')
@@ -224,43 +224,43 @@ const lsp_input_errors_check = ->
       )...
     ]
 
-const empty_body_check = ->
-  Check name: 'lerta lsp reports empty message bodies as parse errors', run: ->
-    const dir = new_cli_dir('lsp-empty-body')
-    const path = "#{dir}/a.lerta"
-    await write_file(path, ''.binary)
-    const input =
-      frame(initialize)
-      frame('{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":1}}}')
-      frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri_of(path)}\"},\"contentChanges\":[]}}"
-      )
-      "Content-Length: 0\r\n\r\nContent-Length: -1\r\n\r\n"
-      finish
-    .join('')
-    const ran = await run_command(compiler, ['lsp'], dir, input.binary)
-    [
-      expect_status(0, ran.status)...
-      compare_text(
-        'responses'
-        [
-          initialize_response('utf-16')
-          '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, found the end of the text"}}'
-          '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, found the end of the text"}}'
-          shutdown_response
-        ].join(
-          "\n"
-        )
-        message_bodies(ran.stdout.text()!).join("\n")
-      )...
-    ]
-
-const formatting_check = -> Check(name: 'lerta lsp formats an open document', run: ->
-  const dir = new_cli_dir('lsp-formatting')
-  const path = "#{dir}/a.lerta"
+empty_body_check := -> Check(name: 'lerta lsp reports empty message bodies as parse errors', run: ->
+  dir := new_cli_dir('lsp-empty-body')
+  path := "#{dir}/a.lerta"
   await write_file(path, ''.binary)
-  const uri = uri_of(path)
-  const messages =
+  input :=
+    frame(initialize)
+    frame('{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":1}}}')
+    frame(
+      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri_of(path)}\"},\"contentChanges\":[]}}"
+    )
+    "Content-Length: 0\r\n\r\nContent-Length: -1\r\n\r\n"
+    finish
+  .join('')
+  ran := await run_command(compiler, ['lsp'], dir, input.binary)
+  [
+    expect_status(0, ran.status)...
+    compare_text(
+      'responses'
+      [
+        initialize_response('utf-16')
+        '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, found the end of the text"}}'
+        '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, found the end of the text"}}'
+        shutdown_response
+      ].join(
+        "\n"
+      )
+      message_bodies(ran.stdout.text()!).join("\n")
+    )...
+  ]
+)
+
+formatting_check := -> Check(name: 'lerta lsp formats an open document', run: ->
+  dir := new_cli_dir('lsp-formatting')
+  path := "#{dir}/a.lerta"
+  await write_file(path, ''.binary)
+  uri := uri_of(path)
+  messages :=
     frame(
       "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"value  := 1\\nprint value\\n\"}}}"
     )
@@ -276,7 +276,7 @@ const formatting_check = -> Check(name: 'lerta lsp formats an open document', ru
       "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
     )
   .join('')
-  const ran = await session(dir, messages)
+  ran := await session(dir, messages)
   [
     expect_status(0, ran.status)...
     exact_messages(
@@ -293,19 +293,19 @@ const formatting_check = -> Check(name: 'lerta lsp formats an open document', ru
   ]
 )
 
-const formatting_new_document_check = ->
+formatting_new_document_check := ->
   Check name: 'lerta lsp formats a document that does not exist yet', run: ->
-    const dir = new_cli_dir('lsp-format-new')
-    const uri = uri_of("#{dir}/new.lerta")
-    const emoji = "\u{1F600}"
-    const text = "print  '#{emoji}'"
-    const messages =
+    dir := new_cli_dir('lsp-format-new')
+    uri := uri_of("#{dir}/new.lerta")
+    emoji := "\u{1F600}"
+    text := "print  '#{emoji}'"
+    messages :=
       did_open(uri, text)
       frame(
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
       )
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       compare_text(
@@ -321,23 +321,23 @@ const formatting_new_document_check = ->
       )...
     ]
 
-const shared_import_check = ->
+shared_import_check := ->
   Check name: 'lerta lsp checks shared imports for each open document', run: ->
-    const dir = new_cli_dir('lsp-shared-import')
+    dir := new_cli_dir('lsp-shared-import')
     await write_file("#{dir}/b.lerta", "export const b: Int = 'text'\n".binary)
-    const c = uri_of("#{dir}/c.lerta")
-    const d = uri_of("#{dir}/d.lerta")
+    c := uri_of("#{dir}/c.lerta")
+    d := uri_of("#{dir}/d.lerta")
     await write_file("#{dir}/c.lerta", ''.binary)
     await write_file("#{dir}/d.lerta", ''.binary)
-    const imports = "import b from './b'\nprint b\n"
-    const messages =
+    imports := "import b from './b'\nprint b\n"
+    messages :=
       did_open(c, imports)
       did_open(d, imports)
       frame(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{c}\"}}}"
       )
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_messages(
@@ -362,19 +362,19 @@ const shared_import_check = ->
       )...
     ]
 
-const changed_import_check = ->
+changed_import_check := ->
   Check name: 'lerta lsp rechecks open importers when an imported document changes', run: ->
-    const dir = new_cli_dir('lsp-changed-import')
+    dir := new_cli_dir('lsp-changed-import')
     await write_file("#{dir}/a.lerta", ''.binary)
     await write_file("#{dir}/b.lerta", ''.binary)
-    const a = uri_of("#{dir}/a.lerta")
-    const b = uri_of("#{dir}/b.lerta")
-    const messages =
+    a := uri_of("#{dir}/a.lerta")
+    b := uri_of("#{dir}/b.lerta")
+    messages :=
       did_open(b, "export const b = 'text'\n")
       did_open(a, "import b from './b'\nprint b\n")
       did_change(b, "export const c = 1\n")
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_messages(
@@ -390,14 +390,14 @@ const changed_import_check = ->
       )...
     ]
 
-const close_unsaved_import_check = ->
+close_unsaved_import_check := ->
   Check name: 'lerta lsp uses an imported document file again when it closes', run: ->
-    const dir = new_cli_dir('lsp-close-unsaved-import')
+    dir := new_cli_dir('lsp-close-unsaved-import')
     await write_file("#{dir}/a.lerta", ''.binary)
     await write_file("#{dir}/b.lerta", "export const f = -> 1\n".binary)
-    const a = uri_of("#{dir}/a.lerta")
-    const b = uri_of("#{dir}/b.lerta")
-    const messages =
+    a := uri_of("#{dir}/a.lerta")
+    b := uri_of("#{dir}/b.lerta")
+    messages :=
       did_open(a, "import f from './b'\nprint f()\n")
       did_open(b, "export const f = -> 1\n")
       did_change(b, "export const f = -> zzz\n")
@@ -405,8 +405,8 @@ const close_unsaved_import_check = ->
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{b}\"}}}"
       )
     .join('')
-    const ran = await session(dir, messages)
-    const last =
+    ran := await session(dir, messages)
+    last :=
       frame(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":\"#{b}\",\"diagnostics\":[]}}"
       )
@@ -420,14 +420,14 @@ const close_unsaved_import_check = ->
       )...
     ]
 
-const hover_definition_check = ->
+hover_definition_check := ->
   Check name: 'lerta lsp gives a value type and its declaration location', run: ->
-    const dir = new_cli_dir('lsp-hover-definition')
-    const path = "#{dir}/a.lerta"
-    const text = "const value = 1\nprint value\n"
+    dir := new_cli_dir('lsp-hover-definition')
+    path := "#{dir}/a.lerta"
+    text := "const value = 1\nprint value\n"
     await write_file(path, text.binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       frame(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"const value = 1\\nprint value\\n\"}}}"
       )
@@ -438,7 +438,7 @@ const hover_definition_check = ->
         "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/definition\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
       )
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_responses(
@@ -447,14 +447,14 @@ const hover_definition_check = ->
       )...
     ]
 
-const generic_hover_check = ->
+generic_hover_check := ->
   Check name: 'lerta lsp gives generic values the types of their instances', run: ->
-    const dir = new_cli_dir('lsp-generic-hover')
-    const path = "#{dir}/a.lerta"
-    const text = "const id = <T>(v: T) -> v\nprint id(1)\nprint id('a')\n"
+    dir := new_cli_dir('lsp-generic-hover')
+    path := "#{dir}/a.lerta"
+    text := "const id = <T>(v: T) -> v\nprint id(1)\nprint id('a')\n"
     await write_file(path, text.binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       frame(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"const id = <T>(v: T) -> v\\nprint id(1)\\nprint id('a')\\n\"}}}"
       )
@@ -466,7 +466,7 @@ const generic_hover_check = ->
       )
       hover_request(uri, 0, 24, 3)
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_responses(
@@ -479,12 +479,12 @@ const generic_hover_check = ->
       )...
     ]
 
-const definition_contexts_check = ->
+definition_contexts_check := ->
   Check name: 'lerta lsp finds assigned fields, enum members, bindings, and methods', run: ->
-    const dir = new_cli_dir('lsp-definition-contexts')
-    const path = "#{dir}/a.lerta"
-    const shades = "#{dir}/shades.lerta"
-    const text =
+    dir := new_cli_dir('lsp-definition-contexts')
+    path := "#{dir}/a.lerta"
+    shades := "#{dir}/shades.lerta"
+    text :=
       "import Shade from './shades'"
       'class K'
       '  v: Int = 1'
@@ -511,9 +511,9 @@ const definition_contexts_check = ->
     .join("\n")
     await write_file(path, ''.binary)
     await write_file(shades, "export enum Shade\n  LIGHT\n  DARK\n".binary)
-    const uri = uri_of(path)
-    const imported_uri = uri_of(shades)
-    const messages =
+    uri := uri_of(path)
+    imported_uri := uri_of(shades)
+    messages :=
       did_open(uri, text)
       definition_request(uri, 5, 2, 10)
       definition_request(uri, 3, 12, 11)
@@ -525,7 +525,7 @@ const definition_contexts_check = ->
       definition_request(uri, 16, 2, 17)
       definition_request(uri, 21, 12, 18)
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_responses(
@@ -544,12 +544,12 @@ const definition_contexts_check = ->
       )...
     ]
 
-const hover_contexts_check = ->
+hover_contexts_check := ->
   Check name: 'lerta lsp finds assigned, generic, and UTF-16 names with their definitions', run: ->
-    const dir = new_cli_dir('lsp-hover-contexts')
-    const path = "#{dir}/a.lerta"
-    const emoji = "\u{1F600}"
-    const text =
+    dir := new_cli_dir('lsp-hover-contexts')
+    path := "#{dir}/a.lerta"
+    emoji := "\u{1F600}"
+    text :=
       "const s = '#{emoji}'"
       'struct Box<T>(value: T)'
       'extend Int'
@@ -561,8 +561,8 @@ const hover_contexts_check = ->
       ''
     .join("\n")
     await write_file(path, ''.binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       did_open(uri, text)
       hover_request(uri, 6, 6, 10)
       definition_request(uri, 6, 6, 11)
@@ -581,7 +581,7 @@ const hover_contexts_check = ->
       hover_request(uri, 6, 15, 24)
       definition_request(uri, 6, 15, 25)
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_responses(
@@ -607,13 +607,13 @@ const hover_contexts_check = ->
       )...
     ]
 
-const optional_and_interpolation_check = ->
+optional_and_interpolation_check := ->
   Check
     name: 'lerta lsp finds optional fields and interpolation names, not unrelated positions'
     run: ->
-      const dir = new_cli_dir('lsp-optional-interpolation')
-      const path = "#{dir}/a.lerta"
-      const text =
+      dir := new_cli_dir('lsp-optional-interpolation')
+      path := "#{dir}/a.lerta"
+      text :=
         'struct P(x: Int)'
         'const f = (p: P?) -> p?.x'
         'class C'
@@ -628,9 +628,9 @@ const optional_and_interpolation_check = ->
         ''
       .join("\n")
       await write_file(path, ''.binary)
-      const uri = uri_of(path)
-      const other = uri_of("#{dir}/other.lerta")
-      const messages =
+      uri := uri_of(path)
+      other := uri_of("#{dir}/other.lerta")
+      messages :=
         did_open(uri, text)
         hover_request(uri, 7, 13, 10)
         definition_request(uri, 7, 13, 11)
@@ -651,7 +651,7 @@ const optional_and_interpolation_check = ->
         hover_request(other, 0, 0, 26)
         definition_request(other, 0, 0, 27)
       .join('')
-      const ran = await session(dir, messages)
+      ran := await session(dir, messages)
       [
         expect_status(0, ran.status)...
         exact_responses(
@@ -679,17 +679,17 @@ const optional_and_interpolation_check = ->
         )...
       ]
 
-const open_import_hover_check = ->
+open_import_hover_check := ->
   Check name: 'lerta lsp answers for an imported file in an open program', run: ->
-    const dir = new_cli_dir('lsp-open-import-hover')
-    const a_path = "#{dir}/a.lerta"
-    const b_path = "#{dir}/b.lerta"
-    const b_text = "export const b = 1\n"
+    dir := new_cli_dir('lsp-open-import-hover')
+    a_path := "#{dir}/a.lerta"
+    b_path := "#{dir}/b.lerta"
+    b_text := "export const b = 1\n"
     await write_file(a_path, ''.binary)
     await write_file(b_path, b_text.binary)
-    const a = uri_of(a_path)
-    const b = uri_of(b_path)
-    const messages =
+    a := uri_of(a_path)
+    b := uri_of(b_path)
+    messages :=
       did_open(a, "import b from './b'\nprint b\n")
       hover_request(b, 0, 13, 10)
       did_open(b, b_text)
@@ -698,7 +698,7 @@ const open_import_hover_check = ->
       )
       hover_request(a, 1, 6, 11)
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_responses(
@@ -707,11 +707,11 @@ const open_import_hover_check = ->
       )...
     ]
 
-const definitions_after_error_check = ->
+definitions_after_error_check := ->
   Check name: 'lerta lsp finds locals after errors, destructured, loop, and captured names', run: ->
-    const dir = new_cli_dir('lsp-definitions-after-error')
-    const path = "#{dir}/a.lerta"
-    const text =
+    dir := new_cli_dir('lsp-definitions-after-error')
+    path := "#{dir}/a.lerta"
+    text :=
       'const n = [1].length'
       'print n + zz'
       'const q = 2'
@@ -724,8 +724,8 @@ const definitions_after_error_check = ->
       ''
     .join("\n")
     await write_file(path, ''.binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       did_open(uri, text)
       definition_request(uri, 3, 6, 10)
       definition_request(uri, 6, 8, 11)
@@ -734,7 +734,7 @@ const definitions_after_error_check = ->
       did_change(uri, "import x from './missing'\nprint n + zz\n")
       hover_request(uri, 1, 6, 20)
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_responses(
@@ -749,27 +749,27 @@ const definitions_after_error_check = ->
       )...
     ]
 
-const imported_hover_definition_check = ->
+imported_hover_definition_check := ->
   Check
     name: 'lerta lsp gives imported, field, and generic values their types and definitions'
     run: ->
-      const dir = new_cli_dir('lsp-imported-hover-definition')
-      const lib = "#{dir}/lib.lerta"
-      const path = "#{dir}/a.lerta"
-      const text = "import make from './lib'\nconst p = make(1)\nprint p.x\nconst id = <T>(v: T) -> v\nprint id(1) + id(2)\nprint id('a')\n"
+      dir := new_cli_dir('lsp-imported-hover-definition')
+      lib := "#{dir}/lib.lerta"
+      path := "#{dir}/a.lerta"
+      text := "import make from './lib'\nconst p = make(1)\nprint p.x\nconst id = <T>(v: T) -> v\nprint id(1) + id(2)\nprint id('a')\n"
       await write_file(
         lib
         "export struct Point(x: Int, y: Int)\nexport const make = (x: Int) -> Point(x, y: 0)\n".binary
       )
       await write_file(path, ''.binary)
-      const uri = uri_of(path)
-      const asks = [(1, 10), (2, 8), (3, 24), (4, 6), (5, 6), (0, 7), (1, 4)]
-      const messages = [did_open(uri, text)]
+      uri := uri_of(path)
+      asks := [(1, 10), (2, 8), (3, 24), (4, 6), (5, 6), (0, 7), (1, 4)]
+      messages := [did_open(uri, text)]
       for ask, i in asks
-        const (line, character) = ask
+        (line, character) := ask
         messages.push hover_request(uri, line, character, 10 + 2 * i)
         messages.push definition_request(uri, line, character, 11 + 2 * i)
-      const ran = await session(dir, messages.join(''))
+      ran := await session(dir, messages.join(''))
       [
         expect_status(0, ran.status)...
         exact_responses(
@@ -793,18 +793,18 @@ const imported_hover_definition_check = ->
         )...
       ]
 
-const extern_definition_check = ->
+extern_definition_check := ->
   Check name: 'lerta lsp finds extern definitions in the current and imported modules', run: ->
-    const dir = new_cli_dir('lsp-extern-definition')
-    const path = "#{dir}/a.lerta"
-    const text = "import float_text, float_text as t from './conversions'\nextern lerta_float_to_string as text_of: (Float) -> String\nprint text_of(1.0)\nprint float_text(2.0)\nprint t(3.0)\n"
+    dir := new_cli_dir('lsp-extern-definition')
+    path := "#{dir}/a.lerta"
+    text := "import float_text, float_text as t from './conversions'\nextern lerta_float_to_string as text_of: (Float) -> String\nprint text_of(1.0)\nprint float_text(2.0)\nprint t(3.0)\n"
     await write_file(path, ''.binary)
     await write_file(
       "#{dir}/conversions.lerta"
       "export extern lerta_float_to_string as float_text: (Float) -> String\n".binary
     )
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       did_open(uri, text)
       definition_request(uri, 2, 6, 1)
       definition_request(uri, 3, 6, 2)
@@ -812,7 +812,7 @@ const extern_definition_check = ->
       definition_request(uri, 4, 6, 4)
       definition_request(uri, 0, 34, 5)
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_responses(
@@ -827,24 +827,24 @@ const extern_definition_check = ->
       )...
     ]
 
-const reexport_definition_check = ->
+reexport_definition_check := ->
   Check name: 'lerta lsp finds the declarations of names that modules export from others', run: ->
-    const dir = new_cli_dir('lsp-reexport-definition')
-    const path = "#{dir}/a.lerta"
-    const shapes = "#{dir}/shapes.lerta"
-    const text = "import n from './facade'\nexport norm as m from './shapes'\nprint n(1)\n"
+    dir := new_cli_dir('lsp-reexport-definition')
+    path := "#{dir}/a.lerta"
+    shapes := "#{dir}/shapes.lerta"
+    text := "import n from './facade'\nexport norm as m from './shapes'\nprint n(1)\n"
     await write_file(path, ''.binary)
     await write_file(shapes, "export const norm = (x: Int) -> x\n".binary)
     await write_file("#{dir}/facade.lerta", "export norm as n from './shapes'\n".binary)
-    const uri = uri_of(path)
-    const messages =
+    uri := uri_of(path)
+    messages :=
       did_open(uri, text)
       definition_request(uri, 0, 7, 1)
       definition_request(uri, 1, 8, 2)
       definition_request(uri, 1, 16, 3)
       definition_request(uri, 2, 6, 4)
     .join('')
-    const ran = await session(dir, messages)
+    ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
       exact_responses(
@@ -858,7 +858,7 @@ const reexport_definition_check = ->
       )...
     ]
 
-export const checks =
+export checks :=
   initialize_check()
   error_request_check()
   diagnostic_check()

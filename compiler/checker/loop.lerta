@@ -17,61 +17,59 @@ import
   ArrayType, bool_type, format_type, int_type, iterable_item, IterType, Type, void_type
 from '../types'
 
-export const check_loop_jump = (body: Body, jump: Jump) ->
+export check_loop_jump := (body: Body, jump: Jump) ->
   return if body.loop_depth > 0
   fail body.program, jump.position, "'#{jump.kind.to_string()}' outside a loop"
 
 # A loop variable is a const declared by the loop rather than by a statement, hence not
 # `declared`.
-const define_loop_variable = (body: Body, variable: Identifier, type: Type) ->
-  const local = Local(type, identifier: variable)
+define_loop_variable := (body: Body, variable: Identifier, type: Type) ->
+  local := Local(type, identifier: variable)
   define_local body, local
 
 # The item, and its place, an Int, if the loop names it.
-const define_loop_variables = (body: Body, variable: Identifier, index: Identifier?, type: Type) ->
+define_loop_variables := (body: Body, variable: Identifier, index: Identifier?, type: Type) ->
   define_loop_variable body, variable, type
   define_loop_variable body, index, int_type if index
 
-export const check_for = (body: Body, for_statement: For) ->
-  const { iterable, variable, index } = for_statement
-  const item_type = type_of_iterated(body, iterable, "after 'in'")
-  const define = -> define_loop_variables(body, variable, index, item_type)
+export check_for := (body: Body, for_statement: For) ->
+  { iterable, variable, index } := for_statement
+  item_type := type_of_iterated(body, iterable, "after 'in'")
+  define := -> define_loop_variables(body, variable, index, item_type)
   in_loop body, -> check_loop_body(body, for_statement.body, define)
 
-export const check_while = (body: Body, while_statement: While): void ->
-  const check = (): void ->
+export check_while := (body: Body, while_statement: While): void ->
+  check := (): void ->
     body.scopes.push()
     body.scopes.hide_var_views()
-    const define = check_condition(body, while_statement.condition)
+    define := check_condition(body, while_statement.condition)
     check_loop_body body, while_statement.body, define
     body.scopes.pop()
   in_loop body, check
 
 # Checks a loop, numbered so that a narrowing made in it is known to be (see forget_narrowing).
-const in_loop = (body: Body, check: () -> void): void ->
-  const program = body.program
+in_loop := (body: Body, check: () -> void): void ->
+  program := body.program
   program.loops_checked += 1
   body.loops.push program.loops_checked
   check()
   body.loops.pop()
 
-export const type_of_comprehension = (
-  body: Body, comprehension: Comprehension, expected: Type?
-): Type ->
-  const { element, variable, index, iterable, guard, bindings } = comprehension
-  const place = comprehension.spread then "before '...'" else "after 'in'"
-  const item_type = type_of_iterated(body, iterable, place)
+export type_of_comprehension := (body: Body, comprehension: Comprehension, expected: Type?): Type ->
+  { element, variable, index, iterable, guard, bindings } := comprehension
+  place := comprehension.spread then "before '...'" else "after 'in'"
+  item_type := type_of_iterated(body, iterable, place)
   if comprehension.lazy != nil
     return type_of_iter_comprehension(body, comprehension, item_type, expected)
-  const expected_element = expected_array_element(expected)
+  expected_element := expected_array_element(expected)
   var element_type: Type = void_type
-  const define = ->
+  define := ->
     define_loop_variables body, variable, index, item_type
     check_statement body, binding for binding in bindings
     if guard
       expect_condition body, guard
       narrow_where_holds body, guard
-  const finish = ->
+  finish := ->
     if expected_element
       expect_type body, element, expected_element
       element_type = expected_element
@@ -80,25 +78,25 @@ export const type_of_comprehension = (
   check_block body, [], define, finish
   ArrayType element: check_item_type(body.program, element_type, element.position, 'an array')
 
-const expected_array_element = (expected: Type?) -> (expected as ArrayType?)?.element
+expected_array_element := (expected: Type?) -> (expected as ArrayType?)?.element
 
-const type_of_iter_comprehension = (
+type_of_iter_comprehension := (
   body: Body, comprehension: Comprehension, item_type: Type, expected: Type?
 ) ->
-  const { guard, element } = comprehension.lazy!
+  { guard, element } := comprehension.lazy!
   type_of_item_function body, guard, item_type, bool_type, nil if guard
-  const expected_item = expected_iter_item(expected)
-  const holds = comprehension.guard
-  const element_type = type_of_item_function(body, element, item_type, expected_item, holds)
-  const at = comprehension.element.position
-  const item = check_value_type(body.program, element_type.result, at, 'an Iter')
+  expected_item := expected_iter_item(expected)
+  holds := comprehension.guard
+  element_type := type_of_item_function(body, element, item_type, expected_item, holds)
+  at := comprehension.element.position
+  item := check_value_type(body.program, element_type.result, at, 'an Iter')
   IterType item
 
-const expected_iter_item = (expected: Type?) -> (expected as IterType?)?.item
+expected_iter_item := (expected: Type?) -> (expected as IterType?)?.item
 
-const check_loop_body = (body: Body, statements: Statement[], define: () -> void) ->
+check_loop_body := (body: Body, statements: Statement[], define: () -> void) ->
   body.loop_depth += 1
-  const define_hiding = ->
+  define_hiding := ->
     body.scopes.hide_var_views()
     define()
   check_block body, statements, define_hiding, nothing
@@ -107,18 +105,18 @@ const check_loop_body = (body: Body, statements: Statement[], define: () -> void
 # A value of a type that satisfies Iterable is gone through by the Iter
 # of its `iter()`, a call recorded in the facts, which codegen generates instead (see
 # iter_calls). `place` tells where the iterable is written, for messages.
-const type_of_iterated = (body: Body, iterable: Expression, place: String): Type ->
+type_of_iterated := (body: Body, iterable: Expression, place: String): Type ->
   if iterable is Range
     expect_type body, iterable.start, int_type
     expect_type body, iterable.end, int_type
     return int_type
-  const type = type_of(body, iterable)
-  return item if const item = iterable_item(type)
-  const at = iterable.position
+  type := type_of(body, iterable)
+  return item if item := iterable_item(type)
+  at := iterable.position
   if iterable_item_of(body, type, at) == nil
-    const iterables = 'a range, an array, a Binary, an Iter or an Iterable'
+    iterables := 'a range, an array, a Binary, an Iter or an Iterable'
     reject_not_iterable body, type, at, "expected #{iterables} #{place}, got #{format_type(type)}"
-  const iter = Member(object: iterable, name: Identifier(name: 'iter', position: at), position: at)
-  const call = Call(callee: iter, args: [], named_args: [], type_args: [], position: at)
+  iter := Member(object: iterable, name: Identifier(name: 'iter', position: at), position: at)
+  call := Call(callee: iter, args: [], named_args: [], type_args: [], position: at)
   body.facts.iter_calls[iterable] = call
   iterable_item(type_of(body, call))!

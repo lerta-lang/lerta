@@ -15,27 +15,27 @@ import
   type_key, TypeKind, UnionType, void_type
 from '../types'
 
-const JSON_MODULE = 'std:json'
+JSON_MODULE := 'std:json'
 
-export const is_jsonable_bound = (bound: InterfaceType) ->
+export is_jsonable_bound := (bound: InterfaceType) ->
   bound.module == JSON_MODULE and bound.name == 'Jsonable'
 
 # Whether the interface of the name, declared in the module, is std:json's Jsonable.
-export const is_jsonable_declaration = (shared: Shared, name: String) ->
+export is_jsonable_declaration := (shared: Shared, name: String) ->
   is_json_module(shared) and name == 'Jsonable'
 
 # std:json, also when it is the entry module, as when it is built on its own.
-const is_json_module = (shared: Shared) ->
+is_json_module := (shared: Shared) ->
   shared.name == JSON_MODULE or (shared.path == nil and shared.program.entry_path == JSON_MODULE)
 
 # Rejects a type that has a part std:json does not convert, naming the part by its path, as
 # JsonError does in std:json: `$[]` is an item of an array, `$.*` a value of a map, and `$[0]` and
 # `$.name` an item of a tuple and a field.
-export const reject_unjsonable = (program: ProgramWide, type: Type, at: Position) ->
-  const finder = PartFinder(program, at)
-  const part = finder.unjsonable_part(type, '$') ? return
-  const where = part.path == '$' then 'it' else part.path
-  const reason = "#{where} #{part.problem}"
+export reject_unjsonable := (program: ProgramWide, type: Type, at: Position) ->
+  finder := PartFinder(program, at)
+  part := finder.unjsonable_part(type, '$') ? return
+  where := part.path == '$' then 'it' else part.path
+  reason := "#{where} #{part.problem}"
   fail program, at, "#{format_type(type)} does not satisfy Jsonable: #{reason}"
 
 # A part of a type, by its path from it, and why std:json does not convert it.
@@ -43,11 +43,11 @@ struct Part(path: String, problem: String)
 
 # Two of the fields' names that camel case writes as one key (see JsonKeys in std:json), which
 # would give an object two values of one key.
-const same_camel_case = (names: String[], path: String) ->
-  const named: Map<String, String>
+same_camel_case := (names: String[], path: String) ->
+  named: Map<String, String>
   for name in names
-    const key = camel_case(name)
-    if const other = named[key]
+    key := camel_case(name)
+    if other := named[key]
       return Part
         path
         problem: "has the fields #{other} and #{name}, which camel case writes as one key, #{key}"
@@ -57,14 +57,14 @@ const same_camel_case = (names: String[], path: String) ->
 # The key of a field of the name in camel case: each `_` between another character and a lowercase
 # ASCII letter is left out, and the letter written in uppercase; a leading `_`, and one after
 # another, stay.
-export const camel_case = (name: String) ->
-  const chars = [c for c in name]
+export camel_case := (name: String) ->
+  chars := [c for c in name]
   var written = ''
   var i = 0
   while i < chars.length
-    const c = chars[i]
-    const after: Char = i + 1 < chars.length then chars[i + 1] else ' '
-    const joins = c == '_' and i > 0 and chars[i - 1] != '_' and after >= 'a' and after <= 'z'
+    c := chars[i]
+    after: Char = i + 1 < chars.length then chars[i + 1] else ' '
+    joins := c == '_' and i > 0 and chars[i - 1] != '_' and after >= 'a' and after <= 'z'
     if joins
       written += after.to_string().to_upper()
       i += 2
@@ -73,7 +73,7 @@ export const camel_case = (name: String) ->
       i += 1
   written
 
-const unconverted = (path: String, problem: String) ->
+unconverted := (path: String, problem: String) ->
   Part path, problem: "#{problem}, which std:json does not convert"
 
 class PartFinder
@@ -90,8 +90,8 @@ class PartFinder
       when type is ArrayType then @unjsonable_part(type.element, "#{path}[]")
       when type is TupleType then @first_part([(item, "#{path}[#{i}]") for item, i in type.items])
       when type is RecordType
-        const names = [field.name for field in type.fields]
-        return part if const part = same_camel_case(names, path)
+        names := [field.name for field in type.fields]
+        return part if part := same_camel_case(names, path)
         @first_part [(field.type, "#{path}.#{field.name}") for field in type.fields]
       when type is MapType
         if not is_kind(type.key, 'String')
@@ -103,38 +103,37 @@ class PartFinder
 
   first_part = (parts: (Type, String)[]): Part? ->
     for (type, path) in parts
-      return part if const part = @unjsonable_part(type, path)
+      return part if part := @unjsonable_part(type, path)
     nil
 
   # The members, which decoding tells apart by the kind of JSON value that each is written as.
   union_part = (type: UnionType, path: String): Part? ->
-    const members_by_kind: Map<Int, Type>
+    members_by_kind: Map<Int, Type>
     for member in type.members
-      return part if const part = @unjsonable_part(member, path)
-      const kind = json_kind(member)
-      if const other = members_by_kind[kind]
-        const both = "#{format_type(other)} and #{format_type(member)}"
-        const problem = "has two members that JSON writes as #{JSON_KIND_WORDS[kind]}, #{both}"
+      return part if part := @unjsonable_part(member, path)
+      kind := json_kind(member)
+      if other := members_by_kind[kind]
+        both := "#{format_type(other)} and #{format_type(member)}"
+        problem := "has two members that JSON writes as #{JSON_KIND_WORDS[kind]}, #{both}"
         return Part(path, problem: "#{problem}, which decoding could not tell apart")
       members_by_kind[kind] = member
     nil
 
   object_part = (type: ObjectType, path: String): Part? ->
-    const key = type_key(type)
+    key := type_key(type)
     return nil if @visited.has(key)
     @visited.add key
-    const info = info_of(@program, type)
-    return part if const part = same_camel_case([field.name.name for field in info.fields], path)
+    info := info_of(@program, type)
+    return part if part := same_camel_case([field.name.name for field in info.fields], path)
     for field in info.fields
-      const field_path = "#{path}.#{field.name.name}"
+      field_path := "#{path}.#{field.name.name}"
       return unconverted(field_path, 'is weak') if field.weak
-      if const part = @unjsonable_part(field_type(@program, info, field, @at), field_path)
-        return part
+      return part if part := @unjsonable_part(field_type(@program, info, field, @at), field_path)
     nil
 
 # The kind of JSON value that a member of a union is written as, by its number, which
 # JsonReader.peek_kind gives for such a value (std/internal/json_reader.lerta).
-export const json_kind = (member: Type) ->
+export json_kind := (member: Type) ->
   case
     when is_kind(member, 'Bool') then 0
     when is_integer(member) or is_float(member) then 1
@@ -143,15 +142,15 @@ export const json_kind = (member: Type) ->
     else panic("no kind of JSON value for #{format_type(member)}")
 
 # The kinds as messages write them, by their numbers.
-const JSON_KIND_WORDS = ['Bool values', 'numbers', 'strings', 'objects']
+JSON_KIND_WORDS := ['Bool values', 'numbers', 'strings', 'objects']
 
-const JSON_SCALAR_KINDS: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS..., 'Bool', 'String', 'Binary']
+JSON_SCALAR_KINDS: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS..., 'Bool', 'String', 'Binary']
 
 # A call in std:json of the builtin `write_json` or `read_json`, unless the name is taken there.
-export const json_direction = (body: Body, callee: Expression): JsonDirection? ->
+export json_direction := (body: Body, callee: Expression): JsonDirection? ->
   return nil if callee is not Identifier or not is_json_module(body.shared)
-  const name = callee.name
-  const direction =
+  name := callee.name
+  direction :=
     case name
       when 'write_json' then JsonDirection.WRITE
       when 'read_json' then JsonDirection.READ
@@ -161,22 +160,21 @@ export const json_direction = (body: Body, callee: Expression): JsonDirection? -
 
 # `write_json(writer, value)` writes the value, of a Jsonable type, and `read_json<T>(reader)`
 # reads a T.
-export const type_of_json_call = (body: Body, call: Call, direction: JsonDirection) ->
-  const program = body.program
-  const callee = call.callee as Identifier!
-  const arity = direction == WRITE then 2 else 1
+export type_of_json_call := (body: Body, call: Call, direction: JsonDirection) ->
+  program := body.program
+  callee := call.callee as Identifier!
+  arity := direction == WRITE then 2 else 1
   if call.args.length != arity or call.named_args.length > 0
     fail program, call.position, "#{callee.name} takes #{arity} arguments"
-  const arg_types = [type_of(body, arg) for arg in call.args]
-  const coder = direction == WRITE then 'JsonWriter' else 'JsonReader'
-  const takes_coder = arg_types[0] is ObjectType and (arg_types[0] as ObjectType!).name == coder
+  arg_types := [type_of(body, arg) for arg in call.args]
+  coder := direction == WRITE then 'JsonWriter' else 'JsonReader'
+  takes_coder := arg_types[0] is ObjectType and (arg_types[0] as ObjectType!).name == coder
   fail program, call.args[0].position, "#{callee.name} takes a #{coder} first" if not takes_coder
-  const type =
+  type :=
     case direction
       when WRITE then arg_types[1]
       when READ
-        const written =
-          call.type_args.first() ? fail(program, call.position, 'read_json<T> needs T')
+        written := call.type_args.first() ? fail(program, call.position, 'read_json<T> needs T')
         resolve program, body.resolver, written
   reject_unjsonable program, type, call.position
   record_reference body, callee, JsonConversion(direction, type)

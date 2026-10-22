@@ -27,16 +27,14 @@ export struct Itab(type: Type, target: InterfaceType, entries: ItabEntry[])
 
 # Whether the expression's value, which is not of the expected type, converts to it through an itab:
 # to an interface type, or to an Iter.
-export const converts_through_itab = (
-  body: Body, expression: Expression, type: Type, expected: Type
-) ->
+export converts_through_itab := (body: Body, expression: Expression, type: Type, expected: Type) ->
   return true if converts_to_interface(body, expression, type, expected)
   converts_to_iter body, expression, type, expected
 
 # Whether the expression's value, which is not of the expected type, converts to it: to an
 # interface type, or to one optional, which its type must satisfy. Records the itab's plan.
-const converts_to_interface = (body: Body, expression: Expression, type: Type, expected: Type) ->
-  const target = inner_of(expected)
+converts_to_interface := (body: Body, expression: Expression, type: Type, expected: Type) ->
+  target := inner_of(expected)
   return false if target is not InterfaceType
   return false if is_one_of_kinds(type, ['nil', 'never', OPTIONAL, INTERFACE])
   record_itab body, expression, type, target
@@ -45,47 +43,47 @@ const converts_to_interface = (body: Body, expression: Expression, type: Type, e
 # Whether the expression's value, which is not of the expected type, converts to it: to an Iter, or
 # to one optional, which an Iter makes of a value that has `has_next(): Bool` and `next(): T` (see
 # iter_source_type). The Iter holds the value as an interface value, whose itab's plan is recorded.
-const converts_to_iter = (body: Body, expression: Expression, type: Type, expected: Type) ->
-  const target = inner_of(expected)
+converts_to_iter := (body: Body, expression: Expression, type: Type, expected: Type) ->
+  target := inner_of(expected)
   return false if target is not IterType
   return false if is_one_of_kinds(type, ['nil', 'never', OPTIONAL, ITER])
-  const has_next = Identifier(name: 'has_next', position: expression.position)
+  has_next := Identifier(name: 'has_next', position: expression.position)
   return false if member_type_by_name(body, type, has_next) == nil
   record_itab body, expression, type, iter_source_type(target.item)
   true
 
 # Records the plan of the itab of the value converted to the interface type, which its type must
 # satisfy.
-const record_itab = (body: Body, expression: Expression, type: Type, target: InterfaceType) ->
+record_itab := (body: Body, expression: Expression, type: Type, target: InterfaceType) ->
   body.facts.itabs[expression] = itab_of(body, expression.position, type, target)
 
-const itab_of = (body: Body, at: Position, type: Type, target: InterfaceType) ->
-  const to_target = "to #{format_type(target)}"
+itab_of := (body: Body, at: Position, type: Type, target: InterfaceType) ->
+  to_target := "to #{format_type(target)}"
   if not is_reference_type(type)
-    const reason = 'only references can be held by interface values so far'
+    reason := 'only references can be held by interface values so far'
     fail body.program, at, "#{format_type(type)} cannot be converted #{to_target}: #{reason}"
   reject_unsatisfied body, type, target, at
-  const members = members_for(body.program, target, type)
-  const entries = [itab_entry(body, type, member, at) for member in members]
+  members := members_for(body.program, target, type)
+  entries := [itab_entry(body, type, member, at) for member in members]
   Itab type, target, entries
 
-const itab_entry = (body: Body, type: Type, member: InterfaceMember, at: Position) ->
-  const name = Identifier(name: member.name, position: at)
+itab_entry := (body: Body, type: Type, member: InterfaceMember, at: Position) ->
+  name := Identifier(name: member.name, position: at)
   # The type satisfies the interface (see reject_unsatisfied), so it has the member.
-  const target = find_member(body, type, name)!.target
-  const generic = target is Method then generic_method(target.source)
-  const instance = generic then receiver_instance(body, generic, type, at, nil)
+  target := find_member(body, type, name)!.target
+  generic := target is Method then generic_method(target.source)
+  instance := generic then receiver_instance(body, generic, type, at, nil)
   ItabEntry member, target, instance
 
 # The plans of the itabs of the runtime's errors, from which codegen makes them (see
 # runtime_errors), by the module that declares the Error of std:builtins, which `shared` is: its
 # structs that declare Error, in the order they are declared there. std keeps the runtime's errors
 # in that module.
-export const plan_runtime_errors = (shared: Shared) ->
-  const resolver = module_resolver(shared.index)
-  const body = Body(shared, resolver, extensions: shared.extensions, facts: shared.facts)
-  const at = Position(line: 1, column: 1)
-  const error = std_interface(shared, 'Error', at).type
-  const declares_error = (info: ObjectInfo) -> info.satisfies and same_type(info.satisfies!, error)
-  const errors = (info for info in shared.objects.values() when declares_error(info))
+export plan_runtime_errors := (shared: Shared) ->
+  resolver := module_resolver(shared.index)
+  body := Body(shared, resolver, extensions: shared.extensions, facts: shared.facts)
+  at := Position(line: 1, column: 1)
+  error := std_interface(shared, 'Error', at).type
+  declares_error := (info: ObjectInfo) -> info.satisfies and same_type(info.satisfies!, error)
+  errors := (info for info in shared.objects.values() when declares_error(info))
   shared.program.runtime_errors = [itab_of(body, at, info.type, error) for info in errors]

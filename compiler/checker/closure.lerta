@@ -11,22 +11,22 @@ import resolve_result from './type_names'
 import has_type_parameters from './type_patterns'
 import format_type, FunctionType, is_kind, ObjectType, PromiseType, Type from '../types'
 
-export const type_of_function_literal = (body: Body, literal: FunctionLiteral, expected: Type?) ->
-  const expected_function = expected_function_type(expected)
-  const params = expected_function?.params
-  const result = expected_function?.result
+export type_of_function_literal := (body: Body, literal: FunctionLiteral, expected: Type?) ->
+  expected_function := expected_function_type(expected)
+  params := expected_function?.params
+  result := expected_function?.result
   reject_nil_result body.program, check_literal(body, literal, params, result, nil), literal
 
-const expected_function_type = (expected: Type?) -> expected as FunctionType?
+expected_function_type := (expected: Type?) -> expected as FunctionType?
 
 # A function literal of an item, as `map` takes, or as the guard and the element of an Iter
 # comprehension are: its parameter's type may be left out, and its result is inferred unless
 # given. `holds`, a condition known to hold where it runs, narrows the item as an `if` would. Its
 # type is recorded here, since it is not checked as an expression.
-export const type_of_item_function = (
+export type_of_item_function := (
   body: Body, literal: FunctionLiteral, item: Type, result: Type?, holds: Expression?
 ) ->
-  const type = check_literal(body, literal, [item], result, holds)
+  type := check_literal(body, literal, [item], result, holds)
   body.facts.types[literal] = type
   type
 
@@ -34,90 +34,87 @@ export const type_of_item_function = (
 # functions are its captures. The expected parameter types stand in for those left out, and the
 # expected result for one left out, unless they have type parameters, whose types are not known
 # yet (see generic_call).
-const check_literal = (
+check_literal := (
   body: Body, literal: FunctionLiteral, expected_params: Type[]?, expected_result: Type?,
   holds: Expression?
 ) ->
-  const program = body.program
+  program := body.program
   reject_generic program, literal
   reject_defaults program, literal
   reject_variadic program, literal
-  const has_untyped = literal.params.any((param) -> param.type == nil)
-  const count = literal.params.length
+  has_untyped := literal.params.any((param) -> param.type == nil)
+  count := literal.params.length
   if expected_params and has_untyped and expected_params.length != count
-    const expected =
+    expected :=
       if expected_result
         format_type FunctionType(params: expected_params, result: expected_result)
       else
         "a function of #{expected_params.length} parameter(s)"
-    const message = "expected #{expected}, got a function of #{count} parameter(s)"
+    message := "expected #{expected}, got a function of #{count} parameter(s)"
     fail program, literal.position, message
-  const known = (type: Type?) ->
-    const found = type ? return nil
+  known := (type: Type?) ->
+    found := type ? return nil
     has_type_parameters(found) then nil else found
-  const known_params = [known(type) for type in expected_params ? []]
-  const params = parameter_types(program, body.resolver, literal, known_params)
-  const return_type = literal.return_type
-  const annotated =
+  known_params := [known(type) for type in expected_params ? []]
+  params := parameter_types(program, body.resolver, literal, known_params)
+  return_type := literal.return_type
+  annotated :=
     if return_type
       resolve_result program, body.resolver, return_type
     else
       known expected_result
-  const context = function_context(program, literal, annotated)
-  const { shared, resolver, extensions, facts } = body
-  const weak_this = literal.weak
+  context := function_context(program, literal, annotated)
+  { shared, resolver, extensions, facts } := body
+  weak_this := literal.weak
   reject_weak_outside_classes program, literal if weak_this and not is_class_object(this_type(body))
-  const literal_body =
-    Body(shared, resolver, extensions, facts, context, weak_this, enclosing: body)
+  literal_body := Body(shared, resolver, extensions, facts, context, weak_this, enclosing: body)
   check_function_body literal_body, literal, params, holds
   body.facts.captures[literal] = literal_body.captures
-  const type = finish_function_type(context, params, body.facts)
+  type := finish_function_type(context, params, body.facts)
   if weak_this
     reject_weak_result program, literal, type.result
     reject_needless_weak program, literal, literal_body.captures
   type
 
 # The type of `@` where the body is: in a method, or in a function literal written in one.
-const this_type = (body: Body): Type? ->
-  return self.type if const self = body.self
-  const enclosing = body.enclosing ? return nil
+this_type := (body: Body): Type? ->
+  return self.type if self := body.self
+  enclosing := body.enclosing ? return nil
   this_type enclosing
 
-const is_class_object = (type: Type?) -> (type as ObjectType?)?.is_struct == false
+is_class_object := (type: Type?) -> (type as ObjectType?)?.is_struct == false
 
-const reject_weak_outside_classes = (program: ProgramWide, literal: FunctionLiteral) ->
-  const where = 'in a method of a class, whose @ it captures'
-  const message = "a weak function literal must be written #{where}"
+reject_weak_outside_classes := (program: ProgramWide, literal: FunctionLiteral) ->
+  where := 'in a method of a class, whose @ it captures'
+  message := "a weak function literal must be written #{where}"
   fail program, literal.position, message
 
-const reject_needless_weak = (
-  program: ProgramWide, literal: FunctionLiteral, captures: Capture[]
-) ->
+reject_needless_weak := (program: ProgramWide, literal: FunctionLiteral, captures: Capture[]) ->
   return if captures.any((capture) -> capture.name == '@')
   fail program, literal.position, 'a weak function literal that does not use @ need not be weak'
 
-const reject_weak_result = (program: ProgramWide, literal: FunctionLiteral, result: Type) ->
-  const no_value = (type: Type) -> is_kind(type, 'void')
-  const gives_none = no_value(result) or (result is PromiseType and no_value(result.value))
+reject_weak_result := (program: ProgramWide, literal: FunctionLiteral, result: Type) ->
+  no_value := (type: Type) -> is_kind(type, 'void')
+  gives_none := no_value(result) or (result is PromiseType and no_value(result.value))
   if not gives_none
-    const reason = 'since it may not run'
-    const message = "a weak function literal gives no value, #{reason}; got #{format_type(result)}"
+    reason := 'since it may not run'
+    message := "a weak function literal gives no value, #{reason}; got #{format_type(result)}"
     fail program, literal.position, message
 
 # A local of an enclosing function, seen from a function literal, which captures its value; a
 # top-level value is not captured but read where it is.
-export const captured = (body: Body, name: String): Local? ->
-  const enclosing = body.enclosing ? return nil
-  const local = enclosing.scopes.lookup_local(name) ? captured(enclosing, name) ? return nil
-  if const top_level = body.shared.top_level.locals[name]
+export captured := (body: Body, name: String): Local? ->
+  enclosing := body.enclosing ? return nil
+  local := enclosing.scopes.lookup_local(name) ? captured(enclosing, name) ? return nil
+  if top_level := body.shared.top_level.locals[name]
     return nil if local == top_level
-  const origin = local.origin ? local
+  origin := local.origin ? local
   body.facts.shared_vars.add origin.identifier if origin.mutable
   if not body.captures.any((capture) -> capture.name == name)
     # A weak literal's `@` holds no reference to the object.
-    const weak_this = name == '@' and body.weak_this
-    const is_this = (name == '@' or origin.is_this) and not weak_this
-    const capture = Capture
+    weak_this := name == '@' and body.weak_this
+    is_this := (name == '@' or origin.is_this) and not weak_this
+    capture := Capture
       name
       is_this
       source: local_reference(enclosing, name, local)
@@ -125,9 +122,9 @@ export const captured = (body: Body, name: String): Local? ->
       is_var: origin.mutable
       is_weak: origin.weak or weak_this
     body.captures.push capture
-  const { identifier, mutable, used } = local
+  { identifier, mutable, used } := local
   # A `var` may be assigned before the literal runs, so it reads as declared.
-  const type = origin.mutable then origin.type else local.type
-  const seen = Local(identifier, type, mutable, used, origin)
+  type := origin.mutable then origin.type else local.type
+  seen := Local(identifier, type, mutable, used, origin)
   seen.captured = true
   seen

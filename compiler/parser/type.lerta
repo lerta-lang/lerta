@@ -9,29 +9,29 @@ import parse_identifier from './expression'
 import is_one_of, token_position, TokenStream from './token_stream'
 
 # The tokens that a type name is made of.
-const TYPE_TOKEN_KINDS: TokenKind[] =
+TYPE_TOKEN_KINDS: TokenKind[] =
   IDENTIFIER, '.', '<', '>', ',', '?', '|', '(', ')', '->', '{', '}', ':', '[', ']'
 
 # A named type, or a union of them: `A | B`.
-export const parse_type_name = (tokens: TokenStream) ->
+export parse_type_name := (tokens: TokenStream) ->
   return parse_parenthesized_type(tokens, false) if tokens.peek().kind == '('
   union_of parse_union_members(tokens)
 
 # The type of `type Name =`: a type on the same line, or a union whose members are on the indented
 # lines below, one or more on each line.
-export const parse_aliased_type = (tokens: TokenStream) ->
+export parse_aliased_type := (tokens: TokenStream) ->
   return parse_type_name(tokens) if tokens.peek().kind != NEWLINE
-  const lines = tokens.parse_lines('indented union members', -> parse_union_members(tokens))
-  const members: UnionMember[]
+  lines := tokens.parse_lines('indented union members', -> parse_union_members(tokens))
+  members: UnionMember[]
   members.append line for line in lines
   union_of members
 
 # `A | B | ...`, or one member alone.
-const parse_union_members = (tokens: TokenStream) ->
+parse_union_members := (tokens: TokenStream) ->
   tokens.parse_separated '|', -> parse_union_member(tokens)
 
 # The union of the members, or the member alone.
-const union_of = (members: UnionMember[]): TypeName ->
+union_of := (members: UnionMember[]): TypeName ->
   return members[0] if members.length == 1
   UnionTypeName members, position: members[0].position
 
@@ -39,22 +39,22 @@ const union_of = (members: UnionMember[]): TypeName ->
 # optional. Any type in parentheses may be the items of an array: `((A) -> R)[]`, `(A | B)[]`. As a
 # function literal's return type, the `->` after it starts the body, so a function type there is
 # written in parentheses.
-const parse_parenthesized_type = (tokens: TokenStream, is_result: Bool): TypeName ->
-  const position = token_position(tokens.next())
-  const types = tokens.parse_list(')', -> parse_type_name(tokens))
-  const is_tuple = types.length > 1 and (is_result or tokens.peek().kind != '->')
+parse_parenthesized_type := (tokens: TokenStream, is_result: Bool): TypeName ->
+  position := token_position(tokens.next())
+  types := tokens.parse_list(')', -> parse_type_name(tokens))
+  is_tuple := types.length > 1 and (is_result or tokens.peek().kind != '->')
   if is_tuple
-    const tuple = TupleTypeName(position, items: types, optional: tokens.accept('?'))
+    tuple := TupleTypeName(position, items: types, optional: tokens.accept('?'))
     return parse_array_suffix(tokens, tuple, position)
   if not is_result and tokens.accept('->')
-    const result = parse_type_name(tokens)
+    result := parse_type_name(tokens)
     return FunctionTypeName(result, position, params: types)
-  const is_array = types.length == 1 and tokens.peek().kind == '['
+  is_array := types.length == 1 and tokens.peek().kind == '['
   return parse_array_type(tokens, types[0], position) if is_array
-  const inner = types.length == 1 then types[0]
+  inner := types.length == 1 then types[0]
   if inner is FunctionTypeName
-    const { params, result } = inner
-    const function = FunctionTypeName(params, result, position, optional: tokens.accept('?'))
+    { params, result } := inner
+    function := FunctionTypeName(params, result, position, optional: tokens.accept('?'))
     return parse_array_suffix(tokens, function, position)
   if is_result
     tokens.fail position, 'a function type returned is written in parentheses: `((Int) -> Int)`'
@@ -62,92 +62,90 @@ const parse_parenthesized_type = (tokens: TokenStream, is_result: Bool): TypeNam
 
 # A type that `|` can join: a named type, or an anonymous struct or an array, which the checker
 # rejects as a member so far.
-const parse_union_member = (tokens: TokenStream): UnionMember ->
-  const member: UnionMember =
+parse_union_member := (tokens: TokenStream): UnionMember ->
+  member: UnionMember =
     tokens.peek().kind == '{' then parse_record_type(tokens) else parse_named_type(tokens)
   return member if tokens.peek().kind != '['
   parse_array_type tokens, member, member.position
 
 # The type, made the items of an array if `[]` follows.
-const parse_array_suffix = (tokens: TokenStream, type: TypeName, position: Position): TypeName ->
+parse_array_suffix := (tokens: TokenStream, type: TypeName, position: Position): TypeName ->
   tokens.peek().kind == '[' then parse_array_type(tokens, type, position) else type
 
 # `T[]`, any number of times, each with `?` after it if the array may be nil: `Int[]?` is an
 # optional array, and `Int[]?[]` an array of them.
-const parse_array_type = (
-  tokens: TokenStream, element: TypeName, position: Position
-): ArrayTypeName ->
+parse_array_type := (tokens: TokenStream, element: TypeName, position: Position): ArrayTypeName ->
   tokens.next()
   tokens.expect ']', "']'"
-  const array = ArrayTypeName(element, position, optional: tokens.accept('?'))
+  array := ArrayTypeName(element, position, optional: tokens.accept('?'))
   tokens.peek().kind == '[' then parse_array_type(tokens, array, position) else array
 
 # `{ x: Int, y: String }`, with `?` after it if it may be nil.
-const parse_record_type = (tokens: TokenStream) ->
-  const position = token_position(tokens.next())
-  const fields = tokens.parse_list('}', -> parse_record_type_field(tokens))
+parse_record_type := (tokens: TokenStream) ->
+  position := token_position(tokens.next())
+  fields := tokens.parse_list('}', -> parse_record_type_field(tokens))
   RecordTypeName fields, position, optional: tokens.accept('?')
 
-const parse_record_type_field = (tokens: TokenStream) ->
-  const name = parse_identifier(tokens)
+parse_record_type_field := (tokens: TokenStream) ->
+  name := parse_identifier(tokens)
   tokens.expect ':', "':'"
   RecordTypeField name, type: parse_type_name(tokens)
 
-export const parse_named_type = (tokens: TokenStream) ->
-  const type = parse_named_type_alone(tokens)
+export parse_named_type := (tokens: TokenStream) ->
+  type := parse_named_type_alone(tokens)
   type.optional = tokens.accept('?')
   type
 
 # A named type without the `?` that may follow it.
 # A name that a module imported as a name qualifies, `mod.Point`, is one name.
-export const parse_named_type_alone = (tokens: TokenStream) ->
-  const { name, position } = parse_identifier(tokens)
-  const qualifies = tokens.peek().kind == '.' and tokens.peek_at(1).kind == IDENTIFIER
-  const full_name = qualifies then "#{name}.#{parse_qualified_rest(tokens)}" else name
-  const args: TypeName[] = tokens.peek().kind == '<' then parse_type_arguments(tokens) else []
+export parse_named_type_alone := (tokens: TokenStream) ->
+  { name, position } := parse_identifier(tokens)
+  qualifies := tokens.peek().kind == '.' and tokens.peek_at(1).kind == IDENTIFIER
+  full_name := qualifies then "#{name}.#{parse_qualified_rest(tokens)}" else name
+  args: TypeName[] = tokens.peek().kind == '<' then parse_type_arguments(tokens) else []
   NamedType args, position, name: full_name
 
-const parse_qualified_rest = (tokens: TokenStream) ->
+parse_qualified_rest := (tokens: TokenStream) ->
   tokens.next()
   parse_identifier(tokens).name
 
 # `<A, B>`.
-export const parse_type_arguments = (tokens: TokenStream) ->
+export parse_type_arguments := (tokens: TokenStream) ->
   tokens.expect '<', "'<'"
-  const args = tokens.parse_separated(',', -> parse_type_name(tokens))
+  args := tokens.parse_separated(',', -> parse_type_name(tokens))
   tokens.expect '>', "'>'"
   args
 
 # Whether type arguments follow, written without a space and followed by `(`, as in `f<Int>(x)`.
 # Comparisons do not chain, so `a<b>(c)` cannot be read otherwise; `a<<b>>(c)` is two shifts, as
 # no type argument starts with `<`.
-export const starts_type_arguments = (tokens: TokenStream) ->
-  const open = tokens.peek()
+export starts_type_arguments := (tokens: TokenStream) ->
+  open := tokens.peek()
   return false if open.kind != '<' or open.spaced
-  const second = tokens.peek_at(1)
+  second := tokens.peek_at(1)
   return false if second.kind == '<' and not second.spaced
-  const is_type_token = (kind: TokenKind) -> is_one_of(kind, TYPE_TOKEN_KINDS)
-  const close = tokens.closing_offset('<', '>', is_type_token) ? return false
-  const next = tokens.peek_at(close + 1)
+  is_type_token := (kind: TokenKind) -> is_one_of(kind, TYPE_TOKEN_KINDS)
+  close := tokens.closing_offset('<', '>', is_type_token) ? return false
+  next := tokens.peek_at(close + 1)
   next.kind == '(' and not next.spaced
 
 # `: Type`, if it follows.
-export const parse_type_annotation = (tokens: TokenStream) ->
+export parse_type_annotation := (tokens: TokenStream) ->
   tokens.accept(':') then parse_type_name(tokens)
 
 # `: Type` as a function literal's return type (see parse_parenthesized_type), if it follows.
-export const parse_result_annotation = (tokens: TokenStream): TypeName? ->
+export parse_result_annotation := (tokens: TokenStream): TypeName? ->
   return nil if not tokens.accept(':')
   tokens.peek().kind == '(' then parse_parenthesized_type(tokens, true) else parse_type_name(tokens)
 
 # `<T, U: Stringable, X: Iterable<T>>`, if it follows.
-export const parse_type_parameters = (tokens: TokenStream): TypeParameter[] ->
+export parse_type_parameters := (tokens: TokenStream): TypeParameter[] ->
   return [] if not tokens.accept('<')
-  const type_params = tokens.parse_separated(',', -> parse_type_parameter(tokens))
+  type_params := tokens.parse_separated(',', -> parse_type_parameter(tokens))
   tokens.expect '>', "'>'"
   type_params
 
-const parse_type_parameter = (tokens: TokenStream) ->
-  const name = parse_identifier(tokens)
-  const bound = tokens.accept(':') then parse_named_type(tokens)
+parse_type_parameter := (tokens: TokenStream) ->
+  name := parse_identifier(tokens)
+  bound := tokens.accept(':') then parse_named_type(tokens)
   TypeParameter name, bound

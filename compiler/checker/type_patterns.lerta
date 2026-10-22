@@ -8,13 +8,13 @@ import
 from '../types'
 
 # The type parameters standing for themselves, for resolving the types written with them.
-export const placeholders = (type_params: TypeParameter[]) ->
-  const types: Map<String, Type>
+export placeholders := (type_params: TypeParameter[]) ->
+  types: Map<String, Type>
   types[param.name.name] = TypeParameterType(name: param.name.name) for param in type_params
   types
 
 # The type with each type it is made of replaced by `replace` of it.
-const map_parts = (type: Type, replace: (Type) -> Type): Type ->
+map_parts := (type: Type, replace: (Type) -> Type): Type ->
   case type
     when ArrayType then ArrayType(element: replace(type.element))
     when IterType then IterType(item: replace(type.item))
@@ -22,53 +22,53 @@ const map_parts = (type: Type, replace: (Type) -> Type): Type ->
     when MapType then MapType(key: replace(type.key), value: replace(type.value))
     when OptionalType then optional_type(replace(type.inner))
     when RecordType
-      const replace_field = (field: RecordField) ->
+      replace_field := (field: RecordField) ->
         RecordField name: field.name, type: replace(field.type)
       record_type [replace_field(field) for field in type.fields]
     when TupleType then TupleType(items: [replace(item) for item in type.items])
     when UnionType then union_type([replace(member) for member in type.members])
     when InterfaceType
-      const args = [replace(arg) for arg in type.args]
+      args := [replace(arg) for arg in type.args]
       InterfaceType args, name: type.name, symbol: type.symbol, module: type.module
     when ObjectType
       return type if type.args.length == 0
-      const args = [replace(arg) for arg in type.args]
-      const { name, symbol, module, is_struct } = type
+      args := [replace(arg) for arg in type.args]
+      { name, symbol, module, is_struct } := type
       ObjectType name, symbol, module, is_struct, args
     when FunctionType
       FunctionType params: [replace(param) for param in type.params], result: replace(type.result)
     else type
 
 # The type with the type parameters that `bindings` has replaced by their types.
-export const substitute = (type: Type, bindings: Map<String, Type>): Type ->
+export substitute := (type: Type, bindings: Map<String, Type>): Type ->
   return bindings[type.name] ? type if type is TypeParameterType
   map_parts type, (part) -> substitute(part, bindings)
 
 # Whether the type has type parameters, as `T[]` has, which make it a pattern of other types.
-export const is_pattern = (type: Type): Bool ->
+export is_pattern := (type: Type): Bool ->
   type is TypeParameterType or parts_of(type).any(is_pattern)
 
 # The types that the type is made of, such as the items of an array.
-export const parts_of = (type: Type) ->
-  const parts: Type[]
-  const collect = (part: Type) ->
+export parts_of := (type: Type) ->
+  parts: Type[]
+  collect := (part: Type) ->
     parts.push part
     part
   map_parts type, collect
   parts
 
-export const type_depth = (type: Type): Int ->
+export type_depth := (type: Type): Int ->
   var deepest = 0
   for part in parts_of(type)
-    const depth = type_depth(part)
+    depth := type_depth(part)
     deepest = depth if depth > deepest
   1 + deepest
 
 # Whether the type is the pattern with its type parameters replaced, as Int[] is T[].
-export const matches = (pattern: Type, type: Type) ->
+export matches := (pattern: Type, type: Type) ->
   return false if not has_same_outer_shape(pattern, type)
-  const bindings: Map<String, Type>
-  const bind = (name: String, bound: Type) -> bindings[name] = bound if not bindings.has(name)
+  bindings: Map<String, Type>
+  bind := (name: String, bound: Type) -> bindings[name] = bound if not bindings.has(name)
   infer pattern, type, bind
   same_type substitute(pattern, bindings), type
 
@@ -77,7 +77,7 @@ export const matches = (pattern: Type, type: Type) ->
 # extends in effect for a generic call's types fast enough to find (see methods_reachable_from).
 # Substituting keeps what a pattern is outside, except a type parameter's and a union's, whose
 # members may merge.
-const has_same_outer_shape = (pattern: Type, type: Type) ->
+has_same_outer_shape := (pattern: Type, type: Type) ->
   return true if pattern is TypeParameterType or pattern is UnionType or type is UnionType
   case pattern
     when ObjectType then type is ObjectType and type.symbol == pattern.symbol
@@ -86,26 +86,26 @@ const has_same_outer_shape = (pattern: Type, type: Type) ->
 
 # Whether some type matches both patterns, as Int[] matches T[] and Int[]. A type
 # parameter stands for any type on either side, even where it is repeated, as in Map<T, T>.
-export const overlaps = (a: Type, b: Type): Bool ->
+export overlaps := (a: Type, b: Type): Bool ->
   return true if a is TypeParameterType or b is TypeParameterType
-  const a_parts = parts_of(a)
-  const b_parts = parts_of(b)
+  a_parts := parts_of(a)
+  b_parts := parts_of(b)
   return false if shape_key(a) != shape_key(b) or a_parts.length != b_parts.length
   for (a_part, b_part) in a_parts.zip(b_parts)
     return false if not overlaps(a_part, b_part)
   true
 
 # The type without the types it is made of: _[] for any array.
-const shape_key = (type: Type) -> type_key(map_parts(type, (_) -> TypeParameterType(name: '_')))
+shape_key := (type: Type) -> type_key(map_parts(type, (_) -> TypeParameterType(name: '_')))
 
-export const has_type_parameters = (type: Type): Bool ->
+export has_type_parameters := (type: Type): Bool ->
   type is TypeParameterType or parts_of(type).any(has_type_parameters)
 
 # Binds the type parameters in `pattern` to the types they have in `type`, where its shape
 # matches: `T[]` and an `Int[]` bind T to Int. A type parameter bound already is kept;
 # the caller then checks that the type fits.
-export const infer = (pattern: Type, type: Type, bind: (String, Type) -> void): void ->
-  const match = (part: Type, type_part: Type?) -> infer(part, type_part, bind) if type_part
+export infer := (pattern: Type, type: Type, bind: (String, Type) -> void): void ->
+  match := (part: Type, type_part: Type?) -> infer(part, type_part, bind) if type_part
   case pattern
     when TypeParameterType then bind(pattern.name, type)
     when OptionalType then match(pattern.inner, inner_of(type))
@@ -120,7 +120,7 @@ export const infer = (pattern: Type, type: Type, bind: (String, Type) -> void): 
     when RecordType
       if type is RecordType
         for field in pattern.fields
-          const found = type.fields.find((each) -> each.name == field.name)
+          found := type.fields.find((each) -> each.name == field.name)
           match field.type, found?.type
     when TupleType
       if type is TupleType and type.items.length == pattern.items.length

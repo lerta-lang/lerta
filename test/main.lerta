@@ -25,23 +25,23 @@ import suite as format_suite from './format'
 import suite as runtime_suite from './runtime'
 import suite as self_suite from './self'
 
-const SUITE_NAMES = ['run', 'cli', 'format', 'runtime', 'self']
+SUITE_NAMES := ['run', 'cli', 'format', 'runtime', 'self']
 
 # The keys of the checks that failed when they last ran, one per line (see key in lib/report);
 # LERTA_TEST_FAILED_FILE names another file, for the self checks (see self.lerta).
-const FAILED_FILE = env('LERTA_TEST_FAILED_FILE') ? "#{root_dir}/build/test-failed.txt"
+FAILED_FILE := env('LERTA_TEST_FAILED_FILE') ? "#{root_dir}/build/test-failed.txt"
 
 struct Arguments(suites: String[], triple: String?, failed: Bool, options: Options)
 
-const usage = (problem: String) ->
+usage := (problem: String) ->
   print_error problem
   print_error
     'usage: bin/test [<suite>...] [-k <text>] [--target <triple>] [--list] [--failed] [-j <count>] [-q]'
   await remove_work_root()
   exit 2
 
-const parse_arguments = ->
-  const suites: String[]
+parse_arguments := ->
+  suites: String[]
   var pattern = ''
   var triple: String?
   var listing = false
@@ -50,19 +50,19 @@ const parse_arguments = ->
   var quiet = false
   var i = 0
   # The value of the option at i, which it takes too.
-  const value = ->
+  value := ->
     i += 1
     await usage("#{argv[i - 1]} needs a value") if i >= argv.length
     argv[i]
   while i < argv.length
-    const arg = argv[i]
+    arg := argv[i]
     case arg
       when '-k' then pattern = await value()
       when '--target' then triple = await value()
       when '--list' then listing = true
       when '--failed' then failed = true
       when '-j'
-        const text = await value()
+        text := await value()
         jobs = text.parse_int() ? 0
         await usage("-j needs a count above 0: #{text}") if jobs < 1
       when '-q' then quiet = true
@@ -73,32 +73,32 @@ const parse_arguments = ->
   if triple
     await usage('--target is for the run suite alone') if suites.any((name) -> name != 'run')
     await usage('--failed is for the host alone') if failed
-  const chosen = suites.length > 0 then suites else triple then ['run'] else SUITE_NAMES
-  const options = Options(pattern, listing, jobs, quiet, only: nil)
+  chosen := suites.length > 0 then suites else triple then ['run'] else SUITE_NAMES
+  options := Options(pattern, listing, jobs, quiet, only: nil)
   Arguments suites: chosen, triple: triple, failed: failed, options: options
 
-const read_failed_keys = (): Promise<String[]> ->
+read_failed_keys := (): Promise<String[]> ->
   return [] if not is_file(FAILED_FILE)
-  const text = (await read_file(FAILED_FILE)).text() ? ''
+  text := (await read_file(FAILED_FILE)).text() ? ''
   [line for line in text.split("\n") when line != '']
 
 # What failed now, and what failed before and did not run now, but not a check that a suite that ran
 # no longer has.
-const write_failed_keys = (before: String[]) ->
-  const title_of = (key: String) -> key.split("\t")[0]
-  const ran_titles = Set([title_of(key) for key in known_keys])
-  const is_kept = (key: String) ->
+write_failed_keys := (before: String[]) ->
+  title_of := (key: String) -> key.split("\t")[0]
+  ran_titles := Set([title_of(key) for key in known_keys])
+  is_kept := (key: String) ->
     not ran_keys.contains(key) and (known_keys.has(key) or not ran_titles.has(title_of(key)))
-  const kept = [key for key in before when is_kept(key)]
+  kept := [key for key in before when is_kept(key)]
   await write_file(FAILED_FILE, ["#{key}\n" for key in [kept..., failed_keys...]].join('').binary)
 
 # The number of suites that failed, each of which is reported. The checks that a suite selected but
 # could not run count as failed.
-const run_suites = (names: String[], triple: String?) ->
+run_suites := (names: String[], triple: String?) ->
   var failed = 0
   for name in names
-    const first_selected = selected_keys.length
-    const failed_checks =
+    first_selected := selected_keys.length
+    failed_checks :=
       try
         case name
           when 'run' then await run_suite(triple then target_of(triple) else host_target)
@@ -115,19 +115,19 @@ const run_suites = (names: String[], triple: String?) ->
     failed += 1 if failed_checks > 0
   failed
 
-const main = ->
-  const arguments = await parse_arguments()
-  const before = await read_failed_keys()
-  const options = arguments.options
+main := ->
+  arguments := await parse_arguments()
+  before := await read_failed_keys()
+  options := arguments.options
   if arguments.failed
     if before.length == 0
       print 'no check failed when it last ran'
       return 0
-    const { pattern, listing, jobs, quiet } = options
+    { pattern, listing, jobs, quiet } := options
     set_options Options(pattern, listing, jobs, quiet, only: Set(before))
   else
     set_options options
-  const failed_suites = await run_suites(arguments.suites, arguments.triple)
+  failed_suites := await run_suites(arguments.suites, arguments.triple)
   # Only the host's runs are kept, so that the runs for other targets, which test_cross.sh runs at
   # the same time, neither overwrite them nor take one target's failures for another's.
   await write_failed_keys(before) if not options.listing and not arguments.triple
@@ -136,7 +136,7 @@ const main = ->
     return 2
   failed_suites > 0 then 1 else 0
 
-const status =
+status :=
   try
     await main()
   finally

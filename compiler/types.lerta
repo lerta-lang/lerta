@@ -88,7 +88,7 @@ export struct EnumType(name: String, symbol: String, module: String, members: En
 export struct EnumMember(text: String, is_name: Bool)
 
 # How a member is written in messages: as it is declared.
-export const format_enum_member = (member: EnumMember) ->
+export format_enum_member := (member: EnumMember) ->
   member.is_name then member.text else "'#{member.text}'"
 
 # `A | B`: classes and structs, by name; the object carries which one it is. The members are kept
@@ -108,19 +108,19 @@ export type Type =
   SimpleType | ArrayType | MapType | IterType | PromiseType | RecordType | TupleType | ObjectType
   InterfaceType | EnumType | UnionType | OptionalType | TypeParameterType | FunctionType
 
-export const string_type = SimpleType(kind: 'String')
-export const int_type = SimpleType(kind: 'Int')
-export const float_type = SimpleType(kind: 'Float')
-export const float32_type = SimpleType(kind: 'Float32')
-export const bool_type = SimpleType(kind: 'Bool')
-export const byte_type = SimpleType(kind: 'Byte')
-export const char_type = SimpleType(kind: 'Char')
-export const binary_type = SimpleType(kind: 'Binary')
-export const void_type = SimpleType(kind: 'void')
-export const never_type = SimpleType(kind: 'never')
-export const nil_type = SimpleType(kind: 'nil')
+export string_type := SimpleType(kind: 'String')
+export int_type := SimpleType(kind: 'Int')
+export float_type := SimpleType(kind: 'Float')
+export float32_type := SimpleType(kind: 'Float32')
+export bool_type := SimpleType(kind: 'Bool')
+export byte_type := SimpleType(kind: 'Byte')
+export char_type := SimpleType(kind: 'Char')
+export binary_type := SimpleType(kind: 'Binary')
+export void_type := SimpleType(kind: 'void')
+export never_type := SimpleType(kind: 'never')
+export nil_type := SimpleType(kind: 'nil')
 
-export const kind_of = (type: Type): TypeKind ->
+export kind_of := (type: Type): TypeKind ->
   case type
     when SimpleType then type.kind
     when ArrayType then ARRAY
@@ -137,24 +137,24 @@ export const kind_of = (type: Type): TypeKind ->
     when TypeParameterType then TYPE_PARAMETER
     when FunctionType then FUNCTION
 
-export const is_kind = (type: Type, kind: TypeKind) -> kind_of(type) == kind
+export is_kind := (type: Type, kind: TypeKind) -> kind_of(type) == kind
 
 # The integer types, `Int` and `Byte` among them, which differ in their bits and their sign.
-export const INTEGER_KINDS: TypeKind[] =
+export INTEGER_KINDS: TypeKind[] =
   'Int', 'Byte', 'Int8', 'Int16', 'Int32', 'UInt16', 'UInt32', 'UInt64'
 
-export const is_integer = (type: Type) -> is_one_of_kinds(type, INTEGER_KINDS)
+export is_integer := (type: Type) -> is_one_of_kinds(type, INTEGER_KINDS)
 
 # The floating-point types, of 64 and of 32 bits.
-export const FLOAT_KINDS: TypeKind[] = ['Float', 'Float32']
+export FLOAT_KINDS: TypeKind[] = ['Float', 'Float32']
 
-export const is_float = (type: Type) -> is_one_of_kinds(type, FLOAT_KINDS)
+export is_float := (type: Type) -> is_one_of_kinds(type, FLOAT_KINDS)
 
-export const SIGNED_INTEGER_KINDS: TypeKind[] = ['Int', 'Int8', 'Int16', 'Int32']
+export SIGNED_INTEGER_KINDS: TypeKind[] = ['Int', 'Int8', 'Int16', 'Int32']
 
-export const is_signed = (type: Type) -> is_one_of_kinds(type, SIGNED_INTEGER_KINDS)
+export is_signed := (type: Type) -> is_one_of_kinds(type, SIGNED_INTEGER_KINDS)
 
-export const integer_bits = (type: Type) ->
+export integer_bits := (type: Type) ->
   case kind_of(type)
     when 'Byte', 'Int8' then 8
     when 'Int16', 'UInt16' then 16
@@ -163,50 +163,50 @@ export const integer_bits = (type: Type) ->
 
 # The least and the largest value of an integer type, from its bits and its sign; a UInt64's
 # largest is taken as the largest Int, as no value above it can be written.
-export const integer_range = (type: Type) ->
-  const bits = integer_bits(type)
+export integer_range := (type: Type) ->
+  bits := integer_bits(type)
   # -(2 to the bits - 1), in steps that stay within an Int.
   var signed_least = -1
   signed_least *= 2 for _ in 1...bits
-  const signed_most = -(signed_least + 1)
+  signed_most := -(signed_least + 1)
   return { least: signed_least, most: signed_most } if is_signed(type)
   { least: 0, most: bits == 64 then signed_most else signed_most * 2 + 1 }
 
-export const is_one_of_kinds = (type: Type, kinds: TypeKind[]) -> kinds.contains(kind_of(type))
+export is_one_of_kinds := (type: Type, kinds: TypeKind[]) -> kinds.contains(kind_of(type))
 
-export const record_type = (fields: RecordField[]) ->
+export record_type := (fields: RecordField[]) ->
   RecordType fields: fields.sorted((a, b) -> a.name.compare(b.name))
 
 # `T?` of a T that may be nil already, as a type argument may be, is T.
-export const optional_type = (inner: Type): Type ->
+export optional_type := (inner: Type): Type ->
   inner is OptionalType then inner else OptionalType(inner)
 
 # The members are kept in the order of their keys, so that `A | B` and `B | A` are the same type.
-export const union_type = (members: Type[]) ->
+export union_type := (members: Type[]) ->
   UnionType members: members.sorted((a, b) -> type_key(a).compare(type_key(b)))
 
 # The union of the types, each a member of a union, a union, or one of those optional, or nil: an
 # optional one if any of them is. Nil if one is none of those.
-export const union_of = (types: Type[]): Type? ->
-  const members: Type[]
+export union_of := (types: Type[]): Type? ->
+  members: Type[]
   var optional = false
   for type in types
     optional = true if type is OptionalType or is_kind(type, 'nil')
     continue if is_kind(type, 'nil')
-    const inner = inner_of(type)
-    const added: Type[] = inner is UnionType then inner.members else [inner]
+    inner := inner_of(type)
+    added: Type[] = inner is UnionType then inner.members else [inner]
     for member in added
       return nil if not is_union_member(member)
       members.push member if not members.any((other) -> same_type(other, member))
-  const union = members.length == 1 then members[0] else union_type(members)
+  union := members.length == 1 then members[0] else union_type(members)
   optional then optional_type(union) else union
 
 # A type whose values a union may hold: a class or a struct, as it is, or a value of the others,
 # which a union holds boxed (see codegen boxes).
-export const is_union_member = (type: Type) ->
+export is_union_member := (type: Type) ->
   type is ObjectType or type is EnumType or is_one_of_kinds(type, UNION_VALUE_KINDS)
 
-const UNION_VALUE_KINDS: TypeKind[] = [
+UNION_VALUE_KINDS: TypeKind[] = [
   INTEGER_KINDS...
   'Char'
   'Float'
@@ -218,10 +218,10 @@ const UNION_VALUE_KINDS: TypeKind[] = [
 
 # How a type is written in messages. A class, struct or enum is written by its name, and with its
 # module where `qualified` says so, or where a union holds another of the same name.
-export const format_type = (type: Type) -> format_qualified(type, false)
+export format_type := (type: Type) -> format_qualified(type, false)
 
-export const format_qualified = (type: Type, qualified: Bool): String ->
-  const format = (inner: Type) -> format_qualified(inner, qualified)
+export format_qualified := (type: Type, qualified: Bool): String ->
+  format := (inner: Type) -> format_qualified(inner, qualified)
   case type
     when SimpleType then type.kind.to_string()
     when ArrayType then "#{operand_text(type.element, format)}[]"
@@ -232,7 +232,7 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
     when InterfaceType then format_named(type.name, type.module, type.args, format, qualified)
     when EnumType then qualified then "#{type.name} (of #{type.module})" else type.name
     when RecordType
-      const fields = ["#{field.name}: #{format(field.type)}" for field in type.fields]
+      fields := ["#{field.name}: #{format(field.type)}" for field in type.fields]
       "{ #{fields.join(', ')} }"
     when TupleType then "(#{[format(item) for item in type.items].join(', ')})"
     when UnionType
@@ -243,48 +243,47 @@ export const format_qualified = (type: Type, qualified: Bool): String ->
       "(#{[format(param) for param in type.params].join(', ')}) -> #{format(type.result)}"
 
 # The type that `?` or `[]` follows, in parentheses if it would otherwise apply to a part of it.
-const operand_text = (operand: Type, write: (Type) -> String) ->
-  const needs_parentheses = operand is FunctionType or operand is UnionType
+operand_text := (operand: Type, write: (Type) -> String) ->
+  needs_parentheses := operand is FunctionType or operand is UnionType
   needs_parentheses then "(#{write(operand)})" else write(operand)
 
-const map_text = (type: MapType, format: (Type) -> String) ->
-  const key = format(type.key)
+map_text := (type: MapType, format: (Type) -> String) ->
+  key := format(type.key)
   is_set(type) then "Set<#{key}>" else "Map<#{key}, #{format(type.value)}>"
 
 # A Promise of no value is written without a type argument.
-const promise_text = (type: PromiseType, write: (Type) -> String) ->
+promise_text := (type: PromiseType, write: (Type) -> String) ->
   is_kind(type.value, 'void') then 'Promise' else "Promise<#{write(type.value)}>"
 
 # A class, struct or interface, with its type arguments, and its module where `qualified` says so.
-const format_named = (
+format_named := (
   name: String, module: String, args: Type[], format: (Type) -> String, qualified: Bool
 ) ->
-  const written_args = [format(arg) for arg in args].join(', ')
-  const written = args.length == 0 then name else "#{name}<#{written_args}>"
+  written_args := [format(arg) for arg in args].join(', ')
+  written := args.length == 0 then name else "#{name}<#{written_args}>"
   qualified then "#{written} (of #{module})" else written
 
 # A member of a union, with its module if another member has the same name.
-export const format_member = (member: Type, union: Type) ->
-  format_member_qualified member, union, false
+export format_member := (member: Type, union: Type) -> format_member_qualified(member, union, false)
 
-const format_member_qualified = (member: Type, union: Type, qualified: Bool) ->
+format_member_qualified := (member: Type, union: Type, qualified: Bool) ->
   return format_qualified(member, qualified) if member is not ObjectType
   return format_qualified(member, qualified) if union is not UnionType
-  const shares_name = (other: Type) ->
+  shares_name := (other: Type) ->
     return false if other is not ObjectType
     other.name == member.name and not same_type(other, member)
   format_qualified member, qualified or union.members.any(shares_name)
 
 # Two types for a message: as format_type writes them, or, if that cannot tell them apart, with
 # the modules of their classes and structs.
-export const format_types = (a: Type, b: Type) ->
-  const first = format_type(a)
-  const second = format_type(b)
+export format_types := (a: Type, b: Type) ->
+  first := format_type(a)
+  second := format_type(b)
   return { first, second } if first != second
   { first: format_qualified(a, true), second: format_qualified(b, true) }
 
 # Identifies a type: as format_type writes it, with classes and structs by their symbols.
-export const type_key = (type: Type): String ->
+export type_key := (type: Type): String ->
   case type
     when SimpleType then type.kind.to_string()
     when ObjectType then named_key(type.symbol, type.args)
@@ -303,15 +302,15 @@ export const type_key = (type: Type): String ->
       "(#{[type_key(param) for param in type.params].join(', ')}) -> #{type_key(type.result)}"
     when TypeParameterType then type.name
 
-const named_key = (symbol: String, args: Type[]) ->
+named_key := (symbol: String, args: Type[]) ->
   return symbol if args.length == 0
   "#{symbol}<#{[type_key(arg) for arg in args].join(', ')}>"
 
-export const same_type = (a: Type, b: Type) -> type_key(a) == type_key(b)
+export same_type := (a: Type, b: Type) -> type_key(a) == type_key(b)
 
 # Values of these types are references to objects that are reference counted; a function value
 # is a closure. An interface value holds one, besides its itab.
-export const is_reference_type = (type: Type): Bool ->
+export is_reference_type := (type: Type): Bool ->
   case type
     when SimpleType then type.kind == 'String' or type.kind == 'Binary'
     when OptionalType then is_reference_type(type.inner)
@@ -322,31 +321,31 @@ export const is_reference_type = (type: Type): Bool ->
 
 # The type of the items of an array, a Binary or an Iter, which `for` and lazy methods such as
 # `map` go through.
-export const iterable_item = (type: Type): Type? ->
+export iterable_item := (type: Type): Type? ->
   case type
     when ArrayType then type.element
     when IterType then type.item
     else is_kind(type, 'Binary') then byte_type
 
 # The members of a union, or the type alone.
-export const members_of = (type: Type): Type[] -> type is UnionType then type.members else [type]
+export members_of := (type: Type): Type[] -> type is UnionType then type.members else [type]
 
 # Whether a union holds a value of the type, one of its members, in a box (see codegen boxes):
 # one that is not a class or a struct, which are heap objects of their own.
-export const is_boxed = (member: Type) ->
+export is_boxed := (member: Type) ->
   member is not ObjectType and member is not UnionType and member is not OptionalType
 
 # Whether a value of the type, a T or a T?, fits where the union, or an optional one, is expected
 # only in a box: as an Int where an `Int | String` is.
-export const boxes_into = (type: Type, target: Type) ->
-  const value = inner_of(type)
+export boxes_into := (type: Type, target: Type) ->
+  value := inner_of(type)
   inner_of(target) is UnionType and value is not UnionType and is_boxed(value)
 
 # A T or nil also fits where a T? is expected.
-export const is_assignable = (value: Type, target: Type): Bool ->
+export is_assignable := (value: Type, target: Type): Bool ->
   return true if is_kind(value, 'never')
   if target is UnionType
-    const is_member = (member: Type) -> target.members.any((type) -> same_type(type, member))
+    is_member := (member: Type) -> target.members.any((type) -> same_type(type, member))
     return members_of(value).all(is_member)
   if target is OptionalType
     return true if is_kind(value, 'nil') or is_assignable(value, target.inner)
@@ -355,7 +354,7 @@ export const is_assignable = (value: Type, target: Type): Bool ->
 
 # A class, or a union of classes, compares by identity; other types that compare do so by their
 # contents.
-export const is_identity_type = (type: Type): Bool ->
+export is_identity_type := (type: Type): Bool ->
   case type
     when ObjectType then not type.is_struct
     when UnionType then type.members.all(is_identity_type)
@@ -365,20 +364,20 @@ export const is_identity_type = (type: Type): Bool ->
 # and nil, or a union for a mix of it and some of its members (see wider_union); `never`, which
 # gives no value, does not count, and void, which gives none either, unifies with nothing else. Nil
 # if there is none.
-export const unify = (a: Type, b: Type) ->
+export unify := (a: Type, b: Type) ->
   return a if same_type(a, b) or is_kind(b, 'never')
   return b if is_kind(a, 'never')
   return a if is_kind(a, 'nil') and is_kind(b, 'nil')
   return nil if is_kind(a, 'void') or is_kind(b, 'void')
   return optional_type(inner_of(b)) if is_kind(a, 'nil')
   return optional_type(inner_of(a)) if is_kind(b, 'nil')
-  const is_optional = a is OptionalType or b is OptionalType
-  const inner = wider_union(inner_of(a), inner_of(b)) ? return nil
+  is_optional := a is OptionalType or b is OptionalType
+  inner := wider_union(inner_of(a), inner_of(b)) ? return nil
   is_optional then optional_type(inner) else inner
 
 # Of a type and a union, or two unions, the one that the other fits in, as a narrowed local's type
 # fits in its own: the type itself if they are the same.
-const wider_union = (a: Type, b: Type) ->
+wider_union := (a: Type, b: Type) ->
   return a if same_type(a, b)
   return b if b is UnionType and is_assignable(a, b)
   return a if a is UnionType and is_assignable(b, a)
@@ -386,18 +385,18 @@ const wider_union = (a: Type, b: Type) ->
 
 # The type of a value of a union type, optional or not, that is none of `excluded`'s members, or nil
 # if it can only be nil.
-export const other_members = (type: Type, excluded: Type) ->
-  const excluded_keys = [type_key(member) for member in members_of(excluded)]
-  const is_left = (member: Type) -> not excluded_keys.contains(type_key(member))
-  const left = [member for member in members_of(inner_of(type)) when is_left(member)]
+export other_members := (type: Type, excluded: Type) ->
+  excluded_keys := [type_key(member) for member in members_of(excluded)]
+  is_left := (member: Type) -> not excluded_keys.contains(type_key(member))
+  left := [member for member in members_of(inner_of(type)) when is_left(member)]
   return nil if left.length == 0
-  const others: Type = left.length == 1 then left[0] else union_type(left)
+  others: Type = left.length == 1 then left[0] else union_type(left)
   type is OptionalType then optional_type(others) else others
 
 # `Set<T>`, a map without values.
-export const set_of = (item: Type) -> MapType(key: item, value: void_type)
+export set_of := (item: Type) -> MapType(key: item, value: void_type)
 
-export const is_set = (type: Type) -> type is MapType and is_kind(type.value, 'void')
+export is_set := (type: Type) -> type is MapType and is_kind(type.value, 'void')
 
 # The type without nil: the inner type of an optional one.
-export const inner_of = (type: Type) -> type is OptionalType then type.inner else type
+export inner_of := (type: Type) -> type is OptionalType then type.inner else type

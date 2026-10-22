@@ -19,37 +19,37 @@ import has_declared_type from './interfaces'
 
 # The local of the name: in the scopes, or outside them, as a function literal captures it from
 # around it, as a top-level value that a function or a method sees, or as an imported value.
-export const lookup = (body: Body, name: String) ->
-  return local if const local = body.scopes.lookup_local(name)
-  return outer if const outer = captured(body, name)
+export lookup := (body: Body, name: String) ->
+  return local if local := body.scopes.lookup_local(name)
+  return outer if outer := captured(body, name)
   if body.sees_top_level
-    return top_level if const top_level = body.shared.top_level.locals[name]
+    return top_level if top_level := body.shared.top_level.locals[name]
   value_local body.shared, name
 
 # The declaration of the top-level function written in Lerta that the callee names, if it does, as
 # type_of_identifier finds it.
-export const named_function_literal = (body: Body, callee: Expression): FunctionLiteral? ->
+export named_function_literal := (body: Body, callee: Expression): FunctionLiteral? ->
   return nil if callee is not Identifier
-  const { program, shared } = body
-  const name = callee.name
+  { program, shared } := body
+  name := callee.name
   return nil if lookup(body, name) != nil
-  return entry.literal if const entry = shared.functions.entries[name]
-  const imported = shared.imports.names[name]
-  const builtin = -> builtin_export(shared, name)
-  const exported = imported then imported_export(program, imported) else builtin()
+  return entry.literal if entry := shared.functions.entries[name]
+  imported := shared.imports.names[name]
+  builtin := -> builtin_export(shared, name)
+  exported := imported then imported_export(program, imported) else builtin()
   return nil if exported is not FunctionExport
   program.shared[exported.module_index].functions.entries[exported.name]!.literal
 
-export const type_of_identifier = (body: Body, identifier: Identifier, is_callee: Bool) ->
-  const { program, shared } = body
-  const { name, position } = identifier
-  if const local = lookup(body, name)
-    const origin = local.origin ? local
+export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Bool) ->
+  { program, shared } := body
+  { name, position } := identifier
+  if local := lookup(body, name)
+    origin := local.origin ? local
     origin.used = true
     body.facts.local_declarations[identifier] = origin.identifier
     record_reference body, identifier, local_reference(body, name, local)
     return local.type
-  if const function_type = function_type_of(program, shared.index, name, position)
+  if function_type := function_type_of(program, shared.index, name, position)
     record_reference body, identifier, FunctionReference(name, module_index: shared.index)
     return function_type
   fail_only_called body, identifier if generic_function(shared, name) != nil
@@ -58,8 +58,8 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
   fail program, position, "'#{name}' is a type" if shared.enums.has(name)
   fail program, position, "'#{name}' is an interface" if shared.interfaces.has(name)
   fail program, position, "'#{name}' is a type" if has_alias(shared, name)
-  if const imported = use_import(shared, name)
-    const exported = imported_export(program, imported)
+  if imported := use_import(shared, name)
+    exported := imported_export(program, imported)
     if exported is ValueExport and exported.type == nil
       abort_if_failed program.shared[exported.module_index].top_level, exported.name
       fail_runs_later program, identifier, "'#{imported.module}'", body.sees_top_level
@@ -69,36 +69,35 @@ export const type_of_identifier = (body: Body, identifier: Identifier, is_callee
   if shared.imports.modules.has(name)
     fail program, position, "'#{name}' is a module, which is no value: write #{name}.<export>"
   probe_locals body if name == COMPLETION_NAME
-  const undefined_name = -> fail(program, position, "undefined name '#{name}'")
-  const builtin = builtin_export(shared, name) ? undefined_name()
+  undefined_name := -> fail(program, position, "undefined name '#{name}'")
+  builtin := builtin_export(shared, name) ? undefined_name()
   type_of_export body, builtin, identifier, is_callee
 
 # `name.export` of a module imported as `name`, where no local takes the name, as the name that the
 # export is imported by (see qualified_import), recorded for codegen; nil for any other member.
-export const qualified_name = (body: Body, member: Member): Identifier? ->
-  return name if const name = body.facts.qualified[member]
-  const object = member.object
+export qualified_name := (body: Body, member: Member): Identifier? ->
+  return name if name := body.facts.qualified[member]
+  object := member.object
   return nil if object is not Identifier or lookup(body, object.name) != nil
   if member.name.name == COMPLETION_NAME
-    if const imported = body.shared.imports.modules[object.name]
-      probe_module body, imported.module_index
-  const qualified = qualified_import(body.shared, object.name, member.name) ? return nil
-  const name = Identifier(name: qualified, position: member.name.position)
+    probe_module body, imported.module_index if imported := body.shared.imports.modules[object.name]
+  qualified := qualified_import(body.shared, object.name, member.name) ? return nil
+  name := Identifier(name: qualified, position: member.name.position)
   body.facts.qualified[member] = name
   name
 
 # The generic function that the callee names: one of the module, an imported one or a builtin,
 # unless a local or another name of the module takes the name.
-export const generic_callee = (body: Body, callee: Expression) ->
+export generic_callee := (body: Body, callee: Expression) ->
   return nil if callee is not Identifier
-  const { program, shared } = body
-  const name = callee.name
+  { program, shared } := body
+  name := callee.name
   return nil if lookup(body, name) != nil
   return nil if body.sees_top_level and shared.top_level.names.has(name)
   return nil if has_declared_type(shared, name) or has_alias(shared, name)
   return generic_function(shared, name) if has_function(shared, name)
-  const imported = shared.imports.names[name]
-  const exported =
+  imported := shared.imports.names[name]
+  exported :=
     if imported
       imported_export program, imported
     else
@@ -111,41 +110,41 @@ export const generic_callee = (body: Body, callee: Expression) ->
 
 # A generic function is called through generic_callee, so here it is used as a value. A value
 # whose type is not known yet is reported by type_of_identifier.
-const type_of_export = (body: Body, exported: Export, identifier: Identifier, is_callee: Bool) ->
-  const { name, position } = identifier
+type_of_export := (body: Body, exported: Export, identifier: Identifier, is_callee: Bool) ->
+  { name, position } := identifier
   case exported
     when TypeExport then fail(body.program, position, "'#{name}' is a type")
     when InterfaceExport then fail(body.program, position, "'#{name}' is an interface")
     when GenericExport then fail_only_called(body, identifier)
     when ExternExport
       fail_only_called body, identifier if not is_callee
-      const { symbol, module_index } = exported
+      { symbol, module_index } := exported
       record_reference body, identifier, ExternReference(symbol, module_index, name: exported.name)
       exported.type
     when FunctionExport
-      const { module_index } = exported
+      { module_index } := exported
       record_reference body, identifier, FunctionReference(module_index, name: exported.name)
       function_type_of(body.program, module_index, exported.name, position)!
     when ValueExport then exported.type ? panic('the type of an imported value is not known')
 
-const fail_only_called = (body: Body, identifier: Identifier) ->
-  const message = "'#{identifier.name}' can only be called so far, not used as a value"
+fail_only_called := (body: Body, identifier: Identifier) ->
+  message := "'#{identifier.name}' can only be called so far, not used as a value"
   fail body.program, identifier.position, message
 
 # What the name, which lookup found as the local, refers to: a top-level value of the module or
 # of another one, or a local of a scope, as one that a function literal captures is. A narrowed
 # local refers to what it narrows.
-export const local_reference = (body: Body, name: String, local: Local): Reference ->
+export local_reference := (body: Body, name: String, local: Local): Reference ->
   return ScopedLocal(name) if local.captured
-  const shared = body.shared
-  const origin = local.origin ? local
+  shared := body.shared
+  origin := local.origin ? local
   if body.sees_top_level and origin == shared.top_level.locals[name]
     return TopLevelValue(name, module_index: shared.index)
-  const imported = shared.imports.names[name]
+  imported := shared.imports.names[name]
   if imported and imported.local == origin
-    const exported = imported_export(body.program, imported) as ValueExport!
+    exported := imported_export(body.program, imported) as ValueExport!
     return TopLevelValue(module_index: exported.module_index, name: exported.name)
   ScopedLocal name
 
-export const record_reference = (body: Body, identifier: Identifier, reference: Reference) ->
+export record_reference := (body: Body, identifier: Identifier, reference: Reference) ->
   body.facts.references[identifier] = reference

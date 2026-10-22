@@ -17,58 +17,58 @@ import module_location from '../source'
 import is_kind, Type from '../types'
 
 # The runtime's pending exception (see lerta_exception in runtime/lerta.h), declared in the module.
-export const exception_global = (ir: IrBuilder) ->
-  const symbol = '@lerta_exception'
+export exception_global := (ir: IrBuilder) ->
+  symbol := '@lerta_exception'
   ir.module.declare 'lerta_exception', "#{symbol} = external global #{INTERFACE_IR_TYPE}"
   symbol
 
 # Returns, from code that is no function of the program, a value that the caller never reads,
 # since it finds the exception first.
-export const emit_return_thrown = (ir: IrBuilder, type: Type) ->
+export emit_return_thrown := (ir: IrBuilder, type: Type) ->
   ir.emit returns_nothing(type) then 'ret void' else "ret #{ir_type(type)} poison"
 
 # Holds an owned value while the expression evaluates others, until pop_temporaries.
-export const push_temporary = (g: Generator, operand: String, type: Type) ->
-  const owned = ownership(type)
+export push_temporary := (g: Generator, operand: String, type: Type) ->
+  owned := ownership(type)
   g.temporaries.push Temporary(operand, owned) if owned != NONE
 
 # Lets go of the temporaries held since there were `depth` of them, which their consumer releases.
-export const pop_temporaries = (g: Generator, depth: Int) ->
+export pop_temporaries := (g: Generator, depth: Int) ->
   g.temporaries.pop() while g.temporaries.length > depth
 
 # Generates `rest` while the owned operand of the type is held.
-export const while_holding = (g: Generator, operand: String, type: Type, rest: () -> void) ->
-  const depth = g.temporaries.length
+export while_holding := (g: Generator, operand: String, type: Type, rest: () -> void) ->
+  depth := g.temporaries.length
   push_temporary g, operand, type
   rest()
   pop_temporaries g, depth
 
 # The operand that `rest` generates while the owned operand of the type is held.
-export const holding = (g: Generator, operand: String, type: Type, rest: () -> String) ->
+export holding := (g: Generator, operand: String, type: Type, rest: () -> String) ->
   var result = ''
-  const generate_rest = -> result = rest()
+  generate_rest := -> result = rest()
   while_holding g, operand, type, generate_rest
   result
 
 # The exception is taken: there is none pending.
-const emit_clear_exception = (ir: IrBuilder) ->
+emit_clear_exception := (ir: IrBuilder) ->
   ir.emit "store #{INTERFACE_IR_TYPE} zeroinitializer, ptr #{exception_global(ir)}"
 
 # Returns at once, from code that is no function of the program, if the call before it has thrown.
-export const emit_check_or_return_thrown = (ir: IrBuilder, type: Type) ->
+export emit_check_or_return_thrown := (ir: IrBuilder, type: Type) ->
   emit_check_with ir, -> emit_return_thrown(ir, type)
 
 # Unwinds if the call before it has thrown, adding where the call is to the exception's trace.
-export const emit_exception_check = (g: Generator) ->
+export emit_exception_check := (g: Generator) ->
   emit_check_with g.ir, -> emit_traced_unwind(g, TRACE_PUSH)
 
 # Runs `unwind` if the call before it has thrown, in code that is no function of the program, as an
 # Iter's has_next and next are: it releases what that code holds and returns.
-export const emit_check_with = (ir: IrBuilder, unwind: () -> void) ->
-  const data = ir.assign("load ptr, ptr #{exception_global(ir)}")
-  const thrown = ir.assign("icmp ne ptr #{data}, null")
-  const unwind_label = ir.fresh_label('unwind')
-  const next_label = ir.fresh_label('no.exception')
+export emit_check_with := (ir: IrBuilder, unwind: () -> void) ->
+  data := ir.assign("load ptr, ptr #{exception_global(ir)}")
+  thrown := ir.assign("icmp ne ptr #{data}, null")
+  unwind_label := ir.fresh_label('unwind')
+  next_label := ir.fresh_label('no.exception')
   ir.emit "br i1 #{thrown}, label %#{unwind_label}, label %#{next_label}"
   ir.start_block unwind_label
   unwind()
@@ -76,53 +76,53 @@ export const emit_check_with = (ir: IrBuilder, unwind: () -> void) ->
 
 # The runtime's functions that add a site to the trace: one that goes on with the trace of the
 # exception, if it is its own, and one that starts a new trace for a new exception.
-const TRACE_PUSH = 'void @lerta_trace_push(ptr)'
-export const TRACE_START = 'void @lerta_trace_start(ptr)'
+TRACE_PUSH := 'void @lerta_trace_push(ptr)'
+export TRACE_START := 'void @lerta_trace_start(ptr)'
 
 # Unwinds an exception that the code has just thrown, or that a call has passed on to it, adding
 # where the code is to its trace with the function `add`, TRACE_PUSH or TRACE_START.
-export const emit_traced_unwind = (g: Generator, add: String) ->
+export emit_traced_unwind := (g: Generator, add: String) ->
   emit_trace_entry g, add
   emit_unwind g
 
 # Adds the site of the code, its function and its position in the source, to the trace (see
 # lerta_trace_push), unless the program is built without traces or the code is outside every
 # statement. The site is a constant, so that the code of each is one argument.
-const emit_trace_entry = (g: Generator, add: String) ->
-  const code = g.code
+emit_trace_entry := (g: Generator, add: String) ->
+  code := g.code
   return if not code.traces
-  const position = g.position ? return
-  const file = module_location(code.program.entry_path, code.module.display_path)
-  const fields =
+  position := g.position ? return
+  file := module_location(code.program.entry_path, code.module.display_path)
+  fields :=
     "ptr #{shared_string_constant(g.ir, g.function_name)}"
     "ptr #{shared_string_constant(g.ir, file)}"
     "i32 #{position.line}"
     "i32 #{position.column}"
-  const definition = "private unnamed_addr constant { ptr, ptr, i32, i32 } { #{fields.join(', ')} }"
-  const site = g.ir.module.global('lerta.site', definition)
+  definition := "private unnamed_addr constant { ptr, ptr, i32, i32 } { #{fields.join(', ')} }"
+  site := g.ir.module.global('lerta.site', definition)
   call_void_runtime g.ir, add, "ptr #{site}"
 
 # Releases what the code holds up to the innermost `try`, and goes to its catches; outside every
 # `try`, releases what the function holds and returns a value that the caller never reads.
-const emit_unwind = (g: Generator) ->
-  const ir = g.ir
-  const handler = g.handlers.last()
+emit_unwind := (g: Generator) ->
+  ir := g.ir
+  handler := g.handlers.last()
   release_held g, handler?.scope_depth ? 0, handler?.temporary_depth ? 0
   if handler == nil
-    cleanup() if const cleanup = g.unwind_cleanup
+    cleanup() if cleanup := g.unwind_cleanup
   if handler
     ir.emit "br label %#{handler.label}"
     return
-  if const coroutine = g.coroutine
+  if coroutine := g.coroutine
     ir.emit "br label %#{coroutine.end_label}"
     return
   emit_return_thrown ir, g.result_type
 
 # Releases the temporaries and the scopes held from the depths inward, innermost first.
-export const release_held = (g: Generator, scope_depth: Int, temporary_depth: Int) ->
+export release_held := (g: Generator, scope_depth: Int, temporary_depth: Int) ->
   var i = g.temporaries.length - 1
   while i >= temporary_depth
-    const temporary = g.temporaries[i]
+    temporary := g.temporaries[i]
     emit_release_as g.ir, temporary.operand, temporary.owned
     i -= 1
   release_scope g, scope for scope in g.locals.inner_scopes(scope_depth)
@@ -130,7 +130,7 @@ export const release_held = (g: Generator, scope_depth: Int, temporary_depth: In
 # The value, an Error, becomes the exception, owned. One that a catch has taken, thrown again from
 # there, goes on with its trace; any other throw starts a new one, even of an object thrown before,
 # whose trace tells where that throw went, not this one.
-export const emit_throw_error = (g: Generator, value: String, rethrows: Bool) ->
+export emit_throw_error := (g: Generator, value: String, rethrows: Bool) ->
   g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr #{exception_global(g.ir)}"
   emit_traced_unwind g, rethrows then TRACE_PUSH else TRACE_START
   g.ir.start_unreachable()
@@ -140,22 +140,22 @@ export const emit_throw_error = (g: Generator, value: String, rethrows: Bool) ->
 # after either. An exception that no catch takes, or that a catch throws, runs the finally block
 # too, then unwinds further, while the finally block runs with it set aside, and its trace, which an
 # exception thrown and caught there would replace.
-export const generate_try = (g: Generator, try_expression: Try) ->
-  const ir = g.ir
-  const type = type_of(g, try_expression)
-  const catches_label = ir.fresh_label('try.catch')
-  const done_label = ir.fresh_label('try.done')
-  const rethrow_label = ir.fresh_label('try.rethrow')
-  const finally_body = try_expression.finally_body
-  const finally_depth = g.finallies.length
+export generate_try := (g: Generator, try_expression: Try) ->
+  ir := g.ir
+  type := type_of(g, try_expression)
+  catches_label := ir.fresh_label('try.catch')
+  done_label := ir.fresh_label('try.done')
+  rethrow_label := ir.fresh_label('try.rethrow')
+  finally_body := try_expression.finally_body
+  finally_depth := g.finallies.length
   if finally_body
-    const scope_depth = g.locals.depth()
+    scope_depth := g.locals.depth()
     g.finallies.push Finally(scope_depth, body: finally_body, handler_depth: g.handlers.length)
-  const incoming: String[]
+  incoming: String[]
   # A try that gives no value runs its blocks as statements, which release the values they discard.
-  const gives_value = not is_kind(type, 'void')
-  const generate_value = (body: Statement[], define: (Map<String, CodegenLocal>) -> void) ->
-    const value =
+  gives_value := not is_kind(type, 'void')
+  generate_value := (body: Statement[], define: (Map<String, CodegenLocal>) -> void) ->
+    value :=
       if gives_value
         generate_block_value g, body, define
       else
@@ -166,24 +166,24 @@ export const generate_try = (g: Generator, try_expression: Try) ->
   with_handler g, catches_label, -> generate_value(try_expression.body, no_locals)
   ir.start_block catches_label
   # A catch's own exception goes through the finally block, if there is one.
-  const catch_handler = finally_body then rethrow_label
+  catch_handler := finally_body then rethrow_label
   for clause in try_expression.catches
-    const exception = ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
-    const caught_type = type_of(g, clause.name)
-    const data = emit_interface_data(ir, exception)
-    const takes_any = is_kind(caught_type, INTERFACE)
-    const matched = takes_any then 'true' else emit_type_test(ir, data, caught_type)
-    const clause_label = ir.fresh_label('catch')
-    const next_label = ir.fresh_label('catch.next')
+    exception := ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
+    caught_type := type_of(g, clause.name)
+    data := emit_interface_data(ir, exception)
+    takes_any := is_kind(caught_type, INTERFACE)
+    matched := takes_any then 'true' else emit_type_test(ir, data, caught_type)
+    clause_label := ir.fresh_label('catch')
+    next_label := ir.fresh_label('catch.next')
     ir.emit "br i1 #{matched}, label %#{clause_label}, label %#{next_label}"
     ir.start_block clause_label
     emit_clear_exception ir
-    const caught = takes_any then exception else data
-    const define = (scope: Map<String, CodegenLocal>) ->
-      const slot = store_in_slot(g, caught, caught_type)
+    caught := takes_any then exception else data
+    define := (scope: Map<String, CodegenLocal>) ->
+      slot := store_in_slot(g, caught, caught_type)
       scope[clause.name.name] = SlotLocal(pointer: slot.pointer, type: slot.type, caught: true)
-    const generate_clause = -> generate_value(clause.body, define)
-    if const label = catch_handler
+    generate_clause := -> generate_value(clause.body, define)
+    if label := catch_handler
       with_handler g, label, generate_clause
     else
       generate_clause()
@@ -193,10 +193,10 @@ export const generate_try = (g: Generator, try_expression: Try) ->
   g.finallies.pop() if g.finallies.length > finally_depth
   ir.start_block rethrow_label
   if finally_body
-    const set_aside = ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
-    const trace = call_runtime(ir, 'ptr @lerta_trace_save()', '')
+    set_aside := ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
+    trace := call_runtime(ir, 'ptr @lerta_trace_save()', '')
     emit_clear_exception ir
-    const depth = g.temporaries.length
+    depth := g.temporaries.length
     g.temporaries.push Temporary(operand: set_aside, owned: INTERFACE)
     g.temporaries.push Temporary(operand: trace, owned: TRACE)
     generate_block g, finally_body, no_locals
@@ -205,9 +205,9 @@ export const generate_try = (g: Generator, try_expression: Try) ->
     call_void_runtime ir, 'void @lerta_trace_restore(ptr)', "ptr #{trace}"
   emit_unwind g
   ir.start_block done_label
-  const result = merge(g, type, incoming)
+  result := merge(g, type, incoming)
   # The value is held while the finally block runs, which may throw.
-  const run_finally = -> generate_block(g, finally_body ? [], no_locals)
+  run_finally := -> generate_block(g, finally_body ? [], no_locals)
   while_holding g, result, type, run_finally
   result
 
@@ -215,11 +215,11 @@ export const generate_try = (g: Generator, try_expression: Try) ->
 # runs on the way the finally blocks of the `try` blocks among them. Each runs as code right after
 # its `try` would: the scopes inside the `try`, released, are set aside, and so are the handlers
 # and the finally blocks inside it, so that an exception thrown there goes to the handlers outside.
-export const leave_scopes = (g: Generator, scope_depth: Int) ->
+export leave_scopes := (g: Generator, scope_depth: Int) ->
   var released_depth = g.locals.depth()
   var i = g.finallies.length - 1
   while i >= 0 and g.finallies[i].scope_depth >= scope_depth
-    const left = g.finallies[i]
+    left := g.finallies[i]
     release_scopes_between g, left.scope_depth, released_depth
     released_depth = left.scope_depth
     run_finally_left g, left, i
@@ -227,30 +227,29 @@ export const leave_scopes = (g: Generator, scope_depth: Int) ->
   release_scopes_between g, scope_depth, released_depth
 
 # Releases the scopes from `from` up to `to`, innermost first.
-const release_scopes_between = (g: Generator, from: Int, to: Int) ->
+release_scopes_between := (g: Generator, from: Int, to: Int) ->
   var depth = to - 1
   while depth >= from
     release_scope g, g.locals.scopes[depth]
     depth -= 1
 
-const run_finally_left = (g: Generator, left: Finally, finally_depth: Int) ->
-  const scopes = take_from(g.locals.scopes, left.scope_depth)
-  const handlers = take_from(g.handlers, left.handler_depth)
-  const finallies = take_from(g.finallies, finally_depth)
+run_finally_left := (g: Generator, left: Finally, finally_depth: Int) ->
+  scopes := take_from(g.locals.scopes, left.scope_depth)
+  handlers := take_from(g.handlers, left.handler_depth)
+  finallies := take_from(g.finallies, finally_depth)
   generate_block g, left.body, no_locals
   g.locals.scopes.append scopes
   g.handlers.append handlers
   g.finallies.append finallies
 
 # Removes the items from `length` on, and gives them, in order.
-const take_from = <T>(items: T[], length: Int) ->
-  const taken = [items[i] for i in length...items.length]
+take_from := <T>(items: T[], length: Int) ->
+  taken := [items[i] for i in length...items.length]
   items.pop() while items.length > length
   taken
 
-const with_handler = (g: Generator, label: String, generate_body: () -> void) ->
-  const handler =
-    Handler(label, scope_depth: g.locals.depth(), temporary_depth: g.temporaries.length)
+with_handler := (g: Generator, label: String, generate_body: () -> void) ->
+  handler := Handler(label, scope_depth: g.locals.depth(), temporary_depth: g.temporaries.length)
   g.handlers.push handler
   generate_body()
   g.handlers.pop()

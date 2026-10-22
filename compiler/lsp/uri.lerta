@@ -2,27 +2,27 @@
 # or on Windows `file:///C:/a.lerta` and `C:/a.lerta`.
 import hex, hex_digit_value from '../hex'
 
-const FILE_PREFIX = 'file://'
+FILE_PREFIX := 'file://'
 
 # The path of the URI, or nil for one that names no file.
-export const path_of_uri = (uri: String): String? ->
-  const encoded = uri.without_prefix(FILE_PREFIX) ? return nil
-  const path = percent_decoded(encoded) ? return nil
+export path_of_uri := (uri: String): String? ->
+  encoded := uri.without_prefix(FILE_PREFIX) ? return nil
+  path := percent_decoded(encoded) ? return nil
   is_windows_drive(path) then path.without_prefix('/')! else path
 
 # The URI of the absolute path.
-export const uri_of_path = (path: String) ->
-  const absolute = path.starts_with('/') then path else "/#{path}"
+export uri_of_path := (path: String) ->
+  absolute := path.starts_with('/') then path else "/#{path}"
   "#{FILE_PREFIX}#{percent_encoded(absolute)}"
 
 # `/C:/`: a drive after the slash that a URI's path starts with.
-const is_windows_drive = (path: String) ->
-  const bytes = path.binary
+is_windows_drive := (path: String) ->
+  bytes := path.binary
   bytes.length >= 3 and bytes[0] == '/' and bytes[1].is_letter() and bytes[2] == ':'
 
-const percent_decoded = (text: String) ->
-  const bytes = text.binary
-  const decoded: Byte[]
+percent_decoded := (text: String) ->
+  bytes := text.binary
+  decoded: Byte[]
   var i = 0
   while i < bytes.length
     if bytes[i] != '%'
@@ -30,20 +30,20 @@ const percent_decoded = (text: String) ->
       i += 1
       continue
     return nil if i + 2 >= bytes.length
-    const high = hex_digit_value(bytes[i + 1]) ? return nil
-    const low = hex_digit_value(bytes[i + 2]) ? return nil
+    high := hex_digit_value(bytes[i + 1]) ? return nil
+    low := hex_digit_value(bytes[i + 2]) ? return nil
     decoded.push (high * 16 + low).to_byte()!
     i += 3
   decoded.to_binary().text()
 
 # Besides letters and digits, the bytes that a path keeps in a URI: the unreserved ones of a URI,
 # the separator, and the colon of a drive.
-const KEPT_BYTES: Byte[] = ['-', '.', '_', '~', '/', ':']
+KEPT_BYTES: Byte[] = ['-', '.', '_', '~', '/', ':']
 
 # Each byte but those that a path keeps, as `%XX`.
-const percent_encoded = (path: String) ->
-  const pieces: String[]
+percent_encoded := (path: String) ->
+  pieces: String[]
   for byte in path.binary
-    const keeps = byte.is_letter() or byte.is_digit() or KEPT_BYTES.contains(byte)
+    keeps := byte.is_letter() or byte.is_digit() or KEPT_BYTES.contains(byte)
     pieces.push keeps then byte.to_char().to_string() else "%#{hex(byte.to_int(), 2)}"
   pieces.join ''

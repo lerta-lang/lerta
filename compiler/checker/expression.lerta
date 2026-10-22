@@ -42,37 +42,37 @@ import
   same_type, string_type, Type, UnionType, void_type
 from '../types'
 
-export const type_of = (body: Body, expression: Expression, expected: Type? = nil) ->
+export type_of := (body: Body, expression: Expression, expected: Type? = nil) ->
   set_type body, expression, compute_type(body, expression, expected)
 
 # The type that a literal takes where the type is expected, as an Int8 where an `Int8 | String` is:
 # the union's one integer member, or one float member, if it has only one.
-const literal_hint = (expression: Expression, expected: Type?) ->
-  const given = expected ? return nil
-  const type = inner_of(given)
+literal_hint := (expression: Expression, expected: Type?) ->
+  given := expected ? return nil
+  type := inner_of(given)
   return type if type is not UnionType
-  const of_kind = (is_kind_of: (Type) -> Bool) ->
-    const members = [member for member in type.members when is_kind_of(member)]
+  of_kind := (is_kind_of: (Type) -> Bool) ->
+    members := [member for member in type.members when is_kind_of(member)]
     members.length == 1 then members[0]
   case expression
     # An integer literal is a float where a float alone is expected.
     when IntegerLiteral
-      return integer if const integer = of_kind(is_integer)
+      return integer if integer := of_kind(is_integer)
       of_kind is_float
     when FloatLiteral then of_kind(is_float)
     else type
 
 # `expected` is a hint: the caller still checks that the type fits. A literal where a `T?` is
 # expected is a T, as where a T is, and where a union is, of its one member of the literal's kind.
-const compute_type = (body: Body, expression: Expression, expected: Type?): Type ->
-  const literal_kind = literal_hint(expression, expected)
+compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
+  literal_kind := literal_hint(expression, expected)
   # A string literal of one character is a byte where a Byte is expected, a Char where a Char is.
-  const wants_character = literal_kind != nil and is_one_of_kinds(literal_kind, ['Byte', 'Char'])
+  wants_character := literal_kind != nil and is_one_of_kinds(literal_kind, ['Byte', 'Char'])
   # An integer literal is an Int unless another integer type is expected.
-  const wants_integer =
+  wants_integer :=
     literal_kind != nil and is_integer(literal_kind) and not is_kind(literal_kind, 'Int')
-  const wants_float = literal_kind != nil and is_float(literal_kind)
-  const program = body.program
+  wants_float := literal_kind != nil and is_float(literal_kind)
+  program := body.program
   case expression
     when StringLiteral
       return integer_literal(program, expression, literal_kind!) if wants_character
@@ -109,7 +109,7 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
     when Coalesce then type_of_coalesce(body, expression)
     when BooleanLiteral then bool_type
     when Identifier
-      const member = type_of_elided_member(body, expression, expected)
+      member := type_of_elided_member(body, expression, expected)
       member ? type_of_identifier(body, expression, false)
     when Call then type_of_call(body, expression, expected)
     when UnaryOperation then type_of_unary(body, expression, expected)
@@ -119,7 +119,7 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
     when If then type_of_if(body, expression, expected)
     when Conditional then type_of_conditional(body, expression, expected)
     when Member
-      return type_of(body, name) if const name = qualified_name(body, expression)
+      return type_of(body, name) if name := qualified_name(body, expression)
       type_of_qualified_member(body, expression, expected) ? type_of_property(body, expression)
     when ArrayLiteral then type_of_array(body, expression, expected)
     when MapLiteral then type_of_map(body, expression, expected)
@@ -132,107 +132,107 @@ const compute_type = (body: Body, expression: Expression, expected: Type?): Type
     when Range
       fail program, expression.position, "a range can only be used after 'in' of a 'for'"
 
-const type_of_call = (body: Body, call: Call, expected: Type?): Type ->
-  const callee = call.callee
+type_of_call := (body: Body, call: Call, expected: Type?): Type ->
+  callee := call.callee
   # A call of `name.export` is the call of the name that the export is imported by.
   if callee is Member
-    if const name = qualified_name(body, callee)
-      const { args, named_args, type_args, position } = call
-      const qualified_call = Call(args, named_args, type_args, position, callee: name)
+    if name := qualified_name(body, callee)
+      { args, named_args, type_args, position } := call
+      qualified_call := Call(args, named_args, type_args, position, callee: name)
       body.facts.qualified_calls[call] = qualified_call
       return type_of(body, qualified_call, expected)
   if makes_builtin(body, call, 'Map')
     return made_collection(body, call, type_of_empty_map(body, call, expected))
   if makes_builtin(body, call, 'Set')
     return made_collection(body, call, type_of_new_set(body, call, expected))
-  if const generic = generic_callee(body, callee)
+  if generic := generic_callee(body, callee)
     return type_of_generic_call(body, call, generic, expected)
-  if const object_type = constructed_type(body, callee)
+  if object_type := constructed_type(body, callee)
     return type_of_construction(body, call, object_type, expected)
-  return type_of_json_call(body, call, direction) if const direction = json_direction(body, callee)
+  return type_of_json_call(body, call, direction) if direction := json_direction(body, callee)
   reject_type_arguments body, call if callee is not Member
   if callee is Member
-    if const parse = enum_parse_type(body, callee)
+    if parse := enum_parse_type(body, callee)
       reject_type_arguments body, call
       return check_arguments(body, call, set_type(body, callee, parse), nil)
     return type_of_method_call(body, call, callee, expected)
-  const callee_type =
+  callee_type :=
     if callee is Identifier
       set_type body, callee, type_of_identifier(body, callee, true)
     else
       type_of body, callee
   check_arguments body, call, callee_type, named_function_literal(body, callee)
 
-export const reject_type_arguments = (body: Body, call: Call) ->
+export reject_type_arguments := (body: Body, call: Call) ->
   return if call.type_args.length == 0
-  const generics = 'a generic function, method, class or struct'
+  generics := 'a generic function, method, class or struct'
   fail body.program, call.callee.position, "only #{generics} takes type arguments"
 
-export const expect_type = (body: Body, expression: Expression, expected: Type) ->
+export expect_type := (body: Body, expression: Expression, expected: Type) ->
   require_type body, expression, type_of(body, expression, expected), expected
 
-const type_of_is_test = (body: Body, test: IsTest) ->
+type_of_is_test := (body: Body, test: IsTest) ->
   check_member_type body, test.value, test.type, resolve(body.program, body.resolver, test.type)
   bool_type
 
-const type_of_cast = (body: Body, cast: Cast) ->
-  const written = resolve(body.program, body.resolver, cast.type)
-  const type = check_member_type(body, cast.value, cast.type, inner_of(written))
+type_of_cast := (body: Body, cast: Cast) ->
+  written := resolve(body.program, body.resolver, cast.type)
+  type := check_member_type(body, cast.value, cast.type, inner_of(written))
   cast.throws then type else optional_type(type)
 
-const check_member_type = (body: Body, value: Expression, type_name: NamedType, type: Type) ->
-  const program = body.program
-  const value_type = unnarrowed_type(body, value, type_of(body, value))
-  const union = inner_of(value_type)
+check_member_type := (body: Body, value: Expression, type_name: NamedType, type: Type) ->
+  program := body.program
+  value_type := unnarrowed_type(body, value, type_of(body, value))
+  union := inner_of(value_type)
   if union is not UnionType
-    const message = "expected a value of a union type, got #{format_type(value_type)}"
+    message := "expected a value of a union type, got #{format_type(value_type)}"
     fail program, value.position, message
   body.facts.types[type_name] = type
   if not is_assignable(type, union)
-    const types = "the types #{format_type(union)} or a union of them"
-    const message = "#{format_type(type)} is not one of #{types}"
+    types := "the types #{format_type(union)} or a union of them"
+    message := "#{format_type(type)} is not one of #{types}"
     fail program, type_name.position, message
   type
 
 # The type that a local or a path of fields that the value names was declared with, before
 # narrowing (see narrowing), so that it can be tested for any member of it.
-export const unnarrowed_type = (body: Body, value: Expression, type: Type) ->
+export unnarrowed_type := (body: Body, value: Expression, type: Type) ->
   narrowable(body, value)?.declared ? type
 
 # Records the type of a node, which type_of may not compute, such as a type pattern.
-export const set_type = (body: Body, node: Node, type: Type) ->
+export set_type := (body: Body, node: Node, type: Type) ->
   body.facts.types[node] = type
   type
 
-const check_throw = (body: Body, throw_expression: Throw) ->
-  const value = throw_expression.message
-  const type = type_of(body, value)
+check_throw := (body: Body, throw_expression: Throw) ->
+  value := throw_expression.message
+  type := type_of(body, value)
   require_type body, value, type, std_interface(body.shared, 'Error', value.position).type
 
 # A T or nil where a T? is expected is converted, and so is a value where an interface or an Iter
 # is expected (see interface_values), or a union holds it in a box (see boxes_into), which codegen
 # does where it generates it.
-export const require_type = (body: Body, expression: Expression, type: Type, expected: Type) ->
-  const assignable = is_assignable(type, expected)
-  const through_itab = not assignable and converts_through_itab(body, expression, type, expected)
+export require_type := (body: Body, expression: Expression, type: Type, expected: Type) ->
+  assignable := is_assignable(type, expected)
+  through_itab := not assignable and converts_through_itab(body, expression, type, expected)
   if not assignable and not through_itab
-    const { first, second } = format_types(expected, type)
+    { first, second } := format_types(expected, type)
     fail body.program, expression.position, "expected #{first}, got #{second}"
-  const is_converted = not is_kind(type, 'never') and not same_type(type, expected)
-  const to_optional = expected is OptionalType and is_converted
-  const to_box = is_converted and boxes_into(type, expected)
+  is_converted := not is_kind(type, 'never') and not same_type(type, expected)
+  to_optional := expected is OptionalType and is_converted
+  to_box := is_converted and boxes_into(type, expected)
   body.facts.conversions[expression] = expected if to_optional or through_itab or to_box
 
-export const expect_condition = (body: Body, expression: Expression) ->
-  const type = type_of(body, expression)
+export expect_condition := (body: Body, expression: Expression) ->
+  type := type_of(body, expression)
   if not is_one_of_kinds(type, ['Bool', OPTIONAL, 'never'])
-    const message = "expected Bool or an optional value, got #{format_type(type)}"
+    message := "expected Bool or an optional value, got #{format_type(type)}"
     fail body.program, expression.position, message
   type
 
 # The type of an optional value without nil.
-export const expect_optional = (body: Body, expression: Expression) ->
-  const type = type_of(body, expression)
+export expect_optional := (body: Body, expression: Expression) ->
+  type := type_of(body, expression)
   if type is not OptionalType
     fail body.program, expression.position, "expected an optional value, got #{format_type(type)}"
   type.inner

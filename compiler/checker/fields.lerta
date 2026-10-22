@@ -18,14 +18,14 @@ struct FieldOf(info: FieldInfo, type: Type)
 struct MemberField(member_type: Type, info: FieldInfo, type: Type)
 
 # The type of the field `member` names, of a class, a struct or an anonymous struct.
-export const field_type = (body: Body, object_type: Type, member: Member) ->
+export field_type := (body: Body, object_type: Type, member: Member) ->
   return field_type_by_name(body, object_type, member.name) if object_type is RecordType
-  const field = field_of(body, object_type, member) ? return nil
+  field := field_of(body, object_type, member) ? return nil
   field.type
 
 # The type of the field of the name, of a class, a struct or an anonymous struct, read from outside
 # its initializers.
-export const field_type_by_name = (body: Body, object_type: Type, name: Identifier) ->
+export field_type_by_name := (body: Body, object_type: Type, name: Identifier) ->
   if object_type is RecordType
     return object_type.fields.find((each) -> each.name == name.name)?.type
   field_by_name(body, object_type, name)?.type
@@ -33,44 +33,44 @@ export const field_type_by_name = (body: Body, object_type: Type, name: Identifi
 # Whether the field of the name holds the same value as long as its object lives: one of an
 # anonymous struct or a struct, or a `const` one of a class. A `weak` field is a `var` one, and a
 # `weak!` one cannot be nil.
-export const is_fixed_field = (body: Body, object_type: Type, name: String) ->
+export is_fixed_field := (body: Body, object_type: Type, name: String) ->
   return true if object_type is RecordType
   return false if object_type is not ObjectType
-  const field = declared_field(body, object_type, name) ? return false
+  field := declared_field(body, object_type, name) ? return false
   not field.mutable
 
 # The field of the name, with its type, if the object is a class or struct.
-const field_by_name = (body: Body, object_type: Type, name: Identifier) ->
+field_by_name := (body: Body, object_type: Type, name: Identifier) ->
   return nil if object_type is not ObjectType
-  const field = declared_field(body, object_type, name.name) ? return nil
+  field := declared_field(body, object_type, name.name) ? return nil
   typed_field body, object_type, field, name
 
-const declared_field = (body: Body, object_type: ObjectType, name: String) ->
+declared_field := (body: Body, object_type: ObjectType, name: String) ->
   info_of(body.program, object_type).fields.find((each) -> each.name.name == name)
 
 # The field with its type, which an initializer alone may give.
-const typed_field = (body: Body, object_type: ObjectType, field: FieldInfo, name: Identifier) ->
-  const program = body.program
-  const object = info_of(program, object_type)
+typed_field := (body: Body, object_type: ObjectType, field: FieldInfo, name: Identifier) ->
+  program := body.program
+  object := info_of(program, object_type)
   FieldOf info: field, type: info_field_type(program, object, field, name.position)
 
 # The type of the field `member` names, read from a union: every member must have the field, of
 # the same type.
-export const common_field_type = (body: Body, union: UnionType, member: Member) ->
+export common_field_type := (body: Body, union: UnionType, member: Member) ->
   common_fields(body, union, member)[0].type
 
 # The type of the field of the name that can be read from the union, or nil if there is none.
-export const common_field_type_by_name = (body: Body, union: UnionType, name: Identifier) ->
-  const found = find_common_fields(body, union, name)
+export common_field_type_by_name := (body: Body, union: UnionType, name: Identifier) ->
+  found := find_common_fields(body, union, name)
   found.problem == nil then found.fields[0].type
 
 # Why the field of the name cannot be read from the union, or nil if it can.
-export const common_field_problem = (body: Body, union: UnionType, name: Identifier) ->
+export common_field_problem := (body: Body, union: UnionType, name: Identifier) ->
   find_common_fields(body, union, name).problem
 
-const common_fields = (body: Body, union: UnionType, member: Member) ->
-  const found = find_common_fields(body, union, member.name)
-  fail body.program, member.name.position, problem if const problem = found.problem
+common_fields := (body: Body, union: UnionType, member: Member) ->
+  found := find_common_fields(body, union, member.name)
+  fail body.program, member.name.position, problem if problem := found.problem
   found.fields
 
 struct CommonFields
@@ -79,90 +79,87 @@ struct CommonFields
   problem: String?
 
 # The field in each member of the union, which must all have it, of the same type.
-const find_common_fields = (body: Body, union: UnionType, name: Identifier) ->
-  const fields: MemberField[]
+find_common_fields := (body: Body, union: UnionType, name: Identifier) ->
+  fields: MemberField[]
   for member_type in union.members
-    const field = field_by_name(body, member_type, name)
+    field := field_by_name(body, member_type, name)
     if field == nil
-      const member_name = format_member(member_type, union)
-      const of_union = "a member of #{format_type(union)}"
-      const is_method = method_owner(body, member_type, name.name) != nil
-      const kind = is_method then 'a method, not a field,' else 'not a field'
-      const problem = "'#{name.name}' is #{kind} of #{member_name}, #{of_union}"
+      member_name := format_member(member_type, union)
+      of_union := "a member of #{format_type(union)}"
+      is_method := method_owner(body, member_type, name.name) != nil
+      kind := is_method then 'a method, not a field,' else 'not a field'
+      problem := "'#{name.name}' is #{kind} of #{member_name}, #{of_union}"
       return CommonFields(fields, problem)
     fields.push MemberField(member_type, info: field.info, type: field.type)
-  const first = fields[0]
-  if const differing = fields.find((each) -> not same_type(each.type, first.type))
-    const types = format_types(first.type, differing.type)
-    const first_member = format_member(first.member_type, union)
-    const differing_member = format_member(differing.member_type, union)
-    const in_first = "#{types.first} in #{first_member}"
-    const problem = "'#{name.name}' has type #{in_first} but #{types.second} in #{differing_member}"
+  first := fields[0]
+  if differing := fields.find((each) -> not same_type(each.type, first.type))
+    types := format_types(first.type, differing.type)
+    first_member := format_member(first.member_type, union)
+    differing_member := format_member(differing.member_type, union)
+    in_first := "#{types.first} in #{first_member}"
+    problem := "'#{name.name}' has type #{in_first} but #{types.second} in #{differing_member}"
     return CommonFields(fields, problem)
   CommonFields fields, problem: nil
 
-const common_field_target = (body: Body, union: UnionType, member: Member) ->
-  const { name, position } = member.name
-  const fields = common_fields(body, union, member)
+common_field_target := (body: Body, union: UnionType, member: Member) ->
+  { name, position } := member.name
+  fields := common_fields(body, union, member)
   for field in fields
-    const member_name = format_member(field.member_type, union)
-    const member_type = field.member_type
+    member_name := format_member(field.member_type, union)
+    member_type := field.member_type
     if member_type is ObjectType and member_type.is_struct
-      const reason = "its member #{member_name} is a struct, whose fields cannot change"
-      const message = "'#{name}' cannot be changed through #{format_type(union)}: #{reason}"
+      reason := "its member #{member_name} is a struct, whose fields cannot change"
+      message := "'#{name}' cannot be changed through #{format_type(union)}: #{reason}"
       fail body.program, position, message
     if not field.info.mutable
-      const field_of_member = "a const field of #{member_name}"
-      const message = "'#{name}' is #{field_of_member}, a member of #{format_type(union)}"
+      field_of_member := "a const field of #{member_name}"
+      message := "'#{name}' is #{field_of_member}, a member of #{format_type(union)}"
       fail body.program, position, message
     if field.info.weak
-      const reason = "it is a weak field of #{member_name}"
-      const message = "'#{name}' cannot be changed through #{format_type(union)} yet: #{reason}"
+      reason := "it is a weak field of #{member_name}"
+      message := "'#{name}' cannot be changed through #{format_type(union)} yet: #{reason}"
       fail body.program, position, message
   fields[0].type
 
 # The type of a field that is assigned to, which must be a field that can be changed.
-export const field_target = (body: Body, member: Member) ->
-  const program = body.program
-  const object_type = type_of(body, member.object)
+export field_target := (body: Body, member: Member) ->
+  program := body.program
+  object_type := type_of(body, member.object)
   if object_type is UnionType
-    const type = common_field_target(body, object_type, member)
+    type := common_field_target(body, object_type, member)
     body.facts.types[member] = type
     return type
   if object_type is InterfaceType
-    const { name, position } = member.name
-    const reason = 'the members of an interface value are read-only'
-    const through = "through #{format_type(object_type)}"
+    { name, position } := member.name
+    reason := 'the members of an interface value are read-only'
+    through := "through #{format_type(object_type)}"
     fail program, position, "'#{name}' cannot be changed #{through}: #{reason}"
-  const field = field_of(body, object_type, member)
-  const { name, position } = member.name
+  field := field_of(body, object_type, member)
+  { name, position } := member.name
   if object_type is RecordType
     fail program, position, 'a field of an anonymous struct cannot be changed'
-  const no_field = ->
-    fail program, position, "type #{format_type(object_type)} has no field '#{name}'"
-  const found = field ? no_field()
+  no_field := -> fail(program, position, "type #{format_type(object_type)} has no field '#{name}'")
+  found := field ? no_field()
   if not found.info.mutable
-    const is_struct = object_type is ObjectType and object_type.is_struct
-    const const_field = "'#{name}' is a const field"
-    const message = is_struct then 'a struct field cannot be changed' else const_field
+    is_struct := object_type is ObjectType and object_type.is_struct
+    const_field := "'#{name}' is a const field"
+    message := is_struct then 'a struct field cannot be changed' else const_field
     fail program, position, message
   body.facts.types[member] = found.type
   found.type
 
 # The field `member` names, with its type, if its object is a class or struct.
-const field_of = (body: Body, object_type: Type, member: Member) ->
+field_of := (body: Body, object_type: Type, member: Member) ->
   return nil if object_type is not ObjectType
-  const field = declared_field(body, object_type, member.name.name) ? return nil
+  field := declared_field(body, object_type, member.name.name) ? return nil
   # Before the field is typed, which would infer the type of one not initialized yet.
   reject_uninitialized body, object_type, field, member if member.object is This
   typed_field body, object_type, field, member.name
 
-const reject_uninitialized = (
-  body: Body, object_type: ObjectType, field: FieldInfo, member: Member
-) ->
-  const initializing = body.self?.initializing ? return
+reject_uninitialized := (body: Body, object_type: ObjectType, field: FieldInfo, member: Member) ->
+  initializing := body.self?.initializing ? return
   return if field.value == nil
-  const fields = info_of(body.program, object_type).fields
-  const place = (each: FieldInfo) -> fields.find_index((other) -> other == each)!
+  fields := info_of(body.program, object_type).fields
+  place := (each: FieldInfo) -> fields.find_index((other) -> other == each)!
   if place(field) >= place(initializing)
     fail body.program, member.name.position, "'#{field.name.name}' is not initialized yet"

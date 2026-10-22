@@ -18,17 +18,17 @@ from '../types'
 export struct CompletionItem(label: String, kind: Int, detail: String?)
 
 # The kinds of items, as the LSP numbers them.
-const METHOD = 2
-const FUNCTION = 3
-const FIELD = 5
-const VARIABLE = 6
-const CLASS = 7
-const MODULE = 9
-const PROPERTY = 10
-const ENUM = 13
-const KEYWORD = 14
-const ENUM_MEMBER = 20
-const STRUCT = 22
+METHOD := 2
+FUNCTION := 3
+FIELD := 5
+VARIABLE := 6
+CLASS := 7
+MODULE := 9
+PROPERTY := 10
+ENUM := 13
+KEYWORD := 14
+ENUM_MEMBER := 20
+STRUCT := 22
 
 # Where a name is being written, in a line of the text: what comes before the name and what comes
 # after it, around the cursor. Whether it is a member is the checker's to tell (see
@@ -37,56 +37,56 @@ export struct Writing(before: String, after: String)
 
 # The name being written at the column of the line, in code points from 1, the cursor before it,
 # in it or after it.
-export const writing_at = (line: String, column: Int) ->
-  const start = name_start(line, column)
-  const scanner = scan(line)
-  const before = scanner.mark()
+export writing_at := (line: String, column: Int) ->
+  start := name_start(line, column)
+  scanner := scan(line)
+  before := scanner.mark()
   scanner.next() for _ in 1...start
-  const written_before = before()
+  written_before := before()
   scanner.skip_while is_name_character
   Writing before: written_before, after: scanner.rest()
 
 # The column where the name that the column is in or after starts: after the last code point
 # before the column that no name holds.
-const name_start = (line: String, column: Int) ->
-  const scanner = scan(line)
+name_start := (line: String, column: Int) ->
+  scanner := scan(line)
   var start = 1
   for at in 1...column
-    const c = scanner.next() ? break
+    c := scanner.next() ? break
     start = at + 1 if not is_name_character(c)
   start
 
 # The text with the name being written, on the line of the index, replaced by the checker's own.
-export const probe_text = (text: String, line_index: Int, writing: Writing) ->
-  const lines = text.split("\n")
+export probe_text := (text: String, line_index: Int, writing: Writing) ->
+  lines := text.split("\n")
   lines[line_index] = "#{writing.before}#{COMPLETION_NAME}#{writing.after}"
   lines.join "\n"
 
 # The items that may be written there, from what the checker found of the probe text.
-export const completion_items = (
+export completion_items := (
   program: ProgramWide, module_index: Int, probe: CompletionProbe?
 ): CompletionItem[] ->
-  const shared = program.shared[module_index]
+  shared := program.shared[module_index]
   # The checker met no name of its own where the code is no value to write, as a comment, a
   # string, a type, or the body of a generic function that no call has checked; nor after an
   # error before it in the part of the code it is in, which ends the checking of that part. A
   # member of an enum written alone, where the enum is expected, is not offered among the names.
-  const found = probe ? return []
+  found := probe ? return []
   # A member, of an object, a module or an enum, as the checker found it, or else a name.
-  return member_items(program, shared, found, object) if const object = found.object
-  return exported_items(program, program.shared[index]) if const index = found.module_index
-  return enum_items(type) if const type = found.enum_type
-  const locals = local_items(found.locals)
+  return member_items(program, shared, found, object) if object := found.object
+  return exported_items(program, program.shared[index]) if index := found.module_index
+  return enum_items(type) if type := found.enum_type
+  locals := local_items(found.locals)
   # A local takes the name from the module's.
-  const outer = [
+  outer := [
     item
     for item in module_items(program, shared, found.in_top_level)
     when not found.locals.has(item.label)
   ]
   [locals..., outer..., keyword_items()...]
 
-const enum_items = (type: EnumType) ->
-  const members = [
+enum_items := (type: EnumType) ->
+  members := [
     CompletionItem(label: member.text, kind: ENUM_MEMBER, detail: type.name)
     for member in type.members
     when member.is_name
@@ -95,15 +95,13 @@ const enum_items = (type: EnumType) ->
 
 # The fields and methods of the type, those of the extends in effect where it is read, and the
 # builtin methods and properties of its kind; of the type without nil, for `?.`.
-const member_items = (
-  program: ProgramWide, shared: Shared, probe: CompletionProbe, read_type: Type
-) ->
-  const type = inner_of(read_type)
-  const items: CompletionItem[]
-  const add = (label: String, kind: Int, detail: String?) ->
+member_items := (program: ProgramWide, shared: Shared, probe: CompletionProbe, read_type: Type) ->
+  type := inner_of(read_type)
+  items: CompletionItem[]
+  add := (label: String, kind: Int, detail: String?) ->
     items.push CompletionItem(label, kind, detail) if not items.any((each) -> each.label == label)
   if type is ObjectType
-    const info = info_of(program, type)
+    info := info_of(program, type)
     add field.name.name, FIELD, formatted(field.type) for field in info.fields
     add name, METHOD, nil for name in info.methods.keys()
     add name, METHOD, nil for name in info.generics.keys()
@@ -111,27 +109,27 @@ const member_items = (
     add field.name, FIELD, format_type(field.type) for field in type.fields
   else if type is InterfaceType
     for member in members_for(program, type, type)
-      const kind = member.type is FunctionType then METHOD else PROPERTY
+      kind := member.type is FunctionType then METHOD else PROPERTY
       add member.name, kind, format_type(member.type)
   for name in BUILTIN_MEMBER_NAMES
-    if const property = builtin_property(type, name)
+    if property := builtin_property(type, name)
       add name, PROPERTY, format_type(property.type)
-    else if const method = builtin_method(program, type, name)
+    else if method := builtin_method(program, type, name)
       add name, METHOD, format_type(method.type)
-  const extensions = probe.extensions
+  extensions := probe.extensions
   for method in extensions.in_effect
-    const name = method.name.name
+    name := method.name.name
     add name, METHOD, nil if method.bound == nil and find_extension(extensions, type, name) != nil
   items
 
 # The names of the builtin members of the builtin types, whose methods and properties
 # checker/builtins and member_targets give by name; the operators' methods are left out.
-const BUILTIN_MEMBER_NAMES =
+BUILTIN_MEMBER_NAMES :=
   'length', 'binary', 'push', 'pop', 'to_string', 'keys', 'entries', 'remove', 'has_next', 'next',
   'compare', 'equals', 'hash', 'wrapping_add', 'wrapping_sub', 'wrapping_mul', 'to_float', 'to_int',
   'to_byte', 'to_int8', 'to_int16', 'to_int32', 'to_uint16', 'to_uint32', 'to_uint64'
 
-const local_items = (locals: Map<String, Type>) ->
+local_items := (locals: Map<String, Type>) ->
   [
     CompletionItem(label: name, kind: VARIABLE, detail: format_type(type))
     for (name, type) in locals.entries()
@@ -140,53 +138,52 @@ const local_items = (locals: Map<String, Type>) ->
 
 # The names of the module, those it imports, and those that std:builtins exports. Top-level code
 # sees the top-level values that it has declared, which are among its locals, and no others yet.
-const module_items = (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
-  const own = names_of(program, shared)
-  const declared_later = (item: CompletionItem) ->
+module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
+  own := names_of(program, shared)
+  declared_later := (item: CompletionItem) ->
     in_top_level and shared.top_level.locals.has(item.label)
-  const items = [item for item in own when not declared_later(item)]
+  items := [item for item in own when not declared_later(item)]
   for name in shared.imports.modules.keys()
     items.push CompletionItem(label: name, kind: MODULE, detail: nil)
   # An imported name is as its module declares it, under the name it is imported by; a name of a
   # module imported as a name, `m.x`, is no name of its own.
   for (name, imported) in shared.imports.names.entries()
     continue if name.contains('.') or items.any((each) -> each.label == name)
-    const source = imported.source
-    const item =
+    source := imported.source
+    item :=
       case source
         when ExportRef
-          const declared = exported_items(program, program.shared[source.module_index])
+          declared := exported_items(program, program.shared[source.module_index])
           declared.find((each) -> each.label == source.name) ? continue
         when ExternExport then extern_item(source.type)
     items.push CompletionItem(label: name, kind: item.kind, detail: item.detail)
-  if const builtins = shared.imports.builtins
+  if builtins := shared.imports.builtins
     for item in exported_items(program, program.shared[builtins])
       items.push item if not items.any((each) -> each.label == item.label)
   items
 
 # The names that the module exports: its own, C functions, as `panic` of std:builtins, and those
 # it exports from other modules.
-const exported_items = (program: ProgramWide, shared: Shared): CompletionItem[] ->
-  const items = [item for item in names_of(program, shared) when shared.exported.has(item.label)]
+exported_items := (program: ProgramWide, shared: Shared): CompletionItem[] ->
+  items := [item for item in names_of(program, shared) when shared.exported.has(item.label)]
   for name in shared.exported.keys()
     continue if items.any((each) -> each.label == name)
-    const exported = export_of(program, shared.index, name)
+    exported := export_of(program, shared.index, name)
     if exported is ExternExport
-      const item = extern_item((exported as ExternExport!).type)
+      item := extern_item((exported as ExternExport!).type)
       items.push CompletionItem(label: name, kind: item.kind, detail: item.detail)
   for name in shared.reexported.keys()
-    const ref = export_ref(program, shared.index, name) ? continue
-    const declared = exported_items(program, program.shared[ref.module_index])
-    const item = declared.find((each) -> each.label == ref.name) ? continue
+    ref := export_ref(program, shared.index, name) ? continue
+    declared := exported_items(program, program.shared[ref.module_index])
+    item := declared.find((each) -> each.label == ref.name) ? continue
     items.push CompletionItem(label: name, kind: item.kind, detail: item.detail)
   items
 
-const extern_item = (type: Type) ->
-  CompletionItem label: '', kind: FUNCTION, detail: format_type(type)
+extern_item := (type: Type) -> CompletionItem(label: '', kind: FUNCTION, detail: format_type(type))
 
 # The top-level names that the module declares.
-const names_of = (program: ProgramWide, shared: Shared) ->
-  const items: CompletionItem[]
+names_of := (program: ProgramWide, shared: Shared) ->
+  items: CompletionItem[]
   for (name, local) in shared.top_level.locals.entries()
     items.push CompletionItem(label: name, kind: VARIABLE, detail: format_type(local.type))
   # A method's entry is named by its receiver too, as `Point.sum`.
@@ -204,17 +201,16 @@ const names_of = (program: ProgramWide, shared: Shared) ->
 
 # The keywords, those of TokenKind in compiler/lexer/tokens.lerta, wherever a name is written: the
 # editor narrows them by what is written of the name.
-const KEYWORDS =
+KEYWORDS :=
   'true', 'false', 'nil', 'and', 'or', 'not', 'const', 'var', 'if', 'else', 'while', 'for', 'break',
   'continue', 'return', 'case', 'then', 'class', 'struct', 'throw', 'import', 'export', 'extern',
   'extend', 'enum', 'interface', 'try', 'catch', 'finally', 'yield', 'await'
 
-const keyword_items = ->
-  [CompletionItem(label: word, kind: KEYWORD, detail: nil) for word in KEYWORDS]
+keyword_items := -> [CompletionItem(label: word, kind: KEYWORD, detail: nil) for word in KEYWORDS]
 
-const formatted = (type: Type?) ->
-  const known = type ? return nil
+formatted := (type: Type?) ->
+  known := type ? return nil
   format_type known
 
 # Whether the Char may be in a name.
-export const is_name_character = (c: Char) -> c.is_letter() or c.is_digit() or c == '_'
+export is_name_character := (c: Char) -> c.is_letter() or c.is_digit() or c == '_'

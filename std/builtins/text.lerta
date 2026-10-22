@@ -8,7 +8,7 @@ extern lerta_print_stderr: (String) -> void
 extern lerta_float_literal_bits: (String) -> Int
 extern lerta_float_from_bits: (Int) -> Float
 
-const MIN_INT = -9223372036854775808
+MIN_INT := -9223372036854775808
 
 # The types that have `to_string()`, which print and interpolation require.
 export interface Stringable
@@ -19,12 +19,12 @@ export interface Stringable
 export interface Literal
   to_literal: () -> String
 
-export const print = <T: Stringable>(x: T) -> print_stdout_line(x.to_string())
-export const print_error = <T: Stringable>(x: T) -> print_stderr_line(x.to_string())
+export print := <T: Stringable>(x: T) -> print_stdout_line(x.to_string())
+export print_error := <T: Stringable>(x: T) -> print_stderr_line(x.to_string())
 
 # Not generic, so that they are checked even if print and print_error are never called.
-const print_stdout_line = (text: String) -> lerta_print_stdout(text + "\n")
-const print_stderr_line = (text: String) -> lerta_print_stderr(text + "\n")
+print_stdout_line := (text: String) -> lerta_print_stdout(text + "\n")
+print_stderr_line := (text: String) -> lerta_print_stderr(text + "\n")
 
 extend Char
   to_string = -> lerta_binary_as_string(utf8_of(@))
@@ -39,10 +39,10 @@ extend Char
   add = (count: Int) -> (@to_int() + count).to_char() ? throw not_a_char()
   sub = (count: Int) -> (@to_int() - count).to_char() ? throw not_a_char()
 
-const is_control = (c: Char) -> c.to_int() < 0x20 or c.to_int() == 0x7F
+is_control := (c: Char) -> c.to_int() < 0x20 or c.to_int() == 0x7F
 
 # The escape of a Char in a "..." literal (see docs/reference/syntax.md), or nil if it needs none.
-const escape_in_double_quotes = (c: Char): String? ->
+escape_in_double_quotes := (c: Char): String? ->
   case c
     when '\' then '\\'
     when '"' then '\"'
@@ -53,21 +53,21 @@ const escape_in_double_quotes = (c: Char): String? ->
     when "\0" then '\0'
     else is_control(c) then "\\u{#{upper_hex(c.to_int())}}"
 
-const UPPER_HEX_DIGITS = '0123456789ABCDEF'.binary
+UPPER_HEX_DIGITS := '0123456789ABCDEF'.binary
 
 # The digits of a number below 256 in upper-case hex, without leading zeros.
-const upper_hex = (n: Int) ->
+upper_hex := (n: Int) ->
   var hex = ''
   hex += UPPER_HEX_DIGITS[n >> 4].to_char() if n >= 16
   hex + UPPER_HEX_DIGITS[n & 0xF].to_char()
 
 # The place of the first occurrence of `part`, which is not empty, at `from` or after it, or -1.
-const index_of = (bytes: Binary, part: Binary, from: Int) ->
+index_of := (bytes: Binary, part: Binary, from: Int) ->
   for i in from...max(from, bytes.length - part.length + 1)
     return i if bytes.occurs_at(i, part)
   -1
 
-const not_a_char = -> ValueError(message: 'not a Unicode scalar value')
+not_a_char := -> ValueError(message: 'not a Unicode scalar value')
 
 extend String
   to_string = -> @
@@ -77,46 +77,46 @@ extend String
     return "'#{@}'" if not @any((c) -> c == "'" or is_control(c))
     var literal = '"'
     for c in @
-      if const escape = escape_in_double_quotes(c)
+      if escape := escape_in_double_quotes(c)
         literal += escape
       else
         literal += c
     literal + '"'
   # The Chars.
   iter = (): Iter<Char> ->
-    const bytes = @binary
+    bytes := @binary
     var i = 0
-    const has_next = -> i < bytes.length
-    const next = ->
-      const c = char_at(bytes, i)
+    has_next := -> i < bytes.length
+    next := ->
+      c := char_at(bytes, i)
       i += sequence_length(bytes[i])
       c
     { has_next, next }
   # The digits are accumulated as a negative number, which can hold the minimum Int.
   parse_int = ->
-    const bytes = @binary
-    const negative = bytes.length > 0 and bytes[0] == '-'
-    const start = negative then 1 else 0
+    bytes := @binary
+    negative := bytes.length > 0 and bytes[0] == '-'
+    start := negative then 1 else 0
     return nil if start == bytes.length
     var value = 0
     for i in start...bytes.length
-      const byte = bytes[i]
+      byte := bytes[i]
       return nil if byte < '0' or byte > '9'
-      const digit = (byte - '0').to_int()
+      digit := (byte - '0').to_int()
       return nil if value < (MIN_INT + digit) / 10
       value = value * 10 - digit
     return nil if not negative and value == MIN_INT
     negative then value else -value
   parse_float = (): Float? ->
     return nil if not is_decimal_number(@binary)
-    const bits = lerta_float_literal_bits(@)
+    bits := lerta_float_literal_bits(@)
     bits != -1 then lerta_float_from_bits(bits)
   # Cutting valid UTF-8 around a valid separator leaves valid UTF-8.
   split = (separator: String) ->
     throw ValueError(message: 'split by an empty separator') if separator == ''
-    const bytes = @binary
-    const separator_bytes = separator.binary
-    const pieces: String[]
+    bytes := @binary
+    separator_bytes := separator.binary
+    pieces: String[]
     var start = 0
     var found = index_of(bytes, separator_bytes, 0)
     while found >= 0
@@ -134,7 +134,7 @@ extend String
     @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)!
   # By the first byte that differs, or else by length, so that a prefix goes first.
   compare = (other: String) ->
-    const (bytes, other_bytes) = (@binary, other.binary)
+    (bytes, other_bytes) := (@binary, other.binary)
     for i in 0...min(bytes.length, other_bytes.length)
       return bytes[i].compare(other_bytes[i]) if bytes[i] != other_bytes[i]
     bytes.length.compare other_bytes.length
@@ -143,7 +143,7 @@ extend String
   # Without the whitespace at both ends: the ASCII spaces of Byte.is_space, which no byte of a
   # multi-byte character is, so that what is left is valid UTF-8.
   trim = ->
-    const bytes = @binary
+    bytes := @binary
     var start = 0
     start += 1 while start < bytes.length and bytes[start].is_space()
     var end = bytes.length
@@ -151,13 +151,13 @@ extend String
     lerta_binary_as_string bytes.slice(start, end)
   # Likewise, at the start only.
   trim_start = ->
-    const bytes = @binary
+    bytes := @binary
     var start = 0
     start += 1 while start < bytes.length and bytes[start].is_space()
     lerta_binary_as_string bytes.slice(start, bytes.length)
   # Likewise, at the end only.
   trim_end = ->
-    const bytes = @binary
+    bytes := @binary
     var end = bytes.length
     end -= 1 while end > 0 and bytes[end - 1].is_space()
     lerta_binary_as_string bytes.slice(0, end)
@@ -168,10 +168,10 @@ extend String
   # Only the ASCII letters change: each is a byte that no multi-byte character holds, so that what
   # is left is valid UTF-8.
   to_upper = ->
-    const bytes = [b >= 'a' and b <= 'z' then b - 'a' + 'A' else b for b in @binary]
+    bytes := [b >= 'a' and b <= 'z' then b - 'a' + 'A' else b for b in @binary]
     lerta_binary_as_string bytes.to_binary()
   to_lower = ->
-    const bytes = [b >= 'A' and b <= 'Z' then b - 'A' + 'a' else b for b in @binary]
+    bytes := [b >= 'A' and b <= 'Z' then b - 'A' + 'a' else b for b in @binary]
     lerta_binary_as_string bytes.to_binary()
   # The String after as many of `fill`, one code point, as make it `width` code points long, or the
   # String itself if it is no shorter.
@@ -187,11 +187,11 @@ extend String
   # there is none.
   split_once = (separator: String): (String, String)? ->
     throw ValueError(message: 'split by an empty separator') if separator == ''
-    const bytes = @binary
-    const found = index_of(bytes, separator.binary, 0)
+    bytes := @binary
+    found := index_of(bytes, separator.binary, 0)
     return nil if found < 0
-    const before = lerta_binary_as_string(bytes.slice(0, found))
-    const after = found + separator.binary.length
+    before := lerta_binary_as_string(bytes.slice(0, found))
+    after := found + separator.binary.length
     (before, lerta_binary_as_string(bytes.slice(after, bytes.length)))
 
 extend Binary
@@ -209,15 +209,15 @@ extend Binary
       return false if @[index + k] != byte
     true
   text = (start = 0, end: Int = @length): String? ->
-    const bytes = start == 0 and end == @length then @ else @slice(start, end)
+    bytes := start == 0 and end == @length then @ else @slice(start, end)
     is_utf8(bytes) then lerta_binary_as_string(bytes)
 
 # The copies of `fill` that make `text` `width` code points long (see pad_start).
-const padding = (text: String, width: Int, fill: String) ->
+padding := (text: String, width: Int, fill: String) ->
   throw ValueError(message: 'a fill that is not one code point') if code_point_count(fill) != 1
   fill.repeat max(0, width - code_point_count(text))
 
-const code_point_count = (text: String) ->
+code_point_count := (text: String) ->
   var count = 0
   count += 1 for _ in text
   count
@@ -248,23 +248,23 @@ extend Byte[]
     bytes
 
 # Digits, an optional fraction and an optional exponent, after an optional `-` (see parse_float).
-const is_decimal_number = (bytes: Binary) ->
+is_decimal_number := (bytes: Binary) ->
   var i = bytes.length > 0 and bytes[0] == '-' then 1 else 0
-  const digits_from = (start: Int) ->
+  digits_from := (start: Int) ->
     var end = start
     end += 1 while end < bytes.length and bytes[end].is_digit()
     end
-  const whole_end = digits_from(i)
+  whole_end := digits_from(i)
   return false if whole_end == i
   i = whole_end
   if i < bytes.length and bytes[i] == '.'
-    const fraction_end = digits_from(i + 1)
+    fraction_end := digits_from(i + 1)
     return false if fraction_end == i + 1
     i = fraction_end
   if i < bytes.length and (bytes[i] == 'e' or bytes[i] == 'E')
     i += 1
     i += 1 if i < bytes.length and (bytes[i] == '+' or bytes[i] == '-')
-    const exponent_end = digits_from(i)
+    exponent_end := digits_from(i)
     return false if exponent_end == i
     i = exponent_end
   i == bytes.length

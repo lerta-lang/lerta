@@ -31,22 +31,21 @@ export struct Annotation
 # The checking and the printer find an annotation in syntax trees parsed apart, by what it annotates
 # (`return`, `parameter`, `variable` or `field`) and where that is: the function literal, or the
 # name; or by `member` and where the member is.
-export const annotation_key = (kind: String, at: Position) -> "#{kind} #{at.line}:#{at.column}"
+export annotation_key := (kind: String, at: Position) -> "#{kind} #{at.line}:#{at.column}"
 
 # The line of what the key names.
-export const key_line = (key: String) -> key.split(' ')[1].split(':')[0].parse_int()!
+export key_line := (key: String) -> key.split(' ')[1].split(':')[0].parse_int()!
 
 # The name that an import gives, if the key names one (see import_key).
-export const imported_name = (key: String) ->
-  const words = key.split(' ')
+export imported_name := (key: String) ->
+  words := key.split(' ')
   words.length == 3 then words[2]
 
 # A name left out of an import, by the import and the name it gives (see import_names_of).
-export const import_key = (import_node: Import, name: String) ->
-  "#{import_prefix(import_node)}#{name}"
+export import_key := (import_node: Import, name: String) -> "#{import_prefix(import_node)}#{name}"
 
 # What the keys of the names left out of the import start with.
-export const import_prefix = (import_node: Import) ->
+export import_prefix := (import_node: Import) ->
   "#{annotation_key('import', import_node.position)} "
 
 # The annotations that may be left out, in the order of the source. Those in generic functions and
@@ -55,15 +54,15 @@ export const import_prefix = (import_node: Import) ->
 # function values held by a `const` without a type, which no function type is expected for (see
 # Parameter), but those with a default. This only spares checks that would fail: the checking
 # decides which can be left out (see removable_annotations).
-export const annotations_of = (program: Statement[]) ->
-  const found: Annotation[]
+export annotations_of := (program: Statement[]) ->
+  found: Annotation[]
   add_statements found, program
   found
 
-const add_statements = (found: Annotation[], statements: Statement[]) ->
+add_statements := (found: Annotation[], statements: Statement[]) ->
   add_statement found, statement for statement in statements
 
-const add_statement = (found: Annotation[], statement: Statement): void ->
+add_statement := (found: Annotation[], statement: Statement): void ->
   case statement
     when Declaration
       found.push variable_annotation(statement) if statement.type != nil
@@ -84,21 +83,21 @@ const add_statement = (found: Annotation[], statement: Statement): void ->
     else add_expression(found, statement)
 
 # The fields with a value, and the methods, whose parameters no function type is expected for.
-const add_members = (found: Annotation[], members: MemberDeclaration[]) ->
+add_members := (found: Annotation[], members: MemberDeclaration[]) ->
   for member, i in members
-    const value = member.value ? continue
+    value := member.value ? continue
     found.push field_annotation(members, i) if member.type != nil and value is not FunctionLiteral
     add_value found, value, false
 
 # A value where a type is `expected` or not, which tells whether a function literal there can leave
 # out the types of its parameters.
-const add_value = (found: Annotation[], value: Expression, expected: Bool) ->
+add_value := (found: Annotation[], value: Expression, expected: Bool) ->
   if value is FunctionLiteral
     add_function found, value, expected
   else
     add_expression found, value
 
-const add_function = (found: Annotation[], literal: FunctionLiteral, expected: Bool) ->
+add_function := (found: Annotation[], literal: FunctionLiteral, expected: Bool) ->
   return if literal.type_params.length > 0
   for param, i in literal.params
     if param.type != nil and (expected or param.default != nil)
@@ -107,26 +106,26 @@ const add_function = (found: Annotation[], literal: FunctionLiteral, expected: B
   add_expression found, value for value in default_values(literal.params)
   add_statements found, literal.body
 
-const default_values = (params: Parameter[]) ->
-  const values: Expression[]
+default_values := (params: Parameter[]) ->
+  values: Expression[]
   for param in params
-    values.push value if const value = param.default
+    values.push value if value := param.default
   values
 
-const add_condition = (found: Annotation[], condition: Condition) ->
+add_condition := (found: Annotation[], condition: Condition) ->
   case condition
     when Binding then add_expression(found, condition.value)
     else add_expression(found, condition)
 
-const add_expression = (found: Annotation[], expression: Expression): void ->
+add_expression := (found: Annotation[], expression: Expression): void ->
   case expression
     when FunctionLiteral then add_function(found, expression, true)
     when Case
-      add_expression found, subject if const subject = expression.subject
+      add_expression found, subject if subject := expression.subject
       for arm in expression.arms
         add_expression found, pattern for pattern in arm.patterns
         add_statements found, arm.body
-      add_statements found, otherwise if const otherwise = expression.otherwise
+      add_statements found, otherwise if otherwise := expression.otherwise
     when If
       add_condition found, expression.condition
       add_statements found, expression.then_body
@@ -134,11 +133,11 @@ const add_expression = (found: Annotation[], expression: Expression): void ->
     when Try
       add_statements found, expression.body
       add_statements found, catch_clause.body for catch_clause in expression.catches
-      add_statements found, finally_body if const finally_body = expression.finally_body
+      add_statements found, finally_body if finally_body := expression.finally_body
     else add_expression(found, operand) for operand in operands_of(expression)
 
-const return_annotation = (literal: FunctionLiteral) ->
-  const type = literal.return_type
+return_annotation := (literal: FunctionLiteral) ->
+  type := literal.return_type
   Annotation
     key: annotation_key('return', literal.position)
     remove: -> literal.return_type = nil
@@ -146,16 +145,16 @@ const return_annotation = (literal: FunctionLiteral) ->
     value: last_value(literal.body)
     function: literal
 
-const last_value = (body: Statement[]) ->
-  const last = body.last() ? return nil
+last_value := (body: Statement[]) ->
+  last := body.last() ? return nil
   last as Expression?
 
 # The parameter's type is put in a Parameter of the default it has then, which may be a member
 # written alone (see qualified_members_of).
-const parameter_annotation = (literal: FunctionLiteral, i: Int) ->
-  const { name, type } = literal.params[i]
-  const typed = (new_type: TypeName?) ->
-    const { variadic, default } = literal.params[i]
+parameter_annotation := (literal: FunctionLiteral, i: Int) ->
+  { name, type } := literal.params[i]
+  typed := (new_type: TypeName?) ->
+    { variadic, default } := literal.params[i]
     literal.params[i] = Parameter(name, variadic, default, type: new_type)
   Annotation
     key: annotation_key('parameter', name.position)
@@ -164,13 +163,13 @@ const parameter_annotation = (literal: FunctionLiteral, i: Int) ->
     parameter: name
 
 # The type of `Map()` or `Set()` moves to its type arguments: `const s = Set<String>()`.
-const variable_annotation = (declaration: Declaration) ->
-  const type = declaration.type
-  const collection = collection_call(declaration)
-  const remove = ->
+variable_annotation := (declaration: Declaration) ->
+  type := declaration.type
+  collection := collection_call(declaration)
+  remove := ->
     declaration.type = nil
     collection.call.type_args = collection.args if collection
-  const restore = ->
+  restore := ->
     declaration.type = type
     collection.call.type_args = [] if collection
   Annotation
@@ -182,20 +181,20 @@ const variable_annotation = (declaration: Declaration) ->
     moves_to_type_arguments: collection != nil
 
 # A call of Map or Set without type arguments, with those of the type that the declaration writes.
-const collection_call = (declaration: Declaration) ->
-  const type = declaration.type as NamedType ? return nil
-  const call = declaration.value as Call ? return nil
-  const callee = call.callee as Identifier ? return nil
-  const is_collection = type.name == 'Map' or type.name == 'Set'
-  const matches = is_collection and callee.name == type.name and not type.optional
+collection_call := (declaration: Declaration) ->
+  type := declaration.type as NamedType ? return nil
+  call := declaration.value as Call ? return nil
+  callee := call.callee as Identifier ? return nil
+  is_collection := type.name == 'Map' or type.name == 'Set'
+  matches := is_collection and callee.name == type.name and not type.optional
   matches and call.type_args.length == 0 then { call, args: type.args }
 
 # The field's type is put in a MemberDeclaration of the value it has then, which may be a member
 # written alone (see qualified_members_of).
-const field_annotation = (members: MemberDeclaration[], i: Int) ->
-  const { name, type, value } = members[i]
-  const typed = (new_type: TypeName?) ->
-    const { modifier, has_default, position } = members[i]
+field_annotation := (members: MemberDeclaration[], i: Int) ->
+  { name, type, value } := members[i]
+  typed := (new_type: TypeName?) ->
+    { modifier, has_default, position } := members[i]
     members[i] = MemberDeclaration
       name
       modifier

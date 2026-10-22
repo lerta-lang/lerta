@@ -15,14 +15,14 @@ import
 from '../types'
 
 # Registers the module's enums, after its classes and structs (see add_objects).
-export const add_enums = (shared: Shared, declarations: EnumDeclaration[]) ->
-  const program = shared.program
+export add_enums := (shared: Shared, declarations: EnumDeclaration[]) ->
+  program := shared.program
   for declaration in declarations
-    const { name } = declaration.name
+    { name } := declaration.name
     fail_already_defined program, declaration.name if has_declared_type(shared, name)
-    const members: EnumMember[]
+    members: EnumMember[]
     for member in declaration.members
-      const text =
+      text :=
         case member
           when Identifier then member.name
           when StringLiteral then member.value
@@ -32,83 +32,81 @@ export const add_enums = (shared: Shared, declarations: EnumDeclaration[]) ->
       if members.any((each) -> each.text == text)
         fail program, member.position, "'#{text}' is already a member of #{name}"
       members.push EnumMember(text, is_name: member is Identifier)
-    const symbol = declared_symbol(shared, name)
+    symbol := declared_symbol(shared, name)
     shared.enums[name] = EnumType(name, symbol, members, module: shared.name)
 
 # The enum of the name, of the module, imported or of std:builtins.
-export const enum_type = (shared: Shared, name: String) ->
-  return own if const own = shared.enums[name]
-  const exported = imported_type(shared, name) ? builtin_type(shared, name) ? return nil
+export enum_type := (shared: Shared, name: String) ->
+  return own if own := shared.enums[name]
+  exported := imported_type(shared, name) ? builtin_type(shared, name) ? return nil
   exported.type as EnumType?
 
 # `E.MEMBER`, where no local takes the name of the enum E.
-export const type_of_qualified_member = (body: Body, member: Member, expected: Type?): Type? ->
-  const type = qualifying_enum(body, member) ? return nil
-  const { name, position } = member.name
+export type_of_qualified_member := (body: Body, member: Member, expected: Type?): Type? ->
+  type := qualifying_enum(body, member) ? return nil
+  { name, position } := member.name
   probe_enum body, type if name == COMPLETION_NAME
   fail body.program, position, "#{type.name}.parse must be called" if name == 'parse'
-  const no_member = -> fail(body.program, position, "#{type.name} has no member '#{name}'")
+  no_member := -> fail(body.program, position, "#{type.name} has no member '#{name}'")
   record_member body, member, EnumValue(index: name_index(type, name) ? no_member())
-  const where_expected = expected_enum(expected)?.symbol == type.symbol
+  where_expected := expected_enum(expected)?.symbol == type.symbol
   body.facts.unqualifiable.add member if where_expected and not is_name_taken(body, name)
   type
 
 # `E.parse`, the member whose to_string gives a String, or nil.
-export const enum_parse_type = (body: Body, member: Member) ->
+export enum_parse_type := (body: Body, member: Member) ->
   return nil if member.name.name != 'parse'
-  const type = qualifying_enum(body, member) ? return nil
+  type := qualifying_enum(body, member) ? return nil
   record_member body, member, EnumParse(type)
   FunctionType params: [string_type], result: optional_type(type)
 
 # The enum E of `E.x`, where no local takes its name, or of `mod.E.x` (see qualified_name).
-const qualifying_enum = (body: Body, member: Member) ->
-  const object = member.object
+qualifying_enum := (body: Body, member: Member) ->
+  object := member.object
   if object is Member
-    return enum_type(body.shared, name.name) if const name = qualified_name(body, object)
+    return enum_type(body.shared, name.name) if name := qualified_name(body, object)
     return nil
   return nil if object is not Identifier
   return nil if lookup(body, object.name) != nil
   enum_type body.shared, object.name
 
-export const type_of_elided_member = (body: Body, identifier: Identifier, expected: Type?): Type? ->
-  const type = expected_enum(expected) ? return nil
-  const name = identifier.name
-  const index = name_index(type, name) ? return nil
+export type_of_elided_member := (body: Body, identifier: Identifier, expected: Type?): Type? ->
+  type := expected_enum(expected) ? return nil
+  name := identifier.name
+  index := name_index(type, name) ? return nil
   if is_name_taken(body, name)
-    const message = "'#{name}' names something else here; write #{type.name}.#{name}"
+    message := "'#{name}' names something else here; write #{type.name}.#{name}"
     fail body.program, identifier.position, message
   record_reference body, identifier, EnumValue(index)
   type
 
-export const type_of_literal_member = (
-  body: Body, literal: StringLiteral, expected: Type?
-): Type? ->
-  const type = expected_enum(expected) ? return nil
-  const text = literal.value
-  const no_member = ->
-    const hint = name_index(type, text) != nil then "; write #{text}" else ''
+export type_of_literal_member := (body: Body, literal: StringLiteral, expected: Type?): Type? ->
+  type := expected_enum(expected) ? return nil
+  text := literal.value
+  no_member := ->
+    hint := name_index(type, text) != nil then "; write #{text}" else ''
     fail body.program, literal.position, "'#{text}' is not a member of #{type.name}#{hint}"
-  const is_literal_of_text = (member: EnumMember) -> not member.is_name and member.text == text
-  const index = type.members.find_index(is_literal_of_text) ? no_member()
+  is_literal_of_text := (member: EnumMember) -> not member.is_name and member.text == text
+  index := type.members.find_index(is_literal_of_text) ? no_member()
   body.facts.enum_literals[literal] = index
   type
 
-const expected_enum = (expected: Type?) ->
-  const wanted = expected ? return nil
+expected_enum := (expected: Type?) ->
+  wanted := expected ? return nil
   inner_of(wanted) as EnumType?
 
 # An identifier that may stand for a member of an enum that the context expects: a name that
 # nothing takes. Such an operand of `==` is typed after the other one, which tells the enum.
-export const may_name_member = (body: Body, expression: Expression) ->
+export may_name_member := (body: Body, expression: Expression) ->
   return false if expression is not Identifier
   not is_name_taken(body, expression.name)
 
 # Whether a name in scope takes the name: a local, a top-level name or a builtin.
-const is_name_taken = (body: Body, name: String) ->
-  const { shared } = body
+is_name_taken := (body: Body, name: String) ->
+  { shared } := body
   return true if lookup(body, name) != nil or has_function(shared, name)
   return true if has_import(shared, name) or shared.top_level.names.has(name)
   builtin_export(shared, name) != nil
 
-const name_index = (type: EnumType, name: String) ->
+name_index := (type: EnumType, name: String) ->
   type.members.find_index (member) -> member.is_name and member.text == name

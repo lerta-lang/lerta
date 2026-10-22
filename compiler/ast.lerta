@@ -6,7 +6,7 @@ import TextPart from './lexer/string_literal'
 export struct Position(line: Int, column: Int)
 
 # The order of two positions in a text, by line, then by column.
-export const compare_positions = (a: Position, b: Position) ->
+export compare_positions := (a: Position, b: Position) ->
   a.line != b.line then a.line.compare(b.line) else a.column.compare(b.column)
 
 export class StringLiteral(value: String, position: Position)
@@ -80,7 +80,7 @@ export class Comprehension
   # An item `xs...` of an array literal, whose items it gives in its place, as `[x for x in xs]`.
   spread = default false
 
-export const is_spread = (item: Expression) -> item is Comprehension and item.spread
+export is_spread := (item: Expression) -> item is Comprehension and item.spread
 
 # A field of an anonymous struct, or a named argument of a call, which gives such a field or
 # constructs a class or struct.
@@ -128,8 +128,8 @@ export class BinaryOperation
   position: Position
 
 # `x == nil` or `x != nil`, on either side.
-export const is_nil_test = (binary: BinaryOperation) ->
-  const compares = binary.operator == '==' or binary.operator == '!='
+export is_nil_test := (binary: BinaryOperation) ->
+  compares := binary.operator == '==' or binary.operator == '!='
   compares and (binary.left is NilLiteral or binary.right is NilLiteral)
 
 # `start...end`
@@ -277,7 +277,7 @@ export class Declaration
   omits_value = default false
 
 # The operator that an assignment such as `+=` combines the old value and the new one with: `+`.
-export const combining_operator = (operator: String) -> operator.without_suffix('=')!
+export combining_operator := (operator: String) -> operator.without_suffix('=')!
 
 export type AssignmentTarget = Identifier | Index | Member
 
@@ -396,23 +396,23 @@ export type Statement =
 export type Node = Statement | Binding | TypeName
 
 # A new node of the same name, so that each place where a name is used has a node of its own.
-export const copy_identifier = (identifier: Identifier) ->
+export copy_identifier := (identifier: Identifier) ->
   Identifier name: identifier.name, position: identifier.position
 
 # The named arguments of a construction, of a class or struct, whose names alone, as in `Point(x)`,
 # are those of the same names, `Point(x: x)`, first.
-export const construction_arguments = (call: Call) ->
-  const from_names =
+export construction_arguments := (call: Call) ->
+  from_names :=
     [NamedValue(name: copy_identifier(arg as Identifier!), value: arg) for arg in call.args]
   [from_names..., call.named_args...]
 
 # The else branch of an `if` that is a statement. That of `x?.rest` gives the nil of its value,
 # which a statement has none of.
-export const statement_else_body = (if_statement: If): Statement[] ->
+export statement_else_body := (if_statement: If): Statement[] ->
   if_statement.nil_safe then [] else if_statement.else_body
 
 # Whether `export` precedes the statement.
-export const is_exported = (statement: Statement) ->
+export is_exported := (statement: Statement) ->
   case statement
     when Import then statement.exported
     else exported_declaration(statement) != nil
@@ -422,7 +422,7 @@ export type Exportable =
   Declaration | TypeDeclaration | EnumDeclaration | InterfaceDeclaration | TypeAlias | Extern
 
 # The statement, if `export` can precede it.
-export const as_exportable = (statement: Statement): Exportable? ->
+export as_exportable := (statement: Statement): Exportable? ->
   case statement
     when Declaration then statement
     when TypeDeclaration then statement
@@ -433,24 +433,24 @@ export const as_exportable = (statement: Statement): Exportable? ->
     else nil
 
 # The statement, if `export` precedes it.
-export const exported_declaration = (statement: Statement) ->
-  const declaration = as_exportable(statement) ? return nil
+export exported_declaration := (statement: Statement) ->
+  declaration := as_exportable(statement) ? return nil
   declaration.exported then declaration
 
 # The expressions directly under the expression, in the order of the source, whether it evaluates
 # them always, as the operands of `+`, or not, as the branches of `then`/`else` and the element of a
 # comprehension. Those of a function literal, an `if`, a `case` and a `try`, which hold statements,
 # are left to the passes that go through the syntax tree, as each treats them otherwise.
-export const operands_of = (expression: Expression): Expression[] ->
+export operands_of := (expression: Expression): Expression[] ->
   case expression
     when Interpolation then [part for part in expression.parts when part is Call]
     when ArrayLiteral then expression.elements
     when Comprehension
-      const parts = [expression.element, expression.iterable]
-      parts.push guard if const guard = expression.guard
+      parts := [expression.element, expression.iterable]
+      parts.push guard if guard := expression.guard
       parts
     when MapLiteral
-      const parts: Expression[]
+      parts: Expression[]
       for entry in expression.entries
         parts.push entry.key
         parts.push entry.value
@@ -474,6 +474,6 @@ export const operands_of = (expression: Expression): Expression[] ->
     when Throw then [expression.message]
     when Yield then [expression.value]
     when Return
-      const value = expression.value
+      value := expression.value
       value then [value] else []
     else []

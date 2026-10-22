@@ -25,44 +25,42 @@ from '../types'
 
 # An i1: whether the two values of the type are equal. A part that holds parts of its own is
 # compared by its function, so that a type that holds itself is compared by a recursive call.
-export const emit_equals_by_contents = (
+export emit_equals_by_contents := (
   ir: IrBuilder, program: ProgramWide, left: String, right: String, type: Type
 ) ->
   return emit_equals(ir, program, left, right, type) if is_whole(program, type)
-  const symbol = equals_function(ir.module, program, type)
+  symbol := equals_function(ir.module, program, type)
   ir.assign "call i1 #{symbol}(#{ir_type(type)} #{left}, #{ir_type(type)} #{right})"
 
-export const emit_hash_by_contents = (
-  ir: IrBuilder, program: ProgramWide, value: String, type: Type
-) ->
+export emit_hash_by_contents := (ir: IrBuilder, program: ProgramWide, value: String, type: Type) ->
   return emit_hash(ir, program, value, type) if is_whole(program, type)
   ir.assign "call i64 #{hash_function(ir.module, program, type)}(#{ir_type(type)} #{value})"
 
 # A type whose values have no parts that compare on their own: a value, an object that compares as
 # itself, or one that compares by its own method.
-const is_whole = (program: ProgramWide, type: Type) ->
+is_whole := (program: ProgramWide, type: Type) ->
   return true if is_value_type(type) or own_equality(program, type) != nil
   is_identity program, type
 
 # Whether values of the type compare as the same object: a class, or a union of classes, none of
 # which has its own equality.
-const is_identity = (program: ProgramWide, type: Type) ->
+is_identity := (program: ProgramWide, type: Type) ->
   is_identity_type(type) and not compares_by_contents(program, type)
 
 # The functions that compare and hash items of the type, as a map with keys of it takes them.
-export const item_functions = (module: IrModule, program: ProgramWide, type: Type) ->
-  const equals = item_equals_function(module, program, type)
+export item_functions := (module: IrModule, program: ProgramWide, type: Type) ->
+  equals := item_equals_function(module, program, type)
   { equals, hash: item_hash_function(module, program, type) }
 
 # The same object is equal to itself at once, which also ends `s == s` for a value that holds
 # itself through an array (see docs/reference/objects.md#classes-and-structs).
-const equals_function = (module: IrModule, program: ProgramWide, type: Type) ->
-  const define = (name: String, defined: IrModule) ->
-    const ir = IrBuilder(module: defined)
-    const compare = -> emit_equals(ir, program, '%a', '%b', type)
-    const result =
+equals_function := (module: IrModule, program: ProgramWide, type: Type) ->
+  define := (name: String, defined: IrModule) ->
+    ir := IrBuilder(module: defined)
+    compare := -> emit_equals(ir, program, '%a', '%b', type)
+    result :=
       if ir_type(type) == 'ptr'
-        const differ = ir.assign('icmp ne ptr %a, %b')
+        differ := ir.assign('icmp ne ptr %a, %b')
         emit_branch ir, 'i1', differ, compare, 'true'
       else
         compare()
@@ -70,93 +68,92 @@ const equals_function = (module: IrModule, program: ProgramWide, type: Type) ->
     ir.finish "private i1 #{name}(#{ir_type(type)} %a, #{ir_type(type)} %b)"
   module.named "equals #{type_key(type)}", '@lerta.equals', define
 
-const hash_function = (module: IrModule, program: ProgramWide, type: Type) ->
-  const define = (name: String, defined: IrModule) ->
-    const ir = IrBuilder(module: defined)
+hash_function := (module: IrModule, program: ProgramWide, type: Type) ->
+  define := (name: String, defined: IrModule) ->
+    ir := IrBuilder(module: defined)
     ir.emit "ret i64 #{emit_hash(ir, program, '%a', type)}"
     ir.finish "private i64 #{name}(#{ir_type(type)} %a)"
   module.named "hash #{type_key(type)}", '@lerta.hash', define
 
-const item_equals_function = (module: IrModule, program: ProgramWide, type: Type) ->
-  const define = (name: String, defined: IrModule) ->
-    const ir = IrBuilder(module: defined)
-    const left = from_item(ir, '%a', type)
-    const right = from_item(ir, '%b', type)
+item_equals_function := (module: IrModule, program: ProgramWide, type: Type) ->
+  define := (name: String, defined: IrModule) ->
+    ir := IrBuilder(module: defined)
+    left := from_item(ir, '%a', type)
+    right := from_item(ir, '%b', type)
     ir.emit "ret i1 #{emit_equals(ir, program, left, right, type)}"
     ir.finish "private zeroext i1 #{name}(i64 %a, i64 %b)"
   module.named "item equals #{type_key(type)}", '@lerta.item_equals', define
 
-const item_hash_function = (module: IrModule, program: ProgramWide, type: Type) ->
-  const define = (name: String, defined: IrModule) ->
-    const ir = IrBuilder(module: defined)
+item_hash_function := (module: IrModule, program: ProgramWide, type: Type) ->
+  define := (name: String, defined: IrModule) ->
+    ir := IrBuilder(module: defined)
     ir.emit "ret i64 #{emit_hash(ir, program, from_item(ir, '%a', type), type)}"
     ir.finish "private i64 #{name}(i64 %a)"
   module.named "item hash #{type_key(type)}", '@lerta.item_hash', define
 
-const emit_equals = (
+emit_equals := (
   ir: IrBuilder, program: ProgramWide, left: String, right: String, type: Type
 ): String ->
-  const nested = (part: Type, a: String, b: String) ->
-    emit_equals_by_contents ir, program, a, b, part
+  nested := (part: Type, a: String, b: String) -> emit_equals_by_contents(ir, program, a, b, part)
   case
     when own_equality(program, type) then emit_own_equals(ir, program, left, right, type)
     when is_one_of_kinds(type, ['String', 'Binary']) then emit_string_equals(ir, left, right)
     when is_identity(program, type) then ir.assign("icmp eq ptr #{left}, #{right}")
     when type is OptionalType then emit_optional_equals(ir, program, left, right, type)
     when type is ObjectType and type.is_struct
-      const info = info_of(program, type)
-      const field_equals = (name: String, field_type: Type) ->
-        const load = (object: String) ->
+      info := info_of(program, type)
+      field_equals := (name: String, field_type: Type) ->
+        load := (object: String) ->
           ir.assign "load #{ir_type(field_type)}, ptr #{emit_field_pointer(ir, object, info, name)}"
         nested field_type, load(left), load(right)
       all_of ir, [field_equals(field.name.name, field.type!) for field in info.fields]
     when is_one_of_kinds(type, [RECORD, TUPLE])
-      const value_equals = (value_type: Type, index: Int) ->
-        const load = (object: String) ->
-          const pointer = emit_value_pointer(ir, object, type, index)
+      value_equals := (value_type: Type, index: Int) ->
+        load := (object: String) ->
+          pointer := emit_value_pointer(ir, object, type, index)
           ir.assign "load #{ir_type(value_type)}, ptr #{pointer}"
         nested value_type, load(left), load(right)
       all_of ir, [value_equals(each, i) for each, i in value_types(type)]
     when type is ArrayType
-      const items = item_equals_function(ir.module, program, type.element)
-      const args = "ptr #{left}, ptr #{right}, ptr #{items}"
+      items := item_equals_function(ir.module, program, type.element)
+      args := "ptr #{left}, ptr #{right}, ptr #{items}"
       call_runtime ir, 'zeroext i1 @lerta_array_equals(ptr, ptr, ptr)', args
     when type is UnionType then emit_union_equals(ir, program, left, right, type)
     else emit_value_equals(ir, left, right, type)
 
 # Both nil, or both present and equal; a nil's value is unspecified (see
 # docs/internals.md#memory-management).
-const emit_optional_equals = (
+emit_optional_equals := (
   ir: IrBuilder, program: ProgramWide, left: String, right: String, type: OptionalType
 ) ->
-  const left_present = emit_is_present(ir, left, type)
-  const right_present = emit_is_present(ir, right, type)
-  const both = ir.assign("and i1 #{left_present}, #{right_present}")
-  const neither = ir.assign("icmp eq i1 #{left_present}, #{right_present}")
-  const compare_values = ->
-    const values = [emit_unwrap(ir, left, type), emit_unwrap(ir, right, type)]
+  left_present := emit_is_present(ir, left, type)
+  right_present := emit_is_present(ir, right, type)
+  both := ir.assign("and i1 #{left_present}, #{right_present}")
+  neither := ir.assign("icmp eq i1 #{left_present}, #{right_present}")
+  compare_values := ->
+    values := [emit_unwrap(ir, left, type), emit_unwrap(ir, right, type)]
     emit_equals_by_contents ir, program, values[0], values[1], type.inner
   emit_branch ir, 'i1', both, compare_values, neither
 
 # Members of the same type, compared as that member compares.
-const emit_union_equals = (
+emit_union_equals := (
   ir: IrBuilder, program: ProgramWide, left: String, right: String, type: UnionType
 ) ->
-  const left_type = emit_object_type(ir, left)
-  const same_type = ir.assign("icmp eq ptr #{left_type}, #{emit_object_type(ir, right)}")
-  const compare_members = ->
-    const of_member = (member: Type) ->
-      const values = [emit_member_value(ir, left, member), emit_member_value(ir, right, member)]
+  left_type := emit_object_type(ir, left)
+  same_type := ir.assign("icmp eq ptr #{left_type}, #{emit_object_type(ir, right)}")
+  compare_members := ->
+    of_member := (member: Type) ->
+      values := [emit_member_value(ir, left, member), emit_member_value(ir, right, member)]
       emit_equals_by_contents ir, program, values[0], values[1], member
     emit_member_dispatch ir, left, type.members, 'i1', of_member
   emit_branch ir, 'i1', same_type, compare_members, 'false'
 
-const all_of = (ir: IrBuilder, tests: String[]) ->
+all_of := (ir: IrBuilder, tests: String[]) ->
   var all = 'true'
   all = ir.assign("and i1 #{all}, #{test}") for test in tests
   all
 
-const emit_hash = (ir: IrBuilder, program: ProgramWide, value: String, type: Type): String ->
+emit_hash := (ir: IrBuilder, program: ProgramWide, value: String, type: Type): String ->
   case
     when type is ObjectType and has_own_hash(program, type)
       emit_own_hash ir, program, value, type
@@ -164,49 +161,48 @@ const emit_hash = (ir: IrBuilder, program: ProgramWide, value: String, type: Typ
     when is_identity(program, type) then ir.assign("ptrtoint ptr #{value} to i64")
     when type is OptionalType
       # A nil holds no value to hash, as a null pointer.
-      const hash_inner = ->
-        emit_hash_by_contents ir, program, emit_unwrap(ir, value, type), type.inner
+      hash_inner := -> emit_hash_by_contents(ir, program, emit_unwrap(ir, value, type), type.inner)
       emit_branch ir, 'i64', emit_is_present(ir, value, type), hash_inner, '0'
     when type is ObjectType and type.is_struct
-      const info = info_of(program, type)
-      const field_hash = (name: String, field_type: Type) ->
-        const pointer = emit_field_pointer(ir, value, info, name)
-        const loaded = ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
+      info := info_of(program, type)
+      field_hash := (name: String, field_type: Type) ->
+        pointer := emit_field_pointer(ir, value, info, name)
+        loaded := ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
         emit_hash_by_contents ir, program, loaded, field_type
       combine ir, [field_hash(field.name.name, field.type!) for field in info.fields]
     when is_one_of_kinds(type, [RECORD, TUPLE])
-      const value_hash = (value_type: Type, index: Int) ->
-        const pointer = emit_value_pointer(ir, value, type, index)
-        const loaded = ir.assign("load #{ir_type(value_type)}, ptr #{pointer}")
+      value_hash := (value_type: Type, index: Int) ->
+        pointer := emit_value_pointer(ir, value, type, index)
+        loaded := ir.assign("load #{ir_type(value_type)}, ptr #{pointer}")
         emit_hash_by_contents ir, program, loaded, value_type
       combine ir, [value_hash(each, i) for each, i in value_types(type)]
     when type is ArrayType
-      const items = item_hash_function(ir.module, program, type.element)
+      items := item_hash_function(ir.module, program, type.element)
       call_runtime ir, 'i64 @lerta_array_hash(ptr, ptr)', "ptr #{value}, ptr #{items}"
     when type is UnionType
-      const of_member = (member: Type) ->
+      of_member := (member: Type) ->
         emit_hash_by_contents ir, program, emit_member_value(ir, value, member), member
       emit_member_dispatch ir, value, type.members, 'i64', of_member
     else value
 
-const combine = (ir: IrBuilder, hashes: String[]) ->
+combine := (ir: IrBuilder, hashes: String[]) ->
   var result = '17'
   for hash in hashes
-    const scaled = ir.assign("mul i64 #{result}, 31")
+    scaled := ir.assign("mul i64 #{result}, 31")
     result = ir.assign("add i64 #{scaled}, #{hash}")
   result
 
 # Whether two values of a type that is neither a reference nor optional are equal: as bits, but a
 # float's -0.0 equals 0.0.
-export const emit_value_equals = (ir: IrBuilder, left: String, right: String, type: Type) ->
-  const comparison = is_float(type) then 'fcmp oeq' else 'icmp eq'
+export emit_value_equals := (ir: IrBuilder, left: String, right: String, type: Type) ->
+  comparison := is_float(type) then 'fcmp oeq' else 'icmp eq'
   ir.assign "#{comparison} #{ir_type(type)} #{left}, #{right}"
 
 # A value of a number, a Char, a Bool, a String, a Binary or an enum (see checker builtins).
-const is_value_type = (type: Type) ->
+is_value_type := (type: Type) ->
   scalar_of(type) != nil or is_one_of_kinds(type, ['String', 'Binary'])
 
-const emit_value_hash = (ir: IrBuilder, value: String, type: Type) ->
+emit_value_hash := (ir: IrBuilder, value: String, type: Type) ->
   if is_one_of_kinds(type, ['String', 'Binary'])
     return call_runtime(ir, 'i64 @lerta_string_hash(ptr)', "ptr #{value}")
   # Equal floats, as 0.0 and -0.0, hash alike.
@@ -214,11 +210,11 @@ const emit_value_hash = (ir: IrBuilder, value: String, type: Type) ->
   widened_to_word ir, value, scalar_of(type)!
 
 # The Ordering of two numbers of the type, as an i64.
-export const emit_number_compare = (ir: IrBuilder, left: String, right: String, type: Type) ->
-  const signed = is_float(type) or is_signed(type)
-  const less = is_float(type) then 'fcmp olt' else "icmp #{signed then 'slt' else 'ult'}"
-  const operands = "#{ir_type(type)} #{left}, #{right}"
-  const is_less = ir.assign("#{less} #{operands}")
-  const is_equal = emit_value_equals(ir, left, right, type)
-  const not_less = ir.assign("select i1 #{is_equal}, i64 #{EQUAL}, i64 #{GREATER}")
+export emit_number_compare := (ir: IrBuilder, left: String, right: String, type: Type) ->
+  signed := is_float(type) or is_signed(type)
+  less := is_float(type) then 'fcmp olt' else "icmp #{signed then 'slt' else 'ult'}"
+  operands := "#{ir_type(type)} #{left}, #{right}"
+  is_less := ir.assign("#{less} #{operands}")
+  is_equal := emit_value_equals(ir, left, right, type)
+  not_less := ir.assign("select i1 #{is_equal}, i64 #{EQUAL}, i64 #{GREATER}")
   ir.assign "select i1 #{is_less}, i64 #{LESS}, i64 #{not_less}"

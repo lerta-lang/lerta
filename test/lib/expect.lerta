@@ -1,36 +1,35 @@
 # What checks expect of the programs they run, as the reasons for a failure (see Check in report).
 import encode_json from 'std:json'
 
-const MAX_SHOWN_LINES = 10
-const CONTEXT_LINES = 2
+MAX_SHOWN_LINES := 10
+CONTEXT_LINES := 2
 
 # Lines with their line ends, so that a missing final newline stays visible.
-const split_lines = (text: String) ->
-  const parts = text.split("\n")
-  const ended = ["#{part}\n" for part, i in parts when i < parts.length - 1]
-  const last = parts.last()!
+split_lines := (text: String) ->
+  parts := text.split("\n")
+  ended := ["#{part}\n" for part, i in parts when i < parts.length - 1]
+  last := parts.last()!
   last == '' then ended else [ended..., last]
 
 # Lines from `start`, numbered and quoted so that spaces, `\r` and line ends are visible.
-const show_lines = (lines: String[], start: Int) ->
+show_lines := (lines: String[], start: Int) ->
   return ['(empty)'] if lines.length == 0
-  const end = min(start + MAX_SHOWN_LINES, lines.length)
-  const shown =
-    ["#{(i + 1).to_string().pad_start(4)} #{encode_json(lines[i])}" for i in start...end]
-  const hidden = lines.length - end
+  end := min(start + MAX_SHOWN_LINES, lines.length)
+  shown := ["#{(i + 1).to_string().pad_start(4)} #{encode_json(lines[i])}" for i in start...end]
+  hidden := lines.length - end
   hidden > 0 then [shown..., "     (#{hidden} more line(s))"] else shown
 
 # The reasons for a mismatch between expected and actual text, shown from just before the first
 # line that differs.
-export const compare_text = (what: String, expected: String, actual: String): String[] ->
+export compare_text := (what: String, expected: String, actual: String): String[] ->
   return [] if expected == actual
-  const expected_lines = split_lines(expected)
-  const actual_lines = split_lines(actual)
+  expected_lines := split_lines(expected)
+  actual_lines := split_lines(actual)
   var first_difference = 0
   while first_difference < expected_lines.length and first_difference < actual_lines.length
     break if expected_lines[first_difference] != actual_lines[first_difference]
     first_difference += 1
-  const start = max(0, first_difference - CONTEXT_LINES)
+  start := max(0, first_difference - CONTEXT_LINES)
   [
     "#{what} differs from line #{first_difference + 1}"
     '  expected:'
@@ -40,18 +39,17 @@ export const compare_text = (what: String, expected: String, actual: String): St
   ]
 
 # As compare_text, of bytes, which a program may write without their being UTF-8.
-export const compare_output = (what: String, expected: Binary, actual: Binary): String[] ->
+export compare_output := (what: String, expected: Binary, actual: Binary): String[] ->
   return [] if expected == actual
-  const expected_text = expected.text() ? return ["the expected #{what} is not valid UTF-8"]
-  const actual_text = actual.text() ? return ["#{what} differs: it is not valid UTF-8"]
+  expected_text := expected.text() ? return ["the expected #{what} is not valid UTF-8"]
+  actual_text := actual.text() ? return ["#{what} differs: it is not valid UTF-8"]
   compare_text what, expected_text, actual_text
 
 # The reasons of a check that fails exactly when the condition holds.
-export const reason_if = (condition: Bool, reason: String): String[] ->
-  condition then [reason] else []
+export reason_if := (condition: Bool, reason: String): String[] -> condition then [reason] else []
 
 # Lines with their line ends, as programs print them.
-export const lines = (texts: String[]) -> ["#{text}\n" for text in texts].join('')
+export lines := (texts: String[]) -> ["#{text}\n" for text in texts].join('')
 
-export const expect_status = (expected: Int, actual: Int): String[] ->
+export expect_status := (expected: Int, actual: Int): String[] ->
   expected == actual then [] else ["expected exit status #{expected}, got #{actual}"]

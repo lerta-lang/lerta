@@ -67,76 +67,75 @@ export class Imports
   builtins: Int? = nil
 
 # The declarations that the module exports, by name.
-export const exported_statements = (program: Statement[]) ->
-  const exported: Map<String, Exportable>
+export exported_statements := (program: Statement[]) ->
+  exported: Map<String, Exportable>
   for statement in program
-    if const declaration = exported_declaration(statement)
-      exported[declaration.name.name] = declaration
+    exported[declaration.name.name] = declaration if declaration := exported_declaration(statement)
   exported
 
 # The names that the module exports from the modules it imports, by name, as those modules know
 # them. The first of a name is kept; add_imports rejects the others.
-export const reexports_of = (module: Module) ->
-  const reexported: Map<String, ExportRef>
+export reexports_of := (module: Module) ->
+  reexported: Map<String, ExportRef>
   for statement in module.program
     continue if statement is not Import
-    const reexport = statement as Import!
+    reexport := statement as Import!
     continue if not reexport.exported
-    const exporter = module.imported[reexport]!
+    exporter := module.imported[reexport]!
     for name in reexport.names
-      const local = (name.alias ? name.name).name
+      local := (name.alias ? name.name).name
       if not reexported.has(local)
         reexported[local] = ExportRef(module_index: exporter, name: name.name.name)
   reexported
 
 # The declaration that the module exports under the name, followed through the modules that export
 # it from others; nil if the module exports no such name, or if they export it from each other.
-export const export_ref = (program: ProgramWide, module_index: Int, name: String) ->
+export export_ref := (program: ProgramWide, module_index: Int, name: String) ->
   followed_export program, ExportRef(module_index, name), Set()
 
 # `passed` holds the names of the modules that the export has been followed through.
-const followed_export = (program: ProgramWide, ref: ExportRef, passed: Set<String>): ExportRef? ->
-  const shared = program.shared[ref.module_index]
+followed_export := (program: ProgramWide, ref: ExportRef, passed: Set<String>): ExportRef? ->
+  shared := program.shared[ref.module_index]
   return ref if shared.exported.has(ref.name)
-  const key = "#{ref.module_index} #{ref.name}"
+  key := "#{ref.module_index} #{ref.name}"
   return nil if passed.has(key)
   passed.add key
-  const next = shared.reexported[ref.name] ? return nil
+  next := shared.reexported[ref.name] ? return nil
   followed_export program, next, passed
 
 # What the module exports under the name, besides its extends.
-export const export_of = (program: ProgramWide, module_index: Int, name: String): Export ->
-  const shared = program.shared[module_index]
-  const statement = shared.exported[name]!
-  return GenericExport(generic) if const generic = generic_function(shared, name)
+export export_of := (program: ProgramWide, module_index: Int, name: String): Export ->
+  shared := program.shared[module_index]
+  statement := shared.exported[name]!
+  return GenericExport(generic) if generic := generic_function(shared, name)
   case statement
     when Declaration
       return FunctionExport(module_index, name) if statement.value is FunctionLiteral
       ValueExport module_index, name, type: shared.facts.types[statement.name]
     # An extern's name is its own import, since add_extern rejects an import of the same name.
     when Extern
-      const source = shared.imports.names[name]!.source
+      source := shared.imports.names[name]!.source
       source as ExternExport!
     when TypeDeclaration
-      const type = object_type(shared, name)!
+      type := object_type(shared, name)!
       TypeExport type, info: program.infos[type.symbol]
     when EnumDeclaration then TypeExport(type: shared.enums[name]!)
     when InterfaceDeclaration then InterfaceExport(info: shared.interfaces[name]!)
     when TypeAlias then TypeExport(type: alias_type(shared, statement.name))
 
-export const imported_export = (program: ProgramWide, imported: ImportedName): Export ->
-  const source = imported.source
+export imported_export := (program: ProgramWide, imported: ImportedName): Export ->
+  source := imported.source
   case source
     when ExportRef then export_of(program, source.module_index, source.name)
     when ExternExport then source
 
 # The module's own names that clash with imports are rejected as they are declared.
-export const add_imports = (shared: Shared, statements: Statement[]) ->
-  const program = shared.program
-  const reexported: Set<String>
+export add_imports := (shared: Shared, statements: Statement[]) ->
+  program := shared.program
+  reexported: Set<String>
   for statement in statements
     if statement is Import
-      const exporter = program.modules[shared.index].imported[statement]!
+      exporter := program.modules[shared.index].imported[statement]!
       if statement.exported
         check_reexport shared, statement, exporter, reexported
       else
@@ -145,127 +144,125 @@ export const add_imports = (shared: Shared, statements: Statement[]) ->
 
 # The names that the module exports from another must be exported there, and must not be
 # exported twice. `reexported` holds those of the module's earlier exports from others.
-const check_reexport = (
-  shared: Shared, statement: Import, exporter: Int, reexported: Set<String>
-) ->
-  const program = shared.program
+check_reexport := (shared: Shared, statement: Import, exporter: Int, reexported: Set<String>) ->
+  program := shared.program
   for exported in statement.names
-    const { name } = exported
+    { name } := exported
     fail_no_export program, statement.module, name if not export_ref(program, exporter, name.name)
-    const local = exported.alias ? name
-    const is_twice = shared.exported.has(local.name) or reexported.has(local.name)
+    local := exported.alias ? name
+    is_twice := shared.exported.has(local.name) or reexported.has(local.name)
     fail_already_defined program, local if is_twice
     reexported.add local.name
 
-const fail_no_export = (program: ProgramWide, module: String, name: Identifier) ->
+fail_no_export := (program: ProgramWide, module: String, name: Identifier) ->
   fail program, name.position, "'#{module}' has no export '#{name.name}'"
 
-const add_import = (shared: Shared, statement: Import, exporter: Int) ->
-  const program = shared.program
-  const names = shared.imports.names
-  if const alias = statement.alias
-    const modules = shared.imports.modules
+add_import := (shared: Shared, statement: Import, exporter: Int) ->
+  program := shared.program
+  names := shared.imports.names
+  if alias := statement.alias
+    modules := shared.imports.modules
     fail_already_defined program, alias if names.has(alias.name) or modules.has(alias.name)
     modules[alias.name] = ModuleAlias(name: alias, module_index: exporter, module: statement.module)
   for imported in statement.names
-    const { name } = imported
-    const source =
+    { name } := imported
+    source :=
       export_ref(program, exporter, name.name) ? fail_no_export(program, statement.module, name)
-    const local = imported.alias ? name
+    local := imported.alias ? name
     fail_already_defined program, local if has_import(shared, local.name)
     names[local.name] = ImportedName(source, name: local, used: false, module: statement.module)
 
 # Whether the module imports a value by the name: a function, a `const` or an extern.
-export const imports_value = (shared: Shared, name: String) ->
-  const source = shared.imports.names[name]?.source ? return false
+export imports_value := (shared: Shared, name: String) ->
+  source := shared.imports.names[name]?.source ? return false
   case source
     when ExternExport then true
     when ExportRef
-      const exported = shared.program.shared[source.module_index].exported[source.name]!
+      exported := shared.program.shared[source.module_index].exported[source.name]!
       not names_a_type(exported)
 
-const names_a_type = (statement: Exportable) ->
+names_a_type := (statement: Exportable) ->
   case statement
     when TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias then true
     else false
 
 # A C function the module declares, which it calls as it calls those it imports from standard
 # modules.
-export const add_extern = (shared: Shared, name: Identifier, type: Type, symbol: String) ->
-  const names = shared.imports.names
+export add_extern := (shared: Shared, name: Identifier, type: Type, symbol: String) ->
+  names := shared.imports.names
   fail_already_defined shared.program, name if has_import(shared, name.name)
-  const source = ExternExport(type, symbol, module_index: shared.index, name: name.name)
+  source := ExternExport(type, symbol, module_index: shared.index, name: name.name)
   names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
 
-export const has_import = (shared: Shared, name: String) ->
+export has_import := (shared: Shared, name: String) ->
   shared.imports.names.has(name) or shared.imports.modules.has(name)
 
 # Imports the export that a written type's name `alias.export` names, so that the type is found by
 # that name, which this gives (see qualified_import).
-export const import_qualified_type = (shared: Shared, type_name: NamedType) ->
-  const parts = type_name.name.split_once('.') ? return nil
-  const (alias, name) = parts
+export import_qualified_type := (shared: Shared, type_name: NamedType) ->
+  parts := type_name.name.split_once('.') ? return nil
+  (alias, name) := parts
   qualified_import shared, alias, Identifier(name, position: type_name.position)
 
 # The name that the export of a module imported as `alias` is imported by, `alias.export`, which
 # this imports on its first use, marking the module's import as used; nil if no module is imported
 # as `alias`. An export that the module does not have is an error.
-export const qualified_import = (shared: Shared, alias: String, exported: Identifier) ->
-  const imported = shared.imports.modules[alias] ? return nil
+export qualified_import := (shared: Shared, alias: String, exported: Identifier) ->
+  imported := shared.imports.modules[alias] ? return nil
   imported.used = true
-  const program = shared.program
-  const name = exported.name
-  const source = export_ref(program, imported.module_index, name) ? fail_no_export(
+  program := shared.program
+  name := exported.name
+  source := export_ref(program, imported.module_index, name) ? fail_no_export(
     program
     imported.module
     exported
   )
-  const qualified = "#{alias}.#{name}"
-  const names = shared.imports.names
+  qualified := "#{alias}.#{name}"
+  names := shared.imports.names
   if not names.has(qualified)
-    const local = Identifier(name: qualified, position: exported.position)
+    local := Identifier(name: qualified, position: exported.position)
     names[qualified] = ImportedName(source, name: local, used: true, module: imported.module)
   qualified
 
 # The imported name, marked as used.
-export const use_import = (shared: Shared, name: String) ->
-  const imported = shared.imports.names[name] ? return nil
+export use_import := (shared: Shared, name: String) ->
+  imported := shared.imports.names[name] ? return nil
   imported.used = true
   imported
 
 # An imported type, marking its import as used.
-export const imported_type = (shared: Shared, name: String) ->
-  const imported = shared.imports.names[name] ? return nil
-  const exported = imported_export(shared.program, imported) as TypeExport ? return nil
+export imported_type := (shared: Shared, name: String) ->
+  imported := shared.imports.names[name] ? return nil
+  exported := imported_export(shared.program, imported) as TypeExport ? return nil
   imported.used = true
   exported
 
 # An imported `const` of another file as a local, so that it is read and narrowed as one; using it
 # marks the import as used. One whose type is not known yet is left to
 # type_of_export, which reports it where it is used.
-export const value_local = (shared: Shared, name: String) ->
-  const imported = shared.imports.names[name] ? return nil
+export value_local := (shared: Shared, name: String) ->
+  imported := shared.imports.names[name] ? return nil
   return imported.local if imported.local
-  const exported = imported_export(shared.program, imported) as ValueExport ? return nil
-  const type = exported.type ? return nil
+  exported := imported_export(shared.program, imported) as ValueExport ? return nil
+  type := exported.type ? return nil
   imported.used = true
-  const local = Local(type, identifier: imported.name, used: true)
+  local := Local(type, identifier: imported.name, used: true)
   imported.local = local
   local
 
-export const builtin_export = (shared: Shared, name: String) ->
-  const program = shared.program
-  const builtins = shared.imports.builtins ? return nil
-  const ref = export_ref(program, builtins, name) ? return nil
+export builtin_export := (shared: Shared, name: String) ->
+  program := shared.program
+  builtins := shared.imports.builtins ? return nil
+  ref := export_ref(program, builtins, name) ? return nil
   export_of program, ref.module_index, ref.name
 
 # The module that declares what std:builtins exports under the name, which std:builtins may export
 # from another module. std:builtins must export the name.
-export const builtins_declarer = (program: ProgramWide, name: String) ->
-  const ref = export_ref(program, program.builtins!, name)!
+export builtins_declarer := (program: ProgramWide, name: String) ->
+  ref := export_ref(program, program.builtins!, name)!
   program.shared[ref.module_index]
 
 # A class, struct, enum or alias that std:builtins exports.
-export const builtin_type = (shared: Shared, name: String) ->
-  const exported = builtin_export(shared, name) ? return nil
+export builtin_type := (shared: Shared, name: String) ->
+  exported := builtin_export(shared, name) ? return nil
   exported is TypeExport then exported

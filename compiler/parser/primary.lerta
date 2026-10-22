@@ -17,18 +17,18 @@ import Token, tokenize_fragment, TokenKind from '../lexer/tokens'
 import CodePart, TemplatePart, TextPart from '../lexer/string_literal'
 import is_one_of, token_position, TokenStream from './token_stream'
 
-const INT_MIN = -9223372036854775808
+INT_MIN := -9223372036854775808
 
-const EXPRESSION_ENDS: TokenKind[] =
+EXPRESSION_ENDS: TokenKind[] =
   NEWLINE, DEDENT, EOF, LINE_BREAK, 'if', 'while', 'then', 'else', ')', ']', '}', ','
 
-export const parse_primary = (tokens: TokenStream): Expression ->
+export parse_primary := (tokens: TokenStream): Expression ->
   return parse_function_literal(tokens) if starts_function_literal(tokens)
   if starts_weak_function_literal(tokens)
     tokens.next()
     return parse_function_literal(tokens, true)
-  const token = tokens.next()
-  const position = token_position(token)
+  token := tokens.next()
+  position := token_position(token)
   case token.kind
     when IDENTIFIER then Identifier(position, name: token.text)
     when STRING then StringLiteral(position, value: token.text)
@@ -37,7 +37,7 @@ export const parse_primary = (tokens: TokenStream): Expression ->
     when 'break' then Jump(position, kind: 'break')
     when 'continue' then Jump(position, kind: 'continue')
     when 'return'
-      const value =
+      value :=
         case
           when starts_block(tokens) then parse_value(tokens)
           when ends_expression(tokens) then nil
@@ -45,7 +45,7 @@ export const parse_primary = (tokens: TokenStream): Expression ->
       Return value, position
     when 'throw' then Throw(position, message: parse_operand(tokens))
     when 'yield'
-      marks.yields = true if const marks = tokens.innermost_function()
+      marks.yields = true if marks := tokens.innermost_function()
       Yield position, value: parse_operand(tokens)
     when '@' then parse_this(tokens, position)
     when 'true', 'false' then BooleanLiteral(position, value: token.kind == 'true')
@@ -59,68 +59,66 @@ export const parse_primary = (tokens: TokenStream): Expression ->
     else tokens.fail_expecting(token, 'expression')
 
 # `@.x` would be a second way to write `@x` for no gain, so it is an error.
-const parse_this = (tokens: TokenStream, position: Position): Expression ->
-  const object = This(position)
-  const next = tokens.peek()
+parse_this := (tokens: TokenStream, position: Position): Expression ->
+  object := This(position)
+  next := tokens.peek()
   tokens.fail token_position(next), 'write @x, not @.x' if next.kind == '.'
   return object if next.kind != IDENTIFIER or next.spaced
   Member object, position, name: parse_identifier(tokens)
 
 # Whether the next token ends the expression, so that `return` there has no value.
-const ends_expression = (tokens: TokenStream) ->
-  is_one_of tokens.peek_continuation(), EXPRESSION_ENDS
+ends_expression := (tokens: TokenStream) -> is_one_of(tokens.peek_continuation(), EXPRESSION_ENDS)
 
-export const integer_literal = (text: String, position: Position) ->
+export integer_literal := (text: String, position: Position) ->
   IntegerLiteral position, text, value: integer_value(text)
 
 # The value of an integer literal's text, with its minus, or nil if it is beyond Int, which the
 # checker rejects but where a Float is expected.
-const integer_value = (text: String) ->
-  const digits = text.without_prefix('-')
-  const negated = negated_value(digits ? text) ? return nil
+integer_value := (text: String) ->
+  digits := text.without_prefix('-')
+  negated := negated_value(digits ? text) ? return nil
   return negated if digits
   negated != INT_MIN then -negated
 
 # The value of a literal's text, decimal or hexadecimal, negated, or nil if that is below the
 # minimum Int. It is computed negated since the minimum Int has no positive counterpart.
-const negated_value = (text: String) ->
-  const hex_digits = text.without_prefix('0x')
-  const base = hex_digits then 16 else 10
-  const digits = (hex_digits ? text).binary
+negated_value := (text: String) ->
+  hex_digits := text.without_prefix('0x')
+  base := hex_digits then 16 else 10
+  digits := (hex_digits ? text).binary
   var value = 0
   for digit in digits
-    const digit_value = hex_digit_value(digit)!
+    digit_value := hex_digit_value(digit)!
     # Division truncates toward zero, so this is the least value that does not overflow.
     return nil if value < (INT_MIN + digit_value) / base
     value = value * base - digit_value
   value
 
-const parse_interpolation = (tokens: TokenStream, token: Token) ->
-  const parts = [interpolation_part(tokens, part) for part in token.parts!]
+parse_interpolation := (tokens: TokenStream, token: Token) ->
+  parts := [interpolation_part(tokens, part) for part in token.parts!]
   Interpolation parts, position: token_position(token)
 
-const interpolation_part = (tokens: TokenStream, part: TemplatePart): InterpolationPart ->
+interpolation_part := (tokens: TokenStream, part: TemplatePart): InterpolationPart ->
   case part
     when TextPart then part
     when CodePart
       to_string_call parse_interpolated_code(tokens, part.source, part.line, part.column)
 
-const to_string_call = (value: Expression) ->
-  const position = value.position
-  const callee = Member(position, object: value, name: Identifier(position, name: 'to_string'))
+to_string_call := (value: Expression) ->
+  position := value.position
+  callee := Member(position, object: value, name: Identifier(position, name: 'to_string'))
   Call callee, position, args: [], named_args: [], type_args: []
 
 # The code belongs to the function literal around the string, which an `await` in it marks.
-const parse_interpolated_code = (outer: TokenStream, source: String, line: Int, column: Int) ->
-  const path = outer.path
-  const fragment = tokenize_fragment(source, path, line, column)
-  const tokens = TokenStream(path, tokens: fragment, interpolation: Position(line, column))
+parse_interpolated_code := (outer: TokenStream, source: String, line: Int, column: Int) ->
+  path := outer.path
+  fragment := tokenize_fragment(source, path, line, column)
+  tokens := TokenStream(path, tokens: fragment, interpolation: Position(line, column))
   tokens.functions = outer.functions
-  const expression = parse_expression(tokens)
+  expression := parse_expression(tokens)
   tokens.expect NEWLINE, 'end of interpolation'
   expression
 
 # The operand of `return`, `throw` or `yield`, which takes the member lines after it, as a value
 # does, rather than leaving them to the statement.
-const parse_operand = (tokens: TokenStream) ->
-  continue_with_members tokens, parse_call_value(tokens)
+parse_operand := (tokens: TokenStream) -> continue_with_members(tokens, parse_call_value(tokens))

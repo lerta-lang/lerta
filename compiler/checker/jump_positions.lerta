@@ -22,29 +22,29 @@ struct Jumps
   # Why a `yield` is not allowed, where it is not for its own reason.
   yield_reason: String? = default nil
 
-const all_jumps = Jumps(may_return: true, may_leave_loop: true)
-const no_jumps = Jumps()
+all_jumps := Jumps(may_return: true, may_leave_loop: true)
+no_jumps := Jumps()
 
-const FINALLY_YIELD_REASON = 'cannot be in a try that has a finally yet'
+FINALLY_YIELD_REASON := 'cannot be in a try that has a finally yet'
 
-const within_finally = Jumps(reason: 'cannot leave a finally', yield_reason: FINALLY_YIELD_REASON)
+within_finally := Jumps(reason: 'cannot leave a finally', yield_reason: FINALLY_YIELD_REASON)
 
 # A default is computed by an entry of its own (see generate_default_entry), before the body.
-const in_default = Jumps(reason: 'cannot be in a default')
+in_default := Jumps(reason: 'cannot be in a default')
 
-export const reject_misplaced_jumps = (program: ProgramWide, statements: Statement[]) ->
+export reject_misplaced_jumps := (program: ProgramWide, statements: Statement[]) ->
   visit_statements program, statements, all_jumps
 
-const visit_statements = (program: ProgramWide, statements: Statement[], jumps: Jumps) ->
+visit_statements := (program: ProgramWide, statements: Statement[], jumps: Jumps) ->
   visit_statement program, statement, jumps for statement in statements
 
-const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
-  const { may_return, reason, yield_reason } = jumps
-  const in_loop = Jumps(may_return, reason, yield_reason, may_leave_loop: true)
+visit_statement := (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
+  { may_return, reason, yield_reason } := jumps
+  in_loop := Jumps(may_return, reason, yield_reason, may_leave_loop: true)
   case statement
     when Declaration then visit(program, statement.value, jumps)
     when Assignment
-      const target = statement.target
+      target := statement.target
       visit program, target, no_jumps
       visit program, statement.value, target is Identifier then jumps else no_jumps
     when While
@@ -54,9 +54,9 @@ const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jump
       visit program, statement.iterable, no_jumps
       visit_statements program, statement.body, in_loop
     when Yield
-      const own_reason = jumps.yield_reason
-      const held = 'cannot be here: only where nothing evaluated before it is still held'
-      const message = "'yield' #{own_reason ? jumps.reason ? held}"
+      own_reason := jumps.yield_reason
+      held := 'cannot be here: only where nothing evaluated before it is still held'
+      message := "'yield' #{own_reason ? jumps.reason ? held}"
       fail program, statement.position, message if own_reason or not jumps.may_return
       visit program, statement.value, no_jumps
     when TypeDeclaration then visit_members(program, statement.members)
@@ -64,11 +64,11 @@ const visit_statement = (program: ProgramWide, statement: Statement, jumps: Jump
     when Import, Pass, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern then pass
     else visit(program, statement, jumps)
 
-const visit_members = (program: ProgramWide, members: MemberDeclaration[]) ->
+visit_members := (program: ProgramWide, members: MemberDeclaration[]) ->
   for member in members
-    visit program, value, all_jumps if const value = member.value
+    visit program, value, all_jumps if value := member.value
 
-const visit_condition = (program: ProgramWide, condition: Condition) ->
+visit_condition := (program: ProgramWide, condition: Condition) ->
   if condition is Binding
     visit program, condition.value, no_jumps
   else
@@ -76,15 +76,15 @@ const visit_condition = (program: ProgramWide, condition: Condition) ->
 
 # `jumps` says which jumps the expression itself may be; its operands, which are evaluated while
 # others are held, may make none.
-const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void ->
-  const operand = (child: Expression) -> visit(program, child, no_jumps)
+visit := (program: ProgramWide, expression: Expression, jumps: Jumps): void ->
+  operand := (child: Expression) -> visit(program, child, no_jumps)
   case expression
     when Jump
-      const kind = expression.kind.to_string()
+      kind := expression.kind.to_string()
       check_jump program, kind, jumps.may_leave_loop, jumps.reason, expression.position
     when Return
       check_jump program, 'return', jumps.may_return, jumps.reason, expression.position
-      operand value if const value = expression.value
+      operand value if value := expression.value
     when Yield then fail(program, expression.position, "'yield' can only be a statement")
     when Coalesce
       operand expression.value
@@ -98,32 +98,32 @@ const visit = (program: ProgramWide, expression: Expression, jumps: Jumps): void
       visit_statements program, expression.then_body, jumps
       visit_statements program, expression.else_body, jumps
     when Case
-      operand subject if const subject = expression.subject
+      operand subject if subject := expression.subject
       for arm in expression.arms
         operand pattern for pattern in arm.patterns
         visit_statements program, arm.body, jumps
-      visit_statements program, otherwise, jumps if const otherwise = expression.otherwise
+      visit_statements program, otherwise, jumps if otherwise := expression.otherwise
     when Try
-      const { may_return, may_leave_loop, reason } = jumps
-      const yield_reason = FINALLY_YIELD_REASON
-      const finally_inside = Jumps(may_return, may_leave_loop, reason, yield_reason)
-      const inside = expression.finally_body then finally_inside else jumps
+      { may_return, may_leave_loop, reason } := jumps
+      yield_reason := FINALLY_YIELD_REASON
+      finally_inside := Jumps(may_return, may_leave_loop, reason, yield_reason)
+      inside := expression.finally_body then finally_inside else jumps
       visit_statements program, expression.body, inside
       visit_statements program, clause.body, inside for clause in expression.catches
-      if const finally_body = expression.finally_body
+      if finally_body := expression.finally_body
         visit_statements program, finally_body, within_finally
     # No loop is outside a function; a jump out of none is an error of its own.
     when FunctionLiteral
       for param in expression.params
-        visit program, default, in_default if const default = param.default
+        visit program, default, in_default if default := param.default
       visit_statements program, expression.body, all_jumps
     else operand(each) for each in operands_of(expression)
 
-const check_jump = (
+check_jump := (
   program: ProgramWide, keyword: String, allowed: Bool, reason: String?, at: Position
 ) ->
   return if allowed
   fail program, at, "'#{keyword}' #{reason}" if reason
-  const statement = 'a statement or as the value of a declaration or of an assignment to a variable'
-  const through = "directly or through '?', then/else or case arms"
+  statement := 'a statement or as the value of a declaration or of an assignment to a variable'
+  through := "directly or through '?', then/else or case arms"
   fail program, at, "'#{keyword}' cannot be used here: only as #{statement}, #{through}"

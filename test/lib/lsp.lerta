@@ -6,19 +6,18 @@ import compiler from './lerta'
 import real_path from 'std:io'
 import decode_json, encode_json from 'std:json'
 
-const real_work_dir =
-  host_platform == 'windows' then cli_work_dir else real_path(cli_work_dir).text()!
+real_work_dir := host_platform == 'windows' then cli_work_dir else real_path(cli_work_dir).text()!
 
 struct ResponseHeader(id: Int | String)
 
-const unreserved_marks = [mark for mark in '-._~/:'.binary]
+unreserved_marks := [mark for mark in '-._~/:'.binary]
 
-export const uri_of = (path: String) ->
-  const in_work_dir = path.without_prefix(cli_work_dir)
-  const canonical_path = in_work_dir != nil then "#{real_work_dir}#{in_work_dir}" else path
-  const portable = canonical_path.split('\').join('/')
-  const hexadecimal = '0123456789ABCDEF'.binary
-  const bytes: Byte[]
+export uri_of := (path: String) ->
+  in_work_dir := path.without_prefix(cli_work_dir)
+  canonical_path := in_work_dir != nil then "#{real_work_dir}#{in_work_dir}" else path
+  portable := canonical_path.split('\').join('/')
+  hexadecimal := '0123456789ABCDEF'.binary
+  bytes: Byte[]
   for byte in portable.binary
     if byte.is_letter() or byte.is_digit() or unreserved_marks.contains(byte)
       bytes.push byte
@@ -26,105 +25,104 @@ export const uri_of = (path: String) ->
       bytes.push '%'
       bytes.push hexadecimal[byte.to_int() >> 4]
       bytes.push hexadecimal[byte.to_int() & 0xF]
-  const prefix = host_platform == 'windows' then 'file:///' else 'file://'
+  prefix := host_platform == 'windows' then 'file:///' else 'file://'
   "#{prefix}#{bytes.to_binary().text()!}"
 
-export const frame = (json: String) -> "Content-Length: #{json.binary.length}\r\n\r\n#{json}"
+export frame := (json: String) -> "Content-Length: #{json.binary.length}\r\n\r\n#{json}"
 
-export const did_open = (uri: String, text: String) ->
+export did_open := (uri: String, text: String) ->
   frame
     "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":#{encode_json(text)}}}}"
 
-export const did_change = (uri: String, text: String) -> did_change_at(uri, text, 2)
+export did_change := (uri: String, text: String) -> did_change_at(uri, text, 2)
 
-export const did_change_at = (uri: String, text: String, version: Int) ->
+export did_change_at := (uri: String, text: String, version: Int) ->
   frame
     "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":#{version}},\"contentChanges\":[{\"text\":#{encode_json(text)}}]}}"
 
-export const completion_request = (uri: String, line: Int, character: Int, id = 1) ->
+export completion_request := (uri: String, line: Int, character: Int, id = 1) ->
   frame
     "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/completion\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line},\"character\":#{character}}}}"
 
-export const definition_request = (uri: String, line: Int, character: Int, id: Int) ->
+export definition_request := (uri: String, line: Int, character: Int, id: Int) ->
   frame
     "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/definition\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line},\"character\":#{character}}}}"
 
-export const hover_request = (uri: String, line: Int, character: Int, id: Int) ->
+export hover_request := (uri: String, line: Int, character: Int, id: Int) ->
   frame
     "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line},\"character\":#{character}}}}"
 
-export const location_fragment = (id: Int, uri: String, line: Int, start: Int, end: Int) ->
+export location_fragment := (id: Int, uri: String, line: Int, start: Int, end: Int) ->
   "\"id\":#{id},\"result\":{\"uri\":\"#{uri}\",\"range\":{\"start\":{\"line\":#{line},\"character\":#{start}},\"end\":{\"line\":#{line},\"character\":#{end}}}}"
 
-export const hover_fragment = (id: Int, text: String) ->
+export hover_fragment := (id: Int, text: String) ->
   "\"id\":#{id},\"result\":{\"contents\":{\"kind\":\"markdown\",\"value\":#{encode_json("```lerta\n#{text}\n```")}}}"
 
-export const initialize =
-  '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{}}}'
-export const finish =
+export initialize := '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{}}}'
+export finish :=
   frame('{"jsonrpc":"2.0","id":"end","method":"shutdown"}')
   frame('{"jsonrpc":"2.0","method":"exit"}')
 .join('')
 
-export const session = (dir: String, messages: String) ->
-  const input = frame(initialize) + messages + finish
+export session := (dir: String, messages: String) ->
+  input := frame(initialize) + messages + finish
   await run_command(compiler, ['lsp'], dir, input.binary)
 
-export const check_reason = (condition: Bool, reason: String): String[] ->
+export check_reason := (condition: Bool, reason: String): String[] ->
   condition then [] else [reason]
 
-export const excludes = (output: String, token: String, reason: String): String[] ->
+export excludes := (output: String, token: String, reason: String): String[] ->
   output.contains(token) then [reason] else []
 
-export const message_bodies = (output: String) ->
-  const parts = output.split("\r\n\r\n")
-  const messages: String[]
+export message_bodies := (output: String) ->
+  parts := output.split("\r\n\r\n")
+  messages: String[]
   var header = parts[0]
   for section in 1...parts.length
-    const length_text = header.without_prefix('Content-Length:') ? throw ValueError(
+    length_text := header.without_prefix('Content-Length:') ? throw ValueError(
       message: "an LSP response without its Content-Length: #{header}"
     )
-    const length = length_text.trim().parse_int() ? throw ValueError(
+    length := length_text.trim().parse_int() ? throw ValueError(
       message: "an LSP response with an invalid length: #{header}"
     )
-    const chunk = parts[section].binary
-    const body = chunk.slice(0, length).text()!
+    chunk := parts[section].binary
+    body := chunk.slice(0, length).text()!
     messages.push body
     header = chunk.slice(length, chunk.length).text()!
   messages
 
-const response_bodies = (output: String) ->
+response_bodies := (output: String) ->
   [body for body in message_bodies(output) when body.starts_with('{"jsonrpc":"2.0","id":')]
 
-export const response_body = (output: String, id: Int) ->
-  const prefix = "{\"jsonrpc\":\"2.0\",\"id\":#{id},"
+export response_body := (output: String, id: Int) ->
+  prefix := "{\"jsonrpc\":\"2.0\",\"id\":#{id},"
   response_bodies(output).find((each) -> each.starts_with(prefix)) ? throw ValueError(
     message: "no response with id #{id}"
   )
 
-export const response_ids = (output: String) ->
+export response_ids := (output: String) ->
   ["#{decode_json<ResponseHeader>(body).id}" for body in response_bodies(output)]
 
-export const diagnostic_body = (line: Int, character: Int, severity: Int, message: String) ->
-  const position = "{\"line\":#{line},\"character\":#{character}}"
+export diagnostic_body := (line: Int, character: Int, severity: Int, message: String) ->
+  position := "{\"line\":#{line},\"character\":#{character}}"
   "{\"range\":{\"start\":#{position},\"end\":#{position}},\"severity\":#{severity},\"source\":\"lerta\",\"message\":#{encode_json(message)}}"
 
-export const published_diagnostics = (uri: String, diagnostics: String[]) ->
+export published_diagnostics := (uri: String, diagnostics: String[]) ->
   "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":#{encode_json(uri)},\"diagnostics\":[#{diagnostics.join(',')}]}}"
 
-export const initialize_response = (encoding: String) ->
+export initialize_response := (encoding: String) ->
   "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"positionEncoding\":\"#{encoding}\",\"textDocumentSync\":1,\"documentFormattingProvider\":true,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\"]}},\"serverInfo\":{\"name\":\"lerta\"}}}"
 
-export const shutdown_response = '{"jsonrpc":"2.0","id":"end","result":null}'
+export shutdown_response := '{"jsonrpc":"2.0","id":"end","result":null}'
 
-const response_from_fragment = (fragment: String) -> "{\"jsonrpc\":\"2.0\",#{fragment}}"
+response_from_fragment := (fragment: String) -> "{\"jsonrpc\":\"2.0\",#{fragment}}"
 
-export const exact_responses = (output: String, fragments: String[]) ->
-  const expected = [initialize_response('utf-16')]
+export exact_responses := (output: String, fragments: String[]) ->
+  expected := [initialize_response('utf-16')]
   expected.append [response_from_fragment(fragment) for fragment in fragments]
   expected.push shutdown_response
   compare_text 'responses', expected.join("\n"), response_bodies(output).join("\n")
 
-export const exact_messages = (output: String, messages: String[]) ->
-  const expected = [initialize_response('utf-16'), messages..., shutdown_response]
+export exact_messages := (output: String, messages: String[]) ->
+  expected := [initialize_response('utf-16'), messages..., shutdown_response]
   compare_text 'messages', expected.join("\n"), message_bodies(output).join("\n")

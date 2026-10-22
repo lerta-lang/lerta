@@ -8,49 +8,49 @@ import
   format_type, FunctionType, inner_of, is_kind, is_reference_type, kind_of, OptionalType, Type
 from '../types'
 
-export const declare_externs = (shared: Shared, statements: Statement[]) ->
+export declare_externs := (shared: Shared, statements: Statement[]) ->
   for statement in statements
     declare_extern shared, statement if statement is Extern
 
-const declare_extern = (shared: Shared, statement: Extern) ->
-  const program = shared.program
-  const type = resolve_result(program, module_resolver(shared.index), statement.type)
+declare_extern := (shared: Shared, statement: Extern) ->
+  program := shared.program
+  type := resolve_result(program, module_resolver(shared.index), statement.type)
   if type is not FunctionType
     fail program, statement.type.position, 'an extern is a C function, of a function type'
   reject_types_without_c_type program, type, statement.type.position
-  const { symbol } = statement
-  if const declared = program.extern_types[symbol.name]
+  { symbol } := statement
+  if declared := program.extern_types[symbol.name]
     if c_signature(declared.type) != c_signature(type)
-      const declared_as = "#{format_type(declared.type)} in #{declared.module_name}"
-      const message = "the C function '#{symbol.name}' is declared as #{declared_as}"
+      declared_as := "#{format_type(declared.type)} in #{declared.module_name}"
+      message := "the C function '#{symbol.name}' is declared as #{declared_as}"
       fail program, symbol.position, message
   else
     program.extern_types[symbol.name] = ExternType(type, module_name: shared.name)
   add_extern shared, statement.name, type, symbol.name
 
-const reject_types_without_c_type = (program: ProgramWide, type: FunctionType, at: Position) ->
+reject_types_without_c_type := (program: ProgramWide, type: FunctionType, at: Position) ->
   for value_type in value_types(type)
     if is_kind(inner_of(value_type), INTERFACE)
-      const message = "a C function cannot take or return the type #{format_type(value_type)}"
+      message := "a C function cannot take or return the type #{format_type(value_type)}"
       fail program, at, "#{message}: an interface value has no C type"
     if value_type is OptionalType
-      const has_c_type = is_reference_type(value_type) or is_kind(value_type.inner, 'Int')
+      has_c_type := is_reference_type(value_type) or is_kind(value_type.inner, 'Int')
       if not has_c_type
-        const reason = 'of the optional values, only references and Int? have a C type'
-        const message =
+        reason := 'of the optional values, only references and Int? have a C type'
+        message :=
           "a C function cannot take or return the type #{format_type(value_type)}; #{reason}"
         fail program, at, message
 
-const value_types = (type: FunctionType) ->
-  const types = [param for param in type.params]
+value_types := (type: FunctionType) ->
+  types := [param for param in type.params]
   types.push type.result
   types
 
-const c_type = (type: Type): String ->
+c_type := (type: Type): String ->
   return 'pointer' if is_reference_type(type)
   type is OptionalType then "#{c_type(type.inner)}?" else kind_of(type).to_string()
 
-const c_signature = (type: Type) ->
+c_signature := (type: Type) ->
   if type is FunctionType
     "(#{[c_type(param) for param in type.params].join(', ')}) -> #{c_type(type.result)}"
   else

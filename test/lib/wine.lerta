@@ -8,13 +8,13 @@ import env, run from 'std:process'
 # the machine is busy, as when the cross tests run, and writes so to the program's stderr. No
 # tested program needs a device driver, so the service is not started. The tests give it to every
 # program that Wine runs.
-export const WINE_DLL_OVERRIDES = 'winedevice.exe=d'
+export WINE_DLL_OVERRIDES := 'winedevice.exe=d'
 
-const source_prefix = env('WINEPREFIX') ? "#{env('HOME') ? ''}/.wine"
+source_prefix := env('WINEPREFIX') ? "#{env('HOME') ? ''}/.wine"
 
 # How long a wineserver outlives its last program, in seconds: long enough to serve every run, and
 # short enough that one left by a killed test run goes away.
-const SERVER_LINGER = 60
+SERVER_LINGER := 60
 
 # Prefixes that a run takes for itself and gives back when it ends. `take` gives none when none is
 # free, and the run then uses the prefix of the environment, as all do with no prefixes.
@@ -26,27 +26,27 @@ export class WinePrefixes
   give_back = (prefix: String) -> @free.push(prefix)
   stop = -> await stop_prefixes(@prefixes)
 
-export const no_wine_prefixes = -> WinePrefixes(prefixes: [])
+export no_wine_prefixes := -> WinePrefixes(prefixes: [])
 
 # The error of a step of starting the prefixes.
 struct WineError: Error
 
 # `count` copies of the prefix in `dir`, started; none if the prefix cannot be copied, as when it
 # is on another file system, which is reported.
-export const start_wine_prefixes = (dir: String, count: Int) ->
-  const prefixes = ["#{dir}/wine-#{i}" for i in 0...count]
-  const started: String[]
+export start_wine_prefixes := (dir: String, count: Int) ->
+  prefixes := ["#{dir}/wine-#{i}" for i in 0...count]
+  started: String[]
   try
     await update_source_prefix()
     # All of them end before any fails the whole, so that every wineserver started is stopped.
-    const starts = [start_prefix(prefix, started) for prefix in prefixes]
+    starts := [start_prefix(prefix, started) for prefix in prefixes]
     var failure: Error?
     for each in starts
       try
         await each
       catch error
         failure = error if failure == nil
-    throw error if const error = failure
+    throw error if error := failure
     WinePrefixes prefixes
   catch error
     await stop_prefixes(started)
@@ -55,8 +55,8 @@ export const start_wine_prefixes = (dir: String, count: Int) ->
 
 # A wineserver writes the registry back when it stops, so it stops before the caller removes its
 # prefix. Stopping one in a directory where none runs would leave a directory of Wine's in /tmp.
-const stop_prefixes = (prefixes: String[]) ->
-  const stop = (prefix: String) ->
+stop_prefixes := (prefixes: String[]) ->
+  stop := (prefix: String) ->
     try
       await run_wine(prefix, 'wineserver', '-k')
     catch _
@@ -68,7 +68,7 @@ const stop_prefixes = (prefixes: String[]) ->
 # the files the copies link to; so the prefix is updated first, and its wineserver stops, writing
 # the registry, before the copies are made. tools/test_cross.sh updates it once for the runs that it
 # starts at the same time.
-const update_source_prefix = ->
+update_source_prefix := ->
   return if env('LERTA_WINE_PREFIX_UPDATED') == source_prefix
   await run_wine(nil, 'wine', 'cmd', '/c', 'exit')
   await run_wine(nil, 'wineserver', '--wait')
@@ -77,7 +77,7 @@ const update_source_prefix = ->
 # other file of the prefix as it was, and the programs write only in their own directories. A
 # wineserver that stays spares each run the start of one, and of Wine's services with it, which
 # start with a first run. The prefix is added to `started` once its wineserver runs.
-const start_prefix = (prefix: String, started: String[]) ->
+start_prefix := (prefix: String, started: String[]) ->
   await run_wine(nil, 'cp', '-al', source_prefix, prefix)
   for name in list_dir(prefix)
     continue if not name.ends_with('.reg')
@@ -91,8 +91,8 @@ const start_prefix = (prefix: String, started: String[]) ->
 # messages, goes nowhere: not to this program's streams, which the wineserver that it may leave
 # running would hold open after this program ends, nor to arrays, whose reads would wait for that
 # wineserver to end.
-const run_wine = (prefix: String?, command: String, args: String...) ->
-  const env = { 'WINEDLLOVERRIDES': WINE_DLL_OVERRIDES }
+run_wine := (prefix: String?, command: String, args: String...) ->
+  env := { 'WINEDLLOVERRIDES': WINE_DLL_OVERRIDES }
   env['WINEPREFIX'] = prefix if prefix
-  const exit = await run('sh', '-c', 'exec "$@" > /dev/null 2>&1', 'sh', command, args..., env: env)
+  exit := await run('sh', '-c', 'exec "$@" > /dev/null 2>&1', 'sh', command, args..., env: env)
   throw WineError(message: "#{command} failed") if exit.code != 0

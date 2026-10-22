@@ -15,73 +15,72 @@ import PromiseType, Type from '../types'
 # The function `symbol`, of the linkage and the parameters, as in `i64 %p0`: it makes the
 # Promise, of which the body, which `generate_body` generates, holds a reference too, and runs the
 # body with the Promise first.
-export const generate_awaiting_function = (
+export generate_awaiting_function := (
   g: Generator, linkage: String, symbol: String, params: String[], value: Type,
   generate_body: () -> void
 ) ->
-  const body_symbol = suffixed_symbol(symbol, 'coroutine')
+  body_symbol := suffixed_symbol(symbol, 'coroutine')
   # What g holds captures its builder, not g, which would then hold itself.
-  const body_ir = g.ir
+  body_ir := g.ir
   g.on_return = (result: String) -> emit_resolve(body_ir, value, result)
-  const reject = 'void @lerta_promise_reject(ptr)'
+  reject := 'void @lerta_promise_reject(ptr)'
   g.unwind_cleanup = -> call_void_runtime(body_ir, reject, 'ptr %promise')
-  const end = ->
+  end := ->
     emit_release g.ir, '%promise'
     g.ir.emit "br label %#{g.coroutine!.free_label}"
   generate_coroutine g, body_symbol, ['ptr %promise', params...], generate_body, end
-  const ir = IrBuilder(module: g.ir.module)
-  const promise = call_runtime(ir, 'ptr @lerta_promise_new(i32)', "i32 #{item_kind(value)}")
+  ir := IrBuilder(module: g.ir.module)
+  promise := call_runtime(ir, 'ptr @lerta_promise_new(i32)', "i32 #{item_kind(value)}")
   emit_retain ir, promise
   ir.emit "call void #{body_symbol}(#{["ptr #{promise}", params...].join(', ')})"
   ir.emit "ret ptr #{promise}"
   ir.finish "#{linkage}ptr #{symbol}(#{params.join(', ')})"
 
 # Settles the body's Promise with the result, owned, of the type.
-const emit_resolve = (ir: IrBuilder, type: Type, result: String) ->
+emit_resolve := (ir: IrBuilder, type: Type, result: String) ->
   if not returns_nothing(type)
-    const slot = call_runtime(ir, 'ptr @lerta_promise_slot(ptr)', 'ptr %promise')
+    slot := call_runtime(ir, 'ptr @lerta_promise_slot(ptr)', 'ptr %promise')
     ir.emit "store #{ir_type(type)} #{result}, ptr #{slot}"
   call_void_runtime ir, 'void @lerta_promise_resolve(ptr)', 'ptr %promise'
 
 # The value of the promise, which the body waits for if it is pending; its exception is thrown.
-export const generate_await = (g: Generator, await_expression: Await) ->
-  const promise = generate(g, await_expression.operand)
-  const type = type_of(g, await_expression.operand)
+export generate_await := (g: Generator, await_expression: Await) ->
+  promise := generate(g, await_expression.operand)
+  type := type_of(g, await_expression.operand)
   return promise if type is not PromiseType
   emit_await_owned g, promise, type.value
 
 # The value, of the type, of a promise, owned, which is held while the body waits.
-export const emit_await_owned = (g: Generator, promise: String, value: Type) ->
+export emit_await_owned := (g: Generator, promise: String, value: Type) ->
   holding g, promise, PromiseType(value), -> emit_await(g, promise, value)
 
-const emit_await = (g: Generator, promise: String, value: Type) ->
-  const ir = g.ir
-  const handle = g.coroutine!.handle
+emit_await := (g: Generator, promise: String, value: Type) ->
+  ir := g.ir
+  handle := g.coroutine!.handle
   # The body's own promise is given too, through which a cancel of it reaches what it waits for.
-  const args = "ptr #{promise}, ptr #{handle}, ptr %promise"
-  const is_pending = call_runtime(ir, 'i1 @lerta_promise_wait_in(ptr, ptr, ptr)', args)
-  const wait_label = ir.fresh_label('await.wait')
-  const settled_label = ir.fresh_label('await.settled')
+  args := "ptr #{promise}, ptr #{handle}, ptr %promise"
+  is_pending := call_runtime(ir, 'i1 @lerta_promise_wait_in(ptr, ptr, ptr)', args)
+  wait_label := ir.fresh_label('await.wait')
+  settled_label := ir.fresh_label('await.settled')
   ir.emit "br i1 #{is_pending}, label %#{wait_label}, label %#{settled_label}"
   ir.start_block wait_label
   emit_wait g
   ir.emit "br label %#{settled_label}"
   ir.start_block settled_label
-  const result_args = "ptr #{promise}, ptr %promise"
-  const slot = call_runtime(ir, 'ptr @lerta_promise_result_in(ptr, ptr)', result_args)
+  result_args := "ptr #{promise}, ptr %promise"
+  slot := call_runtime(ir, 'ptr @lerta_promise_result_in(ptr, ptr)', result_args)
   emit_exception_check g
-  const result =
-    returns_nothing(value) then '' else ir.assign("load #{ir_type(value)}, ptr #{slot}")
+  result := returns_nothing(value) then '' else ir.assign("load #{ir_type(value)}, ptr #{slot}")
   emit_retain_value ir, result, value if result != ''
   emit_release ir, promise
   result
 
 # Runs the event loop, which resumes the coroutines through a function defined here, the only code
 # that can resume one.
-export const emit_loop_run = (ir: IrBuilder) ->
-  const resume = '@lerta.resume'
-  const define = (module: IrModule) ->
-    const body = ['  call void @llvm.coro.resume(ptr %coroutine)', '  ret void']
+export emit_loop_run := (ir: IrBuilder) ->
+  resume := '@lerta.resume'
+  define := (module: IrModule) ->
+    body := ['  call void @llvm.coro.resume(ptr %coroutine)', '  ret void']
     module.define_function "private void #{resume}(ptr %coroutine)", body
     module.declare 'llvm.coro.resume', 'declare void @llvm.coro.resume(ptr)'
   ir.module.define_once resume, define

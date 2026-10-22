@@ -18,26 +18,26 @@ import format_type, is_float, is_integer, is_kind, is_one_of_kinds, MapType, Typ
 
 # A compound assignment such as `+=` applies to the types that its operator does, and to the others
 # through the method that its operator calls (see check_operator_assignment).
-export const check_assignment = (body: Body, assignment: Assignment) ->
-  const { target, operator } = assignment
-  const target_type =
+export check_assignment := (body: Body, assignment: Assignment) ->
+  { target, operator } := assignment
+  target_type :=
     case target
       when Index then check_item_target(body, target, operator)
       when Member
         # An export of a module imported as a name is no var, as an imported name is not.
-        const qualified = qualified_name(body, target)
+        qualified := qualified_name(body, target)
         qualified then check_variable_target(body, qualified) else field_target(body, target)
       when Identifier then check_variable_target(body, target)
   if operator != '='
-    const kinds = operand_kinds(combining_operator(operator))
+    kinds := operand_kinds(combining_operator(operator))
     if not is_one_of_kinds(target_type, kinds)
       if check_operator_assignment(body, assignment, target_type)
         forget_narrowing body, target if target is Identifier
         return
-      const message = "expected #{describe_kinds(kinds)}, got #{format_type(target_type)}"
+      message := "expected #{describe_kinds(kinds)}, got #{format_type(target_type)}"
       fail body.program, target.position, message
-  const value_type = type_of(body, assignment.value, target_type)
-  const is_unit = operator == '+=' and appends_unit(body, assignment.value, target_type, value_type)
+  value_type := type_of(body, assignment.value, target_type)
+  is_unit := operator == '+=' and appends_unit(body, assignment.value, target_type, value_type)
   if not is_unit
     reject_text_and_bytes body, assignment.value, target_type, value_type if operator == '+='
     require_type body, assignment.value, value_type, target_type
@@ -48,17 +48,17 @@ export const check_assignment = (body: Body, assignment: Assignment) ->
 # `a += b` on a value of a type that `+` applies to by its method assigns `a.add(b)`, which reads
 # the target; false if the type has no such method. As the target is then evaluated twice, once to
 # read and once to assign, it may not call anything.
-const check_operator_assignment = (body: Body, assignment: Assignment, target_type: Type) ->
-  const { target, operator } = assignment
-  const name = OPERATOR_METHODS[combining_operator(operator)]!
-  const args = [assignment.value]
-  const call_method = ->
+check_operator_assignment := (body: Body, assignment: Assignment, target_type: Type) ->
+  { target, operator } := assignment
+  name := OPERATOR_METHODS[combining_operator(operator)]!
+  args := [assignment.value]
+  call_method := ->
     type_of_operator_call body, assignment, operator, target, target_type, name, args
-  const result = call_method() ? return false
-  const call = body.facts.operator_calls[assignment]!
+  result := call_method() ? return false
+  call := body.facts.operator_calls[assignment]!
   if not is_plain_place(body, target)
-    const reads = "the target of '#{operator}' through '#{name}' is read and then assigned"
-    const message = "#{reads}, so it may only be a name, a field, an index or arithmetic"
+    reads := "the target of '#{operator}' through '#{name}' is read and then assigned"
+    message := "#{reads}, so it may only be a name, a field, an index or arithmetic"
     fail body.program, target.position, message
   require_type body, call, result, target_type
   warn_if_cycle body, target, call
@@ -66,9 +66,9 @@ const check_operator_assignment = (body: Body, assignment: Assignment, target_ty
 
 # A place that names, indexes and fields reach, and arithmetic that no method gives, whose
 # evaluation calls nothing.
-const is_plain_place = (body: Body, expression: Expression): Bool ->
-  const plain = (part: Expression) -> is_plain_place(body, part)
-  const by_method = body.facts.operator_calls.has(expression)
+is_plain_place := (body: Body, expression: Expression): Bool ->
+  plain := (part: Expression) -> is_plain_place(body, part)
+  by_method := body.facts.operator_calls.has(expression)
   case expression
     when Identifier, This, IntegerLiteral, StringLiteral then true
     when Member then plain(expression.object)
@@ -76,56 +76,55 @@ const is_plain_place = (body: Body, expression: Expression): Bool ->
     when UnaryOperation
       expression.operator == '-' and not by_method and plain(expression.operand)
     when BinaryOperation
-      const { operator, left, right } = expression
+      { operator, left, right } := expression
       is_numeric_operator(operator) and not by_method and plain(left) and plain(right)
     else false
 
-const check_item_target = (body: Body, target: Index, operator: String) ->
-  const type = type_of(body, target)
-  const object_type = body.facts.types[target.object]!
+check_item_target := (body: Body, target: Index, operator: String) ->
+  type := type_of(body, target)
+  object_type := body.facts.types[target.object]!
   if object_type is MapType
     if operator != '='
-      const combined = combining_operator(operator)
+      combined := combining_operator(operator)
       # A number may default to 0; other values to what the program chooses.
-      const value = object_type.value
-      const fallback = is_integer(value) or is_float(value) then '0' else 'y'
-      const advice = "write m[k] = (m[k] ? #{fallback}) #{combined} x"
-      const message = "a map value cannot be updated with '#{operator}'; #{advice}"
+      value := object_type.value
+      fallback := is_integer(value) or is_float(value) then '0' else 'y'
+      advice := "write m[k] = (m[k] ? #{fallback}) #{combined} x"
+      message := "a map value cannot be updated with '#{operator}'; #{advice}"
       fail body.program, target.position, message
     return object_type.value
   fail body.program, target.position, 'a Binary cannot be changed' if is_kind(object_type, 'Binary')
   type
 
-const check_variable_target = (body: Body, target: Identifier) ->
-  const reject = (reason: String) ->
-    fail body.program, target.position, "'#{target.name}' #{reason}"
-  const not_a_variable = ->
+check_variable_target := (body: Body, target: Identifier) ->
+  reject := (reason: String) -> fail(body.program, target.position, "'#{target.name}' #{reason}")
+  not_a_variable := ->
     abort_if_failed body.shared.top_level, target.name
     reject_pending body.program, body.shared.top_level, target if body.sees_top_level
     reject 'is not a variable'
-  const variable = lookup(body, target.name) ? not_a_variable()
+  variable := lookup(body, target.name) ? not_a_variable()
   reject 'is not a var' if not variable.mutable
   body.facts.local_declarations[target] = (variable.origin ? variable).identifier
   record_reference body, target, local_reference(body, target.name, variable)
   # A write is not a use: the target's type is found without reading it. It is the declared one,
   # which the value may take whether or not the variable is narrowed where it is.
-  const declared = (variable.origin ? variable).type
+  declared := (variable.origin ? variable).type
   body.facts.types[target] = declared
   declared
 
 # An assigned `var` is no longer narrowed where it is. A function literal that assigns one it
 # captures may run at any later point, so it is not narrowed from there on, around the literal too.
-const forget_narrowing = (body: Body, target: Identifier) ->
-  const variable = lookup(body, target.name)!
-  const origin = variable.origin ? variable
+forget_narrowing := (body: Body, target: Identifier) ->
+  variable := lookup(body, target.name)!
+  origin := variable.origin ? variable
   body.scopes.forget_views origin
   return if not variable.captured
   origin.assigned_by_literal = true
   var enclosing = body.enclosing
-  while const around = enclosing
+  while around := enclosing
     # A round of a loop around the literal may run it before a narrowed read earlier in the loop.
     if around.loops.any((loop) -> origin.narrowed_in_loops.contains(loop))
-      const when = 'a later round may run this function literal first'
+      when := 'a later round may run this function literal first'
       fail
         body.program
         target.position

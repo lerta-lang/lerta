@@ -15,26 +15,26 @@ import
 from '../types'
 
 # The two header fields come before the object's own.
-const HEADER_FIELDS = 2
+HEADER_FIELDS := 2
 
 # A field, by its IR type and how it holds references, which the drop function releases.
 export struct HeapField(ir_type: String, owned: Ownership)
 
 # A field that holds a value of the type.
-export const value_field = (type: Type) -> HeapField(ir_type: ir_type(type), owned: ownership(type))
+export value_field := (type: Type) -> HeapField(ir_type: ir_type(type), owned: ownership(type))
 
 # A field that holds no reference, such as a pointer to code, of the IR type.
-export const plain_field = (ir: String) -> HeapField(ir_type: ir, owned: NONE)
+export plain_field := (ir: String) -> HeapField(ir_type: ir, owned: NONE)
 
 # The LLVM struct type of a heap object with the fields: the header, then the fields.
-export const heap_object_type = (fields: HeapField[]) ->
-  const types = ['i64', 'ptr']
+export heap_object_type := (fields: HeapField[]) ->
+  types := ['i64', 'ptr']
   types.push field.ir_type for field in fields
   "{ #{types.join(', ')} }"
 
 # Defines the LLVM struct type `layout` with the fields, and the type of its objects (see
 # define_type).
-export const define_heap_object = (
+export define_heap_object := (
   module: IrModule, layout: String, type: String, linkage: String, fields: HeapField[],
   name: String, deinit: String?, weak_slot: Int?
 ) ->
@@ -46,159 +46,158 @@ export const define_heap_object = (
 # runtime/lerta.h has it, which the leak check names `name`. Its drop function, for a class's
 # object, first lets go of the object's weak box, held in the field at `weak_slot` (see weak_box),
 # and runs `deinit`, the symbol of the class's deinit method, if there is one.
-export const define_type = (
+export define_type := (
   module: IrModule, layout: String, type: String, linkage: String, fields: HeapField[],
   name: String, deinit: String?, weak_slot: Int?
 ) ->
-  const visit = suffixed_symbol(type, 'visit')
+  visit := suffixed_symbol(type, 'visit')
   define_visit module, layout, visit, linkage, fields
-  const drop = suffixed_symbol(type, 'drop')
+  drop := suffixed_symbol(type, 'drop')
   define_drop module, layout, drop, visit, linkage, fields, deinit, weak_slot
-  const name_constant = shared_string_constant(IrBuilder(module), name)
-  const initial = "{ ptr #{drop}, ptr #{visit}, ptr #{name_constant} }"
+  name_constant := shared_string_constant(IrBuilder(module), name)
+  initial := "{ ptr #{drop}, ptr #{visit}, ptr #{name_constant} }"
   module.define_constant type, linkage, '{ ptr, ptr, ptr }', initial
 
 # Gives the visitor the reference that each counted field holds. It is inlined into the drop
 # function, whose visitor, lerta_release, then is called directly.
-const define_visit = (
+define_visit := (
   module: IrModule, layout: String, visit: String, linkage: String, fields: HeapField[]
 ) ->
-  const ir = IrBuilder(module)
+  ir := IrBuilder(module)
   for field, i in fields
     continue if not is_counted(field.owned)
-    const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
-    const reference = emit_load_reference(ir, pointer, field.ir_type, field.owned)
+    pointer := emit_heap_field_pointer(ir, layout, '%object', i)
+    reference := emit_load_reference(ir, pointer, field.ir_type, field.owned)
     ir.emit "call void %visitor(ptr #{reference})"
   ir.emit 'ret void'
   ir.finish "#{linkage}void #{visit}(ptr %object, ptr %visitor) alwaysinline"
 
 # The fields that are not counted are released first, as a generator's coroutine, which may use
 # what the others hold.
-const define_drop = (
+define_drop := (
   module: IrModule, layout: String, drop: String, visit: String, linkage: String,
   fields: HeapField[], deinit: String?, weak_slot: Int?
 ) ->
-  const ir = IrBuilder(module)
+  ir := IrBuilder(module)
   if weak_slot
-    const slot = emit_heap_field_pointer(ir, layout, '%object', weak_slot)
+    slot := emit_heap_field_pointer(ir, layout, '%object', weak_slot)
     call_void_runtime ir, 'void @lerta_weak_detach(ptr)', "ptr #{slot}"
   call_void_runtime ir, 'void @lerta_run_deinit(ptr, ptr)', "ptr %object, ptr #{deinit}" if deinit
   for field, i in fields
     continue if field.owned == NONE or is_counted(field.owned)
-    const pointer = emit_heap_field_pointer(ir, layout, '%object', i)
+    pointer := emit_heap_field_pointer(ir, layout, '%object', i)
     emit_release_stored ir, pointer, field.ir_type, field.owned
   ir.module.declare 'lerta_release', 'declare void @lerta_release(ptr)'
   ir.emit "call void #{visit}(ptr %object, ptr @lerta_release)"
   ir.emit 'ret void'
   ir.finish "#{linkage}void #{drop}(ptr %object)"
 
-export const emit_heap_field_pointer = (
-  ir: IrBuilder, layout: String, object: String, index: Int
-) -> ir.assign("getelementptr #{layout}, ptr #{object}, i32 0, i32 #{HEADER_FIELDS + index}")
+export emit_heap_field_pointer := (ir: IrBuilder, layout: String, object: String, index: Int) ->
+  ir.assign "getelementptr #{layout}, ptr #{object}, i32 0, i32 #{HEADER_FIELDS + index}"
 
 # A new object of the type, with reference count 1 and uninitialized fields.
-export const emit_heap_allocate = (ir: IrBuilder, layout: String, type: String) ->
-  const end = ir.assign("getelementptr #{layout}, ptr null, i32 1")
-  const size = ir.assign("ptrtoint ptr #{end} to i64")
+export emit_heap_allocate := (ir: IrBuilder, layout: String, type: String) ->
+  end := ir.assign("getelementptr #{layout}, ptr null, i32 1")
+  size := ir.assign("ptrtoint ptr #{end} to i64")
   call_runtime ir, 'ptr @lerta_new(i64, ptr)', "i64 #{size}, ptr #{type}"
 
 # Classes and structs: named by their types. Constructors and methods are generated like
 # functions (see function).
 
 # The pointer to the field of the name.
-export const emit_field_pointer = (ir: IrBuilder, object: String, info: ObjectInfo, name: String) ->
+export emit_field_pointer := (ir: IrBuilder, object: String, info: ObjectInfo, name: String) ->
   emit_heap_field_pointer ir, object_ir_type(info.type), object, field_index(info, name)
 
 # The field of the name, which the class or struct has.
-export const field_named = (info: ObjectInfo, name: String) -> info.fields[field_index(info, name)]
+export field_named := (info: ObjectInfo, name: String) -> info.fields[field_index(info, name)]
 
-const field_index = (info: ObjectInfo, name: String) ->
+field_index := (info: ObjectInfo, name: String) ->
   info.fields.find_index((field) -> field.name.name == name)!
 
 # The index of the field of the name, which the anonymous struct has.
-export const record_field_index = (type: RecordType, name: String) ->
+export record_field_index := (type: RecordType, name: String) ->
   type.fields.find_index((field) -> field.name == name)!
 
 # A class's object starts without a weak box.
-export const emit_allocate = (ir: IrBuilder, info: ObjectInfo) ->
-  const object = emit_heap_allocate(ir, object_ir_type(info.type), type_symbol(info.type))
+export emit_allocate := (ir: IrBuilder, info: ObjectInfo) ->
+  object := emit_heap_allocate(ir, object_ir_type(info.type), type_symbol(info.type))
   ir.emit "store ptr null, ptr #{emit_weak_slot_pointer(ir, object, info)}" if is_class(info)
   object
 
 # Its type has the linkage.
-export const define_object = (
+export define_object := (
   module: IrModule, program: ProgramWide, info: ObjectInfo, linkage: String
 ) ->
-  const fields = [value_field(field.type!) for field in info.fields]
-  const weak_slot = is_class(info) then fields.length
+  fields := [value_field(field.type!) for field in info.fields]
+  weak_slot := is_class(info) then fields.length
   fields.push plain_field('ptr') if is_class(info)
-  const deinit = info.has_deinit then special_method_symbol(program, info, 'deinit')
-  const layout = object_ir_type(info.type)
-  const type = type_symbol(info.type)
-  const name = format_type(info.type)
+  deinit := info.has_deinit then special_method_symbol(program, info, 'deinit')
+  layout := object_ir_type(info.type)
+  type := type_symbol(info.type)
+  name := format_type(info.type)
   define_heap_object module, layout, type, linkage, fields, name, deinit, weak_slot
 
-const is_class = (info: ObjectInfo) -> not info.type.is_struct
+is_class := (info: ObjectInfo) -> not info.type.is_struct
 
-const emit_weak_slot_pointer = (ir: IrBuilder, object: String, info: ObjectInfo) ->
+emit_weak_slot_pointer := (ir: IrBuilder, object: String, info: ObjectInfo) ->
   emit_heap_field_pointer ir, object_ir_type(info.type), object, info.fields.length
 
 # The slot of the weak box of a class's object, or null for a struct's, which has none.
-export const emit_weak_slot_or_null = (ir: IrBuilder, object: String, info: ObjectInfo) ->
+export emit_weak_slot_or_null := (ir: IrBuilder, object: String, info: ObjectInfo) ->
   is_class(info) then emit_weak_slot_pointer(ir, object, info) else 'null'
 
 # The weak box of a class's object, which a `weak!` field holds instead of the object, owned; the
 # object is borrowed.
-const emit_weak_box = (ir: IrBuilder, object: String, info: ObjectInfo) ->
-  const slot = emit_weak_slot_pointer(ir, object, info)
+emit_weak_box := (ir: IrBuilder, object: String, info: ObjectInfo) ->
+  slot := emit_weak_slot_pointer(ir, object, info)
   call_runtime ir, 'ptr @lerta_weak_box(ptr, ptr)', "ptr #{object}, ptr #{slot}"
 
 # The weak box of a value of a class or of its optional type, which a weak local or field holds,
 # owned, or null for nil; the object is borrowed.
-export const emit_weak_box_of = (ir: IrBuilder, program: ProgramWide, object: String, type: Type) ->
-  const info = info_of(program, inner_of(type) as ObjectType!)
+export emit_weak_box_of := (ir: IrBuilder, program: ProgramWide, object: String, type: Type) ->
+  info := info_of(program, inner_of(type) as ObjectType!)
   return emit_weak_box(ir, object, info) if type is not OptionalType
-  const is_present = ir.assign("icmp ne ptr #{object}, null")
+  is_present := ir.assign("icmp ne ptr #{object}, null")
   emit_branch ir, 'ptr', is_present, -> emit_weak_box(ir, object, info), 'null'
 
 # The object of a weak box, borrowed, or null if it is gone; a null box, for nil, gives null.
-export const emit_weak_object = (ir: IrBuilder, box: String) ->
+export emit_weak_object := (ir: IrBuilder, box: String) ->
   call_runtime ir, 'ptr @lerta_weak_object(ptr)', "ptr #{box}"
 
 # An i1: whether the object is of the type, or of a member of the union.
-export const emit_type_test = (ir: IrBuilder, object: String, type: Type) ->
-  const tests = [emit_object_test(ir, object, member) for member in members_of(type)]
+export emit_type_test := (ir: IrBuilder, object: String, type: Type) ->
+  tests := [emit_object_test(ir, object, member) for member in members_of(type)]
   var result = tests[0]
   result = ir.assign("or i1 #{result}, #{tests[i]}") for i in 1...tests.length
   result
 
-const emit_object_test = (ir: IrBuilder, object: String, type: Type) ->
-  const object_type = emit_object_type(ir, object)
+emit_object_test := (ir: IrBuilder, object: String, type: Type) ->
+  object_type := emit_object_type(ir, object)
   return emit_box_test(ir, object_type, type) if is_boxed(type)
   ir.assign "icmp eq ptr #{object_type}, #{type_symbol(type as ObjectType!)}"
 
 # The type in the object's header.
-export const emit_object_type = (ir: IrBuilder, object: String) ->
-  const pointer = ir.assign("getelementptr { i64, ptr }, ptr #{object}, i32 0, i32 1")
+export emit_object_type := (ir: IrBuilder, object: String) ->
+  pointer := ir.assign("getelementptr { i64, ptr }, ptr #{object}, i32 0, i32 1")
   ir.assign "load ptr, ptr #{pointer}"
 
 # A value of the IR type, computed by `of_member` for the member of the union that the object is:
 # each member but the last is tested in turn.
-export const emit_member_dispatch = (
+export emit_member_dispatch := (
   ir: IrBuilder, object: String, members: Type[], result_type: String, of_member: (Type) -> String
 ) ->
-  const done = ir.fresh_label('member.done')
-  const incoming: String[]
+  done := ir.fresh_label('member.done')
+  incoming: String[]
   for member, i in members
-    const is_last = i == members.length - 1
-    const next = is_last then '' else ir.fresh_label('member.next')
+    is_last := i == members.length - 1
+    next := is_last then '' else ir.fresh_label('member.next')
     if not is_last
-      const matched = ir.fresh_label('member.matched')
-      const test = emit_type_test(ir, object, member)
+      matched := ir.fresh_label('member.matched')
+      test := emit_type_test(ir, object, member)
       ir.emit "br i1 #{test}, label %#{matched}, label %#{next}"
       ir.start_block matched
-    const value = of_member(member)
-    const block = ir.current_block
+    value := of_member(member)
+    block := ir.current_block
     ir.emit "br label %#{done}"
     ir.start_block next if not is_last
     incoming.push "[ #{value}, %#{block} ]"
@@ -207,69 +206,69 @@ export const emit_member_dispatch = (
   ir.assign "phi #{result_type} #{incoming.join(', ')}"
 
 # The types of the values, in the order they are laid out.
-export const value_types = (type: Type) ->
+export value_types := (type: Type) ->
   case type
     when RecordType then [field.type for field in type.fields]
     when TupleType then type.items
     else panic('not an anonymous struct or a tuple')
 
 # The LLVM struct type of the type, defined with the type of its objects at the first use.
-const values_layout = (ir: IrBuilder, type: Type) ->
-  const fields = [value_field(each) for each in value_types(type)]
-  const define = (layout: String, module: IrModule) ->
-    const name = format_type(type)
+values_layout := (ir: IrBuilder, type: Type) ->
+  fields := [value_field(each) for each in value_types(type)]
+  define := (layout: String, module: IrModule) ->
+    name := format_type(type)
     define_heap_object module, layout, layout_type(layout), 'private ', fields, name, nil, nil
-  const prefix = type is TupleType then '%lerta.tuple' else '%lerta.record'
+  prefix := type is TupleType then '%lerta.tuple' else '%lerta.record'
   ir.module.named "values #{type_key(type)}", prefix, define
 
 # The type of the objects of a layout that a module numbers of its own.
-const layout_type = (layout: String) -> suffixed_symbol(layout, 'type')
+layout_type := (layout: String) -> suffixed_symbol(layout, 'type')
 
 # A new anonymous struct or tuple, which takes over the values, owned, in their order.
-export const emit_values = (ir: IrBuilder, type: Type, values: String[]) ->
-  const layout = values_layout(ir, type)
-  const object = emit_heap_allocate(ir, layout, layout_type(layout))
+export emit_values := (ir: IrBuilder, type: Type, values: String[]) ->
+  layout := values_layout(ir, type)
+  object := emit_heap_allocate(ir, layout, layout_type(layout))
   for value_type, i in value_types(type)
-    const pointer = emit_heap_field_pointer(ir, layout, object, i)
+    pointer := emit_heap_field_pointer(ir, layout, object, i)
     ir.emit "store #{ir_type(value_type)} #{values[i]}, ptr #{pointer}"
   object
 
 # A new anonymous struct, which takes over the values, owned, given by field name.
-export const emit_record = (ir: IrBuilder, type: Type, values: Map<String, String>) ->
+export emit_record := (ir: IrBuilder, type: Type, values: Map<String, String>) ->
   emit_values ir, type, [values[field.name]! for field in (type as RecordType!).fields]
 
 # The pointer to the value at the index.
-export const emit_value_pointer = (ir: IrBuilder, object: String, type: Type, index: Int) ->
+export emit_value_pointer := (ir: IrBuilder, object: String, type: Type, index: Int) ->
   emit_heap_field_pointer ir, values_layout(ir, type), object, index
 
 # The value at the index, retained if a reference; the object is borrowed.
-export const emit_value_at = (ir: IrBuilder, object: String, type: Type, index: Int) ->
-  const value_type = value_types(type)[index]
-  const pointer = emit_value_pointer(ir, object, type, index)
-  const value = ir.assign("load #{ir_type(value_type)}, ptr #{pointer}")
+export emit_value_at := (ir: IrBuilder, object: String, type: Type, index: Int) ->
+  value_type := value_types(type)[index]
+  pointer := emit_value_pointer(ir, object, type, index)
+  value := ir.assign("load #{ir_type(value_type)}, ptr #{pointer}")
   emit_retain_value ir, value, value_type
   value
 
 # The value of a field of an anonymous struct, as emit_value_at gives it.
-export const emit_record_field = (ir: IrBuilder, record: String, type: Type, name: String) ->
+export emit_record_field := (ir: IrBuilder, record: String, type: Type, name: String) ->
   emit_value_at ir, record, type, record_field_index(type as RecordType!, name)
 
 # The LLVM struct type of a cell of the type, defined with the type of its cells at the first use.
-const cell_layout = (ir: IrBuilder, type: Type) ->
-  const define = (layout: String, module: IrModule) ->
+cell_layout := (ir: IrBuilder, type: Type) ->
+  define := (layout: String, module: IrModule) ->
     # Cells of all types of the same IR type and ownership share it.
-    const fields = [value_field(type)]
+    fields := [value_field(type)]
     define_heap_object module, layout, layout_type(layout), 'private ', fields, 'var', nil, nil
-  const key = "cell #{ir_type(type)} #{ownership(type)}"
+  key := "cell #{ir_type(type)} #{ownership(type)}"
   ir.module.named key, '%lerta.cell', define
 
 # A new cell, which takes over the value, owned.
-export const emit_cell = (ir: IrBuilder, type: Type, value: String) ->
-  const layout = cell_layout(ir, type)
-  const cell = emit_heap_allocate(ir, layout, layout_type(layout))
+export emit_cell := (ir: IrBuilder, type: Type, value: String) ->
+  layout := cell_layout(ir, type)
+  cell := emit_heap_allocate(ir, layout, layout_type(layout))
   ir.emit "store #{ir_type(type)} #{value}, ptr #{emit_cell_pointer(ir, type, cell)}"
   cell
 
 # The pointer to the cell's value, which a var's reads and writes go through.
-export const emit_cell_pointer = (ir: IrBuilder, type: Type, cell: String) ->
+export emit_cell_pointer := (ir: IrBuilder, type: Type, cell: String) ->
   emit_heap_field_pointer ir, cell_layout(ir, type), cell, 0

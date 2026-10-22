@@ -10,12 +10,12 @@ import format_type, is_boxed, type_key, Type from '../types'
 
 # The type of the boxes of the type, the same in every module, since a box may be made in one and
 # tested in another: each defines it, and the linker keeps one.
-const box_type = (type: Type) -> "@#{quoted_name("lerta.box.#{type_key(type)}")}"
+box_type := (type: Type) -> "@#{quoted_name("lerta.box.#{type_key(type)}")}"
 
 # The LLVM struct type of the boxes of the type, defined with the type of the boxes at the first
 # use.
-const box_layout = (ir: IrBuilder, type: Type) ->
-  const define = (layout: String, module: IrModule) ->
+box_layout := (ir: IrBuilder, type: Type) ->
+  define := (layout: String, module: IrModule) ->
     define_heap_object
       module
       layout
@@ -28,23 +28,23 @@ const box_layout = (ir: IrBuilder, type: Type) ->
   ir.module.named "box #{type_key(type)}", '%lerta.box', define
 
 # A box that takes over the value, owned.
-export const emit_box = (ir: IrBuilder, value: String, type: Type) ->
-  const layout = box_layout(ir, type)
-  const box = emit_heap_allocate(ir, layout, box_type(type))
+export emit_box := (ir: IrBuilder, value: String, type: Type) ->
+  layout := box_layout(ir, type)
+  box := emit_heap_allocate(ir, layout, box_type(type))
   ir.emit "store #{ir_type(type)} #{value}, ptr #{emit_heap_field_pointer(ir, layout, box, 0)}"
   box
 
 # The value of the box, borrowed as the box is.
-export const emit_unbox = (ir: IrBuilder, box: String, type: Type) ->
-  const pointer = emit_heap_field_pointer(ir, box_layout(ir, type), box, 0)
+export emit_unbox := (ir: IrBuilder, box: String, type: Type) ->
+  pointer := emit_heap_field_pointer(ir, box_layout(ir, type), box, 0)
   ir.assign "load #{ir_type(type)}, ptr #{pointer}"
 
 # An i1: whether the object of the type `object_type` is a box of the type.
-export const emit_box_test = (ir: IrBuilder, object_type: String, type: Type) ->
+export emit_box_test := (ir: IrBuilder, object_type: String, type: Type) ->
   box_layout ir, type
   ir.assign "icmp eq ptr #{object_type}, #{box_type(type)}"
 
 # The value of the member that the union's object is, borrowed: the object itself, or the value of
 # its box.
-export const emit_member_value = (ir: IrBuilder, object: String, member: Type) ->
+export emit_member_value := (ir: IrBuilder, object: String, member: Type) ->
   is_boxed(member) then emit_unbox(ir, object, member) else object

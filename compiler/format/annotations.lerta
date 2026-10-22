@@ -24,19 +24,19 @@ struct CheckResult(node_types: Map<Node, String>, field_types: String[], warning
 
 # The keys (see annotation_key) of the annotations that can be left out of each of the files at
 # `paths`, by the key of its module (see module_key); none for a file whose program does not check.
-export const removable_annotations = (paths: String[]) ->
-  const wanted: Set<String>
+export removable_annotations := (paths: String[]) ->
+  wanted: Set<String>
   wanted.add module_key(path) for path in paths
-  const removable: Map<String, String[]>
+  removable: Map<String, String[]>
   for entry in [await not_imported(paths)..., paths...]
     await add_removable(removable, entry, wanted) if not removable.has(module_key(entry))
   removable
 
 # Those of the files that none of them imports; all of them that do not parse.
-const not_imported = (paths: String[]) ->
-  const imported: Set<String>
+not_imported := (paths: String[]) ->
+  imported: Set<String>
   for path in paths
-    const keys =
+    keys :=
       try
         await imported_files(path)
       catch _: CompileError
@@ -45,13 +45,13 @@ const not_imported = (paths: String[]) ->
   [path for path in paths when not imported.has(module_key(path))]
 
 # The written types and the enums of members that may be left out, in the order of the source.
-export const left_out_candidates = (program: Statement[]) ->
+export left_out_candidates := (program: Statement[]) ->
   [annotations_of(program)..., qualified_members_of(program)..., import_names_of(program)...]
 
 # The imports are left out after the others, once these leave them unused (see unused_enum_imports).
-const can_leave_out = (annotation: Annotation, shared: Shared, program: ProgramWide) ->
+can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) ->
   return false if annotation.imported
-  return shared.facts.unqualifiable.has(member) if const member = annotation.member
+  return shared.facts.unqualifiable.has(member) if member := annotation.member
   inferable annotation, shared, program
 
 # A written type, or the enum of a member, of the module of `key`.
@@ -61,64 +61,64 @@ struct Placed(key: String, annotation: Annotation)
 # have none yet, or none for `entry` if the program does not check. Those that the checking shows
 # can be inferred are checked without them, to be sure: a type that alone uses an import, for one,
 # still uses it (the import would be warned about without it).
-const add_removable = (removable: Map<String, String[]>, entry: String, wanted: Set<String>) ->
-  const modules =
+add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<String>) ->
+  modules :=
     try
       await load_modules(entry)
     catch _: CompileError
       removable[module_key(entry)] = []
       return
-  const checked = quiet_program(entry, modules)
+  checked := quiet_program(entry, modules)
   if not checks(checked)
     removable[module_key(entry)] = []
     return
-  const held =
+  held :=
     [module for module in modules when wanted.has(module.key) and not removable.has(module.key)]
-  const inferred: Placed[]
+  inferred: Placed[]
   for module in held
-    const { key } = module
+    { key } := module
     removable[key] = []
-    const shared = checked.shared[module.index]
+    shared := checked.shared[module.index]
     for annotation in left_out_candidates(module.program)
       inferred.push Placed(key, annotation) if can_leave_out(annotation, shared, checked)
   return if inferred.length == 0
-  const original = result_of(checked)
-  const checks_the_same = (left_out: Placed[]) ->
+  original := result_of(checked)
+  checks_the_same := (left_out: Placed[]) ->
     placed.annotation.remove() for placed in left_out
-    const tried = quiet_program(entry, modules)
-    const same = checks(tried) and same_result(result_of(tried), original)
+    tried := quiet_program(entry, modules)
+    same := checks(tried) and same_result(result_of(tried), original)
     placed.annotation.restore() for placed in left_out
     same
-  const accepted = removable_among([], inferred, checks_the_same)
-  const imports = unused_enum_imports(accepted, held, checked, -> quiet_program(entry, modules))
+  accepted := removable_among([], inferred, checks_the_same)
+  imports := unused_enum_imports(accepted, held, checked, -> quiet_program(entry, modules))
   for placed in [accepted..., imports...]
-    const keys = removable[placed.key]!
+    keys := removable[placed.key]!
     keys.push placed.annotation.key
 
 # The imports of enums that the program used, but that it does not once the annotations accepted
 # are left out, as the members of enums written alone or the types: the checking that accepts them
 # does not tell their warnings (see result_of).
-const unused_enum_imports = (
+unused_enum_imports := (
   accepted: Placed[], held: Module[], checked: ProgramWide, program: () -> ProgramWide
 ): Placed[] ->
   return [] if accepted.length == 0
   placed.annotation.remove() for placed in accepted
-  const tried = program()
+  tried := program()
   checks tried
-  const found: Placed[]
+  found: Placed[]
   for module in held
-    const before = checked.shared[module.index].imports.names
-    const after = tried.shared[module.index].imports.names
-    const left_unused = (imported: Identifier) ->
-      const name = imported.name
+    before := checked.shared[module.index].imports.names
+    after := tried.shared[module.index].imports.names
+    left_unused := (imported: Identifier) ->
+      name := imported.name
       not after[name]!.used and before[name]!.used and imports_enum(tried, after[name]!)
     for annotation in import_names_of(module.program)
       found.push Placed(annotation, key: module.key) if left_unused(annotation.imported!)
   placed.annotation.restore() for placed in accepted
   found
 
-const imports_enum = (program: ProgramWide, imported: ImportedName) ->
-  const source = imported.source as ExportRef ? return false
+imports_enum := (program: ProgramWide, imported: ImportedName) ->
+  source := imported.source as ExportRef ? return false
   program.shared[source.module_index].exported[source.name] is EnumDeclaration
 
 # `accepted` and those of `trying` that can be left out with them: all at once, or else found by
@@ -126,49 +126,49 @@ const imports_enum = (program: ProgramWide, imported: ImportedName) ->
 # checks once, and few times more for the few that cannot. Which of those that can be left out
 # alone but not together are left out depends on their order; those found are checked together, so
 # a second run finds no more.
-const removable_among = (
+removable_among := (
   accepted: Placed[], trying: Placed[], checks_the_same: (Placed[]) -> Bool
 ): Placed[] ->
   return accepted if trying.length == 0
-  const all = [accepted..., trying...]
+  all := [accepted..., trying...]
   return all if checks_the_same(all)
   return accepted if trying.length == 1
-  const half = trying.length / 2
-  const first = [placed for placed, i in trying when i < half]
-  const second = [placed for placed, i in trying when i >= half]
+  half := trying.length / 2
+  first := [placed for placed, i in trying when i < half]
+  second := [placed for placed, i in trying when i >= half]
   removable_among removable_among(accepted, first, checks_the_same), second, checks_the_same
 
-const quiet_program = (entry_path: String, modules: Module[]) ->
+quiet_program := (entry_path: String, modules: Module[]) ->
   ProgramWide entry_path, modules, finds_all_errors: false
 
-const checks = (program: ProgramWide) ->
+checks := (program: ProgramWide) ->
   try
     check_program program
     true
   catch _: CompileError
     false
 
-const result_of = (program: ProgramWide) ->
-  const node_types: Map<Node, String>
+result_of := (program: ProgramWide) ->
+  node_types: Map<Node, String>
   for shared in program.shared
     continue if is_standard_module(program.modules[shared.index])
-    const { facts } = shared
+    { facts } := shared
     for (node, type) in facts.types.entries()
-      const converted = facts.conversions[node]
-      const conversion = converted then " => #{format_type(converted)}" else ''
+      converted := facts.conversions[node]
+      conversion := converted then " => #{format_type(converted)}" else ''
       node_types[node] = format_type(type) + conversion
-  const warnings = [each for each in all_warnings(program) when not is_unused_enum(each, program)]
+  warnings := [each for each in all_warnings(program) when not is_unused_enum(each, program)]
   CheckResult node_types, warnings, field_types: field_types(program)
 
 # A warning of an import of an enum that is not used, which the members of the enum written alone
 # or the types left out may make, and which unused_enum_imports then leaves out: one at the name of such an import.
-const is_unused_enum = (warning: Located, program: ProgramWide) ->
-  const at_import = (shared: Shared, imported: ImportedName) ->
-    const { position } = imported.name
-    const location = module_location(program.entry_path, program.modules[shared.index].display_path)
-    const placed = location == warning.location and position.line == warning.line
+is_unused_enum := (warning: Located, program: ProgramWide) ->
+  at_import := (shared: Shared, imported: ImportedName) ->
+    { position } := imported.name
+    location := module_location(program.entry_path, program.modules[shared.index].display_path)
+    placed := location == warning.location and position.line == warning.line
     placed and position.column == warning.column and imports_enum(program, imported)
-  const unused = 'is imported but never used'
+  unused := 'is imported but never used'
   return false if not warning.message.ends_with(unused)
   program.shared.any (shared) ->
     shared.imports.names.values().any((imported) -> at_import(shared, imported))
@@ -177,17 +177,17 @@ const is_unused_enum = (warning: Located, program: ProgramWide) ->
 # such as the `iter()` call of a `for` over an object, new each time, so each result has some that
 # the other lacks; their types show in those of the nodes of the syntax tree, which a program that
 # checks gives types to.
-const same_result = (a: CheckResult, b: CheckResult) ->
-  const same_type = (node: Node) ->
-    const b_type = b.node_types[node] ? return true
+same_result := (a: CheckResult, b: CheckResult) ->
+  same_type := (node: Node) ->
+    b_type := b.node_types[node] ? return true
     a.node_types[node] == b_type
-  const same_types = a.node_types.keys().all(same_type)
+  same_types := a.node_types.keys().all(same_type)
   same_types and a.field_types == b.field_types and a.warnings == b.warnings
 
-const field_types = (program: ProgramWide) ->
-  const lines: String[]
+field_types := (program: ProgramWide) ->
+  lines: String[]
   for info in program.infos.values()
     for field in info.fields
-      const type = field.type then format_type(field.type!) else '-'
+      type := field.type then format_type(field.type!) else '-'
       lines.push "#{info.type.symbol}.#{field.name.name}: #{type}"
   lines

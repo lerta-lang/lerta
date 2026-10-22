@@ -38,46 +38,46 @@ export class Extensions
 struct ReachableMethods(methods: ExtensionMethod[], inferred_fields: Int?)
 
 # The type of a method that is not generic, checking its body first if needed.
-export const plain_method_type = (program: ProgramWide, method: ExtensionMethod, at: Position) ->
+export plain_method_type := (program: ProgramWide, method: ExtensionMethod, at: Position) ->
   function_type_of program, method.module_index, method.key, at
 
 # The methods of the module that `statement` imports; a module imported twice brings them once.
 # A conflict between two imported modules is the importer's, so it is reported at its import.
-export const add_imported = (
+export add_imported := (
   program: ProgramWide, extensions: Extensions, methods: ExtensionMethod[], statement: Import
 ) ->
   for method in methods
     continue if extensions.in_effect.contains(method)
-    if const other = overlapping(extensions, method)
-      const modules = "#{other.module_name} and #{method.module_name}"
-      const method_name = "a method '#{method.name.name}'"
-      const gets = "gets #{method_name} from extends in both #{modules}"
-      const message = "#{format_type(extended_type(method))} #{gets}"
+    if other := overlapping(extensions, method)
+      modules := "#{other.module_name} and #{method.module_name}"
+      method_name := "a method '#{method.name.name}'"
+      gets := "gets #{method_name} from extends in both #{modules}"
+      message := "#{format_type(extended_type(method))} #{gets}"
       fail program, statement.position, message
     add_in_effect extensions, method
 
 # The type that the method's extend extends: an interface, or a type, which may be a pattern.
-export const extended_type = (method: ExtensionMethod) ->
-  return bound if const bound = method.bound
+export extended_type := (method: ExtensionMethod) ->
+  return bound if bound := method.bound
   method.receiver
 
 # A method of an extend of the module (see declare_extend).
-export const add_own = (shared: Shared, method: ExtensionMethod) ->
-  const { name } = method
-  const extensions = shared.extensions
-  if const other = overlapping(extensions, method)
-    const is_same_module = other.module_index == extensions.module_index
-    const where = is_same_module then 'the same module' else other.module_name
-    const method_name = "a method '#{name.name}'"
-    const extended = format_type(extended_type(method))
-    const other_extended = format_type(extended_type(other))
-    const message =
+export add_own := (shared: Shared, method: ExtensionMethod) ->
+  { name } := method
+  extensions := shared.extensions
+  if other := overlapping(extensions, method)
+    is_same_module := other.module_index == extensions.module_index
+    where := is_same_module then 'the same module' else other.module_name
+    method_name := "a method '#{name.name}'"
+    extended := format_type(extended_type(method))
+    other_extended := format_type(extended_type(other))
+    message :=
       if method.bound == nil or extended == other_extended
         "#{extended} already has #{method_name}, from an extend in #{where}"
       # Extends of two interfaces, which a type may satisfy both.
       else
-        const also = 'which a type may satisfy too'
-        const gives = "an extend in #{where} gives one to #{other_extended}, #{also}"
+        also := 'which a type may satisfy too'
+        gives := "an extend in #{where} gives one to #{other_extended}, #{also}"
         "#{extended} cannot get #{method_name}: #{gives}"
     fail shared.program, name.position, message
   add_in_effect extensions, method
@@ -86,9 +86,9 @@ export const add_own = (shared: Shared, method: ExtensionMethod) ->
 
 # The extends in effect here, with `methods` before them, as an instance of a generic function
 # sees them (see GenericFunction).
-export const with_methods = (extensions: Extensions, methods: ExtensionMethod[]) ->
-  const { module_index, module_name } = extensions
-  const seen = Extensions(module_index, module_name)
+export with_methods := (extensions: Extensions, methods: ExtensionMethod[]) ->
+  { module_index, module_name } := extensions
+  seen := Extensions(module_index, module_name)
   seen.in_effect.append methods
   for method in extensions.in_effect
     seen.in_effect.push method if not methods.contains(method)
@@ -96,25 +96,23 @@ export const with_methods = (extensions: Extensions, methods: ExtensionMethod[])
 
 # The methods that the extends in effect give the types and the types they are made of, fields
 # included: those that the body of an instance with these type arguments may reach.
-export const methods_reachable_from = (
-  program: ProgramWide, extensions: Extensions, types: Type[]
-) ->
-  const key = [type_key(type) for type in types].join("\n")
-  if const cached = extensions.reachable[key]
-    const inferred_fields = cached.inferred_fields
+export methods_reachable_from := (program: ProgramWide, extensions: Extensions, types: Type[]) ->
+  key := [type_key(type) for type in types].join("\n")
+  if cached := extensions.reachable[key]
+    inferred_fields := cached.inferred_fields
     return cached.methods if inferred_fields == nil or inferred_fields == program.inferred_fields
-  const reach = Reach()
+  reach := Reach()
   visit_reachable program, reach, type for type in types
   # A generic extend's methods, as those of T[], may be in effect for several of the types.
-  const in_effect = Set<ExtensionMethod>(extensions.in_effect)
-  const found: Set<ExtensionMethod>
+  in_effect := Set<ExtensionMethod>(extensions.in_effect)
+  found: Set<ExtensionMethod>
   for (reached, type) in reach.seen.entries()
     for method in methods_matching(program, reached, type)
       found.add method if in_effect.has(method)
-  const methods = [method for method in found]
+  methods := [method for method in found]
   # Until then, the classes and structs may get more fields (see ProgramWide.members_known).
   if program.members_known
-    const inferred_fields = reach.is_complete then nil else program.inferred_fields
+    inferred_fields := reach.is_complete then nil else program.inferred_fields
     extensions.reachable[key] = ReachableMethods(methods, inferred_fields)
   methods
 
@@ -125,26 +123,26 @@ class Reach
   is_complete = true
 
 # The methods of every module's extends whose receivers match the type of the key.
-const methods_matching = (program: ProgramWide, key: String, type: Type) ->
-  const find = ->
-    const found: ExtensionMethod[]
+methods_matching := (program: ProgramWide, key: String, type: Type) ->
+  find := ->
+    found: ExtensionMethod[]
     for shared in program.shared
       found.append [method for method in shared.own_methods when matches(method.receiver, type)]
     found
   program.methods_matching.get_or_put key, find
 
-const add_in_effect = (extensions: Extensions, method: ExtensionMethod) ->
+add_in_effect := (extensions: Extensions, method: ExtensionMethod) ->
   extensions.in_effect.push method
   extensions.reachable = Map()
 
-const visit_reachable = (program: ProgramWide, reach: Reach, type: Type): void ->
-  const key = type_key(type)
+visit_reachable := (program: ProgramWide, reach: Reach, type: Type): void ->
+  key := type_key(type)
   return if reach.seen.has(key)
   reach.seen[key] = type
   visit_reachable program, reach, part for part in parts_of(type)
   if type is ObjectType
     for field in info_of(program, type).fields
-      if const field_type = field.type
+      if field_type := field.type
         visit_reachable program, reach, field_type
       else
         reach.is_complete = false
@@ -153,11 +151,11 @@ const visit_reachable = (program: ProgramWide, reach: Reach, type: Type): void -
 # the type itself, if there is one, before that of a generic extend of the same module that matches
 # it (see overlapping); those of the extends of interfaces are found by the interfaces it satisfies (see
 # find_interface_extension).
-export const find_extension = (extensions: Extensions, receiver: Type, name: String) ->
-  const is_found = (method: ExtensionMethod) ->
+export find_extension := (extensions: Extensions, receiver: Type, name: String) ->
+  is_found := (method: ExtensionMethod) ->
     method.bound == nil and method.name.name == name and matches(method.receiver, receiver)
-  const found = [method for method in extensions.in_effect when is_found(method)]
-  return specific if const specific = found.find((method) -> not is_pattern(method.receiver))
+  found := [method for method in extensions.in_effect when is_found(method)]
+  return specific if specific := found.find((method) -> not is_pattern(method.receiver))
   found.first()
 
 # A method of the name that an extend in effect gives some type that `method`'s receiver, a
@@ -167,12 +165,12 @@ export const find_extension = (extensions: Extensions, receiver: Type, name: Str
 # there, call the same method as any other caller. Two extends of interfaces may both be of a type,
 # which is known only where their method is called (see find_interface_extension), so they clash
 # by name; an extend of a type and one of an interface clash only there.
-const overlapping = (extensions: Extensions, method: ExtensionMethod) ->
-  const name = method.name.name
-  const is_found = (other: ExtensionMethod) ->
+overlapping := (extensions: Extensions, method: ExtensionMethod) ->
+  name := method.name.name
+  is_found := (other: ExtensionMethod) ->
     return false if other.name.name != name or (other.bound == nil) != (method.bound == nil)
     return true if other.bound != nil
-    const one_is_specific = is_pattern(other.receiver) != is_pattern(method.receiver)
-    const specializes = one_is_specific and other.module_index == method.module_index
+    one_is_specific := is_pattern(other.receiver) != is_pattern(method.receiver)
+    specializes := one_is_specific and other.module_index == method.module_index
     overlaps(other.receiver, method.receiver) and not specializes
   extensions.in_effect.find is_found

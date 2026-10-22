@@ -9,13 +9,13 @@ from '../lib/cli'
 import is_file, list_dir, make_dir, make_link, read_file, write_file from 'std:io'
 import env from 'std:process'
 
-const hello = "#{root_dir}/examples/hello.lerta"
-const no_build_flags: String[]
-const no_reasons: String[]
+hello := "#{root_dir}/examples/hello.lerta"
+no_build_flags: String[]
+no_reasons: String[]
 
-const build_and_run = (flags: String[]) ->
+build_and_run := (flags: String[]) ->
   Check name: "lerta build examples/hello.lerta #{flags.join(' ')} and run it", run: ->
-    const built = await run_in_new_dir(
+    built := await run_in_new_dir(
       compiler
       [
         'build'
@@ -25,18 +25,18 @@ const build_and_run = (flags: String[]) ->
         flags...
       ]
     )
-    const reasons = expect_success('build', built.result)
+    reasons := expect_success('build', built.result)
     return reasons if reasons.length > 0
-    const executable = "#{cli_work_dir}/hello-#{flags.join('_')}#{executable_suffix}"
-    const ran = await run_command(executable, [], built.cwd)
+    executable := "#{cli_work_dir}/hello-#{flags.join('_')}#{executable_suffix}"
+    ran := await run_command(executable, [], built.cwd)
     [compare_output('stdout', hello_output, ran.stdout)..., expect_success('run', ran)...]
 
-const default_output_check = ->
+default_output_check := ->
   Check name: 'lerta build examples/hello.lerta writes hello to the current directory', run: ->
-    const built = await run_in_new_dir(compiler, ['build', hello])
+    built := await run_in_new_dir(compiler, ['build', hello])
     return expect_success('build', built.result) if built.result.status != 0
-    const executable = "#{built.cwd}/hello#{executable_suffix}"
-    const ran = await run_command(executable, [], built.cwd)
+    executable := "#{built.cwd}/hello#{executable_suffix}"
+    ran := await run_command(executable, [], built.cwd)
     [
       expect_left('files left', ["hello#{executable_suffix}"], built.left)...
       expect_left('files left in the temporary directory', [], built.left_in_temp)...
@@ -44,14 +44,14 @@ const default_output_check = ->
       expect_success('run', ran)...
     ]
 
-const leading_dash_check = ->
+leading_dash_check := ->
   Check name: 'lerta build accepts source and output names that start with a dash', run: ->
-    const (cwd, temp) = new_cli_dirs()
+    (cwd, temp) := new_cli_dirs()
     await write_file("#{cwd}/-hi.lerta", await read_file(hello))
-    const built = await run_in_dir(compiler, ['build', './-hi.lerta', '-o', '-hi'], cwd, temp)
+    built := await run_in_dir(compiler, ['build', './-hi.lerta', '-o', '-hi'], cwd, temp)
     return expect_success('build', built.result) if built.result.status != 0
-    const executable = "#{cwd}/-hi#{executable_suffix}"
-    const ran = await run_command(executable, [], cwd)
+    executable := "#{cwd}/-hi#{executable_suffix}"
+    ran := await run_command(executable, [], cwd)
     [
       expect_left('files left', ["-hi#{executable_suffix}", '-hi.lerta'], built.left)...
       expect_left('files left in the temporary directory', [], built.left_in_temp)...
@@ -62,7 +62,7 @@ const leading_dash_check = ->
 # Each output names, by another path, a file that the build reads.
 struct InputCase(what: String, input: String, args: String[])
 
-const input_cases =
+input_cases :=
   InputCase(what: 'the source', input: 'hello.lerta', args: ['hello.lerta', '-o', './hello.lerta'])
   InputCase(
     what: 'a linked file'
@@ -80,7 +80,7 @@ const input_cases =
     args: ['hello.lerta', '-o', 'link.lerta']
   )
 
-const make_inputs = (cwd: String) ->
+make_inputs := (cwd: String) ->
   make_dir "#{cwd}/lib"
   await write_file("#{cwd}/hello.lerta", await read_file(hello))
   await write_file("#{cwd}/extern.c", ''.binary)
@@ -91,12 +91,12 @@ const make_inputs = (cwd: String) ->
   await write_file("#{cwd}/lib/greeting.lerta", "export const greeting = 'hi'\n".binary)
   make_link "#{cwd}/hello.lerta", "#{cwd}/link.lerta"
 
-const input_check = (test: InputCase) ->
+input_check := (test: InputCase) ->
   Check name: "lerta build rejects an output that is #{test.what}", run: ->
-    const (cwd, temp) = new_cli_dirs()
+    (cwd, temp) := new_cli_dirs()
     await make_inputs(cwd)
-    const before = await read_file("#{cwd}/#{test.input}")
-    const built = await run_in_dir(compiler, ['build', test.args...], cwd, temp)
+    before := await read_file("#{cwd}/#{test.input}")
+    built := await run_in_dir(compiler, ['build', test.args...], cwd, temp)
     [
       expect_status(1, built.result.status)...
       compare_text(
@@ -107,15 +107,15 @@ const input_check = (test: InputCase) ->
       compare_output(test.input, before, await read_file("#{cwd}/#{test.input}"))...
     ]
 
-const input_checks = [input_check(test) for test in input_cases]
+input_checks := [input_check(test) for test in input_cases]
 
-const no_clang_check = ->
+no_clang_check := ->
   Check name: 'lerta build removes temporary files when clang cannot be started', run: ->
-    const cache = new_cli_dir('no-clang-cache')
-    const env: Map<String, String>
+    cache := new_cli_dir('no-clang-cache')
+    env: Map<String, String>
     env['LERTA_CACHE_DIR'] = cache
     env['PATH'] = cli_work_dir
-    const built = await run_in_new_dir(compiler, ['build', hello, '-o', 'hello'], ''.binary, env)
+    built := await run_in_new_dir(compiler, ['build', hello, '-o', 'hello'], ''.binary, env)
     [
       expect_status(1, built.result.status)...
       expect_left('files left', [], built.left)...
@@ -123,12 +123,12 @@ const no_clang_check = ->
       expect_left('files left in the cache', [], list_dir(cache))...
     ]
 
-const failed_target_check = ->
+failed_target_check := ->
   Check name: 'lerta build removes temporary files when clang rejects a target', run: ->
-    const cache = new_cli_dir('failed-target-cache')
-    const env: Map<String, String>
+    cache := new_cli_dir('failed-target-cache')
+    env: Map<String, String>
     env['LERTA_CACHE_DIR'] = cache
-    const built = await run_in_new_dir(
+    built := await run_in_new_dir(
       compiler
       ['build', hello, '-o', 'hello', '--target', 'no-such-target']
       ''.binary
@@ -141,43 +141,43 @@ const failed_target_check = ->
       expect_left('files left in the cache', [], list_dir(cache))...
     ]
 
-const optimized_runtime_check = ->
+optimized_runtime_check := ->
   Check name: 'lerta build -O inlines the runtime into the program', run: ->
-    const source = "#{root_dir}/tests/string/split.lerta"
-    const built =
+    source := "#{root_dir}/tests/string/split.lerta"
+    built :=
       await run_in_new_dir(compiler, ['build', source, '-o', "split#{executable_suffix}", '-O'])
-    const reasons = expect_success('build', built.result)
+    reasons := expect_success('build', built.result)
     return reasons if reasons.length > 0
-    const executable = "#{built.cwd}/split#{executable_suffix}"
-    const disassembler = host_platform == 'macos' then 'otool' else 'objdump'
-    const args = host_platform == 'macos' then ['-tvV', executable] else ['-d', executable]
-    const code = await run_command(disassembler, args, built.cwd)
+    executable := "#{built.cwd}/split#{executable_suffix}"
+    disassembler := host_platform == 'macos' then 'otool' else 'objdump'
+    args := host_platform == 'macos' then ['-tvV', executable] else ['-d', executable]
+    code := await run_command(disassembler, args, built.cwd)
     return ["#{disassembler} failed: #{code.stderr.text()!}"] if code.status != 0
-    const lines = code.stdout.text()!.split("\n")
+    lines := code.stdout.text()!.split("\n")
     # objdump shows a call as `call   1234 <lerta_retain>`, otool as `bl\t_lerta_retain`.
-    const is_call_opcode = (word: String) ->
+    is_call_opcode := (word: String) ->
       word.starts_with('call') or word == 'jmp' or word == 'bl' or word == 'b'
-    const names_retain = (word: String) ->
-      const parts = word.split('lerta_retain')
+    names_retain := (word: String) ->
+      parts := word.split('lerta_retain')
       [parts[i] for i in 1...parts.length].any((after) ->
-        const bytes = after.binary
+        bytes := after.binary
         return true if bytes.length == 0
-        const next = bytes[0]
+        next := bytes[0]
         not (next.is_letter() or next.is_digit() or next == '_'.binary[0])
       )
-    const is_call = (line: String) ->
-      const words = [word for word in line.split("\t").join(' ').split(' ') when word != '']
-      const opcode_index = words.find_index(is_call_opcode) ? return false
+    is_call := (line: String) ->
+      words := [word for word in line.split("\t").join(' ').split(' ') when word != '']
+      opcode_index := words.find_index(is_call_opcode) ? return false
       [words[i] for i in (opcode_index + 1)...words.length].any(names_retain)
     if lines.any(is_call)
       ['lerta_retain is not inlined']
     else
       no_reasons
 
-const dump_llvm_check = -> Check(name: 'lerta dump-llvm prints the IR and leaves no file', run: ->
-  const dumped = await run_in_new_dir(compiler, ['dump-llvm', hello])
-  const ir = dumped.result.stdout.text()!
-  const ir_reasons: String[]
+dump_llvm_check := -> Check(name: 'lerta dump-llvm prints the IR and leaves no file', run: ->
+  dumped := await run_in_new_dir(compiler, ['dump-llvm', hello])
+  ir := dumped.result.stdout.text()!
+  ir_reasons: String[]
   ir_reasons.push 'no lerta_main in the IR' if not ir.contains('define external void @lerta_main()')
   ir_reasons.push 'target attributes in the IR' if ir.contains('attributes #')
   [
@@ -188,34 +188,34 @@ const dump_llvm_check = -> Check(name: 'lerta dump-llvm prints the IR and leaves
   ]
 )
 
-const dump_symbols_check = ->
-  Check name: 'lerta dump-llvm escapes module paths in symbol names', run: ->
-    const source = "#{root_dir}/tests/module/escaped_path.lerta"
-    const dumped = await run_in_new_dir(compiler, ['dump-llvm', source])
-    const ir = dumped.result.stdout.text()!
-    const symbols =
-      '@"lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
-      '@"lerta.thunk.lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
-      '@"lerta.method.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Box.doubled"'
-      '@"lerta.extend.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Int.tripled"'
-      '%"lerta.object.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Pair<String>"'
-      '@"lerta.value../escaped_path.lerta.box.set"'
-      '@"lerta.fn.std:builtins/text.print<String>"'
-    [
-      expect_status(0, dumped.result.status)...
-      ["no #{symbol}" for symbol in symbols when not ir.contains(symbol)]...
-      expect_left('files left', [], dumped.left)...
-      expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
-    ]
+dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in symbol names', run: ->
+  source := "#{root_dir}/tests/module/escaped_path.lerta"
+  dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
+  ir := dumped.result.stdout.text()!
+  symbols :=
+    '@"lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
+    '@"lerta.thunk.lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
+    '@"lerta.method.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Box.doubled"'
+    '@"lerta.extend.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Int.tripled"'
+    '%"lerta.object.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Pair<String>"'
+    '@"lerta.value../escaped_path.lerta.box.set"'
+    '@"lerta.fn.std:builtins/text.print<String>"'
+  [
+    expect_status(0, dumped.result.status)...
+    ["no #{symbol}" for symbol in symbols when not ir.contains(symbol)]...
+    expect_left('files left', [], dumped.left)...
+    expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
+  ]
+)
 
-const source_lines_check = -> Check(name: 'lerta run --source-lines runs a program', run: ->
-  const source = "#{root_dir}/tests/trace/lib/source_lines.lerta"
-  const ran = await run_command(compiler, ['run', source, '--source-lines'], cli_work_dir)
+source_lines_check := -> Check(name: 'lerta run --source-lines runs a program', run: ->
+  source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
+  ran := await run_command(compiler, ['run', source, '--source-lines'], cli_work_dir)
   [expect_status(0, ran.status)..., compare_output('stdout', "2\n7\n".binary, ran.stdout)...]
 )
 
-const contains_bytes = (bytes: Binary, text: String) ->
-  const wanted = text.binary
+contains_bytes := (bytes: Binary, text: String) ->
+  wanted := text.binary
   return true if wanted.length == 0
   return false if wanted.length > bytes.length
   for start in 0...(bytes.length - wanted.length + 1)
@@ -226,18 +226,18 @@ const contains_bytes = (bytes: Binary, text: String) ->
   false
 
 # macOS keeps the debug information beside the executable, in its dSYM bundle.
-const debug_file_of = (executable: String) ->
+debug_file_of := (executable: String) ->
   return executable if host_platform != 'macos'
-  const name = executable.split('/').last()!
+  name := executable.split('/').last()!
   "#{executable}.dSYM/Contents/Resources/DWARF/#{name}"
 
-const has_debug_info = (executable: String) ->
-  const debug_file = debug_file_of(executable)
+has_debug_info := (executable: String) ->
+  debug_file := debug_file_of(executable)
   return false if not is_file(debug_file)
-  const marker = host_platform == 'macos' then '__debug_line' else '.debug_line'
+  marker := host_platform == 'macos' then '__debug_line' else '.debug_line'
   contains_bytes await read_file(debug_file), marker
 
-const source_line_number = (text: String) ->
+source_line_number := (text: String) ->
   return nil if text == ''
   var number = 0
   for digit in text
@@ -245,49 +245,49 @@ const source_line_number = (text: String) ->
     number = number * 10 + digit.to_int() - 48
   number
 
-const tool_on_path = (name: String) ->
-  const path = env('PATH') ? return nil
-  const separator = host_platform == 'windows' then ';' else ':'
+tool_on_path := (name: String) ->
+  path := env('PATH') ? return nil
+  separator := host_platform == 'windows' then ';' else ':'
   for directory in path.split(separator)
-    const candidate = "#{directory}/#{name}#{executable_suffix}"
+    candidate := "#{directory}/#{name}#{executable_suffix}"
     return candidate if directory != '' and is_file(candidate)
   nil
 
-const run_dwarfdump = (command: String, path: String) ->
+run_dwarfdump := (command: String, path: String) ->
   try
     await run_command(command, ['--debug-line', path], cli_work_dir)
   catch error
     return nil
 
-const line_table_rows = (path: String) ->
+line_table_rows := (path: String) ->
   for tool in ['dwarfdump', 'llvm-dwarfdump']
-    if const command = tool_on_path(tool)
-      if const result = await run_dwarfdump(command, path)
+    if command := tool_on_path(tool)
+      if result := await run_dwarfdump(command, path)
         if result.status == 0
-          const rows: Int[]
+          rows: Int[]
           for line in result.stdout.text()!.split("\n")
-            const fields = [field for field in line.split(' ') when field != '']
+            fields := [field for field in line.split(' ') when field != '']
             if fields.length >= 2 and fields[0].starts_with('0x')
-              rows.push number if const number = source_line_number(fields[1])
+              rows.push number if number := source_line_number(fields[1])
           return rows
   nil
 
-const source_lines_build_check = (flags: String[]) ->
+source_lines_build_check := (flags: String[]) ->
   Check
     name: "lerta build --source-lines #{flags.join(' ')} gives the program line tables of its source"
     run: ->
-      const source = "#{root_dir}/tests/trace/lib/source_lines.lerta"
-      const built = await run_in_new_dir(
+      source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
+      built := await run_in_new_dir(
         compiler
         ['build', source, '-o', "lines#{executable_suffix}", '--source-lines', flags...]
       )
-      const reasons = expect_success('build', built.result)
+      reasons := expect_success('build', built.result)
       return reasons if reasons.length > 0
-      const output = "#{built.cwd}/lines#{executable_suffix}"
-      const ran = await run_command(output, [], built.cwd)
-      const rows = await line_table_rows(debug_file_of(output))
-      const expected_lines: Int[] = flags.length == 0 then [12, 5, 16] else []
-      const has_debug = await has_debug_info(output)
+      output := "#{built.cwd}/lines#{executable_suffix}"
+      ran := await run_command(output, [], built.cwd)
+      rows := await line_table_rows(debug_file_of(output))
+      expected_lines: Int[] = flags.length == 0 then [12, 5, 16] else []
+      has_debug := await has_debug_info(output)
       [
         expect_success('run', ran)...
         compare_output('stdout', "2\n7\n".binary, ran.stdout)...
@@ -302,29 +302,27 @@ const source_lines_build_check = (flags: String[]) ->
         ])...
       ]
 
-const no_source_lines_check = ->
+no_source_lines_check := ->
   Check name: 'lerta build without --source-lines omits debug information', run: ->
-    const source = "#{root_dir}/tests/trace/lib/source_lines.lerta"
-    const built =
-      await run_in_new_dir(compiler, ['build', source, '-o', "lines#{executable_suffix}"])
-    const reasons = expect_success('build', built.result)
+    source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
+    built := await run_in_new_dir(compiler, ['build', source, '-o', "lines#{executable_suffix}"])
+    reasons := expect_success('build', built.result)
     return reasons if reasons.length > 0
     return no_reasons if host_platform == 'windows'
-    const output = "#{built.cwd}/lines#{executable_suffix}"
-    const has_debug = await has_debug_info(output)
+    output := "#{built.cwd}/lines#{executable_suffix}"
+    has_debug := await has_debug_info(output)
     return ['debug information without --source-lines'] if has_debug
     no_reasons
 
-const no_trace_check = ->
+no_trace_check := ->
   Check name: 'lerta build --no-trace prints an uncaught exception without its trace', run: ->
-    const source = "#{root_dir}/tests/trace/rethrow.lerta"
-    const executable = "#{cli_work_dir}/rethrow#{executable_suffix}"
-    const built =
-      await run_in_new_dir(compiler, ['build', source, '-o', executable, '-O', '--no-trace'])
-    const reasons = expect_success('build', built.result)
+    source := "#{root_dir}/tests/trace/rethrow.lerta"
+    executable := "#{cli_work_dir}/rethrow#{executable_suffix}"
+    built := await run_in_new_dir(compiler, ['build', source, '-o', executable, '-O', '--no-trace'])
+    reasons := expect_success('build', built.result)
     return reasons if reasons.length > 0
-    const ran = await run_command(executable, [], built.cwd)
-    const program = await read_file(executable)
+    ran := await run_command(executable, [], built.cwd)
+    program := await read_file(executable)
     [
       expect_status(1, ran.status)...
       compare_text('stderr', "failed\n", ran.stderr.text()!)...
@@ -333,7 +331,7 @@ const no_trace_check = ->
       ] else no_reasons)...
     ]
 
-export const checks: Check[] = [build_and_run(flags) for flags in runtime_flags]
+export checks: Check[] = [build_and_run(flags) for flags in runtime_flags]
 checks.push default_output_check()
 checks.push leading_dash_check()
 checks.append input_checks

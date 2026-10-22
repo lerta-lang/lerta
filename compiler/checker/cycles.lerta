@@ -13,19 +13,19 @@ import Body from './shared'
 import ObjectType from '../types'
 
 # Warns if storing the value at the target, already checked, makes such a cycle.
-export const warn_if_cycle = (body: Body, target: Expression, value: Expression) ->
+export warn_if_cycle := (body: Body, target: Expression, value: Expression) ->
   return if not is_held_by_this(body, target)
-  const literal = capturing_literal(body, value) ? return
-  const advice = 'write it `weak -> ...`, which captures @ weakly'
-  const message = "this function captures @, which then holds it, so neither is freed; #{advice}"
+  literal := capturing_literal(body, value) ? return
+  advice := 'write it `weak -> ...`, which captures @ weakly'
+  message := "this function captures @, which then holds it, so neither is freed; #{advice}"
   warn body.shared, literal.position, message
 
 # Warns if a builtin method that keeps its argument is given one that makes such a cycle.
-export const warn_if_kept = (body: Body, call: Call, member: Member, source: MethodSource?) ->
-  const keeps = source is BuiltinMethod and keeps_argument(source.member)
+export warn_if_kept := (body: Body, call: Call, member: Member, source: MethodSource?) ->
+  keeps := source is BuiltinMethod and keeps_argument(source.member)
   warn_if_cycle body, member.object, call.args[0] if keeps
 
-const is_held_by_this = (body: Body, target: Expression): Bool ->
+is_held_by_this := (body: Body, target: Expression): Bool ->
   case target
     when This then true
     when Member then not is_weak_field(body, target) and is_held_by_this(body, target.object)
@@ -33,20 +33,20 @@ const is_held_by_this = (body: Body, target: Expression): Bool ->
     when Unwrap then is_held_by_this(body, target.operand)
     else false
 
-const is_weak_field = (body: Body, member: Member) ->
-  const object_type = body.facts.types[member.object] as ObjectType ? return false
-  const name = member.name.name
-  const field = info_of(body.program, object_type).fields.find((each) -> each.name.name == name)
+is_weak_field := (body: Body, member: Member) ->
+  object_type := body.facts.types[member.object] as ObjectType ? return false
+  name := member.name.name
+  field := info_of(body.program, object_type).fields.find((each) -> each.name.name == name)
   field?.weak == true
 
-const capturing_literal = (body: Body, value: Expression): FunctionLiteral? ->
-  const first = (parts: Expression[]) ->
+capturing_literal := (body: Body, value: Expression): FunctionLiteral? ->
+  first := (parts: Expression[]) ->
     for part in parts
-      return found if const found = capturing_literal(body, part)
+      return found if found := capturing_literal(body, part)
     nil
   case value
     when FunctionLiteral
-      const captures = body.facts.captures[value] ? []
+      captures := body.facts.captures[value] ? []
       captures.any((capture) -> capture.is_this) then value
     when ArrayLiteral then first(value.elements)
     when TupleLiteral then first(value.items)

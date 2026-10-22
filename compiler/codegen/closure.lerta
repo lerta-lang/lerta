@@ -8,79 +8,78 @@ import emit_valueless_call from './runtime_calls'
 import FunctionType, Type from '../types'
 
 # The code pointer comes after the header.
-const CODE_FIELD = 2
+CODE_FIELD := 2
 
-export const function_type_of = (type: Type) -> type as FunctionType!
+export function_type_of := (type: Type) -> type as FunctionType!
 
-export const emit_function_closure = (ir: IrBuilder, symbol: String, type: Type) ->
-  const { params, result } = function_type_of(type)
-  const thunk = prefixed_symbol('lerta.thunk', symbol)
-  const define = (module: IrModule) ->
-    const typed_params = ["#{ir_type(param)} %p#{i}" for param, i in params]
-    const return_type = ir_return_type(result)
-    const call = "call #{return_type} #{symbol}(#{typed_params.join(', ')})"
-    const body =
+export emit_function_closure := (ir: IrBuilder, symbol: String, type: Type) ->
+  { params, result } := function_type_of(type)
+  thunk := prefixed_symbol('lerta.thunk', symbol)
+  define := (module: IrModule) ->
+    typed_params := ["#{ir_type(param)} %p#{i}" for param, i in params]
+    return_type := ir_return_type(result)
+    call := "call #{return_type} #{symbol}(#{typed_params.join(', ')})"
+    body :=
       if return_type == 'void'
         ["  #{call}", '  ret void']
       else
         ["  %result = #{call}", "  ret #{return_type} %result"]
-    const all_params = ['ptr %closure', typed_params...]
-    const signature = "#{return_type} #{thunk}(#{all_params.join(', ')})"
+    all_params := ['ptr %closure', typed_params...]
+    signature := "#{return_type} #{thunk}(#{all_params.join(', ')})"
     module.define_function "private #{signature}", body
   ir.module.define_once thunk, define
   emit_static_closure ir, thunk
 
-export const emit_static_closure = (ir: IrBuilder, code: String) ->
-  const closure = prefixed_symbol('lerta.closure', code)
-  const define = (module: IrModule) ->
-    const header = "i64 #{LERTA_IMMORTAL}, ptr null, ptr #{code}"
+export emit_static_closure := (ir: IrBuilder, code: String) ->
+  closure := prefixed_symbol('lerta.closure', code)
+  define := (module: IrModule) ->
+    header := "i64 #{LERTA_IMMORTAL}, ptr null, ptr #{code}"
     module.define_global closure, "private constant { i64, ptr, ptr } { #{header} }"
   ir.module.define_once closure, define
   closure
 
 # The place of the closure's code.
-const emit_code_pointer = (ir: IrBuilder, closure: String) ->
+emit_code_pointer := (ir: IrBuilder, closure: String) ->
   ir.assign "getelementptr { i64, ptr, ptr }, ptr #{closure}, i32 0, i32 #{CODE_FIELD}"
 
 # Calls a closure with the operands of its arguments; the closure is borrowed.
-export const emit_closure_call = (ir: IrBuilder, closure: String, type: Type, args: String[]) ->
-  const { params, result } = function_type_of(type)
-  const code = ir.assign("load ptr, ptr #{emit_code_pointer(ir, closure)}")
-  const all_args = ["ptr #{closure}"]
+export emit_closure_call := (ir: IrBuilder, closure: String, type: Type, args: String[]) ->
+  { params, result } := function_type_of(type)
+  code := ir.assign("load ptr, ptr #{emit_code_pointer(ir, closure)}")
+  all_args := ["ptr #{closure}"]
   all_args.push "#{ir_type(param)} #{arg}" for (param, arg) in params.zip(args)
-  const return_type = ir_return_type(result)
-  const call = "call #{return_type} #{code}(#{all_args.join(', ')})"
+  return_type := ir_return_type(result)
+  call := "call #{return_type} #{code}(#{all_args.join(', ')})"
   return ir.assign(call) if return_type != 'void'
   emit_valueless_call ir, call, result
 
 # What a closure holds for each capture is a field (see HeapField): a value, or the cell of a
 # captured var (see heap_object), which is an owned reference.
-export const CELL_SLOT = HeapField(ir_type: 'ptr', owned: REFERENCE)
+export CELL_SLOT := HeapField(ir_type: 'ptr', owned: REFERENCE)
 
 # The IR type of a closure that holds these captures.
-const closure_ir_type = (slots: HeapField[]) -> heap_object_type([plain_field('ptr'), slots...])
+closure_ir_type := (slots: HeapField[]) -> heap_object_type([plain_field('ptr'), slots...])
 
 # The pointer to the closure's `index`th capture.
-export const emit_capture_pointer = (
-  ir: IrBuilder, closure: String, slots: HeapField[], index: Int
-) -> emit_heap_field_pointer(ir, closure_ir_type(slots), closure, 1 + index)
+export emit_capture_pointer := (ir: IrBuilder, closure: String, slots: HeapField[], index: Int) ->
+  emit_heap_field_pointer ir, closure_ir_type(slots), closure, 1 + index
 
 # A new closure of the code `symbol`, the function `name`, which takes over the captured operands,
 # owned, held in the slots. Its type, defined with it, releases those that are references.
-export const emit_closure = (
+export emit_closure := (
   ir: IrBuilder, symbol: String, name: String, slots: HeapField[], operands: String[]
 ) ->
-  const type = suffixed_symbol(symbol, 'type')
+  type := suffixed_symbol(symbol, 'type')
   define_closure_type ir, type, name, slots
-  const closure = emit_heap_allocate(ir, closure_ir_type(slots), type)
+  closure := emit_heap_allocate(ir, closure_ir_type(slots), type)
   ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}"
   for slot, i in slots
-    const pointer = emit_capture_pointer(ir, closure, slots, i)
+    pointer := emit_capture_pointer(ir, closure, slots, i)
     ir.emit "store #{slot.ir_type} #{operands[i]}, ptr #{pointer}"
   closure
 
-const define_closure_type = (ir: IrBuilder, type: String, name: String, slots: HeapField[]) ->
-  const define = (module: IrModule) ->
-    const fields = [plain_field('ptr'), slots...]
+define_closure_type := (ir: IrBuilder, type: String, name: String, slots: HeapField[]) ->
+  define := (module: IrModule) ->
+    fields := [plain_field('ptr'), slots...]
     define_type module, closure_ir_type(slots), type, 'private ', fields, name, nil, nil
   ir.module.define_once type, define

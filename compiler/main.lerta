@@ -15,7 +15,7 @@ import basename from './paths'
 import read_entry_source, SOURCE_EXTENSION from './source'
 import dump_tokens from './token_dump'
 
-const USAGE = """
+USAGE := """
   usage: lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror]
                      [--no-trace] [--source-lines] [--target <triple>]
          lerta run <source> [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace]
@@ -27,26 +27,25 @@ const USAGE = """
          lerta dump-checked <source>
          lerta dump-llvm <source>"""
 
-const is_value = (arg: String) -> not arg.starts_with('-')
+is_value := (arg: String) -> not arg.starts_with('-')
 
-const fail_usage = ->
+fail_usage := ->
   print_error USAGE
   exit 2
 
 # Prints what `dump` makes of the source file.
-const run_dump = (args: String[], dump: (String) -> Promise<String>) ->
+run_dump := (args: String[], dump: (String) -> Promise<String>) ->
   fail_usage() if args.length != 1 or not is_value(args[0])
   await stdout.write(await dump(args[0]))
 
 # The files that clang links with the program, as it takes them.
-const LINKED_EXTENSIONS = ['.c', '.o', '.ll', '.a', '.obj', '.lib']
+LINKED_EXTENSIONS := ['.c', '.o', '.ll', '.a', '.obj', '.lib']
 
-const is_linked_file = (path: String) ->
-  LINKED_EXTENSIONS.any (extension) -> path.ends_with(extension)
+is_linked_file := (path: String) -> LINKED_EXTENSIONS.any((extension) -> path.ends_with(extension))
 
-const parse_build_arguments = (args: String[]) ->
+parse_build_arguments := (args: String[]) ->
   var source: String?
-  const linked_files: String[]
+  linked_files: String[]
   var output: String?
   var target: String?
   var optimize = false
@@ -57,12 +56,12 @@ const parse_build_arguments = (args: String[]) ->
   var program_args: String[]?
   var i = 0
   # The value is the next argument, even one that starts with `-`, as `-o -out` gives `-out`.
-  const take_value = (previous: String?) ->
+  take_value := (previous: String?) ->
     i += 1
     fail_usage() if previous != nil or i >= args.length
     args[i]
   while i < args.length
-    const arg = args[i]
+    arg := args[i]
     case arg
       when '-O'
         fail_usage() if optimize
@@ -92,7 +91,7 @@ const parse_build_arguments = (args: String[]) ->
           fail_usage() if not is_linked_file(arg)
           linked_files.push arg
     i += 1
-  const given_source = source ? fail_usage()
+  given_source := source ? fail_usage()
   {
     source: given_source
     linked_files
@@ -106,13 +105,13 @@ const parse_build_arguments = (args: String[]) ->
     program_args
   }
 
-const build_command = (args: String[]) ->
-  const parsed = parse_build_arguments(args)
-  const { source, linked_files, output, target, optimize, memory_checks } = parsed
-  const { warnings_as_errors, traces } = parsed
+build_command := (args: String[]) ->
+  parsed := parse_build_arguments(args)
+  { source, linked_files, output, target, optimize, memory_checks } := parsed
+  { warnings_as_errors, traces } := parsed
   fail_usage() if parsed.program_args != nil
-  const executable = output ? default_output(source, target)
-  const request = BuildRequest
+  executable := output ? default_output(source, target)
+  request := BuildRequest
     source
     linked_files
     optimize
@@ -125,12 +124,12 @@ const build_command = (args: String[]) ->
   build request
 
 # The program is built in the temporary directory, for the host.
-const run_command = (args: String[]) ->
-  const parsed = parse_build_arguments(args)
-  const { source, linked_files, output, target, optimize, memory_checks } = parsed
-  const { warnings_as_errors, traces } = parsed
+run_command := (args: String[]) ->
+  parsed := parse_build_arguments(args)
+  { source, linked_files, output, target, optimize, memory_checks } := parsed
+  { warnings_as_errors, traces } := parsed
   fail_usage() if output != nil or target != nil
-  const request = BuildRequest
+  request := BuildRequest
     source
     linked_files
     optimize
@@ -142,30 +141,29 @@ const run_command = (args: String[]) ->
     source_lines: parsed.source_lines
   build_and_run request, parsed.program_args ? []
 
-const default_output = (source: String, target: String?) ->
-  const name = basename(source)
-  const stem = name.without_suffix(SOURCE_EXTENSION) ? fail_usage()
+default_output := (source: String, target: String?) ->
+  name := basename(source)
+  stem := name.without_suffix(SOURCE_EXTENSION) ? fail_usage()
   fail_usage() if stem == ''
   "#{stem}#{executable_suffix(target)}"
 
 # `--fix` may come before the paths, of which there is at least one.
-const fmt_command = (args: String[]) ->
-  const fix = args.length > 0 and args[0] == '--fix'
-  const paths = [arg for arg, i in args when i > 0 or not fix]
+fmt_command := (args: String[]) ->
+  fix := args.length > 0 and args[0] == '--fix'
+  paths := [arg for arg, i in args when i > 0 or not fix]
   fail_usage() if paths.length == 0 or paths.any((path) -> not is_value(path))
   exit await format_command(paths, fix)
 
 # The dumps of one module read no module that it imports.
-const dump_file_tokens = (path: String) ->
-  dump_tokens tokenize(await read_entry_source(path), path)
+dump_file_tokens := (path: String) -> dump_tokens(tokenize(await read_entry_source(path), path))
 
-const dump_file_ast = (path: String) ->
+dump_file_ast := (path: String) ->
   dump_ast parse(tokenize(await read_entry_source(path), path), path)
 
-const dump_program_checked = (path: String) -> dump_checked(await check_program(path, false))
+dump_program_checked := (path: String) -> dump_checked(await check_program(path, false))
 
-const command = argv.first() ? ''
-const args = [argv[i] for i in 1...argv.length]
+command := argv.first() ? ''
+args := [argv[i] for i in 1...argv.length]
 # A compile error is the user's, so it is reported without the compiler's trace.
 try
   case command

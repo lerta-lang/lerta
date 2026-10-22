@@ -45,12 +45,12 @@ export enum BuiltinMember
 # The source of a builtin method (see methods' MethodSource): its member and its type.
 export struct BuiltinMethod(member: BuiltinMember, type: Type)
 
-const method = (member: BuiltinMember, params: Type[], result: Type) ->
+method := (member: BuiltinMember, params: Type[], result: Type) ->
   BuiltinMethod member, type: FunctionType(params, result)
 
 # The method of a generic builtin type, an enum or an integer type by the name, if it has one: an
 # enum's to_string gives the member's text, and its to_literal the member as declared.
-export const builtin_method = (program: ProgramWide, receiver: Type, name: String) ->
+export builtin_method := (program: ProgramWide, receiver: Type, name: String) ->
   return equality_method(program, receiver, name) if name == 'equals' or name == 'hash'
   return value_method(program, receiver, name) if is_value_type(receiver)
   case receiver
@@ -62,20 +62,20 @@ export const builtin_method = (program: ProgramWide, receiver: Type, name: Strin
 
 # Whether the type's values are numbers, Chars, Bools, texts, Binaries or members of enums; numbers
 # and Chars order by their builtin compare (see Comparable).
-const is_value_type = (type: Type) ->
-  const kinds: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS..., 'Char', 'Bool', 'String', 'Binary']
+is_value_type := (type: Type) ->
+  kinds: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS..., 'Char', 'Bool', 'String', 'Binary']
   type is EnumType or is_one_of_kinds(type, kinds)
 
 # The equals of a type that `==` compares, but by an equals of its own, and the hash of one that
 # can be a map key, but by a hash of its own; a compare of its own gives its equals.
-const equality_method = (program: ProgramWide, receiver: Type, name: String): BuiltinMethod? ->
+equality_method := (program: ProgramWide, receiver: Type, name: String): BuiltinMethod? ->
   return nil if receiver is ObjectType and info_of(program, receiver).methods.has(name)
   if name == 'equals'
     return is_equatable(program, receiver, nil) then method(EQUALS, [receiver], bool_type)
-  const is_key = receiver is not OptionalType and is_hashable(program, receiver, nil)
+  is_key := receiver is not OptionalType and is_hashable(program, receiver, nil)
   is_key then method(HASH, [], int_type)
 
-const value_method = (program: ProgramWide, receiver: Type, name: String) ->
+value_method := (program: ProgramWide, receiver: Type, name: String) ->
   case name
     when 'compare'
       return nil if not is_one_of_kinds(receiver, [INTEGER_KINDS..., FLOAT_KINDS..., 'Char'])
@@ -84,26 +84,26 @@ const value_method = (program: ProgramWide, receiver: Type, name: String) ->
       if receiver is EnumType
         return method(ENUM_TO_STRING, [], string_type) if name == 'to_string'
         return method(ENUM_TO_LITERAL, [], string_type) if name == 'to_literal'
-      return operator if const operator = operator_method(receiver, name)
+      return operator if operator := operator_method(receiver, name)
       return char_method(name) if is_kind(receiver, 'Char')
       is_integer(receiver) then integer_method(receiver, name)
 
 # The method that an operator calls, `add` for `+` and so on, of a type that the operator applies
 # to, which applies it: the numbers', and String's and Binary's add.
-const operator_method = (receiver: Type, name: String) ->
+operator_method := (receiver: Type, name: String) ->
   if name == 'neg'
     return is_one_of_kinds(receiver, SIGNED_KINDS) then method(OPERATOR, [], receiver)
-  const operator = operator_of_method(name) ? return nil
+  operator := operator_of_method(name) ? return nil
   is_one_of_kinds(receiver, operand_kinds(operator)) then method(OPERATOR, [receiver], receiver)
 
 # The enum that compare gives, of std:builtins.
-export const ordering_type = (program: ProgramWide) ->
+export ordering_type := (program: ProgramWide) ->
   builtins_declarer(program, 'Ordering').enums['Ordering']!
 
 # `x.wrapping_add(y)` and so on, which wrap around where the operators throw; the conversions to
 # the integer types and to Float.
-const integer_method = (receiver: Type, name: String) ->
-  const wrapping: BuiltinMember? =
+integer_method := (receiver: Type, name: String) ->
+  wrapping: BuiltinMember? =
     case name
       when 'wrapping_add' then WRAPPING_ADD
       when 'wrapping_sub' then WRAPPING_SUB
@@ -111,46 +111,46 @@ const integer_method = (receiver: Type, name: String) ->
       else nil
   return method(wrapping, [receiver], receiver) if wrapping
   return method(INTEGER_TO_FLOAT, [], float_type) if name == 'to_float'
-  const kind = CONVERSIONS[name] ? return nil
-  const target = SimpleType(kind)
+  kind := CONVERSIONS[name] ? return nil
+  target := SimpleType(kind)
   method INTEGER_CONVERSION, [], holds_all(target, receiver) then target else optional_type(target)
 
 # Whether every value of the integer type `from` is one of `to`, which converting to it gives,
 # where it gives nil for a value that it does not hold: a type of no fewer bits and of no other
 # sign, or an unsigned type into a signed one of more bits; and only Bytes are all Chars, the
 # numbers below the surrogates.
-const holds_all = (to: Type, from: Type) ->
+holds_all := (to: Type, from: Type) ->
   return is_kind(from, 'Byte') if is_kind(to, 'Char')
-  const wider = integer_bits(to) > integer_bits(from)
-  const as_wide = integer_bits(to) >= integer_bits(from)
+  wider := integer_bits(to) > integer_bits(from)
+  as_wide := integer_bits(to) >= integer_bits(from)
   is_signed(from) == is_signed(to) then as_wide else not is_signed(from) and wider
 
 # The types that `to_int`, `to_byte`, `to_int8` and so on convert to: the integer types, and Char.
-const CONVERSIONS: Map<String, TypeKind> =
+CONVERSIONS: Map<String, TypeKind> =
   'to_int': 'Int', 'to_byte': 'Byte', 'to_int8': 'Int8', 'to_int16': 'Int16', 'to_int32': 'Int32',
   'to_uint16': 'UInt16', 'to_uint32': 'UInt32', 'to_uint64': 'UInt64', 'to_char': 'Char'
 
 # A Char's number, which every Char has, as an Int.
-const char_method = (name: String) -> name == 'to_int' then method(INTEGER_CONVERSION, [], int_type)
+char_method := (name: String) -> name == 'to_int' then method(INTEGER_CONVERSION, [], int_type)
 
 # Whether the builtin method keeps its argument, as an array's `push` does, which a cycle can go
 # through (see cycles).
-export const keeps_argument = (member: BuiltinMember) -> member == ARRAY_PUSH
+export keeps_argument := (member: BuiltinMember) -> member == ARRAY_PUSH
 
-const array_method = (element: Type, name: String) ->
+array_method := (element: Type, name: String) ->
   case name
     when 'push' then method(ARRAY_PUSH, [element], void_type)
     when 'pop' then method(ARRAY_POP, [], element)
     else nil
 
-const iter_method = (item: Type, name: String) ->
+iter_method := (item: Type, name: String) ->
   case name
     when 'has_next' then method(ITER_HAS_NEXT, [], bool_type)
     when 'next' then method(ITER_NEXT, [], item)
     else nil
 
-const map_method = (map: MapType, name: String) ->
-  const { key, value } = map
+map_method := (map: MapType, name: String) ->
+  { key, value } := map
   return set_method(key, name) if is_set(map)
   case name
     when 'remove' then method(MAP_REMOVE, [key], void_type)
@@ -158,7 +158,7 @@ const map_method = (map: MapType, name: String) ->
     when 'entries' then method(MAP_ENTRIES, [], IterType(item: TupleType(items: [key, value])))
     else nil
 
-const set_method = (item: Type, name: String) ->
+set_method := (item: Type, name: String) ->
   case name
     when 'has' then method(SET_HAS, [item], bool_type)
     when 'add' then method(SET_ADD, [item], void_type)

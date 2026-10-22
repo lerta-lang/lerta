@@ -116,19 +116,19 @@ export struct Comment(line: Int, column: Int, own_line: Bool)
 export struct Lexed(tokens: Token[], comments: Comment[])
 
 # `path` names the source in diagnostics.
-export const tokenize = (source: String, path: String) -> lex(source, path).tokens
+export tokenize := (source: String, path: String) -> lex(source, path).tokens
 
 # The tokens, and the comments apart from them.
-export const lex = (source: String, path: String) ->
-  const tokens: Token[]
-  const comments: Comment[]
-  const layout = Layout(path, tokens)
-  const lines = source_lines(source, path)
+export lex := (source: String, path: String) ->
+  tokens: Token[]
+  comments: Comment[]
+  layout := Layout(path, tokens)
+  lines := source_lines(source, path)
   # The lines up to this number are inside a `"""` or `'''` literal.
   var literal_end = 0
   for line in lines
     continue if line.number <= literal_end
-    const indent = line.scan_while(0, is_space)
+    indent := line.scan_while(0, is_space)
     continue if indent == line.length
     if line.bytes[indent] == '#'
       comments.push Comment(own_line: true, line: line.number, column: line.column(indent))
@@ -138,45 +138,45 @@ export const lex = (source: String, path: String) ->
     var scanner = LineScanner(line, position: indent)
     while true
       layout.add token for token in scanner.run()
-      const start = scanner.multiline_start ? break
-      const literal = scan_multiline(lines, scanner.line.number - 1, start)
+      start := scanner.multiline_start ? break
+      literal := scan_multiline(lines, scanner.line.number - 1, start)
       layout.add multiline_token(scanner.line, start, literal)
       scanner = LineScanner(line: literal.line, position: literal.end)
       literal_end = literal.line.number
-    const last = scanner.line
-    if const index = scanner.comment_index
+    last := scanner.line
+    if index := scanner.comment_index
       comments.push Comment(own_line: false, line: last.number, column: last.column(index))
     layout.end_line last, indent
   layout.finish lines.length
   Lexed tokens, comments
 
-const source_lines = (source: String, path: String) ->
-  const texts = source.split("\n")
-  const lines: SourceLine[]
+source_lines := (source: String, path: String) ->
+  texts := source.split("\n")
+  lines: SourceLine[]
   for text, index in texts
-    const ends_with_lf = index + 1 < texts.length
-    const bytes = ends_with_lf then without_carriage_return(text) else text.binary
+    ends_with_lf := index + 1 < texts.length
+    bytes := ends_with_lf then without_carriage_return(text) else text.binary
     lines.push SourceLine(path, bytes, number: index + 1, column_offset: 0)
   lines
 
 # The tokens of an interpolated expression, placed where it is in the source line.
-export const tokenize_fragment = (source: String, path: String, line: Int, column: Int) ->
-  const fragment = SourceLine(path, bytes: source.binary, number: line, column_offset: column - 1)
-  const scanner = LineScanner(line: fragment, position: 0)
-  const tokens = scanner.run()
-  fragment.fail 'unterminated string literal', start if const start = scanner.multiline_start
-  const end = fragment.column(fragment.length)
+export tokenize_fragment := (source: String, path: String, line: Int, column: Int) ->
+  fragment := SourceLine(path, bytes: source.binary, number: line, column_offset: column - 1)
+  scanner := LineScanner(line: fragment, position: 0)
+  tokens := scanner.run()
+  fragment.fail 'unterminated string literal', start if start := scanner.multiline_start
+  end := fragment.column(fragment.length)
   tokens.push layout_token(NEWLINE, line, end)
   tokens.push layout_token(EOF, line, end)
   tokens
 
 # A line that LF ends may end with CRLF.
-const without_carriage_return = (line: String) ->
-  const bytes = line.binary
-  const ends_with_cr = bytes.length > 0 and bytes[bytes.length - 1] == "\r"
+without_carriage_return := (line: String) ->
+  bytes := line.binary
+  ends_with_cr := bytes.length > 0 and bytes[bytes.length - 1] == "\r"
   ends_with_cr then bytes.slice(0, bytes.length - 1) else bytes
 
-const layout_token = (kind: TokenKind, line: Int, column: Int) ->
+layout_token := (kind: TokenKind, line: Int, column: Int) ->
   Token kind, line, column, text: '', spaced: true
 
 # A level of the layout: the indentation of its blocks, from its base, and the brackets open in it.
@@ -207,12 +207,12 @@ class Layout
   in_brackets = -> @frame().open.length > 0
 
   start_line = (line: SourceLine, indent: Int) ->
-    const column = line.column(indent)
-    if const base = @arrow_indent
+    column := line.column(indent)
+    if base := @arrow_indent
       @arrow_indent = nil
       if indent > base
         # The line break after `->` ends the line that the block's body follows.
-        const arrow_end = @tokens.pop()
+        arrow_end := @tokens.pop()
         @tokens.push layout_token(NEWLINE, arrow_end.line, arrow_end.column)
         @frames.push Frame(indents: [base, indent])
         @tokens.push layout_token(INDENT, line.number, column)
@@ -223,9 +223,9 @@ class Layout
     return if @in_brackets()
     # A closing bracket that starts a line of a block closes the brackets around it, whatever its
     # indentation (see add).
-    const first = line.bytes[indent]
+    first := line.bytes[indent]
     return if @frames.length > 1 and (first == ')' or first == ']' or first == '}')
-    const indents = @frame().indents
+    indents := @frame().indents
     if indent > indents.last()!
       indents.push indent
       @tokens.push layout_token(INDENT, line.number, column)
@@ -238,13 +238,13 @@ class Layout
   # A closing bracket in a block that has none open closes the brackets that the block is in,
   # which ends the block first.
   add = (token: Token) ->
-    const open = @frame().open
+    open := @frame().open
     case token.kind
       when '(', '[', '{' then open.push(token)
       when ')', ']', '}'
         if open.length == 0 and @frames.length > 1
           # A bracket at the start of a line follows the line end of the block's last line.
-          const after_line_end = @tokens.last()!.kind == NEWLINE
+          after_line_end := @tokens.last()!.kind == NEWLINE
           @tokens.push layout_token(NEWLINE, token.line, token.column) if not after_line_end
           @close_frame token.line, token.column
         # An extra closing bracket is left to the parser to report.
@@ -253,23 +253,23 @@ class Layout
     @tokens.push token
 
   end_line = (line: SourceLine, indent: Int) ->
-    const in_brackets = @in_brackets()
-    const ends_with_arrow = @tokens.length > 0 and @tokens.last()!.kind == '->'
+    in_brackets := @in_brackets()
+    ends_with_arrow := @tokens.length > 0 and @tokens.last()!.kind == '->'
     @arrow_indent = indent if in_brackets and ends_with_arrow
-    const kind: TokenKind = in_brackets then LINE_BREAK else NEWLINE
+    kind: TokenKind = in_brackets then LINE_BREAK else NEWLINE
     @tokens.push layout_token(kind, line.number, line.column(line.length))
 
   # Ends the innermost frame's block, which leaves the line in the brackets around it.
   close_frame = (line: Int, column: Int) ->
-    const frame = @frames.pop()
+    frame := @frames.pop()
     @tokens.push layout_token(DEDENT, line, column) for _ in 1...frame.indents.length
 
   finish = (eof_line: Int) ->
-    const unclosed = @frames.find((frame) -> frame.open.length > 0)
-    if const frame = unclosed
-      const bracket = frame.open.last()!
+    unclosed := @frames.find((frame) -> frame.open.length > 0)
+    if frame := unclosed
+      bracket := frame.open.last()!
       compile_error @path, bracket.line, bracket.column, "'#{bracket.kind}' is never closed"
-    const indents = @frame().indents
+    indents := @frame().indents
     @tokens.push layout_token(DEDENT, eof_line, 1) for _ in 1...indents.length
     @tokens.push layout_token(EOF, eof_line, 1)
 
@@ -286,16 +286,16 @@ class LineScanner
 
   run = ->
     while @position < @line.length
-      const c = @line.bytes[@position]
+      c := @line.bytes[@position]
       case
         when c == ' ' then @position += 1
         when c == '#'
           @comment_index = @position
           break
         when @at_multiline_quotes()
-          const quotes = @line.text(@position, @position + 3)
+          quotes := @line.text(@position, @position + 3)
           # Quoted with the other quote, which is clearer than the same one next to them.
-          const shown = quotes == '"""' then "'#{quotes}'" else "\"#{quotes}\""
+          shown := quotes == '"""' then "'#{quotes}'" else "\"#{quotes}\""
           @line.fail "#{shown} must end its line", @position if @position + 3 != @line.length
           @multiline_start = @position
           break
@@ -307,52 +307,52 @@ class LineScanner
     @tokens
 
   at_multiline_quotes = ->
-    const bytes = @line.bytes
+    bytes := @line.bytes
     bytes.occurs_at(@position, '"""'.binary) or bytes.occurs_at(@position, "'''".binary)
 
   # Adds the token that starts at the position, and moves to `end`, after it.
   add = (kind: TokenKind, text: String, end: Int, parts: TemplatePart[]?) ->
-    const start = @position
-    const spaced = start == 0 or @line.bytes[start - 1] == ' '
-    const column = @line.column(start)
-    const end_column = @line.column(end)
+    start := @position
+    spaced := start == 0 or @line.bytes[start - 1] == ' '
+    column := @line.column(start)
+    end_column := @line.column(end)
     @tokens.push Token(kind, text, spaced, parts, column, end_column, line: @line.number)
     @position = end
 
   scan_word = ->
-    const end = @line.scan_while(@position, is_identifier_part)
-    const word = @line.text(@position, end)
+    end := @line.scan_while(@position, is_identifier_part)
+    word := @line.text(@position, end)
     @add keyword_kind(word) ? IDENTIFIER, word, end, nil
 
   scan_raw_string = ->
-    const start = @position
-    const close = @line.index_of("'", start + 1) ? @line.fail('unterminated string literal', start)
+    start := @position
+    close := @line.index_of("'", start + 1) ? @line.fail('unterminated string literal', start)
     @add STRING, @line.text(start + 1, close), close + 1, nil
 
   scan_double_quoted = ->
-    const { parts, end } = scan_double_quoted(@line, @position)
-    if const text = plain_text(parts)
+    { parts, end } := scan_double_quoted(@line, @position)
+    if text := plain_text(parts)
       @add STRING, text, end, nil
     else
       @add INTERPOLATED, '', end, parts
 
   # A `.` begins a fraction only before a digit, so `1.f()` stays an integer and a member.
   scan_number = ->
-    const bytes = @line.bytes
-    const after_digits = (start: Int) -> @line.scan_while(start, is_identifier_part)
+    bytes := @line.bytes
+    after_digits := (start: Int) -> @line.scan_while(start, is_identifier_part)
     var end = after_digits(@position)
-    const is_decimal = not @line.text(@position, end).starts_with('0x')
+    is_decimal := not @line.text(@position, end).starts_with('0x')
     # What looks like a fraction is taken whole (see Float literals in docs/reference/syntax.md).
-    const at_dot = end + 1 < @line.length and bytes[end] == '.'
-    const after_dot: Byte = at_dot then bytes[end + 1] else ' '
-    const has_fraction = after_dot.is_digit() or after_dot == '_'
+    at_dot := end + 1 < @line.length and bytes[end] == '.'
+    after_dot: Byte = at_dot then bytes[end + 1] else ' '
+    has_fraction := after_dot.is_digit() or after_dot == '_'
     end = after_digits(end + 1) if has_fraction
-    const ends_with_exponent = bytes[end - 1] == 'e' or bytes[end - 1] == 'E'
+    ends_with_exponent := bytes[end - 1] == 'e' or bytes[end - 1] == 'E'
     # The sign is taken even with no digit after it, so that a diagnostic shows it.
-    const sign_follows = end < @line.length and (bytes[end] == '+' or bytes[end] == '-')
+    sign_follows := end < @line.length and (bytes[end] == '+' or bytes[end] == '-')
     end = after_digits(end + 1) if is_decimal and ends_with_exponent and sign_follows
-    const text = @line.text(@position, end)
-    const digits = text.split('_').join('')
+    text := @line.text(@position, end)
+    digits := text.split('_').join('')
     return @add(INTEGER, digits, end, nil) if is_integer_literal(text)
     return @add(FLOAT, digits, end, nil) if is_float_literal(text)
     @line.fail "invalid number literal '#{text}'", @position
@@ -362,19 +362,19 @@ class LineScanner
   # keyword or named kind can match.
   scan_punctuation = ->
     for length in [3, 2, 1]
-      const end = @position + length
+      end := @position + length
       continue if end > @line.length
-      const text = @line.bytes.text(@position, end) ? continue
-      if const kind = TokenKind.parse(text)
+      text := @line.bytes.text(@position, end) ? continue
+      if kind := TokenKind.parse(text)
         @add kind, text, end, nil
         return
     @fail_unexpected_character()
 
   # Control characters such as '\r' would garble the error line if printed raw.
   fail_unexpected_character = ->
-    const number = @line.char_at(@position).to_int()
-    const is_printable_ascii = number >= 0x20 and number <= 0x7E
-    const shown =
+    number := @line.char_at(@position).to_int()
+    is_printable_ascii := number >= 0x20 and number <= 0x7E
+    shown :=
       if is_printable_ascii
         "'#{@line.text(@position, @position + 1)}'"
       else
@@ -382,10 +382,10 @@ class LineScanner
     @line.fail "unexpected character #{shown}", @position
 
 # The token of the `"""` or `'''` literal that starts at `start` on the line.
-const multiline_token = (line: SourceLine, start: Int, literal: MultilineLiteral) ->
-  const plain = plain_text(literal.parts)
-  const kind: TokenKind = plain != nil then STRING else INTERPOLATED
-  const parts = plain != nil then nil else literal.parts
+multiline_token := (line: SourceLine, start: Int, literal: MultilineLiteral) ->
+  plain := plain_text(literal.parts)
+  kind: TokenKind = plain != nil then STRING else INTERPOLATED
+  parts := plain != nil then nil else literal.parts
   Token
     kind
     parts
@@ -397,47 +397,47 @@ const multiline_token = (line: SourceLine, start: Int, literal: MultilineLiteral
     end_column: literal.line.column(literal.end)
 
 # The text of a literal without interpolations, or nil.
-const plain_text = (parts: TemplatePart[]) ->
+plain_text := (parts: TemplatePart[]) ->
   return nil if parts.length != 1
-  const part = parts[0]
+  part := parts[0]
   part is TextPart then part.text
 
 # The kind of a keyword; the named kinds are no keywords, so that a name such as EOF stays a name.
-const keyword_kind = (word: String) ->
-  const kind = TokenKind.parse(word) ? return nil
+keyword_kind := (word: String) ->
+  kind := TokenKind.parse(word) ? return nil
   case kind
     when IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, NEWLINE then nil
     when LINE_BREAK, INDENT, DEDENT, EOF then nil
     else kind
 
-const is_space = (c: Byte) -> c == ' '
-const is_identifier_start = (c: Byte) -> c.is_letter() or c == '_'
-const is_identifier_part = (c: Byte) -> is_identifier_start(c) or c.is_digit()
-const is_hex_digit = (c: Byte) -> hex_digit_value(c) != nil
+is_space := (c: Byte) -> c == ' '
+is_identifier_start := (c: Byte) -> c.is_letter() or c == '_'
+is_identifier_part := (c: Byte) -> is_identifier_start(c) or c.is_digit()
+is_hex_digit := (c: Byte) -> hex_digit_value(c) != nil
 
-const is_float_literal = (text: String) ->
-  const parts = text.split('e').join('E').split('E')
+is_float_literal := (text: String) ->
+  parts := text.split('e').join('E').split('E')
   return false if parts.length > 2
-  const significand = parts[0].split('.')
+  significand := parts[0].split('.')
   return false if significand.length > 2 or (parts.length == 1 and significand.length == 1)
   return false if not is_integer_literal(significand[0]) or significand[0].starts_with('0x')
   return false if significand.length == 2 and not is_digit_run(significand[1])
   return true if parts.length == 1
-  const exponent = parts[1].without_prefix('-') ? parts[1].without_prefix('+') ? parts[1]
+  exponent := parts[1].without_prefix('-') ? parts[1].without_prefix('+') ? parts[1]
   is_digit_run exponent
 
 # Digits, with separators between them.
-const is_digit_run = (text: String) ->
-  const bytes = text.binary
+is_digit_run := (text: String) ->
+  bytes := text.binary
   return false if bytes.length == 0 or not bytes[0].is_digit()
   for i in 1...bytes.length
-    const c = bytes[i]
-    const separates_digits = c == '_' and i + 1 < bytes.length and bytes[i + 1].is_digit()
+    c := bytes[i]
+    separates_digits := c == '_' and i + 1 < bytes.length and bytes[i + 1].is_digit()
     return false if not c.is_digit() and not separates_digits
   true
 
-const is_integer_literal = (text: String) ->
-  const bytes = text.binary
+is_integer_literal := (text: String) ->
+  bytes := text.binary
   if text.starts_with('0x')
     return false if text == '0x'
     for i in 2...bytes.length

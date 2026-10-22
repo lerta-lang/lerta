@@ -18,67 +18,67 @@ import parse_result_annotation, parse_type_annotation, parse_type_parameters fro
 # `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
 # map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
 # The lookahead skips line breaks, which may separate the parameters.
-export const starts_function_literal = (tokens: TokenStream) ->
+export starts_function_literal := (tokens: TokenStream) ->
   tokens.inside SKIP, -> looks_like_function_literal(tokens)
 
-export const starts_weak_function_literal = (tokens: TokenStream) ->
+export starts_weak_function_literal := (tokens: TokenStream) ->
   return false if not tokens.at_word('weak')
-  const start = tokens.index
+  start := tokens.index
   tokens.next()
-  const starts = starts_function_literal(tokens)
+  starts := starts_function_literal(tokens)
   tokens.index = start
   starts
 
-const looks_like_function_literal = (tokens: TokenStream) ->
-  const first = tokens.peek().kind
-  const second = tokens.peek_at(1).kind
-  const third = tokens.peek_at(2).kind
+looks_like_function_literal := (tokens: TokenStream) ->
+  first := tokens.peek().kind
+  second := tokens.peek_at(1).kind
+  third := tokens.peek_at(2).kind
   return true if first == '->' or first == '<'
   return false if first != '('
   return third == ':' or third == '->' if second == ')'
   # `(x = 1)` is no expression, as an assignment is a statement.
   return true if second == IDENTIFIER and (third == ':' or third == '=')
-  const on_line = (kind: TokenKind) -> kind != NEWLINE and kind != EOF
-  const close = tokens.closing_offset('(', ')', on_line) ? return false
+  on_line := (kind: TokenKind) -> kind != NEWLINE and kind != EOF
+  close := tokens.closing_offset('(', ')', on_line) ? return false
   tokens.peek_at(close + 1).kind == '->'
 
 # `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted, and so may
 # the parameters' types, `(a, b) -> body`, where a function type is expected. Type parameters,
 # `<T, U: Stringable>`, come first.
-export const parse_function_literal = (tokens: TokenStream, weak = false) ->
-  const token = tokens.peek()
-  const type_params = parse_type_parameters(tokens)
-  const parse_params = (): Parameter[] ->
+export parse_function_literal := (tokens: TokenStream, weak = false) ->
+  token := tokens.peek()
+  type_params := parse_type_parameters(tokens)
+  parse_params := (): Parameter[] ->
     return [] if not tokens.accept('(')
     tokens.parse_list ')', -> parse_parameter(tokens)
   # A default is computed before the body runs (see generate_default_entry), so it cannot wait.
-  const parsed_params = tokens.in_function(parse_params)
-  const params = parsed_params.body
-  tokens.fail at, "'await' cannot be in a default" if const at = parsed_params.marks.await_at
-  const return_type = parse_result_annotation(tokens)
+  parsed_params := tokens.in_function(parse_params)
+  params := parsed_params.body
+  tokens.fail at, "'await' cannot be in a default" if at := parsed_params.marks.await_at
+  return_type := parse_result_annotation(tokens)
   tokens.expect '->', "'->'"
-  const is_block = tokens.peek().kind == NEWLINE
+  is_block := tokens.peek().kind == NEWLINE
   # Interpolated code is one expression; a function literal, whose body is made of statements,
   # cannot be written there.
-  if const start = tokens.interpolation
+  if start := tokens.interpolation
     tokens.fail start, 'a function cannot be written in an interpolation'
-  const parse_body = ->
+  parse_body := ->
     case
       when is_block then parse_block(tokens)
       # Inside brackets, a postfix `for` or `if` after the body belongs to them, as in
       # `[(x) -> x for x in xs]`.
       when tokens.in_brackets() then [parse_simple_statement(tokens)]
       else [parse_line_statement(tokens)]
-  const { body, marks } = tokens.in_function(parse_body)
-  const yields = marks.yields
-  const awaits = marks.await_at != nil
-  const position = token_position(token)
+  { body, marks } := tokens.in_function(parse_body)
+  yields := marks.yields
+  awaits := marks.await_at != nil
+  position := token_position(token)
   FunctionLiteral type_params, params, return_type, body, yields, awaits, position, weak
 
 # `name[: Type][ = default]`, or `name: Type...`.
-const parse_parameter = (tokens: TokenStream) ->
-  const name = parse_identifier(tokens)
-  const type = parse_type_annotation(tokens)
+parse_parameter := (tokens: TokenStream) ->
+  name := parse_identifier(tokens)
+  type := parse_type_annotation(tokens)
   if tokens.accept('...')
     if type == nil
       tokens.fail name.position, 'a variadic parameter must have a type, as in `rest: Int...`'
@@ -87,41 +87,41 @@ const parse_parameter = (tokens: TokenStream) ->
 
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension. An element
 # `xs...` gives the items of `xs` in its place.
-export const parse_array_literal = (tokens: TokenStream, position: Position) ->
-  const parse_contents = ->
+export parse_array_literal := (tokens: TokenStream, position: Position) ->
+  parse_contents := ->
     tokens.accept LINE_BREAK
     return ArrayLiteral(position, elements: []) if tokens.accept(']')
-    const first = parse_element(tokens)
+    first := parse_element(tokens)
     tokens.next() if tokens.peek().kind == LINE_BREAK and tokens.peek_at(1).kind == 'for'
     if tokens.peek().kind == 'for'
       if is_spread(first)
         tokens.fail first.position, 'a spread cannot be the element of a comprehension'
       return parse_comprehension(tokens, first, position, ']')
-    const elements = tokens.parse_list_rest(']', -> parse_element(tokens), [first])
+    elements := tokens.parse_list_rest(']', -> parse_element(tokens), [first])
     ArrayLiteral elements, position
   tokens.inside SEPARATE, parse_contents
 
 # A spread `xs...` is the comprehension `[x for x in xs]` marked to give its items in its place;
 # its variable's name cannot be written, so no code can read it.
-export const parse_element = (tokens: TokenStream) -> spread_of(tokens, parse_expression(tokens))
+export parse_element := (tokens: TokenStream) -> spread_of(tokens, parse_expression(tokens))
 
 # `value`, or `value...` when a spread follows it.
-export const spread_of = (tokens: TokenStream, value: Expression) ->
+export spread_of := (tokens: TokenStream, value: Expression) ->
   return value if not at_spread(tokens)
   tokens.next()
-  const { position } = value
-  const variable = Identifier(position, name: ' item')
-  const element = copy_identifier(variable)
+  { position } := value
+  variable := Identifier(position, name: ' item')
+  element := copy_identifier(variable)
   Comprehension element, variable, position, iterable: value, guard: nil, lazy: nil, spread: true
 
 # `(a)`, a tuple, `(a, b)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends
 # inside are skipped.
-export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
-  const parse_contents = ->
-    const first = parse_expression(tokens)
+export parse_parenthesized := (tokens: TokenStream, position: Position) ->
+  parse_contents := ->
+    first := parse_expression(tokens)
     return parse_comprehension(tokens, first, position, ')') if tokens.peek().kind == 'for'
     if tokens.peek().kind == ','
-      const items = tokens.parse_list_rest(')', -> parse_expression(tokens), [first])
+      items := tokens.parse_list_rest(')', -> parse_expression(tokens), [first])
       return TupleLiteral(items, position)
     tokens.expect ')', "')'"
     # Diagnostics about the group point at its opening parenthesis.
@@ -131,98 +131,98 @@ export const parse_parenthesized = (tokens: TokenStream, position: Position) ->
 
 # `for x in xs when guard]`, after the element, or `... guard)` for an Iter; line ends inside
 # are skipped.
-const parse_comprehension = (
+parse_comprehension := (
   tokens: TokenStream, element: Expression, position: Position, close: TokenKind
 ): Expression ->
-  const parse_header = ->
-    const header = parse_loop_header(tokens)
+  parse_header := ->
+    header := parse_loop_header(tokens)
     tokens.expect close, "'#{close}'"
     header
-  const header = tokens.inside(SKIP, parse_header)
-  const { variable, index, iterable, guard } = header
-  const is_lazy = close == ')'
+  header := tokens.inside(SKIP, parse_header)
+  { variable, index, iterable, guard } := header
+  is_lazy := close == ')'
   if is_lazy and index != nil
     tokens.fail index.position, 'an Iter comprehension takes no index so far'
   # Each place that reads the parts declares them anew, as each is its own function or scope.
-  const bindings = -> take_apart_item(header)
-  const lazy = is_lazy then lazy_functions(element, variable, guard, bindings)
+  bindings := -> take_apart_item(header)
+  lazy := is_lazy then lazy_functions(element, variable, guard, bindings)
   Comprehension element, variable, iterable, guard, lazy, position, index, bindings: bindings()
 
-export const parse_map_literal = (tokens: TokenStream, position: Position): Expression ->
+export parse_map_literal := (tokens: TokenStream, position: Position): Expression ->
   return parse_record_literal(tokens, position) if starts_record_field(tokens)
-  const entries = tokens.parse_list('}', -> parse_map_entry(tokens))
+  entries := tokens.parse_list('}', -> parse_map_entry(tokens))
   if entries.length == 0
     tokens.fail position, 'the empty map is written `Map()`, and the empty set `Set()`'
   MapLiteral entries, position
 
-const parse_map_entry = (tokens: TokenStream) ->
+parse_map_entry := (tokens: TokenStream) ->
   if starts_record_field(tokens)
-    const token = tokens.peek()
-    const name = token.text
-    const message = "a map's keys are values: for the value of '#{name}', write (#{name})"
+    token := tokens.peek()
+    name := token.text
+    message := "a map's keys are values: for the value of '#{name}', write (#{name})"
     tokens.fail token_position(token), message
-  const key = parse_expression(tokens)
+  key := parse_expression(tokens)
   tokens.expect ':', "':'"
   MapEntry key, value: parse_expression(tokens)
 
 # A name followed by `:`, `,` or `}` starts a field of an anonymous struct; a map's keys are
 # other expressions.
-const starts_record_field = (tokens: TokenStream) ->
-  const follows_name = is_one_of(tokens.peek_at(1).kind, [':', ',', '}', LINE_BREAK])
+starts_record_field := (tokens: TokenStream) ->
+  follows_name := is_one_of(tokens.peek_at(1).kind, [':', ',', '}', LINE_BREAK])
   tokens.peek().kind == IDENTIFIER and follows_name
 
 # `{ x: 1, y }`; a field without a value takes that of the name.
-const parse_record_literal = (tokens: TokenStream, position: Position) ->
+parse_record_literal := (tokens: TokenStream, position: Position) ->
   RecordLiteral position, fields: tokens.parse_list('}', -> parse_record_field(tokens))
 
-const parse_record_field = (tokens: TokenStream) ->
+parse_record_field := (tokens: TokenStream) ->
   if not starts_record_field(tokens)
-    const message = 'an anonymous struct and a map cannot be mixed'
+    message := 'an anonymous struct and a map cannot be mixed'
     tokens.fail token_position(tokens.peek()), message
-  const name = parse_identifier(tokens)
-  const has_value = tokens.accept(':')
-  const value: Expression = has_value then parse_expression(tokens) else copy_identifier(name)
+  name := parse_identifier(tokens)
+  has_value := tokens.accept(':')
+  value: Expression = has_value then parse_expression(tokens) else copy_identifier(name)
   NamedValue name, value
 
 # With a subject, the `else` arm may be left out; whether it may is checked later.
-export const parse_case = (tokens: TokenStream, position: Position) ->
-  const subject = tokens.peek().kind == NEWLINE then nil else parse_expression(tokens)
+export parse_case := (tokens: TokenStream, position: Position) ->
+  subject := tokens.peek().kind == NEWLINE then nil else parse_expression(tokens)
   tokens.expect NEWLINE, 'end of line'
   tokens.expect INDENT, "indented 'when' arms"
-  const has_subject = subject != nil
-  const arms = [parse_case_arm(tokens, has_subject)]
+  has_subject := subject != nil
+  arms := [parse_case_arm(tokens, has_subject)]
   arms.push parse_case_arm(tokens, has_subject) while tokens.at_word('when')
-  const has_else = not has_subject or tokens.peek().kind == 'else'
+  has_else := not has_subject or tokens.peek().kind == 'else'
   tokens.expect 'else', "'when' or 'else'" if has_else
-  const otherwise = has_else then parse_arm_body(tokens, 'else')
+  otherwise := has_else then parse_arm_body(tokens, 'else')
   tokens.expect DEDENT, 'end of block'
   Case subject, arms, otherwise, position
 
 # `try` and an indented block, then `catch` clauses and a `finally` clause, each with its block.
-export const parse_try = (tokens: TokenStream, position: Position) ->
-  const body = parse_block(tokens)
-  const catches: Catch[]
+export parse_try := (tokens: TokenStream, position: Position) ->
+  body := parse_block(tokens)
+  catches: Catch[]
   catches.push parse_catch(tokens) while tokens.peek().kind == 'catch'
-  const has_finally = tokens.accept('finally')
-  const finally_body = has_finally then parse_block(tokens)
+  has_finally := tokens.accept('finally')
+  finally_body := has_finally then parse_block(tokens)
   if catches.length == 0 and finally_body == nil
     tokens.fail_expecting tokens.peek(), "'catch' or 'finally'"
   Try body, catches, finally_body, position
 
-const parse_catch = (tokens: TokenStream) ->
-  const position = token_position(tokens.next())
-  const name = parse_identifier(tokens)
-  const type = parse_type_annotation(tokens)
+parse_catch := (tokens: TokenStream) ->
+  position := token_position(tokens.next())
+  name := parse_identifier(tokens)
+  type := parse_type_annotation(tokens)
   Catch name, type, position, body: parse_block(tokens)
 
-const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
+parse_case_arm := (tokens: TokenStream, has_subject: Bool) ->
   tokens.expect_word 'when'
   # A pattern stops before `then`, which begins the arm's value.
-  const parse_pattern = -> parse_or(tokens)
+  parse_pattern := -> parse_or(tokens)
   if has_subject and starts_block(tokens)
-    const patterns = parse_pattern_block(tokens, parse_pattern)
+    patterns := parse_pattern_block(tokens, parse_pattern)
     return CaseArm(patterns, body: parse_arm_body(tokens, 'else'))
-  const patterns =
+  patterns :=
     if has_subject
       tokens.parse_separated ',', parse_pattern
     else
@@ -232,8 +232,8 @@ const parse_case_arm = (tokens: TokenStream, has_subject: Bool) ->
 # Patterns in an indented block, as the items of a literal are, and `then` at the indentation of
 # `when`, which the body follows as it follows `else`: `when` and then `'a', 'b'` and `'c'` on the
 # lines below, and `then 1`.
-const parse_pattern_block = (tokens: TokenStream, parse_pattern: () -> Expression) ->
-  const patterns: Expression[]
+parse_pattern_block := (tokens: TokenStream, parse_pattern: () -> Expression) ->
+  patterns: Expression[]
   tokens.read_block_items -> patterns.push(parse_pattern())
   tokens.expect 'then', "'then'"
   patterns
@@ -241,37 +241,37 @@ const parse_pattern_block = (tokens: TokenStream, parse_pattern: () -> Expressio
 # A simple statement on the same line (`when c then x`, `else i += 1`), or an indented block.
 # `arm` is 'then', which comes first, or 'else', which is read already, as `then` is after a block
 # of patterns.
-const parse_arm_body = (tokens: TokenStream, arm: TokenKind) ->
-  const is_inline = arm == 'then' then tokens.accept('then') else tokens.peek().kind != NEWLINE
+parse_arm_body := (tokens: TokenStream, arm: TokenKind) ->
+  is_inline := arm == 'then' then tokens.accept('then') else tokens.peek().kind != NEWLINE
   if is_inline
-    const statement = parse_pass(tokens) ? parse_inline_arm(tokens)
+    statement := parse_pass(tokens) ? parse_inline_arm(tokens)
     tokens.expect_line_end()
     return [statement]
-  const next = tokens.peek()
+  next := tokens.peek()
   tokens.fail_expecting next, "'then' or end of line" if next.kind != NEWLINE
   parse_block tokens
 
 # `pass` is not a keyword: a name alone after `then` or `else` would be an unused value, so it can
 # mean nothing else there.
-const parse_pass = (tokens: TokenStream): Statement? ->
+parse_pass := (tokens: TokenStream): Statement? ->
   return nil if not tokens.at_word('pass') or tokens.peek_at(1).kind != NEWLINE
   Pass position: token_position(tokens.next())
 
 # A declaration's scope would end with the line, so none may follow `then` or `else`.
-const parse_inline_arm = (tokens: TokenStream) ->
-  const message = 'a declaration in an arm must be in an indented block'
+parse_inline_arm := (tokens: TokenStream) ->
+  message := 'a declaration in an arm must be in an indented block'
   tokens.fail token_position(tokens.peek()), message if at_declaration(tokens)
   parse_line_statement tokens
 
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
 # Comprehension). The guard's function tests its condition as an `if` would:
 # `guard then true else false`.
-const lazy_functions = (
+lazy_functions := (
   element: Expression, variable: Identifier, guard: Expression?, bindings: () -> Statement[]
 ) ->
-  const function_of = (value: Expression) ->
-    const params = [Parameter(name: copy_identifier(variable))]
-    const body = [bindings()..., value]
+  function_of := (value: Expression) ->
+    params := [Parameter(name: copy_identifier(variable))]
+    body := [bindings()..., value]
     FunctionLiteral
       params
       body
@@ -280,11 +280,11 @@ const lazy_functions = (
       yields: false
       awaits: false
       weak: false
-  const guard_function = guard then function_of(as_test(guard))
+  guard_function := guard then function_of(as_test(guard))
   LazyFunctions guard: guard_function, element: function_of(element)
 
-const as_test = (guard: Expression) ->
-  const position = guard.position
-  const then_value = BooleanLiteral(position, value: true)
-  const else_value = BooleanLiteral(position, value: false)
+as_test := (guard: Expression) ->
+  position := guard.position
+  then_value := BooleanLiteral(position, value: true)
+  else_value := BooleanLiteral(position, value: false)
   Conditional then_value, else_value, position, condition: guard

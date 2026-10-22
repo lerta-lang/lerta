@@ -54,45 +54,45 @@ export struct Item
 # An item that holds a block, a function's body, ends its line inside the brackets, which a comma
 # cannot then follow: only the last item may, and the closing bracket goes on a line of its own
 # (see Layout in the lexer); otherwise each item is on a line of its own.
-export const bracketed = (open: Doc, items: Item[], close: String, close_at: Position?) ->
-  const closing_text = closing(close, close_at)
+export bracketed := (open: Doc, items: Item[], close: String, close_at: Position?) ->
+  closing_text := closing(close, close_at)
   bracketed_or open, items, closing_text, opened_list(open, items, closing_text)
 
 # The list in brackets as `bracketed` lays it out, with `opened` where its items would go on lines
 # of their own inside the brackets.
-export const bracketed_or = (open: Doc, items: Item[], closing_text: Doc, opened: Doc) ->
+export bracketed_or := (open: Doc, items: Item[], closing_text: Doc, opened: Doc) ->
   return join([open, closing_text]) if items.length == 0
-  const docs = [item.doc for item in items]
-  const holds_block = (item: Item) -> has_line_feed(item.doc)
-  const blocks = items.find_index(holds_block)
-  const ending_with = (last: Doc) ->
-    const leading = [doc for doc, i in docs when i < docs.length - 1]
+  docs := [item.doc for item in items]
+  holds_block := (item: Item) -> has_line_feed(item.doc)
+  blocks := items.find_index(holds_block)
+  ending_with := (last: Doc) ->
+    leading := [doc for doc, i in docs when i < docs.length - 1]
     join [open, separated([leading..., last], text(', ')), line_feed(), closing_text]
-  if const first_block = blocks
+  if first_block := blocks
     return opened if first_block < items.length - 1
     return breaking(LONG_LISTS, ending_with(docs.last()!), opened)
-  const flat = join([open, separated(docs, text(', ')), closing_text])
+  flat := join([open, separated(docs, text(', ')), closing_text])
   # A function last whose body does not fit on its line takes the lines below for it.
-  const block = items.last()!.as_block ? return breaking(LONG_LISTS, flat, opened)
+  block := items.last()!.as_block ? return breaking(LONG_LISTS, flat, opened)
   breaking LONG_LISTS, flat, breaking(LONG_LISTS, ending_with(block), opened)
 
 # The list broken after its opening bracket, with its items on the lines below.
-export const opened_list = (open: Doc, items: Item[], closing: Doc) ->
-  const inside = indent(join([line_feed(), lines_of_items(items)]))
+export opened_list := (open: Doc, items: Item[], closing: Doc) ->
+  inside := indent(join([line_feed(), lines_of_items(items)]))
   join [open, inside, line_feed(), closing]
 
 # The items on lines of their own: as many on a line as fit if all are simple, with a comma ending
 # each line but the last, and otherwise one on each line, without commas.
-export const lines_of_items = (items: Item[]) ->
+export lines_of_items := (items: Item[]) ->
   # Lines that a comment ends would hold one item, which no comma ends.
-  const shares_lines = (item: Item) ->
+  shares_lines := (item: Item) ->
     item.simple and not item.after_comment and not has_line_feed(item.doc)
-  const all_simple = items.find_index((item) -> not shares_lines(item)) == nil
+  all_simple := items.find_index((item) -> not shares_lines(item)) == nil
   return separated([item.doc for item in items], line_feed()) if not all_simple
-  const parts: Doc[]
+  parts: Doc[]
   for item, i in items
     if i > 0
-      const next_line = join([text(','), line_feed(), item.doc])
+      next_line := join([text(','), line_feed(), item.doc])
       parts.push choice(join([text(', '), item.doc]), next_line)
     else
       parts.push item.doc
@@ -100,44 +100,44 @@ export const lines_of_items = (items: Item[]) ->
 
 # Where an annotation was left out of the syntax tree (see `kind` in annotation_key), the place
 # that reports it, which holds no text.
-export const removed_type = (kind: String, at: Position, context: Context) ->
-  const removed = context.left_out.contains(annotation_key(kind, at))
+export removed_type := (kind: String, at: Position, context: Context) ->
+  removed := context.left_out.contains(annotation_key(kind, at))
   removed then rule(TYPE_ANNOTATIONS, text('')) else text('')
 
 # Whether names were left out of the import (see import_names_of): all of them, if it has none left
 # and is not `import 'module' as name`, which takes none.
-export const has_left_out_names = (import_node: Import, context: Context) ->
-  const prefix = import_prefix(import_node)
+export has_left_out_names := (import_node: Import, context: Context) ->
+  prefix := import_prefix(import_node)
   context.left_out.any (key) -> key.starts_with(prefix)
 
 # A keyword at the position, where the source has it there.
-export const keyword = (word: String, at: Position) -> token(word, at)
+export keyword := (word: String, at: Position) -> token(word, at)
 
 # What `doc` makes of the value, or nothing.
-export const optional_doc = <T>(value: T?, doc: (T) -> Doc): Doc ->
-  if const present = value
+export optional_doc := <T>(value: T?, doc: (T) -> Doc): Doc ->
+  if present := value
     doc present
   else
     text ''
 
 # A keyword before the token at the position, past line ends and indentation, at its position in the
 # source if it is there, so that the comments before it go before it.
-export const word_before = (at: Position, word: String, context: Context) ->
-  if const position = position_before(at, word, context)
+export word_before := (at: Position, word: String, context: Context) ->
+  if position := position_before(at, word, context)
     token word, position
   else
     text word
 
 # Where the keyword before the token at the position is, past line ends and indentation, if it is
 # there.
-export const position_before = (at: Position, word: String, context: Context) ->
-  const source = context.source
-  const at_index = source.token_at(at) ? return nil
+export position_before := (at: Position, word: String, context: Context) ->
+  source := context.source
+  at_index := source.token_at(at) ? return nil
   var index = at_index - 1
   index -= 1 while index > 0 and is_layout(source.tokens[index].kind)
   return nil if index < 0
-  const found = source.tokens[index]
+  found := source.tokens[index]
   source.spelling(found) == word then Position(line: found.line, column: found.column)
 
-export const is_layout = (kind: TokenKind) ->
+export is_layout := (kind: TokenKind) ->
   kind == NEWLINE or kind == LINE_BREAK or kind == INDENT or kind == DEDENT

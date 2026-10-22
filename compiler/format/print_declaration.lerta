@@ -15,21 +15,20 @@ import
   Context, has_left_out_names, Item, keyword, lines_of_items, optional_doc, removed_type
 from './printing'
 
-export const declaration_doc = (statement: Statement, context: Context) ->
+export declaration_doc := (statement: Statement, context: Context) ->
   case statement
     when TypeDeclaration
-      const word = statement.is_struct then 'struct ' else 'class '
-      const head =
+      word := statement.is_struct then 'struct ' else 'class '
+      head :=
         exported(statement.exported, statement.position, context)
         keyword(word, statement.position)
         name_doc(statement.name)
         type_parameters(statement.type_params)
-      const interface_type = statement.satisfies
-      const satisfies =
-        interface_type then join([text(': '), named_type(interface_type)]) else text('')
+      interface_type := statement.satisfies
+      satisfies := interface_type then join([text(': '), named_type(interface_type)]) else text('')
       type_declaration_doc join(head), satisfies, statement.members, context
     when InterfaceDeclaration
-      const head = join
+      head := join
         [
           exported(statement.exported, statement.position, context)
           keyword('interface ', statement.position)
@@ -38,16 +37,16 @@ export const declaration_doc = (statement: Statement, context: Context) ->
         ]
       join [head, members_doc(statement.members, context)]
     when EnumDeclaration
-      const head = join
+      head := join
         [
           exported(statement.exported, statement.position, context)
           keyword('enum ', statement.position)
           name_doc(statement.name)
         ]
-      const members = [enum_member(member, context) for member in statement.members]
+      members := [enum_member(member, context) for member in statement.members]
       join [head, indent(join([line_feed(), separated(members, line_feed())]))]
     when TypeAlias
-      const head = join
+      head := join
         [
           exported(statement.exported, statement.position, context)
           keyword('type ', statement.position)
@@ -56,7 +55,7 @@ export const declaration_doc = (statement: Statement, context: Context) ->
         ]
       join [head, aliased_type(statement)]
     when Extern
-      const parts =
+      parts :=
         exported(statement.exported, statement.position, context)
         keyword('extern ', statement.position)
         name_doc(statement.symbol)
@@ -66,7 +65,7 @@ export const declaration_doc = (statement: Statement, context: Context) ->
       parts.push join([text(': '), type_doc(statement.type)])
       join parts
     when Extend
-      const head = join
+      head := join
         [
           keyword('extend', statement.position)
           type_parameters(statement.type_params)
@@ -78,64 +77,63 @@ export const declaration_doc = (statement: Statement, context: Context) ->
     else text('')
 
 # `export ` before a declaration that has it, at the position of the token before the declaration.
-export const exported = (is_exported: Bool, at: Position, context: Context) ->
+export exported := (is_exported: Bool, at: Position, context: Context) ->
   return text('') if not is_exported
-  const source = context.source
-  if const index = source.token_at(at)
+  source := context.source
+  if index := source.token_at(at)
     if index > 0
-      const word = source.tokens[index - 1]
+      word := source.tokens[index - 1]
       return token('export ', Position(line: word.line, column: word.column))
   text 'export '
 
-const name_doc = (name: Identifier) -> token(name.name, name.position)
+name_doc := (name: Identifier) -> token(name.name, name.position)
 
 # The members in `(...)` on the line of the declaration, if all are constructor arguments and fit,
 # and in a block otherwise.
-const type_declaration_doc = (
+type_declaration_doc := (
   head: Doc, satisfies: Doc, members: MemberDeclaration[], context: Context
 ) ->
-  const block = join([satisfies, members_doc(members, context)])
-  const all_arguments = members.all((member) -> member.value == nil or member.has_default)
+  block := join([satisfies, members_doc(members, context)])
+  all_arguments := members.all((member) -> member.value == nil or member.has_default)
   return join([head, block]) if members.length == 0 or not all_arguments
-  const arguments = separated([member_doc(member, context) for member in members], text(', '))
-  const in_parentheses =
-    rule(CONSTRUCTOR_ARGUMENTS, join([text('('), arguments, text(')'), satisfies]))
+  arguments := separated([member_doc(member, context) for member in members], text(', '))
+  in_parentheses := rule(CONSTRUCTOR_ARGUMENTS, join([text('('), arguments, text(')'), satisfies]))
   # The rule marks where the parentheses were left out, as the block may differ from the source
   # only there.
-  const marked_block = join([rule(CONSTRUCTOR_ARGUMENTS, text('')), block])
+  marked_block := join([rule(CONSTRUCTOR_ARGUMENTS, text('')), block])
   join [head, one_line(in_parentheses, marked_block)]
 
-const members_doc = (members: MemberDeclaration[], context: Context) ->
+members_doc := (members: MemberDeclaration[], context: Context) ->
   return text('') if members.length == 0
-  const docs = [member_doc(member, context) for member in members]
+  docs := [member_doc(member, context) for member in members]
   indent join([line_feed(), separated(docs, line_feed())])
 
 # `[const | var | weak | weak!] name[: Type][ = [default] value]`.
-const member_doc = (member: MemberDeclaration, context: Context) ->
-  const parts: Doc[]
-  parts.push keyword("#{modifier} ", member.position) if const modifier = member.modifier
+member_doc := (member: MemberDeclaration, context: Context) ->
+  parts: Doc[]
+  parts.push keyword("#{modifier} ", member.position) if modifier := member.modifier
   parts.push name_doc(member.name)
   parts.push removed_type('field', member.name.position, context)
-  parts.push join([text(': '), type_doc(type)]) if const type = member.type
-  if const value = member.value
+  parts.push join([text(': '), type_doc(type)]) if type := member.type
+  if value := member.value
     if member.has_default
       parts.push join([text(' = default '), expression_doc(value, context)])
     else
       parts.push join([text(' ='), value_after(value, context)])
   join parts
 
-const enum_member = (member: Identifier | StringLiteral, context: Context) ->
+enum_member := (member: Identifier | StringLiteral, context: Context) ->
   case member
     when Identifier then name_doc(member)
     when StringLiteral then string_doc(member, context)
 
 # A union on the line, or on the indented lines below with as many members on each as fit.
-const aliased_type = (alias: TypeAlias) ->
-  const type = alias.type
-  const on_line = join([text(' '), type_doc(type)])
+aliased_type := (alias: TypeAlias) ->
+  type := alias.type
+  on_line := join([text(' '), type_doc(type)])
   return on_line if type is not UnionTypeName
-  const members = [type_doc(member) for member in type.members]
-  const parts: Doc[]
+  members := [type_doc(member) for member in type.members]
+  parts: Doc[]
   for member, i in members
     parts.push
       i == 0 then member else choice(join([text(' | '), member]), join([line_feed(), member]))
@@ -144,42 +142,42 @@ const aliased_type = (alias: TypeAlias) ->
 # `import a, b as c from 'module'`, or `export` before them, with the names in an indented block
 # when they do not fit on the line (see Multi-line literals). One that names were left out of is
 # reported for them, as is the layout that they change.
-const import_doc = (import_node: Import, context: Context) ->
-  const left_out = has_left_out_names(import_node, context)
-  const reported = left_out then ENUM_MEMBERS else MULTI_LINE_LITERALS
-  const word = keyword(import_node.exported then 'export' else 'import', import_node.position)
-  const module = module_doc(import_node, context)
+import_doc := (import_node: Import, context: Context) ->
+  left_out := has_left_out_names(import_node, context)
+  reported := left_out then ENUM_MEMBERS else MULTI_LINE_LITERALS
+  word := keyword(import_node.exported then 'export' else 'import', import_node.position)
+  module := module_doc(import_node, context)
   if import_node.names.length == 0
-    const as_name = optional_doc(import_node.alias, (alias) ->
+    as_name := optional_doc(import_node.alias, (alias) ->
       join [text(' as '), token(alias.name, alias.position)]
     )
-    const written = join([word, text(' '), module, as_name])
+    written := join([word, text(' '), module, as_name])
     return left_out then rule(ENUM_MEMBERS, written) else written
-  const item = (name: ImportName) ->
-    const after_comment = context.source.comment_before(name.name.position)
+  item := (name: ImportName) ->
+    after_comment := context.source.comment_before(name.name.position)
     Item after_comment, doc: import_name(name), simple: true
-  const items = [item(name) for name in import_node.names]
-  const names = separated([item.doc for item in items], text(', '))
-  const on_line = join([word, text(' '), names, text(' from '), module])
-  const block = join
+  items := [item(name) for name in import_node.names]
+  names := separated([item.doc for item in items], text(', '))
+  on_line := join([word, text(' '), names, text(' from '), module])
+  block := join
     [word, indent(join([line_feed(), lines_of_items(items)])), line_feed(), text('from '), module]
-  const doc = breaking(reported, on_line, block)
+  doc := breaking(reported, on_line, block)
   left_out then rule(ENUM_MEMBERS, doc) else doc
 
-const import_name = (name: ImportName) ->
-  if const alias = name.alias
+import_name := (name: ImportName) ->
+  if alias := name.alias
     join [name_doc(name.name), text(' as '), name_doc(alias)]
   else
     name_doc name.name
 
 # The module's name as the source spells it, the string after `from`, or after `import` alone.
-const module_doc = (import_node: Import, context: Context) ->
-  const source = context.source
-  const start = source.token_at(import_node.position) ? return text("'#{import_node.module}'")
-  const end = source.tokens.length
-  const index = source.find(STRING, start, end) ? return text("'#{import_node.module}'")
-  const module = source.tokens[index]
-  const literal = StringLiteral
+module_doc := (import_node: Import, context: Context) ->
+  source := context.source
+  start := source.token_at(import_node.position) ? return text("'#{import_node.module}'")
+  end := source.tokens.length
+  index := source.find(STRING, start, end) ? return text("'#{import_node.module}'")
+  module := source.tokens[index]
+  literal := StringLiteral
     value: import_node.module
     position: Position(line: module.line, column: module.column)
   string_doc literal, context

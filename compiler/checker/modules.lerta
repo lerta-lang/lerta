@@ -27,10 +27,10 @@ import FunctionType, is_kind from '../types'
 # generic function of another checks an instance of it there, which may find warnings and use names
 # of that module. `on_checked` takes the program as far as it is checked, and them, with an error
 # too, before it is thrown.
-export const check_modules = (
+export check_modules := (
   entry_path: String, modules: Module[], on_checked: (ProgramWide, Located[]) -> void
 ) ->
-  const program = ProgramWide(entry_path, modules, finds_all_errors: true)
+  program := ProgramWide(entry_path, modules, finds_all_errors: true)
   try
     check_program program
   catch error: CompileError
@@ -41,12 +41,12 @@ export const check_modules = (
 
 # Checks the program as check_modules does, into the ProgramWide given. Throws its errors as one
 # CompileError: an error ends the part of the program it is found in, or else all the checking.
-export const check_program = (program: ProgramWide) ->
+export check_program := (program: ProgramWide) ->
   check_part program, -> check_steps(program)
   report_errors program
 
-const check_steps = (program: ProgramWide) ->
-  const { modules } = program
+check_steps := (program: ProgramWide) ->
+  { modules } := program
   program.shared.push create_shared(program, module) for module in modules
   for shared in program.shared
     enter_module shared
@@ -66,7 +66,7 @@ const check_steps = (program: ProgramWide) ->
   # Instances of generic functions and of generic classes and structs may make others.
   # Checks the module's instances left unchecked, and tells whether there were any. Each round
   # goes through every module, until none has any left.
-  const check_round = (shared: Shared) ->
+  check_round := (shared: Shared) ->
     var checked = false
     checked = check_pending(program, generic) or checked for generic in shared.generics
     check_pending_objects(shared) or checked
@@ -76,51 +76,51 @@ const check_steps = (program: ProgramWide) ->
     pending = check_round(shared) or pending for shared in program.shared
 
 # The module that std:builtins is, which may be the entry module itself.
-const builtins_module = (program: ProgramWide) ->
-  return index if const index = program.shared.last()!.imports.builtins
+builtins_module := (program: ProgramWide) ->
+  return index if index := program.shared.last()!.imports.builtins
   program.entry_path == BUILTINS_MODULE then program.shared.length - 1
 
-const for_each_module = (program: ProgramWide, step: (Shared) -> void) ->
+for_each_module := (program: ProgramWide, step: (Shared) -> void) ->
   for shared in program.shared
     enter_module shared
     step shared
     leave_module shared
 
-const create_shared = (program: ProgramWide, module: Module) ->
-  const index = module.index
-  const name = module.display_path ? 'the entry module'
-  const path = module.display_path
-  const extensions = Extensions(module_index: index, module_name: name)
-  const top_level = top_level_values(module.program)
-  const exported = exported_statements(module.program)
-  const reexported = reexports_of(module)
+create_shared := (program: ProgramWide, module: Module) ->
+  index := module.index
+  name := module.display_path ? 'the entry module'
+  path := module.display_path
+  extensions := Extensions(module_index: index, module_name: name)
+  top_level := top_level_values(module.program)
+  exported := exported_statements(module.program)
+  reexported := reexports_of(module)
   Shared program, index, name, path, extensions, top_level, exported, reexported, imports: Imports()
 
 # The names of the top-level code are warned about if never used once the functions, checked
 # later, and the instances of generic functions that other modules call, which may use them, are
 # checked (see all_warnings).
-const check_top_level = (shared: Shared) ->
-  const program = shared.program
+check_top_level := (shared: Shared) ->
+  program := shared.program
   shared.top_level.started = true
-  const resolver = module_resolver(shared.index)
-  const { extensions } = shared
-  const body = Body(shared, resolver, extensions, facts: shared.facts)
+  resolver := module_resolver(shared.index)
+  { extensions } := shared
+  body := Body(shared, resolver, extensions, facts: shared.facts)
   shared.top_level_scope = check_top_level_code(body, program.modules[shared.index].program)
 
-const check_bodies = (shared: Shared) ->
-  const program = shared.program
+check_bodies := (shared: Shared) ->
+  program := shared.program
   check_all_objects shared
   check_all_functions shared
   reject_deinit_results shared
   program.bodies_checked.push shared.index
 
-const reject_deinit_results = (shared: Shared) ->
-  const program = shared.program
+reject_deinit_results := (shared: Shared) ->
+  program := shared.program
   for info in shared.objects.values()
-    const literal = info.methods['deinit'] ? continue
-    const key = method_key(info.declaration.name.name, 'deinit')
-    const type = function_type_of(program, shared.index, key, literal.position)
-    const result = (type as FunctionType?)?.result
+    literal := info.methods['deinit'] ? continue
+    key := method_key(info.declaration.name.name, 'deinit')
+    type := function_type_of(program, shared.index, key, literal.position)
+    result := (type as FunctionType?)?.result
     if result
       fail program, literal.position, 'deinit cannot throw' if is_kind(result, 'never')
       fail program, literal.position, 'deinit gives no value' if not is_kind(result, 'void')

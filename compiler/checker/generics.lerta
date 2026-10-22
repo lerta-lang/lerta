@@ -37,10 +37,10 @@ export class Instance
   defaults_checked = false
 
 # See docs/reference/functions.md#generic-functions.
-export const MAX_TYPE_DEPTH = 32
+export MAX_TYPE_DEPTH := 32
 # Instances that each call more than one of deeper type arguments would number exponentially many
 # before any reached MAX_TYPE_DEPTH.
-export const MAX_INSTANCES = 1000
+export MAX_INSTANCES := 1000
 
 export class GenericFunction
   name: Identifier
@@ -58,24 +58,24 @@ export class GenericFunction
   result: Type?
   instances: Instance[] = []
 
-export const make_generic_function = (
+export make_generic_function := (
   shared: Shared, name: Identifier, literal: FunctionLiteral, receiver: Receiver?
 ) ->
-  const program = shared.program
-  const type_params: TypeParameter[]
+  program := shared.program
+  type_params: TypeParameter[]
   type_params.append receiver.type_params if receiver
   type_params.append literal.type_params
-  const resolver = module_resolver(shared.index)
+  resolver := module_resolver(shared.index)
   reject_bad_type_parameters program, resolver, type_params
-  const generic_resolver = with_type_parameters(resolver, placeholders(type_params))
+  generic_resolver := with_type_parameters(resolver, placeholders(type_params))
   # A bound may name the type parameters, as in `X: Iterable<T>`.
-  const bound_of = (param: TypeParameter) ->
-    const bound = param.bound ? return nil
+  bound_of := (param: TypeParameter) ->
+    bound := param.bound ? return nil
     bound_interface program, generic_resolver, bound
-  const bounds = [bound_of(param) for param in type_params]
-  const params = parameter_types(program, generic_resolver, literal)
-  const return_type = literal.return_type
-  const result = return_type then resolve_result(program, generic_resolver, return_type)
+  bounds := [bound_of(param) for param in type_params]
+  params := parameter_types(program, generic_resolver, literal)
+  return_type := literal.return_type
+  result := return_type then resolve_result(program, generic_resolver, return_type)
   GenericFunction
     name
     literal
@@ -86,81 +86,79 @@ export const make_generic_function = (
     result
     module_index: shared.index
 
-export const reject_bad_type_parameters = (
+export reject_bad_type_parameters := (
   program: ProgramWide, resolver: Resolver, type_params: TypeParameter[]
 ) ->
-  const seen: Set<String>
+  seen: Set<String>
   for param in type_params
-    const { name } = param.name
+    { name } := param.name
     fail_already_defined program, param.name if seen.has(name) or has_type(program, resolver, name)
     seen.add name
 
-export const generic_of = (program: ProgramWide, ref: GenericRef) ->
+export generic_of := (program: ProgramWide, ref: GenericRef) ->
   program.shared[ref.module_index].generics[ref.index]
 
 # The instance of the type arguments, whose extends in effect are `methods`, checked if new.
-export const instantiate = (
+export instantiate := (
   program: ProgramWide, ref: GenericRef, type_arguments: Type[], methods: ExtensionMethod[],
   at: Position
 ) ->
-  const generic = generic_of(program, ref)
-  const key = arguments_key(type_arguments)
-  const same_arguments =
+  generic := generic_of(program, ref)
+  key := arguments_key(type_arguments)
+  same_arguments :=
     [instance for instance in generic.instances when arguments_key(instance.type_arguments) == key]
-  const found = same_arguments.find((instance) -> same_methods(instance.methods, methods))
+  found := same_arguments.find((instance) -> same_methods(instance.methods, methods))
   if found == nil and type_arguments.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
-    const name = generic.name.name
-    const message = "'#{name}' needs instances without end, each with type arguments nested deeper"
+    name := generic.name.name
+    message := "'#{name}' needs instances without end, each with type arguments nested deeper"
     fail_in_context program, at, message, "from #{describe(generic, generic.instances[0])}"
   if found == nil and generic.instances.length >= MAX_INSTANCES
-    const message = "'#{generic.name.name}' needs more than #{MAX_INSTANCES} instances"
+    message := "'#{generic.name.name}' needs more than #{MAX_INSTANCES} instances"
     fail_in_context program, at, message, "from #{describe(generic, generic.instances[0])}"
-  const variant = same_arguments.length
-  const instance = found ? add_instance(program, ref, type_arguments, methods, variant, at)
+  variant := same_arguments.length
+  instance := found ? add_instance(program, ref, type_arguments, methods, variant, at)
   check program, generic, instance if found == nil and instance.entry.type == nil
   abort_part() if instance.entry.state == FAILED
   if instance.entry.type == nil
     fail program, at, "'#{generic.name.name}' is recursive, so its return type must be written"
   instance
 
-const arguments_key = (type_arguments: Type[]) ->
-  [type_key(type) for type in type_arguments].join(', ')
+arguments_key := (type_arguments: Type[]) -> [type_key(type) for type in type_arguments].join(', ')
 
 # The type arguments by the names of the type parameters.
-export const bindings = (generic: GenericFunction, type_arguments: Type[]) ->
-  const types: Map<String, Type>
-  const { type_params } = generic
+export bindings := (generic: GenericFunction, type_arguments: Type[]) ->
+  types: Map<String, Type>
+  { type_params } := generic
   types[param.name.name] = arg for (param, arg) in type_params.zip(type_arguments)
   types
 
-const add_instance = (
+add_instance := (
   program: ProgramWide, ref: GenericRef, type_arguments: Type[], methods: ExtensionMethod[],
   variant: Int, at: Position
 ) ->
-  const generic = generic_of(program, ref)
-  const type_bindings = bindings(generic, type_arguments)
-  const resolver = with_type_parameters(module_resolver(generic.module_index), type_bindings)
-  const receiver = generic.receiver
-  const this_type = receiver then substitute(receiver.type, type_bindings)
-  const entry = FunctionEntry(this_type, literal: generic.literal, name: generic.name)
-  const extensions = with_methods(program.shared[generic.module_index].extensions, methods)
-  const instance =
-    Instance(entry, type_arguments, methods, extensions, resolver, variant, generic: ref)
+  generic := generic_of(program, ref)
+  type_bindings := bindings(generic, type_arguments)
+  resolver := with_type_parameters(module_resolver(generic.module_index), type_bindings)
+  receiver := generic.receiver
+  this_type := receiver then substitute(receiver.type, type_bindings)
+  entry := FunctionEntry(this_type, literal: generic.literal, name: generic.name)
+  extensions := with_methods(program.shared[generic.module_index].extensions, methods)
+  instance := Instance(entry, type_arguments, methods, extensions, resolver, variant, generic: ref)
   entry.type = resolve_annotation(program, generic, instance, at)
   generic.instances.push instance
   instance
 
 # Checks the instances left unchecked; returns whether there were any.
-export const check_pending = (program: ProgramWide, generic: GenericFunction) ->
-  const is_pending = (instance: Instance) -> instance.entry.state == UNCHECKED
-  const pending = [instance for instance in generic.instances when is_pending(instance)]
+export check_pending := (program: ProgramWide, generic: GenericFunction) ->
+  is_pending := (instance: Instance) -> instance.entry.state == UNCHECKED
+  pending := [instance for instance in generic.instances when is_pending(instance)]
   check program, generic, instance for instance in pending
   pending.length > 0
 
 # An error in the body says which instance it was found in.
-const check = (program: ProgramWide, generic: GenericFunction, instance: Instance) ->
+check := (program: ProgramWide, generic: GenericFunction, instance: Instance) ->
   instance.entry.state = CHECKING
-  const check_body = (): void ->
+  check_body := (): void ->
     program.contexts.push "in #{describe(generic, instance)}"
     check_instance program, generic.module_index, instance
     program.contexts.pop()
@@ -170,27 +168,27 @@ const check = (program: ProgramWide, generic: GenericFunction, instance: Instanc
 # the call's, which says which instance's defaults it was found in. Inside the check of a call
 # already, as of another instance's defaults, the error is that outer call's, which the program's
 # own source makes.
-export const check_defaults = (
+export check_defaults := (
   program: ProgramWide, generic: GenericFunction, instance: Instance, at: Position
 ) ->
-  const context = "in the defaults of #{describe(generic, instance)}"
+  context := "in the defaults of #{describe(generic, instance)}"
   annotating program, at, context, ->
     check_instance_defaults program, generic.module_index, instance
 
 # A written type that the type arguments make wrong, such as `T?` of an optional type, is the
 # call's error, as a type argument that misses its bound is.
-const resolve_annotation = (
+resolve_annotation := (
   program: ProgramWide, generic: GenericFunction, instance: Instance, at: Position
 ) ->
   var type: Type?
-  const resolve = -> type = annotated_type(program, instance.resolver, instance.entry.literal)
+  resolve := -> type = annotated_type(program, instance.resolver, instance.entry.literal)
   annotating program, at, "in #{describe(generic, instance)}", resolve
   type
 
 # Runs `check` with errors reported at the call at `at`, in the module being checked, unless an
 # outer call is annotated already, whose annotation is kept.
-const annotating = (program: ProgramWide, at: Position, context: String, check: () -> void) ->
-  const outer = program.annotated_call
+annotating := (program: ProgramWide, at: Position, context: String, check: () -> void) ->
+  outer := program.annotated_call
   if outer == nil
     program.annotated_call = AnnotatedCall(at, context, path: error_module_path(program))
   check()
@@ -198,16 +196,16 @@ const annotating = (program: ProgramWide, at: Position, context: String, check: 
 
 # `print<Int>`, as messages write an instance; a method's, `Int[].map<String>`, by its
 # receiver and the type arguments of its own.
-const describe = (generic: GenericFunction, instance: Instance) ->
-  const receiver = generic.receiver
-  const receiver_count = receiver then receiver.type_params.length else 0
-  const own_arguments =
+describe := (generic: GenericFunction, instance: Instance) ->
+  receiver := generic.receiver
+  receiver_count := receiver then receiver.type_params.length else 0
+  own_arguments :=
     [instance.type_arguments[i] for i in receiver_count...instance.type_arguments.length]
-  const this_type = instance.entry.this_type
-  const generic_name = generic.name.name
-  const name = this_type then "#{format_type(this_type)}.#{generic_name}" else generic_name
+  this_type := instance.entry.this_type
+  generic_name := generic.name.name
+  name := this_type then "#{format_type(this_type)}.#{generic_name}" else generic_name
   return name if own_arguments.length == 0
   "#{name}<#{[format_type(type) for type in own_arguments].join(', ')}>"
 
-const same_methods = (a: ExtensionMethod[], b: ExtensionMethod[]) ->
+same_methods := (a: ExtensionMethod[], b: ExtensionMethod[]) ->
   a.length == b.length and a.all((method) -> b.contains(method))

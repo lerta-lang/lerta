@@ -15,86 +15,86 @@ import format_type, FunctionType, inner_of, nil_type, ObjectType, RecordType, Ty
 
 # The result of a call of a function of the type, once its arguments are checked. `declaration`,
 # the function's literal if the call knows it, tells the parameters that may be left out.
-export const check_arguments = (
+export check_arguments := (
   body: Body, call: Call, callee_type: Type, declaration: FunctionLiteral?
 ) ->
-  const program = body.program
+  program := body.program
   if callee_type is not FunctionType
     fail program, call.position, "cannot call a value of type #{format_type(callee_type)}"
-  const params = callee_type.params
-  const packed = packed_arguments(body, call, declaration)
-  const args = packed ? call.args
-  const leaves_out_struct = args.length == params.length - 1 and is_struct_type(params.last())
-  const gathers = call.named_args.length > 0 or leaves_out_struct
-  const gathered = gathers then gathered_argument(body, call, params.last())
-  const passed = gathered then [args..., gathered] else args
+  params := callee_type.params
+  packed := packed_arguments(body, call, declaration)
+  args := packed ? call.args
+  leaves_out_struct := args.length == params.length - 1 and is_struct_type(params.last())
+  gathers := call.named_args.length > 0 or leaves_out_struct
+  gathered := gathers then gathered_argument(body, call, params.last())
+  passed := gathered then [args..., gathered] else args
   check_argument_count body, call, passed.length, params.length, declaration
   expect_type body, arg, params[i] for arg, i in args
   check_gathered body, gathered, params.last()! if gathered
   body.facts.arguments[call] = passed if packed or gathered
   callee_type.result
 
-export const check_argument_count = (
+export check_argument_count := (
   body: Body, call: Call, count: Int, param_count: Int, declaration: FunctionLiteral?
 ) ->
-  const required = declaration then required_params(declaration) else param_count
+  required := declaration then required_params(declaration) else param_count
   return if count >= required and count <= param_count
-  const range = required == param_count then '' else "#{required} to "
-  const expected = "#{range}#{param_count}"
+  range := required == param_count then '' else "#{required} to "
+  expected := "#{range}#{param_count}"
   fail body.program, call.position, "expected #{expected} argument(s), got #{count}"
 
 # The arguments with those from the place of the declaration's variadic parameter on packed into
 # one, an array literal of them, `f(a, [b, c])` of `f(a, b, c)` for `f = (x: Int, rest: Int...)`, as
 # codegen passes them; a spread among them is one of the literal. Nil if the declaration has no
 # variadic parameter. A spread anywhere else is an error.
-export const packed_arguments = (body: Body, call: Call, declaration: FunctionLiteral?) ->
-  const program = body.program
-  const params = declaration?.params ? []
-  const place = params.find_index((param) -> param.variadic)
-  const packed = place != nil then pack_from(body, call, params, place)
-  if const spread = (packed ? call.args).find(is_spread)
+export packed_arguments := (body: Body, call: Call, declaration: FunctionLiteral?) ->
+  program := body.program
+  params := declaration?.params ? []
+  place := params.find_index((param) -> param.variadic)
+  packed := place != nil then pack_from(body, call, params, place)
+  if spread := (packed ? call.args).find(is_spread)
     fail
       program
       spread.position
       'a spread `xs...` can only be an item of an array or an argument of a variadic parameter'
   packed
 
-const pack_from = (body: Body, call: Call, params: Parameter[], place: Int) ->
-  const fixed = [arg for arg, i in call.args when i < place]
-  if const spread = fixed.find(is_spread)
-    const rest = params[place].name.name
+pack_from := (body: Body, call: Call, params: Parameter[], place: Int) ->
+  fixed := [arg for arg, i in call.args when i < place]
+  if spread := fixed.find(is_spread)
+    rest := params[place].name.name
     fail
       body.program
       spread.position
       "a spread fills only the variadic parameter '#{rest}', after the others"
-  const count = call.args.length
+  count := call.args.length
   if count < place
     fail body.program, call.position, "expected at least #{place} argument(s), got #{count}"
-  const elements = [arg for arg, i in call.args when i >= place]
-  const position = elements.first()?.position ? call.position
+  elements := [arg for arg, i in call.args when i >= place]
+  position := elements.first()?.position ? call.position
   [fixed..., ArrayLiteral(elements, position)]
 
 # Named arguments, none where a last parameter of a struct type is left out, are gathered into an
 # argument of that parameter: an anonymous struct, or a construction of the struct, so that codegen,
 # which reads named arguments only as a construction, generates the call as any other.
-const gathered_argument = (body: Body, call: Call, last_param: Type?): Expression ->
-  const position = call.named_args.first()?.name.position ? call.position
-  const type = inner_of(last_param ? nil_type)
+gathered_argument := (body: Body, call: Call, last_param: Type?): Expression ->
+  position := call.named_args.first()?.name.position ? call.position
+  type := inner_of(last_param ? nil_type)
   if type is RecordType
-    const fields = [NamedValue(name: arg.name, value: arg.value) for arg in call.named_args]
+    fields := [NamedValue(name: arg.name, value: arg.value) for arg in call.named_args]
     return RecordLiteral(fields, position)
   if is_struct_type(type)
-    const callee = Identifier(position, name: (type as ObjectType!).name)
+    callee := Identifier(position, name: (type as ObjectType!).name)
     return Call(callee, position, args: [], named_args: call.named_args, type_args: [])
-  const uses = 'construct a class or struct, or give a last parameter of a struct type'
+  uses := 'construct a class or struct, or give a last parameter of a struct type'
   fail body.program, position, "named arguments #{uses}"
 
 # The gathered argument must fit the last parameter. A construction is of the parameter's struct,
 # found by the type rather than the name, which may name nothing or another type here; its type
 # arguments are inferred from the parameter's.
-const check_gathered = (body: Body, gathered: Expression, param: Type) ->
+check_gathered := (body: Body, gathered: Expression, param: Type) ->
   return expect_type(body, gathered, param) if gathered is not Call
-  const info = info_of(body.program, inner_of(param) as ObjectType!)
-  const declared = info.generic?.type ? info.type
-  const type = set_type(body, gathered, type_of_construction(body, gathered, declared, param))
+  info := info_of(body.program, inner_of(param) as ObjectType!)
+  declared := info.generic?.type ? info.type
+  type := set_type(body, gathered, type_of_construction(body, gathered, declared, param))
   require_type body, gathered, type, param

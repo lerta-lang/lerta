@@ -28,12 +28,12 @@ export struct Inference(bindings: Map<String, TypeBinding>, inferred: InferredAr
 # The type arguments of a generic method that the receiver gives, if it gives all of them: those
 # of an extend of a type match its type, and those of an extend of an interface come from how the
 # receiver satisfies it (see declare_interface_extend).
-export const receiver_type_arguments = (
+export receiver_type_arguments := (
   body: Body, generic: GenericFunction, receiver: Type, at: Position
 ) ->
-  const bindings: Map<String, Type>
-  const bind = (name: String, type: Type) -> bindings[name] = type if not bindings.has(name)
-  const pattern = generic.receiver!.type
+  bindings: Map<String, Type>
+  bind := (name: String, type: Type) -> bindings[name] = type if not bindings.has(name)
+  pattern := generic.receiver!.type
   infer pattern, receiver, bind
   # The receiver of an extend of an interface is Self, the first type parameter.
   infer_through_members body, generic.bounds[0]!, receiver, at, bind if pattern is TypeParameterType
@@ -41,90 +41,90 @@ export const receiver_type_arguments = (
   [bindings[param.name.name]! for param in generic.type_params]
 
 # The call's arguments, as it passes them, are as many as the generic has parameters.
-export const infer_type_arguments = (
+export infer_type_arguments := (
   body: Body, call: Call, args: Expression[], generic: GenericFunction, expected: Type?,
   receiver: TypeBinding?
 ) ->
-  const params = generic.params
-  const bindings = written_bindings(body, call, generic)
-  const written: Set<String>
+  params := generic.params
+  bindings := written_bindings(body, call, generic)
+  written: Set<String>
   written.add name for name in bindings.keys()
-  const inferred: InferredArgument[]
-  const bind_at = (at: Position) ->
+  inferred: InferredArgument[]
+  bind_at := (at: Position) ->
     (name: String, bound_type: Type) ->
       # nil and never tell nothing about the type.
       return if is_kind(bound_type, 'nil') or is_kind(bound_type, 'never')
-      if const bound = bindings[name]
+      if bound := bindings[name]
         return if written.has(name) or not widens(bound.type, bound_type)
       bindings[name] = TypeBinding(at, type: bound_type)
   # A value converts to an interface type, whose type arguments its members may give.
-  const bind_from = (pattern: Type, type: Type, at: Position) ->
+  bind_from := (pattern: Type, type: Type, at: Position) ->
     infer pattern, type, bind_at(at)
-    const target = inner_of(pattern)
-    const value_type = inner_of(type)
+    target := inner_of(pattern)
+    value_type := inner_of(type)
     if target is InterfaceType and value_type is not InterfaceType
       infer_through_members body, target, value_type, at, bind_at(at)
   bind_from generic.receiver!.type, receiver.type, receiver.at if receiver
-  const check_argument = (index: Int) ->
-    const arg = args[index]
-    const param = substitute(params[index], types_of(bindings))
+  check_argument := (index: Int) ->
+    arg := args[index]
+    param := substitute(params[index], types_of(bindings))
     # A parameter whose type names no type parameter takes its argument as in any call.
-    const declared_alone = not has_type_parameters(params[index])
+    declared_alone := not has_type_parameters(params[index])
     if declared_alone or (needs_context(body, arg) and not has_type_parameters(param))
       expect_type body, arg, param
       return
     # A function literal's parameters may take the types that are known already.
-    const type = type_of(body, arg, arg is FunctionLiteral then param)
+    type := type_of(body, arg, arg is FunctionLiteral then param)
     fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
     bind_from params[index], type, arg.position
     inferred.push InferredArgument(arg, type, index)
-  const is_function = (i: Int) -> args[i] is FunctionLiteral
-  const is_literal = (i: Int) -> needs_context(body, args[i]) and not is_function(i)
+  is_function := (i: Int) -> args[i] is FunctionLiteral
+  is_literal := (i: Int) -> needs_context(body, args[i]) and not is_function(i)
   for arg, i in args
     check_argument i if not needs_context(body, arg)
-  if const result = generic.result
+  if result := generic.result
     bind_from result, expected, call.position if expected
-  const literals = [i for i in 0...args.length when is_literal(i)]
+  literals := [i for i in 0...args.length when is_literal(i)]
   check_argument i for i in float_first(literals, (i) -> args[i])
   # The type argument of a bounded type parameter gives those that its bound names, as `X:
   # Iterable<T>` gives T, before function literals take their parameters' types.
-  const bind_from_bounds = ->
+  bind_from_bounds := ->
     for (type_param, written_bound) in generic.type_params.zip(generic.bounds)
-      const bound = written_bound ? continue
-      const known = bindings[type_param.name.name] ? continue
+      bound := written_bound ? continue
+      known := bindings[type_param.name.name] ? continue
       infer_through_members body, bound, known.type, known.at, bind_at(known.at)
   bind_from_bounds()
   for i in 0...args.length
     check_argument i if is_function(i)
   Inference bindings, inferred
 
-const widens = (bound: Type, type: Type) ->
+widens := (bound: Type, type: Type) ->
   type is OptionalType then same_type(type.inner, bound) else false
 
 # `f<Int>(x)` gives all the type arguments; `x.f<Int>(y)`, those of the method's own, as the
 # receiver gives the extend's.
-const written_bindings = (body: Body, call: Call, generic: GenericFunction) ->
-  const bindings: Map<String, TypeBinding>
-  const { name } = generic
-  const type_params = generic.literal.type_params
+written_bindings := (body: Body, call: Call, generic: GenericFunction) ->
+  bindings: Map<String, TypeBinding>
+  { name } := generic
+  type_params := generic.literal.type_params
   return bindings if call.type_args.length == 0
   if call.type_args.length != type_params.length
-    const counts = "takes #{type_params.length} type argument(s), got #{call.type_args.length}"
+    counts := "takes #{type_params.length} type argument(s), got #{call.type_args.length}"
     fail body.program, call.position, "'#{name.name}' #{counts}"
   for (type_param, type_name) in type_params.zip(call.type_args)
-    const type = resolve(body.program, body.resolver, type_name)
+    type := resolve(body.program, body.resolver, type_name)
     bindings[type_param.name.name] = TypeBinding(type, at: type_name.position)
   bindings
 
 # A literal whose type may depend on what is expected of it, or a name that may stand for a
 # member of an enum.
-export const needs_context = (body: Body, arg: Expression) ->
+export needs_context := (body: Body, arg: Expression) ->
   case arg
     when FunctionLiteral, NilLiteral, IntegerLiteral, FloatLiteral, StringLiteral then true
     when ArrayLiteral, MapLiteral, RecordLiteral, TupleLiteral then true
     else may_name_member(body, arg)
 
-const types_of = (bindings: Map<String, TypeBinding>) ->
-  const types: Map<String, Type>
+types_of := (bindings: Map<String, TypeBinding>) ->
+  types: Map<String, Type>
   types[name] = binding.type for (name, binding) in bindings.entries()
   types

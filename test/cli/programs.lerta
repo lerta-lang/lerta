@@ -6,20 +6,20 @@ import executable_suffix, expect_success, host_platform, new_cli_dir, run_comman
 
 struct BuiltProgram(dir: String, executable: String, errors: String[])
 
-const check_reason = (condition: Bool, reason: String): String[] -> condition then [] else [reason]
+check_reason := (condition: Bool, reason: String): String[] -> condition then [] else [reason]
 
-const build_program = (name: String, source: String) ->
-  const dir = new_cli_dir("program-#{name}")
-  const executable = "#{dir}/program#{executable_suffix}"
-  const built = await run_command(compiler, ['build', source, '-o', executable], dir)
+build_program := (name: String, source: String) ->
+  dir := new_cli_dir("program-#{name}")
+  executable := "#{dir}/program#{executable_suffix}"
+  built := await run_command(compiler, ['build', source, '-o', executable], dir)
   BuiltProgram dir: dir, executable: executable, errors: expect_success('build', built)
 
 # The message of an uncaught exception, without the trace that follows it; none without a newline.
-const first_line = (text: String) ->
-  const (line, _) = text.split_once("\n") ? return ''
+first_line := (text: String) ->
+  (line, _) := text.split_once("\n") ? return ''
   "#{line}\n"
 
-const program_check = (
+program_check := (
   name: String
   source: String
   input: Binary
@@ -29,9 +29,9 @@ const program_check = (
   unset_env: String[] = []
   expected_stderr = ''
 ) -> Check(name: name, run: ->
-  const built = await build_program(name, source)
+  built := await build_program(name, source)
   return built.errors if built.errors.length > 0
-  const ran = await run_command(built.executable, args, built.dir, input, env, unset_env)
+  ran := await run_command(built.executable, args, built.dir, input, env, unset_env)
   [
     expect_status(0, ran.status)...
     compare_output('stdout', expected.binary, ran.stdout)...
@@ -39,18 +39,18 @@ const program_check = (
   ]
 )
 
-const invalid_argument_check = ->
+invalid_argument_check := ->
   Check name: 'a built program rejects command-line arguments that are not UTF-8', run: ->
     return nil if host_platform == 'windows'
-    const source = "#{root_dir}/examples/wc.lerta"
-    const built = await build_program('invalid-argument', source)
+    source := "#{root_dir}/examples/wc.lerta"
+    built := await build_program('invalid-argument', source)
     return built.errors if built.errors.length > 0
-    const ran =
+    ran :=
       await run_command('sh', ['-c', "\"$0\" \"$(printf '\\377')\"", built.executable], built.dir)
-    const exit_only =
+    exit_only :=
       await build_program('invalid-argument-exit-only', "#{root_dir}/tests/io/lib/exit_only.lerta")
     return exit_only.errors if exit_only.errors.length > 0
-    const exit_only_ran = await run_command(
+    exit_only_ran := await run_command(
       'sh'
       ['-c', "\"$0\" \"$(printf '\\377')\"", exit_only.executable]
       exit_only.dir
@@ -70,15 +70,15 @@ const invalid_argument_check = ->
       )...
     ]
 
-const decode_argument_bytes_check = ->
+decode_argument_bytes_check := ->
   Check name: 'a built program decodes command-line arguments at UTF-8 boundaries', run: ->
     return nil if host_platform == 'windows'
-    const built = await build_program(
+    built := await build_program(
       'decode-argument-bytes'
       "#{root_dir}/tests/binary/lib/decode_arguments.lerta"
     )
     return built.errors if built.errors.length > 0
-    const arguments =
+    arguments :=
       "\"$(printf '\\177')\""
       "\"$(printf '\\302\\200')\""
       "\"$(printf '\\337\\277')\""
@@ -98,20 +98,20 @@ const decode_argument_bytes_check = ->
       "\"$(printf '\\303\\101')\""
       "\"$(printf '\\200')\""
     .join(' ')
-    const ran = await run_command('sh', ['-c', "\"$0\" #{arguments}", built.executable], built.dir)
+    ran := await run_command('sh', ['-c', "\"$0\" #{arguments}", built.executable], built.dir)
     [
       expect_status(0, ran.status)...
       compare_output('stdout', ("true\n".repeat(8) + "false\n".repeat(10)).binary, ran.stdout)...
     ]
 
-const invalid_environment_check = ->
+invalid_environment_check := ->
   Check name: 'a built program rejects an environment value that is not UTF-8', run: ->
     return nil if host_platform == 'windows'
-    const source = "#{root_dir}/tests/process/lib/print_env.lerta"
-    const built = await build_program('invalid-environment', source)
+    source := "#{root_dir}/tests/process/lib/print_env.lerta"
+    built := await build_program('invalid-environment', source)
     return built.errors if built.errors.length > 0
-    const script = "LERTA_TEST_VALUE=\"$(printf '\\377')\" \"$0\""
-    const ran = await run_command('sh', ['-c', script, built.executable], built.dir)
+    script := "LERTA_TEST_VALUE=\"$(printf '\\377')\" \"$0\""
+    ran := await run_command('sh', ['-c', script, built.executable], built.dir)
     [
       expect_status(1, ran.status)...
       compare_text(
@@ -121,45 +121,45 @@ const invalid_environment_check = ->
       )...
     ]
 
-const closed_stdout_check = -> Check(name: 'a built program reports a failed stdout write', run: ->
+closed_stdout_check := -> Check(name: 'a built program reports a failed stdout write', run: ->
   return nil if host_platform == 'windows'
-  const built = await build_program('closed-stdout', "#{root_dir}/tests/print/lib/print_lost.lerta")
+  built := await build_program('closed-stdout', "#{root_dir}/tests/print/lib/print_lost.lerta")
   return built.errors if built.errors.length > 0
-  const ran = await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
+  ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
   [expect_status(1, ran.status)..., compare_output('stderr', "reported\n".binary, ran.stderr)...]
 )
 
-const closed_write_check = -> Check(name: 'a built program reports a rejected stdout write', run: ->
+closed_write_check := -> Check(name: 'a built program reports a rejected stdout write', run: ->
   return nil if host_platform == 'windows'
-  const built = await build_program('closed-write', "#{root_dir}/tests/io/lib/write_closed.lerta")
+  built := await build_program('closed-write', "#{root_dir}/tests/io/lib/write_closed.lerta")
   return built.errors if built.errors.length > 0
-  const ran = await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
+  ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
   [
     expect_status(1, ran.status)...
     compare_output('stderr', "cannot write to stdout\n".repeat(2).binary, ran.stderr)...
   ]
 )
 
-const closed_stderr_check = ->
+closed_stderr_check := ->
   Check name: 'a built program reports a rejected stderr write without failing', run: ->
     return nil if host_platform == 'windows'
-    const built =
+    built :=
       await build_program('closed-stderr', "#{root_dir}/tests/io/lib/write_closed_stderr.lerta")
     return built.errors if built.errors.length > 0
-    const ran = await run_command('sh', ['-c', '"$0" 2>&-', built.executable], built.dir)
+    ran := await run_command('sh', ['-c', '"$0" 2>&-', built.executable], built.dir)
     [
       expect_status(0, ran.status)...
       compare_output('stdout', "cannot write to stderr\n".binary, ran.stdout)...
     ]
 
-const broken_pipe_check = ->
+broken_pipe_check := ->
   Check name: 'a built program ends with SIGPIPE when its reader closes', run: ->
     return nil if host_platform == 'windows'
-    const built = await build_program('broken-pipe', "#{root_dir}/tests/io/lib/print_many.lerta")
+    built := await build_program('broken-pipe', "#{root_dir}/tests/io/lib/print_many.lerta")
     return built.errors if built.errors.length > 0
-    const script = '{ "$0"; echo $? >&2; } | head -1'
-    const ran = await run_command('sh', ['-c', script, built.executable], built.dir)
-    const ignoring =
+    script := '{ "$0"; echo $? >&2; } | head -1'
+    ran := await run_command('sh', ['-c', script, built.executable], built.dir)
+    ignoring :=
       await run_command('sh', ['-c', "trap '' PIPE; #{script}", built.executable], built.dir)
     [
       expect_status(0, ran.status)...
@@ -170,14 +170,13 @@ const broken_pipe_check = ->
       compare_output('stderr', "141\n".binary, ignoring.stderr)...
     ]
 
-const stdin_redirection_check = ->
+stdin_redirection_check := ->
   Check name: 'a built program reads closed stdin as empty and rejects a directory', run: ->
     return nil if host_platform == 'windows'
-    const built =
-      await build_program('stdin-redirection', "#{root_dir}/tests/io/lib/read_much.lerta")
+    built := await build_program('stdin-redirection', "#{root_dir}/tests/io/lib/read_much.lerta")
     return built.errors if built.errors.length > 0
-    const closed = await run_command('sh', ['-c', '"$0" <&-', built.executable], built.dir)
-    const directory = await run_command('sh', ['-c', '"$0" < /', built.executable], built.dir)
+    closed := await run_command('sh', ['-c', '"$0" <&-', built.executable], built.dir)
+    directory := await run_command('sh', ['-c', '"$0" < /', built.executable], built.dir)
     [
       expect_status(0, closed.status)...
       compare_output('stdout', "0\n".binary, closed.stdout)...
@@ -185,143 +184,140 @@ const stdin_redirection_check = ->
       compare_text('stderr', "cannot read stdin\n", first_line(directory.stderr.text()!))...
     ]
 
-const unawaited_write_check = ->
+unawaited_write_check := ->
   Check name: 'a built program reports an unawaited rejected write', run: ->
     return nil if host_platform == 'windows'
-    const built =
+    built :=
       await build_program('unawaited-write', "#{root_dir}/tests/io/lib/write_unawaited.lerta")
     return built.errors if built.errors.length > 0
-    const ran = await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
+    ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
     [
       expect_status(1, ran.status)...
       compare_text('stderr', "cannot write to stdout\n", first_line(ran.stderr.text()!))...
     ]
 
-const slow_reader_check = ->
+slow_reader_check := ->
   Check name: 'a built program keeps writing while a slow reader waits', run: ->
     return nil if host_platform == 'windows'
-    const built =
-      await build_program('slow-reader', "#{root_dir}/tests/io/lib/write_slowly_read.lerta")
+    built := await build_program('slow-reader', "#{root_dir}/tests/io/lib/write_slowly_read.lerta")
     return built.errors if built.errors.length > 0
-    const ran = await run_command(
+    ran := await run_command(
       'sh'
       ['-c', '"$0" | { sleep 1; cat >/dev/null; }', built.executable]
       built.dir
     )
     [expect_status(0, ran.status)..., compare_output('stderr', "on time\n".binary, ran.stderr)...]
 
-const read_before_exit_check = ->
+read_before_exit_check := ->
   Check name: 'a built program exits after its pending stdin read ends', run: ->
     return nil if host_platform == 'windows'
-    const built =
-      await build_program('read-before-exit', "#{root_dir}/tests/io/lib/read_one_line.lerta")
+    built := await build_program('read-before-exit', "#{root_dir}/tests/io/lib/read_one_line.lerta")
     return built.errors if built.errors.length > 0
-    const script = 'start=$(date +%s); "$0"; echo $(( $(date +%s) - start ))'
-    const pipeline = "{ printf 'a\\n'; sleep 4; } | { #{script}; }"
-    const ran = await run_command('sh', ['-c', pipeline, built.executable], built.dir)
-    const lines = ran.stdout.text()!.split("\n")
+    script := 'start=$(date +%s); "$0"; echo $(( $(date +%s) - start ))'
+    pipeline := "{ printf 'a\\n'; sleep 4; } | { #{script}; }"
+    ran := await run_command('sh', ['-c', pipeline, built.executable], built.dir)
+    lines := ran.stdout.text()!.split("\n")
     [
       expect_status(0, ran.status)...
       compare_text('first line', 'a', lines[0])...
       check_reason(['0', '1', '2'].contains(lines[1]), "program took #{lines[1]} seconds")...
     ]
 
-const read_then_run_check = ->
+read_then_run_check := ->
   Check name: 'a built program preserves stdin for a process it runs', run: ->
     return nil if host_platform == 'windows'
-    const built =
-      await build_program('read-then-run', "#{root_dir}/tests/io/lib/read_then_run.lerta")
+    built := await build_program('read-then-run', "#{root_dir}/tests/io/lib/read_then_run.lerta")
     return built.errors if built.errors.length > 0
-    const script = "{ printf 'first\\n'; sleep 0.5; printf 'second\\n'; } | \"$0\""
-    const ran = await run_command('sh', ['-c', script, built.executable], built.dir)
+    script := "{ printf 'first\\n'; sleep 0.5; printf 'second\\n'; } | \"$0\""
+    ran := await run_command('sh', ['-c', script, built.executable], built.dir)
     [
       expect_status(0, ran.status)...
       compare_output('stdout', "first\nsecond\ntrue\n".binary, ran.stdout)...
       compare_output('stderr', ''.binary, ran.stderr)...
     ]
 
-const run_without_stdout_check = ->
+run_without_stdout_check := ->
   Check name: 'a built program can run a process when stdout is closed', run: ->
     return nil if host_platform == 'windows'
-    const built = await build_program(
+    built := await build_program(
       'run-without-stdout'
       "#{root_dir}/tests/process/lib/capture_without_stdout.lerta"
     )
     return built.errors if built.errors.length > 0
-    const ran = await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
+    ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
     [expect_status(0, ran.status)..., compare_output('stderr', "true\n".binary, ran.stderr)...]
 
-const read_lines_check = ->
+read_lines_check := ->
   program_check
     'lerta build runs a program that reads lines without their line endings'
     "#{root_dir}/tests/io/lib/read_lines.lerta"
     "a\r\nb\n\nlast\r".binary
     "[a]\n[b]\n[]\n[last\r]\n"
 
-const read_parts_check = ->
+read_parts_check := ->
   program_check
     'lerta build runs a program that reads parts and the rest of stdin'
     "#{root_dir}/tests/io/lib/read_parts.lerta"
     "3\nabcdef".binary
     "abc\ndef\n0\ntrue\ntrue\n"
 
-const read_empty_check = ->
+read_empty_check := ->
   program_check
     'lerta build runs a program that reads empty stdin'
     "#{root_dir}/tests/io/lib/read_empty.lerta"
     ''.binary
     "true\ntrue\n0\n"
 
-const read_much_check = ->
+read_much_check := ->
   program_check
     'lerta build runs a program that reads stdin past one chunk'
     "#{root_dir}/tests/io/lib/read_much.lerta"
     'x'.repeat(200000).binary
     "200000\n"
 
-const read_long_line_check = ->
+read_long_line_check := ->
   program_check
     'lerta build runs a program that reads a line past one chunk'
     "#{root_dir}/tests/io/lib/read_long_line.lerta"
     ('x'.repeat(100000) + "\nnext\n").binary
     "100000\nnext\n"
 
-const read_bodies_check = ->
+read_bodies_check := ->
   program_check
     'lerta build runs a program that reads long and short bodies'
     "#{root_dir}/tests/io/lib/read_bodies.lerta"
     ("100000\n" + 'x'.repeat(100000) + "10\nabcd").binary
     "100000\n4\n"
 
-const read_bodies_streaming_check = ->
+read_bodies_streaming_check := ->
   Check name: 'a built program reads a body that arrives in separate chunks', run: ->
     return nil if host_platform == 'windows'
-    const built =
+    built :=
       await build_program('read-bodies-streaming', "#{root_dir}/tests/io/lib/read_bodies.lerta")
     return built.errors if built.errors.length > 0
-    const half = "head -c 50000 /dev/zero | tr '\\0' x"
-    const input = "printf '100000\\n'; #{half}; sleep 0.3; #{half}; printf '10\\nabcd'"
-    const script = "{ #{input}; } | \"$0\""
-    const ran = await run_command('sh', ['-c', script, built.executable], built.dir)
+    half := "head -c 50000 /dev/zero | tr '\\0' x"
+    input := "printf '100000\\n'; #{half}; sleep 0.3; #{half}; printf '10\\nabcd'"
+    script := "{ #{input}; } | \"$0\""
+    ran := await run_command('sh', ['-c', script, built.executable], built.dir)
     [expect_status(0, ran.status)..., compare_output('stdout', "100000\n4\n".binary, ran.stdout)...]
 
-const read_errors_check = ->
-  const input: Byte[] = [255, 10, 114, 101, 115, 116]
+read_errors_check := ->
+  input: Byte[] = [255, 10, 114, 101, 115, 116]
   program_check
     'lerta build runs a program that reports stdin read errors'
     "#{root_dir}/tests/io/lib/read_errors.lerta"
     input.to_binary()
     "read a count of bytes below 1: 0\na Reader is read by another read that has not ended\na line is not valid UTF-8\nrest\n"
 
-const write_much_check = ->
-  const line = '0123456789'.repeat(10) + "\n"
+write_much_check := ->
+  line := '0123456789'.repeat(10) + "\n"
   program_check
     'lerta build writes stdout beyond one buffer'
     "#{root_dir}/tests/io/lib/write_much.lerta"
     ''.binary
     line.repeat(2000) + "end\n"
 
-const write_both_check = ->
+write_both_check := ->
   program_check
     'lerta build writes to stdout and stderr'
     "#{root_dir}/tests/io/lib/write_both.lerta"
@@ -332,16 +328,15 @@ const write_both_check = ->
     []
     'b'
 
-const write_both_order_check = ->
+write_both_order_check := ->
   Check name: 'a built program preserves stdout and stderr write order when combined', run: ->
     return nil if host_platform == 'windows'
-    const built =
-      await build_program('write-both-order', "#{root_dir}/tests/io/lib/write_both.lerta")
+    built := await build_program('write-both-order', "#{root_dir}/tests/io/lib/write_both.lerta")
     return built.errors if built.errors.length > 0
-    const ran = await run_command('sh', ['-c', '"$0" 2>&1', built.executable], built.dir)
+    ran := await run_command('sh', ['-c', '"$0" 2>&1', built.executable], built.dir)
     [expect_status(0, ran.status)..., compare_output('stdout', "abc\n".binary, ran.stdout)...]
 
-const write_then_error_check = ->
+write_then_error_check := ->
   program_check
     'lerta build writes stdout and stderr after buffered output'
     "#{root_dir}/tests/print/lib/write_then_print_error.lerta"
@@ -352,21 +347,21 @@ const write_then_error_check = ->
     []
     "error\n"
 
-const merged_output_order_check = ->
+merged_output_order_check := ->
   Check name: 'a built program preserves write order when stdout and stderr are combined', run: ->
     return nil if host_platform == 'windows'
-    const built = await build_program(
+    built := await build_program(
       'merged-output-order'
       "#{root_dir}/tests/print/lib/write_then_print_error.lerta"
     )
     return built.errors if built.errors.length > 0
-    const ran = await run_command('sh', ['-c', '"$0" 2>&1', built.executable], built.dir)
+    ran := await run_command('sh', ['-c', '"$0" 2>&1', built.executable], built.dir)
     [
       expect_status(0, ran.status)...
       compare_output('stdout', "out error\nprinted\n".binary, ran.stdout)...
     ]
 
-const wc_check = ->
+wc_check := ->
   program_check
     'lerta build runs a program that reads its command-line arguments'
     "#{root_dir}/examples/wc.lerta"
@@ -375,7 +370,7 @@ const wc_check = ->
     Map()
     ["#{root_dir}/examples/hello.lerta"]
 
-const environment_check = (
+environment_check := (
   name: String
   env: Map<String, String>
   expected: String
@@ -390,7 +385,7 @@ const environment_check = (
     []
     unset_env
 
-const argv_check = ->
+argv_check := ->
   program_check
     'lerta build runs a program with non-ASCII command-line arguments'
     "#{root_dir}/tests/binary/lib/decode_arguments.lerta"
@@ -399,13 +394,13 @@ const argv_check = ->
     Map()
     ['hello', 'héllo', '😀']
 
-const unset_env: Map<String, String>
-const empty_env: Map<String, String>
+unset_env: Map<String, String>
+empty_env: Map<String, String>
 empty_env['LERTA_TEST_VALUE'] = ''
-const value_env: Map<String, String>
+value_env: Map<String, String>
 value_env['LERTA_TEST_VALUE'] = 'héllo'
 
-export const checks =
+export checks :=
   read_lines_check()
   read_parts_check()
   read_empty_check()

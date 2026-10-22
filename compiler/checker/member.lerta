@@ -28,63 +28,63 @@ from '../types'
 
 # The result of a call of the method that `member` names: a method of the object's type (see
 # find_method), or a field that holds a function.
-export const type_of_method_call = (body: Body, call: Call, member: Member, expected: Type?) ->
-  const receiver = type_of(body, member.object)
+export type_of_method_call := (body: Body, call: Call, member: Member, expected: Type?) ->
+  receiver := type_of(body, member.object)
   probe_member body, receiver if member.name.name == COMPLETION_NAME
-  const source = find_callable(body, receiver, member.name)
-  const generic = generic_method(source)
+  source := find_callable(body, receiver, member.name)
+  generic := generic_method(source)
   if generic == nil
     reject_type_arguments body, call
-    const method = type_of_method(body, member, receiver, source)
-    const result = check_arguments(body, call, method, method_literal_of(body, source, member))
+    method := type_of_method(body, member, receiver, source)
+    result := check_arguments(body, call, method, method_literal_of(body, source, member))
     warn_if_kept body, call, member, source
     return result
   record_member body, member, Method(source: source!)
-  const method = type_of_generic_method_call(body, call, member, generic, receiver, expected)
+  method := type_of_generic_method_call(body, call, member, generic, receiver, expected)
   set_type body, member, method
   method.result
 
 # The declaration of a method written in Lerta.
-const method_literal_of = (body: Body, source: MethodSource?, member: Member): FunctionLiteral? ->
+method_literal_of := (body: Body, source: MethodSource?, member: Member): FunctionLiteral? ->
   case source
     when OwnMethod then info_of(body.program, source.receiver).methods[member.name.name]
     when ExtensionSource then source.method.literal
     else nil
 
-export const generic_method = (source: MethodSource?) ->
+export generic_method := (source: MethodSource?) ->
   return nil if source == nil
   case source
     when OwnMethod then source.generic
     when ExtensionSource then source.method.generic
     else nil
 
-const type_of_method = (body: Body, member: Member, receiver: Type, source: MethodSource?) ->
-  const { name, position } = member.name
+type_of_method := (body: Body, member: Member, receiver: Type, source: MethodSource?) ->
+  { name, position } := member.name
   reject_deinit body, receiver, member
-  const from_source = source then method_type(body, receiver, source, member.name, nil)
-  const no_method = ->
+  from_source := source then method_type(body, receiver, source, member.name, nil)
+  no_method := ->
     fail body.program, position, "type #{format_type(receiver)} has no method '#{name}'"
-  const field = ->
+  field := ->
     if receiver is UnionType
-      if const problem = union_method_problem(body, receiver, member.name)
+      if problem := union_method_problem(body, receiver, member.name)
         fail body.program, position, problem
       return common_field_type(body, receiver, member)
     field_type(body, receiver, member) ? no_method()
-  const method = from_source ? field()
+  method := from_source ? field()
   record_member body, member, from_source then Method(source: source!) else Property(kind: FIELD)
   set_type body, member, method
 
-const find = (body: Body, receiver: Type, name: Identifier) ->
+find := (body: Body, receiver: Type, name: Identifier) ->
   return union_method(body, receiver, name) if receiver is UnionType
   find_method body.program, receiver, name.name, body.extensions
 
 # The method of the name that every member of the union has, of one type, or nil.
-const union_method = (body: Body, union: UnionType, name: Identifier): UnionMethod? ->
-  const found = find_union_method(body, union, name)
+union_method := (body: Body, union: UnionType, name: Identifier): UnionMethod? ->
+  found := find_union_method(body, union, name)
   found.problem == nil then UnionMethod(type: found.type!, members: found.members)
 
 # Why no method of the name can be called on the union, or nil if one can or no member has one.
-export const union_method_problem = (body: Body, union: UnionType, name: Identifier) ->
+export union_method_problem := (body: Body, union: UnionType, name: Identifier) ->
   return nil if union.members.all((member) -> find_callable(body, member, name) == nil)
   find_union_method(body, union, name).problem
 
@@ -96,21 +96,21 @@ struct UnionMethods
 
 # The method of the name in each member of the union, which must all have it, of one type, as a
 # call on the member would call it. A generic one would have an instance of each member.
-const find_union_method = (body: Body, union: UnionType, name: Identifier): UnionMethods ->
-  const members: MemberMethod[]
+find_union_method := (body: Body, union: UnionType, name: Identifier): UnionMethods ->
+  members: MemberMethod[]
   var first: Type?
   for member in union.members
-    const member_name = format_member(member, union)
-    const of_member = "of #{member_name}, a member of #{format_type(union)}"
-    const failed = (problem: String) -> UnionMethods(type: nil, members: members, problem: problem)
-    const missing = "'#{name.name}' is no method #{of_member}"
-    const source = find_callable(body, member, name) ? return failed(missing)
+    member_name := format_member(member, union)
+    of_member := "of #{member_name}, a member of #{format_type(union)}"
+    failed := (problem: String) -> UnionMethods(type: nil, members: members, problem: problem)
+    missing := "'#{name.name}' is no method #{of_member}"
+    source := find_callable(body, member, name) ? return failed(missing)
     return failed(generic_problem(source, name.name, of_member)) if generic_method(source) != nil
-    const type = method_type(body, member, source, name, nil)!
+    type := method_type(body, member, source, name, nil)!
     if first and not same_type(first, type)
-      const first_name = format_member(members[0].member, union)
-      const types = format_types(first, type)
-      const differing = "#{types.first} in #{first_name} but #{types.second} in #{member_name}"
+      first_name := format_member(members[0].member, union)
+      types := format_types(first, type)
+      differing := "#{types.first} in #{first_name} but #{types.second} in #{member_name}"
       return failed("'#{name.name}' has type #{differing}")
     first = type
     members.push MemberMethod(member, source)
@@ -118,31 +118,29 @@ const find_union_method = (body: Body, union: UnionType, name: Identifier): Unio
 
 # Why the generic method cannot be called on the union: it has type parameters of its own or of its
 # type, or it comes from an extend of an interface, which has an instance for each type.
-const generic_problem = (source: MethodSource, name: String, of_member: String) ->
-  const bound = source is ExtensionSource then source.method.bound
+generic_problem := (source: MethodSource, name: String, of_member: String) ->
+  bound := source is ExtensionSource then source.method.bound
   return "'#{name}' #{of_member}, comes from an extend of #{format_type(bound)}" if bound
   "'#{name}' is a generic method, or one of a generic type, #{of_member}"
 
 # The method that a call of the name calls: one of the receiver's type (see find_method), or one
 # that an extend of an interface it satisfies gives it, which codegen reads from the facts. A
 # member of the type of the same name would make the call ambiguous.
-const find_callable = (body: Body, receiver: Type, name: Identifier): MethodSource? ->
-  const own = find(body, receiver, name)
-  const extended = find_interface_extension(body, receiver, name) ? return own
+find_callable := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
+  own := find(body, receiver, name)
+  extended := find_interface_extension(body, receiver, name) ? return own
   if own != nil or field_type_by_name(body, receiver, name) != nil
-    const from = "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
-    const gets = "has a member '#{name.name}', and gets a method of that name #{from}"
+    from := "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
+    gets := "has a member '#{name.name}', and gets a method of that name #{from}"
     fail body.program, name.position, "#{format_type(receiver)} #{gets}"
   ExtensionSource method: extended
 
 # The type of the method, checking its body first if needed. A generic one's comes from its
 # instance for the receiver, if the receiver gives all its type arguments; `call`, if given, calls
 # it.
-const method_type = (
-  body: Body, receiver: Type, source: MethodSource, name: Identifier, call: Call?
-) ->
-  if const generic = generic_method(source)
-    const instance = receiver_instance(body, generic, receiver, name.position, call) ? return nil
+method_type := (body: Body, receiver: Type, source: MethodSource, name: Identifier, call: Call?) ->
+  if generic := generic_method(source)
+    instance := receiver_instance(body, generic, receiver, name.position, call) ? return nil
     return instance.entry.type
   case source
     when OwnMethod then object_method_type(body, source.receiver, name)
@@ -154,28 +152,23 @@ const method_type = (
 # The member of the type that an interface reads by the name: a method, or a field or a property,
 # or a field of every member of a union, as `x.name` reads it; nil if it has none. `call`, if
 # given, calls a generic method.
-export const find_member = (
-  body: Body
-  type: Type
-  name: Identifier
-  call: Call? = nil
-): FoundMember? ->
-  if const source = find(body, type, name)
-    const method = method_type(body, type, source, name, call) ? return nil
+export find_member := (body: Body, type: Type, name: Identifier, call: Call? = nil): FoundMember? ->
+  if source := find(body, type, name)
+    method := method_type(body, type, source, name, call) ? return nil
     return FoundMember(target: Method(source), type: method)
   if type is UnionType
-    const common = common_field_type_by_name(body, type, name) ? return nil
+    common := common_field_type_by_name(body, type, name) ? return nil
     return FoundMember(target: Property(kind: FIELD), type: common)
-  if const field = field_type_by_name(body, type, name)
+  if field := field_type_by_name(body, type, name)
     return FoundMember(target: Property(kind: FIELD), type: field)
   property_of body, type, name.name
 
 # A property of a builtin type, or of an interface value, by the name.
-const property_of = (body: Body, type: Type, name: String): FoundMember? ->
-  return property if const property = builtin_property(type, name)
+property_of := (body: Body, type: Type, name: String): FoundMember? ->
+  return property if property := builtin_property(type, name)
   interface_property body, type, name
 
-export const member_type_by_name = (
+export member_type_by_name := (
   body: Body
   type: Type
   name: Identifier
@@ -183,44 +176,44 @@ export const member_type_by_name = (
 ): Type? -> find_member(body, type, name, call)?.type
 
 # The member of the interface type of the name that is no method, which is read through the itab.
-const interface_property = (body: Body, type: Type, name: String) ->
+interface_property := (body: Body, type: Type, name: String) ->
   return nil if type is not InterfaceType
-  const found = interface_member(body.program, type, name) ? return nil
-  const member_type = found.member.type
+  found := interface_member(body.program, type, name) ? return nil
+  member_type := found.member.type
   return nil if member_type is FunctionType
   FoundMember target: InterfaceProperty(index: found.index), type: member_type
 
 # Records what the member refers to, which codegen generates it by.
-export const record_member = (body: Body, member: Member, target: MemberTarget) ->
+export record_member := (body: Body, member: Member, target: MemberTarget) ->
   body.facts.members[member] = target
 
-const reject_deinit = (body: Body, object_type: Type, member: Member) ->
-  const { name, position } = member.name
+reject_deinit := (body: Body, object_type: Type, member: Member) ->
+  { name, position } := member.name
   return if name != 'deinit' or method_owner(body, object_type, name) == nil
-  const message = 'deinit runs when the object is released; it cannot be called or used'
+  message := 'deinit runs when the object is released; it cannot be called or used'
   fail body.program, position, message
 
-export const type_of_property = (body: Body, member: Member): Type ->
-  const object_type = type_of_object(body, member)
-  const { name, position } = member.name
+export type_of_property := (body: Body, member: Member): Type ->
+  object_type := type_of_object(body, member)
+  { name, position } := member.name
   probe_member body, object_type if name == COMPLETION_NAME
   reject_deinit body, object_type, member
   if object_type is UnionType
     record_member body, member, Property(kind: FIELD)
     return common_field_type(body, object_type, member)
-  if const field = field_type(body, object_type, member)
+  if field := field_type(body, object_type, member)
     record_member body, member, Property(kind: FIELD)
     return narrowed_field_type(body, member) ? field
-  if const property = property_of(body, object_type, name)
+  if property := property_of(body, object_type, name)
     record_member body, member, property.target
     return property.type
-  const extended = find_interface_extension(body, object_type, member.name)
+  extended := find_interface_extension(body, object_type, member.name)
   if find(body, object_type, member.name) != nil or extended != nil
     fail body.program, position, "a method must be called: write `#{name}()`"
   fail body.program, position, "type #{format_type(object_type)} has no property '#{name}'"
 
-const type_of_object = (body: Body, member: Member) ->
-  const object = member.object
+type_of_object := (body: Body, member: Member) ->
+  object := member.object
   if object is This
-    return set_type(body, object, self.type) if const self = body.self
+    return set_type(body, object, self.type) if self := body.self
   type_of body, object

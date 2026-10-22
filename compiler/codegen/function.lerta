@@ -48,11 +48,11 @@ export struct TopLevelCode(symbol: String, awaits: Bool)
 # needed. The entry module's, the program's, then runs the event loop, and releases the values of
 # all modules; if it awaits, the program's top-level code is a coroutine of its own, which the loop
 # must finish.
-export const generate_main = (
+export generate_main := (
   g: Generator, statements: Statement[], code: TopLevelCode, runs_first: TopLevelCode[],
   releases: TopLevelGlobal[], is_program: Bool
 ) ->
-  const run = ->
+  run := ->
     for first in runs_first
       if first.awaits
         emit_await_owned g, g.ir.assign("call ptr #{first.symbol}()"), void_type
@@ -67,18 +67,18 @@ export const generate_main = (
     g.ir.emit 'ret void'
     finish g, is_program then PROGRAM_MAIN else "void #{code.symbol}()"
     return
-  const run_and_return = ->
+  run_and_return := ->
     run()
     emit_return g, '', void_type
-  const body = is_program then '@lerta.top_level' else code.symbol
+  body := is_program then '@lerta.top_level' else code.symbol
   generate_awaiting_function g, '', body, [], void_type, run_and_return
   generate_program_main g.ir.module, body, releases if is_program
 
 # Runs the program's top-level code, a coroutine, and the event loop, which must settle it; its
 # exception is the program's.
-const generate_program_main = (module: IrModule, body: String, releases: TopLevelGlobal[]) ->
-  const ir = IrBuilder(module)
-  const promise = ir.assign("call ptr #{body}()")
+generate_program_main := (module: IrModule, body: String, releases: TopLevelGlobal[]) ->
+  ir := IrBuilder(module)
+  promise := ir.assign("call ptr #{body}()")
   emit_loop_run ir
   call_void_runtime ir, 'void @lerta_finish_top_level(ptr)', "ptr #{promise}"
   emit_release ir, promise
@@ -88,30 +88,30 @@ const generate_program_main = (module: IrModule, body: String, releases: TopLeve
   ir.finish PROGRAM_MAIN
 
 # The program's top-level code, which the runtime calls.
-const PROGRAM_MAIN = 'external void @lerta_main()'
+PROGRAM_MAIN := 'external void @lerta_main()'
 
 # Defines nothing, for a block that declares no locals besides its statements'.
-export const no_locals = (_scope: Map<String, CodegenLocal>) -> return
+export no_locals := (_scope: Map<String, CodegenLocal>) -> return
 
 # A function literal in an expression: its code, generated as a function of its own, and a new
 # closure of it with the values it captures.
-export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
-  const captures = g.facts.captures[literal]!
-  const symbol = g.code.ir_module.fresh_symbol('lerta.lambda')
-  const name = "#{g.function_name}.<anonymous>"
-  const body_generator = function_generator(g.code, g.extensions, g.facts, name)
+export generate_closure := (g: Generator, literal: FunctionLiteral) ->
+  captures := g.facts.captures[literal]!
+  symbol := g.code.ir_module.fresh_symbol('lerta.lambda')
+  name := "#{g.function_name}.<anonymous>"
+  body_generator := function_generator(g.code, g.extensions, g.facts, name)
   # Its symbol is numbered within the module.
   generate_function body_generator, 'private ', symbol, literal, nil, captures
-  const slots: HeapField[]
-  const operands: String[]
+  slots: HeapField[]
+  operands: String[]
   for capture in captures
-    const local = referred_local(g, capture.source, capture.name)
+    local := referred_local(g, capture.source, capture.name)
     if not capture.is_var
       slots.push value_field(capture.type)
       operands.push captured_value(g, local, capture)
       continue
-    const cell = local is SlotLocal then local.cell
-    const owned = cell ? panic("the captured var '#{capture.name}' has no cell")
+    cell := local is SlotLocal then local.cell
+    owned := cell ? panic("the captured var '#{capture.name}' has no cell")
     emit_retain g.ir, owned.cell
     slots.push CELL_SLOT
     operands.push owned.cell
@@ -120,27 +120,27 @@ export const generate_closure = (g: Generator, literal: FunctionLiteral) ->
 
 # The value a function literal captures, owned: the box of a weak local, or of `@` for a weak
 # literal, rather than its object.
-const captured_value = (g: Generator, local: CodegenLocal, capture: Capture) ->
-  const type = capture.type
+captured_value := (g: Generator, local: CodegenLocal, capture: Capture) ->
+  type := capture.type
   if local.weak
-    const box = held_value(g, local)
+    box := held_value(g, local)
     emit_retain g.ir, box
     return box
-  const value = read_local(g, local, type)
+  value := read_local(g, local, type)
   return value if not capture.is_weak
-  const box = weak_box_of(g, value, type)
+  box := weak_box_of(g, value, type)
   emit_release g.ir, value
   box
 
 # A weak literal's `@`, captured as its box, is its object for the whole call, which does nothing if
 # the object is gone.
-const hold_weak_this = (g: Generator, scope: Map<String, CodegenLocal>) ->
-  const captured = scope['@'] ? return
-  const ir = g.ir
-  const object = emit_weak_object(ir, held_value(g, captured))
-  const gone_label = ir.fresh_label('weak.gone')
-  const alive_label = ir.fresh_label('weak.alive')
-  const is_gone = ir.assign("icmp eq ptr #{object}, null")
+hold_weak_this := (g: Generator, scope: Map<String, CodegenLocal>) ->
+  captured := scope['@'] ? return
+  ir := g.ir
+  object := emit_weak_object(ir, held_value(g, captured))
+  gone_label := ir.fresh_label('weak.gone')
+  alive_label := ir.fresh_label('weak.alive')
+  is_gone := ir.assign("icmp eq ptr #{object}, null")
   ir.emit "br i1 #{is_gone}, label %#{gone_label}, label %#{alive_label}"
   ir.start_block gone_label
   emit_return g, '', void_type
@@ -154,7 +154,7 @@ const hold_weak_this = (g: Generator, scope: Map<String, CodegenLocal>) ->
 # that awaits a Promise that the body settles (see yielding and awaiting). The function and its
 # entries for defaults have the linkage (see Definition), unless `with_defaults` is false, as for
 # an instance whose defaults no call uses (see check_instance_defaults).
-export const generate_function = (
+export generate_function := (
   g: Generator
   linkage: String
   symbol: String
@@ -163,40 +163,39 @@ export const generate_function = (
   captures: Capture[]?
   with_defaults = true
 ) ->
-  const type = function_type_of(type_of(g, literal))
+  type := function_type_of(type_of(g, literal))
   g.ir.declared_at = literal.position
-  const params: String[]
+  params: String[]
   params.push 'ptr %closure' if captures != nil
   params.push "#{ir_type(this_type)} %this" if this_type
   params.push "#{ir_type(param)} %p#{i}" for param, i in type.params
-  const generate_body = (result: Type) ->
-    generate_function_body g, literal, this_type, captures, result
+  generate_body := (result: Type) -> generate_function_body(g, literal, this_type, captures, result)
   if literal.yields
-    const item = iterable_item(type.result)!
+    item := iterable_item(type.result)!
     generate_yielding_function g, linkage, symbol, params, item, -> generate_body(void_type)
   else if literal.awaits
-    const value = (type.result as PromiseType!).value
+    value := (type.result as PromiseType!).value
     generate_awaiting_function g, linkage, symbol, params, value, -> generate_body(value)
   else
     g.result_type = type.result
     generate_body type.result
     finish g, "#{linkage}#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})"
-  const fewest = with_defaults then required_params(literal) else literal.params.length
+  fewest := with_defaults then required_params(literal) else literal.params.length
   for given in fewest...literal.params.length
-    const entry_generator = function_generator(g.code, g.extensions, g.facts, g.function_name)
+    entry_generator := function_generator(g.code, g.extensions, g.facts, g.function_name)
     generate_default_entry entry_generator, linkage, symbol, literal, this_type, given
 
 # The body of a coroutine may run after its call returns, so it holds its parameters, its object
 # and its closure, which its scope releases; that of a function that yields waits for its first
 # item to be asked for before running its statements. `result` is what its last statement gives.
-const generate_function_body = (
+generate_function_body := (
   g: Generator, literal: FunctionLiteral, this_type: Type?, captures: Capture[]?, result: Type
 ) ->
-  const type = function_type_of(type_of(g, literal))
-  const ir = g.ir
-  const holds = g.coroutine != nil
-  const scope = g.locals.push()
-  const bind = (name: String, operand: String, local_type: Type) ->
+  type := function_type_of(type_of(g, literal))
+  ir := g.ir
+  holds := g.coroutine != nil
+  scope := g.locals.push()
+  bind := (name: String, operand: String, local_type: Type) ->
     if not holds
       scope[name] = ValueLocal(operand, type: local_type)
       return
@@ -207,15 +206,15 @@ const generate_function_body = (
   # The name cannot be written in the source, so no code can read it.
   bind '(closure)', '%closure', type if holds and captures != nil
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
-  const captured = captures ? []
-  const slot_of = (capture: Capture) -> capture.is_var then CELL_SLOT else value_field(capture.type)
-  const slots = [slot_of(capture) for capture in captured]
+  captured := captures ? []
+  slot_of := (capture: Capture) -> capture.is_var then CELL_SLOT else value_field(capture.type)
+  slots := [slot_of(capture) for capture in captured]
   for capture, i in captured
-    const { name, type, is_var } = capture
-    const pointer = emit_capture_pointer(ir, '%closure', slots, i)
-    const value = ir.assign("load #{slots[i].ir_type}, ptr #{pointer}")
-    const cell = CellSlot(cell: value, is_owned: false)
-    const weak = capture.is_weak
+    { name, type, is_var } := capture
+    pointer := emit_capture_pointer(ir, '%closure', slots, i)
+    value := ir.assign("load #{slots[i].ir_type}, ptr #{pointer}")
+    cell := CellSlot(cell: value, is_owned: false)
+    weak := capture.is_weak
     scope[name] =
       if is_var
         SlotLocal type, cell, weak, is_var, pointer: emit_cell_pointer(ir, type, value)
@@ -230,43 +229,43 @@ const generate_function_body = (
 # The entry that takes the first `given` arguments, borrowed, and the object of a method; computes
 # the defaults of the others in order, each seeing `@` and the parameters before it; and calls the
 # function with them all.
-const generate_default_entry = (
+generate_default_entry := (
   g: Generator, linkage: String, symbol: String, literal: FunctionLiteral, this_type: Type?,
   given: Int
 ) ->
-  const type = function_type_of(type_of(g, literal))
+  type := function_type_of(type_of(g, literal))
   g.result_type = type.result
-  const scope = g.locals.push()
+  scope := g.locals.push()
   scope['@'] = ValueLocal(operand: '%this', type: this_type) if this_type
-  const operands: String[]
+  operands: String[]
   for param, i in literal.params
-    const param_type = type.params[i]
+    param_type := type.params[i]
     if i < given
       scope[param.name.name] = ValueLocal(operand: "%p#{i}", type: param_type)
       operands.push "%p#{i}"
     else
-      const value = generate(g, param.default!)
+      value := generate(g, param.default!)
       scope[param.name.name] = store_in_slot(g, value, param_type)
       operands.push value
-  const args: String[]
+  args: String[]
   args.push "#{ir_type(this_type)} %this" if this_type
   args.push "#{ir_type(param)} #{operand}" for (param, operand) in type.params.zip(operands)
-  const result = call_user_function(g.ir, symbol, type, args.join(', '))
+  result := call_user_function(g.ir, symbol, type, args.join(', '))
   emit_exception_check g
   emit_return g, result, type.result
   g.locals.pop()
-  const params: String[]
+  params: String[]
   params.push "#{ir_type(this_type)} %this" if this_type
   params.push "#{ir_type(type.params[i])} %p#{i}" for i in 0...given
-  const entry = default_entry_symbol(symbol, given)
+  entry := default_entry_symbol(symbol, given)
   finish g, "#{linkage}#{ir_return_type(type.result)} #{entry}(#{params.join(', ')})"
 
 # The last statement returns its value, if it is an expression and the function has a result.
-const generate_last_statement = (g: Generator, body: Statement[], result: Type) ->
-  const has_result = not is_kind(result, 'void')
-  const last = body.last()
+generate_last_statement := (g: Generator, body: Statement[], result: Type) ->
+  has_result := not is_kind(result, 'void')
+  last := body.last()
   if last
-    const value = last as Expression?
+    value := last as Expression?
     if value
       return emit_return(g, generate(g, value), type_at_use(g, value)) if has_result
     generate_statement g, last
@@ -279,63 +278,63 @@ const generate_last_statement = (g: Generator, body: Statement[], result: Type) 
 # computes the other fields, and the defaults of the arguments not given, in order, and runs `init`
 # last. An exception on the way releases the fields, which start as nil, and frees the object
 # without running its deinit, or panics if init let it escape. It has the linkage (see Definition).
-export const generate_constructor = (g: Generator, linkage: String, info: ObjectInfo) ->
-  const ir = g.ir
+export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo) ->
+  ir := g.ir
   g.result_type = info.type
-  const object = emit_allocate(ir, info)
-  const field_pointer = (field: FieldInfo) -> emit_field_pointer(ir, object, info, field.name.name)
+  object := emit_allocate(ir, info)
+  field_pointer := (field: FieldInfo) -> emit_field_pointer(ir, object, info, field.name.name)
   for field in info.fields
     ir.emit "store #{ir_type(field.type!)} zeroinitializer, ptr #{field_pointer(field)}"
   g.unwind_cleanup = ->
-    const mark = call_runtime(ir, 'i64 @lerta_drop_mark()', '')
+    mark := call_runtime(ir, 'i64 @lerta_drop_mark()', '')
     for field in info.fields
-      const type = field.type!
+      type := field.type!
       emit_release_stored ir, field_pointer(field), ir_type(type), ownership(type)
-    const weak_slot = emit_weak_slot_or_null(ir, object, info)
-    const args = "ptr #{object}, ptr #{weak_slot}, i64 #{mark}"
+    weak_slot := emit_weak_slot_or_null(ir, object, info)
+    args := "ptr #{object}, ptr #{weak_slot}, i64 #{mark}"
     call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
-  const arguments = [field for field in info.fields when is_argument(field)]
-  const store_argument = (field: FieldInfo) ->
-    const param = "%p#{argument_index(arguments, field)}"
+  arguments := [field for field in info.fields when is_argument(field)]
+  store_argument := (field: FieldInfo) ->
+    param := "%p#{argument_index(arguments, field)}"
     emit_retain_value ir, param, field.type!
     store_field g, object, info, field, param
   for field in arguments
     store_argument field if not field.has_default
-  const scope = g.locals.push()
+  scope := g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
-    const value = field.value ? continue
-    const compute = -> store_field(g, object, info, field, generate(g, value))
+    value := field.value ? continue
+    compute := -> store_field(g, object, info, field, generate(g, value))
     if field.has_default
       emit_default_or_argument g, arguments, field, compute, -> store_argument(field)
     else
       compute()
   g.locals.pop()
-  const init = special_method_symbol(g.code.program, info, 'init')
+  init := special_method_symbol(g.code.program, info, 'init')
   if info.has_init
     ir.emit "call void #{init}(ptr #{object})"
     emit_exception_check g
   ir.emit "ret ptr #{object}"
-  const params: String[]
+  params: String[]
   for argument, i in arguments
     params.push "#{ir_type(argument.type!)} %p#{i}"
     params.push "i1 %given#{i}" if argument.has_default
   finish g, "#{linkage}ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
 
-const argument_index = (arguments: FieldInfo[], field: FieldInfo) ->
+argument_index := (arguments: FieldInfo[], field: FieldInfo) ->
   arguments.find_index((each) -> each == field)!
 
 # An argument with a default comes with whether it is given (see generate_construction); if it is
 # not, its default is computed in its place among the initializers.
-const emit_default_or_argument = (
+emit_default_or_argument := (
   g: Generator, arguments: FieldInfo[], field: FieldInfo, compute: () -> void,
   store_argument: () -> void
 ) ->
-  const ir = g.ir
-  const given = "%given#{argument_index(arguments, field)}"
-  const given_label = ir.fresh_label('argument.given')
-  const default_label = ir.fresh_label('argument.default')
-  const end_label = ir.fresh_label('argument.end')
+  ir := g.ir
+  given := "%given#{argument_index(arguments, field)}"
+  given_label := ir.fresh_label('argument.given')
+  default_label := ir.fresh_label('argument.default')
+  end_label := ir.fresh_label('argument.end')
   ir.emit "br i1 #{given}, label %#{given_label}, label %#{default_label}"
   ir.start_block given_label
   store_argument()
@@ -346,54 +345,52 @@ const emit_default_or_argument = (
   ir.start_block end_label
 
 # The field takes over the value, owned; a weak field takes its box instead.
-const store_field = (
-  g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String
-) ->
-  const pointer = emit_field_pointer(g.ir, object, info, field.name.name)
-  const stored = field.weak then weak_box_of(g, value, field.type!) else value
+store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String) ->
+  pointer := emit_field_pointer(g.ir, object, info, field.name.name)
+  stored := field.weak then weak_box_of(g, value, field.type!) else value
   emit_release g.ir, value if field.weak
   g.ir.emit "store #{ir_type(field.type!)} #{stored}, ptr #{pointer}"
 
 # A weak local or field holds the box of its object, which stays borrowed.
-export const weak_box_of = (g: Generator, object: String, type: Type) ->
+export weak_box_of := (g: Generator, object: String, type: Type) ->
   emit_weak_box_of g.ir, g.code.program, object, type
 
-export const finish = (g: Generator, signature: String) -> g.ir.finish(signature)
+export finish := (g: Generator, signature: String) -> g.ir.finish(signature)
 
 # Releases every scope of the function, running the finally blocks of the `try` blocks it leaves,
 # while it holds the owned value of the type, which it then returns. The function's result type
 # decides the instruction: a returned value that never comes (`return throw ...`) is poison. The
 # body of a coroutine gives its value to `on_return`, if any, and goes to its end instead.
-const emit_return = (g: Generator, value: String, type: Type) ->
+emit_return := (g: Generator, value: String, type: Type) ->
   while_holding g, value, type, -> leave_scopes(g, 0)
-  on_return value if const on_return = g.on_return
-  if const coroutine = g.coroutine
+  on_return value if on_return := g.on_return
+  if coroutine := g.coroutine
     g.ir.emit "br label %#{coroutine.end_label}"
     return
-  const result = g.result_type
+  result := g.result_type
   g.ir.emit returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}"
 
 # Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
 # function releases it where the code goes on.
-export const hold = (g: Generator, value: String, type: Type) ->
-  const scope = push_held_scope(g, value, type)
+export hold := (g: Generator, value: String, type: Type) ->
+  scope := push_held_scope(g, value, type)
   ->
     release_scope g, scope
     g.locals.pop()
 
 # Pushes a scope that holds an owned reference, which a jump out of it releases.
-export const push_held_scope = (g: Generator, value: String, type: Type) ->
-  const scope = g.locals.push()
+export push_held_scope := (g: Generator, value: String, type: Type) ->
+  scope := g.locals.push()
   # The name cannot be written in the source, so no code can read it.
   scope['(held)'] = store_in_slot(g, value, type)
   scope
 
 # A jump ends the block; the code after it, until the next label, is unreachable.
-export const generate_jump = (g: Generator, jump: Jump | Return) ->
+export generate_jump := (g: Generator, jump: Jump | Return) ->
   case jump
     when Jump then generate_control_jump(g, jump)
     when Return
-      const value = jump.value
+      value := jump.value
       if value
         emit_return g, generate(g, value), type_at_use(g, value)
       else
@@ -402,17 +399,17 @@ export const generate_jump = (g: Generator, jump: Jump | Return) ->
 
 # A block that gives a value: its last statement, if an expression, gives it, or ''. The value is
 # computed before the locals are released, as it may be one of them.
-export const generate_block_value = (
+export generate_block_value := (
   g: Generator, body: Statement[], define: (Map<String, CodegenLocal>) -> void
 ) ->
-  const scope = g.locals.push()
+  scope := g.locals.push()
   define scope
   generate_statement g, statement for statement in all_but_last(body)
-  const last = body.last()!
-  const expression = last as Expression?
+  last := body.last()!
+  expression := last as Expression?
   # nil that ends a branch of an if or a try that gives no value has no type to be converted to.
-  const is_discarded_nil = expression is NilLiteral and g.facts.conversions[expression] == nil
-  const value = expression and not is_discarded_nil then generate(g, expression) else ''
+  is_discarded_nil := expression is NilLiteral and g.facts.conversions[expression] == nil
+  value := expression and not is_discarded_nil then generate(g, expression) else ''
   generate_statement g, last if expression == nil
   release_scope g, scope
   g.locals.pop()
@@ -420,42 +417,42 @@ export const generate_block_value = (
 
 # A block is a scope: the references held by its locals are released at its end. `define`
 # declares the locals that belong to it besides its statements'.
-export const generate_block = (
+export generate_block := (
   g: Generator, body: Statement[], define: (Map<String, CodegenLocal>) -> void
 ) -> generate_block_with(g, statements_code(g, body), define)
 
 # What generates the statements, for a block whose code is given that way.
-export const statements_code = (g: Generator, statements: Statement[]) ->
-  const generate_all = -> generate_statement(g, statement) for statement in statements
+export statements_code := (g: Generator, statements: Statement[]) ->
+  generate_all := -> generate_statement(g, statement) for statement in statements
   generate_all
 
 # A block whose code `generate` generates in its scope.
-export const generate_block_with = (
+export generate_block_with := (
   g: Generator, generate_body: () -> void, define: (Map<String, CodegenLocal>) -> void
 ) ->
-  const scope = g.locals.push()
+  scope := g.locals.push()
   define scope
   generate_body()
   release_scope g, scope
   g.locals.pop()
 
-export const release_scope = (g: Generator, scope: Map<String, CodegenLocal>) ->
-  const ir = g.ir
+export release_scope := (g: Generator, scope: Map<String, CodegenLocal>) ->
+  ir := g.ir
   for local in scope.values()
     continue if local is not SlotLocal
     continue if local.top_level != nil
-    if const cell = local.cell
+    if cell := local.cell
       emit_release ir, cell.cell if cell.is_owned
     else
       emit_release_stored ir, local.pointer, ir_type(local.type), ownership(local.type)
 
-const generate_statement = (g: Generator, statement: Statement) ->
-  const outer = g.position
+generate_statement := (g: Generator, statement: Statement) ->
+  outer := g.position
   locate g, statement.position
   generate_statement_node g, statement
   locate g, outer
 
-const generate_statement_node = (g: Generator, statement: Statement): void ->
+generate_statement_node := (g: Generator, statement: Statement): void ->
   case statement
     when For then generate_for(g, statement)
     when While then generate_while(g, statement)
@@ -468,32 +465,32 @@ const generate_statement_node = (g: Generator, statement: Statement): void ->
     when NilLiteral then pass
     else release_if_reference(g, statement, generate(g, statement))
 
-const generate_declaration = (g: Generator, declaration: Declaration) ->
-  const ir = g.ir
-  const type = type_of(g, declaration.name)
-  const weak = declaration.weak
-  const generated = generate(g, declaration.value)
-  const value = weak then weak_box_of(g, generated, type) else generated
+generate_declaration := (g: Generator, declaration: Declaration) ->
+  ir := g.ir
+  type := type_of(g, declaration.name)
+  weak := declaration.weak
+  generated := generate(g, declaration.value)
+  value := weak then weak_box_of(g, generated, type) else generated
   emit_release ir, generated if weak
-  const name = declaration.name.name
-  const code = g.code
-  const is_top_level = g.top_level_code and g.locals.depth() == 1
-  const global = is_top_level then code.globals[code.module.index][name]
+  name := declaration.name.name
+  code := g.code
+  is_top_level := g.top_level_code and g.locals.depth() == 1
+  global := is_top_level then code.globals[code.module.index][name]
   if g.facts.shared_vars.has(declaration.name)
-    const cell = emit_cell(ir, type, value)
-    const pointer = emit_cell_pointer(ir, type, cell)
-    const owned = CellSlot(cell, is_owned: true)
+    cell := emit_cell(ir, type, value)
+    pointer := emit_cell_pointer(ir, type, cell)
+    owned := CellSlot(cell, is_owned: true)
     g.locals.define name, SlotLocal(type, pointer, weak, is_var: declaration.mutable, cell: owned)
     return
   if global == nil
-    const slot = store_in_slot(g, value, type)
+    slot := store_in_slot(g, value, type)
     g.locals.define name, SlotLocal(type, weak, is_var: declaration.mutable, pointer: slot.pointer)
     return
   ir.emit "store #{ir_type(type)} #{value}, ptr #{global.pointer}"
   emit_mark_initialized ir, global
   g.locals.define name, top_level_slot(global, false)
 
-export const store_in_slot = (g: Generator, value: String, type: Type) ->
-  const pointer = g.ir.alloca(ir_type(type))
+export store_in_slot := (g: Generator, value: String, type: Type) ->
+  pointer := g.ir.alloca(ir_type(type))
   g.ir.emit "store #{ir_type(type)} #{value}, ptr #{pointer}"
   SlotLocal pointer, type

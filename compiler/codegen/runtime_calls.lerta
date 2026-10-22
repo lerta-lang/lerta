@@ -6,38 +6,36 @@ import FunctionType, is_kind, Type from '../types'
 
 # Calls a runtime function; the value of one that never returns is poison (see
 # emit_valueless_call).
-export const emit_runtime_call = (
-  ir: IrBuilder, symbol: String, type: FunctionType, args: String[]
-) ->
-  const params = [ir_param_type(param) for param in type.params].join(', ')
-  const result = ir_c_return_type(type.result)
+export emit_runtime_call := (ir: IrBuilder, symbol: String, type: FunctionType, args: String[]) ->
+  params := [ir_param_type(param) for param in type.params].join(', ')
+  result := ir_c_return_type(type.result)
   ir.module.declare symbol, "declare #{result} @#{symbol}(#{params})"
-  const arg_list = ["#{ir_param_type(type.params[i])} #{arg}" for arg, i in args]
-  const call = "call #{result} @#{symbol}(#{arg_list.join(', ')})"
+  arg_list := ["#{ir_param_type(type.params[i])} #{arg}" for arg, i in args]
+  call := "call #{result} @#{symbol}(#{arg_list.join(', ')})"
   return ir.assign(call) if result != 'void'
   emit_valueless_call ir, call, type.result
 
 # Emits a call that gives no value, of a void function, or of a never one, which returns only
 # with an exception pending, for the caller's check to take: its value is poison, which nothing
 # reads.
-export const emit_valueless_call = (ir: IrBuilder, call: String, result: Type) ->
+export emit_valueless_call := (ir: IrBuilder, call: String, result: Type) ->
   ir.emit call
   is_kind(result, 'never') then 'poison' else ''
 
 # Declares and calls the function of the signature, as in `i64 @f(ptr, i64)`, giving its result.
-export const call_runtime = (ir: IrBuilder, signature: String, args: String) ->
+export call_runtime := (ir: IrBuilder, signature: String, args: String) ->
   ir.assign runtime_call(ir, signature, args, false)
 
 # Declares and calls the void function of the signature, as in `void @f(ptr)`.
-export const call_void_runtime = (ir: IrBuilder, signature: String, args: String) ->
+export call_void_runtime := (ir: IrBuilder, signature: String, args: String) ->
   ir.emit runtime_call(ir, signature, args, true)
 
 # A void result cannot be assigned, and a result that call_void_runtime dropped would hide a wrong
 # signature.
-const runtime_call = (ir: IrBuilder, signature: String, args: String, is_void: Bool) ->
-  const parts = signature.split(' @')
-  const result_type = parts[0]
+runtime_call := (ir: IrBuilder, signature: String, args: String, is_void: Bool) ->
+  parts := signature.split(' @')
+  result_type := parts[0]
   panic "#{signature} does not match the call" if (result_type == 'void') != is_void
-  const name = parts[1].split('(')[0]
+  name := parts[1].split('(')[0]
   ir.module.declare name, "declare #{signature}"
   "call #{result_type} @#{name}(#{args})"

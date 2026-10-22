@@ -10,44 +10,44 @@ struct Element(value: Expression)
 type Item = NamedValue | MapEntry | Element
 
 # Whether the line ends here and an indented block follows.
-export const starts_block = (tokens: TokenStream) ->
+export starts_block := (tokens: TokenStream) ->
   tokens.peek().kind == NEWLINE and tokens.peek_at(1).kind == INDENT
 
-export const parse_block_literal = (tokens: TokenStream) ->
+export parse_block_literal := (tokens: TokenStream) ->
   # Diagnostics about the literal point at its first line, after the line end and the indentation.
-  const position = token_position(tokens.peek_at(2))
-  const items: Item[]
+  position := token_position(tokens.peek_at(2))
+  items: Item[]
   tokens.read_block_items -> add_item(tokens, items)
   to_literal items, position
 
-const add_item = (tokens: TokenStream, items: Item[]) ->
-  const start = token_position(tokens.peek())
-  const item = parse_item(tokens)
+add_item := (tokens: TokenStream, items: Item[]) ->
+  start := token_position(tokens.peek())
+  item := parse_item(tokens)
   if items.length > 0 and kind_of(item) != kind_of(items[0])
     tokens.fail start, "the items of this block are #{kind_of(items[0])}, so this one must be too"
   items.push item
 
 # A value may take the lines below, as an `if` does.
-const parse_item = (tokens: TokenStream): Item ->
+parse_item := (tokens: TokenStream): Item ->
   if tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':'
-    const name = parse_identifier(tokens)
+    name := parse_identifier(tokens)
     tokens.next()
     return NamedValue(name, value: parse_value(tokens))
-  const value = parse_value(tokens)
+  value := parse_value(tokens)
   return Element(value) if not tokens.accept(':')
   MapEntry key: value, value: parse_value(tokens)
 
-const kind_of = (item: Item) ->
+kind_of := (item: Item) ->
   case item
     when NamedValue then 'fields'
     when MapEntry then 'map entries'
     when Element then 'array elements'
 
-const to_literal = (items: Item[], position: Position): Expression ->
-  const fields = [item for item in items when item is NamedValue]
-  const entries = [item for item in items when item is MapEntry]
+to_literal := (items: Item[], position: Position): Expression ->
+  fields := [item for item in items when item is NamedValue]
+  entries := [item for item in items when item is MapEntry]
   return RecordLiteral(fields, position) if fields.length > 0
   return MapLiteral(entries, position) if entries.length > 0
-  const elements = [item.value for item in items when item is Element]
+  elements := [item.value for item in items when item is Element]
   return elements[0] if elements.length == 1
   ArrayLiteral position, elements

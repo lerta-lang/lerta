@@ -18,29 +18,29 @@ import has_type_parameters, infer, substitute from './type_patterns'
 import format_type, InterfaceType, same_type, string_type, Type, UnionType from '../types'
 
 # Rejects a type that does not satisfy the interface type.
-export const reject_unsatisfied = (body: Body, type: Type, bound: InterfaceType, at: Position) ->
+export reject_unsatisfied := (body: Body, type: Type, bound: InterfaceType, at: Position) ->
   return reject_unjsonable(body.program, type, at) if is_jsonable_bound(bound)
   for member in members_for(body.program, bound, type)
     satisfying_member body, type, bound, member, Identifier(position: at, name: member.name), nil
 
 # The type's member that satisfies the interface's member.
-const satisfying_member = (
+satisfying_member := (
   body: Body, type: Type, bound: InterfaceType, member: InterfaceMember, name: Identifier,
   call: Call?
 ) ->
-  const found = find_member(body, type, name, call)
-  const reason = unsatisfied_reason(body, type, member, name, found?.type) ? return found!
-  const bound_name = format_type(bound)
+  found := find_member(body, type, name, call)
+  reason := unsatisfied_reason(body, type, member, name, found?.type) ? return found!
+  bound_name := format_type(bound)
   fail body.program, name.position, "#{format_type(type)} does not satisfy #{bound_name}: #{reason}"
 
 # Why the type's member, of the type found, does not satisfy the interface's member, or nil if it
 # does: it must be of exactly the member's type. Not merely of a type assignable to it: the
 # generic code is checked with the type it has.
-const unsatisfied_reason = (
+unsatisfied_reason := (
   body: Body, type: Type, member: InterfaceMember, name: Identifier, found: Type?
 ): String? ->
   return nil if found and same_type(found, member.type)
-  const expected = format_type(member.type)
+  expected := format_type(member.type)
   case
     when found then "its #{member.name} is of type #{format_type(found)}, not #{expected}"
     # Only a generic method has no type without a call.
@@ -53,68 +53,68 @@ const unsatisfied_reason = (
 # Binds the type parameters in the type arguments of `pattern`, an interface type, to the types
 # that the type's members give them, as Int[], whose iter gives an Iter<Int>, binds T of
 # Iterable<T> to Int.
-export const infer_through_members = (
+export infer_through_members := (
   body: Body, pattern: InterfaceType, type: Type, at: Position, bind: (String, Type) -> void
 ) ->
-  const info = interface_of(body.program, pattern)
-  const bindings: Map<String, Type>
+  info := interface_of(body.program, pattern)
+  bindings: Map<String, Type>
   bindings[name] = arg for (name, arg) in info.type_params.zip(pattern.args)
   bindings[SELF] = type
   for member in interface_members(body.program, info)
-    const name = Identifier(position: at, name: member.name)
-    const found = member_type_by_name(body, type, name) ? continue
+    name := Identifier(position: at, name: member.name)
+    found := member_type_by_name(body, type, name) ? continue
     infer substitute(member.type, bindings), found, bind
 
 # `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
 # is typed once. x must be Stringable.
-export const check_interpolated = (body: Body, part: Call) ->
-  const member = part.callee
+export check_interpolated := (body: Body, part: Call) ->
+  member := part.callee
   panic 'an interpolated value is read by a call of its to_string()' if member is not Member
-  const type = type_of(body, member.object)
-  const bound = std_interface(body.shared, 'Stringable', member.object.position).type
-  const to_string = members_for(body.program, bound, type)[0]
-  const name = Identifier(position: member.object.position, name: member.name.name)
-  const found = satisfying_member(body, type, bound, to_string, name, part)
+  type := type_of(body, member.object)
+  bound := std_interface(body.shared, 'Stringable', member.object.position).type
+  to_string := members_for(body.program, bound, type)[0]
+  name := Identifier(position: member.object.position, name: member.name.name)
+  found := satisfying_member(body, type, bound, to_string, name, part)
   record_member body, member, found.target
   set_type body, member, found.type
   set_type body, part, string_type
 
 # The method of the name that an extend of an interface in effect gives the type, by an interface
 # that the type satisfies; the methods of such extends do not count for satisfying one.
-export const find_interface_extension = (body: Body, type: Type, name: Identifier) ->
-  const is_found = (method: ExtensionMethod) ->
-    const bound = method.bound ? return false
+export find_interface_extension := (body: Body, type: Type, name: Identifier) ->
+  is_found := (method: ExtensionMethod) ->
+    bound := method.bound ? return false
     method.name.name == name.name and satisfied_bindings(body, type, bound, name.position) != nil
   body.extensions.in_effect.find is_found
 
 # The type arguments that the type gives the type parameters in the interface type if it
 # satisfies it, or nil.
-const satisfied_bindings = (body: Body, type: Type, pattern: InterfaceType, at: Position) ->
-  const bindings: Map<String, Type>
-  const bind = (name: String, bound: Type) -> bindings[name] = bound if not bindings.has(name)
+satisfied_bindings := (body: Body, type: Type, pattern: InterfaceType, at: Position) ->
+  bindings: Map<String, Type>
+  bind := (name: String, bound: Type) -> bindings[name] = bound if not bindings.has(name)
   infer_through_members body, pattern, type, at, bind
-  const bound = substitute(pattern, bindings)
+  bound := substitute(pattern, bindings)
   return nil if has_type_parameters(bound)
-  const satisfies_member = (member: InterfaceMember) ->
-    const name = Identifier(position: at, name: member.name)
+  satisfies_member := (member: InterfaceMember) ->
+    name := Identifier(position: at, name: member.name)
     unsatisfied_reason(body, type, member, name, member_type_by_name(body, type, name)) == nil
-  const members = members_for(body.program, bound as InterfaceType!, type)
+  members := members_for(body.program, bound as InterfaceType!, type)
   members.all(satisfies_member) then bindings
 
 # The type of the items of a type that satisfies Iterable, which its iter gives.
-export const iterable_item_of = (body: Body, type: Type, at: Position) ->
-  const iterable = std_interface(body.shared, 'Iterable', at)
-  const bindings = satisfied_bindings(body, type, iterable.type, at) ? return nil
+export iterable_item_of := (body: Body, type: Type, at: Position) ->
+  iterable := std_interface(body.shared, 'Iterable', at)
+  bindings := satisfied_bindings(body, type, iterable.type, at) ? return nil
   bindings[iterable.type_params[0]]
 
 # Fails with the message, or, for a type that has a member `iter` of another type, with why it is
 # not Iterable.
-export const reject_not_iterable = (body: Body, type: Type, at: Position, message: String) ->
-  const name = Identifier(position: at, name: 'iter')
-  const found = member_type_by_name(body, type, name)
+export reject_not_iterable := (body: Body, type: Type, at: Position, message: String) ->
+  name := Identifier(position: at, name: 'iter')
+  found := member_type_by_name(body, type, name)
   fail body.program, at, message if found == nil
-  const iterable = std_interface(body.shared, 'Iterable', at)
-  const member = interface_members(body.program, iterable)[0]
-  const reason = unsatisfied_reason(body, type, member, name, found)!
-  const unsatisfied = "#{format_type(type)} does not satisfy #{format_type(iterable.type)}"
+  iterable := std_interface(body.shared, 'Iterable', at)
+  member := interface_members(body.program, iterable)[0]
+  reason := unsatisfied_reason(body, type, member, name, found)!
+  unsatisfied := "#{format_type(type)} does not satisfy #{format_type(iterable.type)}"
   fail body.program, at, "#{unsatisfied}: #{reason}"

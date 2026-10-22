@@ -15,112 +15,110 @@ import is_kind, ObjectType, OptionalType, Type, UnionType from '../types'
 # jumps to one end block that merges the values. A case over every type of a union has no else
 # arm, and falling past its last test cannot happen. A subject that is a reference is held (see
 # hold), so that a jump out of an arm releases it too.
-export const generate_case = (g: Generator, case_expression: Case) ->
-  const ir = g.ir
-  const subject = case_expression.subject
-  const subject_operand = subject then generate(g, subject) else ''
-  const subject_type = subject then type_of(g, subject)
-  const holds_subject = subject_type then ownership(subject_type) != NONE else false
-  const release_nothing = -> return
-  const held = holds_subject then hold(g, subject_operand, subject_type!)
-  const release_subject = held ? release_nothing
-  const end_label = ir.fresh_label('case.end')
-  const incoming: String[]
+export generate_case := (g: Generator, case_expression: Case) ->
+  ir := g.ir
+  subject := case_expression.subject
+  subject_operand := subject then generate(g, subject) else ''
+  subject_type := subject then type_of(g, subject)
+  holds_subject := subject_type then ownership(subject_type) != NONE else false
+  release_nothing := -> return
+  held := holds_subject then hold(g, subject_operand, subject_type!)
+  release_subject := held ? release_nothing
+  end_label := ir.fresh_label('case.end')
+  incoming: String[]
   # An arm that ends with a jump gives no operand; it never reaches the end.
-  const generate_arm_value = (body: Statement[]) ->
-    const value = generate_block_value(g, body, no_locals)
-    const operand = value == '' then 'poison' else value
+  generate_arm_value := (body: Statement[]) ->
+    value := generate_block_value(g, body, no_locals)
+    operand := value == '' then 'poison' else value
     incoming.push "[ #{operand}, %#{ir.current_block} ]"
     ir.emit "br label %#{end_label}"
   for arm in case_expression.arms
-    const test = generate_test(g, arm, subject_type, subject_operand)
-    const arm_label = ir.fresh_label('case.arm')
-    const next_label = ir.fresh_label('case.next')
+    test := generate_test(g, arm, subject_type, subject_operand)
+    arm_label := ir.fresh_label('case.arm')
+    next_label := ir.fresh_label('case.next')
     ir.emit "br i1 #{test}, label %#{arm_label}, label %#{next_label}"
     ir.start_block arm_label
     generate_arm_value arm.body
     ir.start_block next_label
-  if const otherwise = case_expression.otherwise
+  if otherwise := case_expression.otherwise
     generate_arm_value otherwise
   else
     ir.emit 'unreachable'
   ir.start_block end_label
-  const result = merge(g, type_of(g, case_expression), incoming)
+  result := merge(g, type_of(g, case_expression), incoming)
   release_subject()
   result
 
 # The condition is tested as an `if` tests it; both values jump to one end block that merges
 # them.
-export const generate_conditional = (g: Generator, conditional: Conditional) ->
-  const test = generate_condition(g, conditional.condition)
-  const value_of = (value: Expression) -> -> generate_block_value(g, [value], no_locals)
-  const incoming =
+export generate_conditional := (g: Generator, conditional: Conditional) ->
+  test := generate_condition(g, conditional.condition)
+  value_of := (value: Expression) -> -> generate_block_value(g, [value], no_locals)
+  incoming :=
     branch_values(g, test, value_of(conditional.then_value), value_of(conditional.else_value))
   merge g, type_of(g, conditional), incoming
 
 # An `if` that gives a value merges those of its branches as then/else does; one that gives none
 # runs as a statement, which releases the values its branches discard.
-export const generate_if_value = (g: Generator, if_expression: If) ->
+export generate_if_value := (g: Generator, if_expression: If) ->
   if is_kind(type_of(g, if_expression), 'void')
     generate_if g, if_expression
     return ''
-  const condition = generate_condition_of(g, if_expression.condition)
-  const then_value = -> generate_block_value(g, if_expression.then_body, condition.define)
-  const else_value = -> generate_block_value(g, if_expression.else_body, no_locals)
+  condition := generate_condition_of(g, if_expression.condition)
+  then_value := -> generate_block_value(g, if_expression.then_body, condition.define)
+  else_value := -> generate_block_value(g, if_expression.else_body, no_locals)
   merge g, type_of(g, if_expression), branch_values(g, condition.test, then_value, else_value)
 
 # Branches on the test to the two values, each generated in a block of its own that then jumps to
 # one end block: the incoming values of that block, which merge takes.
-const branch_values = (
-  g: Generator, test: String, then_value: () -> String, else_value: () -> String
-) ->
-  const ir = g.ir
-  const then_label = ir.fresh_label('branch.then')
-  const else_label = ir.fresh_label('branch.else')
-  const end_label = ir.fresh_label('branch.end')
+branch_values := (g: Generator, test: String, then_value: () -> String, else_value: () -> String) ->
+  ir := g.ir
+  then_label := ir.fresh_label('branch.then')
+  else_label := ir.fresh_label('branch.else')
+  end_label := ir.fresh_label('branch.end')
   ir.emit "br i1 #{test}, label %#{then_label}, label %#{else_label}"
-  const branch = (label: String, value: () -> String) ->
+  branch := (label: String, value: () -> String) ->
     ir.start_block label
-    const operand = value()
-    const from = ir.current_block
+    operand := value()
+    from := ir.current_block
     ir.emit "br label %#{end_label}"
     "[ #{operand == '' then 'poison' else operand}, %#{from} ]"
-  const incoming = [branch(then_label, then_value), branch(else_label, else_value)]
+  incoming := [branch(then_label, then_value), branch(else_label, else_value)]
   ir.start_block end_label
   incoming
 
 # The value of the arms at their end block: none for void, and none that comes for never.
-export const merge = (g: Generator, type: Type, incoming: String[]) ->
+export merge := (g: Generator, type: Type, incoming: String[]) ->
   case
     when is_kind(type, 'void') then ''
     when is_kind(type, 'never') then 'poison'
     else g.ir.assign("phi #{ir_type(type)} #{incoming.join(', ')}")
 
 # An i1 that holds when any of the arm's patterns matches.
-const generate_test = (g: Generator, arm: CaseArm, subject_type: Type?, operand: String) ->
-  const type = subject_type ? return generate_condition(g, arm.patterns[0])
-  const test_of = (pattern: Expression) ->
+generate_test := (g: Generator, arm: CaseArm, subject_type: Type?, operand: String) ->
+  type := subject_type ? return generate_condition(g, arm.patterns[0])
+  test_of := (pattern: Expression) ->
     if type is OptionalType
       return emit_is_nil(g.ir, operand, type) if pattern is NilLiteral
-      const test_value = (value: String) -> pattern_test(g, value, type.inner, pattern)
+      test_value := (value: String) -> pattern_test(g, value, type.inner, pattern)
       return emit_present_test(g.ir, operand, type, test_value)
     pattern_test g, operand, type, pattern
-  const tests = [test_of(pattern) for pattern in arm.patterns]
+  tests := [test_of(pattern) for pattern in arm.patterns]
   var all = tests[0]
   all = g.ir.assign("or i1 #{all}, #{tests[i]}") for i in 1...tests.length
   all
 
 # A subject of a union narrowed to one of its members is still tested for its type.
-const pattern_test = (g: Generator, subject: String, type: Type, pattern: Expression) ->
+pattern_test := (g: Generator, subject: String, type: Type, pattern: Expression) ->
   if type is UnionType or type is ObjectType
     emit_type_test g.ir, subject, type_of(g, pattern)
   else
     value_test g, subject, type, pattern
 
 # The subject is borrowed by the comparison, as it is tested again by the next patterns.
-const value_test = (g: Generator, subject: String, type: Type, pattern: Expression) ->
-  const value = generate(g, pattern)
+value_test := (g: Generator, subject: String, type: Type, pattern: Expression) ->
+  value := generate(g, pattern)
   return g.ir.assign("icmp eq #{ir_type(type)} #{subject}, #{value}") if not is_kind(type, 'String')
-  const equal = emit_string_equals(g.ir, subject, value)
+  equal := emit_string_equals(g.ir, subject, value)
   emit_release g.ir, value
   equal

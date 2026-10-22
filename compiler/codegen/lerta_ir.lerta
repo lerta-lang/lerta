@@ -12,22 +12,22 @@ import
   type_key
 from '../types'
 
-export const LERTA_IMMORTAL = '-9223372036854775808'
+export LERTA_IMMORTAL := '-9223372036854775808'
 
-export const INTERFACE_IR_TYPE = '{ ptr, ptr }'
+export INTERFACE_IR_TYPE := '{ ptr, ptr }'
 
 # Whether nil of the optional type is a null pointer: that of a reference, or the data of an
 # interface value.
-export const is_nil_by_null = (type: Type) ->
+export is_nil_by_null := (type: Type) ->
   is_reference_type(type) or is_kind(inner_of(type), INTERFACE)
 
-export const ir_type = (type: Type): String ->
+export ir_type := (type: Type): String ->
   # A reference is nil when null, and so is an interface value when its data is; a value carries a
   # flag that tells whether it is there.
   if type is OptionalType
     return ir_type(type.inner) if is_nil_by_null(type)
     return "{ i1, #{ir_type(type.inner)} }"
-  return scalar.ir_type if const scalar = scalar_of(type)
+  return scalar.ir_type if scalar := scalar_of(type)
   case kind_of(type)
     when 'String', 'Binary', ARRAY, ITER, PROMISE, MAP, OBJECT, UNION, RECORD, TUPLE then 'ptr'
     when FUNCTION then 'ptr'
@@ -35,129 +35,126 @@ export const ir_type = (type: Type): String ->
     when INTERFACE then INTERFACE_IR_TYPE
     else panic("no IR type for #{kind_of(type)}")
 
-export const ir_return_type = (type: Type) -> returns_nothing(type) then 'void' else ir_type(type)
+export ir_return_type := (type: Type) -> returns_nothing(type) then 'void' else ir_type(type)
 
-export const returns_nothing = (result: Type) -> is_one_of_kinds(result, ['void', 'never'])
+export returns_nothing := (result: Type) -> is_one_of_kinds(result, ['void', 'never'])
 
 # C values narrower than 32 bits, `bool`, `int8_t`, `uint16_t` and so on, are extended to them, as
 # parameters and as results, by their sign; clang marks them so.
-const extension = (type: Type) ->
-  const scalar = scalar_of(type) ? return ''
+extension := (type: Type) ->
+  scalar := scalar_of(type) ? return ''
   return '' if scalar.is_float or scalar.bits > 16
   scalar.signed then 'signext' else 'zeroext'
 
-export const ir_c_return_type = (type: Type) ->
-  const attribute = extension(type)
+export ir_c_return_type := (type: Type) ->
+  attribute := extension(type)
   attribute == '' then ir_return_type(type) else "#{attribute} #{ir_type(type)}"
 
-export const ir_param_type = (type: Type) ->
-  const attribute = extension(type)
+export ir_param_type := (type: Type) ->
+  attribute := extension(type)
   attribute == '' then ir_type(type) else "#{ir_type(type)} #{attribute}"
 
 # Symbols of generated functions; the prefixes keep them apart from the runtime's C symbols.
-export const function_symbol = (module: String, name: String) ->
-  quoted "lerta.fn.#{module}.#{name}"
+export function_symbol := (module: String, name: String) -> quoted("lerta.fn.#{module}.#{name}")
 
-export const instance_symbol = (program: ProgramWide, instance: Instance) ->
-  const generic = generic_of(program, instance.generic)
-  const module = module_symbol_name(program, generic.module_index)
-  const receiver = generic.receiver
-  const prefix =
+export instance_symbol := (program: ProgramWide, instance: Instance) ->
+  generic := generic_of(program, instance.generic)
+  module := module_symbol_name(program, generic.module_index)
+  receiver := generic.receiver
+  prefix :=
     if receiver
       "lerta.extend.#{module}.#{type_key(receiver.type)}"
     else
       "lerta.fn.#{module}"
-  const type_arguments = [type_key(type) for type in instance.type_arguments].join(', ')
-  const symbol = "#{prefix}.#{generic.name.name}<#{type_arguments}>"
+  type_arguments := [type_key(type) for type in instance.type_arguments].join(', ')
+  symbol := "#{prefix}.#{generic.name.name}<#{type_arguments}>"
   quoted instance.variant == 0 then symbol else "#{symbol}.#{instance.variant}"
 
 # The entry of the function of the symbol that a call giving only its first `given` arguments
 # calls (see generate_default_entry).
-export const default_entry_symbol = (symbol: String, given: Int) ->
+export default_entry_symbol := (symbol: String, given: Int) ->
   suffixed_symbol symbol, "given#{given}"
 
 # The symbol of something that belongs to that of a function, as its name and `.suffix`. The name
 # is escaped already, and so needs no escaping, as the constant suffixes and prefixes do not.
-export const suffixed_symbol = (symbol: String, suffix: String) ->
+export suffixed_symbol := (symbol: String, suffix: String) ->
   "@\"#{written_name(symbol)}.#{suffix}\""
 
 # The symbol of something made for that of a function, as `prefix.` and its name.
-export const prefixed_symbol = (prefix: String, symbol: String) ->
+export prefixed_symbol := (prefix: String, symbol: String) ->
   "@\"#{prefix}.#{written_name(symbol)}\""
 
 # The name of a global or a type as it is written, without its sigil and quotes, to build other
 # names from.
-const written_name = (symbol: String) ->
-  const name = without_sigil(symbol)
-  const opened = name.without_prefix('"')
+written_name := (symbol: String) ->
+  name := without_sigil(symbol)
+  opened := name.without_prefix('"')
   opened then opened.without_suffix('"')! else name
 
-const quoted = (name: String) -> "@#{quoted_name(name)}"
+quoted := (name: String) -> "@#{quoted_name(name)}"
 
-export const quoted_name = (name: String) -> "\"#{ir_string_bytes(name.binary)}\""
+export quoted_name := (name: String) -> "\"#{ir_string_bytes(name.binary)}\""
 
 # The global that holds a top-level value, and its flag (see top_level).
-export const top_level_symbol = (module: String, name: String) ->
-  quoted "lerta.value.#{module}.#{name}"
+export top_level_symbol := (module: String, name: String) -> quoted("lerta.value.#{module}.#{name}")
 
-export const module_init_symbol = (module: String) -> quoted("lerta.module.#{module}")
+export module_init_symbol := (module: String) -> quoted("lerta.module.#{module}")
 
 # A class or struct is named by its symbol (see ObjectType), which tells apart those of different
 # modules.
-export const method_symbol = (type: ObjectType, method: String) ->
+export method_symbol := (type: ObjectType, method: String) ->
   quoted "lerta.method.#{type.symbol}.#{method}"
 
 # A method of an extend is named by its module, which may extend a type that another module
 # extends too, and by its receiver (see type_key).
-export const extension_symbol = (program: ProgramWide, method: ExtensionMethod) ->
-  const module = module_symbol_name(program, method.module_index)
-  const receiver = type_key(method.receiver)
+export extension_symbol := (program: ProgramWide, method: ExtensionMethod) ->
+  module := module_symbol_name(program, method.module_index)
+  receiver := type_key(method.receiver)
   quoted "lerta.extend.#{module}.#{receiver}.#{method.name.name}"
 
 # The init or deinit of a class or struct: the instance of its generic one's, for an instance of a
 # generic one.
-export const special_method_symbol = (program: ProgramWide, info: ObjectInfo, name: String) ->
-  const instance = name == 'init' then info.init else info.deinit
+export special_method_symbol := (program: ProgramWide, info: ObjectInfo, name: String) ->
+  instance := name == 'init' then info.init else info.deinit
   instance then instance_symbol(program, instance) else method_symbol(info.type, name)
 
 # An instance of a generic class or struct is named by its type arguments too (see type_key).
-export const constructor_symbol = (type: ObjectType) -> quoted("lerta.new.#{type_key(type)}")
+export constructor_symbol := (type: ObjectType) -> quoted("lerta.new.#{type_key(type)}")
 
-export const type_symbol = (type: ObjectType) -> quoted("lerta.type.#{type_key(type)}")
+export type_symbol := (type: ObjectType) -> quoted("lerta.type.#{type_key(type)}")
 
 # The LLVM struct type of a class or struct (see define_object).
-export const object_ir_type = (type: ObjectType) ->
-  "%#{quoted_name("lerta.object.#{type_key(type)}")}"
+export object_ir_type := (type: ObjectType) -> "%#{quoted_name("lerta.object.#{type_key(type)}")}"
 
 # The name without its sigil, `@` or `%`, to build other names from it.
-const without_sigil = (name: String) -> name.without_prefix('@') ? name.without_prefix('%')!
+without_sigil := (name: String) -> name.without_prefix('@') ? name.without_prefix('%')!
 
 # Bytes other than printable ASCII, '"' and '\' are written as \XX in IR strings.
-const ir_string_bytes = (bytes: Binary) ->
+ir_string_bytes := (bytes: Binary) ->
   var written = ''
   for b in bytes
-    const is_plain = b >= 0x20 and b <= 0x7e and b != '"' and b != '\'
+    is_plain := b >= 0x20 and b <= 0x7e and b != '"' and b != '\'
     written += is_plain then b.to_char().to_string() else "\\#{hex(b.to_int(), 2)}"
   written
 
 # An immortal LertaString (see runtime/lerta.h) holding the literal's bytes.
-export const string_constant = (ir: IrBuilder, value: String) ->
+export string_constant := (ir: IrBuilder, value: String) ->
   ir.module.global 'lerta.string', string_definition(value)
 
 # As string_constant, one per module for each value: for the names that the module's traces repeat
 # at every call.
-export const shared_string_constant = (ir: IrBuilder, value: String) ->
-  const define = (symbol: String, module: IrModule) ->
+export shared_string_constant := (ir: IrBuilder, value: String) ->
+  define := (symbol: String, module: IrModule) ->
     module.define_global symbol, string_definition(value)
   ir.module.named "string #{value}", '@lerta.name', define
 
-const string_definition = (value: String) ->
-  const bytes = value.binary
-  const bytes_type = "[#{bytes.length} x i8]"
+string_definition := (value: String) ->
+  bytes := value.binary
+  bytes_type := "[#{bytes.length} x i8]"
   # The header (reference count and type, none), the length and the bytes.
-  const type = "{ i64, ptr, i64, #{bytes_type} }"
-  const bytes_init = "#{bytes_type} c\"#{ir_string_bytes(bytes)}\""
-  const init = "{ i64 #{LERTA_IMMORTAL}, ptr null, i64 #{bytes.length}, #{bytes_init} }"
+  type := "{ i64, ptr, i64, #{bytes_type} }"
+  bytes_init := "#{bytes_type} c\"#{ir_string_bytes(bytes)}\""
+  init := "{ i64 #{LERTA_IMMORTAL}, ptr null, i64 #{bytes.length}, #{bytes_init} }"
   "private unnamed_addr constant #{type} #{init}"
 
 # How a value holds what it owns: nothing, a reference, the data of an interface value; in a
@@ -171,38 +168,38 @@ export enum Ownership
   COROUTINE
   TRACE
 
-export const ownership = (type: Type) ->
+export ownership := (type: Type) ->
   case
     when is_reference_type(type) then Ownership.REFERENCE
     when is_kind(inner_of(type), INTERFACE) then Ownership.INTERFACE
     else Ownership.NONE
 
 # Reference counting of a value of the type: of the references it holds, if any.
-export const emit_retain_value = (ir: IrBuilder, operand: String, type: Type) ->
+export emit_retain_value := (ir: IrBuilder, operand: String, type: Type) ->
   emit_retain_as ir, operand, ownership(type)
 
-export const emit_release_value = (ir: IrBuilder, operand: String, type: Type) ->
+export emit_release_value := (ir: IrBuilder, operand: String, type: Type) ->
   emit_release_as ir, operand, ownership(type)
 
-const emit_retain_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
-  emit_retain ir, reference if const reference = reference_of(ir, operand, owned)
+emit_retain_as := (ir: IrBuilder, operand: String, owned: Ownership) ->
+  emit_retain ir, reference if reference := reference_of(ir, operand, owned)
 
-export const emit_release_as = (ir: IrBuilder, operand: String, owned: Ownership) ->
+export emit_release_as := (ir: IrBuilder, operand: String, owned: Ownership) ->
   case owned
     when COROUTINE then call_void_runtime(ir, 'void @llvm.coro.destroy(ptr)', "ptr #{operand}")
     when TRACE then call_void_runtime(ir, 'void @lerta_trace_free(ptr)', "ptr #{operand}")
-    else emit_release(ir, reference) if const reference = reference_of(ir, operand, owned)
+    else emit_release(ir, reference) if reference := reference_of(ir, operand, owned)
 
 # Whether the value holds a reference that is counted, as a COROUTINE or a TRACE is not.
-export const is_counted = (owned: Ownership) -> owned == REFERENCE or owned == INTERFACE
+export is_counted := (owned: Ownership) -> owned == REFERENCE or owned == INTERFACE
 
 # The reference that the value of the IR type at the pointer holds, which may be null; the value is
 # counted.
-export const emit_load_reference = (
+export emit_load_reference := (
   ir: IrBuilder, pointer: String, value_type: String, owned: Ownership
 ) -> reference_of(ir, ir.assign("load #{value_type}, ptr #{pointer}"), owned)!
 
-const reference_of = (ir: IrBuilder, operand: String, owned: Ownership) ->
+reference_of := (ir: IrBuilder, operand: String, owned: Ownership) ->
   case owned
     when NONE then nil
     when REFERENCE then operand
@@ -211,19 +208,19 @@ const reference_of = (ir: IrBuilder, operand: String, owned: Ownership) ->
     when TRACE then panic('a trace is not reference counted')
 
 # The data of an interface value, null for nil.
-export const emit_interface_data = (ir: IrBuilder, value: String) ->
+export emit_interface_data := (ir: IrBuilder, value: String) ->
   ir.assign "extractvalue #{INTERFACE_IR_TYPE} #{value}, 0"
 
 # Releases what the value of the IR type at the pointer holds.
-export const emit_release_stored = (
+export emit_release_stored := (
   ir: IrBuilder, pointer: String, value_type: String, owned: Ownership
 ) ->
   return if owned == NONE
   emit_release_as ir, ir.assign("load #{value_type}, ptr #{pointer}"), owned
 
 # Reference counting of an object operand (see runtime/memory.c).
-export const emit_retain = (ir: IrBuilder, operand: String) ->
+export emit_retain := (ir: IrBuilder, operand: String) ->
   call_void_runtime ir, 'void @lerta_retain(ptr)', "ptr #{operand}"
 
-export const emit_release = (ir: IrBuilder, operand: String) ->
+export emit_release := (ir: IrBuilder, operand: String) ->
   call_void_runtime ir, 'void @lerta_release(ptr)', "ptr #{operand}"

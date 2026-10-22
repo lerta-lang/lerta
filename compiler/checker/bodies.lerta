@@ -21,33 +21,33 @@ from '../types'
 
 # A body may be checked on demand from another module, such as the method `to_string` that an
 # instance of `print` calls; its diagnostics give its own module.
-export const check_function = (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
-  const shared = program.shared[module_index]
-  const resolver = module_resolver(module_index)
+export check_function := (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
+  shared := program.shared[module_index]
+  resolver := module_resolver(module_index)
   check_function_with shared, shared.facts, entry, resolver, shared.extensions
 
 # An instance's body sees the names of its module, with the type parameters standing for its type
 # arguments, and the extends of the type arguments where it is called.
-export const check_instance = (program: ProgramWide, module_index: Int, instance: Instance) ->
-  const { entry, resolver, extensions, facts } = instance
+export check_instance := (program: ProgramWide, module_index: Int, instance: Instance) ->
+  { entry, resolver, extensions, facts } := instance
   check_function_with program.shared[module_index], facts, entry, resolver, extensions, false
 
 # The defaults of an instance, once, for a call that leaves arguments out.
-export const check_instance_defaults = (
+export check_instance_defaults := (
   program: ProgramWide, module_index: Int, instance: Instance
 ): void ->
   return if instance.defaults_checked
   instance.defaults_checked = true
-  const shared = program.shared[module_index]
-  const { entry, resolver, extensions, facts } = instance
+  shared := program.shared[module_index]
+  { entry, resolver, extensions, facts } := instance
   enter_module shared
-  const checked = function_body(shared, facts, entry, resolver, extensions)
+  checked := function_body(shared, facts, entry, resolver, extensions)
   checked.body.scopes.push()
   define_parameters checked.body, entry.literal, checked.params, true
   checked.body.scopes.pop()
   leave_module shared
 
-const check_function_with = (
+check_function_with := (
   shared: Shared
   facts: NodeFacts
   entry: FunctionEntry
@@ -55,65 +55,65 @@ const check_function_with = (
   extensions: Extensions
   checks_defaults = true
 ): void ->
-  const program = shared.program
+  program := shared.program
   enter_module shared
-  const literal = entry.literal
+  literal := entry.literal
   fail program, literal.position, 'a top-level function or a method cannot be weak' if literal.weak
-  const { body, params, context } = function_body(shared, facts, entry, resolver, extensions)
+  { body, params, context } := function_body(shared, facts, entry, resolver, extensions)
   check_function_body body, literal, params, nil, checks_defaults
   # The conversions of the results are recorded even if the type was known from its annotation.
-  const finished = finish_function_type(context, params, facts)
-  const checked_type = reject_nil_result(program, finished, literal)
-  const type = entry.type ? checked_type
+  finished := finish_function_type(context, params, facts)
+  checked_type := reject_nil_result(program, finished, literal)
+  type := entry.type ? checked_type
   entry.type = type
   facts.types[literal] = type
   leave_module shared
 
-const annotated_result = (type: Type?) -> (type as FunctionType?)?.result
+annotated_result := (type: Type?) -> (type as FunctionType?)?.result
 
 # The body in which the function's parameters, its defaults and its statements are checked, with
 # the parameters' types and the context of its results.
-const function_body = (
+function_body := (
   shared: Shared, facts: NodeFacts, entry: FunctionEntry, resolver: Resolver, extensions: Extensions
 ) ->
-  const { literal, this_type } = entry
-  const params = parameter_types(shared.program, resolver, literal)
-  const context = function_context(shared.program, literal, annotated_result(entry.type))
-  const self = this_type then SelfContext(type: this_type)
+  { literal, this_type } := entry
+  params := parameter_types(shared.program, resolver, literal)
+  context := function_context(shared.program, literal, annotated_result(entry.type))
+  self := this_type then SelfContext(type: this_type)
   { body: Body(shared, resolver, extensions, facts, context, self), params, context }
 
-export const check_object = (program: ProgramWide, info: ObjectInfo) ->
-  const shared = program.shared[info.module_index]
+export check_object := (program: ProgramWide, info: ObjectInfo) ->
+  shared := program.shared[info.module_index]
   enter_module shared
-  const self = SelfContext(type: info.type)
-  const { extensions } = shared
-  const body = Body(shared, extensions, self, resolver: info.resolver, facts: info.facts)
+  self := SelfContext(type: info.type)
+  { extensions } := shared
+  body := Body(shared, extensions, self, resolver: info.resolver, facts: info.facts)
   check_initializers body, info, self
   leave_module shared
 
 # Once the type is checked, as its methods' types may need its fields'.
-export const check_satisfies = (program: ProgramWide, info: ObjectInfo): void ->
-  const satisfies = info.satisfies ? return
-  const shared = program.shared[info.module_index]
+export check_satisfies := (program: ProgramWide, info: ObjectInfo): void ->
+  satisfies := info.satisfies ? return
+  shared := program.shared[info.module_index]
   enter_module shared
-  const { extensions } = shared
-  const body = Body(shared, extensions, resolver: info.resolver, facts: info.facts)
+  { extensions } := shared
+  body := Body(shared, extensions, resolver: info.resolver, facts: info.facts)
   reject_unsatisfied body, info.type, satisfies, info.declaration.satisfies!.position
   leave_module shared
 
 # Rejects a class or struct whose own equals, compare or hash is not of its type, that has both
 # equals and compare, or that has a hash but neither, by which equal values would be told.
-export const check_equality_methods = (program: ProgramWide, info: ObjectInfo): void ->
-  const methods = info.methods
-  const has = (name: String) -> methods.has(name)
+export check_equality_methods := (program: ProgramWide, info: ObjectInfo): void ->
+  methods := info.methods
+  has := (name: String) -> methods.has(name)
   return if not has('equals') and not has('compare') and not has('hash')
-  const shared = program.shared[info.module_index]
+  shared := program.shared[info.module_index]
   enter_module shared
-  const { extensions } = shared
-  const body = Body(shared, extensions, resolver: info.resolver, facts: info.facts)
-  const type = info.type
-  const name = format_type(type)
-  const at = (method: String) -> methods[method]!.position
+  { extensions } := shared
+  body := Body(shared, extensions, resolver: info.resolver, facts: info.facts)
+  type := info.type
+  name := format_type(type)
+  at := (method: String) -> methods[method]!.position
   if has('equals') and has('compare')
     fail
       program
@@ -121,22 +121,22 @@ export const check_equality_methods = (program: ProgramWide, info: ObjectInfo): 
       "#{name} has both equals and compare, which gives its == too; leave out equals"
   if has('hash') and not has('equals') and not has('compare')
     fail program, at('hash'), "#{name} has a hash but neither equals nor compare"
-  const expect_method = (method: String, expected: FunctionType) ->
+  expect_method := (method: String, expected: FunctionType) ->
     return if not has(method)
-    const name_at = Identifier(name: method, position: at(method))
-    const found = find_member(body, type, name_at)
+    name_at := Identifier(name: method, position: at(method))
+    found := find_member(body, type, name_at)
     if found and same_type(found.type, expected)
-      const target = found.target
-      const generic = target is Method then generic_method(target.source)
+      target := found.target
+      generic := target is Method then generic_method(target.source)
       if generic
-        const instance = receiver_instance(body, generic, type, name_at.position, nil)
+        instance := receiver_instance(body, generic, type, name_at.position, nil)
         info.comparison_instances[method] = instance!
       return
-    const must = "#{method} of #{name} must be of type"
-    const got = found?.type ? return fail(program, at(method), "#{must} #{format_type(expected)}")
+    must := "#{method} of #{name} must be of type"
+    got := found?.type ? return fail(program, at(method), "#{must} #{format_type(expected)}")
     # A type of the module may take the name of the builtin one: they are told apart by module.
-    const qualified = format_type(got) == format_type(expected)
-    const show = (each: Type) -> format_qualified(each, qualified)
+    qualified := format_type(got) == format_type(expected)
+    show := (each: Type) -> format_qualified(each, qualified)
     fail program, at(method), "#{must} #{show(expected)}, not #{show(got)}"
   expect_method 'equals', FunctionType(params: [type], result: bool_type)
   expect_method 'compare', FunctionType(params: [type], result: ordering_type(program))

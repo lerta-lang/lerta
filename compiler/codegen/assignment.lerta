@@ -18,16 +18,16 @@ import is_one_of_kinds, MapType, ObjectType, Type, UnionType from '../types'
 
 # The new value is stored before the old one is released, which is safe even if they are the
 # same object.
-export const generate_assignment = (g: Generator, written: Assignment) ->
-  const assignment = through_method(g, written)
-  const target = assignment.target
+export generate_assignment := (g: Generator, written: Assignment) ->
+  assignment := through_method(g, written)
+  target := assignment.target
   case target
     when Index then generate_index_assignment(g, assignment, target)
     when Member then generate_field_assignment(g, assignment, target)
     when Identifier
-      const local = local_of(g, target)
-      const slot = local as SlotLocal!
-      const pointer = slot_pointer(g, slot)
+      local := local_of(g, target)
+      slot := local as SlotLocal!
+      pointer := slot_pointer(g, slot)
       if slot.weak
         assign_weak g, assignment, pointer, slot.type
       else
@@ -35,25 +35,25 @@ export const generate_assignment = (g: Generator, written: Assignment) ->
 
 # `a += b` through a method assigns the call of it that the checker made, `a.add(b)` (see
 # check_operator_assignment).
-const through_method = (g: Generator, assignment: Assignment) ->
-  const call = g.facts.operator_calls[assignment] ? return assignment
+through_method := (g: Generator, assignment: Assignment) ->
+  call := g.facts.operator_calls[assignment] ? return assignment
   Assignment operator: '=', target: assignment.target, value: call, position: assignment.position
 
 # The field takes the new value's reference and releases the old one. Through a union, the field
 # is that of the member the object is.
-const generate_field_assignment = (g: Generator, assignment: Assignment, target: Member) ->
-  const object_type = type_of(g, target.object)
-  const object = generate(g, target.object)
-  const name = target.name.name
-  const pointer_of = (type: Type) -> field_pointer(g, object, type, name)
-  const pointer =
+generate_field_assignment := (g: Generator, assignment: Assignment, target: Member) ->
+  object_type := type_of(g, target.object)
+  object := generate(g, target.object)
+  name := target.name.name
+  pointer_of := (type: Type) -> field_pointer(g, object, type, name)
+  pointer :=
     if object_type is UnionType
       emit_member_dispatch g.ir, object, object_type.members, 'ptr', pointer_of
     else
       pointer_of object_type
-  const field_type = type_of(g, target)
-  const weak = is_weak_field(g, object_type, name)
-  const assign = ->
+  field_type := type_of(g, target)
+  weak := is_weak_field(g, object_type, name)
+  assign := ->
     if weak
       assign_weak g, assignment, pointer, field_type
     else
@@ -62,63 +62,61 @@ const generate_field_assignment = (g: Generator, assignment: Assignment, target:
   emit_release g.ir, object
 
 # The checker allows no weak field to be assigned through a union.
-const is_weak_field = (g: Generator, type: Type, name: String): Bool ->
+is_weak_field := (g: Generator, type: Type, name: String): Bool ->
   if type is UnionType
-    const has_weak = type.members.any((member) -> is_weak_field(g, member, name))
+    has_weak := type.members.any((member) -> is_weak_field(g, member, name))
     panic "a weak field '#{name}' assigned through a union" if has_weak
     return false
-  const info = info_of(g.code.program, type as ObjectType!)
+  info := info_of(g.code.program, type as ObjectType!)
   field_named(info, name).weak
 
 # A weak local or field takes the box of the new value's object, and releases its old box; only
 # `=` applies, to an optional class's object.
-const assign_weak = (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
+assign_weak := (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
   panic "'#{assignment.operator}' on a weak local or field" if assignment.operator != '='
-  const ir = g.ir
-  const value = generate(g, assignment.value)
-  const box = weak_box_of(g, value, type)
+  ir := g.ir
+  value := generate(g, assignment.value)
+  box := weak_box_of(g, value, type)
   emit_release ir, value
-  const replaced = ir.assign("load ptr, ptr #{pointer}")
+  replaced := ir.assign("load ptr, ptr #{pointer}")
   ir.emit "store ptr #{box}, ptr #{pointer}"
   emit_release ir, replaced
 
-const field_pointer = (g: Generator, object: String, type: Type, name: String) ->
-  const object_type = type as ObjectType!
+field_pointer := (g: Generator, object: String, type: Type, name: String) ->
+  object_type := type as ObjectType!
   emit_field_pointer g.ir, object, info_of(g.code.program, object_type), name
 
 # The array or map retains the new item and releases the old one.
-const generate_index_assignment = (g: Generator, assignment: Assignment, target: Index) ->
-  const object_type = type_of(g, target.object)
+generate_index_assignment := (g: Generator, assignment: Assignment, target: Index) ->
+  object_type := type_of(g, target.object)
   return generate_map_assignment(g, assignment, target, object_type) if object_type is MapType
-  const ir = g.ir
-  const element = type_of(g, target)
-  const (array, is_owned) = generate_borrowed(g, target.object)
-  const depth = g.temporaries.length
+  ir := g.ir
+  element := type_of(g, target)
+  (array, is_owned) := generate_borrowed(g, target.object)
+  depth := g.temporaries.length
   push_temporary g, array, object_type if is_owned
-  const index = generate(g, target.index)
-  const old = assignment.operator == '=' then '' else emit_get(ir, array, index, element)
+  index := generate(g, target.index)
+  old := assignment.operator == '=' then '' else emit_get(ir, array, index, element)
   # An index out of range throws.
   emit_exception_check g if old != ''
   push_temporary g, old, element if old != ''
-  const operand = appended(g, assignment.value)
-  const value = generate(g, operand)
+  operand := appended(g, assignment.value)
+  value := generate(g, operand)
   pop_temporaries g, depth
-  const result = combine(g, assignment.operator, old, value, element, type_at_use(g, operand))
+  result := combine(g, assignment.operator, old, value, element, type_at_use(g, operand))
   emit_set ir, array, index, result, element
   emit_release_value ir, result, element
   emit_release ir, array if is_owned
   emit_exception_check g
 
 # Only `=` applies to a map value. The key, like an index, is evaluated before the value.
-const generate_map_assignment = (
-  g: Generator, assignment: Assignment, target: Index, type: MapType
-) ->
-  const (map, is_owned) = generate_borrowed(g, target.object)
-  const depth = g.temporaries.length
+generate_map_assignment := (g: Generator, assignment: Assignment, target: Index, type: MapType) ->
+  (map, is_owned) := generate_borrowed(g, target.object)
+  depth := g.temporaries.length
   push_temporary g, map, type if is_owned
-  const key = generate(g, target.index)
+  key := generate(g, target.index)
   push_temporary g, key, type_at_use(g, target.index)
-  const value = generate(g, assignment.value)
+  value := generate(g, assignment.value)
   pop_temporaries g, depth
   emit_map_set g.ir, map, key, value, type
   release_if_reference g, target.index, key
@@ -130,37 +128,37 @@ const generate_map_assignment = (
 # example), so the value to release is loaded again after it: releasing a stale one would free it
 # twice. The old value is held in a scope, not as a temporary, so that a jump in the value, which
 # an assignment to a variable allows, releases it.
-const assign_through = (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
-  const ir = g.ir
-  const load = -> ir.assign("load #{ir_type(type)}, ptr #{pointer}")
-  const holds_reference = ownership(type) != NONE
+assign_through := (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
+  ir := g.ir
+  load := -> ir.assign("load #{ir_type(type)}, ptr #{pointer}")
+  holds_reference := ownership(type) != NONE
   var old = ''
   if assignment.operator != '='
     old = load()
     emit_retain_value ir, old, type
-  const operand = appended(g, assignment.value)
-  const value = generate_holding_old(g, old, type, operand)
+  operand := appended(g, assignment.value)
+  value := generate_holding_old(g, old, type, operand)
   # A String or a Binary grows in place when nothing else holds it, so the target lets go of it
   # first, as it is after the value, which may have assigned it.
-  const extends_old = old != '' and is_one_of_kinds(type, ['String', 'Binary'])
+  extends_old := old != '' and is_one_of_kinds(type, ['String', 'Binary'])
   emit_release_value ir, load(), type if extends_old
-  const result = combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
-  const replaced = holds_reference and not extends_old then load() else ''
+  result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
+  replaced := holds_reference and not extends_old then load() else ''
   ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}"
   emit_release_value ir, replaced, type if replaced != ''
 
 # The value, generated while the old value, if any, is held in a scope; `combine` consumes the old
 # value, so the scope is left without releasing it.
-const generate_holding_old = (g: Generator, old: String, type: Type, value: Expression) ->
+generate_holding_old := (g: Generator, old: String, type: Type, value: Expression) ->
   return generate(g, value) if old == ''
   push_held_scope g, old, type
-  const operand = generate(g, value)
+  operand := generate(g, value)
   g.locals.pop()
   operand
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
 # Both are owned.
-const combine = (
+combine := (
   g: Generator, operator: String, old: String, value: String, type: Type, value_type: Type
 ) ->
   case

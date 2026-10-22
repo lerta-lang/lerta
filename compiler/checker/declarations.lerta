@@ -19,14 +19,14 @@ import add_alias, names_type_or_import, resolve_aliases from './type_names'
 
 # The module's types (classes, structs and enums), interfaces, aliases and imports, which the
 # declarations of the modules in its import cycle may use before their own are complete.
-export const declare_names = (shared: Shared) ->
-  const program = shared.program
-  const statements = program.modules[shared.index].program
-  const declarations = [statement for statement in statements when statement is TypeDeclaration]
+export declare_names := (shared: Shared) ->
+  program := shared.program
+  statements := program.modules[shared.index].program
+  declarations := [statement for statement in statements when statement is TypeDeclaration]
   add_objects shared, declarations
-  const enums = [statement for statement in statements when statement is EnumDeclaration]
+  enums := [statement for statement in statements when statement is EnumDeclaration]
   add_enums shared, enums
-  const interfaces = [statement for statement in statements when statement is InterfaceDeclaration]
+  interfaces := [statement for statement in statements when statement is InterfaceDeclaration]
   add_interfaces shared, interfaces
   for statement in statements
     add_alias shared, statement if statement is TypeAlias
@@ -34,9 +34,9 @@ export const declare_names = (shared: Shared) ->
 
 # The types of the aliases and of the interfaces' members, the externs, the functions and the
 # members, which the code may use before their declarations.
-export const complete_declarations = (shared: Shared) ->
-  const program = shared.program
-  const statements = program.modules[shared.index].program
+export complete_declarations := (shared: Shared) ->
+  program := shared.program
+  statements := program.modules[shared.index].program
   resolve_aliases shared
   resolve_interfaces shared
   declare_externs shared, statements
@@ -47,44 +47,44 @@ export const complete_declarations = (shared: Shared) ->
 # The extends in effect in the module, once the types they extend are complete: those of the
 # modules it imports that run before it, then its own. Those of the modules of its import cycle
 # that run after it come later (see declare_later_extends), once theirs are declared.
-export const declare_extends = (shared: Shared) ->
-  const program = shared.program
+export declare_extends := (shared: Shared) ->
+  program := shared.program
   add_imported_extends shared, true
   for statement in program.modules[shared.index].program
     declare_extend shared, statement if statement is Extend
 
-export const declare_later_extends = (shared: Shared) -> add_imported_extends(shared, false)
+export declare_later_extends := (shared: Shared) -> add_imported_extends(shared, false)
 
 # The extends of the imported modules that run before the module, or of those that run after it.
-const add_imported_extends = (shared: Shared, run_before: Bool) ->
-  const program = shared.program
-  const module = program.modules[shared.index]
+add_imported_extends := (shared: Shared, run_before: Bool) ->
+  program := shared.program
+  module := program.modules[shared.index]
   for statement in module.program
     if statement is Import
       for imported in extending_modules(program, module.imported[statement]!)
         continue if imported == module.index
-        const is_added = run_before then imported < module.index else imported > module.index
+        is_added := run_before then imported < module.index else imported > module.index
         if is_added
           add_imported program, shared.extensions, program.shared[imported].own_methods, statement
 
 # The imported module, and those whose extends it passes on: those it exports from, and theirs.
-const extending_modules = (program: ProgramWide, imported: Int) ->
-  const found = [imported]
+extending_modules := (program: ProgramWide, imported: Int) ->
+  found := [imported]
   var i = 0
   while i < found.length
-    const module = program.modules[found[i]]
+    module := program.modules[found[i]]
     i += 1
     for statement in module.program
       if statement is Import and statement.exported
-        const passed = module.imported[statement]!
+        passed := module.imported[statement]!
         found.push passed if not found.contains(passed)
   found
 
 # A class, struct, enum, interface or type alias cannot have the name of an import; the error points
 # at it.
-const reject_types_named_like_imports = (shared: Shared, statements: Statement[]) ->
+reject_types_named_like_imports := (shared: Shared, statements: Statement[]) ->
   for statement in statements
-    const name =
+    name :=
       case statement
         when TypeDeclaration then statement.name
         when EnumDeclaration then statement.name
@@ -93,17 +93,17 @@ const reject_types_named_like_imports = (shared: Shared, statements: Statement[]
         else continue
     fail_already_defined shared.program, name if has_import(shared, name.name)
 
-const add_top_level_functions = (shared: Shared, statements: Statement[]) ->
-  const program = shared.program
+add_top_level_functions := (shared: Shared, statements: Statement[]) ->
+  program := shared.program
   for statement in statements
     continue if statement is not Declaration
-    const literal = statement.value
+    literal := statement.value
     continue if literal is not FunctionLiteral
     fail program, statement.position, 'a function must be declared with const' if statement.mutable
-    const name = statement.name
+    name := statement.name
     fail_already_defined program, name if names_type_or_import(shared, name.name)
     if literal.type_params.length == 0
       add_function shared, name.name, name, literal, nil
       continue
-    const generic = make_generic_function(shared, name, literal, nil)
+    generic := make_generic_function(shared, name, literal, nil)
     add_generic_function shared, generic

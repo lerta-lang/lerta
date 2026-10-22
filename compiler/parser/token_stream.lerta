@@ -48,8 +48,8 @@ export class TokenStream
   peek_at = (offset: Int) -> @tokens[@index_at(offset)]
 
   next = ->
-    const index = @index_at(0)
-    const token = @tokens[index]
+    index := @index_at(0)
+    token := @tokens[index]
     @index = index + 1 if token.kind != EOF
     token
 
@@ -66,19 +66,19 @@ export class TokenStream
 
   # The index of the first token from `index` on that is not a skipped line break.
   unskipped_from = (index: Int) ->
-    const last = @tokens.length - 1
+    last := @tokens.length - 1
     var unskipped = index
     unskipped += 1 while unskipped < last and @is_skipped(unskipped)
     unskipped
 
   is_skipped = (index: Int) ->
-    const skips = @line_breaks.last() != SEPARATE
+    skips := @line_breaks.last() != SEPARATE
     skips and @tokens[index].kind == LINE_BREAK
 
   # Whether the next token is the identifier `word`, which is not a keyword, so that it stays
   # usable as a name.
   at_word = (word: String) ->
-    const token = @peek()
+    token := @peek()
     token.kind == IDENTIFIER and token.text == word
 
   accept_word = (word: String) ->
@@ -97,7 +97,7 @@ export class TokenStream
     @fail_expecting @peek(), description if not @accept(kind)
 
   fail_expecting = (token: Token, expected: String) ->
-    const at = token_position(token)
+    at := token_position(token)
     if at == @spread
       @fail
         at
@@ -111,13 +111,13 @@ export class TokenStream
   # needs no restoring on one.
   inside = <T>(mode: LineBreaks, parse: () -> T): T ->
     @line_breaks.push mode
-    const result = parse()
+    result := parse()
     @line_breaks.pop()
     result
 
   # Items separated by `separator`, at least one.
   parse_separated = <T>(separator: TokenKind, parse_item: () -> T): T[] ->
-    const items = [parse_item()]
+    items := [parse_item()]
     items.push parse_item() while @accept(separator)
     items
 
@@ -125,7 +125,7 @@ export class TokenStream
   parse_lines = <T>(description: String, parse_line: () -> T): T[] ->
     @expect NEWLINE, 'end of line'
     @expect INDENT, description
-    const lines: T[]
+    lines: T[]
     while @peek().kind != DEDENT
       lines.push parse_line()
       @expect_line_end()
@@ -139,7 +139,7 @@ export class TokenStream
     var offset = start
     var index = @index_at(start)
     while allowed(@tokens[index].kind)
-      const kind = @tokens[index].kind
+      kind := @tokens[index].kind
       depth += 1 if kind == open
       depth -= 1 if kind == close
       return offset if depth == 0
@@ -150,7 +150,7 @@ export class TokenStream
   # The items of a list after its opening bracket, through `close`. Items are separated by a
   # comma, by a line end, or by both, a comma ending a line.
   parse_list = <T>(close: TokenKind, parse_item: () -> T): T[] ->
-    const parse_items = ->
+    parse_items := ->
       @accept LINE_BREAK
       @parse_list_rest close, parse_item, []
     @inside SEPARATE, parse_items
@@ -179,8 +179,8 @@ export class TokenStream
   accept_block_comma = ->
     return false if not @accept(',')
     @accept NEWLINE
-    const next = @peek()
-    const changes_indentation = next.kind == DEDENT or next.kind == INDENT
+    next := @peek()
+    changes_indentation := next.kind == DEDENT or next.kind == INDENT
     @fail_expecting next, "an item after ','" if changes_indentation
     true
 
@@ -189,7 +189,7 @@ export class TokenStream
   ends_item = (close: TokenKind) ->
     if @accept(',')
       @accept LINE_BREAK
-      const next = @peek()
+      next := @peek()
       @fail_expecting next, "an item after ','" if next.kind == close
       return true
     return true if @accept(LINE_BREAK)
@@ -198,9 +198,9 @@ export class TokenStream
 
   # The body that `parse` reads is a function literal's: the result, and what it has of its own.
   in_function = <T>(parse: () -> T) ->
-    const marks = FunctionMarks()
+    marks := FunctionMarks()
     @functions.push marks
-    const body = parse()
+    body := parse()
     @functions.pop()
     { body, marks }
 
@@ -223,7 +223,7 @@ export class TokenStream
     # The error may be at the first token of the next statement, after the line that ends this one.
     return if @index > start and @ends_statement(@tokens[@index - 1].kind, depth)
     while @tokens[@index].kind != EOF
-      const kind = @tokens[@index].kind
+      kind := @tokens[@index].kind
       @index += 1
       depth += indentation_change(kind)
       return if @ends_statement(kind, depth)
@@ -231,21 +231,21 @@ export class TokenStream
   # Whether the token of `kind`, just read at the indentation `depth`, ends the top-level statement:
   # the next token starts another.
   ends_statement = (kind: TokenKind, depth: Int) ->
-    const ends_line = kind == NEWLINE or kind == DEDENT
-    const continues = is_one_of(@tokens[@index].kind, [INDENT, 'else', 'catch', 'finally'])
+    ends_line := kind == NEWLINE or kind == DEDENT
+    continues := is_one_of(@tokens[@index].kind, [INDENT, 'else', 'catch', 'finally'])
     depth == 0 and ends_line and not continues
 
-const indentation_change = (kind: TokenKind) ->
+indentation_change := (kind: TokenKind) ->
   case kind
     when INDENT then 1
     when DEDENT then -1
     else 0
 
-export const token_position = (token: Token) -> Position(line: token.line, column: token.column)
+export token_position := (token: Token) -> Position(line: token.line, column: token.column)
 
-export const is_one_of = (kind: TokenKind, kinds: TokenKind[]) -> kinds.contains(kind)
+export is_one_of := (kind: TokenKind, kinds: TokenKind[]) -> kinds.contains(kind)
 
-const describe_token = (token: Token) ->
+describe_token := (token: Token) ->
   case token.kind
     when INTEGER then 'integer literal'
     when FLOAT then 'float literal'

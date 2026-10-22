@@ -9,7 +9,7 @@ extern lerta_env: (String) -> Binary?
 extern lerta_platform: () -> String
 extern lerta_cpu_count: () -> Int
 
-export const argv = [
+export argv := [
   argument.text() ? throw ValueError(message: 'a command-line argument is not valid UTF-8')
   for argument in lerta_argv()
 ]
@@ -32,23 +32,23 @@ export struct RunOptions
 # that signal.
 export struct Exit(code: Int, signal: Int?)
 
-export const run = (command: String, args: String..., options: RunOptions) ->
+export run := (command: String, args: String..., options: RunOptions) ->
   check_options options
-  const { stdin, stdout, stderr, cwd, env, unset_env, output_limit, kill_after } = options
-  const names = [name for name in env.keys()]
-  const values = [env[name]! for name in names]
+  { stdin, stdout, stderr, cwd, env, unset_env, output_limit, kill_after } := options
+  names := [name for name in env.keys()]
+  values := [env[name]! for name in names]
   # An Int, as an Int? passed to C on Windows is not yet as C takes it; -1 is no limit.
-  const limit = output_limit ? -1
-  const status = await lerta_run(
+  limit := output_limit ? -1
+  status := await lerta_run(
     command, args, stdin, stdout, stderr, cwd, names, values, unset_env, limit, kill_after
   )
   status >= 0 then Exit(code: status) else Exit(code: 128 - status, signal: -status)
 
-const check_options = (options: RunOptions) ->
+check_options := (options: RunOptions) ->
   throw ValueError(message: 'kill a program after a negative time') if options.kill_after < 0
   if options.output_limit ? 0 < 0
     throw ValueError(message: "a negative limit of output: #{options.output_limit!}")
-  const set_names = [name for name in options.env.keys()]
+  set_names := [name for name in options.env.keys()]
   for name in [set_names..., options.unset_env...]
     if name == '' or name.contains('=') or name.contains("\0")
       throw ValueError(message: "not a name of an environment variable: '#{name}'")
@@ -59,16 +59,16 @@ const check_options = (options: RunOptions) ->
     if set_names.find((each) -> same_env_name(each, name)) != nil
       throw ValueError(message: "the environment variable #{name} is both set and removed")
 
-export const env = (name: String) ->
-  const value = lerta_env(name)
+export env := (name: String) ->
+  value := lerta_env(name)
   return nil if not value
   value.text() ? throw ValueError(message: "the environment variable #{name} is not valid UTF-8")
 
-export const platform = lerta_platform()
+export platform := lerta_platform()
 
-export const cpu_count = lerta_cpu_count()
+export cpu_count := lerta_cpu_count()
 
 extern lerta_process_id: () -> Int
-export const process_id = lerta_process_id()
+export process_id := lerta_process_id()
 
 export extern lerta_is_running as is_running: (Int) -> Bool

@@ -42,75 +42,73 @@ export class Functions
 
 # The written types of the parameters; `expected`, the types a function type expects, where they
 # are known, stands in for those left out (the caller checks that there are as many).
-export const parameter_types = (
+export parameter_types := (
   program: ProgramWide
   resolver: Resolver
   literal: FunctionLiteral
   expected: Type?[] = []
 ) ->
-  const types: Type[]
+  types: Type[]
   for param, i in literal.params
-    const expected_type = i < expected.length then expected[i]
-    const unwritten = expected_type then expected_type else literal_type(param.default)
-    if const type_name = param.type
-      const type = resolve(program, resolver, type_name)
-      const inferable = unwritten != nil and same_type(type, unwritten)
-      const inferable_before = program.inferable_parameters[param.name] ? true
+    expected_type := i < expected.length then expected[i]
+    unwritten := expected_type then expected_type else literal_type(param.default)
+    if type_name := param.type
+      type := resolve(program, resolver, type_name)
+      inferable := unwritten != nil and same_type(type, unwritten)
+      inferable_before := program.inferable_parameters[param.name] ? true
       program.inferable_parameters[param.name] = inferable and inferable_before
       types.push param.variadic then ArrayType(element: type) else type
       continue
-    const { name, position } = param.name
-    const message = "the type of the parameter '#{name}' must be written"
+    { name, position } := param.name
+    message := "the type of the parameter '#{name}' must be written"
     types.push unwritten ? fail(program, position, message)
-  const last_is_struct = ends_with_struct(resolver, literal, types)
+  last_is_struct := ends_with_struct(resolver, literal, types)
   reject_misplaced_variadic program, literal, last_is_struct
   reject_struct_default program, literal, last_is_struct
   types
 
 # Whether the type is a struct, which a last parameter of the type lets a call construct from its
 # named arguments, or leave out, constructing it from none (see gathered_argument).
-export const is_struct_type = (type: Type?) -> type is ObjectType and type.is_struct
+export is_struct_type := (type: Type?) -> type is ObjectType and type.is_struct
 
 # Whether the last parameter is of a struct type as declared, not through a type parameter that an
 # instance binds to a struct, so that every instance of a generic function agrees.
-const ends_with_struct = (resolver: Resolver, literal: FunctionLiteral, types: Type[]) ->
-  const written = literal.params.last()?.type ? return false
-  const is_type_parameter = written is NamedType and resolver.type_parameters.has(written.name)
+ends_with_struct := (resolver: Resolver, literal: FunctionLiteral, types: Type[]) ->
+  written := literal.params.last()?.type ? return false
+  is_type_parameter := written is NamedType and resolver.type_parameters.has(written.name)
   not is_type_parameter and is_struct_type(types.last())
 
 # A variadic parameter comes last, or before a last parameter of a struct type, which named
 # arguments alone then give, and its function has no defaults, so that the arguments that it takes
 # are those after the others.
-const reject_misplaced_variadic = (
+reject_misplaced_variadic := (
   program: ProgramWide, literal: FunctionLiteral, last_is_struct: Bool
 ) ->
-  const params = literal.params
-  const found = params.find_index((param) -> param.variadic) ? return
-  const name = params[found].name
-  const last = params.length - 1
-  const is_placed = found == last or (found == last - 1 and last_is_struct)
+  params := literal.params
+  found := params.find_index((param) -> param.variadic) ? return
+  name := params[found].name
+  last := params.length - 1
+  is_placed := found == last or (found == last - 1 and last_is_struct)
   if not is_placed
-    const before_struct = 'or only before a last parameter of a struct type'
+    before_struct := 'or only before a last parameter of a struct type'
     fail program, name.position, "a variadic parameter must be the last, #{before_struct}"
-  if const param = params.find((each) -> each.default != nil)
+  if param := params.find((each) -> each.default != nil)
     fail program, param.default!.position, 'a variadic function cannot have defaults so far'
 
 # A last parameter of a struct type has no default, as a call that leaves it out constructs it, and
 # neither do the others so far: a call would have to construct it at its place after the defaults.
-const reject_struct_default = (
-  program: ProgramWide, literal: FunctionLiteral, last_is_struct: Bool
-) ->
+reject_struct_default := (program: ProgramWide, literal: FunctionLiteral, last_is_struct: Bool) ->
   return if not last_is_struct
-  const param = literal.params.find((each) -> each.default != nil) ? return
-  const value = param.default!
+  param := literal.params.find((each) -> each.default != nil) ? return
+  value := param.default!
   if param == literal.params.last()
-    const reason = 'a call that leaves it out constructs it'
+    reason := 'a call that leaves it out constructs it'
     fail program, value.position, "a last parameter of a struct type has no default; #{reason}"
-  const message = 'a function with a last parameter of a struct type has no defaults so far'
+  message := 'a function with a last parameter of a struct type has no defaults so far'
   fail program, value.position, message
 
 # The type of a default that is a literal of one type alone.
-const literal_type = (value: Expression?): Type? ->
+literal_type := (value: Expression?): Type? ->
   case value
     when IntegerLiteral then int_type
     when FloatLiteral then float_type
@@ -119,87 +117,85 @@ const literal_type = (value: Expression?): Type? ->
     else nil
 
 # The number of parameters that a call must give: those before the first with a default.
-export const required_params = (literal: FunctionLiteral) ->
+export required_params := (literal: FunctionLiteral) ->
   literal.params.find_index((param) -> param.default != nil) ? literal.params.length
 
 # The function's type, if its return type is written; otherwise only its body tells.
-export const annotated_type = (
+export annotated_type := (
   program: ProgramWide, resolver: Resolver, literal: FunctionLiteral
 ): Type? ->
-  const return_type = literal.return_type ? return nil
-  const params = parameter_types(program, resolver, literal)
+  return_type := literal.return_type ? return nil
+  params := parameter_types(program, resolver, literal)
   FunctionType params, result: resolve_result(program, resolver, return_type)
 
-export const reject_generic = (program: ProgramWide, literal: FunctionLiteral) ->
+export reject_generic := (program: ProgramWide, literal: FunctionLiteral) ->
   return if literal.type_params.length == 0
   fail program, literal.position, 'only a top-level function or a method can be generic so far'
 
-export const reject_variadic = (program: ProgramWide, literal: FunctionLiteral) ->
-  const param = literal.params.find((each) -> each.variadic) ? return
-  const message = 'only a top-level function or a method can be variadic so far'
+export reject_variadic := (program: ProgramWide, literal: FunctionLiteral) ->
+  param := literal.params.find((each) -> each.variadic) ? return
+  message := 'only a top-level function or a method can be variadic so far'
   fail program, param.name.position, message
 
-export const reject_defaults = (program: ProgramWide, literal: FunctionLiteral) ->
-  const param = literal.params.find((each) -> each.default != nil) ? return
-  const message = 'only a top-level function or a method can have a default so far'
+export reject_defaults := (program: ProgramWide, literal: FunctionLiteral) ->
+  param := literal.params.find((each) -> each.default != nil) ? return
+  message := 'only a top-level function or a method can have a default so far'
   fail program, param.default!.position, message
 
-export const add_function = (
+export add_function := (
   shared: Shared, key: String, name: Identifier, literal: FunctionLiteral, this_type: Type?
 ) ->
-  const program = shared.program
+  program := shared.program
   reject_defined shared, key, name
   reject_generic program, literal
-  const type = annotated_type(program, module_resolver(shared.index), literal)
+  type := annotated_type(program, module_resolver(shared.index), literal)
   shared.functions.entries[key] = FunctionEntry(name, literal, type, this_type)
 
 # Adds a generic function or method of the module; returns how others refer to it.
-export const add_generic = (shared: Shared, generic: GenericFunction) ->
-  const ref = GenericRef(module_index: shared.index, index: shared.generics.length)
+export add_generic := (shared: Shared, generic: GenericFunction) ->
+  ref := GenericRef(module_index: shared.index, index: shared.generics.length)
   shared.generics.push generic
   ref
 
-export const add_generic_function = (shared: Shared, generic: GenericFunction) ->
-  const { name } = generic
+export add_generic_function := (shared: Shared, generic: GenericFunction) ->
+  { name } := generic
   reject_defined shared, name.name, name
   shared.functions.generics[name.name] = add_generic(shared, generic).index
 
-const reject_defined = (shared: Shared, key: String, name: Identifier) ->
+reject_defined := (shared: Shared, key: String, name: Identifier) ->
   fail_already_defined shared.program, name if has_function(shared, key)
 
-export const has_function = (shared: Shared, name: String) ->
+export has_function := (shared: Shared, name: String) ->
   shared.functions.entries.has(name) or shared.functions.generics.has(name)
 
-export const generic_function = (shared: Shared, name: String) ->
-  const index = shared.functions.generics[name] ? return nil
+export generic_function := (shared: Shared, name: String) ->
+  index := shared.functions.generics[name] ? return nil
   GenericRef index, module_index: shared.index
 
 # The type of the function of the module, checking its body first if the return type must be
 # inferred.
-export const function_type_of = (
-  program: ProgramWide, module_index: Int, name: String, at: Position
-) ->
-  const entry = program.shared[module_index].functions.entries[name] ? return nil
-  if const caller = program.functions_checked.last()
-    const callees: FunctionLiteral[] = program.calls.get_or_put(caller, -> [])
+export function_type_of := (program: ProgramWide, module_index: Int, name: String, at: Position) ->
+  entry := program.shared[module_index].functions.entries[name] ? return nil
+  if caller := program.functions_checked.last()
+    callees: FunctionLiteral[] = program.calls.get_or_put(caller, -> [])
     callees.push entry.literal
-  return type if const type = entry.type
+  return type if type := entry.type
   abort_part() if entry.state == FAILED
   if entry.state == CHECKING
     fail program, at, "'#{name}' is recursive, so its return type must be written"
   check_entry program, module_index, entry
   entry.type ? abort_part()
 
-export const check_all_functions = (shared: Shared) ->
+export check_all_functions := (shared: Shared) ->
   check_entry shared.program, shared.index, entry for entry in shared.functions.entries.values()
 
-const check_entry = (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
+check_entry := (program: ProgramWide, module_index: Int, entry: FunctionEntry) ->
   return if entry.state != UNCHECKED
   entry.state = CHECKING
-  const check = (): void ->
+  check := (): void ->
     program.functions_checked.push entry.literal
     check_function program, module_index, entry
     program.functions_checked.pop()
   entry.state = check_part(program, check) then CHECKED else FAILED
 
-export const method_key = (type_name: String, method: String) -> "#{type_name}.#{method}"
+export method_key := (type_name: String, method: String) -> "#{type_name}.#{method}"

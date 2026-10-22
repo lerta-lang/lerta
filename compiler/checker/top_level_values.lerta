@@ -17,48 +17,46 @@ export class TopLevelValues
   started = false
 
 # A top-level declaration whose value is not a function literal.
-export const top_level_value = (statement: Statement) ->
+export top_level_value := (statement: Statement) ->
   return nil if statement is not Declaration
   statement.value is FunctionLiteral then nil else statement
 
-export const top_level_values = (program: Statement[]) ->
-  const names: Set<String>
-  const function_names: Set<String>
+export top_level_values := (program: Statement[]) ->
+  names: Set<String>
+  function_names: Set<String>
   for statement in program
     continue if statement is not Declaration
-    const set = statement.value is FunctionLiteral then function_names else names
+    set := statement.value is FunctionLiteral then function_names else names
     set.add statement.name.name
   TopLevelValues names, function_names
 
 # A use of a value whose declaration has an error cannot be checked, and has no error of its own.
-export const abort_if_failed = (values: TopLevelValues, name: String) ->
+export abort_if_failed := (values: TopLevelValues, name: String) ->
   abort_part() if values.failed.has(name)
 
 # Called as the top-level code declares the value.
-export const define_top_level = (values: TopLevelValues, local: Local) ->
+export define_top_level := (values: TopLevelValues, local: Local) ->
   values.locals[local.identifier.name] = local
 
 # Rejects a use of a value whose type is not known yet.
-export const reject_pending = (
-  program: ProgramWide, values: TopLevelValues, identifier: Identifier
-) ->
-  const { name, position } = identifier
+export reject_pending := (program: ProgramWide, values: TopLevelValues, identifier: Identifier) ->
+  { name, position } := identifier
   return if not values.names.has(name) or values.locals.has(name)
   fail_runs_later program, identifier, 'this module', true if not values.started
-  const reason = 'as it is declared below code that needs it here'
-  const advice = 'declare it before, or write the type of this function or field'
-  const message = "the type of '#{name}' is not known yet, #{reason}; #{advice}"
+  reason := 'as it is declared below code that needs it here'
+  advice := 'declare it before, or write the type of this function or field'
+  message := "the type of '#{name}' is not known yet, #{reason}; #{advice}"
   fail program, position, message
 
 # Rejects a use of a value of `module`, of the same import cycle, whose type is not known yet;
 # `in_function` is a function whose return type is inferred or a field initializer.
-export const fail_runs_later = (
+export fail_runs_later := (
   program: ProgramWide, identifier: Identifier, module: String, in_function: Bool
 ) ->
-  const advice =
+  advice :=
     if in_function
       "#{module} runs after the top-level code that needs this function or field; write its type"
     else
       "#{module} runs after this module; read it in a function whose return type is written"
-  const message = "the type of '#{identifier.name}' is not known yet, as #{advice}"
+  message := "the type of '#{identifier.name}' is not known yet, as #{advice}"
   fail program, identifier.position, message

@@ -14,85 +14,83 @@ import format_type, is_kind, members_of, ObjectType, same_type, Type, void_type 
 import Branch, BranchValue, type_of_branches, unify_unless_void, unify_values from './branches'
 import check_patterns from './case_patterns'
 
-export const type_of_case = (body: Body, case_expression: Case, expected: Type?) ->
-  const narrowings = check_patterns(body, case_expression)
-  const { arms } = case_expression
-  const arm_branch = (i: Int) ->
+export type_of_case := (body: Body, case_expression: Case, expected: Type?) ->
+  narrowings := check_patterns(body, case_expression)
+  { arms } := case_expression
+  arm_branch := (i: Int) ->
     Branch statements: arms[i].body, enter: -> narrow(body, narrowings.arms[i])
-  const branches = [arm_branch(i) for i in 0...arms.length]
-  if const otherwise = case_expression.otherwise
+  branches := [arm_branch(i) for i in 0...arms.length]
+  if otherwise := case_expression.otherwise
     branches.push Branch(statements: otherwise, enter: -> narrow(body, narrowings.otherwise))
-  const unify_arms = (values: BranchValue[]) ->
-    unify_values body, values, case_expression, 'case arms'
+  unify_arms := (values: BranchValue[]) -> unify_values(body, values, case_expression, 'case arms')
   type_of_branches body, branches, expected, unify_arms
 
-export const type_of_if = (body: Body, if_expression: If, expected: Type?): Type ->
-  const { then_body, else_body } = if_expression
+export type_of_if := (body: Body, if_expression: If, expected: Type?): Type ->
+  { then_body, else_body } := if_expression
   if else_body.length == 0
     check_if body, if_expression
     return void_type
-  const entries = check_if_condition(body, if_expression)
-  const branches =
+  entries := check_if_condition(body, if_expression)
+  branches :=
     Branch(statements: then_body, enter: entries.enter_then)
     Branch(statements: else_body, enter: entries.enter_else)
   # A `?.` is an if only after parsing, so its error names what the source has.
-  const nil_safe = "'?.', whose chain gives no value"
-  const description = if_expression.nil_safe then nil_safe else 'the branches of if'
-  const unify = unify_unless_void(body, if_expression, description)
+  nil_safe := "'?.', whose chain gives no value"
+  description := if_expression.nil_safe then nil_safe else 'the branches of if'
+  unify := unify_unless_void(body, if_expression, description)
   type_of_branches body, branches, expected, unify
 
 # A try that is a statement gives no value: its blocks are checked as statements, as an if's
 # branches are, so that the values they end with are discarded by the same rules.
-export const check_try_statement = (body: Body, try_expression: Try) ->
-  const { catches, finally_body } = try_expression
+export check_try_statement := (body: Body, try_expression: Try) ->
+  { catches, finally_body } := try_expression
   check_block body, try_expression.body, nothing, nothing
   check_block body, clause.body, catch_entry(body, clause), nothing for clause in catches
   check_block body, finally_body, nothing, nothing if finally_body
   body.facts.types[try_expression] = void_type
 
-export const type_of_try = (body: Body, try_expression: Try, expected: Type?) ->
-  const branches = [Branch(statements: try_expression.body, enter: nothing)]
+export type_of_try := (body: Body, try_expression: Try, expected: Type?) ->
+  branches := [Branch(statements: try_expression.body, enter: nothing)]
   for clause in try_expression.catches
     branches.push Branch(statements: clause.body, enter: catch_entry(body, clause))
-  const unify = unify_unless_void(body, try_expression, 'the values of try and catch')
-  const type = type_of_branches(body, branches, expected, unify)
-  if const finally_body = try_expression.finally_body
-    check_block body, finally_body, nothing, nothing
+  unify := unify_unless_void(body, try_expression, 'the values of try and catch')
+  type := type_of_branches(body, branches, expected, unify)
+  check_block body, finally_body, nothing, nothing if finally_body := try_expression.finally_body
   type
 
 # What entering a catch does: it defines the name of the exception it takes.
-const catch_entry = (body: Body, clause: Catch) ->
-  const caught = caught_type(body, clause)
+catch_entry := (body: Body, clause: Catch) ->
+  caught := caught_type(body, clause)
   -> define_local(body, Local(identifier: clause.name, type: caught))
 
-const caught_type = (body: Body, clause: Catch): Type ->
-  const error = std_interface(body.shared, 'Error', clause.position).type
-  const type_name = clause.type ? return error
-  const type = resolve(body.program, body.resolver, type_name)
+caught_type := (body: Body, clause: Catch): Type ->
+  error := std_interface(body.shared, 'Error', clause.position).type
+  type_name := clause.type ? return error
+  type := resolve(body.program, body.resolver, type_name)
   set_type body, type_name, type
   return type if same_type(type, error)
   for member in members_of(type)
     if member is not ObjectType
-      const takes = 'a class or struct, or a union of them'
-      const message = "a catch takes #{takes}, not #{format_type(member)}"
+      takes := 'a class or struct, or a union of them'
+      message := "a catch takes #{takes}, not #{format_type(member)}"
       fail body.program, type_name.position, message
     reject_unsatisfied body, member, error, type_name.position
   type
 
 # The condition narrows a local as `if` does: in the value for when it holds, or the other.
-export const type_of_conditional = (body: Body, conditional: Conditional, expected: Type?) ->
+export type_of_conditional := (body: Body, conditional: Conditional, expected: Type?) ->
   expect_condition body, conditional.condition
-  const narrowings = narrowings_of(body, conditional.condition)
-  const then_body: Statement[] = [conditional.then_value]
-  const else_body: Statement[] = [conditional.else_value]
-  const branches =
+  narrowings := narrowings_of(body, conditional.condition)
+  then_body: Statement[] = [conditional.then_value]
+  else_body: Statement[] = [conditional.else_value]
+  branches :=
     Branch(statements: then_body, enter: -> narrow(body, narrowings.where_true))
     Branch(statements: else_body, enter: -> narrow(body, narrowings.where_false))
-  const unify_then_else = (values: BranchValue[]) ->
-    if const valueless = values.find((value) -> is_kind(value.type, 'void'))
-      const message = 'then and else must give values; to run statements, write an if'
+  unify_then_else := (values: BranchValue[]) ->
+    if valueless := values.find((value) -> is_kind(value.type, 'void'))
+      message := 'then and else must give values; to run statements, write an if'
       fail body.program, valueless.last.position, message
-    const { without_else } = conditional
-    const description = without_else then 'then without else' else 'the values of then and else'
+    { without_else } := conditional
+    description := without_else then 'then without else' else 'the values of then and else'
     unify_values body, values, conditional, description
   type_of_branches body, branches, expected, unify_then_else

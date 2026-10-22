@@ -17,7 +17,7 @@ from '../types'
 import bound_interface, interface_members, interface_of, named_interface, SELF from './interfaces'
 
 # Optional values, functions, unions and anonymous structs and tuples are left out.
-const EXTENDABLE_KINDS: TypeKind[] = [
+EXTENDABLE_KINDS: TypeKind[] = [
   INTEGER_KINDS...
   'Char'
   'String'
@@ -32,12 +32,12 @@ const EXTENDABLE_KINDS: TypeKind[] = [
 
 # Names EXTENDABLE_KINDS for the error, the integer types together. Interfaces are added by hand:
 # declare_interface_extend takes their extends before the check of the kinds.
-const extendable_kinds_text = ->
-  const names: String[]
+extendable_kinds_text := ->
+  names: String[]
   for kind in EXTENDABLE_KINDS
-    const is_integer_kind = INTEGER_KINDS.contains(kind)
+    is_integer_kind := INTEGER_KINDS.contains(kind)
     continue if is_integer_kind and names.contains('the integer types')
-    const name =
+    name :=
       case
         when is_integer_kind then 'the integer types'
         when kind == ARRAY then 'arrays'
@@ -51,52 +51,52 @@ const extendable_kinds_text = ->
 # Puts the extend's methods in effect in the module, and adds them to its functions, which check
 # their bodies with `@` as the receiver, or makes them generic methods, whose instances are
 # checked so.
-export const declare_extend = (shared: Shared, statement: Extend) ->
-  const program = shared.program
-  const { type_params } = statement
-  const resolver = with_type_parameters(module_resolver(shared.index), placeholders(type_params))
-  const written = statement.type
+export declare_extend := (shared: Shared, statement: Extend) ->
+  program := shared.program
+  { type_params } := statement
+  resolver := with_type_parameters(module_resolver(shared.index), placeholders(type_params))
+  written := statement.type
   if written is NamedType and named_interface(program, resolver, written.name) != nil
     return declare_interface_extend(shared, statement, written, resolver)
-  const receiver = resolve(program, resolver, written)
+  receiver := resolve(program, resolver, written)
   if not is_one_of_kinds(receiver, EXTENDABLE_KINDS)
-    const so_far = "only #{extendable_kinds_text()} can be so far"
-    const message = "#{format_type(receiver)} cannot be extended; #{so_far}"
+    so_far := "only #{extendable_kinds_text()} can be so far"
+    message := "#{format_type(receiver)} cannot be extended; #{so_far}"
     fail program, written.position, message
   reject_unused_type_parameters program, type_params, receiver
-  const has_already = (name: String) -> has_member(program, receiver, name)
+  has_already := (name: String) -> has_member(program, receiver, name)
   declare_methods shared, statement, Receiver(type_params, type: receiver), nil, has_already
 
 # The methods of an extend of an interface are those of the types that satisfy it: each is
 # generic, with a type parameter Self, the type of `@`, which the interface bounds, before the
 # extend's own (see find_interface_extension).
-const declare_interface_extend = (
+declare_interface_extend := (
   shared: Shared, statement: Extend, written: NamedType, resolver: Resolver
 ) ->
-  const program = shared.program
-  const bound = bound_interface(program, resolver, written)
+  program := shared.program
+  bound := bound_interface(program, resolver, written)
   reject_unused_type_parameters program, statement.type_params, bound
-  const self_name = Identifier(name: SELF, position: written.position)
-  const type_params = [TypeParameter(name: self_name, bound: written), statement.type_params...]
-  const receiver = Receiver(type_params, type: TypeParameterType(name: SELF))
+  self_name := Identifier(name: SELF, position: written.position)
+  type_params := [TypeParameter(name: self_name, bound: written), statement.type_params...]
+  receiver := Receiver(type_params, type: TypeParameterType(name: SELF))
   # Satisfying the interface does not depend on its extends.
-  const members = interface_members(program, interface_of(program, bound))
-  const has_already = (name: String) -> members.any((member) -> member.name == name)
+  members := interface_members(program, interface_of(program, bound))
+  has_already := (name: String) -> members.any((member) -> member.name == name)
   declare_methods shared, statement, receiver, bound, has_already
 
-const declare_methods = (
+declare_methods := (
   shared: Shared, statement: Extend, extended: Receiver, bound: InterfaceType?,
   has_already: (String) -> Bool
 ) ->
-  const program = shared.program
-  const receiver = extended.type
+  program := shared.program
+  receiver := extended.type
   for member in statement.members
-    const { name } = member
-    const literal = method_literal(member)
+    { name } := member
+    literal := method_literal(member)
     if literal == nil
       fail program, member.position, 'an extend has only methods, as in `name = (x: Int) -> ...`'
     if name.name == 'init' or name.name == 'deinit'
-      const message = "an extend cannot declare #{name.name}, which only a class or struct runs"
+      message := "an extend cannot declare #{name.name}, which only a class or struct runs"
       fail program, name.position, message
     # Every type that == compares has its equals and hash, which an extend would not replace.
     if name.name == 'equals' or name.name == 'hash'
@@ -105,45 +105,44 @@ const declare_methods = (
         name.position
         "an extend cannot declare #{name.name}, which == and map keys give"
     if receiver is ObjectType and name.name == 'compare'
-      const where = 'which < takes only from the class or struct itself'
+      where := 'which < takes only from the class or struct itself'
       fail program, name.position, "an extend of a class or struct cannot declare compare, #{where}"
     if has_already(name.name)
-      const extended_type = bound then format_type(bound) else format_type(receiver)
+      extended_type := bound then format_type(bound) else format_type(receiver)
       fail program, name.position, "#{extended_type} already has a member '#{name.name}'"
-    const method = extension_method(shared, extended, bound, name, literal)
+    method := extension_method(shared, extended, bound, name, literal)
     add_own shared, method
     add_function shared, method.key, name, literal, receiver if method.generic == nil
 
 # A method of an extend of the receiver: generic if the extend or the method has type parameters.
-const extension_method = (
+extension_method := (
   shared: Shared, receiver: Receiver, bound: InterfaceType?, name: Identifier,
   literal: FunctionLiteral
 ) ->
-  const type = receiver.type
-  const key = method_key(bound then format_type(bound) else format_type(type), name.name)
-  const is_generic = receiver.type_params.length > 0 or literal.type_params.length > 0
-  const make_generic = ->
-    add_generic shared, make_generic_function(shared, name, literal, receiver)
-  const generic = is_generic then make_generic()
-  const module_index = shared.index
-  const module_name = shared.name
+  type := receiver.type
+  key := method_key(bound then format_type(bound) else format_type(type), name.name)
+  is_generic := receiver.type_params.length > 0 or literal.type_params.length > 0
+  make_generic := -> add_generic(shared, make_generic_function(shared, name, literal, receiver))
+  generic := is_generic then make_generic()
+  module_index := shared.index
+  module_name := shared.name
   ExtensionMethod name, literal, generic, key, module_index, module_name, bound, receiver: type
 
-const reject_unused_type_parameters = (
+reject_unused_type_parameters := (
   program: ProgramWide, type_params: TypeParameter[], receiver: Type
 ) ->
-  const used: Set<String>
+  used: Set<String>
   add_type_parameters used, receiver
   for param in type_params
-    const { name, position } = param.name
+    { name, position } := param.name
     fail program, position, "'#{name}' is not in the extended type" if not used.has(name)
 
-const add_type_parameters = (used: Set<String>, type: Type): void ->
+add_type_parameters := (used: Set<String>, type: Type): void ->
   used.add type.name if type is TypeParameterType
   add_type_parameters used, part for part in parts_of(type)
 
-const has_member = (program: ProgramWide, receiver: Type, name: String) ->
+has_member := (program: ProgramWide, receiver: Type, name: String) ->
   if receiver is ObjectType
-    const info = info_of(program, receiver)
+    info := info_of(program, receiver)
     return info.methods.has(name) or info.fields.any((field) -> field.name.name == name)
   builtin_method(program, receiver, name) != nil or builtin_property(receiver, name) != nil

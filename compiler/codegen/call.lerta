@@ -41,31 +41,31 @@ import MapType, ObjectType, same_type, Type from '../types'
 
 # A call of `name.export` of a module imported as `name` is the call of the name that the checker
 # made (see qualified_name).
-export const generate_call = (g: Generator, call: Call): String ->
-  return generate_call(g, qualified) if const qualified = g.facts.qualified_calls[call]
-  const callee = call.callee
+export generate_call := (g: Generator, call: Call): String ->
+  return generate_call(g, qualified) if qualified := g.facts.qualified_calls[call]
+  callee := call.callee
   return generate_member_call(g, call, callee) if callee is Member
-  if const instance = g.facts.instances[call]?.instance
-    const symbol = instance_symbol(g.code.program, instance)
+  if instance := g.facts.instances[call]?.instance
+    symbol := instance_symbol(g.code.program, instance)
     return call_function(g, symbol, instance.entry.type!, arguments_of(g.facts, call), nil)
   return generate_named_call(g, call, callee) if callee is Identifier
   call_closure g, generate(g, callee), type_of(g, callee), arguments_of(g.facts, call)
 
 # A call of a name: of the builtin Map or Set, std:json's write_json or read_json, a constructor,
 # a C function, a function written in Lerta, or a local or a top-level value that holds a function.
-const generate_named_call = (g: Generator, call: Call, callee: Identifier) ->
+generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
   # The checker types the callee of every call but those of Map, Set and std:json's builtins.
-  const callee_type = -> type_of(g, callee)
-  const reference = g.facts.references[callee]!
-  const args = arguments_of(g.facts, call)
+  callee_type := -> type_of(g, callee)
+  reference := g.facts.references[callee]!
+  args := arguments_of(g.facts, call)
   case reference
     when CollectionMaker then generate_new_collection(g, call, reference.type)
     when JsonConversion then generate_json_conversion(g, call, reference)
     when Constructor then generate_construction(g, call, reference.type)
     when ExternReference
-      const emit_call = (operands: String[]) ->
+      emit_call := (operands: String[]) ->
         emit_runtime_call g.ir, reference.symbol, function_type_of(callee_type()), operands
-      const result = with_arguments(g, args, emit_call)
+      result := with_arguments(g, args, emit_call)
       # A C function of the runtime may throw (see lerta_raise).
       emit_exception_check g
       result
@@ -74,39 +74,38 @@ const generate_named_call = (g: Generator, call: Call, callee: Identifier) ->
     when ScopedLocal, TopLevelValue then call_closure(g, generate(g, callee), callee_type(), args)
     when EnumValue then panic('an enum value is not called')
 
-const generate_new_collection = (g: Generator, call: Call, map_type: MapType) ->
-  const map = emit_map_new(g.ir, g.code.program, map_type)
-  if const items = call.args.first()
-    const array = generate(g, items)
+generate_new_collection := (g: Generator, call: Call, map_type: MapType) ->
+  map := emit_map_new(g.ir, g.code.program, map_type)
+  if items := call.args.first()
+    array := generate(g, items)
     emit_add_items g.ir, map, array, map_type
     emit_release g.ir, array
   map
 
 # The writer or reader is the first argument, and the value written the second.
-const generate_json_conversion = (g: Generator, call: Call, conversion: JsonConversion) ->
-  const coder_type = type_of(g, call.args[0]) as ObjectType!
-  const emit_call = (operands: String[]) ->
+generate_json_conversion := (g: Generator, call: Call, conversion: JsonConversion) ->
+  coder_type := type_of(g, call.args[0]) as ObjectType!
+  emit_call := (operands: String[]) ->
     case conversion.direction
       when WRITE
         emit_write_json g.ir, g.code.program, coder_type, operands[0], operands[1], conversion.type
         ''
       when READ then emit_read_json(g.ir, g.code.program, coder_type, operands[0], conversion.type)
-  const result = with_arguments(g, call.args, emit_call)
+  result := with_arguments(g, call.args, emit_call)
   emit_exception_check g
   result
 
 # A member that is called: `E.parse`, a field that holds a function, or a method.
-const generate_member_call = (g: Generator, call: Call, member: Member) ->
-  const target = g.facts.members[member]!
+generate_member_call := (g: Generator, call: Call, member: Member) ->
+  target := g.facts.members[member]!
   case target
     when EnumParse
       with_arguments g, arguments_of(g.facts, call), (operands) ->
         emit_parse g.ir, operands[0], target.type
     when Property
-      const object = generate(g, member.object)
-      const field_type = type_of(g, member)
-      const closure =
-        read_any_field(g, object, type_of(g, member.object), member.name.name, field_type)
+      object := generate(g, member.object)
+      field_type := type_of(g, member)
+      closure := read_any_field(g, object, type_of(g, member.object), member.name.name, field_type)
       call_closure g, closure, field_type, arguments_of(g.facts, call)
     when Method then generate_method_call(g, call, member, target.source)
     when InterfaceProperty then panic('a member of an interface that is called is a method')
@@ -114,24 +113,24 @@ const generate_member_call = (g: Generator, call: Call, member: Member) ->
 
 # The methods of Iters (see takes_object) take the object and the arguments; the other
 # methods borrow them, and the object is released after the call.
-const generate_method_call = (g: Generator, call: Call, member: Member, source: MethodSource) ->
-  const object_type = type_of(g, member.object)
-  const object = generate(g, member.object)
+generate_method_call := (g: Generator, call: Call, member: Member, source: MethodSource) ->
+  object_type := type_of(g, member.object)
+  object := generate(g, member.object)
   # An Iter's has_next and next run the code of its kind, which may throw.
   if source is BuiltinMethod and takes_object(source.member)
     # The object is held until the Iter's method takes it over.
-    const check = -> emit_exception_check(g)
-    const call_iter = ->
+    check := -> emit_exception_check(g)
+    call_iter := ->
       call_builtin_method g.ir, g.code.program, source.member, object, object_type, [], check
-    const result = holding(g, object, object_type, call_iter)
+    result := holding(g, object, object_type, call_iter)
     emit_exception_check g
     return result
-  const call_method = ->
-    const emit_call = (operands: String[]) ->
-      const args = typed_arguments(g, arguments_of(g.facts, call), operands)
-      const instance = g.facts.instances[call]?.instance
-      const check = -> emit_exception_check(g)
-      const method_call = MethodCall
+  call_method := ->
+    emit_call := (operands: String[]) ->
+      args := typed_arguments(g, arguments_of(g.facts, call), operands)
+      instance := g.facts.instances[call]?.instance
+      check := -> emit_exception_check(g)
+      method_call := MethodCall
         name: member.name.name
         type: type_of(g, member)
         operands: operands
@@ -140,7 +139,7 @@ const generate_method_call = (g: Generator, call: Call, member: Member, source: 
         check: check
       emit_method_call g, source, object, object_type, method_call
     with_arguments g, arguments_of(g.facts, call), emit_call
-  const result = holding(g, object, object_type, call_method)
+  result := holding(g, object, object_type, call_method)
   release_if_reference g, member.object, object
   emit_exception_check g
   result
@@ -157,7 +156,7 @@ export struct MethodCall
   check: () -> void
 
 # Calls the method of the source on the object, borrowed.
-export const emit_method_call = (
+export emit_method_call := (
   g: Generator, source: MethodSource, object: String, object_type: Type, call: MethodCall
 ): String ->
   case source
@@ -167,8 +166,8 @@ export const emit_method_call = (
       # A conversion between integer types gives nil where the value does not fit.
       if source.member == INTEGER_CONVERSION
         return emit_conversion(g.ir, object, object_type, function_type_of(source.type).result)
-      const { program } = g.code
-      const { operands, check } = call
+      { program } := g.code
+      { operands, check } := call
       call_builtin_method g.ir, program, source.member, object, object_type, operands, check
     when InterfaceMethod
       emit_interface_call g.ir, object, source.index, source.type, call.args
@@ -177,80 +176,80 @@ export const emit_method_call = (
     when ExtensionSource
       call_written_method g, extension_method_symbol(g, source, call), object, object_type, call
     when UnionMethod
-      const of_member = (member_type: Type) ->
-        const found = source.members.find((each) -> same_type(each.member, member_type))!
-        const value = emit_member_value(g.ir, object, member_type)
+      of_member := (member_type: Type) ->
+        found := source.members.find((each) -> same_type(each.member, member_type))!
+        value := emit_member_value(g.ir, object, member_type)
         emit_method_call g, found.source, value, member_type, call
-      const result_type = ir_return_type(function_type_of(source.type).result)
-      const members = [each.member for each in source.members]
+      result_type := ir_return_type(function_type_of(source.type).result)
+      members := [each.member for each in source.members]
       emit_member_dispatch g.ir, object, members, result_type, of_member
 
 # Calls a method written in Lerta by its symbol, with the object first.
-const call_written_method = (
+call_written_method := (
   g: Generator, symbol: String, object: String, object_type: Type, call: MethodCall
 ) ->
-  const receiver = "#{ir_type(object_type)} #{object}"
+  receiver := "#{ir_type(object_type)} #{object}"
   emit_function_call g, symbol, call.type, call.args, receiver
 
 # The symbol of a method written in Lerta: of a class or struct, or of an extend; or of the
 # instance of a generic method that the call calls.
-const own_method_symbol = (g: Generator, source: OwnMethod, call: MethodCall) ->
+own_method_symbol := (g: Generator, source: OwnMethod, call: MethodCall) ->
   return method_symbol(source.receiver, call.name) if source.generic == nil
   instance_symbol g.code.program, call.instance!
 
-const extension_method_symbol = (g: Generator, source: ExtensionSource, call: MethodCall) ->
-  const method = source.method
+extension_method_symbol := (g: Generator, source: ExtensionSource, call: MethodCall) ->
+  method := source.method
   return extension_symbol(g.code.program, method) if method.generic == nil
   instance_symbol g.code.program, call.instance!
 
 # Calls a function written in Lerta by its symbol, or by the entry that computes the defaults of
 # the arguments left out; a method gets `receiver`, its object as an IR argument, first.
-const call_function = (
+call_function := (
   g: Generator, symbol: String, type: Type, args: Expression[], receiver: String?
 ) ->
-  const emit_call = (operands: String[]) ->
+  emit_call := (operands: String[]) ->
     emit_function_call g, symbol, type, typed_arguments(g, args, operands), receiver
-  const result = with_arguments(g, args, emit_call)
+  result := with_arguments(g, args, emit_call)
   # A method's receiver is released after the check.
   emit_exception_check g if receiver == nil
   result
 
 # Calls the function by its symbol, or by the entry that computes the defaults of the arguments
 # left out, with the arguments, typed operands, after `receiver` if given.
-const emit_function_call = (
+emit_function_call := (
   g: Generator, symbol: String, type: Type, args: String[], receiver: String?
 ) ->
-  const left_out = args.length < function_type_of(type).params.length
-  const target = left_out then default_entry_symbol(symbol, args.length) else symbol
-  const all_args: String[]
+  left_out := args.length < function_type_of(type).params.length
+  target := left_out then default_entry_symbol(symbol, args.length) else symbol
+  all_args: String[]
   all_args.push receiver if receiver
   all_args.append args
   call_user_function g.ir, target, type, all_args.join(', ')
 
 # The arguments' operands with their IR types.
-const typed_arguments = (g: Generator, args: Expression[], operands: String[]) ->
+typed_arguments := (g: Generator, args: Expression[], operands: String[]) ->
   ["#{ir_type(type_at_use(g, arg))} #{operands[i]}" for arg, i in args]
 
-export const call_user_function = (ir: IrBuilder, symbol: String, type: Type, args: String) ->
-  const result = function_type_of(type).result
-  const call = "call #{ir_return_type(result)} #{symbol}(#{args})"
+export call_user_function := (ir: IrBuilder, symbol: String, type: Type, args: String) ->
+  result := function_type_of(type).result
+  call := "call #{ir_return_type(result)} #{symbol}(#{args})"
   return ir.assign(call) if not returns_nothing(result)
   emit_valueless_call ir, call, result
 
 # Calls a function value, a closure, which the call owns and releases; it is evaluated before
 # the arguments, as a named function is known before them.
-const call_closure = (g: Generator, closure: String, type: Type, args: Expression[]) ->
-  const emit_call = (operands: String[]) -> emit_closure_call(g.ir, closure, type, operands)
-  const result = holding(g, closure, type, -> with_arguments(g, args, emit_call))
+call_closure := (g: Generator, closure: String, type: Type, args: Expression[]) ->
+  emit_call := (operands: String[]) -> emit_closure_call(g.ir, closure, type, operands)
+  result := holding(g, closure, type, -> with_arguments(g, args, emit_call))
   emit_release g.ir, closure
   emit_exception_check g
   result
 
 # Generates the arguments, which `emit_call` borrows, and releases them after the call. Each is
 # held while the next ones are evaluated, which may throw.
-const with_arguments = (g: Generator, args: Expression[], emit_call: (String[]) -> String) ->
-  const call_and_release = (operands: String[]) ->
-    const result = emit_call(operands)
+with_arguments := (g: Generator, args: Expression[], emit_call: (String[]) -> String) ->
+  call_and_release := (operands: String[]) ->
+    result := emit_call(operands)
     release_if_reference g, arg, operands[i] for arg, i in args
     result
   holding_all g, args, call_and_release
@@ -258,24 +257,23 @@ const with_arguments = (g: Generator, args: Expression[], emit_call: (String[]) 
 # The named arguments are evaluated in the order they are written, then passed in the order of
 # the fields; an optional field left out is nil. One with a default is followed by whether it is
 # given.
-const generate_construction = (g: Generator, call: Call, type: ObjectType) ->
-  const info = info_of(g.code.program, type)
-  const named_args = construction_arguments(call)
-  const construct_and_release = (operands: String[]) ->
-    const given: Map<String, String>
+generate_construction := (g: Generator, call: Call, type: ObjectType) ->
+  info := info_of(g.code.program, type)
+  named_args := construction_arguments(call)
+  construct_and_release := (operands: String[]) ->
+    given: Map<String, String>
     given[arg.name.name] = operands[i] for arg, i in named_args
-    const args: String[]
+    args: String[]
     for field in info.fields
       continue if not is_argument(field)
-      const field_type = field.type!
-      const value = given[field.name.name]
-      const passed =
-        value ? (field.has_default then 'zeroinitializer' else nil_constant(field_type))
+      field_type := field.type!
+      value := given[field.name.name]
+      passed := value ? (field.has_default then 'zeroinitializer' else nil_constant(field_type))
       args.push "#{ir_type(field_type)} #{passed}"
       args.push "i1 #{value != nil}" if field.has_default
-    const object = g.ir.assign("call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})")
+    object := g.ir.assign("call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})")
     release_if_reference g, arg.value, operands[i] for arg, i in named_args
     object
-  const object = holding_all(g, [arg.value for arg in named_args], construct_and_release)
+  object := holding_all(g, [arg.value for arg in named_args], construct_and_release)
   emit_exception_check g
   object

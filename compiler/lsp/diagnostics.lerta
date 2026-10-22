@@ -15,8 +15,8 @@ export struct LspRange(start: LspPosition, end: LspPosition)
 
 export struct LspDiagnostic(range: LspRange, severity: Int, source: String, message: String)
 
-const ERROR = 1
-const WARNING = 2
+ERROR := 1
+WARNING := 2
 
 # How a position counts the characters of a line: in code points, as diagnostics do, or in UTF-16
 # units, which the LSP takes unless the client says it takes code points.
@@ -32,29 +32,29 @@ export struct Checked(by_path: Map<String, LspDiagnostic[]>, program: ProgramWid
 # every one of them, those without any too, but the standard modules; only the entry module's and
 # those that have some if the modules cannot be loaded. An error that is found in no module is the
 # entry module's, at its start.
-export const check_file = (path: String, encoding: PositionEncoding) ->
-  const by_path: Map<String, LspDiagnostic[]>
+export check_file := (path: String, encoding: PositionEncoding) ->
+  by_path: Map<String, LspDiagnostic[]>
   by_path[path] = []
   var warnings: Located[] = []
   var errors: Located[] = []
   var checked: ProgramWide?
-  const keep_warnings = (program: ProgramWide, found: Located[]) ->
+  keep_warnings := (program: ProgramWide, found: Located[]) ->
     checked = program
     warnings = found
   try
-    const modules = await load_modules(path)
+    modules := await load_modules(path)
     for module in modules
-      const location = module_location(path, module.display_path)
+      location := module_location(path, module.display_path)
       by_path[location] = [] if not is_standard_name(location)
     check_modules path, modules, keep_warnings
   catch error: CompileError
-    const placed = Located(location: path, line: 1, column: 1, message: error.message)
+    placed := Located(location: path, line: 1, column: 1, message: error.message)
     errors = error.errors.length > 0 then error.errors else [placed]
-  const add = (located: Located, severity: Int) ->
+  add := (located: Located, severity: Int) ->
     return if is_standard_name(located.location)
-    const at = await position(located, encoding)
-    const range = LspRange(start: at, end: at)
-    const diagnostic = LspDiagnostic(range, severity, source: 'lerta', message: located.message)
+    at := await position(located, encoding)
+    range := LspRange(start: at, end: at)
+    diagnostic := LspDiagnostic(range, severity, source: 'lerta', message: located.message)
     by_path.get_or_put(located.location, -> []).push(diagnostic)
   await add(each, ERROR) for each in errors
   await add(each, WARNING) for each in warnings
@@ -62,7 +62,7 @@ export const check_file = (path: String, encoding: PositionEncoding) ->
 
 # The position of the diagnostic, whose column counts code points: in UTF-16 units, those before
 # it on its line count 2 each above U+FFFF.
-const position = (located: Located, encoding: PositionEncoding) ->
+position := (located: Located, encoding: PositionEncoding) ->
   await lsp_position(
     located.location
     Position(line: located.line, column: located.column)
@@ -71,16 +71,16 @@ const position = (located: Located, encoding: PositionEncoding) ->
 
 # The position, of lines and columns from 1 and columns in code points, in the file at the
 # location, as the LSP takes it.
-export const lsp_position = (location: String, at: Position, encoding: PositionEncoding) ->
-  const line = at.line - 1
-  const before = at.column - 1
+export lsp_position := (location: String, at: Position, encoding: PositionEncoding) ->
+  line := at.line - 1
+  before := at.column - 1
   return LspPosition(line, character: before) if encoding == UTF32
   LspPosition line, character: characters(await line_text(location, line), encoding, before)
 
 # The position that the LSP gives in the file at the location, of lines and columns from 1 and
 # columns in code points.
-export const source_position = (location: String, at: LspPosition, encoding: PositionEncoding) ->
-  const column = Position(line: at.line + 1, column: at.character + 1)
+export source_position := (location: String, at: LspPosition, encoding: PositionEncoding) ->
+  column := Position(line: at.line + 1, column: at.character + 1)
   return column if encoding == UTF32
   var units = 0
   var counted = 0
@@ -90,12 +90,12 @@ export const source_position = (location: String, at: LspPosition, encoding: Pos
     counted += 1
   Position line: at.line + 1, column: counted + 1
 
-const line_text = (location: String, line: Int) ->
-  const lines = (await read_source(location)).split("\n")
+line_text := (location: String, line: Int) ->
+  lines := (await read_source(location)).split("\n")
   line < lines.length then lines[line] else ''
 
 # The characters of the text, or of its first `count` code points, in the encoding's units.
-export const characters = (text: String, encoding: PositionEncoding, count: Int? = nil) ->
+export characters := (text: String, encoding: PositionEncoding, count: Int? = nil) ->
   var units = 0
   var counted = 0
   for code in text

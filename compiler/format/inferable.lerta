@@ -16,32 +16,32 @@ from '../types'
 import Annotation from './annotated'
 
 # The annotation of the module of `shared`, in the program checked with it.
-export const inferable = (annotation: Annotation, shared: Shared, program: ProgramWide) ->
-  const { facts } = shared
-  if const function = annotation.function
+export inferable := (annotation: Annotation, shared: Shared, program: ProgramWide) ->
+  { facts } := shared
+  if function := annotation.function
     return not is_recursive(function, program) and gives_its_type(function, annotation.value, facts)
-  return program.inferable_parameters[parameter] ? false if const parameter = annotation.parameter
-  const name = annotation.name!
-  const value = annotation.value!
-  const declared = facts.types[name] ? field_type(program, name) ? return false
-  const type = facts.types[value] ? return false
+  return program.inferable_parameters[parameter] ? false if parameter := annotation.parameter
+  name := annotation.name!
+  value := annotation.value!
+  declared := facts.types[name] ? field_type(program, name) ? return false
+  type := facts.types[value] ? return false
   # A type that moves to the type arguments of a Map() or Set() is given there.
-  const is_given = annotation.moves_to_type_arguments or given_as_is(value, facts)
+  is_given := annotation.moves_to_type_arguments or given_as_is(value, facts)
   is_given and same_type(type, declared)
 
 # The type of the field of a class or struct that `name` declares.
-const field_type = (program: ProgramWide, name: Identifier) ->
+field_type := (program: ProgramWide, name: Identifier) ->
   for info in program.infos.values()
     for field in info.fields
       return field.type if field.name == name
   nil
 
 # Whether the function's body uses its own type, directly or through the functions it uses.
-const is_recursive = (function: FunctionLiteral, program: ProgramWide) ->
+is_recursive := (function: FunctionLiteral, program: ProgramWide) ->
   reaches program.calls, function, function, Set()
 
 # Whether `from` uses `target`, through the functions it uses that are not `seen` yet.
-const reaches = (
+reaches := (
   calls: Map<FunctionLiteral, FunctionLiteral[]>, from: FunctionLiteral, target: FunctionLiteral,
   seen: Set<FunctionLiteral>
 ): Bool ->
@@ -55,18 +55,18 @@ const reaches = (
 # A return type that the results give together, as a mix of T and nil gives T?, in a Promise for a
 # function that awaits; or `void`, where the function gives no result and ends with no value, or
 # with one of type void.
-const gives_its_type = (function: FunctionLiteral, last: Expression?, facts: NodeFacts) ->
+gives_its_type := (function: FunctionLiteral, last: Expression?, facts: NodeFacts) ->
   return false if function.yields
-  const declared = facts.types[function] as FunctionType ? return false
-  const results = facts.results[function] ? return false
-  const result = function.awaits then (declared.result as PromiseType?)?.value else declared.result
+  declared := facts.types[function] as FunctionType ? return false
+  results := facts.results[function] ? return false
+  result := function.awaits then (declared.result as PromiseType?)?.value else declared.result
   return false if result == nil
   if not is_kind(result, 'void')
-    const unified = unified_own_type(results, facts) ? return false
+    unified := unified_own_type(results, facts) ? return false
     return same_type(unified, result)
   return false if results.length > 0
-  const value = last ? return true
-  const type = facts.types[value] ? return false
+  value := last ? return true
+  type := facts.types[value] ? return false
   is_kind type, 'void'
 
 # The type that values of their own types give together, as the branches of a conditional do; nil
@@ -74,34 +74,34 @@ const gives_its_type = (function: FunctionLiteral, last: Expression?, facts: Nod
 # other than one that gives no value such as a throw, is not converted to it: the checking converts
 # a member of a union, as `A` for `A | B`, where the values give the type but not where the type is
 # written, so leaving the type out would change the checking.
-const unified_own_type = (values: Expression[], facts: NodeFacts) ->
+unified_own_type := (values: Expression[], facts: NodeFacts) ->
   var unified: Type?
   for value in values
-    const type = facts.types[value] ? return nil
+    type := facts.types[value] ? return nil
     return nil if not has_own_type(value, facts)
-    const before = unified
+    before := unified
     unified = before then unify(before, type) else type
     return nil if unified == nil
-  const whole = unified ? return nil
-  const is_converted = (value: Expression) ->
-    const type = facts.types[value]!
+  whole := unified ? return nil
+  is_converted := (value: Expression) ->
+    type := facts.types[value]!
     facts.conversions[value] != nil or same_type(type, whole) or is_kind(type, 'never')
   values.all(is_converted) then whole
 
 # A value whose type does not come from where it is, given where its own type is wanted.
-const given_as_is = (value: Expression, facts: NodeFacts) ->
+given_as_is := (value: Expression, facts: NodeFacts) ->
   facts.conversions[value] == nil and has_own_type(value, facts)
 
 # Whether the value's type does not come from the type wanted where it is: as a member of an enum,
 # an empty array or map, a number that may be a Byte or a Float, a function literal whose
 # parameters take their types from it, or the type arguments of a generic function or type do.
-const has_own_type = (value: Expression, facts: NodeFacts): Bool ->
-  const own = (part: Expression) -> given_as_is(part, facts)
+has_own_type := (value: Expression, facts: NodeFacts): Bool ->
+  own := (part: Expression) -> given_as_is(part, facts)
   # A part may take the type of the whole without a conversion, as an Item where Item | Other is.
-  const own_as = (part: Expression, type: Type?) ->
-    const part_type = facts.types[part]
+  own_as := (part: Expression, type: Type?) ->
+    part_type := facts.types[part]
     own(part) and type != nil and part_type != nil and same_type(part_type, type)
-  const type = facts.types[value]
+  type := facts.types[value]
   case value
     when StringLiteral then is_type(type, 'String')
     when Identifier, Member then enum_value_of(facts, value) == nil
@@ -112,54 +112,54 @@ const has_own_type = (value: Expression, facts: NodeFacts): Bool ->
     then true
     when Range, Await, Unwrap, Coalesce then true
     when Call
-      const own_type = facts.instances[value] == nil and not has_type_arguments(facts.types[value])
+      own_type := facts.instances[value] == nil and not has_type_arguments(facts.types[value])
       own_type or is_collection_call(value)
     when UnaryOperation then own(value.operand)
     when BinaryOperation then own(value.left) and own(value.right)
     when Conditional then unifies_to([value.then_value, value.else_value], type, facts)
     when Case, If, Try
-      const values = branch_values(value) ? return false
+      values := branch_values(value) ? return false
       unifies_to values, type, facts
     when ArrayLiteral
-      const element = (type as ArrayType?)?.element
+      element := (type as ArrayType?)?.element
       value.elements.length > 0 and value.elements.all((part) -> own_as(part, element))
     when MapLiteral
-      const map = type as MapType ? return false
-      const own_entry = (entry: MapEntry) ->
+      map := type as MapType ? return false
+      own_entry := (entry: MapEntry) ->
         own_as(entry.key, map.key) and own_as(entry.value, map.value)
       value.entries.length > 0 and value.entries.all(own_entry)
     when TupleLiteral
-      const items = (type as TupleType?)?.items ? return false
+      items := (type as TupleType?)?.items ? return false
       [own_as(part, items[i]) for part, i in value.items].all((same) -> same)
     else false
 
 # Whether values of their own types give the type together, as branches do.
-const unifies_to = (values: Expression[], type: Type?, facts: NodeFacts) ->
-  const unified = unified_own_type(values, facts)
+unifies_to := (values: Expression[], type: Type?, facts: NodeFacts) ->
+  unified := unified_own_type(values, facts)
   type != nil and unified != nil and same_type(unified, type)
 
 # The values that the branches of a case, an if or a try give, their last statements; nil for
 # another value, or if a branch is empty or ends with a statement that is no expression.
-const branch_values = (value: Expression) ->
-  const bodies: Statement[][] =
+branch_values := (value: Expression) ->
+  bodies: Statement[][] =
     case value
       when Case
-        const arms = [arm.body for arm in value.arms]
-        const otherwise: Statement[][] = value.otherwise then [value.otherwise!] else []
+        arms := [arm.body for arm in value.arms]
+        otherwise: Statement[][] = value.otherwise then [value.otherwise!] else []
         [arms..., otherwise...]
       when If then [value.then_body, value.else_body]
       when Try then [value.body, [clause.body for clause in value.catches]...]
       else return nil
-  const values: Expression[]
+  values: Expression[]
   for body in bodies
-    const last = body.last() ? return nil
-    const last_value = last as Expression ? return nil
+    last := body.last() ? return nil
+    last_value := last as Expression ? return nil
     values.push last_value
   values
 
-const is_type = (type: Type?, kind: TypeKind) -> type != nil and is_kind(type, kind)
+is_type := (type: Type?, kind: TypeKind) -> type != nil and is_kind(type, kind)
 
-const has_type_arguments = (type: Type?) ->
+has_type_arguments := (type: Type?) ->
   case type
     when MapType then true
     when ObjectType then type.args.length > 0
@@ -169,6 +169,6 @@ const has_type_arguments = (type: Type?) ->
 # from where it is, as a variable's annotation that moves to them (see annotated). A local that
 # takes the name passes too: this only picks the annotations to check without, and that checking
 # keeps them (see removable_annotations).
-const is_collection_call = (call: Call) ->
-  const callee = call.callee as Identifier ? return false
+is_collection_call := (call: Call) ->
+  callee := call.callee as Identifier ? return false
   call.type_args.length > 0 and (callee.name == 'Map' or callee.name == 'Set')

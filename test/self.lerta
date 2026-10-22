@@ -8,9 +8,9 @@ import OUTPUT_LIMIT, read_text, root_dir, suite_dir from './lib/lerta'
 import list_dir, write_file from 'std:io'
 import run from 'std:process'
 
-const work_dir = suite_dir('self')
-const driver = "#{root_dir}/bin/test"
-const harness_dir = 'tests/harness'
+work_dir := suite_dir('self')
+driver := "#{root_dir}/bin/test"
+harness_dir := 'tests/harness'
 
 struct DriverRun(status: Int, stdout: String, stderr: String)
 
@@ -18,19 +18,19 @@ var next_failed_file = 0
 
 # A file of failed checks of its own for each run, holding `keys`, so that the runs neither meet one
 # another nor build/test-failed.txt.
-const new_failed_file = (keys: String[]) ->
+new_failed_file := (keys: String[]) ->
   next_failed_file += 1
-  const path = "#{work_dir}/failed-#{next_failed_file}.txt"
+  path := "#{work_dir}/failed-#{next_failed_file}.txt"
   await write_file(path, lines(keys).binary)
   path
 
 # Runs the driver with the arguments, the run tests of tests/harness and the file of failed checks,
 # two checks at once, as the checks run together.
-const run_driver = (args: String[], failed_file: String) ->
-  const stdout: Byte[]
-  const stderr: Byte[]
-  const env = { 'LERTA_TEST_RUN_DIR': harness_dir, 'LERTA_TEST_FAILED_FILE': failed_file }
-  const ended = await run(
+run_driver := (args: String[], failed_file: String) ->
+  stdout: Byte[]
+  stderr: Byte[]
+  env := { 'LERTA_TEST_RUN_DIR': harness_dir, 'LERTA_TEST_FAILED_FILE': failed_file }
+  ended := await run(
     driver
     '-j'
     '2'
@@ -41,27 +41,27 @@ const run_driver = (args: String[], failed_file: String) ->
     stderr: stderr
     output_limit: OUTPUT_LIMIT
   )
-  const text = (bytes: Byte[]) -> bytes.to_binary().text() ? '(not valid UTF-8)'
+  text := (bytes: Byte[]) -> bytes.to_binary().text() ? '(not valid UTF-8)'
   DriverRun status: ended.code, stdout: text(stdout), stderr: text(stderr)
 
-const run_key = (name: String) -> "run tests\t#{name}"
+run_key := (name: String) -> "run tests\t#{name}"
 
 # A test of tests/harness and the reasons that the driver gives for its failure, none for a test
 # that passes.
 struct HarnessResult(name: String, reasons: String[])
 
-const passes = (name: String) -> HarnessResult(name, reasons: [])
+passes := (name: String) -> HarnessResult(name, reasons: [])
 
-const stderr_differs = 'stderr differs from line 1'
-const did_not_succeed = 'expected the run to succeed, but it did not'
-const did_not_fail = 'expected the run to fail, but it did not'
-const needs_expected = (name: String) ->
+stderr_differs := 'stderr differs from line 1'
+did_not_succeed := 'expected the run to succeed, but it did not'
+did_not_fail := 'expected the run to fail, but it did not'
+needs_expected := (name: String) ->
   "needs #{name}.out or #{name}.err or #{name}.warn in tests/harness"
 
 # How the driver reports each test of tests/harness, in order. The (-O) check of a test that fails
 # to compile does not apply, so it is not reported; the optimized build does not report leaks, so
 # the leak that the unoptimized one reports as expected makes it fail.
-const harness_results =
+harness_results :=
   HarnessResult(name: 'tests/harness/stray.out', reasons: ['stray file: no test reads it'])
   HarnessResult(name: 'tests/harness/aborts', reasons: [stderr_differs, did_not_succeed])
   HarnessResult(name: 'tests/harness/aborts (-O)', reasons: [stderr_differs, did_not_succeed])
@@ -87,19 +87,19 @@ const harness_results =
   HarnessResult(name: 'tests/harness/wrong_warning', reasons: ['warnings differs from line 1'])
   HarnessResult(name: 'tests/harness/wrong_warning (-O)', reasons: ['warnings differs from line 1'])
 
-const failed_names = [result.name for result in harness_results when result.reasons.length > 0]
+failed_names := [result.name for result in harness_results when result.reasons.length > 0]
 
 # A result as a line: `ok <name>`, or `FAIL <name>` and its reasons, each after ` | `.
-const result_line = (name: String, reasons: String[]) ->
+result_line := (name: String, reasons: String[]) ->
   reasons.length == 0 then "ok #{name}" else ["FAIL #{name}", reasons...].join(' | ')
 
 # The results that the driver printed, as result_line writes them. A result's line pads the name
 # and ends with the time; the reasons follow, indented by 6, and what they show by more.
-const reported_results = (stdout: String) ->
-  const results: String[]
+reported_results := (stdout: String) ->
+  results: String[]
   var name: String?
   var reasons: String[] = []
-  const flush = ->
+  flush := ->
     results.push result_line(name, reasons) if name
     name = nil
     reasons = []
@@ -107,20 +107,20 @@ const reported_results = (stdout: String) ->
     if line.starts_with('ok    ') or line.starts_with('FAIL  ')
       flush()
       name = line.without_prefix(line.starts_with('ok') then 'ok    ' else 'FAIL  ')!.split('  ')[0]
-    else if const reason = line.without_prefix('      ')
+    else if reason := line.without_prefix('      ')
       reasons.push reason if name != nil and not reason.starts_with(' ')
     else
       flush()
   flush()
   results
 
-const harness_check = Check
+harness_check := Check
   name: 'bin/test reports each test of tests/harness as it should, and keeps those that failed'
   run: ->
-    const failed_file = await new_failed_file([])
-    const ran = await run_driver(['run'], failed_file)
-    const expected = [result_line(result.name, result.reasons) for result in harness_results]
-    const summary = "run tests: #{harness_results.length - failed_names.length} passed, #{failed_names.length} failed in "
+    failed_file := await new_failed_file([])
+    ran := await run_driver(['run'], failed_file)
+    expected := [result_line(result.name, result.reasons) for result in harness_results]
+    summary := "run tests: #{harness_results.length - failed_names.length} passed, #{failed_names.length} failed in "
     [
       compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
       reason_if(not ran.stdout.contains(summary), "no summary `#{summary}...`")...
@@ -133,21 +133,20 @@ const harness_check = Check
     ]
 
 # Each source of tests/harness is in harness_results, so that a test added there is checked.
-const harness_listed_check =
-  Check(name: 'every test of tests/harness has its expected result', run: ->
-    const listed = [result.name for result in harness_results]
-    at_once [
-      "tests/harness/#{file} is not in harness_results"
-      for file in list_dir("#{root_dir}/#{harness_dir}")
-      when file.ends_with('.lerta') and not listed.contains(
-        "tests/harness/#{file.without_suffix('.lerta')!}"
-      )
-    ]
-  )
+harness_listed_check := Check(name: 'every test of tests/harness has its expected result', run: ->
+  listed := [result.name for result in harness_results]
+  at_once [
+    "tests/harness/#{file} is not in harness_results"
+    for file in list_dir("#{root_dir}/#{harness_dir}")
+    when file.ends_with('.lerta') and not listed.contains(
+      "tests/harness/#{file.without_suffix('.lerta')!}"
+    )
+  ]
+)
 
-const usage_check = (args: String[]) ->
+usage_check := (args: String[]) ->
   Check name: "bin/test #{args.join(' ')} is a usage error", run: ->
-    const ran = await run_driver(args, await new_failed_file([]))
+    ran := await run_driver(args, await new_failed_file([]))
     [
       expect_status(2, ran.status)...
       reason_if(
@@ -157,32 +156,32 @@ const usage_check = (args: String[]) ->
     ]
 
 # A check of the format suite, whose one case runs fast.
-const format_case = 'tests/format/calls'
-const format_key = "format checks\t#{format_case}"
+format_case := 'tests/format/calls'
+format_key := "format checks\t#{format_case}"
 
-const driver_checks =
+driver_checks :=
   usage_check(['nothing'])
   usage_check(['-k'])
   usage_check(['-j', '0'])
   usage_check(['cli', '--target', 'x86_64-w64-mingw32'])
   usage_check(['--target', 'x86_64-w64-mingw32', '--failed'])
   Check(name: 'bin/test fails when no check is selected', run: ->
-    const ran = await run_driver(['format', '-k', 'no such check'], await new_failed_file([]))
+    ran := await run_driver(['format', '-k', 'no such check'], await new_failed_file([]))
     [
       compare_text('stderr', "no check is selected\n", ran.stderr)...
       expect_status(2, ran.status)...
     ]
   )
   Check(name: 'bin/test --list names the selected checks under their suites', run: ->
-    const ran = await run_driver(['format', '-k', format_case, '--list'], await new_failed_file([]))
+    ran := await run_driver(['format', '-k', format_case, '--list'], await new_failed_file([]))
     [
       compare_text('stdout', "format checks:\n  #{format_case}\n", ran.stdout)...
       expect_status(0, ran.status)...
     ]
   )
   Check(name: 'bin/test -q prints the checks that failed but none that passed', run: ->
-    const ran = await run_driver(['run', '-q'], await new_failed_file([]))
-    const expected = [
+    ran := await run_driver(['run', '-q'], await new_failed_file([]))
+    expected := [
       result_line(result.name, result.reasons)
       for result in harness_results
       when result.reasons.length > 0
@@ -193,9 +192,9 @@ const driver_checks =
     ]
   )
   Check(name: "bin/test --target takes the host's triple for the run tests", run: ->
-    const name = 'tests/harness/passes'
-    const ran = await run_driver(['--target', host_triple, '-k', name], await new_failed_file([]))
-    const expected = [result_line(name, []), result_line("#{name} (-O)", [])]
+    name := 'tests/harness/passes'
+    ran := await run_driver(['--target', host_triple, '-k', name], await new_failed_file([]))
+    expected := [result_line(name, []), result_line("#{name} (-O)", [])]
     [
       compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
       expect_status(0, ran.status)...
@@ -204,10 +203,10 @@ const driver_checks =
   Check(
     name: 'bin/test --failed runs the failed checks, and drops those that pass or that a suite no longer has'
     run: ->
-      const kept = "cli checks\ta check of a suite that does not run"
-      const failed_file =
+      kept := "cli checks\ta check of a suite that does not run"
+      failed_file :=
         await new_failed_file([format_key, "format checks\ta check that is gone", kept])
-      const ran = await run_driver(['--failed'], failed_file)
+      ran := await run_driver(['--failed'], failed_file)
       [
         compare_text('results', "ok #{format_case}\n", lines(reported_results(ran.stdout)))...
         expect_status(0, ran.status)...
@@ -215,10 +214,10 @@ const driver_checks =
       ]
   )
   Check(name: 'bin/test --failed -q keeps a check that fails again, and prints its failure', run: ->
-    const name = 'tests/harness/wrong_stdout'
-    const failed_file = await new_failed_file([run_key(name)])
-    const ran = await run_driver(['--failed', '-q'], failed_file)
-    const expected = result_line(name, ['stdout differs from line 1'])
+    name := 'tests/harness/wrong_stdout'
+    failed_file := await new_failed_file([run_key(name)])
+    ran := await run_driver(['--failed', '-q'], failed_file)
+    expected := result_line(name, ['stdout differs from line 1'])
     [
       compare_text('results', lines([expected]), lines(reported_results(ran.stdout)))...
       expect_status(1, ran.status)...
@@ -226,7 +225,7 @@ const driver_checks =
     ]
   )
   Check(name: 'bin/test --failed says so when no check failed', run: ->
-    const ran = await run_driver(['--failed'], await new_failed_file([]))
+    ran := await run_driver(['--failed'], await new_failed_file([]))
     [
       compare_text('stdout', "no check failed when it last ran\n", ran.stdout)...
       expect_status(0, ran.status)...
@@ -234,7 +233,7 @@ const driver_checks =
   )
 
 # The number of the checks that failed.
-export const suite = ->
-  const title = 'self checks'
-  const checks = select(title, [harness_check, harness_listed_check, driver_checks...]) ? return 0
+export suite := ->
+  title := 'self checks'
+  checks := select(title, [harness_check, harness_listed_check, driver_checks...]) ? return 0
   await run_checks(title, checks)

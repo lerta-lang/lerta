@@ -69,73 +69,72 @@ export class ObjectInfo
   fields_checked = false
 
 # A field without an initializer, or with a default, is a constructor argument.
-export const is_argument = (field: FieldInfo) -> field.value == nil or field.has_default
+export is_argument := (field: FieldInfo) -> field.value == nil or field.has_default
 
-export const is_generic_object = (info: ObjectInfo) -> info.declaration.type_params.length > 0
+export is_generic_object := (info: ObjectInfo) -> info.declaration.type_params.length > 0
 
 # The function literal of a member that is a method.
-export const method_literal = (member: MemberDeclaration) ->
+export method_literal := (member: MemberDeclaration) ->
   return nil if member.modifier == 'var'
   member.value as FunctionLiteral?
 
 # Registers the names first, so that the members can refer to any of the types.
-export const add_objects = (shared: Shared, declarations: TypeDeclaration[]) ->
-  const program = shared.program
+export add_objects := (shared: Shared, declarations: TypeDeclaration[]) ->
+  program := shared.program
   for declaration in declarations
-    const { name } = declaration.name
+    { name } := declaration.name
     fail_already_defined program, declaration.name if has_declared_type(shared, name)
-    const symbol = declared_symbol(shared, name)
-    const is_struct = declaration.is_struct
-    const { type_params } = declaration
+    symbol := declared_symbol(shared, name)
+    is_struct := declaration.is_struct
+    { type_params } := declaration
     reject_bounds program, type_params
-    const own = placeholders(type_params)
-    const args = [own[param.name.name]! for param in type_params]
-    const type = ObjectType(name, symbol, is_struct, args, module: shared.name)
-    const resolver = with_type_parameters(module_resolver(shared.index), own)
-    const info =
-      ObjectInfo(declaration, type, resolver, facts: shared.facts, module_index: shared.index)
+    own := placeholders(type_params)
+    args := [own[param.name.name]! for param in type_params]
+    type := ObjectType(name, symbol, is_struct, args, module: shared.name)
+    resolver := with_type_parameters(module_resolver(shared.index), own)
+    info := ObjectInfo(declaration, type, resolver, facts: shared.facts, module_index: shared.index)
     shared.objects[name] = info
     program.infos[symbol] = info
 
-const reject_bounds = (program: ProgramWide, type_params: TypeParameter[]) ->
+reject_bounds := (program: ProgramWide, type_params: TypeParameter[]) ->
   for param in type_params
-    if const bound = param.bound
+    if bound := param.bound
       fail program, bound.position, "a class's or struct's type parameter takes no bound so far"
 
 # Resolves the written field types and adds the methods to the module's functions.
-export const add_members = (shared: Shared) ->
-  const program = shared.program
+export add_members := (shared: Shared) ->
+  program := shared.program
   for info in shared.objects.values()
     reject_bad_type_parameters program, module_resolver(shared.index), info.declaration.type_params
-    const seen: Set<String>
+    seen: Set<String>
     for member in info.declaration.members
-      const { name, position } = member.name
+      { name, position } := member.name
       if seen.has(name)
-        const message = "'#{name}' is already a member of #{info.declaration.name.name}"
+        message := "'#{name}' is already a member of #{info.declaration.name.name}"
         fail program, position, message
       seen.add name
-      if const literal = method_literal(member)
+      if literal := method_literal(member)
         add_method shared, info, member, literal
       else
         info.fields.push field_of_member(shared, info, member)
     add_interface_fields shared, info, seen if info.declaration.satisfies != nil
 
 # The types written in a member: a field's, or a method's parameters' and result's.
-export const written_types = (member: MemberDeclaration) ->
-  const literal = method_literal(member) ? return [member.type]
-  const types: TypeName?[] = [param.type for param in literal.params]
+export written_types := (member: MemberDeclaration) ->
+  literal := method_literal(member) ? return [member.type]
+  types: TypeName?[] = [param.type for param in literal.params]
   types.push literal.return_type
   types
 
-const add_interface_fields = (shared: Shared, info: ObjectInfo, declared: Set<String>) ->
-  const program = shared.program
-  const written = info.declaration.satisfies!
+add_interface_fields := (shared: Shared, info: ObjectInfo, declared: Set<String>) ->
+  program := shared.program
+  written := info.declaration.satisfies!
   # As a bound, an interface whose members name Self can be named.
-  const interface_type = bound_interface(program, info.resolver, written)
+  interface_type := bound_interface(program, info.resolver, written)
   info.satisfies = interface_type
-  const is_struct = info.declaration.is_struct
-  const field_of = (member: InterfaceMember) ->
-    const name = Identifier(name: member.name, position: written.position)
+  is_struct := info.declaration.is_struct
+  field_of := (member: InterfaceMember) ->
+    name := Identifier(name: member.name, position: written.position)
     FieldInfo
       name
       type: member.type
@@ -143,17 +142,17 @@ const add_interface_fields = (shared: Shared, info: ObjectInfo, declared: Set<St
       value: nil
       has_default: false
       weak: false
-  const members = members_for(program, interface_type, info.type)
-  const from_interface = [field_of(member) for member in members when not declared.has(member.name)]
+  members := members_for(program, interface_type, info.type)
+  from_interface := [field_of(member) for member in members when not declared.has(member.name)]
   info.fields = [from_interface..., info.fields...]
 
-const add_method = (
+add_method := (
   shared: Shared, info: ObjectInfo, member: MemberDeclaration, literal: FunctionLiteral
 ) ->
-  const program = shared.program
-  const type_name = info.declaration.name.name
-  const { name } = member.name
-  const runs_alone = name == 'init' or name == 'deinit'
+  program := shared.program
+  type_name := info.declaration.name.name
+  { name } := member.name
+  runs_alone := name == 'init' or name == 'deinit'
   if runs_alone and literal.params.length > 0
     fail program, literal.position, "#{name} takes no parameters"
   if runs_alone and literal.type_params.length > 0
@@ -169,72 +168,72 @@ const add_method = (
   if literal.type_params.length == 0 and not is_generic_object(info)
     add_function shared, method_key(type_name, name), member.name, literal, info.type
     return
-  const receiver = Receiver(type: info.type, type_params: info.declaration.type_params)
-  const generic = make_generic_function(shared, member.name, literal, receiver)
+  receiver := Receiver(type: info.type, type_params: info.declaration.type_params)
+  generic := make_generic_function(shared, member.name, literal, receiver)
   info.generics[name] = add_generic(shared, generic)
 
-const field_of_member = (shared: Shared, info: ObjectInfo, member: MemberDeclaration) ->
-  const program = shared.program
-  const is_struct = info.declaration.is_struct
-  const value = member.value
+field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration) ->
+  program := shared.program
+  is_struct := info.declaration.is_struct
+  value := member.value
   if value is FunctionLiteral
-    const message = 'a function field is not supported yet; a method is written without var'
+    message := 'a function field is not supported yet; a method is written without var'
     fail program, member.position, message
   if is_struct and member.modifier == 'var'
     fail program, member.position, 'a struct field cannot be var'
-  const type_name = member.type
-  const type = type_name then resolve(program, info.resolver, type_name)
-  const modifier = member.modifier
-  const weak = modifier == 'weak' or modifier == 'weak!'
+  type_name := member.type
+  type := type_name then resolve(program, info.resolver, type_name)
+  modifier := member.modifier
+  weak := modifier == 'weak' or modifier == 'weak!'
   reject_invalid_weak program, member, is_struct, type if weak
-  const mutable = not is_struct and modifier != 'const' and modifier != 'weak!'
+  mutable := not is_struct and modifier != 'const' and modifier != 'weak!'
   FieldInfo type, mutable, value, weak, name: member.name, has_default: member.has_default
 
-const reject_invalid_weak = (
+reject_invalid_weak := (
   program: ProgramWide, member: MemberDeclaration, is_struct: Bool, type: Type?
 ) ->
-  const fail_weak = (message: String) -> fail(program, member.position, message)
+  fail_weak := (message: String) -> fail(program, member.position, message)
   fail_weak 'a struct field cannot be weak' if is_struct
-  const is_bang = member.modifier == 'weak!'
+  is_bang := member.modifier == 'weak!'
   if is_bang
     fail_weak 'a weak! field is a constructor argument, without an initializer' if member.value
-  const written = type ? fail_weak('the type of a weak field must be written')
+  written := type ? fail_weak('the type of a weak field must be written')
   if not is_bang and written is not OptionalType
-    const optional = "#{format_type(written)}?"
+    optional := "#{format_type(written)}?"
     fail_weak "a weak field may hold nil: write its type as #{optional}, or use weak!"
-  const object = (is_bang then written else inner_of(written)) as ObjectType?
+  object := (is_bang then written else inner_of(written)) as ObjectType?
   fail_weak 'a weak field holds an object of a class' if object?.is_struct != false
 
 # The class or struct of the name, of the module or imported.
-export const object_type = (shared: Shared, name: String) ->
-  return info.type if const info = shared.objects[name]
-  const exported = imported_type(shared, name) ? builtin_type(shared, name) ? return nil
-  const info = exported.info ? return nil
+export object_type := (shared: Shared, name: String) ->
+  return info.type if info := shared.objects[name]
+  exported := imported_type(shared, name) ? builtin_type(shared, name) ? return nil
+  info := exported.info ? return nil
   info.type
 
 # The class or struct of the type: an instance of a generic one for its type arguments, made on
 # demand, once the generic one's members are known.
-export const info_of = (program: ProgramWide, type: ObjectType) ->
-  const declared = program.infos[type.symbol]!
+export info_of := (program: ProgramWide, type: ObjectType) ->
+  declared := program.infos[type.symbol]!
   # A pattern, as the receiver of `extend<T> Stack<T>`, stands for any instance.
   return declared if same_type(type, declared.type) or type.args.any(has_type_parameters)
-  const is_same = (instance: ObjectInfo) -> same_type(instance.type, type)
+  is_same := (instance: ObjectInfo) -> same_type(instance.type, type)
   declared.instances.find(is_same) ? add_instance(declared, type)
 
-const add_instance = (generic: ObjectInfo, type: ObjectType) ->
-  const { declaration, module_index } = generic
-  const type_bindings: Map<String, Type>
-  const type_params = declaration.type_params
+add_instance := (generic: ObjectInfo, type: ObjectType) ->
+  { declaration, module_index } := generic
+  type_bindings: Map<String, Type>
+  type_params := declaration.type_params
   type_bindings[param.name.name] = arg for (param, arg) in type_params.zip(type.args)
-  const resolver = with_type_parameters(module_resolver(module_index), type_bindings)
-  const info = ObjectInfo(declaration, type, module_index, resolver, generic, facts: NodeFacts())
-  const instance_field = (field: FieldInfo) ->
-    const { name, mutable, value, has_default, weak } = field
-    const field_type = field.type
-    const type = field_type then substitute(field_type, type_bindings)
+  resolver := with_type_parameters(module_resolver(module_index), type_bindings)
+  info := ObjectInfo(declaration, type, module_index, resolver, generic, facts: NodeFacts())
+  instance_field := (field: FieldInfo) ->
+    { name, mutable, value, has_default, weak } := field
+    field_type := field.type
+    type := field_type then substitute(field_type, type_bindings)
     FieldInfo name, type, mutable, value, has_default, weak
   info.fields = [instance_field(field) for field in generic.fields]
-  if const satisfies = generic.satisfies
+  if satisfies := generic.satisfies
     info.satisfies = substitute(satisfies, type_bindings) as InterfaceType!
   info.methods = generic.methods
   info.generics = generic.generics
@@ -244,10 +243,8 @@ const add_instance = (generic: ObjectInfo, type: ObjectType) ->
   info
 
 # The field's type, checking the initializers first if it is given by one alone.
-export const field_type = (
-  program: ProgramWide, info: ObjectInfo, field: FieldInfo, at: Position
-) ->
-  return type if const type = field.type
+export field_type := (program: ProgramWide, info: ObjectInfo, field: FieldInfo, at: Position) ->
+  return type if type := field.type
   abort_part() if info.state == FAILED
   if info.state == CHECKING
     fail program, at, "the type of '#{field.name.name}' is not known yet; write it"
@@ -257,8 +254,8 @@ export const field_type = (
 # A generic class or struct is checked by its instances (see check_pending_objects). Whether a
 # type satisfies the interface it names is checked once all are, as its methods may need the
 # fields of any.
-export const check_all_objects = (shared: Shared) ->
-  const checked: ObjectInfo[]
+export check_all_objects := (shared: Shared) ->
+  checked: ObjectInfo[]
   for info in shared.objects.values()
     continue if is_generic_object(info)
     check_info shared.program, info
@@ -267,8 +264,8 @@ export const check_all_objects = (shared: Shared) ->
 
 # Checks the instances of the module's generic classes and structs left unchecked, which checking
 # others may make; returns whether there were any.
-export const check_pending_objects = (shared: Shared) ->
-  const pending: ObjectInfo[]
+export check_pending_objects := (shared: Shared) ->
+  pending: ObjectInfo[]
   for info in shared.objects.values()
     pending.append [each for each in info.instances when each.state == UNCHECKED]
   check_info shared.program, info for info in pending
@@ -277,7 +274,7 @@ export const check_pending_objects = (shared: Shared) ->
 
 # Those with an error are left out, as their fields' types may be unknown. Each satisfies the
 # interface it names, and its equals, compare and hash are of their types.
-const check_all_satisfy = (program: ProgramWide, infos: ObjectInfo[]) ->
+check_all_satisfy := (program: ProgramWide, infos: ObjectInfo[]) ->
   for info in infos
     continue if info.state != CHECKED
     check_satisfies program, info
@@ -285,18 +282,18 @@ const check_all_satisfy = (program: ProgramWide, infos: ObjectInfo[]) ->
 
 # Checks the initializers of the fields with the declaring module's checker, setting the types
 # that they give. An instance gets the instances of its generic's init and deinit.
-const check_info = (program: ProgramWide, info: ObjectInfo) ->
+check_info := (program: ProgramWide, info: ObjectInfo) ->
   return if info.state != UNCHECKED
   info.state = CHECKING
-  const check = (): void ->
+  check := (): void ->
     reject_endless_instance program, info
     check_object program, info
-  const checked = check_part(program, check)
+  checked := check_part(program, check)
   info.state = checked then CHECKED else FAILED
   return if not checked
-  const generic = info.generic ? return
-  const at = info.declaration.name.position
-  const instance_of = (name: String) ->
+  generic := info.generic ? return
+  at := info.declaration.name.position
+  instance_of := (name: String) ->
     instantiate program, generic.generics[name]!, info.type.args, [], at
   info.init = instance_of('init') if info.has_init
   info.deinit = instance_of('deinit') if info.has_deinit
@@ -304,15 +301,15 @@ const check_info = (program: ProgramWide, info: ObjectInfo) ->
 # An instance whose members make ever larger ones, as `A<T>` does with a field of `A<T[]>`, which
 # its type alone may not tell, is stopped at the depth or the number that ends a generic
 # function's.
-const reject_endless_instance = (program: ProgramWide, info: ObjectInfo): void ->
-  const generic = info.generic ? return
-  const too_deep = info.type.args.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
+reject_endless_instance := (program: ProgramWide, info: ObjectInfo): void ->
+  generic := info.generic ? return
+  too_deep := info.type.args.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
   # The instance is counted already, as a generic function's is not before it is added.
-  const too_many = generic.instances.length > MAX_INSTANCES
+  too_many := generic.instances.length > MAX_INSTANCES
   return if not too_deep and not too_many
-  const shared = program.shared[info.module_index]
+  shared := program.shared[info.module_index]
   enter_module shared
-  const { name, position } = info.declaration.name
-  const endless = "'#{name}' needs instances without end, each with type arguments nested deeper"
-  const message = too_deep then endless else "'#{name}' needs more than #{MAX_INSTANCES} instances"
+  { name, position } := info.declaration.name
+  endless := "'#{name}' needs instances without end, each with type arguments nested deeper"
+  message := too_deep then endless else "'#{name}' needs more than #{MAX_INSTANCES} instances"
   fail_in_context program, position, message, "from #{format_type(generic.instances[0].type)}"

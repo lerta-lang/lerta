@@ -4,50 +4,50 @@
 import is_file, make_dir, make_temp_dir, read_file, real_path, remove_tree from 'std:io'
 import exit, run from 'std:process'
 
-export const root_dir = real_path('.').text()!
+export root_dir := real_path('.').text()!
 
 if not is_file("#{root_dir}/test/main.lerta")
   print_error 'the tests run from the root of the repository'
   exit 2
 
-export const compiler = "#{root_dir}/bin/lerta"
+export compiler := "#{root_dir}/bin/lerta"
 if not is_file(compiler)
   print_error "#{compiler} is missing: run make, or make test, which builds it first"
   exit 2
 
 # The most output kept of each stream of a program that a test runs, far beyond what any test
 # prints; the limit only stops runaway output.
-export const OUTPUT_LIMIT = 1024 * 1024
+export OUTPUT_LIMIT := 1024 * 1024
 
 # A file's text, which must be UTF-8.
-export const read_text = (path: String) ->
+export read_text := (path: String) ->
   (await read_file(path)).text() ? throw ValueError(message: "#{path} is not valid UTF-8")
 
 # The directory of what the tests make, made as they start and removed as they end (see
 # remove_work_root); each suite works in a directory of its own in it.
-const work_root = make_temp_dir().text()!
+work_root := make_temp_dir().text()!
 
-export const suite_dir = (name: String) ->
-  const path = "#{work_root}/#{name}"
+export suite_dir := (name: String) ->
+  path := "#{work_root}/#{name}"
   make_dir path
   path
 
-export const remove_work_root = -> await remove_tree(work_root)
+export remove_work_root := -> await remove_tree(work_root)
 
 # The compiler caches the runtime it compiles; the tests give it a new cache, which the compilers
 # that the tests run inherit through LERTA_CACHE_DIR, so that no cache left by another build of the
 # compiler takes part.
-export const cache_dir = suite_dir('cache')
+export cache_dir := suite_dir('cache')
 
 # A run of a file to its end, whatever its exit status: `failure` tells how it ended, for messages.
 export struct FileRun(status: Int, failure: String, errors: String)
 
-export const run_file = (file: String, args: String[], cwd: String) ->
+export run_file := (file: String, args: String[], cwd: String) ->
   # Its standard output is dropped, as nothing that it would print there is checked.
-  const output: Byte[]
-  const errors: Byte[]
-  const env = { 'LERTA_CACHE_DIR': cache_dir }
-  const exit = await run(
+  output: Byte[]
+  errors: Byte[]
+  env := { 'LERTA_CACHE_DIR': cache_dir }
+  exit := await run(
     file
     args...
     cwd: cwd
@@ -56,8 +56,8 @@ export const run_file = (file: String, args: String[], cwd: String) ->
     stderr: errors
     output_limit: OUTPUT_LIMIT
   )
-  const failure =
-    if const signal = exit.signal
+  failure :=
+    if signal := exit.signal
       "signal #{signal}"
     else
       "exit status #{exit.code}"
@@ -69,11 +69,11 @@ export struct SetupError: Error
 # Builds a program in `dir` with each of the sets of flags, so that the compiler caches each kind of
 # runtime before the tests start. Otherwise the tests started together would each compile the same
 # runtime, and each such compile runs as many clang processes as there are CPUs.
-export const build_runtimes = (dir: String, flag_sets: String[][]) ->
-  const build = (flags: String[], index: Int) ->
-    const args = ['build', 'tests/empty.lerta', '-o', "#{dir}/runtime#{index}", flags...]
-    const built = await run_file(compiler, args, root_dir)
+export build_runtimes := (dir: String, flag_sets: String[][]) ->
+  build := (flags: String[], index: Int) ->
+    args := ['build', 'tests/empty.lerta', '-o', "#{dir}/runtime#{index}", flags...]
+    built := await run_file(compiler, args, root_dir)
     if built.status != 0
-      const what = "tests/empty with [#{flags.join(' ')}]"
+      what := "tests/empty with [#{flags.join(' ')}]"
       throw SetupError(message: "the build of #{what} failed (#{built.failure}):\n#{built.errors}")
   await promise for promise in [build(flags, i) for flags, i in flag_sets]

@@ -9,55 +9,55 @@ import Type from '../types'
 
 # The bits of the largest double's successor, infinity, which no Float reaches; the IR writes a
 # float's infinity, which no Float32 reaches, as the same double.
-const INFINITY = '0x7FF0000000000000'
+INFINITY := '0x7FF0000000000000'
 
-const INT_MIN = -9223372036854775808
+INT_MIN := -9223372036854775808
 
-const PREDICATES = { '==': 'oeq', '!=': 'one', '<': 'olt', '<=': 'ole', '>': 'ogt', '>=': 'oge' }
+PREDICATES := { '==': 'oeq', '!=': 'one', '<': 'olt', '<=': 'ole', '>': 'ogt', '>=': 'oge' }
 
 # The literal's value as the type, a Float or a Float32, written as a double by its bits (see
 # docs/internals.md#floats); the checker has found it finite (see float_literal).
-export const float_constant = (text: String, type: Type) ->
-  const bits = float_bits(text, type)!
+export float_constant := (text: String, type: Type) ->
+  bits := float_bits(text, type)!
   return "0x#{hex(bits, 16)}" if bits >= 0
   # A negative double's bits are a negative Int: its sign bit, the top one, is set apart from the
   # rest, which hex writes, as it writes no negative number.
-  const rest = bits - INT_MIN
+  rest := bits - INT_MIN
   "0x#{hex((rest >> 60) + 8, 1)}#{hex(rest & 0x0FFFFFFFFFFFFFFF, 15)}"
 
 # `+`, `-`, `*` or `/` of two floats of the type; division by zero throws, as does a result too
 # large.
-export const apply_float_arithmetic = (
+export apply_float_arithmetic := (
   g: Generator, operator: String, left: String, right: String, type: Type
 ) ->
-  const ir = g.ir
-  const scalar = scalar_of(type)!
-  const float = scalar.ir_type
+  ir := g.ir
+  scalar := scalar_of(type)!
+  float := scalar.ir_type
   throw_if g, ir.assign("fcmp oeq #{float} #{right}, 0.0"), DIVISION_BY_ZERO if operator == '/'
-  const instruction =
+  instruction :=
     case operator
       when '+' then 'fadd'
       when '-' then 'fsub'
       when '*' then 'fmul'
       when '/' then 'fdiv'
       else panic("no Float operator #{operator}")
-  const result = ir.assign("#{instruction} #{float} #{left}, #{right}")
-  const fabs = "llvm.fabs.f#{scalar.bits}"
+  result := ir.assign("#{instruction} #{float} #{left}, #{right}")
+  fabs := "llvm.fabs.f#{scalar.bits}"
   ir.module.declare fabs, "declare #{float} @#{fabs}(#{float})"
-  const size = ir.assign("call #{float} @#{fabs}(#{float} #{result})")
+  size := ir.assign("call #{float} @#{fabs}(#{float} #{result})")
   throw_if g, ir.assign("fcmp oge #{float} #{size}, #{INFINITY}"), FLOAT_OVERFLOW
   result
 
-export const emit_float_negation = (ir: IrBuilder, operand: String, type: Type) ->
+export emit_float_negation := (ir: IrBuilder, operand: String, type: Type) ->
   ir.assign "fneg #{scalar_of(type)!.ir_type} #{operand}"
 
 # A comparison of two floats of the type; none is NaN, so they are ordered.
-export const emit_float_comparison = (
+export emit_float_comparison := (
   ir: IrBuilder, operator: String, left: String, right: String, type: Type
 ) -> ir.assign("fcmp #{PREDICATES[operator]!} #{scalar_of(type)!.ir_type} #{left}, #{right}")
 
 # The float's bits as a word, with -0.0 made 0.0, so that equal floats give the same word.
-export const emit_float_word = (ir: IrBuilder, value: String, type: Type) ->
-  const scalar = scalar_of(type)!
-  const positive_zero = ir.assign("fadd #{scalar.ir_type} #{value}, 0.0")
+export emit_float_word := (ir: IrBuilder, value: String, type: Type) ->
+  scalar := scalar_of(type)!
+  positive_zero := ir.assign("fadd #{scalar.ir_type} #{value}, 0.0")
   widened_to_word ir, positive_zero, scalar

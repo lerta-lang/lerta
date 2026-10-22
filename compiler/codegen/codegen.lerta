@@ -25,7 +25,7 @@ import format_type, Type from '../types'
 # (see IrModule). Each module becomes an LLVM module of its own, if `separate`, or else all become
 # one. Exceptions are traced if `traces`, and the instructions tell where they come from in the
 # source if `source_lines`, of a build that is `optimized` or not (see SourceLines).
-export const generate = (
+export generate := (
   program: ProgramWide
   function_attributes: String
   coro_end_type: String
@@ -34,89 +34,88 @@ export const generate = (
   source_lines = false
   optimized = false
 ) ->
-  const modules = program.modules
-  const ir_module_of = (module: Module) ->
-    const source_filename = quoted_name(module.symbol_name)
-    const ir_module = IrModule(source_filename, function_attributes, coro_end_type)
+  modules := program.modules
+  ir_module_of := (module: Module) ->
+    source_filename := quoted_name(module.symbol_name)
+    ir_module := IrModule(source_filename, function_attributes, coro_end_type)
     ir_module.source_lines = SourceLines(optimized) if source_lines
     ir_module
   # The entry module comes last (see load_modules).
-  const entry = modules[modules.length - 1]
-  const one = ir_module_of(entry)
-  const ir_modules = [separate then ir_module_of(module) else one for module in modules]
-  const globals =
+  entry := modules[modules.length - 1]
+  one := ir_module_of(entry)
+  ir_modules := [separate then ir_module_of(module) else one for module in modules]
+  globals :=
     [define_top_level_globals(ir_modules[i], module, program.shared[i]) for module, i in modules]
-  const module_code = (i: Int, ir_module: IrModule) ->
-    const shared = program.shared[i]
+  module_code := (i: Int, ir_module: IrModule) ->
+    shared := program.shared[i]
     ModuleCode program, globals, ir_module, shared, traces, module: modules[i]
   generate_module module_code(i, ir_modules[i]) for _, i in modules
-  const linked = separate then ir_modules else [one]
-  const on_demand = instances_on_demand(program, module_code)
+  linked := separate then ir_modules else [one]
+  on_demand := instances_on_demand(program, module_code)
   define_on_demand ir_module, on_demand for ir_module in linked
   link_modules linked
 
 # The module's top-level code, functions, instances of generic functions, classes and structs,
 # and methods of extends.
-const generate_module = (code: ModuleCode) ->
-  const { program, module, shared } = code
-  const { extensions, facts } = shared
-  const generate_one = (symbol: String, name: String, literal: FunctionLiteral, this_type: Type?) ->
-    const g = function_generator(code, extensions, facts, trace_name(name, this_type))
+generate_module := (code: ModuleCode) ->
+  { program, module, shared } := code
+  { extensions, facts } := shared
+  generate_one := (symbol: String, name: String, literal: FunctionLiteral, this_type: Type?) ->
+    g := function_generator(code, extensions, facts, trace_name(name, this_type))
     generate_function g, '', symbol, literal, this_type, nil
-  const main =
-    Generator(code, extensions, facts, function_name: TOP_LEVEL_NAME, top_level_code: true)
-  const main_code = [statement for statement in module.program when is_main_code(statement)]
-  const entry_index = program.modules.length - 1
-  const top_level_code = (index: Int) ->
-    const symbol = module_init_symbol(module_symbol_name(program, index))
+  main := Generator(code, extensions, facts, function_name: TOP_LEVEL_NAME, top_level_code: true)
+  main_code := [statement for statement in module.program when is_main_code(statement)]
+  entry_index := program.modules.length - 1
+  top_level_code := (index: Int) ->
+    symbol := module_init_symbol(module_symbol_name(program, index))
     TopLevelCode symbol, awaits: program.shared[index].top_level_awaits
   if module.index == entry_index
     emit_register_raise main if program.builtins != nil
-    const runs_first = [top_level_code(i) for i in 0...entry_index]
-    const awaits = program.shared.any((each) -> each.top_level_awaits)
-    const releases = released_globals(code.globals)
-    const program_code = TopLevelCode(awaits, symbol: '@lerta_main')
+    runs_first := [top_level_code(i) for i in 0...entry_index]
+    awaits := program.shared.any((each) -> each.top_level_awaits)
+    releases := released_globals(code.globals)
+    program_code := TopLevelCode(awaits, symbol: '@lerta_main')
     generate_main main, main_code, program_code, runs_first, releases, true
   else
     generate_main main, main_code, top_level_code(module.index), [], [], false
   if module.index == program.builtins
     define_raise_error function_generator(code, extensions, facts, '')
   for statement in module.program
-    const declaration = plain_function(statement) ? continue
-    const name = declaration.name.name
+    declaration := plain_function(statement) ? continue
+    name := declaration.name.name
     generate_one function_symbol(module.symbol_name, name), name, literal_of(declaration), nil
   for info in shared.objects.values()
     # A generic class or struct is generated by its instances (see instances_on_demand), whose
     # methods are all generic.
     continue if is_generic_object(info)
     define_object code.ir_module, program, info, ''
-    const constructor = function_generator(code, extensions, info.facts, format_type(info.type))
+    constructor := function_generator(code, extensions, info.facts, format_type(info.type))
     generate_constructor constructor, '', info
     for (method, literal) in info.methods.entries()
       continue if info.generics.has(method)
       generate_one method_symbol(info.type, method), method, literal, info.type
   for method in shared.own_methods
     continue if method.generic != nil
-    const symbol = extension_symbol(program, method)
+    symbol := extension_symbol(program, method)
     generate_one symbol, method.name.name, method.literal, method.receiver
 
 # The top-level code: the statements other than the declarations of functions and types.
-const is_main_code = (statement: Statement) ->
+is_main_code := (statement: Statement) ->
   case statement
     when Declaration then statement.value is not FunctionLiteral
     when TypeDeclaration then false
     else true
 
 # A top-level function that is not generic; a generic function is generated per instance instead.
-const plain_function = (statement: Statement) ->
+plain_function := (statement: Statement) ->
   return nil if statement is not Declaration
-  const value = statement.value
+  value := statement.value
   return nil if value is not FunctionLiteral
   value.type_params.length == 0 then statement
 
-const literal_of = (declaration: Declaration) -> declaration.value as FunctionLiteral!
+literal_of := (declaration: Declaration) -> declaration.value as FunctionLiteral!
 
-const released_globals = (globals: Map<String, TopLevelGlobal>[]) ->
-  const in_order: TopLevelGlobal[]
+released_globals := (globals: Map<String, TopLevelGlobal>[]) ->
+  in_order: TopLevelGlobal[]
   in_order.append values.values().to_array() for values in globals
   [in_order[in_order.length - 1 - i] for i in 0...in_order.length]

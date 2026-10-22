@@ -17,109 +17,109 @@ import
 from '../types'
 
 # The length and the items of an array or a Binary, which for loops and their Iters read by index.
-export const emit_sequence_length = (ir: IrBuilder, sequence: String, type: Type) ->
+export emit_sequence_length := (ir: IrBuilder, sequence: String, type: Type) ->
   is_kind(type, 'Binary') then emit_binary_length(ir, sequence) else emit_length(ir, sequence)
 
 # The item is owned when it is a reference.
-export const emit_sequence_get = (ir: IrBuilder, sequence: String, index: String, type: Type) ->
+export emit_sequence_get := (ir: IrBuilder, sequence: String, index: String, type: Type) ->
   if is_kind(type, 'Binary')
     emit_binary_get ir, sequence, index
   else
     emit_get ir, sequence, index, iterable_item(type)!
 
 # The items of an array or a Binary, which the Iter holds.
-const emit_sequence_iter = (ir: IrBuilder, sequence: String, type: Type) ->
-  const element = iterable_item(type)!
-  const has_next = (body: IrBuilder, kind: IterKind) ->
-    const length = emit_sequence_length(body, load_state(body, kind, 0), type)
-    const index = load_state(body, kind, 1)
-    const is_below = body.assign("icmp slt i64 #{index}, #{length}")
+emit_sequence_iter := (ir: IrBuilder, sequence: String, type: Type) ->
+  element := iterable_item(type)!
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    length := emit_sequence_length(body, load_state(body, kind, 0), type)
+    index := load_state(body, kind, 1)
+    is_below := body.assign("icmp slt i64 #{index}, #{length}")
     body.emit "ret i1 #{is_below}"
-  const next = (body: IrBuilder, kind: IterKind) ->
-    const index = load_state(body, kind, 1)
-    const item = emit_sequence_get(body, load_state(body, kind, 0), index, type)
+  next := (body: IrBuilder, kind: IterKind) ->
+    index := load_state(body, kind, 1)
+    item := emit_sequence_get(body, load_state(body, kind, 0), index, type)
     store_state body, kind, 1, body.assign("add nsw i64 #{index}, 1")
     body.emit "ret #{ir_type(element)} #{item}"
-  const state = [value_field(type), value_field(int_type)]
-  const kind = define_kind(ir, "sequence #{type_key(type)}", state, element, has_next, next)
+  state := [value_field(type), value_field(int_type)]
+  kind := define_kind(ir, "sequence #{type_key(type)}", state, element, has_next, next)
   emit_iter ir, kind, [sequence, '0']
 
 # The items that a value with has_next and next gives, which the Iter holds as an interface value
 # of the type `source_type` (see iter_source_type), and calls through its itab.
-export const emit_adapter_iter = (ir: IrBuilder, source: String, source_type: Type, item: Type) ->
-  const has_next = (body: IrBuilder, kind: IterKind) ->
-    const type = FunctionType(params: [], result: bool_type)
-    const more = emit_interface_call(body, load_state(body, kind, 0), 0, type, [])
+export emit_adapter_iter := (ir: IrBuilder, source: String, source_type: Type, item: Type) ->
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    type := FunctionType(params: [], result: bool_type)
+    more := emit_interface_call(body, load_state(body, kind, 0), 0, type, [])
     emit_check_or_return_thrown body, bool_type
     body.emit "ret i1 #{more}"
-  const next = (body: IrBuilder, kind: IterKind) ->
-    const type = FunctionType(params: [], result: item)
-    const value = emit_interface_call(body, load_state(body, kind, 0), 1, type, [])
+  next := (body: IrBuilder, kind: IterKind) ->
+    type := FunctionType(params: [], result: item)
+    value := emit_interface_call(body, load_state(body, kind, 0), 1, type, [])
     emit_check_or_return_thrown body, item
     body.emit "ret #{ir_type(item)} #{value}"
-  const state = [value_field(source_type)]
-  const kind = define_kind(ir, "adapter #{type_key(source_type)}", state, item, has_next, next)
+  state := [value_field(source_type)]
+  kind := define_kind(ir, "adapter #{type_key(source_type)}", state, item, has_next, next)
   emit_iter ir, kind, [source]
 
 # The Ints from start up to, but not including, end.
-export const emit_range_iter = (ir: IrBuilder, start: String, end: String) ->
-  const has_next = (body: IrBuilder, kind: IterKind) ->
-    const current = load_state(body, kind, 0)
-    const last = load_state(body, kind, 1)
-    const is_below = body.assign("icmp slt i64 #{current}, #{last}")
+export emit_range_iter := (ir: IrBuilder, start: String, end: String) ->
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    current := load_state(body, kind, 0)
+    last := load_state(body, kind, 1)
+    is_below := body.assign("icmp slt i64 #{current}, #{last}")
     body.emit "ret i1 #{is_below}"
   # The current Int is below the end, so the next one cannot overflow.
-  const next = (body: IrBuilder, kind: IterKind) ->
-    const current = load_state(body, kind, 0)
+  next := (body: IrBuilder, kind: IterKind) ->
+    current := load_state(body, kind, 0)
     store_state body, kind, 0, body.assign("add nsw i64 #{current}, 1")
     body.emit "ret i64 #{current}"
-  const state = [value_field(int_type), value_field(int_type)]
+  state := [value_field(int_type), value_field(int_type)]
   emit_iter ir, define_kind(ir, 'range', state, int_type, has_next, next), [start, end]
 
 # The results of a function of one item, a closure of the type, for each item of the source.
-const emit_map_iter = (ir: IrBuilder, source: String, mapper: String, type: Type) ->
-  const function_type = function_type_of(type)
-  const item = function_type.params[0]
-  const has_next = (body: IrBuilder, kind: IterKind) ->
-    const more = emit_has_next(body, load_state(body, kind, 0))
+emit_map_iter := (ir: IrBuilder, source: String, mapper: String, type: Type) ->
+  function_type := function_type_of(type)
+  item := function_type.params[0]
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    more := emit_has_next(body, load_state(body, kind, 0))
     emit_check_or_return_thrown body, bool_type
     body.emit "ret i1 #{more}"
-  const next = (body: IrBuilder, kind: IterKind) ->
-    const value = emit_next(body, load_state(body, kind, 0), item)
+  next := (body: IrBuilder, kind: IterKind) ->
+    value := emit_next(body, load_state(body, kind, 0), item)
     emit_check_or_return_thrown body, function_type.result
-    const result = emit_closure_call(body, load_state(body, kind, 1), type, [value])
+    result := emit_closure_call(body, load_state(body, kind, 1), type, [value])
     emit_release_value body, value, item
     emit_check_or_return_thrown body, function_type.result
     body.emit "ret #{ir_type(function_type.result)} #{result}"
-  const state = [value_field(IterType(item)), value_field(type)]
-  const key = "map #{type_key(type)}"
-  const kind = define_kind(ir, key, state, function_type.result, has_next, next)
+  state := [value_field(IterType(item)), value_field(type)]
+  key := "map #{type_key(type)}"
+  kind := define_kind(ir, key, state, function_type.result, has_next, next)
   emit_iter ir, kind, [source, mapper]
 
 # The items of the source for which a function, a closure, gives true. has_next finds the next
 # such item and holds it until next takes it; the state is the source, the function, whether an
 # item is held, and that item.
-const emit_filter_iter = (ir: IrBuilder, source: String, test: String, item: Type) ->
-  const test_type = FunctionType(params: [item], result: bool_type)
-  const has_next = (body: IrBuilder, kind: IterKind) ->
-    const search_label = body.fresh_label('filter.search')
-    const test_label = body.fresh_label('filter.test')
-    const keep_label = body.fresh_label('filter.keep')
-    const skip_label = body.fresh_label('filter.skip')
-    const found_label = body.fresh_label('filter.found')
-    const end_label = body.fresh_label('filter.end')
-    const is_held = load_state(body, kind, 2)
+emit_filter_iter := (ir: IrBuilder, source: String, test: String, item: Type) ->
+  test_type := FunctionType(params: [item], result: bool_type)
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    search_label := body.fresh_label('filter.search')
+    test_label := body.fresh_label('filter.test')
+    keep_label := body.fresh_label('filter.keep')
+    skip_label := body.fresh_label('filter.skip')
+    found_label := body.fresh_label('filter.found')
+    end_label := body.fresh_label('filter.end')
+    is_held := load_state(body, kind, 2)
     body.emit "br i1 #{is_held}, label %#{found_label}, label %#{search_label}"
     body.start_block search_label
-    const source_iter = load_state(body, kind, 0)
-    const has_more = emit_has_next(body, source_iter)
+    source_iter := load_state(body, kind, 0)
+    has_more := emit_has_next(body, source_iter)
     emit_check_or_return_thrown body, bool_type
     body.emit "br i1 #{has_more}, label %#{test_label}, label %#{end_label}"
     body.start_block test_label
-    const value = emit_next(body, source_iter, item)
+    value := emit_next(body, source_iter, item)
     emit_check_or_return_thrown body, bool_type
-    const keep = emit_closure_call(body, load_state(body, kind, 1), test_type, [value])
-    const release_and_return = ->
+    keep := emit_closure_call(body, load_state(body, kind, 1), test_type, [value])
+    release_and_return := ->
       emit_release_value body, value, item
       emit_return_thrown body, bool_type
     emit_check_with body, release_and_return
@@ -137,43 +137,43 @@ const emit_filter_iter = (ir: IrBuilder, source: String, test: String, item: Typ
     body.emit 'ret i1 false'
   # The held item passes to the caller; a reference is cleared, so that the drop does not release
   # it.
-  const next = (body: IrBuilder, kind: IterKind) ->
+  next := (body: IrBuilder, kind: IterKind) ->
     store_state body, kind, 2, 'false'
-    const value = load_state(body, kind, 3)
+    value := load_state(body, kind, 3)
     store_state body, kind, 3, 'zeroinitializer' if ownership(item) != NONE
     body.emit "ret #{ir_type(item)} #{value}"
-  const state =
+  state :=
     value_field(IterType(item))
     value_field(test_type)
     value_field(bool_type)
     value_field(item)
-  const kind = define_kind(ir, "filter #{type_key(item)}", state, item, has_next, next)
+  kind := define_kind(ir, "filter #{type_key(item)}", state, item, has_next, next)
   emit_iter ir, kind, [source, test, 'false', 'zeroinitializer']
 
 # An owned array, Binary or Iter as an Iter to read from: an Iter of the array's or the Binary's
 # items, or the Iter itself, whose traversal starts here.
-export const emit_source_iter = (ir: IrBuilder, value: String, type: Type) ->
+export emit_source_iter := (ir: IrBuilder, value: String, type: Type) ->
   return emit_sequence_iter(ir, value, type) if is_one_of_kinds(type, [ARRAY, 'Binary'])
   emit_iter_start ir, value
   value
 
 # The methods of an Iter, has_next and next (see codegen builtins), which take over the object.
-export const call_has_next = (ir: IrBuilder, object: String) ->
+export call_has_next := (ir: IrBuilder, object: String) ->
   emit_mark_started ir, object
   consume ir, object, emit_has_next(ir, object)
 
-export const call_next = (ir: IrBuilder, object: String, type: Type, check: () -> void) ->
+export call_next := (ir: IrBuilder, object: String, type: Type, check: () -> void) ->
   emit_mark_started ir, object
   consume ir, object, emit_checked_next(ir, object, iterable_item(type)!, check)
 
-const consume = (ir: IrBuilder, object: String, result: String) ->
+consume := (ir: IrBuilder, object: String, result: String) ->
   emit_release ir, object
   result
 
 # A comprehension's Iter: the items of the source for which the guard, if any, gives true, mapped
 # by the element's function. The closures are owned, of functions of the item.
-export const emit_comprehension_iter = (
+export emit_comprehension_iter := (
   ir: IrBuilder, source: String, item: Type, guard: String?, element: String, element_type: Type
 ) ->
-  const kept = guard then emit_filter_iter(ir, source, guard, item) else source
+  kept := guard then emit_filter_iter(ir, source, guard, item) else source
   emit_map_iter ir, kept, element, element_type

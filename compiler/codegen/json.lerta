@@ -22,7 +22,7 @@ export struct Coder(program: ProgramWide, type: ObjectType, operand: String)
 # integer of another type goes through an Int (see json_write and json_read).
 export struct ScalarMethods(write: String, read: String, type: Type)
 
-export const SCALARS: Map<TypeKind, ScalarMethods> =
+export SCALARS: Map<TypeKind, ScalarMethods> =
   'UInt64': ScalarMethods(
     write: 'write_uint64'
     read: 'read_uint64'
@@ -35,30 +35,29 @@ export const SCALARS: Map<TypeKind, ScalarMethods> =
   'Binary': ScalarMethods(write: 'write_binary', read: 'read_binary', type: binary_type)
 
 # Whether the type is written and read inline rather than by a function of its own.
-export const is_inline = (type: Type) ->
+export is_inline := (type: Type) ->
   SCALARS.has(kind_of(type)) or is_integer(type) or type is EnumType or type is OptionalType
 
 # The arguments that give a method a field's name, as written and in camel case (see JsonKeys in
 # std:json).
-export const field_name_args = (ir: IrBuilder, name: String) ->
-  const as_written = shared_string_constant(ir, name)
+export field_name_args := (ir: IrBuilder, name: String) ->
+  as_written := shared_string_constant(ir, name)
   ["ptr #{as_written}", "ptr #{shared_string_constant(ir, camel_case(name))}"]
 
 # Calls the method of the writer or reader, of the result type, with the arguments after the
 # object; `unwind` runs if it throws.
-export const call_method = (
+export call_method := (
   ir: IrBuilder, coder: Coder, name: String, result: Type, args: String[], unwind: () -> void
 ) ->
-  const operands = ["ptr #{coder.operand}", args...].join(', ')
-  const call = "call #{ir_return_type(result)} #{method_symbol(coder.type, name)}(#{operands})"
-  const value =
-    returns_value(result) then ir.assign(call) else emit_valueless_call(ir, call, result)
+  operands := ["ptr #{coder.operand}", args...].join(', ')
+  call := "call #{ir_return_type(result)} #{method_symbol(coder.type, name)}(#{operands})"
+  value := returns_value(result) then ir.assign(call) else emit_valueless_call(ir, call, result)
   emit_check_with ir, unwind
   value
 
 # Calls the method, which gives no value, as call_method does.
-export const call_void_method = (
+export call_void_method := (
   ir: IrBuilder, coder: Coder, name: String, args: String[], unwind: () -> void
 ): void -> call_method(ir, coder, name, void_type, args, unwind)
 
-const returns_value = (result: Type) -> ir_return_type(result) != 'void'
+returns_value := (result: Type) -> ir_return_type(result) != 'void'

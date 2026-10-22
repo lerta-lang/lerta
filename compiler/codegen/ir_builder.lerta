@@ -5,7 +5,7 @@ import SourceLines, SourceScope from './source_lines'
 # A function or a global of a module.
 export struct Definition(symbol: String, text: String, declaration: String?)
 
-const LINKAGES = ['private ', 'internal ', 'external ', 'linkonce_odr ']
+LINKAGES := ['private ', 'internal ', 'external ', 'linkonce_odr ']
 
 export class IrModule
   # Quoted, the name of the Lerta module, or of the program's entry for all modules as one.
@@ -30,15 +30,15 @@ export class IrModule
   # The name `<prefix>.<n>` given to `key`, the same for the same key; `define` runs when the name
   # is first given, to define what it names.
   named = (key: String, prefix: String, define: (String, IrModule) -> void) ->
-    return existing if const existing = @names[key]
-    const name = "#{prefix}.#{@names.length}"
+    return existing if existing := @names[key]
+    name := "#{prefix}.#{@names.length}"
     @names[key] = name
     define name, @
     name
 
   # A new global symbol, `@<prefix>.<n>`.
   fresh_symbol = (prefix: String) ->
-    const symbol = "@#{prefix}.#{@symbol_count}"
+    symbol := "@#{prefix}.#{@symbol_count}"
     @symbol_count += 1
     symbol
 
@@ -50,13 +50,13 @@ export class IrModule
 
   # Declaring the same symbol again with the same text is harmless.
   declare = (symbol: String, declaration: String) ->
-    if const existing = @declarations[symbol]
+    if existing := @declarations[symbol]
       panic "conflicting declarations of #{symbol}" if existing != declaration
     @declarations[symbol] = declaration
 
   # Adds `@<prefix>.<n> = <definition>`, which gives its linkage, and returns the global's name.
   global = (prefix: String, definition: String) ->
-    const name = "@#{prefix}.#{@globals.length}"
+    name := "@#{prefix}.#{@globals.length}"
     @define_global name, definition
     name
 
@@ -66,16 +66,16 @@ export class IrModule
 
   # A constant of the IR type, of the linkage; without one, the other modules may use it.
   define_constant = (name: String, linkage: String, type: String, initial: String) ->
-    const declaration = linkage == '' then "#{name} = external constant #{type}"
-    const symbol = name
-    const text = "#{name} = #{linkage}constant #{type} #{initial}"
+    declaration := linkage == '' then "#{name} = external constant #{type}"
+    symbol := name
+    text := "#{name} = #{linkage}constant #{type} #{initial}"
     @globals.push Definition(symbol, text, declaration)
 
   # A global variable of the IR type, which other modules may use.
   define_variable = (name: String, type: String, initial: String) ->
-    const declaration = "#{name} = external global #{type}"
-    const symbol = name
-    const text = "#{name} = global #{type} #{initial}"
+    declaration := "#{name} = external global #{type}"
+    symbol := name
+    text := "#{name} = global #{type} #{initial}"
     @globals.push Definition(symbol, text, declaration)
 
   add_type = (name: String, body: String) -> @types[name] = "#{name} = type #{body}"
@@ -86,17 +86,17 @@ export class IrModule
 
   # As define_function, with the debug information of the function, `!<n>`, if it has some.
   define_function_in = (signature: String, body: String[], subprogram: String?) ->
-    const attributes = @function_attributes == '' then '' else ' #0'
-    const debug = subprogram then " !dbg #{subprogram}" else ''
-    const text = ["define #{signature}#{attributes}#{debug} {", body..., '}'].join("\n")
-    const has_linkage = LINKAGES.any((linkage) -> signature.starts_with(linkage))
-    const declaration = has_linkage then nil else "declare #{signature}"
-    const symbol = defined_symbol(signature)
+    attributes := @function_attributes == '' then '' else ' #0'
+    debug := subprogram then " !dbg #{subprogram}" else ''
+    text := ["define #{signature}#{attributes}#{debug} {", body..., '}'].join("\n")
+    has_linkage := LINKAGES.any((linkage) -> signature.starts_with(linkage))
+    declaration := has_linkage then nil else "declare #{signature}"
+    symbol := defined_symbol(signature)
     @functions.push Definition(symbol, text, declaration)
 
   # The module, with the declarations and the types that it takes from other modules.
   render = (imported_types: String[], imported_declarations: String[]) ->
-    const lines = [
+    lines := [
       "source_filename = #{@source_filename}"
       imported_types...
       @types.values().to_array()...
@@ -106,12 +106,12 @@ export class IrModule
       [definition.text for definition in @functions]...
     ]
     lines.push "attributes #0 = { #{@function_attributes} }" if @function_attributes != ''
-    lines.append source_lines.metadata() if const source_lines = @source_lines
+    lines.append source_lines.metadata() if source_lines := @source_lines
     "#{lines.join("\n")}\n"
 
 # The symbol that a function's signature defines: the first, after its result type and attributes.
-const defined_symbol = (signature: String) ->
-  const after_sigil = signature.split('@')[1]
+defined_symbol := (signature: String) ->
+  after_sigil := signature.split('@')[1]
   return "@#{after_sigil.split('(')[0]}" if not after_sigil.starts_with('"')
   "@\"#{after_sigil.split('"')[1]}\""
 
@@ -135,13 +135,13 @@ export class IrBuilder
 
   # Emits `%r<n> = <value>` and returns the register.
   assign = (value: String) ->
-    const register = @fresh_register()
+    register := @fresh_register()
     @assign_to register, value
     register
 
   # A register to be assigned later with `assign_to`, for `phi` operands defined further down.
   fresh_register = ->
-    const register = "%r#{@register_count}"
+    register := "%r#{@register_count}"
     @register_count += 1
     register
 
@@ -149,7 +149,7 @@ export class IrBuilder
 
   # A stack slot for a value of the IR type, valid in the whole function.
   alloca = (type: String) ->
-    const register = @fresh_register()
+    register := @fresh_register()
     @stack_slots.push "  #{register} = alloca #{type}"
     register
 
@@ -158,15 +158,15 @@ export class IrBuilder
   # `, !dbg !<n>`: where the instruction comes from, if the module has source lines and the
   # function a place in the source.
   debug_location = ->
-    const lines = @module.source_lines ? return ''
-    const scope = @scope ? return ''
-    const position = @location ? return ''
-    const subprogram = @subprogram ? lines.subprogram(scope, (@declared_at ? position).line)
+    lines := @module.source_lines ? return ''
+    scope := @scope ? return ''
+    position := @location ? return ''
+    subprogram := @subprogram ? lines.subprogram(scope, (@declared_at ? position).line)
     @subprogram = subprogram
     ", !dbg #{lines.location(subprogram, position)}"
 
   fresh_label = (prefix: String) ->
-    const label = "#{prefix}.#{@label_count}"
+    label := "#{prefix}.#{@label_count}"
     @label_count += 1
     label
 
@@ -179,24 +179,24 @@ export class IrBuilder
 
   # Adds the function `define <signature>`, holding everything emitted, to the module.
   finish = (signature: String) ->
-    const lines = ['entry:', @stack_slots..., @body...]
-    const subprogram = @subprogram ? return @module.define_function(signature, lines)
+    lines := ['entry:', @stack_slots..., @body...]
+    subprogram := @subprogram ? return @module.define_function(signature, lines)
     # Every instruction of a function that has debug information has a location, as LLVM requires
     # of its calls: those before the first position get the function's own.
-    const start = @module.source_lines!.start_of(subprogram)
-    const located = (line: String) ->
-      const is_instruction = line.starts_with('  ') and not line.contains('!dbg')
+    start := @module.source_lines!.start_of(subprogram)
+    located := (line: String) ->
+      is_instruction := line.starts_with('  ') and not line.contains('!dbg')
       is_instruction then "#{line}, !dbg #{start}" else line
     # A private function has no symbol, which dsymutil finds the function's debug information by:
     # an internal one does, and is the same otherwise.
-    const linked = signature.without_prefix('private ')
-    const kept = linked then "internal #{linked}" else signature
+    linked := signature.without_prefix('private ')
+    kept := linked then "internal #{linked}" else signature
     @module.define_function_in kept, [located(line) for line in lines], subprogram
 
 # Emits `body` to run only where the condition holds.
-export const emit_when = (ir: IrBuilder, condition: String, body: () -> void) ->
-  const then_label = ir.fresh_label('branch.then')
-  const end_label = ir.fresh_label('branch.end')
+export emit_when := (ir: IrBuilder, condition: String, body: () -> void) ->
+  then_label := ir.fresh_label('branch.then')
+  end_label := ir.fresh_label('branch.end')
   ir.emit "br i1 #{condition}, label %#{then_label}, label %#{end_label}"
   ir.start_block then_label
   body()
@@ -204,12 +204,12 @@ export const emit_when = (ir: IrBuilder, condition: String, body: () -> void) ->
   ir.start_block end_label
 
 # Emits `then_body` to run where the condition holds, and `else_body` elsewhere.
-export const emit_if_else = (
+export emit_if_else := (
   ir: IrBuilder, condition: String, then_body: () -> void, else_body: () -> void
 ) ->
-  const then_label = ir.fresh_label('branch.then')
-  const else_label = ir.fresh_label('branch.else')
-  const end_label = ir.fresh_label('branch.end')
+  then_label := ir.fresh_label('branch.then')
+  else_label := ir.fresh_label('branch.else')
+  end_label := ir.fresh_label('branch.end')
   ir.emit "br i1 #{condition}, label %#{then_label}, label %#{else_label}"
   ir.start_block then_label
   then_body()
@@ -221,29 +221,29 @@ export const emit_if_else = (
 
 # A value of the IR type: `then_value` where the condition holds, computed only there, and
 # `otherwise` elsewhere.
-export const emit_branch = (
+export emit_branch := (
   ir: IrBuilder, type: String, condition: String, then_value: () -> String, otherwise: String
 ) ->
-  const from = ir.current_block
+  from := ir.current_block
   var value = ''
   var value_block = ''
-  const compute = ->
+  compute := ->
     value = then_value()
     value_block = ir.current_block
   emit_when ir, condition, compute
   ir.assign "phi #{type} [ #{otherwise}, %#{from} ], [ #{value}, %#{value_block} ]"
 
 # Runs `body` with each index from 0 up to `count`, as an i64.
-export const emit_count_up = (ir: IrBuilder, count: String, body: (String) -> void) ->
-  const counter = ir.alloca('i64')
+export emit_count_up := (ir: IrBuilder, count: String, body: (String) -> void) ->
+  counter := ir.alloca('i64')
   ir.emit "store i64 0, ptr #{counter}"
-  const loop = ir.fresh_label('count')
-  const step = ir.fresh_label('count.step')
-  const done = ir.fresh_label('count.done')
+  loop := ir.fresh_label('count')
+  step := ir.fresh_label('count.step')
+  done := ir.fresh_label('count.done')
   ir.emit "br label %#{loop}"
   ir.start_block loop
-  const index = ir.assign("load i64, ptr #{counter}")
-  const is_done = ir.assign("icmp eq i64 #{index}, #{count}")
+  index := ir.assign("load i64, ptr #{counter}")
+  is_done := ir.assign("icmp eq i64 #{index}, #{count}")
   ir.emit "br i1 #{is_done}, label %#{done}, label %#{step}"
   ir.start_block step
   body index
@@ -252,10 +252,10 @@ export const emit_count_up = (ir: IrBuilder, count: String, body: (String) -> vo
   ir.start_block done
 
 # Runs `body` while `more`, which it emits at the start of each turn, gives true.
-export const emit_while = (ir: IrBuilder, more: () -> String, body: () -> void) ->
-  const loop = ir.fresh_label('while')
-  const step = ir.fresh_label('while.step')
-  const done = ir.fresh_label('while.done')
+export emit_while := (ir: IrBuilder, more: () -> String, body: () -> void) ->
+  loop := ir.fresh_label('while')
+  step := ir.fresh_label('while.step')
+  done := ir.fresh_label('while.done')
   ir.emit "br label %#{loop}"
   ir.start_block loop
   ir.emit "br i1 #{more()}, label %#{step}, label %#{done}"

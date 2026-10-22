@@ -18,25 +18,25 @@ import
   string_type, Type, TypeKind
 from '../types'
 
-const NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS...]
+NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS...]
 
-const EQUALITY_KINDS: TypeKind[] = [NUMERIC_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
+EQUALITY_KINDS: TypeKind[] = [NUMERIC_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
 
 # The arithmetic and bitwise operators, which give a value of their operands' type, as a comparison
 # does not.
-const NUMERIC_OPERATORS = ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>']
+NUMERIC_OPERATORS := ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>']
 
-export const is_numeric_operator = (operator: String) -> NUMERIC_OPERATORS.contains(operator)
+export is_numeric_operator := (operator: String) -> NUMERIC_OPERATORS.contains(operator)
 
 # The methods that the arithmetic and bitwise operators call on values of the types that they do
 # not apply to otherwise, `a + b` as `a.add(b)`, as prefix `-` calls `neg` (see Add and the like
 # in std:builtins).
-export const OPERATOR_METHODS =
+export OPERATOR_METHODS :=
   '+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'rem', '&': 'bit_and', '|': 'bit_or',
   '^': 'bit_xor', '<<': 'shl', '>>': 'shr'
 
 # The operator whose method has the name, as `+` that of `add`, or nil.
-export const operator_of_method = (name: String) ->
+export operator_of_method := (name: String) ->
   for (operator, method) in OPERATOR_METHODS.entries()
     return operator if method == name
   nil
@@ -45,70 +45,69 @@ export const operator_of_method = (name: String) ->
 # written as `written`, does not apply to otherwise, with the arguments; a call recorded in the
 # facts, which codegen generates instead of the operation (see operator_calls). Nil if the type has
 # no such member, which is an error for a class or struct.
-export const type_of_operator_call = (
+export type_of_operator_call := (
   body: Body, operation: BinaryOperation | UnaryOperation | Assignment, written: String,
   object: Expression, object_type: Type, name: String, args: Expression[]
 ): Type? ->
-  const at = operation.position
-  const method_name = Identifier(name: name, position: at)
+  at := operation.position
+  method_name := Identifier(name: name, position: at)
   if member_type_by_name(body, object_type, method_name) == nil
     return nil if object_type is not ObjectType
-    const message = "#{format_type(object_type)} has no #{name}, by which #{written} applies"
+    message := "#{format_type(object_type)} has no #{name}, by which #{written} applies"
     fail body.program, object.position, message
-  const member = Member(object: object, name: method_name, position: at)
-  const call = Call(callee: member, args: args, named_args: [], type_args: [], position: at)
+  member := Member(object: object, name: method_name, position: at)
+  call := Call(callee: member, args: args, named_args: [], type_args: [], position: at)
   body.facts.operator_calls[operation] = call
   type_of body, call
 
-const share_a_class = (a: Type, b: Type) ->
-  const others = members_of(b)
+share_a_class := (a: Type, b: Type) ->
+  others := members_of(b)
   members_of(a).any((member) -> others.any((other) -> same_type(member, other)))
 
 # Lists kinds for a message, such as "Int or Byte".
-export const describe_kinds = (kinds: TypeKind[]) ->
-  const integers = INTEGER_KINDS.all((kind) -> kinds.contains(kind))
-  const others =
+export describe_kinds := (kinds: TypeKind[]) ->
+  integers := INTEGER_KINDS.all((kind) -> kinds.contains(kind))
+  others :=
     [kind.to_string() for kind in kinds when not (integers and INTEGER_KINDS.contains(kind))]
   # All the integer types are named as one, first.
-  const names = integers then ['an integer type', others...] else others
+  names := integers then ['an integer type', others...] else others
   return names[0] if names.length == 1
   "#{all_but_last(names).join(', ')} or #{names.last()!}"
 
 # The expected type, or that inside an expected optional type, if it is of one of the kinds, as a
 # hint for the operands: `1 + 2` is a Float where a `Float?` is expected.
-const hint_of = (expected: Type?, kinds: TypeKind[]) ->
-  const given = expected ? return nil
-  const type = inner_of(given)
+hint_of := (expected: Type?, kinds: TypeKind[]) ->
+  given := expected ? return nil
+  type := inner_of(given)
   is_one_of_kinds(type, kinds) then type
 
-export const type_of_unary = (body: Body, unary: UnaryOperation, expected: Type?): Type ->
+export type_of_unary := (body: Body, unary: UnaryOperation, expected: Type?): Type ->
   if unary.operator == 'not'
     expect_condition body, unary.operand
     return bool_type
-  const type = type_of(body, unary.operand, hint_of(expected, SIGNED_KINDS))
+  type := type_of(body, unary.operand, hint_of(expected, SIGNED_KINDS))
   if not is_one_of_kinds(type, SIGNED_KINDS)
-    const operand = unary.operand
-    if const result = type_of_operator_call(body, unary, '-', operand, type, 'neg', [])
-      return result
-    const message = "expected #{describe_kinds(SIGNED_KINDS)}, got #{format_type(type)}"
+    operand := unary.operand
+    return result if result := type_of_operator_call(body, unary, '-', operand, type, 'neg', [])
+    message := "expected #{describe_kinds(SIGNED_KINDS)}, got #{format_type(type)}"
     fail body.program, unary.operand.position, message
   type
 
 # The types that prefix `-` takes: not an unsigned one, whose negation throws unless it is 0.
-export const SIGNED_KINDS: TypeKind[] = [SIGNED_INTEGER_KINDS..., FLOAT_KINDS...]
+export SIGNED_KINDS: TypeKind[] = [SIGNED_INTEGER_KINDS..., FLOAT_KINDS...]
 
-const type_of_nil_test = (body: Body, binary: BinaryOperation) ->
-  const left_is_nil = binary.left is NilLiteral
+type_of_nil_test := (body: Body, binary: BinaryOperation) ->
+  left_is_nil := binary.left is NilLiteral
   type_of body, left_is_nil then binary.left else binary.right
   expect_optional body, left_is_nil then binary.right else binary.left
   bool_type
 
-export const type_of_coalesce = (body: Body, coalesce: Coalesce) ->
-  const inner = expect_optional(body, coalesce.value)
+export type_of_coalesce := (body: Body, coalesce: Coalesce) ->
+  inner := expect_optional(body, coalesce.value)
   expect_type body, coalesce.fallback, inner
   inner
 
-export const operand_kinds = (operator: String): TypeKind[] ->
+export operand_kinds := (operator: String): TypeKind[] ->
   case operator
     when '+' then [NUMERIC_KINDS..., 'String', 'Binary']
     when '%', '&', '|', '^', '<<', '>>' then INTEGER_KINDS
@@ -117,40 +116,39 @@ export const operand_kinds = (operator: String): TypeKind[] ->
     else NUMERIC_KINDS
 
 # An arithmetic or bitwise operator passes the expected type to its operands; a comparison's operands have their own.
-export const type_of_binary = (body: Body, binary: BinaryOperation, expected: Type?): Type ->
-  const operator = binary.operator
+export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?): Type ->
+  operator := binary.operator
   if operator == 'and' or operator == 'or'
     expect_condition body, binary.left
     where_right_operand body, binary, -> expect_condition(body, binary.right)
     return bool_type
   return type_of_nil_test(body, binary) if is_nil_test(binary)
   if operator == '==' or operator == '!='
-    const reject = (type: Type) -> "cannot compare values of type #{format_type(type)}"
+    reject := (type: Type) -> "cannot compare values of type #{format_type(type)}"
     type_of_operands body, binary, nil, EQUALITY_KINDS, reject
     return bool_type
-  const allowed = operand_kinds(operator)
-  const reject = (type: Type) -> "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
+  allowed := operand_kinds(operator)
+  reject := (type: Type) -> "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if not is_numeric_operator(operator)
-    const type = type_of_operands(body, binary, nil, allowed, reject)
+    type := type_of_operands(body, binary, nil, allowed, reject)
     order_by_compare body, binary if is_kind(type, 'String')
     return bool_type
   type_of_operands body, binary, hint_of(expected, allowed), allowed, reject
 
-const type_of_operands = (
+type_of_operands := (
   body: Body, binary: BinaryOperation, expected: Type?, allowed_kinds: TypeKind[],
   reject: (Type) -> String
 ) ->
-  const { left, right } = binary
-  const takes_context = (operand: Expression) ->
-    is_contextual(operand) or may_name_member(body, operand)
-  const decides_more = (operand: Expression, than: Expression) ->
+  { left, right } := binary
+  takes_context := (operand: Expression) -> is_contextual(operand) or may_name_member(body, operand)
+  decides_more := (operand: Expression, than: Expression) ->
     not takes_context(operand) or (holds_float_literal(operand) and not holds_float_literal(than))
-  const right_first = takes_context(left) and decides_more(right, left)
-  const first = right_first then right else left
-  const second = right_first then left else right
-  const type = type_of(body, first, expected)
-  const program = body.program
-  const operator = binary.operator
+  right_first := takes_context(left) and decides_more(right, left)
+  first := right_first then right else left
+  second := right_first then left else right
+  type := type_of(body, first, expected)
+  program := body.program
+  operator := binary.operator
   # A string literal on the left of a Char, which no Char's method takes, is the String it appends to.
   if right_first and operator == '+' and is_kind(type, 'Char') and second is StringLiteral
     expect_type body, second, string_type
@@ -159,24 +157,23 @@ const type_of_operands = (
   # An operator on a value of a type it does not apply to calls the type's method, which is that of
   # its left operand.
   if is_numeric_operator(operator) and not is_one_of_kinds(type, allowed_kinds)
-    const name = OPERATOR_METHODS[operator]!
+    name := OPERATOR_METHODS[operator]!
     if right_first
-      const has_method =
+      has_method :=
         member_type_by_name(body, type, Identifier(name: name, position: first.position)) != nil
       if has_method or type is ObjectType
-        const message =
-          "#{operator} calls the #{name} of its left operand, not of #{format_type(type)}"
+        message := "#{operator} calls the #{name} of its left operand, not of #{format_type(type)}"
         fail program, first.position, message
     else
-      const call = -> type_of_operator_call(body, binary, operator, left, type, name, [right])
-      return result if const result = call()
-  const is_equality = binary.operator == '==' or binary.operator == '!='
-  const is_order = not is_equality and not is_numeric_operator(binary.operator)
-  const inner = is_equality then inner_of(type) else type
-  const by_contents = is_equality and compares_by_contents(program, inner)
-  const is_identity = is_equality and is_identity_type(inner) and not by_contents
+      call := -> type_of_operator_call(body, binary, operator, left, type, name, [right])
+      return result if result := call()
+  is_equality := binary.operator == '==' or binary.operator == '!='
+  is_order := not is_equality and not is_numeric_operator(binary.operator)
+  inner := is_equality then inner_of(type) else type
+  by_contents := is_equality and compares_by_contents(program, inner)
+  is_identity := is_equality and is_identity_type(inner) and not by_contents
   return type_of_identity_operand(body, second, type) if is_identity
-  const is_allowed =
+  is_allowed :=
     case
       when by_contents then is_equatable(program, inner, first.position)
       # `<` and the like of a class or struct compare by its compare.
@@ -195,9 +192,8 @@ const type_of_operands = (
         "#{format_type(type)} has no compare, by which #{binary.operator} orders"
   fail body.program, first.position, reject(type) if not is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
-  const second_type = type_of(body, second, type)
-  const is_unit =
-    not right_first and operator == '+' and appends_unit(body, second, type, second_type)
+  second_type := type_of(body, second, type)
+  is_unit := not right_first and operator == '+' and appends_unit(body, second, type, second_type)
   return type if is_unit
   reject_text_and_bytes body, second, type, second_type
   require_type body, second, second_type, type
@@ -205,51 +201,50 @@ const type_of_operands = (
 
 # `<` and the like of two Strings test the Ordering of the left one's compare, by the call of it,
 # which the facts record for codegen to generate in place of the operation (see order_calls).
-const order_by_compare = (body: Body, binary: BinaryOperation) ->
-  const at = binary.position
-  const callee =
+order_by_compare := (body: Body, binary: BinaryOperation) ->
+  at := binary.position
+  callee :=
     Member(object: binary.left, name: Identifier(name: 'compare', position: at), position: at)
-  const call =
-    Call(callee: callee, args: [binary.right], named_args: [], type_args: [], position: at)
+  call := Call(callee: callee, args: [binary.right], named_args: [], type_args: [], position: at)
   body.facts.order_calls[binary] = call
   type_of body, call
 
 # `+` appends a Char to a String, as the text of the call of its `to_string()`, which the facts
 # record for codegen to generate in its place (see appended_texts), and a Byte to a Binary.
-export const appends_unit = (body: Body, value: Expression, target: Type, value_type: Type) ->
+export appends_unit := (body: Body, value: Expression, target: Type, value_type: Type) ->
   if is_kind(target, 'String') and is_kind(value_type, 'Char')
-    const at = value.position
-    const name = Identifier(name: 'to_string', position: at)
-    const callee = Member(object: value, name: name, position: at)
-    const call = Call(callee: callee, args: [], named_args: [], type_args: [], position: at)
+    at := value.position
+    name := Identifier(name: 'to_string', position: at)
+    callee := Member(object: value, name: name, position: at)
+    call := Call(callee: callee, args: [], named_args: [], type_args: [], position: at)
     body.facts.appended_texts[value] = call
     type_of body, call
     return true
   is_kind(target, 'Binary') and is_kind(value_type, 'Byte')
 
 # `+` joins two Strings or two Binarys, but not one of each, whose bytes `.binary` gives.
-export const reject_text_and_bytes = (body: Body, operand: Expression, first: Type, second: Type) ->
-  const kinds: TypeKind[] = ['String', 'Binary']
-  const mixed = is_one_of_kinds(first, kinds) and is_one_of_kinds(second, kinds)
+export reject_text_and_bytes := (body: Body, operand: Expression, first: Type, second: Type) ->
+  kinds: TypeKind[] = ['String', 'Binary']
+  mixed := is_one_of_kinds(first, kinds) and is_one_of_kinds(second, kinds)
   return if not mixed or is_kind(first, 'String') == is_kind(second, 'String')
-  const message = "cannot join a String and a Binary: write `.binary` for the String's bytes"
+  message := "cannot join a String and a Binary: write `.binary` for the String's bytes"
   fail body.program, operand.position, message
 
-const type_of_equality_operand = (
+type_of_equality_operand := (
   body: Body, first: Expression, second: Expression, first_type: Type
 ): Type ->
-  const second_type = type_of(body, second, inner_of(first_type))
+  second_type := type_of(body, second, inner_of(first_type))
   if second_type is OptionalType and same_type(second_type.inner, first_type)
     require_type body, first, first_type, second_type
     return second_type
   require_type body, second, second_type, first_type
   first_type
 
-const type_of_identity_operand = (body: Body, second: Expression, first_type: Type) ->
-  const type = type_of(body, second)
-  const first_inner = inner_of(first_type)
-  const inner = inner_of(type)
+type_of_identity_operand := (body: Body, second: Expression, first_type: Type) ->
+  type := type_of(body, second)
+  first_inner := inner_of(first_type)
+  inner := inner_of(type)
   if not (is_identity_type(inner) and share_a_class(first_inner, inner))
-    const message = "cannot compare #{format_type(first_type)} with #{format_type(type)}"
+    message := "cannot compare #{format_type(first_type)} with #{format_type(type)}"
     fail body.program, second.position, message
   first_type

@@ -7,32 +7,32 @@ import CheckedError, throw_if from './runtime_errors'
 import IrBuilder, IrModule from './ir_builder'
 import emit_release_stored, ir_type, ownership, suffixed_symbol, top_level_symbol from './lerta_ir'
 
-export const define_top_level_globals = (ir_module: IrModule, module: Module, shared: Shared) ->
-  const globals: Map<String, TopLevelGlobal>
+export define_top_level_globals := (ir_module: IrModule, module: Module, shared: Shared) ->
+  globals: Map<String, TopLevelGlobal>
   for statement in module.program
-    const declaration = top_level_value(statement) ? continue
-    const name = declaration.name.name
-    const type = shared.facts.types[declaration.name]!
-    const pointer = top_level_symbol(module.symbol_name, name)
-    const flag = suffixed_symbol(pointer, 'set')
+    declaration := top_level_value(statement) ? continue
+    name := declaration.name.name
+    type := shared.facts.types[declaration.name]!
+    pointer := top_level_symbol(module.symbol_name, name)
+    flag := suffixed_symbol(pointer, 'set')
     ir_module.define_variable pointer, ir_type(type), 'zeroinitializer'
     ir_module.define_variable flag, 'i1', 'false'
     globals[name] = TopLevelGlobal(name, type, pointer, flag, is_var: declaration.mutable)
   globals
 
-export const emit_mark_initialized = (ir: IrBuilder, global: TopLevelGlobal) ->
+export emit_mark_initialized := (ir: IrBuilder, global: TopLevelGlobal) ->
   ir.emit "store i1 true, ptr #{global.flag}"
 
 # Throws an InitError unless the value has been initialized.
-export const emit_initialized_check = (g: Generator, global: TopLevelGlobal) ->
-  const is_set = g.ir.assign("load i1, ptr #{global.flag}")
-  const is_unset = g.ir.assign("xor i1 #{is_set}, true")
-  const message = "'#{global.name}' is used before it is initialized"
+export emit_initialized_check := (g: Generator, global: TopLevelGlobal) ->
+  is_set := g.ir.assign("load i1, ptr #{global.flag}")
+  is_unset := g.ir.assign("xor i1 #{is_set}, true")
+  message := "'#{global.name}' is used before it is initialized"
   throw_if g, is_unset, CheckedError(message, type_name: 'InitError')
 
 # At the end of the program, the references the values hold. Each value is unset first, so that a
 # deinit run by the releases fails the initialized check instead of reading a released value.
-export const emit_release_globals = (ir: IrBuilder, globals: TopLevelGlobal[]) ->
+export emit_release_globals := (ir: IrBuilder, globals: TopLevelGlobal[]) ->
   for global in globals
     ir.emit "store i1 false, ptr #{global.flag}"
     emit_release_stored ir, global.pointer, ir_type(global.type), ownership(global.type)
