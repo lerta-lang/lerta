@@ -67,7 +67,7 @@ checks that each file is in the [style](style.md).
 - **Code kept as written.** A comment `# fmt: skip` that ends a line keeps that line as it is written, and one on a line of its own the next line of code; the lines from a comment `# fmt: off` up to a comment `# fmt: on`, or to the end of the file, are kept likewise. A line of a statement on lines of its own keeps all the lines of the statement, or of the innermost one, where statements in its blocks hold it: a line of an `if`'s block keeps that statement alone, but one of a list keeps all of it, and so does an arm on the line of its `when` keep the whole `case`, and a member the whole class. The statement is printed as it is written, with its comments, its types and the enums of its members, and with the imports that it uses, but indented as its block is, and its lines after the first as much deeper or shallower than the first as they were, but none shallower than the first column. The blank lines and the comments between such statements are printed as elsewhere. A file in which `# fmt: off` comes before the code, and no `# fmt: on` after it, is not even parsed: it is left as it is written, blank lines and comments too, and reported in nothing, even if it does not parse.
 
   ```
-  const identity = [  # fmt: skip
+  identity := [  # fmt: skip
     1, 0
     0, 1
   ]

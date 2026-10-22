@@ -112,16 +112,16 @@ const command_checks =
       const dir = await tree(
         'programs'
         {
-          'lib.lerta': "export const one = (): Int -> 1\n"
-          'main.lerta': "import one from './lib'\nconst two: Int = one() + 1\nprint two\n"
-          'broken.lerta': "import one from './lib'\nconst three: String = one()\n"
+          'lib.lerta': "export one := (): Int -> 1\n"
+          'main.lerta': "import one from './lib'\ntwo: Int = one() + 1\nprint two\n"
+          'broken.lerta': "import one from './lib'\nthree: String = one()\n"
         }
       )
       const held = await fmt(dir, ['.'])
       const alone = await fmt(dir, ['broken.lerta', 'lib.lerta'])
       [
-        expect_run(held, type_report('./lib.lerta:1:20') + type_report('./main.lerta:2:10'), 1)...
-        expect_run(alone, type_report('lib.lerta:1:20'), 1, 'stderr alone')...
+        expect_run(held, type_report('./lib.lerta:1:15') + type_report('./main.lerta:2:4'), 1)...
+        expect_run(alone, type_report('lib.lerta:1:15'), 1, 'stderr alone')...
       ]
   )
   Check(
@@ -130,17 +130,17 @@ const command_checks =
       const dir = await tree(
         'cycles'
         {
-          'a.lerta': "import b from './b'\nexport const a = (): Int -> 1\nprint b()\n"
-          'b.lerta': "import a from './a'\nexport const b = (): Int -> a()\n"
+          'a.lerta': "import b from './b'\nexport a := (): Int -> 1\nprint b()\n"
+          'b.lerta': "import a from './a'\nexport b := (): Int -> a()\n"
           'c.lerta': "(\n"
-          'd.lerta': "import c from './c'\nconst d: Int = 1\nprint d\n"
+          'd.lerta': "import c from './c'\nd: Int = 1\nprint d\n"
         }
       )
       const result = await fmt(dir, ['a.lerta', './a.lerta', 'b.lerta', 'c.lerta', 'd.lerta'])
       const expected =
-        type_report('a.lerta:2:18')
-        type_report('./a.lerta:2:18')
-        type_report('b.lerta:2:18')
+        type_report('a.lerta:2:13')
+        type_report('./a.lerta:2:13')
+        type_report('b.lerta:2:13')
         "c.lerta:1:1: '(' is never closed\n"
       expect_run result, expected.join(''), 1
   )
@@ -150,14 +150,14 @@ const command_checks =
       const dir = await tree(
         'fix_program'
         {
-          'lib.lerta': "export const one = (): Int -> 1\n"
-          'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nconst out: Writer = stdout\nconst two: Int = one() + 1\nprint two\n"
+          'lib.lerta': "export one := (): Int -> 1\n"
+          'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nout: Writer = stdout\ntwo: Int = one() + 1\nprint two\n"
         }
       )
       const result = await fmt(dir, ['--fix', '.'])
       const expected =
-        'lib.lerta': "export const one = -> 1\n"
-        'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nconst out: Writer = stdout\nconst two = one() + 1\nprint two\n"
+        'lib.lerta': "export one := -> 1\n"
+        'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nout: Writer = stdout\ntwo := one() + 1\nprint two\n"
       [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
   )
   Check(
@@ -166,28 +166,28 @@ const command_checks =
       const dir = await tree(
         'members'
         {
-          'kinds.lerta': "export enum Kind\n  A\n  B\n\nexport struct Field(name: String, kind: Kind)\n\nexport const count = (kinds: Kind...) -> kinds.length\n\nexport const pick = (n: Int, options: { kind: Kind }) -> options.kind\n"
-          'made.lerta': "import Field, Kind from './kinds'\n\nexport const made = Field(name: 'a', kind: Kind.A)\n"
-          'named.lerta': "import Field from './kinds'\nimport Kind from './kinds'\n\nconst name = 'b'\nexport const named = Field(name, kind: Kind.B)\n"
-          'counted.lerta': "import count from './kinds'\nimport Kind from './kinds'\n\nexport const counted = count(Kind.A, Kind.A)\n"
-          'picked.lerta': "import Kind, pick from './kinds'\n\nexport const picked = pick(1, kind: Kind.A)\n"
-          'test.lerta': "import Kind from './kinds'\n\nexport const is_b = (kind: Kind) -> kind == Kind.B\n"
-          'unused.lerta': "import Kind from './kinds'\n\nexport const one = 1\n"
-          'typed.lerta': "import Kind, pick from './kinds'\n\nexport const typed = (n: Int) ->\n  const kind: Kind = pick(n, kind: A)\n  kind\n"
-          'parsed.lerta': "import Kind from './kinds'\n\nexport const parsed = Kind.parse('A')\n"
+          'kinds.lerta': "export enum Kind\n  A\n  B\n\nexport struct Field(name: String, kind: Kind)\n\nexport count := (kinds: Kind...) -> kinds.length\n\nexport pick := (n: Int, options: { kind: Kind }) -> options.kind\n"
+          'made.lerta': "import Field, Kind from './kinds'\n\nexport made := Field(name: 'a', kind: Kind.A)\n"
+          'named.lerta': "import Field from './kinds'\nimport Kind from './kinds'\n\nname := 'b'\nexport named := Field(name, kind: Kind.B)\n"
+          'counted.lerta': "import count from './kinds'\nimport Kind from './kinds'\n\nexport counted := count(Kind.A, Kind.A)\n"
+          'picked.lerta': "import Kind, pick from './kinds'\n\nexport picked := pick(1, kind: Kind.A)\n"
+          'test.lerta': "import Kind from './kinds'\n\nexport is_b := (kind: Kind) -> kind == Kind.B\n"
+          'unused.lerta': "import Kind from './kinds'\n\nexport one := 1\n"
+          'typed.lerta': "import Kind, pick from './kinds'\n\nexport typed := (n: Int) ->\n  kind: Kind = pick(n, kind: A)\n  kind\n"
+          'parsed.lerta': "import Kind from './kinds'\n\nexport parsed := Kind.parse('A')\n"
           'main.lerta': "import counted from './counted'\nimport made from './made'\nimport named from './named'\nimport picked from './picked'\nimport is_b from './test'\nimport one from './unused'\nimport typed from './typed'\nimport parsed from './parsed'\n\nprint is_b(made.kind).to_string()\nprint counted\nprint is_b(picked).to_string()\nprint named.name\nprint one\nprint is_b(typed(1)).to_string()\nprint parsed == nil\n"
         }
       )
       const result = await fmt(dir, ['--fix', '.'])
       const expected =
-        'made.lerta': "import Field from './kinds'\n\nexport const made = Field(name: 'a', kind: A)\n"
-        'named.lerta': "import Field from './kinds'\n\nconst name = 'b'\nexport const named = Field(name, kind: B)\n"
-        'counted.lerta': "import count from './kinds'\n\nexport const counted = count(A, A)\n"
-        'picked.lerta': "import pick from './kinds'\n\nexport const picked = pick(1, kind: A)\n"
-        'test.lerta': "import Kind from './kinds'\n\nexport const is_b = (kind: Kind) -> kind == B\n"
-        'unused.lerta': "import Kind from './kinds'\n\nexport const one = 1\n"
-        'typed.lerta': "import pick from './kinds'\n\nexport const typed = (n: Int) ->\n  const kind = pick(n, kind: A)\n  kind\n"
-        'parsed.lerta': "import Kind from './kinds'\n\nexport const parsed = Kind.parse('A')\n"
+        'made.lerta': "import Field from './kinds'\n\nexport made := Field(name: 'a', kind: A)\n"
+        'named.lerta': "import Field from './kinds'\n\nname := 'b'\nexport named := Field(name, kind: B)\n"
+        'counted.lerta': "import count from './kinds'\n\nexport counted := count(A, A)\n"
+        'picked.lerta': "import pick from './kinds'\n\nexport picked := pick(1, kind: A)\n"
+        'test.lerta': "import Kind from './kinds'\n\nexport is_b := (kind: Kind) -> kind == B\n"
+        'unused.lerta': "import Kind from './kinds'\n\nexport one := 1\n"
+        'typed.lerta': "import pick from './kinds'\n\nexport typed := (n: Int) ->\n  kind := pick(n, kind: A)\n  kind\n"
+        'parsed.lerta': "import Kind from './kinds'\n\nexport parsed := Kind.parse('A')\n"
       [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
   )
   Check(
@@ -197,13 +197,13 @@ const command_checks =
         'chain'
         {
           'a.lerta': "import b from './b'\nprint b()\n"
-          'b.lerta': "import c from './c'\nexport const b = (): Int -> c()\n"
-          'c.lerta': "export const c = (): Int -> 1\n"
+          'b.lerta': "import c from './c'\nexport b := (): Int -> c()\n"
+          'c.lerta': "export c := (): Int -> 1\n"
           'e.lerta': "import nope from './nope'\nimport c from './c'\nprint c()\n"
         }
       )
       const result = await fmt(dir, ['a.lerta', 'b.lerta', 'c.lerta', 'e.lerta'])
-      expect_run result, type_report('b.lerta:2:18') + type_report('c.lerta:1:18'), 1
+      expect_run result, type_report('b.lerta:2:13') + type_report('c.lerta:1:13'), 1
   )
   Check(
     name: 'lerta fmt --fix writes only the files that change, and fails on one that does not parse'

@@ -5,7 +5,7 @@ endif
 " When several matches start at the same position, the one defined last wins,
 " and keywords win over matches.
 
-syn match lertaOperator "\.\.\.\|->\|[=!<>+\-*/%]=\|[-+*/%<>=?!@|]"
+syn match lertaOperator "\.\.\.\|->\|[=!<>+\-*/%:]=\|[-+*/%<>=?!@|]"
 syn match lertaCall "\<[a-z_]\w*\ze("
 syn match lertaType "\<[A-Z]\w*\>"
 syn match lertaConstant "\<[A-Z][A-Z0-9_]\+\>"

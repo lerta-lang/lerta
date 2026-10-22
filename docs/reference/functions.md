@@ -1,12 +1,12 @@
 # Functions
 
 ```
-const gcd = (a: Int, b: Int): Int ->
+gcd := (a: Int, b: Int): Int ->
   return a if b == 0
   gcd b, a % b
 
-const square = (x: Int) -> x * x
-const greet = -> print('hello')
+square := (x: Int) -> x * x
+greet := -> print('hello')
 ```
 
 - A function is declared as a top-level `const` whose value is a [function literal](#function-literals) `(<parameters>): <return type> -> <body>`. One held by a local `const` is a [function value](#function-values) instead: unlike a top-level function, it cannot be used before its declaration, call itself or be generic.
@@ -27,11 +27,11 @@ const greet = -> print('hello')
 ## Function values
 
 ```
-const double = (x: Int) -> x * 2
-const square = (x: Int) -> x * x
-const apply = (f: (Int) -> Int, x: Int): Int -> f(x)
+double := (x: Int) -> x * 2
+square := (x: Int) -> x * x
+apply := (f: (Int) -> Int, x: Int): Int -> f(x)
 print apply(double, 4)
-const steps: ((Int) -> Int)[] = [double, square]
+steps: ((Int) -> Int)[] = [double, square]
 ```
 
 - A function is a value of the function type `(<parameter types>) -> <return type>`, such as `(Int, String) -> Bool` or `() -> void`. To make it optional, put it in parentheses: `((Int) -> Int)?`. As a function literal's return type, the `->` after it starts the body, so a function type there is written in parentheses, `(n: Int): ((Int) -> Int) -> (x) -> x + n`, and two or more types in parentheses are a [tuple](types.md#tuples), `(x: Int): (Int, Int) -> (x, x)`.
@@ -43,7 +43,7 @@ const steps: ((Int) -> Int)[] = [double, square]
 ## Function literals
 
 ```
-const make_adder = (n: Int): ((Int) -> Int) -> (x) -> x + n
+make_adder := (n: Int): ((Int) -> Int) -> (x) -> x + n
 print [1, 2, 3].map((x) -> x * x).to_array().length
 ```
 
@@ -57,7 +57,7 @@ print [1, 2, 3].map((x) -> x * x).to_array().length
 ## Functions that yield
 
 ```
-const countdown = (n: Int) ->
+countdown := (n: Int) ->
   var i = n
   while i > 0
     yield i
@@ -79,13 +79,13 @@ print x for x in countdown(3)
 ```
 import sleep from 'std:time'
 
-const fetch = (name: String) ->
+fetch := (name: String) ->
   await sleep(1)
   "#{name} fetched"
 
-const main = ->
-  const a = fetch('a')
-  const b = fetch('b')
+main := ->
+  a := fetch('a')
+  b := fetch('b')
   print "#{await a}, #{await b}"
 
 await main()
@@ -110,18 +110,18 @@ struct Point
   y: Int
   to_string = -> "(#{@x}, #{@y})"
 
-const first = <T>(xs: T[]): T -> xs[0]
-const show = <T: Stringable>(label: String, x: T) -> print("#{label}: #{x}")
-const empty = <T>(): T[] -> []
+first := <T>(xs: T[]): T -> xs[0]
+show := <T: Stringable>(label: String, x: T) -> print("#{label}: #{x}")
+empty := <T>(): T[] -> []
 
 print first(['a', 'b'])
 show 'point', Point(x: 1, y: 2)
-const xs = empty<String>()
+xs := empty<String>()
 ```
 
 - A top-level function may declare type parameters before its parameters: `<T, U>`, and so may a method of a class, struct or extend (see [generic methods](objects.md#extend)); a function literal elsewhere cannot so far. A type parameter cannot have the name of a type, builtin ones included, as `<Int>` would read as a function for `Int` alone.
 - `T: Shape` bounds a type parameter by an [interface](objects.md#interfaces): its type argument must satisfy it, with the extends in effect where the function is called. `Stringable` is a builtin one (see [Stringable](builtins.md#stringable)). The bound of a generic interface may name the type parameters, as in `<T, S: Source<T>>`; the type argument of `S` then gives `T` by its members, as a `Counter` whose `next_value` is of type `() -> Int` gives `T = Int`. A parameter of an interface type, `(s: Source<T>)` or `(s: Source<T>?)`, gives its type arguments so from the argument's type too, but not one in which the interface type is a part, as in `Source<T>[]`.
-- **Type arguments** are inferred from the arguments, matched against the parameters' types: an `Int[]` passed as a `T[]`, or an `Int?` as a `T?`, gives `T = Int`. They come, in this order, from the arguments that have a type of their own; from the type the call is expected to have (`const xs: String[] = copy([])`); from the literals whose type depends on what is expected of them (`[]`, `nil`, `1`, `'a'`, maps, anonymous structs and tuples), each checked against its parameter once the type arguments in it are known; and last from function literals, whose parameters may take the types the others give, even where the result's type is still to be inferred from them, as in `xs.map((x) -> x * 2)`. An argument for a parameter whose type names no type parameter takes that type as in any call, so that a member of an enum may stand alone there (`encode_json(value, CAMEL_CASE)`). The first type given decides a type argument, except that `X?` after `X` makes it `X?`; the others are checked against it: `pair(1, 'a')` is an error at `'a'`. `nil`, a `throw` and similar values give no type; a type argument that nothing gives must be written. Written type arguments come between the name and the parentheses, which are then required: `empty<String>()`, or for a [generic method](objects.md#extend) its own, `xs.map<String>(...)`.
+- **Type arguments** are inferred from the arguments, matched against the parameters' types: an `Int[]` passed as a `T[]`, or an `Int?` as a `T?`, gives `T = Int`. They come, in this order, from the arguments that have a type of their own; from the type the call is expected to have (`xs: String[] = copy([])`); from the literals whose type depends on what is expected of them (`[]`, `nil`, `1`, `'a'`, maps, anonymous structs and tuples), each checked against its parameter once the type arguments in it are known; and last from function literals, whose parameters may take the types the others give, even where the result's type is still to be inferred from them, as in `xs.map((x) -> x * 2)`. An argument for a parameter whose type names no type parameter takes that type as in any call, so that a member of an enum may stand alone there (`encode_json(value, CAMEL_CASE)`). The first type given decides a type argument, except that `X?` after `X` makes it `X?`; the others are checked against it: `pair(1, 'a')` is an error at `'a'`. `nil`, a `throw` and similar values give no type; a type argument that nothing gives must be written. Written type arguments come between the name and the parentheses, which are then required: `empty<String>()`, or for a [generic method](objects.md#extend) its own, `xs.map<String>(...)`.
 - The function is **checked per instance**, once for each distinct set of type arguments, with the type parameters standing for them, as C++ templates are: `x * 2` is accepted in `twice<Int>` and an error in `twice<String>`. An error in the body names the instance, as in `(in twice<String>)`. A bound is checked at the call, so an argument that does not satisfy it is an error there. An instance whose return type is written is checked once the calling module is, as a function is, so its body may use a top-level value declared after the call (which throws if it is not initialized when the body runs); one whose return type is inferred is checked at its first call. A generic function that is never called is not checked beyond parsing, so the names that only it uses are warned about as unused. A type argument may nest types at most 32 deep, as `Int[][]` nests 3: instances that call instances of ever deeper type arguments, as `f<T>` calling `f<T[]>`, would never end, which is an error, `'f' needs instances without end, each with type arguments nested deeper`. A generic function may have at most 1000 instances, which stops instances that each call more than one of deeper type arguments, as `f<T>` calling `f<T[]>` and `f<Map<String, T>>`, long before they nest too deep: more is an error, `'f' needs more than 1000 instances`.
 - Each instance is compiled once, as a function of its own (monomorphization). In its body, the methods of a type argument, and of the types it is made of (items, fields and so on), include those of the extends in effect where it is called.
 - The types that the type arguments make in the parameters and the result must be valid where the call is: `T[]` with `T = Int?`, an array that cannot hold its items, or `Map<K, V>` with a key type that a [map](types.md#map) cannot have, is an error at the call. A type parameter cannot stand for a union member so far. A generic function can be exported and imported. It takes no named arguments.

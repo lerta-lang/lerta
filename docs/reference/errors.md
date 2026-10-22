@@ -5,11 +5,11 @@
 ```
 struct NotFound: Error
 
-const find = (key: String) ->
+find := (key: String) ->
   throw NotFound(message: "no #{key}") if key != 'a'
   1
 
-const n =
+n :=
   try
     find 'b'
   catch e: NotFound
@@ -55,7 +55,7 @@ A panic prints its message and a newline to stderr, after flushing stdout, and a
 These apply when a value in statement position is not captured.
 
 - A literal, a name, an operator expression, a field or an index (`'a'`, `x`, `1 + 2`, `x == 1`, `p.x`, `xs[0]`) → error. An unused comparison often means a mistyped assignment.
-- A function value itself (`f` after `const f = () -> 1`) → error "function value is unused; to call it, write `f()`".
+- A function value itself (`f` after `f := () -> 1`) → error "function value is unused; to call it, write `f()`".
 - An [`Iter`](types.md#iter) (`xs.map(f)`) → error "an Iter does nothing until it is consumed".
 - A [`Promise`](functions.md#functions-that-await) (`fetch('a')`) → error "a Promise must be awaited".
 - A call, an `await`, or an expression with no value such as a `case` whose arms are calls to `void` functions → allowed.
@@ -69,7 +69,7 @@ A `const` or `var` that is never read (assigning to it does not count) produces 
 
 A function literal that captures `@`, stored where `@` holds it, produces a warning, since the object and the literal then hold each other and neither is ever freed ([objects](objects.md#classes-and-structs)). The warning suggests a [weak function literal](functions.md#function-literals), `weak -> ...`, which captures `@` weakly.
 
-- The literal captures `@` itself, or a `const` that holds `@`, as `const me = @`, not a weak one; a `var` that holds `@` may change, and is not seen.
+- The literal captures `@` itself, or a `const` that holds `@`, as `me := @`, not a weak one; a `var` that holds `@` may change, and is not seen.
 - The place is a field reached from `@`, as `@on_press` or `@child.f`, or an item of an array or a map so reached, set by assignment or by `push`, through `!` too; not through a weak field, which holds its object without keeping it.
 - The literal is the value stored, or a value that `?` or `then`/`else` gives, or an item, a field or a constructor argument of it.
-- Only a literal written in place is seen: one held by a local first, as `const g = -> @n` before `@f = g`, or given to a method, is not, and neither is a capture of a const of such a const.
+- Only a literal written in place is seen: one held by a local first, as `g := -> @n` before `@f = g`, or given to a method, is not, and neither is a capture of a const of such a const.

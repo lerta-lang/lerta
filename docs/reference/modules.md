@@ -27,8 +27,8 @@ export struct Circle(center: Point, radius: Int)
 
 export type Shape = Point | Circle
 
-export const origin = -> Point(x: 0, y: 0)
-export const unit = 1
+export origin := -> Point(x: 0, y: 0)
+export unit := 1
 ```
 
 - `export` before a top-level `const` (a function or a value), class, struct, enum, interface or type alias makes it importable. An imported value cannot be assigned, and is narrowed as a `const` is (see [control flow](control-flow.md#if-and-while)). An exported value is not warned about if its module does not use it (see [unused names](errors.md#unused-names)). Names are local to their module: other names cannot be imported, and different modules may use the same name. Classes, structs and enums of the same name in different modules are different types; where a message would not tell them apart, it names their modules.
@@ -81,8 +81,8 @@ export const unit = 1
 ```
 import decode_json, encode_json from 'std:json'
 
-const text = encode_json([1, 2])  # '[1,2]'
-const xs = decode_json<Int[]>(text)
+text := encode_json([1, 2])  # '[1,2]'
+xs := decode_json<Int[]>(text)
 ```
 
 | Name | |
@@ -149,8 +149,8 @@ A `Scanner` reads a `String` by code points, as a lexer does: it looks at the ne
 ```lerta
 import scan from 'std:scanner'
 
-const scanner = scan('width = 42')
-const name = scanner.take_while((c) -> c != ' ')
+scanner := scan('width = 42')
+name := scanner.take_while((c) -> c != ' ')
 scanner.take ' = '
 print "#{name}: #{scanner.rest()}"
 ```

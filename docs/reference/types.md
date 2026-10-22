@@ -26,8 +26,8 @@ The methods of the builtin types are listed in [builtins](builtins.md#methods-of
 ## Sized integers
 
 ```
-const flags: UInt16 = 0x8001
-const offset: Int32 = -4
+flags: UInt16 = 0x8001
+offset: Int32 = -4
 print (flags >> 15).to_int() + offset.to_int()
 ```
 
@@ -41,7 +41,7 @@ print (flags >> 15).to_int() + offset.to_int()
 ## Char
 
 ```
-const kana = (c: Char) -> c >= 'ぁ' and c <= 'ゖ' then c + 0x60 else c
+kana := (c: Char) -> c >= 'ぁ' and c <= 'ゖ' then c + 0x60 else c
 print [kana(c).to_string() for c in 'ひらがな'].join('')
 ```
 
@@ -57,7 +57,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 ## Float
 
 - `Float` is a 64-bit IEEE 754 double that is always finite: no `Float` is an infinity or NaN. An operation whose result would be one throws instead, so `==` holds for every value and its own copy, and `<` orders all values.
-- A literal has a fraction or an exponent, or both (`1.5`, `1e9`, `2.5e-3`; see [syntax](syntax.md)), and rounds to the nearest double. One too large to be finite is an error. **Where a `Float` or a `Float?` is expected, an integer literal is a `Float` too** (`const x: Float = 3`), as it becomes a `Byte` where one is expected (below), and a decimal one may then be beyond `Int`, rounding as a float literal does (`const x: Float = 18446744073709551616`). A hexadecimal one may not, as it stands for the bits of an `Int`.
+- A literal has a fraction or an exponent, or both (`1.5`, `1e9`, `2.5e-3`; see [syntax](syntax.md)), and rounds to the nearest double. One too large to be finite is an error. **Where a `Float` or a `Float?` is expected, an integer literal is a `Float` too** (`x: Float = 3`), as it becomes a `Byte` where one is expected (below), and a decimal one may then be beyond `Int`, rounding as a float literal does (`x: Float = 18446744073709551616`). A hexadecimal one may not, as it stands for the bits of an `Int`.
 - `+` `-` `*` `/` and prefix `-` follow IEEE 754. `/` throws `division by zero` when the divisor is 0, and the others `float overflow` when the result is too large to be finite. There is no `%`.
 - Comparisons and `==` follow IEEE 754 too: `-0.0 == 0.0`, and a map whose keys are `Float`s, or a set of them, holds them as one key, `0.0`. `0.1 + 0.2 == 0.3` is false, as the doubles nearest these values do not add up exactly.
 - `case` cannot branch on a `Float`, as an exact value of a `Float` is rarely what a branch means.
@@ -111,10 +111,10 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 ```
 var name: String?
 print name ? 'nobody'
-print n + 1 if const n = '42'.parse_int()
+print n + 1 if n := '42'.parse_int()
 ```
 
-- `T?` is a `T` or `nil`, where `T` is not itself optional: `T?` of an optional type, such as `Name?` after `type Name = String?`, is an error, since its nil would be ambiguous. A `T` or `nil` fits where a `T?` is expected. `nil` has no type of its own, so `const x = nil` needs a type (`const x: String? = nil`).
+- `T?` is a `T` or `nil`, where `T` is not itself optional: `T?` of an optional type, such as `Name?` after `type Name = String?`, is an error, since its nil would be ambiguous. A `T` or `nil` fits where a `T?` is expected. `nil` has no type of its own, so `x := nil` needs a type (`x: String? = nil`).
 - `x!` is `x` without nil; it throws `unwrapped nil` if `x` is nil.
 - `x?.name` is nil if `x` is nil, and otherwise `x.name` followed by the rest of the chain of `.`, calls, indexes and `!` after it, which is skipped as a whole: in `node?.name.binary.length`, a nil `node` gives nil. Its type is that of the chain, made optional. A member of the chain that may be nil takes its own `?.`: `node?.next?.name`. `x` is evaluated once, and must be optional. As a statement, `counter?.bump()` runs the chain only if `counter` is not nil.
 - `x ? fallback` is `x` without nil, or `fallback`, which has that type, if `x` is nil. The fallback is evaluated only then. `?` binds tighter than comparisons, so `ages[name] ? 0 > 18` compares the age, and weaker than ranges and arithmetic; `a ? b ? c` is `a ? (b ? c)`.
@@ -126,8 +126,8 @@ print n + 1 if const n = '42'.parse_int()
 ## Array
 
 ```
-const xs = [3, 1, 2]
-const names: String[] = []
+xs := [3, 1, 2]
+names: String[] = []
 names.push 'a'
 print xs[0] + xs.length
 ```
@@ -146,8 +146,8 @@ print xs[0] + xs.length
 ## Map
 
 ```
-const ages = { 'ann': 31, 'bob': 27 }
-const squares = Map<Int, Int>()
+ages := { 'ann': 31, 'bob': 27 }
+squares := Map<Int, Int>()
 squares[3] = 9
 print ages['ann'] ? 0
 ```
@@ -161,9 +161,9 @@ print ages['ann'] ? 0
 ## Set
 
 ```
-const seen = Set<String>()
+seen := Set<String>()
 seen.add 'a'
-const primes = Set([2, 3, 5])
+primes := Set([2, 3, 5])
 print primes.has(4)
 ```
 
@@ -176,9 +176,9 @@ print primes.has(4)
 ## Iter
 
 ```
-const squares = (x * x for x in 0...10 when x % 2 == 0)
+squares := (x * x for x in 0...10 when x % 2 == 0)
 print square for square in squares.take(3)
-const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
+shouts := ['hi', 'yo'].map((w) -> w + '!').to_array()
 ```
 
 - `Iter<T>` is a lazy sequence of items of type `T`, which can be any type with values, an optional one too. It computes an item only when asked for it, so nothing happens until it is consumed; a statement that only makes an `Iter` is an error (see [discarded values](errors.md#discarded-values)).
@@ -198,10 +198,10 @@ const shouts = ['hi', 'yo'].map((w) -> w + '!').to_array()
 - `it.has_next()` tells whether there is an item left, and `it.next()` gives it; past the end, `next` throws `next past the end of an Iter`. `it.iter()` gives the `Iter` itself, so that it is [Iterable](builtins.md#iterable).
 - **Iters written in Lerta.** A value of a type with `has_next(): Bool` and `next(): T` converts to an `Iter<T>` where one is expected, as a value converts to an [interface type](objects.md#interfaces) (so it must be a reference): the `Iter` gives the items that its `has_next` and `next` give. The state is typically a `var` that the two functions capture:
   ```
-  const countdown = (n: Int): Iter<Int> ->
+  countdown := (n: Int): Iter<Int> ->
     var i = n
-    const has_next = -> i > 0
-    const next = ->
+    has_next := -> i > 0
+    next := ->
       i -= 1
       i + 1
     { has_next, next }
@@ -230,7 +230,7 @@ type Expr = Num | Add | Mul
   ```
 - A member's value fits where the union is expected. A field that every member declares, with the same type in each, can be read from the union: `shape.name` reads the field of whichever member the value is, and `shape.area()` calls a field that holds a function. It can be assigned through the union, `shape.name = n` (and `+=` and so on), when every member is a class whose field is not `const`. A method that every member has, of the same type in each, can be called on the union, with all its arguments, when it is neither generic, nor of a generic type, nor of an extend of an interface: `value.to_string()` calls the method of whichever member the value is, so `print` and `"#{value}"` take a union of `Stringable` types. Other fields and methods cannot be used directly: branch on its type first.
 - `x is T` tells whether a union value holds a `T`; for an optional union value, whether it is not nil and holds a `T`. `x is not T` is `not (x is T)`. Like nil tests, it narrows a `const`, a parameter, a loop variable or a path of fields from one to `T` where it holds, and to the other members where it does not (see [control flow](control-flow.md#if-and-while)).
-- `x as T?` gives a union value as a `T` if it holds one, and nil otherwise; for an optional union value, nil gives nil. `x as T ? y`, with a space before `?`, is `(x as T?) ? y`: the value as a `T`, or `y`, which is evaluated only then (see [optional values](#optional-values)), and binds as the fallback of `?` does, or is another such cast: `x as T ? y as T ? z` is `x as T ? (y as T ? z)`. `x as T!` gives it as a `T`, and throws `failed cast` otherwise. `x as T` alone is an error, so that a cast shows where it is written whether it fails into nil, falls back or throws. To take a narrowed value under another name, write `if const c = x as Circle?`. `is` and `as` are not [keywords](syntax.md#operators), and do not chain with comparisons.
+- `x as T?` gives a union value as a `T` if it holds one, and nil otherwise; for an optional union value, nil gives nil. `x as T ? y`, with a space before `?`, is `(x as T?) ? y`: the value as a `T`, or `y`, which is evaluated only then (see [optional values](#optional-values)), and binds as the fallback of `?` does, or is another such cast: `x as T ? y as T ? z` is `x as T ? (y as T ? z)`. `x as T!` gives it as a `T`, and throws `failed cast` otherwise. `x as T` alone is an error, so that a cast shows where it is written whether it fails into nil, falls back or throws. To take a narrowed value under another name, write `if c := x as Circle?`. `is` and `as` are not [keywords](syntax.md#operators), and do not chain with comparisons.
 - There is no unchecked cast.
 - In `x is T`, `x as T?`, `x as T!` and the patterns of a `case`, `T` may also be a type alias of a union of some of the members: `x is T` then tells whether `x` holds one of them. For a narrowed local, `T` may be any of the members of the type it was declared with.
 
@@ -243,7 +243,7 @@ enum TokenKind
   '('
   '->'
 
-const kind: TokenKind = INTEGER
+kind: TokenKind = INTEGER
 print kind == TokenKind.IDENTIFIER
 print kind == '('
 ```
@@ -255,26 +255,26 @@ print kind == '('
 ## Anonymous structs
 
 ```
-const divide = (a: Int, b: Int): { quotient: Int, remainder: Int } ->
+divide := (a: Int, b: Int): { quotient: Int, remainder: Int } ->
   { quotient: a / b, remainder: a % b }
-const { quotient, remainder } = divide(17, 5)
+{ quotient, remainder } := divide(17, 5)
 ```
 
 - `{ x: 1, y: 'a' }` is a value of the anonymous struct type `{ x: Int, y: String }`; `{ x, y }` is short for `{ x: x, y: y }`. Where an anonymous struct type (or an optional one) is expected, each field the type has takes its type from it; the others, and all fields elsewhere, take the types of their values. A field cannot be nil alone. `?` after the type makes it optional: `{ a: Int }?`.
 - Two anonymous struct types are the same if their fields have the same names and types, in any order. An anonymous struct is a different type from any class or struct.
 - Its fields are read with `.` and cannot be changed. It is useful to return several values.
 - A call may give the last argument, when its parameter is of an anonymous struct type, as named arguments without `{}`, as for a [struct](functions.md): `draw('a', x: 1, y: 2)` is `draw('a', { x: 1, y: 2 })`. Named arguments come after the others, as in the construction of a class or struct.
-- `const { a, b } = value` (or `var`) declares `a` and `b` from the fields of those names of an anonymous struct, a class or a struct; the value is evaluated once. It must be on a line of its own.
+- `{ a, b } := value` (or `var { a, b } = value`) declares `a` and `b` from the fields of those names of an anonymous struct, a class or a struct; the value is evaluated once. It must be on a line of its own.
 
 ## Tuples
 
 ```
-const swap = (t: (String, Int)): (Int, String) ->
-  const (s, n) = t
+swap := (t: (String, Int)): (Int, String) ->
+  (s, n) := t
   (n, s)
 ```
 
 - `(1, 'a')` is a value of the tuple type `(Int, String)`, of two or more items. `(a)` is only parentheses. Where a tuple type of as many items (or an optional one) is expected, each item takes its type from it; elsewhere, the types of their values. An item cannot be nil alone. `?` after the type makes it optional: `(Int, String)?`.
 - Two tuple types are the same if their items have the same types in the same order.
-- Its items cannot be read by position: `const (a, b) = value` (or `var`) takes it apart, declaring a name for each item, so that each gets a name where it is used. The value must be a tuple of as many items; it is evaluated once, and `_` discards an item. It must be on a line of its own. A loop takes its items apart too (see [for](control-flow.md#for-and-ranges)).
+- Its items cannot be read by position: `(a, b) := value` (or `var (a, b) = value`) takes it apart, declaring a name for each item, so that each gets a name where it is used. The value must be a tuple of as many items; it is evaluated once, and `_` discards an item. It must be on a line of its own. A loop takes its items apart too (see [for](control-flow.md#for-and-ranges)).
 - Why tuples beside [anonymous structs](#anonymous-structs): a tuple's items are named by the code that uses it, as is fitting for what `zip` gives, and an anonymous struct's fields by the code that makes it, as for the several results of a function.

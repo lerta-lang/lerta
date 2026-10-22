@@ -11,7 +11,7 @@ struct Circle
   r: Float
   area = @r * @r * PI
 
-const eval = (e: Expr): Int ->
+eval := (e: Expr): Int ->
   case e
     when Num then e.value
     when Neg then -eval(e.operand)

@@ -10,8 +10,8 @@
 - `"""` string literals span lines. The opening `"""` ends its line, and the text is that of the lines after it, up to the closing `"""`, joined by line feeds. The closing `"""` may end the last line of the text, or stand on a line of its own after spaces, which keeps the line feed before it:
 
   ```
-  const name = 'app'
-  const usage = """
+  name := 'app'
+  usage := """
     Usage:
       build "#{name}"
     """
@@ -29,7 +29,7 @@
 ## Lines inside brackets
 
 ```
-const keywords = [
+keywords := [
   'const'
   'var', 'if',
   'else'
@@ -38,10 +38,10 @@ print add(
   1
   2
 )
-const total = (1 +
+total := (1 +
   2)
-const doubled = xs.map((x) ->
-  const y = x * 2
+doubled := xs.map((x) ->
+  y := x * 2
   y + 1
 )
 ```
@@ -54,7 +54,7 @@ const doubled = xs.map((x) ->
 ## Bracketless blocks
 
 ```
-const config =
+config :=
   name: 'lerta'
   targets:
     'linux'
@@ -62,33 +62,33 @@ const config =
 draw 'p'
   x: 10
   y: 20
-const total = sum
+total := sum
   1, 2
   3
 ```
 
-- After a trailing `=` (of a declaration, a destructuring one among them, an assignment or a field), a trailing `key:` or a `return`, an indented block on the next lines is a literal. Its items, one or more on each line separated by commas as inside brackets, decide its kind: all `name: value` make an anonymous struct, all `key: value` (a key that is not a name) a map, and all plain values an array. Mixing them is an error. A value may take the lines below, as an `if`, a `case` or a function literal does. A block of one plain value is that value itself, not an array of it, so that a value can start on the next line; an array of one item is written `[x]`.
+- After a trailing `=` or `:=` (of a declaration, a destructuring one among them, an assignment or a field), a trailing `key:` or a `return`, an indented block on the next lines is a literal. Its items, one or more on each line separated by commas as inside brackets, decide its kind: all `name: value` make an anonymous struct, all `key: value` (a key that is not a name) a map, and all plain values an array. Mixing them is an error. A value may take the lines below, as an `if`, a `case` or a function literal does. A block of one plain value is that value itself, not an array of it, so that a value can start on the next line; an array of one item is written `[x]`.
 - **Arguments in a block.** A callee, the name, `@name` or member of a [call without parentheses](#calls), or a call, followed by an indented block, gives the block as the call's arguments, after those on its line: `sum` above is `sum(1, 2, 3)`, and `draw 'p'` is `draw('p', x: 10, y: 20)`. It is written as a statement, or as a whole value where a block literal may be, after `=`, `key:` or a `return`, and as the operand of `throw` or `yield`; a callee inside an operation, as in `1 + f` or `await f`, takes no block. Its items are separated as a literal's are, with the positional arguments before the named ones (`name: value`, see [anonymous structs](types.md#anonymous-structs)), and `xs...` a spread; a key that is not a name is an error. A positional item is an expression, as on the line, that may take a block of arguments of its own and the member lines below it; an `if` is not one, but `c then a else b` is. Named arguments are all on the line or all in the block. An array inside an array cannot be written without brackets.
 
 ## Declarations and assignment
 
-- `const name = value` declares a name that cannot be reassigned; `var name = value` one that can. The type is the type of the value, or the one written after the name (`var xs: Int[] = []`). A `var` of an optional type may leave out its value, which is then nil: `var found: String?`. A `const` variable (not a field) whose type is written as an array, `Map<K, V>` or `Set<T>` (not optional, nor through an alias) may leave out its value, which is then empty, a new one each time the declaration runs: `const names: String[]` is `const names: String[] = []`, and `const seen: Set<String>` is `const seen = Set<String>()`.
+- `name := value` declares a const, a name that cannot be reassigned, and `var name = value` a `var`, one that can. The type is the type of the value, or the one written after the name, after which a const takes `=`: `limit: Int? = 10`, `var xs: Int[] = []`. A [destructuring](types.md#anonymous-structs) declares its names with `:=` too, and so does the condition of an `if` or a `while` that binds a name (see [control flow](control-flow.md#if-and-while)). `const` before the name or the names declares a const too, with `=`, as `var` does, which the formatter leaves out (see [Declarations](style.md)); after `const` or `var`, `:=` is an error. In a class or struct body, `name: Type = value` declares a field, which is a `var` in a class (see [mutability](objects.md#classes-and-structs)). A `var` of an optional type may leave out its value, which is then nil: `var found: String?`. A const (not a field) whose type is written as an array, `Map<K, V>` or `Set<T>` (not optional, nor through an alias) may leave out its value, which is then empty, a new one each time the declaration runs: `names: String[]` is `names: String[] = []`, and `seen: Set<String>` is `seen := Set<String>()`.
 - `name = value` assigns to a `var`, `xs[i] = value` to an item of an array, `m[k] = value` to a value of a map and `c.name = value` to a field of a class that is not `const` (see [mutability](objects.md#classes-and-structs)).
 - `+=` `-=` `*=` `/=` `%=` `&=` `|=` `^=` `<<=` `>>=` combine a target with a value as their binary operator does, for the types it takes (`Int`, `Byte` and `Float`; see [types](types.md)), and `+=` also appends a `String` to a `String`. A map's value takes none of them (see [Map](types.md#map)).
 - An assignment is a statement, not an expression.
-- Why: there is no `let` and no function declaration (`def`), so that declarations look the same at the top level, inside functions and in type bodies, for values and for functions, which avoids the CoffeeScript ambiguity between declaration and assignment. `const` only makes the binding immutable, since immutability of the contents is handled by types.
+- Why: there is no `let` and no function declaration (`def`), so that declarations look the same at the top level and inside functions, for values and for functions. `:=`, a written type or `var` tells a declaration from an assignment, which avoids the CoffeeScript ambiguity between them, and the most common declaration, of a name that is not reassigned, is the shortest. A const only makes the binding immutable, since immutability of the contents is handled by types.
 
 ## Statements
 
 - One statement per line. A statement is an expression; see [discarded values](errors.md#discarded-values) for which expressions may stand alone.
 - A line that starts with `.` or `?.` continues a value with a member, so a method chain may be split across lines. The value is that of a declaration, an assignment, an item of a [bracketless block](#bracketless-blocks), a statement, or the operand of `return`, `throw` or `yield`; the line has the indentation of the line where the value starts. The member applies to the whole value, however many lines it takes: `a + b` and then `.text` on the next line is `(a + b).text`, as `.join('')` applies to a block:
   ```
-  const text =
+  text :=
     'a'
     'b'
   .join('')
   ```
-  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `const g = (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead (see [lines inside brackets](#lines-inside-brackets)). After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with [arguments in a block](#bracketless-blocks), the line is an error; a value that ends with arguments in a block takes it, as it takes one after a literal.
+  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `g := (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead (see [lines inside brackets](#lines-inside-brackets)). After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with [arguments in a block](#bracketless-blocks), the line is an error; a value that ends with arguments in a block takes it, as it takes one after a literal.
 
 ## Calls
 
@@ -121,4 +121,4 @@ From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!
   - `from` in an [import](modules.md) or an [export](modules.md#exports);
   - `type` before an alias's name and `=` (see [unions](types.md#unions));
   - `default` before an operand in a field (see [members](objects.md#classes-and-structs)): `default -1` is a default, and `default - 1` a subtraction;
-  - `weak` before a function literal, a field, `const` or `var` (see [weak function literals](functions.md#function-literals) and [weak fields and locals](objects.md#classes-and-structs)), and `weak!` before a field; a function named `weak` is called with parentheses.
+  - `weak` before a function literal, a field or a declaration (`name :=`, `name:` or `var`) (see [weak function literals](functions.md#function-literals) and [weak fields and locals](objects.md#classes-and-structs)), and `weak!` before a field; a function named `weak` is called with parentheses.

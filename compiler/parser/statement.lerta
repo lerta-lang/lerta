@@ -92,13 +92,37 @@ export const parse_statement = (tokens: TokenStream): Statement ->
         else parse_postfix_conditions(tokens, parse_simple_statement(tokens))
 
 export const at_declaration = (tokens: TokenStream) ->
-  is_one_of(tokens.peek().kind, ['const', 'var']) or at_weak_declaration(tokens)
+  const at_keyword = is_one_of(tokens.peek().kind, ['const', 'var'])
+  const at_bare = at_named_declaration(tokens, 0) or at_bare_destructuring(tokens, 0)
+  at_keyword or at_weak_declaration(tokens) or at_bare
 
+# `weak` before a declaration, or before a destructuring, which parse_declaration rejects.
 const at_weak_declaration = (tokens: TokenStream) ->
-  tokens.at_word('weak') and is_one_of(tokens.peek_at(1).kind, ['const', 'var'])
+  const at_keyword = is_one_of(tokens.peek_at(1).kind, ['const', 'var'])
+  const at_bare = at_named_declaration(tokens, 1) or at_bare_destructuring(tokens, 1)
+  tokens.at_word('weak') and (at_keyword or at_bare)
+
+# `name := value`, `name: Type = value` or `name: Type`, at `offset`.
+const at_named_declaration = (tokens: TokenStream, offset: Int) ->
+  const name_follows = tokens.peek_at(offset).kind == IDENTIFIER
+  name_follows and is_one_of(tokens.peek_at(offset + 1).kind, [':=', ':'])
 
 export const at_destructuring = (tokens: TokenStream) ->
-  at_declaration(tokens) and is_one_of(tokens.peek_at(1).kind, ['{', '('])
+  const at_keyword = is_one_of(tokens.peek().kind, ['const', 'var'])
+  const after_keyword = at_keyword and is_one_of(tokens.peek_at(1).kind, ['{', '('])
+  after_keyword or at_bare_destructuring(tokens, 0)
+
+# `{ a, b } := value` or `(a, b) := value`, which only `:=` after the names tells from an
+# expression.
+const at_bare_destructuring = (tokens: TokenStream, offset: Int) ->
+  const open = tokens.peek_at(offset).kind
+  return false if not is_one_of(open, ['{', '('])
+  const close: TokenKind = open == '{' then '}' else ')'
+  const closing = tokens.closing_offset(open, close, is_name_list_token, offset) ? return false
+  tokens.peek_at(closing + 1).kind == ':='
+
+const is_name_list_token = (kind: TokenKind) ->
+  is_one_of kind, [IDENTIFIER, ',', LINE_BREAK, '{', '}', '(', ')']
 
 # A statement that fits on one line, which postfix `if` and `while` can follow, unless it is a
 # declaration.
@@ -177,15 +201,19 @@ const wrap_in_for = (tokens: TokenStream, statement: Statement) ->
   const body = [take_apart_item(header)..., guarded]
   For variable, iterable, body, position, index
 
-# `[weak] const name[: Type] = value`, or `var`.
+# `[weak] name := value` or `[weak] name: Type = value`, or `var` before a name, which takes `=`;
+# `const` before a name, which the formatter leaves out, takes `=` too.
 const parse_declaration = (tokens: TokenStream) ->
   const position = token_position(tokens.peek())
-  const weak = tokens.accept_word('weak')
-  const mutable = tokens.next().kind == 'var'
+  const weak = at_weak_declaration(tokens) and tokens.accept_word('weak')
+  const has_keyword = is_one_of(tokens.peek().kind, ['const', 'var'])
+  const mutable = tokens.peek().kind == 'var'
+  tokens.next() if has_keyword
   if weak and is_one_of(tokens.peek().kind, ['{', '('])
     tokens.fail position, 'a destructuring declaration cannot be weak'
   const name = parse_identifier(tokens)
   const type = parse_type_annotation(tokens)
+  tokens.fail_expecting tokens.peek(), "'='" if has_keyword and tokens.peek().kind == ':='
   # `var x: T?` without a value is nil at first; the checker rejects a type that nil does not fit.
   if mutable and tokens.peek().kind != '='
     if type == nil
@@ -202,7 +230,9 @@ const parse_declaration = (tokens: TokenStream) ->
     # The type of an empty Map or Set goes to its type arguments, as the formatter writes it.
     const written = value is Call then nil else type
     return Declaration(name, value, mutable, position, weak, type: written)
-  tokens.expect '=', "'='"
+  # A type, as `const` and `var` do, tells a declaration from an assignment; `:=` does without.
+  const operator: TokenKind = has_keyword or type then '=' else ':='
+  tokens.expect operator, "'#{operator}'"
   const value = parse_value(tokens)
   Declaration name, type, value, mutable, position, weak
 
@@ -215,29 +245,32 @@ const empty_value = (type: TypeName): Expression? ->
   const callee = Identifier(position: at, name: named.name)
   Call callee, position: at, args: [], named_args: [], type_args: named.args, makes_builtin: true
 
-# `const { a, b } = value`, as the declarations it stands for.
+# `{ a, b } := value`, as the declarations it stands for.
 export const parse_destructuring_statement = (tokens: TokenStream) ->
   const declarations = parse_destructuring(tokens)
   reject_postfix tokens
   declarations
 
-# `const { a, b } = value` declares a const that cannot be named (`.` is not allowed in names),
-# holding the value, then `a` and `b`, each from the field of its name. `const (a, b) = value`
-# takes a tuple apart likewise, by position.
+# `{ a, b } := value` declares a const that cannot be named (`.` is not allowed in names), holding
+# the value, then `a` and `b`, each from the field of its name. `(a, b) := value` takes a tuple
+# apart likewise, by position. `var` before the names declares them so, and takes `=`, as `const`
+# does, which the formatter leaves out.
 const parse_destructuring = (tokens: TokenStream) ->
-  const token = tokens.next()
-  const position = token_position(token)
-  const mutable = token.kind == 'var'
+  const position = token_position(tokens.peek())
+  const has_keyword = is_one_of(tokens.peek().kind, ['const', 'var'])
+  const mutable = tokens.peek().kind == 'var'
+  tokens.next() if has_keyword
+  const operator: TokenKind = has_keyword then '=' else ':='
   if tokens.peek().kind == '('
     const names = parse_tuple_names(tokens)
-    const value = parse_held_value(tokens)
+    const value = parse_held_value(tokens, operator)
     # Where the value is, for the message when it is no tuple of as many items.
     const holder = tuple_holder(value.position)
     return [holding(holder, value), take_apart(holder, names, mutable, false)...]
   tokens.next()
   const names = tokens.parse_list('}', -> parse_identifier(tokens))
   tokens.fail_expecting tokens.peek(), 'a name' if names.length == 0
-  const value = parse_held_value(tokens)
+  const value = parse_held_value(tokens, operator)
   const holder = Identifier(position, name: "destructured.#{position.line}.#{position.column}")
   const field_of = (name: Identifier) ->
     const object = copy_identifier(holder)
@@ -247,9 +280,10 @@ const parse_destructuring = (tokens: TokenStream) ->
   const declarations = [declare(name) for name in names]
   [holding(holder, value), declarations...]
 
-# `= value`, after the names of a destructuring, which may take lines as that of a declaration.
-const parse_held_value = (tokens: TokenStream) ->
-  tokens.expect '=', "'='"
+# `= value` or `:= value`, after the names of a destructuring, which may take lines as that of a
+# declaration.
+const parse_held_value = (tokens: TokenStream, operator: TokenKind) ->
+  tokens.expect operator, "'#{operator}'"
   parse_value tokens
 
 const holding = (holder: Identifier, value: Expression): Statement ->
@@ -319,13 +353,15 @@ const parse_for = (tokens: TokenStream) ->
   const body = [take_apart_item(header)..., parse_block(tokens)...]
   For variable, iterable, position, index, body
 
-# A condition, or `const name = value`, which holds when the value is not nil.
+# A condition, or `name := value` or `const name = value`, which holds when the value is not nil.
 const parse_condition = (tokens: TokenStream): Condition ->
   const token = tokens.peek()
-  return parse_expression(tokens) if token.kind != 'const'
-  tokens.next()
+  const binds_name = token.kind == IDENTIFIER and tokens.peek_at(1).kind == ':='
+  return parse_expression(tokens) if token.kind != 'const' and not binds_name
+  tokens.next() if token.kind == 'const'
   const name = parse_identifier(tokens)
-  tokens.expect '=', "'='"
+  const operator: TokenKind = binds_name then ':=' else '='
+  tokens.expect operator, "'#{operator}'"
   Binding name, value: parse_expression(tokens), position: token_position(token)
 
 const parse_while = (tokens: TokenStream) ->

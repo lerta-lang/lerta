@@ -14,12 +14,12 @@ class Counter
   count = 0
   increment = -> @count += 1
 
-const c = Counter(label: 'clicks')
+c := Counter(label: 'clicks')
 c.increment()
 print c.count
 ```
 
-- `class` and `struct` declare a type at the top level. Its name cannot be the name of a top-level function or another top-level name: types and values share one namespace (`class A` then `const A = 1` is an error, `'A' is already defined`). It may be that of a builtin, type or value, which it then shadows in the whole module (see [control flow](control-flow.md)). Like functions, types can be used anywhere in the module, so they can refer to each other and to themselves (`next: Node?`).
+- `class` and `struct` declare a type at the top level. Its name cannot be the name of a top-level function or another top-level name: types and values share one namespace (`class A` then `A := 1` is an error, `'A' is already defined`). It may be that of a builtin, type or value, which it then shadows in the whole module (see [control flow](control-flow.md)). Like functions, types can be used anywhere in the module, so they can refer to each other and to themselves (`next: Node?`).
 - **Members**, one per line:
   - `name: Type` is a field without an initializer: a constructor argument. If its type is optional, the argument may be left out, and the field is nil. A field may hold a function (`on_click: () -> void`); `b.on_click()` calls it (see [function values](functions.md#function-values)).
   - `name = value` or `name: Type = value` is a field computed at construction from its initializer.
@@ -34,7 +34,7 @@ print c.count
 - Inside methods, `@` is the object and `@x` its member `x` (`@.x` is an error). An initializer can only use `@` to read a field set before it (`@name`): the object is not complete yet, so it cannot be passed on or have its methods called.
 - `p.x` reads a field and `p.m(...)` calls a method.
 - **Mutability.** A class field can be assigned (`c.count = 1`) unless it is declared `const`. A struct field cannot be changed, and cannot be declared `var`.
-- **Weak locals.** `weak const name = value` and `weak var name = value` declare a local, in a function or in a block of the top-level code but not a top-level value, that holds an object of a class without keeping it alive. Its type is the class's optional type, `Button?`, which an annotation must write so; it reads as nil once the object is freed, so it is never narrowed: after `weak const seen = button`, take the object with `if const alive = seen`. A function literal that captures one captures it so, weak too; to capture `@` so, a [weak function literal](functions.md#function-literals) is shorter.
+- **Weak locals.** `weak name := value` and `weak var name = value` declare a local, in a function or in a block of the top-level code but not a top-level value, that holds an object of a class without keeping it alive. Its type is the class's optional type, `Button?`, which an annotation must write so; it reads as nil once the object is freed, so it is never narrowed: after `weak seen := button`, take the object with `if alive := seen`. A function literal that captures one captures it so, weak too; to capture `@` so, a [weak function literal](functions.md#function-literals) is shorter.
 - Objects are reference counted, with no cycle collector. Assigning or passing an object shares it, and may retain it; whatever optimization can remove is removed. A struct can be part of a cycle only through something mutable it holds (an array, a map, a class object, or a function that captures a `var`), so immutable data is recommended.
 - A struct is immutable, so copying it and sharing it cannot be told apart. The implementation may choose either (see [internals](../internals.md#structs-planned)).
 - There are no static members (`static`), but for an [enum](types.md#enums)'s builtin `parse`. Functions related to a type are module functions; `extend` adds methods to a type, but not functions without a receiver.
@@ -94,12 +94,12 @@ struct Square
   name = 'square'
   area = -> @side * @side
 
-const describe = <T: Shape>(shape: T) -> print("#{shape.name}: #{shape.area()}")
+describe := <T: Shape>(shape: T) -> print("#{shape.name}: #{shape.area()}")
 
 describe Square(side: 3)
 describe { name: 'dot', area: -> 0 }
 
-const shapes: Shape[] = [Square(side: 2), { name: 'dot', area: -> 0 }]
+shapes: Shape[] = [Square(side: 2), { name: 'dot', area: -> 0 }]
 print shape.area() for shape in shapes
 ```
 

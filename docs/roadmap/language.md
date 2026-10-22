@@ -53,7 +53,7 @@ Interfaces and generics are in [objects](objects.md).
 ## Open questions
 
 - Whether `-1.abs()` is `(-1).abs()` (the negative literal binds first) or `-(1.abs())` (as in Rust and Python). Decide when methods on literals are implemented.
-- Renaming in destructuring (`const { a: x } = value`).
+- Renaming in destructuring (`{ a: x } := value`).
 - Notation for writing an array inside an array without brackets (CoffeeScript can).
 - `Binary` literals (`'...'.binary` can substitute).
 - Ranges without an end or a start, `20..` and `...n`, as SQL's `>= 20` and `< n` (Rust and Swift have them).

@@ -5,54 +5,54 @@ import Reader from 'std:io'
 import sleep from 'std:time'
 
 var requested = Deferred<Binary?>()
-const reader = Reader(read_chunk: ->
+reader := Reader(read_chunk: ->
   requested = Deferred<Binary?>()
   await requested.promise()
 )
 
 # Gives the chunk that the reader asked for last, and lets the read take it.
-const give = (chunk: Binary?) ->
+give := (chunk: Binary?) ->
   requested.resolve chunk
   await sleep(0)
 
-const outcome = (promise: Promise<String?>) ->
+outcome := (promise: Promise<String?>) ->
   try
     await promise ? 'nil'
   catch error: CancelledError
     error.message
 
-const line = reader.read_line()
+line := reader.read_line()
 await give('ab'.binary)
 line.cancel()
 print await outcome(line)
-const next_line = reader.read_line()
+next_line := reader.read_line()
 await give("cd\nef".binary)
 print await outcome(next_line)
 
-const bytes = -> (await reader.read(4))?.text()
-const four = bytes()
+bytes := -> (await reader.read(4))?.text()
+four := bytes()
 await give('g'.binary)
 four.cancel()
 print await outcome(four)
-const next_four = bytes()
+next_four := bytes()
 await give('hij'.binary)
 print await outcome(next_four)
-const rest = -> (await reader.read_all()).text()
-const all = rest()
+rest := -> (await reader.read_all()).text()
+all := rest()
 await give('k'.binary)
 await give('l'.binary)
 all.cancel()
 print await outcome(all)
 
 # So does one that the chunk's error rejects.
-const failing_line = reader.read_line()
+failing_line := reader.read_line()
 await give('m'.binary)
 requested.reject IOError(message: 'broken')
 try
   await failing_line
 catch error: IOError
   print error.message
-const recovered = rest()
+recovered := rest()
 await give('n'.binary)
 await give(nil)
 print await outcome(recovered)

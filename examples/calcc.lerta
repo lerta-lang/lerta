@@ -18,31 +18,31 @@ class Emitter
     case e
       when Number then e.value.to_string()
       when Variable
-        const slot = @slots[e.name] ? throw CalcError(message: "undefined name '#{e.name}'")
-        const register = @fresh()
+        slot := @slots[e.name] ? throw CalcError(message: "undefined name '#{e.name}'")
+        register := @fresh()
         @emit "#{register} = load i64, ptr #{slot}"
         register
       when Operation
-        const left = @expression(e.left)
-        const right = @expression(e.right)
-        const register = @fresh()
+        left := @expression(e.left)
+        right := @expression(e.right)
+        register := @fresh()
         @emit "#{register} = #{instruction(e.operator)} i64 #{left}, #{right}"
         register
 
   statement = (s: Statement) ->
     case s
       when Let
-        const value = @expression(s.value)
-        const slot = "%#{s.name}"
+        value := @expression(s.value)
+        slot := "%#{s.name}"
         if not @slots.has(s.name)
           @slots[s.name] = slot
           @emit "#{slot} = alloca i64"
         @emit "store i64 #{value}, ptr #{slot}"
       when Print
-        const value = @expression(s.value)
+        value := @expression(s.value)
         @emit "call i32 (ptr, ...) @printf(ptr @format, i64 #{value})"
 
-const instruction = (operator: String) ->
+instruction := (operator: String) ->
   case operator
     when '+' then 'add'
     when '-' then 'sub'
@@ -50,8 +50,8 @@ const instruction = (operator: String) ->
     when '/' then 'sdiv'
     else throw CalcError(message: "unknown operator '#{operator}'")
 
-const compile = (source: String) ->
-  const emitter = Emitter()
+compile := (source: String) ->
+  emitter := Emitter()
   emitter.statement statement for statement in Parser(tokens: tokenize(source)).statements()
   return
     '@format = private constant [5 x i8] c"%ld\0A\00"'
