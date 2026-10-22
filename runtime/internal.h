@@ -261,6 +261,11 @@ const char *lerta_os_platform(void);
 int64_t lerta_os_cpu_count(void);
 // The value of an environment variable, which the caller frees, or NULL if it is not set.
 char *lerta_os_env(const char *name);
+// Appends this program's environment variables to the array, as NAME=VALUE strings.
+void lerta_os_environ(LertaArray *entries);
+int64_t lerta_os_process_id(void);
+// Whether a process with the ID is running; one that the program may not signal is.
+bool lerta_os_is_running(int id);
 // A file that holds the bytes, read from its start, for a program's standard input, which
 // lerta_os_close_input_file closes and which is removed once closed; -1 if it cannot be made.
 int lerta_os_input_file(const uint8_t *bytes, int64_t length);

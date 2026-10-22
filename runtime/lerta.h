@@ -258,7 +258,7 @@ void lerta_promise_cancel(LertaPromise *promise);
 // A promise without a value that lerta_promise_fire resolves, unless it is settled already.
 LertaPromise *lerta_promise_pending(void);
 void lerta_promise_fire(LertaPromise *promise);
-// A promise resolved once the seconds have passed; a negative time throws.
+// A promise resolved once the seconds have passed, which std:time checks are not negative.
 LertaPromise *lerta_sleep(double seconds);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_unix_time(void);
@@ -272,20 +272,20 @@ void lerta_finish_top_level(LertaPromise *promise);
 // makes them UTF-8.
 LertaArray *lerta_argv(void);
 // Flushes stdout and ends the program; only the objects that nothing in use holds are checked for
-// leaks, and a leak ends it with LERTA_LEAK_EXIT_CODE in place of `code`. A code out of 0 to 255
-// throws a ValueError instead, and the call returns.
+// leaks, and a leak ends it with LERTA_LEAK_EXIT_CODE in place of `code`, which std:process checks
+// is from 0 to 255.
 void lerta_exit(int64_t code);
 // A promise of the program's exit code, or minus the signal that ended it, settled once it ends.
 // It reads `input` as its standard input, if given; its standard output and error are appended to
 // `output` and `errors`, arrays of bytes, if given; it runs in `cwd`, if given, with the variables
-// of this program but those that `unset` names, and those that `set` names with `values`. It is
-// rejected if an output cannot be read, or one goes past `output_limit` bytes, if not -1, which stops
-// the program, and a program that cannot start throws at once. A cancel stops the program, killing
-// it after `kill_after` seconds, and rejects the promise once it ends.
+// of `env`, as NAME=VALUE, if given, and otherwise this program's. No text holds a NUL byte, which
+// std:process refuses first. It is rejected if an output cannot be read, or one goes past
+// `output_limit` bytes, if not -1, which stops the program, and a program that cannot start throws
+// at once. A cancel stops the program, killing it after `kill_after` seconds, and rejects the
+// promise once it ends.
 LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
                         const LertaString *input, LertaArray *output, LertaArray *errors,
-                        const LertaString *cwd, const LertaArray *set, const LertaArray *values,
-                        const LertaArray *unset, int64_t output_limit,
+                        const LertaString *cwd, const LertaArray *env, int64_t output_limit,
                         double kill_after);
 // Whether two names of environment variables name the same variable.
 bool lerta_same_env_name(const LertaString *a, const LertaString *b);
@@ -293,14 +293,18 @@ bool lerta_same_env_name(const LertaString *a, const LertaString *b);
 LertaString *lerta_platform(void);
 // The number of CPUs that are online, at least 1.
 int64_t lerta_cpu_count(void);
+// Appends this program's environment variables to the array, as NAME=VALUE Binary values.
+void lerta_environ(LertaArray *entries);
 // The ID of the program's process.
 int64_t lerta_process_id(void);
-// Whether a process with the ID is running.
+// Whether a process with the ID, from 1 to the largest Int32, which std:process checks, is running.
 bool lerta_is_running(int64_t id);
 // The value of an environment variable, as a Binary, or NULL if it is not set.
 LertaString *lerta_env(const LertaString *name);
 
-// Files (file.c). A failure throws, or rejects the promise of one that runs on the thread pool.
+// Files (file.c). A failure throws, or rejects the promise of one that runs on the thread pool. No
+// path holds a NUL byte, nor is empty for lerta_make_dir and lerta_list_dir_names: std:io refuses
+// those first.
 LertaPromise *lerta_read_file_async(const LertaString *path);
 LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data);
 LertaPromise *lerta_remove_tree_async(const LertaString *path);
@@ -319,8 +323,9 @@ LertaString *lerta_make_temp_dir(void);
 void lerta_make_dir(const LertaString *path);
 void lerta_rename(const LertaString *from, const LertaString *to);
 
-// Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr. Its writes go through
-// a buffer, written out on the event loop (output.c; see docs/internals.md#output).
+// Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr, which std:io checks.
+// Its writes go through a buffer, written out on the event loop (output.c; see
+// docs/internals.md#output).
 LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes);
 LertaPromise *lerta_stream_flush(int64_t fd);
 // Up to 64 KiB of what stdin has, read on the thread pool, or NULL at its end.

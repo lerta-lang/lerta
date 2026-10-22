@@ -258,6 +258,21 @@ char *lerta_os_env(const char *name) {
   return value == NULL ? NULL : strdup(value);
 }
 
+extern char **environ;
+
+void lerta_os_environ(LertaArray *entries) {
+  for (char **entry = environ; *entry != NULL; entry++) lerta_append_c_string(entries, *entry);
+}
+
+int64_t lerta_os_process_id(void) {
+  return getpid();
+}
+
+// Signal 0 only checks the process.
+bool lerta_os_is_running(int id) {
+  return kill(id, 0) == 0 || errno != ESRCH;
+}
+
 static bool is_dot_or_dot_dot(const char *name) {
   return strcmp(name, ".") == 0 || strcmp(name, "..") == 0;
 }

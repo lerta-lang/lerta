@@ -439,6 +439,36 @@ bool lerta_os_rename(const char *from, const char *to) {
 
 const char *lerta_os_platform(void) { return "windows"; }
 
+// A variable that is not valid UTF-16 is read with U+FFFD in place of what is not, as the other
+// texts that Windows gives are.
+void lerta_os_environ(LertaArray *entries) {
+  wchar_t *block = GetEnvironmentStringsW();
+  if (block == NULL) return;
+  for (wchar_t *entry = block; *entry != L'\0'; entry += wcslen(entry) + 1) {
+    char *text = to_utf8(entry);
+    if (text != NULL) lerta_append_c_string(entries, text);
+    free(text);
+  }
+  FreeEnvironmentStringsW(block);
+}
+
+int64_t lerta_os_process_id(void) {
+  return GetCurrentProcessId();
+}
+
+// As libuv's kill with signal 0: a process that cannot be opened for another reason than that there
+// is none, such as one the program may not signal, is running.
+bool lerta_os_is_running(int id) {
+  DWORD access = PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE;
+  HANDLE process = OpenProcess(access, FALSE, (DWORD)id);
+  if (process == NULL) return GetLastError() != ERROR_INVALID_PARAMETER;
+  DWORD status;
+  bool running = !GetExitCodeProcess(process, &status) ||
+                 (status == STILL_ACTIVE && WaitForSingleObject(process, 0) != WAIT_OBJECT_0);
+  CloseHandle(process);
+  return running;
+}
+
 int64_t lerta_os_cpu_count(void) {
   DWORD count = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
   return count > 0 ? count : 1;

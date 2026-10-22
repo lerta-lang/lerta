@@ -1,10 +1,11 @@
 # The running program: its arguments, how it ends, and the programs it runs (see runtime/process.c).
 
 extern lerta_exit: (Int) -> never
-extern lerta_run: (String, String[], Binary?, Byte[]?, Byte[]?, String?, String[], String[], String[], Int, Float) -> Promise<Int>
+extern lerta_run: (String, String[], Binary?, Byte[]?, Byte[]?, String?, Binary[]?, Int, Float) -> Promise<Int>
 extern lerta_argv: () -> Binary[]
 # Windows compares the names of variables without case.
-extern lerta_same_env_name as same_env_name: (String, String) -> Bool
+extern lerta_same_env_name as same_env_name: (Binary, Binary) -> Bool
+extern lerta_environ: (Binary[]) -> void
 extern lerta_env: (String) -> Binary?
 extern lerta_platform: () -> String
 extern lerta_cpu_count: () -> Int
@@ -43,18 +44,35 @@ export exit := (code: Int) ->
 export run := (command: String, args: String..., options: RunOptions) ->
   check_options options
   { stdin, stdout, stderr, cwd, env, unset_env, output_limit, kill_after } := options
-  names := env.keys().to_array()
-  values := env.values().to_array()
   # A program cannot start with a text that holds a NUL byte, as it cannot without its command; a
   # name that holds one is no name, which check_options refuses.
-  texts := [command, args..., cwd ? '', values...]
+  texts := [command, args..., cwd ? '', env.values()...]
   throw IOError(message: "cannot run: #{command}") if texts.any(holds_nul)
+  changes_env := env.length > 0 or unset_env.length > 0
+  program_env := changes_env then env_with(env, unset_env)
   # An Int, as an Int? passed to C on Windows is not yet as C takes it; -1 is no limit.
   limit := output_limit ? -1
-  status := await lerta_run(
-    command, args, stdin, stdout, stderr, cwd, names, values, unset_env, limit, kill_after
-  )
+  status :=
+    await lerta_run(command, args, stdin, stdout, stderr, cwd, program_env, limit, kill_after)
   status >= 0 then Exit(code: status) else Exit(code: 128 - status, signal: -status)
+
+# This program's variables, as NAME=VALUE, but those that `set` names, which it gives, or that
+# `unset` names.
+env_with := (set: Map<String, String>, unset: String[]) ->
+  entries: Binary[]
+  lerta_environ entries
+  changed := [name.binary for name in [set.keys()..., unset...]]
+  is_changed := (name: Binary) -> changed.any((each) -> same_env_name(each, name))
+  env := [entry for entry in entries when not is_changed(env_name(entry))]
+  env.push "#{name}=#{value}".binary for (name, value) in set.entries()
+  env
+
+# The name of a variable's NAME=VALUE, up to its first `=`. Windows names some of its own variables
+# with a leading `=`, which no name given to run holds, so they are kept, as they should be.
+env_name := (entry: Binary) ->
+  var end = 0
+  end += 1 while end < entry.length and entry[end] != '='
+  entry.slice 0, end
 
 check_options := (options: RunOptions) ->
   throw ValueError(message: 'kill a program after a negative time') if options.kill_after < 0
@@ -65,10 +83,10 @@ check_options := (options: RunOptions) ->
     if name == '' or name.contains('=') or holds_nul(name)
       throw ValueError(message: "not a name of an environment variable: '#{name}'")
   for name, i in set_names
-    if set_names.find_index((each) -> same_env_name(each, name))! < i
+    if set_names.find_index((each) -> same_env_name(each.binary, name.binary))! < i
       throw ValueError(message: "the environment variable #{name} is set twice")
   for name in options.unset_env
-    if set_names.any((each) -> same_env_name(each, name))
+    if set_names.any((each) -> same_env_name(each.binary, name.binary))
       throw ValueError(message: "the environment variable #{name} is both set and removed")
 
 # No variable's name holds `=`, which the system would take as the end of the name, nor a NUL byte.
@@ -85,4 +103,9 @@ export cpu_count := lerta_cpu_count()
 extern lerta_process_id: () -> Int
 export process_id := lerta_process_id()
 
-export extern lerta_is_running as is_running: (Int) -> Bool
+extern lerta_is_running: (Int) -> Bool
+
+# The ID is checked first, since the system takes 0 and the negative IDs for groups of processes.
+export is_running := (id: Int) -> id > 0 and id <= MAX_PROCESS_ID and lerta_is_running(id)
+
+MAX_PROCESS_ID := 2147483647

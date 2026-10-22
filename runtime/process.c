@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <uv.h>
-
 #include "internal.h"
 
 LERTA_STATIC_STRING(cannot_run, "cannot run: ");
@@ -124,83 +122,27 @@ static char **program_args(char **c_args, int64_t count, char **file) {
   return args;
 }
 
-static const LertaString *string_item(const LertaArray *array, int64_t index) {
-  return (const LertaString *)(intptr_t)lerta_word_item(array, index);
-}
-
-static bool is_named(const LertaArray *names, const char *name) {
-  for (int64_t i = 0; i < names->length; i++) {
-    char *each = lerta_c_string(string_item(names, i));
-    bool same = lerta_os_same_env_name(each, name);
-    free(each);
-    if (same) return true;
+// The strings as C strings, ending with NULL, which free_c_args frees.
+static char **c_strings_of(const LertaArray *strings) {
+  char **c_strings = lerta_checked_calloc((size_t)strings->length + 1, sizeof(char *));
+  for (int64_t i = 0; i < strings->length; i++) {
+    c_strings[i] = lerta_c_string((const LertaString *)(intptr_t)lerta_word_item(strings, i));
   }
-  return false;
-}
-
-// `name=value`, which the caller frees.
-static char *env_entry(const char *name, const char *value) {
-  size_t name_length = strlen(name);
-  size_t value_length = strlen(value);
-  char *entry = lerta_checked_malloc(name_length + value_length + 2);
-  memcpy(entry, name, name_length);
-  entry[name_length] = '=';
-  memcpy(entry + name_length + 1, value, value_length + 1);
-  return entry;
-}
-
-// `name=value` of the strings, which the caller frees.
-static char *given_env_entry(const LertaString *name, const LertaString *value) {
-  char *c_name = lerta_c_string(name);
-  char *c_value = lerta_c_string(value);
-  char *entry = env_entry(c_name, c_value);
-  free(c_name);
-  free(c_value);
-  return entry;
-}
-
-// The variables of this program but those that `set` names, which it gives, or that `unset`
-// names, as NAME=VALUE ending with NULL; NULL if they cannot be read. With neither, NULL also stands
-// for this program's own, as libuv takes it.
-static char **program_env(const LertaArray *set, const LertaArray *values, const LertaArray *unset,
-                          bool *valid) {
-  *valid = true;
-  if (set->length == 0 && unset->length == 0) return NULL;
-  uv_env_item_t *items;
-  int count;
-  if (uv_os_environ(&items, &count) != 0) {
-    *valid = false;
-    return NULL;
-  }
-  char **env = lerta_checked_calloc((size_t)count + (size_t)set->length + 1, sizeof(char *));
-  int64_t length = 0;
-  for (int i = 0; i < count; i++) {
-    const char *name = items[i].name;
-    if (is_named(set, name) || is_named(unset, name)) continue;
-    env[length++] = env_entry(name, items[i].value);
-  }
-  uv_os_free_environ(items, count);
-  for (int64_t i = 0; i < set->length; i++) {
-    env[length++] = given_env_entry(string_item(set, i), string_item(values, i));
-  }
-  return env;
+  return c_strings;
 }
 
 // What the run gives the program, which free_spec frees; whether all can be given is written to
 // `valid`.
 static LertaProgramSpec program_spec(const LertaString *command, const LertaArray *args,
                                      const LertaString *input, const LertaString *cwd,
-                                     const LertaArray *set, const LertaArray *values,
-                                     const LertaArray *unset, bool *valid) {
+                                     const LertaArray *env, bool *valid) {
   int64_t count = args->length + 1;
   LertaProgramSpec spec = {.stdin_fd = -1};
   char **c_args = c_args_of(command, args);
   spec.args = program_args(c_args, count, &spec.file);
   free_c_args(c_args, count);
   *valid = spec.args != NULL;
-  bool env_valid;
-  spec.env = program_env(set, values, unset, &env_valid);
-  *valid = *valid && env_valid;
+  if (env != NULL) spec.env = c_strings_of(env);
   if (cwd != NULL) spec.cwd = lerta_c_string(cwd);
   if (input != NULL) {
     spec.stdin_fd = lerta_os_input_file(input->bytes, input->length);
@@ -224,11 +166,10 @@ static void free_spec(LertaProgramSpec *spec, int64_t count) {
 // The promise is resolved with the exit code, or minus the signal that ended the program.
 LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
                         const LertaString *input, LertaArray *output, LertaArray *errors,
-                        const LertaString *cwd, const LertaArray *set, const LertaArray *values,
-                        const LertaArray *unset, int64_t output_limit,
+                        const LertaString *cwd, const LertaArray *env, int64_t output_limit,
                         double kill_after) {
   bool valid;
-  LertaProgramSpec spec = program_spec(command, args, input, cwd, set, values, unset, &valid);
+  LertaProgramSpec spec = program_spec(command, args, input, cwd, env, &valid);
   spec.reads[0] = output != NULL;
   spec.reads[1] = errors != NULL;
   spec.output_limit = output_limit;
@@ -278,14 +219,11 @@ LertaString *lerta_env(const LertaString *name) {
 
 int64_t lerta_cpu_count(void) { return lerta_os_cpu_count(); }
 
-int64_t lerta_process_id(void) { return uv_os_getpid(); }
+void lerta_environ(LertaArray *entries) { lerta_os_environ(entries); }
 
-// Signal 0 only checks the process. The ID is checked first, since kill takes 0 and the negative
-// IDs for groups of processes. A process that the program may not signal is still running.
-bool lerta_is_running(int64_t id) {
-  if (id <= 0 || id > INT32_MAX) return false;
-  return uv_kill((int)id, 0) != UV_ESRCH;
-}
+int64_t lerta_process_id(void) { return lerta_os_process_id(); }
+
+bool lerta_is_running(int64_t id) { return lerta_os_is_running((int)id); }
 
 LertaString *lerta_platform(void) {
   const char *name = lerta_os_platform();
