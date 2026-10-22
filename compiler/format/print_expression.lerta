@@ -194,18 +194,19 @@ const spelled = (at: Position, context: Context) ->
   return multiline_string_doc(first, context) if first.end_line > first.line
   token source.spelling(first), at
 
-# A `"""` literal, whose lines go one level deeper than the line that it starts on, without the
-# indentation that they share in the source, and a blank one empty.
+# A `"""` or `'''` literal, whose lines go one level deeper than the line that it starts on,
+# without the indentation that they share in the source, and a blank one empty.
 const multiline_string_doc = (literal: Token, context: Context) ->
   const source = context.source
   const lines = [source.lines[line - 1] for line in (literal.line + 1)...literal.end_line]
   const quotes_column = literal.end_column - 3
   lines.push source.slice(literal.end_line, 1, quotes_column)
+  const quotes = source.slice(literal.end_line, quotes_column, literal.end_column)
   const width = common_indentation(lines)
   const dedented =
     [is_blank(line) then '' else line.binary.text(width, line.binary.length)! for line in lines]
-  dedented.push "#{dedented.pop()}\"\"\""
-  const first = token('"""', Position(line: literal.line, column: literal.column))
+  dedented.push "#{dedented.pop()}#{quotes}"
+  const first = token(quotes, Position(line: literal.line, column: literal.column))
   join [first, LiteralLines(lines: dedented, end_line: literal.end_line)]
 
 # The index of the literal's token at the position, past the parentheses that it was written in,

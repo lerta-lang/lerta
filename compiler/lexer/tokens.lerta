@@ -104,7 +104,7 @@ export struct Token
   # The parts of an interpolated string.
   parts: TemplatePart[]?
   # The line and the column after it, where the formatter reads its spelling up to; those of its
-  # start for a layout token. Only a `"""` literal ends on a later line.
+  # start for a layout token. Only a `"""` or `'''` literal ends on a later line.
   end_line = default @line
   end_column = default @column
 
@@ -123,7 +123,7 @@ export const lex = (source: String, path: String) ->
   const comments: Comment[]
   const layout = Layout(path, tokens)
   const lines = source_lines(source, path)
-  # The lines up to this number are inside a `"""` literal.
+  # The lines up to this number are inside a `"""` or `'''` literal.
   var literal_end = 0
   for line in lines
     continue if line.number <= literal_end
@@ -279,8 +279,8 @@ class LineScanner
   tokens: Token[] = []
   # Where the comment that ends the line starts, if any; scanning stops at it.
   comment_index: Int? = nil
-  # Where the `"""` that opens a literal on the lines after it starts, if the line ends with one;
-  # scanning stops at it, and the caller reads the literal.
+  # Where the `"""` or `'''` that opens a literal on the lines after it starts, if the line ends
+  # with one; scanning stops at it, and the caller reads the literal.
   multiline_start: Int? = nil
 
   run = ->
@@ -291,8 +291,11 @@ class LineScanner
         when c == '#'
           @comment_index = @position
           break
-        when @line.bytes.occurs_at(@position, '"""'.binary)
-          @line.fail "'\"\"\"' must end its line", @position if @position + 3 != @line.length
+        when @at_multiline_quotes()
+          const quotes = @line.text(@position, @position + 3)
+          # Quoted with the other quote, which is clearer than the same one next to them.
+          const shown = quotes == '"""' then "'#{quotes}'" else "\"#{quotes}\""
+          @line.fail "#{shown} must end its line", @position if @position + 3 != @line.length
           @multiline_start = @position
           break
         when is_identifier_start(c) then @scan_word()
@@ -301,6 +304,10 @@ class LineScanner
         when c.is_digit() then @scan_number()
         else @scan_punctuation()
     @tokens
+
+  at_multiline_quotes = ->
+    const bytes = @line.bytes
+    bytes.occurs_at(@position, '"""'.binary) or bytes.occurs_at(@position, "'''".binary)
 
   # Adds the token that starts at the position, and moves to `end`, after it.
   add = (kind: TokenKind, text: String, end: Int, parts: TemplatePart[]?) ->
@@ -373,7 +380,7 @@ class LineScanner
         "U+#{hex(number, 4)}"
     @line.fail "unexpected character #{shown}", @position
 
-# The token of the `"""` literal that starts at `start` on the line.
+# The token of the `"""` or `'''` literal that starts at `start` on the line.
 const multiline_token = (line: SourceLine, start: Int, literal: MultilineLiteral) ->
   const plain = plain_text(literal.parts)
   const kind: TokenKind = plain != nil then STRING else INTERPOLATED

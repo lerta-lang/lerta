@@ -8,7 +8,7 @@ The planned syntax, control flow, types and operators.
 - A function literal held by a local `const` may call itself by that name, its return type written as for any recursive function. It does not capture itself, which would make a cycle that is never freed, but calls its own code with its own captures.
 - An error in a [call without parentheses](../reference/syntax.md#calls) suggests the fix: `f g x` suggests `f g(x)`, and a callee that is not a name with `.name`s, as `xs[i].push x`, suggests `xs[i].push(x)`. An undefined name that is a word only in its place, as `default` in `default - 1`, says so.
 - An `if` or a `case` value may start on the next line, one level deeper, also as the argument of a call without brackets (`print`, then `case` on the next line) and after the `then` of a `case` arm, as it may after `=`, so that the [style](../reference/style.md) can always put it there.
-- `'''` string literals spanning lines, as `"""` ones do (see [the reference](../reference/syntax.md)), with no escapes and no interpolation, as `'...'` has none. Once the seed reads them, `SEED_PART` in tools/embed.lerta becomes one, without its `\#{`.
+- Once the seed reads `'''` literals, `SEED_PART` in tools/embed.lerta becomes one, without its `\#{`.
 
 ## Control flow
 

@@ -35,13 +35,16 @@ syn region lertaInterpolation matchgroup=lertaInterpolationDelimiter start="#{" 
 syn region lertaString start=+"+ end=+"\|$+ contains=lertaEscape,lertaInvalidEscape,lertaInterpolation
 syn region lertaMultilineString start=+"""+ end=+"""+ contains=lertaEscape,lertaInvalidEscape,lertaInterpolation
 syn match lertaRawString "'[^']*'"
+" Defined after lertaRawString, so that it wins where both start.
+syn region lertaRawMultilineString start=+'''+ end=+'''+
 
 syn match lertaComment "#.*$" contains=@Spell
 
-syn cluster lertaCode contains=lertaComment,lertaRawString,lertaString,lertaMultilineString,lertaNumber,lertaFloat,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
+syn cluster lertaCode contains=lertaComment,lertaRawString,lertaRawMultilineString,lertaString,lertaMultilineString,lertaNumber,lertaFloat,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
 
 hi def link lertaComment Comment
 hi def link lertaRawString String
+hi def link lertaRawMultilineString String
 hi def link lertaString String
 hi def link lertaMultilineString String
 hi def link lertaEscape SpecialChar

@@ -18,6 +18,7 @@
   ```
 
   This is `"Usage:\n  build \"app\"\n"`; with the closing `"""` at the end of the `build` line, it would end without the line feed. The first `"""` closes, so a text that ends with `"` before the closing `"""` writes it `\"`. The text leaves out the indentation that its lines share: the least number of leading spaces of the lines that are not blank, wherever the closing `"""` is. A blank line, of spaces only, is empty. A tab is never indentation, but text. The literal has the escapes and the interpolation of `"..."`, each within a line, and holds `"` and `""` as they are; `\"""` writes `"""`. A CRLF line end is a line feed.
+- `'''` string literals span lines as `"""` ones do, and leave out the indentation that their lines share as those do, but have no escapes and no interpolation, as `'...'` has none: the first `'''` closes, and no text holds one.
 
 ## Indentation
 
