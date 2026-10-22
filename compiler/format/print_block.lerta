@@ -1,5 +1,7 @@
 # The expressions that hold blocks: function literals, `case` and `try`.
-import Case, CaseArm, Expression, FunctionLiteral, Parameter, Position, Statement, Try from '../ast'
+import
+  Case, CaseArm, Expression, FunctionLiteral, Identifier, Parameter, Position, Statement, Try
+from '../ast'
 import
   breaking_after, choice, Doc, indent, join, line_feed, rule, separated, text, token
 from './doc'
@@ -114,9 +116,13 @@ const pattern_item = (pattern: Expression, context: Context) ->
 const arm_body = (body: Statement[], head: Position, context: Context, joint: String) ->
   const block = indent(join([line_feed(), block_doc(body, context)]))
   const has_comments = context.source.block_has_comments(head)
-  return block if body.length != 1 or not is_inline(body[0], context) or has_comments
+  const stays_block = body.length != 1 or not is_inline(body[0], context) or has_comments
+  return block if stays_block or is_name_pass(body[0])
   const on_line = join([text(joint), inline_statement(body[0], context)])
   rule BRANCHES, choice(on_line, block)
+
+# The name `pass` alone, which on the line of the arm would be the arm that does nothing.
+const is_name_pass = (statement: Statement) -> statement is Identifier and statement.name == 'pass'
 
 export const try_doc = (try_value: Try, context: Context) ->
   const block = (body: Statement[]) -> indent(join([line_feed(), block_doc(body, context)]))
