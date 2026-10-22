@@ -1,5 +1,5 @@
 # Exceptions in the generated code (see docs/internals.md#exceptions).
-import Statement, Try from '../ast'
+import Catch, Statement, Try from '../ast'
 import merge from './case'
 import type_of from './expression'
 import
@@ -167,42 +167,12 @@ export generate_try := (g: Generator, try_expression: Try) ->
   ir.start_block catches_label
   # A catch's own exception goes through the finally block, if there is one.
   catch_handler := finally_body then rethrow_label
-  for clause in try_expression.catches
-    exception := ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
-    caught_type := type_of(g, clause.name)
-    data := emit_interface_data(ir, exception)
-    takes_any := is_kind(caught_type, INTERFACE)
-    matched := takes_any then 'true' else emit_type_test(ir, data, caught_type)
-    clause_label := ir.fresh_label('catch')
-    next_label := ir.fresh_label('catch.next')
-    ir.emit "br i1 #{matched}, label %#{clause_label}, label %#{next_label}"
-    ir.start_block clause_label
-    emit_clear_exception ir
-    caught := takes_any then exception else data
-    define := (scope: Map<String, CodegenLocal>) ->
-      slot := store_in_slot(g, caught, caught_type)
-      scope[clause.name.name] = SlotLocal(pointer: slot.pointer, type: slot.type, caught: true)
-    generate_clause := -> generate_value(clause.body, define)
-    if label := catch_handler
-      with_handler g, label, generate_clause
-    else
-      generate_clause()
-    ir.start_block next_label
+  generate_catch g, clause, catch_handler, generate_value for clause in try_expression.catches
   # No catch takes the exception.
   ir.emit "br label %#{rethrow_label}"
   g.finallies.pop() if g.finallies.length > finally_depth
   ir.start_block rethrow_label
-  if finally_body
-    set_aside := ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
-    trace := call_runtime(ir, 'ptr @lerta_trace_save()', '')
-    emit_clear_exception ir
-    depth := g.temporaries.length
-    g.temporaries.push Temporary(operand: set_aside, owned: INTERFACE)
-    g.temporaries.push Temporary(operand: trace, owned: TRACE)
-    generate_block g, finally_body, no_locals
-    pop_temporaries g, depth
-    ir.emit "store #{INTERFACE_IR_TYPE} #{set_aside}, ptr #{exception_global(ir)}"
-    call_void_runtime ir, 'void @lerta_trace_restore(ptr)', "ptr #{trace}"
+  run_finally_unwinding g, finally_body if finally_body
   emit_unwind g
   ir.start_block done_label
   result := merge(g, type, incoming)
@@ -210,6 +180,49 @@ export generate_try := (g: Generator, try_expression: Try) ->
   run_finally := -> generate_block(g, finally_body ? [], no_locals)
   while_holding g, result, type, run_finally
   result
+
+# Runs the catch's block where the exception is of the caught type, with the catch's name bound to
+# it; elsewhere, falls through to the next catch.
+generate_catch := (
+  g: Generator, clause: Catch, handler: String?,
+  generate_value: (Statement[], (Map<String, CodegenLocal>) -> void) -> void
+) ->
+  ir := g.ir
+  exception := ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
+  caught_type := type_of(g, clause.name)
+  data := emit_interface_data(ir, exception)
+  takes_any := is_kind(caught_type, INTERFACE)
+  matched := takes_any then 'true' else emit_type_test(ir, data, caught_type)
+  clause_label := ir.fresh_label('catch')
+  next_label := ir.fresh_label('catch.next')
+  ir.emit "br i1 #{matched}, label %#{clause_label}, label %#{next_label}"
+  ir.start_block clause_label
+  emit_clear_exception ir
+  caught := takes_any then exception else data
+  define := (scope: Map<String, CodegenLocal>) ->
+    slot := store_in_slot(g, caught, caught_type)
+    scope[clause.name.name] = SlotLocal(pointer: slot.pointer, type: slot.type, caught: true)
+  generate_clause := -> generate_value(clause.body, define)
+  if handler
+    with_handler g, handler, generate_clause
+  else
+    generate_clause()
+  ir.start_block next_label
+
+# The finally block, run while an exception unwinds, which it sets aside with its trace and puts
+# back after.
+run_finally_unwinding := (g: Generator, finally_body: Statement[]) ->
+  ir := g.ir
+  set_aside := ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
+  trace := call_runtime(ir, 'ptr @lerta_trace_save()', '')
+  emit_clear_exception ir
+  depth := g.temporaries.length
+  g.temporaries.push Temporary(operand: set_aside, owned: INTERFACE)
+  g.temporaries.push Temporary(operand: trace, owned: TRACE)
+  generate_block g, finally_body, no_locals
+  pop_temporaries g, depth
+  ir.emit "store #{INTERFACE_IR_TYPE} #{set_aside}, ptr #{exception_global(ir)}"
+  call_void_runtime ir, 'void @lerta_trace_restore(ptr)', "ptr #{trace}"
 
 # Releases the scopes from `scope_depth` inward, innermost first, as a jump out of them does, and
 # runs on the way the finally blocks of the `try` blocks among them. Each runs as code right after

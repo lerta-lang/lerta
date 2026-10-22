@@ -35,8 +35,14 @@ export heap_object_type := (fields: HeapField[]) ->
 # Defines the LLVM struct type `layout` with the fields, and the type of its objects (see
 # define_type).
 export define_heap_object := (
-  module: IrModule, layout: String, type: String, linkage: String, fields: HeapField[],
-  name: String, deinit: String?, weak_slot: Int?
+  module: IrModule
+  layout: String
+  type: String
+  linkage: String
+  fields: HeapField[]
+  name: String
+  deinit: String? = nil
+  weak_slot: Int? = nil
 ) ->
   module.add_type layout, heap_object_type(fields)
   define_type module, layout, type, linkage, fields, name, deinit, weak_slot
@@ -47,8 +53,14 @@ export define_heap_object := (
 # object, first lets go of the object's weak box, held in the field at `weak_slot` (see weak_box),
 # and runs `deinit`, the symbol of the class's deinit method, if there is one.
 export define_type := (
-  module: IrModule, layout: String, type: String, linkage: String, fields: HeapField[],
-  name: String, deinit: String?, weak_slot: Int?
+  module: IrModule
+  layout: String
+  type: String
+  linkage: String
+  fields: HeapField[]
+  name: String
+  deinit: String? = nil
+  weak_slot: Int? = nil
 ) ->
   visit := suffixed_symbol(type, 'visit')
   define_visit module, layout, visit, linkage, fields
@@ -217,7 +229,7 @@ values_layout := (ir: IrBuilder, type: Type) ->
   fields := [value_field(each) for each in value_types(type)]
   define := (layout: String, module: IrModule) ->
     name := format_type(type)
-    define_heap_object module, layout, layout_type(layout), 'private ', fields, name, nil, nil
+    define_heap_object module, layout, layout_type(layout), 'private ', fields, name
   prefix := type is TupleType then '%lerta.tuple' else '%lerta.record'
   ir.module.named "values #{type_key(type)}", prefix, define
 
@@ -258,7 +270,7 @@ cell_layout := (ir: IrBuilder, type: Type) ->
   define := (layout: String, module: IrModule) ->
     # Cells of all types of the same IR type and ownership share it.
     fields := [value_field(type)]
-    define_heap_object module, layout, layout_type(layout), 'private ', fields, 'var', nil, nil
+    define_heap_object module, layout, layout_type(layout), 'private ', fields, 'var'
   key := "cell #{ir_type(type)} #{ownership(type)}"
   ir.module.named key, '%lerta.cell', define
 

@@ -11,6 +11,7 @@ import
   store_in_slot
 from './function'
 import CodegenLocal, Generator, Loop, ValueLocal from './generator'
+import emit_if_else, emit_when from './ir_builder'
 import
   emit_comprehension_iter, emit_range_iter, emit_sequence_get, emit_sequence_length,
   emit_source_iter
@@ -21,19 +22,10 @@ import emit_is_present, emit_unwrap from './optional'
 import ArrayType, int_type, iterable_item, IterType, OptionalType, Type from '../types'
 
 export generate_if := (g: Generator, if_statement: If) ->
-  ir := g.ir
   condition := generate_condition_of(g, if_statement.condition)
-  then_label := ir.fresh_label('if.then')
-  else_label := ir.fresh_label('if.else')
-  end_label := ir.fresh_label('if.end')
-  ir.emit "br i1 #{condition.test}, label %#{then_label}, label %#{else_label}"
-  ir.start_block then_label
-  generate_block g, if_statement.then_body, condition.define
-  ir.emit "br label %#{end_label}"
-  ir.start_block else_label
-  generate_block g, statement_else_body(if_statement), no_locals
-  ir.emit "br label %#{end_label}"
-  ir.start_block end_label
+  then_body := -> generate_block(g, if_statement.then_body, condition.define)
+  else_body := -> generate_block(g, statement_else_body(if_statement), no_locals)
+  emit_if_else g.ir, condition.test, then_body, else_body
 
 # The test of a condition, and what it defines in the body: for `name := value`, the value
 # without nil, which the body's scope owns.
@@ -90,16 +82,11 @@ export push_comprehension := (g: Generator, comprehension: Comprehension, result
   ir := g.ir
   body := ->
     statements_code(g, bindings)()
-    push_label := ir.fresh_label('comprehension.push')
-    next_label := ir.fresh_label('comprehension.next')
     test := guard then generate_condition(g, guard) else 'true'
-    ir.emit "br i1 #{test}, label %#{push_label}, label %#{next_label}"
-    ir.start_block push_label
-    value := generate(g, element)
-    emit_push ir, result, value, element_type
-    release_if_reference g, element, value
-    ir.emit "br label %#{next_label}"
-    ir.start_block next_label
+    emit_when ir, test, ->
+      value := generate(g, element)
+      emit_push ir, result, value, element_type
+      release_if_reference g, element, value
   generate_iteration g, iterable, variable, index, body
 
 # What a `for` or a comprehension goes through: the iterable, or the call of its `iter()` that

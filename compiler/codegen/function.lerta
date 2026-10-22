@@ -29,7 +29,7 @@ import
   emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of,
   emit_weak_object, emit_weak_slot_or_null, HeapField, value_field
 from './heap_object'
-import IrBuilder, IrModule from './ir_builder'
+import emit_if_else, IrBuilder, IrModule from './ir_builder'
 import
   constructor_symbol, default_entry_symbol, emit_release, emit_release_stored, emit_retain,
   emit_retain_value, ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol
@@ -329,20 +329,7 @@ argument_index := (arguments: FieldInfo[], field: FieldInfo) ->
 emit_default_or_argument := (
   g: Generator, arguments: FieldInfo[], field: FieldInfo, compute: () -> void,
   store_argument: () -> void
-) ->
-  ir := g.ir
-  given := "%given#{argument_index(arguments, field)}"
-  given_label := ir.fresh_label('argument.given')
-  default_label := ir.fresh_label('argument.default')
-  end_label := ir.fresh_label('argument.end')
-  ir.emit "br i1 #{given}, label %#{given_label}, label %#{default_label}"
-  ir.start_block given_label
-  store_argument()
-  ir.emit "br label %#{end_label}"
-  ir.start_block default_label
-  compute()
-  ir.emit "br label %#{end_label}"
-  ir.start_block end_label
+) -> emit_if_else(g.ir, "%given#{argument_index(arguments, field)}", store_argument, compute)
 
 # The field takes over the value, owned; a weak field takes its box instead.
 store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String) ->
