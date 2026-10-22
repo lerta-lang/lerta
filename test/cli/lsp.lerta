@@ -99,7 +99,7 @@ diagnostic_lifecycle_check := ->
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"print missing\\n\"}}}"
       )
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":2},\"contentChanges\":[{\"text\":\"const unused = 1\\n\"}]}}"
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":2},\"contentChanges\":[{\"text\":\"unused := 1\\n\"}]}}"
       )
       frame(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":3},\"contentChanges\":[{\"text\":\"print 1\\n\"}]}}"
@@ -116,7 +116,7 @@ diagnostic_lifecycle_check := ->
         [
           initialize_response('utf-16')
           published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])
-          published_diagnostics(uri, [diagnostic_body(0, 6, 2, "'unused' is never used")])
+          published_diagnostics(uri, [diagnostic_body(0, 0, 2, "'unused' is never used")])
           published_diagnostics(uri, [])
           published_diagnostics(uri, [])
           shutdown_response
@@ -133,7 +133,7 @@ imported_diagnostic_check := ->
     path := "#{dir}/a.lerta"
     imported := "#{dir}/b.lerta"
     await write_file(path, ''.binary)
-    await write_file(imported, "export const b = '😀' + nothing\n".binary)
+    await write_file(imported, "export b := '😀' + nothing\n".binary)
     uri := uri_of(path)
     message := frame
       "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"import b from './b'\\nprint b\\n\"}}}"
@@ -147,7 +147,7 @@ imported_diagnostic_check := ->
           published_diagnostics(uri, [])
           published_diagnostics(
             uri_of(imported)
-            [diagnostic_body(0, 24, 1, "undefined name 'nothing'")]
+            [diagnostic_body(0, 19, 1, "undefined name 'nothing'")]
           )
           shutdown_response
         ].join(
@@ -165,7 +165,7 @@ uri_import_check := ->
     imported := uri_of("#{dir}/lib.lerta")
     make_dir nested
     await write_file(path, ''.binary)
-    await write_file("#{dir}/lib.lerta", "export const x = missing\n".binary)
+    await write_file("#{dir}/lib.lerta", "export x := missing\n".binary)
     uri := uri_of(path)
     message := frame
       "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"import x from '../lib'\\nprint x\\n\"}}}"
@@ -179,7 +179,7 @@ uri_import_check := ->
         ran.stdout.text()!
         [
           published_diagnostics(uri, [])
-          published_diagnostics(imported, [diagnostic_body(0, 17, 1, "undefined name 'missing'")])
+          published_diagnostics(imported, [diagnostic_body(0, 12, 1, "undefined name 'missing'")])
           '{"jsonrpc":"2.0","id":1,"result":null}'
         ]
       )...
@@ -324,7 +324,7 @@ formatting_new_document_check := ->
 shared_import_check := ->
   Check name: 'lerta lsp checks shared imports for each open document', run: ->
     dir := new_cli_dir('lsp-shared-import')
-    await write_file("#{dir}/b.lerta", "export const b: Int = 'text'\n".binary)
+    await write_file("#{dir}/b.lerta", "export b: Int = 'text'\n".binary)
     c := uri_of("#{dir}/c.lerta")
     d := uri_of("#{dir}/d.lerta")
     await write_file("#{dir}/c.lerta", ''.binary)
@@ -346,17 +346,17 @@ shared_import_check := ->
           published_diagnostics(c, [])
           published_diagnostics(
             uri_of("#{dir}/b.lerta")
-            [diagnostic_body(0, 22, 1, 'expected Int, got String')]
+            [diagnostic_body(0, 16, 1, 'expected Int, got String')]
           )
           published_diagnostics(d, [])
           published_diagnostics(
             uri_of("#{dir}/b.lerta")
-            [diagnostic_body(0, 22, 1, 'expected Int, got String')]
+            [diagnostic_body(0, 16, 1, 'expected Int, got String')]
           )
           published_diagnostics(c, [])
           published_diagnostics(
             uri_of("#{dir}/b.lerta")
-            [diagnostic_body(0, 22, 1, 'expected Int, got String')]
+            [diagnostic_body(0, 16, 1, 'expected Int, got String')]
           )
         ]
       )...
@@ -370,9 +370,9 @@ changed_import_check := ->
     a := uri_of("#{dir}/a.lerta")
     b := uri_of("#{dir}/b.lerta")
     messages :=
-      did_open(b, "export const b = 'text'\n")
+      did_open(b, "export b := 'text'\n")
       did_open(a, "import b from './b'\nprint b\n")
-      did_change(b, "export const c = 1\n")
+      did_change(b, "export c := 1\n")
     .join('')
     ran := await session(dir, messages)
     [
@@ -394,13 +394,13 @@ close_unsaved_import_check := ->
   Check name: 'lerta lsp uses an imported document file again when it closes', run: ->
     dir := new_cli_dir('lsp-close-unsaved-import')
     await write_file("#{dir}/a.lerta", ''.binary)
-    await write_file("#{dir}/b.lerta", "export const f = -> 1\n".binary)
+    await write_file("#{dir}/b.lerta", "export f := -> 1\n".binary)
     a := uri_of("#{dir}/a.lerta")
     b := uri_of("#{dir}/b.lerta")
     messages :=
       did_open(a, "import f from './b'\nprint f()\n")
-      did_open(b, "export const f = -> 1\n")
-      did_change(b, "export const f = -> zzz\n")
+      did_open(b, "export f := -> 1\n")
+      did_change(b, "export f := -> zzz\n")
       frame(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{b}\"}}}"
       )
@@ -424,12 +424,12 @@ hover_definition_check := ->
   Check name: 'lerta lsp gives a value type and its declaration location', run: ->
     dir := new_cli_dir('lsp-hover-definition')
     path := "#{dir}/a.lerta"
-    text := "const value = 1\nprint value\n"
+    text := "value := 1\nprint value\n"
     await write_file(path, text.binary)
     uri := uri_of(path)
     messages :=
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"const value = 1\\nprint value\\n\"}}}"
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"value := 1\\nprint value\\n\"}}}"
       )
       frame(
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
@@ -443,7 +443,7 @@ hover_definition_check := ->
       expect_status(0, ran.status)...
       exact_responses(
         ran.stdout.text()!
-        [hover_fragment(1, 'value: Int'), location_fragment(2, uri, 0, 6, 11)]
+        [hover_fragment(1, 'value: Int'), location_fragment(2, uri, 0, 0, 5)]
       )...
     ]
 
@@ -451,12 +451,12 @@ generic_hover_check := ->
   Check name: 'lerta lsp gives generic values the types of their instances', run: ->
     dir := new_cli_dir('lsp-generic-hover')
     path := "#{dir}/a.lerta"
-    text := "const id = <T>(v: T) -> v\nprint id(1)\nprint id('a')\n"
+    text := "id := <T>(v: T) -> v\nprint id(1)\nprint id('a')\n"
     await write_file(path, text.binary)
     uri := uri_of(path)
     messages :=
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"const id = <T>(v: T) -> v\\nprint id(1)\\nprint id('a')\\n\"}}}"
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"id := <T>(v: T) -> v\\nprint id(1)\\nprint id('a')\\n\"}}}"
       )
       frame(
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
@@ -489,13 +489,13 @@ definition_contexts_check := ->
       'class K'
       '  v: Int = 1'
       '  inc = -> @v += 1'
-      'const k = K()'
+      'k := K()'
       'k.v = 3'
       'enum Color'
       '  RED'
-      'const c = Color.RED'
-      'const found: Int? = 1'
-      'if const n = found'
+      'c := Color.RED'
+      'found: Int? = 1'
+      'if n := found'
       '  print n'
       'try'
       "  throw ValueError(message: 'x')"
@@ -517,7 +517,7 @@ definition_contexts_check := ->
       did_open(uri, text)
       definition_request(uri, 5, 2, 10)
       definition_request(uri, 3, 12, 11)
-      definition_request(uri, 8, 16, 12)
+      definition_request(uri, 8, 11, 12)
       definition_request(uri, 11, 8, 13)
       definition_request(uri, 15, 8, 14)
       definition_request(uri, 19, 15, 15)
@@ -534,7 +534,7 @@ definition_contexts_check := ->
           location_fragment(10, uri, 2, 2, 3)
           location_fragment(11, uri, 2, 2, 3)
           location_fragment(12, uri, 7, 2, 5)
-          location_fragment(13, uri, 10, 9, 10)
+          location_fragment(13, uri, 10, 3, 4)
           location_fragment(14, uri, 14, 6, 11)
           location_fragment(15, uri, 2, 2, 3)
           location_fragment(16, uri, 19, 2, 7)
@@ -550,7 +550,7 @@ hover_contexts_check := ->
     path := "#{dir}/a.lerta"
     emoji := "\u{1F600}"
     text :=
-      "const s = '#{emoji}'"
+      "s := '#{emoji}'"
       'struct Box<T>(value: T)'
       'extend Int'
       '  twice = -> @ * 2'
@@ -588,7 +588,7 @@ hover_contexts_check := ->
         ran.stdout.text()!
         [
           hover_fragment(10, 's: String')
-          location_fragment(11, uri, 0, 6, 7)
+          location_fragment(11, uri, 0, 0, 1)
           hover_fragment(12, 'n: Int')
           location_fragment(13, uri, 4, 4, 5)
           hover_fragment(14, 'Box: Box<Int>')
@@ -598,9 +598,9 @@ hover_contexts_check := ->
           hover_fragment(18, 'twice: () -> Int')
           location_fragment(19, uri, 3, 2, 7)
           hover_fragment(20, 's: String')
-          location_fragment(21, uri, 0, 6, 7)
+          location_fragment(21, uri, 0, 0, 1)
           hover_fragment(22, 's: String')
-          location_fragment(23, uri, 0, 6, 7)
+          location_fragment(23, uri, 0, 0, 1)
           hover_fragment(24, 'to_string: () -> String')
           '"id":25,"result":null'
         ]
@@ -615,15 +615,15 @@ optional_and_interpolation_check := ->
       path := "#{dir}/a.lerta"
       text :=
         'struct P(x: Int)'
-        'const f = (p: P?) -> p?.x'
+        'f := (p: P?) -> p?.x'
         'class C'
         '  x: Int = 1'
         '  get = -> @x'
         'print C().get()'
         'print f(nil) == nil'
         'print "#{C().x}"'
-        'const g = (p: P?) -> p?.x.to_string()'
-        'const to_string_value = 1'
+        'g := (p: P?) -> p?.x.to_string()'
+        'to_string_value := 1'
         'print "#{to_string_value}"'
         ''
       .join("\n")
@@ -636,12 +636,12 @@ optional_and_interpolation_check := ->
         definition_request(uri, 7, 13, 11)
         hover_request(uri, 7, 15, 12)
         definition_request(uri, 7, 15, 13)
-        hover_request(uri, 8, 28, 14)
-        definition_request(uri, 8, 28, 15)
+        hover_request(uri, 8, 23, 14)
+        definition_request(uri, 8, 23, 15)
         hover_request(uri, 10, 10, 16)
         definition_request(uri, 10, 10, 17)
-        hover_request(uri, 1, 24, 18)
-        definition_request(uri, 1, 24, 19)
+        hover_request(uri, 1, 19, 18)
+        definition_request(uri, 1, 19, 19)
         hover_request(uri, 4, 12, 20)
         definition_request(uri, 4, 12, 21)
         hover_request(uri, 5, 40, 22)
@@ -664,7 +664,7 @@ optional_and_interpolation_check := ->
             hover_fragment(14, 'to_string: () -> String')
             '"id":15,"result":null'
             hover_fragment(16, 'to_string_value: Int')
-            location_fragment(17, uri, 9, 6, 21)
+            location_fragment(17, uri, 9, 0, 15)
             hover_fragment(18, 'x: Int')
             location_fragment(19, uri, 0, 9, 10)
             hover_fragment(20, 'x: Int')
@@ -684,14 +684,14 @@ open_import_hover_check := ->
     dir := new_cli_dir('lsp-open-import-hover')
     a_path := "#{dir}/a.lerta"
     b_path := "#{dir}/b.lerta"
-    b_text := "export const b = 1\n"
+    b_text := "export b := 1\n"
     await write_file(a_path, ''.binary)
     await write_file(b_path, b_text.binary)
     a := uri_of(a_path)
     b := uri_of(b_path)
     messages :=
       did_open(a, "import b from './b'\nprint b\n")
-      hover_request(b, 0, 13, 10)
+      hover_request(b, 0, 7, 10)
       did_open(b, b_text)
       frame(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{a}\"}}}"
@@ -712,14 +712,14 @@ definitions_after_error_check := ->
     dir := new_cli_dir('lsp-definitions-after-error')
     path := "#{dir}/a.lerta"
     text :=
-      'const n = [1].length'
+      'n := [1].length'
       'print n + zz'
-      'const q = 2'
+      'q := 2'
       'print q'
-      'const (a, b) = (1, 2)'
+      '(a, b) := (1, 2)'
       'for item in [a]'
       '  print item + b'
-      'const add = (x: Int) -> -> x + 1'
+      'add := (x: Int) -> -> x + 1'
       'print add(1)()'
       ''
     .join("\n")
@@ -730,7 +730,7 @@ definitions_after_error_check := ->
       definition_request(uri, 3, 6, 10)
       definition_request(uri, 6, 8, 11)
       definition_request(uri, 6, 15, 12)
-      definition_request(uri, 7, 27, 13)
+      definition_request(uri, 7, 22, 13)
       did_change(uri, "import x from './missing'\nprint n + zz\n")
       hover_request(uri, 1, 6, 20)
     .join('')
@@ -740,10 +740,10 @@ definitions_after_error_check := ->
       exact_responses(
         ran.stdout.text()!
         [
-          location_fragment(10, uri, 2, 6, 7)
+          location_fragment(10, uri, 2, 0, 1)
           location_fragment(11, uri, 5, 4, 8)
-          location_fragment(12, uri, 4, 10, 11)
-          location_fragment(13, uri, 7, 13, 14)
+          location_fragment(12, uri, 4, 4, 5)
+          location_fragment(13, uri, 7, 8, 9)
           '"id":20,"result":null'
         ]
       )...
@@ -756,14 +756,14 @@ imported_hover_definition_check := ->
       dir := new_cli_dir('lsp-imported-hover-definition')
       lib := "#{dir}/lib.lerta"
       path := "#{dir}/a.lerta"
-      text := "import make from './lib'\nconst p = make(1)\nprint p.x\nconst id = <T>(v: T) -> v\nprint id(1) + id(2)\nprint id('a')\n"
+      text := "import make from './lib'\np := make(1)\nprint p.x\nid := <T>(v: T) -> v\nprint id(1) + id(2)\nprint id('a')\n"
       await write_file(
         lib
-        "export struct Point(x: Int, y: Int)\nexport const make = (x: Int) -> Point(x, y: 0)\n".binary
+        "export struct Point(x: Int, y: Int)\nexport make := (x: Int) -> Point(x, y: 0)\n".binary
       )
       await write_file(path, ''.binary)
       uri := uri_of(path)
-      asks := [(1, 10), (2, 8), (3, 24), (4, 6), (5, 6), (0, 7), (1, 4)]
+      asks := [(1, 5), (2, 8), (3, 19), (4, 6), (5, 6), (0, 7), (1, 2)]
       messages := [did_open(uri, text)]
       for ask, i in asks
         (line, character) := ask
@@ -776,17 +776,17 @@ imported_hover_definition_check := ->
           ran.stdout.text()!
           [
             hover_fragment(10, 'make: (Int) -> Point')
-            location_fragment(11, uri_of(lib), 1, 13, 17)
+            location_fragment(11, uri_of(lib), 1, 7, 11)
             hover_fragment(12, 'x: Int')
             location_fragment(13, uri_of(lib), 0, 20, 21)
             hover_fragment(14, "v: Int\nv: String")
-            location_fragment(15, uri, 3, 15, 16)
+            location_fragment(15, uri, 3, 10, 11)
             hover_fragment(16, 'id: (Int) -> Int')
-            location_fragment(17, uri, 3, 6, 8)
+            location_fragment(17, uri, 3, 0, 2)
             hover_fragment(18, 'id: (String) -> String')
-            location_fragment(19, uri, 3, 6, 8)
+            location_fragment(19, uri, 3, 0, 2)
             '"id":20,"result":null'
-            location_fragment(21, uri_of(lib), 1, 13, 17)
+            location_fragment(21, uri_of(lib), 1, 7, 11)
             '"id":22,"result":null'
             '"id":23,"result":null'
           ]
@@ -834,7 +834,7 @@ reexport_definition_check := ->
     shapes := "#{dir}/shapes.lerta"
     text := "import n from './facade'\nexport norm as m from './shapes'\nprint n(1)\n"
     await write_file(path, ''.binary)
-    await write_file(shapes, "export const norm = (x: Int) -> x\n".binary)
+    await write_file(shapes, "export norm := (x: Int) -> x\n".binary)
     await write_file("#{dir}/facade.lerta", "export norm as n from './shapes'\n".binary)
     uri := uri_of(path)
     messages :=
@@ -850,10 +850,10 @@ reexport_definition_check := ->
       exact_responses(
         ran.stdout.text()!
         [
-          location_fragment(1, uri_of(shapes), 0, 13, 17)
-          location_fragment(2, uri_of(shapes), 0, 13, 17)
-          location_fragment(3, uri_of(shapes), 0, 13, 17)
-          location_fragment(4, uri_of(shapes), 0, 13, 17)
+          location_fragment(1, uri_of(shapes), 0, 7, 11)
+          location_fragment(2, uri_of(shapes), 0, 7, 11)
+          location_fragment(3, uri_of(shapes), 0, 7, 11)
+          location_fragment(4, uri_of(shapes), 0, 7, 11)
         ]
       )...
     ]

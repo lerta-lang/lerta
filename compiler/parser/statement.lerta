@@ -1,5 +1,5 @@
-# Statements: the program, blocks, `const` and `var` declarations, assignments, control flow and
-# calls without parentheses; `declaration` reads the other declarations.
+# Statements: the program, blocks, the declarations of consts and `var`s, assignments, control flow
+# and calls without parentheses; `declaration` reads the other declarations.
 import
   ArrayLiteral, ArrayTypeName, Assignment, AssignmentTarget, Binding, Call, Condition,
   copy_identifier, Declaration, Expression, For, Identifier, If, Index, Jump, Member, NamedType,
@@ -92,15 +92,13 @@ export parse_statement := (tokens: TokenStream): Statement ->
         else parse_postfix_conditions(tokens, parse_simple_statement(tokens))
 
 export at_declaration := (tokens: TokenStream) ->
-  at_keyword := is_one_of(tokens.peek().kind, ['const', 'var'])
   at_bare := at_named_declaration(tokens, 0) or at_bare_destructuring(tokens, 0)
-  at_keyword or at_weak_declaration(tokens) or at_bare
+  tokens.peek().kind == 'var' or at_weak_declaration(tokens) or at_bare
 
 # `weak` before a declaration, or before a destructuring, which parse_declaration rejects.
 at_weak_declaration := (tokens: TokenStream) ->
-  at_keyword := is_one_of(tokens.peek_at(1).kind, ['const', 'var'])
   at_bare := at_named_declaration(tokens, 1) or at_bare_destructuring(tokens, 1)
-  tokens.at_word('weak') and (at_keyword or at_bare)
+  tokens.at_word('weak') and (tokens.peek_at(1).kind == 'var' or at_bare)
 
 # `name := value`, `name: Type = value` or `name: Type`, at `offset`.
 at_named_declaration := (tokens: TokenStream, offset: Int) ->
@@ -108,9 +106,15 @@ at_named_declaration := (tokens: TokenStream, offset: Int) ->
   name_follows and is_one_of(tokens.peek_at(offset + 1).kind, [':=', ':'])
 
 export at_destructuring := (tokens: TokenStream) ->
-  at_keyword := is_one_of(tokens.peek().kind, ['const', 'var'])
-  after_keyword := at_keyword and is_one_of(tokens.peek_at(1).kind, ['{', '('])
-  after_keyword or at_bare_destructuring(tokens, 0)
+  after_var := tokens.peek().kind == 'var' and is_one_of(tokens.peek_at(1).kind, ['{', '('])
+  after_var or at_bare_destructuring(tokens, 0)
+
+# `const` where a declaration would start, which a const does without, as a field of a class or
+# struct alone takes it.
+reject_const := (tokens: TokenStream) ->
+  token := tokens.peek_at(tokens.at_word('weak') then 1 else 0)
+  return if token.kind != 'const'
+  tokens.fail token_position(token), 'a const is declared as `name := value`, without `const`'
 
 # `{ a, b } := value` or `(a, b) := value`, which only `:=` after the names tells from an
 # expression.
@@ -127,6 +131,7 @@ is_name_list_token := (kind: TokenKind) ->
 # A statement that fits on one line, which postfix `if` and `while` can follow, unless it is a
 # declaration.
 export parse_simple_statement := (tokens: TokenStream): Statement ->
+  reject_const tokens
   if at_destructuring(tokens)
     position := token_position(tokens.peek())
     parse_destructuring tokens
@@ -201,19 +206,16 @@ wrap_in_for := (tokens: TokenStream, statement: Statement) ->
   body := [take_apart_item(header)..., guarded]
   For variable, iterable, body, position, index
 
-# `[weak] name := value` or `[weak] name: Type = value`, or `var` before a name, which takes `=`;
-# `const` before a name, which the formatter leaves out, takes `=` too.
+# `[weak] name := value` or `[weak] name: Type = value`, or `var` before a name, which takes `=`.
 parse_declaration := (tokens: TokenStream) ->
   position := token_position(tokens.peek())
   weak := at_weak_declaration(tokens) and tokens.accept_word('weak')
-  has_keyword := is_one_of(tokens.peek().kind, ['const', 'var'])
-  mutable := tokens.peek().kind == 'var'
-  tokens.next() if has_keyword
+  mutable := tokens.accept('var')
   if weak and is_one_of(tokens.peek().kind, ['{', '('])
     tokens.fail position, 'a destructuring declaration cannot be weak'
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
-  tokens.fail_expecting tokens.peek(), "'='" if has_keyword and tokens.peek().kind == ':='
+  tokens.fail_expecting tokens.peek(), "'='" if mutable and tokens.peek().kind == ':='
   # `var x: T?` without a value is nil at first; the checker rejects a type that nil does not fit.
   if mutable and tokens.peek().kind != '='
     if type == nil
@@ -230,8 +232,8 @@ parse_declaration := (tokens: TokenStream) ->
     # The type of an empty Map or Set goes to its type arguments, as the formatter writes it.
     written := value is Call then nil else type
     return Declaration(name, value, mutable, position, weak, type: written)
-  # A type, as `const` and `var` do, tells a declaration from an assignment; `:=` does without.
-  operator: TokenKind = has_keyword or type then '=' else ':='
+  # A type, as `var` does, tells a declaration from an assignment; `:=` does without.
+  operator: TokenKind = mutable or type then '=' else ':='
   tokens.expect operator, "'#{operator}'"
   value := parse_value(tokens)
   Declaration name, type, value, mutable, position, weak
@@ -253,14 +255,11 @@ export parse_destructuring_statement := (tokens: TokenStream) ->
 
 # `{ a, b } := value` declares a const that cannot be named (`.` is not allowed in names), holding
 # the value, then `a` and `b`, each from the field of its name. `(a, b) := value` takes a tuple
-# apart likewise, by position. `var` before the names declares them so, and takes `=`, as `const`
-# does, which the formatter leaves out.
+# apart likewise, by position. `var` before the names declares them so, and takes `=`.
 parse_destructuring := (tokens: TokenStream) ->
   position := token_position(tokens.peek())
-  has_keyword := is_one_of(tokens.peek().kind, ['const', 'var'])
-  mutable := tokens.peek().kind == 'var'
-  tokens.next() if has_keyword
-  operator: TokenKind = has_keyword then '=' else ':='
+  mutable := tokens.accept('var')
+  operator: TokenKind = mutable then '=' else ':='
   if tokens.peek().kind == '('
     names := parse_tuple_names(tokens)
     value := parse_held_value(tokens, operator)
@@ -353,15 +352,14 @@ parse_for := (tokens: TokenStream) ->
   body := [take_apart_item(header)..., parse_block(tokens)...]
   For variable, iterable, position, index, body
 
-# A condition, or `name := value` or `const name = value`, which holds when the value is not nil.
+# A condition, or `name := value`, which holds when the value is not nil.
 parse_condition := (tokens: TokenStream): Condition ->
+  reject_const tokens
   token := tokens.peek()
   binds_name := token.kind == IDENTIFIER and tokens.peek_at(1).kind == ':='
-  return parse_expression(tokens) if token.kind != 'const' and not binds_name
-  tokens.next() if token.kind == 'const'
+  return parse_expression(tokens) if not binds_name
   name := parse_identifier(tokens)
-  operator: TokenKind = binds_name then ':=' else '='
-  tokens.expect operator, "'#{operator}'"
+  tokens.next()
   Binding name, value: parse_expression(tokens), position: token_position(token)
 
 parse_while := (tokens: TokenStream) ->

@@ -18,7 +18,6 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Shorthand**: when the value of a named argument or a field is a variable of the same name, write the name alone: `Point(x, y: 2)`, `{ a }`. `lerta fmt` applies it only to the fields of an anonymous struct so far; to named arguments, as `Point(x: x)`, it is [planned](../roadmap/programs.md#tools).
 - **Parentheses**: do not write parentheses that change nothing, except where another rule asks for them (**Ranges**), to clarify `and` mixed with `or` and around a `then`/`else` inside the `then` value of another (`a then (b then x else y) else z`), whose `else`s are hard to pair otherwise.
 - **Cast fallbacks**: write `x as T ? y`, not `(x as T?) ? y`.
-- **Declarations**: declare a const with `name := value`, or `name: Type = value` where its type is written, not with `const`, which only a field of a class or struct takes.
 - **Nil initial values**: write `var found: String?`, not `var found: String? = nil`.
 - **Empty initial values**: write `names: String[]`, not `names: String[] = []`, and `seen: Set<String>`, not `seen := Set<String>()` or `seen: Set<String> = Set()`; the same for `Map`. A `var` and a field keep their values.
 - **Negated is tests**: write `x is not T`, not `not (x is T)`.

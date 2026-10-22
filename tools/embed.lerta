@@ -47,36 +47,36 @@ import_line := seed_mode then "import is_dir, list_dir, read_file from 'std:io'\
 # embedded_source is the same function in both modes.
 SEED_PART := '''
   # The files of std under the directory, as paths from the repository's root.
-  const std_files = (dir: String): String[] ->
-    const files: String[] = []
+  std_files := (dir: String): String[] ->
+    files: String[]
     for name in list_dir(dir)
-      const path = "#{dir}/#{name}"
+      path := "#{dir}/#{name}"
       if is_dir(path)
         files.append std_files(path)
       else if path.ends_with('.lerta')
         files.push path
     files
 
-  export const EMBEDDED_PATHS = std_files('std')
+  export EMBEDDED_PATHS := std_files('std')
 
-  const CONTENTS = Map<String, String>()
+  CONTENTS: Map<String, String>
   for path in EMBEDDED_PATHS
-    const bytes = await read_file(path)
+    bytes := await read_file(path)
     CONTENTS[path] = bytes.text() ? throw ValueError(message: "'#{path}' is not valid UTF-8")
 
-  export const embedded_source = (path: String) -> CONTENTS[path]
+  export embedded_source := (path: String) -> CONTENTS[path]
   '''
 normal_part := ->
   path_list := ["  #{path_literal(path)}\n" for path in paths].join('')
   contents := ["  #{path_literal(path)}: #{await contents_literal(path)}\n" for path in paths]
   return """
-    export const EMBEDDED_PATHS = [
+    export EMBEDDED_PATHS := [
     #{path_list}]
 
-    const CONTENTS: Map<String, String> = {
+    CONTENTS: Map<String, String> = {
     #{contents.join('')}}
 
-    export const embedded_source = (path: String) -> CONTENTS[path]
+    export embedded_source := (path: String) -> CONTENTS[path]
     """
 mode_part := seed_mode then SEED_PART else await normal_part()
 await write_file(output, [header, import_line, mode_part].join('').binary)

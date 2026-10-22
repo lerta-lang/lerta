@@ -13,12 +13,11 @@ import
   choice, Doc, has_line_feed, indent, join, line_feed, rule, separated, text, token
 from './doc'
 import declaration_doc, exported from './print_declaration'
-import Token from '../lexer/tokens'
 import SourceText from './source'
 import type_doc from './print_type'
 import
-  BRANCHES, CALLS_WITHOUT_PARENTHESES, DECLARATIONS, EMPTY_INITIAL_VALUES, ENUM_MEMBERS,
-  NIL_INITIAL_VALUES, POSTFIX_FORMS
+  BRANCHES, CALLS_WITHOUT_PARENTHESES, EMPTY_INITIAL_VALUES, ENUM_MEMBERS, NIL_INITIAL_VALUES,
+  POSTFIX_FORMS
 from './rules'
 import arguments, call_doc, expression_doc, loop_header from './print_expression'
 import value_after from './print_literal'
@@ -72,7 +71,7 @@ start_of := (statement: Statement, context: Context) ->
   var index = source.token_at(statement.position) ? return statement.position
   if holder := destructuring_holder(statement)
     open := destructuring_open(holder, context) ? return statement.position
-    index = keyword_before(source, open) then open - 1 else open
+    index = var_before(source, open) then open - 1 else open
   index -= 1 if index > 0 and source.spelling(source.tokens[index - 1]) == 'export'
   first := source.tokens[index]
   Position line: first.line, column: first.column
@@ -123,31 +122,16 @@ destructuring_doc := (holder: Declaration, context: Context) ->
     else
       join [token('{ ', at_open), separated(names, text(', ')), text(' }')]
   value := value_after(holder.value, context)
-  word := keyword_before(source, open)
-  if word and word.kind == 'var'
+  if word := var_before(source, open)
     join [token('var ', at_token(word.line, word.column)), pattern, text(' ='), value]
   else
-    at_word := word then at_token(word.line, word.column) else at_open
-    join [declared_head([keyword('', at_word), pattern, text(' :=')], word), value]
+    join [pattern, text(' :='), value]
 
-# The token that the source writes first for a declaration at `at`, after `weak` in a weak one:
-# `const`, `var` or the name.
-word_token := (at: Position, context: Context, weak = false) ->
-  source := context.source
-  index := source.token_at(at) ? return nil
-  source.tokens[weak then index + 1 else index]
-
-# The parts of a declaration up to its value, which break the style if the source writes `const`
-# first.
-declared_head := (parts: Doc[], written: Token?) ->
-  head := join(parts)
-  written?.kind == 'const' then rule(DECLARATIONS, head) else head
-
-# The `const` or `var` before the names of a destructuring, which `:=` does without.
-keyword_before := (source: SourceText, open: Int) ->
+# The `var` before the names of a destructuring, which `:=` does without.
+var_before := (source: SourceText, open: Int) ->
   return nil if open == 0
   before := source.tokens[open - 1]
-  before.kind == 'const' or before.kind == 'var' then before
+  before.kind == 'var' then before
 
 at_token := (line: Int, column: Int) -> Position(line, column)
 
@@ -219,24 +203,20 @@ variable_doc := (declaration: Declaration, context: Context) ->
   { mutable, position, weak, name } := declaration
   parts := [exported(declaration.exported, position, context)]
   parts.push text('weak ') if weak
-  word := word_token(position, context, weak)
-  word_at := word then at_token(word.line, word.column) else position
-  head :=
-    keyword(mutable then 'var ' else '', word_at)
-    token(name.name, name.position)
-    removed_type('variable', name.position, context)
+  parts.push keyword('var ', position) if mutable
+  parts.push token(name.name, name.position)
+  parts.push removed_type('variable', name.position, context)
   # A const of an array, Map or Set type is empty at first without its value (see Empty initial
   # values), and the type of an empty Map or Set moves from its type arguments.
   if empty_type := starts_empty(declaration)
     written := join([text(': '), type_doc(empty_type), rule(EMPTY_INITIAL_VALUES, text(''))])
-    head.push rule(EMPTY_INITIAL_VALUES, written)
-    return join([parts..., declared_head(head, word)])
-  head.push join([text(': '), type_doc(type)]) if type := declaration.type
+    return join([parts..., rule(EMPTY_INITIAL_VALUES, written)])
+  parts.push join([text(': '), type_doc(type)]) if type := declaration.type
   # `var x: T?` is nil at first without `= nil` (see Nil initial values).
-  if starts_nil(declaration)
-    return join([parts..., declared_head(head, word), rule(NIL_INITIAL_VALUES, text(''))])
-  head.push text(mutable or declaration.type then ' =' else ' :=')
-  join [parts..., declared_head(head, word), value_after(declaration.value, context)]
+  return join([parts..., rule(NIL_INITIAL_VALUES, text(''))]) if starts_nil(declaration)
+  parts.push text(mutable or declaration.type then ' =' else ' :=')
+  parts.push value_after(declaration.value, context)
+  join parts
 
 # The type is written with `?`, or the value is left out already: one that an alias makes optional
 # keeps `= nil` where it is written, which is still right.
@@ -270,9 +250,7 @@ condition_doc := (condition: Condition, context: Context) ->
   case condition
     when Binding
       name := token(condition.name.name, condition.name.position)
-      word := word_token(condition.position, context)
-      head := [keyword('', condition.position), name, text(' :=')]
-      join [declared_head(head, word), text(' '), expression_doc(condition.value, context)]
+      join [name, text(' := '), expression_doc(condition.value, context)]
     else expression_doc(condition, context)
 
 # `if` and its block, and `else if` or `else` and its block (see Branches).
