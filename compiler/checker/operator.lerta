@@ -1,8 +1,8 @@
 # Types unary and binary operators, nil tests and `?`.
 import all_but_last from '../arrays'
 import
-  Assignment, BinaryOperation, Coalesce, Expression, Identifier, is_nil_test, method_call,
-  NilLiteral, StringLiteral, UnaryOperation
+  Assignment, BinaryOperation, Coalesce, Expression, Identifier, is_equality_operator, is_nil_test,
+  is_order_operator, method_call, NilLiteral, StringLiteral, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
 import compares_by_contents, is_equatable, own_equality from './equality'
@@ -107,11 +107,11 @@ export type_of_coalesce := (body: Body, coalesce: Coalesce) ->
   inner
 
 export operand_kinds := (operator: String): TypeKind[] ->
+  # Strings order by their compare, and Chars by their numbers.
+  return [NUMERIC_KINDS..., 'Char', 'String'] if is_order_operator(operator)
   case operator
     when '+' then [NUMERIC_KINDS..., 'String', 'Binary']
     when '%', '&', '|', '^', '<<', '>>' then INTEGER_KINDS
-    # Strings order by their compare, and Chars by their numbers.
-    when '<', '<=', '>', '>=' then [NUMERIC_KINDS..., 'Char', 'String']
     else NUMERIC_KINDS
 
 # An arithmetic or bitwise operator passes the expected type to its operands; a comparison's operands have their own.
@@ -122,13 +122,13 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
     where_right_operand body, binary, -> expect_condition(body, binary.right)
     return bool_type
   return type_of_nil_test(body, binary) if is_nil_test(binary)
-  if operator == '==' or operator == '!='
+  if is_equality_operator(operator)
     reject := (type: Type) -> "cannot compare values of type #{format_type(type)}"
     type_of_operands body, binary, nil, EQUALITY_KINDS, reject
     return bool_type
   allowed := operand_kinds(operator)
   reject := (type: Type) -> "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
-  if not is_numeric_operator(operator)
+  if is_order_operator(operator)
     type := type_of_operands(body, binary, nil, allowed, reject)
     order_by_compare body, binary if is_kind(type, 'String')
     return bool_type
@@ -148,48 +148,21 @@ type_of_operands := (
   type := type_of(body, first, expected)
   program := body.program
   operator := binary.operator
-  # A string literal on the left of a Char, which no Char's method takes, is the String it appends to.
-  if right_first and operator == '+' and is_kind(type, 'Char') and second is StringLiteral
-    expect_type body, second, string_type
-    appends_unit body, first, string_type, type
-    return string_type
-  # An operator on a value of a type it does not apply to calls the type's method, which is that of
-  # its left operand.
-  if is_numeric_operator(operator) and not is_one_of_kinds(type, allowed_kinds)
-    name := OPERATOR_METHODS[operator]!
-    if right_first
-      has_method :=
-        member_type_by_name(body, type, Identifier(name: name, position: first.position)) != nil
-      if has_method or type is ObjectType
-        message := "#{operator} calls the #{name} of its left operand, not of #{format_type(type)}"
-        fail program, first.position, message
-    else
-      call := -> type_of_operator_call(body, binary, operator, left, type, name, [right])
-      return result if result := call()
-  is_equality := binary.operator == '==' or binary.operator == '!='
-  is_order := not is_equality and not is_numeric_operator(binary.operator)
+  call_type := type_of_operation_call(body, binary, first, second, type, right_first, allowed_kinds)
+  return call_type if call_type
+  is_equality := is_equality_operator(operator)
   inner := is_equality then inner_of(type) else type
   by_contents := is_equality and compares_by_contents(program, inner)
   is_identity := is_equality and is_identity_type(inner) and not by_contents
   return type_of_identity_operand(body, second, type) if is_identity
+  is_order := is_order_operator(operator)
   is_allowed :=
     case
       when by_contents then is_equatable(program, inner, first.position)
       # `<` and the like of a class or struct compare by its compare.
       when is_order and own_equality(program, inner) == 'compare' then true
       else is_one_of_kinds(inner, allowed_kinds)
-  if not is_allowed and is_order
-    if own_equality(program, inner_of(type)) == 'compare'
-      fail
-        program
-        first.position
-        "#{binary.operator} takes no optional values, got #{format_type(type)}"
-    if type is ObjectType
-      fail
-        program
-        first.position
-        "#{format_type(type)} has no compare, by which #{binary.operator} orders"
-  fail body.program, first.position, reject(type) if not is_allowed
+  reject_operand body, operator, first, type, reject if not is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
   second_type := type_of(body, second, type)
   is_unit := not right_first and operator == '+' and appends_unit(body, second, type, second_type)
@@ -197,6 +170,47 @@ type_of_operands := (
   reject_text_and_bytes body, second, type, second_type
   require_type body, second, second_type, type
   type
+
+# The type of an operation that is a call in place of the operator, or nil for one that is not: a
+# String appended to a Char, or an operator applied to a type it does not apply to.
+type_of_operation_call := (
+  body: Body, binary: BinaryOperation, first: Expression, second: Expression, type: Type,
+  right_first: Bool, allowed_kinds: TypeKind[]
+): Type? ->
+  { left, right, operator } := binary
+  # A string literal on the left of a Char, which no Char's method takes, is the String it appends to.
+  if right_first and operator == '+' and is_kind(type, 'Char') and second is StringLiteral
+    expect_type body, second, string_type
+    appends_unit body, first, string_type, type
+    return string_type
+  return nil if not is_numeric_operator(operator) or is_one_of_kinds(type, allowed_kinds)
+  # The method is that of the left operand.
+  name := OPERATOR_METHODS[operator]!
+  return type_of_operator_call(body, binary, operator, left, type, name, [right]) if not right_first
+  has_method :=
+    member_type_by_name(body, type, Identifier(name: name, position: first.position)) != nil
+  if has_method or type is ObjectType
+    message := "#{operator} calls the #{name} of its left operand, not of #{format_type(type)}"
+    fail body.program, first.position, message
+  nil
+
+# Rejects the operand, of a type the operator does not apply to.
+reject_operand := (
+  body: Body, operator: String, operand: Expression, type: Type, reject: (Type) -> String
+) ->
+  program := body.program
+  if is_order_operator(operator)
+    if own_equality(program, inner_of(type)) == 'compare'
+      fail
+        program
+        operand.position
+        "#{operator} takes no optional values, got #{format_type(type)}"
+    if type is ObjectType
+      fail
+        program
+        operand.position
+        "#{format_type(type)} has no compare, by which #{operator} orders"
+  fail program, operand.position, reject(type)
 
 # `<` and the like of two Strings test the Ordering of the left one's compare, by the call of it,
 # which the facts record for codegen to generate in place of the operation (see order_calls).

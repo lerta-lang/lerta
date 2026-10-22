@@ -1,6 +1,7 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import
-  BinaryOperation, Coalesce, Expression, is_nil_test, NilLiteral, UnaryOperation, Unwrap
+  BinaryOperation, Coalesce, Expression, is_nil_test, is_order_operator, NilLiteral, UnaryOperation,
+  Unwrap
 from '../ast'
 import compares_by_contents, own_equality from '../checker/equality'
 import is_numeric_operator, operator_of_method from '../checker/operator'
@@ -79,7 +80,7 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
     emit_release g.ir, left
     emit_release g.ir, right
     result
-  if own_equality(program, operand_type) == 'compare' and not is_equality(operator)
+  if own_equality(program, operand_type) == 'compare' and is_order_operator(operator)
     ordering := emit_own_compare(g.ir, program, left, right, operand_type)
     return released(emit_order_test(g.ir, operator, ordering))
   if by_contents
@@ -99,8 +100,6 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
 export apply_numeric := (g: Generator, operator: String, left: String, right: String, type: Type) ->
   return apply_float_arithmetic(g, operator, left, right, type) if is_float(type)
   apply_integer_operator g, operator, left, right, type
-
-is_equality := (operator: String) -> operator == '==' or operator == '!='
 
 # Whether the Ordering, an i64, is one that the operator, `<` or the like, holds for.
 emit_order_test := (ir: IrBuilder, operator: String, ordering: String) ->
