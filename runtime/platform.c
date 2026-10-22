@@ -153,14 +153,19 @@ bool lerta_os_rename(const char *from, const char *to) {
 
 // libuv lists the entries without `.` and `..`, and all at once, so they may be removed while
 // they are read.
+// A directory is listed by its real path: on Windows, a drive alone, as C:, names the drive's current
+// directory, but libuv lists the drive's root for it.
 bool lerta_os_list_dir(const char *path, LertaArray *names) {
+  char *dir = lerta_os_real_path(path);
+  if (dir == NULL) return false;
   uv_fs_t request;
-  bool listed = uv_fs_scandir(NULL, &request, path, 0, NULL) >= 0;
+  bool listed = uv_fs_scandir(NULL, &request, dir, 0, NULL) >= 0;
   uv_dirent_t entry;
   while (listed && uv_fs_scandir_next(&request, &entry) == 0) {
     lerta_append_c_string(names, entry.name);
   }
   uv_fs_req_cleanup(&request);
+  free(dir);
   return listed;
 }
 
@@ -189,10 +194,19 @@ bool lerta_os_remove_tree(const char *path) {
   bool is_dir = error == 0 && is_dir_mode(request.statbuf.st_mode);
   uv_fs_req_cleanup(&request);
   if (error != 0) return false;
-  bool removed = is_dir ? remove_entries(path) &&
-                              uv_fs_rmdir(NULL, &request, path, NULL) == 0
-                        : uv_fs_unlink(NULL, &request, path, NULL) == 0;
-  uv_fs_req_cleanup(&request);
+  if (!is_dir) {
+    bool unlinked = uv_fs_unlink(NULL, &request, path, NULL) == 0;
+    uv_fs_req_cleanup(&request);
+    return unlinked;
+  }
+  // By its real path, as lerta_os_list_dir lists a directory.
+  char *dir = lerta_os_real_path(path);
+  bool removed = dir != NULL && remove_entries(dir);
+  if (removed) {
+    removed = uv_fs_rmdir(NULL, &request, dir, NULL) == 0;
+    uv_fs_req_cleanup(&request);
+  }
+  free(dir);
   return removed;
 }
 
