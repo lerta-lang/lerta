@@ -60,11 +60,7 @@ can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) 
 struct Placed(key: String, annotation: Annotation)
 
 # Adds the removable annotations of the modules `wanted` that the program of `entry` holds and that
-# have none yet, or none for `entry` if the program does not check. Those that the checking shows
-# can be inferred are checked without them, to be sure: a type that alone uses an import, for one,
-# still uses it (the import would be warned about without it). The names of constructions are left
-# out first, so that a type that gives the type expected of them is kept, as they would no longer
-# show it; an import of a struct that only they use does not count then.
+# have none yet, or none for `entry` if the program does not check.
 add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<String>) ->
   modules :=
     try
@@ -78,33 +74,46 @@ add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<S
     return
   held :=
     [module for module in modules when wanted.has(module.key) and not removable.has(module.key)]
-  inferred: Placed[]
+  removable[module.key] = [] for module in held
+  candidates := candidates_of(held, checked)
+  return if candidates.length == 0
+  program := -> quiet_program(entry, modules)
+  accepted := accepted_among(candidates, checked, program)
+  imports := unused_type_imports(accepted, held, checked, program)
+  for placed in [accepted..., imports...]
+    keys := removable[placed.key]!
+    keys.push placed.annotation.key
+
+# The annotations of the modules that the checking shows can be left out.
+candidates_of := (held: Module[], checked: ProgramWide) ->
+  found: Placed[]
   for module in held
-    { key } := module
-    removable[key] = []
     shared := checked.shared[module.index]
     for annotation in left_out_candidates(module.program)
-      inferred.push { key, annotation } if can_leave_out(annotation, shared, checked)
-  return if inferred.length == 0
+      found.push { annotation, key: module.key } if can_leave_out(annotation, shared, checked)
+  found
+
+# The candidates that `program`, checked anew, checks the same without, to be sure: a type that
+# alone uses an import, for one, still uses it (the import would be warned about without it). The
+# names of constructions are left out first, so that a type that gives the type expected of them is
+# kept, as they would no longer show it; an import of a struct that only they use does not count
+# then.
+accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> ProgramWide) ->
   # The result of the program without the annotations, if it checks (see is_unused_type).
   result_without := (left_out: Placed[], structs: Bool) ->
     placed.annotation.remove() for placed in left_out
-    tried := quiet_program(entry, modules)
+    tried := program()
     result := checks(tried) then result_of(tried, structs)
     placed.annotation.restore() for placed in left_out
     result
   checks_the_same := (original: CheckResult, structs: Bool) -> (left_out: Placed[]) ->
     result := result_without(left_out, structs) ? return false
     same_result result, original
-  constructions := [placed for placed in inferred when placed.annotation.construction]
-  others := [placed for placed in inferred when not placed.annotation.construction]
+  constructions := [placed for placed in candidates when placed.annotation.construction]
+  others := [placed for placed in candidates when not placed.annotation.construction]
   recorded := removable_among([], constructions, checks_the_same(result_of(checked, true), true))
   with_records := result_without(recorded, false)!
-  accepted := removable_among(recorded, others, checks_the_same(with_records, false))
-  imports := unused_type_imports(accepted, held, checked, -> quiet_program(entry, modules))
-  for placed in [accepted..., imports...]
-    keys := removable[placed.key]!
-    keys.push placed.annotation.key
+  removable_among recorded, others, checks_the_same(with_records, false)
 
 # The imports of enums and structs that the program used, but that it does not once the annotations
 # accepted are left out, as the members of enums written alone, the constructions written as records
