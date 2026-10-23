@@ -47,7 +47,7 @@ import emit_initialized_check from './top_level'
 import generate_yield from './yielding'
 import
   boxes_into, inner_of, InterfaceType, is_boxed, is_float, is_kind, IterType, ObjectType,
-  optional_type, OptionalType, RecordType, string_type, Type, UnionType
+  optional_type, OptionalType, RecordType, same_type, string_type, Type, UnionType
 from '../types'
 
 # The type that the checker gave the node.
@@ -165,8 +165,12 @@ generate_is_test := (g: Generator, test: IsTest) ->
 generate_cast := (g: Generator, cast: Cast) ->
   ir := g.ir
   object := generate(g, cast.value)
-  holds := emit_member_test(g, object, cast.value, cast.type)
   member := type_of(g, cast.type)
+  # A value narrowed to the type is held as the type itself, not boxed in the union, so there is no
+  # member to test or unbox, and the owned object is the result as it is.
+  if same_type(type_of(g, cast.value), member)
+    return cast.throws then object else emit_wrap(ir, object, member)
+  holds := emit_member_test(g, object, cast.value, cast.type)
   if cast.throws
     fails := ir.assign("xor i1 #{holds}, true")
     while_holding g, object, type_of(g, cast.value), -> throw_if(g, fails, FAILED_CAST)
