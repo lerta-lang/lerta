@@ -231,8 +231,6 @@ void *lerta_map_find(const LertaMap *map, int64_t key);
 // The place of the key's value, holding zeros where the map did not hold the key; the map then
 // holds the key, retained, and the caller writes the value there, which it retains.
 void *lerta_map_place(LertaMap *map, int64_t key);
-bool lerta_map_read(const LertaMap *map, int64_t key, void *value);
-void lerta_map_write(LertaMap *map, int64_t key, const void *value);
 void lerta_map_remove(LertaMap *map, int64_t key);
 
 // next writes the key, and the value unless `value` is NULL, both owned, and moves on.

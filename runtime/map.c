@@ -151,31 +151,6 @@ void *lerta_map_place(LertaMap *map, int64_t key) {
   return value_of(entry);
 }
 
-// The seed's IR reads and writes values through these, which generated code no longer calls: they
-// are to go once the seed is refreshed.
-bool lerta_map_read(const LertaMap *map, int64_t key, void *value) {
-  size_t size = value_size(map);
-  void *found = lerta_map_find(map, key);
-  if (found == NULL) {
-    memset(value, 0, size);
-    return false;
-  }
-  memcpy(value, found, size);
-  lerta_retain_item(map->value_kind, value);
-  return true;
-}
-
-// The new value is retained before the old one is released, in case they are the same object.
-void lerta_map_write(LertaMap *map, int64_t key, const void *value) {
-  lerta_retain_item(map->value_kind, value);
-  size_t size = value_size(map);
-  void *place = lerta_map_place(map, key);
-  LertaItem old;
-  memcpy(&old, place, size);
-  memcpy(place, value, size);
-  lerta_release_item(map->value_kind, &old);
-}
-
 void lerta_map_remove(LertaMap *map, int64_t key) {
   if (map->length == 0) return;
   int64_t position = map->slots[find_slot(map, key, hash_key(map, key))];
