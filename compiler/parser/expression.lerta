@@ -40,7 +40,7 @@ export parse_expression := (tokens: TokenStream) -> parse_conditional(tokens)
 # The value after `=` or `key:`, which may be a literal in an indented block on the next lines.
 parse_if_value := (tokens: TokenStream) ->
   if_expression := parse_if(tokens)
-  if if_expression.else_body.length == 0
+  if if_expression.else_body.is_empty()
     tokens.fail if_expression.position, 'an if without an else gives no value'
   if_expression
 
@@ -100,10 +100,10 @@ export parse_block_arguments := (tokens: TokenStream, callee: Expression) ->
   items: Argument[]
   tokens.read_block_items -> items.push(parse_block_argument(tokens))
   { args, named_args } := to_arguments(tokens, items)
-  if call.named_args.length > 0 and named_args.length > 0
+  if not call.named_args.is_empty() and not named_args.is_empty()
     message := 'named arguments are all on the line or all in the indented block'
     tokens.fail named_args[0].name.position, message
-  if call.named_args.length > 0 and args.length > 0
+  if not call.named_args.is_empty() and not args.is_empty()
     tokens.fail args[0].position, POSITIONAL_AFTER_NAMED
   call.args.push arg for arg in args
   call.named_args.push named for named in named_args
@@ -357,7 +357,7 @@ export parse_loop_header := (tokens: TokenStream) ->
   tokens.expect 'for'
   position := tokens.peek().position()
   parts: Identifier[] = tokens.peek().kind == '(' then parse_tuple_names(tokens) else []
-  variable := parts.length > 0 then tuple_holder(position) else parse_identifier(tokens)
+  variable := not parts.is_empty() then tuple_holder(position) else parse_identifier(tokens)
   index := tokens.accept(',') then parse_identifier(tokens)
   tokens.expect_word 'in'
   iterable := parse_expression(tokens)
@@ -425,7 +425,7 @@ to_arguments := (tokens: TokenStream, items: Argument[]) ->
   for item in items
     if name := item.name
       named_args.push { name, value: item.value }
-    else if named_args.length > 0
+    else if not named_args.is_empty()
       tokens.fail item.value.position, POSITIONAL_AFTER_NAMED
     else
       args.push item.value

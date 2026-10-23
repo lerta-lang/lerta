@@ -176,7 +176,7 @@ export tokenize_fragment := (source: String, path: String, line: Int, column: In
 # A line that LF ends may end with CRLF.
 without_carriage_return := (line: String) ->
   bytes := line.binary
-  ends_with_cr := bytes.length > 0 and bytes[bytes.length - 1] == "\r"
+  ends_with_cr := not bytes.is_empty() and bytes[bytes.length - 1] == "\r"
   ends_with_cr then bytes.slice(0, bytes.length - 1) else bytes
 
 layout_token := (kind: TokenKind, line: Int, column: Int) ->
@@ -207,7 +207,7 @@ class Layout
 
   frame = -> @frames.last()!
 
-  in_brackets = -> @frame().open.length > 0
+  in_brackets = -> not @frame().open.is_empty()
 
   start_line = (line: SourceLine, indent: Int) ->
     column := line.column(indent)
@@ -245,7 +245,7 @@ class Layout
     case token.kind
       when '(', '[', '{' then open.push(token)
       when ')', ']', '}'
-        if open.length == 0 and @frames.length > 1
+        if open.is_empty() and @frames.length > 1
           # A bracket at the start of a line follows the line end of the block's last line.
           after_line_end := @tokens.last()!.kind == NEWLINE
           @tokens.push layout_token(NEWLINE, token.line, token.column) if not after_line_end
@@ -257,7 +257,7 @@ class Layout
 
   end_line = (line: SourceLine, indent: Int) ->
     in_brackets := @in_brackets()
-    ends_with_arrow := @tokens.length > 0 and @tokens.last()!.kind == '->'
+    ends_with_arrow := not @tokens.is_empty() and @tokens.last()!.kind == '->'
     @arrow_indent = indent if in_brackets and ends_with_arrow
     kind: TokenKind = in_brackets then LINE_BREAK else NEWLINE
     @tokens.push layout_token(kind, line.number, line.column(line.length))
@@ -268,7 +268,7 @@ class Layout
     @tokens.push layout_token(DEDENT, line, column) for _ in 1...frame.indents.length
 
   finish = (eof_line: Int) ->
-    unclosed := @frames.find((frame) -> frame.open.length > 0)
+    unclosed := @frames.find((frame) -> not frame.open.is_empty())
     if frame := unclosed
       bracket := frame.open.last()!
       compile_error @path, bracket.line, bracket.column, "'#{bracket.kind}' is never closed"
@@ -432,7 +432,7 @@ is_float_literal := (text: String) ->
 # Digits, with separators between them.
 is_digit_run := (text: String) ->
   bytes := text.binary
-  return false if bytes.length == 0 or not bytes[0].is_digit()
+  return false if bytes.is_empty() or not bytes[0].is_digit()
   for i in 1...bytes.length
     c := bytes[i]
     separates_digits := c == '_' and i + 1 < bytes.length and bytes[i + 1].is_digit()

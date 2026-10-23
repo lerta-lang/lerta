@@ -26,7 +26,7 @@ build_and_run := (flags: String[]) ->
       ]
     )
     reasons := expect_success('build', built.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     executable := "#{cli_work_dir}/hello-#{flags.join('_')}#{executable_suffix}"
     ran := await run_command(executable, [], built.cwd)
     [compare_output('stdout', hello_output, ran.stdout)..., expect_success('run', ran)...]
@@ -122,7 +122,7 @@ symlink_output_check := ->
     make_link 'under/below', "#{cwd}/link"
     built := await run_in_dir(compiler, ['build', hello, '-o', 'link/../hello'], cwd, temp)
     reasons := expect_success('build', built.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     executable := "#{cwd}/under/hello#{executable_suffix}"
     ran := await run_command(executable, [], cwd)
     [
@@ -195,7 +195,7 @@ relative_temp_check := ->
     built :=
       await run_command(compiler, ['build', hello, '-o', 'hello'], cwd, ''.binary, environment)
     reasons := expect_success('build', built)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     ran := await run_command("#{cwd}/hello#{executable_suffix}", [], cwd)
     [
       expect_left('files left in the temporary directory', [], list_dir(temp))...
@@ -241,7 +241,7 @@ optimized_runtime_check := ->
     built :=
       await run_in_new_dir(compiler, ['build', source, '-o', "split#{executable_suffix}", '-O'])
     reasons := expect_success('build', built.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     executable := "#{built.cwd}/split#{executable_suffix}"
     disassembler := host_platform == 'macos' then 'otool' else 'objdump'
     # Without the bytes of each instruction, which the check does not read, objdump's output stays
@@ -258,7 +258,7 @@ optimized_runtime_check := ->
       parts := word.split('lerta_retain')
       [parts[i] for i in 1...parts.length].any((after) ->
         bytes := after.binary
-        return true if bytes.length == 0
+        return true if bytes.is_empty()
         next := bytes[0]
         not (next.is_letter() or next.is_digit() or next == '_'.binary[0])
       )
@@ -301,7 +301,7 @@ dump_seldom_check := ->
     to := (line: String, target: String) -> line.starts_with('  br i1 ') and line.contains(target)
     for target in targets
       branches := [line for line in lines when to(line, target)]
-      reasons.push "no branch to #{target}" if branches.length == 0
+      reasons.push "no branch to #{target}" if branches.is_empty()
       reasons.append ["no weights: #{line}" for line in branches when not line.contains(weights)]
     reasons
 
@@ -333,7 +333,7 @@ source_lines_check := -> Check(name: 'lerta run --source-lines runs a program', 
 
 contains_bytes := (bytes: Binary, text: String) ->
   wanted := text.binary
-  return true if wanted.length == 0
+  return true if wanted.is_empty()
   return false if wanted.length > bytes.length
   for start in 0...(bytes.length - wanted.length + 1)
     var same = true
@@ -355,7 +355,7 @@ has_debug_info := (executable: String) ->
   contains_bytes await read_file(debug_file), marker
 
 source_line_number := (text: String) ->
-  return nil if text == ''
+  return nil if text.is_empty()
   var number = 0
   for digit in text
     return nil if not digit.is_digit()
@@ -367,7 +367,7 @@ tool_on_path := (name: String) ->
   separator := host_platform == 'windows' then ';' else ':'
   for directory in path.split(separator)
     candidate := "#{directory}/#{name}#{executable_suffix}"
-    return candidate if directory != '' and is_file(candidate)
+    return candidate if not directory.is_empty() and is_file(candidate)
   nil
 
 run_dwarfdump := (command: String, path: String) ->
@@ -399,11 +399,11 @@ source_lines_build_check := (flags: String[]) ->
         ['build', source, '-o', "lines#{executable_suffix}", '--source-lines', flags...]
       )
       reasons := expect_success('build', built.result)
-      return reasons if reasons.length > 0
+      return reasons if not reasons.is_empty()
       output := "#{built.cwd}/lines#{executable_suffix}"
       ran := await run_command(output, [], built.cwd)
       rows := await line_table_rows(debug_file_of(output))
-      expected_lines: Int[] = flags.length == 0 then [12, 5, 16] else []
+      expected_lines: Int[] = flags.is_empty() then [12, 5, 16] else []
       has_debug := await has_debug_info(output)
       [
         expect_success('run', ran)...
@@ -415,7 +415,7 @@ source_lines_build_check := (flags: String[]) ->
             for line in expected_lines
             when not rows.contains(line)
           ]...
-          (rows.length == 0 then ['the line table has no rows'] else no_reasons)...
+          (rows.is_empty() then ['the line table has no rows'] else no_reasons)...
         ])...
       ]
 
@@ -424,7 +424,7 @@ no_source_lines_check := ->
     source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
     built := await run_in_new_dir(compiler, ['build', source, '-o', "lines#{executable_suffix}"])
     reasons := expect_success('build', built.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     return no_reasons if host_platform == 'windows'
     output := "#{built.cwd}/lines#{executable_suffix}"
     has_debug := await has_debug_info(output)
@@ -437,7 +437,7 @@ no_trace_check := ->
     executable := "#{cli_work_dir}/rethrow#{executable_suffix}"
     built := await run_in_new_dir(compiler, ['build', source, '-o', executable, '-O', '--no-trace'])
     reasons := expect_success('build', built.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     ran := await run_command(executable, [], built.cwd)
     program := await read_file(executable)
     [

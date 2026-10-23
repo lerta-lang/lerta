@@ -83,7 +83,7 @@ export left_out_import_mark := (import_node: Import) ->
 
 export is_left_out_import := (statement: Statement, context: Context) ->
   import_node := statement as Import ? return false
-  takes_none := import_node.names.length == 0 and import_node.alias == nil
+  takes_none := import_node.names.is_empty() and import_node.alias == nil
   takes_none and has_left_out_names(import_node, context)
 
 # The declaration that holds the value of a destructuring, whose name no source can write.
@@ -234,12 +234,12 @@ starts_empty := (declaration: Declaration): TypeName? ->
   { type, value } := declaration
   if value is ArrayLiteral
     array := type as ArrayTypeName ? return nil
-    return value.elements.length == 0 and not array.optional then array
+    return value.elements.is_empty() and not array.optional then array
   call := value as Call ? return nil
   callee := call.callee as Identifier ? return nil
   is_collection := callee.name == 'Map' or callee.name == 'Set'
-  empty := call.args.length == 0 and call.named_args.length == 0
-  return nil if type or not is_collection or not empty or call.type_args.length == 0
+  empty := call.args.is_empty() and call.named_args.is_empty()
+  return nil if type or not is_collection or not empty or call.type_args.is_empty()
   NamedType name: callee.name, args: call.type_args, position: callee.position
 
 assignment_doc := (assignment: Assignment, context: Context) ->
@@ -262,7 +262,7 @@ export if_doc := (if_node: If, context: Context): Doc ->
     word := word_before(else_body[0].position, 'else', context)
     else_if := join([line_feed(), word, text(' '), if_doc(else_body[0] as If!, context)])
     parts.push rule(BRANCHES, else_if)
-  else if else_body.length > 0
+  else if not else_body.is_empty()
     word := word_before(else_body[0].position, 'else', context)
     parts.push join([line_feed(), word, block_below(else_body, context)])
   join parts
@@ -278,7 +278,7 @@ block_below := (body: Statement[], context: Context) ->
 
 # `statement if c`, for an `if` without `else` whose block holds one statement that can have it.
 statement_if_postfix := (if_node: If, context: Context) ->
-  return nil if if_node.else_body.length > 0 or if_node.then_body.length != 1
+  return nil if not if_node.else_body.is_empty() or if_node.then_body.length != 1
   return nil if context.source.block_has_comments(if_node.position)
   statement := if_node.then_body[0]
   takes_postfix(statement) then statement
@@ -307,7 +307,7 @@ ends_open := (statement: Statement): Bool ->
     when Range then ends_open(statement.end)
     when Call
       args := statement.args
-      args.length > 0 and ends_open(args[args.length - 1])
+      not args.is_empty() and ends_open(args[args.length - 1])
     when FunctionLiteral, Case, Try then true
     when If then not statement.nil_safe
     else false
@@ -349,7 +349,7 @@ is_loop_part := (statement: Statement) -> statement is Declaration and statement
 # starts_spaced_operand). One that does not fit on its line takes them back to break inside them.
 call_statement := (call: Call, context: Context) ->
   with_parentheses := call_doc(call, context, true)
-  could := call.type_args.length == 0 and is_command_callee(call.callee) and starts_command(call)
+  could := call.type_args.is_empty() and is_command_callee(call.callee) and starts_command(call)
   return with_parentheses if not could
   # On the line of an arm or of a function literal, a call keeps its parentheses.
   return rule(CALLS_WITHOUT_PARENTHESES, with_parentheses) if not context.on_own_line
@@ -362,7 +362,7 @@ call_statement := (call: Call, context: Context) ->
   # A block before the last argument ends its line, which the comma after it cannot follow.
   return with_parentheses if leading.any(has_line_feed)
   # A function literal last takes the lines below for its body, which parentheses could not hold.
-  last_arg := call.named_args.length == 0 then call.args.last()
+  last_arg := call.named_args.is_empty() then call.args.last()
   if last_arg is FunctionLiteral
     return command_of([leading..., function_doc(last_arg, context.after_head())])
   command := command_of([item.doc for item in items])
@@ -382,8 +382,8 @@ export is_command_callee := (callee: Expression): Bool ->
 # Whether the call has arguments and the first starts as an argument of a call without
 # parentheses can, rather than continuing an expression with the callee.
 starts_command := (call: Call) ->
-  return true if call.args.length == 0 and call.named_args.length > 0
-  return false if call.args.length == 0
+  return true if call.args.is_empty() and not call.named_args.is_empty()
+  return false if call.args.is_empty()
   starts_argument leftmost(call.args[0])
 
 leftmost := (expression: Expression): Expression ->
@@ -412,5 +412,5 @@ starts_argument := (expression: Expression) ->
     when BooleanLiteral, NilLiteral, This, ArrayLiteral, MapLiteral, RecordLiteral then true
     when TupleLiteral, Case, Throw, Await, UnaryOperation then true
     when Comprehension then not expression.spread
-    when FunctionLiteral then expression.type_params.length == 0
+    when FunctionLiteral then expression.type_params.is_empty()
     else false

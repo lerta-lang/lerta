@@ -64,7 +64,7 @@ gives_its_type := (function: FunctionLiteral, last: Expression?, facts: NodeFact
   if not is_kind(result, 'void')
     unified := unified_own_type(results, facts) ? return false
     return same_type(unified, result)
-  return false if results.length > 0
+  return false if not results.is_empty()
   value := last ? return true
   type := facts.types[value] ? return false
   is_kind type, 'void'
@@ -122,12 +122,12 @@ has_own_type := (value: Expression, facts: NodeFacts): Bool ->
       unifies_to values, type, facts
     when ArrayLiteral
       element := (type as ArrayType?)?.element
-      value.elements.length > 0 and value.elements.all((part) -> own_as(part, element))
+      not value.elements.is_empty() and value.elements.all((part) -> own_as(part, element))
     when MapLiteral
       map := type as MapType ? return false
       own_entry := (entry: MapEntry) ->
         own_as(entry.key, map.key) and own_as(entry.value, map.value)
-      value.entries.length > 0 and value.entries.all(own_entry)
+      not value.entries.is_empty() and value.entries.all(own_entry)
     when TupleLiteral
       items := (type as TupleType?)?.items ? return false
       [own_as(part, items[i]) for part, i in value.items].all((same) -> same)
@@ -162,7 +162,7 @@ is_type := (type: Type?, kind: TypeKind) -> type != nil and is_kind(type, kind)
 has_type_arguments := (type: Type?) ->
   case type
     when MapType then true
-    when ObjectType then type.args.length > 0
+    when ObjectType then not type.args.is_empty()
     else false
 
 # `Map<K, V>()` or `Set<T>()`, whose type arguments give its type; without them, it takes the type
@@ -171,4 +171,4 @@ has_type_arguments := (type: Type?) ->
 # keeps them (see removable_annotations).
 is_collection_call := (call: Call) ->
   callee := call.callee as Identifier ? return false
-  call.type_args.length > 0 and (callee.name == 'Map' or callee.name == 'Set')
+  not call.type_args.is_empty() and (callee.name == 'Map' or callee.name == 'Set')

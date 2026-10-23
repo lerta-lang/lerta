@@ -39,7 +39,7 @@ export reject_growing_instances := (program: ProgramWide) ->
     reported.add place
     shared := program.shared[edge.module_index]
     in_module shared, -> check_part(program, -> fail(program, edge.at, message_of(edge)))
-  reported.length > 0
+  not reported.is_empty()
 
 message_of := (edge: Edge) ->
   grows := 'whose instances would grow without end'
@@ -66,7 +66,7 @@ edges_of := (program: ProgramWide) ->
     add_edges program, edges, declaration, [], info.declaration.satisfies
   for interface_info in program.interfaces.values()
     written := interface_info.declaration ? continue
-    continue if interface_info.type_params.length == 0
+    continue if interface_info.type_params.is_empty()
     declaration := GenericDeclaration
       params: interface_info.type_params
       module_index: interface_info.module_index!
@@ -83,11 +83,11 @@ add_edges := (
   shared := program.shared[module_index]
   is_parameter := (name: String) -> params.contains(name) or method_params.contains(name)
   for named in named_types_in(written)
-    continue if named.args.length == 0 or is_parameter(named.name)
+    continue if named.args.is_empty() or is_parameter(named.name)
     held := generic_symbol(named_type(shared, named.name)) ? continue
     for arg, i in named.args
       for param, index in params
-        continue if method_params.contains(param) or named_in(arg, param).length == 0
+        continue if method_params.contains(param) or named_in(arg, param).is_empty()
         edges.push {
           module_index
           from: vertex(declaration.symbol, index)
@@ -103,13 +103,13 @@ vertex := (symbol: String, index: Int) -> "#{symbol} #{index}"
 generic_symbol := (named: Type?) ->
   type := named ? return nil
   case type
-    when ObjectType then type.args.length > 0 then type.symbol
-    when InterfaceType then type.args.length > 0 then type.symbol
+    when ObjectType then not type.args.is_empty() then type.symbol
+    when InterfaceType then not type.args.is_empty() then type.symbol
     else nil
 
 # Whether the type argument is the type parameter itself, as in `next: Node<T>?`.
 is_alone := (arg: TypeName, param: String) ->
-  arg is NamedType and arg.name == param and arg.args.length == 0 and not arg.optional
+  arg is NamedType and arg.name == param and arg.args.is_empty() and not arg.optional
 
 # The strongly connected components of the graph, by Tarjan's algorithm, as a number for each
 # vertex: two vertices have the same one when each leads to the other.

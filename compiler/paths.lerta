@@ -18,7 +18,7 @@ split_path := (path: String) ->
   slashed := is_windows then path.replace('\', '/') else path
   bytes := slashed.binary
   names := [name for name in slashed.split('/') when name != '']
-  starts_at_separator := bytes.length > 0 and bytes[0] == '/'
+  starts_at_separator := not bytes.is_empty() and bytes[0] == '/'
   is_share := starts_at_separator and bytes.length > 1 and bytes[1] == '/'
   case
     when is_windows and is_drive(bytes)
@@ -36,26 +36,26 @@ is_drive := (bytes: Binary) ->
 names_after := (names: String[], count: Int) -> [names[i] for i in count...names.length]
 
 joined := (root: String, names: String[]) ->
-  root == '' and names.length == 0 then '.' else "#{root}#{names.join('/')}"
+  root.is_empty() and names.is_empty() then '.' else "#{root}#{names.join('/')}"
 
 # The directory of the path: `.` for a name alone, and the root for the root.
 export dirname := (path: String) ->
   split := split_path(path)
   names := split.names
-  joined split.root, names.length == 0 then names else all_but_last(names)
+  joined split.root, names.is_empty() then names else all_but_last(names)
 
 export join := (a: String, b: String) -> normalize("#{a}/#{b}")
 
 # The path without `.` and empty names, and with each `..` removing the name before it.
 normalize := (path: String) ->
   split := split_path(path)
-  is_absolute := split.root != ''
+  is_absolute := not split.root.is_empty()
   names: String[]
   for name in split.names
     case name
       when '.' then continue
       when '..'
-        can_cancel := names.length > 0 and names.last() != '..'
+        can_cancel := not names.is_empty() and names.last() != '..'
         if can_cancel
           names.pop()
         else if not is_absolute
@@ -81,7 +81,7 @@ export relative := (cwd: String, from: String, to: String) ->
 
 # Whether the path starts at a root (see split_path). On Windows a path that starts at `/` alone
 # names the file from the root of the current drive, so it names one file for each drive.
-export is_absolute := (path: String) -> split_path(path).root != ''
+export is_absolute := (path: String) -> not split_path(path).root.is_empty()
 
 # The path as it is if it is absolute, and otherwise from `cwd`, with `.` and `..` worked out as
 # text, as join does: a `..` after a name that is a symbolic link names another directory than the

@@ -33,7 +33,7 @@ runtime_name_reasons := (name: String, kind: String) ->
   hash := parts[1]
   [
     check_reason(
-      version != '' and [character for character in version].all((character) ->
+      not version.is_empty() and [character for character in version].all((character) ->
         character.is_digit()
       )
       "the cached runtime #{name} has an invalid clang version"
@@ -52,7 +52,7 @@ runtime_file_names := ->
   libuv_text := await read_text("#{root_dir}/third_party/libuv.txt")
   libuv: String[]
   for line in libuv_text.split("\n")
-    continue if line == '' or line.starts_with('#')
+    continue if line.is_empty() or line.starts_with('#')
     fields := line.split(' ')
     continue if fields.length != 3 or not host_systems.contains(fields[0])
     continue if fields[1] != 'source' or not fields[2].ends_with('.c')
@@ -82,7 +82,7 @@ complete_runtime := (cache: String, name: String) ->
   expected_files := await runtime_file_names()
   files := list_dir(dir)
   file_reasons := expect_left("the files of #{name}", expected_files, files)
-  return file_reasons if file_reasons.length > 0
+  return file_reasons if not file_reasons.is_empty()
   attributes := await read_text("#{dir}/function_attributes.txt")
   coro_end_type := await read_text("#{dir}/coro_end_type.txt")
   [
@@ -117,7 +117,7 @@ find_plain_runtime_name := ->
   cache := new_cli_dir('cache-plain')
   built := await build_in_cache(cache, [])
   reasons := expect_success('build', built.result)
-  throw ValueError(message: reasons[0]) if reasons.length > 0
+  throw ValueError(message: reasons[0]) if not reasons.is_empty()
   entries := runtimes_in(cache)
   throw ValueError(message: "expected one cached runtime, found: #{entries}") if entries.length != 1
   entries[0]
@@ -131,16 +131,16 @@ cached_runtime_check := (flags: String[], kind: String) ->
     cache := new_cli_dir("cache-#{kind}")
     first := await build_in_cache(cache, flags)
     reasons := expect_success('build', first.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     entries := runtimes_in(cache)
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
     name := entries[0]
     name_reasons := runtime_name_reasons(name, kind)
-    return name_reasons if name_reasons.length > 0
+    return name_reasons if not name_reasons.is_empty()
     incomplete := await complete_runtime(cache, name)
-    return incomplete if incomplete.length > 0
+    return incomplete if not incomplete.is_empty()
     optimized := thinlto_entries(cache)
-    if (kind != 'debug') != (optimized.length > 0)
+    if (kind != 'debug') != (not optimized.is_empty())
       return ["#{flags.join(' ')} left the ThinLTO cache with: #{optimized}"]
     object := "#{cache}/#{name}/allocator.o"
     written := stat(object) ? throw ValueError(message: "no cached object: #{object}")
@@ -163,7 +163,7 @@ incomplete_runtime_check := (flags: String[], kind: String) ->
     cache := new_cli_dir("cache-incomplete-#{kind}")
     first := await build_in_cache(cache, flags)
     reasons := expect_success('build', first.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     entries := runtimes_in(cache)
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
     dir := printed_path("#{cache}/#{entries[0]}")
@@ -199,7 +199,7 @@ invalid_target_check := ->
       )...
       expect_left('files beside the cache', [], list_dir(beside_cache))...
       check_reason(
-        runtimes_in(windows_path_cache).length == 0
+        runtimes_in(windows_path_cache).is_empty()
         'invalid target created a runtime cache'
       )...
       expect_left('files left in the cache', [], list_dir(unsupported_cache))...
@@ -210,7 +210,7 @@ host_target_check := ->
     cache := new_cli_dir('cache-host-target')
     ran := await build_in_cache(cache, ['--target', host_triple])
     reasons := expect_success('build', ran.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     entries := runtimes_in(cache)
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
     name := entries[0]
@@ -247,7 +247,7 @@ cache_location_check := ->
 
 one_cached_runtime := (what: String, built: CliRun, cache: String, kind: String) ->
   reasons := expect_success(what, built)
-  return reasons if reasons.length > 0
+  return reasons if not reasons.is_empty()
   no_entries: String[]
   entries := is_dir(cache) then runtimes_in(cache) else no_entries
   return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
@@ -277,12 +277,12 @@ relative_cache_check := ->
       expect_left('files left', ['cache', "hello#{executable_suffix}"], first.left)...
       expect_left('files left in the temporary directory', [], first.left_in_temp)...
     ]
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     optimized := thinlto_entries(cache)
     second := await build_in(new_cli_dir('cache-relative-temp'))
     [
       expect_success('second build', second.result)...
-      check_reason(optimized.length > 0, "no ThinLTO cache in #{cache}")...
+      check_reason(not optimized.is_empty(), "no ThinLTO cache in #{cache}")...
       check_reason(
         thinlto_entries(cache).join("\n") == optimized.join("\n")
         'the build in another temporary directory optimized again'
@@ -353,7 +353,7 @@ empty_runtime_directory_check := ->
     make_dir "#{cache}/#{name}"
     built := await build_in_cache(cache, [])
     reasons := expect_success('build', built.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     await complete_runtime(cache, name)
 
 occupied_runtime_directory_check := ->
@@ -391,7 +391,7 @@ abandoned_staging_check := ->
     await write_file("#{cache}/#{file}", ''.binary)
     built := await build_in_cache(cache, [])
     reasons := expect_success('build', built.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     expected := [name, kept...].sorted((a, b) -> a.compare(b))
     [
       await complete_runtime(cache, name)...
@@ -421,7 +421,7 @@ unremovable_staging_check := ->
         if restored.status != 0
           throw ValueError(message: "chmod could not restore #{locked}: #{restored.stderr.text()!}")
     reasons := expect_success('build', built.result)
-    return reasons if reasons.length > 0
+    return reasons if not reasons.is_empty()
     [
       check_reason(is_dir(locked), 'the unremovable staging directory was removed')...
       await complete_runtime(cache, name)...

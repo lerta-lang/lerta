@@ -197,16 +197,16 @@ resolve_name := (
   shared := program.shared[resolver.module_index]
   import_qualified_type shared, type_name
   if parameter := resolver.type_parameters[name]
-    fail_here "'#{name}' takes no type arguments" if args.length > 0
+    fail_here "'#{name}' takes no type arguments" if not args.is_empty()
     return parameter
   fail_here "'#{name}' is a value, not a type" if names_value(shared, name)
   if not names_type_or_import(shared, name) and is_core_type_name(name)
     return resolve_core_type(program, resolver, type_name, is_result)
   interface_info := named_interface(program, resolver, name)
   named := named_type(shared, name)
-  generic_object := named is ObjectType and named.args.length > 0
+  generic_object := named is ObjectType and not named.args.is_empty()
   takes_arguments := interface_info != nil or generic_object
-  fail_here "'#{name}' takes no type arguments" if args.length > 0 and not takes_arguments
+  fail_here "'#{name}' takes no type arguments" if not args.is_empty() and not takes_arguments
   return value_interface_type(program, resolver, interface_info, type_name) if interface_info
   return instantiate_object(program, resolver, named as ObjectType!, type_name) if generic_object
   return named if named
@@ -224,7 +224,7 @@ resolve_core_type := (
       return IterType(item: resolve(program, resolver, args[0]))
     when 'Promise'
       fail_here 'Promise takes one type argument, or none' if args.length > 1
-      return PromiseType(value: void_type) if args.length == 0
+      return PromiseType(value: void_type) if args.is_empty()
       return PromiseType(value: resolve(program, resolver, args[0]))
     when 'Map'
       fail_here 'Map takes two type arguments' if args.length != 2
@@ -234,7 +234,7 @@ resolve_core_type := (
       fail_here 'Set takes one type argument' if args.length != 1
       return set_of(resolve_key(program, resolver, args[0], 'a set item'))
     else pass
-  fail_here "'#{name}' takes no type arguments" if args.length > 0
+  fail_here "'#{name}' takes no type arguments" if not args.is_empty()
   return void_type if is_result and name == 'void'
   return never_type if is_result and name == 'never'
   simple_type(name) ? fail_here("unknown type '#{name}'")

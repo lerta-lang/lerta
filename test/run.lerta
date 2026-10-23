@@ -150,7 +150,7 @@ after_place := (line: String) ->
   parts := line.split(':')
   # The file's name is not empty, and may hold `:` itself, as C:\dir does.
   for i in 1...(parts.length - 2)
-    continue if i == 1 and parts[0] == ''
+    continue if i == 1 and parts[0].is_empty()
     if is_number(parts[i]) and is_number(parts[i + 1]) and parts[i + 2].starts_with(' ')
       return [part for part, j in parts when j >= i + 2].join(':').without_prefix(' ')!
   nil
@@ -170,7 +170,7 @@ compile_and_run := (test: TestCase, optimize: Bool) ->
   diagnostics := [line for line in built.errors.split("\n") when line != '']
   warnings := [line for line in diagnostics when is_warning(line)]
   others := [line for line in diagnostics when not is_warning(line)]
-  is_compile_error := built.status == 1 and others.length > 0 and others.find((line) ->
+  is_compile_error := built.status == 1 and not others.is_empty() and others.find((line) ->
     not is_diagnostic(line)
   ) == nil
   if is_compile_error
@@ -181,7 +181,7 @@ compile_and_run := (test: TestCase, optimize: Bool) ->
       warnings: lines(warnings)
       failed: true
       compile_error: true
-  if built.status != 0 or others.length > 0
+  if built.status != 0 or not others.is_empty()
     throw SetupError(message: "the build failed (#{built.failure}):\n#{built.errors}")
   ran := await run_program(executable)
   { stdout, stderr, failed } := ran
@@ -256,7 +256,7 @@ unoptimized_runs: Map<String, Promise<Outcome>>
 
 run_test := (test: TestCase, optimize: Bool): Promise<String[]?> ->
   expected := test.expected
-  if expected.length == 0
+  if expected.is_empty()
     candidates := ["#{test.name}.#{extension}" for extension in test.extensions]
     return ["needs #{candidates.join(' or ')} in #{test.expected_dir}"]
   pending := compile_and_run(test, optimize)
@@ -293,7 +293,7 @@ std_frame := (line: String) ->
   return line if parts.length != 3 or not [parts[1], parts[2]].all(is_number)
   "#{head} (std:#{parts[0]}:XX)"
 
-is_number := (part: String) -> part != '' and part.all((c) -> c.is_digit())
+is_number := (part: String) -> not part.is_empty() and part.all((c) -> c.is_digit())
 
 optimized_check := (test: TestCase) ->
   wait := ->

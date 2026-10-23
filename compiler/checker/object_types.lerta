@@ -74,7 +74,7 @@ export class ObjectInfo
 # A field without an initializer, or with a default, is a constructor argument.
 export is_argument := (field: FieldInfo) -> field.value == nil or field.has_default
 
-export is_generic_object := (info: ObjectInfo) -> info.declaration.type_params.length > 0
+export is_generic_object := (info: ObjectInfo) -> not info.declaration.type_params.is_empty()
 
 # The function literal of a member that is a method.
 export method_literal := (member: MemberDeclaration) ->
@@ -154,9 +154,9 @@ add_method := (
   type_name := info.declaration.name.name
   { name } := member.name
   runs_alone := name == 'init' or name == 'deinit'
-  if runs_alone and literal.params.length > 0
+  if runs_alone and not literal.params.is_empty()
     fail program, literal.position, "#{name} takes no parameters"
-  if runs_alone and literal.type_params.length > 0
+  if runs_alone and not literal.type_params.is_empty()
     fail program, literal.position, "#{name} takes no type parameters"
   fail program, literal.position, "#{name} cannot yield" if runs_alone and literal.yields
   fail program, literal.position, "#{name} cannot await" if runs_alone and literal.awaits
@@ -166,7 +166,7 @@ add_method := (
   info.has_deinit = true if name == 'deinit'
   info.methods[name] = literal
   # Those of a generic class or struct are generic, as those of an extend of a generic type are.
-  if literal.type_params.length == 0 and not is_generic_object(info)
+  if literal.type_params.is_empty() and not is_generic_object(info)
     add_function shared, method_key(type_name, name), member.name, literal, info.type
     return
   receiver := Receiver(type: info.type, type_params: info.declaration.type_params)
@@ -271,7 +271,7 @@ export check_pending_objects := (shared: Shared) ->
     pending.append [each for each in info.instances when each.state == UNCHECKED]
   check_info shared.program, info for info in pending
   check_all_satisfy shared.program, pending
-  pending.length > 0
+  not pending.is_empty()
 
 # Those with an error are left out, as their fields' types may be unknown. Each satisfies the
 # interface it names, and its equals, compare and hash are of their types.

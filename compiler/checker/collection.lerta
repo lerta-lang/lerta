@@ -170,17 +170,17 @@ export type_of_empty_map := (body: Body, call: Call, expected: Type?) ->
   if set := expected_set(target)
     fail program, call.position, "expected #{format_type(set)}, got a map; write Set()"
   type := expected_map(target) ? missing_type()
-  if call.args.length > 0 or call.named_args.length > 0
+  if not call.args.is_empty() or not call.named_args.is_empty()
     fail program, call.position, 'Map() takes no arguments'
   type
 
 # `Set()`, of the expected type, or `Set(xs)`, of the items of an array.
 export type_of_new_set := (body: Body, call: Call, expected: Type?) ->
   program := body.program
-  if call.args.length > 1 or call.named_args.length > 0
+  if call.args.length > 1 or not call.named_args.is_empty()
     fail program, call.position, 'Set() takes an array of its items, or nothing'
   set := expected_set(written_or_expected(body, call, 'Set', expected))
-  if call.args.length == 0
+  if call.args.is_empty()
     example := '`Set<String>()`'
     message := "the type of an empty set must be written, as in #{example}"
     return set ? fail(program, call.position, message)
@@ -194,7 +194,7 @@ export type_of_new_set := (body: Body, call: Call, expected: Type?) ->
 
 # The type that `Map<K, V>()` or `Set<T>()` writes, or else the one expected.
 written_or_expected := (body: Body, call: Call, name: String, expected: Type?) ->
-  return expected if call.type_args.length == 0
+  return expected if call.type_args.is_empty()
   written := NamedType(name, args: call.type_args, position: call.callee.position)
   resolve body.program, body.resolver, written
 
