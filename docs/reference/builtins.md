@@ -17,7 +17,7 @@ Builtins need no import. Most are written in Lerta, in the files of `std/builtin
 
 ## Iterable
 
-`Iterable<T>` is a builtin [interface](objects.md#interfaces), of `std:builtins`, with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). An extend of it gives every Iterable `map`, `filter`, `take`, `zip`, `any`, `all`, `find`, `min_by`, `max_by` and `to_array`, one of `Iterable<T>` where `T` is [Comparable](#equatable-comparable-and-hashable) `min` and `max`, and one where `T` is [Add<T, T>](#operators) `sum`, which work as those of [Iter](types.md#iter) do. Arrays, `String`s, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
+`Iterable<T>` is a builtin [interface](objects.md#interfaces), of `std:builtins`, with one member, `iter: () -> Iter<T>`, which `for` and comprehensions go through (see [control flow](control-flow.md#for-and-ranges)). An extend of it gives every Iterable `map`, `filter`, `take`, `zip`, `any`, `all`, `find`, `fold`, `min_by`, `max_by` and `to_array`, one of `Iterable<T>` where `T` is [Comparable](#equatable-comparable-and-hashable) `min` and `max`, and one where `T` is [Add<T, T>](#operators) `sum`, which work as those of [Iter](types.md#iter) do. Arrays, `String`s, `Binary` values and `Iter`s satisfy it, an `Iter`'s `iter()` giving itself, and so does any type that has such an `iter`. A module's own name `Iterable` shadows it.
 
 ## Equatable, Comparable and Hashable
 
@@ -48,7 +48,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `Bool` | `equals`, `hash`, `to_string` |
 | `String` | `equals`, `hash`, `add`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `is_empty`, `without_prefix`, `without_suffix`, `contains`, `split_once`, `replace`, `trim`, `repeat`, `pad_start`, `pad_end`, `to_upper`, `to_lower`, `compare` |
 | `Binary` | `equals`, `hash`, `length`, `is_empty`, `iter`, `slice`, `occurs_at`, `text` |
-| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `index_of`, `is_empty`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
+| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `index_of`, `is_empty`, `first`, `last`, `sorted`, `sorted_by`, `append`, `slice`, `reversed`, `truncate`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
 | `Map<K, V>` | `length`, `is_empty`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries` |
 | `Set<T>` | `length`, `is_empty`, `has`, `add`, `remove`, `iter`, `bit_or`, `bit_and`, `sub`, `bit_xor`, `is_subset` |
 | `Iter<T>` | `has_next`, `next`, `iter` |

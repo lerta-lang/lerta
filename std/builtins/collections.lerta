@@ -59,6 +59,17 @@ extend<T> T[]
   append = (items: T[]) ->
     count := items.length
     @push items[i] for i in 0...count
+  # The items from `start` up to `end`, which it does not hold, as a new array.
+  slice = (start: Int, end: Int = @length): T[] ->
+    throw IndexError(message: 'slice out of range') if start < 0 or start > end or end > @length
+    [@[i] for i in start...end]
+  reversed = (): T[] -> [@[@length - 1 - i] for i in 0...@length]
+  # Removes the items after the first `length`, if it has more.
+  truncate = (length: Int) ->
+    throw IndexError(message: 'truncate to a negative length') if length < 0
+    @pop() while @length > length
+  # The items in the order of their keys, as `sorted` orders them.
+  sorted_by = <K: Comparable>(key: (T) -> K): T[] -> @sorted((a, b) -> key(a).compare(key(b)))
 
 extend<T> Iter<T>
   # Itself, so that an Iter is Iterable.
@@ -82,6 +93,11 @@ extend<T> Iterable<T>
     for x in @
       return x if test(x)
     nil
+  # `combine` applied to `initial` and the first item, then to that and the next, and so on.
+  fold = <A>(initial: A, combine: (A, T) -> A): A ->
+    var result = initial
+    result = combine(result, x) for x in @
+    result
   # The item whose key is the least, the first of those with equal keys, or nil if there is none.
   min_by = <K: Comparable>(key: (T) -> K): T? -> extreme_by(@iter(), key, LESS)
   # The item whose key is the greatest, the first of those with equal keys, or nil if there is none.
