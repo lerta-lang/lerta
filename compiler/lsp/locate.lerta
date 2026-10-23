@@ -69,11 +69,11 @@ candidates_at := (program: ProgramWide, module_index: Int, source: String, at: P
       instance := link.instance
       generic := generic_of(program, instance.generic)
       declared := Declared(module_index: generic.module_index, name: generic.name)
-      add { name: callee as Identifier!, type: instance.entry.type, declaration: -> declared }
+      add { name: callee, type: instance.entry.type, declaration: -> declared }
   for imported in shared.imports.names.values()
     source := imported.source
     continue if source is not ExportRef
-    ref := source as ExportRef!
+    ref := source
     add {
       name: imported.name
       type: nil
@@ -87,7 +87,7 @@ add_reexported_names := (add: (Candidate) -> void, program: ProgramWide, module_
   module := program.modules[module_index]
   for statement in module.program
     continue if statement is not Import
-    reexport := statement as Import!
+    reexport := statement
     continue if not reexport.exported
     exporter := module.imported[reexport]!
     for exported in reexport.names
@@ -136,8 +136,7 @@ member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) -
   name := member.name.name
   object_type := facts.types[member.object]
   target := facts.members[member]
-  if target == nil
-    return object_type is ObjectType then declared_member(program, object_type as ObjectType!, name)
+  return object_type is ObjectType then declared_member(program, object_type, name) if target == nil
   case target
     when Method
       source := target.source
@@ -148,7 +147,7 @@ member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) -
         else nil
     when Property
       return nil if target.kind != FIELD or object_type is not ObjectType
-      declared_member program, object_type as ObjectType!, name
+      declared_member program, object_type, name
     when EnumValue then enum_member_declaration(program, facts.types[member]!, name)
     else nil
 
@@ -160,7 +159,7 @@ enum_member_declaration := (program: ProgramWide, type: Type, name: String) ->
   module_index := program.shared.find(declares)?.index ? return nil
   for statement in program.modules[module_index].program
     continue if statement is not EnumDeclaration
-    declaration := statement as EnumDeclaration!
+    declaration := statement
     continue if declaration.name.name != enum_type.name
     for each in declaration.members
       return Declared(module_index, name: each) if each is Identifier and each.name == name
