@@ -2,34 +2,19 @@
 # annotations in docs/reference/style.md), the enums of members and the names of the constructions
 # of structs that it shows are expected (see Expected types there), and the imports of the enums and
 # the structs that these leave unused, which `lerta fmt` leaves out.
-import
-  compare_positions, EnumDeclaration, Identifier, Node, Position, Statement, TypeDeclaration
-from '../ast'
-import Located from '../errors'
-import all_warnings from '../checker/diagnostics'
-import check_program from '../checker/modules'
+import Identifier, Node, Statement from '../ast'
 import ProgramWide, Shared from '../checker/shared'
-import ExportRef, ImportedName from '../checker/imports'
 import CompileError from '../errors'
-import module_location from '../source'
-import imported_files, is_standard_module, load_modules, Module, module_key from '../loader'
-import ArrayType, format_type, MapType, same_type, SimpleType, Type from '../types'
-import Annotation, annotations_of, key_position from './annotated'
-import dump_annotated_without_positions from '../ast_dump'
+import imported_files, load_modules, Module, module_key from '../loader'
+import ArrayType, MapType, same_type, SimpleType, Type from '../types'
+import Annotation, annotations_of, key_position, Placed from './annotated'
+import
+  CheckResult, checks, imports_type, quiet_program, result_of, same_result
+from './check_result'
 import inferable from './inferable'
 import import_names_of from './left_out_imports'
 import rewrites_of from './rewrites'
-
-# What the checking of a program gives that an annotation can change: the type of each node of the
-# modules that are not standard, with the type it is converted to, if any; the types of the fields,
-# which code that the program does not hold, such as a module that imports the entry module, can
-# rely on; and the warnings.
-struct CheckResult
-  node_types: Map<Node, String>
-  # The key of the module of each node (see module_key).
-  node_modules: Map<Node, String>
-  field_types: String[]
-  warnings: Located[]
+import in_body, in_shared_body, shares_types from './shared_arms'
 
 # The keys (see annotation_key) of the annotations that can be left out of each of the files at
 # `paths`, by the key of its module (see module_key); none for a file whose program does not check.
@@ -86,9 +71,6 @@ has_is_empty := (type: Type?) ->
     when ArrayType, MapType then true
     when SimpleType then type.kind == 'String' or type.kind == 'Binary'
     else false
-
-# A written type, the enum of a member or the name of a construction, of the module of `key`.
-struct Placed(key: String, annotation: Annotation)
 
 # Adds the removable annotations of the modules `wanted` that the program of `entry` holds and that
 # have none yet, or none for `entry` if the program does not check.
@@ -176,43 +158,6 @@ accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> Pr
   outside := [placed for placed in others when is_outside(placed)]
   removable_among merged, outside, checks_the_same(with_arms, false, false)
 
-# Whether the node is in the body that the arms left out of the tree share with the arm kept, whose
-# subject is narrowed to the union of their types then, which gives the nodes that use it other
-# types, as the same code that each arm ran.
-in_shared_body := (left_out: Placed[], result: CheckResult, node: Node) ->
-  module := result.node_modules[node] ? return false
-  left_out.any (placed) -> placed.key == module and in_body(placed, node.position)
-
-# Whether the body of the arms made one, as they are in `merged`, has the types of the body of each
-# of them in `separate`, but for the subjects of the arms made one with them, which each arm
-# narrows to the type of its own patterns and the arm made one to their union: a literal or an
-# operation may take another type then, as `s == 1` compares a Float with a Float where s is a
-# Float, and an Int where it is an Int | Float.
-shares_types := (
-  annotation: Annotation, subjects: Set<String>, separate: CheckResult, merged: CheckResult
-) ->
-  run := annotation.shared_arms ? return true
-  # Arms in an arm that others are made one with are left out with it: their patterns, which the
-  # checker gives types as it does not each statement, had them before.
-  first_pattern := run[0].patterns[0]
-  return true if separate.node_types.has(first_pattern) and not merged.node_types.has(first_pattern)
-  annotate := (result: CheckResult) -> (node: Node) ->
-    written := result.node_types[node] ? return ''
-    return written if node is not Identifier or not subjects.has(node.name)
-    (_, conversion) := written.split_once(' => ') ? return 'the subject'
-    "the subject => #{conversion}"
-  kept := dump_annotated_without_positions(run[0].body, annotate(merged))
-  run.all (arm) -> dump_annotated_without_positions(arm.body, annotate(separate)) == kept
-
-# Whether the position is in the body of the first of the arms that the annotation makes one, which
-# holds the nodes that the source has from its first statement up to the next arm, as the checker
-# makes its own nodes at the places of those it stands for.
-in_body := (placed: Placed, at: Position) ->
-  run := placed.annotation.shared_arms ? return false
-  start := run[0].body[0].position
-  end := run[1].patterns[0].position
-  compare_positions(start, at) != GREATER and compare_positions(at, end) == LESS
-
 # The imports of enums and structs that the program used, but that it does not once the annotations
 # accepted are left out, as the members of enums written alone, the constructions written as records
 # or the types: the checking that accepts them does not tell their warnings (see result_of).
@@ -235,12 +180,6 @@ unused_type_imports := (
   placed.annotation.restore() for placed in accepted
   found
 
-# Whether the name imports an enum, or a struct if `structs`.
-imports_type := (program: ProgramWide, imported: ImportedName, structs: Bool) ->
-  source := imported.source as ExportRef ? return false
-  exported := program.shared[source.module_index].exported[source.name]
-  exported is EnumDeclaration or (structs and exported is TypeDeclaration and exported.is_struct)
-
 # `accepted` and those of `trying` that can be left out with them: all at once, or else found by
 # halving `trying` until the parts that cannot be left out are single annotations, so that a module
 # checks once, and few times more for the few that cannot. Which of those that can be left out
@@ -257,65 +196,3 @@ removable_among := (
   first := trying.slice(0, half)
   second := trying.slice(half)
   removable_among removable_among(accepted, first, checks_the_same), second, checks_the_same
-
-quiet_program := (entry_path: String, modules: Module[]) ->
-  ProgramWide entry_path, modules, finds_all_errors: false
-
-checks := (program: ProgramWide) ->
-  try
-    check_program program
-    true
-  catch _: CompileError
-    false
-
-# The imports of enums, and those of structs if `structs`, that are not used do not count in the
-# warnings (see is_unused_type).
-result_of := (program: ProgramWide, structs: Bool) ->
-  node_types: Map<Node, String>
-  node_modules: Map<Node, String>
-  for shared in program.shared
-    module := program.modules[shared.index]
-    continue if is_standard_module(module)
-    { facts } := shared
-    for (node, type) in facts.types.entries()
-      converted := facts.conversions[node]
-      conversion := converted then " => #{format_type(converted)}" else ''
-      node_types[node] = format_type(type) + conversion
-      node_modules[node] = module.key
-  counts := (warning: Located) -> not is_unused_type(warning, program, structs)
-  warnings := [each for each in all_warnings(program) when counts(each)]
-  CheckResult node_types, node_modules, warnings, field_types: field_types(program)
-
-# A warning of an import of an enum or a struct that is not used, which the members of the enum
-# written alone, the constructions of the struct written as records or the types left out may make,
-# and which unused_type_imports then leaves out: one at the name of such an import.
-is_unused_type := (warning: Located, program: ProgramWide, structs: Bool) ->
-  at_import := (shared: Shared, imported: ImportedName) ->
-    { position } := imported.name
-    location := module_location(program.entry_path, program.modules[shared.index].display_path)
-    placed := location == warning.location and position.line == warning.line
-    placed and position.column == warning.column and imports_type(program, imported, structs)
-  unused := 'is imported but never used'
-  return false if not warning.message.ends_with(unused)
-  program.shared.any (shared) ->
-    shared.imports.names.values().any((imported) -> at_import(shared, imported))
-
-# Whether the nodes that both results have have the same types. The checking makes nodes of its own,
-# such as the `iter()` call of a `for` over an object, new each time, so each result has some that
-# the other lacks; their types show in those of the nodes of the syntax tree, which a program that
-# checks gives types to.
-same_result := (a: CheckResult, b: CheckResult, excused: (Node) -> Bool) ->
-  same_type := (node: Node) ->
-    return true if excused(node)
-    b_type := b.node_types[node] ? return true
-    a.node_types[node] == b_type
-  same_types := a.node_types.keys().all(same_type)
-  same_types and a.field_types == b.field_types and a.warnings == b.warnings
-
-field_types := (program: ProgramWide) ->
-  lines: String[]
-  for info in program.infos.values()
-    for field in info.fields
-      type := field.type then format_type(field.type!) else '-'
-      lines.push "#{info.type.symbol}.#{field.name.name}: #{type}"
-  lines
