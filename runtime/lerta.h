@@ -222,6 +222,12 @@ uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
 LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, LertaHash hash,
                            LertaEquals equals);
 int64_t lerta_map_length(const LertaMap *map);
+// The place of the key's value, which the generated code reads and writes in place as its type, or
+// NULL if the map holds no such key.
+void *lerta_map_find(const LertaMap *map, int64_t key);
+// The place of the key's value, holding zeros where the map did not hold the key; the map then
+// holds the key, retained, and the caller writes the value there, which it retains.
+void *lerta_map_place(LertaMap *map, int64_t key);
 bool lerta_map_read(const LertaMap *map, int64_t key, void *value);
 void lerta_map_write(LertaMap *map, int64_t key, const void *value);
 void lerta_map_remove(LertaMap *map, int64_t key);

@@ -128,13 +128,39 @@ static void grow(LertaMap *map) {
   }
 }
 
+void *lerta_map_find(const LertaMap *map, int64_t key) {
+  if (map->length == 0) return NULL;
+  int64_t position = map->slots[find_slot(map, key, hash_key(map, key))];
+  return position == EMPTY ? NULL : value_of(entry_at(map, position));
+}
+
+void *lerta_map_place(LertaMap *map, int64_t key) {
+  uint64_t hash = hash_key(map, key);
+  if (map->entry_count > 0) {
+    int64_t position = map->slots[find_slot(map, key, hash)];
+    if (position != EMPTY) return value_of(entry_at(map, position));
+  }
+  if (map->entry_count == map->entry_capacity) grow(map);
+  if (keys_are_references(map)) lerta_retain((void *)(intptr_t)key);
+  int64_t position = map->entry_count++;
+  LertaMapEntry *entry = entry_at(map, position);
+  *entry = (LertaMapEntry){key, hash, true};
+  memset(value_of(entry), 0, value_size(map));
+  map->slots[find_slot(map, key, hash)] = position;
+  map->length++;
+  return value_of(entry);
+}
+
+// The seed's IR reads and writes values through these, which generated code no longer calls: they
+// are to go once the seed is refreshed.
 bool lerta_map_read(const LertaMap *map, int64_t key, void *value) {
   size_t size = value_size(map);
-  memset(value, 0, size);
-  if (map->length == 0) return false;
-  int64_t position = map->slots[find_slot(map, key, hash_key(map, key))];
-  if (position == EMPTY) return false;
-  memcpy(value, value_of(entry_at(map, position)), size);
+  void *found = lerta_map_find(map, key);
+  if (found == NULL) {
+    memset(value, 0, size);
+    return false;
+  }
+  memcpy(value, found, size);
   lerta_retain_item(map->value_kind, value);
   return true;
 }
@@ -143,26 +169,11 @@ bool lerta_map_read(const LertaMap *map, int64_t key, void *value) {
 void lerta_map_write(LertaMap *map, int64_t key, const void *value) {
   lerta_retain_item(map->value_kind, value);
   size_t size = value_size(map);
-  uint64_t hash = hash_key(map, key);
-  if (map->entry_count > 0) {
-    int64_t position = map->slots[find_slot(map, key, hash)];
-    if (position != EMPTY) {
-      void *entry_value = value_of(entry_at(map, position));
-      LertaItem old;
-      memcpy(&old, entry_value, size);
-      memcpy(entry_value, value, size);
-      lerta_release_item(map->value_kind, &old);
-      return;
-    }
-  }
-  if (map->entry_count == map->entry_capacity) grow(map);
-  if (keys_are_references(map)) lerta_retain((void *)(intptr_t)key);
-  int64_t position = map->entry_count++;
-  LertaMapEntry *entry = entry_at(map, position);
-  *entry = (LertaMapEntry){key, hash, true};
-  memcpy(value_of(entry), value, size);
-  map->slots[find_slot(map, key, hash)] = position;
-  map->length++;
+  void *place = lerta_map_place(map, key);
+  LertaItem old;
+  memcpy(&old, place, size);
+  memcpy(place, value, size);
+  lerta_release_item(map->value_kind, &old);
 }
 
 void lerta_map_remove(LertaMap *map, int64_t key) {

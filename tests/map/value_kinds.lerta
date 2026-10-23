@@ -1,0 +1,53 @@
+# Values of every width and kind are written and read in place: a key the map does not hold reads
+# as nil, an old value is released as a new one replaces it, the same object may replace itself,
+# and an old value's deinit may write to the map, which then grows, while it is replaced.
+struct Point(x: Int, y: Int)
+
+class Noisy
+  name: String
+  deinit = -> print("drop #{@name}")
+
+kinds := ->
+  flags := { 'yes': true, 'no': false }
+  bytes: Map<String, Byte> = { 'a': 97 }
+  small: Map<String, Int32> = { 'm': -5 }
+  floats := { 'half': 0.5 }
+  words := { 1: 'one' }
+  texts: Map<String, Stringable> = { 'n': 'seven' }
+  points: Map<String, Point> = { 'p': { x: 1, y: 2 } }
+  print [flags['yes']!, flags['no']!, flags['gone'] == nil]
+  print [bytes['a']!.to_int(), bytes['b'] == nil then 0 else 1]
+  print [small['m']!.to_int(), small['n'] == nil then 0 else 1]
+  print [floats['half']!, floats['third'] ? -1.0]
+  print [words[1]!, words[2] ? 'nil']
+  print texts['n']!.to_string()
+  print texts['m'] == nil
+  print points['p']!.x + points['p']!.y
+  print points['q'] == nil
+
+replaced := ->
+  noisy: Map<String, Noisy>
+  noisy['a'] = Noisy(name: 'first')
+  noisy['a'] = Noisy(name: 'second')
+  same := noisy['a']!
+  noisy['a'] = same
+  print noisy['a']!.name
+
+# The map that Recorder's deinit writes to, which holds the Recorders themselves.
+RECORDERS: Map<String, Recorder | Int>
+
+class Recorder
+  deinit = -> RECORDERS["k#{i}"] = i for i in 0...40
+
+grows_while_replaced := ->
+  RECORDERS['r'] = Recorder()
+  RECORDERS['r'] = Recorder()
+  print RECORDERS.length
+  print RECORDERS['r'] is Recorder
+  # Replaced by an Int, the last Recorder is dropped before the program ends, while the map is.
+  RECORDERS['r'] = 0
+  print RECORDERS.length
+
+kinds()
+replaced()
+grows_while_replaced()
