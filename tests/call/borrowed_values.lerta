@@ -1,0 +1,105 @@
+# Locals passed to calls, read from, tested against nil and called on are borrowed where they
+# cannot change meanwhile, and taken otherwise: each value is released once, and lives as long as
+# something holds it.
+interface Named
+  name: String
+
+class Box
+  name: String
+  label = -> "box #{@name}"
+
+class Holder(weak! box: Box)
+
+class Crate
+  name: String
+  fail = (reason: String): String -> throw ValueError(message: "#{@name}: #{reason}")
+
+struct Pair(first: Box, second: Box)
+
+describe := (box: Box) -> box.label()
+describe_any := (value: Box | Int) -> value is Box then value.name else "int #{value}"
+name_of := (named: Named) -> named.name
+or_zero := (n: Int?) -> n ? 0
+name_or_gone := (box: Box?) -> box?.name ? 'gone'
+
+passes := ->
+  box := Box(name: 'a')
+  print describe(box)
+  print describe_any(box)
+  print name_of(box)
+  print or_zero(7)
+  count := 3
+  print or_zero(count)
+  pair := Pair(first: box, second: box)
+  print pair.first.name
+  print box.name.binary.length
+  maybe: Box? = box
+  print maybe != nil
+  print maybe == nil
+  print describe(maybe) if maybe != nil
+  either: Box | Int = box
+  print either.name if either is Box
+  xs := [1, 2, 3]
+  counts := { 'a': 1 }
+  print xs.length + counts.length
+  holder := Holder(box)
+  print holder.box.name
+  weak held := box
+  print name_or_gone(held)
+
+# A field that every member of a union has, read from a borrowed local, and bytes that outlive
+# the String they are read from.
+reads := ->
+  either: Box | Crate = Crate(name: 'crate')
+  print either.name
+  text := 'kept'
+  bytes := text.binary
+  print bytes.length
+
+# A method called on a borrowed object throws, from its arguments or its body; an Iter named by a
+# local is taken over by next.
+throws := ->
+  crate := Crate(name: 'c')
+  try
+    print crate.fail(Box(name: 'arg').name)
+  catch e: ValueError
+    print e.message
+  try
+    print crate.fail(refuse())
+  catch e: ValueError
+    print e.message
+  print crate.name
+  items := (x * 2 for x in [1, 2])
+  print items.next()
+  print items.has_next()
+
+refuse := (): String -> throw ValueError(message: 'before the call')
+
+TOP := Box(name: 'top')
+
+# A var that the call assigns, through the closure, is not borrowed: the old value stays alive for
+# the call.
+changes_meanwhile := ->
+  var current = Box(name: 'old')
+  replace := ->
+    current = Box(name: 'new')
+    'replaced'
+  show := (box: Box, note: String) -> "#{box.name} #{note}"
+  print show(current, replace())
+  print current.name
+
+# A weak! field of a borrowed object whose box is gone throws, and the object is released once.
+gone := ->
+  holder := Holder(box: Box(name: 'gone'))
+  try
+    print holder.box.name
+  catch e: WeakError
+    print e.message
+
+passes()
+reads()
+throws()
+print describe(TOP)
+print TOP.label()
+changes_meanwhile()
+gone()

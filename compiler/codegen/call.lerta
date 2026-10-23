@@ -19,7 +19,8 @@ import emit_member_value from './boxes'
 import emit_closure_call, function_type_of from './closure'
 import emit_parse from './enum'
 import
-  generate, holding_all, read_any_field, release_if_reference, type_at_use, type_of
+  borrowing_all, generate, generate_borrowed, read_any_field, release_if_reference, type_at_use,
+  type_of
 from './expression'
 import function_reference_symbol from './references'
 import emit_exception_check, holding from './exceptions'
@@ -112,19 +113,21 @@ generate_member_call := (g: Generator, call: Call, member: Member) ->
     when EnumValue then panic('an enum value is not called')
 
 # The methods of Iters (see takes_object) take the object and the arguments; the other
-# methods borrow them, and the object is released after the call.
+# methods borrow them, and the object, if owned (see generate_borrowed), is released after the
+# call.
 generate_method_call := (g: Generator, call: Call, member: Member, source: MethodSource) ->
   object_type := type_of(g, member.object)
-  object := generate(g, member.object)
   # An Iter's has_next and next run the code of its kind, which may throw.
   if source is BuiltinMethod and takes_object(source.member)
-    # The object is held until the Iter's method takes it over.
+    # The object is owned, and held until the Iter's method takes it over.
+    object := generate(g, member.object)
     check := -> emit_exception_check(g)
     call_iter := ->
       call_builtin_method g.ir, g.code.program, source.member, object, object_type, [], check
     result := holding(g, object, object_type, call_iter)
     emit_exception_check g
     return result
+  (object, is_owned) := generate_borrowed(g, member.object)
   call_method := ->
     emit_call := (operands: String[]) ->
       args := typed_arguments(g, arguments_of(g.facts, call), operands)
@@ -139,8 +142,8 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
         check: check
       emit_method_call g, source, object, object_type, method_call
     with_arguments g, arguments_of(g.facts, call), emit_call
-  result := holding(g, object, object_type, call_method)
-  release_if_reference g, member.object, object
+  result := is_owned then holding(g, object, object_type, call_method) else call_method()
+  release_if_reference g, member.object, object if is_owned
   emit_exception_check g
   result
 
@@ -245,14 +248,9 @@ call_closure := (g: Generator, closure: String, type: Type, args: Expression[]) 
   emit_exception_check g
   result
 
-# Generates the arguments, which `emit_call` borrows, and releases them after the call. Each is
-# held while the next ones are evaluated, which may throw.
+# Generates the arguments, which `emit_call` borrows (see borrowing_all).
 with_arguments := (g: Generator, args: Expression[], emit_call: (String[]) -> String) ->
-  call_and_release := (operands: String[]) ->
-    result := emit_call(operands)
-    release_if_reference g, arg, operands[i] for arg, i in args
-    result
-  holding_all g, args, call_and_release
+  borrowing_all g, args, emit_call
 
 # The named arguments are evaluated in the order they are written, then passed in the order of
 # the fields; an optional field left out is nil. One with a default is followed by whether it is
@@ -260,7 +258,7 @@ with_arguments := (g: Generator, args: Expression[], emit_call: (String[]) -> St
 generate_construction := (g: Generator, call: Call, type: ObjectType) ->
   info := info_of(g.code.program, type)
   named_args := construction_arguments(call)
-  construct_and_release := (operands: String[]) ->
+  construct := (operands: String[]) ->
     given: Map<String, String>
     given[arg.name.name] = operands[i] for arg, i in named_args
     args: String[]
@@ -271,9 +269,8 @@ generate_construction := (g: Generator, call: Call, type: ObjectType) ->
       passed := value ? (field.has_default then 'zeroinitializer' else nil_constant(field_type))
       args.push "#{ir_type(field_type)} #{passed}"
       args.push "i1 #{value != nil}" if field.has_default
-    object := g.ir.assign("call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})")
-    release_if_reference g, arg.value, operands[i] for arg, i in named_args
-    object
-  object := holding_all(g, [arg.value for arg in named_args], construct_and_release)
+    g.ir.assign "call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})"
+  # The constructor retains the arguments that its fields hold.
+  object := borrowing_all(g, [arg.value for arg in named_args], construct)
   emit_exception_check g
   object

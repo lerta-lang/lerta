@@ -194,13 +194,13 @@ emit_member_test := (g: Generator, object: String, value: Expression, type_name:
   return test_of(object) if value_type is not OptionalType
   emit_present_test g.ir, object, value_type, test_of
 
-# A field's value, of a class, a struct or an anonymous struct; the object is released, and the
-# value retained.
-read_field := (g: Generator, object: String, type: Type, name: String) ->
+# A field's value, of a class, a struct or an anonymous struct; the object is released if it is
+# owned, and the value retained.
+read_field := (g: Generator, object: String, type: Type, name: String, is_owned: Bool) ->
   ir := g.ir
   if type is RecordType
     value := emit_record_field(ir, object, type, name)
-    emit_release ir, object
+    emit_release ir, object if is_owned
     return value
   object_type := type as ObjectType!
   info := info_of(g.code.program, object_type)
@@ -215,17 +215,24 @@ read_field := (g: Generator, object: String, type: Type, name: String) ->
     case
       when not field.weak then loaded
       when field_type is OptionalType then emit_weak_object(ir, loaded)
-      else holding(g, object, object_type, read_weak)
+      when is_owned then holding(g, object, object_type, read_weak)
+      else read_weak()
   emit_retain_value ir, value, field_type
-  emit_release ir, object
+  emit_release ir, object if is_owned
   value
 
-# A field of a class, a struct or an anonymous struct, or one that every member of a union has.
+# A field of a class, a struct or an anonymous struct, or one that every member of a union has,
+# of the object, which is released if it is owned.
 export read_any_field := (
-  g: Generator, object: String, object_type: Type, name: String, field_type: Type
+  g: Generator
+  object: String
+  object_type: Type
+  name: String
+  field_type: Type
+  is_owned = true
 ) ->
-  return read_field(g, object, object_type, name) if object_type is not UnionType
-  of_member := (type: Type) -> read_field(g, object, type, name)
+  return read_field(g, object, object_type, name, is_owned) if object_type is not UnionType
+  of_member := (type: Type) -> read_field(g, object, type, name, is_owned)
   emit_member_dispatch g.ir, object, object_type.members, ir_type(field_type), of_member
 
 # The object that a `weak!` field's box holds, borrowed; it throws if the object is gone.
@@ -238,15 +245,18 @@ weak_object := (g: Generator, box: String) ->
 generate_property := (g: Generator, member: Member) ->
   target := g.facts.members[member]!
   return "#{target.index}" if target is EnumValue
-  object := generate(g, member.object)
   object_type := type_of(g, member.object)
-  name := member.name.name
   type := type_of(g, member)
+  if target is InterfaceProperty
+    # An interface's getter takes its object owned.
+    object := generate(g, member.object)
+    return emit_interface_read(g, object, object_type as InterfaceType!, target.index, type)
+  (object, is_owned) := generate_borrowed(g, member.object)
+  name := member.name.name
   value :=
     case target
-      when Property then read_property(g, object, object_type, target.kind, name, type)
-      when InterfaceProperty
-        emit_interface_read g, object, object_type as InterfaceType!, target.index, type
+      when Property then read_property(g, object, object_type, target.kind, name, type, is_owned)
+      when InterfaceProperty then panic('an interface property is read above')
       when Method, EnumParse then panic('a method must be called')
       when EnumValue then panic('an enum value is read before its object')
   # A field narrowed where it is read (see checker narrowable FieldPath).
@@ -259,22 +269,30 @@ declared_field_type := (g: Generator, object_type: Type, name: String) ->
     when ObjectType then field_named(info_of(g.code.program, object_type), name).type
     else nil
 
-# The property of the object, which is owned and released: a field, or a property of a builtin
-# type. `s.binary` is the string itself, passing on its ownership; `length` borrows its object.
+# The property of the object, which is released if it is owned: a field, or a property of a
+# builtin type. `s.binary` is the string itself, passing on its ownership, or retained if it is
+# borrowed; `length` borrows its object.
 export read_property := (
-  g: Generator, object: String, object_type: Type, kind: PropertyKind, name: String, type: Type
+  g: Generator
+  object: String
+  object_type: Type
+  kind: PropertyKind
+  name: String
+  type: Type
+  is_owned = true
 ) ->
   ir := g.ir
+  released := (value: String) ->
+    emit_release ir, object if is_owned
+    value
   case kind
-    when FIELD then read_any_field(g, object, object_type, name, type)
-    when STRING_BINARY then object
-    when ARRAY_LENGTH then released(ir, object, emit_length(ir, object))
-    when MAP_LENGTH then released(ir, object, emit_map_length(ir, object))
-    when BINARY_LENGTH then released(ir, object, emit_binary_length(ir, object))
-
-released := (ir: IrBuilder, object: String, value: String) ->
-  emit_release ir, object
-  value
+    when FIELD then read_any_field(g, object, object_type, name, type, is_owned)
+    when STRING_BINARY
+      emit_retain ir, object if not is_owned
+      object
+    when ARRAY_LENGTH then released(emit_length(ir, object))
+    when MAP_LENGTH then released(emit_map_length(ir, object))
+    when BINARY_LENGTH then released(emit_binary_length(ir, object))
 
 generate_interpolation := (g: Generator, interpolation: Interpolation) ->
   parts: String[]
@@ -303,6 +321,24 @@ export holding_all := (g: Generator, expressions: Expression[], use: (String[]) 
   pop_temporaries g, depth
   result
 
+# The operands of the expressions, which `use` borrows: borrowed from their locals where they can
+# be (see generate_borrowed), and otherwise owned, held while the later ones are evaluated, which
+# may throw, and released after `use`.
+export borrowing_all := (g: Generator, expressions: Expression[], use: (String[]) -> String) ->
+  depth := g.temporaries.length
+  operands: String[]
+  owned: Bool[]
+  for expression in expressions
+    (operand, is_owned) := generate_borrowed(g, expression)
+    push_temporary g, operand, type_at_use(g, expression) if is_owned
+    operands.push operand
+    owned.push is_owned
+  result := use(operands)
+  pop_temporaries g, depth
+  for expression, i in expressions
+    release_if_reference g, expression, operands[i] if owned[i]
+  result
+
 export release_if_reference := (g: Generator, expression: Expression, operand: String) ->
   emit_release_value g.ir, operand, type_at_use(g, expression)
 
@@ -322,13 +358,16 @@ generate_identifier := (g: Generator, identifier: Identifier) ->
 
 # The value of the expression and whether it is owned: borrowed when it is a local whose scope
 # keeps the value for as long as its consumer uses it, so that using an array in a loop retains and
-# releases nothing (see docs/internals.md#memory-management); owned otherwise.
+# releases nothing (see docs/internals.md#memory-management); owned otherwise, as where it is
+# converted to another type, which makes a new value.
 export generate_borrowed := (g: Generator, expression: Expression) ->
+  owned := -> (generate(g, expression), true)
+  return owned() if g.facts.conversions.has(expression)
   if expression is Identifier and g.facts.references[expression] is ScopedLocal
     local := local_of(g, expression)
     can_go := local.weak or (local is SlotLocal and local.is_var)
     return (read_borrowed(g, local, type_of(g, expression)), false) if not can_go
-  (generate(g, expression), true)
+  owned()
 
 # The slot's pointer, once a top-level value is known to be initialized.
 export slot_pointer := (g: Generator, local: SlotLocal) ->
