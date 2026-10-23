@@ -56,6 +56,8 @@ struct LertaString {
 // without values, do. An integer narrower than 8 bytes, a Bool or a Float32's bits, is
 // LERTA_INTEGER_ITEMS with its size in bytes in LERTA_ITEM_BYTES, and LERTA_SIGNED_ITEMS if it is
 // signed, and takes that size.
+// C moves items only by memcpy, never as a C type: the generated code reads and writes them as a
+// type of their own in type-based alias analysis (see compiler/codegen/array.lerta).
 typedef enum {
   LERTA_PLAIN_ITEMS,
   LERTA_REFERENCE_ITEMS,

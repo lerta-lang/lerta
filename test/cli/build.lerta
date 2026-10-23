@@ -305,6 +305,49 @@ dump_seldom_check := ->
       reasons.append ["no weights: #{line}" for line in branches when not line.contains(weights)]
     reasons
 
+ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
+
+# Each load and store of an item of an array or a value of a map, of each size, names the alias tag
+# of the items, whose nodes the module defines once each.
+dump_item_tag_check := -> Check(name: 'lerta dump-llvm tags the loads and stores of items', run: ->
+  dumped := await run_in_new_dir(compiler, ['dump-llvm', ITEM_WRITES])
+  lines := dumped.result.stdout.text()!.split("\n")
+  item := [line for line in lines when line.contains('!"lerta item"')]
+  return ["the item's node is defined #{item.length} times"] if item.length != 1
+  name := item[0].split(' = ')[0]
+  tag := [line for line in lines when line.ends_with(" = !{#{name}, #{name}, i64 0}")]
+  return ["the item's tag is defined #{tag.length} times"] if tag.length != 1
+  tagged := ", !tbaa #{tag[0].split(' = ')[0]}"
+  root := await clang_tbaa_root(dumped.cwd)
+  has_root := lines.any((line) -> line.ends_with(" = #{root}"))
+  return ["no node of clang's root of type-based alias analysis, #{root}"] if not has_root
+  types := ['i8', 'i32', 'float', 'i64', '{ ptr, ptr }']
+  accesses := [["load #{type}, ptr" for type in types]..., ["store #{type} " for type in types]...]
+  is_tagged := (access: String) ->
+    lines.any (line) -> line.contains(access) and line.ends_with(tagged)
+  [
+    expect_status(0, dumped.result.status)...
+    ["no #{access} with the tag" for access in accesses when not is_tagged(access)]...
+  ]
+)
+
+# The root node of the alias analysis that clang gives the runtime's C, without its number, so that
+# the items' type is in the same tree as the C types of the runtime.
+clang_tbaa_root := (cwd: String) ->
+  await write_file("#{cwd}/load.c", 'long load(long *p) { return *p; }'.binary)
+  args := ['-O1', '-S', '-emit-llvm', '-o', '-', 'load.c']
+  compiled := await run_command('clang', args, cwd)
+  lines := compiled.stdout.text()!.split("\n")
+  root := lines.find((line) -> line.ends_with('TBAA"}')) ? return "none in clang's IR"
+  root.split(' = ')[1]
+
+# The alias tag's nodes and those of the debug information share the module's numbers.
+item_tag_source_lines_check := ->
+  Check name: 'lerta run --source-lines -O runs a program with tagged items', run: ->
+    ran := await run_command(compiler, ['run', ITEM_WRITES, '--source-lines', '-O'], cli_work_dir)
+    expected := await read_file(ITEM_WRITES.without_suffix('.lerta')! + '.out')
+    [expect_status(0, ran.status)..., compare_output('stdout', expected, ran.stdout)...]
+
 dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in symbol names', run: ->
   source := "#{root_dir}/tests/module/escaped_path.lerta"
   dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
@@ -462,6 +505,8 @@ checks.push optimized_runtime_check()
 checks.push dump_llvm_check()
 checks.push dump_symbols_check()
 checks.push dump_seldom_check()
+checks.push dump_item_tag_check()
+checks.push item_tag_source_lines_check()
 checks.push source_lines_check()
 checks.push no_trace_check()
 checks.push source_lines_build_check(no_build_flags)

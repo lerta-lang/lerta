@@ -1,5 +1,6 @@
 # Accumulates the text of an LLVM IR module. It knows IR syntax only, not Lerta semantics.
 import Position from '../ast'
+import Metadata from './metadata'
 import SourceLines, SourceScope from './source_lines'
 
 # A function or a global of a module.
@@ -23,6 +24,7 @@ export class IrModule
   defined: Set<String> = Set()
   symbol_count = 0
   names: Map<String, String> = Map()
+  metadata = Metadata()
   # With `--source-lines`, the metadata of the debug information, where the instructions come
   # from in the source, as LLVM's line tables have it; nil without.
   source_lines: SourceLines? = nil
@@ -105,7 +107,11 @@ export class IrModule
       [definition.text for definition in @functions]...
     ]
     lines.push "attributes #0 = { #{@function_attributes} }" if not @function_attributes.is_empty()
-    lines.append source_lines.metadata() if source_lines := @source_lines
+    # Naming the nodes may make more of them.
+    named: String[]
+    named.append source_lines.named_metadata() if source_lines := @source_lines
+    lines.append @metadata.nodes
+    lines.append named
     "#{lines.join("\n")}\n"
 
 # The symbol that a function's signature defines: the first, after its result type and attributes.
