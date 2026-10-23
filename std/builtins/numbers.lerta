@@ -8,6 +8,8 @@ extern lerta_float_to_float32: (Float) -> Float32
 extern lerta_float32_to_string: (Float32) -> String
 extern lerta_float32_to_float: (Float32) -> Float
 
+HEX_DIGITS := ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
+
 extend Float
   to_string = -> lerta_float_to_string(@)
   to_literal = -> @to_string()
@@ -53,6 +55,17 @@ extend Int
       break if rest == 0
     @ < 0 then '-' + digits else digits
   to_literal = -> @to_string()
+  # The digits in lower-case hexadecimal, with zeros before them to make `width` digits; a negative
+  # number has no one such text, so it throws.
+  to_hex = (width: Int = 0) ->
+    throw ValueError(message: "to_hex of #{@}, a negative number") if @ < 0
+    var rest = @
+    var digits = ''
+    while true
+      digits = HEX_DIGITS[rest & 0xF] + digits
+      rest >>= 4
+      break if rest == 0
+    digits.pad_start width, '0'
 
 extend Int8
   to_string = -> @to_int().to_string()
@@ -93,6 +106,13 @@ extend Byte
   is_letter = -> @to_char().is_letter()
   is_space = -> @to_char().is_space()
   is_utf8_continuation = -> is_continuation(@)
+  # The value of a hexadecimal digit, of either case, or nil if the byte is none.
+  hex_value = (): Int? ->
+    case
+      when @ >= '0' and @ <= '9' then (@ - '0').to_int()
+      when @ >= 'a' and @ <= 'f' then (@ - 'a').to_int() + 10
+      when @ >= 'A' and @ <= 'F' then (@ - 'A').to_int() + 10
+      else nil
 
 ZERO: Char = '0'
 

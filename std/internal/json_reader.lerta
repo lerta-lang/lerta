@@ -1,6 +1,6 @@
 # What std:json's generated code reads through (see std/json.lerta).
 import from_base64 from './base64'
-import field_key, hex_text, quoted from './json_text'
+import field_key, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonReader
@@ -211,7 +211,7 @@ export class JsonReader
   read_escaped_char = ->
     code := @read_hex_unit()
     return code.to_char()! if code < 0xD800 or code > 0xDFFF
-    lone := -> @fail("a lone surrogate in a string, \\u#{hex_text(code)}")
+    lone := -> @fail("a lone surrogate in a string, \\u#{code.to_hex(4)}")
     lone() if code > 0xDBFF or not @bytes.occurs_at(@at, '\u'.binary)
     @at += 2
     low := @read_hex_unit()
@@ -221,7 +221,7 @@ export class JsonReader
   read_hex_unit = ->
     var code = 0
     for _ in 0...4
-      digit := hex_value(@peek() ? 0) ? @fail('an escape \u without four hex digits')
+      digit := (@peek() ? 0).hex_value() ? @fail('an escape \u without four hex digits')
       code = code * 16 + digit
       @at += 1
     code
@@ -292,13 +292,6 @@ unescaped := (byte: Byte): Byte? ->
     when 'n' then "\n"
     when 'r' then "\r"
     when 't' then "\t"
-    else nil
-
-hex_value := (byte: Byte): Int? ->
-  case
-    when byte.is_digit() then (byte - '0').to_int()
-    when byte >= 'a' and byte <= 'f' then (byte - 'a').to_int() + 10
-    when byte >= 'A' and byte <= 'F' then (byte - 'A').to_int() + 10
     else nil
 
 # The byte as it is written in an error: as itself if it is ASCII and visible.
