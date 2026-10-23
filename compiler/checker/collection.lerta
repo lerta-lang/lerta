@@ -1,7 +1,7 @@
 # Types arrays, maps and sets: their literals, `Map()`, `Set()`, and indexing (of a Binary too).
 import
-  ArrayLiteral, Call, Expression, Identifier, Index, is_spread, MapLiteral, NamedType, Position,
-  Range, RecordLiteral, Throw, TupleLiteral
+  ArrayLiteral, Call, Expression, Identifier, Index, is_spread, MapLiteral, NamedType, NilLiteral,
+  Position, Range, RecordLiteral, Throw, TupleLiteral
 from '../ast'
 import fail from './diagnostics'
 import is_equatable, is_hashable from './equality'
@@ -11,10 +11,12 @@ import float_first, is_contextual from './literals'
 import lookup, record_reference from './name'
 import CollectionMaker from './references'
 import Body, ProgramWide from './shared'
+import field_type, info_of from './object_types'
 import names_type_or_import, resolve from './type_names'
 import
-  ArrayType, binary_type, byte_type, format_type, inner_of, int_type, is_kind, is_reference_type,
-  is_set, MapType, optional_type, OptionalType, set_of, Type
+  ArrayType, binary_type, byte_type, format_type, inner_of, int_type, InterfaceType, is_kind,
+  is_reference_type, is_set, IterType, MapType, ObjectType, optional_type, OptionalType, RecordType,
+  set_of, TupleType, Type, type_key, UnionType
 from '../types'
 
 # The type of the values of a container, such as 'an Iter', which `at` gives: any type with
@@ -155,9 +157,9 @@ export makes_builtin := (body: Body, call: Call, name: String) ->
   made := call.makes_builtin and callee is Identifier and callee.name == name
   made or is_builtin_call(body, callee, name)
 
-# Records the call of the builtin Map or Set, whose callee is a name (see is_builtin_call), as
-# making the collection of the type.
-export made_collection := (body: Body, call: Call, type: MapType) ->
+# Records the call of the builtin Map, Set or Array, whose callee is a name (see is_builtin_call),
+# as making the collection of the type.
+export made_collection := (body: Body, call: Call, type: MapType | ArrayType) ->
   record_reference body, call.callee as Identifier!, CollectionMaker(type)
   type
 
@@ -191,6 +193,44 @@ export type_of_new_set := (body: Body, call: Call, expected: Type?) ->
   array := type as ArrayType ? fail(program, items.position, not_array)
   reject_map_key program, array.element, items.position, 'a set item'
   set_of array.element
+
+# `Array(n, value)`, an array of `n` copies of the value, of the items that the expected type
+# gives, or else of the value's type, which must not hold a value that changes and is shared,
+# since every item would hold the same one, unless the value is nil.
+export type_of_filled_array := (body: Body, call: Call, expected: Type?) ->
+  program := body.program
+  is_plain := call.named_args.is_empty() and call.type_args.is_empty()
+  if call.args.length != 2 or not is_plain
+    fail program, call.position, 'Array() takes a length and a value, as in Array(n, false)'
+  expect_type body, call.args[0], int_type
+  value := call.args[1]
+  expected_array := expected then inner_of(expected) as ArrayType?
+  element := expected_array then expected_array.element else type_of(body, value)
+  expect_type body, value, element if expected_array
+  check_item_type program, element, value.position, 'an array'
+  if value is not NilLiteral and holds_changing(program, element, value.position, Set())
+    shared := "Array() would make every item share one #{format_type(element)}"
+    changing := 'which may hold a value that changes'
+    fail program, value.position, "#{shared}, #{changing}; make each with [<value> for _ in 0...n]"
+  ArrayType element
+
+# Whether a value of the type may be, or hold, one that changes and that every holder shares, as a
+# class object, an array, a map or an Iter is; `seen` has the types already looked into, as a
+# struct may hold itself.
+holds_changing := (program: ProgramWide, type: Type, at: Position, seen: Set<String>): Bool ->
+  return false if not seen.add(type_key(type))
+  holds := (part: Type) -> holds_changing(program, part, at, seen)
+  case type
+    when ArrayType, MapType, IterType, InterfaceType then true
+    when ObjectType
+      return true if not type.is_struct
+      info := info_of(program, type)
+      info.fields.any (field) -> holds(field_type(program, info, field, at))
+    when TupleType then type.items.any(holds)
+    when RecordType then type.fields.any((field) -> holds(field.type))
+    when UnionType then type.members.any(holds)
+    when OptionalType then holds(type.inner)
+    else false
 
 # The type that `Map<K, V>()` or `Set<T>()` writes, or else the one expected.
 written_or_expected := (body: Body, call: Call, name: String, expected: Type?) ->

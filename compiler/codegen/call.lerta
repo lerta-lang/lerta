@@ -14,6 +14,7 @@ import Instance from '../checker/generics'
 import arguments_of from '../checker/shared'
 import info_of, is_argument from '../checker/object_types'
 import call_builtin_method, takes_object from './builtins'
+import emit_array_filled from './array'
 import emit_conversion from './checked_int'
 import emit_member_value from './boxes'
 import emit_closure_call, function_type_of from './closure'
@@ -38,7 +39,7 @@ import emit_add_items, emit_map_new from './map'
 import apply_operator_method from './operator'
 import nil_constant from './optional'
 import emit_runtime_call, emit_valueless_call from './runtime_calls'
-import MapType, ObjectType, same_type, Type from '../types'
+import ArrayType, MapType, ObjectType, same_type, Type from '../types'
 
 # A call of `name.export` of a module imported as `name` is the call of the name that the checker
 # made (see qualified_name).
@@ -53,10 +54,12 @@ export generate_call := (g: Generator, call: Call): String ->
   return generate_named_call(g, call, callee) if callee is Identifier
   call_closure g, generate(g, callee), type_of(g, callee), arguments_of(g.facts, call)
 
-# A call of a name: of the builtin Map or Set, std:json's write_json or read_json, a constructor,
-# a C function, a function written in Lerta, or a local or a top-level value that holds a function.
+# A call of a name: of the builtin Map, Set or Array, std:json's write_json or read_json, a
+# constructor, a C function, a function written in Lerta, or a local or a top-level value that holds
+# a function.
 generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
-  # The checker types the callee of every call but those of Map, Set and std:json's builtins.
+  # The checker types the callee of every call but those of the builtin collections and of
+  # std:json.
   callee_type := -> type_of(g, callee)
   reference := g.facts.references[callee]!
   args := arguments_of(g.facts, call)
@@ -76,13 +79,26 @@ generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
     when ScopedLocal, TopLevelValue then call_closure(g, generate(g, callee), callee_type(), args)
     when EnumValue then panic('an enum value is not called')
 
-generate_new_collection := (g: Generator, call: Call, map_type: MapType) ->
+generate_new_collection := (g: Generator, call: Call, type: MapType | ArrayType) ->
+  case type
+    when MapType then generate_new_map(g, call, type)
+    when ArrayType then generate_filled_array(g, call, type)
+
+# `Map()`, `Set()` or `Set(items)`.
+generate_new_map := (g: Generator, call: Call, map_type: MapType) ->
   map := emit_map_new(g.ir, g.code.program, map_type)
   if items := call.args.first()
     array := generate(g, items)
     emit_add_items g.ir, map, array, map_type
     emit_release g.ir, array
   map
+
+# `Array(n, value)`.
+generate_filled_array := (g: Generator, call: Call, type: ArrayType) ->
+  fill := (operands: String[]) -> emit_array_filled(g.ir, operands[0], operands[1], type.element)
+  array := borrowing_all(g, call.args, fill)
+  emit_exception_check g
+  array
 
 # The writer or reader is the first argument, and the value written the second.
 generate_json_conversion := (g: Generator, call: Call, conversion: JsonConversion) ->

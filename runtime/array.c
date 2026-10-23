@@ -79,6 +79,40 @@ LertaArray *lerta_array_create(LertaItemKind item_kind) {
   return array;
 }
 
+LERTA_STATIC_STRING(negative_length, "an array of a negative length");
+
+// Copies the item into each place, by a size that the callers give as a constant, so that the C
+// compiler writes the copies as plain stores.
+static inline void fill_items(uint8_t *items, int64_t length, const void *item, size_t size) {
+  for (int64_t i = 0; i < length; i++) memcpy(items + i * (int64_t)size, item, size);
+}
+
+LertaArray *lerta_array_filled(LertaItemKind item_kind, int64_t length, const void *item) {
+  if (length < 0) {
+    lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&negative_length);
+    return NULL;
+  }
+  LertaArray *array = lerta_array_create(item_kind);
+  if (length == 0) return array;
+  int64_t size = lerta_item_size(item_kind);
+  if (length > INT64_MAX / size) lerta_panic("out of memory");
+  uint8_t *items = lerta_mem_alloc(length * size);
+  uint8_t byte;
+  memcpy(&byte, item, 1);
+  switch (size) {
+    case 1: memset(items, byte, (size_t)length); break;
+    case 2: fill_items(items, length, item, 2); break;
+    case 4: fill_items(items, length, item, 4); break;
+    case 8: fill_items(items, length, item, 8); break;
+    default: fill_items(items, length, item, 16); break;
+  }
+  for (int64_t i = 0; i < length; i++) lerta_retain_item(item_kind, item);
+  array->items = items;
+  array->length = length;
+  array->capacity = length;
+  return array;
+}
+
 int64_t lerta_array_length(const LertaArray *array) { return array->length; }
 
 LERTA_STATIC_STRING(index_out_of_range, "index out of range");

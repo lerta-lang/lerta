@@ -209,6 +209,8 @@ LertaString *lerta_binary_as_string(LertaString *binary);
 // Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; pop writes
 // the item owned.
 LertaArray *lerta_array_create(LertaItemKind item_kind);
+// An array of `length` copies of the item, borrowed, each retained; a negative length throws.
+LertaArray *lerta_array_filled(LertaItemKind item_kind, int64_t length, const void *item);
 int64_t lerta_array_length(const LertaArray *array);
 void lerta_array_take_last(LertaArray *array, void *item);
 // These two give all the items, not the one at hand, whose place the generated code computes, as
