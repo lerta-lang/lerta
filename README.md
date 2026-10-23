@@ -26,7 +26,7 @@ Early development. The compiler is written in Lerta and builds itself, starting 
 
 ## Getting started
 
-Requirements: make and `clang` (LLVM). The programs run on Linux, macOS and Windows; the compiler runs on Linux and macOS, and builds Windows programs with mingw-w64 (`--target x86_64-w64-mingw32`).
+Requirements: make and `clang` (LLVM 15 or newer). The programs run on Linux, macOS and Windows; the compiler runs on Linux and macOS, and builds Windows programs with mingw-w64 (`--target x86_64-w64-mingw32`).
 
 `make` builds the compiler, `bin/lerta` (see [Building and testing](#building-and-testing)). To compile a program:
 

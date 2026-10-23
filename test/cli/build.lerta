@@ -109,6 +109,100 @@ input_check := (test: InputCase) ->
 
 input_checks := [input_check(test) for test in input_cases]
 
+# The system resolves a `..` after a name that is a symbolic link to the directory the link points
+# into, where the output must be written, as clang wrote it before the link ran in the build's own
+# directory.
+symlink_output_check := ->
+  Check name: 'lerta build writes an output whose path goes through a symbolic link', run: ->
+    # Wine makes symbolic links but does not follow them (see std:io in the reference).
+    return nil if host_platform == 'windows'
+    (cwd, temp) := new_cli_dirs()
+    make_dir "#{cwd}/under"
+    make_dir "#{cwd}/under/below"
+    make_link 'under/below', "#{cwd}/link"
+    built := await run_in_dir(compiler, ['build', hello, '-o', 'link/../hello'], cwd, temp)
+    reasons := expect_success('build', built.result)
+    return reasons if reasons.length > 0
+    executable := "#{cwd}/under/hello#{executable_suffix}"
+    ran := await run_command(executable, [], cwd)
+    [
+      expect_left('files left', ['link', 'under'], built.left)...
+      expect_left('files left in the temporary directory', [], built.left_in_temp)...
+      compare_output('stdout', hello_output, ran.stdout)...
+      expect_success('run', ran)...
+    ]
+
+# An output whose directory is not there is clang's to report: the path worked out as text may name
+# another directory that is there, by a `..` after a symbolic link or after a name that is not there
+# (see real_path in std:io in the reference), which the build must not write into instead. An output
+# that names a directory is clang's to report too, rather than the file its name as text would be.
+missing_output_directory_check := ->
+  Check name: 'lerta build reports an output directory that only the path as text has', run: ->
+    # Wine makes symbolic links but does not follow them (see std:io in the reference).
+    return nil if host_platform == 'windows'
+    (cwd, temp) := new_cli_dirs()
+    make_dir "#{cwd}/under"
+    make_dir "#{cwd}/under/below"
+    make_dir "#{cwd}/beside"
+    make_link 'under/below', "#{cwd}/link"
+    reasons: String[]
+    for output in [
+      'link/../beside/hello'
+      'missing/../beside/hello'
+      'missing/../hello'
+      'missing/'
+    ]
+      built := await run_in_dir(compiler, ['build', hello, '-o', output], cwd, temp)
+      reasons.append expect_status(1, built.result.status)
+      reasons.append
+        expect_left("files left for #{output}", ['beside', 'link', 'under'], built.left)
+      reasons.append
+        expect_left("files left in beside for #{output}", [], list_dir("#{cwd}/beside"))
+      reasons.append expect_left("temporary files left for #{output}", [], built.left_in_temp)
+    reasons
+
+# A `..` after a name that is not there names no file for the system, so an output written there as
+# text would be an input of the build that reject_input_as_output does not see.
+missing_input_output_check := ->
+  Check name: 'lerta build does not write an input that only the output path as text names', run: ->
+    # Windows works a `..` out as text (see real_path in std:io in the reference), so the output
+    # does name the input there, which only reject_input_as_output could tell.
+    return nil if host_platform == 'windows'
+    (cwd, temp) := new_cli_dirs()
+    source := "#{cwd}/hi.lerta"
+    await write_file(source, await read_file(hello))
+    before := await read_file(source)
+    built :=
+      await run_in_dir(compiler, ['build', 'hi.lerta', '-o', 'missing/../hi.lerta'], cwd, temp)
+    [
+      expect_status(1, built.result.status)...
+      compare_output('hi.lerta', before, await read_file(source))...
+      expect_left('files left', ['hi.lerta'], built.left)...
+      expect_left('files left in the temporary directory', [], built.left_in_temp)...
+    ]
+
+# The build resolves its temporary directory, which the link runs in, so one given by a relative
+# path names the same directory for the compiler and for clang.
+relative_temp_check := ->
+  Check name: 'lerta build takes a temporary directory given by a relative path', run: ->
+    cwd := new_cli_dir('relative-temp')
+    temp := "#{cwd}/temp"
+    make_dir temp
+    environment: Map<String, String>
+    environment['TMPDIR'] = 'temp'
+    environment['TEMP'] = 'temp'
+    environment['TMP'] = 'temp'
+    built :=
+      await run_command(compiler, ['build', hello, '-o', 'hello'], cwd, ''.binary, environment)
+    reasons := expect_success('build', built)
+    return reasons if reasons.length > 0
+    ran := await run_command("#{cwd}/hello#{executable_suffix}", [], cwd)
+    [
+      expect_left('files left in the temporary directory', [], list_dir(temp))...
+      compare_output('stdout', hello_output, ran.stdout)...
+      expect_success('run', ran)...
+    ]
+
 no_clang_check := ->
   Check name: 'lerta build removes temporary files when clang cannot be started', run: ->
     cache := new_cli_dir('no-clang-cache')
@@ -357,6 +451,10 @@ no_trace_check := ->
 export checks: Check[] = [build_and_run(flags) for flags in runtime_flags]
 checks.push default_output_check()
 checks.push leading_dash_check()
+checks.push symlink_output_check()
+checks.push missing_output_directory_check()
+checks.push missing_input_output_check()
+checks.push relative_temp_check()
 checks.append input_checks
 checks.push no_clang_check()
 checks.push failed_target_check()

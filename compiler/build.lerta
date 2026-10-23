@@ -8,7 +8,7 @@ import build_flags, executable_suffix, lto_cache_flags from './clang_flags'
 import generate from './codegen/codegen'
 import check_program from './compile'
 import CompileError from './errors'
-import join from './paths'
+import basename, is_absolute, join from './paths'
 import target_system from './libuv'
 import real_path_text from './loader'
 import cache_dir, cached_runtime from './runtime_cache'
@@ -74,37 +74,55 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
     generate(program, function_attributes, coro_end_type, true, traces, source_lines, optimize)
   flags := build_flags(optimize, memory_checks, target)
   objects := await compile_modules(modules, flags, dir) ? return 1
-  executable := request.output ? join(dir, "program#{executable_suffix(request.target)}")
+  # The link runs in the temporary directory and names the modules' objects in it, and the paths it
+  # is given besides are under the directory the compiler runs in (see
+  # docs/internals.md#per-module-output).
+  cwd := real_path_text('.')
+  work_dir := real_path_text(dir)
+  executable :=
+    link_path(cwd, request.output ? join(work_dir, "program#{executable_suffix(request.target)}"))
   # libm, which runtime/math.c calls, is apart from libc on Linux; elsewhere -lm links nothing more.
   libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
-  lto_cache := join(cache_dir(), 'thinlto')
+  lto_cache := join(real_path_text(cache_dir()), 'thinlto')
   system := target_system(request.target)
   cache_flags := request.optimize then lto_cache_flags(system, lto_cache)
   # dsymutil (below) reads the debug information from the objects, which the link-time optimizer
   # makes in a directory that it removes unless told one.
   keeps_objects := source_lines and system == 'macos' and request.optimize
-  lto_objects: String[] = keeps_objects then ["-Wl,-object_path_lto,#{join(dir, 'lto')}"] else []
+  lto_objects: String[] =
+    keeps_objects then ["-Wl,-object_path_lto,#{join(work_dir, 'lto')}"] else []
   args := [
-    objects...
+    [basename(object) for object in objects]...
     flags...
     (cache_flags ? [])...
     lto_objects...
-    runtime.objects...
+    [real_path_text(object) for object in runtime.objects]...
     libraries...
-    request.linked_files...
+    [link_path(cwd, file) for file in request.linked_files]...
     '-o'
     executable
   ]
   # clang's driver for macOS, given a source to compile as it links with -flto, has the linker keep
-  # what it optimizes in a directory under TMPDIR, which it never removes; under `dir`, it is
-  # removed with `dir`.
-  return 1 if (await run('clang', args..., env: { 'TMPDIR': dir })).code != 0
+  # what it optimizes in a directory under TMPDIR, which it never removes; under the temporary
+  # directory, it is removed with it.
+  clang := await run('clang', args..., cwd: work_dir, env: { 'TMPDIR': work_dir })
+  return 1 if clang.code != 0
   # On macOS, the debug information stays in the object files, which are removed, so dsymutil
-  # copies it beside the executable first.
+  # copies it beside the executable first; it reads their paths from the executable, as the link
+  # was given them, in the directory it ran in.
   if source_lines and system == 'macos'
-    return 1 if (await run('dsymutil', executable)).code != 0
+    return 1 if (await run('dsymutil', executable, cwd: work_dir)).code != 0
   program_args := run_args ? return 0
   (await run(executable, program_args...)).code
+
+# The path that the link, which runs in the build's temporary directory, is given for a file named
+# on the command line: a relative one below `cwd`, the directory the compiler runs in, written there
+# as it is, so that the system resolves its `..` and the symbolic links on its way from there, as it
+# did when clang ran in that directory. Worked out as text instead, a `..` would cancel the name
+# before it, which names another file when that name is a link or is not there at all. A path from a
+# root alone, as `/out` on Windows, is left to the drive of the directory the link runs in, as `C:a`
+# is left to the drive's own directory (see compiler/paths.lerta).
+link_path := (cwd: String, path: String) -> is_absolute(path) then path else "#{cwd}/#{path}"
 
 # Has clang compile the IR of each module, written to `dir`, into an object file there, as many at
 # once as there are CPUs; nil if it fails for any.

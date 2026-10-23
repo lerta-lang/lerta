@@ -3,8 +3,8 @@ import Check from '../lib/report'
 import compare_text, expect_status from '../lib/expect'
 import compiler, host_systems, read_text, root_dir from '../lib/lerta'
 import
-  CliRun, cli_work_dir, expect_left, expect_success, host_platform, host_triple, new_cli_dir,
-  run_command, run_in_new_dir
+  CliRun, cli_work_dir, executable_suffix, expect_left, expect_success, host_platform, host_triple,
+  new_cli_dir, new_cli_dirs, run_command, run_in_dir, run_in_new_dir
 from '../lib/cli'
 import is_dir, list_dir, make_dir, remove_tree, stat, write_file from 'std:io'
 import process_id from 'std:process'
@@ -236,17 +236,58 @@ cache_location_check := ->
       ['LERTA_CACHE_DIR']
     )
     [
-      await one_cached_runtime('XDG cache build', xdg_build.result, "#{xdg}/lerta")...
-      await one_cached_runtime('HOME cache build', home_build.result, "#{home}/.cache/lerta")...
+      await one_cached_runtime('XDG cache build', xdg_build.result, "#{xdg}/lerta", 'debug')...
+      await one_cached_runtime(
+        'HOME cache build'
+        home_build.result
+        "#{home}/.cache/lerta"
+        'debug'
+      )...
     ]
 
-one_cached_runtime := (what: String, built: CliRun, cache: String) ->
+one_cached_runtime := (what: String, built: CliRun, cache: String, kind: String) ->
   reasons := expect_success(what, built)
   return reasons if reasons.length > 0
   no_entries: String[]
   entries := is_dir(cache) then runtimes_in(cache) else no_entries
   return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
-  [runtime_name_reasons(entries[0], 'debug')..., await complete_runtime(cache, entries[0])...]
+  [runtime_name_reasons(entries[0], kind)..., await complete_runtime(cache, entries[0])...]
+
+# The link runs in the build's temporary directory, so a cache given by a path relative to the
+# directory the build runs in must still be the one the linker writes its ThinLTO cache into, and
+# what it optimized must be found again by a build in another temporary directory.
+relative_cache_check := ->
+  Check name: 'lerta build -O takes a cache directory given by a relative path', run: ->
+    (cwd, temp) := new_cli_dirs()
+    env: Map<String, String>
+    env['LERTA_CACHE_DIR'] = 'cache'
+    build_in := (in_temp: String) ->
+      await run_in_dir(
+        compiler
+        ['build', hello, '-o', 'hello', '-O']
+        cwd
+        in_temp
+        ''.binary
+        env
+      )
+    first := await build_in(temp)
+    cache := "#{cwd}/cache"
+    reasons := [
+      await one_cached_runtime('build', first.result, cache, 'release')...
+      expect_left('files left', ['cache', "hello#{executable_suffix}"], first.left)...
+      expect_left('files left in the temporary directory', [], first.left_in_temp)...
+    ]
+    return reasons if reasons.length > 0
+    optimized := thinlto_entries(cache)
+    second := await build_in(new_cli_dir('cache-relative-temp'))
+    [
+      expect_success('second build', second.result)...
+      check_reason(optimized.length > 0, "no ThinLTO cache in #{cache}")...
+      check_reason(
+        thinlto_entries(cache).join("\n") == optimized.join("\n")
+        'the build in another temporary directory optimized again'
+      )...
+    ]
 
 no_cache_location_check := ->
   Check name: 'lerta build reports when no cache location is available', run: ->
@@ -395,6 +436,7 @@ export checks :=
   invalid_target_check()
   host_target_check()
   cache_location_check()
+  relative_cache_check()
   no_cache_location_check()
   cache_creation_failure_check()
   concurrent_builds_check()

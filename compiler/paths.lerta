@@ -66,8 +66,8 @@ normalize := (path: String) ->
 # The path from the directory `from` to `to`, both relative to `cwd` unless absolute. Paths under
 # different roots have none, so `to` is given absolute.
 export relative := (cwd: String, from: String, to: String) ->
-  from_path := absolute_path(cwd, from)
-  to_path := absolute_path(cwd, to)
+  from_path := split_path(absolute(cwd, from))
+  to_path := split_path(absolute(cwd, to))
   return joined(to_path.root, to_path.names) if from_path.root != to_path.root
   from_names := from_path.names
   to_names := to_path.names
@@ -79,9 +79,15 @@ export relative := (cwd: String, from: String, to: String) ->
   names.push to_names[i] for i in common...to_names.length
   names.join '/'
 
-absolute_path := (cwd: String, path: String) ->
-  is_absolute := split_path(path).root != ''
-  split_path normalize(is_absolute then path else join(cwd, path))
+# Whether the path starts at a root (see split_path). On Windows a path that starts at `/` alone
+# names the file from the root of the current drive, so it names one file for each drive.
+export is_absolute := (path: String) -> split_path(path).root != ''
+
+# The path as it is if it is absolute, and otherwise from `cwd`, with `.` and `..` worked out as
+# text, as join does: a `..` after a name that is a symbolic link names another directory than the
+# system resolves it to.
+absolute := (cwd: String, path: String) ->
+  normalize is_absolute(path) then path else join(cwd, path)
 
 # The last name of the path: `c` for `a/b/c`, and `` for a root.
 export basename := (path: String) -> split_path(path).names.last() ? ''
