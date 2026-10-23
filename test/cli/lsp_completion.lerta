@@ -58,10 +58,10 @@ compiler_keywords := ->
 completion_check := -> Check(name: 'lerta lsp completes members after a dot', run: ->
   dir := new_cli_dir('lsp-completion')
   path := "#{dir}/a.lerta"
-  text := "struct Point(x: Int, y: Int)\nf := (p: Point) ->\n  print p.\n  later := 2\n"
+  text := "struct Point\n  x: Int\n  y: Int\nf := (p: Point) ->\n  print p.\n  later := 2\n"
   await write_file(path, text.binary)
   uri := uri_of(path)
-  messages := [did_open(uri, text), did_change(uri, text), completion_request(uri, 2, 10)].join('')
+  messages := [did_open(uri, text), did_change(uri, text), completion_request(uri, 4, 10)].join('')
   ran := await session(dir, messages)
   items := completion_items(ran.stdout.text()!, 1)
   [
@@ -79,14 +79,13 @@ completion_names_check := ->
   Check name: 'lerta lsp completes locals, module names, and keywords', run: ->
     dir := new_cli_dir('lsp-completion-names')
     path := "#{dir}/a.lerta"
-    text :=
-      "struct Point(x: Int)\ntop := 1\nf := (p: Point) ->\n  local := 1\n  print lo\n  later := 2\n"
+    text := "struct Point\n  x: Int\ntop := 1\nf := (p: Point) ->\n  local := 1\n  print lo\n  later := 2\n"
     await write_file(path, text.binary)
     uri := uri_of(path)
     messages :=
       did_open(uri, text)
       did_change(uri, text)
-      completion_request(uri, 4, 10)
+      completion_request(uri, 5, 10)
     .join('')
     ran := await session(dir, messages)
     output := ran.stdout.text()!
@@ -131,11 +130,11 @@ completion_contexts_check := ->
     point_text :=
       "struct Point\n  x: Int\n  y: Int\nf := (p: Point) ->\n  print p.eq()\n  later := 1\n"
     optional_text :=
-      "struct Point(x: Int, y: Int)\nf := (q: Point?) ->\n  print q?.\n  later := 1\n"
+      "struct Point\n  x: Int\n  y: Int\nf := (q: Point?) ->\n  print q?.\n  later := 1\n"
     counter_text := "class Counter\n  count = 0\n  bump = ->\n    @count += 1\n    print @co\n"
     bare_at_text := "class Counter\n  count = 0\n  bump = ->\n    @count += 1\n    print @\n"
     parameter_text := (here: String) ->
-      "struct Point(x: Int, y: Int)\np := 3\nf := (p: Point, q: Point?) ->\n#{here}\n"
+      "struct Point\n  x: Int\n  y: Int\np := 3\nf := (p: Point, q: Point?) ->\n#{here}\n"
     await write_file(path, point_text.binary)
     uri := uri_of(path)
     messages :=
@@ -146,16 +145,16 @@ completion_contexts_check := ->
         "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
       )
       did_change(uri, optional_text)
-      completion_request(uri, 2, 11, 2)
+      completion_request(uri, 4, 11, 2)
       did_change(uri, counter_text)
       completion_request(uri, 4, 13, 3)
       did_change(uri, bare_at_text)
       completion_request(uri, 4, 11, 5)
       did_change(uri, parameter_text('  print p'))
-      completion_request(uri, 3, 9, 6)
+      completion_request(uri, 5, 9, 6)
       completion_request(uri, 40, 0, 7)
       did_change(uri, parameter_text('  print [i for i in 0...p]'))
-      completion_request(uri, 3, 24, 8)
+      completion_request(uri, 5, 24, 8)
     .join('')
     ran := await session(dir, messages)
     output := ran.stdout.text()!
@@ -204,7 +203,7 @@ completion_imports_check := ->
     await write_file(path, ''.binary)
     await write_file(
       "#{dir}/lib.lerta"
-      "export helper := -> 1\nexport struct Pair(a: Int)\n".binary
+      "export helper := -> 1\nexport struct Pair\n  a: Int\n".binary
     )
     uri := uri_of(path)
     messages :=
@@ -258,8 +257,12 @@ completion_coverage_check := ->
     completion_text := (here: String) ->
       [
         "import './m' as m"
-        'struct Point(x: Int, y: Int)'
-        'struct Named(m: Int, Color: Int)'
+        'struct Point'
+        '  x: Int'
+        '  y: Int'
+        'struct Named'
+        '  m: Int'
+        '  Color: Int'
         'class Counter'
         '  count = 0'
         '  bump = -> @count += 1'
@@ -424,9 +427,9 @@ completion_coverage_check := ->
     messages := [did_open(uri, completion_text('    print local'))]
     for each, i in cases
       messages.push did_change(uri, completion_text(each.here))
-      messages.push completion_request(uri, 20, each.character, 10 + i)
+      messages.push completion_request(uri, 24, each.character, 10 + i)
     messages.push did_change(uri, completion_text('    print  lo'))
-    messages.push completion_request(uri, 20, 13, 97)
+    messages.push completion_request(uri, 24, 13, 97)
     messages.push
       frame(
         "{\"jsonrpc\":\"2.0\",\"id\":98,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"

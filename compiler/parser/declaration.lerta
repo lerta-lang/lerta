@@ -120,35 +120,19 @@ parse_import_name := (tokens: TokenStream) ->
   expect_name tokens, "a name after 'as'"
   ImportName name, alias: parse_identifier(tokens)
 
-# `class Name` or `struct Name`, or `class Name<T>` with type parameters, then its constructor
-# arguments in parentheses, and `: Interface` for an interface it satisfies. Without parentheses,
-# an indented block of members, one per line, follows, which may be left out after an interface.
+# `class Name` or `struct Name`, or `class Name<T>` with type parameters, then `: Interface` for an
+# interface it satisfies, and an indented block of members, one per line, which may be left out
+# after an interface.
 export parse_type_declaration := (tokens: TokenStream) ->
   token := tokens.next()
   name := parse_identifier(tokens)
   type_params := parse_type_parameters(tokens)
-  has_arguments := tokens.peek().kind == '('
-  arguments := has_arguments then parse_constructor_arguments(tokens)
   satisfies := tokens.accept(':') then parse_named_type(tokens)
-  block_follows := tokens.peek_at(1).kind == INDENT
-  if arguments != nil and block_follows
-    tokens.fail tokens.peek_at(2).position(), 'write the members in () or in a block, not both'
-  has_body := arguments == nil and (satisfies == nil or block_follows)
-  members := has_body then parse_members(tokens) else arguments ? []
+  has_body := satisfies == nil or tokens.peek_at(1).kind == INDENT
+  members: MemberDeclaration[] = has_body then parse_members(tokens) else []
   is_struct := token.kind == 'struct'
   position := token.position()
   TypeDeclaration name, type_params, members, is_struct, position, satisfies
-
-# The members in `(...)`, each a constructor argument.
-parse_constructor_arguments := (tokens: TokenStream) ->
-  open := tokens.next()
-  members := tokens.parse_list(')', -> parse_member(tokens))
-  tokens.fail open.position(), 'write at least one constructor argument in ()' if members.is_empty()
-  for member in members
-    if member.value != nil and not member.has_default
-      message := 'only constructor arguments, `name: Type` or `name = default value`, go in ()'
-      tokens.fail member.position, message
-  members
 
 # `interface Name`, or `interface Name<T>`, followed by an indented block of members, one per line,
 # written as a class's; the checker tells which an interface can have, and whether it can have
