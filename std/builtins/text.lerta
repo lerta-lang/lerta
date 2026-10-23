@@ -1,6 +1,8 @@
 # Text: what makes it, prints it and reads it, and the methods of Char, String and Binary (see
 # docs/reference/builtins.md).
-import char_at, is_utf8, lerta_binary_as_string, sequence_length, utf8_of from '../internal/utf8'
+import
+  char_at, is_utf8, lerta_binary_as_string, sequence_length, text_between, utf8_of
+from '../internal/utf8'
 # Writes at once, unlike std:io's Writer (see runtime/io.c).
 extern lerta_print_stdout: (String) -> void
 extern lerta_print_stderr: (String) -> void
@@ -129,10 +131,10 @@ extend String
     var start = 0
     var found = index_of(bytes, separator_bytes, 0)
     while found >= 0
-      pieces.push lerta_binary_as_string(bytes.slice(start, found))
+      pieces.push text_between(bytes, start, found)
       start = found + separator_bytes.length
       found = index_of(bytes, separator_bytes, start)
-    pieces.push lerta_binary_as_string(bytes.slice(start, bytes.length))
+    pieces.push text_between(bytes, start, bytes.length)
     pieces
   starts_with = (prefix: String) -> @binary.occurs_at(0, prefix.binary)
   ends_with = (suffix: String) ->
@@ -153,11 +155,11 @@ extend String
   # multi-byte character is, so that what is left is valid UTF-8.
   trim = ->
     start := text_start(@binary)
-    lerta_binary_as_string @binary.slice(start, text_end(@binary, start))
+    text_between @binary, start, text_end(@binary, start)
   # Likewise, at the start only.
-  trim_start = -> lerta_binary_as_string(@binary.slice(text_start(@binary), @binary.length))
+  trim_start = -> text_between(@binary, text_start(@binary), @binary.length)
   # Likewise, at the end only.
-  trim_end = -> lerta_binary_as_string(@binary.slice(0, text_end(@binary, 0)))
+  trim_end = -> text_between(@binary, 0, text_end(@binary, 0))
   # Each occurrence of the part, from the start and without overlapping, replaced.
   replace = (part: String, by: String) ->
     throw ValueError(message: 'replace of an empty part') if part == ''
@@ -187,9 +189,9 @@ extend String
     bytes := @binary
     found := index_of(bytes, separator.binary, 0)
     return nil if found < 0
-    before := lerta_binary_as_string(bytes.slice(0, found))
+    before := text_between(bytes, 0, found)
     after := found + separator.binary.length
-    (before, lerta_binary_as_string(bytes.slice(after, bytes.length)))
+    (before, text_between(bytes, after, bytes.length))
 
 extend Binary
   # The bytes, read as the Iter is.
