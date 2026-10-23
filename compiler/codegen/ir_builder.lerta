@@ -193,6 +193,16 @@ export class IrBuilder
     kept := linked then "internal #{linked}" else signature
     @module.define_function_in kept, [located(line) for line in lines], subprogram
 
+# Branches to the label `seldom` where the condition holds, and to `otherwise` elsewhere, with the
+# branch weights that clang gives `__builtin_expect`, so that LLVM lays out the code, and gives the
+# registers, for `otherwise` first. Use it for a branch to a throw or to an unwinding, which a
+# program seldom takes.
+export emit_seldom_branch := (
+  ir: IrBuilder, condition: String, seldom: String, otherwise: String
+) ->
+  weights := '!prof !{!"branch_weights", i32 1, i32 2000}'
+  ir.emit "br i1 #{condition}, label %#{seldom}, label %#{otherwise}, #{weights}"
+
 # Emits `body` to run only where the condition holds.
 export emit_when := (ir: IrBuilder, condition: String, body: () -> void) ->
   then_label := ir.fresh_label('branch.then')

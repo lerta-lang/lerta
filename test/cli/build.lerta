@@ -188,6 +188,26 @@ dump_llvm_check := -> Check(name: 'lerta dump-llvm prints the IR and leaves no f
   ]
 )
 
+# A branch to a throw carries the weights of one seldom taken: to an unwinding after a call, to an
+# overflow's throw and to the throw of an Iter resumed while it runs, of a program with each.
+dump_seldom_check := ->
+  Check name: 'lerta dump-llvm weighs the branches to a throw as seldom', run: ->
+    sources := ["#{root_dir}/bench/fib/main.lerta", "#{root_dir}/tests/yield/basic.lerta"]
+    reasons: String[]
+    lines: String[]
+    for source in sources
+      dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
+      reasons.append expect_status(0, dumped.result.status)
+      lines.append dumped.result.stdout.text()!.split("\n")
+    weights := '!prof !{!"branch_weights", i32 1, i32 2000}'
+    targets := ['label %unwind.', 'label %raise.', 'label %generator.reject.']
+    to := (line: String, target: String) -> line.starts_with('  br i1 ') and line.contains(target)
+    for target in targets
+      branches := [line for line in lines when to(line, target)]
+      reasons.push "no branch to #{target}" if branches.length == 0
+      reasons.append ["no weights: #{line}" for line in branches when not line.contains(weights)]
+    reasons
+
 dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in symbol names', run: ->
   source := "#{root_dir}/tests/module/escaped_path.lerta"
   dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
@@ -340,6 +360,7 @@ checks.push failed_target_check()
 checks.push optimized_runtime_check()
 checks.push dump_llvm_check()
 checks.push dump_symbols_check()
+checks.push dump_seldom_check()
 checks.push source_lines_check()
 checks.push no_trace_check()
 checks.push source_lines_build_check(no_build_flags)
