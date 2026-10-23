@@ -1,5 +1,5 @@
 # Generates assignments to names, fields, array items and map values.
-import Assignment, combining_operator, Expression, Identifier, Index, Member from '../ast'
+import Assignment, combining_operator, Identifier, Index, Member from '../ast'
 import info_of from '../checker/object_types'
 import emit_checked_items, emit_get, emit_is_out_of_range, emit_set_in from './array'
 import
@@ -8,11 +8,11 @@ from './exceptions'
 import
   generate, generate_borrowed, release_if_reference, slot_pointer, type_at_use, type_of
 from './expression'
-import push_held_scope, weak_box_of from './function'
+import weak_box_of from './function'
 import local_of from './references'
 import Generator, SlotLocal from './generator'
 import emit_field_pointer, emit_member_dispatch, field_named from './heap_object'
-import emit_release, emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
+import emit_release, emit_release_value, ir_type, ownership from './lerta_ir'
 import emit_map_set from './map'
 import appended, apply_numeric from './operator'
 import emit_extend from './string'
@@ -88,7 +88,8 @@ field_pointer := (g: Generator, object: String, type: Type, name: String) ->
   object_type := type as ObjectType!
   emit_field_pointer g.ir, object, info_of(g.code.program, object_type), name
 
-# The array or map retains the new item and releases the old one.
+# The array or map retains the new item and releases the old one. For `+=` and so on, the old item
+# is read after the value is evaluated, as a name's is (see assign_through).
 generate_index_assignment := (g: Generator, assignment: Assignment, target: Index) ->
   object_type := type_of(g, target.object)
   return generate_map_assignment(g, assignment, target, object_type) if object_type is MapType
@@ -98,12 +99,12 @@ generate_index_assignment := (g: Generator, assignment: Assignment, target: Inde
   depth := g.temporaries.length
   push_temporary g, array, object_type if is_owned
   index := generate(g, target.index)
+  operand := appended(g, assignment.value)
+  value := generate(g, operand)
+  push_temporary g, value, type_at_use(g, operand)
   old := assignment.operator == '=' then '' else emit_get(ir, array, index, element)
   # An index out of range throws.
   emit_exception_check g if old != ''
-  push_temporary g, old, element if old != ''
-  operand := appended(g, assignment.value)
-  value := generate(g, operand)
   pop_temporaries g, depth
   result := combine(g, assignment.operator, old, value, element, type_at_use(g, operand))
   items := emit_checked_items(ir, array, index)
@@ -131,38 +132,21 @@ generate_map_assignment := (g: Generator, assignment: Assignment, target: Index,
   release_if_reference g, assignment.value, value
   emit_release g.ir, map if is_owned
 
-# For `+=` and so on, the old value is loaded, and owned, before the value is evaluated, as it is
-# combined. Evaluating the value may change the target (a method that assigns the same field, for
-# example), so the value to release is loaded again after it: releasing a stale one would free it
-# twice. The old value is held in a scope, not as a temporary, so that a jump in the value, which
-# an assignment to a variable allows, releases it.
+# The value is evaluated first, and then, for `+=` and so on, the old value is loaded, which sees
+# what the value did to the target, as a method that assigns the same field does. The target's
+# reference to the old value passes to `combine`, which consumes it, so that a String or a Binary
+# that nothing else holds grows in place; `=` releases the old value once the new one is stored.
 assign_through := (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
   ir := g.ir
   load := -> ir.assign("load #{ir_type(type)}, ptr #{pointer}")
-  holds_reference := ownership(type) != NONE
-  var old = ''
-  if assignment.operator != '='
-    old = load()
-    emit_retain_value ir, old, type
   operand := appended(g, assignment.value)
-  value := generate_holding_old(g, old, type, operand)
-  # A String or a Binary grows in place when nothing else holds it, so the target lets go of it
-  # first, as it is after the value, which may have assigned it.
-  extends_old := old != '' and is_one_of_kinds(type, ['String', 'Binary'])
-  emit_release_value ir, load(), type if extends_old
+  value := generate(g, operand)
+  is_plain := assignment.operator == '='
+  old := is_plain then '' else load()
   result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
-  replaced := holds_reference and not extends_old then load() else ''
+  replaced := is_plain and ownership(type) != NONE then load() else ''
   ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}"
   emit_release_value ir, replaced, type if replaced != ''
-
-# The value, generated while the old value, if any, is held in a scope; `combine` consumes the old
-# value, so the scope is left without releasing it.
-generate_holding_old := (g: Generator, old: String, type: Type, value: Expression) ->
-  return generate(g, value) if old == ''
-  push_held_scope g, old, type
-  operand := generate(g, value)
-  g.locals.pop()
-  operand
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
 # Both are owned.
