@@ -7,7 +7,7 @@
 # is checked by `make check`.
 import Check, run_checks, select from './lib/report'
 import compare_text, expect_status from './lib/expect'
-import compiler, FileRun, read_text, root_dir, run_file, suite_dir from './lib/lerta'
+import compiler, FileRun, read_text_or_throw, root_dir, run_file, suite_dir from './lib/lerta'
 import is_file, list_dir, make_dir, stat, write_file from 'std:io'
 
 work_dir := suite_dir('format')
@@ -16,18 +16,18 @@ cases_dir := "#{root_dir}/tests/format"
 fmt := (cwd: String, args: String[]) -> await run_file(compiler, ['fmt', args...], cwd)
 
 read_or := (path: String, fallback: String) ->
-  is_file(path) then await read_text(path) else fallback
+  is_file(path) then await read_text_or_throw(path) else fallback
 
 case_check := (name: String) -> Check(name: "tests/format/#{name}", run: ->
   dir := "#{work_dir}/#{name}"
   make_dir dir
-  input := await read_text("#{cases_dir}/#{name}.in")
+  input := await read_text_or_throw("#{cases_dir}/#{name}.in")
   file := "#{name}.lerta"
   await write_file("#{dir}/#{file}", input.binary)
   expected_report := await read_or("#{cases_dir}/#{name}.report", '')
   checked := await fmt(dir, [file])
   fixed := await fmt(dir, ['--fix', file])
-  formatted := await read_text("#{dir}/#{file}")
+  formatted := await read_text_or_throw("#{dir}/#{file}")
   rechecked := await fmt(dir, [file])
   [
     expect_run(checked, expected_report, expected_report.is_empty() then 0 else 1, 'report')...
@@ -56,7 +56,7 @@ expect_run := (result: FileRun, stderr: String, status: Int, what = 'stderr') ->
 expect_files := (dir: String, files: Map<String, String>) ->
   var reasons: String[] = []
   for (file, text) in files.entries()
-    reasons = [reasons..., compare_text(file, text, await read_text("#{dir}/#{file}"))...]
+    reasons = [reasons..., compare_text(file, text, await read_text_or_throw("#{dir}/#{file}"))...]
   reasons
 
 modified_time := (path: String) -> stat(path)!.modified_time

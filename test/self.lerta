@@ -4,7 +4,7 @@
 import at_once, Check, run_checks, select from './lib/report'
 import compare_text, expect_status, lines, reason_if from './lib/expect'
 import host_triple from './lib/cli'
-import OUTPUT_LIMIT, read_text, root_dir, suite_dir from './lib/lerta'
+import OUTPUT_LIMIT, read_text_or_throw, root_dir, suite_dir from './lib/lerta'
 import list_dir, write_file from 'std:io'
 import run from 'std:process'
 
@@ -125,7 +125,7 @@ harness_check := Check
       compare_text(
         'failed checks'
         lines([run_key(name) for name in failed_names])
-        await read_text(failed_file)
+        await read_text_or_throw(failed_file)
       )...
     ]
 
@@ -207,7 +207,7 @@ driver_checks :=
       [
         compare_text('results', "ok #{format_case}\n", lines(reported_results(ran.stdout)))...
         expect_status(0, ran.status)...
-        compare_text('failed checks', lines([kept]), await read_text(failed_file))...
+        compare_text('failed checks', lines([kept]), await read_text_or_throw(failed_file))...
       ]
   )
   Check(name: 'bin/test --failed -q keeps a check that fails again, and prints its failure', run: ->
@@ -218,7 +218,11 @@ driver_checks :=
     [
       compare_text('results', lines([expected]), lines(reported_results(ran.stdout)))...
       expect_status(1, ran.status)...
-      compare_text('failed checks', lines([run_key(name)]), await read_text(failed_file))...
+      compare_text(
+        'failed checks'
+        lines([run_key(name)])
+        await read_text_or_throw(failed_file)
+      )...
     ]
   )
   Check(name: 'bin/test --failed says so when no check failed', run: ->

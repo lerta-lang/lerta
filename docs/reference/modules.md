@@ -53,6 +53,7 @@ export unit := 1
 | Name | |
 |---|---|
 | `read_file(path: String): Promise<Binary>` | The contents of a file, read on the event loop. Rejected with `cannot read file: <path>` on failure, including for a path that holds a NUL byte. |
+| `read_text(path: String): Promise<String?>` | The contents of a file as a `String`, read as `read_file` reads them, or nil if they are not valid UTF-8. Rejected as `read_file` is. |
 | `write_file(path: String, data: Binary): Promise` | Replaces the contents of a file, creating it if needed, on the event loop. Rejected with `cannot write file: <path>` on failure. |
 | `is_file(path: String): Bool` | Whether the path names a regular file (through symbolic links); false for a directory, a missing file or a path that holds a NUL byte. |
 | `is_dir(path: String): Bool` | Whether the path names a directory (through symbolic links); false for a file, a missing path or a path that holds a NUL byte. |

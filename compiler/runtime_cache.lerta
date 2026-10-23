@@ -1,6 +1,6 @@
 # Compiles the runtime, with libuv, once for each kind of build, and keeps its object files in a
 # cache directory, so that a build only links them (see docs/reference/compiler.md).
-import is_file, list_dir, make_dir, read_file, remove_tree, rename, write_file from 'std:io'
+import is_file, list_dir, make_dir, read_text, remove_tree, rename, write_file from 'std:io'
 import env, is_running, platform, process_id, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
 import run_clang_jobs from './clang_jobs'
@@ -37,8 +37,8 @@ export cached_runtime := (optimize: Bool, memory_checks: Bool, target: String?, 
   objects := [join(dir, name) for name in object_names(libuv)]
   files := [join(dir, name) for name in cached_file_names(libuv)]
   runtime := ->
-    function_attributes := await read_text(join(dir, ATTRIBUTES_FILE))
-    coro_end_type := await read_text(join(dir, CORO_END_FILE))
+    function_attributes := await read_text_or_throw(join(dir, ATTRIBUTES_FILE))
+    coro_end_type := await read_text_or_throw(join(dir, CORO_END_FILE))
     CachedRuntime objects, function_attributes, coro_end_type, libraries: libuv.libraries
   return await runtime() if is_complete(files)
   if files.iter().any((file) -> is_file(file))
@@ -88,8 +88,8 @@ clang_version_text := ->
   return nil if (await run('clang', '--version', stdout: output)).code != 0
   output.to_binary().text() ? throw CompileError(message: 'clang --version is not valid UTF-8')
 
-read_text := (path: String) ->
-  (await read_file(path)).text() ? throw CompileError(message: "#{path} is not valid UTF-8")
+read_text_or_throw := (path: String) ->
+  await read_text(path) ? throw CompileError(message: "#{path} is not valid UTF-8")
 
 # `$LERTA_CACHE_DIR`, or else the system's place for caches, made if missing. An empty variable
 # counts as unset, as the XDG specification has it.
