@@ -1,0 +1,27 @@
+# `@` passed on stays alive while a later argument drops what else held its object, as the caller
+# holds it for the call; in a weak literal and in a closure that captures it, too.
+take := (node: Node, extra: Int) -> node.value + extra
+describe := (text: Stringable) -> "node #{text.to_string()}"
+
+class Node
+  var next: Node? = nil
+  var value = 1
+  deinit = -> print("drop #{@value}")
+  to_string = -> "#{@value}"
+  run = (holder: Node) ->
+    print take(@, holder.clear())
+    # Converted to an interface value, `@` is passed owned.
+    print describe(@)
+    weakly := weak -> print(take(@, 10))
+    weakly()
+    strongly := -> print(take(@, 20))
+    strongly()
+  clear = ->
+    @next = nil
+    0
+
+outer := Node()
+outer.value = 5
+outer.next = Node()
+outer.next!.run(outer)
+print 'ran'

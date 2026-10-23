@@ -363,11 +363,19 @@ generate_identifier := (g: Generator, identifier: Identifier) ->
 export generate_borrowed := (g: Generator, expression: Expression) ->
   owned := -> (generate(g, expression), true)
   return owned() if g.facts.conversions.has(expression)
-  if expression is Identifier and g.facts.references[expression] is ScopedLocal
-    local := local_of(g, expression)
-    can_go := local.weak or (local is SlotLocal and local.is_var)
-    return (read_borrowed(g, local, type_of(g, expression)), false) if not can_go
-  owned()
+  local := named_local(g, expression) ? return owned()
+  can_go := local.weak or (local is SlotLocal and local.is_var)
+  return owned() if can_go
+  (read_borrowed(g, local, type_of(g, expression)), false)
+
+# The local of a scope that the expression names, `@` among them, if it names one.
+named_local := (g: Generator, expression: Expression) ->
+  case expression
+    when This then g.locals.lookup('@')
+    when Identifier
+      return nil if g.facts.references[expression] is not ScopedLocal
+      local_of g, expression
+    else nil
 
 # The slot's pointer, once a top-level value is known to be initialized.
 export slot_pointer := (g: Generator, local: SlotLocal) ->
