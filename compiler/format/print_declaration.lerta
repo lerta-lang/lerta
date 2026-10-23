@@ -4,9 +4,7 @@ import
   EnumDeclaration, Extend, Extern, Identifier, Import, ImportName, InterfaceDeclaration,
   MemberDeclaration, Position, Statement, StringLiteral, TypeAlias, TypeDeclaration, UnionTypeName
 from '../ast'
-import
-  breaking, choice, Doc, indent, join, line_feed, one_line, rule, separated, text, token
-from './doc'
+import breaking, choice, Doc, indent, join, line_feed, rule, separated, text, token from './doc'
 import named_type, type_doc, type_parameters from './print_type'
 import CONSTRUCTOR_ARGUMENTS, EXPECTED_TYPES, LONG_LISTS, MULTI_LINE_LITERALS from './rules'
 import expression_doc, string_doc from './print_expression'
@@ -88,20 +86,11 @@ export exported := (is_exported: Bool, at: Position, context: Context) ->
 
 name_doc := (name: Identifier) -> token(name.name, name.position)
 
-# The members in `(...)` on the line of the declaration, if all are constructor arguments and fit,
-# and in a block otherwise.
+# The members in a block, with the rule marking where the source wrote them in `(...)`, as the block
+# may differ from the source only there.
 type_declaration_doc := (
   head: Doc, satisfies: Doc, members: MemberDeclaration[], context: Context
-) ->
-  block := join([satisfies, members_doc(members, context)])
-  all_arguments := members.all((member) -> member.value == nil or member.has_default)
-  return join([head, block]) if members.is_empty() or not all_arguments
-  arguments := separated([member_doc(member, context) for member in members], text(', '))
-  in_parentheses := rule(CONSTRUCTOR_ARGUMENTS, join([text('('), arguments, text(')'), satisfies]))
-  # The rule marks where the parentheses were left out, as the block may differ from the source
-  # only there.
-  marked_block := join([rule(CONSTRUCTOR_ARGUMENTS, text('')), block])
-  join [head, one_line(in_parentheses, marked_block)]
+) -> join([head, rule(CONSTRUCTOR_ARGUMENTS, text('')), satisfies, members_doc(members, context)])
 
 members_doc := (members: MemberDeclaration[], context: Context) ->
   return text('') if members.is_empty()

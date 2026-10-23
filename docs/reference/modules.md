@@ -21,9 +21,13 @@ import argv, exit from 'std:process'
 ## Exports
 
 ```
-export struct Point(x: Int, y: Int)
+export struct Point
+  x: Int
+  y: Int
 
-export struct Circle(center: Point, radius: Int)
+export struct Circle
+  center: Point
+  radius: Int
 
 export type Shape = Point | Circle
 
