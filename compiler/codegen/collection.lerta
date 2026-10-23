@@ -9,7 +9,7 @@ import generate, generate_borrowed, release_if_reference, type_at_use, type_of f
 import Generator from './generator'
 import emit_release from './lerta_ir'
 import emit_map_get, emit_map_new, emit_map_set from './map'
-import emit_binary_get from './string'
+import emit_binary_get, emit_binary_out_of_range from './string'
 import ArrayType, is_kind, MapType from '../types'
 
 # Each item is pushed, so the array retains it; the item's own reference is then released.
@@ -48,8 +48,10 @@ export generate_index := (g: Generator, index: Index) ->
   generate_position := -> generate(g, index.index)
   position :=
     is_owned then holding(g, object, object_type, generate_position) else generate_position()
-  is_array := object_type is not MapType and not is_kind(object_type, 'Binary')
-  items := is_array then emit_checked_items(g.ir, object, position)
+  is_map := object_type is MapType
+  is_binary := is_kind(object_type, 'Binary')
+  items := not is_map and not is_binary then emit_checked_items(g.ir, object, position)
+  outside := is_binary then emit_binary_out_of_range(g.ir, object, position)
   item :=
     case
       when items then emit_get_from(g.ir, items, position, type_of(g, index))
@@ -57,9 +59,10 @@ export generate_index := (g: Generator, index: Index) ->
       else emit_binary_get(g.ir, object, position)
   release_if_reference g, index.index, position
   emit_release g.ir, object if is_owned
-  # An index out of range throws, which an array's items tell.
-  if items
-    emit_exception_check_if g, emit_is_out_of_range(g.ir, items)
+  # An index out of range throws, which an array's items, or a Binary's length, tell.
+  thrown := items then emit_is_out_of_range(g.ir, items) else outside
+  if thrown
+    emit_exception_check_if g, thrown
   else
     emit_exception_check g
   item
