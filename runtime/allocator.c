@@ -12,6 +12,8 @@ typedef struct Place {
 struct Region {
   // The size of each place, or of the region of a large place.
   int64_t place_size;
+  // The size class of a slab's places, which freeing one need not compute again.
+  int size_class;
   bool is_large;
   int64_t live;
   Place *free_first;
@@ -79,9 +81,12 @@ static void link_slab(Region *slab, int size_class) {
   slabs_with_room[size_class] = slab;
 }
 
-static bool has_fresh_room(const Region *slab) {
-  return (uint8_t *)slab + LERTA_REGION_SIZE - slab->fresh >= slab->place_size;
+// Whether a place fits in the slab from `fresh`, as the part not handed out yet would start.
+static bool has_room_at(const Region *slab, const uint8_t *fresh) {
+  return (uint8_t *)slab + LERTA_REGION_SIZE - fresh >= slab->place_size;
 }
+
+static bool has_fresh_room(const Region *slab) { return has_room_at(slab, slab->fresh); }
 
 static bool is_full(const Region *slab) {
   return slab->free_first == NULL && !has_fresh_room(slab);
@@ -117,13 +122,11 @@ static void keep_empty_slab(Region *slab) {
 static bool takes_free_place(const Region *slab) { return slab->free_first != NULL; }
 #endif
 
-// Kept out of lerta_mem_alloc, so that the rest, which most allocations end in, is small enough
-// for LLVM to inline into the generated code.
-__attribute__((noinline)) static Region *new_slab(int size_class) {
+static Region *new_slab(int size_class) {
   Region *slab = take_empty_slab();
   if (slab == NULL) slab = map_region(LERTA_REGION_SIZE);
   uint8_t *places = (uint8_t *)slab + PLACES_START;
-  *slab = (Region){.place_size = place_size_of(size_class), .fresh = places};
+  *slab = (Region){.place_size = place_size_of(size_class), .size_class = size_class, .fresh = places};
   link_slab(slab, size_class);
   return slab;
 }
@@ -136,7 +139,9 @@ __attribute__((noinline)) static void *alloc_large(int64_t size) {
   return (uint8_t *)region + PLACES_START;
 }
 
-void *lerta_mem_alloc(int64_t size) {
+// Allocates where lerta_mem_alloc's own part does not: a large place, or a small one that may leave
+// its slab full or needs a new slab.
+__attribute__((noinline)) static void *alloc_slow(int64_t size) {
   if (size > SLAB_LIMIT) return alloc_large(size);
   int size_class = size_class_of(size);
   Region *slab = slabs_with_room[size_class];
@@ -154,6 +159,29 @@ void *lerta_mem_alloc(int64_t size) {
   return place;
 }
 
+// Most allocations are small, of a size that the generated code knows, so that LLVM computes the
+// size class as it inlines this, and take a place from a slab that still has room after it.
+void *lerta_mem_alloc(int64_t size) {
+  if (size > SMALL_LIMIT) return alloc_slow(size);
+  Region *slab = slabs_with_room[size_class_of(size)];
+  if (slab == NULL) return alloc_slow(size);
+  if (takes_free_place(slab)) {
+    Place *place = slab->free_first;
+    // Taking the last free place of a slab with no fresh room leaves it full, which alloc_slow
+    // unlinks.
+    if (place->next == NULL && !has_fresh_room(slab)) return alloc_slow(size);
+    slab->free_first = place->next;
+    slab->live++;
+    return place;
+  }
+  uint8_t *place = slab->fresh;
+  uint8_t *fresh = place + slab->place_size;
+  if (!has_room_at(slab, fresh)) return alloc_slow(size);
+  slab->fresh = fresh;
+  slab->live++;
+  return place;
+}
+
 __attribute__((noinline)) static void free_slab(Region *slab, int size_class) {
   unlink_slab(slab, size_class);
   keep_empty_slab(slab);
@@ -168,7 +196,7 @@ void lerta_mem_free(void *memory) {
     lerta_os_unmap_region(region, region->place_size);
     return;
   }
-  int size_class = size_class_of(region->place_size);
+  int size_class = region->size_class;
   if (is_full(region)) link_slab(region, size_class);
   Place *place = memory;
   place->count = 0;

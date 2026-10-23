@@ -150,7 +150,10 @@ optimized_runtime_check := ->
     return reasons if reasons.length > 0
     executable := "#{built.cwd}/split#{executable_suffix}"
     disassembler := host_platform == 'macos' then 'otool' else 'objdump'
-    args := host_platform == 'macos' then ['-tvV', executable] else ['-d', executable]
+    # Without the bytes of each instruction, which the check does not read, objdump's output stays
+    # under the limit that the tests put on a command's output.
+    objdump_args := ['-d', '--no-show-raw-insn', executable]
+    args := host_platform == 'macos' then ['-tvV', executable] else objdump_args
     code := await run_command(disassembler, args, built.cwd)
     return ["#{disassembler} failed: #{code.stderr.text()!}"] if code.status != 0
     lines := code.stdout.text()!.split("\n")

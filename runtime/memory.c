@@ -112,19 +112,26 @@ static void push_pending(void *object) {
   pending[pending_length++] = object;
 }
 
-// Drops and frees the queued objects until only the first `length` are left.
-static void drain_to(int64_t length) {
-  while (pending_length > length) {
-    LertaHeader *dead = pending[--pending_length];
-    if (dead->type != NULL) dead->type->drop(dead);
-    free_object(dead);
-  }
+static void drop_and_free(LertaHeader *dead) {
+  if (dead->type != NULL) dead->type->drop(dead);
+  free_object(dead);
 }
 
+// Drops and frees the queued objects until only the first `length` are left.
+static void drain_to(int64_t length) {
+  while (pending_length > length) drop_and_free(pending[--pending_length]);
+}
+
+// An object released while another is dropped is queued, so that a long chain is dropped in a loop
+// rather than in a recursion as deep. The first is dropped at once, without the queue, as most
+// releases drop one object alone.
 __attribute__((noinline)) static void drop_released(void *object) {
-  push_pending(object);
-  if (draining) return;
+  if (draining) {
+    push_pending(object);
+    return;
+  }
   draining = true;
+  drop_and_free(object);
   drain_to(0);
   draining = false;
 }
