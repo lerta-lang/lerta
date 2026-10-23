@@ -101,6 +101,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `==` and `!=` compare two `Binary`s byte by byte.
 - `+` joins two `Binary`s into a new one, `b + byte` appends a `Byte`, and `+=` appends to a variable, as they do to `String`s; an integer literal there is no `Byte`, as `+` expects a `Binary`. A `String` and a `Binary` are not joined (`cannot join a String and a Binary`): `s.binary` gives the bytes of the `String` without copying them. `parts.join(separator)` joins a `Binary[]` into one `Binary`; pieces gathered so and joined once are O(n), as for `String`s.
 - `b.occurs_at(index, part)` tells whether the bytes of `part` occur in `b` at `index`; it is false where `part` does not fit.
+- `b.index_of(part, from = 0)` gives the place of the first occurrence of `part`, a `Binary` or a `Byte`, at `from` or after it, or nil if there is none, which is the case whenever `from` is past the end: `'abcabc'.binary.index_of('c'.binary, 3)` is 5. An empty `part` occurs at `from` when `from` is at most the length. A negative `from` throws an `IndexError`.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `bytes.to_binary()` copies the items of a `Byte[]` into a new `Binary`.
 - `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.

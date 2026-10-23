@@ -65,13 +65,6 @@ escape_in_double_quotes := (c: Char): String? ->
     when "\0" then '\0'
     else is_control(c) then "\\u{#{c.to_int().to_hex().to_upper()}}"
 
-# The place of the first occurrence of `part`, which is not empty, at `from` or after it, or -1.
-index_of := (bytes: Binary, part: Binary, from: Int) ->
-  first := part[0]
-  for i in from...max(from, bytes.length - part.length + 1)
-    return i if bytes[i] == first and bytes.occurs_at(i, part)
-  -1
-
 not_a_char := -> ValueError(message: 'not a Unicode scalar value')
 
 extend String
@@ -124,11 +117,9 @@ extend String
     separator_bytes := separator.binary
     pieces: String[]
     var start = 0
-    var found = index_of(bytes, separator_bytes, 0)
-    while found >= 0
+    while found := bytes.index_of(separator_bytes, start)
       pieces.push text_between(bytes, start, found)
       start = found + separator_bytes.length
-      found = index_of(bytes, separator_bytes, start)
     pieces.push text_between(bytes, start, bytes.length)
     pieces
   starts_with = (prefix: String) -> @binary.occurs_at(0, prefix.binary)
@@ -144,8 +135,8 @@ extend String
     for i in 0...min(bytes.length, other_bytes.length)
       return bytes[i].compare(other_bytes[i]) if bytes[i] != other_bytes[i]
     bytes.length.compare other_bytes.length
-  # The empty String occurs in every one; index_of takes no empty part.
-  contains = (part: String) -> part == '' or index_of(@binary, part.binary, 0) >= 0
+  # The empty String occurs in every one, as index_of finds an empty part.
+  contains = (part: String) -> @binary.index_of(part.binary) != nil
   # Without the whitespace at both ends: the ASCII spaces of Byte.is_space, which no byte of a
   # multi-byte character is, so that what is left is valid UTF-8.
   trim = ->
@@ -182,14 +173,24 @@ extend String
   split_once = (separator: String): (String, String)? ->
     throw ValueError(message: 'split by an empty separator') if separator == ''
     bytes := @binary
-    found := index_of(bytes, separator.binary, 0)
-    return nil if found < 0
+    found := bytes.index_of(separator.binary) ? return nil
     before := text_between(bytes, 0, found)
     after := found + separator.binary.length
     (before, text_between(bytes, after, bytes.length))
 
 extend Binary
   is_empty = -> @length == 0
+  # The place of the first occurrence of `part`, bytes or a byte, at `from` or after it, or nil,
+  # always so past the end; an empty part occurs at `from` if it is at most the length.
+  index_of = (part: Binary | Byte, from: Int = 0): Int? ->
+    throw IndexError(message: 'index_of from a negative place') if from < 0
+    if part is Byte
+      for i in from...@length
+        return i if @[i] == part
+      return nil
+    for i in from...max(from, @length - part.length + 1)
+      return i if @occurs_at(i, part)
+    nil
   # The bytes, read as the Iter is.
   iter = (): Iter<Byte> -> (b for b in @)
   # The bytes from `start` up to `end`, which it does not hold.
