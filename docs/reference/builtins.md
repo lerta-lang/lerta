@@ -33,6 +33,10 @@ Every type that `==` compares has `equals`, which compares as `==` does, and eve
 
 Builtin [interfaces](objects.md#interfaces), of `std:builtins`, for bounds such as `<T: Add<T, T>>`, of the methods that the arithmetic and bitwise operators call (see [operators](objects.md#classes-and-structs)): `Add<Rhs, Out>` (`add: (Rhs) -> Out`), `Sub`, `Mul`, `Div`, `Rem`, `BitAnd`, `BitOr`, `BitXor`, `Shl` and `Shr` likewise, and `Neg<Out>` (`neg: () -> Out`). The numbers have the methods of the operators that apply to them, which apply the operators, throwing as they do (`3.add(4)` is 7), and `String` has `add`, so that `<T: Add<T, T>>` takes an `Int` or a `String` as well as a type that declares `add`.
 
+## INT_MIN and INT_MAX
+
+`INT_MIN` and `INT_MAX` are builtin constants of `std:builtins`, the least and the greatest [Int](types.md#int), `-9223372036854775808` and `9223372036854775807`. A module's own names shadow them.
+
 ## Methods of the builtin types
 
 The methods of the builtin types, by type (see [types](types.md) for what each does; how each is written is in [internals](../internals.md#builtins)):
