@@ -1,8 +1,9 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import
-  BinaryOperation, Coalesce, Expression, is_nil_test, is_order_operator, NilLiteral, UnaryOperation,
-  Unwrap
+  BinaryOperation, Coalesce, Expression, FloatLiteral, Identifier, IntegerLiteral, is_nil_test,
+  is_order_operator, NilLiteral, UnaryOperation, Unwrap
 from '../ast'
+import ScopedLocal from '../checker/references'
 import compares_by_contents, own_equality from '../checker/equality'
 import is_numeric_operator, operator_of_method from '../checker/operator'
 import apply_integer_operator from './checked_int'
@@ -65,15 +66,40 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   operator := binary.operator
   return generate_logical(g, binary) if operator == 'and' or operator == 'or'
   return generate_nil_test(g, binary) if is_nil_test(binary)
+  # The root of a tree of float `+ - *` alone checks its result, which its operands leave unchecked.
+  is_root := not g.defers_float_checks and float_tree(g, binary)
+  g.defers_float_checks = true if is_root
   left := generate(g, binary.left)
   operand_type := type_at_use(g, binary.left)
   right_operand := appended(g, binary.right)
   right := holding(g, left, operand_type, -> generate(g, right_operand))
+  g.defers_float_checks = false if is_root
   if is_bytes(operand_type) and operator == '+'
     return emit_extend(g.ir, left, right, type_at_use(g, right_operand))
   apply_binary g, operator, left, right, operand_type
 
 is_bytes := (type: Type) -> is_one_of_kinds(type, ['String', 'Binary'])
+
+# Whether the operation is a tree of float `+ - *` whose leaves are locals and literals, maybe
+# negated: an infinity in it gives an infinity or a NaN at its root, so that its root alone need
+# check that its result is finite. The leaves neither throw nor do anything else, so nothing runs
+# between the operation that overflows and the root; the error is reported at the root's position
+# rather than at that operation's. A division, whose result is 0 for an infinite divisor, is no part
+# of one.
+float_tree := (g: Generator, binary: BinaryOperation) ->
+  return false if not ['+', '-', '*'].contains(binary.operator)
+  return false if g.facts.operator_calls.has(binary) or not is_float(type_of(g, binary))
+  float_leaf(g, binary.left) and float_leaf(g, binary.right)
+
+float_leaf := (g: Generator, expression: Expression): Bool ->
+  case expression
+    when FloatLiteral, IntegerLiteral then true
+    when Identifier then g.facts.references[expression] is ScopedLocal
+    when UnaryOperation
+      is_negation := expression.operator == '-' and not g.facts.operator_calls.has(expression)
+      is_negation and float_leaf(g, expression.operand)
+    when BinaryOperation then float_tree(g, expression)
+    else false
 
 # The operator applied to the values of the operands, of the type, which it takes over.
 apply_binary := (g: Generator, operator: String, left: String, right: String, operand_type: Type) ->
