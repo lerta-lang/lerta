@@ -1,0 +1,98 @@
+# The expressions that `lerta fmt` may write otherwise, which the checking decides (see
+# can_leave_out): the members of enums written with their enums, `E.MEMBER`, written alone, and the
+# constructions of structs, `S(x: 1)`, written as records, `{ x: 1 }` (see Expected types in
+# docs/reference/style.md); the named arguments of constructions written as names alone (see
+# Shorthand there); and the casts left out (see Redundant casts); and how to write them so in the
+# syntax tree.
+import
+  BooleanLiteral, Call, Cast, construction_arguments, Expression, FloatLiteral, Identifier,
+  IntegerLiteral, Member, NamedValue, NilLiteral, RecordLiteral, Statement, StringLiteral, This
+from '../ast'
+import Annotation, annotation_key from './annotated'
+import Place, places_of from './places'
+
+# In the order of the source, but for a cast and a construction after those inside them, and the
+# named arguments of a construction before it: a record takes the arguments of its construction as
+# the rewrites inside them leave them (see recorded).
+export rewrites_of := (program: Statement[]) ->
+  found: Annotation[]
+  before := (value: Expression, place: Place) ->
+    found.push unqualified(value, place) if value is Member
+  after := (value: Expression, place: Place) ->
+    found.push uncast(value, place) if value is Cast and value.throws
+    if value is Call
+      for named, i in value.named_args
+        found.push shorthand(value, named) if is_shorthand(value, i)
+      found.push recorded(value, place)
+  places_of program, { before, after }
+  found
+
+# The member written alone, as a name at its place.
+unqualified := (member: Member, place: Place) ->
+  alone := Identifier(name: member.name.name, position: member.position)
+  Annotation
+    member
+    key: annotation_key('member', member.position)
+    remove: -> place(alone)
+    restore: -> place(member)
+
+# The cast left out, as its value at its place.
+uncast := (cast: Cast, place: Place) ->
+  Annotation
+    cast
+    key: annotation_key('cast', cast.type.position)
+    remove: -> place(cast.value)
+    restore: -> place(cast)
+
+# Whether the named argument is a variable of its name that may be written alone, which comes before
+# the named arguments (see Construction in docs/reference/objects.md): those it then goes before
+# give values that it cannot change.
+is_shorthand := (call: Call, i: Int) ->
+  named := call.named_args[i]
+  variable := variable_of(named.value) ? return false
+  names_itself := variable.name == named.name.name
+  names_itself and call.named_args.take(i).all((other) -> has_no_effects(other.value))
+
+# The variable that the value is, or that a cast which throws casts, which the shorthand leaves out
+# with it if the checking shows that it may be (see Redundant casts), so that one run of `lerta fmt`
+# writes both.
+variable_of := (value: Expression) ->
+  case value
+    when Identifier then value
+    when Cast then value.throws then value.value as Identifier?
+    else nil
+
+# A name, a literal or a member of one, whose evaluation changes nothing that a value evaluated
+# after it reads. A member of an enum written with its enum is one, as it is once written alone.
+has_no_effects := (value: Expression): Bool ->
+  value is Member then has_no_effects(value.object) else value is Inert
+
+type Inert =
+  Identifier | This | NilLiteral | BooleanLiteral | StringLiteral | IntegerLiteral | FloatLiteral
+
+# The named argument written as the name alone, after the arguments written so. The arguments of
+# the call are replaced rather than changed, and put back as they were: the places of the others
+# in them (see visit_named_at in ./places) change those that are put back.
+shorthand := (call: Call, named: NamedValue) ->
+  { args, named_args } := call
+  alone := Identifier(name: named.name.name, position: named.name.position)
+  Annotation
+    shorthand: call
+    shorthand_cast: named.value as Cast?
+    key: annotation_key('shorthand', named.name.position)
+    # By its name, as leaving out its cast puts another argument in its place.
+    remove: ->
+      call.named_args = [each for each in call.named_args when each.name.name != alone.name]
+      call.args = [call.args..., alone]
+    restore: ->
+      call.args = args
+      call.named_args = named_args
+
+# The construction written as a record of its arguments as they are then: those inside it, which
+# come before it (see rewrites_of), are written so by then, in their places among them.
+recorded := (call: Call, place: Place) ->
+  Annotation
+    construction: call
+    key: annotation_key('record', call.position)
+    remove: -> place(RecordLiteral(fields: construction_arguments(call), position: call.position))
+    restore: -> place(call)

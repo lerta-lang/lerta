@@ -1,0 +1,27 @@
+# The names that modules import, which `lerta fmt` leaves out once nothing uses them.
+import Import, ImportName, Statement from '../ast'
+import Annotation, import_key from './annotated'
+
+# The names that the module imports, of which those of the enums and the structs that the rewrites
+# leave unused are left out (see unused_type_imports).
+export import_names_of := (program: Statement[]) ->
+  found: Annotation[]
+  for statement in program
+    # The names exported from another module are used by the modules that import this one.
+    add_import_names found, statement if statement is Import and not statement.exported
+  found
+
+add_import_names := (found: Annotation[], import_node: Import) ->
+  found.push left_out_import(import_node, name) for name in import_node.names
+
+# The import without the name, which keeps the others in their order.
+left_out_import := (import_node: Import, name: ImportName) ->
+  all := import_node.names
+  local := name.alias ? name.name
+  Annotation
+    key: import_key(import_node, local.name)
+    remove: -> import_node.names = [each for each in import_node.names when each != name]
+    restore: ->
+      import_node.names =
+        [each for each in all when each == name or import_node.names.contains(each)]
+    imported: local
