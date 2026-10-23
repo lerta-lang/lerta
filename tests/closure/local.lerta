@@ -1,0 +1,110 @@
+# Function literals declared as locals and only called, whose closures never outlive the calls that
+# make them, beside those that are read as values, and those that yield or await, whose Iters and
+# Promises hold them, which do.
+import sleep from 'std:time'
+
+class Box(label: String)
+
+apply := (f: (Int) -> Int, x: Int) -> f(x)
+
+captures_values := (n: Int, box: Box) ->
+  offset := n * 10
+  add := (x: Int) -> x + offset + n
+  show := (x: Int) -> "#{box.label} #{add(x)}"
+  print show(1)
+  print show(2)
+
+captures_a_var := ->
+  var count = 0
+  bump := (by: Int) -> count += by
+  bump 1
+  bump 2
+  print count
+
+in_a_loop := ->
+  var total = 0
+  for i in 0...3
+    label := "item #{i}"
+    describe := -> "#{label}: #{i * i}"
+    print describe()
+    total += i
+  print total
+
+throws := (n: Int) ->
+  check := (x: Int) ->
+    throw ValueError(message: "too large: #{x}") if x > n
+    x
+  print check(1)
+  print check(n + 1)
+
+read_as_a_value := (n: Int) ->
+  triple := (x: Int) -> x * 3 + n
+  print apply(triple, 2)
+  kept := triple
+  print kept(3)
+
+called_by_another := (box: Box) ->
+  name := -> box.label
+  greet := -> "hello #{name()}"
+  print greet()
+
+returned := (n: Int) ->
+  add := (x: Int) -> x + n
+  add
+
+yields_items := (n: Int) ->
+  items := -> yield i * n for i in 0...3
+  items()
+
+awaits_later := (n: Int) ->
+  later := ->
+    await sleep(0.001)
+    n + 1
+  later()
+
+calls_across_yields := (n: Int) ->
+  scale := (x: Int) -> x * n
+  yield scale(i) for i in 0...3
+
+calls_across_awaits := (n: Int) ->
+  add := (x: Int) -> x + n
+  first := add(1)
+  await sleep(0.001)
+  first + add(2)
+
+captures_a_weak_local := ->
+  box := Box(label: 'weakly held')
+  weak held := box
+  show := -> held?.label ? 'gone'
+  print show()
+
+class Counter
+  var count = 0
+  bump_twice = ->
+    bump := weak -> @count += 1
+    bump()
+    bump()
+    @count
+
+lazy_items := (n: Int) ->
+  scale := (x: Int) -> x * n
+  print [scale(i) for i in 0...3]
+  (scale(i) for i in 0...3)
+
+captures_values 4, Box(label: 'box')
+captures_a_var()
+in_a_loop()
+try
+  throws 5
+catch e: ValueError
+  print e.message
+read_as_a_value 1
+called_by_another Box(label: 'world')
+print returned(5)(6)
+print [x for x in yields_items(2)]
+print await awaits_later(1)
+print [x for x in calls_across_yields(3)]
+print await calls_across_awaits(10)
+captures_a_weak_local()
+print Counter().bump_twice()
+print [x for x in lazy_items(4)]

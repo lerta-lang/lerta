@@ -72,11 +72,30 @@ export emit_closure := (
   type := suffixed_symbol(symbol, 'type')
   define_closure_type ir, type, name, slots
   closure := emit_heap_allocate(ir, closure_ir_type(slots), type)
+  emit_fill_closure ir, closure, symbol, slots, operands
+  closure
+
+# A closure of the code `symbol` on the stack, for one that never outlives the call that makes it,
+# which borrows the captured operands, as they outlive it. It is immortal, as a static closure is,
+# so that counting it does nothing, and LLVM, which sees its code, can call it directly.
+export emit_local_closure := (
+  ir: IrBuilder, symbol: String, slots: HeapField[], operands: String[]
+) ->
+  layout := closure_ir_type(slots)
+  closure := ir.alloca(layout)
+  ir.emit "store i64 #{LERTA_IMMORTAL}, ptr #{closure}"
+  type := ir.assign("getelementptr #{layout}, ptr #{closure}, i32 0, i32 1")
+  ir.emit "store ptr null, ptr #{type}"
+  emit_fill_closure ir, closure, symbol, slots, operands
+  closure
+
+emit_fill_closure := (
+  ir: IrBuilder, closure: String, symbol: String, slots: HeapField[], operands: String[]
+) ->
   ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}"
   for slot, i in slots
     pointer := emit_capture_pointer(ir, closure, slots, i)
     ir.emit "store #{slot.ir_type} #{operands[i]}, ptr #{pointer}"
-  closure
 
 define_closure_type := (ir: IrBuilder, type: String, name: String, slots: HeapField[]) ->
   define := (module: IrModule) ->

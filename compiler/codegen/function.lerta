@@ -13,13 +13,14 @@ import generate_assignment from './assignment'
 import emit_await_owned, emit_loop_run, generate_awaiting_function from './awaiting'
 import call_user_function from './call'
 import
-  CELL_SLOT, emit_capture_pointer, emit_closure, emit_static_closure, function_type_of
+  CELL_SLOT, emit_capture_pointer, emit_closure, emit_local_closure, emit_static_closure,
+  function_type_of
 from './closure'
 import generate_control_jump, generate_for, generate_if, generate_while from './control_flow'
 import emit_suspend from './coroutine'
 import emit_check_with, emit_exception_check, leave_scopes, while_holding from './exceptions'
 import
-  generate, held_value, read_local, release_if_reference, type_at_use, type_of
+  generate, held_value, read_borrowed, read_local, release_if_reference, type_at_use, type_of
 from './expression'
 import
   CellSlot, CodegenLocal, function_generator, Generator, locate, SlotLocal, TopLevelGlobal,
@@ -94,28 +95,37 @@ PROGRAM_MAIN := 'external void @lerta_main()'
 export no_locals := (_scope: Map<String, CodegenLocal>) -> return
 
 # A function literal in an expression: its code, generated as a function of its own, and a new
-# closure of it with the values it captures.
-export generate_closure := (g: Generator, literal: FunctionLiteral) ->
+# closure of it with the values it captures. The closure of one that never outlives the call that
+# makes it, `is_local`, is on the stack (see emit_local_closure), unless it captures a weak local,
+# whose box it would have to make and hold, or it yields or awaits, as the Iter or the Promise that a
+# call of it gives holds the closure.
+export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = false) ->
   captures := g.facts.captures[literal]!
   symbol := g.code.ir_module.fresh_symbol('lerta.lambda')
   name := "#{g.function_name}.<anonymous>"
   body_generator := function_generator(g.code, g.extensions, g.facts, name)
   # Its symbol is numbered within the module.
   generate_function body_generator, 'private ', symbol, literal, nil, captures
+  return emit_static_closure(g.ir, symbol) if captures.length == 0
+  local_of := (capture: Capture) -> referred_local(g, capture.source, capture.name)
+  is_weak := (capture: Capture) -> capture.is_weak or local_of(capture).weak
+  is_coroutine := literal.yields or literal.awaits
+  on_stack := is_local and not is_coroutine and not literal.weak and not captures.any(is_weak)
   slots: HeapField[]
   operands: String[]
   for capture in captures
-    local := referred_local(g, capture.source, capture.name)
+    local := local_of(capture)
     if not capture.is_var
       slots.push value_field(capture.type)
-      operands.push captured_value(g, local, capture)
+      borrowed := -> read_borrowed(g, local, capture.type)
+      operands.push on_stack then borrowed() else captured_value(g, local, capture)
       continue
     cell := local is SlotLocal then local.cell
     owned := cell ? panic("the captured var '#{capture.name}' has no cell")
-    emit_retain g.ir, owned.cell
+    emit_retain g.ir, owned.cell if not on_stack
     slots.push CELL_SLOT
     operands.push owned.cell
-  return emit_static_closure(g.ir, symbol) if captures.length == 0
+  return emit_local_closure(g.ir, symbol, slots, operands) if on_stack
   emit_closure g.ir, symbol, name, slots, operands
 
 # The value a function literal captures, owned: the box of a weak local, or of `@` for a weak
@@ -456,13 +466,13 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
   ir := g.ir
   type := type_of(g, declaration.name)
   weak := declaration.weak
-  generated := generate(g, declaration.value)
-  value := weak then weak_box_of(g, generated, type) else generated
-  emit_release ir, generated if weak
   name := declaration.name.name
   code := g.code
   is_top_level := g.top_level_code and g.locals.depth() == 1
   global := is_top_level then code.globals[code.module.index][name]
+  generated := generate_declared_value(g, declaration, global == nil and not weak)
+  value := weak then weak_box_of(g, generated, type) else generated
+  emit_release ir, generated if weak
   if g.facts.shared_vars.has(declaration.name)
     cell := emit_cell(ir, type, value)
     pointer := emit_cell_pointer(ir, type, cell)
@@ -476,6 +486,14 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
   ir.emit "store #{ir_type(type)} #{value}, ptr #{global.pointer}"
   emit_mark_initialized ir, global
   g.locals.define name, top_level_slot(global, false)
+
+# The value of a local that is a const and is held as it is: the closure of a function literal
+# is local if the local never leaves the function, being only called (see escaping_locals).
+generate_declared_value := (g: Generator, declaration: Declaration, is_held_as_is: Bool) ->
+  value := declaration.value
+  if value is FunctionLiteral and is_held_as_is and not declaration.mutable
+    return generate_closure(g, value, not g.facts.escaping_locals.has(declaration.name))
+  generate g, value
 
 export store_in_slot := (g: Generator, value: String, type: Type) ->
   pointer := g.ir.alloca(ir_type(type))
