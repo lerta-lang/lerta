@@ -11,7 +11,7 @@ import ExportRef, ImportedName from '../checker/imports'
 import CompileError from '../errors'
 import module_location from '../source'
 import imported_files, is_standard_module, load_modules, Module, module_key from '../loader'
-import format_type from '../types'
+import ArrayType, format_type, MapType, SimpleType, Type from '../types'
 import Annotation, annotations_of from './annotated'
 import inferable from './inferable'
 import import_names_of from './left_out_imports'
@@ -60,7 +60,16 @@ can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) 
     left_out_cast := annotation.shorthand_cast ? return true
     return shared.facts.redundant_casts.has(left_out_cast)
   return shared.facts.redundant_casts.has(cast) if cast := annotation.cast
+  return has_is_empty(shared.facts.types[emptied]) if emptied := annotation.emptied
   inferable annotation, shared, program
+
+# Whether std gives the type `is_empty` (see EMPTINESS_TESTS). One test serves the tests of a length
+# and the comparisons with '': a `String` has no `length`, and nothing else compares with ''.
+has_is_empty := (type: Type?) ->
+  case type
+    when ArrayType, MapType then true
+    when SimpleType then type.kind == 'String' or type.kind == 'Binary'
+    else false
 
 # A written type, the enum of a member or the name of a construction, of the module of `key`.
 struct Placed(key: String, annotation: Annotation)
@@ -82,7 +91,7 @@ add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<S
     [module for module in modules when wanted.has(module.key) and not removable.has(module.key)]
   removable[module.key] = [] for module in held
   candidates := candidates_of(held, checked)
-  return if candidates.length == 0
+  return if candidates.is_empty()
   program := -> quiet_program(entry, modules)
   accepted := accepted_among(candidates, checked, program)
   imports := unused_type_imports(accepted, held, checked, program)
@@ -127,7 +136,7 @@ accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> Pr
 unused_type_imports := (
   accepted: Placed[], held: Module[], checked: ProgramWide, program: () -> ProgramWide
 ): Placed[] ->
-  return [] if accepted.length == 0
+  return [] if accepted.is_empty()
   placed.annotation.remove() for placed in accepted
   tried := program()
   checks tried
@@ -157,7 +166,7 @@ imports_type := (program: ProgramWide, imported: ImportedName, structs: Bool) ->
 removable_among := (
   accepted: Placed[], trying: Placed[], checks_the_same: (Placed[]) -> Bool
 ): Placed[] ->
-  return accepted if trying.length == 0
+  return accepted if trying.is_empty()
   all := [accepted..., trying...]
   return all if checks_the_same(all)
   return accepted if trying.length == 1

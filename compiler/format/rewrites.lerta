@@ -2,13 +2,15 @@
 # can_leave_out): the members of enums written with their enums, `E.MEMBER`, written alone, and the
 # constructions of structs, `S(x: 1)`, written as records, `{ x: 1 }` (see Expected types in
 # docs/reference/style.md); the named arguments of constructions written as names alone (see
-# Shorthand there); and the casts left out (see Redundant casts); and how to write them so in the
-# syntax tree.
+# Shorthand there); the casts left out (see Redundant casts); and the tests of emptiness written
+# with `is_empty()` (see Emptiness tests); and how to write them so in the syntax tree.
 import
-  BooleanLiteral, Call, Cast, construction_arguments, Expression, FloatLiteral, Identifier,
-  IntegerLiteral, Member, NamedValue, NilLiteral, RecordLiteral, Statement, StringLiteral, This
+  BinaryOperation, BooleanLiteral, Call, Cast, construction_arguments, Expression, FloatLiteral,
+  Identifier, IntegerLiteral, Member, NamedValue, NilLiteral, Position, RecordLiteral, Statement,
+  StringLiteral, This, UnaryOperation
 from '../ast'
 import Annotation, annotation_key from './annotated'
+import EMPTINESS_TESTS, REDUNDANT_CASTS from './rules'
 import Place, places_of from './places'
 
 # In the order of the source, but for a cast and a construction after those inside them, and the
@@ -20,6 +22,7 @@ export rewrites_of := (program: Statement[]) ->
     found.push unqualified(value, place) if value is Member
   after := (value: Expression, place: Place) ->
     found.push uncast(value, place) if value is Cast and value.throws
+    found.push emptied(value, test, place) if test := emptiness_test(value)
     if value is Call
       for named, i in value.named_args
         found.push shorthand(value, named) if is_shorthand(value, i)
@@ -40,9 +43,69 @@ unqualified := (member: Member, place: Place) ->
 uncast := (cast: Cast, place: Place) ->
   Annotation
     cast
+    reported: { written: cast.value, rule: REDUNDANT_CASTS }
     key: annotation_key('cast', cast.type.position)
     remove: -> place(cast.value)
     restore: -> place(cast)
+
+# A test that a value is empty, or that it is not, by its length or by comparing it with '': at the
+# `length` or the '', which the `is_empty()` written for it takes, as the position of the test may
+# be that of a `(` before the value, which would make it look written in parentheses.
+struct EmptinessTest(value: Expression, negated: Bool, at: Position)
+
+# `x.length == 0` and `0 == x.length`, `x.length != 0` and `x.length > 0`, and `s == ''`, `'' == s`
+# and `s != ''`.
+emptiness_test := (expression: Expression): EmptinessTest? ->
+  if expression is UnaryOperation and expression.operator == 'not'
+    # `not (xs.length != 0)` is `xs.is_empty()`, not `not not xs.is_empty()`.
+    inner := emptiness_test(expression.operand) ? return nil
+    return { value: inner.value, negated: not inner.negated, at: inner.at }
+  test := expression as BinaryOperation ? return nil
+  { operator, left, right } := test
+  return measured(left, right, true) if operator == '>'
+  return nil if operator != '==' and operator != '!='
+  negated := operator == '!='
+  either_way := (test: (Expression, Expression, Bool) -> EmptinessTest?) ->
+    return found if found := test(left, right, negated)
+    test right, left, negated
+  return found if found := either_way(measured)
+  either_way compared
+
+measured := (length: Expression, zero: Expression, negated: Bool) ->
+  return nil if zero is not IntegerLiteral or zero.value != 0
+  member := length as Member ? return nil
+  member.name.name == 'length' then EmptinessTest(
+    negated
+    value: member.object
+    at: member.name.position
+  )
+
+compared := (value: Expression, empty: Expression, negated: Bool) ->
+  empty is StringLiteral and empty.value.is_empty() then EmptinessTest(
+    value
+    negated
+    at: empty.position
+  )
+
+# The test written as `is_empty()`, `not` before it if it is negated, at its place.
+emptied := (expression: Expression, test: EmptinessTest, place: Place) ->
+  { value, negated } := test
+  position := test.at
+  name := Identifier(position, name: 'is_empty')
+  call := Call
+    position
+    callee: Member(name, position, object: value)
+    args: []
+    named_args: []
+    type_args: []
+  written: Expression =
+    negated then UnaryOperation(position, operator: 'not', operand: call) else call
+  Annotation
+    emptied: value
+    reported: { written, rule: EMPTINESS_TESTS }
+    key: annotation_key('empty', expression.position)
+    remove: -> place(written)
+    restore: -> place(expression)
 
 # Whether the named argument is a variable of its name that may be written alone, which comes before
 # the named arguments (see Construction in docs/reference/objects.md): those it then goes before

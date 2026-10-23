@@ -8,7 +8,7 @@ import
   token
 from './doc'
 import StatementLines from './kept'
-import LONG_LISTS, TYPE_ANNOTATIONS from './rules'
+import LONG_LISTS, StyleRule, TYPE_ANNOTATIONS from './rules'
 import SourceText from './source'
 
 # Where a part is printed. Inside brackets, a call without parentheses would take the items after
@@ -20,8 +20,8 @@ export struct Context
   # where they were.
   left_out: String[]
   lines: StatementLines
-  # The values of the casts left out, at which they are reported (see Redundant casts).
-  uncast: Set<Expression>
+  # The expressions written in place of others, which report the rules (see Annotation.reported).
+  reported: Map<Expression, StyleRule>
   in_brackets = default false
   on_own_line = default true
 
@@ -40,7 +40,7 @@ export struct Context
       source: @source
       left_out: @left_out
       lines: @lines
-      uncast: @uncast
+      reported: @reported
 
 # The item of a list, and whether it is simple: a name, a literal, or `name: value` or a parameter
 # `name: Type` of such, which share a line with others when the list does not fit on one.
@@ -76,7 +76,7 @@ export bracketed_or := (
   opened: Doc
   flat: Doc? = nil
 ) ->
-  return join([open, closing_text]) if items.length == 0
+  return join([open, closing_text]) if items.is_empty()
   docs := [item.doc for item in items]
   holds_block := (item: Item) -> has_line_feed(item.doc)
   blocks := items.find_index(holds_block)

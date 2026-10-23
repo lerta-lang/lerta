@@ -31,7 +31,7 @@ export format_source := (source: String, path: String, left_out: String[]) ->
   # Which statements are kept as written shows once they are printed, and their annotations stay.
   kept_lines := first.lines.kept
   result :=
-    if kept_lines.length == 0
+    if kept_lines.is_empty()
       first
     else
       printed lexed, text_source, path, outside(left_out, kept_lines, text_source)
@@ -46,9 +46,9 @@ export format_source := (source: String, path: String, left_out: String[]) ->
 # a string that merely ends so takes for it too, and the file is then parsed.
 is_off_throughout := (source: String) ->
   lines := [line.trim() for line in source.split("\n")]
-  is_code := (line: String) -> line != '' and not line.starts_with('#')
+  is_code := (line: String) -> not line.is_empty() and not line.starts_with('#')
   code_start := lines.find_index(is_code) ? lines.length
-  off := lines.find_index((line) -> line == '# fmt: off') ? return false
+  off := lines.index_of('# fmt: off') ? return false
   after := [line for line, i in lines when i > off]
   off < code_start and not after.any((line) -> line.ends_with('# fmt: on'))
 
@@ -58,16 +58,16 @@ struct Printed(statements: Statement[], layout: Layout, lines: StatementLines)
 
 printed := (lexed: Lexed, source: SourceText, path: String, left_out: String[]) ->
   statements := parse(lexed.tokens, path)
-  uncast: Set<Expression>
+  reported: Map<Expression, StyleRule>
   for annotation in left_out_candidates(statements)
     continue if not left_out.contains(annotation.key)
     annotation.remove()
-    uncast.add cast.value if cast := annotation.cast
+    reported[found.written] = found.rule if found := annotation.reported
   lines := StatementLines()
-  context := Context(left_out, source, lines, uncast)
+  context := Context(left_out, source, lines, reported)
   body := block_doc(statements, context)
   ending := left_out_ending(statements, context)
-  doc := statements.length == 0 then text('') else join([body, line_feed(), ending])
+  doc := statements.is_empty() then text('') else join([body, line_feed(), ending])
   kept := [statement for statement in statements when not is_left_out_import(statement, context)]
   Printed lines, statements: kept, layout: lay_out(doc, source)
 
@@ -107,7 +107,7 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[]) ->
     column := columns(old[crlf]) + 1
     result.push { rule: LAYOUT, at: { column, line: crlf + 1 } }
   last := old.length - 1
-  if old[last] != ''
+  if not old[last].is_empty()
     result.push { rule: LAYOUT, at: { line: last + 1, column: columns(old[last]) + 1 } }
     old.push ''
   for hunk in hunks(old, new)

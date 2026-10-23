@@ -17,8 +17,8 @@ import named_type, type_arguments from './print_type'
 import if_doc, is_command_callee from './print_statement'
 import annotation_key from './annotated'
 import
-  CAST_FALLBACKS, EXPECTED_TYPES, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, REDUNDANT_CASTS,
-  SHORTHAND, STRING_LITERALS
+  CAST_FALLBACKS, EXPECTED_TYPES, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, SHORTHAND,
+  STRING_LITERALS
 from './rules'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
@@ -57,7 +57,7 @@ export clarified := (expression: Expression, context: Context) ->
   in_parentheses expression, context, true
 
 in_parentheses := (expression: Expression, context: Context, needed: Bool) ->
-  bare := uncast_doc(expression, context, bare_doc(expression, context))
+  bare := reported_doc(expression, context, bare_doc(expression, context))
   was_in_parentheses := written_in_parentheses(expression, context)
   if needed
     open := was_in_parentheses then token('(', expression.position) else text('(')
@@ -65,10 +65,10 @@ in_parentheses := (expression: Expression, context: Context, needed: Bool) ->
       rule(PARENTHESES, join([open, bare_doc(expression, context.inside_brackets()), text(')')]))
   was_in_parentheses then rule(PARENTHESES, bare) else bare
 
-# The value of a cast left out, which reports it, and where the cast was.
-uncast_doc := (expression: Expression, context: Context, doc: Doc) ->
-  return doc if not context.uncast.has(expression)
-  join [rule(REDUNDANT_CASTS, doc), rule(REDUNDANT_CASTS, text(''))]
+# An expression written in place of another, which reports its rule, and where the other ended.
+reported_doc := (expression: Expression, context: Context, doc: Doc) ->
+  reported := context.reported[expression] ? return doc
+  join [rule(reported, doc), rule(reported, text(''))]
 
 # A parenthesized expression takes the position of its `(`.
 written_in_parentheses := (expression: Expression, context: Context) ->
@@ -323,17 +323,17 @@ export call_doc := (call: Call, context: Context, whole: Bool) ->
 # parentheses (see Long lists): one on a line of its own, outside brackets, with arguments and the
 # callee of a call without parentheses, which `f<T>`, `g(x)` or `fs[0]` is not.
 export takes_block_arguments := (call: Call, context: Context) ->
-  has_arguments := call.args.length > 0 or call.named_args.length > 0
-  plain_callee := call.type_args.length == 0 and is_command_callee(call.callee)
+  has_arguments := not call.args.is_empty() or not call.named_args.is_empty()
+  plain_callee := call.type_args.is_empty() and is_command_callee(call.callee)
   context.on_own_line and not context.in_brackets and plain_callee and has_arguments
 
 # Where the parenthesis that closes the arguments is in the source: the one that closes the
 # parenthesis before the first argument, if the source has the arguments in parentheses.
 arguments_closing_at := (call: Call, context: Context) ->
   first :=
-    if call.args.length > 0
+    if not call.args.is_empty()
       call.args[0].position
-    else if call.named_args.length > 0
+    else if not call.named_args.is_empty()
       call.named_args[0].name.position
     else
       return nil
