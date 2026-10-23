@@ -58,7 +58,8 @@ export packed_arguments := (body: Body, call: Call, declaration: FunctionLiteral
   packed
 
 pack_from := (body: Body, call: Call, params: Parameter[], place: Int) ->
-  fixed := [arg for arg, i in call.args when i < place]
+  # There may be fewer arguments than `place`, which is reported below, after a spread among them.
+  fixed := call.args.slice(0, min(place, call.args.length))
   if spread := fixed.find(is_spread)
     rest := params[place].name.name
     fail
@@ -68,7 +69,7 @@ pack_from := (body: Body, call: Call, params: Parameter[], place: Int) ->
   count := call.args.length
   if count < place
     fail body.program, call.position, "expected at least #{place} argument(s), got #{count}"
-  elements := [arg for arg, i in call.args when i >= place]
+  elements := call.args.slice(place)
   position := elements.first()?.position ? call.position
   [fixed..., ArrayLiteral(elements, position)]
 

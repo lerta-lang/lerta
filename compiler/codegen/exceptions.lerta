@@ -33,8 +33,7 @@ export push_temporary := (g: Generator, operand: String, type: Type) ->
   g.temporaries.push { operand, owned } if owned != NONE
 
 # Lets go of the temporaries held since there were `depth` of them, which their consumer releases.
-export pop_temporaries := (g: Generator, depth: Int) ->
-  g.temporaries.pop() while g.temporaries.length > depth
+export pop_temporaries := (g: Generator, depth: Int) -> g.temporaries.truncate(depth)
 
 # Generates `rest` while the owned operand of the type is held.
 export while_holding := (g: Generator, operand: String, type: Type, rest: () -> void) ->
@@ -262,10 +261,11 @@ run_finally_left := (g: Generator, left: Finally, finally_depth: Int) ->
   g.handlers.append handlers
   g.finallies.append finallies
 
-# Removes the items from `length` on, and gives them, in order.
+# Removes the items from `length` on, and gives them, in order; `length`, recorded when the stack
+# was no deeper, is at most the number of items.
 take_from := <T>(items: T[], length: Int) ->
-  taken := [items[i] for i in length...items.length]
-  items.pop() while items.length > length
+  taken := items.slice(length)
+  items.truncate length
   taken
 
 with_handler := (g: Generator, label: String, generate_body: () -> void) ->
