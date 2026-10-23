@@ -2,7 +2,8 @@
 # gives (see main and lib/target), and run, and its output is compared with <name>.out (stdout),
 # <name>.err (stderr: the compile errors or an uncaught throw) and <name>.warn (compile warnings). A
 # missing file means empty output, but at least one must exist. The run must fail exactly when
-# <name>.err exists.
+# <name>.err exists. A place in a standard module that a trace goes through is written without its
+# line and column, `(std:builtins/text:XX)`, since any change to std would move them.
 # Tests run in parallel, as many at once as the driver says, and are reported in order; each program
 # runs in an empty directory of its own, where it may write files. Every test that compiles runs
 # twice, without and with optimization, to catch code whose behavior changes when optimized.
@@ -147,7 +148,6 @@ struct Outcome(stdout: Binary, stderr: Binary, warnings: String, failed: Bool, c
 # messages, is a failure of the build itself. What follows the place, or nil.
 after_place := (line: String) ->
   parts := line.split(':')
-  is_number := (part: String) -> part != '' and [c for c in part].all((c) -> c.is_digit())
   # The file's name is not empty, and may hold `:` itself, as C:\dir does.
   for i in 1...(parts.length - 2)
     continue if i == 1 and parts[0] == ''
@@ -271,10 +271,29 @@ run_test := (test: TestCase, optimize: Bool): Promise<String[]?> ->
   none := ''.binary
   [
     compare_output('stdout', expected['out'] ? none, outcome.stdout)...
-    compare_output('stderr', expected['err'] ? none, outcome.stderr)...
+    compare_output('stderr', expected['err'] ? none, without_std_places(outcome.stderr))...
     compare_text('warnings', expected['warn']?.text() ? '', outcome.warnings)...
     status_reasons...
   ]
+
+# The output with the line and column of each place in a standard module that a trace goes
+# through written as XX (see std_frame).
+without_std_places := (output: Binary) ->
+  text := output.text() ? return output
+  [std_frame(line) for line in text.split("\n")].join("\n").binary
+
+# A line of a trace, `  at Binary.slice (std:builtins/text:201:5)`, with `XX` for the line and the
+# column of a place in a standard module, which must be numbers, so that a place that is not well
+# formed still differs; any other line as it is.
+std_frame := (line: String) ->
+  return line if not line.starts_with('  at ') or not line.ends_with(')')
+  found := line.split_once(' (std:') ? return line
+  (head, place) := found
+  parts := place.without_suffix(')')!.split(':')
+  return line if parts.length != 3 or not [parts[1], parts[2]].all(is_number)
+  "#{head} (std:#{parts[0]}:XX)"
+
+is_number := (part: String) -> part != '' and part.all((c) -> c.is_digit())
 
 optimized_check := (test: TestCase) ->
   wait := ->
