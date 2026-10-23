@@ -155,7 +155,7 @@ export class Reader
   # What a cancelled read took goes back before the rest of the chunk.
   put_back_taken = ->
     return if @taken.is_empty()
-    @taken += @chunk.slice(@start, @chunk.length)
+    @taken += @chunk[@start...@chunk.length]
     @chunk = @taken_out()
     @start = 0
 
@@ -167,7 +167,7 @@ export class Reader
   line = ->
     while await @fill()
       end := @chunk.index_of("\n".binary, @start) ? @chunk.length
-      @taken += @chunk.slice(@start, end)
+      @taken += @chunk[@start...end]
       if end < @chunk.length
         @start = end + 1
         return ended_line_text(@taken_out())
@@ -184,7 +184,7 @@ export class Reader
   # Up to `count` bytes of the chunk, from where it is read.
   take = (count: Int) ->
     end := @start + min(count, @chunk.length - @start)
-    bytes := @chunk.slice(@start, end)
+    bytes := @chunk[@start...end]
     @start = end
     bytes
 
@@ -194,7 +194,7 @@ export class Reader
 # A line that ended with "\n", without a "\r" before it.
 ended_line_text := (bytes: Binary) ->
   ends_with_return := not bytes.is_empty() and bytes[bytes.length - 1] == "\r"
-  utf8_line ends_with_return then bytes.slice(0, bytes.length - 1) else bytes
+  utf8_line ends_with_return then bytes[0...(bytes.length - 1)] else bytes
 
 utf8_line := (bytes: Binary) ->
   bytes.text() ? throw ValueError(message: 'a line is not valid UTF-8')

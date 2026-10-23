@@ -51,7 +51,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `Byte` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type, `to_char`, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation`, `hex_value` |
 | `Bool` | `equals`, `hash`, `to_string` |
 | `String` | `equals`, `hash`, `add`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `is_empty`, `without_prefix`, `without_suffix`, `contains`, `split_once`, `replace`, `trim`, `repeat`, `pad_start`, `pad_end`, `to_upper`, `to_lower`, `compare` |
-| `Binary` | `equals`, `hash`, `length`, `is_empty`, `iter`, `slice`, `occurs_at`, `index_of`, `text` |
+| `Binary` | `equals`, `hash`, `length`, `is_empty`, `iter`, `occurs_at`, `index_of`, `text` |
 | `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `index_of`, `is_empty`, `first`, `last`, `sorted`, `sorted_by`, `append`, `slice`, `reversed`, `truncate`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
 | `Map<K, V>` | `length`, `is_empty`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries` |
 | `Set<T>` | `length`, `is_empty`, `has`, `add`, `remove`, `iter`, `bit_or`, `bit_and`, `sub`, `bit_xor`, `is_subset` |
