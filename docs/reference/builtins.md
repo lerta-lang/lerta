@@ -46,11 +46,11 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `Float32` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float` |
 | `Byte` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type, `to_char`, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation` |
 | `Bool` | `equals`, `hash`, `to_string` |
-| `String` | `equals`, `hash`, `add`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `without_prefix`, `without_suffix`, `contains`, `split_once`, `replace`, `trim`, `repeat`, `pad_start`, `pad_end`, `to_upper`, `to_lower`, `compare` |
-| `Binary` | `equals`, `hash`, `length`, `iter`, `slice`, `occurs_at`, `text` |
-| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
-| `Map<K, V>` | `length`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries` |
-| `Set<T>` | `length`, `has`, `add`, `remove`, `iter`, `bit_or`, `bit_and`, `sub`, `bit_xor`, `is_subset` |
+| `String` | `equals`, `hash`, `add`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `is_empty`, `without_prefix`, `without_suffix`, `contains`, `split_once`, `replace`, `trim`, `repeat`, `pad_start`, `pad_end`, `to_upper`, `to_lower`, `compare` |
+| `Binary` | `equals`, `hash`, `length`, `is_empty`, `iter`, `slice`, `occurs_at`, `text` |
+| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `index_of`, `is_empty`, `first`, `last`, `sorted`, `append`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
+| `Map<K, V>` | `length`, `is_empty`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries` |
+| `Set<T>` | `length`, `is_empty`, `has`, `add`, `remove`, `iter`, `bit_or`, `bit_and`, `sub`, `bit_xor`, `is_subset` |
 | `Iter<T>` | `has_next`, `next`, `iter` |
 | Any [Iterable](#iterable) | those that [Iterable](#iterable) gives |
 | An [enum](types.md#enums) | `equals`, `hash`, `to_string`, and the static `E.parse` |
