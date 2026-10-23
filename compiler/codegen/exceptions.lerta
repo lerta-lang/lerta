@@ -62,11 +62,18 @@ export emit_check_or_return_thrown := (ir: IrBuilder, type: Type) ->
 export emit_exception_check := (g: Generator) ->
   emit_check_with g.ir, -> emit_traced_unwind(g, TRACE_PUSH)
 
+# Unwinds as emit_exception_check does, where `thrown`, a result that the call gives only when it
+# throws, tells that it has, so that the pending exception need not be read.
+export emit_exception_check_if := (g: Generator, thrown: String) ->
+  emit_unwind_if g.ir, thrown, -> emit_traced_unwind(g, TRACE_PUSH)
+
 # Runs `unwind` if the call before it has thrown, in code that is no function of the program, as an
 # Iter's has_next and next are: it releases what that code holds and returns.
 export emit_check_with := (ir: IrBuilder, unwind: () -> void) ->
   data := ir.assign("load ptr, ptr #{exception_global(ir)}")
-  thrown := ir.assign("icmp ne ptr #{data}, null")
+  emit_unwind_if ir, ir.assign("icmp ne ptr #{data}, null"), unwind
+
+emit_unwind_if := (ir: IrBuilder, thrown: String, unwind: () -> void) ->
   unwind_label := ir.fresh_label('unwind')
   next_label := ir.fresh_label('no.exception')
   ir.emit "br i1 #{thrown}, label %#{unwind_label}, label %#{next_label}"

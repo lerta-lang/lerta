@@ -1,8 +1,10 @@
 # Generates assignments to names, fields, array items and map values.
 import Assignment, combining_operator, Expression, Identifier, Index, Member from '../ast'
 import info_of from '../checker/object_types'
-import emit_get, emit_set from './array'
-import emit_exception_check, pop_temporaries, push_temporary, while_holding from './exceptions'
+import emit_checked_items, emit_get, emit_is_out_of_range, emit_set_in from './array'
+import
+  emit_exception_check, emit_exception_check_if, pop_temporaries, push_temporary, while_holding
+from './exceptions'
 import
   generate, generate_borrowed, release_if_reference, slot_pointer, type_at_use, type_of
 from './expression'
@@ -104,10 +106,16 @@ generate_index_assignment := (g: Generator, assignment: Assignment, target: Inde
   value := generate(g, operand)
   pop_temporaries g, depth
   result := combine(g, assignment.operator, old, value, element, type_at_use(g, operand))
-  emit_set ir, array, index, result, element
+  items := emit_checked_items(ir, array, index)
+  emit_set_in ir, items, index, result, element
   emit_release_value ir, result, element
   emit_release ir, array if is_owned
-  emit_exception_check g
+  # An index out of range throws, which the items tell; an operator such as `+=` may have thrown
+  # before, on an overflow, with the index in range, so that only the pending exception tells it.
+  if assignment.operator == '='
+    emit_exception_check_if g, emit_is_out_of_range(ir, items)
+  else
+    emit_exception_check g
 
 # Only `=` applies to a map value. The key, like an index, is evaluated before the value.
 generate_map_assignment := (g: Generator, assignment: Assignment, target: Index, type: MapType) ->

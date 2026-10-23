@@ -1,8 +1,10 @@
 # Arrays and maps in the generated code: their literals, and indexing (of a Binary too).
 import ArrayLiteral, Comprehension, Index, is_spread, MapLiteral from '../ast'
-import emit_array_new, emit_get, emit_push from './array'
+import
+  emit_array_new, emit_checked_items, emit_get_from, emit_is_out_of_range, emit_push
+from './array'
 import push_comprehension from './control_flow'
-import emit_exception_check, holding, while_holding from './exceptions'
+import emit_exception_check, emit_exception_check_if, holding, while_holding from './exceptions'
 import generate, generate_borrowed, release_if_reference, type_at_use, type_of from './expression'
 import Generator from './generator'
 import emit_release from './lerta_ir'
@@ -46,13 +48,18 @@ export generate_index := (g: Generator, index: Index) ->
   generate_position := -> generate(g, index.index)
   position :=
     is_owned then holding(g, object, object_type, generate_position) else generate_position()
+  is_array := object_type is not MapType and not is_kind(object_type, 'Binary')
+  items := is_array then emit_checked_items(g.ir, object, position)
   item :=
     case
+      when items then emit_get_from(g.ir, items, position, type_of(g, index))
       when object_type is MapType then emit_map_get(g.ir, object, position, object_type)
-      when is_kind(object_type, 'Binary') then emit_binary_get(g.ir, object, position)
-      else emit_get(g.ir, object, position, type_of(g, index))
+      else emit_binary_get(g.ir, object, position)
   release_if_reference g, index.index, position
   emit_release g.ir, object if is_owned
-  # An index out of range throws.
-  emit_exception_check g
+  # An index out of range throws, which an array's items tell.
+  if items
+    emit_exception_check_if g, emit_is_out_of_range(g.ir, items)
+  else
+    emit_exception_check g
   item

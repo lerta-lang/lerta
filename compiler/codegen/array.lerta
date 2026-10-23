@@ -90,7 +90,10 @@ export emit_length := (ir: IrBuilder, array: String) ->
 
 # The item is owned. An index out of range throws, and gives poison.
 export emit_get := (ir: IrBuilder, array: String, index: String, element: Type) ->
-  items := emit_checked_items(ir, array, index)
+  emit_get_from ir, emit_checked_items(ir, array, index), index, element
+
+# The item, owned, of items that emit_checked_items gives, or poison where it gives none.
+export emit_get_from := (ir: IrBuilder, items: String, index: String, element: Type) ->
   read := ->
     item := emit_load_item(ir, emit_item_address(ir, items, index, element), element)
     emit_retain_value ir, item, element
@@ -102,10 +105,10 @@ export emit_borrowed_item := (ir: IrBuilder, array: String, index: String, eleme
   items := emit_checked_items(ir, array, index)
   emit_load_item ir, emit_item_address(ir, items, index, element), element
 
-# The array retains the item, which stays owned by the caller. The new item is retained before the
-# old one is released, in case they are the same object.
-export emit_set := (ir: IrBuilder, array: String, index: String, value: String, element: Type) ->
-  items := emit_checked_items(ir, array, index)
+# Sets the item in items that emit_checked_items gives, unless it gives none. The array retains the
+# item, which stays owned by the caller; the new item is retained before the old one is released,
+# in case they are the same object.
+export emit_set_in := (ir: IrBuilder, items: String, index: String, value: String, element: Type) ->
   write := ->
     address := emit_item_address(ir, items, index, element)
     emit_retain_value ir, value, element
@@ -116,8 +119,12 @@ export emit_set := (ir: IrBuilder, array: String, index: String, value: String, 
 
 # The items of the array, which are read and written in place, or null, after the runtime has
 # thrown, when the index is out of range.
-emit_checked_items := (ir: IrBuilder, array: String, index: String) ->
+export emit_checked_items := (ir: IrBuilder, array: String, index: String) ->
   call_runtime ir, 'ptr @lerta_array_checked_items(ptr, i64)', "ptr #{array}, i64 #{index}"
+
+# Whether emit_checked_items gave no items, having thrown.
+export emit_is_out_of_range := (ir: IrBuilder, items: String) ->
+  ir.assign "icmp eq ptr #{items}, null"
 
 emit_is_in_range := (ir: IrBuilder, items: String) -> ir.assign("icmp ne ptr #{items}, null")
 
