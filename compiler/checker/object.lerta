@@ -10,7 +10,7 @@ import function_type_of, has_function, method_key from './functions'
 import float_first from './literals'
 import lookup, record_reference from './name'
 import Constructor from './references'
-import field_type, info_of, is_argument, object_type, ObjectInfo from './object_types'
+import field_type, FieldInfo, info_of, is_argument, object_type, ObjectInfo from './object_types'
 import Body from './shared'
 import instantiate_object from './type_names'
 import reject_invalid_instance from './type_validity'
@@ -84,6 +84,8 @@ export type_of_construction := (
     is_required := field.value == nil and field.type! is not OptionalType
     if is_required and not given.has(field.name.name)
       fail program, call.position, "missing argument '#{field.name.name}'"
+  is_given := (field: FieldInfo) -> not is_argument(field) or given.has(field.name.name)
+  body.facts.full_constructions.add call if info.fields.all(is_given)
   type
 
 # The field that a named argument gives, which must be an argument (see is_argument).
@@ -234,7 +236,7 @@ export type_of_record := (body: Body, record: RecordLiteral, expected: Type?): T
     value := field.value
     if expected_field := expected_fields.find((each) -> each.name == name)
       expect_type body, value, expected_field.type
-      return RecordField(name, type: expected_field.type)
+      return RecordField(expected_field..., name)
     type := type_of(body, value)
     if is_one_of_kinds(type, ['void', 'never', 'nil'])
       fail program, value.position, "a field cannot hold a value of type #{format_type(type)}"

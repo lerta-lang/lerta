@@ -1,0 +1,62 @@
+# A construction that copies arguments from the fields of the same names of a value of its type is
+# written with a spread of that value, where it gives every argument; not where an argument is left
+# to its default, where the copies come from two values, nor where an argument with effects comes
+# before a copy, which the spread would then read before it.
+import 'std:process' as process
+
+struct Point(x: Int, y: Int, z: Int)
+
+struct Labeled(name: String, count = default 0)
+
+class Box(size: Int, name: String)
+
+struct Other(x: Int, y: Int, z: Int)
+
+struct Holder(point: Point)
+
+struct Moving
+  x: Int
+  y: Int
+  z: Int
+  moved = -> Moving(@..., x: @x + 1)
+
+next := -> 9
+
+p := Point(x: 1, y: 2, z: 3)
+moved := Point(p..., x: 10)
+expected: Point = { p..., y: 5 }
+copy := Point(p...)
+called := Point(x: next(), y: p.y, z: p.z)
+after := Point(p..., x: next())
+mixed := Point(x: p.x, y: moved.y, z: 0)
+l := Labeled(name: 'a', count: 2)
+defaulted := Labeled(name: l.name)
+full := Labeled(l..., name: 'b')
+b := Box(size: 1, name: 'b')
+boxed := Box(b..., name: 'c')
+y := 4
+named := Point(p..., y)
+o := Other(x: 1, y: 2, z: 3)
+other := Point(x: o.x, y: o.y, z: o.z)
+h := Holder(point: p)
+pathed := Point(h.point..., y: 0)
+generic := <T>(value: T, point: Point) -> Point(x: point.x, y: 1, z: point.z)
+spread := Point(p..., x: p.x, y: 0)
+exit := process.Exit(code: 0, signal: nil)
+qualified := process.Exit(exit..., signal: 9)
+maybe: Point? = p
+narrowed := maybe != nil then Point(maybe..., z: 5) else p
+q := Point(x: 7, y: 8, z: 9)
+later := Point(x: p.x, y: p.y, z: q.z)
+var current = p
+reset := ->
+  current = q
+  0
+reassigned := Point(current..., z: reset())
+place := (point: Point) -> point.x + point.y + point.z
+print place(x: p.x, y: p.y, z: p.z)
+print [named.y, other.x, pathed.x, generic(0, p).y, spread.y, qualified.code]
+print Moving(x: 1, y: 2, z: 3).moved().x
+print [moved.x, expected.y, copy.z, called.x, after.x, mixed.y]
+print [defaulted.count, full.count, boxed.size]
+print [narrowed.z, later.z, reassigned.x, current.x]

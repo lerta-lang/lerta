@@ -13,7 +13,7 @@ import ExportRef, ImportedName from '../checker/imports'
 import CompileError from '../errors'
 import module_location from '../source'
 import imported_files, is_standard_module, load_modules, Module, module_key from '../loader'
-import ArrayType, format_type, MapType, SimpleType, Type from '../types'
+import ArrayType, format_type, MapType, same_type, SimpleType, Type from '../types'
 import Annotation, annotations_of, key_position from './annotated'
 import dump_annotated_without_positions from '../ast_dump'
 import inferable from './inferable'
@@ -68,6 +68,12 @@ can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) 
     left_out_cast := annotation.shorthand_cast ? return true
     return shared.facts.redundant_casts.has(left_out_cast)
   return shared.facts.redundant_casts.has(cast) if cast := annotation.cast
+  if call := annotation.spread_copy
+    return false if not shared.facts.full_constructions.has(call)
+    { types } := shared.facts
+    source_type := types[annotation.spread_source!] ? return false
+    constructed := types[call] ? return false
+    return same_type(source_type, constructed)
   return has_is_empty(shared.facts.types[emptied]) if emptied := annotation.emptied
   # Not in the body of a generic function, whose types are those of its instances.
   return shared.facts.types.has(run[0].patterns[0]) if run := annotation.shared_arms

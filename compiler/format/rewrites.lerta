@@ -6,12 +6,13 @@
 # with `is_empty()` (see Emptiness tests); and how to write them so in the syntax tree.
 import
   BinaryOperation, BooleanLiteral, Call, Case, CaseArm, Cast, construction_arguments,
-  construction_spread, Expression, FloatLiteral, Identifier, IntegerLiteral, Member, NamedValue,
-  NilLiteral, Position, RecordLiteral, Statement, StringLiteral, This, UnaryOperation
+  construction_spread, Expression, FloatLiteral, Identifier, IntegerLiteral, is_spread, Member,
+  NamedValue, NilLiteral, Position, RecordLiteral, spread_of_value, Statement, StringLiteral, This,
+  UnaryOperation
 from '../ast'
 import dump_ast_without_positions from '../ast_dump'
 import Annotation, annotation_key from './annotated'
-import EMPTINESS_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES from './rules'
+import EMPTINESS_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS from './rules'
 import Place, places_of from './places'
 
 # In the order of the source, but for a cast and a construction after those inside them, and the
@@ -27,6 +28,7 @@ export rewrites_of := (program: Statement[]) ->
     if value is Case
       found.push shared_arms(value, run) for run in runs_of_alike_arms(value)
     if value is Call
+      found.push spread_copy(value, source) if source := copied_source(value)
       for named, i in value.named_args
         found.push shorthand(value, named) if is_shorthand(value, i)
       found.push recorded(value, place)
@@ -137,7 +139,7 @@ shared_arms := (case_value: Case, run: CaseArm[]) ->
   first := run[0]
   patterns: Expression[]
   patterns.append arm.patterns for arm in run
-  arm := CaseArm(patterns, body: first.body)
+  arm := CaseArm(first..., patterns)
   others := [each for each in run when each != first]
   Annotation
     shared_arms: run
@@ -178,12 +180,53 @@ has_no_effects := (value: Expression): Bool ->
 type Inert =
   Identifier | This | NilLiteral | BooleanLiteral | StringLiteral | IntegerLiteral | FloatLiteral
 
+# The value whose fields of the same names the named arguments of a construction copy, `y: p.y`,
+# which a spread of it may give (see Spreads): a name, `@` or a path of fields from one, which
+# the spread reads before the arguments written, so those before a copy must have no effects.
+copied_source := (call: Call) ->
+  return nil if call.args.any(is_spread)
+  copies := [named for named in call.named_args when copied_field(named) != nil]
+  first := copies.first() ? return nil
+  source := copied_field(first)!.object
+  is_path := source is Identifier or source is This or source is Member
+  return nil if not is_path or not has_no_effects(source)
+  key := dump_ast_without_positions([source])
+  if not copies.all((named) -> dump_ast_without_positions([copied_field(named)!.object]) == key)
+    return nil
+  last_copy := call.named_args.index_of(copies.last()!)!
+  before :=
+    [named for named, i in call.named_args when i < last_copy and not copies.contains(named)]
+  before.all((named) -> has_no_effects(named.value)) then source
+
+# The field that the named argument copies: of its own name.
+copied_field := (named: NamedValue) ->
+  member := named.value as Member ? return nil
+  member.name.name == named.name.name then member
+
+# The construction with a spread of the value whose fields it copies, first, and the arguments
+# that it does not copy, reported at the spread.
+spread_copy := (call: Call, source: Expression) ->
+  { args, named_args } := call
+  spread := spread_of_value(source)
+  kept := [named for named in named_args when copied_field(named) == nil]
+  Annotation
+    spread_copy: call
+    spread_source: source
+    reported: { written: spread, rule: SPREADS }
+    key: annotation_key('spread', call.position)
+    remove: ->
+      call.args = [spread, call.args...]
+      call.named_args = kept
+    restore: ->
+      call.args = args
+      call.named_args = named_args
+
 # The named argument written as the name alone, after the arguments written so. The arguments of
 # the call are replaced rather than changed, and put back as they were: the places of the others
 # in them (see visit_named_at in ./places) change those that are put back.
 shorthand := (call: Call, named: NamedValue) ->
   { args, named_args } := call
-  alone := Identifier(name: named.name.name, position: named.name.position)
+  alone := Identifier(named.name...)
   Annotation
     shorthand: call
     shorthand_cast: named.value as Cast?

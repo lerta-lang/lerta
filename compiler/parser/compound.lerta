@@ -3,7 +3,8 @@
 import
   ArrayLiteral, BooleanLiteral, Case, CaseArm, Catch, Comprehension, Conditional, copy_identifier,
   Expression, FunctionLiteral, Identifier, is_spread, LazyFunctions, MapEntry, MapLiteral,
-  NamedValue, Parameter, Pass, Position, RecordLiteral, Statement, Try, TupleLiteral
+  NamedValue, Parameter, Pass, Position, RecordLiteral, spread_of_value, Statement, Try,
+  TupleLiteral
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import starts_block from './block_literal'
@@ -102,18 +103,14 @@ export parse_array_literal := (tokens: TokenStream, position: Position) ->
     ArrayLiteral elements, position
   tokens.inside SEPARATE, parse_contents
 
-# A spread `xs...` is the comprehension `[x for x in xs]` marked to give its items in its place;
-# its variable's name cannot be written, so no code can read it.
+# An item, which a spread `xs...` may be (see spread_of_value).
 export parse_element := (tokens: TokenStream) -> spread_of(tokens, parse_expression(tokens))
 
 # `value`, or `value...` when a spread follows it.
 export spread_of := (tokens: TokenStream, value: Expression) ->
   return value if not at_spread(tokens)
   tokens.next()
-  { position } := value
-  variable := Identifier(position, name: ' item')
-  element := copy_identifier(variable)
-  Comprehension element, variable, position, iterable: value, guard: nil, lazy: nil, spread: true
+  spread_of_value value
 
 # `(a)`, a tuple, `(a, b)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends
 # inside are skipped.
