@@ -5,7 +5,7 @@ import dump_ast_without_positions from '../ast_dump'
 import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
-import imported_name, key_line from './annotated'
+import Annotation, imported_name, key_line from './annotated'
 import left_out_candidates from './annotations'
 import hunks from './diff'
 import join, lay_out, Layout, line_feed, RulePlace, text from './doc'
@@ -60,7 +60,7 @@ printed := (lexed: Lexed, source: SourceText, path: String, left_out: String[]) 
   statements := parse(lexed.tokens, path)
   reported: Map<Expression, StyleRule>
   for annotation in left_out_candidates(statements)
-    continue if not left_out.contains(annotation.key)
+    continue if not left_out.contains(annotation.key) or holds_comments(annotation, source)
     annotation.remove()
     reported[found.written] = found.rule if found := annotation.reported
   lines := StatementLines()
@@ -70,6 +70,16 @@ printed := (lexed: Lexed, source: SourceText, path: String, left_out: String[]) 
   doc := statements.is_empty() then text('') else join([body, line_feed(), ending])
   kept := [statement for statement in statements when not is_left_out_import(statement, context)]
   Printed lines, statements: kept, layout: lay_out(doc, source)
+
+# Whether a comment is among the arms that would be one, from the line of the `when` of the first
+# up to what follows the last: one in the arms left out, after its last statement too, has no place
+# in the arm kept, and one in the first, as one that ends its line, would be printed before the
+# patterns that the others give it, which come after it in the source (see Shared arm bodies).
+holds_comments := (annotation: Annotation, source: SourceText) ->
+  run := annotation.shared_arms ? return false
+  first_line := source.line_before(run[0].patterns[0].position)
+  body_end := source.statement_last_line(run.last()!.body.last()!.position, nil)
+  source.has_comment first_line, source.line_before_next(body_end)
 
 # The annotations of `left_out` that are not on the lines kept as written, but for the names of
 # imports that those lines use.

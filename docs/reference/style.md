@@ -19,6 +19,7 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Parentheses**: do not write parentheses that change nothing, except where another rule asks for them (**Ranges**), to clarify `and` mixed with `or` and around a `then`/`else` inside the `then` value of another (`a then (b then x else y) else z`), whose `else`s are hard to pair otherwise.
 - **Cast fallbacks**: write `x as T ? y`, not `(x as T?) ? y`.
 - **Emptiness tests**: write `xs.is_empty()`, not `xs.length == 0`, and `not xs.is_empty()`, not `xs.length > 0` or `xs.length != 0`; for a `String`, `s.is_empty()`, not `s == ''`.
+- **Shared arm bodies**: write arms next to each other whose bodies are the same as one arm of their patterns, `when Point, Circle then shape.name`, not an arm for each.
 - **Redundant casts**: do not cast a value to the type it has: after `if shape is Point`, write `shape.x`, not `(shape as Point!).x`.
 - **Nil initial values**: write `var found: String?`, not `var found: String? = nil`.
 - **Empty initial values**: write `names: String[]`, not `names: String[] = []`, and `seen: Set<String>`, not `seen := Set<String>()` or `seen: Set<String> = Set()`; the same for `Map`. A `var` and a field keep their values.

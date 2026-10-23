@@ -5,12 +5,13 @@
 # Shorthand there); the casts left out (see Redundant casts); and the tests of emptiness written
 # with `is_empty()` (see Emptiness tests); and how to write them so in the syntax tree.
 import
-  BinaryOperation, BooleanLiteral, Call, Cast, construction_arguments, Expression, FloatLiteral,
-  Identifier, IntegerLiteral, Member, NamedValue, NilLiteral, Position, RecordLiteral, Statement,
-  StringLiteral, This, UnaryOperation
+  BinaryOperation, BooleanLiteral, Call, Case, CaseArm, Cast, construction_arguments, Expression,
+  FloatLiteral, Identifier, IntegerLiteral, Member, NamedValue, NilLiteral, Position, RecordLiteral,
+  Statement, StringLiteral, This, UnaryOperation
 from '../ast'
+import dump_ast_without_positions from '../ast_dump'
 import Annotation, annotation_key from './annotated'
-import EMPTINESS_TESTS, REDUNDANT_CASTS from './rules'
+import EMPTINESS_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES from './rules'
 import Place, places_of from './places'
 
 # In the order of the source, but for a cast and a construction after those inside them, and the
@@ -23,6 +24,8 @@ export rewrites_of := (program: Statement[]) ->
   after := (value: Expression, place: Place) ->
     found.push uncast(value, place) if value is Cast and value.throws
     found.push emptied(value, test, place) if test := emptiness_test(value)
+    if value is Case
+      found.push shared_arms(value, run) for run in runs_of_alike_arms(value)
     if value is Call
       for named, i in value.named_args
         found.push shorthand(value, named) if is_shorthand(value, i)
@@ -106,6 +109,48 @@ emptied := (expression: Expression, test: EmptinessTest, place: Place) ->
     key: annotation_key('empty', expression.position)
     remove: -> place(written)
     restore: -> place(expression)
+
+# The runs of two or more arms next to each other whose bodies are written alike, which may be one
+# arm of all their patterns (see Shared arm bodies); an arm of nil is in none, as nil must be the
+# only pattern of its arm, and so is an arm of a case without a subject, whose arms have one
+# condition each.
+runs_of_alike_arms := (case_value: Case) ->
+  runs: CaseArm[][]
+  return runs if case_value.subject == nil
+  arms := case_value.arms
+  bodies := [is_nil_arm(arm) then '' else dump_ast_without_positions(arm.body) for arm in arms]
+  var start = 0
+  while start < arms.length
+    var end = start + 1
+    while end < arms.length and not bodies[start].is_empty() and bodies[end] == bodies[start]
+      end += 1
+    runs.push [arms[i] for i in start...end] if end - start > 1
+    start = end
+  runs
+
+is_nil_arm := (arm: CaseArm) -> arm.patterns.any((pattern) -> pattern is NilLiteral)
+
+# The run of arms written as its first arm with the patterns of all of them, in their order,
+# reported at the first pattern that the others give it. The arms are replaced by their identity,
+# so that the runs of one case are written so apart.
+shared_arms := (case_value: Case, run: CaseArm[]) ->
+  first := run[0]
+  patterns: Expression[]
+  patterns.append arm.patterns for arm in run
+  arm := CaseArm(patterns, body: first.body)
+  others := [each for each in run when each != first]
+  Annotation
+    shared_arms: run
+    shared_subject: case_value.subject as Identifier?
+    reported: { written: patterns[first.patterns.length], rule: SHARED_ARM_BODIES }
+    key: annotation_key('arms', first.patterns[0].position)
+    remove: ->
+      kept := [each for each in case_value.arms when not others.contains(each)]
+      case_value.arms = [each == first then arm else each for each in kept]
+    restore: ->
+      restored: CaseArm[]
+      restored.append each == arm then run else [each] for each in case_value.arms
+      case_value.arms = restored
 
 # Whether the named argument is a variable of its name that may be written alone, which comes before
 # the named arguments (see Construction in docs/reference/objects.md): those it then goes before

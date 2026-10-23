@@ -2,7 +2,9 @@
 # annotations in docs/reference/style.md), the enums of members and the names of the constructions
 # of structs that it shows are expected (see Expected types there), and the imports of the enums and
 # the structs that these leave unused, which `lerta fmt` leaves out.
-import EnumDeclaration, Identifier, Node, Statement, TypeDeclaration from '../ast'
+import
+  compare_positions, EnumDeclaration, Identifier, Node, Position, Statement, TypeDeclaration
+from '../ast'
 import Located from '../errors'
 import all_warnings from '../checker/diagnostics'
 import check_program from '../checker/modules'
@@ -12,7 +14,8 @@ import CompileError from '../errors'
 import module_location from '../source'
 import imported_files, is_standard_module, load_modules, Module, module_key from '../loader'
 import ArrayType, format_type, MapType, SimpleType, Type from '../types'
-import Annotation, annotations_of from './annotated'
+import Annotation, annotations_of, key_position from './annotated'
+import dump_annotated_without_positions from '../ast_dump'
 import inferable from './inferable'
 import import_names_of from './left_out_imports'
 import rewrites_of from './rewrites'
@@ -21,7 +24,12 @@ import rewrites_of from './rewrites'
 # modules that are not standard, with the type it is converted to, if any; the types of the fields,
 # which code that the program does not hold, such as a module that imports the entry module, can
 # rely on; and the warnings.
-struct CheckResult(node_types: Map<Node, String>, field_types: String[], warnings: Located[])
+struct CheckResult
+  node_types: Map<Node, String>
+  # The key of the module of each node (see module_key).
+  node_modules: Map<Node, String>
+  field_types: String[]
+  warnings: Located[]
 
 # The keys (see annotation_key) of the annotations that can be left out of each of the files at
 # `paths`, by the key of its module (see module_key); none for a file whose program does not check.
@@ -61,6 +69,8 @@ can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) 
     return shared.facts.redundant_casts.has(left_out_cast)
   return shared.facts.redundant_casts.has(cast) if cast := annotation.cast
   return has_is_empty(shared.facts.types[emptied]) if emptied := annotation.emptied
+  # Not in the body of a generic function, whose types are those of its instances.
+  return shared.facts.types.has(run[0].patterns[0]) if run := annotation.shared_arms
   inferable annotation, shared, program
 
 # Whether std gives the type `is_empty` (see EMPTINESS_TESTS). One test serves the tests of a length
@@ -114,21 +124,86 @@ candidates_of := (held: Module[], checked: ProgramWide) ->
 # kept, as they would no longer show it; an import of a struct that only they use does not count
 # then.
 accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> ProgramWide) ->
-  # The result of the program without the annotations, if it checks (see is_unused_type).
-  result_without := (left_out: Placed[], structs: Bool) ->
+  # The result of the program without the annotations, if it checks (see is_unused_type), and
+  # whether it is `alike` while they are left out of the tree.
+  tried_without := (left_out: Placed[], structs: Bool, alike: (CheckResult) -> Bool) ->
     placed.annotation.remove() for placed in left_out
     tried := program()
     result := checks(tried) then result_of(tried, structs)
+    is_alike := result then alike(result) else false
     placed.annotation.restore() for placed in left_out
-    result
-  checks_the_same := (original: CheckResult, structs: Bool) -> (left_out: Placed[]) ->
-    result := result_without(left_out, structs) ? return false
-    same_result result, original
+    { result, is_alike }
+  result_without := (left_out: Placed[], structs: Bool) ->
+    tried_without(left_out, structs, (_) -> true).result
+  # Where `merging`, the types in the bodies of the arms made one are compared apart (see
+  # in_shared_body and shares_types).
+  checks_the_same := (original: CheckResult, structs: Bool, merging: Bool) ->
+    (left_out: Placed[]) ->
+      subjects: Set<String>
+      for placed in left_out
+        subjects.add subject.name if subject := placed.annotation.shared_subject
+      shares := (result: CheckResult) ->
+        not merging or left_out.all((placed) -> shares_types(placed.annotation, subjects, original, result))
+      { result, is_alike } := tried_without(left_out, structs, shares)
+      found := result ? return false
+      excused := (node: Node) -> merging and in_shared_body(left_out, found, node)
+      is_alike and same_result(found, original, excused)
   constructions := [placed for placed in candidates when placed.annotation.construction]
-  others := [placed for placed in candidates when not placed.annotation.construction]
-  recorded := removable_among([], constructions, checks_the_same(result_of(checked, true), true))
+  arms := [placed for placed in candidates when placed.annotation.shared_arms]
+  is_other := (placed: Placed) ->
+    not placed.annotation.construction and not placed.annotation.shared_arms
+  others := [placed for placed in candidates when is_other(placed)]
+  original := result_of(checked, true)
+  recorded := removable_among([], constructions, checks_the_same(original, true, false))
   with_records := result_without(recorded, false)!
-  removable_among recorded, others, checks_the_same(with_records, false)
+  # Before the others, which are then checked against the program with the arms made one, as a cast
+  # that only the first arm's narrowing makes redundant.
+  merged := removable_among(recorded, arms, checks_the_same(with_records, false, true))
+  with_arms := result_without(merged, false)!
+  # Nor are those in the body of arms made one, which the checking decided with the narrowing of the
+  # first arm alone, as a cast that only that narrowing makes redundant.
+  is_outside := (placed: Placed) ->
+    at := key_position(placed.annotation.key)
+    not merged.any((arms) -> arms.key == placed.key and in_body(arms, at))
+  outside := [placed for placed in others when is_outside(placed)]
+  removable_among merged, outside, checks_the_same(with_arms, false, false)
+
+# Whether the node is in the body that the arms left out of the tree share with the arm kept, whose
+# subject is narrowed to the union of their types then, which gives the nodes that use it other
+# types, as the same code that each arm ran.
+in_shared_body := (left_out: Placed[], result: CheckResult, node: Node) ->
+  module := result.node_modules[node] ? return false
+  left_out.any (placed) -> placed.key == module and in_body(placed, node.position)
+
+# Whether the body of the arms made one, as they are in `merged`, has the types of the body of each
+# of them in `separate`, but for the subjects of the arms made one with them, which each arm
+# narrows to the type of its own patterns and the arm made one to their union: a literal or an
+# operation may take another type then, as `s == 1` compares a Float with a Float where s is a
+# Float, and an Int where it is an Int | Float.
+shares_types := (
+  annotation: Annotation, subjects: Set<String>, separate: CheckResult, merged: CheckResult
+) ->
+  run := annotation.shared_arms ? return true
+  # Arms in an arm that others are made one with are left out with it: their patterns, which the
+  # checker gives types as it does not each statement, had them before.
+  first_pattern := run[0].patterns[0]
+  return true if separate.node_types.has(first_pattern) and not merged.node_types.has(first_pattern)
+  annotate := (result: CheckResult) -> (node: Node) ->
+    written := result.node_types[node] ? return ''
+    return written if node is not Identifier or not subjects.has(node.name)
+    (_, conversion) := written.split_once(' => ') ? return 'the subject'
+    "the subject => #{conversion}"
+  kept := dump_annotated_without_positions(run[0].body, annotate(merged))
+  run.all (arm) -> dump_annotated_without_positions(arm.body, annotate(separate)) == kept
+
+# Whether the position is in the body of the first of the arms that the annotation makes one, which
+# holds the nodes that the source has from its first statement up to the next arm, as the checker
+# makes its own nodes at the places of those it stands for.
+in_body := (placed: Placed, at: Position) ->
+  run := placed.annotation.shared_arms ? return false
+  start := run[0].body[0].position
+  end := run[1].patterns[0].position
+  compare_positions(start, at) != GREATER and compare_positions(at, end) == LESS
 
 # The imports of enums and structs that the program used, but that it does not once the annotations
 # accepted are left out, as the members of enums written alone, the constructions written as records
@@ -189,16 +264,19 @@ checks := (program: ProgramWide) ->
 # warnings (see is_unused_type).
 result_of := (program: ProgramWide, structs: Bool) ->
   node_types: Map<Node, String>
+  node_modules: Map<Node, String>
   for shared in program.shared
-    continue if is_standard_module(program.modules[shared.index])
+    module := program.modules[shared.index]
+    continue if is_standard_module(module)
     { facts } := shared
     for (node, type) in facts.types.entries()
       converted := facts.conversions[node]
       conversion := converted then " => #{format_type(converted)}" else ''
       node_types[node] = format_type(type) + conversion
+      node_modules[node] = module.key
   counts := (warning: Located) -> not is_unused_type(warning, program, structs)
   warnings := [each for each in all_warnings(program) when counts(each)]
-  CheckResult node_types, warnings, field_types: field_types(program)
+  CheckResult node_types, node_modules, warnings, field_types: field_types(program)
 
 # A warning of an import of an enum or a struct that is not used, which the members of the enum
 # written alone, the constructions of the struct written as records or the types left out may make,
@@ -218,8 +296,9 @@ is_unused_type := (warning: Located, program: ProgramWide, structs: Bool) ->
 # such as the `iter()` call of a `for` over an object, new each time, so each result has some that
 # the other lacks; their types show in those of the nodes of the syntax tree, which a program that
 # checks gives types to.
-same_result := (a: CheckResult, b: CheckResult) ->
+same_result := (a: CheckResult, b: CheckResult, excused: (Node) -> Bool) ->
   same_type := (node: Node) ->
+    return true if excused(node)
     b_type := b.node_types[node] ? return true
     a.node_types[node] == b_type
   same_types := a.node_types.keys().all(same_type)

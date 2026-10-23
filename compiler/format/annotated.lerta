@@ -1,10 +1,10 @@
 # The types written in a syntax tree that the checker may be able to infer, and how to take them out
 # of it.
 import
-  Assignment, Binding, Call, Case, Cast, Condition, Declaration, EnumDeclaration, Expression,
-  Extend, Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration, Member,
-  MemberDeclaration, NamedType, operands_of, Parameter, Pass, Position, Statement, Try, TypeAlias,
-  TypeDeclaration, TypeName, While
+  Assignment, Binding, Call, Case, CaseArm, Cast, Condition, Declaration, EnumDeclaration,
+  Expression, Extend, Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration,
+  Member, MemberDeclaration, NamedType, operands_of, Parameter, Pass, Position, Statement, Try,
+  TypeAlias, TypeDeclaration, TypeName, While
 from '../ast'
 import StyleRule from './rules'
 
@@ -36,6 +36,10 @@ export struct Annotation
   # The value whose test of length, or comparison with '', may be written as `is_empty()`, which
   # its type shows.
   emptied: Expression? = default nil
+  # The arms next to each other, of one body, that may be one arm (see Shared arm bodies).
+  shared_arms: CaseArm[]? = default nil
+  # The subject of their case, if it is a name, which the arms narrow.
+  shared_subject: Identifier? = default nil
   # The expression written in place of what is left out, which reports the rule: what is left out
   # leaves no other trace for the printer to report it at.
   reported: Reported? = default nil
@@ -53,7 +57,12 @@ export struct Annotation
 export annotation_key := (kind: String, at: Position) -> "#{kind} #{at.line}:#{at.column}"
 
 # The line of what the key names.
-export key_line := (key: String) -> key.split(' ')[1].split(':')[0].parse_int()!
+export key_line := (key: String) -> key_position(key).line
+
+# Where what the key names is.
+export key_position := (key: String) ->
+  place := key.split(' ')[1].split(':')
+  Position line: place[0].parse_int()!, column: place[1].parse_int()!
 
 # The name that an import gives, if the key names one (see import_key).
 export imported_name := (key: String) ->
