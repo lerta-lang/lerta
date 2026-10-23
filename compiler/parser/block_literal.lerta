@@ -1,8 +1,10 @@
 # A literal written as an indented block (see docs/reference/syntax.md#bracketless-blocks).
 import
-  ArrayLiteral, Expression, MapEntry, MapLiteral, NamedValue, Position, RecordLiteral
+  ArrayLiteral, Comprehension, Expression, is_spread, MapEntry, MapLiteral, NamedValue, Position,
+  RecordLiteral
 from '../ast'
 import parse_identifier, parse_value from './expression'
+import parse_element, starts_spread from './compound'
 import TokenStream from './token_stream'
 
 struct Element(value: Expression)
@@ -18,17 +20,27 @@ export parse_block_literal := (tokens: TokenStream) ->
   position := tokens.peek_at(2).position()
   items: Item[]
   tokens.read_block_items -> add_item(tokens, items)
+  # A spread starts the fields of a struct alone (see record_of); an array's is written in brackets.
+  is_record := items.any((item) -> item is NamedValue)
+  if not is_record and items.any(is_spread_element)
+    tokens.fail position, 'a spread in a block starts its fields, as `p...` before `x: 1`'
   to_literal items, position
 
 add_item := (tokens: TokenStream, items: Item[]) ->
   start := tokens.peek().position()
   item := parse_item(tokens)
-  if not items.is_empty() and kind_of(item) != kind_of(items[0])
-    tokens.fail start, "the items of this block are #{kind_of(items[0])}, so this one must be too"
+  if is_spread_element(item) and not items.is_empty()
+    tokens.fail start, 'a spread comes first in a block, once'
+  # A spread first, then fields, spreads a struct (see record_of).
+  spread_first := items.length == 1 and is_spread_element(items[0]) and item is NamedValue
+  if previous := items.last()
+    if not spread_first and kind_of(item) != kind_of(previous)
+      tokens.fail start, "the items of this block are #{kind_of(previous)}, so this one must be too"
   items.push item
 
 # A value may take the lines below, as an `if` does.
 parse_item := (tokens: TokenStream): Item ->
+  return Element(value: parse_element(tokens)) if starts_spread(tokens)
   if tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':'
     name := parse_identifier(tokens)
     tokens.next()
@@ -43,10 +55,15 @@ kind_of := (item: Item) ->
     when MapEntry then 'map entries'
     when Element then 'array elements'
 
+is_spread_element := (item: Item) -> item is Element and is_spread(item.value)
+
 to_literal := (items: Item[], position: Position): Expression ->
   fields := [item for item in items when item is NamedValue]
   entries := [item for item in items when item is MapEntry]
-  return RecordLiteral(fields, position) if not fields.is_empty()
+  if not fields.is_empty()
+    first := items[0]
+    spread := first is Element then first.value as Comprehension? else nil
+    return RecordLiteral(fields, position, spread)
   return MapLiteral(entries, position) if not entries.is_empty()
   elements := [item.value for item in items when item is Element]
   return elements[0] if elements.length == 1

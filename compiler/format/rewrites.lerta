@@ -5,9 +5,9 @@
 # Shorthand there); the casts left out (see Redundant casts); and the tests of emptiness written
 # with `is_empty()` (see Emptiness tests); and how to write them so in the syntax tree.
 import
-  BinaryOperation, BooleanLiteral, Call, Case, CaseArm, Cast, construction_arguments, Expression,
-  FloatLiteral, Identifier, IntegerLiteral, Member, NamedValue, NilLiteral, Position, RecordLiteral,
-  Statement, StringLiteral, This, UnaryOperation
+  BinaryOperation, BooleanLiteral, Call, Case, CaseArm, Cast, construction_arguments,
+  construction_spread, Expression, FloatLiteral, Identifier, IntegerLiteral, Member, NamedValue,
+  NilLiteral, Position, RecordLiteral, Statement, StringLiteral, This, UnaryOperation
 from '../ast'
 import dump_ast_without_positions from '../ast_dump'
 import Annotation, annotation_key from './annotated'
@@ -198,9 +198,11 @@ shorthand := (call: Call, named: NamedValue) ->
 
 # The construction written as a record of its arguments as they are then: those inside it, which
 # come before it (see rewrites_of), are written so by then, in their places among them.
-recorded := (call: Call, place: Place) ->
-  Annotation
-    construction: call
-    key: annotation_key('record', call.position)
-    remove: -> place(RecordLiteral(fields: construction_arguments(call), position: call.position))
-    restore: -> place(call)
+recorded := (call: Call, place: Place) -> Annotation(
+  construction: call
+  key: annotation_key('record', call.position)
+  remove: ->
+    fields := construction_arguments(call)
+    place RecordLiteral(fields, position: call.position, spread: construction_spread(call))
+  restore: -> place(call)
+)

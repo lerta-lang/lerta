@@ -43,8 +43,10 @@ opened_doc := (expression: Expression, context: Context): Doc? ->
       opened_list opening_brace(expression, '{', context), items, closing_of('}')
     when RecordLiteral
       return nil if expression.fields.is_empty()
-      items := [field_item(field, inside) for field in expression.fields]
-      opened_list opening_brace(expression, '{', context), items, closing_of('}')
+      opened_list
+        opening_brace(expression, '{', context)
+        record_items(expression, inside)
+        closing_of('}')
     when Comprehension
       return nil if expression.spread or expression.lazy != nil
       comprehension_forms(expression, context).broken
@@ -61,8 +63,7 @@ flat_literal := (literal: Expression, context: Context) ->
       join [token('[', at), separated([item.doc for item in items], text(', ')), closing_bracket]
     when MapLiteral
       flat_braces literal, [entry_item(entry, inside) for entry in literal.entries], context
-    when RecordLiteral
-      flat_braces literal, [field_item(field, inside) for field in literal.fields], context
+    when RecordLiteral then flat_braces(literal, record_items(literal, inside), context)
     else expression_doc(literal, context)
 
 export named_item := (named: NamedValue, context: Context) ->
@@ -112,10 +113,16 @@ entry_item := (entry: MapEntry, context: Context) ->
   Item doc, after_comment, simple: is_simple(entry.key) and is_simple(entry.value)
 
 export record_doc := (record: RecordLiteral, context: Context) ->
-  items := [field_item(field, context.inside_brackets()) for field in record.fields]
+  items := record_items(record, context.inside_brackets())
   braced record, items, context
 
 # `{ x }` for `{ x: x }` (see Shorthand).
+# The spread first, `p...`, then the fields.
+record_items := (record: RecordLiteral, context: Context) ->
+  fields := [field_item(field, context) for field in record.fields]
+  spread := record.spread ? return fields
+  [item(spread, context), fields...]
+
 field_item := (field: NamedValue, context: Context) ->
   name := token(field.name.name, field.name.position)
   value := field.value
@@ -202,7 +209,7 @@ literal_block := (literal: Expression, context: Context) ->
         [item(element, context) for element in literal.elements]
       when RecordLiteral
         return nil if literal.fields.any(is_shorthand)
-        [field_item(field, context) for field in literal.fields]
+        record_items literal, context
       when MapLiteral then [entry_item(entry, context) for entry in literal.entries]
       else return nil
   return nil if items.is_empty()

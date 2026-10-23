@@ -83,7 +83,11 @@ export is_spread := (item: Expression) -> item is Comprehension and item.spread
 export struct NamedValue(name: Identifier, value: Expression)
 
 # `{ x: 1, y: 'a' }`, an anonymous struct; `{ x }` is short for `{ x: x }`.
-export class RecordLiteral(fields: NamedValue[], position: Position)
+export class RecordLiteral
+  fields: NamedValue[]
+  position: Position
+  # `{ p..., x: 1 }`: the fields of p but those written (see the checker's spread_records).
+  spread: Comprehension? = default nil
 
 # `(a, b)`, a tuple of two or more items.
 export class TupleLiteral(items: Expression[], position: Position)
@@ -409,11 +413,15 @@ export method_call := (object: Expression, name: String, args: Expression[], at:
   Call callee, args, position: at, named_args: [], type_args: []
 
 # The named arguments of a construction, of a class or struct, whose names alone, as in `Point(x)`,
-# are those of the same names, `Point(x: x)`, first.
+# are those of the same names, `Point(x: x)`, first; its spread, `Point(p...)`, gives none of them
+# (see construction_spread).
 export construction_arguments := (call: Call) ->
-  from_names :=
-    [NamedValue(name: copy_identifier(arg as Identifier!), value: arg) for arg in call.args]
+  names := [arg as Identifier! for arg in call.args when not is_spread(arg)]
+  from_names := [NamedValue(name: copy_identifier(name), value: name) for name in names]
   [from_names..., call.named_args...]
+
+# The spread of a construction, `Point(p..., x: 1)`, which gives the arguments not written.
+export construction_spread := (call: Call) -> call.args.find(is_spread) as Comprehension?
 
 # The else branch of an `if` that is a statement. That of `x?.rest` gives the nil of its value,
 # which a statement has none of.

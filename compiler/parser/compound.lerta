@@ -8,7 +8,8 @@ from '../ast'
 import TokenKind from '../lexer/tokens'
 import starts_block from './block_literal'
 import
-  at_spread, parse_expression, parse_identifier, parse_loop_header, parse_or, take_apart_item
+  at_spread, parse_expression, parse_identifier, parse_loop_header, parse_or, SPREAD_FOLLOWERS,
+  take_apart_item
 from './expression'
 import at_declaration, parse_block, parse_line_statement, parse_simple_statement from './statement'
 import is_one_of, TokenStream from './token_stream'
@@ -149,7 +150,8 @@ parse_comprehension := (
   Comprehension element, variable, iterable, guard, lazy, position, index, bindings: bindings()
 
 export parse_map_literal := (tokens: TokenStream, position: Position): Expression ->
-  return parse_record_literal(tokens, position) if starts_record_field(tokens)
+  if starts_record_field(tokens) or starts_spread(tokens)
+    return parse_record_literal(tokens, position)
   entries := tokens.parse_list('}', -> parse_map_entry(tokens))
   if entries.is_empty()
     tokens.fail position, 'the empty map is written `Map()`, and the empty set `Set()`'
@@ -172,9 +174,46 @@ starts_record_field := (tokens: TokenStream) ->
   follows_name := is_one_of(tokens.tokens[index + 1].kind, [':', ',', '}', LINE_BREAK])
   tokens.tokens[index].kind == IDENTIFIER and follows_name
 
-# `{ x: 1, y }`; a field without a value takes that of the name.
+# An item that ends with `...`, which spreads the fields of a struct into a construction or an
+# anonymous struct (see the checker's spread_argument), before a `,`, `}`, `:` or the end of its
+# line outside brackets of its own, which end a field or a map's key.
+export starts_spread := (tokens: TokenStream) ->
+  var depth = 0
+  var index = tokens.item_index()
+  while true
+    kind := tokens.tokens[index].kind
+    return false if kind == EOF
+    if kind == '(' or kind == '[' or kind == '{'
+      depth += 1
+    else if kind == ')' or kind == ']' or kind == '}'
+      return false if depth == 0
+      depth -= 1
+    else if depth == 0
+      return false if is_one_of(kind, [',', ':', LINE_BREAK, NEWLINE])
+      return true if kind == '...' and is_one_of(tokens.tokens[index + 1].kind, SPREAD_FOLLOWERS)
+    index += 1
+  false
+
+# `{ x: 1, y }`; a field without a value takes that of the name. A spread comes first, alone.
 parse_record_literal := (tokens: TokenStream, position: Position) ->
-  RecordLiteral position, fields: tokens.parse_list('}', -> parse_record_field(tokens))
+  items := tokens.parse_list('}', -> parse_record_item(tokens))
+  record_of tokens, items, position
+
+type RecordItem = NamedValue | Comprehension
+
+parse_record_item := (tokens: TokenStream): RecordItem ->
+  starts_spread(tokens) then parse_element(tokens) as Comprehension! else parse_record_field(tokens)
+
+export record_of := (tokens: TokenStream, items: RecordItem[], position: Position) ->
+  var spread: Comprehension?
+  fields: NamedValue[]
+  for item, i in items
+    if item is Comprehension
+      tokens.fail item.position, 'a spread comes first in an anonymous struct, once' if i > 0
+      spread = item
+    else
+      fields.push item
+  RecordLiteral fields, position, spread
 
 parse_record_field := (tokens: TokenStream) ->
   if not starts_record_field(tokens)
