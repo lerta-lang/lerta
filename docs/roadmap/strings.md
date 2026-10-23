@@ -5,7 +5,7 @@ The planned design of `String` and `Binary` beyond [the reference](../reference/
 ## Operations and representation
 
 - A separate iterator for graphemes, besides the code points that a `String` gives (see [the reference](../reference/types.md#string)).
-- `s.to_upper()` and `s.to_lower()` of every letter, which change the ASCII letters only so far, through the case mappings of Unicode; and the number of code points.
+- `s.to_upper()` and `s.to_lower()` of every letter, which change the ASCII letters only so far, through the case mappings of Unicode.
 - Ropes, so that `+` is O(1).
 - Small strings as immediate values.
 - For I/O, sockets and FFI, `void*` is `Binary` and `char*` is `String`. Encoding conversions are provided as functions between `Binary` and `String`.
