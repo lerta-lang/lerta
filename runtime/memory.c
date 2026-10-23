@@ -46,20 +46,31 @@ static void free_object(void *object) {
 #endif
 }
 
-void *lerta_grow(void *object, int64_t size) {
+// Kept out of lerta_grow, so that the rest, which most calls end in, is short enough for LLVM to
+// inline into the generated code, as a loop of `+=` grows a String or a Binary.
+__attribute__((noinline)) static void *move_to_room(void *object, int64_t size) {
 #ifdef LERTA_DEBUG
   LertaPrefix *prefix = (LertaPrefix *)object - 1;
-  int64_t needed = (int64_t)sizeof(LertaPrefix) + size;
-  if (needed <= lerta_mem_capacity(prefix)) return object;
   // The neighbours in the list of objects alive point at the prefix, which may move.
   lerta_untrack(prefix);
-  prefix = lerta_mem_realloc(prefix, 2 * needed);
+  prefix = lerta_mem_realloc(prefix, 2 * ((int64_t)sizeof(LertaPrefix) + size));
   lerta_track(prefix);
   return prefix + 1;
 #else
-  if (size <= lerta_mem_capacity(object)) return object;
   return lerta_mem_realloc(object, 2 * size);
 #endif
+}
+
+void *lerta_grow(void *object, int64_t size) {
+#ifdef LERTA_DEBUG
+  void *place = (LertaPrefix *)object - 1;
+  int64_t needed = (int64_t)sizeof(LertaPrefix) + size;
+#else
+  void *place = object;
+  int64_t needed = size;
+#endif
+  if (needed <= lerta_mem_capacity(place)) return object;
+  return move_to_room(object, size);
 }
 
 void *lerta_new(int64_t size, const LertaType *type) {

@@ -53,6 +53,15 @@ LertaString *lerta_string_concat(int64_t count, ...) {
   return result;
 }
 
+// A copy of `s`, taken, `length` bytes long, of which `s`'s come first. Kept out of extended, so
+// that it is short enough for LLVM to inline.
+__attribute__((noinline)) static LertaString *copied(LertaString *s, int64_t length) {
+  LertaString *result = lerta_string_new(length);
+  memcpy(result->bytes, s->bytes, (size_t)s->length);
+  lerta_release(s);
+  return result;
+}
+
 // `s`, taken, with room for `extra` more bytes after its own, which the caller fills: in place
 // when nothing else holds it, which a String or a Binary may move to, as none is held weakly nor
 // thrown; else in a copy.
@@ -62,9 +71,7 @@ static LertaString *extended(LertaString *s, int64_t extra) {
   if (s->header.ref_count == 1) {
     result = lerta_grow(s, (int64_t)sizeof(LertaString) + length);
   } else {
-    result = lerta_string_new(length);
-    memcpy(result->bytes, s->bytes, (size_t)s->length);
-    lerta_release(s);
+    result = copied(s, length);
   }
   result->length = length;
   return result;
