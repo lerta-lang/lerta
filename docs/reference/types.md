@@ -104,7 +104,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `b.index_of(part, from = 0)` gives the place of the first occurrence of `part`, a `Binary` or a `Byte`, at `from` or after it, or nil if there is none, which is the case whenever `from` is past the end: `'abcabc'.binary.index_of('c'.binary, 3)` is 5. An empty `part` occurs at `from` when `from` is at most the length. A negative `from` throws an `IndexError`.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.
 - `bytes.to_binary()` copies the items of a `Byte[]` into a new `Binary`.
-- `b.slice(start, end)` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`.
+- `b[start...end]` copies the bytes from `start` up to, but not including, `end` into a new `Binary`; it throws `slice out of range` unless `0 <= start <= end <= b.length`. Only a `Binary` takes a range as its index. `b.slice(start, end)` does the same.
 - Why `Binary` is separate from `String`: a `String` only adds the invariant "valid UTF-8", rather than "a string is any byte sequence" as in Python 2 and Go.
 - `b.text(start, end)` gives the bytes from `start` up to `end` as a `String` if they are valid UTF-8, or nil otherwise; it throws an `IndexError` if they are out of range. `start` is 0 and `end` is `b.length` by default, and `b.text()` gives the whole `Binary` without copying its bytes. `b.text()!` or `b.text() ? throw ...` takes a String where the bytes must be UTF-8.
 

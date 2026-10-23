@@ -1,7 +1,7 @@
 # Types arrays, maps and sets: their literals, `Map()`, `Set()`, and indexing (of a Binary too).
 import
   ArrayLiteral, Call, Expression, Identifier, Index, is_spread, MapLiteral, NamedType, Position,
-  RecordLiteral, Throw, TupleLiteral
+  Range, RecordLiteral, Throw, TupleLiteral
 from '../ast'
 import fail from './diagnostics'
 import is_equatable, is_hashable from './equality'
@@ -13,8 +13,8 @@ import CollectionMaker from './references'
 import Body, ProgramWide from './shared'
 import names_type_or_import, resolve from './type_names'
 import
-  ArrayType, byte_type, format_type, inner_of, int_type, is_kind, is_reference_type, is_set,
-  MapType, optional_type, OptionalType, set_of, Type
+  ArrayType, binary_type, byte_type, format_type, inner_of, int_type, is_kind, is_reference_type,
+  is_set, MapType, optional_type, OptionalType, set_of, Type
 from '../types'
 
 # The type of the values of a container, such as 'an Iter', which `at` gives: any type with
@@ -201,6 +201,8 @@ written_or_expected := (body: Body, call: Call, name: String, expected: Type?) -
 # An item of an array or a Binary, or the value of a map's key, which may not be there.
 export type_of_index := (body: Body, index: Index): Type ->
   object_type := type_of(body, index.object)
+  range := index.index as Range?
+  return type_of_slice(body, range, object_type) if range
   if object_type is MapType
     reject_set_index body, index, object_type
     expect_type body, index.index, object_type.key
@@ -210,6 +212,15 @@ export type_of_index := (body: Body, index: Index): Type ->
     fail body.program, index.object.position, message
   expect_type body, index.index, int_type
   object_type is ArrayType then object_type.element else byte_type
+
+# `b[start...end]`, the bytes of a Binary from `start` up to `end`, which no other type takes.
+type_of_slice := (body: Body, range: Range, object_type: Type) ->
+  if not is_kind(object_type, 'Binary')
+    message := "only a Binary takes a range as its index, not #{format_type(object_type)}"
+    fail body.program, range.position, message
+  expect_type body, range.start, int_type
+  expect_type body, range.end, int_type
+  binary_type
 
 reject_set_index := (body: Body, index: Index, type: MapType) ->
   return if not is_set(type)

@@ -1,15 +1,17 @@
 # Arrays and maps in the generated code: their literals, and indexing (of a Binary too).
-import ArrayLiteral, Comprehension, Index, is_spread, MapLiteral from '../ast'
+import ArrayLiteral, Comprehension, Expression, Index, is_spread, MapLiteral, Range from '../ast'
 import
   emit_array_new, emit_checked_items, emit_get_from, emit_is_out_of_range, emit_push
 from './array'
 import push_comprehension from './control_flow'
 import emit_exception_check, emit_exception_check_if, holding, while_holding from './exceptions'
-import generate, generate_borrowed, release_if_reference, type_at_use, type_of from './expression'
+import
+  borrowing_all, generate, generate_borrowed, release_if_reference, type_at_use, type_of
+from './expression'
 import Generator from './generator'
 import emit_release from './lerta_ir'
 import emit_map_get, emit_map_new, emit_map_set from './map'
-import emit_binary_get, emit_binary_out_of_range from './string'
+import emit_binary_get, emit_binary_out_of_range, emit_binary_slice from './string'
 import ArrayType, is_kind, MapType from '../types'
 
 # Each item is pushed, so the array retains it; the item's own reference is then released.
@@ -42,7 +44,16 @@ export generate_map := (g: Generator, map: MapLiteral) ->
   while_holding g, result, map_type, set_all
   result
 
+# `b[start...end]`: the runtime copies the bytes, and throws where the range is not the Binary's.
+generate_slice := (g: Generator, object: Expression, range: Range) ->
+  slice := (operands: String[]) -> emit_binary_slice(g.ir, operands[0], operands[1], operands[2])
+  result := borrowing_all(g, [object, range.start, range.end], slice)
+  emit_exception_check g
+  result
+
 export generate_index := (g: Generator, index: Index) ->
+  range := index.index as Range?
+  return generate_slice(g, index.object, range) if range
   (object, is_owned) := generate_borrowed(g, index.object)
   object_type := type_of(g, index.object)
   generate_position := -> generate(g, index.index)
