@@ -1,13 +1,16 @@
 # The members of enums written with their enums, `E.MEMBER`, that the checking may show can be
 # written alone, and the constructions of structs, `S(x: 1)`, that it may show can be written as
 # records, `{ x: 1 }` (see Expected types in docs/reference/style.md); the imports of the enums and
-# the structs that they then leave unused; and how to write them so in the syntax tree.
+# the structs that they then leave unused; the named arguments of constructions that may be written
+# as names alone (see Shorthand there) and the casts that may be left out (see Redundant casts);
+# and how to write them so in the syntax tree.
 import
-  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
-  Comprehension, Condition, Conditional, construction_arguments, Declaration, Expression, Extend,
-  For, FunctionLiteral, Identifier, If, Import, ImportName, Index, IsTest, MapEntry, MapLiteral,
-  Member, MemberDeclaration, NamedValue, Parameter, Range, RecordLiteral, Return, Statement, Throw,
-  Try, TupleItem, TupleLiteral, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
+  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast,
+  Coalesce, Comprehension, Condition, Conditional, construction_arguments, Declaration, Expression,
+  Extend, FloatLiteral, For, FunctionLiteral, Identifier, If, Import, ImportName, Index,
+  IntegerLiteral, IsTest, MapEntry, MapLiteral, Member, MemberDeclaration, NamedValue, NilLiteral,
+  Parameter, Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw, Try, TupleItem,
+  TupleLiteral, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
 from '../ast'
 import Annotation, annotation_key, import_key from './annotated'
 
@@ -51,12 +54,17 @@ add_member := (found: Annotation[], members: MemberDeclaration[], i: Int) ->
     { name, modifier, type, has_default, position } := members[i]
     members[i] = { name, modifier, type, has_default, position, value: new_value }
 
-# An expression in its place: a member of an enum is one that may be written alone, and a call one
-# that may be written as a record.
+# An expression in its place: a member of an enum is one that may be written alone, a cast one
+# that may be left out, and a call one that may be written as a record, after its named arguments
+# that may be written as names alone.
 add := (found: Annotation[], value: Expression, place: Place) ->
   found.push unqualified(value, place) if value is Member
   add_expression found, value
-  found.push recorded(value, place) if value is Call
+  found.push uncast(value, place) if value is Cast and value.throws
+  if value is Call
+    for named, i in value.named_args
+      found.push shorthand(value, named) if is_shorthand(value, i)
+    found.push recorded(value, place)
 
 add_condition := (found: Annotation[], condition: Condition, place: Place) ->
   case condition
@@ -122,7 +130,7 @@ add_expression := (found: Annotation[], expression: Expression): void ->
       add_expression found, expression.callee
       add_all found, expression.args
       add_named found, expression.named_args
-    when Member then add_expression(found, expression.object)
+    when Member then add(found, expression.object, (value) -> expression.object = value)
     when BinaryOperation
       add found, expression.left, (value) -> expression.left = value
       add found, expression.right, (value) -> expression.right = value
@@ -130,7 +138,7 @@ add_expression := (found: Annotation[], expression: Expression): void ->
       add found, expression.start, (value) -> expression.start = value
       add found, expression.end, (value) -> expression.end = value
     when IsTest then add_expression(found, expression.value)
-    when Cast then add_expression(found, expression.value)
+    when Cast then add(found, expression.value, (value) -> expression.value = value)
     when Conditional
       add found, expression.condition, (value) -> expression.condition = value
       add found, expression.then_value, (value) -> expression.then_value = value
@@ -163,6 +171,58 @@ unqualified := (member: Member, place: Place) ->
     key: annotation_key('member', member.position)
     remove: -> place(alone)
     restore: -> place(member)
+
+# The cast left out, as its value at its place.
+uncast := (cast: Cast, place: Place) ->
+  Annotation
+    cast
+    key: annotation_key('cast', cast.type.position)
+    remove: -> place(cast.value)
+    restore: -> place(cast)
+
+# Whether the named argument is a variable of its name that may be written alone, which comes before
+# the named arguments (see Construction in docs/reference/objects.md): those it then goes before
+# give values that it cannot change.
+is_shorthand := (call: Call, i: Int) ->
+  named := call.named_args[i]
+  variable := variable_of(named.value) ? return false
+  names_itself := variable.name == named.name.name
+  names_itself and call.named_args.take(i).all((other) -> has_no_effects(other.value))
+
+# The variable that the value is, or that a cast which throws casts, which the shorthand leaves out
+# with it if the checking shows that it may be (see Redundant casts), so that one run of `lerta fmt`
+# writes both.
+variable_of := (value: Expression) ->
+  case value
+    when Identifier then value
+    when Cast then value.throws then value.value as Identifier?
+    else nil
+
+# A name, a literal or a member of one, whose evaluation changes nothing that a value evaluated
+# after it reads. A member of an enum written with its enum is one, as it is once written alone.
+has_no_effects := (value: Expression): Bool ->
+  value is Member then has_no_effects(value.object) else value is Inert
+
+type Inert =
+  Identifier | This | NilLiteral | BooleanLiteral | StringLiteral | IntegerLiteral | FloatLiteral
+
+# The named argument written as the name alone, after the arguments written so. The arguments of
+# the call are replaced rather than changed, and put back as they were: the places of the others
+# in them (see add_named_at) change those that are put back.
+shorthand := (call: Call, named: NamedValue) ->
+  { args, named_args } := call
+  alone := Identifier(name: named.name.name, position: named.name.position)
+  Annotation
+    shorthand: call
+    shorthand_cast: named.value as Cast?
+    key: annotation_key('shorthand', named.name.position)
+    # By its name, as leaving out its cast puts another argument in its place.
+    remove: ->
+      call.named_args = [each for each in call.named_args when each.name.name != alone.name]
+      call.args = [call.args..., alone]
+    restore: ->
+      call.args = args
+      call.named_args = named_args
 
 # The construction written as a record of its arguments as they are then: those inside it, which
 # come before it (see qualified_members_of), are written so by then, in their places among them.

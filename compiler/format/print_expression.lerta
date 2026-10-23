@@ -17,14 +17,16 @@ import named_type, type_arguments from './print_type'
 import if_doc, is_command_callee from './print_statement'
 import annotation_key from './annotated'
 import
-  CAST_FALLBACKS, EXPECTED_TYPES, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, STRING_LITERALS
+  CAST_FALLBACKS, EXPECTED_TYPES, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, REDUNDANT_CASTS,
+  SHORTHAND, STRING_LITERALS
 from './rules'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
 from './print_literal'
 import case_doc, function_doc, try_doc from './print_block'
 import
-  bracketed, bracketed_or, Context, is_layout, keyword, lines_of_items, opened_list, word_before
+  bracketed, bracketed_or, Context, is_layout, Item, keyword, lines_of_items, opened_list,
+  word_before
 from './printing'
 
 # Precedence levels, weakest first (see Operators in docs/reference/syntax.md).
@@ -55,13 +57,18 @@ export clarified := (expression: Expression, context: Context) ->
   in_parentheses expression, context, true
 
 in_parentheses := (expression: Expression, context: Context, needed: Bool) ->
-  bare := bare_doc(expression, context)
+  bare := uncast_doc(expression, context, bare_doc(expression, context))
   was_in_parentheses := written_in_parentheses(expression, context)
   if needed
     open := was_in_parentheses then token('(', expression.position) else text('(')
     return
       rule(PARENTHESES, join([open, bare_doc(expression, context.inside_brackets()), text(')')]))
   was_in_parentheses then rule(PARENTHESES, bare) else bare
+
+# The value of a cast left out, which reports it, and where the cast was.
+uncast_doc := (expression: Expression, context: Context, doc: Doc) ->
+  return doc if not context.uncast.has(expression)
+  join [rule(REDUNDANT_CASTS, doc), rule(REDUNDANT_CASTS, text(''))]
 
 # A parenthesized expression takes the position of its `(`.
 written_in_parentheses := (expression: Expression, context: Context) ->
@@ -339,9 +346,17 @@ arguments_closing_at := (call: Call, context: Context) ->
   closing_at open.position(), context
 
 export arguments := (call: Call, context: Context) ->
-  positional := [item(arg, context) for arg in call.args]
+  positional := [positional_item(arg, context) for arg in call.args]
   named := [named_item(named, context) for named in call.named_args]
   [positional..., named...]
+
+# A name alone for the argument of its name, which reports where its value was left out (see
+# Shorthand).
+positional_item := (arg: Expression, context: Context) ->
+  written := item(arg, context)
+  return written if not context.left_out.contains(annotation_key('shorthand', arg.position))
+  doc := join([rule(SHORTHAND, written.doc), rule(SHORTHAND, text(''))])
+  Item doc, simple: written.simple, after_comment: written.after_comment
 
 comprehension_doc := (comprehension: Comprehension, context: Context) ->
   inside := context.inside_brackets()

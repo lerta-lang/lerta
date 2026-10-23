@@ -142,7 +142,10 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
       { args, named_args, type_args, position } := call
       qualified_call := Call(args, named_args, type_args, position, callee: name)
       body.facts.qualified_calls[call] = qualified_call
-      return type_of(body, qualified_call, expected)
+      type := type_of(body, qualified_call, expected)
+      constructions := body.facts.object_constructions
+      constructions.add call if constructions.has(qualified_call)
+      return type
   if makes_builtin(body, call, 'Map')
     return made_collection(body, call, type_of_empty_map(body, call, expected))
   if makes_builtin(body, call, 'Set')
@@ -151,6 +154,7 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     return type_of_generic_call(body, call, generic, expected)
   if object_type := constructed_type(body, callee)
     type := type_of_construction(body, call, object_type, expected)
+    body.facts.object_constructions.add call
     struct_type := expected_struct(expected) ? return type
     # `{}` is no record but an empty map.
     has_arguments := call.args.length > 0 or call.named_args.length > 0
@@ -185,6 +189,8 @@ type_of_is_test := (body: Body, test: IsTest) ->
 type_of_cast := (body: Body, cast: Cast) ->
   written := resolve(body.program, body.resolver, cast.type)
   type := check_member_type(body, cast.value, cast.type, inner_of(written))
+  narrowed := body.facts.types[cast.value]!
+  body.facts.redundant_casts.add cast if cast.throws and same_type(narrowed, type)
   cast.throws then type else optional_type(type)
 
 check_member_type := (body: Body, value: Expression, type_name: NamedType, type: Type) ->

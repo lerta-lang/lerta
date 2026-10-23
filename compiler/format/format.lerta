@@ -1,6 +1,6 @@
 # `lerta fmt`: prints each file again in the style (docs/reference/style.md), and reports where the
 # file differs from that, by the rule that decides it there, or writes it with `--fix`.
-import compare_positions, Import, Position, Statement from '../ast'
+import compare_positions, Expression, Import, Position, Statement from '../ast'
 import dump_ast_without_positions from '../ast_dump'
 import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
@@ -58,10 +58,13 @@ struct Printed(statements: Statement[], layout: Layout, lines: StatementLines)
 
 printed := (lexed: Lexed, source: SourceText, path: String, left_out: String[]) ->
   statements := parse(lexed.tokens, path)
+  uncast: Set<Expression>
   for annotation in left_out_candidates(statements)
-    annotation.remove() if left_out.contains(annotation.key)
+    continue if not left_out.contains(annotation.key)
+    annotation.remove()
+    uncast.add cast.value if cast := annotation.cast
   lines := StatementLines()
-  context := Context(left_out, source, lines)
+  context := Context(left_out, source, lines, uncast)
   body := block_doc(statements, context)
   ending := left_out_ending(statements, context)
   doc := statements.length == 0 then text('') else join([body, line_feed(), ending])

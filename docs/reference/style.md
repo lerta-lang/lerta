@@ -15,9 +15,10 @@ These conventions also cover features not implemented yet. The compiler does not
 - **Modules**: a library module contains only code that builds the exported values. Put code to run in a separate entry file.
 - **Calls without parentheses**: call a function or a method without parentheses at the start of a statement on a line of its own, the last expression of a block included (`write_group writer, item, indent`, `xs.push x`), wherever the language allows it (see [calls](syntax.md#calls)). On the line of an arm or of a function literal, keep the parentheses (`when Call then generate_call(g, expression)`, `-> Group(fields)`).
 - **Implicit return**: end a function with its value (`x`), not `return x`, except a multi-line literal (see **Multi-line literals**); do not end a function returning nothing with a bare `return`.
-- **Shorthand**: when the value of a named argument or a field is a variable of the same name, write the name alone: `Point(x, y: 2)`, `{ a }`. `lerta fmt` applies it only to the fields of an anonymous struct so far; to named arguments, as `Point(x: x)`, it is [planned](../roadmap/programs.md#tools).
+- **Shorthand**: when the value of a named argument or a field is a variable of the same name, write the name alone: `Point(x, y: 2)`, `{ a }`.
 - **Parentheses**: do not write parentheses that change nothing, except where another rule asks for them (**Ranges**), to clarify `and` mixed with `or` and around a `then`/`else` inside the `then` value of another (`a then (b then x else y) else z`), whose `else`s are hard to pair otherwise.
 - **Cast fallbacks**: write `x as T ? y`, not `(x as T?) ? y`.
+- **Redundant casts**: do not cast a value to the type it has: after `if shape is Point`, write `shape.x`, not `(shape as Point!).x`.
 - **Nil initial values**: write `var found: String?`, not `var found: String? = nil`.
 - **Empty initial values**: write `names: String[]`, not `names: String[] = []`, and `seen: Set<String>`, not `seen := Set<String>()` or `seen: Set<String> = Set()`; the same for `Map`. A `var` and a field keep their values.
 - **Negated is tests**: write `x is not T`, not `not (x is T)`.
