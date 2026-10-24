@@ -85,6 +85,15 @@ export generate_condition := (g: Generator, expression: Expression) ->
   value := emit_unwrap(g.ir, operand, type)
   g.ir.assign "and i1 #{present}, #{value}"
 
+# A call typed `never` does not come back to the code after it, whether its check unwinds the
+# exception that it returns with or it does not return at all.
+generate_call_ending_if_never := (g: Generator, call: Call) ->
+  operand := generate_call(g, call)
+  if is_kind(type_of(g, call), 'never')
+    g.ir.emit 'unreachable'
+    g.ir.start_unreachable()
+  operand
+
 generate_value := (g: Generator, expression: Expression) ->
   outer := g.position
   locate g, expression.position
@@ -121,7 +130,7 @@ generate_node := (g: Generator, expression: Expression): String ->
       "#{expression.value!}"
     when FloatLiteral then float_constant(expression.text, type_of(g, expression))
     when BooleanLiteral then "#{expression.value}"
-    when Call then generate_call(g, expression)
+    when Call then generate_call_ending_if_never(g, expression)
     when UnaryOperation then generate_unary(g, expression)
     when BinaryOperation then generate_binary(g, expression)
     when Case then generate_case(g, expression)

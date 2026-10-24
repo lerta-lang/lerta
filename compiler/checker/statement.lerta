@@ -7,7 +7,7 @@ import
 from '../ast'
 import check_assignment from './assignment'
 import check_try_statement from './case'
-import check_part, fail, fail_already_defined, warn_if_unused from './diagnostics'
+import check_part, fail, fail_already_defined, warn, warn_if_unused from './diagnostics'
 import expect_condition, expect_optional, expect_type, type_of from './expression'
 import has_function, required_params from './functions'
 import check_for, check_while from './loop'
@@ -55,8 +55,12 @@ export check_function_body := (
     define_parameters body, literal, params, checks_defaults
     narrow_where_holds body, holds if holds
   statements := literal.body
-  finish := -> check_last_statement(body, last) if last := statements.last()
-  check_block body, all_but_last(statements), define_params, finish
+  before_last := all_but_last(statements)
+  finish := ->
+    last := statements.last() ? return
+    warn_if_unreachable body, previous, last if previous := before_last.last()
+    check_last_statement body, last
+  check_block body, before_last, define_params, finish
 
 # Defines `@` and the parameters in order, each default seeing those before it, checked if
 # `checks_defaults`.
@@ -84,7 +88,8 @@ export define_parameters := (
 # statement alone, leaving the scopes and loops that the statement was in.
 export check_top_level_code := (body: Body, statements: Statement[]) ->
   body.scopes.push()
-  for statement in statements
+  for statement, i in statements
+    warn_if_unreachable body, statements[i - 1], statement if i > 0
     continue if check_part(body.program, -> check_statement(body, statement))
     body.scopes.pop() while body.scopes.depth() > 1
     body.loop_depth = 0
@@ -98,15 +103,22 @@ export type_of_block := (
   body: Body, statements: Statement[], define: () -> void, type_of_last: (Expression) -> Type
 ) ->
   last := statements.last()!
+  before_last := all_but_last(statements)
   var type: Type = void_type
   finish := ->
+    warn_if_unreachable body, previous, last if previous := before_last.last()
     if value := last as Expression?
       type = type_of_last(value)
       return
     check_statement body, last
     type = never_type if ends_with_jump([last], (expression) -> is_never_typed(body, expression))
-  check_block body, all_but_last(statements), define, finish
+  check_block body, before_last, define, finish
   type
+
+# Warns at a statement after one that never ends, as `return` or a call of `exit` does.
+warn_if_unreachable := (body: Body, previous: Statement, statement: Statement) ->
+  is_never := (expression: Expression) -> is_never_typed(body, expression)
+  warn body.shared, statement.position, 'unreachable code' if ends_with_jump([previous], is_never)
 
 # Whether the expression was typed `never`.
 is_never_typed := (body: Body, expression: Expression) ->
@@ -122,7 +134,9 @@ export check_block := (
 ) ->
   body.scopes.push()
   define()
-  check_statement body, statement for statement in statements
+  for statement, i in statements
+    warn_if_unreachable body, statements[i - 1], statement if i > 0
+    check_statement body, statement
   finish()
   scope := body.scopes.pop()
   warn_if_unused body.shared, local for local in scope.values()
