@@ -1,0 +1,69 @@
+# TCP over IPv4 and IPv6 on the event loop (see runtime/net.c).
+
+import Reader from 'std:io'
+
+extern lerta_tcp_new: () -> Int
+extern lerta_tcp_close: (Int) -> void
+extern lerta_tcp_free: (Int) -> void
+extern lerta_tcp_listen: (Int, String, Int) -> Int
+extern lerta_tcp_accept: (Int, Int) -> Promise
+extern lerta_tcp_connect: (Int, String, Int) -> Promise
+extern lerta_tcp_read: (Int) -> Promise<Binary?>
+extern lerta_tcp_write: (Int, Binary) -> Promise
+extern lerta_tcp_end: (Int) -> void
+
+# The runtime's socket or listener, closed once nothing holds it. A Socket shares it with the
+# function that its Reader reads through, which would make a cycle if it held the Socket itself.
+class Handle
+  pointer = lerta_tcp_new()
+  deinit = -> lerta_tcp_free(@pointer)
+
+export struct Socket
+  handle: Handle
+  reader: Reader
+
+  # Resolves once the data has been handed to the system.
+  write = (data: String | Binary) ->
+    bytes := data is String then data.binary else data
+    await lerta_tcp_write(@handle.pointer, bytes)
+
+  # Closes the writing side, which the peer reads as its end.
+  end = -> lerta_tcp_end(@handle.pointer)
+
+  close = -> lerta_tcp_close(@handle.pointer)
+
+socket_of := (handle: Handle) ->
+  Socket handle, reader: Reader(read_chunk: -> lerta_tcp_read(handle.pointer))
+
+export struct Listener
+  handle: Handle
+  port: Int
+
+  accept = ->
+    socket := Handle()
+    await lerta_tcp_accept(@handle.pointer, socket.pointer)
+    socket_of socket
+
+  close = -> lerta_tcp_close(@handle.pointer)
+
+# Fails as the operation `failure` does at the address, before the runtime is given what it cannot
+# take: a host that holds a NUL byte, which C would read up to, or a port out of range.
+check_address := (failure: String, host: String, port: Int) ->
+  throw ValueError(message: "port out of range (0 to 65535): #{port}") if port < 0 or port > 65535
+  throw IOError(message: "#{failure}#{address_text(host, port)}") if host.contains("\0")
+
+# As the runtime writes an address: an IPv6 address in brackets, so that its port is told from it.
+address_text := (host: String, port: Int) ->
+  host.contains(':') then "[#{host}]:#{port}" else "#{host}:#{port}"
+
+# Listens at once, at a free port if `port` is 0.
+export listen_tcp := (host: String, port = 0) ->
+  check_address 'cannot listen at ', host, port
+  handle := Handle()
+  Listener handle, port: lerta_tcp_listen(handle.pointer, host, port)
+
+export connect_tcp := (host: String, port: Int) ->
+  check_address 'cannot connect to ', host, port
+  handle := Handle()
+  await lerta_tcp_connect(handle.pointer, host, port)
+  socket_of handle

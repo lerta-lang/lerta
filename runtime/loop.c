@@ -315,6 +315,304 @@ void lerta_loop_stop_program(LertaRunningProgram *program) {
   uv_timer_start(&program->kill_timer, kill_program, program->kill_after, 0);
 }
 
+// A socket or a listener. Its libuv handle is replaced when a connect tries the next address, as a
+// failed connect leaves it unusable; it is unreferenced but while a read or a wait for a connection
+// is pending, so that a socket left open does not keep the program running. Once closed, it is
+// freed when the requests that are pending, and the closes of its handles, have ended.
+struct LertaTcp {
+  uv_tcp_t *handle;
+  bool closed;
+  int pending;
+  // What ends the read, the wait for a connection or the connect that is pending; a close ends it
+  // without a call.
+  LertaChunkEnd read_end;
+  LertaTcpEnd connection_end;
+  LertaTcpEnd connect_end;
+  void *context;
+  // Those that have come and are not taken yet.
+  int64_t connections;
+  // What a connect resolved, and the address that it tries next.
+  struct addrinfo *addresses;
+  struct addrinfo *next_address;
+  uv_getaddrinfo_t resolving;
+  uv_connect_t connecting;
+};
+
+static void free_tcp_if_done(LertaTcp *tcp) {
+  if (tcp->closed && tcp->pending == 0) free(tcp);
+}
+
+static void end_tcp_request(LertaTcp *tcp) {
+  tcp->pending--;
+  free_tcp_if_done(tcp);
+}
+
+static void free_tcp_handle(uv_handle_t *handle) {
+  LertaTcp *tcp = handle->data;
+  free(handle);
+  end_tcp_request(tcp);
+}
+
+static void open_tcp_handle(LertaTcp *tcp) {
+  tcp->handle = lerta_checked_malloc(sizeof(uv_tcp_t));
+  uv_tcp_init(uv_default_loop(), tcp->handle);
+  tcp->handle->data = tcp;
+  uv_unref((uv_handle_t *)tcp->handle);
+}
+
+static void close_tcp_handle(LertaTcp *tcp) {
+  tcp->pending++;
+  uv_close((uv_handle_t *)tcp->handle, free_tcp_handle);
+}
+
+LertaTcp *lerta_loop_tcp_new(void) {
+  LertaTcp *tcp = lerta_checked_calloc(1, sizeof(LertaTcp));
+  open_tcp_handle(tcp);
+  return tcp;
+}
+
+void lerta_loop_tcp_close(LertaTcp *tcp) {
+  tcp->closed = true;
+  tcp->read_end = NULL;
+  tcp->connection_end = NULL;
+  tcp->connect_end = NULL;
+  close_tcp_handle(tcp);
+}
+
+static const struct addrinfo tcp_hints = {
+  .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_flags = AI_NUMERICSERV};
+
+// The port as getaddrinfo takes it, a service named by its number.
+static char *port_text(int64_t port, uint8_t buffer[LERTA_INT_TEXT_MAX + 1]) {
+  int64_t start = lerta_format_int(port, buffer);
+  buffer[LERTA_INT_TEXT_MAX] = '\0';
+  return (char *)buffer + start;
+}
+
+static int64_t port_of(const struct sockaddr_storage *address) {
+  if (address->ss_family == AF_INET6) return ntohs(((struct sockaddr_in6 *)address)->sin6_port);
+  return ntohs(((struct sockaddr_in *)address)->sin_port);
+}
+
+static void come_connection(uv_stream_t *server, int status) {
+  LertaTcp *tcp = server->data;
+  if (status == 0) tcp->connections++;
+  LertaTcpEnd end = tcp->connection_end;
+  if (end == NULL) return;
+  lerta_loop_tcp_stop_waiting(tcp);
+  end(tcp->context, status == 0);
+}
+
+int64_t lerta_loop_tcp_listen(LertaTcp *tcp, const char *host, int64_t port) {
+  uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
+  uv_getaddrinfo_t request;
+  // Without a callback, libuv resolves the name at once.
+  int status = uv_getaddrinfo(uv_default_loop(), &request, NULL, host, port_text(port, buffer),
+                              &tcp_hints);
+  if (status != 0) return -1;
+  bool listening = uv_tcp_bind(tcp->handle, request.addrinfo->ai_addr, 0) == 0 &&
+                   uv_listen((uv_stream_t *)tcp->handle, SOMAXCONN, come_connection) == 0;
+  uv_freeaddrinfo(request.addrinfo);
+  struct sockaddr_storage address;
+  int length = sizeof(address);
+  bool bound =
+    listening && uv_tcp_getsockname(tcp->handle, (struct sockaddr *)&address, &length) == 0;
+  return bound ? port_of(&address) : -1;
+}
+
+bool lerta_loop_tcp_wait_connection(LertaTcp *listener, LertaTcpEnd end, void *context) {
+  if (listener->connections > 0) return true;
+  listener->connection_end = end;
+  listener->context = context;
+  uv_ref((uv_handle_t *)listener->handle);
+  return false;
+}
+
+void lerta_loop_tcp_stop_waiting(LertaTcp *listener) {
+  listener->connection_end = NULL;
+  uv_unref((uv_handle_t *)listener->handle);
+}
+
+bool lerta_loop_tcp_take(LertaTcp *listener, LertaTcp *socket) {
+  listener->connections--;
+  return uv_accept((uv_stream_t *)listener->handle, (uv_stream_t *)socket->handle) == 0;
+}
+
+bool lerta_loop_tcp_peer(LertaTcp *socket, char host[LERTA_HOST_TEXT_SIZE], int64_t *port) {
+  struct sockaddr_storage address;
+  int length = sizeof(address);
+  if (uv_tcp_getpeername(socket->handle, (struct sockaddr *)&address, &length) != 0) return false;
+  *port = port_of(&address);
+  if (address.ss_family == AF_INET6) {
+    return uv_ip6_name((struct sockaddr_in6 *)&address, host, LERTA_HOST_TEXT_SIZE) == 0;
+  }
+  return uv_ip4_name((struct sockaddr_in *)&address, host, LERTA_HOST_TEXT_SIZE) == 0;
+}
+
+static void try_next_address(LertaTcp *tcp);
+
+// A failed connect leaves its socket, of its address's family, on the handle, which libuv would
+// connect again to the next address, even of the other family; so each attempt takes a new one.
+static void reopen_tcp_handle(LertaTcp *tcp) {
+  close_tcp_handle(tcp);
+  open_tcp_handle(tcp);
+}
+
+static void end_connect(LertaTcp *tcp, bool connected) {
+  uv_freeaddrinfo(tcp->addresses);
+  tcp->addresses = NULL;
+  LertaTcpEnd end = tcp->connect_end;
+  tcp->connect_end = NULL;
+  end(tcp->context, connected);
+}
+
+// A close cancels the attempt, which then ends with UV_ECANCELED.
+static void end_connect_attempt(uv_connect_t *request, int status) {
+  LertaTcp *tcp = request->data;
+  tcp->pending--;
+  if (tcp->closed) {
+    uv_freeaddrinfo(tcp->addresses);
+    free_tcp_if_done(tcp);
+  } else if (status == 0) {
+    end_connect(tcp, true);
+  } else {
+    reopen_tcp_handle(tcp);
+    try_next_address(tcp);
+  }
+}
+
+static void try_next_address(LertaTcp *tcp) {
+  for (struct addrinfo *address = tcp->next_address; address != NULL; address = address->ai_next) {
+    tcp->next_address = address->ai_next;
+    tcp->connecting.data = tcp;
+    if (uv_tcp_connect(&tcp->connecting, tcp->handle, address->ai_addr, end_connect_attempt) == 0) {
+      tcp->pending++;
+      return;
+    }
+    reopen_tcp_handle(tcp);
+  }
+  end_connect(tcp, false);
+}
+
+static void end_resolve(uv_getaddrinfo_t *request, int status, struct addrinfo *addresses) {
+  LertaTcp *tcp = request->data;
+  tcp->pending--;
+  if (tcp->closed) {
+    uv_freeaddrinfo(addresses);
+    free_tcp_if_done(tcp);
+    return;
+  }
+  tcp->addresses = addresses;
+  tcp->next_address = status == 0 ? addresses : NULL;
+  try_next_address(tcp);
+}
+
+void lerta_loop_tcp_connect(LertaTcp *socket, const char *host, int64_t port, LertaTcpEnd end,
+                            void *context) {
+  uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
+  socket->connect_end = end;
+  socket->context = context;
+  socket->resolving.data = socket;
+  int status = uv_getaddrinfo(uv_default_loop(), &socket->resolving, end_resolve, host,
+                              port_text(port, buffer), &tcp_hints);
+  if (status == 0) socket->pending++;
+  else end_connect(socket, false);
+}
+
+static void allocate_chunk(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buffer) {
+  (void)handle;
+  *buffer = uv_buf_init(lerta_checked_malloc(suggested_size), (unsigned int)suggested_size);
+}
+
+// One chunk ends a read; libuv may give 0 bytes, which are none.
+static void read_chunk(uv_stream_t *stream, ssize_t count, const uv_buf_t *buffer) {
+  LertaTcp *tcp = stream->data;
+  if (count == 0) {
+    free(buffer->base);
+    return;
+  }
+  LertaChunkEnd end = tcp->read_end;
+  lerta_loop_tcp_stop_reading(tcp);
+  if (count > 0) {
+    end(tcp->context, (uint8_t *)buffer->base, count);
+    return;
+  }
+  free(buffer->base);
+  end(tcp->context, NULL, count == UV_EOF ? 0 : -1);
+}
+
+void lerta_loop_tcp_read(LertaTcp *socket, LertaChunkEnd end, void *context) {
+  if (uv_read_start((uv_stream_t *)socket->handle, allocate_chunk, read_chunk) != 0) {
+    end(context, NULL, -1);
+    return;
+  }
+  socket->read_end = end;
+  socket->context = context;
+  uv_ref((uv_handle_t *)socket->handle);
+}
+
+void lerta_loop_tcp_stop_reading(LertaTcp *socket) {
+  socket->read_end = NULL;
+  uv_read_stop((uv_stream_t *)socket->handle);
+  uv_unref((uv_handle_t *)socket->handle);
+}
+
+// A buffer's length is an unsigned long on Windows, of 32 bits, so the bytes go in parts of 1 GiB.
+enum { TCP_WRITE_PART = 1 << 30 };
+
+typedef struct {
+  uv_write_t request;
+  LertaTcp *tcp;
+  LertaTcpEnd end;
+  void *context;
+} TcpWrite;
+
+static void end_tcp_write(uv_write_t *request, int status) {
+  TcpWrite *write = request->data;
+  write->end(write->context, status == 0);
+  end_tcp_request(write->tcp);
+  free(write);
+}
+
+void lerta_loop_tcp_write(LertaTcp *socket, const uint8_t *bytes, int64_t length, LertaTcpEnd end,
+                          void *context) {
+  // An empty write is one empty buffer, as libuv takes at least one.
+  int64_t count = length == 0 ? 1 : (length + TCP_WRITE_PART - 1) / TCP_WRITE_PART;
+  uv_buf_t *buffers = lerta_checked_malloc((size_t)count * sizeof(uv_buf_t));
+  for (int64_t i = 0; i < count; i++) {
+    int64_t part = length - i * TCP_WRITE_PART;
+    if (part > TCP_WRITE_PART) part = TCP_WRITE_PART;
+    buffers[i] = uv_buf_init((char *)bytes + i * TCP_WRITE_PART, (unsigned int)part);
+  }
+  TcpWrite *write = lerta_checked_malloc(sizeof(TcpWrite));
+  *write = (TcpWrite){.tcp = socket, .end = end, .context = context};
+  write->request.data = write;
+  // libuv copies the buffers, but not the bytes.
+  int status = uv_write(&write->request, (uv_stream_t *)socket->handle, buffers,
+                        (unsigned int)count, end_tcp_write);
+  free(buffers);
+  if (status == 0) {
+    socket->pending++;
+    return;
+  }
+  free(write);
+  end(context, false);
+}
+
+static void end_shutdown(uv_shutdown_t *request, int status) {
+  (void)status;
+  LertaTcp *tcp = request->data;
+  free(request);
+  end_tcp_request(tcp);
+}
+
+void lerta_loop_tcp_shutdown(LertaTcp *socket) {
+  uv_shutdown_t *request = lerta_checked_malloc(sizeof(uv_shutdown_t));
+  request->data = socket;
+  if (uv_shutdown(request, (uv_stream_t *)socket->handle, end_shutdown) == 0) socket->pending++;
+  else free(request);
+}
+
 bool lerta_loop_wait(void) {
   uv_loop_t *loop = uv_default_loop();
   if (!uv_loop_alive(loop)) return false;

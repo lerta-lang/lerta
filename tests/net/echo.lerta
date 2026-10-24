@@ -1,0 +1,22 @@
+# A server and a client on the loopback, over IPv4 and IPv6: lines go both ways, a String or a
+# Binary is written, and the end of the writing side is read as the end.
+import connect_tcp, listen_tcp, Socket from 'std:net'
+
+# Echoes each line, in capitals, until the client ends.
+serve := (socket: Socket) ->
+  await socket.write("#{line.to_upper()}\n") while line := await socket.reader.read_line()
+  socket.close()
+
+for host in ['127.0.0.1', '::1']
+  listener := listen_tcp(host)
+  connecting := connect_tcp(host, listener.port)
+  served := serve(await listener.accept())
+  client := await connecting
+  await client.write('hello')
+  await client.write(" world\nbytes\n".binary)
+  print await client.reader.read_line() ? 'end'
+  print await client.reader.read_line() ? 'end'
+  client.end()
+  print await client.reader.read_line() ? 'end'
+  await served
+  listener.close()

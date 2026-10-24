@@ -1,0 +1,46 @@
+# A close fails the read that waits and what comes after it, and a write to a peer that is gone
+# fails rather than ends the program.
+import connect_tcp, listen_tcp from 'std:net'
+import sleep from 'std:time'
+
+# The port that the system chose changes from run to run, so it is written as PORT.
+failure := <T>(promise: Promise<T>, port: Int) ->
+  try
+    await promise
+    'no failure'
+  catch error: IOError
+    error.message.replace ":#{port}", ':PORT'
+
+listener := listen_tcp('127.0.0.1')
+port := listener.port
+client := await connect_tcp('127.0.0.1', port)
+server := await listener.accept()
+
+reading := client.reader.read_line()
+await sleep(0)
+client.close()
+print await failure(reading, port)
+print await failure(client.reader.read_line(), port)
+print await failure(client.write('late'), port)
+client.close()
+
+waiting := listener.accept()
+listener.close()
+print await failure(waiting, port)
+
+# The writes go on until the system has seen that the peer is gone, whose port, which the system
+# chose too, is left out.
+writes := -> await server.write('ab') while true
+print (await failure(writes(), port)).split(':')[0]
+
+# A close fails the write that has not gone out, and an end after it does nothing. The write holds
+# more than the system takes at once, as no one reads it.
+unread := listen_tcp('127.0.0.1')
+writer := await connect_tcp('127.0.0.1', unread.port)
+_reader := await unread.accept()
+unread_port := unread.port
+writing := writer.write('x'.repeat(1024).repeat(64 * 1024))
+await sleep(0)
+writer.close()
+print await failure(writing, unread_port)
+writer.end()

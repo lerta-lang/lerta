@@ -1,0 +1,39 @@
+# A cancelled read loses nothing that comes after it, a cancelled accept leaves the connection for
+# the next, and a cancelled connect leaves its socket closed.
+import connect_tcp, listen_tcp from 'std:net'
+import sleep from 'std:time'
+
+outcome := <T>(promise: Promise<T>) ->
+  try
+    await promise
+    'done'
+  catch error: CancelledError
+    error.message
+
+listener := listen_tcp('127.0.0.1')
+waiting := listener.accept()
+waiting.cancel()
+print await outcome(waiting)
+client := await connect_tcp('127.0.0.1', listener.port)
+server := await listener.accept()
+
+line := client.reader.read_line()
+await sleep(0)
+line.cancel()
+print await outcome(line)
+await server.write("after\n")
+print await client.reader.read_line() ? 'end'
+
+cancelled := connect_tcp('127.0.0.1', listener.port)
+cancelled.cancel()
+print await outcome(cancelled)
+
+# A cancel while an attempt waits for an address that never answers, from RFC 5737's range for
+# documentation; a system with no route to it fails the attempt at once instead.
+unanswered := connect_tcp('192.0.2.1', 80)
+await sleep(0.1)
+unanswered.cancel()
+try
+  await unanswered
+catch error: CancelledError | IOError
+  print 'given up'

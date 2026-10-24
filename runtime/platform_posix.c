@@ -64,10 +64,19 @@ static bool wait_ready(int fd, short events) {
   }
 }
 
+// SIGPIPE is ignored, so that a write to a socket fails rather than ends the program, as libuv's
+// writes do not keep it from doing on Linux; a write here ends it as the signal did. The programs
+// that run starts take the default again, as libuv resets each signal.
+static void end_by_broken_pipe(void) {
+  signal(SIGPIPE, SIG_DFL);
+  raise(SIGPIPE);
+}
+
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
   while (length > 0) {
     ssize_t written = write(fd, bytes, request_size(length));
     if (written < 0 && errno == EINTR) continue;
+    if (written < 0 && errno == EPIPE) end_by_broken_pipe();
     bool is_full = written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
     if (is_full && wait_ready(fd, POLLOUT)) continue;
     if (written <= 0) return false;
@@ -81,7 +90,7 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
 // opens descriptors of its own, which would otherwise take 0 and be read as stdin. If even that
 // fails, no stdin is safe to read, so the program stops.
 void lerta_os_stdio_init(void) {
-  signal(SIGPIPE, SIG_DFL);
+  signal(SIGPIPE, SIG_IGN);
   bool closed = fcntl(STDIN_FILENO, F_GETFD) == -1 && errno == EBADF;
   if (closed && open("/dev/null", O_RDONLY) != STDIN_FILENO) lerta_panic("cannot open /dev/null");
 }

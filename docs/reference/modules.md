@@ -15,7 +15,7 @@ import argv, exit from 'std:process'
   ```
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
 - `import 'module' as mod` gives its exports as `mod.<export>`, in values (`mod.distance(p, q)`, `mod.ORIGIN`, `mod.Point(x: 1, y: 2)`, `mod.Color.RED`) and in types (`p: mod.Point`, `<T: mod.Shaped>`), alongside any names imported from it by name. `mod` itself is no value (`'mod' is a module, which is no value: write mod.<export>`), and a local of the name hides it in values, as it hides any other name, though not in types, whose names are apart from those of values. An export the module does not have is an error where `mod.<export>` names it, and an unused `mod` warns as an unused name does. This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which would bring the names in unqualified.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:async'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:process'`, `'std:scanner'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, `import JsonWriter from './internal/json_writer'`, as a file imports another; those files are not standard modules: a program cannot import them as `std:...`, and their warnings show only when a standard module that imports them is built on its own. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:async'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, `import JsonWriter from './internal/json_writer'`, as a file imports another; those files are not standard modules: a program cannot import them as `std:...`, and their warnings show only when a standard module that imports them is built on its own. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
 - Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. Functions can be declared in any order (see [top-level values](functions.md#top-level-values)).
 
 ## Exports
@@ -131,6 +131,23 @@ Functions of `Float`s, which throw an `ArithmeticError` where the result would n
 | `sqrt(x: Float): Float` | The square root. Throws `square root of a negative number` for one below 0. |
 | `pow(x: Float, y: Float): Float` | `x` to the power `y`. Throws `float overflow` where the result is too large, `division by zero` for 0 to a negative power, and `a negative number to a fractional power` for a negative `x` and a `y` that is no integer. |
 | `remainder(x: Float, y: Float): Float` | The remainder of `x` divided by `y`, `x - n * y` for `n` the integer of `x / y` truncated toward zero, as `%` of `Int`s takes it, so of the sign of `x`: `remainder(-7.5, 2.0)` is `-1.5`. It is C's `fmod`, not its `remainder`, which rounds `n` to the nearest. Throws `division by zero` for a `y` of 0. |
+
+## std:net
+
+TCP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-await).
+
+| Name | |
+|---|---|
+| `listen_tcp(host: String, port = 0): Listener` | Listens at the first address that the host resolves to, at once, and at a free port if `port` is 0. Throws `cannot listen at <host>:<port>` on failure, including for a host that holds a NUL byte. |
+| `connect_tcp(host: String, port: Int): Promise<Socket>` | Resolves the host, on libuv's thread pool, and connects to each of its addresses in turn until one connects. Rejected with `cannot connect to <host>:<port>` if none does, including for a host that holds a NUL byte. A cancel gives up the connect. |
+| `Listener` | A struct of `port: Int`, the port it listens at, and the methods `accept(): Promise<Socket>`, the next connection, rejected with `cannot accept at <host>:<port>` on failure, which throws a `ValueError`, `a Listener is accepted by another accept that has not ended`, while another accept is pending, as a `Reader` does; and `close()`. |
+| `Socket` | A struct of `reader: Reader`, of [std:io](#stdio), which reads what comes in chunks, nil at the peer's end; and the methods `write(data: String \| Binary): Promise`, resolved once the data has been handed to the system, so that a writer faster than the network waits; `end()`, which closes the writing side, read by the peer as its end once what was written has gone; and `close()`, which closes both. A failure of a read or a write is rejected with `cannot read from <address>` or `cannot write to <address>`, where the address is that of the peer, and a write to a peer that has gone fails so, rather than ending the program by SIGPIPE. |
+
+- A port outside 0 to 65535 throws a `ValueError`. An address is written `<host>:<port>`, with an IPv6 address in brackets, as `[::1]:80`.
+- A socket or a listener closes once nothing holds it, and keeps the program running only while a read or an accept of it waits, so that one left open does not keep the program from ending; a write that is under way does.
+- `close` fails what waits for the socket or the listener, a read, an accept, and what is asked of it after the close, but `close` itself, which does nothing then. A write that is under way may still go out.
+- A cancelled read loses nothing, as the next read gets what comes; a cancelled accept leaves the connection for the next; a cancelled write goes on, which cannot be stopped.
+- A server serves each connection in a function of its own that it does not await, `_serving := serve(await listener.accept())`, which must catch what it throws, since a rejected promise that nothing awaits ends the program.
 
 ## std:process
 

@@ -334,6 +334,27 @@ LertaString *lerta_make_temp_dir(void);
 void lerta_make_dir(const LertaString *path);
 void lerta_rename(const LertaString *from, const LertaString *to);
 
+// TCP (net.c), for std:net. A handle, from lerta_tcp_new, is a socket or a listener, which
+// lerta_tcp_free frees, closing it if lerta_tcp_close has not. A failure throws, or rejects the
+// promise, with an IOError that names the address; so does an operation after the close, and the
+// close rejects the read, the accept or the connect pending. No host holds a NUL byte, and a port
+// is from 0 to 65535: std:net refuses others first.
+int64_t lerta_tcp_new(void);
+void lerta_tcp_close(int64_t handle);
+void lerta_tcp_free(int64_t handle);
+// The port it listens at, which a port 0 leaves to the system.
+int64_t lerta_tcp_listen(int64_t handle, const LertaString *host, int64_t port);
+// Resolved once a connection is taken into the new socket, which std:net holds until then. One
+// accept is pending at most: another throws a ValueError.
+LertaPromise *lerta_tcp_accept(int64_t listener, int64_t socket);
+LertaPromise *lerta_tcp_connect(int64_t handle, const LertaString *host, int64_t port);
+// A chunk of what has come, as a Binary, or NULL at the end. One read is pending at most.
+LertaPromise *lerta_tcp_read(int64_t handle);
+// Resolved once the bytes have been handed to the system.
+LertaPromise *lerta_tcp_write(int64_t handle, const LertaString *bytes);
+// Closes the writing side, once what was written has gone.
+void lerta_tcp_end(int64_t handle);
+
 // Output (io.c). A Writer is a file descriptor: 1 for stdout or 2 for stderr, which std:io checks.
 // Its writes go through a buffer, written out on the event loop (output.c; see
 // docs/internals.md#output).

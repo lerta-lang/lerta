@@ -124,6 +124,39 @@ void lerta_loop_read_stdin(LertaChunkEnd end, void *context);
 // Whether the read of stdin that is pending keeps the program running, as it does unless nothing
 // waits for its chunk any more.
 void lerta_loop_hold_stdin(bool held);
+// A TCP socket or listener, which lerta_loop_tcp_close closes, once; nothing else is called on it
+// then. What is pending on it is given up by the close: its end is not called, but a write's is,
+// as failed.
+typedef struct LertaTcp LertaTcp;
+LertaTcp *lerta_loop_tcp_new(void);
+void lerta_loop_tcp_close(LertaTcp *tcp);
+// What is called once a wait for a connection, a connect or a write has ended, as it succeeded or
+// not.
+typedef void (*LertaTcpEnd)(void *context, bool succeeded);
+// Listens at the first address of the host, resolved at once: the port it listens at, or -1.
+int64_t lerta_loop_tcp_listen(LertaTcp *tcp, const char *host, int64_t port);
+// Whether a connection waits to be taken; if none does, calls `end` once one comes, or once the
+// listener fails. One wait is pending at most, which lerta_loop_tcp_stop_waiting gives up.
+bool lerta_loop_tcp_wait_connection(LertaTcp *listener, LertaTcpEnd end, void *context);
+void lerta_loop_tcp_stop_waiting(LertaTcp *listener);
+// Takes a connection that waits into a new socket; false if it fails, which takes it all the same.
+bool lerta_loop_tcp_take(LertaTcp *listener, LertaTcp *socket);
+// The address of the socket's peer, as text, at most an IPv6 address's length with its NUL.
+enum { LERTA_HOST_TEXT_SIZE = 46 };
+bool lerta_loop_tcp_peer(LertaTcp *socket, char host[LERTA_HOST_TEXT_SIZE], int64_t *port);
+// Resolves the host on the thread pool and connects a new socket to each of its addresses in turn
+// until one connects.
+void lerta_loop_tcp_connect(LertaTcp *socket, const char *host, int64_t port, LertaTcpEnd end,
+                            void *context);
+// Reads a chunk, given to `end` as lerta_loop_read_stdin gives it. One read is pending at most,
+// which lerta_loop_tcp_stop_reading gives up, and no chunk is lost then.
+void lerta_loop_tcp_read(LertaTcp *socket, LertaChunkEnd end, void *context);
+void lerta_loop_tcp_stop_reading(LertaTcp *socket);
+// Writes the bytes, which must not change nor be freed until `end` is called.
+void lerta_loop_tcp_write(LertaTcp *socket, const uint8_t *bytes, int64_t length, LertaTcpEnd end,
+                          void *context);
+// Closes the writing side, after the writes pending; a failure is not reported.
+void lerta_loop_tcp_shutdown(LertaTcp *socket);
 // Runs `work` on libuv's thread pool, then `done` on the loop, both with `data`. `work` must not
 // touch what the main thread does, such as Lerta's allocator.
 void lerta_loop_work(void *data, void (*work)(void *data), void (*done)(void *data));
@@ -202,9 +235,9 @@ void lerta_stack_init(void);
 void lerta_os_arguments(int *argc, char ***argv);
 // Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
-// Has a write to a pipe whose reader is gone end the program, as SIGPIPE does by default on POSIX,
-// whatever the parent left it as (see docs/reference/modules.md); Windows has no such signal. A
-// closed stdin reads as empty.
+// Has a write of lerta_os_write to a pipe whose reader is gone end the program, as SIGPIPE does by
+// default on POSIX, whatever the parent left it as (see docs/reference/modules.md), while one to a
+// socket fails; Windows has no such signal. A closed stdin reads as empty.
 void lerta_os_stdio_init(void);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_os_unix_time(void);

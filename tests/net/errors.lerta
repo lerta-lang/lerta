@@ -1,0 +1,48 @@
+# Failures throw an IOError that names the operation and the address, or a ValueError for a port
+# out of range.
+import connect_tcp, listen_tcp from 'std:net'
+
+# The port that the system chose changes from run to run, so it is written as PORT, and a NUL byte
+# as \0.
+shown := (error: IOError | ValueError, port: Int) ->
+  error.message.replace(":#{port}", ':PORT').replace("\0", '\0')
+
+failure := <T>(attempt: () -> Promise<T>, port: Int) ->
+  try
+    await attempt()
+    'no failure'
+  catch error: IOError | ValueError
+    shown error, port
+
+listen_failure := (host: String, port: Int) ->
+  try
+    listen_tcp host, port
+    'no failure'
+  catch error: IOError | ValueError
+    shown error, port
+
+# Nothing listens at a port that a listener has just given back.
+listener := listen_tcp('127.0.0.1')
+free_port := listener.port
+listener.close()
+print await failure(-> await connect_tcp('127.0.0.1', free_port), free_port)
+print await failure(-> await listener.accept(), free_port)
+print await failure(-> await connect_tcp('no-such-host.invalid', 80), 0)
+print await failure(-> await connect_tcp('127.0.0.1', 65536), 0)
+print await failure(-> await connect_tcp("local\0host", 80), 0)
+print listen_failure('127.0.0.1', -1)
+print listen_failure('no-such-host.invalid', 0)
+print listen_failure("local\0host", 0)
+
+ip6_listener := listen_tcp('::1')
+ip6_port := ip6_listener.port
+ip6_listener.close()
+print await failure(-> await connect_tcp('::1', ip6_port), ip6_port)
+print await failure(-> await connect_tcp("::1\0", 80), 0)
+
+# One accept waits at a time, and a port is listened at by one listener.
+busy := listen_tcp('127.0.0.1')
+first := busy.accept()
+print await failure(-> await busy.accept(), busy.port)
+print listen_failure('127.0.0.1', busy.port).replace(":#{busy.port}", ':PORT')
+first.cancel()
