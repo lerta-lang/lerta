@@ -1,0 +1,42 @@
+# A server answers requests on one connection kept alive: the method, the URL, the headers told
+# apart regardless of case, and a body read or left unread by the handler.
+import connect_tcp, Socket from 'std:net'
+import Headers, Request, Response, serve from 'std:http'
+
+handle := (request: Request) ->
+  return Response(body: 'skipped') if request.url.ends_with('/skip')
+  headers := Headers()
+  headers.set 'X-Echo', request.headers.get('X-NAME') ? 'none'
+  Response
+    body: "#{request.method} #{request.url} #{await request.text()}"
+    status: 201
+    headers: headers
+
+# Reads a response up to its end, which its content-length gives.
+read_response := (client: Socket) ->
+  lines := [await client.reader.read_line() ? 'end']
+  var length = 0
+  while line := await client.reader.read_line()
+    break if line.is_empty()
+    lines.push line
+    (name, value) := line.split_once(': ')!
+    length = value.parse_int()! if name == 'content-length'
+  lines.push (await client.reader.read(length))!.text()! if length > 0
+  lines
+
+server := serve(handle)
+client := await connect_tcp('127.0.0.1', server.port())
+await client.write(
+  "POST /a?b=1 HTTP/1.1\r\nHost: example.com\r\nx-name: lerta\r\nContent-Length: 5\r\n\r\nhello"
+)
+print line for line in await read_response(client)
+# Two requests in one write, the first with a body that the handler leaves unread.
+await client.write(
+  "POST /skip HTTP/1.1\r\nHost: example.com\r\nContent-Length: 3\r\n\r\nabcGET /skip HTTP/1.1\r\nHost: example.com\r\n\r\n"
+)
+print line for line in await read_response(client)
+print line for line in await read_response(client)
+await client.write("GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n")
+print line for line in await read_response(client)
+print await client.reader.read_line() ? 'end'
+server.close()

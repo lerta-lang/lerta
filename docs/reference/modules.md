@@ -15,7 +15,7 @@ import argv, exit from 'std:process'
   ```
 - `import 'module'` imports no name, and so never warns: it only makes the module's top-level code run (see below), and brings its extends (see [objects](objects.md#extend)), as any import of it does.
 - `import 'module' as mod` gives its exports as `mod.<export>`, in values (`mod.distance(p, q)`, `mod.ORIGIN`, `mod.Point(x: 1, y: 2)`, `mod.Color.RED`) and in types (`p: mod.Point`, `<T: mod.Shaped>`), alongside any names imported from it by name. `mod` itself is no value (`'mod' is a module, which is no value: write mod.<export>`), and a local of the name hides it in values, as it hides any other name, though not in types, whose names are apart from those of values. An export the module does not have is an error where `mod.<export>` names it, and an unused `mod` warns as an unused name does. This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which would bring the names in unqualified.
-- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:async'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, `import JsonWriter from './internal/json_writer'`, as a file imports another; those files are not standard modules: a program cannot import them as `std:...`, and their warnings show only when a standard module that imports them is built on its own. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
+- `'std:<name>'` is a standard module, the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it: `'std:async'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` so far (below), and `'std:builtins'` (see [builtins](builtins.md)). A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, `import JsonWriter from './internal/json_writer'`, as a file imports another; those files are not standard modules: a program cannot import them as `std:...`, and their warnings show only when a standard module that imports them is built on its own. A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
 - Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. Functions can be declared in any order (see [top-level values](functions.md#top-level-values)).
 
 ## Exports
@@ -51,6 +51,34 @@ export unit := 1
 | `TimeoutError` | The error of `timeout`, a struct of one field, `message`. |
 
 `all`, `race` and `timeout` await each of the promises, so that the error of one that is rejected after the outcome is decided ends nothing. Cancelled, they cancel the promises they were given (see [functions that await](functions.md#functions-that-await)); an error that rejects `all` leaves the others going on. Promises with a value and without one are not mixed, as an array holds items of one type, and `all` of promises of an optional `Int`, `Byte`, `Float` or `Bool` is an error, as no array holds them (see [arrays](types.md#array)). `all`, `race` and `timeout` are generic functions that call the methods `gathered`, `first_settled` and `settled_within` of an extend of `Promise<T>[]` and one of `Promise[]`, which are in effect where `std:async` is imported (see [objects](objects.md#extend)), so those names are taken there; `timeout` passes its promise in an array of one, as a `Promise` cannot be extended.
+
+## std:http
+
+An HTTP/1.1 server over [std:net](#stdnet), whose handler takes a `Request` and gives a `Response`, as `fetch` does in JavaScript.
+
+```
+import Request, Response, serve from 'std:http'
+
+handle := (request: Request) -> Response(body: "hello, #{await request.text()}")
+
+server := serve(handle, port: 8080)
+```
+
+| Name | |
+|---|---|
+| `serve(handler: (Request) -> Promise<Response>, host = '127.0.0.1', port = 0): Server` | Listens at once, as `listen_tcp` does, and serves each connection until the server is closed. |
+| `Server` | A class of `port(): Int`, the port it listens at, and `close()`, which stops listening; the connections being served go on. |
+| `Request` | A class of `method: String`; `url: String`, the target in absolute form as it is, or `http://` with the `Host` field and the target, or, in place of a `Host` that an HTTP/1.0 request leaves out, the host that `serve` was given and the port, an IPv6 address in brackets, so `http://0.0.0.0:8080/` for a server that listens at every address; `headers: Headers`; `body: Reader`, of [std:io](#stdio); and `text(): Promise<String>` and `binary(): Promise<Binary>`, which read the body to its end. `text` throws a `ValueError`, `a body is not valid UTF-8`. |
+| `Response` | A struct of `body: String \| Binary = ''`, `status = 200` and `headers = Headers()`. |
+| `Headers` | A class of `fields: (String, String)[]`, each name in lower case with its value, and the methods `get(name): String?`, the values of the name joined by `, `, or nil; `has(name)`; `set(name, value)`, which replaces the name's values; `append(name, value)`; and `delete(name)`. Names are told apart regardless of case. `set` and `append` throw a `ValueError` for a name that is not a token of HTTP, `not a header name: <name>`, and for a value that holds a CR, an LF or a NUL, `a header value holds a line break or a NUL: <name>`, so that a value taken from a request cannot add fields to a response. |
+
+- The handler must give a `Promise`, so it is a function that awaits, as `handle` above does; one that does not, `(Request) -> Response`, is not taken.
+- A connection serves its requests one after another. It goes on after a response to HTTP/1.1 unless the request's `Connection` holds `close`, and after one to HTTP/1.0 only if it holds `keep-alive`. What the handler leaves unread of a body is read and dropped before the next request.
+- A body is read by `Content-Length`.
+- The server answers 400, without calling the handler, a request line that is not three words, a target that neither starts with `/` nor is a URL of `http` or `https`, as `*`, a field that `Headers` does not take or that has no `:`, a line that is not UTF-8, a `Content-Length` that is not digits alone, a `Host` that is empty or holds `/`, `\`, `?`, `#`, `@` or whitespace, as it would change the path of the URL, a second `Host`, and an HTTP/1.1 request without one; 505 a version other than HTTP/1.1 and HTTP/1.0; and 501 a request with `Transfer-Encoding`. It closes the connection after each. These responses, and the 500 below, have an empty body.
+- A handler that throws, as one does that reads a body that ends before its `Content-Length`, is answered 500, and so is a `Response` of a status outside 200 to 599, or of fields that `Headers` would not take, put in `fields` directly. The connection is closed then.
+- The server writes `Content-Length` and `Connection` itself, in place of those the handler gives, and leaves out its `Transfer-Encoding`. A response to `HEAD` has no body but its `Content-Length`; one of 204 or 304 has neither.
+- Each connection is served in a function of its own that catches what it throws. A failure of an accept while the server is open rejects a promise that nothing awaits, which ends the program.
 
 ## std:io
 

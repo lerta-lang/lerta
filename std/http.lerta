@@ -1,0 +1,254 @@
+# An HTTP/1.1 server over std:net, whose handler takes a Request and gives a Response, as fetch does.
+
+import Reader from 'std:io'
+import Listener, listen_tcp, Socket from 'std:net'
+
+# Fields of a request or a response, whose names are told apart regardless of case, and which may
+# hold a name more than once.
+export class Headers
+  # Each name in lower case, with its value.
+  fields: (String, String)[] = []
+
+  # The values of the name, joined by ", ", or nil if it has none.
+  get = (name: String) ->
+    lower := name.to_lower()
+    values := [value for (field, value) in @fields when field == lower]
+    values.is_empty() then nil else values.join(', ')
+
+  has = (name: String) -> @get(name) != nil
+
+  set = (name: String, value: String) ->
+    @delete name
+    @append name, value
+
+  # Throws a ValueError for a name that is no token, or a value that would break the line it is
+  # written on, so that a value taken from a request cannot add fields of its own to a response.
+  append = (name: String, value: String) ->
+    check_field name, value
+    @fields.push (name.to_lower(), value)
+
+  delete = (name: String) ->
+    lower := name.to_lower()
+    @fields = [(field, value) for (field, value) in @fields when field != lower]
+
+check_field := (name: String, value: String) ->
+  if name.is_empty() or not name.all(is_token_char)
+    throw ValueError(message: "not a header name: #{name}")
+  if value.contains("\r") or value.contains("\n") or value.contains("\0")
+    throw ValueError(message: "a header value holds a line break or a NUL: #{name}")
+
+is_token_char := (c: Char) ->
+  is_alphanumeric := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9')
+  is_alphanumeric or TOKEN_SYMBOLS.contains(c.to_string())
+
+TOKEN_SYMBOLS := "!#$%&'*+-.^_`|~"
+
+export class Request
+  method: String
+  url: String
+  headers: Headers
+  body: Reader
+
+  binary = -> await @body.read_all()
+
+  text = -> (await @binary()).text() ? throw ValueError(message: 'a body is not valid UTF-8')
+
+export struct Response
+  body: String | Binary = default ''
+  status = default 200
+  headers = default Headers()
+
+export class Server
+  listener: Listener
+  handler: (Request) -> Promise<Response>
+  # Where it listens, as the host of the URL of a request that names none.
+  address: String
+  closed = false
+
+  port = -> @listener.port
+
+  # Stops listening. The connections being served go on.
+  close = ->
+    @closed = true
+    @listener.close()
+
+# Listens at once, at a free port if `port` is 0, and serves each connection until the server is
+# closed.
+export serve := (handler: (Request) -> Promise<Response>, host = '127.0.0.1', port = 0) ->
+  listener := listen_tcp(host, port)
+  # An IPv6 address in brackets, so that its port is told from it.
+  address := host.contains(':') then "[#{host}]:#{listener.port}" else "#{host}:#{listener.port}"
+  server := Server(listener, handler, address)
+  _accepting := accept_all(server)
+  server
+
+accept_all := (server: Server) ->
+  while true
+    socket :=
+      try
+        await server.listener.accept()
+      catch error: IOError
+        return if server.closed
+        throw error
+    _serving := serve_connection(socket, server)
+
+# A request the server answers itself, with `status`, rather than handing it to the handler.
+struct RequestError: Error
+  status: Int
+  message: String
+
+serve_connection := (socket: Socket, server: Server) ->
+  try
+    var going_on = true
+    going_on = await serve_request(socket, server) while going_on
+  catch _: IOError
+    # The peer has gone, or sent less than it said: there is no one left to answer.
+    nil
+  finally
+    socket.close()
+
+# Serves the next request on the connection, and tells whether the connection goes on. A response
+# that the server gives itself has an empty body, which is right for HEAD too.
+serve_request := (socket: Socket, server: Server) ->
+  incoming :=
+    try
+      await read_request(socket.reader, server.address) ? return false
+    catch error: RequestError
+      await socket.write(response_bytes({ status: error.status }, false, 'GET'))
+      return false
+    catch _: ValueError
+      # A line that is not UTF-8, or a header that Headers does not take.
+      await socket.write(response_bytes({ status: 400 }, false, 'GET'))
+      return false
+  method := incoming.request.method
+  bytes :=
+    try
+      response_bytes await server.handler(incoming.request), incoming.keep_alive, method
+    catch _
+      await socket.write(response_bytes({ status: 500 }, false, method))
+      return false
+  await socket.write(bytes)
+  return false if not incoming.keep_alive
+  await incoming.body.skip()
+  true
+
+struct Incoming
+  request: Request
+  body: BodyChunks
+  keep_alive: Bool
+
+# The next request, or nil if the connection ends before it starts.
+read_request := (reader: Reader, address: String) ->
+  var line = await reader.read_line() ? return nil
+  # A client may send an empty line after the body of the request before.
+  line = await reader.read_line() ? return nil if line.is_empty()
+  parts := line.split(' ')
+  throw bad_request() if parts.length != 3
+  (method, target, version) := (parts[0], parts[1], parts[2])
+  throw bad_request() if method.is_empty() or target.is_empty()
+  if not VERSIONS.contains(version)
+    throw RequestError(status: 505, message: 'http version not supported')
+  headers := await read_headers(reader)
+  if headers.has('transfer-encoding')
+    throw RequestError(status: 501, message: 'transfer-encoding not implemented')
+  hosts := [value for (name, value) in headers.fields when name == 'host']
+  # HTTP/1.0 came before Host, which HTTP/1.1 requires.
+  throw bad_request() if hosts.length > 1 or (hosts.is_empty() and version == 'HTTP/1.1')
+  host := hosts.first() ? address
+  throw bad_request() if not is_host(host)
+  body := BodyChunks(reader, left: content_length(headers))
+  url := url_of(host, target) ? throw bad_request()
+  request := Request(method, url, headers, body: Reader(read_chunk: -> await body.next()))
+  Incoming request, body, keep_alive: keeps_alive(version, headers)
+
+VERSIONS := ['HTTP/1.1', 'HTTP/1.0']
+
+bad_request := -> RequestError(status: 400, message: 'bad request')
+
+read_headers := (reader: Reader) ->
+  headers := Headers()
+  while line := await reader.read_line()
+    return headers if line.is_empty()
+    (name, value) := line.split_once(':') ? throw bad_request()
+    headers.append name, value.trim()
+  throw bad_request()
+
+content_length := (headers: Headers) ->
+  text := headers.get('content-length') ? return 0
+  # Digits alone: parse_int would take a sign too.
+  throw bad_request() if text.is_empty() or not text.all((c) -> c >= '0' and c <= '9')
+  text.parse_int() ? throw bad_request()
+
+# Whether a Host names a host and a port alone, so that it cannot change the path of the URL.
+is_host := (host: String) ->
+  not host.is_empty() and not host.any((c) -> NOT_IN_HOST.contains(c.to_string()))
+
+NOT_IN_HOST := "/\\?#@ \t"
+
+# A target in absolute form is the URL itself, and one in origin form a path on the host; nil for
+# another, as `*`.
+url_of := (host: String, target: String) ->
+  lower := target.to_lower()
+  return target if lower.starts_with('http://') or lower.starts_with('https://')
+  target.starts_with('/') then "http://#{host}#{target}" else nil
+
+keeps_alive := (version: String, headers: Headers) ->
+  options := [option.trim().to_lower() for option in (headers.get('connection') ? '').split(',')]
+  return false if options.contains('close')
+  version == 'HTTP/1.1' or options.contains('keep-alive')
+
+# The chunks of a body of `left` bytes, read from the connection's reader.
+class BodyChunks
+  reader: Reader
+  left: Int
+
+  next = ->
+    return nil if @left == 0
+    chunk :=
+      await @reader.read(min(@left, CHUNK_SIZE)) ? throw IOError(message: 'a body ended early')
+    @left -= chunk.length
+    chunk
+
+  # Reads what the handler has left of the body, so that the next request starts after it.
+  skip = -> await @next() while @left > 0
+
+CHUNK_SIZE := 65536
+
+# The response to a request of `method`. A response to HEAD, and one of 204 or 304, has no body, but
+# for HEAD its content-length tells the length of the body that a GET would give. Throws a
+# ValueError for a status that is no final one, and for fields that Headers would not have taken,
+# which a handler may have put in its fields itself.
+response_bytes := (response: Response, keep_alive: Bool, method: String) ->
+  body := response.body is String then response.body.binary else response.body
+  status := response.status
+  throw ValueError(message: "not a final status: #{status}") if status < 200 or status > 599
+  # A handler need not give a 304 the body that a 200 would have, to give its length.
+  has_length := status != 204 and status != 304
+  has_body := has_length and method != 'HEAD'
+  var head = "HTTP/1.1 #{status} #{REASONS[status] ? ''}\r\n"
+  for (name, value) in response.headers.fields
+    check_field name, value
+    head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name)
+  head += "content-length: #{body.length}\r\n" if has_length
+  head += "connection: #{keep_alive then 'keep-alive' else 'close'}\r\n\r\n"
+  has_body then head.binary + body else head.binary
+
+# The fields that the server writes itself, as they tell where the response ends.
+FRAMING_FIELDS := ['content-length', 'transfer-encoding', 'connection']
+
+REASONS :=
+  200: 'OK'
+  201: 'Created'
+  204: 'No Content'
+  301: 'Moved Permanently'
+  302: 'Found'
+  304: 'Not Modified'
+  400: 'Bad Request'
+  401: 'Unauthorized'
+  403: 'Forbidden'
+  404: 'Not Found'
+  405: 'Method Not Allowed'
+  500: 'Internal Server Error'
+  501: 'Not Implemented'
+  503: 'Service Unavailable'
+  505: 'HTTP Version Not Supported'

@@ -1,0 +1,37 @@
+# Whether a connection goes on after a response: HTTP/1.0 closes it unless asked to keep it alive,
+# and HTTP/1.1 keeps it unless asked to close it. A closed server takes no more connections.
+import connect_tcp from 'std:net'
+import Request, Response, serve from 'std:http'
+
+handle := (request: Request) -> Response(body: await request.text())
+
+server := serve(handle)
+
+# Sends each request in turn on one connection, and prints the connection header of each response.
+ask := (requests: String[]) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  for request in requests
+    await client.write(request)
+    while line := await client.reader.read_line()
+      break if line.is_empty()
+      print line if line.starts_with('connection: ')
+  print await client.reader.read_line() ? 'end'
+
+await ask(["GET / HTTP/1.0\r\nHost: a\r\n\r\n"])
+await ask(
+  [
+    "GET / HTTP/1.0\r\nHost: a\r\nConnection: Keep-Alive\r\n\r\n"
+    "GET / HTTP/1.0\r\nHost: a\r\n\r\n"
+  ]
+)
+await ask(
+  [
+    "\r\nGET / HTTP/1.1\r\nHost: a\r\n\r\n"
+    "GET / HTTP/1.1\r\nHost: a\r\nConnection: x, Close\r\n\r\n"
+  ]
+)
+server.close()
+try
+  await connect_tcp('127.0.0.1', server.port())
+catch error: IOError
+  print error.message.starts_with('cannot connect to')

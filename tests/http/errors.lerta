@@ -1,0 +1,63 @@
+# The server answers what it cannot hand to the handler itself, and a handler that throws with 500,
+# as one does that reads a body that ends early or is not UTF-8, or gives a header that would break
+# its line or a status that is no final one, closing the connection after each.
+import connect_tcp from 'std:net'
+import Headers, Request, Response, serve from 'std:http'
+
+handle := (request: Request) ->
+  throw ValueError(message: 'failed') if request.url.ends_with('/throw')
+  Headers().set('location', "/\nset-cookie: a") if request.url.ends_with('/inject')
+  return Response(status: 101) if request.url.ends_with('/switch')
+  if request.url.ends_with('/partial')
+    _start := await request.body.read(1)
+    throw ValueError(message: 'failed')
+  if request.url.ends_with('/fields')
+    headers := Headers()
+    headers.fields.push ('x', "a\r\nset-cookie: a")
+    return Response(headers)
+  Response body: "ok #{await request.text()}"
+
+server := serve(handle)
+
+# The status line of the response to `request`, once the server has closed the connection.
+ask := (request: String | Binary) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  await client.write(request)
+  client.end()
+  status := await client.reader.read_line() ? 'end'
+  _rest := await client.reader.read_all()
+  print status
+
+await ask("GET /throw HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("HEAD /throw HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("GET / HTTP/1.1\r\n\r\n")
+await ask("\r\n\r\nGET / HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("GET foo HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("OPTIONS * HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("HEAD / HTTP/1.1\r\nHost: a/b\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nContent-Length: 99999999999999999999\r\n\r\n")
+await ask("GET /\r\nHost: a\r\n\r\n")
+await ask("GET / HTTP/2.0\r\nHost: a\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nbad header\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nContent-Length: -1\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nContent-Length: x\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nContent-Length: +1\r\n\r\nb")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost:\r\n\r\n")
+await ask("GET /x HTTP/1.1\r\nHost: a/b?\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: u@a\r\n\r\n")
+await ask("GET /x HTTP/1.1\r\nHost: a\\b\r\n\r\n")
+await ask("POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 5\r\n\r\nab")
+await ask("POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 1\r\n\r\n".binary + 0xff.to_byte()!)
+await ask("GET / HTTP/1.1\r\nHost: a\r\nx: a\rb\r\n\r\n")
+await ask("GET /inject HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("GET /switch HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("POST /partial HTTP/1.1\r\nHost: a\r\nContent-Length: 3\r\n\r\nabc")
+await ask("GET / HTTP/1.1\r\nHost : a\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nx: b\r\n c\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nContent-Length: 1\r\nContent-Length: 1\r\n\r\nb")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nContent-Length: 1, 1\r\n\r\nb")
+await ask("GET /fields HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: ".binary + 0xff.to_byte()! + "\r\n\r\n".binary)
+server.close()

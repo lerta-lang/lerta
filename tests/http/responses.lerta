@@ -1,0 +1,58 @@
+# What a response holds: no body for HEAD, though its content-length is that of the body, and for
+# 204 and 304; a status that has no reason phrase; the content-length, transfer-encoding and
+# connection that the server writes in place of the handler's; and the URL of a target in absolute
+# form, and of one that names no host. A body is read as a Binary too.
+import connect_tcp, Socket from 'std:net'
+import Headers, Request, Response, serve from 'std:http'
+
+handle := (request: Request) ->
+  body := await request.binary()
+  path := request.url.split('/').last()!
+  return Response(status: 204) if path == 'empty'
+  return Response(body: 'old', status: 304) if path == 'same'
+  return Response(status: 304) if path == 'unchanged'
+  return Response(body: 'tea', status: 418) if path == 'teapot'
+  if path == 'own'
+    headers := Headers()
+    headers.set 'Content-Length', '99'
+    headers.set 'Connection', 'upgrade'
+    headers.set 'Transfer-Encoding', 'chunked'
+    return Response(headers, body: 'own')
+  Response body: "#{request.url} #{body.length}"
+
+# Sends the request, and prints the head of its response.
+ask := (client: Socket, request: String) ->
+  await client.write(request)
+  while line := await client.reader.read_line()
+    print line
+    break if line.is_empty()
+
+server := serve(handle)
+client := await connect_tcp('127.0.0.1', server.port())
+await ask(client, "HEAD /head HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask(client, "GET /empty HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask(client, "GET /same HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask(client, "GET /unchanged HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask(client, "HEAD /unchanged HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask(client, "GET /teapot HTTP/1.1\r\nHost: a\r\n\r\n")
+print (await client.reader.read(3))!.text()!
+await ask(client, "GET /own HTTP/1.1\r\nHost: a\r\n\r\n")
+print (await client.reader.read(3))!.text()!
+await ask(
+  client
+  "POST HTTP://b/abs HTTP/1.1\r\nHost: a\r\nContent-Length: 2\r\nConnection: close\r\n\r\nab"
+)
+print (await client.reader.read_all()).text()!
+
+server.close()
+
+# The URL of an HTTP/1.0 request takes its Host, or the address that the server listens at if it
+# names none.
+for host in ['127.0.0.1', '::1']
+  old_server := serve(handle, host)
+  for request in ["GET /old HTTP/1.0\r\nHost: b\r\n\r\n", "GET /old HTTP/1.0\r\n\r\n"]
+    old_client := await connect_tcp(host, old_server.port())
+    await ask(old_client, request)
+    print
+      (await old_client.reader.read_all()).text()!.replace(old_server.port().to_string(), 'PORT')
+  old_server.close()
