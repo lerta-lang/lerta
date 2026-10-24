@@ -308,6 +308,51 @@ dump_seldom_check := ->
       reasons.append ["no weights: #{line}" for line in branches when not line.contains(weights)]
     reasons
 
+UNCHECKED_METHODS := "#{root_dir}/tests/operator/unchecked_methods.lerta"
+
+# A builtin method after which no exception is pending is not followed by a check for one: no
+# function of the program that calls one alone reads the pending exception, but those that call
+# the operator of a String or a Binary.
+dump_unchecked_methods_check := ->
+  Check name: 'lerta dump-llvm checks for no exception after a builtin that leaves none', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', UNCHECKED_METHODS])
+    lines := dumped.result.stdout.text()!.split("\n")
+    unchecked :=
+      'code'
+      'char_of'
+      'small'
+      'as_float'
+      'wrapped'
+      'compared'
+      'float_compared'
+      'char_compared'
+      'named'
+      'literal'
+      'added'
+      'negated'
+      'float_quotient'
+    checked := ['joined', 'bytes_joined']
+    # The lines of the function's body, or nil where the module defines no such function.
+    body_of := (name: String): String[]? ->
+      start :=
+        lines.find_index((line) -> line.starts_with('define ') and line.contains(".#{name}\"("))
+      return nil if start == nil
+      var last = start
+      last += 1 while lines[last] != '}'
+      lines.slice start, last
+    reads_exception := (body: String[]) ->
+      body.any (line) -> line.contains('load ptr, ptr @lerta_exception')
+    reasons := expect_status(0, dumped.result.status)
+    for name in [unchecked..., checked...]
+      body := body_of(name)
+      if body == nil
+        reasons.push "no function #{name}"
+        continue
+      expected := checked.contains(name)
+      if reads_exception(body) != expected
+        reasons.push "#{name} #{expected then 'does not read' else 'reads'} the pending exception"
+    reasons
+
 ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
 
 # Each load and store of an item of an array or a value of a map, of each size, names the alias tag
@@ -508,6 +553,7 @@ checks.push optimized_runtime_check()
 checks.push dump_llvm_check()
 checks.push dump_symbols_check()
 checks.push dump_seldom_check()
+checks.push dump_unchecked_methods_check()
 checks.push dump_item_tag_check()
 checks.push item_tag_source_lines_check()
 checks.push source_lines_check()

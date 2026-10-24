@@ -13,7 +13,7 @@ from '../checker/methods'
 import Instance from '../checker/generics'
 import arguments_of from '../checker/shared'
 import info_of, is_argument from '../checker/object_types'
-import call_builtin_method, takes_object from './builtins'
+import call_builtin_method, may_leave_exception, takes_object from './builtins'
 import emit_array_filled from './array'
 import emit_conversion from './checked_int'
 import emit_member_value from './boxes'
@@ -161,7 +161,8 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
     with_arguments g, arguments_of(g.facts, call), emit_call
   result := is_owned then holding(g, object, object_type, call_method) else call_method()
   release_if_reference g, member.object, object if is_owned
-  emit_exception_check g
+  may_throw := source is not BuiltinMethod or may_leave_exception(source.member, object_type)
+  emit_exception_check g if may_throw
   result
 
 # A call of a method, of the type, once its object and its arguments are evaluated: `operands`,
