@@ -269,15 +269,17 @@ void lerta_promise_cancel(LertaPromise *promise);
 // A promise without a value that lerta_promise_fire resolves, unless it is settled already.
 LertaPromise *lerta_promise_pending(void);
 void lerta_promise_fire(LertaPromise *promise);
-// A promise resolved once the seconds have passed, which std:time checks are not negative.
-LertaPromise *lerta_sleep(double seconds);
-// Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
-double lerta_unix_time(void);
 // Runs the loop; `resume` resumes a coroutine, which only the generated code can do.
 void lerta_loop_run(void (*resume)(void *coroutine));
 // After the loop, the end of the program's top-level code, a coroutine that awaits: an error if it
 // still waits, and its exception, if it threw, as the pending one.
 void lerta_finish_top_level(LertaPromise *promise);
+
+// Time (time.c). A promise resolved once the seconds have passed, which std:time checks are not
+// negative.
+LertaPromise *lerta_sleep(double seconds);
+// Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
+double lerta_unix_time(void);
 
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.
@@ -360,10 +362,10 @@ void lerta_tcp_end(int64_t handle);
 // docs/internals.md#output).
 LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes);
 LertaPromise *lerta_stream_flush(int64_t fd);
-// Up to 64 KiB of what stdin has, read on the thread pool, or NULL at its end.
-LertaPromise *lerta_stdin_read(void);
 void lerta_print_stdout(const LertaString *text);
 void lerta_print_stderr(const LertaString *text);
+// Stdin (stdin.c): up to 64 KiB of what it has, read on a thread of its own, or NULL at its end.
+LertaPromise *lerta_stdin_read(void);
 
 // The exception being thrown (see docs/internals.md#exceptions); its data is null while there is
 // none. The first entry of an Error's itab gives its message.

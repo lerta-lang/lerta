@@ -214,24 +214,6 @@ void lerta_promise_cancel(LertaPromise *promise) {
   cancel(end->cancel_context);
 }
 
-// std:time checks that the time is not negative.
-LertaPromise *lerta_sleep(double seconds) {
-  // Rounded up, and one more, so as not to end early: libuv's time is in whole milliseconds, so a
-  // timer may fire up to one before its time. A sleep of 0 only lets others go first. A time past
-  // what milliseconds hold is the longest they do.
-  double exact = seconds * 1000;
-  uint64_t milliseconds = UINT64_MAX;
-  // The largest double below 2^64 is 2^64 - 2048, so the two added below cannot overflow.
-  if (exact < 0x1p64) {
-    milliseconds = (uint64_t)exact;
-    if ((double)milliseconds < exact) milliseconds++;
-    if (milliseconds > 0) milliseconds++;
-  }
-  LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
-  lerta_loop_resolve_after(milliseconds, promise);
-  return promise;
-}
-
 void lerta_loop_run(void (*resume)(void *coroutine)) {
   for (;;) {
     while (ready_start < ready_end) resume(ready[ready_start++]);
@@ -244,9 +226,4 @@ LERTA_STATIC_STRING(never_settled, "the top-level code awaits a promise that is 
 void lerta_finish_top_level(LertaPromise *promise) {
   if (promise->state == PENDING) lerta_exit_with_error((const LertaString *)&never_settled);
   lerta_promise_result(promise);
-}
-
-// std:time's clock, read from the system.
-double lerta_unix_time(void) {
-  return lerta_os_unix_time();
 }

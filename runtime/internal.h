@@ -81,82 +81,9 @@ void lerta_promise_reject_cancelled(LertaPromise *promise);
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
 
-// The event loop's backend (loop.c). Resolves the promise, which it holds meanwhile, once the
-// milliseconds have passed.
-void lerta_loop_resolve_after(uint64_t milliseconds, LertaPromise *promise);
-// Waits for what settles promises, and settles them, once; false, without waiting, if nothing is
-// left to wait for.
+// The event loop (loop.c). Waits for what settles promises, and settles them, once; false, without
+// waiting, if nothing is left to wait for.
 bool lerta_loop_wait(void);
-// What is called once a program has exited and the streams that are read have ended: its exit
-// code, or minus the signal that ended it; its standard output and error, owned, or NULL for one
-// that is not read or cannot be; and whether one of them went past the limit, which stopped it.
-typedef void (*LertaProgramEnd)(void *context, int64_t status, LertaString *output,
-                                LertaString *errors, bool too_long);
-// How a program starts: the file `file`, as lerta_os_program_file gives it, with `args`, which
-// start with the command and end with NULL; with the variables `env`, as NAME=VALUE ending with NULL,
-// or else this program's; in the directory `cwd`, or else this program's; reading `stdin_fd`, or
-// else this program's standard input; its standard output and error, `reads[0]` and `reads[1]`,
-// read, or else shared with this program; the most bytes that each read stream may give, or -1 for
-// no limit; and the milliseconds that a stop waits before it kills the program.
-typedef struct {
-  char *file;
-  char **args;
-  char **env;
-  const char *cwd;
-  int stdin_fd;
-  bool reads[2];
-  int64_t output_limit;
-  uint64_t kill_after;
-} LertaProgramSpec;
-typedef struct LertaRunningProgram LertaRunningProgram;
-// Starts the program, which calls `end` once; NULL if it cannot start, and `end` is not called.
-LertaRunningProgram *lerta_loop_run_program(const LertaProgramSpec *spec, LertaProgramEnd end,
-                                            void *context);
-// Asks the program to end, then kills it if it has not ended after `kill_after`; its output after it
-// exits is dropped. Only before `end` is called.
-void lerta_loop_stop_program(LertaRunningProgram *program);
-// What is called with a chunk that a read gives: its bytes, which it takes, allocated with malloc,
-// and their count; or NULL and 0 at the end, -1 on failure, or LERTA_OUT_OF_MEMORY.
-typedef void (*LertaChunkEnd)(void *context, uint8_t *bytes, int64_t length);
-// Reads a chunk of stdin on a thread of its own, and calls `end` with it on the loop. One read is
-// pending at most.
-void lerta_loop_read_stdin(LertaChunkEnd end, void *context);
-// Whether the read of stdin that is pending keeps the program running, as it does unless nothing
-// waits for its chunk any more.
-void lerta_loop_hold_stdin(bool held);
-// A TCP socket or listener, which lerta_loop_tcp_close closes, once; nothing else is called on it
-// then. What is pending on it is given up by the close: its end is not called, but a write's is,
-// as failed.
-typedef struct LertaTcp LertaTcp;
-LertaTcp *lerta_loop_tcp_new(void);
-void lerta_loop_tcp_close(LertaTcp *tcp);
-// What is called once a wait for a connection, a connect or a write has ended, as it succeeded or
-// not.
-typedef void (*LertaTcpEnd)(void *context, bool succeeded);
-// Listens at the first address of the host, resolved at once: the port it listens at, or -1.
-int64_t lerta_loop_tcp_listen(LertaTcp *tcp, const char *host, int64_t port);
-// Whether a connection waits to be taken; if none does, calls `end` once one comes, or once the
-// listener fails. One wait is pending at most, which lerta_loop_tcp_stop_waiting gives up.
-bool lerta_loop_tcp_wait_connection(LertaTcp *listener, LertaTcpEnd end, void *context);
-void lerta_loop_tcp_stop_waiting(LertaTcp *listener);
-// Takes a connection that waits into a new socket; false if it fails, which takes it all the same.
-bool lerta_loop_tcp_take(LertaTcp *listener, LertaTcp *socket);
-// The address of the socket's peer, as text, at most an IPv6 address's length with its NUL.
-enum { LERTA_HOST_TEXT_SIZE = 46 };
-bool lerta_loop_tcp_peer(LertaTcp *socket, char host[LERTA_HOST_TEXT_SIZE], int64_t *port);
-// Resolves the host on the thread pool and connects a new socket to each of its addresses in turn
-// until one connects.
-void lerta_loop_tcp_connect(LertaTcp *socket, const char *host, int64_t port, LertaTcpEnd end,
-                            void *context);
-// Reads a chunk, given to `end` as lerta_loop_read_stdin gives it. One read is pending at most,
-// which lerta_loop_tcp_stop_reading gives up, and no chunk is lost then.
-void lerta_loop_tcp_read(LertaTcp *socket, LertaChunkEnd end, void *context);
-void lerta_loop_tcp_stop_reading(LertaTcp *socket);
-// Writes the bytes, which must not change nor be freed until `end` is called.
-void lerta_loop_tcp_write(LertaTcp *socket, const uint8_t *bytes, int64_t length, LertaTcpEnd end,
-                          void *context);
-// Closes the writing side, after the writes pending; a failure is not reported.
-void lerta_loop_tcp_shutdown(LertaTcp *socket);
 // Runs `work` on libuv's thread pool, then `done` on the loop, both with `data`. `work` must not
 // touch what the main thread does, such as Lerta's allocator.
 void lerta_loop_work(void *data, void (*work)(void *data), void (*done)(void *data));
@@ -310,7 +237,7 @@ int lerta_os_input_file(const uint8_t *bytes, int64_t length);
 void lerta_os_close_input_file(int fd);
 // Whether two names of environment variables name the same variable.
 bool lerta_os_same_env_name(const char *a, const char *b);
-// The file of a command for lerta_loop_run_program, which on Windows is searched for on PATH if it
+// The file of a command for a program that run starts, which on Windows is searched for on PATH if it
 // holds no directory, as libuv would look in the directory that the program runs in first (see
 // docs/reference/modules.md#stdprocess); NULL if there is none. The caller frees it.
 char *lerta_os_program_file(const char *command);
