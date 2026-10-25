@@ -31,13 +31,18 @@ struct Region {
 #define SLAB_LIMIT (16 << 10)
 #define SMALL_CLASSES ((SMALL_LIMIT - SMALLEST_PLACE) / 8 + 1)
 #define SIZE_CLASSES (SMALL_CLASSES + 4 * 6)
-#define EMPTY_SLABS_KEPT 4
 
 static Region *slabs_with_room[SIZE_CLASSES];
-static Region *empty_slabs[EMPTY_SLABS_KEPT];
+// The slabs given to a size class, which neither the empty ones kept for reuse nor the regions of
+// large places are.
+static int64_t slabs_in_use = 0;
 static int64_t empty_slab_count = 0;
 #ifdef LERTA_DEBUG
+static Region *empty_slabs[EMPTY_SLABS_KEPT];
 static int64_t oldest_empty_slab = 0;
+#else
+// The empty slabs kept for reuse, linked through their headers' `next`.
+static Region *empty_slabs = NULL;
 #endif
 
 static Region *region_of(const void *memory) {
@@ -108,14 +113,28 @@ static void keep_empty_slab(Region *slab) {
 static bool takes_free_place(const Region *slab) { return !has_fresh_room(slab); }
 #else
 static Region *take_empty_slab(void) {
-  return empty_slab_count > 0 ? empty_slabs[--empty_slab_count] : NULL;
+  Region *slab = empty_slabs;
+  if (slab == NULL) return NULL;
+  empty_slabs = slab->next;
+  empty_slab_count--;
+  return slab;
 }
 
+// As many empty slabs are kept as there are slabs in use, and at least EMPTY_SLABS_KEPT, so that a
+// program that makes and drops a structure over and over, as large as those it keeps, maps no
+// slab again, while what it keeps empty is no more than what it uses. Freeing a slab leaves one
+// fewer in use, so that two may be beyond that; those after the slab freed last, which is warm, go.
 static void keep_empty_slab(Region *slab) {
-  if (empty_slab_count < EMPTY_SLABS_KEPT) {
-    empty_slabs[empty_slab_count++] = slab;
-  } else {
-    lerta_os_unmap_region(slab, LERTA_REGION_SIZE);
+  slab->next = empty_slabs;
+  empty_slabs = slab;
+  empty_slab_count++;
+  int64_t kept = slabs_in_use > EMPTY_SLABS_KEPT ? slabs_in_use : EMPTY_SLABS_KEPT;
+  // Beyond EMPTY_SLABS_KEPT, there is always one after the first.
+  while (empty_slab_count > kept) {
+    Region *unkept = empty_slabs->next;
+    empty_slabs->next = unkept->next;
+    empty_slab_count--;
+    lerta_os_unmap_region(unkept, LERTA_REGION_SIZE);
   }
 }
 
@@ -123,6 +142,7 @@ static bool takes_free_place(const Region *slab) { return slab->free_first != NU
 #endif
 
 static Region *new_slab(int size_class) {
+  slabs_in_use++;
   Region *slab = take_empty_slab();
   if (slab == NULL) slab = map_region(LERTA_REGION_SIZE);
   uint8_t *places = (uint8_t *)slab + PLACES_START;
@@ -184,7 +204,13 @@ void *lerta_mem_alloc(int64_t size) {
 
 __attribute__((noinline)) static void free_slab(Region *slab, int size_class) {
   unlink_slab(slab, size_class);
+  slabs_in_use--;
   keep_empty_slab(slab);
+}
+
+void lerta_mem_slab_counts(int64_t *in_use, int64_t *empty) {
+  *in_use = slabs_in_use;
+  *empty = empty_slab_count;
 }
 
 // A release build puts the place first in the free list, a debug build last (see
