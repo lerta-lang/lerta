@@ -58,8 +58,11 @@ struct HarnessResult
 passes := (name: String) -> HarnessResult(name, reasons: [])
 
 stderr_differs := 'stderr differs from line 1'
-did_not_succeed := 'expected the run to succeed, but it did not'
+threw := 'expected the run to succeed, but it exited with 1'
+leaked := 'expected the run to succeed, but it exited with 23'
 did_not_fail := 'expected the run to fail, but it did not'
+killed := 'expected the run to succeed, but it was ended by signal 9'
+did_not_compile := 'expected the run to succeed, but it did not compile'
 needs_expected := (name: String) ->
   "needs #{name}.out or #{name}.err or #{name}.warn in tests/harness"
 
@@ -68,16 +71,19 @@ needs_expected := (name: String) ->
 # the leak that the unoptimized one reports as expected makes it fail.
 harness_results: HarnessResult[] =
   { name: 'tests/harness/stray.out', reasons: ['stray file: no test reads it'] }
-  { name: 'tests/harness/aborts', reasons: [stderr_differs, did_not_succeed] }
-  { name: 'tests/harness/aborts (-O)', reasons: [stderr_differs, did_not_succeed] }
+  { name: 'tests/harness/aborts', reasons: [stderr_differs, threw] }
+  { name: 'tests/harness/aborts (-O)', reasons: [stderr_differs, threw] }
   passes('tests/harness/compile_error')
+  { name: 'tests/harness/killed', reasons: [killed] }
+  { name: 'tests/harness/killed (-O)', reasons: [killed] }
   passes('tests/harness/leaks')
   { name: 'tests/harness/leaks (-O)', reasons: [stderr_differs, did_not_fail] }
   { name: 'tests/harness/no_expected', reasons: [needs_expected('no_expected')] }
   { name: 'tests/harness/no_expected (-O)', reasons: [needs_expected('no_expected')] }
   passes('tests/harness/passes')
   passes('tests/harness/passes (-O)')
-  { name: 'tests/harness/unexpected_leak', reasons: [stderr_differs, did_not_succeed] }
+  { name: 'tests/harness/unexpected_compile_error', reasons: [stderr_differs, did_not_compile] }
+  { name: 'tests/harness/unexpected_leak', reasons: [stderr_differs, leaked] }
   passes('tests/harness/unexpected_leak (-O)')
   { name: 'tests/harness/unexpected_success', reasons: [stderr_differs, did_not_fail] }
   { name: 'tests/harness/unexpected_success (-O)', reasons: [stderr_differs, did_not_fail] }

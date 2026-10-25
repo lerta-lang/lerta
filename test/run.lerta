@@ -20,7 +20,7 @@
 #                          Windows
 import timeout, TimeoutError from 'std:async'
 import is_dir, is_file, list_dir, make_dir, read_file from 'std:io'
-import env, platform, run from 'std:process'
+import env, Exit, platform, run from 'std:process'
 import compare_output, compare_text, lines from './lib/expect'
 import
   build_runtimes, compiler, OUTPUT_LIMIT, root_dir, run_file, SetupError, suite_dir
@@ -149,8 +149,8 @@ struct Outcome
   stdout: Binary
   stderr: Binary
   warnings: String
-  failed: Bool
-  compile_error: Bool
+  # How the program ended, or nil if it did not compile.
+  exit: Exit?
 
 # A diagnostic names its place first, as `<file>:<line>:<column>: `; anything else, such as clang's
 # messages, is a failure of the build itself. What follows the place, or nil.
@@ -183,17 +183,12 @@ compile_and_run := (test: TestCase, optimize: Bool) ->
   ) == nil
   if is_compile_error
     stderr := lines(others).binary
-    return Outcome
-      stderr
-      stdout: ''.binary
-      warnings: lines(warnings)
-      failed: true
-      compile_error: true
+    return Outcome(stderr, stdout: ''.binary, warnings: lines(warnings))
   if built.status != 0 or not others.is_empty()
     throw SetupError(message: "the build failed (#{built.failure}):\n#{built.errors}")
   ran := await run_program(executable)
-  { stdout, stderr, failed } := ran
-  Outcome stdout, stderr, failed, warnings: lines(warnings), compile_error: false
+  { stdout, stderr, exit } := ran
+  Outcome stdout, stderr, exit, warnings: lines(warnings)
 
 path_delimiter := platform == 'windows' then ';' else ':'
 
@@ -228,7 +223,7 @@ run_timeout_seconds := -> target.windows then 180.0 else 60.0
 struct ProgramRun
   stdout: Binary
   stderr: Binary
-  failed: Bool
+  exit: Exit
 
 var program_runs = 0
 
@@ -255,7 +250,7 @@ run_program := (path: String) ->
       stderr: stderr
       output_limit: OUTPUT_LIMIT
     exit := await timeout(ran, run_timeout_seconds())
-    ProgramRun stdout: stdout.to_binary(), stderr: stderr.to_binary(), failed: exit.code != 0
+    ProgramRun exit, stdout: stdout.to_binary(), stderr: stderr.to_binary()
   catch _: TimeoutError
     throw SetupError(message: "the program did not end in #{run_timeout_seconds().to_fixed(0)}s")
   finally
@@ -274,11 +269,13 @@ run_test := (test: TestCase, optimize: Bool): Promise<String[]?> ->
   unoptimized_runs[test.label] = pending if not optimize
   outcome := await pending
   expects_failure := expected.has('err')
+  failed := outcome.exit?.code != 0
+  expectation := expects_failure then 'fail' else 'succeed'
   status_reasons: String[] =
-    if outcome.failed == expects_failure
+    if failed == expects_failure
       []
     else
-      ["expected the run to #{expects_failure then 'fail' else 'succeed'}, but it did not"]
+      ["expected the run to #{expectation}, but #{ending(outcome.exit)}"]
   none := ''.binary
   [
     compare_output('stdout', expected['out'] ? none, outcome.stdout)...
@@ -286,6 +283,13 @@ run_test := (test: TestCase, optimize: Bool): Promise<String[]?> ->
     compare_text('warnings', expected['warn']?.text() ? '', outcome.warnings)...
     status_reasons...
   ]
+
+# How a run that did not end as expected ended, so that a failure shows its cause, as an exit
+# code that the output does not explain.
+ending := (exit: Exit?) ->
+  return 'it did not compile' if not exit
+  return "it was ended by signal #{signal}" if signal := exit.signal
+  exit.code == 0 then 'it did not' else "it exited with #{exit.code}"
 
 # The output with the line and column of each place in a standard module that a trace goes
 # through written as XX (see std_frame).
@@ -316,7 +320,7 @@ optimized_check := (test: TestCase) ->
       return
   check := ->
     if unoptimized := unoptimized_runs[test.label]
-      return nil if (await unoptimized).compile_error
+      return nil if (await unoptimized).exit == nil
     await run_test(test, true)
   Check name: "#{test.label} (-O)", run: check, wait: wait
 
