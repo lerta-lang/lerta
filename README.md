@@ -44,6 +44,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | [docs/reference/](docs/reference/README.md) | The external specification as implemented: the language, the standard modules and the commands, as a program and its user observe them. It grows with the implementation |
 | [docs/internals.md](docs/internals.md) | The internal specification as implemented: execution model, memory management, the LLVM interface, the runtime and the bootstrap |
 | [docs/roadmap/](docs/roadmap/README.md) | What is planned and not implemented yet, both external and internal, and open questions |
+| [docs/issues.md](docs/issues.md) | Known defects, with their severity and fix |
 
 ## Development
 
