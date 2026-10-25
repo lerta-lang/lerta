@@ -1,0 +1,19 @@
+# A write after the end of stdout or stderr fails, while what was written before it, which waits in
+# the buffer, is still written out, and a flush and print, which is no Writer's, still work.
+import stderr, stdout, Writer from 'std:io'
+
+write_after_end := (writer: Writer) ->
+  writer.end()
+  writer.end()
+  writes: (String | Binary)[] = ['after the end', 'bytes'.binary]
+  for data in writes
+    try
+      await writer.write(data)
+    catch error: IOError
+      print error.message
+
+await stdout.write("before the end\n")
+await write_after_end(stdout)
+await write_after_end(stderr)
+await stdout.flush()
+print 'flushed and printed'

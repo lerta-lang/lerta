@@ -1,0 +1,20 @@
+# A Socket is a Writer, whose end its peer reads as the end, and which fails a write after it.
+import Writer from 'std:io'
+import connect_tcp, listen_tcp from 'std:net'
+
+send := (writer: Writer) ->
+  await writer.write('through ')
+  await writer.write("a Writer\n".binary)
+  writer.end()
+  writer.end()
+  try
+    await writer.write('late')
+  catch _: IOError
+    print 'a write after the end fails'
+
+listener := listen_tcp('127.0.0.1')
+connecting := connect_tcp('127.0.0.1', listener.port)
+server := await listener.accept()
+await send(await connecting)
+print await server.reader.read_line() ? 'end'
+print await server.reader.read_line() ? 'end'

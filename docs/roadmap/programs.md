@@ -27,7 +27,7 @@ The planned design of modules, FFI, the standard library and tools.
   - Streaming: a body that the handler writes as it goes, sent chunked, with the pace of `socket.write`, and chunked request bodies, in place of the 501 now.
   - Later: TLS, through that of std:net; a client, `fetch`, with the same `Request`, `Response` and `Headers`; a URL module for the parts of `request.url`; and HTTP/2.
 - `make_link` of [std:io](../reference/modules.md#stdio) followed on Windows itself: Wine, which the tests run under, makes the links but does not follow them.
-- A `start` in `std:process` beside `run`, which gives a running program at once: its standard output and error to read as they come, through a `Reader` of `std:io`, its standard input to write through a `Writer`, and a `wait(): Promise<Exit>`. A write to a pipe that the program has closed must then fail rather than end this program by SIGPIPE, which is why `run` gives its input through a file.
+- `run` of `std:process` taking a `Reader` of `std:io` as its `stdin`, and a `Writer` as its `stdout` or `stderr`, which `run` ends once the program's stream ends; the program reads and writes a pipe, which a task of `run` copies from the `Reader` or to the `Writer`, so that the program's output is read as it comes, and it can be given a socket or another program's stream. A `Pipe` gives a `Reader` and a `Writer` of its own, so that one program's `stdout` is another's `stdin`. A `run` given a `Writer` must not be awaited before what the `Writer` gives is read, or a program that writes more than the pipe holds waits for ever. Its input then goes through a pipe too, in place of a file, as a write to a pipe that the program has closed fails rather than ends this program by SIGPIPE.
 
 ## Tools
 
