@@ -75,17 +75,20 @@ static inline void visit_promise(void *object, LertaVisitor visitor) {
   if (promise->state == REJECTED) visitor(promise->exception.data);
 }
 
+// The exception of a rejected promise ends the program, as an uncaught one does.
+static void exit_with_rejection(LertaPromise *promise) {
+  lerta_exception = promise->exception;
+  lerta_trace_load(promise->trace);
+  lerta_exit_with_exception();
+}
+
 static void drop_promise(void *object) {
   LertaPromise *promise = object;
   lerta_mem_free(promise->waiters);
   if (promise->state == REJECTED) {
     // An exception that nothing awaited would be lost: it ends the program, as an uncaught one
     // does.
-    if (!promise->observed && !is_given_up(promise)) {
-      lerta_exception = promise->exception;
-      lerta_trace_load(promise->trace);
-      lerta_exit_with_exception();
-    }
+    if (!promise->observed && !is_given_up(promise)) exit_with_rejection(promise);
     lerta_trace_free(promise->trace);
   }
   visit_promise(object, lerta_release);
@@ -143,11 +146,15 @@ void lerta_promise_resolve(LertaPromise *promise) {
   settle(promise, RESOLVED);
 }
 
+// The program's top-level code, once it awaits (see lerta_watch_top_level).
+static LertaPromise *top_level = NULL;
+
 void lerta_promise_reject(LertaPromise *promise) {
   promise->exception = lerta_exception;
   promise->trace = lerta_trace_save();
   lerta_exception = (LertaException){NULL, NULL};
   settle(promise, REJECTED);
+  if (promise == top_level) exit_with_rejection(promise);
 }
 
 void *lerta_promise_result(LertaPromise *promise) {
@@ -221,9 +228,18 @@ void lerta_loop_run(void (*resume)(void *coroutine)) {
   }
 }
 
+// The program's top-level code that throws ends the program at once, though the loop would still
+// wait for work, as an accept, that never ends.
+void lerta_watch_top_level(LertaPromise *promise) {
+  if (promise->state == REJECTED) exit_with_rejection(promise);
+  top_level = promise;
+}
+
 LERTA_STATIC_STRING(never_settled, "the top-level code awaits a promise that is never settled");
 
+// Its exception has ended the program already, if it threw (see lerta_watch_top_level).
 void lerta_finish_top_level(LertaPromise *promise) {
   if (promise->state == PENDING) lerta_exit_with_error((const LertaString *)&never_settled);
-  lerta_promise_result(promise);
+  // The promise is released next, and another may take its place.
+  top_level = NULL;
 }

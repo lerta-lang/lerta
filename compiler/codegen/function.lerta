@@ -19,7 +19,7 @@ from './closure'
 import generate_control_jump, generate_for, generate_if, generate_while from './control_flow'
 import emit_suspend from './coroutine'
 import nan_free_operations from './float_ranges'
-import emit_check_with, emit_exception_check, leave_scopes, while_holding from './exceptions'
+import emit_exception_check, leave_scopes, while_holding from './exceptions'
 import
   generate, held_value, read_borrowed, read_local, release_if_reference, type_at_use, type_of
 from './expression'
@@ -80,14 +80,14 @@ export generate_main := (
   generate_program_main g.ir.module, body, releases if is_program
 
 # Runs the program's top-level code, a coroutine, and the event loop, which must settle it; its
-# exception is the program's.
+# exception is the program's, which ends it as soon as it is thrown.
 generate_program_main := (module: IrModule, body: String, releases: TopLevelGlobal[]) ->
   ir := IrBuilder(module)
   promise := ir.assign("call ptr #{body}()")
+  call_void_runtime ir, 'void @lerta_watch_top_level(ptr)', "ptr #{promise}"
   emit_loop_run ir
   call_void_runtime ir, 'void @lerta_finish_top_level(ptr)', "ptr #{promise}"
   emit_release ir, promise
-  emit_check_with ir, -> ir.emit('ret void')
   emit_release_globals ir, releases
   ir.emit 'ret void'
   ir.finish PROGRAM_MAIN

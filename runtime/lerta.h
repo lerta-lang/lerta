@@ -271,8 +271,10 @@ LertaPromise *lerta_promise_pending(void);
 void lerta_promise_fire(LertaPromise *promise);
 // Runs the loop; `resume` resumes a coroutine, which only the generated code can do.
 void lerta_loop_run(void (*resume)(void *coroutine));
-// After the loop, the end of the program's top-level code, a coroutine that awaits: an error if it
-// still waits, and its exception, if it threw, as the pending one.
+// Before the loop, the program's top-level code, a coroutine that awaits, whose exception ends the
+// program as soon as it throws.
+void lerta_watch_top_level(LertaPromise *promise);
+// After the loop, the end of that code: an error if it still waits.
 void lerta_finish_top_level(LertaPromise *promise);
 
 // Time (time.c). A promise resolved once the seconds have passed, which std:time checks are not
