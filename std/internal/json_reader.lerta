@@ -1,6 +1,6 @@
 # What std:json's generated code reads through (see std/json.lerta).
 import from_base64 from './base64'
-import field_key, quoted from './json_text'
+import field_key, is_finite, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonReader
@@ -49,7 +49,7 @@ export class JsonReader
     value
 
   # A number that is not finite as a Float32 is no Float32.
-  read_float32 = -> @read_number('a Float32', (number) -> number.parse_float()?.to_float32())
+  read_float32 = -> @read_number('a Float32', finite_float32)
 
   read_binary = (): Binary ->
     @skip_space()
@@ -302,3 +302,9 @@ ZERO: UInt64 = 0
 ONE: UInt64 = 1
 TEN: UInt64 = 10
 MAX_UINT64 := ZERO.wrapping_sub(ONE)
+
+# The Float32 nearest to the number, or nil where it is beyond the finite ones, as JSON holds no
+# infinity.
+finite_float32 := (number: String): Float32? ->
+  value := number.parse_float()?.to_float32() ? return nil
+  is_finite(value.to_float()) then value

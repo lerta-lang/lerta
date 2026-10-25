@@ -1,20 +1,37 @@
 # Functions of Floats (see docs/reference/modules.md#stdmath), of libm, checked in Lerta where libm
-# would take what no Float holds, and of the runtime for pow, whose result C checks (runtime/math.c).
+# would give a NaN, which no Float holds, and constants.
+
+import INFINITY from './builtins/numbers'
+
+# The positive infinity, which a Float that grows too large becomes; -INFINITY is the negative one.
+export INFINITY from './builtins/numbers'
+# The nearest Floats to π and e.
+export PI := 3.141592653589793
+export E := 2.718281828459045
 
 export extern fabs as abs: (Float) -> Float
 export extern floor: (Float) -> Float
 export extern ceil: (Float) -> Float
 # Half way between two integers, away from zero.
 export extern round: (Float) -> Float
-export extern lerta_math_pow as pow: (Float, Float) -> Float
+extern pow as libm_pow: (Float, Float) -> Float
 extern sqrt as libm_sqrt: (Float) -> Float
 extern fmod: (Float, Float) -> Float
+
+# x to the power y, as C's pow gives it, which is NaN for a finite negative x and a y that is no
+# integer.
+export pow := (x: Float, y: Float) ->
+  if x < 0.0 and x != -INFINITY and floor(y) != y
+    throw ArithmeticError(message: 'a negative number to a fractional power')
+  libm_pow x, y
 
 export sqrt := (x: Float) ->
   throw ArithmeticError(message: 'square root of a negative number') if x < 0.0
   libm_sqrt x
 
-# The remainder of x divided by y, of the sign of x, as C's fmod gives it.
+# The remainder of x divided by y, of the sign of x, as C's fmod gives it, which is NaN for a y of
+# 0 or an infinite x.
 export remainder := (x: Float, y: Float) ->
   throw ArithmeticError(message: 'division by zero') if y == 0.0
+  throw ArithmeticError(message: 'not a number') if x == INFINITY or x == -INFINITY
   fmod x, y

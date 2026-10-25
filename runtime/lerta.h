@@ -170,17 +170,17 @@ int64_t lerta_float_literal_bits(const LertaString *text);
 int64_t lerta_float32_literal_bits(const LertaString *text);
 double lerta_float_from_bits(int64_t bits);
 // A Float's text: the fewest digits that read back as it, positional from 1e-4 up to 1e16, with
-// `.0` for a whole number, and scientific beyond (`1e+16`). A Float32's likewise, of the digits
-// that read back as it as a float.
+// `.0` for a whole number, and scientific beyond (`1e+16`), and `inf` or `-inf` for an infinity.
+// A Float32's likewise, of the digits that read back as it as a float.
 LertaString *lerta_float_to_string(double value);
 LertaString *lerta_float32_to_string(float value);
-// Whether the value is finite as a float, which only then is it converted to.
-bool lerta_float_fits_float32(double value);
+// The nearest float, an infinity beyond the largest.
 float lerta_float_to_float32(double value);
+// Whether the value is finite as a float, which only the seed's std asks.
+bool lerta_float_fits_float32(double value);
 double lerta_float32_to_float(float value);
-
-// std:math's pow, which throws where libm's result would not be finite.
-double lerta_math_pow(double x, double y);
+// The positive infinity, which std:builtins names INFINITY.
+double lerta_float_infinity(void);
 
 // Whether the value truncated toward zero fits in an Int, which only then is it converted to.
 bool lerta_float_fits_int(double value);

@@ -1,6 +1,6 @@
 # What std:json's generated code writes through (see std/json.lerta).
 import base64 from './base64'
-import field_key, quoted from './json_text'
+import field_key, is_finite, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonWriter
@@ -17,10 +17,14 @@ export class JsonWriter
   write_null = (): void -> @written += 'null'
   write_bool = (value: Bool): void -> @written += value.to_string()
   write_int = (value: Int): void -> @written += value.to_string()
-  write_float = (value: Float): void -> @written += value.to_string()
+  write_float = (value: Float): void ->
+    @check_finite value
+    @written += value.to_string()
   write_string = (value: String): void -> @written += quoted(value)
   write_uint64 = (value: UInt64): void -> @written += value.to_string()
-  write_float32 = (value: Float32): void -> @written += value.to_string()
+  write_float32 = (value: Float32): void ->
+    @check_finite value.to_float()
+    @written += value.to_string()
   # As base64 (RFC 4648), whose letters need no escape.
   write_binary = (value: Binary): void -> @written += "\"#{base64(value)}\""
 
@@ -54,6 +58,11 @@ export class JsonWriter
       throw JsonError(message: "#{path}: a cycle back to #{@entered_paths[index]}")
     @entered.push address
     @entered_paths.push path
+
+  # JSON holds no infinity.
+  check_finite = (value: Float): void ->
+    return if is_finite(value)
+    throw JsonError(message: "#{@path_text()}: #{value}, which JSON cannot hold")
 
   leave = (): void ->
     @entered.pop()

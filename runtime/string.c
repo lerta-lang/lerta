@@ -146,6 +146,7 @@ double lerta_float_from_bits(int64_t bits) {
 // The fewest significant digits that read back as the value, a double, or a float if is_float32,
 // at most 17 for a double and 9 for a float.
 static LertaString *shortest_text(double value, bool is_float32) {
+  if (isinf(value)) return lerta_string_from_c(value < 0 ? "-inf" : "inf");
   int digits = 1;
   char text[32];
   for (;; digits++) {
@@ -170,9 +171,11 @@ LertaString *lerta_float_to_string(double value) { return shortest_text(value, f
 
 LertaString *lerta_float32_to_string(float value) { return shortest_text(value, true); }
 
+float lerta_float_to_float32(double value) { return (float)value; }
+
 bool lerta_float_fits_float32(double value) { return isfinite((float)value); }
 
-float lerta_float_to_float32(double value) { return (float)value; }
+double lerta_float_infinity(void) { return INFINITY; }
 
 double lerta_float32_to_float(float value) { return value; }
 

@@ -66,7 +66,8 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   operator := binary.operator
   return generate_logical(g, binary) if operator == 'and' or operator == 'or'
   return generate_nil_test(g, binary) if is_nil_test(binary)
-  # The root of a tree of float `+ - *` alone checks its result, which its operands leave unchecked.
+  # The root of a tree of float arithmetic alone checks its result, which its operands leave
+  # unchecked.
   is_root := not g.defers_float_checks and float_tree(g, binary)
   g.defers_float_checks = true if is_root
   left := generate(g, binary.left)
@@ -80,14 +81,13 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
 
 is_bytes := (type: Type) -> is_one_of_kinds(type, ['String', 'Binary'])
 
-# Whether the operation is a tree of float `+ - *` whose leaves are locals and literals, maybe
-# negated: an infinity in it gives an infinity or a NaN at its root, so that its root alone need
-# check that its result is finite. The leaves neither throw nor do anything else, so nothing runs
-# between the operation that overflows and the root; the error is reported at the root's position
-# rather than at that operation's. A division, whose result is 0 for an infinite divisor, is no part
-# of one.
+# Whether the operation is a tree of float `+ - * /` whose leaves are locals and literals, maybe
+# negated: a NaN in it, which each of them gives for a NaN operand, is a NaN at its root, so that
+# its root alone need check that its result is no NaN. The leaves neither throw nor do anything
+# else, so nothing runs between the operation that makes the NaN and the root; the error is
+# reported at the root's position rather than at that operation's.
 float_tree := (g: Generator, binary: BinaryOperation) ->
-  return false if not ['+', '-', '*'].contains(binary.operator)
+  return false if not ['+', '-', '*', '/'].contains(binary.operator)
   return false if g.facts.operator_calls.has(binary) or not is_float(type_of(g, binary))
   float_leaf(g, binary.left) and float_leaf(g, binary.right)
 

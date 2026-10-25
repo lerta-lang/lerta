@@ -3,24 +3,30 @@ import is_continuation from '../internal/utf8'
 extern lerta_float_to_string: (Float) -> String
 extern lerta_float_fits_int: (Float) -> Bool
 extern lerta_float_to_int: (Float) -> Int
-extern lerta_float_fits_float32: (Float) -> Bool
 extern lerta_float_to_float32: (Float) -> Float32
 extern lerta_float32_to_string: (Float32) -> String
 extern lerta_float32_to_float: (Float32) -> Float
+extern lerta_float_infinity: () -> Float
 
 # The least and the greatest Int.
 export INT_MIN := -9223372036854775808
 export INT_MAX := 9223372036854775807
+# The positive infinity, which std:builtins' own modules use and std:math exports.
+export INFINITY := lerta_float_infinity()
 
 HEX_DIGITS := ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
 
 extend Float
   to_string = -> lerta_float_to_string(@)
-  to_literal = -> @to_string()
+  # An infinity is written as the value that names it.
+  to_literal = ->
+    return 'INFINITY' if @ == INFINITY
+    return '-INFINITY' if @ == -INFINITY
+    @to_string()
   # The Int of the value truncated toward zero, or nil where it is beyond an Int.
   to_int = (): Int? -> lerta_float_fits_int(@) then lerta_float_to_int(@)
-  # The nearest Float32, or nil where that is an infinity.
-  to_float32 = (): Float32? -> lerta_float_fits_float32(@) then lerta_float_to_float32(@)
+  # The nearest Float32, an infinity beyond the largest.
+  to_float32 = -> lerta_float_to_float32(@)
   # The text with `digits` digits after the point, of the value times 10 to the `digits` rounded
   # half away from zero to an Int, which it must fit in. The product may round, so a value just
   # below a half may round up; the rest after truncating it is exact, so that rounding adds no
@@ -41,7 +47,11 @@ extend Float
 
 extend Float32
   to_string = -> lerta_float32_to_string(@)
-  to_literal = -> @to_string()
+  # An infinity is written as the value that names it, made a Float32.
+  to_literal = ->
+    value := @to_float()
+    return "#{value.to_literal()}.to_float32()" if value == INFINITY or value == -INFINITY
+    @to_string()
   to_float = -> lerta_float32_to_float(@)
 
 extend Bool

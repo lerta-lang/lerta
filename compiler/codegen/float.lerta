@@ -2,14 +2,9 @@
 import float_bits from '../float_literals'
 import Generator from './generator'
 import IrBuilder from './ir_builder'
-import DIVISION_BY_ZERO, FLOAT_OVERFLOW, throw_if from './runtime_errors'
+import NOT_A_NUMBER, throw_if from './runtime_errors'
 import scalar_of, widened_to_word from './scalar'
 import Type from '../types'
-
-# The largest finite value of each width, written as a double's bits, as the IR writes float
-# constants. A result whose magnitude is above it, or unordered with it, as a NaN's is, is too large:
-# in a tree of `+ - *` an infinity may have become a NaN (see float_tree).
-LARGEST := { 32: '0x47EFFFFFE0000000', 64: '0x7FEFFFFFFFFFFFFF' }
 
 PREDICATES := { '==': 'oeq', '!=': 'one', '<': 'olt', '<=': 'ole', '>': 'ogt', '>=': 'oge' }
 
@@ -23,15 +18,13 @@ export float_constant := (text: String, type: Type) ->
   rest := bits - INT_MIN
   "0x#{((rest >> 60) + 8).to_hex(1).to_upper()}#{(rest & 0x0FFFFFFFFFFFFFFF).to_hex(15).to_upper()}"
 
-# `+`, `-`, `*` or `/` of two floats of the type; division by zero throws, as does a result too
-# large, but in the operands of a tree whose root checks it (see float_tree).
+# `+`, `-`, `*` or `/` of two floats of the type, which throws where the result is NaN, but in the
+# operands of a tree whose root checks it (see float_tree).
 export apply_float_arithmetic := (
   g: Generator, operator: String, left: String, right: String, type: Type
 ) ->
   ir := g.ir
-  scalar := scalar_of(type)!
-  float := scalar.ir_type
-  throw_if g, ir.assign("fcmp oeq #{float} #{right}, 0.0"), DIVISION_BY_ZERO if operator == '/'
+  float := scalar_of(type)!.ir_type
   instruction :=
     case operator
       when '+' then 'fadd'
@@ -41,16 +34,13 @@ export apply_float_arithmetic := (
       else panic("no Float operator #{operator}")
   result := ir.assign("#{instruction} #{float} #{left}, #{right}")
   return result if g.defers_float_checks
-  fabs := "llvm.fabs.f#{scalar.bits}"
-  ir.module.declare fabs, "declare #{float} @#{fabs}(#{float})"
-  size := ir.assign("call #{float} @#{fabs}(#{float} #{result})")
-  throw_if g, ir.assign("fcmp ugt #{float} #{size}, #{LARGEST[scalar.bits]!}"), FLOAT_OVERFLOW
+  throw_if g, ir.assign("fcmp uno #{float} #{result}, 0.0"), NOT_A_NUMBER
   result
 
 export emit_float_negation := (ir: IrBuilder, operand: String, type: Type) ->
   ir.assign "fneg #{scalar_of(type)!.ir_type} #{operand}"
 
-# A comparison of two floats of the type; none is NaN, so they are ordered.
+# A comparison of two floats of the type; none is NaN, so they are ordered, infinities too.
 export emit_float_comparison := (
   ir: IrBuilder, operator: String, left: String, right: String, type: Type
 ) -> ir.assign("fcmp #{PREDICATES[operator]!} #{scalar_of(type)!.ir_type} #{left}, #{right}")

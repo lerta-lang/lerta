@@ -25,7 +25,7 @@ n :=
   | Type | Thrown by |
   |---|---|
   | `IndexError` | an index or a slice out of range, `pop` of an empty array |
-  | `ArithmeticError` | integer overflow, float overflow, division by zero |
+  | `ArithmeticError` | integer overflow, division by zero, a float that would be NaN (`not a number`) |
   | `NilError` | `x!` of nil |
   | `CastError` | `x as T!` of a value of another type |
   | `IterError` | a second traversal of an `Iter`, `next` past its end, reading an `Iter` from within its own function |

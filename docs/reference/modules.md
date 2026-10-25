@@ -130,7 +130,7 @@ The types convert as the table says, and a type that has a part of another type,
 | Lerta | JSON |
 |---|---|
 | `Int` and the other integer types | a number written as an integer, without a fraction or an exponent, in the range of the type: `$.size: expected a Byte, found 256` |
-| `Float`, `Float32` | a number, written as the type's `to_string` writes it; one that is not finite as one of the type, as `1e400`, is none |
+| `Float`, `Float32` | a number, written as the type's `to_string` writes it; one that is not finite as one of the type, as `1e400`, is none, and an infinity cannot be written: `$.x: inf, which JSON cannot hold` |
 | `Bool` | `true` or `false` |
 | `String` | a string; `encode_json` escapes `"`, `\` and the control characters, and `decode_json` reads every escape of JSON, a surrogate pair as one code point, but no lone surrogate |
 | `Binary` | a string of its bytes in base64 (RFC 4648), with its `=` padding; `decode_json` takes only that, with the bits that the padding leaves over zero, so that each `Binary` has one text |
@@ -148,16 +148,18 @@ The message of a `JsonError` gives the path to the value it is about, `$` for th
 
 ## std:math
 
-Functions of `Float`s, which throw an `ArithmeticError` where the result would not be finite, as `Float`'s operators do (see [Float](types.md#float)). `min` and `max` are [builtins](builtins.md).
+Functions of `Float`s, which throw an `ArithmeticError` where the result would be NaN, as `Float`'s operators do (see [Float](types.md#float)), and constants. `min` and `max` are [builtins](builtins.md).
 
 | Name | |
 |---|---|
+| `INFINITY: Float` | The positive infinity; `-INFINITY` is the negative one. |
+| `PI: Float`, `E: Float` | The nearest `Float`s to π and e. |
 | `abs(x: Float): Float` | The value without its sign. |
 | `floor(x: Float): Float`, `ceil(x: Float): Float` | The greatest integer not above `x`, and the least not below it, as `Float`s; `.to_int()` makes an `Int?` of one, nil beyond an `Int`. |
 | `round(x: Float): Float` | The nearest integer, half way between two away from zero: `round(2.5)` is `3.0`, `round(-2.5)` is `-3.0`. |
 | `sqrt(x: Float): Float` | The square root. Throws `square root of a negative number` for one below 0. |
-| `pow(x: Float, y: Float): Float` | `x` to the power `y`. Throws `float overflow` where the result is too large, `division by zero` for 0 to a negative power, and `a negative number to a fractional power` for a negative `x` and a `y` that is no integer. |
-| `remainder(x: Float, y: Float): Float` | The remainder of `x` divided by `y`, `x - n * y` for `n` the integer of `x / y` truncated toward zero, as `%` of `Int`s takes it, so of the sign of `x`: `remainder(-7.5, 2.0)` is `-1.5`. It is C's `fmod`, not its `remainder`, which rounds `n` to the nearest. Throws `division by zero` for a `y` of 0. |
+| `pow(x: Float, y: Float): Float` | `x` to the power `y`, as C's `pow` gives it: an infinity where the result is too large, or for 0 to a negative power. Throws `a negative number to a fractional power` for a finite negative `x` and a `y` that is no integer. |
+| `remainder(x: Float, y: Float): Float` | The remainder of `x` divided by `y`, `x - n * y` for `n` the integer of `x / y` truncated toward zero, as `%` of `Int`s takes it, so of the sign of `x`: `remainder(-7.5, 2.0)` is `-1.5`. It is C's `fmod`, not its `remainder`, which rounds `n` to the nearest. Throws `division by zero` for a `y` of 0, and `not a number` for an infinite `x`; an infinite `y` gives `x`. |
 
 ## std:net
 

@@ -13,7 +13,7 @@ Builtins need no import. Most are written in Lerta, in the files of `std/builtin
 
 ## Literal
 
-`Literal` is a builtin interface, of `std:builtins`, with one member, `to_literal: () -> String`: the text of the literal that gives the value, as the text of an array writes its items. A `String` is in single quotes if it has no `'` and no control character, and otherwise in double quotes, with `\\`, `\"`, `\#`, `\n`, `\t`, `\r` and `\0` escaped and the other control characters as `\u{7F}`; a `Char` is the `String` of it; an enum value is its member as declared, its name or the literal of its text; the numbers and `Bool` are their `to_string()`, and so is an array of `Literal` items, `[1, 2]`. Any type that declares `to_literal` satisfies it, as one does `Stringable`, with a text that writes its value as the program would.
+`Literal` is a builtin interface, of `std:builtins`, with one member, `to_literal: () -> String`: the text of the literal that gives the value, as the text of an array writes its items. A `String` is in single quotes if it has no `'` and no control character, and otherwise in double quotes, with `\\`, `\"`, `\#`, `\n`, `\t`, `\r` and `\0` escaped and the other control characters as `\u{7F}`; a `Char` is the `String` of it; an enum value is its member as declared, its name or the literal of its text; the numbers and `Bool` are their `to_string()`, but for an infinity, `INFINITY` or `-INFINITY` (`INFINITY.to_float32()` for a `Float32`), which names std:math's `INFINITY`, so that a program reads it back where it imports it, and so is an array of `Literal` items, `[1, 2]`. Any type that declares `to_literal` satisfies it, as one does `Stringable`, with a text that writes its value as the program would.
 
 ## Iterable
 

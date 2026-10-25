@@ -1,0 +1,47 @@
+# A NaN anywhere in a tree of `+ - * /` of locals and literals throws, as it stays a NaN up to the
+# root, which alone checks it; an overflow is an infinity, which throws only where it makes a NaN.
+# A tree with a call in it throws before the call, as each of its operations is checked where it
+# is.
+attempt := (name: String, f: () -> Float) ->
+  try
+    print "#{name}: #{f()}"
+  catch e: ArithmeticError
+    print "#{name}: #{e.message}"
+
+trees := (big: Float) ->
+  attempt 'product', -> big * big * 2.0
+  attempt 'difference of infinities', -> big * big - big * big
+  attempt 'zero times infinity', -> 0.0 * (big * big)
+  attempt 'negated sum', -> -(big * big) + big * big
+  attempt 'fine', -> big * 0.5 - big * 0.25 + 1.0
+  attempt 'integer literal', -> big * big * 2 - big * big
+  attempt 'negated leaf', -> big * -big + big * big
+  attempt 'negated root', -> -(big * big - big * big)
+  attempt 'infinity by infinity', -> big * big / (big * big) + 1.0
+  attempt 'zero by zero', -> (big - big) / (big - big) * 2.0
+  attempt 'by infinity', -> 1.0 / (big * big) + 1.0
+
+calls := (big: Float) ->
+  note := ->
+    print 'called'
+    1.0
+  attempt 'before a call', -> big * big - big * big + note()
+
+narrow := (big: Float32) ->
+  try
+    print big * big - big * big
+  catch e: ArithmeticError
+    print "Float32: #{e.message}"
+  print 1.0 + big * big * 0.5
+
+# A var that a closure captures lives in a cell, which a tree reads as it reads any local.
+captured := ->
+  var big = 1.0
+  grow := -> big = big * 1e300
+  grow()
+  attempt 'captured', -> big * big - big * big
+
+trees 1e300
+calls 1e300
+narrow 3e38
+captured()
