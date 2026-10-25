@@ -1,0 +1,37 @@
+# A server waits for a request only so long: a connection that sends nothing, or nothing more after
+# a response, or not the whole request line, is closed without a response; a head that does not
+# come in time is answered 408; and a body that stops coming fails its read in the handler, which
+# closes the connection.
+import connect_tcp from 'std:net'
+import sleep from 'std:time'
+import Request, Response, serve, Server from 'std:http'
+
+handle := (request: Request) ->
+  try
+    Response body: "#{(await request.binary()).length} bytes"
+  catch error: IOError
+    print "handler: #{error.message}"
+    throw error
+
+# Each server has one short timeout, so that a case passes only through it.
+idle := serve(handle, idle_timeout: 0.3)
+head := serve(handle, head_timeout: 0.3)
+body := serve(handle, body_timeout: 0.3)
+
+# What comes until the server closes the connection, after `request`, sent as its parts, with a
+# pause before each but the first.
+ask := (server: Server, parts: String[]) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  for part, i in parts
+    await sleep(1.0) if i > 0
+    await client.write(part)
+  while line := await client.reader.read_line()
+    print line if line.starts_with('HTTP/')
+  print 'closed'
+
+await ask(idle, [])
+await ask(idle, ["GET / HTTP/1.1\r\nHost: a\r\n\r\n"])
+await ask(idle, ['GET / ', "HTTP/1.1\r\nHost: a\r\n\r\n"])
+await ask(head, ["GET / HTTP/1.1\r\n", "Host: a\r\n\r\n"])
+await ask(body, ["POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 4\r\n\r\nab", 'cd'])
+server.close() for server in [idle, head, body]

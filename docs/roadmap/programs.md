@@ -21,7 +21,6 @@ The planned design of modules, FFI, the standard library and tools.
 - Random numbers, and formatting dates and times.
 - In [std:net](../reference/modules.md#stdnet), UDP, TLS and Unix domain sockets. Each protocol has functions named by it, as TCP's `listen_tcp` and `connect_tcp`, and the types are named by the shape of what they carry: a Unix domain socket, a stream, is a `Socket` of `connect_unix(path)` and a `Listener` of `listen_unix(path)`, as TCP's are, and UDP, of datagrams, is a `UdpSocket` of `bind_udp(host, port)`.
 - In [std:http](../reference/modules.md#stdhttp), what a server needs in production, in this order:
-  - Limits and timeouts: of the length of the request line and of a field, through a `read_line` of `Reader` with a maximum, answered 414 and 431; of the number of fields and of the body, answered 431 and 413; and of the time a request may take to come and a kept connection may stay idle. A connection closed with input unread first reads it for a bounded time and size (lingering close), so that the client gets the response rather than a reset.
   - `server.close()` that ends kept connections after the request they serve, and a promise that it settles once they have ended (graceful shutdown); an accept that fails while the server is open, as for too many open files, retried after a pause rather than ending the program.
   - A `Date` field, and `Expect: 100-continue`.
   - Streaming: a body that the handler writes as it goes, sent chunked, with the pace of `socket.write`, and chunked request bodies, in place of the 501 now.

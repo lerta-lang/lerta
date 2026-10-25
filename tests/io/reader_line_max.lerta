@@ -1,0 +1,32 @@
+# A line of at most a count of bytes before its "\n", across chunks; a longer one throws a
+# LineTooLongError, which leaves its bytes for the next read, whether the chunk that goes beyond the
+# count holds the "\n" or not.
+import LineTooLongError, Reader from 'std:io'
+import sleep from 'std:time'
+
+chunks := ['abc', "d\r\n", 'efg', "hij\nk", "\n", "\n", 'lm', 'no', "\n"]
+var next = 0
+reader := Reader(read_chunk: ->
+  await sleep(0)
+  return nil if next == chunks.length
+  next += 1
+  chunks[next - 1].binary
+)
+print (await reader.read_line(5))!
+try
+  print await reader.read_line(5) ? 'end'
+catch error: LineTooLongError
+  print error.message
+print (await reader.read_line())!
+print (await reader.read_line(1))!
+print "'#{(await reader.read_line(0))!}'"
+try
+  print await reader.read_line(2) ? 'end'
+catch error: LineTooLongError
+  print error.message
+print (await reader.read_line())!
+print await reader.read_line() ? 'end'
+try
+  print await reader.read_line(-1) ? 'end'
+catch error: ValueError
+  print error.message

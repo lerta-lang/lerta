@@ -1,0 +1,84 @@
+# A server answers a request beyond its limits itself: a request line or a field longer than it
+# takes, too many fields, and a body longer than it takes, which it does not read, closing the
+# connection though the request keeps it alive. The client gets the response before the connection
+# closes, though it is still sending.
+import connect_tcp from 'std:net'
+import Request, Response, serve, Server from 'std:http'
+
+handle := (request: Request) -> Response(body: "#{(await request.binary()).length} bytes")
+
+server := serve(handle, max_line: 32, max_fields: 3, max_body: 4)
+
+# The status lines of the responses to `request`, until the server closes the connection.
+ask := (request: String) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  await client.write(request)
+  client.end()
+  while line := await client.reader.read_line()
+    print line if line.starts_with('HTTP/')
+
+await ask("GET /#{'a'.repeat(18)} HTTP/1.1\r\nHost: a\r\nx: #{'b'.repeat(29)}\r\n\r\n")
+await ask("GET /#{'a'.repeat(19)} HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("GET /#{'a'.repeat(19)} HTTP/1.1\nHost: a\n\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nx: #{'b'.repeat(40)}\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nx: 1\r\ny: 2\r\nz: 3\r\n\r\n")
+await ask(
+  "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 5\r\n\r\nhelloGET / HTTP/1.1\r\nHost: a\r\n\r\n"
+)
+await ask("POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 4\r\nConnection: close\r\n\r\nfour")
+
+# A body far beyond the limit, which the server drops unread while the client still writes it.
+client := await connect_tcp('127.0.0.1', server.port())
+body := 'x'.repeat(200000)
+writing :=
+  client.write("POST / HTTP/1.1\r\nHost: a\r\nContent-Length: #{body.binary.length}\r\n\r\n#{body}")
+print await client.reader.read_line() ? 'end'
+# The server may close before the rest has gone, which fails the write.
+_written :=
+  try
+    await writing
+    true
+  catch _: IOError
+    false
+client.end()
+# The server may close with what the client sent unread, which resets the connection.
+_read :=
+  try
+    await client.reader.read_all()
+  catch _: IOError
+    ''.binary
+server.close()
+
+# A limit of 0 takes an empty body alone.
+empty_only := serve(handle, max_body: 0)
+for length in [0, 1]
+  client := await connect_tcp('127.0.0.1', empty_only.port())
+  await client.write(
+    "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: #{length}\r\n\r\n#{'x'.repeat(length)}"
+  )
+  client.end()
+  print await client.reader.read_line() ? 'end'
+  _rest := await client.reader.read_all()
+empty_only.close()
+
+# A negative limit or timeout is refused as the server starts.
+refused := (start: () -> Server) ->
+  try
+    _server := start()
+  catch error: ValueError
+    print error.message
+refused -> serve(handle, max_line: -1)
+refused -> serve(handle, max_fields: -1)
+refused -> serve(handle, max_body: -1)
+refused -> serve(handle, idle_timeout: -1.0)
+refused -> serve(handle, head_timeout: -1.0)
+refused -> serve(handle, body_timeout: -1.0)
+
+# A limit of INT_MAX is none.
+unlimited := serve(handle, max_line: INT_MAX)
+unlimited_client := await connect_tcp('127.0.0.1', unlimited.port())
+await unlimited_client.write("GET / HTTP/1.1\r\nHost: a\r\n\r\n")
+unlimited_client.end()
+print await unlimited_client.reader.read_line() ? 'end'
+_rest := await unlimited_client.reader.read_all()
+unlimited.close()

@@ -124,6 +124,9 @@ export list_dir := (path: String) ->
 
 extern lerta_stdin_read: () -> Promise<Binary?>
 
+# A line with more bytes before its "\n" than a read of it takes.
+export struct LineTooLongError: Error
+
 # A stream read in chunks through a buffer: `read_chunk` gives the next chunk, or nil at the end. A
 # read must end before the next one starts: one that starts while another is pending throws.
 export class Reader
@@ -135,8 +138,11 @@ export class Reader
   # it, so that a read that throws or is cancelled leaves it for the next.
   taken = ''.binary
 
-  # The next line, without its "\n" and a "\r" before it, or nil at the end.
-  read_line = -> await @exclusive(-> await @line())
+  # The next line, without its "\n" and a "\r" before it, or nil at the end. A LineTooLongError
+  # if more than `max` bytes, a "\r" among them, come before its "\n", which leaves them unread.
+  read_line = (max: Int = INT_MAX) ->
+    throw ValueError(message: "read a line of a negative count of bytes: #{max}") if max < 0
+    await @exclusive(-> await @line(max))
 
   # `count` bytes, or as many as are left if the end comes first, or nil at the end.
   read = (count: Int) ->
@@ -175,14 +181,15 @@ export class Reader
     @taken = ''.binary
     bytes
 
-  line = ->
+  line = (max: Int) ->
     while await @fill()
       end := @chunk.index_of("\n".binary, @start) ? @chunk.length
       @taken += @chunk[@start...end]
+      @start = end
+      throw LineTooLongError(message: "a line is longer than #{max} bytes") if @taken.length > max
       if end < @chunk.length
         @start = end + 1
         return ended_line_text(@taken_out())
-      @start = @chunk.length
     return nil if @taken.is_empty()
     utf8_line @taken_out()
 

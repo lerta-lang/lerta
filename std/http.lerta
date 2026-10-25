@@ -1,6 +1,7 @@
 # An HTTP/1.1 server over std:net, whose handler takes a Request and gives a Response, as fetch does.
 
-import Reader from 'std:io'
+import timeout, TimeoutError from 'std:async'
+import LineTooLongError, Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
 
 # Fields of a request or a response, whose names are told apart regardless of case, and which may
@@ -58,9 +59,24 @@ export struct Response
   status = default 200
   headers = default Headers()
 
+# Where a server listens, at a free port if `port` is 0, and how much and how long it waits for of a
+# request: the bytes of its request line or of a field, its fields, and the bytes of its body; the
+# seconds before the request line of a request comes, before the rest of its head does, and before
+# each chunk of its body does.
+export struct ServerOptions
+  host = default '127.0.0.1'
+  port = default 0
+  max_line = default 8192
+  max_fields = default 100
+  max_body = default 10485760
+  idle_timeout = default 5.0
+  head_timeout = default 30.0
+  body_timeout = default 30.0
+
 export class Server
   listener: Listener
   handler: (Request) -> Promise<Response>
+  options: ServerOptions
   # Where it listens, as the host of the URL of a request that names none.
   address: String
   closed = false
@@ -72,15 +88,30 @@ export class Server
     @closed = true
     @listener.close()
 
-# Listens at once, at a free port if `port` is 0, and serves each connection until the server is
-# closed.
-export serve := (handler: (Request) -> Promise<Response>, host = '127.0.0.1', port = 0) ->
-  listener := listen_tcp(host, port)
+# Listens at once, and serves each connection until the server is closed.
+export serve := (handler: (Request) -> Promise<Response>, options: ServerOptions) ->
+  check_options options
+  { host } := options
+  listener := listen_tcp(host, options.port)
   # An IPv6 address in brackets, so that its port is told from it.
   address := host.contains(':') then "[#{host}]:#{listener.port}" else "#{host}:#{listener.port}"
-  server := Server(listener, handler, address)
+  server := Server(listener, handler, options, address)
   _accepting := accept_all(server)
   server
+
+check_options := (options: ServerOptions) ->
+  limits :=
+    ('max_line', options.max_line)
+    ('max_fields', options.max_fields)
+    ('max_body', options.max_body)
+  for (name, limit) in limits
+    throw ValueError(message: "a negative #{name}: #{limit}") if limit < 0
+  timeouts :=
+    ('idle_timeout', options.idle_timeout)
+    ('head_timeout', options.head_timeout)
+    ('body_timeout', options.body_timeout)
+  for (name, seconds) in timeouts
+    throw ValueError(message: "a negative #{name}: #{seconds}") if seconds < 0.0
 
 accept_all := (server: Server) ->
   while true
@@ -105,14 +136,36 @@ serve_connection := (socket: Socket, server: Server) ->
     # The peer has gone, or sent less than it said: there is no one left to answer.
     nil
   finally
+    await close_lingering(socket)
+
+# Closes the connection once the client has read the response: what the client still sends, as a
+# body that the server did not read, is read and dropped first, for a time and a size, as a socket
+# closed with input unread may be reset, which can lose the response before the client reads it.
+close_lingering := (socket: Socket) ->
+  try
+    socket.end()
+    await timeout(drain(socket.reader), LINGER_SECONDS)
+  catch _
+    # A peer that has gone, or keeps sending: it is closed anyway.
+    nil
+  finally
     socket.close()
+
+drain := (reader: Reader) ->
+  var left = LINGER_BYTES
+  while left > 0
+    chunk := await reader.read(min(left, CHUNK_SIZE)) ? return
+    left -= chunk.length
+
+LINGER_SECONDS := 2.0
+LINGER_BYTES := 65536
 
 # Serves the next request on the connection, and tells whether the connection goes on. A response
 # that the server gives itself has an empty body, which is right for HEAD too.
 serve_request := (socket: Socket, server: Server) ->
   incoming :=
     try
-      await read_request(socket.reader, server.address) ? return false
+      await read_request(socket.reader, server) ? return false
     catch error: RequestError
       await socket.write(response_bytes({ status: error.status }, false, 'GET'))
       return false
@@ -137,26 +190,31 @@ struct Incoming
   body: BodyChunks
   keep_alive: Bool
 
-# The next request, or nil if the connection ends before it starts.
-read_request := (reader: Reader, address: String) ->
-  var line = await reader.read_line() ? return nil
-  # A client may send an empty line after the body of the request before.
-  line = await reader.read_line() ? return nil if line.is_empty()
+# The next request, or nil if the connection ends, or stays idle, before it starts.
+read_request := (reader: Reader, server: Server) ->
+  options := server.options
+  line := await read_request_line(reader, options) ? return nil
   parts := line.split(' ')
   throw bad_request() if parts.length != 3
   (method, target, version) := (parts[0], parts[1], parts[2])
   throw bad_request() if method.is_empty() or target.is_empty()
   if not VERSIONS.contains(version)
     throw RequestError(status: 505, message: 'http version not supported')
-  headers := await read_headers(reader)
+  headers :=
+    try
+      await timeout(read_headers(reader, options), options.head_timeout)
+    catch _: TimeoutError
+      throw RequestError(status: 408, message: 'request timeout')
   if headers.has('transfer-encoding')
     throw RequestError(status: 501, message: 'transfer-encoding not implemented')
   hosts := [value for (name, value) in headers.fields when name == 'host']
   # HTTP/1.0 came before Host, which HTTP/1.1 requires.
   throw bad_request() if hosts.length > 1 or (hosts.is_empty() and version == 'HTTP/1.1')
-  host := hosts.first() ? address
+  host := hosts.first() ? server.address
   throw bad_request() if not is_host(host)
-  body := BodyChunks(reader, left: content_length(headers))
+  length := content_length(headers)
+  throw RequestError(status: 413, message: 'content too large') if length > options.max_body
+  body := BodyChunks(reader, left: length, seconds: options.body_timeout)
   url := url_of(host, target) ? throw bad_request()
   request := Request(method, url, headers, body: Reader(read_chunk: -> await body.next()))
   Incoming request, body, keep_alive: keeps_alive(version, headers)
@@ -165,13 +223,38 @@ VERSIONS := ['HTTP/1.1', 'HTTP/1.0']
 
 bad_request := -> RequestError(status: 400, message: 'bad request')
 
-read_headers := (reader: Reader) ->
+# The request line, which comes within the idle timeout, after an empty line that a client may send
+# after the body of the request before; nil if none does.
+read_request_line := (reader: Reader, options: ServerOptions) ->
+  read := ->
+    line := await read_limited_line(reader, options.max_line, 414) ? return nil
+    line.is_empty() then await read_limited_line(reader, options.max_line, 414) else line
+  try
+    await timeout(read(), options.idle_timeout)
+  catch _: TimeoutError
+    nil
+
+read_headers := (reader: Reader, options: ServerOptions) ->
   headers := Headers()
-  while line := await reader.read_line()
+  while line := await read_limited_line(reader, options.max_line, 431)
     return headers if line.is_empty()
+    if headers.fields.length == options.max_fields
+      throw RequestError(status: 431, message: 'too many fields')
     (name, value) := line.split_once(':') ? throw bad_request()
     headers.append name, value.trim()
   throw bad_request()
+
+# A line of at most `max` bytes before its CR LF, or its LF alone; a longer one is answered with
+# `status`. The reader takes a CR more, which the line then leaves out.
+read_limited_line := (reader: Reader, max: Int, status: Int) ->
+  too_long := -> RequestError(status, message: 'line too long')
+  line :=
+    try
+      await reader.read_line(min(max, INT_MAX - 1) + 1) ? return nil
+    catch _: LineTooLongError
+      throw too_long()
+  throw too_long() if line.binary.length > max
+  line
 
 content_length := (headers: Headers) ->
   text := headers.get('content-length') ? return 0
@@ -197,17 +280,24 @@ keeps_alive := (version: String, headers: Headers) ->
   return false if options.contains('close')
   version == 'HTTP/1.1' or options.contains('keep-alive')
 
-# The chunks of a body of `left` bytes, read from the connection's reader.
+# The chunks of a body of `left` bytes, read from the connection's reader, each within `seconds`.
 class BodyChunks
   reader: Reader
   left: Int
+  seconds: Float
 
   next = ->
     return nil if @left == 0
-    chunk :=
-      await @reader.read(min(@left, CHUNK_SIZE)) ? throw IOError(message: 'a body ended early')
+    chunk := await @chunk() ? throw IOError(message: 'a body ended early')
     @left -= chunk.length
     chunk
+
+  # A client that is too slow is taken to have gone.
+  chunk = ->
+    try
+      await timeout(@reader.read(min(@left, CHUNK_SIZE)), @seconds)
+    catch _: TimeoutError
+      throw IOError(message: 'a body timed out')
 
   # Reads what the handler has left of the body, so that the next request starts after it.
   skip = -> await @next() while @left > 0
@@ -248,6 +338,10 @@ REASONS :=
   403: 'Forbidden'
   404: 'Not Found'
   405: 'Method Not Allowed'
+  408: 'Request Timeout'
+  413: 'Content Too Large'
+  414: 'URI Too Long'
+  431: 'Request Header Fields Too Large'
   500: 'Internal Server Error'
   501: 'Not Implemented'
   503: 'Service Unavailable'
