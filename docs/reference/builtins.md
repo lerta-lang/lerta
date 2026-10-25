@@ -53,7 +53,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `String` | `equals`, `hash`, `add`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `is_empty`, `without_prefix`, `without_suffix`, `contains`, `split_once`, `replace`, `trim`, `repeat`, `pad_start`, `pad_end`, `to_upper`, `to_lower`, `compare` |
 | `Binary` | `equals`, `hash`, `length`, `is_empty`, `iter`, `occurs_at`, `index_of`, `text` |
 | `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `index_of`, `is_empty`, `first`, `last`, `sorted`, `sorted_by`, `append`, `slice`, `reversed`, `truncate`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
-| `Map<K, V>` | `length`, `is_empty`, `has`, `get_or_put`, `remove`, `keys`, `values`, `entries` |
+| `Map<K, V>` | `length`, `is_empty`, `has`, `remove`, `keys`, `values`, `entries` |
 | `Set<T>` | `length`, `is_empty`, `has`, `add`, `remove`, `iter`, `bit_or`, `bit_and`, `sub`, `bit_xor`, `is_subset` |
 | `Iter<T>` | `has_next`, `next`, `iter` |
 | Any [Iterable](#iterable) | those that [Iterable](#iterable) gives |
