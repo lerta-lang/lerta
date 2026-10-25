@@ -5,8 +5,9 @@
 
 #include "internal.h"
 
-// The sockets and listeners of std:net, on libuv's TCP. A handle is the address of a Net, which
-// std:net's Handle owns; a close keeps it, closed, until that frees it.
+// Each Handle holds a libuv stream: so far a socket or a listener of std:net. Lerta holds a Handle
+// by its address, in a Handle of std/internal/handle.lerta, which frees it; a close keeps it,
+// closed, until then.
 
 LERTA_STATIC_STRING(cannot_listen, "cannot listen at ");
 LERTA_STATIC_STRING(cannot_accept, "cannot accept at ");
@@ -15,13 +16,13 @@ LERTA_STATIC_STRING(cannot_read, "cannot read from ");
 LERTA_STATIC_STRING(cannot_write, "cannot write to ");
 LERTA_STATIC_STRING(accepted_twice, "a Listener is accepted by another accept that has not ended");
 
-// A socket or a listener. Its libuv handle is replaced when a connect tries the next address; it
-// is unreferenced but while a read or an accept is pending, so that a socket left open does not
-// keep the program running. It is freed once std:net has freed it and the requests that are
-// pending, and the closes of its handles, have ended, which they do on the loop.
-typedef struct Net {
+// A socket or a listener, whose libuv stream is unreferenced but while a read or an accept is
+// pending, so that one left open does not keep the program running. It is freed once Lerta has
+// freed it and the requests that are pending, and the closes of its libuv streams, have ended,
+// which they do on the loop.
+typedef struct Handle {
   // NULL once closed.
-  uv_tcp_t *handle;
+  uv_stream_t *stream;
   bool freed;
   int requests;
   // `host:port`, which the failures name: where it listens, what it connects to or its peer.
@@ -30,59 +31,66 @@ typedef struct Net {
   // close fails it, as another task awaits it.
   LertaPromise *pending;
   const void *pending_failure;
-  // The socket that the accept pending takes the connection into.
-  struct Net *accepted;
+  // The rest is TCP's. The socket that the accept pending takes the connection into.
+  struct Handle *accepted;
   // The connections that have come and are not taken yet.
   int64_t connections;
-  // What a connect resolved, and the address that it tries next.
+  // What a connect resolved, and the address that it tries next; each attempt takes a new libuv
+  // stream (see reopen_tcp).
   struct addrinfo *addresses;
   struct addrinfo *next_address;
   uv_getaddrinfo_t resolving;
   uv_connect_t connecting;
-} Net;
+} Handle;
 
-static Net *net_of(int64_t handle) {
-  return (Net *)(intptr_t)handle;
+static Handle *handle_of(int64_t pointer) {
+  return (Handle *)(intptr_t)pointer;
 }
 
-static void set_address(Net *net, LertaString *address) {
-  if (net->address != NULL) lerta_release(net->address);
-  net->address = address;
+static void set_address(Handle *handle, LertaString *address) {
+  if (handle->address != NULL) lerta_release(handle->address);
+  handle->address = address;
 }
 
-static void free_net_if_done(Net *net) {
-  if (net->freed && net->requests == 0) free(net);
+static void free_handle_if_done(Handle *handle) {
+  if (handle->freed && handle->requests == 0) free(handle);
 }
 
-static void end_request(Net *net) {
-  net->requests--;
-  free_net_if_done(net);
+static void end_request(Handle *handle) {
+  handle->requests--;
+  free_handle_if_done(handle);
 }
 
-static void free_handle(uv_handle_t *handle) {
-  Net *net = handle->data;
-  free(handle);
-  end_request(net);
+static void free_stream(uv_handle_t *stream) {
+  Handle *handle = stream->data;
+  free(stream);
+  end_request(handle);
 }
 
-static void open_handle(Net *net) {
-  net->handle = lerta_checked_malloc(sizeof(uv_tcp_t));
-  uv_tcp_init(uv_default_loop(), net->handle);
-  net->handle->data = net;
-  uv_unref((uv_handle_t *)net->handle);
+static uv_tcp_t *tcp_of(Handle *handle) {
+  return (uv_tcp_t *)handle->stream;
 }
 
-static void close_handle(Net *net) {
-  net->requests++;
-  uv_close((uv_handle_t *)net->handle, free_handle);
-  net->handle = NULL;
+static void open_tcp(Handle *handle) {
+  uv_tcp_t *tcp = lerta_checked_malloc(sizeof(uv_tcp_t));
+  uv_tcp_init(uv_default_loop(), tcp);
+  handle->stream = (uv_stream_t *)tcp;
+  handle->stream->data = handle;
+  uv_unref((uv_handle_t *)handle->stream);
 }
 
-// A failed connect leaves its socket, of its address's family, on the handle, which libuv would
-// connect again to the next address, even of the other family; so each attempt takes a new one.
-static void reopen_handle(Net *net) {
-  close_handle(net);
-  open_handle(net);
+static void close_stream(Handle *handle) {
+  handle->requests++;
+  uv_close((uv_handle_t *)handle->stream, free_stream);
+  handle->stream = NULL;
+}
+
+// A failed connect leaves its socket, of its address's family, on the libuv stream, which libuv
+// would connect again to the next address, even of the other family; so each attempt takes a new
+// stream.
+static void reopen_tcp(Handle *handle) {
+  close_stream(handle);
+  open_tcp(handle);
 }
 
 // An IPv6 address is written in brackets, as in a URL, so that its port is told from it.
@@ -123,62 +131,63 @@ static void reject_with(LertaPromise *promise, const void *failure, const LertaS
   lerta_promise_reject(promise);
 }
 
-// The promise that the Net held, taken from it.
-static LertaPromise *take_pending(Net *net) {
-  LertaPromise *promise = net->pending;
-  net->pending = NULL;
+// The promise that the Handle held, taken from it.
+static LertaPromise *take_pending(Handle *handle) {
+  LertaPromise *promise = handle->pending;
+  handle->pending = NULL;
   return promise;
 }
 
-static void reject_cancelled(Net *net) {
-  LertaPromise *promise = take_pending(net);
+static void reject_cancelled(Handle *handle) {
+  LertaPromise *promise = take_pending(handle);
   lerta_promise_reject_cancelled(promise);
   lerta_release(promise);
 }
 
-static void hold_pending(Net *net, LertaPromise *promise, const void *failure, LertaCancel cancel) {
+static void hold_pending(Handle *handle, LertaPromise *promise, const void *failure,
+                         LertaCancel cancel) {
   lerta_retain(promise);
-  net->pending = promise;
-  net->pending_failure = failure;
-  lerta_promise_on_cancel(promise, cancel, net);
+  handle->pending = promise;
+  handle->pending_failure = failure;
+  lerta_promise_on_cancel(promise, cancel, handle);
 }
 
 int64_t lerta_tcp_new(void) {
-  Net *net = lerta_checked_calloc(1, sizeof(Net));
-  open_handle(net);
-  return (int64_t)(intptr_t)net;
+  Handle *handle = lerta_checked_calloc(1, sizeof(Handle));
+  open_tcp(handle);
+  return (int64_t)(intptr_t)handle;
 }
 
-void lerta_tcp_close(int64_t handle) {
-  Net *net = net_of(handle);
-  if (net->handle == NULL) return;
-  close_handle(net);
-  if (net->pending == NULL) return;
-  net->accepted = NULL;
-  LertaPromise *promise = take_pending(net);
-  reject_with(promise, net->pending_failure, net->address);
+void lerta_handle_close(int64_t pointer) {
+  Handle *handle = handle_of(pointer);
+  if (handle->stream == NULL) return;
+  close_stream(handle);
+  if (handle->pending == NULL) return;
+  handle->accepted = NULL;
+  LertaPromise *promise = take_pending(handle);
+  reject_with(promise, handle->pending_failure, handle->address);
   lerta_release(promise);
 }
 
-void lerta_tcp_free(int64_t handle) {
-  Net *net = net_of(handle);
-  lerta_tcp_close(handle);
+void lerta_handle_free(int64_t pointer) {
+  Handle *handle = handle_of(pointer);
+  lerta_handle_close(pointer);
   // At once, as a Handle released at the end of the program, after the loop, would leave it.
-  set_address(net, NULL);
-  net->freed = true;
-  free_net_if_done(net);
+  set_address(handle, NULL);
+  handle->freed = true;
+  free_handle_if_done(handle);
 }
 
-// The listener's handle is referenced while an accept waits.
-static void stop_waiting(Net *listener) {
-  uv_unref((uv_handle_t *)listener->handle);
+// The listener's stream is referenced while an accept waits.
+static void stop_waiting(Handle *listener) {
+  uv_unref((uv_handle_t *)listener->stream);
 }
 
 // The address of the socket's peer, or NULL if it cannot be read.
-static LertaString *peer_address(Net *socket) {
+static LertaString *peer_address(Handle *socket) {
   struct sockaddr_storage peer;
   int length = sizeof(peer);
-  if (uv_tcp_getpeername(socket->handle, (struct sockaddr *)&peer, &length) != 0) return NULL;
+  if (uv_tcp_getpeername(tcp_of(socket), (struct sockaddr *)&peer, &length) != 0) return NULL;
   char host[INET6_ADDRSTRLEN];
   int status = peer.ss_family == AF_INET6
                  ? uv_ip6_name((struct sockaddr_in6 *)&peer, host, sizeof(host))
@@ -187,11 +196,11 @@ static LertaString *peer_address(Net *socket) {
 }
 
 // The connection goes into the socket, which takes the peer's address.
-static void take_connection(Net *listener, LertaPromise *promise) {
-  Net *socket = listener->accepted;
+static void take_connection(Handle *listener, LertaPromise *promise) {
+  Handle *socket = listener->accepted;
   listener->accepted = NULL;
   listener->connections--;
-  bool accepted = uv_accept((uv_stream_t *)listener->handle, (uv_stream_t *)socket->handle) == 0;
+  bool accepted = uv_accept(listener->stream, socket->stream) == 0;
   LertaString *address = accepted ? peer_address(socket) : NULL;
   if (address == NULL) {
     reject_with(promise, &cannot_accept, listener->address);
@@ -202,8 +211,8 @@ static void take_connection(Net *listener, LertaPromise *promise) {
 }
 
 // A failure fails the accept that waits, and is no connection.
-static void come_connection(uv_stream_t *server, int status) {
-  Net *listener = server->data;
+static void come_connection(uv_stream_t *stream, int status) {
+  Handle *listener = stream->data;
   if (status == 0) listener->connections++;
   if (listener->pending == NULL) return;
   stop_waiting(listener);
@@ -217,59 +226,59 @@ static void come_connection(uv_stream_t *server, int status) {
   lerta_release(promise);
 }
 
-int64_t lerta_tcp_listen(int64_t handle, const LertaString *host, int64_t port) {
-  Net *net = net_of(handle);
+int64_t lerta_tcp_listen(int64_t pointer, const LertaString *host, int64_t port) {
+  Handle *handle = handle_of(pointer);
   char *name = lerta_c_string(host);
   uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
   uv_getaddrinfo_t request;
   // Without a callback, libuv resolves the name at once.
   bool resolved = uv_getaddrinfo(uv_default_loop(), &request, NULL, name, port_text(port, buffer),
                                  &tcp_hints) == 0;
-  bool listening = resolved && uv_tcp_bind(net->handle, request.addrinfo->ai_addr, 0) == 0 &&
-                   uv_listen((uv_stream_t *)net->handle, SOMAXCONN, come_connection) == 0;
+  bool listening = resolved && uv_tcp_bind(tcp_of(handle), request.addrinfo->ai_addr, 0) == 0 &&
+                   uv_listen(handle->stream, SOMAXCONN, come_connection) == 0;
   if (resolved) uv_freeaddrinfo(request.addrinfo);
   struct sockaddr_storage address;
   int length = sizeof(address);
   bool bound =
-    listening && uv_tcp_getsockname(net->handle, (struct sockaddr *)&address, &length) == 0;
+    listening && uv_tcp_getsockname(tcp_of(handle), (struct sockaddr *)&address, &length) == 0;
   int64_t bound_port = bound ? port_of(&address) : -1;
-  set_address(net, address_text(name, bound ? bound_port : port));
+  set_address(handle, address_text(name, bound ? bound_port : port));
   free(name);
-  if (!bound) lerta_raise_with(LERTA_IO_ERROR, &cannot_listen, net->address);
+  if (!bound) lerta_raise_with(LERTA_IO_ERROR, &cannot_listen, handle->address);
   return bound_port;
 }
 
 static void cancel_accept(void *context) {
-  Net *listener = context;
+  Handle *listener = context;
   stop_waiting(listener);
   listener->accepted = NULL;
   reject_cancelled(listener);
 }
 
 // std:net gives a new socket, which it holds until the promise is settled.
-LertaPromise *lerta_tcp_accept(int64_t listener_handle, int64_t socket_handle) {
-  Net *listener = net_of(listener_handle);
+LertaPromise *lerta_tcp_accept(int64_t listener_pointer, int64_t socket_pointer) {
+  Handle *listener = handle_of(listener_pointer);
   // As a Reader throws for a read while another is pending.
   if (listener->pending != NULL) {
     lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&accepted_twice);
     return NULL;
   }
   LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
-  if (listener->handle == NULL) {
+  if (listener->stream == NULL) {
     reject_with(promise, &cannot_accept, listener->address);
     return promise;
   }
-  listener->accepted = net_of(socket_handle);
+  listener->accepted = handle_of(socket_pointer);
   if (listener->connections > 0) {
     take_connection(listener, promise);
     return promise;
   }
-  uv_ref((uv_handle_t *)listener->handle);
+  uv_ref((uv_handle_t *)listener->stream);
   hold_pending(listener, promise, &cannot_accept, cancel_accept);
   return promise;
 }
 
-static void end_connect(Net *socket, bool connected) {
+static void end_connect(Handle *socket, bool connected) {
   uv_freeaddrinfo(socket->addresses);
   socket->addresses = NULL;
   LertaPromise *promise = take_pending(socket);
@@ -278,45 +287,45 @@ static void end_connect(Net *socket, bool connected) {
   lerta_release(promise);
 }
 
-static void try_next_address(Net *socket);
+static void try_next_address(Handle *socket);
 
 // A close cancels the attempt, which then ends with UV_ECANCELED.
 static void end_connect_attempt(uv_connect_t *request, int status) {
-  Net *socket = request->data;
+  Handle *socket = request->data;
   socket->requests--;
-  if (socket->handle == NULL) {
+  if (socket->stream == NULL) {
     uv_freeaddrinfo(socket->addresses);
     socket->addresses = NULL;
-    free_net_if_done(socket);
+    free_handle_if_done(socket);
   } else if (status == 0) {
     end_connect(socket, true);
   } else {
-    reopen_handle(socket);
+    reopen_tcp(socket);
     try_next_address(socket);
   }
 }
 
-static void try_next_address(Net *socket) {
+static void try_next_address(Handle *socket) {
   for (struct addrinfo *address = socket->next_address; address != NULL;
        address = address->ai_next) {
     socket->next_address = address->ai_next;
     socket->connecting.data = socket;
-    if (uv_tcp_connect(&socket->connecting, socket->handle, address->ai_addr,
+    if (uv_tcp_connect(&socket->connecting, tcp_of(socket), address->ai_addr,
                        end_connect_attempt) == 0) {
       socket->requests++;
       return;
     }
-    reopen_handle(socket);
+    reopen_tcp(socket);
   }
   end_connect(socket, false);
 }
 
 static void end_resolve(uv_getaddrinfo_t *request, int status, struct addrinfo *addresses) {
-  Net *socket = request->data;
+  Handle *socket = request->data;
   socket->requests--;
-  if (socket->handle == NULL) {
+  if (socket->stream == NULL) {
     uv_freeaddrinfo(addresses);
-    free_net_if_done(socket);
+    free_handle_if_done(socket);
     return;
   }
   socket->addresses = addresses;
@@ -326,21 +335,21 @@ static void end_resolve(uv_getaddrinfo_t *request, int status, struct addrinfo *
 
 // The socket is closed, which gives up the connect.
 static void cancel_connect(void *context) {
-  Net *socket = context;
+  Handle *socket = context;
   LertaPromise *promise = take_pending(socket);
-  lerta_tcp_close((int64_t)(intptr_t)socket);
+  lerta_handle_close((int64_t)(intptr_t)socket);
   lerta_promise_reject_cancelled(promise);
   lerta_release(promise);
 }
 
 // The host is resolved on the thread pool, and each of its addresses is tried in turn until one
 // connects.
-LertaPromise *lerta_tcp_connect(int64_t handle, const LertaString *host, int64_t port) {
-  Net *socket = net_of(handle);
+LertaPromise *lerta_tcp_connect(int64_t pointer, const LertaString *host, int64_t port) {
+  Handle *socket = handle_of(pointer);
   LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
   char *name = lerta_c_string(host);
   set_address(socket, address_text(name, port));
-  if (socket->handle == NULL) {
+  if (socket->stream == NULL) {
     free(name);
     reject_with(promise, &cannot_connect, socket->address);
     return promise;
@@ -356,21 +365,21 @@ LertaPromise *lerta_tcp_connect(int64_t handle, const LertaString *host, int64_t
   return promise;
 }
 
-// The socket's handle is referenced while a read waits.
-static void stop_reading(Net *socket) {
-  uv_read_stop((uv_stream_t *)socket->handle);
-  uv_unref((uv_handle_t *)socket->handle);
+// The socket's stream is referenced while a read waits.
+static void stop_reading(Handle *socket) {
+  uv_read_stop(socket->stream);
+  uv_unref((uv_handle_t *)socket->stream);
 }
 
-static void allocate_chunk(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buffer) {
-  (void)handle;
+static void allocate_chunk(uv_handle_t *stream, size_t suggested_size, uv_buf_t *buffer) {
+  (void)stream;
   *buffer = uv_buf_init(lerta_checked_malloc(suggested_size), (unsigned int)suggested_size);
 }
 
 // One chunk ends a read, so that a cancelled read, which stops the reads, loses none; libuv may
 // give 0 bytes, which are none.
 static void read_chunk(uv_stream_t *stream, ssize_t count, const uv_buf_t *buffer) {
-  Net *socket = stream->data;
+  Handle *socket = stream->data;
   if (count == 0) {
     free(buffer->base);
     return;
@@ -391,21 +400,21 @@ static void read_chunk(uv_stream_t *stream, ssize_t count, const uv_buf_t *buffe
 }
 
 static void cancel_read(void *context) {
-  Net *socket = context;
+  Handle *socket = context;
   stop_reading(socket);
   reject_cancelled(socket);
 }
 
-LertaPromise *lerta_tcp_read(int64_t handle) {
-  Net *socket = net_of(handle);
+LertaPromise *lerta_handle_read(int64_t pointer) {
+  Handle *socket = handle_of(pointer);
   LertaPromise *promise = lerta_promise_new(LERTA_REFERENCE_ITEMS);
-  bool started = socket->handle != NULL &&
-                 uv_read_start((uv_stream_t *)socket->handle, allocate_chunk, read_chunk) == 0;
+  bool started = socket->stream != NULL &&
+                 uv_read_start(socket->stream, allocate_chunk, read_chunk) == 0;
   if (!started) {
     reject_with(promise, &cannot_read, socket->address);
     return promise;
   }
-  uv_ref((uv_handle_t *)socket->handle);
+  uv_ref((uv_handle_t *)socket->stream);
   hold_pending(socket, promise, &cannot_read, cancel_read);
   return promise;
 }
@@ -415,7 +424,7 @@ LertaPromise *lerta_tcp_read(int64_t handle) {
 // freed first.
 typedef struct {
   uv_write_t request;
-  Net *socket;
+  Handle *socket;
   LertaPromise *promise;
   LertaString *bytes;
   LertaString *address;
@@ -458,16 +467,16 @@ static int start_write(Write *write) {
     if (part > WRITE_PART) part = WRITE_PART;
     buffers[i] = uv_buf_init((char *)write->bytes->bytes + i * WRITE_PART, (unsigned int)part);
   }
-  int status = uv_write(&write->request, (uv_stream_t *)write->socket->handle, buffers,
+  int status = uv_write(&write->request, write->socket->stream, buffers,
                         (unsigned int)count, end_write);
   free(buffers);
   return status;
 }
 
-LertaPromise *lerta_tcp_write(int64_t handle, const LertaString *bytes) {
-  Net *socket = net_of(handle);
+LertaPromise *lerta_handle_write(int64_t pointer, const LertaString *bytes) {
+  Handle *socket = handle_of(pointer);
   LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
-  if (socket->handle == NULL) {
+  if (socket->stream == NULL) {
     reject_with(promise, &cannot_write, socket->address);
     return promise;
   }
@@ -490,17 +499,17 @@ LertaPromise *lerta_tcp_write(int64_t handle, const LertaString *bytes) {
 
 static void end_shutdown(uv_shutdown_t *request, int status) {
   (void)status;
-  Net *socket = request->data;
+  Handle *socket = request->data;
   free(request);
   end_request(socket);
 }
 
 // A failure is not reported: the peer reads the end once the socket is closed in any case.
-void lerta_tcp_end(int64_t handle) {
-  Net *socket = net_of(handle);
-  if (socket->handle == NULL) return;
+void lerta_handle_end(int64_t pointer) {
+  Handle *socket = handle_of(pointer);
+  if (socket->stream == NULL) return;
   uv_shutdown_t *request = lerta_checked_malloc(sizeof(uv_shutdown_t));
   request->data = socket;
-  if (uv_shutdown(request, (uv_stream_t *)socket->handle, end_shutdown) == 0) socket->requests++;
+  if (uv_shutdown(request, socket->stream, end_shutdown) == 0) socket->requests++;
   else free(request);
 }

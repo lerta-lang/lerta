@@ -1,0 +1,27 @@
+# A stream of the runtime, as a socket, which std:net makes: read through a Reader of std:io, and
+# written, ended and closed by the functions below (see runtime/handle.c).
+
+import Reader from 'std:io'
+
+extern lerta_handle_close: (Int) -> void
+extern lerta_handle_free: (Int) -> void
+extern lerta_handle_read: (Int) -> Promise<Binary?>
+extern lerta_handle_write: (Int, Binary) -> Promise
+extern lerta_handle_end: (Int) -> void
+
+# The runtime's stream, closed once nothing holds it. What reads and writes it shares it, as the
+# function that a Reader reads through, which would make a cycle if it held what holds the Reader.
+export class Handle
+  pointer: Int
+  deinit = -> lerta_handle_free(@pointer)
+
+export reader_of := (handle: Handle) -> Reader(read_chunk: -> lerta_handle_read(handle.pointer))
+
+# Resolves once the data has been handed to the system.
+export write_handle := (handle: Handle, data: String | Binary) ->
+  await lerta_handle_write(handle.pointer, data is String then data.binary else data)
+
+# Closes the writing side, which the peer reads as its end.
+export end_handle := (handle: Handle) -> lerta_handle_end(handle.pointer)
+
+export close_handle := (handle: Handle) -> lerta_handle_close(handle.pointer)

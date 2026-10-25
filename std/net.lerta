@@ -1,50 +1,35 @@
-# TCP over IPv4 and IPv6 on the event loop (see runtime/net.c).
+# TCP over IPv4 and IPv6 on the event loop (see runtime/handle.c).
 
 import Reader from 'std:io'
+import close_handle, end_handle, Handle, reader_of, write_handle from './internal/handle'
 
 extern lerta_tcp_new: () -> Int
-extern lerta_tcp_close: (Int) -> void
-extern lerta_tcp_free: (Int) -> void
 extern lerta_tcp_listen: (Int, String, Int) -> Int
 extern lerta_tcp_accept: (Int, Int) -> Promise
 extern lerta_tcp_connect: (Int, String, Int) -> Promise
-extern lerta_tcp_read: (Int) -> Promise<Binary?>
-extern lerta_tcp_write: (Int, Binary) -> Promise
-extern lerta_tcp_end: (Int) -> void
 
-# The runtime's socket or listener, closed once nothing holds it. A Socket shares it with the
-# function that its Reader reads through, which would make a cycle if it held the Socket itself.
-class Handle
-  pointer = lerta_tcp_new()
-  deinit = -> lerta_tcp_free(@pointer)
+new_handle := -> Handle(pointer: lerta_tcp_new())
 
 export struct Socket
   handle: Handle
   reader: Reader
 
-  # Resolves once the data has been handed to the system.
-  write = (data: String | Binary) ->
-    bytes := data is String then data.binary else data
-    await lerta_tcp_write(@handle.pointer, bytes)
+  write = (data: String | Binary) -> await write_handle(@handle, data)
+  end = -> end_handle(@handle)
+  close = -> close_handle(@handle)
 
-  # Closes the writing side, which the peer reads as its end.
-  end = -> lerta_tcp_end(@handle.pointer)
-
-  close = -> lerta_tcp_close(@handle.pointer)
-
-socket_of := (handle: Handle) ->
-  Socket handle, reader: Reader(read_chunk: -> lerta_tcp_read(handle.pointer))
+socket_of := (handle: Handle) -> Socket(handle, reader: reader_of(handle))
 
 export struct Listener
   handle: Handle
   port: Int
 
   accept = ->
-    socket := Handle()
+    socket := new_handle()
     await lerta_tcp_accept(@handle.pointer, socket.pointer)
     socket_of socket
 
-  close = -> lerta_tcp_close(@handle.pointer)
+  close = -> close_handle(@handle)
 
 # Fails as the operation `failure` does at the address, before the runtime is given what it cannot
 # take: a host that holds a NUL byte, which C would read up to, or a port out of range.
@@ -59,11 +44,11 @@ address_text := (host: String, port: Int) ->
 # Listens at once, at a free port if `port` is 0.
 export listen_tcp := (host: String, port = 0) ->
   check_address 'cannot listen at ', host, port
-  handle := Handle()
+  handle := new_handle()
   Listener handle, port: lerta_tcp_listen(handle.pointer, host, port)
 
 export connect_tcp := (host: String, port: Int) ->
   check_address 'cannot connect to ', host, port
-  handle := Handle()
+  handle := new_handle()
   await lerta_tcp_connect(handle.pointer, host, port)
   socket_of handle
