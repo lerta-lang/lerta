@@ -238,15 +238,22 @@ written_or_expected := (body: Body, call: Call, name: String, expected: Type?) -
   written := NamedType(name, args: call.type_args, position: call.callee.position)
   resolve body.program, body.resolver, written
 
-# An item of an array or a Binary, or the value of a map's key, which may not be there.
+# An item of an array or a Binary, or the value of a map's key, which may not be there, but for
+# `m[k, default: d]`, which puts `d` first where it is not.
 export type_of_index := (body: Body, index: Index): Type ->
   object_type := type_of(body, index.object)
+  default_value := index.default_value
+  if default_value and (object_type is not MapType or is_set(object_type))
+    message := "only a map's index takes a default, not that of #{format_type(object_type)}"
+    fail body.program, default_value.position, message
   range := index.index as Range?
   return type_of_slice(body, range, object_type) if range
   if object_type is MapType
     reject_set_index body, index, object_type
     expect_type body, index.index, object_type.key
-    return optional_type(object_type.value)
+    return optional_type(object_type.value) if default_value == nil
+    expect_type body, default_value, object_type.value
+    return object_type.value
   if object_type is not ArrayType and not is_kind(object_type, 'Binary')
     message := "cannot index a value of type #{format_type(object_type)}"
     fail body.program, index.object.position, message

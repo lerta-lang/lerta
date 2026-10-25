@@ -343,16 +343,26 @@ extend_by_postfix := (tokens: TokenStream, expression: Expression): Expression? 
   case token.kind
     when '!' then Unwrap(position, operand: expression)
     when '(' then call_of(expression, parse_parenthesized_arguments(tokens), [])
-    when '[' then Index(position, object: expression, index: parse_index(tokens))
+    when '[' then parse_index(tokens, expression, position)
     else Member(position, object: expression, name: parse_identifier(tokens))
 
-# The index after `[`, through `]`; line ends inside are skipped.
-parse_index := (tokens: TokenStream) ->
+# The index after `[`, and the default of a map's value after it, `m[k, default: d]`, through `]`;
+# line ends inside are skipped, so that they continue the index, but for one before `default`,
+# which separates the two as a comma does, as a list's items are.
+parse_index := (tokens: TokenStream, object: Expression, position: Position) ->
   parse_contents := ->
-    expression := parse_expression(tokens)
+    index := parse_expression(tokens)
+    default_value := parse_index_default(tokens)
     tokens.expect ']'
-    expression
+    Index position, object, index, default_value
   tokens.inside SKIP, parse_contents
+
+parse_index_default := (tokens: TokenStream): Expression? ->
+  if not tokens.accept(',')
+    return nil if not tokens.at_line_break() or not tokens.at_word('default')
+  tokens.expect_word 'default'
+  tokens.expect ':'
+  parse_expression tokens
 
 # `in` and `when` are not keywords, so that they stay usable as names.
 export parse_loop_header := (tokens: TokenStream) ->

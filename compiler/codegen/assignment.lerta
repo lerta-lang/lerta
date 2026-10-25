@@ -1,19 +1,23 @@
 # Generates assignments to names, fields, array items and map values.
-import Assignment, combining_operator, Identifier, Index, Member from '../ast'
+import Assignment, Call, combining_operator, Expression, Identifier, Index, Member from '../ast'
+import Method from '../checker/member_targets'
 import info_of from '../checker/object_types'
 import emit_checked_items, emit_get, emit_is_out_of_range, emit_set_in from './array'
 import
-  emit_exception_check, emit_exception_check_if, pop_temporaries, push_temporary, while_holding
+  emit_exception_check, emit_exception_check_if, holding, pop_temporaries, push_temporary,
+  while_holding
 from './exceptions'
 import
   generate, generate_borrowed, release_if_reference, slot_pointer, type_at_use, type_of
 from './expression'
+import emit_method_call, MethodCall from './call'
 import weak_box_of from './function'
 import local_of from './references'
 import Generator, SlotLocal from './generator'
+import emit_branch from './ir_builder'
 import emit_field_pointer, emit_member_dispatch, field_named from './heap_object'
 import emit_release, emit_release_value, ir_type, ownership from './lerta_ir'
-import emit_map_set from './map'
+import emit_find, emit_held_at, emit_map_set, emit_place, emit_set_at from './map'
 import appended, apply_numeric from './operator'
 import emit_extend from './string'
 import is_one_of_kinds, MapType, ObjectType, Type, UnionType from '../types'
@@ -36,9 +40,11 @@ export generate_assignment := (g: Generator, written: Assignment) ->
         assign_through g, assignment, pointer, slot.type
 
 # `a += b` through a method assigns the call of it that the checker made, `a.add(b)` (see
-# check_operator_assignment).
+# check_operator_assignment), but for a target with a default, which update_with_default reads
+# once, without putting the default first.
 through_method := (g: Generator, assignment: Assignment) ->
   call := g.facts.operator_calls[assignment] ? return assignment
+  return assignment if (assignment.target as Index?)?.default_value
   Assignment(assignment..., operator: '=', value: call)
 
 # The field takes the new value's reference and releases the old one. Through a union, the field
@@ -118,19 +124,76 @@ generate_index_assignment := (g: Generator, assignment: Assignment, target: Inde
   else
     emit_exception_check g
 
-# Only `=` applies to a map value. The key, like an index, is evaluated before the value.
+# `=` sets a map value, and `+=` and so on update that of `m[k, default: d]`. The key, like an
+# index, is evaluated before the value.
 generate_map_assignment := (g: Generator, assignment: Assignment, target: Index, type: MapType) ->
   (map, is_owned) := generate_borrowed(g, target.object)
   depth := g.temporaries.length
   push_temporary g, map, type if is_owned
   key := generate(g, target.index)
   push_temporary g, key, type_at_use(g, target.index)
-  value := generate(g, assignment.value)
-  pop_temporaries g, depth
-  emit_map_set g.ir, map, key, value, type
+  if assignment.operator == '='
+    value := generate(g, assignment.value)
+    pop_temporaries g, depth
+    emit_map_set g.ir, map, key, value, type
+    release_if_reference g, assignment.value, value
+  else
+    update_with_default g, assignment, target.default_value!, map, key, type
+    pop_temporaries g, depth
   release_if_reference g, target.index, key
-  release_if_reference g, assignment.value, value
   emit_release g.ir, map if is_owned
+
+# `m[k, default: d] += x` and so on, of a borrowed map and key: the value is evaluated first, then
+# the key's value is read, or else `d` is evaluated, and the two combined, by the operator or by
+# the method that it calls. The map holds the key only once the result is written, so that one
+# that throws, as an overflow, leaves the map as it was.
+update_with_default := (
+  g: Generator, assignment: Assignment, default_value: Expression, map: String, key: String,
+  type: MapType
+) ->
+  ir := g.ir
+  by_method := g.facts.operator_calls[assignment]
+  operand := by_method then assignment.value else appended(g, assignment.value)
+  value := generate(g, operand)
+  value_type := type_at_use(g, operand)
+  place := emit_find(ir, map, key, type)
+  found := ir.assign("icmp ne ptr #{place}, null")
+  missing := ir.assign("xor i1 #{found}, true")
+  held := emit_held_at(ir, place, found, type)
+  old := holding(g, value, value_type, ->
+    emit_branch ir, ir_type(type.value), missing, -> generate(g, default_value), held
+  )
+  result :=
+    if by_method
+      combine_by_method g, by_method, old, value, type.value, value_type
+    else
+      combine g, assignment.operator, old, value, type.value, value_type
+  # A method, unlike an operator, may change the map, as the default may.
+  place_anew := -> emit_place(ir, map, key, type)
+  written := by_method then place_anew() else emit_branch(ir, 'ptr', missing, place_anew, place)
+  emit_set_at ir, written, result, type
+  emit_release_value ir, result, type.value
+
+# `old.add(value)` and so on, of both owned, by the method of the call that the checker made for
+# `+=` (see through_method), which borrows them; they are released after it.
+combine_by_method := (
+  g: Generator, call: Call, old: String, value: String, type: Type, value_type: Type
+) ->
+  member := call.callee as Member!
+  method := g.facts.members[member] as Method!
+  method_call := MethodCall
+    name: member.name.name
+    type: type_of(g, member)
+    operands: [value]
+    args: ["#{ir_type(value_type)} #{value}"]
+    instance: g.facts.instances[call]?.instance
+    check: -> emit_exception_check(g)
+  call_method := -> emit_method_call(g, method.source, old, type, method_call)
+  result := holding(g, old, type, -> holding(g, value, value_type, call_method))
+  emit_release_value g.ir, old, type
+  emit_release_value g.ir, value, value_type
+  emit_exception_check g
+  result
 
 # The value is evaluated first, and then, for `+=` and so on, the old value is loaded, which sees
 # what the value did to the target, as a method that assigns the same field does. The target's

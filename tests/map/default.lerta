@@ -1,0 +1,152 @@
+# `m[k, default: d]` is the key's value, or else `d`, which the map then holds; `d` is evaluated only
+# where the key is missing. `m[k] ? d` reads the value without changing the map.
+counts: Map<String, Int>
+counts[word, default: 0] += 1 for word in 'a b a c a b'.split(' ')
+print ["#{word}=#{count}" for (word, count) in counts.entries()]
+
+groups: Map<Int, String[]>
+groups[word.binary.length, default: []].push(word) for word in ['one', 'two', 'three', 'four']
+print ["#{length}=#{words}" for (length, words) in groups.entries()]
+
+# A read puts the default too, where the key is missing.
+seen: Map<String, Int>
+print seen['x', default: 7]
+print "#{seen.has('x')} #{seen['y'] ? 8} #{seen.has('y')}"
+
+var made = 0
+make := ->
+  made += 1
+  10
+known := { 'k': 1 }
+print known['k', default: make()]
+print "#{made} #{known['new', default: make()]} #{made}"
+
+# An update that throws leaves the map as it was.
+small: Map<String, Int8>
+try
+  small['a', default: 100] += 100
+catch e: ArithmeticError
+  print e.message
+print small.has('a')
+
+# A default that throws leaves the map as it was too.
+fail := (): Int -> throw ValueError(message: 'no default')
+try
+  counts['z', default: fail()] += 1
+catch e: ValueError
+  print e.message
+print counts.has('z')
+
+# Texts, which `+=` appends to, and floats.
+texts: Map<Int, String>
+texts[1, default: 'a'] += 'b'
+texts[1, default: 'x'] += 'c'
+print texts[1]!
+sums: Map<String, Float>
+sums['s', default: 0.5] += 0.25 for _ in 0...2
+print sums['s']!
+
+# The default may change the map: it is put where the key is, found again.
+growing: Map<Int, Int>
+fill := ->
+  growing[i] = i for i in 1...100
+  1000
+growing[0, default: fill()] += 1
+print "#{growing.length} #{growing[0]!}"
+
+# `+=` through the value's own `add` reads the value, or the default, which it evaluates once.
+struct Amount
+  cents: Int
+extend Amount
+  add = (other: Amount) -> Amount(cents: @cents + other.cents)
+var zeros = 0
+zero := ->
+  zeros += 1
+  Amount cents: 0
+amounts: Map<String, Amount>
+amounts['a', default: zero()] += { cents: 5 } for _ in 0...2
+print "#{amounts['a']!.cents} #{zeros}"
+
+# The value is evaluated before the key's value is read, and may write it, by the operator and by a
+# method alike.
+ints: Map<String, Int>
+set_int := ->
+  ints['a'] = 100
+  1
+ints['a', default: 0] += set_int()
+set_amount := ->
+  amounts['b'] = { cents: 100 }
+  Amount cents: 1
+amounts['b', default: zero()] += set_amount()
+print "#{ints['a']!} #{amounts['b']!.cents}"
+
+# A method that throws leaves the map as it was.
+struct Refused
+  cents: Int
+extend Refused
+  add = (other: Refused): Refused -> throw ValueError(message: "no add of #{other.cents}")
+refused: Map<String, Refused>
+try
+  refused['a', default: { cents: 0 }] += { cents: 1 }
+catch e: ValueError
+  print e.message
+print refused.has('a')
+
+# A method may change the map, which then grows: the result is written where the key is then.
+var grows = false
+struct Grower
+  n: Int
+extend Grower
+  add = (other: Grower) ->
+    for i in 0...100
+      growers[i] = { n: i } if grows
+    Grower n: @n + other.n
+growers: Map<Int, Grower>
+growers[1000, default: { n: 0 }] += { n: 1 }
+grows = true
+growers[1000, default: { n: 0 }] += { n: 1 }
+print "#{growers.length} #{growers[1000]!.n}"
+
+# The other operators, on a key that is there and on one that is not.
+bits := { 'a': 3 }
+bits['a', default: 1] <<= 2
+bits['b', default: 1] <<= 3
+bits['a', default: 100] -= 2
+bits['c', default: 100] -= 2
+print ["#{key}=#{value}" for (key, value) in bits.entries()]
+
+# A default that is itself an index with a default, which puts its own key first.
+nested: Map<String, Int>
+nested['outer', default: nested['inner', default: 5] * 2] += 1
+print ["#{key}=#{value}" for (key, value) in nested.entries()]
+
+# Struct keys, maps reached through a field, a call or another map's default, and a key whose
+# expression runs once.
+struct Point
+  x: Int
+  y: Int
+by_point: Map<Point, Int>
+by_point[{ x: 1, y: 2 }, default: 1] += 1
+print "#{by_point[{ x: 1, y: 2 }, default: 9]} #{by_point[{ x: 2, y: 1 }, default: 9]}"
+class Holder
+  map: Map<String, Int>
+holder := Holder(map: Map())
+holder.map['h', default: 1] *= 3
+held: Map<String, String[]>
+held_map := -> held
+held_map()['k', default: []].push('v')
+nested_maps: Map<String, Map<String, Int>>
+nested_maps['a', default: Map()]['b', default: 0] += 1
+nested_maps['a', default: Map()]['b', default: 0] += 1
+var keys_made = 0
+key := ->
+  keys_made += 1
+  'once'
+counted: Map<String, Int>
+counted[key(), default: 0] += 1
+print "#{holder.map['h']!} #{held['k']!} #{nested_maps['a']!['b']!} #{keys_made}"
+
+# Line ends inside the brackets.
+lines: Map<String, Int>
+lines['key', default: 3] += 1
+print lines['key']!

@@ -123,8 +123,7 @@ bare_doc := (expression: Expression, context: Context): Doc ->
     when Member then member_doc(expression, context)
     when Index
       object := operand(expression.object, context, POSTFIX, false)
-      index := expression_doc(expression.index, context.inside_brackets())
-      join [object, text('['), index, text(']')]
+      join [object, index_doc(expression, context)]
     when Unwrap then join([operand(expression.operand, context, POSTFIX, false), text('!')])
     when Call then call_doc(expression, context, false)
     when UnaryOperation then unary_doc(expression, context)
@@ -222,6 +221,16 @@ literal_token := (at: Position, context: Context) ->
   var index = context.source.token_at(at) ? return nil
   index += 1 while tokens[index].kind == '('
   index
+
+# `[i]` after what is indexed, or `[k, default: d]` of a map, whose key and default go on lines of
+# their own where they do not fit on one, as a call's arguments do.
+export index_doc := (index: Index, context: Context) ->
+  inside := context.inside_brackets()
+  default_value := index.default_value
+  return join([text('['), expression_doc(index.index, inside), text(']')]) if default_value == nil
+  named_default := join([text('default: '), expression_doc(default_value, inside)])
+  items := [item(index.index, inside), Item(doc: named_default, simple: false)]
+  bracketed text('['), items, ']', nil
 
 # A string as written, but with `'...'` where it can be (see String literals): where its text holds
 # no `'` and no control character.

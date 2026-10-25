@@ -9,8 +9,11 @@ import
   borrowing_all, generate, generate_borrowed, release_if_reference, type_at_use, type_of
 from './expression'
 import Generator from './generator'
-import emit_release from './lerta_ir'
-import emit_map_get, emit_map_new, emit_map_set from './map'
+import emit_branch from './ir_builder'
+import emit_release, ir_type from './lerta_ir'
+import
+  emit_find, emit_held_at, emit_map_get, emit_map_new, emit_map_set, emit_place, emit_set_at
+from './map'
 import emit_binary_get, emit_binary_out_of_range, emit_binary_slice from './string'
 import ArrayType, is_kind, MapType from '../types'
 
@@ -44,6 +47,21 @@ export generate_map := (g: Generator, map: MapLiteral) ->
   while_holding g, result, map_type, set_all
   result
 
+# `m[k, default: d]`, of a borrowed map and key: the key's value, owned, or else `d`, evaluated
+# only then, which the map then holds.
+generate_put_default := (
+  g: Generator, map: String, key: String, type: MapType, default_value: Expression
+) ->
+  ir := g.ir
+  place := emit_find(ir, map, key, type)
+  found := ir.assign("icmp ne ptr #{place}, null")
+  held := emit_held_at(ir, place, found, type)
+  put := ->
+    value := generate(g, default_value)
+    emit_set_at ir, emit_place(ir, map, key, type), value, type
+    value
+  emit_branch ir, ir_type(type.value), ir.assign("xor i1 #{found}, true"), put, held
+
 # `b[start...end]`: the runtime copies the bytes, and throws where the range is not the Binary's.
 generate_slice := (g: Generator, object: Expression, range: Range) ->
   slice := (operands: String[]) -> emit_binary_slice(g.ir, operands[0], operands[1], operands[2])
@@ -63,9 +81,14 @@ export generate_index := (g: Generator, index: Index) ->
   is_binary := is_kind(object_type, 'Binary')
   items := not is_map and not is_binary then emit_checked_items(g.ir, object, position)
   outside := is_binary then emit_binary_out_of_range(g.ir, object, position)
+  get_or_put := (default_value: Expression) ->
+    put := -> generate_put_default(g, object, position, object_type as MapType!, default_value)
+    held_position := -> holding(g, position, type_at_use(g, index.index), put)
+    is_owned then holding(g, object, object_type, held_position) else held_position()
   item :=
     case
       when items then emit_get_from(g.ir, items, position, type_of(g, index))
+      when index.default_value then get_or_put(index.default_value!)
       when object_type is MapType then emit_map_get(g.ir, object, position, object_type)
       else emit_binary_get(g.ir, object, position)
   release_if_reference g, index.index, position

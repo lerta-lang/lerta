@@ -72,6 +72,8 @@ is_plain_place := (body: Body, expression: Expression): Bool ->
   case expression
     when Identifier, This, IntegerLiteral, StringLiteral then true
     when Member then plain(expression.object)
+    # The default is not checked: `+=` on `m[k, default: d]` evaluates the place once, through a
+    # method too (see update_with_default in codegen), so that `d` runs at most once.
     when Index then plain(expression.object) and plain(expression.index)
     when UnaryOperation
       expression.operator == '-' and not by_method and plain(expression.operand)
@@ -84,13 +86,15 @@ check_item_target := (body: Body, target: Index, operator: String) ->
   type := type_of(body, target)
   object_type := body.facts.types[target.object]!
   if object_type is MapType
-    if operator != '='
-      combined := combining_operator(operator)
+    if target.default_value and operator == '='
+      message := 'a default is for reading the value; write m[k] = x to assign it'
+      fail body.program, target.position, message
+    if operator != '=' and target.default_value == nil
       # A number may default to 0; other values to what the program chooses.
       value := object_type.value
       fallback := is_integer(value) or is_float(value) then '0' else 'y'
-      advice := "write m[k] = (m[k] ? #{fallback}) #{combined} x"
-      message := "a map value cannot be updated with '#{operator}'; #{advice}"
+      advice := "write m[k, default: #{fallback}] #{operator} x"
+      message := "a map value cannot be updated with '#{operator}' without a default; #{advice}"
       fail body.program, target.position, message
     return object_type.value
   fail body.program, target.position, 'a Binary cannot be changed' if is_kind(object_type, 'Binary')
