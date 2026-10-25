@@ -1,0 +1,265 @@
+# What the ranges of Floats leave unchecked gives no NaN, and what they cannot tell of throws as
+# before: each function below makes a NaN where a rule of the ranges almost applies.
+import INFINITY from 'std:math'
+
+attempt := (name: String, f: () -> Float) ->
+  try
+    print "#{name}: #{f()}"
+  catch e: ArithmeticError
+    print "#{name}: #{e.message}"
+
+big := INFINITY
+
+# A comparison with no finite constant bounds nothing.
+unbounded := (x: Float) ->
+  return x * x - x * x if x * x <= INFINITY
+  0.0
+attempt 'bounded by INFINITY', -> unbounded(big)
+
+# x * y is no square, so its sum bounds neither.
+not_square := (x: Float, y: Float) ->
+  return x * x - y * y if x * y + 1.0 <= 4.0
+  0.0
+attempt 'no square', -> not_square(big, -big)
+
+# A sum with a term of either sign bounds no term.
+signed_sum := (x: Float, y: Float) ->
+  return x * x - x * x if x * x + y <= 4.0
+  0.0
+attempt 'signed term', -> signed_sum(big, -big)
+
+# A local narrowed, then assigned again, is no longer narrowed.
+reassigned := (start: Float) ->
+  var x = start
+  if x * x <= 4.0
+    x = big
+    return x * x - x * x
+  0.0
+attempt 'assigned after the narrowing', -> reassigned(1.0)
+
+# A loop knows nothing, from its first round on, of what it assigns, though it was narrowed before.
+looped := ->
+  var x = 1.0
+  var result = 0.0
+  if x * x <= 4.0
+    var rounds = 0
+    while rounds < 2
+      result = x * x - x * x
+      x = big
+      rounds += 1
+  result
+attempt 'loop', looped
+
+# After a loop, nothing is known of what it assigns, though its condition narrowed it each round.
+after_loop := ->
+  var x = 1.0
+  x = big while x * x <= 4.0
+  x * x - x * x
+attempt 'after the loop', after_loop
+
+# A var that a closure assigns is not followed.
+captured := ->
+  var x = 1.0
+  grow := -> x = big
+  if x * x <= 4.0
+    grow()
+    return x * x - x * x
+  0.0
+attempt 'captured', captured
+
+# A catch knows nothing of what its try assigned.
+in_catch := ->
+  var x = 1.0
+  try
+    x = big
+    throw ValueError(message: 'out')
+  catch _: ValueError
+    x * x - x * x
+attempt 'catch', in_catch
+
+# An if's narrowing ends with the if.
+after_if := (start: Float) ->
+  x := start
+  print 'bounded' if x * x <= 4.0
+  x * x - x * x
+attempt 'after the if', -> after_if(big)
+
+# A division by a constant that may be 0, or by another value, is not followed.
+divided := (x: Float, y: Float) ->
+  return x / y + x / y if x * x <= 4.0
+  0.0
+attempt 'division by a value', -> divided(0.0, 0.0)
+
+# What the ranges tell: a bounded loop, as mandelbrot's, and a sum of squares, which gives no NaN
+# whatever its terms; each gives what it would with its checks.
+bounded_loop := (cr: Float, ci: Float) ->
+  var zr = 0.0
+  var zi = 0.0
+  var i = 0
+  while i < 50 and zr * zr + zi * zi <= 4.0
+    t := zr * zr - zi * zi + cr
+    zi = 2.0 * zr * zi + ci
+    zr = t
+    i += 1
+  i.to_float()
+attempt 'bounded loop', -> bounded_loop(-0.5, 0.5)
+attempt 'bounded loop, infinite', -> bounded_loop(big, 0.0)
+squares := (x: Float, y: Float) -> x * x + y * y
+attempt 'squares', -> squares(big, -big)
+halved := (n: Int) -> n.to_float() / 2.0 - 1.0
+attempt 'integer halved', -> halved(INT_MAX)
+
+# A bound that overflows in its own arithmetic bounds nothing: x * x at most 1e300 lets x * x * x * x
+# be an infinity, less which an infinity is a NaN.
+fourth := (x: Float) ->
+  return x * x * x * x - x * x * x * x if x * x <= 1e300
+  0.0
+attempt 'bound overflowing', -> fourth(1e150)
+
+# A division by the constant 0 is not followed, as 0 by it is a NaN; one by another constant is.
+by_zero := (x: Float) -> x / 0.0 + 1.0
+attempt 'by the constant 0', -> by_zero(0.0)
+by_negative := (x: Float) -> x / -2.0 + 1.0
+attempt 'by a negative constant', -> by_negative(big)
+
+# -0.0 is at least 0 as a comparison tells, and its square is 0.
+attempt 'negative zero', -> squares(-0.0, -0.0)
+
+# A divisor that is bounded and at least 0 may be 0 all the same, as a range tells no least
+# magnitude.
+by_bounded := (x: Float, y: Float) ->
+  return x / y + 1.0 if y >= 0.0 and y <= 4.0
+  0.0
+attempt 'by a bounded value', -> by_bounded(0.0, 0.0)
+
+# A top-level var is not followed, as a call may assign it.
+var top = 1.0
+spoil := -> top = big
+if top * top <= 4.0
+  spoil()
+  try
+    print top * top - top * top
+  catch e: ArithmeticError
+    print "top-level value: #{e.message}"
+
+# More of what the ranges tell: a comparison written the other way, a plain local bounded on both
+# sides, a sum of a local at least 0 and a square, a negation, and a division by an integer literal.
+mirrored := (x: Float) ->
+  return x * x - x * x if 4.0 >= x * x
+  0.0
+attempt 'mirrored', -> mirrored(1.5)
+bounded_local := (x: Float) ->
+  return x * 3.0 - x * 3.0 if x >= 0.0 and x <= 4.0
+  0.0
+attempt 'bounded local', -> bounded_local(2.0)
+nonnegative_sum := (x: Float, y: Float) ->
+  return y * 3.0 - y * 3.0 + x * 3.0 - x * 3.0 if y >= 0.0 and y + x * x <= 4.0
+  0.0
+attempt 'sum of a nonnegative local and a square', -> nonnegative_sum(1.0, 1.0)
+negated_squares := (x: Float) -> -(x * x) - x * x
+attempt 'negated squares', -> negated_squares(big)
+by_integer := (x: Float) -> x / 2 + 1.0
+attempt 'by an integer literal', -> by_integer(big)
+
+# More of what they forget: what a for loop, a case arm, a finally block and an if that gives a
+# value assign; and what they do not narrow by: `==`, `or`, a negative constant, and a Float32.
+in_for := (start: Float) ->
+  var x = start
+  var result = 0.0
+  if x * x <= 4.0
+    for _ in 0...2
+      result = x * x - x * x
+      x = big
+  result
+attempt 'for', -> in_for(1.0)
+in_case := (start: Float, n: Int) ->
+  var x = start
+  if x * x <= 4.0
+    case n
+      when 1 then x = big
+      else pass
+    return x * x - x * x
+  0.0
+attempt 'case', -> in_case(1.0, 1)
+in_finally := (start: Float) ->
+  var x = start
+  if x * x <= 4.0
+    try
+      print 'tried'
+    finally
+      x = big
+    return x * x - x * x
+  0.0
+attempt 'finally', -> in_finally(1.0)
+if_value := (start: Float) ->
+  var x = start
+  if x * x <= 4.0
+    marker :=
+      if start > 0.0
+        x = big
+        1.0
+      else
+        2.0
+    return x * x - x * x + marker
+  0.0
+attempt 'if giving a value', -> if_value(1.0)
+by_equality := (x: Float) ->
+  return x * 3.0 - x * 3.0 if x * x == 4.0
+  0.0
+attempt 'equality', -> by_equality(big)
+by_or := (x: Float) ->
+  return x * 3.0 - x * 3.0 if x * x <= 4.0 or x > 1.0
+  0.0
+attempt 'or', -> by_or(big)
+below_negative := (x: Float) ->
+  return x * 3.0 - x * 3.0 if x < -1.0
+  0.0
+attempt 'below a negative constant', -> below_negative(-big)
+narrow32 := (x: Float32) ->
+  return (x * x - x * x).to_float() if x * x <= 4
+  0.0
+attempt 'Float32', -> narrow32(1e30)
+
+# An operation of no tree, whose operands check their own NaNs, as a call's result or a division of
+# them, checks none where it alone gives no NaN: the division still checks, as 0 by 0 is a NaN.
+spread := (n: Int) -> n.to_float() / n.to_float() - 1.5
+attempt 'division of calls', -> spread(4)
+attempt 'division of calls by 0', -> spread(0)
+
+# Every integer type's to_float is at most 2^64 in magnitude, which the largest UInt64 is nearest:
+# its square squared three times more is an infinity.
+from_uint64 := (u: UInt64) ->
+  x := u.to_float()
+  a := x * x
+  b := a * a
+  c := b * b
+  d := c * c
+  d - d
+largest_half: UInt64 = 9223372036854775807
+attempt 'UInt64', -> from_uint64(largest_half + largest_half + 1)
+
+# A function follows a top-level var that it reads no more than top-level code does, as a call
+# may assign it.
+var shared = 1.0
+assign_shared := -> shared = big
+reads_shared := ->
+  if shared * shared <= 4.0
+    assign_shared()
+    return shared * shared - shared * shared
+  0.0
+attempt 'top-level value in a function', reads_shared
+
+# `and` in a value narrows its right by its left, as in a condition; and a square alone gives no
+# NaN, as a product of two locals may.
+bounded_and := (x: Float) ->
+  ok := x >= 0.0 and x <= 4.0 and x * 3.0 - x * 3.0 < 1.0
+  ok then 1.0 else 0.0
+attempt 'and in a value', -> bounded_and(2.0)
+unbounded_and := (x: Float) ->
+  ok := x >= -1.0 and x <= 4.0 and x * 3.0 - x * 3.0 < 1.0
+  ok then 1.0 else 0.0
+attempt 'and in a value, unbounded', -> unbounded_and(-big)
+square_only := (x: Float) -> x * x
+attempt 'square alone', -> square_only(big)
+product_only := (x: Float, y: Float) -> x * y
+attempt 'product alone', -> product_only(0.0, big)

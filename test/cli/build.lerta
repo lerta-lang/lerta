@@ -308,6 +308,16 @@ dump_seldom_check := ->
       reasons.append ["no weights: #{line}" for line in branches when not line.contains(weights)]
     reasons
 
+# The lines of the body of the program's function with the name, among the lines of the IR, or nil
+# where the module defines no such function; a thunk that passes it as a value is not it.
+function_body := (lines: String[], name: String): String[]? ->
+  is_definition := (line: String) -> line.starts_with('define ') and line.contains('@"lerta.fn.')
+  start := lines.find_index((line) -> is_definition(line) and line.contains(".#{name}\"("))
+  return nil if start == nil
+  var last = start
+  last += 1 while lines[last] != '}'
+  lines.slice start, last
+
 UNCHECKED_METHODS := "#{root_dir}/tests/operator/unchecked_methods.lerta"
 
 # A builtin method after which no exception is pending is not followed by a check for one: no
@@ -332,25 +342,77 @@ dump_unchecked_methods_check := ->
       'negated'
       'float_quotient'
     checked := ['joined', 'bytes_joined']
-    # The lines of the function's body, or nil where the module defines no such function.
-    body_of := (name: String): String[]? ->
-      start :=
-        lines.find_index((line) -> line.starts_with('define ') and line.contains(".#{name}\"("))
-      return nil if start == nil
-      var last = start
-      last += 1 while lines[last] != '}'
-      lines.slice start, last
     reads_exception := (body: String[]) ->
       body.any (line) -> line.contains('load ptr, ptr @lerta_exception')
     reasons := expect_status(0, dumped.result.status)
     for name in [unchecked..., checked...]
-      body := body_of(name)
+      body := function_body(lines, name)
       if body == nil
         reasons.push "no function #{name}"
         continue
       expected := checked.contains(name)
       if reads_exception(body) != expected
         reasons.push "#{name} #{expected then 'does not read' else 'reads'} the pending exception"
+    reasons
+
+# The float operations that the ranges of Floats show give no NaN check for none, and those that a
+# rule of the ranges almost applies to still check (see tests/float/ranges.lerta).
+dump_float_ranges_check := ->
+  Check name: 'lerta dump-llvm checks no NaN where the ranges of Floats give none', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', "#{root_dir}/tests/float/ranges.lerta"])
+    lines := dumped.result.stdout.text()!.split("\n")
+    unchecked :=
+      'bounded_loop'
+      'squares'
+      'halved'
+      'by_negative'
+      'mirrored'
+      'bounded_local'
+      'nonnegative_sum'
+      'negated_squares'
+      'by_integer'
+      'bounded_and'
+      'square_only'
+    checked :=
+      'unbounded'
+      'not_square'
+      'signed_sum'
+      'reassigned'
+      'looped'
+      'after_loop'
+      'captured'
+      'in_catch'
+      'after_if'
+      'divided'
+      'fourth'
+      'by_zero'
+      'by_bounded'
+      'in_for'
+      'in_case'
+      'in_finally'
+      'if_value'
+      'by_equality'
+      'by_or'
+      'below_negative'
+      'narrow32'
+      'from_uint64'
+      'reads_shared'
+      'unbounded_and'
+      'product_only'
+    reasons := expect_status(0, dumped.result.status)
+    for name in [unchecked..., checked...]
+      body := function_body(lines, name)
+      if body == nil
+        reasons.push "no function #{name}"
+        continue
+      expected := checked.contains(name)
+      checks := body.any((line) -> line.contains(' = fcmp uno '))
+      if checks != expected
+        reasons.push "#{name} #{expected then 'does not check' else 'checks'} for NaN"
+    # An operation of no tree checks alone: the division of calls checks, the subtraction does not.
+    spread := function_body(lines, 'spread') ? return [reasons..., 'no function spread']
+    count := spread.filter((line) -> line.contains(' = fcmp uno ')).count()
+    reasons.push "spread checks for NaN #{count} times, not once" if count != 1
     reasons
 
 ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
@@ -554,6 +616,7 @@ checks.push dump_llvm_check()
 checks.push dump_symbols_check()
 checks.push dump_seldom_check()
 checks.push dump_unchecked_methods_check()
+checks.push dump_float_ranges_check()
 checks.push dump_item_tag_check()
 checks.push item_tag_source_lines_check()
 checks.push source_lines_check()

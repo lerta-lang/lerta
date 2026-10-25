@@ -77,7 +77,15 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   g.defers_float_checks = false if is_root
   if is_bytes(operand_type) and operator == '+'
     return emit_extend(g.ir, left, right, type_at_use(g, right_operand))
-  apply_binary g, operator, left, right, operand_type
+  # An operation that would check its result, a tree's root or one of no tree, checks none where it
+  # gives no NaN, as its ranges tell (see float_ranges): a root with its operands, which check none,
+  # and one of no tree alone, as its operands check theirs.
+  safe := is_root then g.nan_free.whole else g.nan_free.alone
+  unchecked := not g.defers_float_checks and safe.has(binary)
+  g.defers_float_checks = true if unchecked
+  result := apply_binary(g, operator, left, right, operand_type)
+  g.defers_float_checks = false if unchecked
+  result
 
 is_bytes := (type: Type) -> is_one_of_kinds(type, ['String', 'Binary'])
 

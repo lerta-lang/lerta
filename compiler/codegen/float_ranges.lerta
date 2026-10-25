@@ -1,0 +1,442 @@
+# The float operations of a body that cannot give a NaN, whose check codegen leaves out (see
+# docs/internals.md#floats). What is known of each Float is its sign and a bound of its magnitude,
+# found through the statements in the order they run, and narrowed by the comparisons that a
+# branch or a loop takes. Only Floats are followed: a Float32's operations round in 32 bits, which
+# a bound computed as a double may fall short of.
+import
+  Assignment, BinaryOperation, Binding, Call, Case, Condition, Declaration, EnumDeclaration,
+  Expression, Extend, Extern, FloatLiteral, For, FunctionLiteral, Identifier, If, Import,
+  IntegerLiteral, InterfaceDeclaration, Member, operands_of, Pass, Statement, Try, TypeAlias,
+  TypeDeclaration, UnaryOperation, While
+from '../ast'
+
+import BuiltinMethod from '../checker/builtins'
+import Method from '../checker/member_targets'
+import ScopedLocal from '../checker/references'
+import NodeFacts from '../checker/shared'
+import integer_float_text from '../float_literals'
+import is_kind from '../types'
+import INFINITY from 'std:math'
+
+# What is known of a Float: whether it is at least 0 or at most 0, and a bound of its magnitude,
+# INFINITY where none is known. A bound computed with the operation's own rounding holds, as
+# rounding is monotonic: |a + b| is at most |a| + |b|, and so is its rounding at most that of the
+# bounds' sum.
+struct Range
+  nonnegative: Bool
+  nonpositive: Bool
+  bound: Float
+
+UNKNOWN := Range(nonnegative: false, nonpositive: false, bound: INFINITY)
+
+# The binary operations that give no NaN: with their operands, for a tree's root, whose operands
+# check none; and of operands that are no NaN, for an operation of no tree, whose operands have
+# checked theirs (see float_tree).
+export class NanFree
+  whole: Set<BinaryOperation> = Set()
+  alone: Set<BinaryOperation> = Set()
+
+# Of an expression: its range, and whether it, with its operands, can give no NaN.
+struct Found
+  range: Range
+  nan_free: Bool
+
+# The ranges of the Float locals that are followed, by their declarations' names: those of the
+# function, which no function literal captures as vars, so that no call changes them. Top-level
+# code's own values, which its functions may assign, are not followed.
+class Analysis
+  facts: NodeFacts
+  top_level_values: Set<Identifier>
+  ranges: Map<Identifier, Range> = Map()
+  found = NanFree()
+  # What the last expression visited for its operations alone gives, which is not read: it holds
+  # the result, as Lerta has no statement that drops a value.
+  visited = Found(range: UNKNOWN, nan_free: true)
+
+# The binary operations of the body, at any depth outside its function literals, that give no NaN
+# (see NanFree); the body is top-level code if `is_top_level`.
+export nan_free_operations := (facts: NodeFacts, body: Statement[], is_top_level: Bool) ->
+  top_level_values: Set<Identifier>
+  if is_top_level
+    for statement in body
+      top_level_values.add statement.name if statement is Declaration
+  analysis := Analysis(facts, top_level_values)
+  analyze_block analysis, body
+  analysis.found
+
+analyze_block := (analysis: Analysis, body: Statement[]) ->
+  analyze_statement analysis, statement for statement in body
+
+analyze_statement := (analysis: Analysis, statement: Statement): void ->
+  case statement
+    when Declaration
+      forget_assigned analysis, [statement.value]
+      found := found_of(analysis, statement.value)
+      follow analysis, statement.name, found.range if is_float_node(analysis, statement.value)
+    when Assignment
+      forget_assigned analysis, [statement.value]
+      found := found_of(analysis, statement.value)
+      local := followed_local(analysis, statement.target)
+      analysis.ranges[local] = statement.operator == '=' then found.range else UNKNOWN if local
+    when While then analyze_while(analysis, statement)
+    when For then analyze_for(analysis, statement)
+    # Declarations of types and imports hold no Float of the body.
+    when
+      Pass, Import, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,
+      Extend
+    then pass
+    else analyze_expression(analysis, statement)
+
+# An expression in a statement's place, which may hold blocks.
+analyze_expression := (analysis: Analysis, expression: Expression): void ->
+  case expression
+    when If then analyze_if(analysis, expression)
+    when Try then analyze_try(analysis, expression)
+    when Case then analyze_case(analysis, expression)
+    else
+      forget_assigned analysis, [expression]
+      visit analysis, expression
+
+analyze_if := (analysis: Analysis, statement: If) ->
+  condition_found analysis, statement.condition
+  before := analysis.ranges.entries().to_array()
+  narrow analysis, statement.condition
+  analyze_block analysis, statement.then_body
+  restore analysis, before
+  analyze_block analysis, statement.else_body
+  restore analysis, before
+  forget_locals analysis, assigned_in_blocks(analysis, [statement.then_body, statement.else_body])
+
+# The ranges of the locals that the loop assigns are known neither as it starts again nor after it.
+analyze_while := (analysis: Analysis, loop: While) ->
+  assigned := assigned_in_blocks(analysis, [loop.body, [condition_value(loop.condition)]])
+  forget_locals analysis, assigned
+  condition_found analysis, loop.condition
+  before := analysis.ranges.entries().to_array()
+  narrow analysis, loop.condition
+  analyze_block analysis, loop.body
+  restore analysis, before
+
+analyze_for := (analysis: Analysis, loop: For) ->
+  forget_assigned analysis, [loop.iterable]
+  visit analysis, loop.iterable
+  forget_locals analysis, assigned_in_blocks(analysis, [loop.body])
+  before := analysis.ranges.entries().to_array()
+  analyze_block analysis, loop.body
+  restore analysis, before
+
+analyze_try := (analysis: Analysis, expression: Try) ->
+  blocks := [
+    expression.body
+    [clause.body for clause in expression.catches]...
+    expression.finally_body ? []
+  ]
+  forget_locals analysis, assigned_in_blocks(analysis, blocks)
+  before := analysis.ranges.entries().to_array()
+  for block in blocks
+    analyze_block analysis, block
+    restore analysis, before
+
+analyze_case := (analysis: Analysis, expression: Case) ->
+  if subject := expression.subject
+    forget_assigned analysis, [subject]
+    visit analysis, subject
+  blocks := [[arm.body for arm in expression.arms]..., expression.otherwise ? []]
+  forget_locals analysis, assigned_in_blocks(analysis, blocks)
+  before := analysis.ranges.entries().to_array()
+  for block in blocks
+    analyze_block analysis, block
+    restore analysis, before
+
+condition_found := (analysis: Analysis, condition: Condition) ->
+  value := condition_value(condition)
+  forget_assigned analysis, [value]
+  visit analysis, value
+
+restore := (analysis: Analysis, entries: (Identifier, Range)[]) ->
+  analysis.ranges = Map()
+  analysis.ranges[local] = range for (local, range) in entries
+
+forget_locals := (analysis: Analysis, locals: Set<Identifier>) ->
+  analysis.ranges.remove local for local in locals
+
+# Forgets the locals that the expressions assign in the blocks that they hold, as `if` and `case`
+# expressions may, before their ranges are read.
+forget_assigned := (analysis: Analysis, expressions: Expression[]) ->
+  nodes: Statement[] = [expressions...]
+  forget_locals analysis, assigned_in_blocks(analysis, [nodes])
+
+follow := (analysis: Analysis, name: Identifier, range: Range) ->
+  return if analysis.facts.shared_vars.has(name) or analysis.top_level_values.has(name)
+  analysis.ranges[name] = range
+
+# The declaration of the followed local that the target names, if it is one: a local of the
+# function, as a top-level value is not, which a call may assign.
+followed_local := (analysis: Analysis, target: Expression) ->
+  return nil if target is not Identifier
+  return nil if analysis.facts.references[target] is not ScopedLocal
+  local := analysis.facts.local_declarations[target] ? return nil
+  followed := not analysis.facts.shared_vars.has(local) and not analysis.top_level_values.has(local)
+  followed then local
+
+is_float_node := (analysis: Analysis, expression: Expression) ->
+  type := analysis.facts.types[expression] ? return false
+  is_kind type, 'Float'
+
+# Finds the operations of an expression whose value is not used, as a statement's.
+visit := (analysis: Analysis, expression: Expression): void ->
+  analysis.visited = found_of(analysis, expression)
+
+# The range of the expression, recording the binary operations in it that give no NaN.
+found_of := (analysis: Analysis, expression: Expression): Found ->
+  case expression
+    when FloatLiteral then literal_found(expression.text)
+    when IntegerLiteral
+      return unknown_found(analysis, expression) if not is_float_node(analysis, expression)
+      literal_found integer_float_text(expression)
+    when Identifier
+      local := followed_local(analysis, expression)
+      range := local then analysis.ranges[local] else nil
+      { range: range ? UNKNOWN, nan_free: true }
+    when UnaryOperation
+      operand := found_of(analysis, expression.operand)
+      if expression.operator != '-' or not is_float_node(analysis, expression)
+        return unknown_found(analysis, expression)
+      { nonnegative, nonpositive, bound } := operand.range
+      {
+        range: { bound, nonnegative: nonpositive, nonpositive: nonnegative }
+        nan_free: operand.nan_free
+      }
+    when BinaryOperation
+      return and_found(analysis, expression) if expression.operator == 'and'
+      binary_found analysis, expression
+    when Call
+      return unknown_found(analysis, expression) if not is_integer_to_float(analysis, expression)
+      visit analysis, (expression.callee as Member!).object
+      # Every integer type's values are of magnitude at most 2^64, which the largest UInt64,
+      # 2^64 less 1, is nearest as a Float.
+      {
+        range: { nonnegative: false, nonpositive: false, bound: 18446744073709551616.0 }
+        nan_free: true
+      }
+    else unknown_found(analysis, expression)
+
+# `n.to_float()` of an integer of any integer type, which is finite.
+is_integer_to_float := (analysis: Analysis, call: Call) ->
+  member := call.callee as Member ? return false
+  method := analysis.facts.members[member] as Method ? return false
+  source := method.source as BuiltinMethod ? return false
+  source.member == INTEGER_TO_FLOAT
+
+# What is known of an expression of no float operation of its own: nothing, but that it is no NaN;
+# the operations among its operands are found all the same.
+unknown_found := (analysis: Analysis, expression: Expression) ->
+  visit analysis, operand for operand in operands_of(expression)
+  Found range: UNKNOWN, nan_free: true
+
+literal_found := (text: String) ->
+  value := text.parse_float() ? return Found(range: UNKNOWN, nan_free: true)
+  Found range: constant_range(value), nan_free: true
+
+constant_range := (value: Float) ->
+  Range nonnegative: value >= 0.0, nonpositive: value <= 0.0, bound: magnitude(value)
+
+magnitude := (value: Float) -> value < 0.0 then -value else value
+
+# `a and b`, whose b is evaluated only where a holds, which narrows it.
+and_found := (analysis: Analysis, binary: BinaryOperation) ->
+  visit analysis, binary.left
+  before := analysis.ranges.entries().to_array()
+  narrow analysis, binary.left
+  visit analysis, binary.right
+  restore analysis, before
+  Found range: UNKNOWN, nan_free: true
+
+binary_found := (analysis: Analysis, binary: BinaryOperation): Found ->
+  left := found_of(analysis, binary.left)
+  right := found_of(analysis, binary.right)
+  is_float := is_float_node(analysis, binary) and not analysis.facts.operator_calls.has(binary)
+  return { range: UNKNOWN, nan_free: true } if not is_float
+  # An operation whose range is not followed may give a NaN.
+  square := is_square(analysis, binary)
+  outcome :=
+    operation(binary, left.range, right.range, square) ? return { range: UNKNOWN, nan_free: false }
+  (range, nan_free) := outcome
+  whole := nan_free and left.nan_free and right.nan_free
+  analysis.found.alone.add binary if nan_free
+  analysis.found.whole.add binary if whole
+  { range, nan_free: whole }
+
+# The range of `+ - * /` of the ranges, and whether it can give no NaN, which takes an infinity
+# less an infinity of the same sign, zero times an infinity, or zero, or an infinity, divided by
+# one.
+operation := (binary: BinaryOperation, left: Range, right: Range, square: Bool): (Range, Bool)? ->
+  case binary.operator
+    when '+' then (sum(left, right), finite(left) or finite(right) or same_sign(left, right))
+    when '-'
+      negated := negation(right)
+      (sum(left, negated), finite(left) or finite(right) or same_sign(left, negated))
+    when '*'
+      if square
+        return ({ nonnegative: true, nonpositive: false, bound: product_bound(left, left) }, true)
+      (product(left, right), finite(left) and finite(right))
+    when '/' then quotient(left, constant_of(binary.right))
+    else nil
+
+finite := (range: Range) -> range.bound < INFINITY
+
+# Both of one sign, so that two infinities are of one sign too and add up to one.
+same_sign := (left: Range, right: Range) ->
+  (left.nonnegative and right.nonnegative) or (left.nonpositive and right.nonpositive)
+
+negation := (range: Range) ->
+  Range(range..., nonnegative: range.nonpositive, nonpositive: range.nonnegative)
+
+sum := (left: Range, right: Range) ->
+  bound := finite(left) and finite(right) then left.bound + right.bound else INFINITY
+  Range
+    bound
+    nonnegative: left.nonnegative and right.nonnegative
+    nonpositive: left.nonpositive and right.nonpositive
+
+product := (left: Range, right: Range) ->
+  nonnegative := same_sign(left, right)
+  nonpositive :=
+    (left.nonnegative and right.nonpositive) or (left.nonpositive and right.nonnegative)
+  Range nonnegative, nonpositive, bound: product_bound(left, right)
+
+# The bounds multiplied, where both are finite, as an infinity times 0 has no bound.
+product_bound := (left: Range, right: Range) ->
+  finite(left) and finite(right) then left.bound * right.bound else INFINITY
+
+# Only a division by a constant other than 0 is followed, which gives no NaN: a range tells no
+# least magnitude, so that a divisor of any other range may be 0.
+quotient := (left: Range, divisor: Float?): (Range, Bool)? ->
+  constant := divisor ? return nil
+  return nil if constant == 0.0
+  bound := finite(left) then left.bound / magnitude(constant) else INFINITY
+  range := product(left, constant_range(constant))
+  ({ range..., bound }, true)
+
+# `x * x` of a Float local or literal, which is at least 0 whatever x is.
+is_square := (analysis: Analysis, binary: BinaryOperation) ->
+  return false if binary.operator != '*'
+  { left, right } := binary
+  return false if left is not Identifier or right is not Identifier
+  local := analysis.facts.local_declarations[left] ? return false
+  analysis.facts.local_declarations[right] == local
+
+# Narrows the ranges of the locals by the condition, which holds: each comparison that `and` joins
+# of an expression with a constant.
+narrow := (analysis: Analysis, condition: Condition): void ->
+  return if condition is not BinaryOperation
+  if condition.operator == 'and'
+    narrow analysis, condition.left
+    narrow analysis, condition.right
+    return
+  { operator, left, right } := condition
+  if constant := constant_of(right)
+    narrow_comparison analysis, operator, left, constant
+  else if constant := constant_of(left)
+    narrow_comparison analysis, MIRRORED[operator] ? '', right, constant
+
+# The comparison read from the other side.
+MIRRORED := { '<': '>', '<=': '>=', '>': '<', '>=': '<=' }
+
+constant_of := (expression: Expression) ->
+  case expression
+    when FloatLiteral then expression.text.parse_float()
+    when IntegerLiteral then integer_float_text(expression).parse_float()
+    else nil
+
+# `e <= c` or `e < c` bounds an e that is at least 0 by c, and `e >= c` or `e > c` for a c of at
+# least 0 makes e at least 0, if e is a followed local.
+narrow_comparison := (
+  analysis: Analysis, operator: String, expression: Expression, constant: Float
+) ->
+  return if not is_float_node(analysis, expression)
+  if operator == '<=' or operator == '<'
+    bound_by analysis, expression, constant
+  else if (operator == '>=' or operator == '>') and constant >= 0.0
+    local := followed_local(analysis, expression) ? return
+    range := analysis.ranges[local] ? UNKNOWN
+    analysis.ranges[local] = { range..., nonnegative: true }
+
+# Bounds an expression that is at least 0, and at most the constant, through what it is made of:
+# a followed local, a sum of two such, each at most the sum, which rounds to no less than either,
+# and a square, whose root is at most the constant plus 1, as the square may have rounded down.
+bound_by := (analysis: Analysis, expression: Expression, constant: Float): void ->
+  return if constant >= INFINITY or constant < 0.0
+  case expression
+    when Identifier
+      local := followed_local(analysis, expression) ? return
+      range := analysis.ranges[local] ? UNKNOWN
+      return if not range.nonnegative
+      analysis.ranges[local] =
+        range...
+        bound: constant < range.bound then constant else range.bound
+    when BinaryOperation
+      { left, right } := expression
+      sums_nonnegative := expression.operator == '+' and is_nonnegative(
+        analysis, left
+      ) and is_nonnegative(analysis, right)
+      if sums_nonnegative
+        bound_by analysis, expression.left, constant
+        bound_by analysis, expression.right, constant
+      else if is_square(analysis, expression)
+        local := followed_local(analysis, expression.left) ? return
+        range := analysis.ranges[local] ? UNKNOWN
+        root := constant + 1.0
+        analysis.ranges[local] = { range..., bound: root < range.bound then root else range.bound }
+    else pass
+
+is_nonnegative := (analysis: Analysis, expression: Expression) ->
+  return true if expression is BinaryOperation and is_square(analysis, expression)
+  local := followed_local(analysis, expression) ? return false
+  (analysis.ranges[local] ? UNKNOWN).nonnegative
+
+# The locals that the blocks assign, at any depth, function literals' bodies included, by their
+# declarations' names. A block may be expressions too, to find the blocks they hold.
+assigned_in_blocks := (analysis: Analysis, blocks: Statement[][]) ->
+  assigned: Set<Identifier>
+  for block in blocks
+    add_assigned analysis, node, assigned for node in block
+  assigned
+
+add_assigned := (analysis: Analysis, node: Statement, assigned: Set<Identifier>): void ->
+  each := (child: Statement) -> add_assigned(analysis, child, assigned)
+  case node
+    when Assignment
+      if node.target is Identifier
+        assigned.add local if local := analysis.facts.local_declarations[node.target as Identifier!]
+      each node.value
+    when Declaration then each(node.value)
+    when If
+      each condition_value(node.condition)
+      each child for child in node.then_body
+      each child for child in node.else_body
+    when While
+      each condition_value(node.condition)
+      each child for child in node.body
+    when For
+      each node.iterable
+      each child for child in node.body
+    when Try
+      each child for child in node.body
+      for clause in node.catches
+        each child for child in clause.body
+      each child for child in node.finally_body ? []
+    when Case
+      each subject if subject := node.subject
+      for arm in node.arms
+        each child for child in arm.body
+      each child for child in node.otherwise ? []
+    when FunctionLiteral then each(child) for child in node.body
+    when
+      Pass, Import, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,
+      Extend
+    then pass
+    else each(child) for child in operands_of(node)
+
+condition_value := (condition: Condition) ->
+  condition is Binding then condition.value else condition

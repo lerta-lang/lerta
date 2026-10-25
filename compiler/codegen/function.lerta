@@ -18,6 +18,7 @@ import
 from './closure'
 import generate_control_jump, generate_for, generate_if, generate_while from './control_flow'
 import emit_suspend from './coroutine'
+import nan_free_operations from './float_ranges'
 import emit_check_with, emit_exception_check, leave_scopes, while_holding from './exceptions'
 import
   generate, held_value, read_borrowed, read_local, release_if_reference, type_at_use, type_of
@@ -55,6 +56,7 @@ export generate_main := (
   g: Generator, statements: Statement[], code: TopLevelCode, runs_first: TopLevelCode[],
   releases: TopLevelGlobal[], is_program: Bool
 ) ->
+  g.nan_free = nan_free_operations(g.facts, statements, true)
   run := ->
     for first in runs_first
       if first.awaits
@@ -232,6 +234,7 @@ generate_function_body := (
 ) ->
   type := function_type_of(type_of(g, literal))
   ir := g.ir
+  g.nan_free = nan_free_operations(g.facts, literal.body, false)
   holds := g.coroutine != nil
   scope := g.locals.push()
   bind := (name: String, operand: String, local_type: Type) ->
