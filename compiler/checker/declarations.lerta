@@ -9,13 +9,16 @@ import declare_extend from './extend_declarations'
 import add_enums from './enums'
 import add_imported from './extensions'
 import declare_externs from './externs'
-import add_function, add_generic_function from './functions'
+import add_declared_function, add_function, add_generic_function from './functions'
 import make_generic_function from './generics'
 import add_imports, has_import from './imports'
 import add_interfaces, resolve_interfaces from './interfaces'
 import add_members, add_objects from './object_types'
 import ProgramWide, Shared from './shared'
-import add_alias, names_type_or_import, resolve_aliases from './type_names'
+import
+  add_alias, module_resolver, names_type_or_import, resolve, resolve_aliases
+from './type_names'
+import format_type, FunctionType from '../types'
 
 # The module's types (classes, structs and enums), interfaces, aliases and imports, which the
 # declarations of the modules in its import cycle may use before their own are complete.
@@ -99,6 +102,15 @@ add_top_level_functions := (shared: Shared, statements: Statement[]) ->
     fail program, statement.position, 'a function must be declared with const' if statement.mutable
     name := statement.name
     fail_already_defined program, name if names_type_or_import(shared, name.name)
+    if type_name := statement.type
+      if not literal.type_params.is_empty()
+        fail program, type_name.position, 'a generic function cannot have its type declared'
+      declared := resolve(program, module_resolver(shared.index), type_name)
+      if declared is not FunctionType
+        message := "the type of a function is a function type, not #{format_type(declared)}"
+        fail program, type_name.position, message
+      add_declared_function shared, name, literal, declared
+      continue
     if literal.type_params.is_empty()
       add_function shared, name.name, name, literal, nil
       continue

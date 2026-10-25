@@ -7,7 +7,7 @@ import ordering_type from './builtins'
 import receiver_instance from './generic_call'
 import find_member, generic_method from './member'
 import Method from './member_targets'
-import FunctionEntry, parameter_types from './functions'
+import annotated_type, FunctionEntry, parameter_types from './functions'
 import Instance from './generics'
 import ObjectInfo from './object_types'
 import finish_function_type, function_context, reject_nil_result from './result'
@@ -64,11 +64,28 @@ check_function_with := (
     # The conversions of the results are recorded even if the type was known from its annotation.
     finished := finish_function_type(context, params, facts)
     checked_type := reject_nil_result(program, finished, literal)
+    reject_misfit program, entry, checked_type, resolver if entry.is_declared
     type := entry.type ? checked_type
     entry.type = type
     facts.types[literal] = type
 
 annotated_result := (type: Type?) -> (type as FunctionType?)?.result
+
+# A literal whose declaration writes its type must have that type, with the parameter types and
+# the return type that it writes itself, and no defaults or variadic parameter, which a function
+# type cannot tell, as for a local's literal.
+reject_misfit := (program: ProgramWide, entry: FunctionEntry, checked: Type, resolver: Resolver) ->
+  if param := entry.literal.params.find((each) -> each.default != nil)
+    message := 'a function whose type is declared cannot have a default'
+    fail program, param.default!.position, message
+  if param := entry.literal.params.find((each) -> each.variadic)
+    fail program, param.name.position, 'a function whose type is declared cannot be variadic'
+  declared := entry.type!
+  written := annotated_type(program, resolver, entry.literal)
+  type := written ? checked
+  return if same_type(type, declared)
+  message := "expected #{format_type(declared)}, got #{format_type(type)}"
+  fail program, entry.literal.position, message
 
 # The body in which the function's parameters, its defaults and its statements are checked, with
 # the parameters' types and the context of its results.
@@ -76,7 +93,9 @@ function_body := (
   shared: Shared, facts: NodeFacts, entry: FunctionEntry, resolver: Resolver, extensions: Extensions
 ) ->
   { literal, this_type } := entry
-  params := parameter_types(shared.program, resolver, literal)
+  declared := entry.is_declared then entry.type as FunctionType?
+  declared_params: Type?[] = [param for param in declared?.params ? []]
+  params := parameter_types(shared.program, resolver, literal, declared_params)
   context := function_context(shared.program, literal, annotated_result(entry.type))
   self := this_type then SelfContext(type: this_type)
   { body: Body(shared, resolver, extensions, facts, context, self), params, context }

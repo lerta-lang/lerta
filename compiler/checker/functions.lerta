@@ -32,6 +32,9 @@ export class FunctionEntry
   # The type of a method's object, a class or struct or an extended type, which its body sees as
   # `@`.
   this_type: Type?
+  # Whether the type is the one its declaration writes, `f: (Int) -> Int = (n) -> n`, which the
+  # literal is checked as, as a local's literal is checked as the type expected.
+  is_declared = default false
   state: CheckState = UNCHECKED
 
 export class Functions
@@ -150,6 +153,15 @@ export add_function := (
   reject_generic program, literal
   type := annotated_type(program, module_resolver(shared.index), literal)
   shared.functions.entries[key] = FunctionEntry(name, literal, type, this_type)
+
+# Adds a top-level function whose declaration writes its type, a function type, which the literal
+# must fit (see reject_misfit).
+export add_declared_function := (
+  shared: Shared, name: Identifier, literal: FunctionLiteral, declared: FunctionType
+) ->
+  reject_defined shared, name.name, name
+  shared.functions.entries[name.name] =
+    FunctionEntry(name, literal, type: declared, this_type: nil, is_declared: true)
 
 # Adds a generic function or method of the module; returns how others refer to it.
 export add_generic := (shared: Shared, generic: GenericFunction) ->
