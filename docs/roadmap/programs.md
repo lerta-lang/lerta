@@ -25,7 +25,6 @@ The planned design of modules, FFI, the standard library and tools.
   - `server.close()` that ends kept connections after the request they serve, and a promise that it settles once they have ended (graceful shutdown); an accept that fails while the server is open, as for too many open files, retried after a pause rather than ending the program.
   - A `Date` field, and `Expect: 100-continue`.
   - Streaming: a body that the handler writes as it goes, sent chunked, with the pace of `socket.write`, and chunked request bodies, in place of the 501 now.
-  - A handler that gives a `Response` without awaiting, `(Request) -> Response`.
   - Later: TLS, through that of std:net; a client, `fetch`, with the same `Request`, `Response` and `Headers`; a URL module for the parts of `request.url`; and HTTP/2.
 - `make_link` of [std:io](../reference/modules.md#stdio) followed on Windows itself: Wine, which the tests run under, makes the links but does not follow them.
 - A `start` in `std:process` beside `run`, which gives a running program at once: its standard output and error to read as they come, through a `Reader` of `std:io`, its standard input to write through a `Writer`, and a `wait(): Promise<Exit>`. A write to a pipe that the program has closed must then fail rather than end this program by SIGPIPE, which is why `run` gives its input through a file.

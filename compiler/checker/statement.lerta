@@ -1,9 +1,9 @@
 # Checks statements and blocks, defining the locals they declare; loops are checked by `loop`.
 import all_but_last from '../arrays'
 import
-  Assignment, Await, Binding, Call, Coalesce, Condition, Declaration, EnumDeclaration, Expression,
-  Extend, Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration, is_exported,
-  Pass, Statement, statement_else_body, This, Try, TypeAlias, TypeDeclaration, While
+  Assignment, Await, Binding, Call, Case, Coalesce, Condition, Declaration, EnumDeclaration,
+  Expression, Extend, Extern, For, FunctionLiteral, Identifier, If, Import, InterfaceDeclaration,
+  is_exported, Pass, Statement, statement_else_body, This, Try, TypeAlias, TypeDeclaration, While
 from '../ast'
 import check_assignment from './assignment'
 import check_try_statement from './case'
@@ -263,8 +263,7 @@ check_expression_statement := (body: Body, statement: Expression) ->
 export check_discarded := (body: Body, statement: Expression, type: Type) ->
   program := body.program
   at := statement.position
-  fail program, at, 'an Iter does nothing until it is consumed' if type is IterType
-  fail program, at, 'a Promise must be awaited' if type is PromiseType
+  reject_unconsumed body, statement, type
   return if statement is Call or statement is Await or is_one_of_kinds(type, ['void', 'never'])
   # `x ? return` is a guard: its value is the reason to stop, not something to use.
   return if statement is Coalesce and is_never_typed(body, statement.fallback)
@@ -272,3 +271,27 @@ export check_discarded := (body: Body, statement: Expression, type: Type) ->
     message := "function value is unused; to call it, write `#{statement.name}()`"
     fail program, at, message
   fail program, at, 'value is unused'
+
+# An Iter or a Promise must be used, even as the value of an arm of a statement whose arms give
+# values with no type in common, as a Promise and void, which gives void.
+reject_unconsumed := (body: Body, value: Expression, type: Type): void ->
+  at := value.position
+  fail body.program, at, 'an Iter does nothing until it is consumed' if type is IterType
+  fail body.program, at, 'a Promise must be awaited' if type is PromiseType
+  return if not is_kind(type, 'void')
+  arms := arm_bodies(value) ? return
+  for arm in arms
+    last := arm.last() as Expression?
+    arm_type := last then body.facts.types[last]
+    reject_unconsumed body, last!, arm_type if arm_type
+
+# The blocks of a statement that holds others, whose last statements give its value.
+arm_bodies := (statement: Expression): Statement[][]? ->
+  case statement
+    when If then [statement.then_body, statement.else_body]
+    when Case
+      arms := [arm.body for arm in statement.arms]
+      arms.push otherwise if otherwise := statement.otherwise
+      arms
+    when Try then [statement.body, [catch_clause.body for catch_clause in statement.catches]...]
+    else nil

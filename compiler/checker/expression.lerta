@@ -41,7 +41,7 @@ import resolve from './type_names'
 import
   bool_type, boxes_into, float_type, format_type, format_types, inner_of, is_assignable, is_float,
   is_integer, is_kind, is_one_of_kinds, never_type, nil_type, optional_type, OptionalType,
-  same_type, string_type, Type, UnionType, void_type
+  same_type, settles_into, string_type, Type, UnionType, void_type
 from '../types'
 
 export type_of := (body: Body, expression: Expression, expected: Type? = nil) ->
@@ -226,18 +226,22 @@ check_throw := (body: Body, throw_expression: Throw) ->
   require_type body, value, type, std_interface(body.shared, 'Error', value.position).type
 
 # A T or nil where a T? is expected is converted, and so is a value where an interface or an Iter
-# is expected (see interface_values), or a union holds it in a box (see boxes_into), which codegen
-# does where it generates it.
+# is expected (see interface_values), a function where one that returns a Promise of its result is
+# (see settles_into), or a union holds it in a box (see boxes_into), which codegen does where it
+# generates it.
 export require_type := (body: Body, expression: Expression, type: Type, expected: Type) ->
   assignable := is_assignable(type, expected)
-  through_itab := not assignable and converts_through_itab(body, expression, type, expected)
-  if not assignable and not through_itab
+  settles := not assignable and settles_into(type, expected)
+  through_itab :=
+    not assignable and not settles and converts_through_itab(body, expression, type, expected)
+  if not assignable and not settles and not through_itab
     { first, second } := format_types(expected, type)
     fail body.program, expression.position, "expected #{first}, got #{second}"
   is_converted := not is_kind(type, 'never') and not same_type(type, expected)
   to_optional := expected is OptionalType and is_converted
   to_box := is_converted and boxes_into(type, expected)
-  body.facts.conversions[expression] = expected if to_optional or through_itab or to_box
+  is_recorded := to_optional or settles or through_itab or to_box
+  body.facts.conversions[expression] = expected if is_recorded
 
 export expect_condition := (body: Body, expression: Expression) ->
   type := type_of(body, expression)

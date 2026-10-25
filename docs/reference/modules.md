@@ -59,7 +59,7 @@ An HTTP/1.1 server over [std:net](#stdnet), whose handler takes a `Request` and 
 ```
 import Request, Response, serve from 'std:http'
 
-handle := (request: Request) -> Response(body: "hello, #{await request.text()}")
+handle := (request: Request) -> Response(body: "hello, #{request.url}")
 
 server := serve(handle, port: 8080)
 ```
@@ -72,7 +72,6 @@ server := serve(handle, port: 8080)
 | `Response` | A struct of `body: String \| Binary = ''`, `status = 200` and `headers = Headers()`. |
 | `Headers` | A class of `fields: (String, String)[]`, each name in lower case with its value, and the methods `get(name): String?`, the values of the name joined by `, `, or nil; `has(name)`; `set(name, value)`, which replaces the name's values; `append(name, value)`; and `delete(name)`. Names are told apart regardless of case. `set` and `append` throw a `ValueError` for a name that is not a token of HTTP, `not a header name: <name>`, and for a value that holds a CR, an LF or a NUL, `a header value holds a line break or a NUL: <name>`, so that a value taken from a request cannot add fields to a response. |
 
-- The handler must give a `Promise`, so it is a function that awaits, as `handle` above does; one that does not, `(Request) -> Response`, is not taken.
 - A connection serves its requests one after another. It goes on after a response to HTTP/1.1 unless the request's `Connection` holds `close`, and after one to HTTP/1.0 only if it holds `keep-alive`. What the handler leaves unread of a body is read and dropped before the next request.
 - A body is read by `Content-Length`.
 - The server answers 400, without calling the handler, a request line that is not three words, a target that neither starts with `/` nor is a URL of `http` or `https`, as `*`, a field that `Headers` does not take or that has no `:`, a line that is not UTF-8, a `Content-Length` that is not digits alone, a `Host` that is empty or holds `/`, `\`, `?`, `#`, `@` or whitespace, as it would change the path of the URL, a second `Host`, and an HTTP/1.1 request without one; 505 a version other than HTTP/1.1 and HTTP/1.0; and 501 a request with `Transfer-Encoding`. It closes the connection after each. These responses, and the 500 below, have an empty body.

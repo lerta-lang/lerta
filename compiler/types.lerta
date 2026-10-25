@@ -369,6 +369,19 @@ export is_assignable := (value: Type, target: Type): Bool ->
     return is_assignable(value.inner, target.inner) if value is OptionalType
   same_type value, target
 
+# Whether a function value of the type, where one of the expected type is expected, which returns a
+# Promise of its result, or one optional, becomes a function that calls it and settles that Promise
+# with its result.
+export settles_into := (type: Type, expected: Type) ->
+  target := inner_of(expected)
+  return false if type is not FunctionType or target is not FunctionType
+  promise := target.result
+  return false if promise is not PromiseType
+  return false if type.params.length != target.params.length
+  for (param, expected_param) in type.params.zip(target.params)
+    return false if not same_type(param, expected_param)
+  same_type type.result, promise.value
+
 # A class, or a union of classes, compares by identity; other types that compare do so by their
 # contents.
 export is_identity_type := (type: Type): Bool ->

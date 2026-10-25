@@ -1,0 +1,155 @@
+# A function that returns a Promise without awaiting settles it with its result, where its return
+# type is written or expected; a function value of a function that returns no Promise becomes one
+# that does where one is expected. A throw rejects the Promise, rather than leaving the call.
+import sleep from 'std:time'
+
+run := (f: (Int) -> Promise<String>, n: Int) -> await f(n)
+
+run_void := (f: () -> Promise) -> await f()
+
+# The return type written.
+twice := (n: Int): Promise<String> -> "#{n * 2}"
+print await twice(2)
+
+# Taken from the expected type.
+print await run((n) -> "#{n + 1}", 1)
+
+# A function value of a function that returns a String.
+plain := (n: Int) -> "plain #{n}"
+print await run(plain, 3)
+local := (n: Int) -> "local #{n}"
+print await run(local, 4)
+
+# A function that returns no value, as a literal and as a value.
+await run_void(-> print('void literal'))
+say := -> print('void value')
+await run_void(say)
+
+# A Promise of the expected type is returned as it is, as a function that does not await gives it.
+later := (n: Int) ->
+  await sleep(0.01)
+  "later #{n}"
+print await run((n) -> later(n), 5)
+await run_void(-> sleep(0.01))
+print 'slept'
+
+# A throw rejects the Promise: the call gives it, and the await throws.
+fails := (n: Int): Promise<String> ->
+  throw ValueError(message: "failed #{n}") if n > 0
+  'fine'
+promise := fails(6)
+print 'called'
+try
+  print await promise
+catch error: ValueError
+  print error.message
+try
+  print await run((n) -> n > 0 then (throw ValueError(message: "thrown #{n}")) else 'fine', 7)
+catch error: ValueError
+  print error.message
+
+# A method, and a literal that captures what it gives.
+class Counter
+  count = 0
+  next = (): Promise<Int> ->
+    @count += 1
+    @count
+counter := Counter()
+print await counter.next() + await counter.next()
+prefix := 'captured'
+print await run((n) -> "#{prefix} #{n}", 8)
+
+# A function that settles its Promise may return early, and a result's type comes from the
+# Promise's value. One whose last statement returns a Promise returns it.
+early := (n: Int): Promise<String> ->
+  return 'early' if n > 0
+  'late'
+print "#{await early(1)} #{await early(0)}"
+empty := (): Promise<Int[]> -> []
+print (await empty()).length
+wait_if := (wait: Bool) ->
+  return sleep(0.01) if wait
+  sleep 0
+await wait_if(true)
+
+# A function value that throws rejects the Promise.
+bad := (n: Int): String -> throw ValueError(message: "bad #{n}")
+try
+  print await run(bad, 9)
+catch error: ValueError
+  print error.message
+
+# A function value converts where an optional function is expected too.
+var maybe: ((Int) -> Promise<String>)?
+maybe = plain
+print await maybe!(10) if maybe
+
+# A settling function with a default, one whose first result is nil, one that settles a Promise of
+# no value through a bare return, and a method that an interface's method of a Promise is.
+greet := (name = 'you'): Promise<String> -> "hi #{name}"
+print await greet()
+find := (n: Int): Promise<String?> ->
+  return nil if n < 0
+  "found #{n}"
+print await find(-1) ? 'none'
+check := (n: Int): Promise ->
+  return if n < 0
+  print "checked #{n}"
+await check(-1)
+await check(11)
+
+interface Source
+  read: () -> Promise<String>
+
+struct Fixed
+  text: String
+  read = (): Promise<String> -> @text
+
+source: Source = Fixed(text: 'fixed')
+print await source.read()
+
+# A literal where an optional function is expected settles its Promise itself, as one where the
+# function is expected does; an optional parameter takes a function value, and a void function
+# fits where an optional function of a Promise of no value is.
+optional_literal := ->
+  held: ((Int) -> Promise<String>)? = (n) -> "literal #{n}"
+  print await held!(12)
+await optional_literal()
+call := (f: ((Int) -> Promise<String>)? = nil) ->
+  print await f(13) if f
+  print 'no function' if not f
+await call(plain)
+await call()
+var void_value: (() -> Promise)? = say
+await void_value!()
+void_value = nil
+print void_value == nil
+optional_functions: ((Int) -> Promise<String>)?[] = [plain, nil]
+print await optional_functions[0]!(14)
+
+# A function whose only result is a throw settles its Promise too, rejecting it.
+boom := (): Promise<Int> -> throw ValueError(message: 'boom')
+exploding := boom()
+print 'boom called'
+try
+  print await exploding
+catch error: ValueError
+  print error.message
+rejected := (f: () -> Promise<Int>) ->
+  try
+    print await f()
+  catch error: ValueError
+    print error.message
+await rejected(-> throw ValueError(message: 'literal boom'))
+both := (left: Bool): Promise<Int> ->
+  if left
+    throw ValueError(message: 'left boom')
+  else
+    throw ValueError(message: 'right boom')
+await rejected(-> both(true))
+void_boom := (): Promise -> throw ValueError(message: 'void boom')
+void_rejection := void_boom()
+try
+  await void_rejection
+catch error: ValueError
+  print error.message

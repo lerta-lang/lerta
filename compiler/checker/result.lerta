@@ -7,7 +7,7 @@ import Body, FunctionContext, NodeFacts, ProgramWide from './shared'
 import check_discarded, check_statement from './statement'
 import
   format_type, FunctionType, is_assignable, is_kind, IterType, nil_type, PromiseType, same_type,
-  Type, unify, void_type
+  settles_into, Type, unify, void_type
 from '../types'
 
 # The context of a function's body, whose written return type, if any, is `annotated`. That of a
@@ -32,6 +32,10 @@ export check_last_statement := (body: Body, statement: Statement) ->
   if context.yields
     check_statement body, statement
     return
+  if promise := undecided_promise(context)
+    if is_kind(promise.value, 'void') and statement is not Return
+      check_last_of_void_promise body, statement, promise
+      return
   annotated := context.annotated
   expects_value := annotated != nil and not is_kind(annotated, 'void')
   var gives_value = false
@@ -51,9 +55,44 @@ export check_last_statement := (body: Body, statement: Statement) ->
     check_statement body, statement
   result := context.annotated ? context.inferred ? void_type
   if not is_kind(result, 'void') and not gives_value and statement is not Return
-    value := "its return value of type #{format_type(result)}"
-    message := "the function must end with #{value} or a return"
-    fail body.program, statement.position, message
+    reject_missing_result body, statement, result
+
+reject_missing_result := (body: Body, statement: Statement, result: Type) ->
+  value := "its return value of type #{format_type(result)}"
+  message := "the function must end with #{value} or a return"
+  fail body.program, statement.position, message
+
+# The last statement of a function that returns a Promise of no value without awaiting: a value
+# that is a Promise, or never ends, is its result, and another settles the Promise, as a statement
+# that gives no value does unless a `return` in it has told that the function returns Promises.
+check_last_of_void_promise := (body: Body, statement: Statement, promise: PromiseType) ->
+  context := body.context!
+  if value := value_of(statement)
+    type := type_of(body, value)
+    if type is PromiseType or is_kind(type, 'never')
+      record_result body, type, value
+      return
+    decide_settling context, true, promise
+    check_discarded body, value, type
+    return
+  check_statement body, statement
+  if undecided_promise(context)
+    decide_settling context, true, promise
+  else if context.settles == false
+    reject_missing_result body, statement, promise
+
+# The Promise that a function returns without awaiting, while its results have not told whether it
+# settles that Promise with them or returns the Promises they are. The first result that is no
+# Promise and does not end the function tells that it settles it; one that is a Promise, that it
+# returns them; a function whose results all end it, as throws, settles it.
+export undecided_promise := (context: FunctionContext) ->
+  return nil if context.awaits or context.yields or context.settles != nil
+  context.annotated as PromiseType?
+
+# Decides whether the function settles its Promise: its results must then fit the Promise's value.
+decide_settling := (context: FunctionContext, settles: Bool, promise: PromiseType) ->
+  context.settles = settles
+  context.annotated = promise.value if settles
 
 # The statement as a value: an `if` without an `else` gives none, so it ends a function as a
 # statement does.
@@ -65,8 +104,11 @@ value_of := (statement: Statement) ->
 record_result := (body: Body, type: Type, at: Expression) ->
   context := body.context!
   context.results.push { type, value: at } if at is not Return
+  if promise := undecided_promise(context)
+    decide_settling context, type is not PromiseType, promise if not is_kind(type, 'never')
   if annotated := context.annotated
-    return if is_assignable(type, annotated) or converts_through_itab(body, at, type, annotated)
+    return if is_assignable(type, annotated) or settles_into(type, annotated)
+    return if converts_through_itab(body, at, type, annotated)
     reject_result body, annotated, type, at.position
   inferred := context.inferred
   if inferred == nil
@@ -117,17 +159,25 @@ export check_yield := (body: Body, yield_expression: Yield) ->
   record_result body, type, value
 
 # A written return type is a hint for the value's type, which can type `[]` and literals; the
-# value is then checked as a return value, for a message that says so.
+# value is then checked as a return value, for a message that says so. Until a function that returns
+# a Promise without awaiting is known to return Promises, the hint is the Promise's value, which
+# a result that settles it may need, as `[]` or the arms of `then` do, while a Promise is mostly
+# what a call gives, which needs none.
 type_of_result := (body: Body, value: Expression) ->
-  annotated := body.context!.annotated
+  context := body.context!
+  promise := undecided_promise(context)
+  annotated := promise then promise.value else context.annotated
   hint := annotated then (is_kind(annotated, 'void') then nil else annotated)
   type_of body, value, hint
 
 # The type of a function once its body is checked: its return type is the written one, or the one
 # its results give, to which they are converted; that of a function that yields is an Iter of its
-# item type, decided so, and that of one that awaits a Promise of its result. Its result may be nil
+# item type, decided so, and that of one that awaits, or settles its Promise, a Promise of its
+# result. Its result may be nil
 # alone, which gives no type, as may its items, if it yields nothing else: see reject_nil_result.
 export finish_function_type := (context: FunctionContext, params: Type[], facts: NodeFacts) ->
+  # No result told, as none ends without a throw: a throw then rejects the Promise.
+  decide_settling context, true, promise if promise := undecided_promise(context)
   unknown := context.yields then nil_type else void_type
   result := context.annotated ? context.inferred ? unknown
   for each in context.results
@@ -138,6 +188,9 @@ export finish_function_type := (context: FunctionContext, params: Type[], facts:
     case
       when context.yields then IterType(item: result)
       when context.awaits then PromiseType(value: result)
+      when context.settles == true
+        facts.settling.add context.literal
+        PromiseType value: result
       else result
   FunctionType params, result: wrapped
 
