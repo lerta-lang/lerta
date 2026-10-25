@@ -196,7 +196,11 @@ check: bin/lerta
 	  | xargs -0 sh -c 'for f; do test -e "$$f" && printf "%s\0" "$$f"; done' sh \
 	  | nice xargs -0 bin/lerta fmt
 
+# Not under nice, as test and check are, which would slow the programs that bench times.
+bench: bin/lerta
+	@bin/lerta run bench/run.lerta
+
 clean:
 	rm -rf build bin
 
-.PHONY: all check seed test test-bootstrap test-cross clean
+.PHONY: all bench check seed test test-bootstrap test-cross clean

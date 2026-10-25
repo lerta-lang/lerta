@@ -61,7 +61,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `test/` | The test scripts (see [Tests](#tests)) |
 | `tests/` | Run tests: Lerta sources and their expected output; also the files of the CLI checks (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks, each in Lerta, C, Swift and JavaScript, and `run.lerta`, which builds them and prints their times next to each other (`bin/lerta run bench/run.lerta`) |
+| `bench/` | Benchmarks, each in Lerta, C, Swift and JavaScript, and `run.lerta`, which builds them and prints their times next to each other (`make bench`) |
 | `editors/` | Editor support for VS Code and Vim; see the README in each subdirectory to install it |
 
 ### Building and testing
@@ -76,6 +76,7 @@ make seed              # rewrites the seed, only when needed (see the bootstrap)
 make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
 make test-cross        # the tests for every environment but the host's own (see below)
 make check             # the code in the style (lerta fmt)
+make bench             # the benchmarks' times in Lerta, C, Swift and JavaScript (see bench/)
 make clean
 ```
 
