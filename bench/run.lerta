@@ -1,6 +1,7 @@
-# Builds each benchmark in Lerta, C, Swift and JavaScript (Node.js), runs each 3 times, checks
+# Builds each benchmark in Lerta, C, Swift, Go and JavaScript (Node.js), runs each 3 times, checks
 # that every run of every language prints the same, and prints the best wall-clock time of each in
-# seconds. C is built with clang, or else cc; Swift only where swiftc is; Node.js must be there.
+# seconds. C is built with clang, or else cc; Swift only where swiftc is, Go only where go is;
+# Node.js must be there.
 # Run it from the repository's root, as `make bench` does after building bin/lerta; the programs go
 # to build/bench/.
 import is_dir, list_dir, make_dir from 'std:io'
@@ -10,7 +11,7 @@ import time from 'std:time'
 # The directories of bench/, one for each benchmark, in order.
 BENCHMARKS := [name for name in list_dir('bench') when is_dir("bench/#{name}")]
 # The languages, in the order of the columns, and the extensions of their sources.
-EXTENSIONS := { 'lerta': 'lerta', 'c': 'c', 'swift': 'swift', 'node': 'js' }
+EXTENSIONS := { 'lerta': 'lerta', 'c': 'c', 'swift': 'swift', 'go': 'go', 'node': 'js' }
 RUNS := 3
 OUT := 'build/bench'
 NAME_COLUMN := 12
@@ -34,6 +35,7 @@ find_c_compiler := ->
 
 c_compiler := await find_c_compiler()
 has_swift := await is_found('swiftc')
+has_go := await is_found('go')
 
 # Runs the command, which must succeed; with `output`, its standard output is appended to it.
 run_checked := (label: String, command: Command, output: Byte[]? = nil) ->
@@ -48,10 +50,12 @@ build := (name: String, language: String) ->
   output := ['-o', executable]
   return Command(program: 'node', args: [source]) if language == 'node'
   return nil if language == 'swift' and not has_swift
+  return nil if language == 'go' and not has_go
   compile :=
     case language
       when 'lerta' then Command(program: 'bin/lerta', args: ['build', source, '-O', output...])
       when 'c' then Command(program: c_compiler, args: ['-O2', source, output...])
+      when 'go' then Command(program: 'go', args: ['build', output..., source])
       else Command(program: 'swiftc', args: ['-O', source, output...])
   await run_checked("building #{name} in #{language}", compile)
   Command program: executable, args: []
@@ -72,7 +76,9 @@ measure := (label: String, command: Command) ->
   (best, printed)
 
 make_dir OUT
-print "C: #{c_compiler}#{has_swift then '' else '; no swiftc, so no Swift'}"
+no_swift := has_swift then '' else '; no swiftc, so no Swift'
+no_go := has_go then '' else '; no go, so no Go'
+print "C: #{c_compiler}#{no_swift}#{no_go}"
 headings := [language.pad_start(COLUMN) for language in EXTENSIONS.keys()]
 print ['benchmark'.pad_end(NAME_COLUMN), headings...].join(' ')
 for name in BENCHMARKS
