@@ -60,11 +60,15 @@ export generate := (g: Generator, expression: Expression) ->
   operand := generate_value(g, expression)
   return operand if target == nil
   source := type_of(g, expression)
+  itab := g.facts.itabs[expression]
+  # A value of a member's interface, made first, is what the union's box holds.
+  if inner_of(target) is UnionType and itab != nil
+    return emit_box_value(g.ir, emit_interface_value(g, operand, itab), itab.target)
   return emit_box_value(g.ir, operand, source) if boxes_into(source, target)
   if settles_into(source, target)
     closure := emit_settling_closure(g, operand, source, inner_of(target))
     return target is OptionalType then emit_wrap(g.ir, closure, inner_of(target)) else closure
-  itab := g.facts.itabs[expression] ? return emit_wrap(g.ir, operand, type_of(g, expression))
+  return emit_wrap(g.ir, operand, type_of(g, expression)) if not itab
   value := emit_interface_value(g, operand, itab)
   converted := inner_of(target)
   return value if converted is not IterType

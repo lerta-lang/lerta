@@ -9,12 +9,12 @@ import InterfaceMember, iter_source_type, members_for, std_interface from './int
 import find_member, generic_method, member_type_by_name from './member'
 import MemberTarget, Method from './member_targets'
 import ObjectInfo from './object_types'
-import reject_unsatisfied from './satisfaction'
+import reject_unsatisfied, satisfies from './satisfaction'
 import Body, Shared from './shared'
 import module_resolver from './type_names'
 import
   format_type, inner_of, InterfaceType, is_one_of_kinds, is_reference_type, IterType, same_type,
-  Type
+  Type, UnionType
 from '../types'
 
 # How the type gives a member of the interface: by a method, with the instance of a generic one, or
@@ -38,13 +38,28 @@ export converts_through_itab := (body: Body, expression: Expression, type: Type,
   converts_to_iter body, expression, type, expected
 
 # Whether the expression's value, which is not of the expected type, converts to it: to an
-# interface type, or to one optional, which its type must satisfy. Records the itab's plan.
+# interface type, or to one optional, which its type must satisfy, or to a union, or one optional,
+# that has an interface member which it satisfies, and which a box holds (see codegen generate).
+# Records the itab's plan.
 converts_to_interface := (body: Body, expression: Expression, type: Type, expected: Type) ->
-  target := inner_of(expected)
-  return false if target is not InterfaceType
   return false if is_one_of_kinds(type, ['nil', 'never', OPTIONAL, INTERFACE])
+  inner := inner_of(expected)
+  target := inner is UnionType then interface_member_of(body, expression, type, inner) else inner
+  return false if target is not InterfaceType
   record_itab body, expression, type, target
   true
+
+# The interface member of the union that the type satisfies, which must be the only one, or nil.
+interface_member_of := (body: Body, expression: Expression, type: Type, union: UnionType) ->
+  at := expression.position
+  is_satisfied := (member: Type) -> member is InterfaceType and satisfies(body, type, member, at)
+  satisfied := [member for member in union.members when is_satisfied(member)]
+  return nil if satisfied.is_empty()
+  return satisfied[0] if satisfied.length == 1
+  names := [format_type(member) for member in satisfied].join(' and ')
+  which := 'so the union cannot tell which it is; convert it to one of them first'
+  message := "#{format_type(type)} satisfies #{names}, members of #{format_type(union)}, #{which}"
+  fail body.program, at, message
 
 # Whether the expression's value, which is not of the expected type, converts to it: to an Iter, or
 # to one optional, which an Iter makes of a value that has `has_next(): Bool` and `next(): T` (see
