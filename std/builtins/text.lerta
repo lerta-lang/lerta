@@ -116,9 +116,11 @@ extend String
     throw ValueError(message: 'split by an empty separator') if separator == ''
     bytes := @binary
     separator_bytes := separator.binary
+    # Taken as a Byte once, so that each index_of below goes straight to the search of a byte.
+    part: Binary | Byte = separator_bytes.length == 1 then separator_bytes[0] else separator_bytes
     pieces: String[]
     var start = 0
-    while found := bytes.index_of(separator_bytes, start)
+    while found := bytes.index_of(part, start)
       pieces.push text_between(bytes, start, found)
       start = found + separator_bytes.length
     pieces.push text_between(bytes, start, bytes.length)
@@ -185,12 +187,10 @@ extend Binary
   # always so past the end; an empty part occurs at `from` if it is at most the length.
   index_of = (part: Binary | Byte, from: Int = 0): Int? ->
     throw IndexError(message: 'index_of from a negative place') if from < 0
-    if part is Byte
-      for i in from...@length
-        return i if @[i] == part
-      return nil
-    # A part of one byte, as a separator often is, is found as the byte, one comparison at each place.
-    return @index_of(part[0], from) if part.length == 1
+    return byte_index(@, part, from) if part is Byte
+    # A part of one byte is found as the byte, one comparison at each place. The search is a
+    # function of its own rather than a call of index_of, which LLVM would not inline.
+    return byte_index(@, part[0], from) if part.length == 1
     for i in from...max(from, @length - part.length + 1)
       return i if @occurs_at(i, part)
     nil
@@ -204,6 +204,12 @@ extend Binary
   text = (start = 0, end: Int = @length): String? ->
     bytes := start == 0 and end == @length then @ else @[start...end]
     is_utf8(bytes) then lerta_binary_as_string(bytes)
+
+# The place of the first `byte` in `bytes` at `from` or after it, or nil.
+byte_index := (bytes: Binary, byte: Byte, from: Int): Int? ->
+  for i in from...bytes.length
+    return i if bytes[i] == byte
+  nil
 
 # The start of the bytes without the spaces at it.
 text_start := (bytes: Binary) ->
