@@ -1,5 +1,5 @@
 # The methods of the numbers and Bool (see docs/reference/builtins.md#methods-of-the-builtin-types).
-import is_continuation from '../internal/utf8'
+import is_continuation, lerta_binary_as_string from '../internal/utf8'
 extern lerta_float_to_string: (Float) -> String
 extern lerta_float_fits_int: (Float) -> Bool
 extern lerta_float_to_int: (Float) -> Int
@@ -13,8 +13,6 @@ export INT_MIN := -9223372036854775808
 export INT_MAX := 9223372036854775807
 # The positive infinity, which std:builtins' own modules use and std:math exports.
 export INFINITY := lerta_float_infinity()
-
-HEX_DIGITS := ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
 
 extend Float
   to_string = -> lerta_float_to_string(@)
@@ -59,27 +57,17 @@ extend Bool
   to_literal = -> @to_string()
 
 extend Int
-  # The digits are taken from the value made negative, which can hold the minimum Int.
+  # The magnitude of a negative value is that of `@ + 1` plus one, as `@ + 1`, unlike the minimum
+  # Int, can be negated.
   to_string = ->
-    var rest = @ < 0 then @ else -@
-    var digits = ''
-    while true
-      digits = digit_text(-(rest % 10)) + digits
-      rest /= 10
-      break if rest == 0
-    @ < 0 then '-' + digits else digits
+    return digits_text(@to_uint64()!, 10) if @ >= 0
+    digits_text (-(@ + 1)).to_uint64()! + 1, 10, true
   to_literal = -> @to_string()
   # The digits in lower-case hexadecimal, with zeros before them to make `width` digits; a negative
   # number has no one such text, so it throws.
   to_hex = (width: Int = 0) ->
     throw ValueError(message: "to_hex of #{@}, a negative number") if @ < 0
-    var rest = @
-    var digits = ''
-    while true
-      digits = HEX_DIGITS[rest & 0xF] + digits
-      rest >>= 4
-      break if rest == 0
-    digits.pad_start width, '0'
+    digits_text(@to_uint64()!, 16).pad_start(width, '0')
 
 extend Int8
   to_string = -> @to_int().to_string()
@@ -102,14 +90,7 @@ extend UInt32
   to_literal = -> @to_string()
 
 extend UInt64
-  to_string = ->
-    var rest = @
-    var digits = ''
-    while true
-      digits = digit_text((rest % 10).to_int()!) + digits
-      rest /= 10
-      break if rest == 0
-    digits
+  to_string = -> digits_text(@, 10)
   to_literal = -> @to_string()
 
 # A byte's classes are those of the Char of the same number.
@@ -128,7 +109,23 @@ extend Byte
       when @ >= 'A' and @ <= 'F' then (@ - 'A').to_int() + 10
       else nil
 
-ZERO: Char = '0'
+DIGITS := '0123456789abcdef'.binary
 
-# The decimal digit of a number from 0 to 9.
-digit_text := (digit: Int) -> (ZERO + digit).to_string()
+# The digits of `n` in `base`, after a '-' if `negative`. They are written in place from the last,
+# once their count is known, so that no digit is a String of its own joined to the others.
+digits_text := (n: UInt64, base: UInt64, negative = false) ->
+  var length = negative then 2 else 1
+  var rest = n / base
+  while rest != 0
+    length += 1
+    rest /= base
+  bytes: Byte[] = Array(length, 0)
+  bytes[0] = '-' if negative
+  rest = n
+  var i = length
+  while true
+    i -= 1
+    bytes[i] = DIGITS[(rest % base).to_int()!]
+    rest /= base
+    break if rest == 0
+  lerta_binary_as_string bytes.to_binary()
