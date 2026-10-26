@@ -1,10 +1,11 @@
 # Builds each benchmark in Lerta, C, Swift, Go and JavaScript (Node.js), runs each 3 times, checks
 # that every run of every language prints the same, and prints the best wall-clock time of each in
-# seconds. C is built with clang, or else cc; Swift only where swiftc is, Go only where go is;
-# Node.js must be there.
+# seconds, and last the geometric mean of those of each language. C is built with clang, or else
+# cc; Swift only where swiftc is, Go only where go is; Node.js must be there.
 # Run it from the repository's root, as `make bench` does after building bin/lerta; the programs go
 # to build/bench/.
 import is_dir, list_dir, make_dir from 'std:io'
+import pow from 'std:math'
 import exit, run from 'std:process'
 import time from 'std:time'
 
@@ -81,6 +82,8 @@ no_go := has_go then '' else '; no go, so no Go'
 print "C: #{c_compiler}#{no_swift}#{no_go}"
 headings := [language.pad_start(COLUMN) for language in EXTENSIONS.keys()]
 print ['benchmark'.pad_end(NAME_COLUMN), headings...].join(' ')
+# The times of each language, one for each benchmark; none for a language whose compiler is missing.
+times: Map<String, Float[]>
 for name in BENCHMARKS
   var expected = ''
   var expected_language = ''
@@ -97,5 +100,17 @@ for name in BENCHMARKS
       expected_language = language
     else if output != expected
       fail "#{label} printed:\n#{output}#{expected_language} printed:\n#{expected}"
+    times[language, default: []].push(seconds)
     cells.push seconds.to_fixed(2).pad_start(COLUMN)
   print cells.join(' ')
+
+geometric_mean := (xs: Float[]) ->
+  product := xs.fold(1.0, (product, x) -> product * x)
+  pow product, 1.0 / xs.length.to_float()
+
+mean_cell := (language: String) ->
+  xs := times[language]
+  (xs == nil then '-' else geometric_mean(xs).to_fixed(2)).pad_start(COLUMN)
+
+means := [mean_cell(language) for language in EXTENSIONS.keys()]
+print ['geomean'.pad_end(NAME_COLUMN), means...].join(' ')

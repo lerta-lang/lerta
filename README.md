@@ -61,7 +61,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `test/` | The test scripts (see [Tests](#tests)) |
 | `tests/` | Run tests: Lerta sources and their expected output; also the files of the CLI checks (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks, each in Lerta, C, Swift, Go and JavaScript, and `run.lerta`, which builds them and prints their times next to each other (`make bench`) |
+| `bench/` | Benchmarks, each in Lerta, C, Swift, Go and JavaScript, and `run.lerta`, which builds them and prints their times next to each other and the geometric mean of each language (`make bench`) |
 | `editors/` | Editor support for VS Code and Vim; see the README in each subdirectory to install it |
 
 ### Building and testing
