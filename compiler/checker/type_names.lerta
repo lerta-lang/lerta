@@ -173,11 +173,16 @@ resolve_union := (program: ProgramWide, resolver: Resolver, type_name: UnionType
     resolved := resolve(program, resolver, member)
     type := inner_of(resolved)
     if type is not UnionType and not is_union_member(type)
-      kinds := 'classes, structs, numbers, Bool, String, Binary and enums'
+      objects := 'arrays, maps, tuples and anonymous structs'
+      kinds := "classes, structs, numbers, Bool, String, Binary, enums, #{objects}"
       message := "a union can only hold #{kinds} so far, not #{format_type(type)}"
       fail program, member.position, message
     resolved
-  union_of([resolve_member(member) for member in type_name.members])!
+  # Its members are all a union's, so only more than one array or map type makes it none.
+  members := [resolve_member(member) for member in type_name.members]
+  return union if union := union_of(members)
+  message := 'a union holds one array type and one map type at most, which it tells apart so far'
+  fail program, type_name.position, message
 
 resolve_alias := (program: ProgramWide, resolver: Resolver, name: String, at: Position) ->
   shared := program.shared[resolver.module_index]

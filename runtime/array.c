@@ -68,10 +68,10 @@ static void drop_array(void *object) {
 }
 
 LERTA_STATIC_STRING(array_name, "Array");
-static const LertaType array_type = {drop_array, visit_array, (const LertaString *)&array_name};
+const LertaType lerta_array_type = {drop_array, visit_array, (const LertaString *)&array_name};
 
 LertaArray *lerta_array_create(LertaItemKind item_kind) {
-  LertaArray *array = lerta_new((int64_t)sizeof(LertaArray), &array_type);
+  LertaArray *array = lerta_new((int64_t)sizeof(LertaArray), &lerta_array_type);
   array->length = 0;
   array->capacity = 0;
   array->items = NULL;

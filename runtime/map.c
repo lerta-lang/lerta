@@ -72,11 +72,11 @@ static void drop_map(void *object) {
 }
 
 LERTA_STATIC_STRING(map_name, "Map");
-static const LertaType map_type = {drop_map, visit_map, (const LertaString *)&map_name};
+const LertaType lerta_map_type = {drop_map, visit_map, (const LertaString *)&map_name};
 
 LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, LertaHash hash,
                            LertaEquals equals) {
-  LertaMap *map = lerta_new((int64_t)sizeof(LertaMap), &map_type);
+  LertaMap *map = lerta_new((int64_t)sizeof(LertaMap), &lerta_map_type);
   map->length = 0;
   map->entry_count = 0;
   map->entry_capacity = 0;

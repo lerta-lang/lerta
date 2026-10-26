@@ -208,6 +208,8 @@ LertaString *lerta_binary_as_string(LertaString *binary);
 
 // Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; pop writes
 // the item owned.
+// The type of every array, whatever its items, which a union tests (see docs/internals.md#objects).
+extern const LertaType lerta_array_type;
 LertaArray *lerta_array_create(LertaItemKind item_kind);
 // An array of `length` copies of the item, borrowed, each retained; a negative length throws.
 LertaArray *lerta_array_filled(LertaItemKind item_kind, int64_t length, const void *item);
@@ -226,6 +228,8 @@ uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash);
 // Maps (map.c). Keys and values in are borrowed; values are passed through pointers to them. get
 // returns whether the key is there, and writes its value owned (zeros otherwise); keys returns
 // them in insertion order. `hash` and `equals` are NULL but for LERTA_VALUE_KEYS.
+// The type of every map, as lerta_array_type is of every array.
+extern const LertaType lerta_map_type;
 LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, LertaHash hash,
                            LertaEquals equals);
 int64_t lerta_map_length(const LertaMap *map);

@@ -17,6 +17,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## Standard library
 
+- In [std:json](../reference/modules.md#stdjson), unions with an array, a map, a tuple or an anonymous struct as a member: an array and a tuple are written as JSON arrays, and a map and an anonymous struct as objects, so decoding tells apart one of each kind, as it does a class from the others.
 - In [std:json](../reference/modules.md#stdjson), unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
 - Random numbers, and formatting dates and times.
 - In [std:net](../reference/modules.md#stdnet), UDP, TLS and Unix domain sockets. Each protocol has functions named by it, as TCP's `listen_tcp` and `connect_tcp`, and the types are named by the shape of what they carry: a Unix domain socket, a stream, is a `Socket` of `connect_unix(path)` and a `Listener` of `listen_unix(path)`, as TCP's are, and UDP, of datagrams, is a `UdpSocket` of `bind_udp(host, port)`.

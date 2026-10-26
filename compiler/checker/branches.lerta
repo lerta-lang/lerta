@@ -6,8 +6,8 @@ import expect_type, type_of from './expression'
 import Body from './shared'
 import type_of_block from './statement'
 import
-  FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_kind, is_one_of_kinds, members_of,
-  same_type, Type, type_key, unify, union_of, void_type
+  FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_kind, is_one_of_kinds, is_union_member,
+  members_of, same_type, Type, type_key, unify, union_of, void_type
 from '../types'
 
 # The body of a case arm, of then/else or of an if, and what entering it does: narrowing locals, or
@@ -71,7 +71,14 @@ mismatch := (body: Body, type: Type, value: BranchValue, description: String) ->
   gives_none := is_kind(type, 'void') or is_kind(value.type, 'void')
   rule := gives_none then 'one type' else 'one type, or types that a union can hold'
   types := "the ones before give #{format_type(type)}, this one #{format_type(value.type)}"
-  fail body.program, value.last.position, "#{description} must have #{rule}: #{types}"
+  message := "#{description} must have #{rule}: #{types}"
+  # Both types are a union's, so only more than one array or map type keeps them apart.
+  limit := ', and a union holds one array type and one map type at most'
+  holds_both := are_members(type) and are_members(value.type)
+  fail body.program, value.last.position, holds_both then message + limit else message
+
+are_members := (type: Type) ->
+  not members_of(inner_of(type)).any((each) -> not is_union_member(each))
 
 # Rejects a type of the values that brings together number types of different values, whatever
 # other types it holds: it could not be used in arithmetic, and a literal among them was meant to

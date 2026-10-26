@@ -12,7 +12,7 @@ import parse_element, spread_of from './compound'
 import parse_if from './statement'
 import is_one_of, TokenStream from './token_stream'
 import
-  parse_named_type, parse_named_type_alone, parse_type_arguments, starts_type_arguments
+  parse_cast_type, parse_type_arguments, parse_union_member, starts_type_arguments
 from './type'
 
 # Arithmetic and bitwise operators by precedence, weakest first. Comparisons are weaker than all of them.
@@ -180,14 +180,14 @@ parse_is := (tokens: TokenStream, value: Expression): Expression ->
   tokens.next()
   negated := tokens.peek().kind == 'not'
   tokens.next() if negated
-  test := IsTest(value, type: parse_named_type(tokens), position: value.position)
+  test := IsTest(value, type: parse_union_member(tokens), position: value.position)
   negated then UnaryOperation(operator: 'not', operand: test, position: value.position) else test
 
 # The `?` is read as the type's, which the checker takes as the form instead. `x as T ? y`, with a
 # space before `?`, is read as `(x as T?) ? y`.
 parse_cast := (tokens: TokenStream, value: Expression): Expression ->
   as_token := tokens.next()
-  type := parse_named_type_alone(tokens)
+  type := parse_cast_type(tokens)
   next := tokens.peek()
   optional := next.kind == '?' and not next.spaced
   throws := next.kind == '!' and not next.spaced

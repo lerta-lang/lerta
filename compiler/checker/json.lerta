@@ -113,7 +113,10 @@ class PartFinder
     members_by_kind: Map<Int, Type>
     for member in type.members
       return part if part := @unjsonable_part(member, path)
-      kind := json_kind(member)
+      kind := json_kind(member) ? return {
+        path
+        problem: "has a member of type #{format_type(member)}, which no union holds in JSON so far"
+      }
       if other := members_by_kind[kind]
         both := "#{format_type(other)} and #{format_type(member)}"
         problem := "has two members that JSON writes as #{JSON_KIND_WORDS[kind]}, #{both}"
@@ -133,14 +136,15 @@ class PartFinder
     nil
 
 # The kind of JSON value that a member of a union is written as, by its number, which
-# JsonReader.peek_kind gives for such a value (std/internal/json_reader.lerta).
+# JsonReader.peek_kind gives for such a value (std/internal/json_reader.lerta); nil for an array, a
+# map, a tuple or an anonymous struct, which decoding does not tell apart so far.
 export json_kind := (member: Type) ->
   case
     when is_kind(member, 'Bool') then 0
     when is_integer(member) or is_float(member) then 1
     when is_one_of_kinds(member, ['String', 'Binary']) or member is EnumType then 2
     when member is ObjectType then 3
-    else panic("no kind of JSON value for #{format_type(member)}")
+    else nil
 
 # The kinds as messages write them, by their numbers.
 JSON_KIND_WORDS := ['Bool values', 'numbers', 'strings', 'objects']

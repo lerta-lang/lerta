@@ -6,12 +6,13 @@ import emit_box_test from './boxes'
 import emit_branch, IrBuilder, IrModule from './ir_builder'
 import
   emit_load_reference, emit_release_stored, emit_retain_value, ir_type, is_counted, object_ir_type,
-  Ownership, ownership, shared_string_constant, special_method_symbol, suffixed_symbol, type_symbol
+  Ownership, ownership, quoted_name, shared_string_constant, special_method_symbol, suffixed_symbol,
+  type_symbol
 from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
-  format_type, inner_of, is_boxed, members_of, ObjectType, OptionalType, RecordType, TupleType,
-  Type, type_key
+  ArrayType, format_type, inner_of, is_boxed, MapType, members_of, ObjectType, OptionalType,
+  RecordType, TupleType, Type, type_key
 from '../types'
 
 # The two header fields come before the object's own.
@@ -186,7 +187,21 @@ export emit_type_test := (ir: IrBuilder, object: String, type: Type) ->
 emit_object_test := (ir: IrBuilder, object: String, type: Type) ->
   object_type := emit_object_type(ir, object)
   return emit_box_test(ir, object_type, type) if is_boxed(type)
-  ir.assign "icmp eq ptr #{object_type}, #{type_symbol(type as ObjectType!)}"
+  ir.assign "icmp eq ptr #{object_type}, #{object_type_symbol(ir, type)}"
+
+# The type in the header of the objects of a member of a union that is no box: an array's or a
+# map's, which the runtime gives, the same whatever their items, or a class's, a struct's, a
+# tuple's or an anonymous struct's own.
+object_type_symbol := (ir: IrBuilder, type: Type) ->
+  case type
+    when ArrayType then runtime_type(ir, 'lerta_array_type')
+    when MapType then runtime_type(ir, 'lerta_map_type')
+    when TupleType, RecordType then values_type(ir, type)
+    else type_symbol(type as ObjectType!)
+
+runtime_type := (ir: IrBuilder, name: String) ->
+  ir.module.declare name, "@#{name} = external constant { ptr, ptr, ptr }"
+  "@#{name}"
 
 # The type in the object's header.
 export emit_object_type := (ir: IrBuilder, object: String) ->
@@ -229,9 +244,18 @@ values_layout := (ir: IrBuilder, type: Type) ->
   fields := [value_field(each) for each in value_types(type)]
   define := (layout: String, module: IrModule) ->
     name := format_type(type)
-    define_heap_object module, layout, layout_type(layout), 'private ', fields, name
+    define_heap_object module, layout, values_type_symbol(type), 'linkonce_odr ', fields, name
   prefix := type is TupleType then '%lerta.tuple' else '%lerta.record'
   ir.module.named "values #{type_key(type)}", prefix, define
+
+# The type of the objects of a tuple or an anonymous struct, the same in every module, since a
+# union may get one made in one and test it in another, as a box's is.
+values_type_symbol := (type: Type) -> "@#{quoted_name("lerta.values.#{type_key(type)}")}"
+
+# The type of the objects of the type, defined first.
+values_type := (ir: IrBuilder, type: Type) ->
+  values_layout ir, type
+  values_type_symbol type
 
 # The type of the objects of a layout that a module numbers of its own.
 layout_type := (layout: String) -> suffixed_symbol(layout, 'type')
@@ -239,7 +263,7 @@ layout_type := (layout: String) -> suffixed_symbol(layout, 'type')
 # A new anonymous struct or tuple, which takes over the values, owned, in their order.
 export emit_values := (ir: IrBuilder, type: Type, values: String[]) ->
   layout := values_layout(ir, type)
-  object := emit_heap_allocate(ir, layout, layout_type(layout))
+  object := emit_heap_allocate(ir, layout, values_type_symbol(type))
   for value_type, i in value_types(type)
     pointer := emit_heap_field_pointer(ir, layout, object, i)
     ir.emit "store #{ir_type(value_type)} #{values[i]}, ptr #{pointer}"

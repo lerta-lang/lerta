@@ -206,7 +206,8 @@ export optional_type := (inner: Type): Type ->
 export union_type := (members: Type[]) -> UnionType(members: members.sorted_by(type_key))
 
 # The union of the types, each a member of a union, a union, or one of those optional, or nil: an
-# optional one if any of them is. Nil if one is none of those.
+# optional one if any of them is. Nil if one is none of those, or if they hold more than one array
+# or map type (see holds_one_of_each).
 export union_of := (types: Type[]): Type? ->
   members: Type[]
   var optional = false
@@ -218,13 +219,28 @@ export union_of := (types: Type[]): Type? ->
     for member in added
       return nil if not is_union_member(member)
       members.push member if not members.any((other) -> same_type(other, member))
+  return nil if not holds_one_of_each(members)
   union := members.length == 1 then members[0] else union_type(members)
   optional then optional_type(union) else union
 
-# A type whose values a union may hold: a class or a struct, as it is, or a value of the others,
-# which a union holds boxed (see codegen boxes).
+# A type whose values a union may hold: an object, as a class, a struct, an array, a map, a tuple or
+# an anonymous struct, as it is, or a value of the others, which a union holds boxed (see codegen
+# boxes).
 export is_union_member := (type: Type) ->
-  type is ObjectType or type is EnumType or is_one_of_kinds(type, UNION_VALUE_KINDS)
+  is_object_member(type) or type is EnumType or is_one_of_kinds(type, UNION_VALUE_KINDS)
+
+# The members that are objects of their own, whose type in their header tells them apart.
+is_object_member := (type: Type) ->
+  case type
+    when ObjectType, ArrayType, MapType, TupleType, RecordType then true
+    else false
+
+# Every array has one type in its header, whatever its items, and so does every map, so a union
+# tells apart one array type and one map type at most.
+holds_one_of_each := (members: Type[]) ->
+  arrays := [member for member in members when member is ArrayType]
+  maps := [member for member in members when member is MapType]
+  arrays.length <= 1 and maps.length <= 1
 
 UNION_VALUE_KINDS: TypeKind[] = [
   INTEGER_KINDS...
@@ -347,10 +363,10 @@ export iterable_item := (type: Type): Type? ->
 # The members of a union, or the type alone.
 export members_of := (type: Type): Type[] -> type is UnionType then type.members else [type]
 
-# Whether a union holds a value of the type, one of its members, in a box (see codegen boxes):
-# one that is not a class or a struct, which are heap objects of their own.
+# Whether a union holds a value of the type, one of its members, in a box (see codegen boxes): one
+# that is no object of its own.
 export is_boxed := (member: Type) ->
-  member is not ObjectType and member is not UnionType and member is not OptionalType
+  not is_object_member(member) and member is not UnionType and member is not OptionalType
 
 # Whether a value of the type, a T or a T?, fits where the union, or an optional one, is expected
 # only in a box: as an Int where an `Int | String` is.

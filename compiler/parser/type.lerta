@@ -1,8 +1,8 @@
 # Type syntax: type names (named types, unions, function types, anonymous structs, tuples and
 # arrays), type annotations and type parameters.
 import
-  ArrayTypeName, FunctionTypeName, NamedType, Position, RecordTypeField, RecordTypeName,
-  TupleTypeName, TypeName, TypeParameter, UnionMember, UnionTypeName
+  ArrayTypeName, CastTypeName, FunctionTypeName, NamedType, Position, RecordTypeField,
+  RecordTypeName, TupleTypeName, TypeName, TypeParameter, UnionMember, UnionTypeName
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import parse_identifier from './expression'
@@ -12,10 +12,20 @@ import is_one_of, TokenStream from './token_stream'
 TYPE_TOKEN_KINDS: TokenKind[] =
   IDENTIFIER, '.', '<', '>', ',', '?', '|', '(', ')', '->', '{', '}', ':', '[', ']'
 
-# A named type, or a union of them: `A | B`.
-export parse_type_name := (tokens: TokenStream) ->
-  return parse_parenthesized_type(tokens, false) if tokens.peek().kind == '('
-  union_of parse_union_members(tokens)
+# Any type: a union, `A | B`, or a type that may be one of its members, or a function type. As a
+# function literal's return type, `is_result`, the `->` after a type in parentheses starts the body
+# (see parse_parenthesized_type).
+export parse_type_name := (tokens: TokenStream, is_result = false) ->
+  return union_of(parse_union_members(tokens, is_result)) if tokens.peek().kind != '('
+  position := tokens.peek().position()
+  first := parse_parenthesized_type(tokens, is_result)
+  return first if tokens.peek().kind != '|'
+  tokens.next()
+  member := first as UnionMember ? fail_function_member(tokens, position)
+  union_of [member, parse_union_members(tokens, is_result)...]
+
+fail_function_member := (tokens: TokenStream, at: Position) ->
+  tokens.fail at, 'a union cannot hold a function type'
 
 # The type of `type Name =`: a type on the same line, or a union whose members are on the indented
 # lines below, one or more on each line.
@@ -27,8 +37,8 @@ export parse_aliased_type := (tokens: TokenStream) ->
   union_of members
 
 # `A | B | ...`, or one member alone.
-parse_union_members := (tokens: TokenStream) ->
-  tokens.parse_separated '|', -> parse_union_member(tokens)
+parse_union_members := (tokens: TokenStream, is_result = false) ->
+  tokens.parse_separated '|', -> parse_union_member(tokens, is_result)
 
 # The union of the members, or the member alone.
 union_of := (members: UnionMember[]): TypeName ->
@@ -60,13 +70,19 @@ parse_parenthesized_type := (tokens: TokenStream, is_result: Bool): TypeName ->
     tokens.fail position, 'a function type returned is written in parentheses: `((Int) -> Int)`'
   tokens.fail_expecting tokens.peek(), "'->'"
 
-# A type that `|` can join: a named type, or an anonymous struct or an array, which the checker
-# rejects as a member so far.
-parse_union_member := (tokens: TokenStream): UnionMember ->
+# A type that `|` can join, as a type test tests: a named type, an anonymous struct, a tuple or an
+# array.
+export parse_union_member := (tokens: TokenStream, is_result = false): UnionMember ->
+  return parse_parenthesized_member(tokens, is_result) if tokens.peek().kind == '('
   member: UnionMember =
     tokens.peek().kind == '{' then parse_record_type(tokens) else parse_named_type(tokens)
   return member if tokens.peek().kind != '['
   parse_array_type tokens, member, member.position
+
+parse_parenthesized_member := (tokens: TokenStream, is_result: Bool): UnionMember ->
+  position := tokens.peek().position()
+  type := parse_parenthesized_type(tokens, is_result)
+  type as UnionMember ? fail_function_member(tokens, position)
 
 # The type, made the items of an array if `[]` follows.
 parse_array_suffix := (tokens: TokenStream, type: TypeName, position: Position): TypeName ->
@@ -79,6 +95,19 @@ parse_array_type := (tokens: TokenStream, element: TypeName, position: Position)
   tokens.expect ']'
   array := ArrayTypeName(element, position, optional: tokens.accept('?'))
   tokens.peek().kind == '[' then parse_array_type(tokens, array, position) else array
+
+# A named type, or an array of them, without the `?` after it, which is the cast's.
+export parse_cast_type := (tokens: TokenStream) ->
+  if is_one_of(tokens.peek().kind, ['(', '{'])
+    message := 'a cast is to a named type or an array of one so far; narrow the others with `is`'
+    tokens.fail tokens.peek().position(), message
+  named := parse_named_type_alone(tokens)
+  var type: CastTypeName = named
+  while tokens.peek().kind == '[' and tokens.peek_at(1).kind == ']'
+    tokens.next()
+    tokens.next()
+    type = ArrayTypeName(element: type, position: named.position)
+  type
 
 # `{ x: Int, y: String }`, with `?` after it if it may be nil.
 parse_record_type := (tokens: TokenStream) ->
@@ -134,9 +163,8 @@ export parse_type_annotation := (tokens: TokenStream) ->
   tokens.accept(':') then parse_type_name(tokens)
 
 # `: Type` as a function literal's return type (see parse_parenthesized_type), if it follows.
-export parse_result_annotation := (tokens: TokenStream): TypeName? ->
-  return nil if not tokens.accept(':')
-  tokens.peek().kind == '(' then parse_parenthesized_type(tokens, true) else parse_type_name(tokens)
+export parse_result_annotation := (tokens: TokenStream) ->
+  tokens.accept(':') then parse_type_name(tokens, true)
 
 # `<T, U: Stringable, X: Iterable<T>>`, if it follows.
 export parse_type_parameters := (tokens: TokenStream): TypeParameter[] ->
