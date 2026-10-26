@@ -1,0 +1,31 @@
+# A cancel that overtakes the rejection of a promise that the program holds besides the task gives
+# it up for the task alone: another await of the promise still takes it (see
+# cancel_overtakes_rejection).
+import Deferred from 'std:async'
+
+gate := Deferred<Int>()
+
+failing := (): Promise<Int> ->
+  await gate.promise()
+  throw IOError(message: 'kept for another await')
+
+shared := failing()
+awaiting := ->
+  try
+    await shared
+    'resolved'
+  catch error: CancelledError
+    error.message
+
+task := awaiting()
+cancelling := ->
+  await gate.promise()
+  task.cancel()
+cancelled := cancelling()
+gate.resolve 0
+await cancelled
+print await task
+try
+  await shared
+catch error: IOError
+  print error.message

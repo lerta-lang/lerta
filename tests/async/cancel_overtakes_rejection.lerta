@@ -1,0 +1,28 @@
+# A cancel that overtakes the rejection of what a task awaits, before the task resumes, takes its
+# place: the task throws the CancelledError, and the rejection, of a promise that only the await
+# held, is given up, not left to end the program. Both `failing` and `cancelling` wait for the
+# gate, in that order, so the rejection makes the task ready only after `cancelling`, which cancels
+# it first.
+import Deferred from 'std:async'
+
+gate := Deferred<Int>()
+
+failing := (): Promise<Int> ->
+  await gate.promise()
+  throw IOError(message: 'given up')
+
+awaiting := ->
+  try
+    await failing()
+    'resolved'
+  catch error: CancelledError
+    error.message
+
+task := awaiting()
+cancelling := ->
+  await gate.promise()
+  task.cancel()
+cancelled := cancelling()
+gate.resolve 0
+await cancelled
+print await task

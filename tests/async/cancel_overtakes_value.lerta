@@ -1,0 +1,24 @@
+# A cancel that overtakes a value, before the task resumes, discards it, which is released (see
+# cancel_overtakes_rejection).
+import Deferred from 'std:async'
+
+gate := Deferred<Int>()
+
+giving := ->
+  await gate.promise()
+  'bytes'.binary
+
+awaiting := ->
+  try
+    (await giving()).length
+  catch error: CancelledError
+    -1
+
+task := awaiting()
+cancelling := ->
+  await gate.promise()
+  task.cancel()
+cancelled := cancelling()
+gate.resolve 0
+await cancelled
+print await task
