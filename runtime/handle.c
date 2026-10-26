@@ -5,9 +5,9 @@
 
 #include "internal.h"
 
-// Each Handle holds a libuv stream: so far a socket or a listener of std:net. Lerta holds a Handle
-// by its address, in a Handle of std/internal/handle.lerta, which frees it; a close keeps it,
-// closed, until then.
+// Each Handle holds a libuv stream: a socket or a listener of std:net, or a pipe of std:process.
+// Lerta holds a Handle by its address, in a Handle of std/internal/handle.lerta, which frees it; a
+// close keeps it, closed, until then.
 
 LERTA_STATIC_STRING(cannot_listen, "cannot listen at ");
 LERTA_STATIC_STRING(cannot_accept, "cannot accept at ");
@@ -16,8 +16,8 @@ LERTA_STATIC_STRING(cannot_read, "cannot read from ");
 LERTA_STATIC_STRING(cannot_write, "cannot write to ");
 LERTA_STATIC_STRING(accepted_twice, "a Listener is accepted by another accept that has not ended");
 
-// A socket or a listener, whose libuv stream is unreferenced but while a read or an accept is
-// pending, so that one left open does not keep the program running. It is freed once Lerta has
+// A socket, a listener or a pipe, whose libuv stream is unreferenced but while a read or an accept
+// is pending, so that one left open does not keep the program running. It is freed once Lerta has
 // freed it and the requests that are pending, and the closes of its libuv streams, have ended,
 // which they do on the loop.
 typedef struct Handle {
@@ -25,7 +25,8 @@ typedef struct Handle {
   uv_stream_t *stream;
   bool freed;
   int requests;
-  // `host:port`, which the failures name: where it listens, what it connects to or its peer.
+  // What the failures name: a socket's `host:port`, where it listens, what it connects to or its
+  // peer, or a pipe's name.
   LertaString *address;
   // The promise of the read, the accept or the connect that is pending, which it holds, and how a
   // close fails it, as another task awaits it.
@@ -71,12 +72,16 @@ static uv_tcp_t *tcp_of(Handle *handle) {
   return (uv_tcp_t *)handle->stream;
 }
 
+static void set_stream(Handle *handle, uv_stream_t *stream) {
+  handle->stream = stream;
+  stream->data = handle;
+  uv_unref((uv_handle_t *)stream);
+}
+
 static void open_tcp(Handle *handle) {
   uv_tcp_t *tcp = lerta_checked_malloc(sizeof(uv_tcp_t));
   uv_tcp_init(uv_default_loop(), tcp);
-  handle->stream = (uv_stream_t *)tcp;
-  handle->stream->data = handle;
-  uv_unref((uv_handle_t *)handle->stream);
+  set_stream(handle, (uv_stream_t *)tcp);
 }
 
 static void close_stream(Handle *handle) {
@@ -156,6 +161,20 @@ int64_t lerta_tcp_new(void) {
   Handle *handle = lerta_checked_calloc(1, sizeof(Handle));
   open_tcp(handle);
   return (int64_t)(intptr_t)handle;
+}
+
+int64_t lerta_pipe_new(const LertaString *name) {
+  Handle *handle = lerta_checked_calloc(1, sizeof(Handle));
+  uv_pipe_t *pipe = lerta_checked_malloc(sizeof(uv_pipe_t));
+  uv_pipe_init(uv_default_loop(), pipe, 0);
+  set_stream(handle, (uv_stream_t *)pipe);
+  lerta_retain((void *)name);
+  handle->address = (LertaString *)name;
+  return (int64_t)(intptr_t)handle;
+}
+
+uv_stream_t *lerta_handle_stream(int64_t pointer) {
+  return handle_of(pointer)->stream;
 }
 
 void lerta_handle_close(int64_t pointer) {

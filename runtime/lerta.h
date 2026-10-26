@@ -294,14 +294,21 @@ LertaArray *lerta_argv(void);
 // leaks, and a leak ends it with LERTA_LEAK_EXIT_CODE in place of `code`, which std:process checks
 // is from 0 to 255.
 void lerta_exit(int64_t code);
-// A promise of the program's exit code, or minus the signal that ended it, settled once it ends.
-// It reads `input` as its standard input, if given; its standard output and error are appended to
-// `output` and `errors`, arrays of bytes, if given; it runs in `cwd`, if given, with the variables
-// of `env`, as NAME=VALUE, if given, and otherwise this program's. No text holds a NUL byte, which
-// std:process refuses first. It is rejected if an output cannot be read, or one goes past
-// `output_limit` bytes, if not -1, which stops the program, and a program that cannot start throws
-// at once. A cancel stops the program, killing it after `kill_after` seconds, and rejects the
-// promise once it ends.
+// A program that runs, which lerta_program_free frees, as it runs on, if it has not ended. It runs
+// with the variables of `env`, as NAME=VALUE, if given, and otherwise this program's, in `cwd`, if
+// given; its standard input, output and error are the streams of the three handles of `streams`,
+// from lerta_pipe_new, or this program's, for 0. No text holds a NUL byte, which std:process
+// refuses first. A program that cannot start throws.
+int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
+                            const LertaString *cwd, const LertaArray *env,
+                            const LertaArray *streams, double kill_after);
+// A promise of its exit code, or minus the signal that ended it, settled once it ends; one wait at
+// most. A cancel stops the program and rejects the promise once it ends.
+LertaPromise *lerta_program_wait(int64_t pointer);
+// Asks the program to end, then kills it if it has not ended after `kill_after` seconds.
+void lerta_program_stop(int64_t pointer);
+void lerta_program_free(int64_t pointer);
+// What the seed's std:process links, which only `run` called, and which the seed does not call.
 LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
                         const LertaString *input, LertaArray *output, LertaArray *errors,
                         const LertaString *cwd, const LertaArray *env, int64_t output_limit,
@@ -348,6 +355,8 @@ void lerta_rename(const LertaString *from, const LertaString *to);
 // after the close, and the close rejects the read, the accept or the connect pending. No host holds
 // a NUL byte, and a port is from 0 to 65535: std:net refuses others first.
 int64_t lerta_tcp_new(void);
+// A pipe that a program reads or writes, which a failure names by `name`.
+int64_t lerta_pipe_new(const LertaString *name);
 void lerta_handle_close(int64_t pointer);
 void lerta_handle_free(int64_t pointer);
 // The port it listens at, which a port 0 leaves to the system.

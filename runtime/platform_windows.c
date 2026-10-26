@@ -1,5 +1,3 @@
-#include <fcntl.h>
-#include <io.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -237,35 +235,6 @@ bool lerta_os_make_link(const char *target, const char *path) {
   free(wide_target);
   free(wide_path);
   return made;
-}
-
-// The file is removed once the last handle to it, the program's, is closed.
-int lerta_os_input_file(const uint8_t *bytes, int64_t length) {
-  wchar_t dir[MAX_PATH + 1];
-  wchar_t path[MAX_PATH + 1];
-  DWORD dir_length = GetTempPathW(MAX_PATH + 1, dir);
-  if (dir_length == 0 || dir_length > MAX_PATH) return -1;
-  if (GetTempFileNameW(dir, L"lin", 0, path) == 0) return -1;
-  DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-  DWORD flags = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE;
-  HANDLE file =
-    CreateFileW(path, GENERIC_READ | GENERIC_WRITE, share, NULL, OPEN_EXISTING, flags, NULL);
-  if (file == INVALID_HANDLE_VALUE) {
-    DeleteFileW(path);
-    return -1;
-  }
-  bool written = write_all(file, bytes, length);
-  LARGE_INTEGER start = {0};
-  int fd = -1;
-  if (written && SetFilePointerEx(file, start, NULL, FILE_BEGIN)) {
-    fd = _open_osfhandle((intptr_t)file, _O_RDONLY);
-  }
-  if (fd < 0) CloseHandle(file);
-  return fd;
-}
-
-void lerta_os_close_input_file(int fd) {
-  _close(fd);
 }
 
 // Windows compares the names of variables without case.

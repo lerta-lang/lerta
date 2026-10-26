@@ -149,25 +149,6 @@ bool lerta_os_copy_file(const char *from, const char *to) {
   return copied;
 }
 
-// The file is removed at once, so that it is gone however the programs end, and is not inherited
-// by a program but where it is passed.
-int lerta_os_input_file(const uint8_t *bytes, int64_t length) {
-  char *path = lerta_os_temp_path("lerta-input-XXXXXX");
-  if (path == NULL) return -1;
-  int fd = mkstemp(path);
-  if (fd >= 0) unlink(path);
-  free(path);
-  if (fd < 0) return -1;
-  bool written = fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 && lerta_os_write(fd, bytes, length);
-  if (written && lseek(fd, 0, SEEK_SET) == 0) return fd;
-  close(fd);
-  return -1;
-}
-
-void lerta_os_close_input_file(int fd) {
-  close(fd);
-}
-
 bool lerta_os_same_env_name(const char *a, const char *b) {
   return strcmp(a, b) == 0;
 }

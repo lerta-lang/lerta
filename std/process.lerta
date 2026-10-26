@@ -1,7 +1,14 @@
 # The running program: its arguments, how it ends, and the programs it runs (see runtime/process.c).
 
+import Reader, Writer from 'std:io'
+import close_handle, Handle, reader_of, write_handle from './internal/handle'
+
 extern lerta_exit: (Int) -> never
-extern lerta_run: (String, String[], Binary?, Byte[]?, Byte[]?, String?, Binary[]?, Int, Float) -> Promise<Int>
+extern lerta_pipe_new: (String) -> Int
+extern lerta_program_start: (String, String[], String?, Binary[]?, Int[], Float) -> Int
+extern lerta_program_wait: (Int) -> Promise<Int>
+extern lerta_program_stop: (Int) -> void
+extern lerta_program_free: (Int) -> void
 extern lerta_argv: () -> Binary[]
 # Windows compares the names of variables without case.
 extern lerta_same_env_name as same_env_name: (Binary, Binary) -> Bool
@@ -15,14 +22,14 @@ export argv := [
   for argument in lerta_argv()
 ]
 
-# How `run` runs a program: what it reads as its standard input, the arrays that its standard
-# output and error are appended to, its directory, the environment variables set and removed, the
-# most bytes that it may write to each of those arrays, and how long a cancel waits for it to end
-# before it is killed.
+# How `run` runs a program: what it reads as its standard input, where its standard output and
+# error go, an array that they are appended to or a Writer that they are copied to as they come, its
+# directory, the environment variables set and removed, the most bytes that it may write to each of
+# those arrays, and how long a cancel waits for it to end before it is killed.
 export struct RunOptions
-  stdin: Binary?
-  stdout: Byte[]?
-  stderr: Byte[]?
+  stdin: Binary | Reader?
+  stdout: Byte[] | Writer?
+  stderr: Byte[] | Writer?
   cwd: String?
   env: Map<String, String> = default Map()
   unset_env: String[] = default []
@@ -52,11 +59,182 @@ export run := (command: String, args: String..., options: RunOptions) ->
   throw IOError(message: "cannot run: #{command}") if texts.any(holds_nul)
   changes_env := not env.is_empty() or not unset_env.is_empty()
   program_env := changes_env then env_with(env, unset_env)
-  # An Int, as an Int? passed to C on Windows is not yet as C takes it; -1 is no limit.
-  limit := output_limit ? -1
+  input := stdin != nil then pipe_of('standard input', command)
+  output := stdout != nil then pipe_of('standard output', command)
+  errors := stderr != nil then pipe_of('standard error', command)
+  streams := [pointer_of(input), pointer_of(output), pointer_of(errors)]
+  program :=
+    Program(pointer: lerta_program_start(command, args, cwd, program_env, streams, kill_after))
+  copies := Copies()
+  feeding := input then feed(input, stdin!, program, copies)
+  outputting := output then copy_output(output, stdout!, output_limit, program, copies)
+  erroring := errors then copy_output(errors, stderr!, output_limit, program, copies)
   status :=
-    await lerta_run(command, args, stdin, stdout, stderr, cwd, program_env, limit, kill_after)
+    try
+      await lerta_program_wait(program.pointer)
+    catch error: CancelledError
+      await give_up(copies, feeding, outputting, erroring)
+      end_writers stdout, stderr, copies
+      throw error
+  # What the program did not read is not wanted any more.
+  await give_up(copies, feeding, nil, nil)
+  # A stopped program's output is not wanted, and a program that it started may hold its pipes
+  # open, so it is not waited for; an output read once the program has ended may still fail, and
+  # stop it, which gives up the other output then, settled or not.
+  await give_up(copies, nil, outputting, erroring) if copies.stopped
+  output_bytes := outputting and not copies.stopped then await outputting
+  error_bytes := erroring and not copies.stopped then await erroring
+  await give_up(copies, nil, outputting, erroring) if copies.stopped
+  end_writers stdout, stderr, copies
+  throw error if error := copies.failure(command)
+  append_to stdout, output_bytes
+  append_to stderr, error_bytes
   status >= 0 then Exit(code: status) else Exit(code: 128 - status, signal: -status)
+
+# A program that runs, which runs on, if it has not ended, once nothing holds it.
+class Program
+  pointer: Int
+  deinit = -> lerta_program_free(@pointer)
+
+# How the copies of a program's streams went: whether an output went past the limit, which stops
+# the program, whether one could not be read, and the error of a Reader or a Writer that one read
+# or wrote.
+class Copies
+  too_long = false
+  unread = false
+  error: Error? = nil
+  # Whether one of them stopped the program, for one of those.
+  stopped = false
+  # Whether run has cancelled the copy of the input, and those of the outputs, which a
+  # CancelledError of a Reader or a Writer is not.
+  input_given_up = false
+  outputs_given_up = false
+
+  # Why the run fails, if it does.
+  failure = (command: String): Error? ->
+    return IOError(message: "the output is too long: #{command}") if @too_long
+    return error if error := @error
+    @unread then IOError(message: "cannot read the output of: #{command}")
+
+  # Stops the program, as a copy that fails or an output that is too long does (see failed_copy).
+  stop = (program: Program) ->
+    @stopped = true
+    lerta_program_stop program.pointer
+
+  # The first error tells why the run fails; the later ones follow from it as often as not.
+  fail = (error: Error) -> @error = @error ? error
+
+pipe_of := (stream: String, command: String) ->
+  Handle pointer: lerta_pipe_new("the #{stream} of #{command}")
+
+# 0 is the program's own stream, which the program shares.
+pointer_of := (pipe: Handle?) -> pipe?.pointer ? 0
+
+# The bytes of each read that a Reader gives the program at most.
+FEED_SIZE := 65536
+
+# The input goes to the program as it reads it, and the pipe is closed after it, however it ends,
+# which the program reads as the end: a pipe has no writing side to end apart, as a socket has. A
+# program may end without reading all of it, which fails the write, and is no failure of the run.
+feed := (pipe: Handle, input: Binary | Reader, program: Program, copies: Copies) ->
+  try
+    if input is Binary
+      await written(pipe, input)
+    else
+      while chunk := await input.read(FEED_SIZE)
+        break if not await written(pipe, chunk)
+  catch error: CancelledError
+    throw error if copies.input_given_up
+    failed_copy copies, error, program
+  catch error
+    failed_copy copies, error, program
+  finally
+    close_handle pipe
+
+written := (pipe: Handle, bytes: Binary) ->
+  try
+    await write_handle(pipe, bytes)
+    true
+  catch _: IOError
+    false
+
+# What the program writes to the stream, as it comes: all of it, for an array, which takes it only
+# once the program has ended, or nil for a Writer, which run ends (see end_writers).
+copy_output := (
+  pipe: Handle, output: Byte[] | Writer, limit: Int?, program: Program, copies: Copies
+) ->
+  reader := reader_of(pipe)
+  var bytes = ''.binary
+  try
+    while chunk := await next_chunk(reader, program, copies)
+      if output is Writer
+        await output.write(chunk)
+      else
+        bytes += chunk
+        if bytes.length > limit ? INT_MAX
+          copies.too_long = true
+          copies.stop program
+          return nil
+    output is Writer then nil else bytes
+  catch error: CancelledError
+    throw error if copies.outputs_given_up
+    failed_copy copies, error, program
+  catch error
+    failed_copy copies, error, program
+
+# A copy that fails stops the program, which would otherwise go on with an input that seems whole
+# though it is cut short, or wait for ever once the pipe of an output that is read no more is full.
+failed_copy := (copies: Copies, error: Error, program: Program): Binary? ->
+  copies.fail error
+  copies.stop program
+  nil
+
+# The Writers are ended once both copies have ended, as one Writer may take both outputs, as `2>&1`
+# does; it is then ended twice, which a Writer takes as once.
+end_writers := (stdout: Byte[] | Writer?, stderr: Byte[] | Writer?, copies: Copies) ->
+  end_writer stdout, copies if stdout is Writer
+  end_writer stderr, copies if stderr is Writer
+
+end_writer := (writer: Writer, copies: Copies) ->
+  try
+    writer.end()
+  catch error
+    copies.fail error
+
+# A read that fails is the end of the stream, and fails the run.
+next_chunk := (reader: Reader, program: Program, copies: Copies) ->
+  try
+    await reader.read_chunk()
+  catch _: IOError
+    copies.unread = true
+    copies.stop program
+    nil
+
+# The copies that are not wanted any more are cancelled, and awaited, so that a Writer is ended
+# before run settles: a cancelled copy stops reading, and ends at once with nothing to tell.
+give_up := (
+  copies: Copies, feeding: Promise?, outputting: Promise<Binary?>?, erroring: Promise<Binary?>?
+) ->
+  copies.input_given_up = copies.input_given_up or feeding != nil
+  copies.outputs_given_up = copies.outputs_given_up or outputting != nil or erroring != nil
+  feeding?.cancel()
+  outputting?.cancel()
+  erroring?.cancel()
+  await ended(feeding) if feeding
+  await ended(outputting) if outputting
+  await ended(erroring) if erroring
+
+ended := <T>(copy: Promise<T>) ->
+  try
+    await copy
+    return
+  catch _: CancelledError
+    return
+
+append_to := (output: Byte[] | Writer?, bytes: Binary?) ->
+  return if not bytes
+  if output is Byte[]
+    output.push byte for byte in bytes
 
 # This program's variables, as NAME=VALUE, but those that `set` names, which it gives, or that
 # `unset` names.

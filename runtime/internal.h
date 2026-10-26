@@ -85,6 +85,8 @@ void lerta_promise_reject_cancelled(LertaPromise *promise);
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
 
+// The libuv stream of a handle (handle.c), for a program that runs to read or write.
+struct uv_stream_s *lerta_handle_stream(int64_t pointer);
 // The event loop (loop.c). Waits for what settles promises, and settles them, once; false, without
 // waiting, if nothing is left to wait for.
 bool lerta_loop_wait(void);
@@ -211,8 +213,6 @@ char *lerta_os_real_path(const char *path);
 // A new, empty directory in the system's directory for temporary files, whose path the caller
 // frees.
 char *lerta_os_make_temp_dir(void);
-// The path of `name` in the system's directory for temporary files, which the caller frees.
-char *lerta_os_temp_path(const char *name);
 // Removes a file, or a directory with everything in it; a symbolic link is removed, not followed.
 bool lerta_os_remove_tree(const char *path);
 // Makes the directory, whose parent must be there; true if it is a directory afterwards, made now
@@ -235,10 +235,6 @@ void lerta_os_environ(LertaArray *entries);
 int64_t lerta_os_process_id(void);
 // Whether a process with the ID is running; one that the program may not signal is.
 bool lerta_os_is_running(int id);
-// A file that holds the bytes, read from its start, for a program's standard input, which
-// lerta_os_close_input_file closes and which is removed once closed; -1 if it cannot be made.
-int lerta_os_input_file(const uint8_t *bytes, int64_t length);
-void lerta_os_close_input_file(int fd);
 // Whether two names of environment variables name the same variable.
 bool lerta_os_same_env_name(const char *a, const char *b);
 // The file of a command for a program that run starts, which on Windows is searched for on PATH if it

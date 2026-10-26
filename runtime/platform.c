@@ -111,9 +111,10 @@ static char *join_path(const char *dir, const char *name) {
   return path;
 }
 
-// libuv takes the first of TMPDIR, TMP, TEMP and TEMPDIR that is set on POSIX, even if it is empty,
-// which is taken as unset, as most programs take it.
-char *lerta_os_temp_path(const char *name) {
+// The path of `name` in the system's directory for temporary files, which the caller frees. libuv
+// takes the first of TMPDIR, TMP, TEMP and TEMPDIR that is set on POSIX, even if it is empty, which
+// is taken as unset, as most programs take it.
+static char *temp_path(const char *name) {
   size_t size = 256;
   for (;;) {
     char *dir = lerta_checked_malloc(size);
@@ -126,7 +127,7 @@ char *lerta_os_temp_path(const char *name) {
 }
 
 char *lerta_os_make_temp_dir(void) {
-  char *template = lerta_os_temp_path("lerta-XXXXXX");
+  char *template = temp_path("lerta-XXXXXX");
   if (template == NULL) return NULL;
   uv_fs_t request;
   bool made = uv_fs_mkdtemp(NULL, &request, template, NULL) == 0;
