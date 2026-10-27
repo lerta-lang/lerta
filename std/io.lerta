@@ -113,8 +113,9 @@ export stdout := StandardOutput(fd: 1, name: 'stdout')
 export stderr := StandardOutput(fd: 2, name: 'stderr')
 
 # A Reader that reads what its Writer writes: a write is resolved once the reader has taken its
-# chunk, and the reader reads nil once the writer has ended and all has been taken. Once the reader
-# is closed, the writes fail, as those to a system pipe whose reader has gone do.
+# chunk, and the reader reads nil once the writer has ended and all has been taken, or throws the
+# error that the writer has failed with. Once the reader is closed, the writes fail, as those to a
+# system pipe whose reader has gone do.
 export class Pipe
   writer = PipeWriter()
   reader = reader_of_pipe(@writer)
@@ -125,6 +126,8 @@ reader_of_pipe := (writer: PipeWriter) ->
 class PipeWriter
   queued: PipeChunk[] = []
   ended = false
+  # What the reader throws in place of its end.
+  failure: Error? = nil
   read_no_more = false
   # The takes that wait while nothing is queued, each on its own, so that a cancel of one leaves
   # the others waiting.
@@ -151,6 +154,11 @@ class PipeWriter
     @ended = true
     @wake()
 
+  fail = (error: Error) ->
+    return if @ended
+    @failure = error
+    @end()
+
   # The chunks left are not read, and their writes fail.
   unread = ->
     @read_no_more = true
@@ -161,7 +169,11 @@ class PipeWriter
 
   take = ->
     while @queued.is_empty()
-      return nil if @ended or @read_no_more
+      return nil if @read_no_more
+      if @ended
+        failure := @failure
+        throw failure if failure != nil
+        return nil
       arrival := Deferred<Bool>()
       @arrivals.push arrival
       try

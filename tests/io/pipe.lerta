@@ -150,3 +150,96 @@ catch error: IOError
   print error.message
 _still_open := not_started.writer.write('still read')
 print (await not_started.reader.read_chunk())!.text()!
+
+# A writer that fails is read to its end, after which every read throws its error in place of nil;
+# an end or a fail after it does nothing, and a write is rejected.
+failed := Pipe()
+_before_failure := failed.writer.write('before the failure')
+failing_read := failed.reader.read_chunk()
+print (await failing_read)!.text()!
+waiting_for_failure := failed.reader.read_chunk()
+await sleep(0.05)
+failed.writer.fail ValueError(message: 'the source failed')
+failed.writer.end()
+failed.writer.fail ValueError(message: 'a second failure')
+for read in [waiting_for_failure, failed.reader.read_chunk()]
+  try
+    await read
+  catch error: ValueError
+    print error.message
+try
+  await failed.writer.write('late')
+catch error: IOError
+  print error.message
+
+# A fail after the end, or once the reader has closed, leaves the reader reading nil.
+ended_first := Pipe()
+ended_first.writer.end()
+ended_first.writer.fail ValueError(message: 'too late')
+print await ended_first.reader.read_chunk() == nil
+closed_first := Pipe()
+closed_first.reader.close()
+closed_first.writer.fail ValueError(message: 'unread')
+print await closed_first.reader.read_chunk() == nil
+
+# A chunk queued before the fail is read first, a read of the Reader that reaches the error throws it
+# however much it has buffered, and a take cancelled before the fail leaves the others to throw it.
+queued_first := Pipe()
+queued_write := queued_first.writer.write("a line\nand a part")
+queued_first.writer.fail ValueError(message: 'cut short')
+print (await queued_first.reader.read_line())!
+await queued_write
+try
+  await queued_first.reader.read_line()
+catch error: ValueError
+  print error.message
+try
+  await queued_first.reader.read_all()
+catch error: ValueError
+  print error.message
+takes := Pipe()
+cancelled_take := takes.reader.read_chunk()
+other_take := takes.reader.read_chunk()
+await sleep(0.05)
+cancelled_take.cancel()
+takes.writer.fail ValueError(message: 'failed after a cancel')
+try
+  await other_take
+catch error: ValueError
+  print error.message
+
+# A write that waits when the writer fails, cancelled before it is taken, writes nothing.
+cancelled_before := Pipe()
+pending_write := cancelled_before.writer.write('never taken')
+cancelled_before.writer.fail ValueError(message: 'failed with a write pending')
+pending_write.cancel()
+try
+  await pending_write
+catch error: CancelledError
+  print 'cancelled'
+try
+  await cancelled_before.reader.read_chunk()
+catch error: ValueError
+  print error.message
+
+# A write after a fail, once the reader has closed, is rejected as one after an end is.
+closed_then_failed := Pipe()
+closed_then_failed.reader.close()
+closed_then_failed.writer.fail ValueError(message: 'unread')
+try
+  await closed_then_failed.writer.write('late')
+catch error: IOError
+  print error.message
+
+# A program whose input fails is stopped, and the run is rejected with the error.
+failures: Error[] =
+  IOError(message: 'the input failed')
+  ValueError(message: 'the input was wrong')
+for failure in failures
+  failing_input := Pipe()
+  _input := failing_input.writer.write("a line\n")
+  failing_input.writer.fail failure
+  try
+    await run('echo_input', stdin: failing_input.reader)
+  catch error: Error
+    print error.message
