@@ -1,0 +1,389 @@
+# An HTTP/1.1 client: fetch sends a request and gives a Response whose body is read as it comes, over
+# connections kept alive from one request to the next.
+
+import LineTooLongError, Reader from 'std:io'
+import connect_tcp, Socket from 'std:net'
+import time from 'std:time'
+import check_field, Headers, is_token, keeps_alive, Response, sent_bytes from './http_message'
+
+# What a request sends besides its URL, and whether a redirect is followed.
+export struct FetchOptions
+  method = default 'GET'
+  headers = default Headers()
+  body: String | Binary = default ''
+  follow_redirects = default true
+
+# Keeps each connection whose response has been read to its end, for the next request to the same
+# host and port, for `idle_timeout` seconds and at most `max_idle` of them to each.
+export class Client
+  idle_timeout = default 4.0
+  max_idle = default 8
+  # The connections kept by host and port, the latest last.
+  idle: Map<String, IdleSocket[]> = Map()
+
+  # The response once its head has come; its body is read as it comes.
+  fetch = (url: String, options: FetchOptions) ->
+    { method } := options
+    throw ValueError(message: "not a method: #{method}") if not is_token(method)
+    check_field name, value for (name, value) in options.headers.fields
+    var request = Outgoing
+      method
+      target: parse_url(url)
+      headers: options.headers
+      body: sent_bytes(options.body)
+    var response = await @exchange(request)
+    var redirects = 0
+    while next := options.follow_redirects then redirected(request, response) else nil
+      throw IOError(message: "too many redirects: #{url}") if redirects == MAX_REDIRECTS
+      redirects += 1
+      # Read to its end, so that its connection is kept.
+      await response.binary()
+      request = next
+      response = await @exchange(request)
+    response
+
+  # Closes the connections kept; the client keeps those it uses after.
+  close = ->
+    for kept in @idle.values()
+      idle.socket.close() for idle in kept
+    @idle = Map()
+
+  # Sends the request on a connection kept, or on a new one. A kept connection may have been closed
+  # by the server in the meantime, so a request that gets no answer on one is sent again on a new
+  # one, when its method is one that may be sent twice.
+  exchange = (request: Outgoing) ->
+    { target } := request
+    if socket := @take_idle(target.authority)
+      try
+        return await @send(socket, request)
+      catch error: NoAnswer
+        throw IOError(message: error.message) if not RESENDABLE.contains(request.method)
+    try
+      await @send(await connect_tcp(target.host, target.port), request)
+    catch error: NoAnswer
+      throw IOError(message: error.message)
+
+  # Closes the connection on a failure, after which what it holds is not known.
+  send = (socket: Socket, request: Outgoing) ->
+    try
+      head := await read_head(socket, request)
+      { left, chunked } := framing(head, request.method)
+      # A body that ends with the connection leaves nothing to keep.
+      keeps := left != nil and keeps_alive(head.version, head.headers)
+      # The connection is given back once the body has been read to its end, or closed.
+      finish := ->
+        if keeps
+          @give_back request.target.authority, socket
+        else
+          socket.close()
+      body := BodyChunks(socket, finish, left, chunked)
+      # A body that is empty by its framing does not hold the connection until it is read.
+      body.end() if left == 0 and not chunked
+      Response
+        body: Reader(read_chunk: -> await body.next())
+        status: head.status
+        headers: head.headers
+    catch error
+      socket.close()
+      throw error
+
+  # The latest connection kept for the host and port, after closing those kept too long, which the
+  # server may be closing. The clock of `time` may be set back, which keeps one longer, and a request
+  # on one the server has closed is sent again.
+  take_idle = (authority: String) ->
+    kept := @idle[authority] ? return nil
+    now := time()
+    fresh := [idle for idle in kept when now - idle.since < @idle_timeout]
+    for idle in kept
+      idle.socket.close() if now - idle.since >= @idle_timeout
+    @idle[authority] = fresh
+    fresh.is_empty() then nil else fresh.pop().socket
+
+  give_back = (authority: String, socket: Socket) ->
+    kept := @idle[authority] ? []
+    if kept.length >= @max_idle
+      socket.close()
+      return
+    kept.push { socket, since: time() }
+    @idle[authority] = kept
+
+# A request that a connection failed before any of its response came, which may then be sent again.
+struct NoAnswer: Error
+
+struct IdleSocket
+  socket: Socket
+  since: Float
+
+MAX_REDIRECTS := 20
+
+# The methods that a request does the same with when sent twice.
+RESENDABLE := ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS', 'TRACE']
+
+default_client := Client()
+
+# Fetches with a client that the program shares.
+export fetch := (url: String, options: FetchOptions) -> await default_client.fetch(url, options)
+
+struct Outgoing
+  target: Target
+  method: String
+  headers: Headers
+  body: Binary
+
+# The parts of an http URL that a request is sent by.
+struct Target
+  # The host and the port as the URL writes them, as the Host field does.
+  authority: String
+  host: String
+  port: Int
+  # The path and the query, as the request line names them.
+  path: String
+
+# Throws an IOError for an https URL, which needs TLS, and a ValueError for one that is not http, or
+# that holds a user, which the client does not send.
+parse_url := (url: String) ->
+  not_url := -> ValueError(message: "not an http URL: #{url}")
+  # A space or a control character would break the request line.
+  throw not_url() if url.any((c) -> c.to_int() <= 0x20 or c.to_int() == 0x7F)
+  (scheme, rest) := url.split_once('://') ? throw not_url()
+  lower_scheme := scheme.to_lower()
+  throw IOError(message: "https is not supported so far: #{url}") if lower_scheme == 'https'
+  throw not_url() if lower_scheme != 'http'
+  var authority = ''
+  for c in rest
+    break if '/?#'.contains(c.to_string())
+    authority += c
+  (path, _fragment) :=
+    rest.without_prefix(authority)!.split_once('#') ? (rest.without_prefix(authority)!, '')
+  throw not_url() if authority.contains('@')
+  (host, port) := host_and_port(authority) ? throw not_url()
+  Target authority, host, port, path: path.starts_with('/') then path else "/#{path}"
+
+# The host, without the brackets of an IPv6 address, and the port, 80 if none is written.
+host_and_port := (authority: String) ->
+  (host, port_text) := split_authority(authority) ? return nil
+  return nil if host.is_empty()
+  return (host, 80) if port_text.is_empty()
+  return nil if not port_text.all((c) -> c >= '0' and c <= '9')
+  port := port_text.parse_int() ? return nil
+  port <= 65535 then (host, port) else nil
+
+split_authority := (authority: String) ->
+  inside := authority.without_prefix('[') ? return authority.split_once(':') ? (authority, '')
+  (address, after) := inside.split_once(']') ? return nil
+  return (address, '') if after.is_empty()
+  port_text := after.without_prefix(':') ? return nil
+  (address, port_text)
+
+request_bytes := (request: Outgoing) ->
+  { target, method, body } := request
+  var head = "#{method} #{target.path} HTTP/1.1\r\nhost: #{target.authority}\r\n"
+  for (name, value) in request.headers.fields
+    head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name.to_lower())
+  if not body.is_empty() or SENDING_BODY.contains(method)
+    head += "content-length: #{body.length}\r\n"
+  (head + "\r\n").binary + body
+
+# The fields that the client writes itself, as they tell where the request goes and ends.
+FRAMING_FIELDS := ['host', 'content-length', 'transfer-encoding', 'connection']
+
+# The methods whose request tells the length of its body even when it is empty.
+SENDING_BODY := ['POST', 'PUT', 'PATCH']
+
+struct Head
+  version: String
+  status: Int
+  headers: Headers
+
+# Sends the request, and gives the head of the final response, past those of 1xx, which tell of
+# progress alone.
+read_head := (socket: Socket, request: Outgoing) ->
+  { reader } := socket
+  var head = await read_any_head(reader, await first_line(socket, request))
+  while head.status < 200
+    # What follows a 101 is another protocol, which the client does not speak.
+    throw IOError(message: 'switching protocols not supported') if head.status == 101
+    head = await read_any_head(reader, await read_line(reader) ? throw ended_early())
+  head
+
+# The first line of the response to the request; a failure before it comes is a NoAnswer.
+first_line := (socket: Socket, request: Outgoing) ->
+  send := ->
+    try
+      await socket.write(request_bytes(request))
+      await socket.reader.read_line(MAX_LINE)
+    catch error: IOError
+      throw NoAnswer(message: error.message)
+  line := await well_formed(send())
+  line ? throw NoAnswer(message: 'the connection closed before a response')
+
+read_any_head := (reader: Reader, line: String) ->
+  (version, rest) := line.split_once(' ') ? throw malformed()
+  throw malformed() if version != 'HTTP/1.1' and version != 'HTTP/1.0'
+  (code, _reason) := rest.split_once(' ') ? (rest, '')
+  throw malformed() if code.binary.length != 3 or not code.all((c) -> c >= '0' and c <= '9')
+  Head version, status: code.parse_int()!, headers: await read_fields(reader)
+
+read_fields := (reader: Reader) ->
+  headers := Headers()
+  while line := await read_line(reader)
+    return headers if line.is_empty()
+    throw malformed() if headers.fields.length == MAX_FIELDS
+    (name, value) := line.split_once(':') ? throw malformed()
+    try
+      headers.append name, value.trim()
+    catch _: ValueError
+      throw malformed()
+  throw ended_early()
+
+read_line := (reader: Reader) -> await well_formed(reader.read_line(MAX_LINE))
+
+well_formed := (line: Promise<String?>) ->
+  try
+    await line
+  catch _: LineTooLongError
+    throw malformed()
+  catch _: ValueError
+    # A line that is not UTF-8.
+    throw malformed()
+
+MAX_LINE := 65536
+MAX_FIELDS := 256
+
+malformed := -> IOError(message: 'a malformed response')
+
+ended_early := -> IOError(message: 'a response ended early')
+
+# How the body of a response is told to end: `left`, the bytes of a body of a Content-Length, or nil
+# for one that ends with the connection; or `chunked`.
+struct Framing
+  left: Int?
+  chunked = default false
+
+# A response to HEAD, and one of 204 or 304, has no body, whatever its fields tell.
+framing := (head: Head, method: String) ->
+  { status, headers } := head
+  return Framing(left: 0) if method == 'HEAD' or status == 204 or status == 304
+  if coding := headers.get('transfer-encoding')
+    if coding.to_lower() != 'chunked'
+      throw IOError(message: "a transfer coding not supported: #{coding}")
+    return Framing(left: 0, chunked: true)
+  text := headers.get('content-length') ? return Framing(left: nil)
+  throw malformed() if text.is_empty() or not text.all((c) -> c >= '0' and c <= '9')
+  Framing left: text.parse_int() ? throw malformed()
+
+# The chunks of a body as they come, after which the connection is finished with.
+class BodyChunks
+  socket: Socket
+  finish: () -> void
+  # The bytes left of the body, or of its chunk if it is chunked; nil until the connection ends.
+  left: Int?
+  chunked: Bool
+  ended = false
+
+  next = ->
+    return nil if @ended
+    chunk :=
+      try
+        await (@chunked then @next_of_chunked() else @next_sized())
+      catch error
+        @socket.close()
+        throw error
+    @end() if chunk == nil
+    chunk
+
+  end = ->
+    @ended = true
+    @finish()
+
+  next_sized = ->
+    left := @left ? return await @socket.reader.read(CHUNK_SIZE)
+    return nil if left == 0
+    chunk := await @socket.reader.read(min(left, CHUNK_SIZE)) ? throw ended_early()
+    @left = left - chunk.length
+    chunk
+
+  next_of_chunked = ->
+    if @left == 0
+      size := await @chunk_size()
+      if size == 0
+        await @skip_trailer()
+        return nil
+      @left = size
+    chunk := await @next_sized()
+    await @end_chunk() if @left == 0
+    chunk
+
+  # The size of the next chunk, in hexadecimal before its extensions.
+  chunk_size = ->
+    line := await read_line(@socket.reader) ? throw ended_early()
+    (digits, _extensions) := line.split_once(';') ? (line, '')
+    hex := digits.trim().binary
+    throw malformed() if hex.is_empty()
+    var zeros = 0
+    zeros += 1 while zeros < hex.length and hex[zeros] == '0'
+    # More digits than zeros could overflow.
+    throw malformed() if hex.length - zeros > 15
+    var size = 0
+    size = size * 16 + (byte.hex_value() ? throw malformed()) for byte in hex
+    size
+
+  end_chunk = ->
+    line := await read_line(@socket.reader) ? throw ended_early()
+    throw malformed() if not line.is_empty()
+
+  skip_trailer = ->
+    while line := await read_line(@socket.reader)
+      return if line.is_empty()
+    throw ended_early()
+
+CHUNK_SIZE := 65536
+
+# The request that a redirect asks for, or nil for a response that is none. A 303, and a 301 or a
+# 302 to POST, as browsers do, ask for a GET without the body. A request to another host or port
+# leaves out the credentials, which were meant for the first.
+redirected := (request: Outgoing, response: Response) ->
+  { status } := response
+  return nil if not REDIRECTS.contains(status)
+  location := response.headers.get('location') ? return nil
+  target :=
+    try
+      parse_url resolve(request.target, location)
+    catch _: ValueError
+      throw IOError(message: "a malformed redirect: #{location}")
+  headers := Headers()
+  headers.fields = [field for field in request.headers.fields]
+  if target.authority != request.target.authority
+    headers.delete name for name in CREDENTIALS
+  as_get := (status == 303 and request.method != 'HEAD') or ((status == 301 or status == 302) and request.method == 'POST')
+  return Outgoing(request..., target, headers) if not as_get
+  headers.delete 'content-type'
+  Outgoing target, headers, method: 'GET', body: ''.binary
+
+# Whether a URL starts with its scheme, which is absolute then; a `:` after a `/`, a `?` or a `#`, as
+# of `/login?next=http://a/`, is in a relative one.
+has_scheme := (location: String) ->
+  (scheme, _rest) := location.split_once(':') ? return false
+  not scheme.is_empty() and scheme.all(is_scheme_char)
+
+is_scheme_char := (c: Char) ->
+  (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or '+-.'.contains(
+    c.to_string()
+  )
+
+REDIRECTS := [301, 302, 303, 307, 308]
+
+CREDENTIALS := ['authorization', 'cookie', 'proxy-authorization']
+
+# The URL of a Location, which may be relative to the URL of the request.
+resolve := (base: Target, location: String) ->
+  return location if has_scheme(location)
+  return "http:#{location}" if location.starts_with('//')
+  origin := "http://#{base.authority}"
+  # The same document, whose fragment the request leaves out.
+  return origin + base.path if location.is_empty() or location.starts_with('#')
+  return origin + location if location.starts_with('/')
+  (path, _query) := base.path.split_once('?') ? (base.path, '')
+  return origin + path + location if location.starts_with('?')
+  segments := path.split('/')
+  "#{origin}#{segments.slice(0, segments.length - 1).join('/')}/#{location}"

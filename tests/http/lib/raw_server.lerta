@@ -1,0 +1,66 @@
+# A server that answers each request with the text that a function gives, as it is, so that a test
+# of fetch says what each response holds byte by byte.
+import Reader from 'std:io'
+import Listener, listen_tcp, Socket from 'std:net'
+
+# A request as it came: its request line, its fields, each as a line, and its body, of its
+# content-length; and the number of the connection it came on, from 1.
+export struct RawRequest
+  line: String
+  fields: String[]
+  body: String
+  connection: Int
+
+# The text written in answer, after which the connection is closed if `close`.
+export struct Reply
+  text: String | Binary
+  close = default false
+
+export class RawServer
+  listener: Listener
+  reply: (RawRequest) -> Reply
+  connections = 0
+
+  port = -> @listener.port
+
+  url = (path: String) -> "http://127.0.0.1:#{@port()}#{path}"
+
+  close = -> @listener.close()
+
+export raw_server := (reply: (RawRequest) -> Reply) ->
+  server := RawServer(reply, listener: listen_tcp('127.0.0.1'))
+  _accepting := accept_all(server)
+  server
+
+accept_all := (server: RawServer) ->
+  while true
+    socket :=
+      try
+        await server.listener.accept()
+      catch _: IOError
+        return
+    server.connections += 1
+    _serving := serve(server, socket, server.connections)
+
+serve := (server: RawServer, socket: Socket, connection: Int) ->
+  try
+    while request := await read_request(socket.reader, connection)
+      reply := server.reply(request)
+      await socket.write(reply.text)
+      break if reply.close
+  catch _: IOError
+    nil
+  finally
+    socket.close()
+
+read_request := (reader: Reader, connection: Int) ->
+  line := await reader.read_line() ? return nil
+  fields: String[]
+  var length = 0
+  while field := await reader.read_line()
+    break if field.is_empty()
+    fields.push field
+    (name, value) := field.split_once(': ')!
+    length = value.parse_int()! if name == 'content-length'
+  body := length > 0 then (await reader.read(length))!.text()! else ''
+  RawRequest line, fields, body, connection

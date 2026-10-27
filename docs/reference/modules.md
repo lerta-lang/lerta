@@ -54,14 +54,16 @@ export unit := 1
 
 ## std:http
 
-An HTTP/1.1 server over [std:net](#stdnet), whose handler takes a `Request` and gives a `Response`, as `fetch` does in JavaScript.
+An HTTP/1.1 server and client over [std:net](#stdnet). The server's handler takes a `Request` and gives a `Response`, and the client's `fetch` gives a `Response`, as in JavaScript.
 
 ```
-import Request, Response, serve from 'std:http'
+import fetch, Request, Response, serve from 'std:http'
 
 handle := (request: Request) -> Response(body: "hello, #{request.url}")
 
 server := serve(handle, port: 8080)
+response := await fetch('http://127.0.0.1:8080/', method: 'POST', body: 'hi')
+print await response.text()
 ```
 
 | Name | |
@@ -69,17 +71,35 @@ server := serve(handle, port: 8080)
 | `serve(handler: (Request) -> Promise<Response>, options: ServerOptions): Server` | Listens at once, as `listen_tcp` does, and serves each connection until the server is closed. The options are given as named arguments, as `serve(handle, port: 8080)`. |
 | `ServerOptions` | A struct of `host = '127.0.0.1'` and `port = 0`, where the server listens, at a free port for 0; the limits of a request, `max_line = 8192`, the bytes of its request line and of each field before its CR LF, or its LF alone, answered 414 and 431 beyond them, `max_fields = 100`, answered 431 beyond them, and `max_body = 10485760`, the length of its body, answered 413 beyond it before the body is read; and its timeouts, in seconds: `idle_timeout = 5.0`, until the request line of a request has come, after which a connection is closed without a response, `head_timeout = 30.0`, until the rest of its head has, answered 408, and `body_timeout = 30.0`, for each chunk of its body, after which the handler's read fails with an `IOError`, `a body timed out`. A negative one throws a `ValueError`, `a negative <name>: <value>`, as `serve` starts. |
 | `Server` | A class of `port(): Int`, the port it listens at, and `close()`, which stops listening; the connections being served go on. |
-| `Request` | A class of `method: String`; `url: String`, the target in absolute form as it is, or `http://` with the `Host` field and the target, or, in place of a `Host` that an HTTP/1.0 request leaves out, the host that `serve` was given and the port, an IPv6 address in brackets, so `http://0.0.0.0:8080/` for a server that listens at every address; `headers: Headers`; `body: Reader`, of [std:io](#stdio); and `text(): Promise<String>` and `binary(): Promise<Binary>`, which read the body to its end. `text` throws a `ValueError`, `a body is not valid UTF-8`. |
-| `Response` | A struct of `body: String \| Binary = ''`, `status = 200` and `headers = Headers()`. |
-| `Headers` | A class of `fields: (String, String)[]`, each name in lower case with its value, and the methods `get(name): String?`, the values of the name joined by `, `, or nil; `has(name)`; `set(name, value)`, which replaces the name's values; `append(name, value)`; and `delete(name)`. Names are told apart regardless of case. `set` and `append` throw a `ValueError` for a name that is not a token of HTTP, `not a header name: <name>`, and for a value that holds a CR, an LF or a NUL, `a header value holds a line break or a NUL: <name>`, so that a value taken from a request cannot add fields to a response. |
+| `Request` | A class of `method: String`; `url: String`, the target in absolute form as it is, or `http://` with the `Host` field and the target, or, in place of a `Host` that an HTTP/1.0 request leaves out, the host that `serve` was given and the port, an IPv6 address in brackets, so `http://0.0.0.0:8080/` for a server that listens at every address; `headers: Headers`; `body: Body`, a `Reader` in a request that the server gives the handler; and `text(): Promise<String>` and `binary(): Promise<Binary>`, which read the body to its end. `text` throws a `ValueError`, `a body is not valid UTF-8`. |
+| `Response` | A struct of `body: Body = ''`, a `Reader` in a response that `fetch` gives, `status = 200` and `headers = Headers()`, and `text()` and `binary()`, as those of `Request`. |
+| `Body` | `String \| Binary \| Reader`, of [std:io](#stdio): a body that comes is a `Reader`, read as it comes, and one that is sent is a `String` or a `Binary` so far. |
+| `Headers` | A class of `fields: (String, String)[]`, each name in lower case with its value, and the methods `get(name): String?`, the values of the name joined by `, `, or nil; `get_all(name): String[]`, the values apart, as those of `Set-Cookie`, which may hold `, `; `has(name)`; `set(name, value)`, which replaces the name's values; `append(name, value)`; and `delete(name)`. Names are told apart regardless of case. `set` and `append` throw a `ValueError` for a name that is not a token of HTTP, `not a header name: <name>`, and for a value that holds a CR, an LF or a NUL, `a header value holds a line break or a NUL: <name>`, so that a value taken from a request cannot add fields to a response. |
 
 - A connection serves its requests one after another. It goes on after a response to HTTP/1.1 unless the request's `Connection` holds `close`, and after one to HTTP/1.0 only if it holds `keep-alive`. What the handler leaves unread of a body is read and dropped before the next request.
 - A body is read by `Content-Length`.
 - The server answers 400, without calling the handler, a request line that is not three words, a target that neither starts with `/` nor is a URL of `http` or `https`, as `*`, a field that `Headers` does not take or that has no `:`, a line that is not UTF-8, a `Content-Length` that is not digits alone, a `Host` that is empty or holds `/`, `\`, `?`, `#`, `@` or whitespace, as it would change the path of the URL, a second `Host`, and an HTTP/1.1 request without one; 505 a version other than HTTP/1.1 and HTTP/1.0; and 501 a request with `Transfer-Encoding`. It closes the connection after each. These responses, and the 500 below, have an empty body.
-- A handler that throws, as one does that reads a body that ends before its `Content-Length`, is answered 500, and so is a `Response` of a status outside 200 to 599, or of fields that `Headers` would not take, put in `fields` directly. The connection is closed then.
+- A handler that throws, as one does that reads a body that ends before its `Content-Length`, is answered 500, and so is a `Response` of a status outside 200 to 599, of a `Reader` as its body, or of fields that `Headers` would not take, put in `fields` directly. The connection is closed then.
 - The server writes `Content-Length` and `Connection` itself, in place of those the handler gives, and leaves out its `Transfer-Encoding`. A response to `HEAD` has no body but its `Content-Length`; one of 204 or 304 has neither.
 - A connection is closed once what the client still sends, as a body that the server did not read, has been read and dropped, for up to 2 seconds and 64 KiB, after the server has ended its writing side, so that the client gets the response rather than a reset.
 - Each connection is served in a function of its own that catches what it throws. A failure of an accept while the server is open rejects a promise that nothing awaits, which ends the program.
+
+The client:
+
+| Name | |
+|---|---|
+| `fetch(url: String, options: FetchOptions): Promise<Response>` | Sends a request with a client that the program shares, as `Client().fetch` does. |
+| `FetchOptions` | A struct of `method = 'GET'`, `headers = Headers()`, `body: String \| Binary = ''` and `follow_redirects = true`, given as named arguments, as `fetch(url, method: 'POST', body: 'hi')`. |
+| `Client` | A class of `idle_timeout = 4.0`, the seconds it keeps a connection, and `max_idle = 8`, the connections it keeps to each host and port, and the methods `fetch(url: String, options: FetchOptions): Promise<Response>`, resolved once the head of the response has come, and `close()`, which closes the connections kept; the client keeps those it uses after. |
+
+- A URL is `http://`, of a host, an IPv6 address in brackets, a port, 80 if none, a path and a query, which the request line takes; the scheme is told regardless of case, and the fragment is left out. `fetch` throws a `ValueError`, `not an http URL: <url>`, for another scheme, a URL without a host, with a user, a space or a control character, or a port that is not digits or is past 65535. An `https` URL, which needs TLS, is rejected with an `IOError`, `https is not supported so far: <url>`.
+- It throws a `ValueError`, `not a method: <method>`, for a method that is not a token, and for fields that `Headers` would not take, put in `fields` directly, before it connects.
+- The client writes `Host` and `Content-Length` itself, in place of those it is given in any case, and leaves out `Connection`, as connections are kept alive by default in HTTP/1.1, and `Transfer-Encoding`. It writes a `Content-Length` for a body that is not empty, and for one of `POST`, `PUT` and `PATCH` that is.
+- A response's body ends by its `Content-Length`, by its last chunk for `Transfer-Encoding: chunked`, whose extensions and trailer fields are dropped, and which goes before a `Content-Length`, or else with the connection. A `Content-Length` written twice is malformed, even with one value. A response to `HEAD`, and one of 204 or 304, has none. A response of 100 to 199 is passed over for the one that follows it, but a 101, which switches to another protocol, is rejected with an `IOError`, `switching protocols not supported`.
+- A malformed response is rejected with an `IOError`, `a malformed response`, as is one of another transfer coding, `a transfer coding not supported: <coding>`; a body read past where the connection ended, `a response ended early`; and a connection that ends before the response, `the connection closed before a response`. A line longer than 64 KiB and more than 256 fields are malformed.
+- A connection is kept alive once the body of its response has been read to its end, or at once for a response without a body by its framing, unless the response ends with the connection, holds `close` in its `Connection` field, or is HTTP/1.0 without `keep-alive` there. The next request to the same host and port, as the URL writes them, is sent on the latest kept, and one kept for `idle_timeout` seconds is closed instead, before the server, whose timeout may be about as long, closes it. A request of `GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS` or `TRACE` that fails on a kept connection before any of its response comes, as when the server has closed it meanwhile, is sent again on a new one. A connection that is not kept is closed once its body ends, and on a failure. A body left unread holds its connection, which closes once nothing holds it.
+- A redirect, a 301, 302, 303, 307 or 308 with a `Location`, is followed to the URL it names, relative to that of the request, an empty one or a fragment naming that URL itself, with its `.` and `..` segments as they are, for the server to resolve, unless `follow_redirects` is false, up to 20 in a row; one more is rejected with an `IOError`, `too many redirects: <url>`, and a `Location` that is not an http URL, as `fetch` would take it, with one, `a malformed redirect: <location>`. A 303 to a method other than `HEAD`, and a 301 or a 302 to `POST`, is followed with a `GET` without the body or its `Content-Type`; another with the method and the body. A redirect to another host or port leaves out `Authorization`, `Cookie` and `Proxy-Authorization`. The body of each response redirected is read to its end, so that its connection is kept.
+- Cookies are not stored or sent by the client: a program reads `Set-Cookie` with `get_all` and writes `Cookie` itself.
 
 ## std:io
 

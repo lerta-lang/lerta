@@ -1,0 +1,85 @@
+# fetch follows a redirect to the URL of its Location, relative to that of the request, as a GET
+# without the body after a 303, or a 301 or a 302 to POST, and with the method and the body
+# otherwise; the credentials go only to the host and port they were sent to first.
+import Client, FetchOptions, Headers from 'std:http'
+import RawRequest, raw_server, Reply from './lib/raw_server'
+
+redirect := (status: Int, location: String) ->
+  "HTTP/1.1 #{status} Moved\r\nlocation: #{location}\r\ncontent-length: 5\r\n\r\nmoved"
+
+ok := (body: String) -> "HTTP/1.1 200 OK\r\ncontent-length: #{body.binary.length}\r\n\r\n#{body}"
+
+# Each field but host and content-length, which tell nothing here.
+echo := (request: RawRequest) ->
+  fields := [
+    field
+    for field in request.fields
+    when not field.starts_with('host:') and not field.starts_with('content-length:')
+  ]
+  ok "#{request.line} #{fields} '#{request.body}'"
+
+var port = 0
+
+reply := (request: RawRequest) ->
+  path := request.line.split(' ')[1]
+  text :=
+    case path
+      when '/301' then redirect(301, '/target')
+      when '/302' then redirect(302, '/target')
+      when '/303' then redirect(303, '/target')
+      when '/307' then redirect(307, '/target')
+      when '/308' then redirect(308, '/target')
+      when '/dir/relative' then redirect(302, 'sibling?x=1')
+      when '/login-next' then redirect(302, 'login?next=http://x/')
+      when '/dir/fragment' then redirect(302, '#top')
+      when '/dir/empty' then redirect(302, '')
+      when '/ftp' then redirect(302, 'ftp://example.com/')
+      when '/space' then redirect(302, '/a b')
+      when '/dir/up' then redirect(302, '../target')
+      when '/query?a=1' then redirect(302, '?b=2')
+      when '/scheme-relative' then redirect(302, "//127.0.0.1:#{port}/target")
+      when '/other-host' then redirect(307, "http://localhost:#{port}/target")
+      when '/https' then redirect(302, 'https://example.com/')
+      when '/no-location' then "HTTP/1.1 302 Found\r\ncontent-length: 0\r\n\r\n"
+      when '/loop' then redirect(302, '/loop')
+      else echo(request)
+  # A response to HEAD has no body.
+  (head, _body) := text.split_once("\r\n\r\n")!
+  Reply text: request.line.starts_with('HEAD ') then "#{head}\r\n\r\n" else text
+
+server := raw_server(reply)
+port = server.port()
+client := Client()
+
+show := (path: String, options: FetchOptions) ->
+  try
+    response := await client.fetch(server.url(path), options)
+    print "#{path}: #{response.status} #{await response.text()}"
+  catch error: IOError
+    print "#{path}: #{error.message.replace(port.to_string(), 'PORT')}"
+
+headers := Headers()
+headers.set 'authorization', 'secret'
+headers.set 'content-type', 'text/plain'
+for path in ['/301', '/302', '/303', '/307', '/308']
+  await show(path, headers: headers, method: 'POST', body: 'data')
+await show('/301', headers: headers, method: 'PUT', body: 'data')
+await show('/303', method: 'HEAD')
+await show('/dir/relative')
+await show('/login-next')
+# Dot segments go as they are, for the server to resolve.
+await show('/dir/up')
+# The same document, which redirects again.
+await show('/dir/fragment')
+await show('/dir/empty')
+await show('/ftp')
+await show('/space')
+await show('/query?a=1')
+await show('/scheme-relative')
+await show('/other-host', headers: headers, method: 'POST', body: 'data')
+await show('/https')
+await show('/no-location')
+await show('/loop')
+await show('/302', follow_redirects: false)
+client.close()
+server.close()

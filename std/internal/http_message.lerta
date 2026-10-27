@@ -1,0 +1,93 @@
+# What the server and the client of std:http both take and give: Headers, Request and Response.
+
+import Reader from 'std:io'
+
+# Fields of a request or a response, whose names are told apart regardless of case, and which may
+# hold a name more than once.
+export class Headers
+  # Each name in lower case, with its value.
+  fields: (String, String)[] = []
+
+  # The values of the name, joined by ", ", or nil if it has none.
+  get = (name: String) ->
+    values := @get_all(name)
+    values.is_empty() then nil else values.join(', ')
+
+  # The values of the name, each apart, as those of Set-Cookie, which a ", " would not part.
+  get_all = (name: String) ->
+    lower := name.to_lower()
+    [value for (field, value) in @fields when field == lower]
+
+  has = (name: String) -> @get(name) != nil
+
+  set = (name: String, value: String) ->
+    @delete name
+    @append name, value
+
+  # Throws a ValueError for a name that is no token, or a value that would break the line it is
+  # written on, so that a value taken from a request cannot add fields of its own to a response.
+  append = (name: String, value: String) ->
+    check_field name, value
+    @fields.push (name.to_lower(), value)
+
+  delete = (name: String) ->
+    lower := name.to_lower()
+    @fields = [(field, value) for (field, value) in @fields when field != lower]
+
+export check_field := (name: String, value: String) ->
+  throw ValueError(message: "not a header name: #{name}") if not is_token(name)
+  if value.contains("\r") or value.contains("\n") or value.contains("\0")
+    throw ValueError(message: "a header value holds a line break or a NUL: #{name}")
+
+# Whether the text is a token of HTTP, as a field name or a method is.
+export is_token := (text: String) -> not text.is_empty() and text.all(is_token_char)
+
+is_token_char := (c: Char) ->
+  is_alphanumeric := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9')
+  is_alphanumeric or TOKEN_SYMBOLS.contains(c.to_string())
+
+TOKEN_SYMBOLS := "!#$%&'*+-.^_`|~"
+
+# Whether a connection goes on after a message of the version, by its Connection field.
+export keeps_alive := (version: String, headers: Headers) ->
+  options := [option.trim().to_lower() for option in (headers.get('connection') ? '').split(',')]
+  return false if options.contains('close')
+  version == 'HTTP/1.1' or options.contains('keep-alive')
+
+# A body that is sent is a String or a Binary; one that comes is a Reader, read as it comes.
+export type Body = String | Binary | Reader
+
+export class Request
+  method: String
+  url: String
+  headers: Headers
+  body: Body
+
+  binary = -> await body_binary(@body)
+
+  text = -> await body_text(@body)
+
+export struct Response
+  body: Body = default ''
+  status = default 200
+  headers = default Headers()
+
+  binary = -> await body_binary(@body)
+
+  text = -> await body_text(@body)
+
+body_binary := (body: Body) ->
+  case body
+    when String then body.binary
+    when Binary then body
+    when Reader then await body.read_all()
+
+body_text := (body: Body) ->
+  (await body_binary(body)).text() ? throw ValueError(message: 'a body is not valid UTF-8')
+
+# The bytes of a body that is sent, which a Reader cannot be so far.
+export sent_bytes := (body: Body) ->
+  case body
+    when String then body.binary
+    when Binary then body
+    when Reader then throw ValueError(message: 'a body that is sent cannot be a Reader so far')

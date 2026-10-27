@@ -1,63 +1,15 @@
-# An HTTP/1.1 server over std:net, whose handler takes a Request and gives a Response, as fetch does.
+# An HTTP/1.1 server and client over std:net, whose handler takes a Request and gives a Response, as
+# fetch does.
 
 import timeout, TimeoutError from 'std:async'
 import LineTooLongError, Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
+import
+  check_field, Headers, keeps_alive, Request, Response, sent_bytes
+from './internal/http_message'
 
-# Fields of a request or a response, whose names are told apart regardless of case, and which may
-# hold a name more than once.
-export class Headers
-  # Each name in lower case, with its value.
-  fields: (String, String)[] = []
-
-  # The values of the name, joined by ", ", or nil if it has none.
-  get = (name: String) ->
-    lower := name.to_lower()
-    values := [value for (field, value) in @fields when field == lower]
-    values.is_empty() then nil else values.join(', ')
-
-  has = (name: String) -> @get(name) != nil
-
-  set = (name: String, value: String) ->
-    @delete name
-    @append name, value
-
-  # Throws a ValueError for a name that is no token, or a value that would break the line it is
-  # written on, so that a value taken from a request cannot add fields of its own to a response.
-  append = (name: String, value: String) ->
-    check_field name, value
-    @fields.push (name.to_lower(), value)
-
-  delete = (name: String) ->
-    lower := name.to_lower()
-    @fields = [(field, value) for (field, value) in @fields when field != lower]
-
-check_field := (name: String, value: String) ->
-  if name.is_empty() or not name.all(is_token_char)
-    throw ValueError(message: "not a header name: #{name}")
-  if value.contains("\r") or value.contains("\n") or value.contains("\0")
-    throw ValueError(message: "a header value holds a line break or a NUL: #{name}")
-
-is_token_char := (c: Char) ->
-  is_alphanumeric := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9')
-  is_alphanumeric or TOKEN_SYMBOLS.contains(c.to_string())
-
-TOKEN_SYMBOLS := "!#$%&'*+-.^_`|~"
-
-export class Request
-  method: String
-  url: String
-  headers: Headers
-  body: Reader
-
-  binary = -> await @body.read_all()
-
-  text = -> (await @binary()).text() ? throw ValueError(message: 'a body is not valid UTF-8')
-
-export struct Response
-  body: String | Binary = default ''
-  status = default 200
-  headers = default Headers()
+export Body, Headers, Request, Response from './internal/http_message'
+export Client, fetch, FetchOptions from './internal/http_client'
 
 # Where a server listens, at a free port if `port` is 0, and how much and how long it waits for of a
 # request: the bytes of its request line or of a field, its fields, and the bytes of its body; the
@@ -275,11 +227,6 @@ url_of := (host: String, target: String) ->
   return target if lower.starts_with('http://') or lower.starts_with('https://')
   target.starts_with('/') then "http://#{host}#{target}" else nil
 
-keeps_alive := (version: String, headers: Headers) ->
-  options := [option.trim().to_lower() for option in (headers.get('connection') ? '').split(',')]
-  return false if options.contains('close')
-  version == 'HTTP/1.1' or options.contains('keep-alive')
-
 # The chunks of a body of `left` bytes, read from the connection's reader, each within `seconds`.
 class BodyChunks
   reader: Reader
@@ -306,10 +253,10 @@ CHUNK_SIZE := 65536
 
 # The response to a request of `method`. A response to HEAD, and one of 204 or 304, has no body, but
 # for HEAD its content-length tells the length of the body that a GET would give. Throws a
-# ValueError for a status that is no final one, and for fields that Headers would not have taken,
-# which a handler may have put in its fields itself.
+# ValueError for a status that is no final one, for a body that is a Reader, and for fields that
+# Headers would not have taken, which a handler may have put in its fields itself.
 response_bytes := (response: Response, keep_alive: Bool, method: String) ->
-  body := response.body is String then response.body.binary else response.body
+  body := sent_bytes(response.body)
   status := response.status
   throw ValueError(message: "not a final status: #{status}") if status < 200 or status > 599
   # A handler need not give a 304 the body that a 200 would have, to give its length.
@@ -318,7 +265,7 @@ response_bytes := (response: Response, keep_alive: Bool, method: String) ->
   var head = "HTTP/1.1 #{status} #{REASONS[status] ? ''}\r\n"
   for (name, value) in response.headers.fields
     check_field name, value
-    head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name)
+    head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name.to_lower())
   head += "content-length: #{body.length}\r\n" if has_length
   head += "connection: #{keep_alive then 'keep-alive' else 'close'}\r\n\r\n"
   has_body then head.binary + body else head.binary

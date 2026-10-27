@@ -1,0 +1,51 @@
+# fetch sends a request to a server and gives its response, whose body is read as it comes. The
+# client writes the host and the content-length of a request itself, leaves out its connection and
+# transfer-encoding, and writes the length of an empty body for the methods that send one. A server answers 500 a Response whose body is a
+# Reader, which it cannot send so far, as one that fetch gives. The program ends with connections that
+# the shared client keeps.
+import fetch, Headers, Request, Response, serve from 'std:http'
+import Reader from 'std:io'
+
+var port = 0
+
+handle := (request: Request) ->
+  return Response(body: Reader(read_chunk: -> nil)) if request.url.ends_with('/reader')
+  return await fetch("http://127.0.0.1:#{port}/a") if request.url.ends_with('/fetched')
+  headers := Headers()
+  headers.append 'set-cookie', 'a=1; Path=/'
+  headers.append 'set-cookie', 'b=2, c'
+  # The server's own, which it writes in place of this, in any case.
+  headers.fields.push ('Content-Length', '99')
+  fields := ["#{name}: #{value}" for (name, value) in request.headers.fields when name != 'host']
+  # The URL holds the host that the client wrote.
+  url := request.url.replace(port.to_string(), 'PORT')
+  Response headers, body: "#{request.method} #{url} #{fields} '#{await request.text()}'"
+
+server := serve(handle)
+port = server.port()
+base := "http://127.0.0.1:#{port}"
+
+show := (path: String, response: Response) ->
+  print "#{path}: #{response.status} #{await response.text()}"
+
+response := await fetch("#{base}/a?b=1#fragment")
+await show('/a', response)
+print response.headers.get_all('Set-Cookie')
+print response.headers.get('set-cookie')!
+headers := Headers()
+headers.set 'X-Name', 'lerta'
+# Its own, which the client writes in place of these.
+headers.set 'Host', 'example.com'
+headers.set 'Content-Length', '99'
+# Left out, as HTTP/1.1 keeps the connection alive anyway.
+headers.set 'Connection', 'close'
+# Put in directly, in another case, which the client tells as its own too.
+headers.fields.push ('Content-Length', '0')
+headers.fields.push ('Transfer-Encoding', 'chunked')
+await show('/post', await fetch("#{base}/post", headers: headers, method: 'POST', body: 'hello'))
+await show('/empty', await fetch("#{base}/empty", method: 'PUT'))
+await show('/binary', await fetch("#{base}/binary", method: 'PATCH', body: 'ab'.binary))
+await show('/delete', await fetch("#{base}/delete", method: 'DELETE'))
+await show('/reader', await fetch("#{base}/reader"))
+await show('/fetched', await fetch("#{base}/fetched"))
+server.close()

@@ -1,0 +1,84 @@
+# A client keeps a connection once it has read a response to its end, and sends the next request to
+# the same host and port on it, unless the response closes it. A request that fails on a connection
+# kept, which the server has closed meanwhile, is sent again on a new one if its method allows. A
+# response without a body by its framing leaves its connection at once, unread.
+import all from 'std:async'
+import Client, FetchOptions from 'std:http'
+import RawRequest, raw_server, Reply from './lib/raw_server'
+
+ok := (body: String) -> "HTTP/1.1 200 OK\r\ncontent-length: #{body.binary.length}\r\n\r\n#{body}"
+
+reply := (request: RawRequest) ->
+  path := request.line.split(' ')[1]
+  answer := "#{path} on #{request.connection}"
+  case path
+    when '/close'
+      Reply
+        text: "HTTP/1.1 200 OK\r\nconnection: close\r\ncontent-length: #{answer.binary.length}\r\n\r\n#{answer}"
+        close: true
+    when '/old'
+      Reply
+        text: "HTTP/1.0 200 OK\r\ncontent-length: #{answer.binary.length}\r\n\r\n#{answer}"
+        close: true
+    # Closed although the response keeps it alive, as by a server whose idle timeout has passed.
+    when '/drop' then Reply(text: ok(answer), close: true)
+    when '/head' then Reply(text: "HTTP/1.1 200 OK\r\ncontent-length: 5\r\n\r\n")
+    when '/no-content' then Reply(text: "HTTP/1.1 204 No Content\r\n\r\n")
+    when '/not-modified' then Reply(text: "HTTP/1.1 304 Not Modified\r\n\r\n")
+    when '/empty' then Reply(text: ok(''))
+    when '/continue' then Reply(text: "HTTP/1.1 100 Continue\r\n\r\n#{ok(answer)}")
+    else Reply(text: ok(answer))
+
+server := raw_server(reply)
+
+ask := (client: Client, path: String, options: FetchOptions) ->
+  try
+    print await (await client.fetch(server.url(path), options)).text()
+  catch error: IOError
+    print error.message
+
+client := Client()
+await ask(client, '/a')
+await ask(client, '/b')
+# A response left unread holds its connection.
+unread := await client.fetch(server.url('/unread'))
+await ask(client, '/c')
+print await unread.text()
+await ask(client, '/close')
+await ask(client, '/d')
+await ask(client, '/old')
+await ask(client, '/e')
+await ask(client, '/drop')
+await ask(client, '/resent')
+await ask(client, '/drop')
+# A POST is not sent again. The server may have closed the connection or reset it.
+try
+  await client.fetch(server.url('/post'), method: 'POST')
+catch _: IOError
+  print 'the POST failed'
+await ask(client, '/f')
+client.close()
+await ask(client, '/after-close')
+await ask(client, '/g')
+
+# Each left unread.
+for path in ['/head', '/no-content', '/not-modified', '/empty']
+  _response := await client.fetch(server.url(path), method: path == '/head' then 'HEAD' else 'GET')
+await ask(client, '/after-empty')
+await ask(client, '/continue')
+await ask(client, '/after-continue')
+
+# Two at once take two connections, which the client then keeps both.
+pair := await all([client.fetch(server.url('/one')), client.fetch(server.url('/two'))])
+texts := await all([response.text() for response in pair])
+first_two := [text.split(' on ')[1] for text in texts]
+for path in ['/three', '/four']
+  text := await (await client.fetch(server.url(path))).text()
+  print "#{path} on one of the two: #{first_two.contains(text.split(' on ')[1])}"
+
+for kept in [Client(idle_timeout: 0.0), Client(max_idle: 0)]
+  await ask(kept, '/h')
+  await ask(kept, '/i')
+# The server reads each connection until the client closes it.
+client.close()
+server.close()

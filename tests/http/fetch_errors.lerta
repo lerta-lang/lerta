@@ -1,0 +1,35 @@
+# fetch throws a ValueError for a URL that is not http, holds a user, a space or a control
+# character, or has no host or a port out of range; for a method that is no token; and for fields
+# that Headers would not take, put in its fields directly. An https URL, which needs TLS, is rejected
+# with an IOError, as is a host that does not connect.
+import fetch, FetchOptions, Headers from 'std:http'
+
+try_fetch := (url: String, options: FetchOptions) ->
+  try
+    _response := await fetch(url, options)
+    print "#{url}: fetched"
+  catch error: ValueError
+    print "ValueError: #{error.message}"
+  catch error: IOError
+    print "IOError: #{error.message}"
+
+urls :=
+  'ftp://example.com/'
+  'example.com'
+  'http://user@example.com/'
+  'http:///path'
+  'http://:80/'
+  'http://example.com:x/'
+  'http://example.com:65536/'
+  'http://[::1/'
+  'http://[::1]x/'
+  'http://exa mple.com/'
+  "http://example.com/\tx"
+  'https://example.com/'
+await try_fetch(url) for url in urls
+# The brackets of an IPv6 address are left out of the host it connects to.
+await try_fetch('HTTP://[::1]:1')
+await try_fetch('http://127.0.0.1:1/', method: 'GE T')
+headers := Headers()
+headers.fields.push ('x', "a\r\nset-cookie: a")
+await try_fetch('http://127.0.0.1:1/', headers: headers)
