@@ -168,6 +168,7 @@ export class JsonReader
   begin = (open: Byte, expected: String) ->
     @skip_space()
     @fail_expected expected if @peek() != open
+    @fail "nesting deeper than #{MAX_DEPTH}" if @counts.length == MAX_DEPTH
     @at += 1
     @path.push ''
     @counts.push 0
@@ -270,6 +271,10 @@ export class JsonReader
       when '{' then 'an object'
       else
         byte == '-' or byte.is_digit() then 'a number that is not JSON' else "'#{byte_text(byte)}'"
+
+# The deepest that arrays and objects may nest, as each is read by a call of its own, so that text
+# nested deeper throws rather than overflowing the stack.
+MAX_DEPTH := 128
 
 # The kinds of values that peek_kind tells, by the numbers that json_kind in
 # compiler/checker/json.lerta gives them: null and an array are JSON_OTHER, as no member of a union
