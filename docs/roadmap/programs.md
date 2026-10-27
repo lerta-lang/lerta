@@ -27,8 +27,7 @@ The planned design of modules, FFI, the standard library and tools.
   - Streaming: a body that is sent as it goes, chunked, with the pace of `socket.write`, by the handler or by `fetch`, in place of the `ValueError` that a `Reader` as a body sent is now, and chunked request bodies, in place of the 501 now.
   - Later: TLS, through that of std:net, for the server and for `fetch`; a URL module for the parts of `request.url`, which `fetch` would parse its URLs with; a cookie jar that a `Client` may be given, which stores the cookies of `Set-Cookie` and sends them with the requests they match; and HTTP/2.
 - `make_link` of [std:io](../reference/modules.md#stdio) followed on Windows itself: Wine, which the tests run under, makes the links but does not follow them.
-- A `Pipe` in `std:io`, written in Lerta, that gives a `Reader` and a `Writer` of its own, whose write is resolved once the reader has taken its chunk, and whose end the reader reads as nil, so that one program that [`run`](../reference/modules.md#stdprocess) starts writes what another reads: `run('a', stdout: p.writer)` beside `run('b', stdin: p.reader)`.
-- A `Pipe` given itself as a `stdin`, `stdout` or `stderr` of `run`, as `stdout: p`, which `run` makes a pipe of the system that the two programs share, so that their data does not go through this program.
+- A [`Pipe`](../reference/modules.md#stdio) given itself as a `stdin`, `stdout` or `stderr` of `run`, as `stdout: p`, which `run` makes a pipe of the system that the two programs share, so that their data does not go through this program; its `reader` and `writer` then read and write that pipe, if this program uses them.
 
 ## Tools
 

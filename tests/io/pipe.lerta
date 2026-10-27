@@ -1,0 +1,152 @@
+# A Pipe's reader reads what its writer writes, in order, and nil once the writer has ended; a write
+# is resolved once its chunk is taken, and one that is cancelled before writes nothing.
+import all from 'std:async'
+import Pipe, Reader from 'std:io'
+import run from 'std:process'
+import sleep from 'std:time'
+
+pipe := Pipe()
+var taken = false
+first := pipe.writer.write('one')
+second := pipe.writer.write('two'.binary)
+waited := ->
+  await first
+  print "first resolved after the read: #{taken}"
+_watching := waited()
+await sleep(0.05)
+taken = true
+print (await pipe.reader.read_chunk())!.text()!
+print (await pipe.reader.read_chunk())!.text()!
+await second
+pipe.writer.end()
+pipe.writer.end()
+print await pipe.reader.read_chunk() == nil
+
+try
+  await pipe.writer.write('late')
+catch error: IOError
+  print error.message
+
+# An empty chunk is resolved at once, and is not read as the end.
+empty := Pipe()
+await empty.writer.write('')
+after := empty.writer.write('after')
+print (await empty.reader.read_chunk())!.text()!
+await after
+
+# A cancelled write is not read.
+cancelled := Pipe()
+dropped := cancelled.writer.write('dropped')
+kept := cancelled.writer.write('kept')
+dropped.cancel()
+try
+  await dropped
+catch error: CancelledError
+  print 'cancelled'
+print (await cancelled.reader.read_chunk())!.text()!
+await kept
+
+# A read that waits is woken by a write, and by the end.
+waiting := Pipe()
+reading := waiting.reader.read_chunk()
+await sleep(0.05)
+_writing := waiting.writer.write('woken')
+print (await reading)!.text()!
+ending := waiting.reader.read_chunk()
+await sleep(0.05)
+waiting.writer.end()
+print await ending == nil
+
+# One program writes what another reads.
+between := Pipe()
+output: Byte[]
+first_program := run('echo_input', stdin: 'through a pipe'.binary, stdout: between.writer)
+second_program := run('echo_input', stdin: between.reader, stdout: output)
+await all([first_program, second_program])
+print output.to_binary().text()!
+
+# Two reads that wait at once are each woken.
+shared := Pipe()
+one_read := shared.reader.read_chunk()
+other_read := shared.reader.read_chunk()
+await sleep(0.05)
+_shared_x := shared.writer.write('x')
+_shared_y := shared.writer.write('y')
+print "#{(await one_read)!.text()!}#{(await other_read)!.text()!}"
+
+# The chunks written before the end are read before it, and their writes resolved then.
+ended := Pipe()
+before_end := ended.writer.write("a line\nsplit ")
+ended_after := ended.writer.write("across chunks\n")
+ended.writer.end()
+print await ended.reader.read_line() ? 'nil'
+print await ended.reader.read_line() ? 'nil'
+await before_end
+await ended_after
+print await ended.reader.read_line() ? 'nil'
+
+# One Pipe may take both outputs of a program.
+both := Pipe()
+both_run := run
+  'echo_input'
+  'to stderr'
+  stdin: "to stdout\n".binary
+  stdout: both.writer
+  stderr: both.writer
+both_text := both.reader.read_all()
+await both_run
+lines := (await both_text).text()!.trim().split("\n")
+print lines.sorted((a, b) -> a.compare(b)).join(', ')
+
+# A read cancelled while it waits leaves the next read to take the next write.
+given_up := Pipe()
+gone := given_up.reader.read_chunk()
+await sleep(0.05)
+gone.cancel()
+try
+  await gone
+catch error: CancelledError
+  print 'read cancelled'
+_after_cancel := given_up.writer.write('ü and more')
+print (await given_up.reader.read(2))!.text()!
+
+# A closed reader fails the writes that wait, and later ones, and reads nil.
+closed := Pipe()
+waiting_write := closed.writer.write('never read')
+closed.reader.close()
+for write in [waiting_write, closed.writer.write('later')]
+  try
+    await write
+  catch error: IOError
+    print error.message
+print await closed.reader.read_chunk() == nil
+
+# A program that ends without reading its input closes the reader, so the program that writes to
+# the pipe fails, as it would by SIGPIPE, rather than waiting for ever.
+unread := Pipe()
+writer_run := run('repeat', '100000', 'line', stdout: unread.writer)
+print (await run('exit_with', '0', stdin: unread.reader)).code
+try
+  await writer_run
+catch error: IOError
+  print error.message
+
+# A read that waits when the reader is closed reads what is left, and a Reader with nothing to tell
+# closes without a word.
+closing := Pipe()
+_closing_write := closing.writer.write('taken before')
+all_read := closing.reader.read_all()
+await sleep(0.05)
+closing.reader.close()
+print (await all_read).text()!
+Reader(read_chunk: -> nil).close()
+print 'closed'
+
+# A program that cannot start leaves the Reader as it was.
+not_started := Pipe()
+try
+  await run('no-such-command', stdin: not_started.reader)
+catch error: IOError
+  print error.message
+_still_open := not_started.writer.write('still read')
+print (await not_started.reader.read_chunk())!.text()!

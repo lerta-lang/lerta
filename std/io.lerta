@@ -1,5 +1,7 @@
 # Files, and the standard output and error streams (see runtime/file.c, io.c, output.c and stdin.c).
 
+import Deferred from 'std:async'
+
 extern lerta_read_file_async: (String) -> Promise<Binary>
 extern lerta_write_file_async: (String, Binary) -> Promise
 extern lerta_is_file: (String) -> Bool
@@ -110,6 +112,80 @@ class StandardOutput
 export stdout := StandardOutput(fd: 1, name: 'stdout')
 export stderr := StandardOutput(fd: 2, name: 'stderr')
 
+# A Reader that reads what its Writer writes: a write is resolved once the reader has taken its
+# chunk, and the reader reads nil once the writer has ended and all has been taken. Once the reader
+# is closed, the writes fail, as those to a system pipe whose reader has gone do.
+export class Pipe
+  writer = PipeWriter()
+  reader = reader_of_pipe(@writer)
+
+reader_of_pipe := (writer: PipeWriter) ->
+  Reader read_chunk: -> await writer.take(), on_close: -> writer.unread()
+
+class PipeWriter
+  queued: PipeChunk[] = []
+  ended = false
+  read_no_more = false
+  # The takes that wait while nothing is queued, each on its own, so that a cancel of one leaves
+  # the others waiting.
+  arrivals: Deferred<Bool>[] = []
+
+  # An empty chunk is not queued, as the reader would take it for the end.
+  write = (data: String | Binary) ->
+    throw IOError(message: 'cannot write to a pipe that has ended') if @ended
+    throw closed_pipe() if @read_no_more
+    bytes := data is String then data.binary else data
+    return if bytes.is_empty()
+    chunk := PipeChunk(bytes)
+    @queued.push chunk
+    @wake()
+    try
+      await chunk.taken.promise()
+      return
+    catch error: CancelledError
+      # A write that is cancelled writes nothing, if it has not been taken.
+      @queued = [each for each in @queued when each != chunk]
+      throw error
+
+  end = ->
+    @ended = true
+    @wake()
+
+  # The chunks left are not read, and their writes fail.
+  unread = ->
+    @read_no_more = true
+    chunks := @queued
+    @queued = []
+    chunk.taken.reject closed_pipe() for chunk in chunks
+    @wake()
+
+  take = ->
+    while @queued.is_empty()
+      return nil if @ended or @read_no_more
+      arrival := Deferred<Bool>()
+      @arrivals.push arrival
+      try
+        await arrival.promise()
+      catch error: CancelledError
+        @arrivals = [each for each in @arrivals when each != arrival]
+        throw error
+    first := @queued[0]
+    @queued = @queued.slice(1)
+    first.taken.resolve true
+    first.bytes
+
+  # Every take that waits looks again, as it may find the queue empty again once another has taken.
+  wake = ->
+    arrivals := @arrivals
+    @arrivals = []
+    arrival.resolve true for arrival in arrivals
+
+closed_pipe := -> IOError(message: 'cannot write to a pipe whose reader has closed')
+
+class PipeChunk
+  bytes: Binary
+  taken = Deferred<Bool>()
+
 extern lerta_list_dir_names: (String) -> Binary[]
 
 # An empty path is refused, as Windows would read `\*` in it as the root of the drive.
@@ -129,8 +205,10 @@ export struct LineTooLongError: Error
 
 # A stream read in chunks through a buffer: `read_chunk` gives the next chunk, or nil at the end. A
 # read must end before the next one starts: one that starts while another is pending throws.
+# `on_close` tells the source that nothing reads it any more, as a pipe's writer is told.
 export class Reader
   read_chunk: () -> Promise<Binary?>
+  on_close: (() -> void)?
   chunk = ''.binary
   start = 0
   reading = false
@@ -151,6 +229,8 @@ export class Reader
 
   # All that is left.
   read_all = -> await @exclusive(-> await @rest())
+
+  close = -> on_close() if on_close := @on_close
 
   exclusive = <T>(read: () -> Promise<T>): Promise<T> ->
     throw ValueError(message: 'a Reader is read by another read that has not ended') if @reading
