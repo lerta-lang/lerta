@@ -1,0 +1,28 @@
+# A handler that starts reading the body without awaiting it, and responds, ends its connection, not
+# the server, which goes on serving other connections.
+import connect_tcp from 'std:net'
+import Request, Response, serve from 'std:http'
+
+# Reads the body, and drops what the read throws, as the connection may end first.
+read_body := (request: Request) ->
+  try
+    await request.text()
+  catch _
+    nil
+
+handle := (request: Request) ->
+  _reading := read_body(request)
+  Response status: 204
+
+server := serve(handle)
+
+# Sends the request on a connection of its own, and prints the status line of the response.
+ask := (request: String) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  await client.write(request)
+  print await client.reader.read_line() ? 'end'
+  client.close()
+
+await ask("POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 5\r\n\r\nab")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+server.close()
