@@ -116,22 +116,6 @@ check_variable_target := (body: Body, target: Identifier) ->
   body.facts.types[target] = declared
   declared
 
-# An assigned `var` is no longer narrowed where it is. A function literal that assigns one it
-# captures may run at any later point, so it is not narrowed from there on, around the literal too.
+# An assigned `var` is no longer narrowed where it is.
 forget_narrowing := (body: Body, target: Identifier) ->
-  variable := lookup(body, target.name)!
-  origin := variable.original()
-  body.scopes.forget_views origin
-  return if not variable.captured
-  origin.assigned_by_literal = true
-  var enclosing = body.enclosing
-  while around := enclosing
-    # A round of a loop around the literal may run it before a narrowed read earlier in the loop.
-    if around.loops.any((loop) -> origin.narrowed_in_loops.contains(loop))
-      when := 'a later round may run this function literal first'
-      fail
-        body.program
-        target.position
-        "'#{target.name}' is narrowed earlier in the loop, and #{when}"
-    around.scopes.forget_views origin
-    enclosing = around.enclosing
+  body.scopes.forget_views lookup(body, target.name)!.original()

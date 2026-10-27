@@ -1,0 +1,59 @@
+# The names that the function literals in a body assign, found before the body is checked, so that
+# a `var` of one of them is not narrowed anywhere (see narrowable_local): a literal may run at any
+# point after it is written, even inside a call made where an earlier test narrows the `var`.
+# Names are matched without their scopes, so a literal's own `var` of an outer `var`'s name stops
+# the outer one being narrowed too.
+import
+  Assignment, Binding, Case, Condition, Declaration, Expression, For, FunctionLiteral, Identifier,
+  If, operands_of, Statement, Try, While
+from '../ast'
+
+export names_literals_assign := (statements: Statement[]) ->
+  names: Set<String>
+  visit_statements names, statements, false
+  names
+
+# `in_literal`: whether the statements are in a function literal of the body.
+visit_statements := (names: Set<String>, statements: Statement[], in_literal: Bool): void ->
+  visit_statement names, statement, in_literal for statement in statements
+
+visit_statement := (names: Set<String>, statement: Statement, in_literal: Bool) ->
+  case statement
+    when Declaration then visit(names, statement.value, in_literal)
+    when Assignment
+      target := statement.target
+      names.add target.name if in_literal and target is Identifier
+      visit names, target, in_literal
+      visit names, statement.value, in_literal
+    when While
+      visit_condition names, statement.condition, in_literal
+      visit_statements names, statement.body, in_literal
+    when For
+      visit names, statement.iterable, in_literal
+      visit_statements names, statement.body, in_literal
+    when Expression then visit(names, statement, in_literal)
+    else pass
+
+visit_condition := (names: Set<String>, condition: Condition, in_literal: Bool) ->
+  case condition
+    when Binding then visit(names, condition.value, in_literal)
+    else visit(names, condition, in_literal)
+
+visit := (names: Set<String>, expression: Expression, in_literal: Bool): void ->
+  case expression
+    when FunctionLiteral then visit_statements(names, expression.body, true)
+    when If
+      visit_condition names, expression.condition, in_literal
+      visit_statements names, expression.then_body, in_literal
+      visit_statements names, expression.else_body, in_literal
+    when Case
+      visit names, subject, in_literal if subject := expression.subject
+      for arm in expression.arms
+        visit names, pattern, in_literal for pattern in arm.patterns
+        visit_statements names, arm.body, in_literal
+      visit_statements names, otherwise, in_literal if otherwise := expression.otherwise
+    when Try
+      visit_statements names, expression.body, in_literal
+      visit_statements names, clause.body, in_literal for clause in expression.catches
+      visit_statements names, finally_body, in_literal if finally_body := expression.finally_body
+    else visit(names, operand, in_literal) for operand in operands_of(expression)

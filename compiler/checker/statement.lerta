@@ -10,6 +10,7 @@ import check_try_statement from './case'
 import check_part, fail, fail_already_defined, warn, warn_if_unused from './diagnostics'
 import expect_condition, expect_optional, expect_type, type_of from './expression'
 import has_function, required_params from './functions'
+import names_literals_assign from './literal_assignments'
 import check_for, check_while from './loop'
 import ends_with_jump, narrow, narrowings_of, narrowings_where from './narrowing'
 import ObjectInfo from './object_types'
@@ -55,6 +56,7 @@ export check_function_body := (
     define_parameters body, literal, params, checks_defaults
     narrow_where_holds body, holds if holds
   statements := literal.body
+  body.names_literals_assign = names_literals_assign(statements)
   before_last := all_but_last(statements)
   finish := ->
     last := statements.last() ? return
@@ -87,6 +89,7 @@ export define_parameters := (
 # scope is kept to warn about those never used once they are. An error ends the checking of its
 # statement alone, leaving the scopes and loops that the statement was in.
 export check_top_level_code := (body: Body, statements: Statement[]) ->
+  body.names_literals_assign = names_literals_assign(statements)
   body.scopes.push()
   for statement, i in statements
     warn_if_unreachable body, statements[i - 1], statement if i > 0
@@ -217,7 +220,10 @@ check_declaration := (body: Body, declaration: Declaration) ->
   type := weak then weak_local_type(body, declaration, value_type) else value_type
   declared := not declaration.of_loop
   is_this := value is This and not mutable and not weak
-  define_local body, Local(type, mutable, declared, weak, is_this, identifier: name, used: exported)
+  assigned_by_literal := mutable and body.names_literals_assign.has(name.name)
+  local := Local
+    type, mutable, declared, weak, is_this, assigned_by_literal, identifier: name, used: exported
+  define_local body, local
 
 # `var x: T` without a value, which is nil.
 reject_omitted_value := (body: Body, declaration: Declaration, type: Type?) ->
