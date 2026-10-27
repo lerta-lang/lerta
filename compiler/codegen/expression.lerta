@@ -39,14 +39,16 @@ import
 from './lerta_ir'
 import emit_map_length from './map'
 import generate_binary, generate_coalesce, generate_unary, generate_unwrap from './operator'
-import emit_is_present, emit_present_test, emit_unwrap, emit_wrap, nil_constant from './optional'
+import
+  emit_is_nil, emit_is_present, emit_present_test, emit_unwrap, emit_wrap, nil_constant
+from './optional'
 import emit_binary_length, emit_concat from './string'
 import DEAD_OBJECT, FAILED_CAST, throw_if from './runtime_errors'
 import emit_initialized_check from './top_level'
 import generate_yield from './yielding'
 import
-  boxes_into, inner_of, InterfaceType, is_boxed, is_float, is_kind, IterType, ObjectType,
-  optional_type, OptionalType, RecordType, same_type, settles_into, string_type, Type, UnionType
+  boxes_into, inner_of, InterfaceType, is_assignable, is_boxed, is_float, is_kind, IterType,
+  ObjectType, optional_type, OptionalType, RecordType, settles_into, string_type, Type, UnionType
 from '../types'
 
 # The type that the checker gave the node.
@@ -173,24 +175,44 @@ generate_node := (g: Generator, expression: Expression): String ->
 generate_is_test := (g: Generator, test: IsTest) ->
   object := generate(g, test.value)
   result := emit_member_test(g, object, test.value, test.type)
-  emit_release g.ir, object
+  emit_release_value g.ir, object, type_of(g, test.value)
   result
+
+# The cast of a value narrowed to one member, held as the member itself, not boxed in the union:
+# whether it holds the type is known but for nil.
+emit_narrowed_cast := (g: Generator, cast: Cast, object: String) ->
+  ir := g.ir
+  member := type_of(g, cast.type)
+  value_type := type_of(g, cast.value)
+  narrowed := inner_of(value_type)
+  if not is_assignable(narrowed, member)
+    emit_release_value ir, object, value_type
+    return nil_constant(optional_type(member)) if not cast.throws
+    throw_if g, 'true', FAILED_CAST
+    return 'undef'
+  if cast.throws and value_type is OptionalType
+    fails := emit_is_nil(ir, object, value_type)
+    while_holding g, object, value_type, -> throw_if(g, fails, FAILED_CAST)
+  # A union's value, a pointer, is null for nil, so it needs no unwrapping or wrapping.
+  if inner_of(member) is UnionType
+    return is_boxed(narrowed) then emit_box_value(ir, object, value_type) else object
+  if value_type is not OptionalType
+    return cast.throws then object else emit_wrap(ir, object, member)
+  cast.throws then emit_unwrap(ir, object, value_type) else object
 
 # The object if it holds the type, and otherwise nil, or a throw.
 generate_cast := (g: Generator, cast: Cast) ->
   ir := g.ir
   object := generate(g, cast.value)
   member := type_of(g, cast.type)
-  # A value narrowed to the type is held as the type itself, not boxed in the union, so there is no
-  # member to test or unbox, and the owned object is the result as it is.
-  if same_type(type_of(g, cast.value), member)
-    return cast.throws then object else emit_wrap(ir, object, member)
+  value_type := type_of(g, cast.value)
+  return emit_narrowed_cast(g, cast, object) if inner_of(value_type) is not UnionType
   holds := emit_member_test(g, object, cast.value, cast.type)
   if cast.throws
     fails := ir.assign("xor i1 #{holds}, true")
-    while_holding g, object, type_of(g, cast.value), -> throw_if(g, fails, FAILED_CAST)
+    while_holding g, object, value_type, -> throw_if(g, fails, FAILED_CAST)
     return object if not is_boxed(member)
-    return emit_narrowed_owned(ir, object, type_of(g, cast.value), member)
+    return emit_narrowed_owned(ir, object, value_type, member)
   if is_boxed(member)
     optional := optional_type(member)
     value := -> emit_wrap(ir, emit_unbox(ir, object, member), member)
@@ -203,10 +225,17 @@ generate_cast := (g: Generator, cast: Cast) ->
   emit_release ir, object
   result
 
-# An i1: whether the object, the value of a union type, optional or not, holds the type.
+# An i1: whether the object, the value of a union type or of a member it is narrowed to, optional
+# or not, holds the type.
 emit_member_test := (g: Generator, object: String, value: Expression, type_name: TypeName) ->
   value_type := type_of(g, value)
   type := type_of(g, type_name)
+  # A value narrowed to one member is held as the member itself, not boxed in the union, so there is
+  # no header to test, and whether it holds the type is known.
+  held := inner_of(value_type)
+  if held is not UnionType
+    return 'false' if not is_assignable(held, type)
+    return value_type is OptionalType then emit_is_present(g.ir, object, value_type) else 'true'
   test_of := (each: String) -> emit_type_test(g.ir, each, type)
   return test_of(object) if value_type is not OptionalType
   emit_present_test g.ir, object, value_type, test_of
