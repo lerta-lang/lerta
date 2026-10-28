@@ -1,0 +1,58 @@
+# race and timeout are settled once the promises they cancel have ended, cleanup that awaits
+# included, and so is a race that is cancelled itself, with a value or without one.
+import race, timeout, TimeoutError from 'std:async'
+import sleep from 'std:time'
+
+slow := (name: String) ->
+  try
+    await sleep(5)
+    name
+  finally
+    await sleep(0.02)
+    print "#{name} cleaned up"
+fast := ->
+  await sleep(0.01)
+  'fast'
+slow_void := (name: String) ->
+  try
+    await sleep(5)
+  finally
+    await sleep(0.02)
+    print "#{name} cleaned up"
+
+print await race([slow('race'), fast()])
+await race([slow_void('race without a value'), sleep(0.01)])
+print 'raced'
+try
+  await timeout(slow('timeout'), 0.01)
+catch error: TimeoutError
+  print error.message
+try
+  await timeout(slow_void('timeout without a value'), 0.01)
+catch error: TimeoutError
+  print error.message
+
+# A loser that throws in its cleanup ends nothing, and a winner's error comes after the cleanup.
+throwing := ->
+  try
+    await sleep(5)
+    'never'
+  finally
+    await sleep(0.02)
+    throw ValueError(message: 'cleanup failed')
+failing := (): Promise<String> ->
+  await sleep(0.01)
+  throw ValueError(message: 'failed')
+print await race([throwing(), fast()])
+try
+  await race([slow('loser of a failure'), failing()])
+catch error: ValueError
+  print error.message
+
+racing := race([slow('cancelled'), slow('also cancelled')])
+await sleep(0.01)
+racing.cancel()
+try
+  await racing
+catch error: CancelledError
+  print error.message
