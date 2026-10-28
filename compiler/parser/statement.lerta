@@ -30,38 +30,60 @@ COMMAND_ARGUMENT_STARTS: TokenKind[] =
 # `path` names the source in diagnostics. An error ends the parsing of its top-level statement
 # alone, so that those after it are parsed for their errors too; the errors are thrown together.
 export parse := (tokens: Token[], path: String) ->
-  parsed := parse_partially(tokens, path)
+  parsed := parse_program(tokens, path, false)
   throw compile_errors(parsed.errors) if not parsed.errors.is_empty()
   parsed.statements
 
-# The top-level statements that parse, and the errors of those that do not.
+# The statements that parse, and the errors of those that do not.
 export struct Parsed
   statements: Statement[]
   errors: Located[]
 
-# Parses as parse does, but gives the top-level statements that parse along with the errors.
-export parse_partially := (tokens: Token[], path: String) ->
+# Parses as parse does, but gives the statements that parse along with the errors, for an editor:
+# an error ends the parsing of its statement alone in a block too, so that the rest of the block is
+# checked while the statement is being written.
+export parse_partially := (tokens: Token[], path: String) -> parse_program(tokens, path, true)
+
+parse_program := (tokens: Token[], path: String, in_blocks: Bool) ->
   stream := TokenStream(tokens, path)
   statements: Statement[]
   errors: Located[]
-  while stream.peek().kind != EOF
-    start := stream.index
-    try
-      parse_line stream, statements
-    catch error: CompileError
-      # The lexer and the parser throw only errors where they are found (see compile_error); one of
-      # no module, if anything below threw it, ends the parsing as it ends the build, rather than
-      # being lost among them.
-      throw error if error.errors.is_empty()
-      errors.append error.errors
-      stream.skip_to_next_statement start
+  stream.block_errors = errors if in_blocks
+  parse_line_or_skip stream, statements, errors while stream.peek().kind != EOF
   Parsed statements, errors
 
 # Statements, one per line, up to the token that ends the block.
 parse_statements := (tokens: TokenStream, end: TokenKind) ->
   statements: Statement[]
-  parse_line tokens, statements while tokens.peek().kind != end and tokens.peek().kind != EOF
+  errors := tokens.block_errors
+  before := errors?.length ? 0
+  at_end := -> tokens.peek().kind == end or tokens.peek().kind == EOF
+  while not at_end()
+    if errors
+      parse_line_or_skip tokens, statements, errors
+    else
+      parse_line tokens, statements
+  # The checker takes a block to have a statement: one whose statements all fail fails itself, and
+  # so does the statement that holds it.
+  if errors and statements.is_empty() and errors.length > before
+    own := [errors[i] for i in before...errors.length]
+    errors.truncate before
+    throw compile_errors(own)
   statements
+
+# Parses the line into `statements`, or, on an error found where it is, keeps it in `errors` and
+# skips the statement.
+parse_line_or_skip := (tokens: TokenStream, statements: Statement[], errors: Located[]) ->
+  start := tokens.mark()
+  try
+    parse_line tokens, statements
+  catch error: CompileError
+    # The lexer and the parser throw only errors where they are found (see compile_error); one of
+    # no module, if anything below threw it, ends the parsing as it ends the build, rather than
+    # being lost among them.
+    throw error if error.errors.is_empty()
+    errors.append error.errors
+    tokens.skip_to_next_statement start
 
 # The statements of a line, into `statements`: one, or the declarations of a destructuring.
 parse_line := (tokens: TokenStream, statements: Statement[]) ->

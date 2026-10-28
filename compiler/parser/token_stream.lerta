@@ -1,5 +1,5 @@
 # A cursor over the tokens, shared by the modules of the parser.
-import compile_error from '../errors'
+import compile_error, Located from '../errors'
 import Position from '../ast'
 import Token, TokenKind from '../lexer/tokens'
 
@@ -14,6 +14,18 @@ export enum LineBreaks
 export class FunctionMarks
   yields = false
   await_at: Position? = nil
+
+# Where a statement starts, and the state of the stream there, to which skip_to_next_statement
+# brings it back.
+export struct StreamMark
+  index: Int
+  spread: Position?
+  line_breaks: Int
+  functions: Int
+  # What the innermost function literal had of its own, which the statement may have marked.
+  yields: Bool
+  await_at: Position?
+  nesting: Int
 
 export class TokenStream
   tokens: Token[]
@@ -32,6 +44,10 @@ export class TokenStream
   functions: FunctionMarks[] = []
   # How deep the expression being parsed is in the tree it makes, which is limited (see deepen).
   nesting = 0
+  # Where the errors of the statements of blocks go, if an error ends the parsing of its statement
+  # alone in a block too, as at the top level (see parse_partially); nil if it ends that of the
+  # top-level statement.
+  block_errors: Located[]? = nil
 
   # The kind of the next token if it continues the current expression. After an indented block
   # (such as a `case`) the line has ended, so `-1` on the next line is not a subtraction.
@@ -236,27 +252,41 @@ export class TokenStream
   fail = (position: Position, message: String) ->
     compile_error @path, position.line, position.column, message
 
-  # Skips the rest of the top-level statement that an error was found in, in whatever brackets and
-  # blocks it was found, up to the next top-level line that does not continue the statement as
-  # `else`, `catch` and `finally` do. The statement started at `start`; it is skipped past at least
-  # one token, so that parsing goes on.
-  skip_to_next_statement = (start: Int) ->
-    @line_breaks = []
-    @functions = []
-    @nesting = 0
-    @spread = nil
+  mark = ->
+    StreamMark
+      index: @index
+      spread: @spread
+      line_breaks: @line_breaks.length
+      functions: @functions.length
+      yields: @functions.last()?.yields ? false
+      await_at: @functions.last()?.await_at
+      nesting: @nesting
+
+  # Skips the rest of the statement that an error was found in, in whatever brackets and blocks it
+  # was found, up to the next line at its indentation that does not continue it as `else`, `catch`
+  # and `finally` do, or the end of the block it is in. The statement started at `start`; it is
+  # skipped past at least one token, so that parsing goes on.
+  skip_to_next_statement = (start: StreamMark) ->
+    @spread = start.spread
+    @line_breaks.truncate start.line_breaks
+    @functions.truncate start.functions
+    if marks := @functions.last()
+      marks.yields = start.yields
+      marks.await_at = start.await_at
+    @nesting = start.nesting
     var depth = 0
-    depth += indentation_change(@tokens[i].kind) for i in start...@index
+    depth += indentation_change(@tokens[i].kind) for i in start.index...@index
     # The error may be at the first token of the next statement, after the line that ends this one.
-    return if @index > start and @ends_statement(@tokens[@index - 1].kind, depth)
+    return if @index > start.index and @ends_statement(@tokens[@index - 1].kind, depth)
     while @tokens[@index].kind != EOF
       kind := @tokens[@index].kind
+      return if kind == DEDENT and depth == 0 and @index > start.index
       @index += 1
       depth += indentation_change(kind)
       return if @ends_statement(kind, depth)
 
-  # Whether the token of `kind`, just read at the indentation `depth`, ends the top-level statement:
-  # the next token starts another.
+  # Whether the token of `kind`, just read at the indentation `depth` from the statement's, ends the
+  # statement: the next token starts another.
   ends_statement = (kind: TokenKind, depth: Int) ->
     ends_line := kind == NEWLINE or kind == DEDENT
     continues := is_one_of(@tokens[@index].kind, [INDENT, 'else', 'catch', 'finally'])

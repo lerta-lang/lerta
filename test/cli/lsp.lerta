@@ -834,6 +834,102 @@ partial_parse_check := ->
         )...
       ]
 
+partial_block_check := ->
+  Check name: 'lerta lsp checks the statements of a block that parse', run: ->
+    dir := new_cli_dir('lsp-partial-block')
+    path := "#{dir}/a.lerta"
+    await write_file(path, ''.binary)
+    uri := uri_of(path)
+    text :=
+      'f := (n: Int) ->'
+      '  y := +'
+      '  z := n + 1'
+      '  if z > 0'
+      '    w := *'
+      '    print z'
+      '  z'
+      'print f(1)'
+      'g := (n: Int) ->'
+      '  if n > 0'
+      '    x := *'
+      '  else'
+      '    1'
+      'h := [1].map((x) ->'
+      '  y := +'
+      '  x'
+      ')'
+      'print h'
+      'k := ->'
+      '  x := await +'
+      '  1'
+      'm := (n: Int) ->'
+      '  if +'
+      '    print 1'
+      '  n'
+      'print k()'
+      'print m(1)'
+      'print g(1)'
+      'p := ->'
+      '  x := yield +'
+      '  1'
+      'q := ->'
+      '  yield 1'
+      '  x := yield +'
+      'print p()'
+      'print q()'
+      ''
+    .join("\n")
+    messages :=
+      did_open(uri, text)
+      hover_request(uri, 6, 2, 1)
+      definition_request(uri, 6, 2, 2)
+      hover_request(uri, 7, 6, 3)
+      hover_request(uri, 15, 2, 4)
+      hover_request(uri, 17, 6, 5)
+      hover_request(uri, 25, 6, 6)
+      hover_request(uri, 26, 6, 7)
+      hover_request(uri, 27, 6, 8)
+      hover_request(uri, 34, 6, 9)
+      hover_request(uri, 35, 6, 10)
+    .join('')
+    ran := await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'messages'
+        [
+          initialize_response('utf-16')
+          published_diagnostics(
+            uri
+            [
+              diagnostic_body(1, 7, 1, "expected expression, found '+'")
+              diagnostic_body(4, 9, 1, "expected expression, found '*'")
+              diagnostic_body(10, 9, 1, "expected expression, found '*'")
+              diagnostic_body(14, 7, 1, "expected expression, found '+'")
+              diagnostic_body(19, 13, 1, "expected expression, found '+'")
+              diagnostic_body(22, 5, 1, "expected expression, found '+'")
+              diagnostic_body(29, 13, 1, "expected expression, found '+'")
+              diagnostic_body(33, 13, 1, "expected expression, found '+'")
+            ]
+          )
+          "{\"jsonrpc\":\"2.0\",#{hover_fragment(1, 'z: Int')}}"
+          "{\"jsonrpc\":\"2.0\",#{location_fragment(2, uri, 2, 2, 3)}}"
+          "{\"jsonrpc\":\"2.0\",#{hover_fragment(3, 'f: (Int) -> Int')}}"
+          "{\"jsonrpc\":\"2.0\",#{hover_fragment(4, 'x: Int')}}"
+          "{\"jsonrpc\":\"2.0\",#{hover_fragment(5, 'h: Iter<Int>')}}"
+          "{\"jsonrpc\":\"2.0\",#{hover_fragment(6, 'k: () -> Int')}}"
+          "{\"jsonrpc\":\"2.0\",#{hover_fragment(7, 'm: (Int) -> Int')}}"
+          '{"jsonrpc":"2.0","id":8,"result":null}'
+          "{\"jsonrpc\":\"2.0\",#{hover_fragment(9, 'p: () -> Int')}}"
+          "{\"jsonrpc\":\"2.0\",#{hover_fragment(10, 'q: () -> Iter<Int>')}}"
+          shutdown_response
+        ].join(
+          "\n"
+        )
+        message_bodies(ran.stdout.text()!).join("\n")
+      )...
+    ]
+
 partial_import_check := ->
   Check
     name: 'lerta lsp checks an imported file that does not parse, and keeps the errors of loading'
@@ -1044,6 +1140,7 @@ export checks :=
   imported_syntax_error_check()
   partial_parse_check()
   partial_import_check()
+  partial_block_check()
   imported_hover_definition_check()
   extern_definition_check()
   reexport_definition_check()
