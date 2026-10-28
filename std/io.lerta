@@ -115,7 +115,8 @@ export stderr := StandardOutput(fd: 2, name: 'stderr')
 # A Reader that reads what its Writer writes: a write is resolved once the reader has taken its
 # chunk, and the reader reads nil once the writer has ended and all has been taken, or throws the
 # error that the writer has failed with. Once the reader is closed, the writes fail, as those to a
-# system pipe whose reader has gone do.
+# system pipe whose reader has gone do. A Pipe that run of std:process is given before anything has
+# used it becomes a system pipe that its programs share (see SystemPipe).
 export class Pipe
   writer = PipeWriter()
   reader = reader_of_pipe(@writer)
@@ -124,6 +125,9 @@ reader_of_pipe := (writer: PipeWriter) ->
   Reader read_chunk: -> await writer.take(), on_close: -> writer.unread()
 
 class PipeWriter
+  # Once set, the Pipe is a system pipe, and the rest is not used.
+  system: SystemPipe? = nil
+  used = false
   queued: PipeChunk[] = []
   ended = false
   # What the reader throws in place of its end.
@@ -135,9 +139,11 @@ class PipeWriter
 
   # An empty chunk is not queued, as the reader would take it for the end.
   write = (data: String | Binary) ->
-    throw IOError(message: 'cannot write to a pipe that has ended') if @ended
-    throw closed_pipe() if @read_no_more
     bytes := data is String then data.binary else data
+    return await system.write(bytes) if system := @system
+    @used = true
+    throw ended_pipe() if @ended
+    throw closed_pipe() if @read_no_more
     return if bytes.is_empty()
     chunk := PipeChunk(bytes)
     @queued.push chunk
@@ -152,15 +158,22 @@ class PipeWriter
 
   end = ->
     @ended = true
+    return system.end() if system := @system
+    @used = true
     @wake()
 
   fail = (error: Error) ->
-    return if @ended
+    return if @ended or not @writes_here()
     @failure = error
     @end()
 
+  # On a system pipe, an end that a program has taken is ended as far as this program goes.
+  writes_here = -> @system?.holds(WRITING) ? true
+
   # The chunks left are not read, and their writes fail.
   unread = ->
+    return system.close(READING) if system := @system
+    @used = true
     @read_no_more = true
     chunks := @queued
     @queued = []
@@ -168,6 +181,12 @@ class PipeWriter
     @wake()
 
   take = ->
+    if system := @system
+      chunk := await system.read()
+      failure := @failure
+      throw failure if chunk == nil and failure != nil
+      return chunk
+    @used = true
     while @queued.is_empty()
       return nil if @read_no_more
       if @ended
@@ -192,7 +211,122 @@ class PipeWriter
     @arrivals = []
     arrival.resolve true for arrival in arrivals
 
+  # The file of an end for a program to take, which makes the Pipe a system pipe if nothing has
+  # used it yet; nil once this program uses the Pipe, or that end, or has given it.
+  file_for = (reading: Bool) ->
+    @system = SystemPipe() if not @used and not @system
+    @system?.file_for(side_of(reading))
+
+  # Closes the end that a program has started with, which the program holds now.
+  give = (reading: Bool) -> @system?.give(side_of(reading))
+
+ended_pipe := -> IOError(message: 'cannot write to a pipe that has ended')
+
 closed_pipe := -> IOError(message: 'cannot write to a pipe whose reader has closed')
+
+READING := 0
+WRITING := 1
+
+side_of := (reading: Bool) -> reading then READING else WRITING
+
+extern lerta_system_pipe: (Int[]) -> void
+extern lerta_file_close: (Int) -> void
+extern lerta_pipe_of_file: (String, Int) -> Int
+extern lerta_handle_read as read_pipe: (Int) -> Promise<Binary?>
+extern lerta_handle_write as write_pipe: (Int, Binary) -> Promise
+extern lerta_handle_free as free_pipe: (Int) -> void
+
+# A pipe of the system, whose data does not go through this program: each end, READING or WRITING,
+# is a file until a program takes it, which closes it here, so that the program that reads reads
+# the end once the program that writes has ended, and the program that writes fails once the one
+# that reads has; or until this program reads or writes it, through a handle of its own (see
+# runtime/handle.c), which a program then does not take: the handle makes the file non-blocking on
+# POSIX systems, which a program that inherited it would not expect.
+class SystemPipe
+  files = system_pipe_files()
+  # The handles that this program reads or writes the ends through: 0 before the first use, and -1
+  # once closed.
+  handles = [0, 0]
+  # The writes that the system has not taken yet, which an end lets finish before it closes the end
+  # that writes, as a Writer's end follows the writes before it.
+  writes = 0
+  ending = false
+  # The read under way, as the handle takes one at a time, and the reads that wait for it.
+  reading = false
+  turns: Deferred<Bool>[] = []
+
+  deinit = ->
+    for file in @files
+      lerta_file_close file if file >= 0
+    for handle in @handles
+      free_pipe handle if handle > 0
+
+  file_for = (side: Int) -> @files[side] >= 0 then @files[side]
+
+  holds = (side: Int) -> @files[side] >= 0 or @handles[side] > 0
+
+  give = (side: Int) ->
+    return if @files[side] < 0
+    lerta_file_close @files[side]
+    @files[side] = -1
+
+  write = (bytes: Binary) ->
+    throw ended_pipe() if @ending
+    handle := @handle(WRITING) ? throw ended_pipe()
+    @writes += 1
+    try
+      await write_pipe(handle, bytes)
+    finally
+      @writes -= 1
+      @close WRITING if @ending and @writes == 0
+
+  read = ->
+    while @reading
+      turn := Deferred<Bool>()
+      @turns.push turn
+      try
+        await turn.promise()
+      catch error: CancelledError
+        @turns = [each for each in @turns when each != turn]
+        throw error
+    handle := @handle(READING) ? return nil
+    @reading = true
+    try
+      await read_pipe(handle)
+    catch error: IOError
+      # The close of this program's end fails the read under way, which reads nil then, as those
+      # that wait do.
+      return nil if @handles[READING] < 0
+      throw error
+    finally
+      @reading = false
+      turns := @turns
+      @turns = []
+      turn.resolve true for turn in turns
+
+  # The end that writes is closed once the writes under way have finished.
+  end = ->
+    @ending = true
+    @close WRITING if @writes == 0
+
+  # An end that this program closes is gone, as one that a program has taken is.
+  close = (side: Int) ->
+    @give side
+    return if @handles[side] <= 0
+    free_pipe @handles[side]
+    @handles[side] = -1
+
+  # The handle of an end, opened at its first use, or nil once it is gone.
+  handle = (side: Int) ->
+    if @handles[side] == 0 and @files[side] >= 0
+      @handles[side] = lerta_pipe_of_file('a pipe', @files[side])
+      @files[side] = -1
+    @handles[side] > 0 then @handles[side]
+
+system_pipe_files := ->
+  files: Int[]
+  lerta_system_pipe files
+  files
 
 class PipeChunk
   bytes: Binary

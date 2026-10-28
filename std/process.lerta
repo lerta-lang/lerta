@@ -1,6 +1,6 @@
 # The running program: its arguments, how it ends, and the programs it runs (see runtime/process.c).
 
-import Reader, Writer from 'std:io'
+import Pipe, Reader, Writer from 'std:io'
 import close_handle, Handle, reader_of, write_handle from './internal/handle'
 
 extern lerta_exit: (Int) -> never
@@ -27,9 +27,9 @@ export argv := [
 # directory, the environment variables set and removed, the most bytes that it may write to each of
 # those arrays, and how long a cancel waits for it to end before it is killed.
 export struct RunOptions
-  stdin: Binary | Reader?
-  stdout: Byte[] | Writer?
-  stderr: Byte[] | Writer?
+  stdin: Binary | Reader | Pipe?
+  stdout: Byte[] | Writer | Pipe?
+  stderr: Byte[] | Writer | Pipe?
   cwd: String?
   env: Map<String, String> = default Map()
   unset_env: String[] = default []
@@ -52,19 +52,31 @@ export exit := (code: Int) ->
 
 export run := (command: String, args: String..., options: RunOptions) ->
   check_options options
-  { stdin, stdout, stderr, cwd, env, unset_env, output_limit, kill_after } := options
+  { cwd, env, unset_env, output_limit, kill_after } := options
   # A program cannot start with a text that holds a NUL byte, as it cannot without its command; a
   # name that holds one is no name, which check_options refuses.
   texts := [command, args..., cwd ? '', env.values()...]
   throw IOError(message: "cannot run: #{command}") if texts.any(holds_nul)
   changes_env := not env.is_empty() or not unset_env.is_empty()
   program_env := changes_env then env_with(env, unset_env)
+  input_file := file_of(options.stdin, true)
+  output_file := file_of(options.stdout, false)
+  error_file := file_of(options.stderr, false)
+  stdin := not input_file then source_of(options.stdin)
+  stdout := not output_file then sink_of(options.stdout)
+  stderr := not error_file then sink_of(options.stderr)
   input := stdin != nil then pipe_of('standard input', command)
   output := stdout != nil then pipe_of('standard output', command)
   errors := stderr != nil then pipe_of('standard error', command)
-  streams := [pointer_of(input), pointer_of(output), pointer_of(errors)]
+  streams :=
+    stream_of(input, input_file)
+    stream_of(output, output_file)
+    stream_of(errors, error_file)
   program :=
     Program(pointer: lerta_program_start(command, args, cwd, program_env, streams, kill_after))
+  give options.stdin, true
+  give options.stdout, false
+  give options.stderr, false
   copies := Copies()
   feeding := input then feed(input, stdin!, program, copies)
   outputting := output then copy_output(output, stdout!, output_limit, program, copies)
@@ -127,8 +139,25 @@ class Copies
 pipe_of := (stream: String, command: String) ->
   Handle pointer: lerta_pipe_new("the #{stream} of #{command}")
 
-# 0 is the program's own stream, which the program shares.
-pointer_of := (pipe: Handle?) -> pipe?.pointer ? 0
+# The file of the end of a Pipe that the program takes, if the Pipe is a system pipe or becomes
+# one; a Pipe that this program uses is read or written as its Reader or Writer instead.
+file_of := (stream: Binary | Reader | Byte[] | Writer | Pipe?, reading: Bool) ->
+  stream is Pipe then stream.writer.file_for(reading)
+
+# The program holds the end it has taken, which this program then closes.
+give := (stream: Binary | Reader | Byte[] | Writer | Pipe?, reading: Bool) ->
+  stream.writer.give reading if stream is Pipe
+
+source_of := (stdin: Binary | Reader | Pipe?) -> stdin is Pipe then stdin.reader else stdin
+
+sink_of := (output: Byte[] | Writer | Pipe?): Byte[] | Writer? ->
+  output is Pipe then output.writer else output
+
+# As lerta_program_start takes them: a file as -1 minus it, a pipe by its handle, or 0 for the
+# program's own stream, which the program shares.
+stream_of := (pipe: Handle?, file: Int?) ->
+  return -1 - file if file
+  pipe?.pointer ? 0
 
 # The bytes of each read that a Reader gives the program at most.
 FEED_SIZE := 65536

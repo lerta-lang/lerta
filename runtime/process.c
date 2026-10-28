@@ -8,6 +8,7 @@
 #include "internal.h"
 
 LERTA_STATIC_STRING(cannot_run, "cannot run: ");
+LERTA_STATIC_STRING(cannot_make_pipe, "cannot make a pipe");
 
 static int argument_count = 0;
 static char **arguments = NULL;
@@ -148,10 +149,16 @@ static void close_file(uv_file file) {
 // program, which are sockets on Unix, which some programs tell apart, as `script` does by its
 // stdin: the program's end, which it inherits, in `child`, and this program's, which the handle
 // opens, without blocking, as libuv's streams on Windows need. A handle of 0 is this program's own
-// stream, and `child` is -1 then.
-static bool open_pipe(int64_t handle, bool program_reads, uv_file *child) {
+// stream, and `child` is -1 then. A negative one is a file of a system pipe that Lerta holds, as
+// -1 minus it, which the program inherits as it is, and which is left to Lerta to close.
+static bool open_pipe(int64_t handle, bool program_reads, uv_file *child, bool *made) {
   *child = -1;
+  *made = false;
   if (handle == 0) return true;
+  if (handle < 0) {
+    *child = (uv_file)(-1 - handle);
+    return true;
+  }
   uv_file files[2];
   int read_flags = program_reads ? 0 : UV_NONBLOCK_PIPE;
   int write_flags = program_reads ? UV_NONBLOCK_PIPE : 0;
@@ -163,6 +170,7 @@ static bool open_pipe(int64_t handle, bool program_reads, uv_file *child) {
     return false;
   }
   *child = program_reads ? files[0] : files[1];
+  *made = true;
   return true;
 }
 
@@ -172,8 +180,11 @@ static bool open_pipe(int64_t handle, bool program_reads, uv_file *child) {
 static bool spawn(Program *program, char *file, char **args, char **env, const char *cwd,
                   const int64_t handles[3]) {
   uv_file children[3] = {-1, -1, -1};
+  bool made[3] = {false, false, false};
   bool opened = true;
-  for (int i = 0; i < 3 && opened; i++) opened = open_pipe(handles[i], i == 0, &children[i]);
+  for (int i = 0; i < 3 && opened; i++) {
+    opened = open_pipe(handles[i], i == 0, &children[i], &made[i]);
+  }
   uv_stdio_container_t stdio[3];
   for (int i = 0; i < 3; i++) {
     int fd = children[i] >= 0 ? children[i] : i;
@@ -192,7 +203,7 @@ static bool spawn(Program *program, char *file, char **args, char **env, const c
   program->process.data = program;
   bool spawned = opened && uv_spawn(uv_default_loop(), &program->process, &options) == 0;
   for (int i = 0; i < 3; i++) {
-    if (children[i] >= 0) close_file(children[i]);
+    if (made[i]) close_file(children[i]);
   }
   if (spawned) {
     program->open_handles++;
@@ -234,6 +245,20 @@ int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
   lerta_raise_with(LERTA_IO_ERROR, &cannot_run, command);
   return 0;
 }
+
+void lerta_system_pipe(LertaArray *files) {
+  uv_file ends[2];
+  if (uv_pipe(ends, 0, 0) != 0) {
+    lerta_raise(LERTA_IO_ERROR, (const LertaString *)&cannot_make_pipe);
+    return;
+  }
+  for (int i = 0; i < 2; i++) {
+    int64_t file = ends[i];
+    lerta_array_append(files, &file);
+  }
+}
+
+void lerta_file_close(int64_t file) { close_file((uv_file)file); }
 
 // Its cancel stops the program, and rejects the promise once it has ended.
 static void cancel_wait(void *context) {

@@ -1,0 +1,192 @@
+# A Pipe that run is given before anything has used it is a system pipe, which the programs share,
+# and which this program may read or write at an end that no program takes.
+import all from 'std:async'
+import Pipe from 'std:io'
+import run from 'std:process'
+
+shared := Pipe()
+output: Byte[]
+writing := run('repeat', '3', 'line', stdout: shared)
+reading := run('echo_input', stdin: shared, stdout: output)
+await all([writing, reading])
+print output.to_binary().text()!.trim().split("\n").join(' ')
+
+# This program reads what a program writes, and writes what one reads.
+read_here := Pipe()
+writes_there := run('repeat', '2', 'read here', stdout: read_here)
+print (await read_here.reader.read_all()).text()!.trim().split("\n").join(' ')
+await writes_there
+written_here := Pipe()
+copied: Byte[]
+reads_there := run('echo_input', stdin: written_here, stdout: copied)
+await written_here.writer.write('written here')
+written_here.writer.end()
+await reads_there
+print copied.to_binary().text()!
+
+# A Pipe used already is copied through, as its Reader and Writer are.
+used := Pipe()
+_early := used.writer.write('copied through')
+used.writer.end()
+through: Byte[]
+await run('echo_input', stdin: used, stdout: through)
+print through.to_binary().text()!
+
+# An end that a program has taken is gone: the writes fail, as a run that writes to it does, and
+# the reads read nil.
+taken := Pipe()
+await run('exit_with', '0', stdout: taken, stdin: taken)
+try
+  await taken.writer.write('late')
+catch error: IOError
+  print error.message
+try
+  await run('repeat', '1', 'late', stdout: taken)
+catch error: IOError
+  print error.message
+print await taken.reader.read_chunk() == nil
+
+# One Pipe may take both outputs of a program, as one end.
+both := Pipe()
+both_run := run('echo_input', 'to stderr', stdin: "to stdout\n".binary, stdout: both, stderr: both)
+both_lines := (await both.reader.read_all()).text()!.trim().split("\n")
+await both_run
+print both_lines.sorted((a, b) -> a.compare(b)).join(', ')
+
+# A write once the program that reads has ended fails, as no end that reads is left, and a program
+# that reads takes the end of the writer that has ended as its end.
+closed := Pipe()
+await run('exit_with', '0', stdin: closed)
+try
+  await closed.writer.write('nobody reads')
+catch error: IOError
+  print error.message
+ended := Pipe()
+ended_output: Byte[]
+ended_run := run('echo_input', stdin: ended, stdout: ended_output)
+ended.writer.end()
+await ended_run
+print ended_output.length
+
+# A run that cannot start leaves the Pipe for the next.
+unstarted := Pipe()
+try
+  await run('no-such-command', stdout: unstarted)
+catch error: IOError
+  print error.message
+after_failure := run('repeat', '1', 'after a failure', stdout: unstarted)
+print (await unstarted.reader.read_all()).text()!.trim()
+await after_failure
+
+# An end lets the writes under way finish, and a second end, as a second close, does nothing.
+long := Pipe()
+long_output: Byte[]
+long_run := run('echo_input', stdin: long, stdout: long_output)
+long_write := long.writer.write('x'.repeat(1000000))
+long.writer.end()
+long.writer.end()
+await long_write
+await long_run
+print long_output.length
+try
+  await long.writer.write('')
+catch error: IOError
+  print error.message
+long_read := Pipe()
+long_read_run := run('repeat', '1', 'once', stdout: long_read)
+print (await long_read.reader.read_chunk())!.text()!.trim()
+long_read.reader.close()
+long_read.reader.close()
+await long_read_run
+
+# Two reads that wait at once each read in turn.
+turns := Pipe()
+turns_run := run('repeat', '2', 'turn', stdout: turns)
+first_turn := turns.reader.read_chunk()
+second_turn := turns.reader.read_chunk()
+taken_turns := [await first_turn ? ''.binary, await second_turn ? ''.binary]
+rest := await turns.reader.read_all()
+await turns_run
+print taken_turns.map((chunk) -> chunk.length).sum() + rest.length
+
+# A read that waits its turn may be cancelled, and the reads under way and waiting when the reader
+# is closed read nil.
+closing := Pipe()
+closing_run := run('repeat', '1', 'kept', stdout: closing)
+under_way := closing.reader.read_chunk()
+cancelled_turn := closing.reader.read_chunk()
+cancelled_turn.cancel()
+try
+  await cancelled_turn
+catch error: CancelledError
+  print 'turn cancelled'
+print (await under_way)!.text()!.trim()
+await closing_run
+silent := Pipe()
+silent_run := run('print_after', '0.5', 'too late', stdout: silent)
+waiting_reads := [silent.reader.read_chunk(), silent.reader.read_chunk()]
+silent.reader.close()
+print [await read == nil for read in waiting_reads]
+await silent_run
+
+# A write after the end fails while an earlier one is under way, which the end lets finish.
+late := Pipe()
+late_output: Byte[]
+late_run := run('echo_input', stdin: late, stdout: late_output)
+earlier := late.writer.write('y'.repeat(1000000))
+late.writer.end()
+try
+  await late.writer.write('too late')
+catch error: IOError
+  print error.message
+await earlier
+await late_run
+print late_output.length
+
+# A Pipe given as stderr alone.
+errors_only := Pipe()
+errors_run := run('echo_input', 'to stderr', stdin: ''.binary, stderr: errors_only)
+print (await errors_only.reader.read_all()).text()!.trim()
+await errors_run
+
+# A Pipe read here already is copied through, as one written here is.
+read_first := Pipe()
+pending_read := read_first.reader.read_chunk()
+await run('repeat', '1', 'copied', stdout: read_first)
+print (await pending_read)!.text()!.trim()
+
+# A program that reads a system pipe whose writer fails reads its end.
+failing := Pipe()
+failing_output: Byte[]
+failing_run := run('echo_input', stdin: failing, stdout: failing_output)
+await failing.writer.write('cut short')
+failing.writer.fail IOError(message: 'the writer fails')
+failing.writer.fail IOError(message: 'a second failure')
+await failing_run
+print failing_output.to_binary().text()!
+
+# A writer whose end a program has taken does not fail, as it has ended here.
+taken_writer := Pipe()
+taken_run := run('repeat', '1', 'whole', stdout: taken_writer)
+taken_writer.writer.fail IOError(message: 'not this stream')
+print (await taken_writer.reader.read_all()).text()!.trim()
+await taken_run
+
+# A run given a Pipe that this program writes to already copies into it, and ends it.
+joined := Pipe()
+joined_output: Byte[]
+joined_run := run('echo_input', stdin: joined, stdout: joined_output)
+await joined.writer.write('from here, ')
+await run('repeat', '1', 'from a program', stdout: joined)
+await joined_run
+print joined_output.to_binary().text()!.trim()
+
+# This program alone may use a system pipe that a run that could not start has made.
+alone := Pipe()
+try
+  await run('no-such-command', stdout: alone)
+catch error: IOError
+  print error.message
+_alone_write := alone.writer.write('alone')
+alone.writer.end()
+print (await alone.reader.read_all()).text()!

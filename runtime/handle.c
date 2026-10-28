@@ -14,6 +14,7 @@ LERTA_STATIC_STRING(cannot_accept, "cannot accept at ");
 LERTA_STATIC_STRING(cannot_connect, "cannot connect to ");
 LERTA_STATIC_STRING(cannot_read, "cannot read from ");
 LERTA_STATIC_STRING(cannot_write, "cannot write to ");
+LERTA_STATIC_STRING(cannot_open_pipe, "cannot open ");
 LERTA_STATIC_STRING(accepted_twice, "a Listener is accepted by another accept that has not ended");
 
 // A socket, a listener or a pipe, whose libuv stream is unreferenced but while a read or an accept
@@ -171,6 +172,16 @@ int64_t lerta_pipe_new(const LertaString *name) {
   lerta_retain((void *)name);
   handle->address = (LertaString *)name;
   return (int64_t)(intptr_t)handle;
+}
+
+int64_t lerta_pipe_of_file(const LertaString *name, int64_t file) {
+  int64_t pointer = lerta_pipe_new(name);
+  if (uv_pipe_open((uv_pipe_t *)lerta_handle_stream(pointer), (uv_file)file) != 0) {
+    lerta_handle_free(pointer);
+    lerta_raise_with(LERTA_IO_ERROR, &cannot_open_pipe, name);
+    return 0;
+  }
+  return pointer;
 }
 
 uv_stream_t *lerta_handle_stream(int64_t pointer) {
