@@ -16,6 +16,10 @@ handle := (request: Request) ->
     headers := Headers()
     headers.fields.push ('x', "a\r\nset-cookie: a")
     return Response(headers)
+  if request.url.ends_with('/control')
+    headers := Headers()
+    headers.fields.push ('x', "a\u{b}")
+    return Response(headers)
   Response body: "ok #{await request.text()}"
 
 server := serve(handle)
@@ -61,4 +65,7 @@ await ask("GET / HTTP/1.1\r\nHost: a\r\nContent-Length: 1, 1\r\n\r\nb")
 await ask("GET /fields HTTP/1.1\r\nHost: a\r\n\r\n")
 await ask("POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n")
 await ask("GET / HTTP/1.1\r\nHost: ".binary + 0xff.to_byte()! + "\r\n\r\n".binary)
+await ask("GET / HTTP/1.1\r\nHost: a\r\nx: v\u{b}x\r\n\r\n")
+await ask("GET / HTTP/1.1\r\nHost: a\r\nx: v\u{7f}\r\n\r\n")
+await ask("GET /control HTTP/1.1\r\nHost: a\r\n\r\n")
 server.close()
