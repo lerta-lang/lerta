@@ -1,6 +1,7 @@
 # Files, and the standard output and error streams (see runtime/file.c, io.c, output.c and stdin.c).
 
 import Deferred from 'std:async'
+import bytes_of from './internal/utf8'
 
 extern lerta_read_file_async: (String) -> Promise<Binary>
 extern lerta_write_file_async: (String, Binary) -> Promise
@@ -103,7 +104,7 @@ class StandardOutput
 
   write = (data: String | Binary) ->
     throw IOError(message: "cannot write to #{@name}") if @ended
-    await lerta_stream_write(@fd, data is String then data.binary else data)
+    await lerta_stream_write(@fd, bytes_of(data))
 
   end = -> @ended = true
 
@@ -139,7 +140,7 @@ class PipeWriter
 
   # An empty chunk is not queued, as the reader would take it for the end.
   write = (data: String | Binary) ->
-    bytes := data is String then data.binary else data
+    bytes := bytes_of(data)
     return await system.write(bytes) if system := @system
     @used = true
     throw ended_pipe() if @ended
@@ -190,8 +191,7 @@ class PipeWriter
     while @queued.is_empty()
       return nil if @read_no_more
       if @ended
-        failure := @failure
-        throw failure if failure != nil
+        throw failure if failure := @failure
         return nil
       arrival := Deferred<Bool>()
       @arrivals.push arrival

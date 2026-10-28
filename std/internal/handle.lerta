@@ -1,7 +1,9 @@
 # A stream of the runtime, as a socket, which std:net makes: read through a Reader of std:io, and
-# written, ended and closed by the functions below (see runtime/handle.c).
+# written, ended and closed by the functions below (see runtime/handle.c); and its address as the
+# runtime writes it.
 
 import Reader from 'std:io'
+import bytes_of from './utf8'
 
 extern lerta_handle_close: (Int) -> void
 extern lerta_handle_free: (Int) -> void
@@ -19,9 +21,13 @@ export reader_of := (handle: Handle) -> Reader(read_chunk: -> lerta_handle_read(
 
 # Resolves once the data has been handed to the system.
 export write_handle := (handle: Handle, data: String | Binary) ->
-  await lerta_handle_write(handle.pointer, data is String then data.binary else data)
+  await lerta_handle_write(handle.pointer, bytes_of(data))
 
 # Closes the writing side, which the peer reads as its end.
 export end_handle := (handle: Handle) -> lerta_handle_end(handle.pointer)
 
 export close_handle := (handle: Handle) -> lerta_handle_close(handle.pointer)
+
+# As the runtime writes an address: an IPv6 address in brackets, so that its port is told from it.
+export address_text := (host: String, port: Int) ->
+  host.contains(':') then "[#{host}]:#{port}" else "#{host}:#{port}"

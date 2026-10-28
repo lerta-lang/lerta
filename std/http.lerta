@@ -4,10 +4,10 @@
 import timeout, TimeoutError from 'std:async'
 import LineTooLongError, Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
+import address_text from './internal/handle'
 import CHUNK_SIZE, chunk_bytes, ChunkedBody, LAST_CHUNK from './internal/http_chunks'
-import
-  check_field, Headers, keeps_alive, Request, Response, sent_bytes
-from './internal/http_message'
+import check_field, Headers, keeps_alive, Request, Response from './internal/http_message'
+import bytes_of from './internal/utf8'
 
 export Body, Headers, Request, Response from './internal/http_message'
 export Client, fetch, FetchOptions from './internal/http_client'
@@ -46,8 +46,7 @@ export serve := (handler: (Request) -> Promise<Response>, options: ServerOptions
   check_options options
   { host } := options
   listener := listen_tcp(host, options.port)
-  # An IPv6 address in brackets, so that its port is told from it.
-  address := host.contains(':') then "[#{host}]:#{listener.port}" else "#{host}:#{listener.port}"
+  address := address_text(host, listener.port)
   server := Server(listener, handler, options, address)
   _accepting := accept_all(server)
   server
@@ -250,7 +249,7 @@ is_chunked := (headers: Headers, version: String) ->
 content_length := (headers: Headers) ->
   text := headers.get('content-length') ? return 0
   # Digits alone: parse_int would take a sign too.
-  throw bad_request() if text.is_empty() or not text.all((c) -> c >= '0' and c <= '9')
+  throw bad_request() if text.is_empty() or not text.all((c) -> c.is_digit())
   text.parse_int() ? throw bad_request()
 
 # Whether a Host names a host and a port alone, so that it cannot change the path of the URL.
@@ -279,8 +278,7 @@ class BodyChunks
   failure: IOError? = nil
 
   next = ->
-    failure := @failure
-    throw failure if failure != nil
+    throw failure if failure := @failure
     return nil if @ended
     chunk :=
       try
@@ -330,7 +328,7 @@ response_bytes := (response: Response, keep_alive: Bool, method: String, chunked
   if body is Reader
     head += "transfer-encoding: chunked\r\n" if has_length(status) and chunked
   else
-    bytes = sent_bytes(body)
+    bytes = bytes_of(body)
     head += "content-length: #{bytes.length}\r\n" if has_length(status)
   head += "connection: #{keep_alive then 'keep-alive' else 'close'}\r\n\r\n"
   has_body(status, method) then head.binary + bytes else head.binary

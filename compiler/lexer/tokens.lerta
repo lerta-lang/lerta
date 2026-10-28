@@ -162,9 +162,12 @@ source_lines := (source: String, path: String) ->
   lines: SourceLine[]
   for text, index in texts
     ends_with_lf := index + 1 < texts.length
-    bytes := ends_with_lf then without_carriage_return(text) else text.binary
+    bytes := ends_with_lf then without_carriage_return(text).binary else text.binary
     lines.push { path, bytes, number: index + 1, column_offset: 0 }
   lines
+
+# The line without a CR at its end, which it has where CRLF ends it.
+export without_carriage_return := (line: String) -> line.without_suffix("\r") ? line
 
 # The tokens of an interpolated expression, placed where it is in the source line.
 export tokenize_fragment := (source: String, path: String, line: Int, column: Int) ->
@@ -176,12 +179,6 @@ export tokenize_fragment := (source: String, path: String, line: Int, column: In
   tokens.push layout_token(NEWLINE, line, end)
   tokens.push layout_token(EOF, line, end)
   tokens
-
-# A line that LF ends may end with CRLF.
-without_carriage_return := (line: String) ->
-  bytes := line.binary
-  ends_with_cr := not bytes.is_empty() and bytes[bytes.length - 1] == "\r"
-  ends_with_cr then bytes[0...(bytes.length - 1)] else bytes
 
 layout_token := (kind: TokenKind, line: Int, column: Int) ->
   Token kind, line, column, text: '', spaced: true
