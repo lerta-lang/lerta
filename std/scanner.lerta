@@ -1,9 +1,9 @@
 # Reading a String by code points (see docs/reference/std.md#stdscanner). The position is a
-# byte offset that only the closures of `scan` hold, so that it only ever stands at the start of a
-# code point, and every part taken is valid UTF-8 without a check.
+# byte offset that only a TextScanner holds, which is seen only as a Scanner, so that it only ever
+# stands at the start of a code point, and every part taken is valid UTF-8 without a check.
 import char_at, sequence_length, text_between from './internal/utf8'
 
-export struct Scanner
+export interface Scanner
   done: () -> Bool
   peek: () -> Char?
   next: () -> Char?
@@ -13,32 +13,35 @@ export struct Scanner
   mark: () -> () -> String
   rest: () -> String
 
-export scan := (text: String) ->
-  bytes := text.binary
+class TextScanner: Scanner
+  bytes: Binary
   var at = 0
-  done := -> at == bytes.length
-  peek := -> not done() then char_at(bytes, at)
-  next := ->
-    code := peek() ? return nil
-    at += sequence_length(bytes[at])
+  done = -> @at == @bytes.length
+  peek = -> not @done() then char_at(@bytes, @at)
+  next = ->
+    code := @peek() ? return nil
+    @at += sequence_length(@bytes[@at])
     code
-  take := (prefix: String) ->
-    return false if not bytes.occurs_at(at, prefix.binary)
-    at += prefix.binary.length
+  take = (prefix: String) ->
+    return false if not @bytes.occurs_at(@at, prefix.binary)
+    @at += prefix.binary.length
     true
-  skip_while := (test: (Char) -> Bool) ->
-    while code := peek()
+  skip_while = (test: (Char) -> Bool) ->
+    while code := @peek()
       return if not test(code)
-      next()
-  mark := ->
-    start := at
-    -> text_between(bytes, start, at)
-  take_while := (test: (Char) -> Bool) ->
-    taken := mark()
-    skip_while test
-    taken()
-  rest := ->
-    taken := mark()
-    at = bytes.length
-    taken()
-  Scanner done, peek, next, take, skip_while, take_while, mark, rest
+      @next()
+  mark = ->
+    start := @at
+    -> @since(start)
+  take_while = (test: (Char) -> Bool) ->
+    start := @at
+    @skip_while test
+    @since start
+  rest = ->
+    start := @at
+    @at = @bytes.length
+    @since start
+  # The text passed over since the position `start`.
+  since = (start: Int) -> text_between(@bytes, start, @at)
+
+export scan := (text: String): Scanner -> TextScanner(bytes: text.binary)

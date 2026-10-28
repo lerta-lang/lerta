@@ -179,7 +179,7 @@ TCP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-await).
 
 ## std:scanner
 
-A `Scanner` reads a `String` by code points, as a lexer does: it looks at the next one before passing over it, and takes the text of what it has passed over, without byte offsets, which only `Binary` has (see [String](types.md#string)). It only ever stands at the start of a code point, so what it gives is a `String` without a check. It is a struct of functions that share where it stands, which only the functions that `scan` makes see and move.
+A `Scanner` reads a `String` by code points, as a lexer does: it looks at the next one before passing over it, and takes the text of what it has passed over, without byte offsets, which only `Binary` has (see [String](types.md#string)). One that `scan` makes only ever stands at the start of a code point, so what it gives is a `String` without a check. It is an interface to an object that `scan` makes, whose methods alone see and move where it stands; they are called, not taken as values.
 
 ```lerta
 import scan from 'std:scanner'
