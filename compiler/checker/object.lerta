@@ -56,7 +56,7 @@ export type_of_construction := (
   body: Body, call: Call, declared: ObjectType, expected: Type?
 ): ObjectType ->
   program := body.program
-  if expanded := spread_construction(body, call, declared)
+  if expanded := expanded_construction(body, call, declared)
     body.facts.replacements[call] = expanded
     type := type_of_construction(body, expanded, declared, expected)
     set_type body, expanded, type
@@ -79,13 +79,45 @@ export type_of_construction := (
       require_type body, value, value_type, field_type
     else
       expect_type body, value, field_type
-  for field in info.fields
-    is_required := field.value == nil and field.type! is not OptionalType
-    if is_required and not given.has(field.name.name)
-      fail program, call.position, "missing argument '#{field.name.name}'"
+  required := [field.name.name for field in required_fields(info)]
+  for name in required
+    fail program, call.position, "missing argument '#{name}'" if not given.has(name)
   is_given := (field: FieldInfo) -> not is_argument(field) or given.has(field.name.name)
   body.facts.full_constructions.add call if info.fields.all(is_given)
+  # The required ones are given by now.
+  gives_only_the_required_one := call.args.is_empty() and required.length == 1 and given.length == 1
+  body.facts.single_arguments.add call if gives_only_the_required_one
   type
+
+# The construction that the call stands for, if it is written with a spread or a value alone.
+expanded_construction := (body: Body, call: Call, declared: ObjectType): Call? ->
+  return spread if spread := spread_construction(body, call, declared)
+  positional_construction body, call, declared
+
+# The fields without initializers that are not optional, whose arguments a construction must give.
+required_fields := (info: ObjectInfo) ->
+  [field for field in info.fields when field.value == nil and field.type! is not OptionalType]
+
+# A construction from a value alone, `Error('failed')`, as that of the one argument that must be
+# given, by its name (see NodeFacts.replacements).
+positional_construction := (body: Body, call: Call, declared: ObjectType) ->
+  value := positional_value(body, call, declared) ? return nil
+  required := required_fields(info_of(body.program, declared))
+  if required.length != 1
+    message := "#{format_type(declared)} takes a value alone only where one argument must be given"
+    fail body.program, value.position, message
+  name := Identifier(position: value.position, name: required[0].name.name)
+  { callee, type_args, position } := call
+  Call callee, type_args, position, args: [], named_args: [{ name, value }]
+
+# The one argument of a construction that is neither the name of one of its arguments (see
+# construction_arguments) nor a spread.
+export positional_value := (body: Body, call: Call, declared: ObjectType) ->
+  return nil if call.args.length != 1 or not call.named_args.is_empty()
+  value := call.args[0]
+  return nil if is_spread(value)
+  names_argument := value is Identifier and info_of(body.program, declared).field_named(value.name)
+  names_argument then nil else value
 
 # The field that a named argument gives, which must be an argument (see is_argument).
 argument_field := (body: Body, info: ObjectInfo, arg: NamedValue) ->
@@ -262,6 +294,6 @@ expected_record_fields := (expected: Type?): RecordField[] ->
 # A construction's arguments are named, or names alone (see construction_arguments).
 reject_positional_args := (body: Body, call: Call, type: ObjectType) ->
   if not_named := call.args.find((arg) -> arg is not Identifier)
-    example := 'Point(x: 1) or Point(x)'
+    example := "Point(x: 1) or Point(x), or with one value alone, as in Error('failed')"
     message := "#{format_type(type)} is constructed with named arguments, as in #{example}"
     fail body.program, not_named.position, message

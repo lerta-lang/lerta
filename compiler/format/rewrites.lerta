@@ -2,8 +2,9 @@
 # can_leave_out): the members of enums written with their enums, `E.MEMBER`, written alone, and the
 # constructions of structs, `S(x: 1)`, written as records, `{ x: 1 }` (see Expected types in
 # docs/reference/style.md); the named arguments of constructions written as names alone (see
-# Shorthand there); the casts left out (see Redundant casts); and the tests of emptiness written
-# with `is_empty()` (see Emptiness tests); and how to write them so in the syntax tree.
+# Shorthand there), and their one named argument as its value alone (see Single arguments); the
+# casts left out (see Redundant casts); and the tests of emptiness written with `is_empty()` (see
+# Emptiness tests); and how to write them so in the syntax tree.
 import
   BinaryOperation, BooleanLiteral, Call, Case, CaseArm, Cast, construction_arguments,
   construction_spread, Expression, FloatLiteral, Identifier, IntegerLiteral, is_spread, Member,
@@ -12,7 +13,7 @@ import
 from '../ast'
 import dump_ast_without_positions from '../ast_dump'
 import Annotation, annotation_key from './annotated'
-import EMPTINESS_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS from './rules'
+import EMPTINESS_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SINGLE_ARGUMENTS, SPREADS from './rules'
 import Place, places_of from './places'
 
 # In the order of the source, but for a cast and a construction after those inside them, and the
@@ -31,6 +32,7 @@ export rewrites_of := (program: Statement[]) ->
       found.push spread_copy(value, source) if source := copied_source(value)
       for named, i in value.named_args
         found.push shorthand(value, named) if is_shorthand(value, i)
+      found.push single_argument(value) if is_single_argument(value)
       found.push recorded(value, place)
   places_of program, { before, after }
   found
@@ -238,6 +240,26 @@ shorthand := (call: Call, named: NamedValue) ->
     remove: ->
       call.named_args = [each for each in call.named_args when each.name.name != alone.name]
       call.args = [call.args..., alone]
+    restore: ->
+      call.args = args
+      call.named_args = named_args
+
+# Whether the call's one argument is named, but not by a variable of its name, which Shorthand
+# writes alone already.
+is_single_argument := (call: Call) ->
+  call.args.is_empty() and call.named_args.length == 1 and not is_shorthand(call, 0)
+
+# The one named argument written as its value alone, which reports the rule.
+single_argument := (call: Call) ->
+  { args, named_args } := call
+  value := named_args[0].value
+  Annotation
+    single_argument: call
+    reported: { written: value, rule: SINGLE_ARGUMENTS }
+    key: annotation_key('single', named_args[0].name.position)
+    remove: ->
+      call.args = [value]
+      call.named_args = []
     restore: ->
       call.args = args
       call.named_args = named_args

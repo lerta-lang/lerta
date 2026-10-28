@@ -29,7 +29,8 @@ import json_direction, type_of_json_call from './json'
 import generic_callee, named_function_literal, qualified_name, type_of_identifier from './name'
 import narrowable from './narrowable'
 import
-  constructed_type, expected_struct, type_of_construction, type_of_record, type_of_this
+  constructed_type, expected_struct, positional_value, type_of_construction, type_of_record,
+  type_of_this
 from './object'
 import type_of_binary, type_of_coalesce, type_of_unary from './operator'
 import check_return, check_yield, type_of_await from './result'
@@ -143,7 +144,8 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
       qualified_call := Call(args, named_args, type_args, position, callee: name)
       body.facts.replacements[call] = qualified_call
       type := type_of(body, qualified_call, expected)
-      for constructions in [body.facts.object_constructions, body.facts.full_constructions]
+      { object_constructions, full_constructions, single_arguments } := body.facts
+      for constructions in [object_constructions, full_constructions, single_arguments]
         constructions.add call if constructions.has(qualified_call)
       return type
   if makes_builtin(body, call, 'Map')
@@ -160,7 +162,9 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     struct_type := expected_struct(expected) ? return type
     # `{}` is no record but an empty map.
     has_arguments := not call.args.is_empty() or not call.named_args.is_empty()
-    body.facts.recordable.add call if has_arguments and type == struct_type
+    # A value alone names no argument for a record to take.
+    is_positional := positional_value(body, call, object_type) != nil
+    body.facts.recordable.add call if has_arguments and type == struct_type and not is_positional
     return type
   return type_of_json_call(body, call, direction) if direction := json_direction(body, callee)
   if callee is Member

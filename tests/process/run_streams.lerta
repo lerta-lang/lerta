@@ -19,14 +19,14 @@ class Collected
   report = -> "#{@name}: #{@written.text()!.trim()} (ended: #{@ended})"
 
 var chunks = ['one ', 'two ', 'three']
-input := Reader(read_chunk: ->
+input := Reader(->
   return nil if chunks.is_empty()
   chunk := chunks[0]
   chunks = chunks.slice(1)
   chunk.binary
 )
-output := Collected(name: 'stdout')
-errors := Collected(name: 'stderr')
+output := Collected('stdout')
+errors := Collected('stderr')
 exit := await run('echo_input', 'argument', stdin: input, stdout: output, stderr: errors)
 print exit.code
 print output.report()
@@ -37,16 +37,16 @@ unread := 'x'.repeat(1000000).binary
 print (await run('exit_with', '0', stdin: unread)).code
 
 struct Refusing
-  write = (data: String | Binary): Promise -> throw IOError(message: 'the writer refuses')
+  write = (data: String | Binary): Promise -> throw IOError('the writer refuses')
   end = -> return
 
 try
   await run('echo_input', stdin: 'refused'.binary, stdout: Refusing())
 catch error: IOError
   print error.message
-failing := Reader(read_chunk: -> throw IOError(message: 'the reader fails'))
+failing := Reader(-> throw IOError('the reader fails'))
 try
-  await run('echo_input', stdin: failing, stdout: Collected(name: 'unused'))
+  await run('echo_input', stdin: failing, stdout: Collected('unused'))
 catch error: IOError
   print error.message
 
@@ -54,7 +54,7 @@ catch error: IOError
 # would wait for ever, and is ended all the same.
 struct RefusingCounted
   ends: Int[]
-  write = (data: String | Binary): Promise -> throw IOError(message: 'refused again')
+  write = (data: String | Binary): Promise -> throw IOError('refused again')
   end = -> @ends.push(1)
 
 ends: Int[]
@@ -65,7 +65,7 @@ catch error: IOError
 
 # An array of stdout past its limit stops the program, and the Writer of stderr is ended.
 too_long: Byte[]
-stderr_writer := Collected(name: 'stderr')
+stderr_writer := Collected('stderr')
 try
   await run(
     'echo_input'
@@ -80,7 +80,7 @@ catch error: IOError
 print stderr_writer.ended
 
 # A cancel ends the Writer too.
-cancelled := Collected(name: 'cancelled')
+cancelled := Collected('cancelled')
 running := run('repeat', '100000000', 'line', stdout: cancelled)
 await sleep(0.1)
 running.cancel()
@@ -91,19 +91,19 @@ catch error: CancelledError
 
 # A Reader may give an empty chunk, which writes nothing.
 var given = ['', 'after an empty chunk']
-gaps := Reader(read_chunk: ->
+gaps := Reader(->
   return nil if given.is_empty()
   chunk := given[0]
   given = given.slice(1)
   chunk.binary
 )
-gapped := Collected(name: 'gapped')
+gapped := Collected('gapped')
 await run('echo_input', stdin: gaps, stdout: gapped)
 print gapped.report()
 
 # A command that cannot start leaves no pipe behind, and its Writer as it was.
 missing: Byte[]
-unstarted := Collected(name: 'unstarted')
+unstarted := Collected('unstarted')
 try
   await run('no-such-command', stdin: 'x'.binary, stdout: missing, stderr: unstarted)
 catch error: IOError
@@ -111,7 +111,7 @@ catch error: IOError
 
 # An array and a Writer together.
 mixed_output: Byte[]
-mixed_errors := Collected(name: 'mixed')
+mixed_errors := Collected('mixed')
 await run(
   'echo_input'
   'to stderr'
@@ -123,13 +123,13 @@ print mixed_output.to_binary().text()!
 print mixed_errors.report()
 
 # A program that ends while its Reader has yet to give a chunk ends the run all the same.
-pending := Reader(read_chunk: -> await Deferred<Binary?>().promise())
+pending := Reader(-> await Deferred<Binary?>().promise())
 print (await run('exit_with', '0', stdin: pending)).code
 
 # The error of a Writer's end fails the run, and the first error is the one told.
 struct FailingEnd
   write = (data: String | Binary): Promise -> return
-  end = (): void -> throw IOError(message: 'the end fails')
+  end = (): void -> throw IOError('the end fails')
 
 try
   await run('echo_input', stdin: 'o'.binary, stdout: FailingEnd())
@@ -142,7 +142,7 @@ catch error: IOError
 
 # A CancelledError that a Writer throws is its failure, not a cancel of the run.
 struct Cancelling
-  write = (data: String | Binary): Promise -> throw CancelledError(message: 'of the writer')
+  write = (data: String | Binary): Promise -> throw CancelledError('of the writer')
   end = -> return
 
 try
@@ -154,7 +154,7 @@ catch error: CancelledError
 struct LateCancelling
   write = (data: String | Binary): Promise ->
     await sleep(0.2)
-    throw CancelledError(message: 'of the writer, late')
+    throw CancelledError('of the writer, late')
   end = -> return
 
 # Its stderr, slower still, is given up and ended before the run fails, as it would not be if the
