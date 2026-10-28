@@ -7,7 +7,7 @@ The planned design of `String` and `Binary` beyond [the reference](../reference/
 - A separate iterator for graphemes, besides the code points that a `String` gives (see [the reference](../reference/types.md#string)).
 - `s.to_upper()` and `s.to_lower()` of every letter, which change the ASCII letters only so far, through the case mappings of Unicode.
 - The set of representations, in priority order:
-  1. Small strings as immediate values (String is a 16-byte value with 15 bytes inline)
+  1. Small strings as immediate values: a String of at most 7 bytes is held in the word itself, told from a pointer by a tag bit, so that a `String` stays one word and a small one is neither allocated nor counted. 7 bytes hold every word of `bench/word_count` and 70% of the names in the compiler's source; 15, in a 16-byte value, would hold 96%, but would double a `String` in every item, field and union.
   2. Flat strings
   3. **Ropes** (concatenation kept as a tree, so that `+` is O(1))
   4. Slices (see [open questions](#open-questions))

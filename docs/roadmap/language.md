@@ -36,7 +36,7 @@ The planned syntax, control flow, types and operators.
 - A tuple and an anonymous struct in a cast, `x as (Int, String)?`, and an array type, a tuple and an anonymous struct in the patterns of a `case`, as in `x is T`.
 - The downcast of an interface value.
 - An array literal's element type is one that every item fits, rather than that of the first item that gives one ([the reference](../reference/types.md#array)): `[import, statements...]`, of an `Import` and the items of a `Statement[]`, is a `Statement[]`, as `Import` is a member of that union.
-- Small anonymous structs and tuples as values rather than heap objects, in registers and in the room of an item (`LertaItem`), so that `for (k, v) in m.entries()` allocates nothing. They cannot be changed, so the representation does not show in what a program does.
+- Structs, anonymous structs and tuples of at most 16 bytes as values rather than heap objects, in registers and in the room of an item (`LertaItem`), at most the two words of an interface value, so that `for (k, v) in m.entries()` and a `Position` of a line and a column allocate nothing. They cannot be changed, so the representation does not show in what a program does. In a union, such a value is still held in a box (see [internals](../internals.md#objects)).
 - Arrays of optional `Int`, `Byte` and `Bool` values (`Int?[]`), which have no item kind yet: an item kind for `{ i1, T }`, which fits in the room of an item (`LertaItem` in `runtime/lerta.h`). A map's value stays not optional, since a missing key reads as nil.
 
 Interfaces and generics are in [objects](objects.md).

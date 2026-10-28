@@ -36,6 +36,14 @@ Every expression of a reference type yields an owned reference for now, except t
 
 First, the operations that this would remove are counted in the generated code, to see whether the gain is worth the change to the ownership of values in codegen.
 
+### Objects on the stack
+
+The closure of a function literal declared as a local that only its own function calls is on the stack, immortal, already ([internals](../internals.md#objects)). The same goes for any object that a local holds and that never leaves its function: a class or struct object, a tuple, an anonymous struct, or an array of a small length, as the digits that `Int.to_string` builds. As for closures, an object held weakly, or kept across a `yield` or an `await`, stays on the heap.
+
+### Closures
+
+The function literals of one scope share one context, a heap object of the values they capture, as V8's contexts do, and a function value is two words, its code and its context, as an interface value is, so that making a closure allocates nothing but the context, once for the scope; a captured `var` is a slot of the context rather than a cell of its own. `scan` of std:scanner makes one context instead of a `Scanner`'s eight closures and a cell, which, called for every name in the IR that the compiler links, are a quarter of what the compiler's own build allocates. A context lives as long as any of its closures, so a closure that outlives the others keeps what they captured too.
+
 ### Allocation
 
 The size classes of the allocator ([internals](../internals.md#allocation)), the limits of 256 bytes and 16 KiB, and the number of empty slabs kept are settled by measuring the benchmarks in `bench/` and the compiler's own build.
