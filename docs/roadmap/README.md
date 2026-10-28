@@ -9,7 +9,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 | [language.md](language.md) | Syntax, control flow, types, operators |
 | [strings.md](strings.md) | Strings, their operations and regular expressions |
 | [objects.md](objects.md) | Classes and structs, interfaces, generics, equality |
-| [runtime.md](runtime.md) | Safety, errors and exceptions, memory management, concurrency |
+| [runtime.md](runtime.md) | Safety, errors and exceptions, memory management, concurrency, platforms |
 | [programs.md](programs.md) | Modules, FFI, the standard library, tools |
 
 ## Dependencies

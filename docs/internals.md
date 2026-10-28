@@ -1,6 +1,6 @@
 # Internals
 
-This describes the implementation design. Unmarked statements describe the compiler as implemented; plans are marked *(planned)* on a heading or **Planned:** on an item.
+This describes the implementation's design. The planned design is in [the roadmap](roadmap/README.md).
 
 ## Overall architecture
 
@@ -12,21 +12,6 @@ This describes the implementation design. Unmarked statements describe the compi
 - The checker records what each name and each member refers to, where it resolves them. A name's reference (`NodeFacts.references`, of the kinds in `compiler/checker/references.lerta`) is a local of a scope, which codegen finds in its own scopes by the name, a top-level value of a module, a function, a C function, a constructor, `Map` or `Set`, or a member of an enum. A member's target (`NodeFacts.members`, of the targets in `compiler/checker/member_targets.lerta`) is a field or a builtin property, a method with its source, a property of an interface value, a member of an enum or an enum's `parse`. Codegen generates names and members by them and looks nothing up again; an itab's entries hold the targets of the type's members alike.
 - The checker leaves the syntax tree as it is written, since the instances of a generic function share their literal and `lerta fmt` checks a program more than once. It records the nodes that it makes for codegen in the facts, by the written ones: the call of an operator's method, say, and the arguments that a call passes (`NodeFacts.arguments`), its variadic arguments packed into an array and its named arguments gathered into a struct.
 - Codegen takes the representation of the types whose values are not references, the integer types, `Float`, `Bool` and enums, from one row per type (`compiler/codegen/scalar.lerta`): the IR type, the bits and the sign, from which a value becomes a word and back and is extended as an argument or a result of C. The bits and the sign of the integer types come from `compiler/types.lerta`, which the checker and the checked arithmetic read too.
-
-### Interface with LLVM (planned)
-
-For the planned [object output and linking with lld](roadmap/programs.md#tools):
-
-- The compiler itself (in Lerta) goes as far as producing IR. Beyond that, a **C++ shim** takes over (it exposes a few functions with `extern "C"`).
-  - The exposed units are not one-to-one with the LLVM API. They are the operations the compiler needs (output, linking, JIT execution, REPL).
-  - The shim receives Lerta objects (`String`, `String[]`) directly. LLVM's C++ API uses `StringRef` (pointer + length), so no conversion to NUL-terminated strings is needed.
-  - lld is called as a library (through the shim, since it has no C API).
-  - LLVM version differences are confined to the shim. The LLVM major version used is fixed.
-- How IR is passed:
-  1. At first, as `.ll` text (as now). The shim parses it. Easy to debug.
-  2. If this is too slow, for example in the REPL, move to a scheme where Lerta builds its own IR objects and passes them in one batch, and the shim builds the LLVM IR.
-  - A fine-grained builder that calls an extern per instruction is not adopted (too many externs, and keeping up with versions is heavy).
-- The runtime is also linked into the compiler, and during JIT execution its symbols resolve as in-process symbols.
 
 ### Per-module output
 
@@ -64,16 +49,8 @@ For the planned [object output and linking with lld](roadmap/programs.md#tools):
 
 ## Execution model
 
-- There is no frame chain yet. A closure copies the values that cannot change (`const`s, parameters, loop variables) in (see [objects](#objects)), and each captured `var` lives in a heap cell of its own, which the closure holds.
-
-### Frames and contexts (planned)
-
-The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
-
-- A function's frame is on the machine stack. **Non-RC values (Int, Float, Bool) stay as SSA values** in registers.
-- Only variables captured by closures and variables living across `await` are placed in a heap **context object** (the V8 approach). Only the captured variables, not the whole frame.
-- For an async function, the context is the coroutine frame itself, which outlives the call that made it; suspended functions are linked by which one awaits which, a spaghetti stack on the heap.
-- A **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach), which would let a panic print a stack trace, is not needed for exceptions, whose traces are made as they unwind (see below); it may come for the traces of panics.
+- A function's locals are on the machine stack, in slots that LLVM makes registers, but for the `var`s that closures capture, each of which lives in a heap cell of its own. A closure holds the values that cannot change (`const`s, parameters, loop variables), copied in or, for one on the stack, borrowed (see [objects](#objects)), and the cells of the `var`s it captures. What a function that yields or awaits keeps across a `yield` or an `await` is in its coroutine frame, on the heap, which outlives the call that made it (see [functions that yield](#functions-that-yield) and [functions that await](#functions-that-await)); suspended functions are linked by which one awaits which, a spaghetti stack on the heap.
+- Why: a closure holds only the cells of the `var`s it captures, as Swift boxes each captured `var`, while a context of all the captures of a scope (the V8 approach) would keep each alive as long as any closure of the scope; and a context would not hold what lives across an `await` either, which is in the coroutine frame.
 
 ### Exceptions
 
@@ -97,7 +74,6 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 
 - The runtime relies on the guard page below the stack: touching it raises SIGSEGV (or SIGBUS), whose handler, on a stack of its own (`sigaltstack`), panics if the faulting address is in the stack's range, which a stack without a limit, or with one beyond the address space, does not have. It costs nothing per call. Other faults keep their default action.
 - Windows raises `EXCEPTION_STACK_OVERFLOW` in the overflowing thread, on what is left of its stack. A vectored exception handler panics on it; `SetThreadStackGuarantee` keeps 64 KiB of the stack for the handler, which writes the message and ends the process with `TerminateProcess` (exit code 3, as C's `abort` gives there), since the code that `ExitProcess` runs may need more. Other exceptions go on to the handlers after it.
-- **Planned:** where there is no guard page, as on microcontrollers, or if stack overflow becomes an exception that can be caught, the remaining stack is checked at function entry instead (the Go approach); catching it then works like any throw, since the handler runs after unwinding.
 
 ## Memory management
 
@@ -140,10 +116,6 @@ The beauty of spaghetti-stack unwinding, at the speed of the machine stack.
 - The heap cell of a captured `var` (see [execution model](#execution-model)) is a heap object with the header and the value; the cells of types of the same representation share one layout and type.
 - A union value is one pointer, null for nil: to the object of a class, a struct, an array, a map, a tuple or an anonymous struct, whose type in its header tells its type, or to a **box** of a value of another member, as an `Int`, a `String` or an interface value, whose two words the box holds (`compiler/codegen/boxes.lerta`); a value converted to an interface member is made an interface value first, through the itab that the checker records for it, as where the interface is expected. Every array has one type in its header, `lerta_array_type` of `runtime/array.c`, whatever its items, and so does every map, `lerta_map_type`, which is why a union holds one array type and one map type at most; a tuple's and an anonymous struct's types are as a box's are (below). A box is a heap object of the value whose type, `linkonce_odr` and named by the value's type, is the same in every module, so that a box made in one is told by another. A value is boxed where it becomes a union's, and taken out where a test, a cast or a `case` narrows it to its member. A method called on a union tests the members in turn and calls that of the member the value is, on the value taken out (`emit_member_dispatch`). A `T?`, of one member and nil, stays the pair of a flag and the value.
 - Each type has a generated constructor function, which takes the constructor arguments borrowed, like any call, and computes the initialized fields; methods are functions that take the object first.
-
-## Structs (planned)
-
-- The implementation may copy or share structs, for example inline for small ones and shared via RC for large ones.
 
 ## Formatter
 
@@ -256,29 +228,9 @@ A function with [defaults](reference/functions.md) takes every argument. For eac
 - String interpolation is expanded at compile time into a call to the runtime variadic function `lerta_string_concat(a, b, ...)` (this expansion is internal to the compiler, so user-facing variadic parameters are not needed). The total length is computed and allocated once.
 - `a + b` of a String or a Binary calls `lerta_string_extend`, or `lerta_binary_push` for a Byte, which take `a`: when nothing else holds it, its count being 1, the bytes are appended in place. `lerta_grow` keeps the object's place while the allocator's place has room (`lerta_mem_capacity`), and else moves it to one of twice the size, so that a loop of `+=` copies O(n) bytes in all; the move (`move_to_room`) and the copy of a String held elsewhere (`copied`) are functions of their own, so that an append that fits is short enough for LLVM to inline into the generated code; moving is safe, since a String or a Binary is never held weakly nor thrown, which are what know an object by its place. `+=` on a variable or a field evaluates the right side first, then reads the target and passes its reference on, so that the count is 1 if nothing else holds the value, with no retain and release around the right side; on an array item the array still holds it, so a new one is made. The checker gives a Char that `+` appends to a String as the call of its `to_string()` (`appended_texts` in `compiler/checker/shared.lerta`).
 - Strings are flat only, for now. A `Binary` has the representation of a `String` (`LertaString` in `runtime/lerta.h`) without the UTF-8 guarantee, so `s.binary` and `b.text()` pass the object on.
-- **Planned:** the set of representations (in priority order):
-  1. Small strings as immediate values (String is a 16-byte value with 15 bytes inline)
-  2. Flat strings
-  3. **Ropes** (concatenation kept as a tree)
-  4. Slices (`StringSlice`)
-- **Planned:** rope rules:
-  - Operations that do not flatten: concatenation, length, iteration, output (`writev`), equality comparison.
-  - Operations that flatten: byte indexing (`s.binary[i]`), passing to C, hashing (use as a map key).
-    - So the O(1) of `s.binary` holds for flat strings. For a rope, the first access costs an O(n) flatten.
-  - Flattening replaces the node in place. Implemented with an explicit stack (no recursion).
-  - A concatenation with a short result copies immediately without creating a node (equivalent to V8's 13 characters).
-  - There is a depth limit. Beyond it, the rope is flattened.
-
-## Regular expressions (planned)
-
-- For literals, the engine's bytecode is embedded in the binary (no parsing at run time). No machine code generation.
-
 ## FFI
 
-- The C types of an extern, and the ownership of its arguments and result, are in [the reference](reference/functions.md#c-functions). **Planned:** the ABI after small strings become immediate values is undecided.
-  - **Planned:** avoid direct access to the representation; use the accessors in the runtime header (`lerta_string_bytes(s, &len)` and so on). This survives changes to the representation. Ropes are flattened here.
-- **Planned:** headers are parsed with **libclang** (no custom parser; the same approach as Zig's `@cImport` and Swift's clang importer).
-- **Planned:** callbacks, a trampoline from closure to C function pointer. If called from another thread, the call is forwarded to the event loop.
+- The C types of an extern, and the ownership of its arguments and result, are in [the reference](reference/functions.md#c-functions).
 
 ## Platforms
 
@@ -287,8 +239,3 @@ A function with [defaults](reference/functions.md) takes every argument. For eac
 - On Windows, libuv converts paths from and to UTF-8, and the platform functions use the wide-character (UTF-16) Win32 functions: for the arguments, which they read from the command line (`CommandLineToArgvW`), since the C runtime's `argv` is in the ANSI code page, and for the standard streams. `run` searches only `PATH` for a command without a directory (`SearchPathW`), as POSIX does, and gives libuv the file it finds, since libuv would look in the directory that the program runs in first; libuv quotes the arguments so that the child's C runtime reads them back as they were. stdout and stderr are written with `WriteFile`, so no newline becomes CRLF; to a console, they are written as UTF-16 with `WriteConsoleW`, which shows them whatever the console's code page, and stdin is read from one as UTF-16 with `ReadConsoleW` and given as UTF-8, a line that begins with Ctrl-Z ending it, as `ReadFile` ends it. Neither is tested: the tests under Wine write and read through pipes.
 - How the tests cover other targets, Windows under Wine included, is in the [README](../README.md#building-and-testing).
 - The runtime is built with libuv (v1.53.0, `third_party/libuv`), with one line taken out: on Unix, `uv_spawn` that fails while it makes the stdio takes the process handle off the loop's queue (libuv's #4980), though its docs ask for `uv_close` even after a failure, which takes it off again and breaks the queue; a runtime check (`test/runtime/spawn_fails.c`) fails while libuv does so, and the line is to stay out of a newer libuv until libuv drops it. The compiler carries its sources as it does the runtime's, and compiles them into the runtime's cache for each target, with the flags and the system's libraries that `third_party/libuv.txt` lists for its system, taken from libuv's CMakeLists.txt; its warnings are silenced, as they are not the program's. The runtime's own files take only libuv's headers, which ask nothing more of their users, so that libuv's feature macros, such as `_FILE_OFFSET_BITS`, do not change what the runtime sees. Its object files are linked as they are, with no archive: an optimized build drops what the program does not use, through `-flto`, and an unoptimized one holds all of libuv, whose size does not matter there. A system's libuv is not used instead: the distributions' packages lag behind (Debian bookworm's is 1.44), none provides one for mingw-w64 off Windows, and a shared one would make programs depend on it; it would not make the optimized build faster either (see [the overall architecture](#overall-architecture)). The [event loop](#functions-that-await) runs on it, which absorbs the platform differences of what waits.
-- **Planned:** microcontrollers as targets (STM32 / Cortex-M, ESP32-C3/C6 / RISC-V; Xtensa-based chips after upstream LLVM support matures).
-  - `Int` stays fixed at 64 bits (TinyGo's environment-dependent `int` is not adopted). Hot spots use `Int32` explicitly.
-  - The [event loop](#functions-that-await) runs there on an interrupt-driven scheduler or FreeRTOS/Zephyr, in place of the files of the runtime that use libuv's loop.
-  - The platform functions are replaced, as the regions of the allocator are by a static heap (see [allocation](#allocation)); the rest of the runtime needs only what [the runtime rules](#runtime-rules) allow of the C library.
-  - Beware of code bloat from monomorphization. Remedies when needed: merging instances with identical machine code at link time (LLVM mergefunc, lld ICF), and a build option to switch to dispatch through interfaces.

@@ -7,8 +7,9 @@ The planned design of modules, FFI, the standard library and tools.
 - An `Int?` parameter of an extern, a `LertaOptionalInt` of 16 bytes, passed as C takes it on Windows, by a pointer to a copy: now it is passed by value, which a C function there misreads, so std passes an `Int` with -1 for nil instead, as `run` does its `output_limit`. The x86-64 ABI of the other systems takes it by value, in two registers.
 - An `extern` declaration may also refer to a C variable.
 - Generic externs, `extern lerta_map_remove: <K, V>(Map<K, V>, K) -> void`, for C functions that take a value of any type as a pointer, as an array, a map or a String is. With them, the method `remove`, built into the compiler now (see [internals](../internals.md#builtins)), moves to `std/builtins/`, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)); `push`, `pop` and indexing stay built in, since their code depends on the items' kind. Using them in std needs a seed refresh.
-- C headers are imported with libclang.
-- The C side reaches Lerta's objects through accessors (see [internals](../internals.md#ffi)).
+- C headers are parsed with **libclang** (no custom parser; the same approach as Zig's `@cImport` and Swift's clang importer).
+- The C side reaches Lerta's objects through the accessors in the runtime header (`lerta_string_bytes(s, &len)` and so on), not their representation, which can then change. Ropes are flattened there.
+- Callbacks: a trampoline from closure to C function pointer. If called from another thread, the call is forwarded to the event loop.
 - Decided points:
   - C++ / Rust go through C wrappers.
   - Ownership boundary: when the C side keeps holding a value, it retains it with an explicit API (equivalent to Swift's `Unmanaged.passRetained`).
@@ -32,7 +33,17 @@ The planned design of modules, FFI, the standard library and tools.
 
 - `.ll`/bitcode output from `lerta build`.
 - With `--source-lines` on Windows, a PDB beside the program (CodeView, which LLVM gives for mingw too, and lld writes), so that WinDbg and Visual Studio read the source lines, as gdb and lldb read the DWARF that it holds now.
-- LLVM emits objects, and `lld` links them, on all platforms, through a C++ shim (see [internals](../internals.md#interface-with-llvm-planned)).
+- LLVM emits objects, and `lld` links them, on all platforms:
+  - The compiler itself (in Lerta) goes as far as producing IR. Beyond that, a **C++ shim** takes over (it exposes a few functions with `extern "C"`).
+    - The exposed units are not one-to-one with the LLVM API. They are the operations the compiler needs (output, linking, JIT execution, REPL).
+    - The shim receives Lerta objects (`String`, `String[]`) directly. LLVM's C++ API uses `StringRef` (pointer + length), so no conversion to NUL-terminated strings is needed.
+    - lld is called as a library (through the shim, since it has no C API).
+    - LLVM version differences are confined to the shim. The LLVM major version used is fixed.
+  - How IR is passed:
+    1. At first, as `.ll` text (as now). The shim parses it. Easy to debug.
+    2. If this is too slow, for example in the REPL, move to a scheme where Lerta builds its own IR objects and passes them in one batch, and the shim builds the LLVM IR.
+    - A fine-grained builder that calls an extern per instruction is not adopted (too many externs, and keeping up with versions is heavy).
+  - The runtime is also linked into the compiler, and during JIT execution its symbols resolve as in-process symbols.
 - `lerta run` running directly with JIT, and `lerta repl`.
 - The rest of the style in [`lerta fmt`](../reference/compiler.md): reporting what it cannot fix, such as a name in the wrong case or a line it cannot bring within 100 columns; the rules that change the syntax tree, such as implicit return; and, applied only when the file type-checks, the rules that need types, such as whether a `case` handles every member of its subject. The compiler reports only what concerns correctness, such as unused names.
 - `lerta fmt` reports each difference under the rule that it breaks, and each run of differing lines apart, as [the reference](../reference/compiler.md#fmt) states: now some are reported under another rule, as the shorthand of `{ x: x }` under **Layout**, a cast left out before a space, or a rewrite that starts the body of a function on the line of `->`, under the rule of what holds it, and the named arguments that a name written alone goes before under **Long lists**, and separate runs that differ may be reported as one. The formatter has no options, as it applies the style as written; settings wait for a configuration file (see [open questions](#open-questions)).

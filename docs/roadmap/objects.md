@@ -4,6 +4,7 @@ The planned design of classes and structs, interfaces, generics and equality.
 
 ## Classes and structs
 
+- Structs copied inline when they are small, and shared via RC when they are large.
 - A function literal member declared `var`, `var on_hover = -> log 'hover'`, is a function field held per instance, so that it can be replaced (class only). A `const` one (the default) is a method. The difference in representation follows from whether reassignment is allowed.
 - Constructing a class or struct, `Circle(r: 1)`, is also a call to a constructor that takes an anonymous struct with the type-only fields.
 - Definite assignment analysis in place of the rule for field initializers, which may read only the fields set before them through `@` ([the reference](../reference/objects.md#classes-and-structs)): `@` still cannot leak before all the fields are initialized, but an initializer may use it otherwise, as by calling a method that reads only those fields.

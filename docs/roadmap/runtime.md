@@ -8,7 +8,7 @@ The definition of safety is in [philosophy](../philosophy.md#safety). Planned:
 
 - `a.get(i)` returns `T?` where `a[i]` throws.
 - FFI and raw pointer operations only inside `unsafe` blocks.
-- A panic prints a stack trace, besides its message.
+- A panic prints a stack trace, besides its message, perhaps through a **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach). Exceptions do not need one: their traces are made as they unwind ([internals](../internals.md#exception-traces)).
 
 ## Discarded values
 
@@ -47,9 +47,18 @@ The size classes of the allocator ([internals](../internals.md#allocation)), the
 - Parallel computation uses **workers that do not share a heap, with message passing** (Node's worker_threads / the Erlang approach).
 - Programs stay single-threaded (see [philosophy](../philosophy.md#safety)), with no thread API, to avoid the GIL path of Python and Ruby.
 
+## Platforms
+
+- Microcontrollers as targets (STM32 / Cortex-M, ESP32-C3/C6 / RISC-V; Xtensa-based chips after upstream LLVM support matures).
+  - `Int` stays fixed at 64 bits (TinyGo's environment-dependent `int` is not adopted). Hot spots use `Int32` explicitly.
+  - The [event loop](../internals.md#functions-that-await) runs there on an interrupt-driven scheduler or FreeRTOS/Zephyr, in place of the files of the runtime that use libuv's loop.
+  - The platform functions are replaced, as the regions of the allocator are by a static heap (see [allocation](../internals.md#allocation)); the rest of the runtime needs only what [the runtime rules](../internals.md#runtime-rules) allow of the C library.
+  - Beware of code bloat from monomorphization. Remedies when needed: merging instances with identical machine code at link time (LLVM mergefunc, lld ICF), and a build option to switch to dispatch through interfaces.
+  - Where there is no guard page, the remaining stack is checked at function entry (the Go approach).
+
 ## Open questions
 
-- Whether stack overflow should be an exception that can be caught instead of a panic. That needs the check at function entry described in [internals](../internals.md#stack-overflow).
+- Whether stack overflow should be an exception that can be caught instead of a panic. That needs the remaining stack checked at function entry instead of [the guard page](../internals.md#stack-overflow), as the targets without a guard page, such as [microcontrollers](#platforms), do; catching it then works like any throw, since the handler runs after unwinding.
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - Whether the runtime should collect cycles (as Nim's ORC does by trial deletion). It is decided by the leak check's report of cycles on a few programs driven by events, of the size of `examples/editor.lerta` or larger, written for it, before the APIs that keep callbacks are designed, which set their shape, rather than after async/await is complete.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).
