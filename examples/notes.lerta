@@ -1,0 +1,46 @@
+# A JSON API of notes, served over HTTP at a free port, and a client in the same program that adds
+# notes at the same time, then lists them.
+import all from 'std:async'
+import fetch, Request, Response, serve from 'std:http'
+import decode_json, encode_json, JsonError from 'std:json'
+
+struct Note
+  title: String
+  tags: String[] = default []
+
+notes: Note[]
+
+handle := (request: Request) ->
+  case
+    when request.method == 'GET' and request.url.ends_with('/notes')
+      Response body: encode_json(notes)
+    when request.method == 'POST' and request.url.ends_with('/notes')
+      try
+        notes.push decode_json<Note>(await request.text())
+        Response status: 201
+      catch e: JsonError
+        Response status: 400, body: e.message
+    else Response(status: 404)
+
+server := serve(handle)
+url := "http://127.0.0.1:#{server.port()}/notes"
+
+add := (body: String) ->
+  response := await fetch(url, method: 'POST', body: body)
+  text := await response.text()
+  print text.is_empty() then response.status else "#{response.status} #{text}"
+
+# The three are sent at the same time, so they may be stored in any order.
+adding :=
+  add('{"title": "buy milk", "tags": ["home"]}')
+  add('{"title": "fix the build"}')
+  add('{"title": "call Ann", "tags": ["home", "phone"]}')
+await all(adding)
+await add('{"tags": []}')
+
+listed := decode_json<Note[]>(await (await fetch(url)).text())
+for note in listed.sorted_by((note) -> note.title)
+  tags := note.tags.is_empty() then '' else " [#{note.tags.join(', ')}]"
+  print "#{note.title}#{tags}"
+print (await fetch("http://127.0.0.1:#{server.port()}/other")).status
+server.close()
