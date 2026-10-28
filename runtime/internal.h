@@ -36,12 +36,14 @@ bool lerta_report_unreachable(void);
 // program may still exit with it itself.
 #define LERTA_LEAK_EXIT_CODE 23
 #ifdef LERTA_DEBUG
-// What the debug runtime keeps before each object, by which the leak check tracks it; its size
-// keeps the object aligned as its place.
+// What the debug runtime keeps before each object, by which the leak check tracks it. Its size is a
+// multiple of 8, even where pointers are 4 bytes, so that the object after it keeps the alignment
+// to 8 that the allocator gives.
 typedef struct LertaPrefix {
-  _Alignas(16) struct LertaPrefix *previous;
+  _Alignas(8) struct LertaPrefix *previous;
   struct LertaPrefix *next;
 } LertaPrefix;
+_Static_assert(sizeof(LertaPrefix) % 8 == 0, "a LertaPrefix keeps its object aligned to 8");
 // Adds an object, by its prefix, to the objects alive, as it is made, and takes it away as it is
 // freed; and counts the frames of coroutines alive likewise, which have no prefix.
 void lerta_track(LertaPrefix *prefix);

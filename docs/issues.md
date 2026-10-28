@@ -6,9 +6,8 @@ Known defects, most severe first.
 |---|---|---|
 | 1 | A Reader refuses a read right after `timeout` ends the last one | Low |
 | 2 | `Reader.read` returns an empty Binary at the end after an empty chunk | Low |
-| 3 | `LertaPrefix` is aligned to 16 but placed at 8 | Info |
-| 4 | `read_console` underflows when given fewer than 3 bytes | Info |
-| 5 | `read_console` loops when the input ends after a held high surrogate | Info |
+| 3 | `read_console` underflows when given fewer than 3 bytes | Info |
+| 4 | `read_console` loops when the input ends after a held high surrogate | Info |
 
 ## 1. A Reader refuses a read right after `timeout` ends the last one
 
@@ -22,19 +21,13 @@ The fix is for `first_settled` to await the cancelled Promises before it returns
 
 The fix is for `fill` to skip an empty chunk.
 
-## 3. `LertaPrefix` is aligned to 16 but placed at 8
-
-In the debug runtime, `LertaPrefix` in `runtime/internal.h` is declared `_Alignas(16)`, but the allocator places objects at multiples of 8, so half of the prefixes are not aligned to 16. A compiler may use aligned 16-byte instructions on them; clang 21 on x86-64 does not today.
-
-The fix is to align it to 8.
-
-## 4. `read_console` underflows when given fewer than 3 bytes
+## 3. `read_console` underflows when given fewer than 3 bytes
 
 In `runtime/platform_windows.c`, `read_console` reads `size / 3` UTF-16 units. With `size` below 3 and a high surrogate held from the last read, `fitting - start` is -1, and `ReadConsoleW` is asked for about 4 billion units into an 8192-unit buffer. `lerta_stdin_read` always passes 65536, so this cannot happen today.
 
 The fix is to read at least one unit beyond the held surrogate.
 
-## 5. `read_console` loops when the input ends after a held high surrogate
+## 4. `read_console` loops when the input ends after a held high surrogate
 
 In `runtime/platform_windows.c`, when `read_console` holds a high surrogate and `ReadConsoleW` then reads nothing, the check for the end sees the held unit, holds it again and reads again, without end. The check for Ctrl-Z also looks at `wide[0]`, the held unit, in place of `wide[start]`. This is found by reading the code, not by running it.
 
