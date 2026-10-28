@@ -57,7 +57,7 @@ export type_of_construction := (
 ): ObjectType ->
   program := body.program
   if expanded := spread_construction(body, call, declared)
-    body.facts.spread_calls[call] = expanded
+    body.facts.replacements[call] = expanded
     type := type_of_construction(body, expanded, declared, expected)
     set_type body, expanded, type
     return type
@@ -170,7 +170,7 @@ export type_of_this := (body: Body, at: Expression) ->
   fail body.program, at.position, message
 
 # A construction from a spread, `Point(p..., x: 1)`, as the construction of the arguments of p but
-# those written, read from p (see NodeFacts.spread_calls): a value of the type constructed.
+# those written, read from p (see NodeFacts.replacements): a value of the type constructed.
 spread_construction := (body: Body, call: Call, declared: ObjectType): Call? ->
   spread := spread_argument(body, call.args, 'a construction') ? return nil
   source := spread.iterable
@@ -213,16 +213,16 @@ spread_argument := (body: Body, items: Expression[], holder: String) ->
 is_path := (value: Expression): Bool ->
   value is Member then is_path(value.object) else value is Identifier or value is This
 
-# A record where a struct is expected constructs it (see NodeFacts.constructions).
+# A record where a struct is expected constructs it (see NodeFacts.replacements).
 export type_of_record := (body: Body, record: RecordLiteral, expected: Type?): Type ->
   program := body.program
   if struct_type := expected_struct(expected)
     construction := struct_construction(struct_type, record.fields, record.spread, record.position)
-    body.facts.constructions[record] = construction
+    body.facts.replacements[record] = construction
     return type_of_expected_construction(body, construction, expected!)
   if spread := record.spread
     expanded := spread_record(body, record, spread)
-    body.facts.spread_records[record] = expanded
+    body.facts.replacements[record] = expanded
     return set_type(body, expanded, type_of_record(body, expanded, expected))
   names: Set<String>
   for field in record.fields
@@ -242,7 +242,7 @@ export type_of_record := (body: Body, record: RecordLiteral, expected: Type?): T
   record_type [type_of_field(field) for field in record.fields]
 
 # An anonymous struct from a spread, `{ r..., z: 1 }`, as the anonymous struct of the fields of r
-# but those written, read from r, and those (see NodeFacts.spread_records).
+# but those written, read from r, and those (see NodeFacts.replacements).
 spread_record := (body: Body, record: RecordLiteral, spread: Comprehension) ->
   spread_argument body, [spread], 'an anonymous struct'
   source := spread.iterable

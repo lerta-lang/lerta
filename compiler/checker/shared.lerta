@@ -3,7 +3,7 @@
 # what each module declares, by index, so that no two of them refer to each other.
 import
   Call, Cast, Exportable, Expression, FunctionLiteral, Identifier, Member, Node, Position,
-  RecordLiteral, StringLiteral
+  StringLiteral
 from '../ast'
 import CompletionProbe from './completion_probe'
 import ExtensionMethod, Extensions from './extensions'
@@ -95,18 +95,14 @@ export class NodeFacts
   # The calls of `to_string()` that give the text of a Char that `+` appends to a String, by the
   # Chars (see appends_unit).
   appended_texts: Map<Expression, Call> = Map()
-  # The exports of modules imported as names that `name.export` reads, as the names they are
-  # imported by (see qualified_import), and the calls of them, which codegen generates instead.
-  qualified: Map<Member, Identifier> = Map()
-  qualified_calls: Map<Call, Call> = Map()
-  # The constructions that records make where structs are expected, which codegen generates instead
-  # (see type_of_record).
-  constructions: Map<RecordLiteral, Call> = Map()
-  # The constructions and the records from spreads, `Point(p..., x: 1)` and `{ r..., z: 1 }`, as
-  # those of the fields that they read from their spreads, which codegen generates instead (see
-  # spread_construction and spread_record).
-  spread_calls: Map<Call, Call> = Map()
-  spread_records: Map<RecordLiteral, RecordLiteral> = Map()
+  # The expressions that codegen generates instead of those written, at their positions:
+  # - `name.export` of a module imported as `name`, and its calls, as the name that the export is
+  #   imported by (see qualified_name);
+  # - a record where a struct is expected, as the construction of the struct (see type_of_record);
+  # - a construction or a record from a spread, `Point(p..., x: 1)` or `{ r..., z: 1 }`, as that of
+  #   the fields that it reads from its spread (see spread_construction and spread_record).
+  # A replacement may be replaced in turn, as `mod.Point(p..., x: 1)` is, twice.
+  replacements: Map<Expression, Expression> = Map()
   # The arguments of the calls whose variadic arguments are packed into an array, or whose named
   # arguments are gathered into an argument of the last parameter, as codegen passes them (see
   # check_arguments). The calls stay as they are written, since the instances of a generic function

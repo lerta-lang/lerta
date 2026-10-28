@@ -76,16 +76,18 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
   type_of_export body, builtin, identifier, is_callee
 
 # `name.export` of a module imported as `name`, where no local takes the name, as the name that the
-# export is imported by (see qualified_import), recorded for codegen; nil for any other member.
+# export is imported by (see qualified_import), recorded as the member's replacement (see
+# NodeFacts.replacements), which later checks of the member return; nil for any other member.
 export qualified_name := (body: Body, member: Member): Identifier? ->
-  return name if name := body.facts.qualified[member]
+  replacement := body.facts.replacements[member]
+  return replacement if replacement is Identifier
   object := member.object
   return nil if object is not Identifier or lookup(body, object.name) != nil
   if member.name.name == COMPLETION_NAME
     probe_module body, imported.module_index if imported := body.shared.imports.modules[object.name]
   qualified := qualified_import(body.shared, object.name, member.name) ? return nil
   name := Identifier(member.name..., name: qualified)
-  body.facts.qualified[member] = name
+  body.facts.replacements[member] = name
   name
 
 # The generic function that the callee names: one of the module, an imported one or a builtin,
