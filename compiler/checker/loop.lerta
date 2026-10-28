@@ -8,6 +8,7 @@ import fail from './diagnostics'
 import expect_condition, expect_type, type_of from './expression'
 import type_of_item_function from './closure'
 import iterable_item_of, reject_not_iterable from './satisfaction'
+import narrow, narrowings_of from './narrowing'
 import Local from './scopes'
 import Body from './shared'
 import
@@ -41,8 +42,13 @@ export check_for := (body: Body, for_statement: For) ->
 export check_while := (body: Body, while_statement: While): void ->
   body.scopes.push()
   body.scopes.hide_var_views()
-  define := check_condition(body, while_statement.condition)
-  check_loop_body body, while_statement.body, define
+  condition := while_statement.condition
+  define := check_condition(body, condition)
+  # The condition holds where each round starts, as it is tested before it.
+  narrowings := narrowings_of(body, condition).where_true
+  check_loop_body body, while_statement.body, ->
+    define()
+    narrow body, narrowings
   body.scopes.pop()
 
 export type_of_comprehension := (body: Body, comprehension: Comprehension, expected: Type?): Type ->
