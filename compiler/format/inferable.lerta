@@ -10,8 +10,8 @@ import
 from '../ast'
 import enum_value_of, NodeFacts, ProgramWide, Shared from '../checker/shared'
 import
-  ArrayType, FunctionType, is_kind, MapType, ObjectType, PromiseType, same_type, TupleType, Type,
-  TypeKind, unify
+  ArrayType, FunctionType, is_kind, MapType, ObjectType, PromiseType, TupleType, Type, TypeKind,
+  unify
 from '../types'
 import Annotation from './annotated'
 
@@ -27,7 +27,7 @@ export inferable := (annotation: Annotation, shared: Shared, program: ProgramWid
   type := facts.types[value] ? return false
   # A type that moves to the type arguments of a Map() or Set() is given there.
   is_given := annotation.moves_to_type_arguments or given_as_is(value, facts)
-  is_given and same_type(type, declared)
+  is_given and type == declared
 
 # The type of the field of a class or struct that `name` declares.
 field_type := (program: ProgramWide, name: Identifier) ->
@@ -62,7 +62,7 @@ gives_its_type := (function: FunctionLiteral, last: Expression?, facts: NodeFact
   return false if result == nil
   if not is_kind(result, 'void')
     unified := unified_own_type(results, facts) ? return false
-    return same_type(unified, result)
+    return unified == result
   return false if not results.is_empty()
   value := last ? return true
   type := facts.types[value] ? return false
@@ -84,7 +84,7 @@ unified_own_type := (values: Expression[], facts: NodeFacts) ->
   whole := unified ? return nil
   is_converted := (value: Expression) ->
     type := facts.types[value]!
-    facts.conversions[value] != nil or same_type(type, whole) or is_kind(type, 'never')
+    facts.conversions[value] != nil or type == whole or is_kind(type, 'never')
   values.all(is_converted) then whole
 
 # A value whose type does not come from where it is, given where its own type is wanted.
@@ -99,7 +99,7 @@ has_own_type := (value: Expression, facts: NodeFacts): Bool ->
   # A part may take the type of the whole without a conversion, as an Item where Item | Other is.
   own_as := (part: Expression, type: Type?) ->
     part_type := facts.types[part]
-    own(part) and type != nil and part_type != nil and same_type(part_type, type)
+    own(part) and type != nil and part_type != nil and part_type == type
   type := facts.types[value]
   case value
     when StringLiteral then is_type(type, 'String')
@@ -134,7 +134,7 @@ has_own_type := (value: Expression, facts: NodeFacts): Bool ->
 # Whether values of their own types give the type together, as branches do.
 unifies_to := (values: Expression[], type: Type?, facts: NodeFacts) ->
   unified := unified_own_type(values, facts)
-  type != nil and unified != nil and same_type(unified, type)
+  type != nil and unified != nil and unified == type
 
 # The values that the branches of a case, an if or a try give, their last statements; nil for
 # another value, or if a branch is empty or ends with a statement that is no expression.

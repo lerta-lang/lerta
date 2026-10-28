@@ -40,7 +40,7 @@ import resolve from './type_names'
 import
   bool_type, boxes_into, float_type, format_type, format_types, inner_of, is_assignable, is_float,
   is_integer, is_kind, is_one_of_kinds, never_type, nil_type, optional_type, OptionalType,
-  same_type, settles_into, string_type, Type, UnionType, void_type
+  settles_into, string_type, Type, UnionType, void_type
 from '../types'
 
 export type_of := (body: Body, expression: Expression, expected: Type? = nil) ->
@@ -160,7 +160,7 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     struct_type := expected_struct(expected) ? return type
     # `{}` is no record but an empty map.
     has_arguments := not call.args.is_empty() or not call.named_args.is_empty()
-    body.facts.recordable.add call if has_arguments and same_type(type, struct_type)
+    body.facts.recordable.add call if has_arguments and type == struct_type
     return type
   return type_of_json_call(body, call, direction) if direction := json_direction(body, callee)
   if callee is Member
@@ -192,7 +192,7 @@ type_of_cast := (body: Body, cast: Cast) ->
   written := resolve(body.program, body.resolver, cast.type)
   type := check_member_type(body, cast.value, cast.type, inner_of(written))
   narrowed := body.facts.types[cast.value]!
-  body.facts.redundant_casts.add cast if cast.throws and same_type(narrowed, type)
+  body.facts.redundant_casts.add cast if cast.throws and narrowed == type
   cast.throws then type else optional_type(type)
 
 check_member_type := (body: Body, value: Expression, type_name: TypeName, type: Type) ->
@@ -236,7 +236,7 @@ export require_type := (body: Body, expression: Expression, type: Type, expected
   if not assignable and not settles and not through_itab
     { first, second } := format_types(expected, type)
     fail body.program, expression.position, "expected #{first}, got #{second}"
-  is_converted := not is_kind(type, 'never') and not same_type(type, expected)
+  is_converted := not is_kind(type, 'never') and type != expected
   to_optional := expected is OptionalType and is_converted
   to_box := is_converted and boxes_into(type, expected)
   is_recorded := to_optional or settles or through_itab or to_box

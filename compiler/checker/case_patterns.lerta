@@ -8,8 +8,8 @@ import Body, enum_value_of from './shared'
 import has_type, resolve from './type_names'
 import
   EnumType, format_enum_member, format_member, format_type, inner_of, INTEGER_KINDS, is_assignable,
-  is_kind, is_one_of_kinds, members_of, other_members, optional_type, OptionalType, Type, type_key,
-  TypeKind, union_of, union_type, UnionType
+  is_kind, is_one_of_kinds, members_of, other_members, optional_type, OptionalType, Type, TypeKind,
+  union_of, union_type, UnionType
 from '../types'
 
 VALUE_KINDS: TypeKind[] = [INTEGER_KINDS..., 'Char', 'Bool', 'String', ENUM]
@@ -74,7 +74,7 @@ check_type_patterns := (
   body: Body, case_expression: Case, is_nil_arm: (CaseArm) -> Bool, subject: Expression,
   union: UnionType, narrowed: Type, missing_nil: String[]
 ) ->
-  handled: Set<String>
+  handled: Set<Type>
   arm_narrowings: Narrowing[][]
   for arm in case_expression.arms
     if is_nil_arm(arm)
@@ -83,16 +83,15 @@ check_type_patterns := (
     types := [type_pattern(body, pattern, union) for pattern in arm.patterns]
     for (pattern_type, pattern) in types.zip(arm.patterns)
       for member in members_of(pattern_type)
-        key := type_key(member)
-        fail_handled_twice body, pattern, format_member(member, union) if not handled.add(key)
+        fail_handled_twice body, pattern, format_member(member, union) if not handled.add(member)
     arm_narrowings.push subject_narrowings(body, subject, union_of(types)!)
-  is_unhandled := (member: Type) -> not handled.has(type_key(member))
+  is_unhandled := (member: Type) -> not handled.has(member)
   unhandled_members := members_of(narrowed).filter(is_unhandled)
   missing := [format_member(member, union) for member in unhandled_members]
   fail_unhandled body, case_expression, [missing..., missing_nil...]
   # Where nil is handled, the else arm does not see it.
   unhandled := not missing_nil.is_empty() then optional_type(narrowed) else narrowed
-  handled_members := [member for member in union.members when handled.has(type_key(member))]
+  handled_members := [member for member in union.members when handled.has(member)]
   others := other_members(unhandled, union_type(handled_members))
   otherwise: Narrowing[] = others then subject_narrowings(body, subject, others) else []
   CaseNarrowings otherwise, arms: arm_narrowings

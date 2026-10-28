@@ -1,5 +1,5 @@
 # The types of values, as the checker works them out. They are values that are never changed, so
-# that they can be shared; two are the same type when their keys are (see type_key).
+# that they can be shared; two are the same type when they are equal, `==`.
 
 # `String`, `Int`, `Float`, `Float32`, `Bool`, `Byte`, `Binary`, `void`, `nil`, the type of the
 # literal `nil`, which fits any optional type, and `never`, the result of what does not return, such
@@ -61,7 +61,7 @@ export struct RecordField
   type: Type
 
 # An anonymous struct, `{ x: Int, y: String }`; its fields are kept in name order, so that the
-# order they are written in does not matter (see record_type).
+# order they are written in does not matter; record_type makes one so.
 export struct RecordType
   fields: RecordField[]
 
@@ -108,7 +108,7 @@ export format_enum_member := (member: EnumMember) ->
   member.is_name then member.text else "'#{member.text}'"
 
 # `A | B`: classes and structs, by name; the object carries which one it is. The members are kept
-# in order (see union_type).
+# in order, so that `A | B` and `B | A` are equal; union_type makes one so.
 export struct UnionType
   members: Type[]
 
@@ -218,7 +218,7 @@ export union_of := (types: Type[]): Type? ->
     added: Type[] = inner is UnionType then inner.members else [inner]
     for member in added
       return nil if not is_union_member(member)
-      members.push member if not members.any((other) -> same_type(other, member))
+      members.push member if not members.contains(member)
   return nil if not holds_one_of_each(members)
   union := members.length == 1 then members[0] else union_type(members)
   optional then optional_type(union) else union
@@ -308,7 +308,7 @@ format_member_qualified := (member: Type, union: Type, qualified: Bool) ->
   return format_qualified(member, qualified) if union is not UnionType
   shares_name := (other: Type) ->
     return false if other is not ObjectType
-    other.name == member.name and not same_type(other, member)
+    other.name == member.name and other != member
   format_qualified member, qualified or union.members.any(shares_name)
 
 # Two types for a message: as format_type writes them, or, if that cannot tell them apart, with
@@ -341,8 +341,6 @@ export type_key := (type: Type): String ->
 named_key := (symbol: String, args: Type[]) ->
   return symbol if args.is_empty()
   "#{symbol}<#{[type_key(arg) for arg in args].join(', ')}>"
-
-export same_type := (a: Type, b: Type) -> type_key(a) == type_key(b)
 
 # Values of these types are references to objects that are reference counted; a function value
 # is a closure. An interface value holds one, besides its itab.
@@ -379,12 +377,12 @@ export boxes_into := (type: Type, target: Type) ->
 export is_assignable := (value: Type, target: Type): Bool ->
   return true if is_kind(value, 'never')
   if target is UnionType
-    is_member := (member: Type) -> target.members.any((type) -> same_type(type, member))
+    is_member := (member: Type) -> target.members.contains(member)
     return members_of(value).all(is_member)
   if target is OptionalType
     return true if is_kind(value, 'nil') or is_assignable(value, target.inner)
     return is_assignable(value.inner, target.inner) if value is OptionalType
-  same_type value, target
+  value == target
 
 # Whether a function value of the type, where one of the expected type is expected, which returns a
 # Promise of its result, or one optional, becomes a function that calls it and settles that Promise
@@ -396,8 +394,8 @@ export settles_into := (type: Type, expected: Type) ->
   return false if promise is not PromiseType
   return false if type.params.length != target.params.length
   for (param, expected_param) in type.params.zip(target.params)
-    return false if not same_type(param, expected_param)
-  same_type type.result, promise.value
+    return false if param != expected_param
+  type.result == promise.value
 
 # A class, or a union of classes, compares by identity; other types that compare do so by their
 # contents.
@@ -412,7 +410,7 @@ export is_identity_type := (type: Type): Bool ->
 # gives no value, does not count, and void, which gives none either, unifies with nothing else. Nil
 # if there is none.
 export unify := (a: Type, b: Type) ->
-  return a if same_type(a, b) or is_kind(b, 'never')
+  return a if a == b or is_kind(b, 'never')
   return b if is_kind(a, 'never')
   return a if is_kind(a, 'nil') and is_kind(b, 'nil')
   return nil if is_kind(a, 'void') or is_kind(b, 'void')
@@ -425,7 +423,7 @@ export unify := (a: Type, b: Type) ->
 # Of a type and a union, or two unions, the one that the other fits in, as a narrowed local's type
 # fits in its own: the type itself if they are the same.
 wider_union := (a: Type, b: Type) ->
-  return a if same_type(a, b)
+  return a if a == b
   return b if b is UnionType and is_assignable(a, b)
   return a if a is UnionType and is_assignable(b, a)
   nil
@@ -433,9 +431,8 @@ wider_union := (a: Type, b: Type) ->
 # The type of a value of a union type, optional or not, that is none of `excluded`'s members, or nil
 # if it can only be nil.
 export other_members := (type: Type, excluded: Type) ->
-  excluded_keys := [type_key(member) for member in members_of(excluded)]
-  is_left := (member: Type) -> not excluded_keys.contains(type_key(member))
-  left := [member for member in members_of(inner_of(type)) when is_left(member)]
+  removed := members_of(excluded)
+  left := [member for member in members_of(inner_of(type)) when not removed.contains(member)]
   return nil if left.is_empty()
   others: Type = left.length == 1 then left[0] else union_type(left)
   type is OptionalType then optional_type(others) else others

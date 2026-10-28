@@ -7,7 +7,7 @@ import Body from './shared'
 import type_of_block from './statement'
 import
   FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_kind, is_one_of_kinds, is_union_member,
-  members_of, same_type, Type, type_key, unify, union_of, void_type
+  members_of, Type, unify, union_of, void_type
 from '../types'
 
 # The body of a case arm, of then/else or of an if, and what entering it does: narrowing locals, or
@@ -63,7 +63,7 @@ export unify_values := (body: Body, values: BranchValue[], at: Expression, descr
     message := "nil alone does not give the type of #{description}; write it in an annotation"
     fail body.program, at.position, message
   for value in values
-    is_converted := not is_kind(value.type, 'never') and not same_type(value.type, type)
+    is_converted := not is_kind(value.type, 'never') and value.type != type
     body.facts.conversions[value.last] = type if is_converted and value.last is Expression
   type
 
@@ -88,12 +88,12 @@ reject_mixed_numbers := (body: Body, type: Type, values: BranchValue[], descript
   numbers := numbers_of(type)
   gives_all := (value: BranchValue) -> numbers_of(value.type).length == numbers.length
   return if numbers.length < 2 or values.any(gives_all)
-  seen: Set<String>
+  seen: Set<Type>
   var last_adding = values[0]
   for value in values
-    added := [number for number in numbers_of(value.type) when not seen.has(type_key(number))]
+    added := [number for number in numbers_of(value.type) when not seen.has(number)]
     last_adding = value if not seen.is_empty() and not added.is_empty()
-    seen.add type_key(number) for number in added
+    seen.add number for number in added
   names := [format_type(number) for number in numbers].join(', ')
   message := "#{description} cannot mix the number types #{names}; write the type where it is meant"
   fail body.program, last_adding.last.position, message
