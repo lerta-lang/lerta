@@ -86,13 +86,17 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
   return true;
 }
 
-// A closed stdin is opened on /dev/null, which takes the lowest free descriptor, 0, before libuv
-// opens descriptors of its own, which would otherwise take 0 and be read as stdin. If even that
-// fails, no stdin is safe to read, so the program stops.
+// A closed stdin, stdout or stderr is opened on /dev/null, which takes the lowest free descriptor,
+// before libuv, a pipe or a socket takes it: one would otherwise be read as stdin, or be written
+// by print and inherited by the programs that run starts. Read-only, a closed stdin reads as empty
+// and a write to a closed stdout or stderr still fails. If even that fails, no standard stream is
+// safe to use, so the program stops.
 void lerta_os_stdio_init(void) {
   signal(SIGPIPE, SIG_IGN);
-  bool closed = fcntl(STDIN_FILENO, F_GETFD) == -1 && errno == EBADF;
-  if (closed && open("/dev/null", O_RDONLY) != STDIN_FILENO) lerta_panic("cannot open /dev/null");
+  for (int fd = STDIN_FILENO; fd <= STDERR_FILENO; fd++) {
+    bool closed = fcntl(fd, F_GETFD) == -1 && errno == EBADF;
+    if (closed && open("/dev/null", O_RDONLY) != fd) lerta_panic("cannot open /dev/null");
+  }
 }
 
 void lerta_os_exit(int code) {

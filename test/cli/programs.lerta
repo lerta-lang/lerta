@@ -3,6 +3,7 @@ import Check from '../lib/report'
 import compare_output, compare_text, expect_status from '../lib/expect'
 import compiler, root_dir from '../lib/lerta'
 import executable_suffix, expect_success, host_platform, new_cli_dir, run_command from '../lib/cli'
+import is_file from 'std:io'
 
 struct BuiltProgram
   dir: String
@@ -153,6 +154,25 @@ closed_stderr_check := ->
     [
       expect_status(0, ran.status)...
       compare_output('stdout', "cannot write to stderr\n".binary, ran.stdout)...
+    ]
+
+closed_stdio_check := ->
+  Check name: 'a built program keeps closed stdout and stderr from being reused', run: ->
+    return nil if host_platform == 'windows'
+    built := await build_program('closed-stdio', "#{root_dir}/tests/process/lib/closed_stdio.lerta")
+    return built.errors if not built.errors.is_empty()
+    # An uncaught error ends with 1 too, so the file that the program makes at its end tells them
+    # apart, as no output is left to tell them by.
+    run_closed := (redirection: String, ended: String) ->
+      script := "\"$0\" \"$1\" #{redirection}"
+      ran := await run_command('sh', ['-c', script, built.executable, ended], built.dir)
+      [
+        expect_status(1, ran.status)...
+        check_reason(is_file("#{built.dir}/#{ended}"), "#{redirection}: the program did not end")...
+      ]
+    [
+      await run_closed('>&- 2>&-', 'output-closed')...
+      await run_closed('<&- >&- 2>&-', 'all-closed')...
     ]
 
 broken_pipe_check := ->
@@ -447,6 +467,7 @@ export checks :=
   closed_stdout_check()
   closed_write_check()
   closed_stderr_check()
+  closed_stdio_check()
   broken_pipe_check()
   stdin_redirection_check()
   unawaited_write_check()
