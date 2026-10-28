@@ -33,13 +33,17 @@ export class Server
   # Where it listens, as the host of the URL of a request that names none.
   address: String
   closed = false
+  # The connections that wait for their next request, before the whole of its request line has come.
+  waiting = Set<Socket>()
 
   port = -> @listener.port
 
-  # Stops listening. The connections being served go on.
+  # Stops listening, and closes the connections that wait for their next request. Those being served
+  # go on to their response, and end then.
   close = ->
     @closed = true
     @listener.close()
+    socket.close() for socket in @waiting
 
 # Listens at once, and serves each connection until the server is closed.
 export serve := (handler: (Request) -> Promise<Response>, options: ServerOptions) ->
@@ -119,7 +123,7 @@ LINGER_BYTES := 65536
 serve_request := (socket: Socket, server: Server) ->
   incoming :=
     try
-      await read_request(socket.reader, server) ? return false
+      await read_request(socket, server) ? return false
     catch error: RequestError
       await socket.write(response_bytes({ status: error.status }, false, 'GET', true))
       return false
@@ -140,8 +144,9 @@ serve_request := (socket: Socket, server: Server) ->
   sends_reader := body is Reader and has_body(response.status, method)
   # A body whose read has failed cannot be read past to the next request, and one sent as it comes
   # to HTTP/1.0 ends with the connection.
-  keep_alive :=
-    incoming.keep_alive and incoming.body.failure == nil and (chunked or not sends_reader)
+  # A closed server ends the connection, rather than wait for the next request.
+  goes_on := incoming.keep_alive and not server.closed
+  keep_alive := goes_on and incoming.body.failure == nil and (chunked or not sends_reader)
   try
     bytes :=
       try
@@ -164,10 +169,19 @@ struct Incoming
   # Whether a body that the response sends as it comes may go in chunks, which HTTP/1.0 does not take.
   chunked: Bool
 
-# The next request, or nil if the connection ends, or stays idle, before it starts.
-read_request := (reader: Reader, server: Server) ->
+# The next request, or nil if the connection ends, or stays idle, before it starts. A server that
+# is closed meanwhile closes the connection, which the read throws for.
+read_request := (socket: Socket, server: Server) ->
+  { reader } := socket
   options := server.options
-  line := await read_request_line(reader, options) ? return nil
+  server.waiting.add socket
+  # A connection that the server took before it was closed.
+  socket.close() if server.closed
+  line :=
+    try
+      await read_request_line(reader, options) ? return nil
+    finally
+      server.waiting.remove socket
   parts := line.split(' ')
   throw bad_request() if parts.length != 3
   (method, target, version) := (parts[0], parts[1], parts[2])

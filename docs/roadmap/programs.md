@@ -23,7 +23,7 @@ The planned design of modules, FFI, the standard library and tools.
 - Random numbers, and formatting dates and times.
 - In [std:net](../reference/std.md#stdnet), UDP, TLS and Unix domain sockets. Each protocol has functions named by it, as TCP's `listen_tcp` and `connect_tcp`, and the types are named by the shape of what they carry: a Unix domain socket, a stream, is a `Socket` of `connect_unix(path)` and a `Listener` of `listen_unix(path)`, as TCP's are, and UDP, of datagrams, is a `UdpSocket` of `bind_udp(host, port)`.
 - In [std:http](../reference/std.md#stdhttp), what a server needs in production, in this order:
-  - `server.close()` that ends kept connections after the request they serve, and a promise that it settles once they have ended (graceful shutdown); an accept that fails while the server is open, as for too many open files, retried after a pause rather than ending the program.
+  - A promise that `server.close()` settles once the connections it ends have ended (graceful shutdown); an accept that fails while the server is open, as for too many open files, retried after a pause rather than ending the program.
   - A `Date` field, and `Expect: 100-continue`.
   - Later: TLS, through that of std:net, for the server and for `fetch`; a URL module for the parts of `request.url`, which `fetch` would parse its URLs with; a cookie jar that a `Client` may be given, which stores the cookies of `Set-Cookie` and sends them with the requests they match; and HTTP/2.
 - `make_link` of [std:io](../reference/std.md#stdio) followed on Windows itself: Wine, which the tests run under, makes the links but does not follow them.
