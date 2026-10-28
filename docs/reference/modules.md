@@ -15,8 +15,8 @@ import argv, exit from 'std:process'
   ```
 - `import 'module'` imports no name, and so never warns: it only makes the module's [top-level code](#top-level-code-and-cycles) run, and brings its extends (see [objects](objects.md#extend)), as any import of it does.
 - `import 'module' as mod` gives its exports as `mod.<export>`, in values (`mod.distance(p, q)`, `mod.ORIGIN`, `mod.Point(x: 1, y: 2)`, `mod.Color.RED`) and in types (`p: mod.Point`, `<T: mod.Shaped>`), alongside any names imported from it by name. `mod` itself is no value (`'mod' is a module, which is no value: write mod.<export>`), and a local of the name hides it in values, as it hides any other name, though not in types, whose names are apart from those of values. An export the module does not have is an error where `mod.<export>` names it, and an unused `mod` warns as an unused name does. This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which would bring the names in unqualified.
-- `'std:<name>'` is a [standard module](std.md), and `'std:builtins'` the module of the [builtins](builtins.md). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`. Other names are reserved.
-- Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)). Paths need `./` or `../` and have no `index` resolution for directories. Functions can be declared in any order (see [top-level values](functions.md#top-level-values)).
+- `'std:<name>'` is a [standard module](std.md), and `'std:builtins'` the module of the [builtins](builtins.md). A path that starts with `./` or `../` names another file, relative to the importing one, without the `.lerta` extension: `import Point from './lib/geometry'`; a directory has no `index` resolution. Other names are reserved.
+- Why: ESM style, so there is no `import *` and no `export default` (see [philosophy](../philosophy.md#non-goals)).
 
 ## Exports
 

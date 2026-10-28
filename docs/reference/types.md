@@ -97,14 +97,14 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `==` and `!=` compare two `String`s byte by byte.
 - A `String` is [Iterable](builtins.md#iterable): `for c in s`, comprehensions and `s.iter()` give its code points, as [Char](#char)s, in order, so `'é'` gives the `Char` of 233; its bytes are `s.binary`.
 - Why code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
-- Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `+=` appends in place to a `String` that nothing else holds, so that a loop of `+=` is O(n) in all (see [internals](../internals.md#strings)).
+- Why UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary. There is no integer indexing `s[i]`, which could be taken for a character, and no StringBuilder, since `+=` appends in place (above; see [internals](../internals.md#strings)).
 
 ## Binary
 
 - `Binary` is an immutable sequence of bytes; a mutable one is a `Byte[]`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.text()` goes back (see below).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`.
 - `==` and `!=` compare two `Binary`s byte by byte.
-- `+` joins two `Binary`s into a new one, `b + byte` appends a `Byte`, and `+=` appends to a variable, as they do to `String`s; an integer literal there is no `Byte`, as `+` expects a `Binary`. A `String` and a `Binary` are not joined (`cannot join a String and a Binary`): `s.binary` gives the bytes of the `String` without copying them. `parts.join(separator)` joins a `Binary[]` into one `Binary`; pieces gathered so and joined once are O(n), as for `String`s.
+- `+` joins two `Binary`s into a new one, `b + byte` appends a `Byte`, and `+=` appends to a variable, as they do to `String`s; an integer literal there is no `Byte`, as `+` expects a `Binary`. A `String` and a `Binary` are not joined (`cannot join a String and a Binary`): `s.binary` gives the bytes of the `String` without copying them. An [array](#array)'s `join` joins a `Binary[]` into one; pieces gathered so and joined once are O(n), as for `String`s.
 - `b.occurs_at(index, part)` tells whether the bytes of `part` occur in `b` at `index`; it is false where `part` does not fit.
 - `b.index_of(part, from = 0)` gives the place of the first occurrence of `part`, a `Binary` or a `Byte`, at `from` or after it, or nil if there is none, which is the case whenever `from` is past the end: `'abcabc'.binary.index_of('c'.binary, 3)` is 5. An empty `part` occurs at `from` when `from` is at most the length. A negative `from` throws an `IndexError`.
 - `for b in bytes` goes through the bytes (see [for](control-flow.md#for-and-ranges)), as comprehensions over a `Binary` do.

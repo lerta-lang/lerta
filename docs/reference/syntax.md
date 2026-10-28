@@ -102,7 +102,7 @@ total := sum
   6. If the last argument is a function literal, its body may continue as an indented block on the next lines: `each xs, (x) ->` followed by the body. With parentheses it cannot, as an item inside brackets cannot open a block (see [lines inside brackets](#lines-inside-brackets)); give the arguments in a block instead (see [arguments in a block](#bracketless-blocks)).
 - Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
 - `(x)` groups an expression.
-- Arguments may be named, `f(name: value)`, after the positional ones: those of a constructor and the fields of an [anonymous struct](types.md#anonymous-structs) parameter.
+- Arguments may be named, `f(name: value)`, after the positional ones: those of a constructor, and those of a last struct or [anonymous struct](types.md#anonymous-structs) parameter (see [functions](functions.md)).
 - `x.name()` calls a method of `x`, `x.name` reads a property and `xs[i]` indexes; a map's index may name a default after the key, `m[k, default: d]`. As with `(`, no space is allowed before `.` or `[`. At the start of a statement, `f [1]` is the call `f([1])`.
 
 ## Types
