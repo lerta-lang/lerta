@@ -14,6 +14,7 @@ import interface_member from './interfaces'
 import
   builtin_property, FoundMember, InterfaceProperty, MemberTarget, Method, Property
 from './member_targets'
+import lookup from './name'
 import narrowed_field_type from './narrowable'
 import
   ExtensionSource, find_method, InterfaceMethod, MemberMethod, MethodSource, OwnMethod, UnionMethod
@@ -23,7 +24,8 @@ import info_of from './object_types'
 import find_interface_extension from './satisfaction'
 import Body from './shared'
 import
-  format_member, format_type, format_types, FunctionType, InterfaceType, same_type, Type, UnionType
+  format_member, format_type, format_types, FunctionType, InterfaceType, OptionalType, same_type,
+  Type, UnionType
 from '../types'
 
 # The result of a call of the method that `member` names: a method of the object's type (see
@@ -63,7 +65,7 @@ type_of_method := (body: Body, member: Member, receiver: Type, source: MethodSou
   reject_deinit body, receiver, member
   from_source := source then method_type(body, receiver, source, member.name, nil)
   no_method := ->
-    fail body.program, position, "type #{format_type(receiver)} has no method '#{name}'"
+    fail_missing body, member, receiver, "type #{format_type(receiver)} has no method '#{name}'"
   field := ->
     if receiver is UnionType
       if problem := union_method_problem(body, receiver, member.name)
@@ -208,7 +210,30 @@ export type_of_property := (body: Body, member: Member): Type ->
   extended := find_interface_extension(body, object_type, member.name)
   if find(body, object_type, member.name) != nil or extended != nil
     fail body.program, position, "a method must be called: write `#{name}()`"
-  fail body.program, position, "type #{format_type(object_type)} has no property '#{name}'"
+  fail_missing
+    body
+    member
+    object_type
+    "type #{format_type(object_type)} has no property '#{name}'"
+
+# Fails with the message of a member that the object, of the type, has not, saying why when the
+# object is a weak local that would have it if it were not nil, as a test of it does not narrow it.
+fail_missing := (body: Body, member: Member, type: Type, message: String) ->
+  object := member.object
+  var reason = ''
+  if object is Identifier and lookup(body, object.name)?.original().weak == true
+    name := object.name
+    if has_unless_nil(body, type, member.name)
+      reason = ": #{name} is weak, so a test does not narrow it; take it with `if alive := #{name}`"
+  fail body.program, member.name.position, message + reason
+
+# Whether the optional type has a field, a property or a method of the name without nil.
+has_unless_nil := (body: Body, type: Type, name: Identifier) ->
+  return false if type is not OptionalType
+  inner := type.inner
+  return true if field_type_by_name(body, inner, name) != nil
+  return true if property_of(body, inner, name.name) != nil
+  find(body, inner, name) != nil or find_interface_extension(body, inner, name) != nil
 
 type_of_object := (body: Body, member: Member) ->
   object := member.object
