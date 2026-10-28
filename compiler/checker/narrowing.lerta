@@ -103,7 +103,7 @@ narrowings_of_logical := (body: Body, logical: BinaryOperation) ->
   value := logical.operator == 'and'
   first := narrowings_where(narrowings_of(body, logical.left), value)
   var second: Narrowing[] = []
-  where_right_operand body, logical, ->
+  with_narrowings body, first, ->
     second = narrowings_where(narrowings_of(body, logical.right), value)
   narrowings_only_where [first..., second...], value
 
@@ -115,8 +115,12 @@ narrowings_only_where := (narrowings: Narrowing[], value: Bool) ->
 # `a or b`, where a does not.
 export where_right_operand := (body: Body, logical: BinaryOperation, check: () -> void) ->
   left := narrowings_of(body, logical.left)
+  with_narrowings body, narrowings_where(left, logical.operator == 'and'), check
+
+# Runs `check` with the narrowings, in a scope of their own.
+with_narrowings := (body: Body, narrowings: Narrowing[], check: () -> void) ->
   body.scopes.push()
-  narrow body, narrowings_where(left, logical.operator == 'and')
+  narrow body, narrowings
   check()
   body.scopes.pop()
 

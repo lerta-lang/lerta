@@ -6,13 +6,12 @@ Known defects, most severe first.
 |---|---|---|
 | 1 | A Reader refuses a read right after `timeout` ends the last one | Low |
 | 2 | `Reader.read` returns an empty Binary at the end after an empty chunk | Low |
-| 3 | Checking takes time exponential in the `and`s and `or`s nested on the left | Low |
-| 4 | `while` does not narrow in its body | Info |
-| 5 | Testing a weak local for nil does not say why it is not narrowed | Info |
-| 6 | The reference says an enum cannot be a member of a union | Info |
-| 7 | `LertaPrefix` is aligned to 16 but placed at 8 | Info |
-| 8 | `read_console` underflows when given fewer than 3 bytes | Info |
-| 9 | `read_console` loops when the input ends after a held high surrogate | Info |
+| 3 | `while` does not narrow in its body | Info |
+| 4 | Testing a weak local for nil does not say why it is not narrowed | Info |
+| 5 | The reference says an enum cannot be a member of a union | Info |
+| 6 | `LertaPrefix` is aligned to 16 but placed at 8 | Info |
+| 7 | `read_console` underflows when given fewer than 3 bytes | Info |
+| 8 | `read_console` loops when the input ends after a held high surrogate | Info |
 
 ## 1. A Reader refuses a read right after `timeout` ends the last one
 
@@ -26,43 +25,37 @@ The fix is for `first_settled` to await the cancelled Promises before it returns
 
 The fix is for `fill` to skip an empty chunk.
 
-## 3. Checking takes time exponential in the `and`s and `or`s nested on the left
-
-`narrowings_of_logical` in `compiler/checker/narrowing.lerta` finds the narrowings of the left operand, and `where_right_operand` finds them again, so each `and` or `or` nested on the left of another doubles the work: `z := not (not (... not b and b ...) and b) and b` takes 0.7 s to check with 20 levels and does not end with 60, which the limit on nesting allows.
-
-The fix is to find the left operand's narrowings once and give them to `where_right_operand`.
-
-## 4. `while` does not narrow in its body
+## 3. `while` does not narrow in its body
 
 `check_while` in `compiler/checker/loop.lerta` checks the condition but does not narrow by it, so `while m != nil` followed by `m.v` is rejected with `type Node? has no property 'v'`. [The reference](reference/control-flow.md) does not list `while` among the places that narrow.
 
 The fix is to narrow the body by the condition, as `if` does, and to add `while` to the reference.
 
-## 5. Testing a weak local for nil does not say why it is not narrowed
+## 4. Testing a weak local for nil does not say why it is not narrowed
 
 A weak local is not narrowed, as the reference says, but after `if w != nil`, `w.n` reports only `type C? has no property 'n'`.
 
 The fix is to add that `w` is weak and can be taken with `if alive := w`.
 
-## 6. The reference says an enum cannot be a member of a union
+## 5. The reference says an enum cannot be a member of a union
 
 [The reference](reference/types.md) says an enum cannot be a member of a union so far, but the checker accepts `type K = Color | Int`, and `case` and `to_string` work on it.
 
 The fix is to remove the sentence.
 
-## 7. `LertaPrefix` is aligned to 16 but placed at 8
+## 6. `LertaPrefix` is aligned to 16 but placed at 8
 
 In the debug runtime, `LertaPrefix` in `runtime/internal.h` is declared `_Alignas(16)`, but the allocator places objects at multiples of 8, so half of the prefixes are not aligned to 16. A compiler may use aligned 16-byte instructions on them; clang 21 on x86-64 does not today.
 
 The fix is to align it to 8.
 
-## 8. `read_console` underflows when given fewer than 3 bytes
+## 7. `read_console` underflows when given fewer than 3 bytes
 
 In `runtime/platform_windows.c`, `read_console` reads `size / 3` UTF-16 units. With `size` below 3 and a high surrogate held from the last read, `fitting - start` is -1, and `ReadConsoleW` is asked for about 4 billion units into an 8192-unit buffer. `lerta_stdin_read` always passes 65536, so this cannot happen today.
 
 The fix is to read at least one unit beyond the held surrogate.
 
-## 9. `read_console` loops when the input ends after a held high surrogate
+## 8. `read_console` loops when the input ends after a held high surrogate
 
 In `runtime/platform_windows.c`, when `read_console` holds a high surrogate and `ReadConsoleW` then reads nothing, the check for the end sees the held unit, holds it again and reads again, without end. The check for Ctrl-Z also looks at `wide[0]`, the held unit, in place of `wide[start]`. This is found by reading the code, not by running it.
 
