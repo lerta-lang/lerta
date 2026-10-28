@@ -34,7 +34,7 @@ For now, cycles stay uncollected ([objects](../reference/objects.md#reference-co
 
 Every expression of a reference type yields an owned reference for now, except the values that [internals](../internals.md#memory-management) lists as borrowed, such as a `const` local passed as an argument. So passing another value to a call, as a `var` or a field read (`f(a.b)`), retains and releases it around the call. The plan is to borrow those too where the value cannot go away meanwhile, and emit no retain and release there.
 
-Counted at run time in the compiler's own `dump-llvm`, the reference count operations are about a fifth of its instructions, and the pairs that borrowing would remove are mostly of field reads: 25M where no code of the program runs while the value is used (`a.b.c`, a test against nil), 21M as the array or map of an index, borrowable where the index calls nothing, and 28M as an argument or the object of a call, which needs to know that the call cannot replace the field; those of `var`s are 1.5M. The first two are planned first, about 4% of the instructions by the count.
+Field reads are borrowed now where nothing runs while they are used ([internals](../internals.md#memory-management)), which took 5% of the instructions of the compiler's own `dump-llvm`. Counted at run time there before, the pairs left are mostly of field reads as an argument or the object of a call, 28M, which needs to know that the call cannot replace the field, against 46M that the borrowing in place removed; those of `var`s are 1.5M.
 
 ### Objects on the stack
 

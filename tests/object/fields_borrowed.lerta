@@ -1,0 +1,95 @@
+class Tag
+  name: String
+  deinit = -> print("tag #{@name} gone")
+
+class Inner
+  tag: Tag
+  tags: Tag[]
+  by_name: Map<String, Tag>
+  maybe: Tag?
+
+class Outer
+  var inner: Inner
+  replace = ->
+    @inner = Inner(tag: Tag(name: 'replaced'), tags: [], by_name: Map(), maybe: nil)
+    0
+
+make := (name: String) ->
+  tag := Tag(name)
+  by_name: Map<String, Tag>
+  by_name[name] = tag
+  Inner tag, by_name, tags: [tag], maybe: tag
+
+# A field read through fields, indexed and tested against nil.
+outer := Outer(inner: make('a'))
+print outer.inner.tag.name
+print outer.inner.tags.length
+print outer.inner.tags[0].name
+print outer.inner.by_name['a']!.name
+print outer.inner.maybe != nil
+
+# An index whose position calls a function that replaces the field: the array is held meanwhile.
+position := -> outer.replace()
+print outer.inner.tags[position()].name
+print outer.inner.tag.name
+
+# A field given to a call that replaces it stays held for the call.
+show := (tag: Tag) ->
+  outer.replace()
+  print tag.name
+outer.inner = make('b')
+show outer.inner.tag
+print 'done'
+
+# A key's own hash that replaces the field: the map is held while the key is found.
+struct Key
+  n: Int
+  equals = (other: Key) -> @n == other.n
+  hash = ->
+    keyed.replace() if armed
+    @n
+
+class Keyed
+  var by_key: Map<Key, Tag>
+  replace = -> @by_key = Map()
+
+keyed := Keyed(by_key: Map())
+var armed = false
+keyed.by_key[{ n: 1 }] = Tag(name: 'keyed')
+key := Key(n: 1)
+armed = true
+print keyed.by_key[key]?.name ? 'not found'
+armed = false
+
+# Fields left owned: weak, narrowed out of a union's box, read with a default, or from a var.
+class Parts
+  weak tag: Tag?
+  counts: Map<String, Int>
+
+struct Either
+  value: Tag | Int
+
+kept := Tag(name: 'kept')
+parts := Parts(tag: kept, counts: Map())
+print parts.tag?.name ? 'gone'
+either := Either(value: kept)
+print either.value.name if either.value is Tag
+parts.counts['x', default: 0] += 1
+print parts.counts['x']!
+var current = outer
+print current.inner.tag.name
+
+# A chain from `@` whose index position replaces the field, and literal positions of a Binary.
+class Owner
+  var inner: Inner
+  var data: Binary
+  first_after_replace = ->
+    at := -> @replace_own()
+    @inner.tags[at()].name
+  replace_own = ->
+    @inner = make('own')
+    0
+
+owner := Owner(inner: make('c'), data: 'xyz'.binary)
+print owner.first_after_replace()
+print "#{owner.data[0]} #{owner.data[2]}"

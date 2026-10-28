@@ -1,5 +1,8 @@
 # Arrays and maps in the generated code: their literals, and indexing (of a Binary too).
-import ArrayLiteral, Comprehension, Expression, Index, is_spread, MapLiteral, Range from '../ast'
+import
+  ArrayLiteral, Comprehension, Expression, Identifier, Index, IntegerLiteral, is_spread, MapLiteral,
+  Range, StringLiteral
+from '../ast'
 import
   emit_array_new, emit_checked_items, emit_get_from, emit_is_out_of_range, emit_push
 from './array'
@@ -12,10 +15,11 @@ import Generator from './generator'
 import emit_branch from './ir_builder'
 import emit_release, ir_type from './lerta_ir'
 import
-  emit_find, emit_held_at, emit_map_get, emit_map_new, emit_map_set, emit_place, emit_set_at
+  are_keys_plain, emit_find, emit_held_at, emit_map_get, emit_map_new, emit_map_set, emit_place,
+  emit_set_at
 from './map'
 import emit_binary_get, emit_binary_out_of_range, emit_binary_slice from './string'
-import ArrayType, is_kind, MapType from '../types'
+import ArrayType, is_kind, MapType, Type from '../types'
 
 # Each item is pushed, so the array retains it; the item's own reference is then released.
 export generate_array := (g: Generator, array: ArrayLiteral) ->
@@ -69,11 +73,21 @@ generate_slice := (g: Generator, object: Expression, range: Range) ->
   emit_exception_check g
   result
 
+# Whether the index runs no code of the program between its object and the item, so that it may
+# borrow a field as its object: its position is a name or a literal, it puts no default, and a
+# map's keys are found without their own `hash` and `==`.
+can_borrow_in_place := (g: Generator, index: Index, object_type: Type) ->
+  position := index.index
+  is_simple := position is Identifier or position is IntegerLiteral or position is StringLiteral
+  are_keys_found := object_type is not MapType or are_keys_plain(g.code.program, object_type.key)
+  is_simple and index.default_value == nil and are_keys_found
+
 export generate_index := (g: Generator, index: Index) ->
   range := index.index as Range?
   return generate_slice(g, index.object, range) if range
-  (object, is_owned) := generate_borrowed(g, index.object)
   object_type := type_of(g, index.object)
+  (object, is_owned) :=
+    generate_borrowed(g, index.object, can_borrow_in_place(g, index, object_type))
   generate_position := -> generate(g, index.index)
   position :=
     is_owned then holding(g, object, object_type, generate_position) else generate_position()
