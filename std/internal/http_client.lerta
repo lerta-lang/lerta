@@ -1,9 +1,10 @@
 # An HTTP/1.1 client: fetch sends a request and gives a Response whose body is read as it comes, over
 # connections kept alive from one request to the next.
 
-import LineTooLongError, Reader from 'std:io'
+import Reader from 'std:io'
 import connect_tcp, Socket from 'std:net'
 import time from 'std:time'
+import CHUNK_SIZE, ChunkedBody, MAX_LINE, well_formed from './http_chunks'
 import check_field, Headers, is_token, keeps_alive, Response, sent_bytes from './http_message'
 
 # What a request sends besides its URL, and whether a redirect is followed.
@@ -76,7 +77,9 @@ export class Client
           @give_back request.target.authority, socket
         else
           socket.close()
-      body := BodyChunks(socket, finish, left, chunked)
+      { reader } := socket
+      chunks := chunked then ChunkedBody(reader, name: 'response', room: INT_MAX) else nil
+      body := BodyChunks(socket, finish, left, chunks)
       # A body that is empty by its framing does not hold the connection until it is read.
       body.end() if left == 0 and not chunked
       Response
@@ -214,7 +217,7 @@ first_line := (socket: Socket, request: Outgoing) ->
       await socket.reader.read_line(MAX_LINE)
     catch error: IOError
       throw NoAnswer(message: error.message)
-  line := await well_formed(send())
+  line := await well_formed(send(), 'response')
   line ? throw NoAnswer(message: 'the connection closed before a response')
 
 read_any_head := (reader: Reader, line: String) ->
@@ -236,18 +239,8 @@ read_fields := (reader: Reader) ->
       throw malformed()
   throw ended_early()
 
-read_line := (reader: Reader) -> await well_formed(reader.read_line(MAX_LINE))
+read_line := (reader: Reader) -> await well_formed(reader.read_line(MAX_LINE), 'response')
 
-well_formed := (line: Promise<String?>) ->
-  try
-    await line
-  catch _: LineTooLongError
-    throw malformed()
-  catch _: ValueError
-    # A line that is not UTF-8.
-    throw malformed()
-
-MAX_LINE := 65536
 MAX_FIELDS := 256
 
 malformed := -> IOError(message: 'a malformed response')
@@ -276,16 +269,17 @@ framing := (head: Head, method: String) ->
 class BodyChunks
   socket: Socket
   finish: () -> void
-  # The bytes left of the body, or of its chunk if it is chunked; nil until the connection ends.
+  # The bytes left of a body that is not chunked; nil for one that ends with the connection.
   left: Int?
-  chunked: Bool
+  chunks: ChunkedBody?
   ended = false
 
   next = ->
     return nil if @ended
     chunk :=
       try
-        await (@chunked then @next_of_chunked() else @next_sized())
+        chunks := @chunks
+        await (chunks != nil then chunks.next() else @next_sized())
       catch error
         @socket.close()
         throw error
@@ -302,42 +296,6 @@ class BodyChunks
     chunk := await @socket.reader.read(min(left, CHUNK_SIZE)) ? throw ended_early()
     @left = left - chunk.length
     chunk
-
-  next_of_chunked = ->
-    if @left == 0
-      size := await @chunk_size()
-      if size == 0
-        await @skip_trailer()
-        return nil
-      @left = size
-    chunk := await @next_sized()
-    await @end_chunk() if @left == 0
-    chunk
-
-  # The size of the next chunk, in hexadecimal before its extensions.
-  chunk_size = ->
-    line := await read_line(@socket.reader) ? throw ended_early()
-    (digits, _extensions) := line.split_once(';') ? (line, '')
-    hex := digits.trim().binary
-    throw malformed() if hex.is_empty()
-    var zeros = 0
-    zeros += 1 while zeros < hex.length and hex[zeros] == '0'
-    # More digits than zeros could overflow.
-    throw malformed() if hex.length - zeros > 15
-    var size = 0
-    size = size * 16 + (byte.hex_value() ? throw malformed()) for byte in hex
-    size
-
-  end_chunk = ->
-    line := await read_line(@socket.reader) ? throw ended_early()
-    throw malformed() if not line.is_empty()
-
-  skip_trailer = ->
-    while line := await read_line(@socket.reader)
-      return if line.is_empty()
-    throw ended_early()
-
-CHUNK_SIZE := 65536
 
 # The request that a redirect asks for, or nil for a response that is none. A 303, and a 301 or a
 # 302 to POST, as browsers do, ask for a GET without the body. A request to another host or port

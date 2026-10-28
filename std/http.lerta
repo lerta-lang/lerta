@@ -4,6 +4,7 @@
 import timeout, TimeoutError from 'std:async'
 import LineTooLongError, Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
+import CHUNK_SIZE, ChunkedBody from './internal/http_chunks'
 import
   check_field, Headers, keeps_alive, Request, Response, sent_bytes
 from './internal/http_message'
@@ -127,14 +128,18 @@ serve_request := (socket: Socket, server: Server) ->
       await socket.write(response_bytes({ status: 400 }, false, 'GET'))
       return false
   method := incoming.request.method
+  var keep_alive = incoming.keep_alive
   bytes :=
     try
-      response_bytes await server.handler(incoming.request), incoming.keep_alive, method
+      response := await server.handler(incoming.request)
+      # A body whose read has failed cannot be read past to the next request.
+      keep_alive = keep_alive and incoming.body.failure == nil
+      response_bytes response, keep_alive, method
     catch _
       await socket.write(response_bytes({ status: 500 }, false, method))
       return false
   await socket.write(bytes)
-  return false if not incoming.keep_alive
+  return false if not keep_alive
   await incoming.body.skip()
   true
 
@@ -158,8 +163,7 @@ read_request := (reader: Reader, server: Server) ->
       await timeout(read_headers(reader, options), options.head_timeout)
     catch _: TimeoutError
       throw RequestError(status: 408, message: 'request timeout')
-  if headers.has('transfer-encoding')
-    throw RequestError(status: 501, message: 'transfer-encoding not implemented')
+  chunked := is_chunked(headers, version)
   hosts := [value for (name, value) in headers.fields when name == 'host']
   # HTTP/1.0 came before Host, which HTTP/1.1 requires.
   throw bad_request() if hosts.length > 1 or (hosts.is_empty() and version == 'HTTP/1.1')
@@ -167,7 +171,9 @@ read_request := (reader: Reader, server: Server) ->
   throw bad_request() if not is_host(host)
   length := content_length(headers)
   throw RequestError(status: 413, message: 'content too large') if length > options.max_body
-  body := BodyChunks(reader, left: length, seconds: options.body_timeout)
+  { max_body, body_timeout } := options
+  chunks := chunked then ChunkedBody(reader, name: 'body', room: max_body) else nil
+  body := BodyChunks(reader, chunks, left: length, seconds: body_timeout)
   url := url_of(host, target) ? throw bad_request()
   request := Request(method, url, headers, body: Reader(read_chunk: -> await body.next()))
   Incoming request, body, keep_alive: keeps_alive(version, headers)
@@ -209,6 +215,21 @@ read_limited_line := (reader: Reader, max: Int, status: Int) ->
   throw too_long() if line.binary.length > max
   line
 
+# Whether the body comes in chunks. Another coding is not implemented; a Content-Length besides
+# chunks could tell another end to a proxy before the server, and HTTP/1.0 has no chunks.
+is_chunked := (headers: Headers, version: String) ->
+  coding := headers.get('transfer-encoding') ? return false
+  throw bad_request() if headers.has('content-length') or version == 'HTTP/1.0'
+  names := [each.trim().to_lower() for each in coding.split(',')]
+  # An empty element of a list is no element.
+  codings := [name for name in names when not name.is_empty()]
+  throw bad_request() if codings.is_empty()
+  if not codings.all((each) -> each == 'chunked')
+    throw RequestError(status: 501, message: 'transfer-encoding not implemented')
+  # Chunks are not put in chunks again.
+  throw bad_request() if codings.length > 1
+  true
+
 content_length := (headers: Headers) ->
   text := headers.get('content-length') ? return 0
   # Digits alone: parse_int would take a sign too.
@@ -228,29 +249,53 @@ url_of := (host: String, target: String) ->
   return target if lower.starts_with('http://') or lower.starts_with('https://')
   target.starts_with('/') then "http://#{host}#{target}" else nil
 
-# The chunks of a body of `left` bytes, read from the connection's reader, each within `seconds`.
+# The chunks of a body, read from the connection's reader, each within `seconds`, which for `chunks`
+# bounds the lines read before a chunk too, as the trailer: `left` bytes, or those of `chunks`. A
+# read that fails leaves the place in the body unknown, so the later ones fail too.
 class BodyChunks
   reader: Reader
   left: Int
+  chunks: ChunkedBody?
   seconds: Float
+  ended = false
+  # Only an IOError is kept: the reads throw no other but a cancel, which leaves the place known.
+  failure: IOError? = nil
 
   next = ->
+    failure := @failure
+    throw failure if failure != nil
+    return nil if @ended
+    chunk :=
+      try
+        await @within_seconds(@chunk())
+      catch error: IOError
+        @failure = error
+        throw error
+    @ended = chunk == nil
+    chunk
+
+  chunk = ->
+    chunks := @chunks
+    chunks != nil then await chunks.next() else await @sized()
+
+  sized = ->
     return nil if @left == 0
-    chunk := await @chunk() ? throw IOError(message: 'a body ended early')
+    ended_early := IOError(message: 'a body ended early')
+    chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw ended_early
     @left -= chunk.length
     chunk
 
   # A client that is too slow is taken to have gone.
-  chunk = ->
+  within_seconds = (read: Promise<Binary?>) ->
     try
-      await timeout(@reader.read(min(@left, CHUNK_SIZE)), @seconds)
+      await timeout(read, @seconds)
     catch _: TimeoutError
       throw IOError(message: 'a body timed out')
 
   # Reads what the handler has left of the body, so that the next request starts after it.
-  skip = -> await @next() while @left > 0
-
-CHUNK_SIZE := 65536
+  skip = ->
+    var chunk = await @next()
+    chunk = await @next() while chunk != nil
 
 # The response to a request of `method`. A response to HEAD, and one of 204 or 304, has no body, but
 # for HEAD its content-length tells the length of the body that a GET would give. Throws a

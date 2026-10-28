@@ -1,0 +1,100 @@
+# A request body may come in chunks, whose extensions and trailer fields are dropped. The handler
+# reads a malformed one, one that ends early, one past max_body, its lines counted, and one too
+# slow, its lines too, as an IOError, at every read after, and the response then closes the
+# connection; what it leaves unread is read past, for the next request, unless that fails, which
+# closes the connection after the response.
+import connect_tcp from 'std:net'
+import sleep from 'std:time'
+import Request, Response, serve from 'std:http'
+
+handle := (request: Request) ->
+  return Response(body: 'ignored') if request.url.ends_with('/ignore')
+  read := ->
+    try
+      text := await request.text()
+      text.binary.length > 20 then "read #{text.binary.length} bytes" else "read #{text}"
+    catch error: IOError
+      "failed: #{error.message}"
+  first := await read()
+  Response body: request.url.ends_with('/again') then "#{first}, then #{await read()}" else first
+
+server := serve(handle, max_body: 70000, body_timeout: 0.2)
+
+# What the server answers to `requests`, sent on one connection, until it closes it; the client
+# ends its side unless it is `slow`.
+ask := (requests: String | Binary, slow = false) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  await client.write(requests)
+  client.end() if not slow
+  print (await client.reader.read_all()).text()!.replace("\r\n", ' | ')
+
+chunked := (path: String, body: String) ->
+  "POST #{path} HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: Chunked\r\n\r\n#{body}"
+last := "GET /last HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n"
+
+await ask(chunked('/', "5;x=y\r\nhello\r\n007\r\n, there\r\n0\r\nx-trailer: t\r\n\r\n") + last)
+await ask(chunked('/ignore', "3\r\nabc\r\n0\r\n\r\n") + last)
+await ask(chunked('/', "zz\r\n") + last)
+await ask(chunked('/', "5\r\nhel"))
+await ask(chunked('/', "3\r\nabcX\r\n") + last)
+
+# The bytes of a body up to max_body, and one more, also when it is not read; many small chunks,
+# whose lines come to more than 64 KiB; and lines beyond max_body and 64 KiB together.
+at_most := "11170\r\n#{'x'.repeat(70000)}\r\n0\r\n\r\n"
+one_more := "11171\r\n#{'x'.repeat(70001)}\r\n0\r\n\r\n"
+await ask(chunked('/', at_most) + last)
+await ask(chunked('/', one_more) + last)
+await ask(chunked('/ignore', one_more) + last)
+small := "1;#{'e'.repeat(10)}\r\nx\r\n".repeat(7000)
+await ask(chunked('/', "#{small}0\r\n\r\n") + last)
+extended := "1;#{'x'.repeat(40000)}\r\na\r\n"
+await ask(chunked('/', "#{extended}#{extended}0\r\n\r\n") + last)
+# Lines of 70000 + 65536 bytes, and one more: 10 for those around the data, and three fields.
+fields := (last_length: Int) ->
+  long := "x: #{'t'.repeat(45175)}\r\n"
+  "1\r\na\r\n0\r\n#{long}#{long}x: #{'t'.repeat(last_length)}\r\n\r\n"
+await ask(chunked('/', fields(45161)) + last)
+await ask(chunked('/', fields(45162)) + last)
+
+# A read after one too large fails so too.
+await ask(chunked('/again', one_more) + last)
+await ask(chunked('/again', fields(45162)) + last)
+await ask(chunked('/again', "zz\r\n") + last)
+
+# The ends of a body: within the line after a chunk, within the trailer, and too slow.
+await ask(chunked('/', "3\r\nabc"))
+await ask(chunked('/', "0\r\nx-trailer: t\r\n"))
+await ask(chunked('/', "3\r\nab"), true)
+
+# A trailer whose lines each come in time, but not all of them.
+trickling := await connect_tcp('127.0.0.1', server.port())
+await trickling.write(chunked('/', "0\r\n"))
+trickle := ->
+  try
+    for _ in 0...4
+      await sleep(0.1)
+      await trickling.write("x-trailer: t\r\n")
+  catch _: IOError
+    # The server may have closed the connection already.
+    nil
+await trickle()
+print (await trickling.reader.read_all()).text()!.replace("\r\n", ' | ')
+
+# Sizes: zeros before 15 digits, more than 15 digits, and lines too long or not UTF-8.
+await ask(chunked('/', "00000000000000003\r\nabc\r\n0\r\n\r\n") + last)
+await ask(chunked('/', "1000000000000000\r\n") + last)
+await ask(chunked('/', "3;#{'x'.repeat(65536)}\r\nabc\r\n0\r\n\r\n") + last)
+not_utf8 := '3;'.binary + 0xff.to_byte()! + "\r\nabc\r\n0\r\n\r\n".binary
+await ask(chunked('/', '').binary + not_utf8)
+
+# The fields: chunks are not put in chunks again, the value is trimmed and its empty elements
+# dropped as any other, and none is no coding; a request that another coding would not be
+# implemented for is bad first for being of HTTP/1.0, or for a Content-Length.
+post := "POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n"
+await ask("#{post}Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n")
+await ask("#{post}Transfer-Encoding:  chunked \r\n\r\n0\r\n\r\n")
+await ask("#{post}Transfer-Encoding: , chunked,\r\n\r\n0\r\n\r\n")
+await ask("#{post}Transfer-Encoding: \r\n\r\n")
+await ask("POST / HTTP/1.0\r\nTransfer-Encoding: gzip\r\n\r\n")
+await ask("#{post}Transfer-Encoding: gzip\r\nContent-Length: 1\r\n\r\na")
+server.close()

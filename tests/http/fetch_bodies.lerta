@@ -3,6 +3,8 @@
 import Client, FetchOptions from 'std:http'
 import RawRequest, raw_server, Reply from './lib/raw_server'
 
+MANY_CHUNKS := "1;#{'e'.repeat(1000)}\r\nx\r\n".repeat(70)
+
 replies :=
   '/length': "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello"
   '/chunked': "HTTP/1.1 200 OK\r\nTransfer-Encoding: Chunked\r\n\r\n5;x=y\r\nhello\r\nA\r\n, chunked!\r\n0\r\nx-trailer: t\r\n\r\n"
@@ -26,6 +28,9 @@ replies :=
   '/largest-size': "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n000fffffffffffffff\r\nabc"
   '/switch-after-continue': "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 101 Switching Protocols\r\n\r\n"
   '/gzip': "HTTP/1.1 200 OK\r\ntransfer-encoding: gzip, chunked\r\n\r\n"
+  # Lines that come to more than 64 KiB, between pieces of data.
+  '/long-trailer-line': "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n0\r\nx: #{'t'.repeat(65536)}\r\n\r\n"
+  '/many-chunks': "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n#{MANY_CHUNKS}0\r\n\r\n"
   '/bad-length': "HTTP/1.1 200 OK\r\ncontent-length: +5\r\n\r\nhello"
   '/bad-status': "HTTP/1.1 2000 OK\r\n\r\n"
   '/bad-version': "HTTP/2 200 OK\r\n\r\n"

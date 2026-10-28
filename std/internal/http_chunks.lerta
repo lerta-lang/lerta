@@ -1,0 +1,90 @@
+# The body of a message sent in chunks, by `Transfer-Encoding: chunked`.
+
+import LineTooLongError, Reader from 'std:io'
+
+# The bytes of a chunked body as they come from `reader`, without the extensions of its chunks and
+# its trailer fields, or nil at its end. `name` names the message in its errors, as `a malformed
+# <name>`, `a <name> ended early` and `a <name> too large`, once more than `room` bytes of data have
+# come, or more than MAX_LINE besides of lines, those of the sizes, the line end after each chunk
+# and those of the trailer, each counted with CR LF, which a body of chunks of a sensible size does
+# not come to before its data does.
+export class ChunkedBody
+  reader: Reader
+  name: String
+  room: Int
+  data_taken = 0
+  lines_taken = 0
+  # The bytes left of the chunk being read.
+  left = 0
+  # Where the body stands, kept before each read, so that a read that is cancelled leaves the next to
+  # go on from there: after the data of a chunk, before its line end, and in the trailer.
+  ending_chunk = false
+  in_trailer = false
+  ended = false
+
+  next = ->
+    return nil if @ended
+    if @left == 0
+      if @ending_chunk
+        await @end_chunk()
+        @ending_chunk = false
+      if not @in_trailer
+        @left = await @size()
+        @in_trailer = @left == 0
+      if @in_trailer
+        await @skip_trailer()
+        @ended = true
+        return nil
+    chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw @ended_early()
+    @left -= chunk.length
+    @ending_chunk = @left == 0
+    @data_taken += chunk.length
+    throw @too_large() if @data_taken > @room
+    chunk
+
+  # The size of the next chunk, in hexadecimal before its extensions.
+  size = ->
+    line := await @line() ? throw @ended_early()
+    (digits, _extensions) := line.split_once(';') ? (line, '')
+    hex := digits.trim().binary
+    throw @malformed() if hex.is_empty()
+    var zeros = 0
+    zeros += 1 while zeros < hex.length and hex[zeros] == '0'
+    # More digits than zeros could overflow.
+    throw @malformed() if hex.length - zeros > 15
+    var size = 0
+    size = size * 16 + (byte.hex_value() ? throw @malformed()) for byte in hex
+    size
+
+  end_chunk = ->
+    line := await @line() ? throw @ended_early()
+    throw @malformed() if not line.is_empty()
+
+  skip_trailer = ->
+    while line := await @line()
+      return if line.is_empty()
+    throw @ended_early()
+
+  # A line, its line end counted as CR LF.
+  line = ->
+    line := await well_formed(@reader.read_line(MAX_LINE), @name) ? return nil
+    @lines_taken += line.binary.length + 2
+    # Compared so, as `room` may be INT_MAX.
+    throw @too_large() if @lines_taken - MAX_LINE > @room
+    line
+
+  too_large = -> IOError(message: "a #{@name} too large")
+
+  malformed = -> IOError(message: "a malformed #{@name}")
+
+  ended_early = -> IOError(message: "a #{@name} ended early")
+
+# A line of a message, which is malformed if it is longer than MAX_LINE or not UTF-8.
+export well_formed := (line: Promise<String?>, name: String) ->
+  try
+    await line
+  catch _: LineTooLongError | ValueError
+    throw IOError(message: "a malformed #{name}")
+
+export MAX_LINE := 65536
+export CHUNK_SIZE := 65536
