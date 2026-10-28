@@ -11,6 +11,7 @@ This reference documents only implemented behavior. The planned design of what i
 | [objects.md](objects.md) | Classes, structs, `deinit`, `extend` and interfaces |
 | [errors.md](errors.md) | Exceptions, panics, discarded values, unused names and cycles |
 | [builtins.md](builtins.md) | Builtin functions, `Stringable`, `Iterable` and the methods of the builtin types |
-| [modules.md](modules.md) | Imports and the standard modules |
+| [modules.md](modules.md) | Imports, exports, top-level code and import cycles |
+| [std.md](std.md) | The standard modules |
 | [compiler.md](compiler.md) | Commands, the cache, diagnostics, `lerta fmt` and `lerta dump` |
 | [style.md](style.md) | Coding conventions for Lerta code |

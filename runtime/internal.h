@@ -171,7 +171,7 @@ void lerta_os_arguments(int *argc, char ***argv);
 // Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
 // Has a write of lerta_os_write to a pipe whose reader is gone end the program, as SIGPIPE does by
-// default on POSIX, whatever the parent left it as (see docs/reference/modules.md), while one to a
+// default on POSIX, whatever the parent left it as (see docs/reference/std.md#stdio), while one to a
 // socket fails; Windows has no such signal. A closed stdin reads as empty.
 void lerta_os_stdio_init(void);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
@@ -243,7 +243,7 @@ bool lerta_os_is_running(int id);
 bool lerta_os_same_env_name(const char *a, const char *b);
 // The file of a command for a program that run starts, which on Windows is searched for on PATH if it
 // holds no directory, as libuv would look in the directory that the program runs in first (see
-// docs/reference/modules.md#stdprocess); NULL if there is none. The caller frees it.
+// docs/reference/std.md#stdprocess); NULL if there is none. The caller frees it.
 char *lerta_os_program_file(const char *command);
 
 #endif
