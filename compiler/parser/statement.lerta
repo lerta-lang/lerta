@@ -30,6 +30,17 @@ COMMAND_ARGUMENT_STARTS: TokenKind[] =
 # `path` names the source in diagnostics. An error ends the parsing of its top-level statement
 # alone, so that those after it are parsed for their errors too; the errors are thrown together.
 export parse := (tokens: Token[], path: String) ->
+  parsed := parse_partially(tokens, path)
+  throw compile_errors(parsed.errors) if not parsed.errors.is_empty()
+  parsed.statements
+
+# The top-level statements that parse, and the errors of those that do not.
+export struct Parsed
+  statements: Statement[]
+  errors: Located[]
+
+# Parses as parse does, but gives the top-level statements that parse along with the errors.
+export parse_partially := (tokens: Token[], path: String) ->
   stream := TokenStream(tokens, path)
   statements: Statement[]
   errors: Located[]
@@ -44,8 +55,7 @@ export parse := (tokens: Token[], path: String) ->
       throw error if error.errors.is_empty()
       errors.append error.errors
       stream.skip_to_next_statement start
-  throw compile_errors(errors) if not errors.is_empty()
-  statements
+  Parsed statements, errors
 
 # Statements, one per line, up to the token that ends the block.
 parse_statements := (tokens: TokenStream, end: TokenKind) ->

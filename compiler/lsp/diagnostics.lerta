@@ -4,7 +4,7 @@ import check_modules from '../checker/modules'
 import Position from '../ast'
 import ProgramWide from '../checker/shared'
 import CompileError, Located from '../errors'
-import load_modules from '../loader'
+import load_modules_partially from '../loader'
 import is_standard_name, module_location, read_source from '../source'
 
 # A position as the LSP takes it, from 0, its character counted in the units of the encoding that
@@ -41,18 +41,20 @@ export struct Checked
 # The diagnostics of the program whose entry module is at the path, by the paths of its files,
 # every one of them, those without any too, but the standard modules; only the entry module's and
 # those that have some if the modules cannot be loaded. An error that is found in no module is the
-# entry module's, at its start.
+# entry module's, at its start. A module is loaded with the top-level statements that parse, so
+# that the program is checked while it is being written.
 export check_file := (path: String, encoding: PositionEncoding) ->
   by_path: Map<String, LspDiagnostic[]>
   by_path[path] = []
   var warnings: Located[] = []
   var errors: Located[] = []
+  parse_errors: Located[]
   var checked: ProgramWide?
   keep_warnings := (program: ProgramWide, found: Located[]) ->
     checked = program
     warnings = found
   try
-    modules := await load_modules(path)
+    modules := await load_modules_partially(path, parse_errors)
     for module in modules
       location := module_location(path, module.display_path)
       by_path[location] = [] if not is_standard_name(location)
@@ -60,6 +62,14 @@ export check_file := (path: String, encoding: PositionEncoding) ->
   catch error: CompileError
     placed := Located(location: path, line: 1, column: 1, message: error.message)
     errors = not error.errors.is_empty() then error.errors else [placed]
+  # A file whose statements do not all parse has only its parse errors: the checker's would mostly
+  # be of the names that the statements left out declare. Those of the files that import such names
+  # from it are kept, as they hold of its code as it is.
+  unparsed := Set([each.location for each in parse_errors])
+  # An error of loading, which ends it before the checker starts, is kept.
+  errors = [each for each in errors when not unparsed.has(each.location)] if checked
+  errors.append parse_errors
+  warnings = [each for each in warnings when not unparsed.has(each.location)]
   add := (located: Located, severity: Int) ->
     return if is_standard_name(located.location)
     at := await position(located, encoding)

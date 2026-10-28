@@ -2,9 +2,9 @@
 # the others import (see builtins_import).
 import is_file, real_path from 'std:io'
 import Import, Statement from './ast'
-import compile_error, CompileError from './errors'
-import tokenize from './lexer/tokens'
-import parse from './parser/statement'
+import compile_error, CompileError, Located from './errors'
+import Token, tokenize from './lexer/tokens'
+import parse, parse_partially from './parser/statement'
 import basename, dirname, join, relative from './paths'
 import
   is_standard_name, module_location, read_entry_source, read_source, standard_import,
@@ -49,6 +49,9 @@ class Loader
   entry_path: String
   # The directory that relative paths start from.
   cwd: String
+  # Where a module whose top-level statements do not all parse keeps their errors, as it is loaded
+  # with those that do; nil if it ends the loading.
+  parse_errors: Located[]?
   loaded: LoadingModule[] = []
   # The places of the modules by their keys (see load).
   by_key: Map<String, Int> = Map()
@@ -58,9 +61,17 @@ class Loader
 # The modules, each after those it imports unless they import it back, so the entry module comes
 # last. The standard modules are those embedded in the compiler.
 export load_modules := (entry_path: String) ->
-  loader := Loader(entry_path, cwd: real_path_text('.'))
-  source := await read_entry_source(entry_path)
-  await load(loader, module_key(entry_path), source, nil)
+  await load_all(Loader(entry_path, cwd: real_path_text('.'), parse_errors: nil))
+
+# The modules as load_modules gives them, but each with the top-level statements that parse, for an
+# editor, which checks the code that is being written; the errors of those that do not go into
+# `parse_errors`, those found before an error that ends the loading too.
+export load_modules_partially := (entry_path: String, parse_errors: Located[]) ->
+  await load_all(Loader(entry_path, parse_errors, cwd: real_path_text('.')))
+
+load_all := (loader: Loader) ->
+  source := await read_entry_source(loader.entry_path)
+  await load(loader, module_key(loader.entry_path), source, nil)
   [finished_module(loader, id) for id in loader.order]
 
 # A module is known by its key: a standard module by its name, `std:name`, and a file by its real
@@ -69,7 +80,7 @@ export load_modules := (entry_path: String) ->
 # given. Returns the module's place in the loading order.
 load := (loader: Loader, key: String, source: String, display_path: String?): Promise<Int> ->
   location := module_location(loader.entry_path, display_path)
-  program := parse(tokenize(source, location), location)
+  program := parsed_program(loader, tokenize(source, location), location)
   with_builtins := key == BUILTINS_MODULE then program else [builtins_import(), program...]
   id := loader.loaded.length
   module := LoadingModule(key, display_path, program: with_builtins)
@@ -81,6 +92,12 @@ load := (loader: Loader, key: String, source: String, display_path: String?): Pr
   module.index = loader.order.length
   loader.order.push id
   id
+
+parsed_program := (loader: Loader, tokens: Token[], location: String) ->
+  errors := loader.parse_errors ? return parse(tokens, location)
+  parsed := parse_partially(tokens, location)
+  errors.append parsed.errors
+  parsed.statements
 
 builtins_import := (): Statement ->
   Import names: [], module: BUILTINS_MODULE, position: { line: 1, column: 1 }

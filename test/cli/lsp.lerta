@@ -803,6 +803,82 @@ syntax_error_check := ->
         )...
       ]
 
+partial_parse_check := ->
+  Check
+    name: 'lerta lsp checks the statements that parse, and reports only the parse errors of their file'
+    run: ->
+      dir := new_cli_dir('lsp-partial-parse')
+      path := "#{dir}/a.lerta"
+      await write_file(path, ''.binary)
+      uri := uri_of(path)
+      messages :=
+        did_open(uri, "x := +\nprint x\nvalue := 1\nprint value\n")
+        hover_request(uri, 3, 6, 1)
+        definition_request(uri, 3, 6, 2)
+      .join('')
+      ran := await session(dir, messages)
+      [
+        expect_status(0, ran.status)...
+        compare_text(
+          'messages'
+          [
+            initialize_response('utf-16')
+            published_diagnostics(uri, [diagnostic_body(0, 5, 1, "expected expression, found '+'")])
+            "{\"jsonrpc\":\"2.0\",#{hover_fragment(1, 'value: Int')}}"
+            "{\"jsonrpc\":\"2.0\",#{location_fragment(2, uri, 2, 0, 5)}}"
+            shutdown_response
+          ].join(
+            "\n"
+          )
+          message_bodies(ran.stdout.text()!).join("\n")
+        )...
+      ]
+
+partial_import_check := ->
+  Check
+    name: 'lerta lsp checks an imported file that does not parse, and keeps the errors of loading'
+    run: ->
+      dir := new_cli_dir('lsp-partial-import')
+      lib := "#{dir}/lib.lerta"
+      path := "#{dir}/a.lerta"
+      other := "#{dir}/c.lerta"
+      await write_file(lib, "unused := 1\nexport a := 2\nexport b := +\n".binary)
+      await write_file(path, ''.binary)
+      await write_file(other, ''.binary)
+      uri := uri_of(path)
+      messages :=
+        did_open(uri, "import a from './lib'\nprint a\nkept := 3\n")
+        did_open(uri_of(other), "x := +\nimport y from './nowhere'\n")
+        hover_request(uri, 1, 6, 1)
+      .join('')
+      ran := await session(dir, messages)
+      [
+        expect_status(0, ran.status)...
+        compare_text(
+          'messages'
+          [
+            initialize_response('utf-16')
+            published_diagnostics(uri, [diagnostic_body(2, 0, 2, "'kept' is never used")])
+            published_diagnostics(
+              uri_of(lib)
+              [diagnostic_body(2, 12, 1, "expected expression, found '+'")]
+            )
+            published_diagnostics(
+              uri_of(other)
+              [
+                diagnostic_body(1, 0, 1, "cannot find module './nowhere'")
+                diagnostic_body(0, 5, 1, "expected expression, found '+'")
+              ]
+            )
+            "{\"jsonrpc\":\"2.0\",#{hover_fragment(1, 'a: Int')}}"
+            shutdown_response
+          ].join(
+            "\n"
+          )
+          message_bodies(ran.stdout.text()!).join("\n")
+        )...
+      ]
+
 imported_syntax_error_check := ->
   Check
     name: 'lerta lsp finds no declaration that an imported text no longer writes, nor a program never loaded'
@@ -966,6 +1042,8 @@ export checks :=
   definitions_after_error_check()
   syntax_error_check()
   imported_syntax_error_check()
+  partial_parse_check()
+  partial_import_check()
   imported_hover_definition_check()
   extern_definition_check()
   reexport_definition_check()
