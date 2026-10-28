@@ -6,7 +6,7 @@ Known defects, most severe first.
 |---|---|---|
 | 1 | A Reader refuses a read right after `timeout` ends the last one | Low |
 | 2 | `Reader.read` returns an empty Binary at the end after an empty chunk | Low |
-| 3 | Code generation takes time exponential in the `not`s nested on a value | Low |
+| 3 | Checking takes time exponential in the `and`s and `or`s nested on the left | Low |
 | 4 | `while` does not narrow in its body | Info |
 | 5 | Testing a weak local for nil does not say why it is not narrowed | Info |
 | 6 | The reference says an enum cannot be a member of a union | Info |
@@ -26,9 +26,11 @@ The fix is for `first_settled` to await the cancelled Promises before it returns
 
 The fix is for `fill` to skip an empty chunk.
 
-## 3. Code generation takes time exponential in the `not`s nested on a value
+## 3. Checking takes time exponential in the `and`s and `or`s nested on the left
 
-`print not not ... true` takes twice as long to compile for each `not` more: `lerta dump-llvm` takes 0.06 s with 20 and 0.9 s with 24, and does not end with a few hundred, which the limit on nesting allows. Checking it is fast, so the cost is in codegen.
+`narrowings_of_logical` in `compiler/checker/narrowing.lerta` finds the narrowings of the left operand, and `where_right_operand` finds them again, so each `and` or `or` nested on the left of another doubles the work: `z := not (not (... not b and b ...) and b) and b` takes 0.7 s to check with 20 levels and does not end with 60, which the limit on nesting allows.
+
+The fix is to find the left operand's narrowings once and give them to `where_right_operand`.
 
 ## 4. `while` does not narrow in its body
 
