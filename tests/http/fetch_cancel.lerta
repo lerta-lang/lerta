@@ -1,0 +1,52 @@
+# A read of a response's body that is cancelled, as by a timeout, leaves its connection open, and
+# the next read takes the body from where it stopped: by its Content-Length, in chunks, cut before
+# the body, in its data, in the CR LF after a chunk, in the line of a size and in the trailer, and
+# to the end of the connection. A connection kept alive then takes the next request.
+import timeout, TimeoutError from 'std:async'
+import fetch from 'std:http'
+import listen_tcp, Socket from 'std:net'
+import sleep from 'std:time'
+
+read_head := (socket: Socket) ->
+  while line := await socket.reader.read_line()
+    break if line.is_empty()
+
+# Writes the head and the start of the body at once, and the rest only after the client's first
+# read has timed out; then answers the next request on the connection, unless it ends the body.
+serve := (socket: Socket, head: String, start: String, rest: String) ->
+  await read_head(socket)
+  await socket.write("HTTP/1.1 200 OK\r\n#{head}\r\n#{start}")
+  await sleep(0.2)
+  await socket.write(rest)
+  if not head.is_empty()
+    await read_head(socket)
+    await socket.write("HTTP/1.1 200 OK\r\ncontent-length: 5\r\n\r\nagain")
+  socket.close()
+
+SIZED := "content-length: 9\r\n"
+CHUNKED := "transfer-encoding: chunked\r\n"
+TO_THE_END := ''
+
+listener := listen_tcp('127.0.0.1')
+url := "http://127.0.0.1:#{listener.port}/"
+for (head, start, rest) in [
+  (SIZED, '', 'earlylate')
+  (SIZED, 'ear', 'lylate')
+  (CHUNKED, '', "9\r\nearlylate\r\n0\r\n\r\n")
+  (CHUNKED, "9\r\near", "lylate\r\n0\r\n\r\n")
+  (CHUNKED, "9\r\nearlylate\r", "\n0\r\n\r\n")
+  (CHUNKED, '9', "\r\nearlylate\r\n0\r\n\r\n")
+  (CHUNKED, "9\r\nearlylate\r\n0\r\nx: 1\r\n", "y: 2\r\n\r\n")
+  (TO_THE_END, 'ear', 'lylate')
+]
+  fetching := fetch(url)
+  serving := serve(await listener.accept(), head, start, rest)
+  response := await fetching
+  try
+    await timeout(response.text(), 0.05)
+  catch error: TimeoutError
+    print error.message
+  print await response.text()
+  print await (await fetch(url)).text() if head != TO_THE_END
+  await serving
+listener.close()
