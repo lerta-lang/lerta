@@ -30,6 +30,8 @@ export class TokenStream
   line_breaks: LineBreaks[] = []
   # What each function literal being parsed, innermost last, has of its own.
   functions: FunctionMarks[] = []
+  # How deep the expression being parsed is in the tree it makes, which is limited (see deepen).
+  nesting = 0
 
   # The kind of the next token if it continues the current expression. After an indented block
   # (such as a `case`) the line has ended, so `-1` on the next line is not a subtraction.
@@ -217,6 +219,20 @@ export class TokenStream
   # A `yield` or `await` outside every function literal marks none; the checker rejects it.
   innermost_function = -> @functions.last()
 
+  # Runs `parse`, which reads a part of an expression, one level deeper (see deepen).
+  nested = <T>(parse: () -> T): T ->
+    @deepen()
+    part := parse()
+    @nesting -= 1
+    part
+
+  # Goes one level deeper, as a loop does for each part it adds to an expression, which it then
+  # gives back by restoring `nesting`; the tree's depth is limited, as the passes after the parser
+  # walk it by recursion, which would overflow the stack.
+  deepen = ->
+    @nesting += 1
+    @fail @peek().position(), "nesting deeper than #{MAX_NESTING}" if @nesting > MAX_NESTING
+
   fail = (position: Position, message: String) ->
     compile_error @path, position.line, position.column, message
 
@@ -227,6 +243,7 @@ export class TokenStream
   skip_to_next_statement = (start: Int) ->
     @line_breaks = []
     @functions = []
+    @nesting = 0
     @spread = nil
     var depth = 0
     depth += indentation_change(@tokens[i].kind) for i in start...@index
@@ -244,6 +261,8 @@ export class TokenStream
     ends_line := kind == NEWLINE or kind == DEDENT
     continues := is_one_of(@tokens[@index].kind, [INDENT, 'else', 'catch', 'finally'])
     depth == 0 and ends_line and not continues
+
+MAX_NESTING := 500
 
 indentation_change := (kind: TokenKind) ->
   case kind

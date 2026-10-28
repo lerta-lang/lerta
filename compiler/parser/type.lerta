@@ -15,7 +15,10 @@ TYPE_TOKEN_KINDS: TokenKind[] =
 # Any type: a union, `A | B`, or a type that may be one of its members, or a function type. As a
 # function literal's return type, `is_result`, the `->` after a type in parentheses starts the body
 # (see parse_parenthesized_type).
-export parse_type_name := (tokens: TokenStream, is_result = false) ->
+export parse_type_name := (tokens: TokenStream, is_result = false): TypeName ->
+  tokens.nested -> parse_any_type(tokens, is_result)
+
+parse_any_type := (tokens: TokenStream, is_result: Bool) ->
   return union_of(parse_union_members(tokens, is_result)) if tokens.peek().kind != '('
   position := tokens.peek().position()
   first := parse_parenthesized_type(tokens, is_result)
@@ -94,7 +97,8 @@ parse_array_type := (tokens: TokenStream, element: TypeName, position: Position)
   tokens.next()
   tokens.expect ']'
   array := ArrayTypeName(element, position, optional: tokens.accept('?'))
-  tokens.peek().kind == '[' then parse_array_type(tokens, array, position) else array
+  return array if tokens.peek().kind != '['
+  tokens.nested -> parse_array_type(tokens, array, position)
 
 # A named type, or an array of them, without the `?` after it, which is the cast's.
 export parse_cast_type := (tokens: TokenStream) ->

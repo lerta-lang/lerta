@@ -37,7 +37,7 @@ export struct LoopHeader
   guard: Expression?
   parts: Identifier[]
 
-export parse_expression := (tokens: TokenStream) -> parse_conditional(tokens)
+export parse_expression := (tokens: TokenStream) -> tokens.nested(-> parse_conditional(tokens))
 
 # The value after `=` or `key:`, which may be a literal in an indented block on the next lines.
 parse_if_value := (tokens: TokenStream) ->
@@ -71,10 +71,13 @@ export parse_continued_value := (tokens: TokenStream) ->
 # the indentation of its first line, so that a member applies to the whole value, however many
 # lines it took.
 export continue_with_members := (tokens: TokenStream, value: Expression) ->
+  nesting := tokens.nesting
   var continued = value
   while at_member_line(tokens)
+    tokens.deepen()
     tokens.accept NEWLINE
     continued = parse_member_line(tokens, continued)
+  tokens.nesting = nesting
   continued
 
 # After a block, its NEWLINE is consumed already, so the line's first token is next; otherwise it
@@ -133,10 +136,10 @@ parse_conditional := (tokens: TokenStream): Expression ->
   condition := parse_or(tokens)
   return condition if tokens.peek_continuation() != 'then'
   tokens.next()
-  then_value := parse_conditional(tokens)
+  then_value := parse_expression(tokens)
   position := condition.position
   without_else := not tokens.accept('else')
-  else_value: Expression = without_else then NilLiteral(position) else parse_conditional(tokens)
+  else_value: Expression = without_else then NilLiteral(position) else parse_expression(tokens)
   Conditional condition, then_value, else_value, position, without_else
 
 export parse_or := (tokens: TokenStream): Expression ->
@@ -148,17 +151,23 @@ parse_and := (tokens: TokenStream) -> parse_left_associative(tokens, ['and'], ->
 parse_left_associative := (
   tokens: TokenStream, operators: TokenKind[], parse_operand: () -> Expression
 ) ->
+  nesting := tokens.nesting
   var left = parse_operand()
   while is_one_of(tokens.peek_continuation(), operators)
+    tokens.deepen()
     operator := tokens.next().kind.to_string()
     left = BinaryOperation(operator, left, right: parse_operand(), position: left.position)
+  tokens.nesting = nesting
   left
 
 parse_not := (tokens: TokenStream): Expression ->
   token := tokens.peek()
   return parse_comparison(tokens) if token.kind != 'not'
   tokens.next()
-  UnaryOperation operator: 'not', operand: parse_not(tokens), position: token.position()
+  UnaryOperation
+    operator: 'not'
+    operand: tokens.nested(-> parse_not(tokens))
+    position: token.position()
 
 at_comparison_start := (tokens: TokenStream) ->
   tokens.continues_with_word('is') or tokens.continues_with_word('as') or at_comparison(tokens)
@@ -203,7 +212,7 @@ parse_cast := (tokens: TokenStream, value: Expression): Expression ->
 
 # The fallback of `x as T ? y`, which may itself be one, as `a ? b ? c` is `a ? (b ? c)`.
 parse_cast_fallback := (tokens: TokenStream) ->
-  fallback := parse_coalesce(tokens)
+  fallback := tokens.nested(-> parse_coalesce(tokens))
   tokens.continues_with_word('as') then parse_cast(tokens, fallback) else fallback
 
 parse_binary_comparison := (tokens: TokenStream, left: Expression): Expression ->
@@ -215,7 +224,7 @@ parse_coalesce := (tokens: TokenStream): Expression ->
   value := parse_range(tokens)
   return value if tokens.peek_continuation() != '?'
   tokens.next()
-  fallback := parse_coalesce(tokens)
+  fallback := tokens.nested(-> parse_coalesce(tokens))
   Coalesce value, fallback, position: value.position
 
 parse_range := (tokens: TokenStream): Expression ->
@@ -247,11 +256,14 @@ parse_arithmetic := (tokens: TokenStream, level: Int): Expression ->
   return parse_unary(tokens) if level == ARITHMETIC_PRECEDENCE.length
   operators := ARITHMETIC_PRECEDENCE[level]
   takes_shifts := level == ARITHMETIC_PRECEDENCE.length - 1
+  nesting := tokens.nesting
   var left = parse_arithmetic(tokens, level + 1)
   while true
     operator := operator_at(tokens, operators, takes_shifts then '') ? break
+    tokens.deepen()
     right := parse_arithmetic(tokens, level + 1)
     left = BinaryOperation(operator, left, right, position: left.position)
+  tokens.nesting = nesting
   left
 
 # The operator that follows, consumed: one of `kinds`, or a shift and `shift_rest` if that is given,
@@ -285,7 +297,7 @@ parse_unary := (tokens: TokenStream): Expression ->
     position := token.position()
     marks := tokens.innermost_function()
     marks.await_at = position if marks and marks.await_at == nil
-    return Await(position, operand: parse_unary(tokens))
+    return Await(position, operand: tokens.nested(-> parse_unary(tokens)))
   return parse_postfix(tokens, parse_primary(tokens)) if token.kind != '-'
   tokens.next()
   position := token.position()
@@ -298,7 +310,7 @@ parse_unary := (tokens: TokenStream): Expression ->
   if literal.kind == FLOAT and not literal.spaced
     tokens.next()
     return parse_postfix(tokens, FloatLiteral(position, text: "-#{literal.text}"))
-  UnaryOperation position, operator: '-', operand: parse_unary(tokens)
+  UnaryOperation position, operator: '-', operand: tokens.nested(-> parse_unary(tokens))
 
 export parse_identifier := (tokens: TokenStream) ->
   token := tokens.peek()
@@ -307,9 +319,13 @@ export parse_identifier := (tokens: TokenStream) ->
   Identifier name: token.text, position: token.position()
 
 parse_postfix := (tokens: TokenStream, primary: Expression): Expression ->
+  nesting := tokens.nesting
   var expression = primary
-  expression = extended while extended := extend_by_postfix(tokens, expression)
-  at_nil_safe(tokens) then parse_nil_safe(tokens, expression) else expression
+  while extended := extend_by_postfix(tokens, expression)
+    tokens.deepen()
+    expression = extended
+  tokens.nesting = nesting
+  at_nil_safe(tokens) then tokens.nested(-> parse_nil_safe(tokens, expression)) else expression
 
 at_nil_safe := (tokens: TokenStream) ->
   question := tokens.peek()

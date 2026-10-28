@@ -161,23 +161,34 @@ parse_char := (digits: Binary) ->
     value = value << 4 | digit_value
   value.to_char()
 
-# The index of the `}` that closes an interpolation, skipping nested braces and string literals.
-# Each arm moves past what it reads.
-find_interpolation_end := (line: SourceLine, start: Int): Int? ->
-  var depth = 0
+# The index of the `}` that closes an interpolation, skipping nested braces and string literals with
+# the interpolations in them. It reads them in a loop, not by recursion, as they may nest deep.
+find_interpolation_end := (line: SourceLine, start: Int) ->
+  # The braces open in the code of each interpolation being read, and where each string literal in
+  # that code starts, the innermost last: a string is being read where there are as many of each.
+  braces := [0]
+  strings: Int[]
   var i = start
   while i < line.length
-    case line.bytes[i]
-      when '"' then i = scan_double_quoted(line, i).end
-      when "'"
-        close := line.index_of("'", i + 1) ? return nil
-        i = close + 1
-      when '{'
-        depth += 1
+    byte := line.bytes[i]
+    if strings.length == braces.length
+      if byte == '\'
         i += 1
-      when '}'
-        return i if depth == 0
-        depth -= 1
+      else if byte == '"'
+        strings.pop()
+      else if byte == '#' and line.bytes.occurs_at(i + 1, '{'.binary)
+        braces.push 0
         i += 1
-      else i += 1
+    else
+      case byte
+        when '"' then strings.push(i)
+        when "'" then i = line.index_of("'", i + 1) ? return nil
+        when '{' then braces[braces.length - 1] += 1
+        when '}'
+          open := braces.pop()
+          return i if braces.is_empty() and open == 0
+          braces.push open - 1 if open > 0
+        else pass
+    i += 1
+  line.fail 'unterminated string literal', strings.last()! if not strings.is_empty()
   nil

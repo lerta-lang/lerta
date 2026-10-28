@@ -4,10 +4,10 @@ Known defects, most severe first.
 
 | # | Title | Severity |
 |---|---|---|
-| 1 | The compiler crashes on deeply nested source | Low |
-| 2 | std:http repeats Content-Length and Connection that a handler puts in `fields` | Low |
-| 3 | A Reader refuses a read right after `timeout` ends the last one | Low |
-| 4 | `Reader.read` returns an empty Binary at the end after an empty chunk | Low |
+| 1 | std:http repeats Content-Length and Connection that a handler puts in `fields` | Low |
+| 2 | A Reader refuses a read right after `timeout` ends the last one | Low |
+| 3 | `Reader.read` returns an empty Binary at the end after an empty chunk | Low |
+| 4 | Code generation takes time exponential in the `not`s nested on a value | Low |
 | 5 | `while` does not narrow in its body | Info |
 | 6 | Testing a weak local for nil does not say why it is not narrowed | Info |
 | 7 | The reference says an enum cannot be a member of a union | Info |
@@ -15,29 +15,27 @@ Known defects, most severe first.
 | 9 | `read_console` underflows when given fewer than 3 bytes | Info |
 | 10 | `read_console` loops when the input ends after a held high surrogate | Info |
 
-## 1. The compiler crashes on deeply nested source
-
-The recursive descent parser has no limit on nesting. Source with 200,000 nested parentheses or array literals makes `lerta dump-ast` abort with exit status 134 on a stack overflow. `lerta lsp` parses what an editor opens, so a file can stop the language server.
-
-The fix is a limit on the depth, beyond which the parser reports a compile error.
-
-## 2. std:http repeats Content-Length and Connection that a handler puts in `fields`
+## 1. std:http repeats Content-Length and Connection that a handler puts in `fields`
 
 `response_bytes` in `std/http.lerta` drops the framing fields a handler gives by comparing their names with lowercase ones. A handler that pushes `('Content-Length', '99')` to `fields` directly gets it sent beside the server's `content-length: 3`, and the response's framing breaks.
 
 The fix is to compare the names in lowercase.
 
-## 3. A Reader refuses a read right after `timeout` ends the last one
+## 2. A Reader refuses a read right after `timeout` ends the last one
 
 `first_settled` in `std/async.lerta` cancels the losing Promises and returns without waiting for them to unwind. A read that `timeout` ends has not yet left `Reader.exclusive` in `std/io.lerta`, so a read started right after the `TimeoutError` throws `a Reader is read by another read that has not ended`. After one `await`, it succeeds. std:http awaits a write in between, so it is not affected.
 
 The fix is for `first_settled` to await the cancelled Promises before it returns, though a step that a cancel does not stop, such as a write in progress, then delays the `TimeoutError`.
 
-## 4. `Reader.read` returns an empty Binary at the end after an empty chunk
+## 3. `Reader.read` returns an empty Binary at the end after an empty chunk
 
 `fill` in `std/io.lerta` takes an empty chunk as data, so when a `read_chunk` returns an empty Binary and then nil, `read` returns an empty Binary in place of nil. The runtime never gives an empty chunk, so only a `read_chunk` of the program's own does this.
 
 The fix is for `fill` to skip an empty chunk.
+
+## 4. Code generation takes time exponential in the `not`s nested on a value
+
+`print not not ... true` takes twice as long to compile for each `not` more: `lerta dump-llvm` takes 0.06 s with 20 and 0.9 s with 24, and does not end with a few hundred, which the limit on nesting allows. Checking it is fast, so the cost is in codegen.
 
 ## 5. `while` does not narrow in its body
 
