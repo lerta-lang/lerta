@@ -31,7 +31,7 @@ import
   emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of,
   emit_weak_object, emit_weak_slot_or_null, HeapField, value_field
 from './heap_object'
-import emit_if_else, IrBuilder, IrModule from './ir_builder'
+import emit_when, IrBuilder, IrModule from './ir_builder'
 import
   constructor_symbol, default_entry_symbol, emit_release, emit_release_stored, emit_retain,
   emit_retain_value, ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol
@@ -316,10 +316,13 @@ generate_last_statement := (g: Generator, body: Statement[], result: Type) ->
   else
     emit_return g, '', void_type
 
-# Takes the constructor arguments (see is_argument, in order) borrowed, as for any call; then
-# computes the other fields, and the defaults of the arguments not given, in order, and runs `init`
-# last. An exception on the way releases the fields, which start as nil, and frees the object
-# without running its deinit, or panics if init let it escape. It has the linkage (see Definition).
+# Takes the constructor arguments (see is_argument, in order) owned, unlike any other call, and
+# stores those given first, so that the fields own them before anything can throw; then computes
+# the other fields, and the defaults of the arguments not given, in order, and runs `init` last.
+# Storing the arguments first does not show, as an initializer reads only the fields before it. An
+# exception on the way releases the fields, which start as nil, and frees the object without
+# running its deinit, or panics if init let it escape. An argument with a default comes with whether
+# it is given (see generate_construction). It has the linkage (see Definition).
 export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo) ->
   ir := g.ir
   g.result_type = info.type
@@ -336,19 +339,21 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
     args := "ptr #{object}, ptr #{weak_slot}, i64 #{mark}"
     call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
   arguments := [field for field in info.fields when is_argument(field)]
-  store_argument := (field: FieldInfo) ->
-    param := "%p#{argument_index(arguments, field)}"
-    emit_retain_value ir, param, field.type!
-    store_field g, object, info, field, param
+  given := (field: FieldInfo) -> "%given#{argument_index(arguments, field)}"
   for field in arguments
-    store_argument field if not field.has_default
+    store_argument := ->
+      store_field g, object, info, field, "%p#{argument_index(arguments, field)}"
+    if field.has_default
+      emit_when ir, given(field), store_argument
+    else
+      store_argument()
   scope := g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
     value := field.value ? continue
     compute := -> store_field(g, object, info, field, generate(g, value))
     if field.has_default
-      emit_default_or_argument g, arguments, field, compute, -> store_argument(field)
+      emit_when ir, ir.assign("xor i1 #{given(field)}, true"), compute
     else
       compute()
   g.locals.pop()
@@ -364,13 +369,6 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
   finish g, "#{linkage}ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
 
 argument_index := (arguments: FieldInfo[], field: FieldInfo) -> arguments.index_of(field)!
-
-# An argument with a default comes with whether it is given (see generate_construction); if it is
-# not, its default is computed in its place among the initializers.
-emit_default_or_argument := (
-  g: Generator, arguments: FieldInfo[], field: FieldInfo, compute: () -> void,
-  store_argument: () -> void
-) -> emit_if_else(g.ir, "%given#{argument_index(arguments, field)}", store_argument, compute)
 
 # The field takes over the value, owned; a weak field takes its box instead.
 store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String) ->

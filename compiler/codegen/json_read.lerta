@@ -172,10 +172,9 @@ emit_read_object := (ir: IrBuilder, reader: Coder, type: ObjectType) ->
     for field, i in fields
       args.push "#{ir_type(field.type)} #{values.value(i)}"
       args.push "i1 #{values.given(i)}" if field.has_default
+    # The constructor takes the values over, owned, and releases them if it throws.
     object := ir.assign("call ptr #{constructor_symbol(type)}(#{args.join(', ')})")
-    emit_check_with ir, -> values.unwind()
-    # The constructor retains the values, which this function owned.
-    values.release()
+    emit_check_with ir, -> emit_return_thrown(ir, type)
     object
   emit_read_fields ir, reader, type, fields, make
 
@@ -194,10 +193,8 @@ class FieldValues
   value = (i: Int) -> @ir.assign("load #{ir_type(@fields[i].type)}, ptr #{@slots[i]}")
   given = (i: Int) -> @ir.assign("load i1, ptr #{@given_slots[i]}")
 
-  release = -> emit_release_value(@ir, @value(i), field.type) for field, i in @fields
-
   unwind = ->
-    @release()
+    emit_release_value @ir, @value(i), field.type for field, i in @fields
     emit_return_thrown @ir, @type
 
 emit_read_fields := (

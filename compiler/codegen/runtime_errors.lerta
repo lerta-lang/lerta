@@ -4,7 +4,7 @@ import emit_traced_unwind, exception_global, TRACE_START from './exceptions'
 import emit_interface_value from './interface'
 import Generator from './generator'
 import emit_seldom_branch from './ir_builder'
-import constructor_symbol, INTERFACE_IR_TYPE, string_constant from './lerta_ir'
+import constructor_symbol, emit_retain, INTERFACE_IR_TYPE, string_constant from './lerta_ir'
 import call_void_runtime from './runtime_calls'
 import ObjectType from '../types'
 
@@ -24,9 +24,10 @@ export define_raise_error := (g: Generator) ->
   ir.emit 'ret void'
   ir.finish "void #{RAISE_ERROR}(i32 %kind, ptr %message)"
 
-# The constructor takes the message borrowed, as any call does.
+# The constructor takes the message owned, which the runtime lends.
 emit_set_error := (g: Generator, itab: Itab) ->
   type := itab.type as ObjectType!
+  emit_retain g.ir, '%message'
   error := g.ir.assign("call ptr #{constructor_symbol(type)}(ptr %message)")
   value := emit_interface_value(g, error, itab)
   g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr #{exception_global(g.ir)}"

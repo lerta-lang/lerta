@@ -1,0 +1,94 @@
+interface Named
+  name: String
+
+class Tag
+  name: String
+  deinit = -> print("tag #{@name} gone")
+
+fail := (): String -> throw IndexError(message: 'no default')
+
+class Holder
+  tag: Tag
+  named: Named?
+  extra: Tag? = default nil
+  note = default fail()
+
+class Checked
+  tag: Tag
+  init = -> throw IndexError(message: 'init failed')
+
+class Watcher
+  weak tag: Tag?
+
+# A new value is taken over by the object, and goes with it.
+made := -> Holder(tag: Tag(name: 'new'), named: Tag(name: 'named'), note: 'n')
+made()
+print 'made gone'
+
+# A local's value is shared with the object, and stays with the local.
+shared := ->
+  tag := Tag(name: 'shared')
+  var other = Tag(name: 'var')
+  holder := Holder(tag, named: other, extra: other, note: 'n')
+  other = Tag(name: 'replaced')
+  print holder.named?.name ? ''
+  print 'holder dropped'
+shared()
+
+# The arguments given go with the object when an initializer or init throws.
+try
+  Holder tag: Tag(name: 'thrown'), named: nil, extra: Tag(name: 'extra')
+catch e: IndexError
+  print e.message
+try
+  Checked tag: Tag(name: 'checked')
+catch e: IndexError
+  print e.message
+
+# A weak field given a new value lets it go at once.
+watcher := Watcher(tag: Tag(name: 'weak'))
+print watcher.tag == nil
+
+# A weak field given a local's object leaves it with the local.
+kept := Tag(name: 'kept')
+print Watcher(tag: kept).tag?.name ? 'gone'
+
+# A struct given from a local is shared, with the reference it holds.
+struct Pair
+  tag: Tag
+
+class PairHolder
+  pair: Pair
+
+pair_shared := ->
+  pair := Pair(tag: Tag(name: 'pair'))
+  holder := PairHolder(pair)
+  print holder.pair.tag.name
+pair_shared()
+
+# A runtime error's message is shared with the error.
+try
+  print [1][2]
+catch e: IndexError
+  print e.message
+
+# A weak field given nil, and fields of other kinds given a local's value.
+class Box<T>
+  value: T
+
+class Mixed
+  weak tag: Tag?
+  either: Tag | String
+  pair: (Tag, Int)
+  describe: () -> String
+
+kinds := ->
+  none: Tag? = nil
+  tag := Tag(name: 'kinds')
+  either: Tag | String = tag
+  pair := (tag, 1)
+  describe := -> tag.name
+  mixed := Mixed(either, pair, describe, tag: none)
+  box := Box(value: tag)
+  print "#{mixed.tag == nil} #{mixed.describe()} #{box.value.name} #{Box(value: 'new').value}"
+kinds()
