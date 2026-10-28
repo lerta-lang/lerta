@@ -111,21 +111,13 @@ extend Byte
 
 DIGITS := '0123456789abcdef'.binary
 
-# The digits of `n` in `base`, after a '-' if `negative`. They are written in place from the last,
-# once their count is known, so that no digit is a String of its own joined to the others.
+# The digits of `n` in `base`, after a '-' if `negative`. They are appended from the first, which
+# the greatest power of the base not above `n` picks, so that the Binary grows in place.
 digits_text := (n: UInt64, base: UInt64, negative = false) ->
-  var length = negative then 2 else 1
-  var rest = n / base
-  while rest != 0
-    length += 1
-    rest /= base
-  bytes: Byte[] = Array(length, 0)
-  bytes[0] = '-' if negative
-  rest = n
-  var i = length
-  while true
-    i -= 1
-    bytes[i] = DIGITS[(rest % base).to_int()!]
-    rest /= base
-    break if rest == 0
-  lerta_binary_as_string bytes.to_binary()
+  var scale: UInt64 = 1
+  scale *= base while n / scale >= base
+  var bytes = negative then '-'.binary else ''.binary
+  while scale != 0
+    bytes += DIGITS[(n / scale % base).to_int()!]
+    scale /= base
+  lerta_binary_as_string bytes
