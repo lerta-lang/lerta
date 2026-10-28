@@ -27,11 +27,11 @@ Builtin [interfaces](objects.md#interfaces), of `std:builtins`, for bounds such 
 - `Comparable`: `compare: (Self) -> Ordering`, where the builtin enum `Ordering` has the members `LESS`, `EQUAL` and `GREATER`.
 - `Hashable`: `equals: (Self) -> Bool` and `hash: () -> Int`.
 
-Every type that `==` compares has `equals`, which compares as `==` does, and every type that can be a [map key](types.md#map) has `hash`, which equal values share: builtin ones, unless a class or struct declares [its own](objects.md#classes-and-structs), and one that declares `compare` has a builtin `equals` by it. So they satisfy `Equatable` and `Hashable`. The numbers and `String` have a `compare`, and so satisfy `Comparable`, as does a class or struct that declares its own; `<` and the like order by it. A module's own names shadow them.
+Every type that `==` compares has `equals`, which compares as `==` does, and every type that can be a [map key](types.md#map) has `hash`, which equal values share: builtin ones, unless a class or struct declares [its own](objects.md#equality-and-order), and one that declares `compare` has a builtin `equals` by it. So they satisfy `Equatable` and `Hashable`. The numbers and `String` have a `compare`, and so satisfy `Comparable`, as does a class or struct that declares its own; `<` and the like order by it. A module's own names shadow them.
 
 ## Operators
 
-Builtin [interfaces](objects.md#interfaces), of `std:builtins`, for bounds such as `<T: Add<T, T>>`, of the methods that the arithmetic and bitwise operators call (see [operators](objects.md#classes-and-structs)): `Add<Rhs, Out>` (`add: (Rhs) -> Out`), `Sub`, `Mul`, `Div`, `Rem`, `BitAnd`, `BitOr`, `BitXor`, `Shl` and `Shr` likewise, and `Neg<Out>` (`neg: () -> Out`). The numbers have the methods of the operators that apply to them, which apply the operators, throwing as they do (`3.add(4)` is 7), and `String` has `add`, so that `<T: Add<T, T>>` takes an `Int` or a `String` as well as a type that declares `add`.
+Builtin [interfaces](objects.md#interfaces), of `std:builtins`, for bounds such as `<T: Add<T, T>>`, of the methods that the arithmetic and bitwise operators call (see [operators](objects.md#operators)): `Add<Rhs, Out>` (`add: (Rhs) -> Out`), `Sub`, `Mul`, `Div`, `Rem`, `BitAnd`, `BitOr`, `BitXor`, `Shl` and `Shr` likewise, and `Neg<Out>` (`neg: () -> Out`). The numbers have the methods of the operators that apply to them, which apply the operators, throwing as they do (`3.add(4)` is 7), and `String` has `add`, so that `<T: Add<T, T>>` takes an `Int` or a `String` as well as a type that declares `add`.
 
 ## INT_MIN and INT_MAX
 

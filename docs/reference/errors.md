@@ -71,7 +71,7 @@ A statement after one that never ends produces a warning, `unreachable code`: af
 
 ## Cycles
 
-A function literal that captures `@`, stored where `@` holds it, produces a warning, since the object and the literal then hold each other and neither is ever freed ([objects](objects.md#classes-and-structs)). The warning suggests a [weak function literal](functions.md#function-literals), `weak -> ...`, which captures `@` weakly.
+A function literal that captures `@`, stored where `@` holds it, produces a warning, since the object and the literal then hold each other and neither is ever freed ([objects](objects.md#reference-counting-and-weak-references)). The warning suggests a [weak function literal](functions.md#function-literals), `weak -> ...`, which captures `@` weakly.
 
 - The literal captures `@` itself, or a `const` that holds `@`, as `me := @`, not a weak one; a `var` that holds `@` may change, and is not seen.
 - The place is a field reached from `@`, as `@on_press` or `@child.f`, or an item of an array or a map so reached, set by assignment or by `push`, through `!` too; not through a weak field, which holds its object without keeping it.
