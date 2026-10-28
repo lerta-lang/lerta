@@ -24,7 +24,6 @@ The planned design of modules, FFI, the standard library and tools.
 - In [std:http](../reference/modules.md#stdhttp), what a server needs in production, in this order:
   - `server.close()` that ends kept connections after the request they serve, and a promise that it settles once they have ended (graceful shutdown); an accept that fails while the server is open, as for too many open files, retried after a pause rather than ending the program.
   - A `Date` field, and `Expect: 100-continue`.
-  - Streaming: a body that is sent as it goes, chunked, with the pace of `socket.write`, by the handler or by `fetch`, in place of the `ValueError` that a `Reader` as a body sent is now.
   - Later: TLS, through that of std:net, for the server and for `fetch`; a URL module for the parts of `request.url`, which `fetch` would parse its URLs with; a cookie jar that a `Client` may be given, which stores the cookies of `Set-Cookie` and sends them with the requests they match; and HTTP/2.
 - `make_link` of [std:io](../reference/modules.md#stdio) followed on Windows itself: Wine, which the tests run under, makes the links but does not follow them.
 

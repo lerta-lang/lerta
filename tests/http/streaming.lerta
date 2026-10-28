@@ -1,0 +1,129 @@
+# A body that is a Reader is sent as it comes: by the server in chunks, or to HTTP/1.0 up to the end
+# of the connection, and by fetch in chunks, while it reads the response, which may come first. Each
+# write waits for the peer, a body that fails ends the connection, and the Reader is closed once
+# sent, or once it is not to be. A request whose body is a Reader follows no redirect that would
+# send it again.
+import Pipe from 'std:io'
+import connect_tcp from 'std:net'
+import sleep from 'std:time'
+import Client, fetch, Headers, Request, Response, serve from 'std:http'
+
+# What the writer of each pipe has done, once it has done it.
+var log: String[] = []
+
+# Writes the parts to the pipe, and ends it, or fails it if `fails`.
+feed := (pipe: Pipe, parts: String[], fails: Bool) ->
+  try
+    await pipe.writer.write(part) for part in parts
+    if fails
+      pipe.writer.fail IOError(message: 'the source failed')
+    else
+      pipe.writer.end()
+    log.push 'fed'
+  catch error: IOError
+    log.push "not fed: #{error.message}"
+
+# A pipe of the parts, fed as they are taken.
+fed := (parts: String[], fails = false) ->
+  pipe := Pipe()
+  _feeding := feed(pipe, parts, fails)
+  pipe
+
+# The number of MiB that the writer of /many has had taken, of 16.
+var taken = 0
+
+feed_many := (pipe: Pipe) ->
+  mib := 'm'.repeat(1048576)
+  for _ in 0...16
+    await pipe.writer.write(mib)
+    taken += 1
+  pipe.writer.end()
+
+redirect := (status: Int) ->
+  headers := Headers()
+  headers.set 'location', '/echo'
+  Response headers, status
+
+handle := (request: Request) ->
+  path := request.url.split('/').last()!
+  if path == 'echo'
+    coding := request.headers.get('transfer-encoding') ? '-'
+    return Response(body: "#{request.method} #{coding}: #{await request.text()}")
+  # Sent back as it comes.
+  return Response(body: request.body) if path == 'mirror'
+  return redirect(307) if path == 'redirect'
+  return redirect(303) if path == 'see-other'
+  # Answered before the body that comes is read.
+  return Response(status: 413) if path == 'early'
+  if path == 'many'
+    pipe := Pipe()
+    _feeding := feed_many(pipe)
+    return Response(body: pipe.reader)
+  status := path == 'no-content' then 204 else path == 'bad-status' then 99 else 200
+  Response status, body: fed(['hello', ', world'], path == 'fails').reader
+
+server := serve(handle)
+
+# What the server answers to the requests, until it closes the connection after them, and what the
+# writers have done.
+ask := (requests: String) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  await client.write(requests)
+  client.end()
+  print (await client.reader.read_all()).text()!.replace("\r\n", ' | ')
+  client.close()
+  await sleep(0.05)
+  print "  #{log.join(', ')}"
+  log = []
+
+await ask("GET /parts HTTP/1.1\r\nHost: a\r\n\r\nGET /parts HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("GET /parts HTTP/1.0\r\n\r\n")
+await ask("HEAD /parts HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("HEAD /parts HTTP/1.0\r\nConnection: keep-alive\r\n\r\n")
+await ask("GET /parts HTTP/1.0\r\nConnection: keep-alive\r\n\r\nGET /parts HTTP/1.0\r\n\r\n")
+mirrored := "POST /mirror HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n"
+await ask("#{mirrored}3\r\nabc\r\n0\r\n\r\n#{mirrored}2\r\nde\r\n0\r\n\r\n")
+await ask("GET /no-content HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("GET /bad-status HTTP/1.1\r\nHost: a\r\n\r\n")
+await ask("GET /fails HTTP/1.1\r\nHost: a\r\n\r\nGET /parts HTTP/1.1\r\nHost: a\r\n\r\n")
+
+# A peer that does not read leaves the writer waiting.
+client := await connect_tcp('127.0.0.1', server.port())
+await client.write("GET /many HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+await sleep(0.3)
+print "taken before the peer reads: #{taken < 16}"
+received := await client.reader.read_all()
+print "taken after: #{taken}, received 16 MiB: #{received.length > 16 * 1048576}"
+client.close()
+
+url := "http://127.0.0.1:#{server.port()}"
+
+# What fetch gives for a request of the path with the body, or the error it throws.
+post := (path: String, body: Pipe) ->
+  try
+    response := await fetch("#{url}/#{path}", method: 'POST', body: body.reader)
+    print "#{response.status} #{await response.text()}"
+  catch error: IOError
+    print "failed: #{error.message}"
+
+await post('echo', fed(['sent', ' in parts']))
+await post('echo', fed(['sent'], true))
+# A 307 would send again the body, which has been read; a 303 asks for a GET without it.
+await post('redirect', fed(['sent']))
+await post('see-other', fed(['sent']))
+# A response that comes before the body has been sent is given; the rest is not sent.
+await post('early', fed(['x'.repeat(1048576) for _ in 0...8]))
+try
+  await fetch("#{url}/echo", method: 'NOT A METHOD', body: fed(['unsent']).reader)
+catch error: ValueError
+  print error.message
+await sleep(0.05)
+print log.join(', ')
+
+# A body that is a Reader goes on a new connection, which is kept once the response has been read.
+kept := Client()
+await (await kept.fetch("#{url}/echo")).text()
+await (await kept.fetch("#{url}/echo", method: 'POST', body: fed(['sent']).reader)).text()
+print "kept: #{kept.idle["127.0.0.1:#{server.port()}"]!.length}"
+kept.close()
+server.close()

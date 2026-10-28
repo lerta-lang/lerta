@@ -4,14 +4,15 @@
 import Reader from 'std:io'
 import connect_tcp, Socket from 'std:net'
 import time from 'std:time'
-import CHUNK_SIZE, ChunkedBody, MAX_LINE, well_formed from './http_chunks'
-import check_field, Headers, is_token, keeps_alive, Response, sent_bytes from './http_message'
+import CHUNK_SIZE, chunk_bytes, ChunkedBody, LAST_CHUNK, MAX_LINE, well_formed from './http_chunks'
+import Body, check_field, Headers, is_token, keeps_alive, Response, sent_bytes from './http_message'
 
-# What a request sends besides its URL, and whether a redirect is followed.
+# What a request sends besides its URL, and whether a redirect is followed. A body that is a Reader
+# is sent in chunks as it comes, and closed once the final response has come.
 export struct FetchOptions
   method = default 'GET'
   headers = default Headers()
-  body: String | Binary = default ''
+  body: Body = default ''
   follow_redirects = default true
 
 # Keeps each connection whose response has been read to its end, for the next request to the same
@@ -24,14 +25,17 @@ export class Client
 
   # The response once its head has come; its body is read as it comes.
   fetch = (url: String, options: FetchOptions) ->
+    { body } := options
+    try
+      await @fetch_body(url, options, body is Reader then body else sent_bytes(body))
+    finally
+      body.close() if body is Reader
+
+  fetch_body = (url: String, options: FetchOptions, body: Binary | Reader) ->
     { method } := options
     throw ValueError(message: "not a method: #{method}") if not is_token(method)
     check_field name, value for (name, value) in options.headers.fields
-    var request = Outgoing
-      method
-      target: parse_url(url)
-      headers: options.headers
-      body: sent_bytes(options.body)
+    var request = Outgoing(method, body, target: parse_url(url), headers: options.headers)
     var response = await @exchange(request)
     var redirects = 0
     while next := options.follow_redirects then redirected(request, response) else nil
@@ -51,10 +55,11 @@ export class Client
 
   # Sends the request on a connection kept, or on a new one. A kept connection may have been closed
   # by the server in the meantime, so a request that gets no answer on one is sent again on a new
-  # one, when its method is one that may be sent twice.
+  # one, when its method is one that may be sent twice. A body that is a Reader cannot be sent twice,
+  # so it goes on a new connection, which the server has not had the time to close.
   exchange = (request: Outgoing) ->
-    { target } := request
-    if socket := @take_idle(target.authority)
+    { target, body } := request
+    if socket := body is Reader then nil else @take_idle(target.authority)
       try
         return await @send(socket, request)
       catch error: NoAnswer
@@ -64,13 +69,22 @@ export class Client
     catch error: NoAnswer
       throw IOError(message: error.message)
 
-  # Closes the connection on a failure, after which what it holds is not known.
+  # Closes the connection on a failure, after which what it holds is not known. A body that is a
+  # Reader is sent while the response is read, as a server may answer before it has read it all, and
+  # a failure to read it fails the request.
   send = (socket: Socket, request: Outgoing) ->
+    { body } := request
+    sent := body is Reader then SentBody(socket, request, body) else nil
+    sending := sent?.send()
     try
-      head := await read_head(socket, request)
+      head := await read_head(socket, request, sent == nil)
+      throw failure if failure := sent?.failure
+      # What is still being sent when the response has come is not wanted any more.
+      sending?.cancel()
       { left, chunked } := framing(head, request.method)
-      # A body that ends with the connection leaves nothing to keep.
-      keeps := left != nil and keeps_alive(head.version, head.headers)
+      # A body that ends with the connection leaves nothing to keep, and so does a request that has
+      # not been sent whole.
+      keeps := left != nil and keeps_alive(head.version, head.headers) and sent?.whole ? true
       # The connection is given back once the body has been read to its end, or closed.
       finish := ->
         if keeps
@@ -87,8 +101,9 @@ export class Client
         status: head.status
         headers: head.headers
     catch error
+      sending?.cancel()
       socket.close()
-      throw error
+      throw sent?.failure ? error
 
   # The latest connection kept for the host and port, after closing those kept too long, which the
   # server may be closing. The clock of `time` may be set back, which keeps one longer, and a request
@@ -131,7 +146,38 @@ struct Outgoing
   target: Target
   method: String
   headers: Headers
-  body: Binary
+  body: Binary | Reader
+
+# A request whose body is a Reader, sent in chunks. A read of the body that fails ends the sending
+# side of the connection, so that the server does not wait for the rest; a write that fails ends the
+# sending too, as the server has stopped reading, and its response may have come.
+class SentBody
+  socket: Socket
+  request: Outgoing
+  # The request's body, which is a Reader.
+  body: Reader
+  # Whether the last chunk has been written.
+  whole = false
+  failure: Error? = nil
+
+  send = ->
+    try
+      return if not await @written(request_bytes(@request))
+      while chunk := await @body.read(CHUNK_SIZE)
+        return if not await @written(chunk_bytes(chunk))
+      @whole = await @written(LAST_CHUNK.binary)
+    catch error: CancelledError
+      throw error
+    catch error
+      @failure = error
+      @socket.end()
+
+  written = (bytes: Binary) ->
+    try
+      await @socket.write(bytes)
+      true
+    catch _: IOError
+      false
 
 # The parts of an http URL that a request is sent by.
 struct Target
@@ -178,11 +224,13 @@ split_authority := (authority: String) ->
   port_text := after.without_prefix(':') ? return nil
   (address, port_text)
 
+# The bytes of the request, but for a body that is a Reader, which follows them in chunks.
 request_bytes := (request: Outgoing) ->
   { target, method, body } := request
   var head = "#{method} #{target.path} HTTP/1.1\r\nhost: #{target.authority}\r\n"
   for (name, value) in request.headers.fields
     head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name.to_lower())
+  return (head + "transfer-encoding: chunked\r\n\r\n").binary if body is Reader
   if not body.is_empty() or SENDING_BODY.contains(method)
     head += "content-length: #{body.length}\r\n"
   (head + "\r\n").binary + body
@@ -200,20 +248,21 @@ struct Head
 
 # Sends the request, and gives the head of the final response, past those of 1xx, which tell of
 # progress alone.
-read_head := (socket: Socket, request: Outgoing) ->
+read_head := (socket: Socket, request: Outgoing, writes: Bool) ->
   { reader } := socket
-  var head = await read_any_head(reader, await first_line(socket, request))
+  var head = await read_any_head(reader, await first_line(socket, request, writes))
   while head.status < 200
     # What follows a 101 is another protocol, which the client does not speak.
     throw IOError(message: 'switching protocols not supported') if head.status == 101
     head = await read_any_head(reader, await read_line(reader) ? throw ended_early())
   head
 
-# The first line of the response to the request; a failure before it comes is a NoAnswer.
-first_line := (socket: Socket, request: Outgoing) ->
+# The first line of the response to the request, which is written first if `writes`; a failure
+# before it comes is a NoAnswer.
+first_line := (socket: Socket, request: Outgoing, writes: Bool) ->
   send := ->
     try
-      await socket.write(request_bytes(request))
+      await socket.write(request_bytes(request)) if writes
       await socket.reader.read_line(MAX_LINE)
     catch error: IOError
       throw NoAnswer(message: error.message)
@@ -314,7 +363,9 @@ redirected := (request: Outgoing, response: Response) ->
   if target.authority != request.target.authority
     headers.delete name for name in CREDENTIALS
   as_get := (status == 303 and request.method != 'HEAD') or ((status == 301 or status == 302) and request.method == 'POST')
-  return Outgoing(request..., target, headers) if not as_get
+  if not as_get
+    # A body that is a Reader has been read as it was sent.
+    return request.body is Reader then nil else Outgoing(request..., target, headers)
   headers.delete 'content-type'
   Outgoing target, headers, method: 'GET', body: ''.binary
 

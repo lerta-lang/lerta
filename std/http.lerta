@@ -4,7 +4,7 @@
 import timeout, TimeoutError from 'std:async'
 import LineTooLongError, Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
-import CHUNK_SIZE, ChunkedBody from './internal/http_chunks'
+import CHUNK_SIZE, chunk_bytes, ChunkedBody, LAST_CHUNK from './internal/http_chunks'
 import
   check_field, Headers, keeps_alive, Request, Response, sent_bytes
 from './internal/http_message'
@@ -115,30 +115,45 @@ LINGER_SECONDS := 2.0
 LINGER_BYTES := 65536
 
 # Serves the next request on the connection, and tells whether the connection goes on. A response
-# that the server gives itself has an empty body, which is right for HEAD too.
+# that the server gives itself has an empty body, which is right for HEAD too. A body that is a
+# Reader is closed once sent, or once it is not to be.
 serve_request := (socket: Socket, server: Server) ->
   incoming :=
     try
       await read_request(socket.reader, server) ? return false
     catch error: RequestError
-      await socket.write(response_bytes({ status: error.status }, false, 'GET'))
+      await socket.write(response_bytes({ status: error.status }, false, 'GET', true))
       return false
     catch _: ValueError
       # A line that is not UTF-8, or a header that Headers does not take.
-      await socket.write(response_bytes({ status: 400 }, false, 'GET'))
+      await socket.write(response_bytes({ status: 400 }, false, 'GET', true))
       return false
-  method := incoming.request.method
-  var keep_alive = incoming.keep_alive
-  bytes :=
+  { request, chunked } := incoming
+  { method } := request
+  failed := -> await socket.write(response_bytes({ status: 500 }, false, method, chunked))
+  response :=
     try
-      response := await server.handler(incoming.request)
-      # A body whose read has failed cannot be read past to the next request.
-      keep_alive = keep_alive and incoming.body.failure == nil
-      response_bytes response, keep_alive, method
+      await server.handler(request)
     catch _
-      await socket.write(response_bytes({ status: 500 }, false, method))
+      await failed()
       return false
-  await socket.write(bytes)
+  { body } := response
+  sends_reader := body is Reader and has_body(response.status, method)
+  # A body whose read has failed cannot be read past to the next request, and one sent as it comes
+  # to HTTP/1.0 ends with the connection.
+  keep_alive :=
+    incoming.keep_alive and incoming.body.failure == nil and (chunked or not sends_reader)
+  try
+    bytes :=
+      try
+        response_bytes response, keep_alive, method, chunked
+      catch _
+        await failed()
+        return false
+    await socket.write(bytes)
+    await write_body(socket, body, chunked) if body is Reader and sends_reader
+  finally
+    body.close() if body is Reader
   return false if not keep_alive
   await incoming.body.skip()
   true
@@ -147,6 +162,8 @@ struct Incoming
   request: Request
   body: BodyChunks
   keep_alive: Bool
+  # Whether a body that the response sends as it comes may go in chunks, which HTTP/1.0 does not take.
+  chunked: Bool
 
 # The next request, or nil if the connection ends, or stays idle, before it starts.
 read_request := (reader: Reader, server: Server) ->
@@ -176,7 +193,7 @@ read_request := (reader: Reader, server: Server) ->
   body := BodyChunks(reader, chunks, left: length, seconds: body_timeout)
   url := url_of(host, target) ? throw bad_request()
   request := Request(method, url, headers, body: Reader(read_chunk: -> await body.next()))
-  Incoming request, body, keep_alive: keeps_alive(version, headers)
+  Incoming request, body, keep_alive: keeps_alive(version, headers), chunked: version == 'HTTP/1.1'
 
 VERSIONS := ['HTTP/1.1', 'HTTP/1.0']
 
@@ -297,24 +314,40 @@ class BodyChunks
     var chunk = await @next()
     chunk = await @next() while chunk != nil
 
-# The response to a request of `method`. A response to HEAD, and one of 204 or 304, has no body, but
-# for HEAD its content-length tells the length of the body that a GET would give. Throws a
-# ValueError for a status that is no final one, for a body that is a Reader, and for fields that
-# Headers would not have taken, which a handler may have put in its fields itself.
-response_bytes := (response: Response, keep_alive: Bool, method: String) ->
-  body := sent_bytes(response.body)
-  status := response.status
+# The bytes of the response to a request of `method`, but for a body that is a Reader, which follows
+# them as it comes, in chunks when `chunked`. A response to HEAD, and one of 204 or 304, has no body,
+# but for HEAD its fields tell how the body that a GET would give comes. Throws a ValueError for a
+# status that is no final one, and for fields that Headers would not have taken, which a handler may
+# have put in its fields itself.
+response_bytes := (response: Response, keep_alive: Bool, method: String, chunked: Bool) ->
+  { status, body } := response
   throw ValueError(message: "not a final status: #{status}") if status < 200 or status > 599
-  # A handler need not give a 304 the body that a 200 would have, to give its length.
-  has_length := status != 204 and status != 304
-  has_body := has_length and method != 'HEAD'
   var head = "HTTP/1.1 #{status} #{REASONS[status] ? ''}\r\n"
   for (name, value) in response.headers.fields
     check_field name, value
     head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name.to_lower())
-  head += "content-length: #{body.length}\r\n" if has_length
+  var bytes = ''.binary
+  if body is Reader
+    head += "transfer-encoding: chunked\r\n" if has_length(status) and chunked
+  else
+    bytes = sent_bytes(body)
+    head += "content-length: #{bytes.length}\r\n" if has_length(status)
   head += "connection: #{keep_alive then 'keep-alive' else 'close'}\r\n\r\n"
-  has_body then head.binary + body else head.binary
+  has_body(status, method) then head.binary + bytes else head.binary
+
+# A handler need not give a 304 the body that a 200 would have, to give its length.
+has_length := (status: Int) -> status != 204 and status != 304
+
+has_body := (status: Int, method: String) -> has_length(status) and method != 'HEAD'
+
+# Writes the bytes of `body` as they come, each read as a chunk of its own when `chunked`, or else as
+# they are, which the end of the connection ends; for HTTP/1.0, a body that a failed read cuts short
+# so cannot be told from a whole one. Each write is awaited before the next read, so that the body
+# comes no faster than the peer takes it.
+write_body := (socket: Socket, body: Reader, chunked: Bool) ->
+  while chunk := await body.read(CHUNK_SIZE)
+    await socket.write(chunked then chunk_bytes(chunk) else chunk)
+  await socket.write(LAST_CHUNK) if chunked
 
 # The fields that the server writes itself, as they tell where the response ends.
 FRAMING_FIELDS := ['content-length', 'transfer-encoding', 'connection']
