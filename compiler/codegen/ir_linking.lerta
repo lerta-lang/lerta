@@ -1,8 +1,8 @@
 # Renders the modules of a program, each as LLVM IR of its own (see
 # docs/internals.md#per-module-output).
-# A module defines the named types it uses, as LLVM does not share them across modules; scanning
-# its text finds them all, since a named type (an object's layout) names no other named types.
-import scan from 'std:scanner'
+# A module defines the named types it uses, as LLVM does not share them across modules; the names
+# in its definitions (see names_in) give them all, since a named type (an object's layout) names no
+# other named types.
 import Definition, IrModule from './ir_builder'
 
 # What a module defines the first time its text names it: `define` runs once in a module for the
@@ -14,7 +14,7 @@ export struct OnDemand
 # Defines what the module's definitions name of `on_demand`, and in turn what those name.
 export define_on_demand := (module: IrModule, on_demand: Map<String, OnDemand>) ->
   define_named := (definition: Definition) ->
-    for name in [symbols_in(definition.text)..., type_names_in(definition.text)...]
+    for name in definition.names
       module.define_once each.key, each.define if each := on_demand[name]
   var globals = 0
   var functions = 0
@@ -53,33 +53,11 @@ imports_of := (
   symbols: Set<String>
   type_names: Set<String>
   for definition in own
-    text := definition.text
-    for symbol in symbols_in(text)
-      symbols.add symbol if definitions.has(symbol) and not defined.has(symbol)
-    for name in type_names_in(text)
-      type_names.add name if types.has(name) and not module.types.has(name)
+    for name in definition.names
+      if definitions.has(name)
+        symbols.add name if not defined.has(name)
+      else if types.has(name) and not module.types.has(name)
+        type_names.add name
   Imports symbols: [symbol for symbol in symbols], type_names: [name for name in type_names]
 
 all_definitions := (module: IrModule) -> [module.globals..., module.functions...]
-
-# The names after `@`: quoted, or of the characters of an unquoted name.
-symbols_in := (text: String) ->
-  pieces := text.split('@')
-  names: String[]
-  for i in 1...pieces.length
-    piece := pieces[i]
-    if piece.starts_with('"')
-      names.push "@\"#{piece.split('"')[1]}\""
-    else
-      names.push "@#{unquoted_name(piece)}"
-  names
-
-# Only types are named after `%` in quotes; registers and labels are not quoted.
-type_names_in := (text: String) ->
-  pieces := text.split('%"')
-  ["%\"#{pieces[i].split('"')[0]}\"" for i in 1...pieces.length]
-
-unquoted_name := (text: String) -> scan(text).take_while(is_name_character)
-
-is_name_character := (c: Char) ->
-  c.is_letter() or c.is_digit() or c == '.' or c == '_' or c == '$' or c == '-'

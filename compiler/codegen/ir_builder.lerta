@@ -8,6 +8,44 @@ export struct Definition
   symbol: String
   text: String
   declaration: String?
+  # The names in the text (see names_in), which linking looks up.
+  names: String[]
+
+definition_of := (symbol: String, text: String, declaration: String?) ->
+  Definition symbol, text, declaration, names: names_in(text)
+
+# The symbols, `@name` or `@"name"`, and the named types, `%"name"`, in the text, in order, read in
+# one pass, as the text of a function is long. Other quoted text, as a `c"..."` constant, is passed
+# over, so that an `@` in it starts no name; in well-formed IR, every quote is closed.
+names_in := (text: String) ->
+  bytes := text.binary
+  names: String[]
+  var i = 0
+  while i < bytes.length
+    byte := bytes[i]
+    is_type := byte == '%' and i + 1 < bytes.length and bytes[i + 1] == '"'
+    if byte == '@' or is_type
+      start := i
+      i += 1
+      if i < bytes.length and bytes[i] == '"'
+        i = after_quote(bytes, i)
+      else
+        i += 1 while i < bytes.length and is_name_byte(bytes[i])
+      names.push bytes.text(start, i)!
+    else if byte == '"'
+      i = after_quote(bytes, i)
+    else
+      i += 1
+  names
+
+# The place after the quote that closes the one at `start`.
+after_quote := (bytes: Binary, start: Int) ->
+  var i = start + 1
+  i += 1 while i < bytes.length and bytes[i] != '"'
+  min i + 1, bytes.length
+
+is_name_byte := (byte: Byte) ->
+  byte.is_letter() or byte.is_digit() or byte == '.' or byte == '_' or byte == '$' or byte == '-'
 
 LINKAGES := ['private ', 'internal ', 'external ', 'linkonce_odr ']
 
@@ -66,21 +104,21 @@ export class IrModule
 
   # Adds `<name> = <definition>`, which gives its linkage, for a global named by the caller.
   define_global = (name: String, definition: String) ->
-    @globals.push { symbol: name, text: "#{name} = #{definition}", declaration: nil }
+    @globals.push definition_of(name, "#{name} = #{definition}", nil)
 
   # A constant of the IR type, of the linkage; without one, the other modules may use it.
   define_constant = (name: String, linkage: String, type: String, initial: String) ->
     declaration := linkage.is_empty() then "#{name} = external constant #{type}"
     symbol := name
     text := "#{name} = #{linkage}constant #{type} #{initial}"
-    @globals.push { symbol, text, declaration }
+    @globals.push definition_of(symbol, text, declaration)
 
   # A global variable of the IR type, which other modules may use.
   define_variable = (name: String, type: String, initial: String) ->
     declaration := "#{name} = external global #{type}"
     symbol := name
     text := "#{name} = global #{type} #{initial}"
-    @globals.push { symbol, text, declaration }
+    @globals.push definition_of(symbol, text, declaration)
 
   add_type = (name: String, body: String) -> @types[name] = "#{name} = type #{body}"
 
@@ -96,7 +134,7 @@ export class IrModule
     has_linkage := LINKAGES.any((linkage) -> signature.starts_with(linkage))
     declaration := has_linkage then nil else "declare #{signature}"
     symbol := defined_symbol(signature)
-    @functions.push { symbol, text, declaration }
+    @functions.push definition_of(symbol, text, declaration)
 
   # The module, with the declarations and the types that it takes from other modules.
   render = (imported_types: String[], imported_declarations: String[]) ->
