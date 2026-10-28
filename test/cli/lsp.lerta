@@ -764,10 +764,74 @@ definitions_after_error_check := ->
           location_fragment(11, uri, 5, 4, 8)
           location_fragment(12, uri, 4, 4, 5)
           location_fragment(13, uri, 7, 8, 9)
-          '"id":20,"result":null'
+          hover_fragment(20, 'n: Int')
         ]
       )...
     ]
+
+syntax_error_check := ->
+  Check
+    name: 'lerta lsp answers from the last loaded text while the document does not parse'
+    run: ->
+      dir := new_cli_dir('lsp-syntax-error')
+      path := "#{dir}/a.lerta"
+      await write_file(path, ''.binary)
+      uri := uri_of(path)
+      messages :=
+        did_open(uri, "value := 1\nprint value\nother := 2\n")
+        did_change(uri, "value := 1\nprint value\nx := (\n")
+        hover_request(uri, 1, 6, 1)
+        definition_request(uri, 1, 6, 2)
+        hover_request(uri, 2, 0, 3)
+        did_change_at(uri, "other := 1\nprint value\nx := (\n", 3)
+        definition_request(uri, 1, 6, 4)
+        did_change_at(uri, "value := 'a'\nprint value\n", 4)
+        hover_request(uri, 1, 6, 5)
+      .join('')
+      ran := await session(dir, messages)
+      [
+        expect_status(0, ran.status)...
+        exact_responses(
+          ran.stdout.text()!
+          [
+            hover_fragment(1, 'value: Int')
+            location_fragment(2, uri, 0, 0, 5)
+            '"id":3,"result":null'
+            '"id":4,"result":null'
+            hover_fragment(5, 'value: String')
+          ]
+        )...
+      ]
+
+imported_syntax_error_check := ->
+  Check
+    name: 'lerta lsp finds no declaration that an imported text no longer writes, nor a program never loaded'
+    run: ->
+      dir := new_cli_dir('lsp-imported-syntax-error')
+      lib := "#{dir}/lib.lerta"
+      path := "#{dir}/a.lerta"
+      other := "#{dir}/b.lerta"
+      await write_file(lib, ''.binary)
+      await write_file(path, ''.binary)
+      await write_file(other, ''.binary)
+      uri := uri_of(path)
+      messages :=
+        did_open(uri, "import value from './lib'\nprint value\n")
+        did_open(uri_of(lib), "export value := 1\n")
+        did_change(uri_of(lib), "\nexport value := (\n")
+        definition_request(uri, 1, 6, 1)
+        hover_request(uri, 1, 6, 2)
+        did_open(uri_of(other), "print 1\nx := (\n")
+        hover_request(uri_of(other), 0, 0, 3)
+      .join('')
+      ran := await session(dir, messages)
+      [
+        expect_status(0, ran.status)...
+        exact_responses(
+          ran.stdout.text()!
+          ['"id":1,"result":null', hover_fragment(2, 'value: Int'), '"id":3,"result":null']
+        )...
+      ]
 
 imported_hover_definition_check := ->
   Check
@@ -900,6 +964,8 @@ export checks :=
   optional_and_interpolation_check()
   open_import_hover_check()
   definitions_after_error_check()
+  syntax_error_check()
+  imported_syntax_error_check()
   imported_hover_definition_check()
   extern_definition_check()
   reexport_definition_check()
