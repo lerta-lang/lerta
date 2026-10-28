@@ -152,14 +152,15 @@ harness_listed_check := Check(name: 'every test of tests/harness has its expecte
   ]
 )
 
-usage_check := (args: String[]) ->
+# The problem is the line that the usage follows.
+usage_check := (args: String[], problem: String) ->
   Check name: "bin/test #{args.join(' ')} is a usage error", run: ->
     ran := await run_driver(args, await new_failed_file([]))
     [
       expect_status(2, ran.status)...
       reason_if(
-        not ran.stderr.contains("\nusage: bin/test ")
-        "no usage on stderr: #{ran.stderr}"
+        not ran.stderr.starts_with("#{problem}\nusage: bin/test ")
+        "no #{problem} and usage on stderr: #{ran.stderr}"
       )...
     ]
 
@@ -168,11 +169,11 @@ format_case := 'tests/format/calls'
 format_key := "format checks\t#{format_case}"
 
 driver_checks :=
-  usage_check(['nothing'])
-  usage_check(['-k'])
-  usage_check(['-j', '0'])
-  usage_check(['cli', '--target', 'x86_64-w64-mingw32'])
-  usage_check(['--target', 'x86_64-w64-mingw32', '--failed'])
+  usage_check(['nothing'], 'not a suite: nothing (the suites: run, cli, format, runtime, self)')
+  usage_check(['-k'], '-k needs a value')
+  usage_check(['-j', '0'], '-j needs a count above 0: 0')
+  usage_check(['cli', '--target', 'x86_64-w64-mingw32'], '--target is for the run suite alone')
+  usage_check(['--target', 'x86_64-w64-mingw32', '--failed'], '--failed is for the host alone')
   Check(name: 'bin/test fails when no check is selected', run: ->
     ran := await run_driver(['format', '-k', 'no such check'], await new_failed_file([]))
     [
