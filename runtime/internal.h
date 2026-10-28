@@ -189,7 +189,9 @@ void lerta_os_unmap_region(void *region, int64_t size);
 // caller sets it first.
 uint8_t *lerta_os_read_file(const char *path, int64_t *length);
 // Reads what stdin has, up to `size` bytes, waiting for some: their count, 0 at the end, or -1 on
-// failure.
+// failure. `size` is at least LERTA_STDIN_MIN_READ, which a read of a Windows console needs (see
+// read_console).
+#define LERTA_STDIN_MIN_READ 6
 int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size);
 bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
 // What lerta_os_stat writes of what a path names: its kind, its size in bytes and the time it was

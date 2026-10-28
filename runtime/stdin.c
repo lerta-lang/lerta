@@ -8,6 +8,8 @@
 // a libuv stream, which would make descriptor 0 non-blocking for the programs that share it, and
 // rather than on the thread pool, whose few threads a read that waits for input would hold.
 enum { STDIN_CHUNK_SIZE = 65536 };
+_Static_assert(STDIN_CHUNK_SIZE >= LERTA_STDIN_MIN_READ,
+               "a console read leaves room for a unit after a held surrogate");
 
 static uv_thread_t stdin_thread;
 static uv_async_t stdin_done;

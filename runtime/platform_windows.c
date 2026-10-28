@@ -149,7 +149,8 @@ static wchar_t console_high_surrogate = 0;
 static bool console_line_start = true;
 
 // A console is read as UTF-16, whatever its code page, and given as UTF-8, as write_console writes
-// to it: as many units as fit in `size` as UTF-8, at most 3 bytes each. A line that begins with
+// to it: as many units as fit in `size` as UTF-8, at most 3 bytes each; LERTA_STDIN_MIN_READ makes
+// that at least two, so that a unit is read past a held high surrogate. A line that begins with
 // Ctrl-Z ends the input, as ReadFile reads it.
 static int64_t read_console(HANDLE console, uint8_t *buffer, int64_t size) {
   wchar_t wide[CONSOLE_READ_UNITS];
@@ -162,8 +163,9 @@ static int64_t read_console(HANDLE console, uint8_t *buffer, int64_t size) {
     }
     DWORD count;
     if (!ReadConsoleW(console, wide + start, (DWORD)(fitting - start), &count, NULL)) return -1;
-    if (start == 0 && count == 0) return 0;
-    if (console_line_start && wide[0] == 0x1A) return 0;
+    // The end drops a held surrogate, as nothing follows to complete it.
+    if (count == 0) return 0;
+    if (console_line_start && wide[start] == 0x1A) return 0;
     int total = start + (int)count;
     console_line_start = wide[total - 1] == L'\n';
     if (IS_HIGH_SURROGATE(wide[total - 1])) console_high_surrogate = wide[--total];
