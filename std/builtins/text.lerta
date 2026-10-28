@@ -80,15 +80,7 @@ extend String
         literal += c
     literal + '"'
   # The Chars.
-  iter = (): Iter<Char> ->
-    bytes := @binary
-    var i = 0
-    has_next := -> i < bytes.length
-    next := ->
-      c := char_at(bytes, i)
-      i += sequence_length(bytes[i])
-      c
-    { has_next, next }
+  iter = (): Iter<Char> -> Chars(bytes: @binary)
   # The digits are accumulated as a negative number, which can hold the minimum Int.
   parse_int = ->
     bytes := @binary
@@ -204,6 +196,17 @@ extend Binary
   text = (start = 0, end: Int = @length): String? ->
     bytes := start == 0 and end == @length then @ else @[start...end]
     is_utf8(bytes) then lerta_binary_as_string(bytes)
+
+# The Chars of a String's bytes, for its iter: one object, where `has_next` and `next` as closures
+# sharing `at` would allocate both closures and the variable.
+class Chars
+  bytes: Binary
+  var at = 0
+  has_next = -> @at < @bytes.length
+  next = ->
+    c := char_at(@bytes, @at)
+    @at += sequence_length(@bytes[@at])
+    c
 
 # The place of the first `byte` in `bytes` at `from` or after it, or nil.
 byte_index := (bytes: Binary, byte: Byte, from: Int): Int? ->
