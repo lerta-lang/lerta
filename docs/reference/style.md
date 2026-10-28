@@ -1,6 +1,6 @@
 # Style
 
-These conventions also cover features not implemented yet. The compiler does not check them; [`lerta fmt`](compiler.md#fmt) checks and fixes them, except those that [the roadmap](../roadmap/programs.md#tools) lists as not applied yet.
+The compiler does not check these conventions; [`lerta fmt`](compiler.md#fmt) checks and fixes them, except those that [the roadmap](../roadmap/programs.md#tools) lists as not applied yet.
 
 - **Naming**: variables, functions, methods, fields and module names are `snake_case`. Types, classes and interfaces are `PascalCase`. A `const` whose value is a literal (such as `MAX_SIZE := 100`) and an enum member are `SCREAMING_CASE`. A `const` holding a computed result is an ordinary variable and is `snake_case`. This matches C names imported through FFI naturally.
 - **String literals**: use `'...'` whenever it can be written with `'...'`. A `"""` literal stays as it is written, though `'''` could write it. The lines of a `"""` or `'''` literal after its first are one level deeper than the line that it starts on, keeping their indentation relative to each other, and a blank one is empty.

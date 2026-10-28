@@ -9,7 +9,7 @@ Builtins need no import. Most are written in Lerta, in the files of `std/builtin
 
 ## Stringable
 
-`Stringable` is a builtin [interface](objects.md#interfaces), of `std:builtins`, with one member, `to_string: () -> String`. `String`, `Int`, `Float`, `Byte`, `Char`, `Bool` and enums satisfy it, and so does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect; a `to_string` with parameters or another result does not. A module's own name `Stringable` shadows it. An array is `Stringable` when its items are [Literal](#literal), each written as the literal that gives it: `[1, 2]`, `[[1], []]`, `['a', "it's"]`. Its `to_string` comes from an extend of std, which no other extend can declare again: a type whose arrays should read otherwise gives its items a `to_literal` of their own. `Int?` and the arrays of other items are not `Stringable`. String interpolation goes through it (see [syntax](syntax.md)).
+`Stringable` is a builtin [interface](objects.md#interfaces), of `std:builtins`, with one member, `to_string: () -> String`. `String`, `Int`, the sized integers, `Float`, `Float32`, `Byte`, `Char`, `Bool` and enums satisfy it, and so does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect; a `to_string` with parameters or another result does not. A module's own name `Stringable` shadows it. An array is `Stringable` when its items are [Literal](#literal), each written as the literal that gives it: `[1, 2]`, `[[1], []]`, `['a', "it's"]`. Its `to_string` comes from an extend of std, which no other extend can declare again: a type whose arrays should read otherwise gives its items a `to_literal` of their own. `Int?` and the arrays of other items are not `Stringable`. String interpolation goes through it (see [syntax](syntax.md)).
 
 ## Literal
 
@@ -43,20 +43,20 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 
 | Type | Methods |
 |---|---|
-| `Int` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type (see [sized integers](types.md#sized-integers)), `to_char`, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `to_hex` |
-| `Int8`, `Int16`, `Int32`, `UInt16`, `UInt32`, `UInt64` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type, `to_char`, `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
-| `Char` | `equals`, `compare`, `hash`, `add`, `sub`, `to_string`, `to_int`, `is_digit`, `is_letter`, `is_space` |
-| `Float` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_fixed`, `to_int`, `to_float32` |
-| `Float32` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float` |
-| `Byte` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_float`, the conversions to each integer type, `to_char`, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation`, `hex_value` |
-| `Bool` | `equals`, `hash`, `to_string` |
-| `String` | `equals`, `hash`, `add`, `to_string`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `is_empty`, `without_prefix`, `without_suffix`, `contains`, `split_once`, `replace`, `trim`, `repeat`, `pad_start`, `pad_end`, `to_upper`, `to_lower`, `compare` |
+| `Int` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_literal`, `to_float`, the conversions to each integer type (see [sized integers](types.md#sized-integers)), `to_char`, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `to_hex` |
+| `Int8`, `Int16`, `Int32`, `UInt16`, `UInt32`, `UInt64` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_literal`, `to_float`, the conversions to each integer type, `to_char`, `wrapping_add`, `wrapping_sub`, `wrapping_mul` |
+| `Char` | `equals`, `compare`, `hash`, `add`, `sub`, `to_string`, `to_literal`, `to_int`, `is_digit`, `is_letter`, `is_space` |
+| `Float` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_literal`, `to_fixed`, `to_int`, `to_float32` |
+| `Float32` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_literal`, `to_float` |
+| `Byte` | `equals`, `compare`, `hash`, the methods of the operators, `to_string`, `to_literal`, `to_float`, the conversions to each integer type, `to_char`, `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `is_digit`, `is_letter`, `is_space`, `is_utf8_continuation`, `hex_value` |
+| `Bool` | `equals`, `hash`, `to_string`, `to_literal` |
+| `String` | `equals`, `hash`, `add`, `to_string`, `to_literal`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `is_empty`, `without_prefix`, `without_suffix`, `contains`, `split_once`, `replace`, `trim`, `repeat`, `pad_start`, `pad_end`, `to_upper`, `to_lower`, `compare` |
 | `Binary` | `equals`, `hash`, `length`, `is_empty`, `iter`, `occurs_at`, `index_of`, `text` |
-| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)), `iter`, `contains`, `find_index`, `index_of`, `is_empty`, `first`, `last`, `sorted`, `sorted_by`, `append`, `slice`, `reversed`, `truncate`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
+| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)) and `to_literal` of [Literal](#literal) items, `iter`, `contains`, `find_index`, `index_of`, `is_empty`, `first`, `last`, `sorted`, `sorted_by`, `append`, `slice`, `reversed`, `truncate`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
 | `Map<K, V>` | `length`, `is_empty`, `has`, `remove`, `keys`, `values`, `entries` |
 | `Set<T>` | `length`, `is_empty`, `has`, `add`, `remove`, `iter`, `bit_or`, `bit_and`, `sub`, `bit_xor`, `is_subset` |
 | `Iter<T>` | `has_next`, `next`, `iter` |
 | Any [Iterable](#iterable) | those that [Iterable](#iterable) gives |
-| An [enum](types.md#enums) | `equals`, `hash`, `to_string`, and the static `E.parse` |
+| An [enum](types.md#enums) | `equals`, `hash`, `to_string`, `to_literal`, and the static `E.parse` |
 
 A `Bool` gives `true` or `false` as its text, and a `Byte` a number.

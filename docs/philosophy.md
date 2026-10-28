@@ -49,7 +49,7 @@ Safety means **zero undefined behavior** outside [C functions](reference/functio
 | Frame chain | Stackless Python, Scheme implementations, LLVM shadow stack, V8 contexts |
 | FFI | Zig `@cImport`, Swift clang importer, Nim c2nim |
 | Generics | Rust (monomorphization + `linkonce_odr`, trait bounds) |
-| Exception implementation (candidates) | Stackless Python, LLVM shadow stack, Itanium C++ ABI, Swift (error return values) |
+| Exceptions | Swift (error return values) |
 | Bootstrap | GCC `make bootstrap`, Rust, Crystal |
 
 ## Why not Nim or Crystal

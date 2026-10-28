@@ -32,7 +32,7 @@ For now, cycles stay uncollected ([objects](../reference/objects.md#classes-and-
 
 ### Reference count operations
 
-Every expression of a reference type yields an owned reference for now ([internals](../internals.md#memory-management)), so passing a local to a call retains and releases it around the call. The plan is to borrow where the value cannot go away meanwhile, as a `const` local or a parameter passed as an argument, and emit no retain and release there. In the compiler's front end, `lerta_retain` and `lerta_release` take about a third of the time.
+Every expression of a reference type yields an owned reference for now, except the values that [internals](../internals.md#memory-management) lists as borrowed, such as a `const` local passed as an argument. So passing another value to a call, as a `var` or a field read (`f(a.b)`), retains and releases it around the call. The plan is to borrow those too where the value cannot go away meanwhile, and emit no retain and release there.
 
 First, the operations that this would remove are counted in the generated code, to see whether the gain is worth the change to the ownership of values in codegen.
 
