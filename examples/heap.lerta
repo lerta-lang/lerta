@@ -1,0 +1,68 @@
+# A priority queue of any Comparable items, as a binary heap, which gives tasks by their deadline.
+# A class's type parameter takes no bound, so the methods that compare items come in an extend.
+class Heap<T>
+  items: T[] = []
+
+extend<T: Comparable> Heap<T>
+  push = (item: T) ->
+    @items.push item
+    @sift_up @items.length - 1
+
+  # Gives the least item, or nil when the heap is empty.
+  pop = (): T? ->
+    return nil if @items.is_empty()
+    last := @items.pop()
+    return last if @items.is_empty()
+    least := @items[0]
+    @items[0] = last
+    @sift_down 0
+    least
+
+  sift_up = (index: Int) ->
+    var i = index
+    while i > 0
+      parent := (i - 1) / 2
+      return if @items[parent] <= @items[i]
+      @swap i, parent
+      i = parent
+
+  sift_down = (index: Int) ->
+    var i = index
+    while true
+      var least = i
+      for child in [2 * i + 1, 2 * i + 2]
+        least = child if child < @items.length and @items[child] < @items[least]
+      return if least == i
+      @swap i, least
+      i = least
+
+  swap = (i: Int, j: Int) ->
+    item := @items[i]
+    @items[i] = @items[j]
+    @items[j] = item
+
+  # Pops the items one by one, least first, as they are asked for.
+  drain = (): Iter<T> -> yield item while item := @pop()
+
+struct Task
+  name: String
+  deadline: Int
+  # By deadline, then by name, so that tasks of the same deadline come in a fixed order.
+  compare = (other: Task) ->
+    by_deadline := @deadline.compare(other.deadline)
+    by_deadline == EQUAL then @name.compare(other.name) else by_deadline
+  to_string = -> "day #{@deadline}: #{@name}"
+
+numbers: Heap<Int> = Heap()
+numbers.push n for n in [5, 3, 8, 1, 9, 2]
+print numbers.drain().to_array()
+
+tasks: Heap<Task> = Heap()
+tasks.push { name: 'write the report', deadline: 3 }
+tasks.push { name: 'fix the build', deadline: 1 }
+tasks.push { name: 'review the change', deadline: 3 }
+tasks.push { name: 'plan the release', deadline: 7 }
+print "first: #{tasks.pop()!}"
+tasks.push { name: 'answer the mail', deadline: 2 }
+print task for task in tasks.drain()
+print "after the last: #{tasks.pop() == nil then 'nothing' else 'more'}"
