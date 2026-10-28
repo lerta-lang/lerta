@@ -205,24 +205,42 @@ malformed_message_check := ->
     ]
 
 lsp_input_errors_check := ->
-  Check name: 'lerta lsp rejects arguments and a message without Content-Length', run: ->
-    args := await run_command(compiler, ['lsp', 'extra'], new_cli_dir('lsp-arguments'))
-    missing_length := await run_command(
-      compiler
-      ['lsp']
-      new_cli_dir('lsp-no-content-length')
-      "Content-Length: x\r\n\r\n{}".binary
-    )
-    [
-      expect_status(1, args.status)...
-      compare_text('stderr', "lerta lsp takes no arguments\n", args.stderr.text()!)...
-      expect_status(1, missing_length.status)...
-      compare_text(
-        'stderr'
-        "an LSP message without its Content-Length\n"
-        missing_length.stderr.text()!
-      )...
-    ]
+  Check
+    name: 'lerta lsp rejects arguments, a message without Content-Length and one cut short'
+    run: ->
+      args := await run_command(compiler, ['lsp', 'extra'], new_cli_dir('lsp-arguments'))
+      missing_length := await run_command(
+        compiler
+        ['lsp']
+        new_cli_dir('lsp-no-content-length')
+        "Content-Length: x\r\n\r\n{}".binary
+      )
+      cut_short := await run_command(
+        compiler
+        ['lsp']
+        new_cli_dir('lsp-cut-short')
+        "Content-Length: 100\r\n\r\n{}".binary
+      )
+      no_body := await run_command(
+        compiler
+        ['lsp']
+        new_cli_dir('lsp-no-body')
+        "Content-Length: 100\r\n\r\n".binary
+      )
+      [
+        expect_status(1, args.status)...
+        compare_text('stderr', "lerta lsp takes no arguments\n", args.stderr.text()!)...
+        expect_status(1, missing_length.status)...
+        compare_text(
+          'stderr'
+          "an LSP message without its Content-Length\n"
+          missing_length.stderr.text()!
+        )...
+        expect_status(1, cut_short.status)...
+        compare_text('stderr', "the end came after 2 of 100 bytes\n", cut_short.stderr.text()!)...
+        expect_status(1, no_body.status)...
+        compare_text('stderr', "the end came after 0 of 100 bytes\n", no_body.stderr.text()!)...
+      ]
 
 empty_body_check := -> Check(name: 'lerta lsp reports empty message bodies as parse errors', run: ->
   dir := new_cli_dir('lsp-empty-body')

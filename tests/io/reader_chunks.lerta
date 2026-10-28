@@ -1,8 +1,10 @@
-# A line and a count of bytes are gathered from as many chunks as they cross.
+# A line and an exact count of bytes are gathered from as many chunks as they cross, while a read
+# gives what there is of the chunk it is in, at most the count, or of the next that is not empty,
+# and does not wait for more; an exact count that the end cuts short is an IOError.
 import Reader from 'std:io'
 import sleep from 'std:time'
 
-chunks := ['ab', 'cd', 'e', "f\ngh", 'ij', 'kl', 'mno']
+chunks := ['', 'ab', 'cd', 'e', "f\ngh", 'ij', 'kl', '', 'mno', 'pq', '']
 var next = 0
 reader := Reader(read_chunk: ->
   await sleep(0)
@@ -11,5 +13,33 @@ reader := Reader(read_chunk: ->
   chunks[next - 1].binary
 )
 print (await reader.read_line())!
+print (await reader.read_exactly(5))!.text()!
 print (await reader.read(5))!.text()!
-print (await reader.read_all()).text()!
+print (await reader.read(1))!.text()!
+print (await reader.read(9))!.text()!
+try
+  await reader.read_exactly(3)
+catch error: IOError
+  print error.message
+print (await reader.read(9))!.text()!
+print await reader.read(9) == nil
+print await reader.read_exactly(3) == nil
+
+empty := ['', '']
+var given = 0
+only_empty := Reader(read_chunk: ->
+  return nil if given == empty.length
+  given += 1
+  empty[given - 1].binary
+)
+print await only_empty.read_exactly(3) == nil
+
+# A count that ends with the last chunk is no error.
+var ends = false
+exact := Reader(read_chunk: ->
+  return nil if ends
+  ends = true
+  'abc'.binary
+)
+print (await exact.read_exactly(3))!.text()!
+print await exact.read_exactly(1) == nil

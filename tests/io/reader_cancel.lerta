@@ -1,5 +1,6 @@
 # A cancelled read of a Reader leaves what it took from the chunks for the next read, of a line, of
-# a count of bytes or of all that is left.
+# a count of bytes or of all that is left, which a read of what there is gives first, at most its
+# count; one of what there is takes nothing before a chunk comes.
 import Deferred from 'std:async'
 import Reader from 'std:io'
 import sleep from 'std:time'
@@ -21,6 +22,11 @@ outcome := (promise: Promise<String?>) ->
   catch error: CancelledError
     error.message
 
+waiting := (-> (await reader.read(4))?.text())()
+await sleep(0)
+waiting.cancel()
+print await outcome(waiting)
+
 line := reader.read_line()
 await give('ab'.binary)
 line.cancel()
@@ -29,7 +35,7 @@ next_line := reader.read_line()
 await give("cd\nef".binary)
 print await outcome(next_line)
 
-bytes := -> (await reader.read(4))?.text()
+bytes := -> (await reader.read_exactly(4))?.text()
 four := bytes()
 await give('g'.binary)
 four.cancel()
@@ -43,6 +49,7 @@ await give('k'.binary)
 await give('l'.binary)
 all.cancel()
 print await outcome(all)
+print (await reader.read(3))!.text()!
 
 # So does one that the chunk's error rejects.
 failing_line := reader.read_line()
