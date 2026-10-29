@@ -18,7 +18,7 @@ extern lerta_platform: () -> String
 extern lerta_cpu_count: () -> Int
 
 export argv := [
-  argument.text() ? throw ValueError(message: 'a command-line argument is not valid UTF-8')
+  argument.text() ? throw ValueError('a command-line argument is not valid UTF-8')
   for argument in lerta_argv()
 ]
 
@@ -47,7 +47,7 @@ holds_nul := (text: String) -> text.contains("\0")
 
 # POSIX systems keep only 8 bits of an exit code, so a code outside 0 to 255 would be misread.
 export exit := (code: Int) ->
-  throw ValueError(message: 'exit code out of range (0 to 255)') if code < 0 or code > 255
+  throw ValueError('exit code out of range (0 to 255)') if code < 0 or code > 255
   lerta_exit code
 
 export run := (command: String, args: String..., options: RunOptions) ->
@@ -56,7 +56,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
   # A program cannot start with a text that holds a NUL byte, as it cannot without its command; a
   # name that holds one is no name, which check_options refuses.
   texts := [command, args..., cwd ? '', env.values()...]
-  throw IOError(message: "cannot run: #{command}") if texts.any(holds_nul)
+  throw IOError("cannot run: #{command}") if texts.any(holds_nul)
   changes_env := not env.is_empty() or not unset_env.is_empty()
   program_env := changes_env then env_with(env, unset_env)
   input_file := file_of(options.stdin, true)
@@ -72,8 +72,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
     stream_of(input, input_file)
     stream_of(output, output_file)
     stream_of(errors, error_file)
-  program :=
-    Program(pointer: lerta_program_start(command, args, cwd, program_env, streams, kill_after))
+  program := Program(lerta_program_start(command, args, cwd, program_env, streams, kill_after))
   give options.stdin, true
   give options.stdout, false
   give options.stderr, false
@@ -124,9 +123,9 @@ class Copies
 
   # Why the run fails, if it does.
   failure = (command: String): Error? ->
-    return IOError(message: "the output is too long: #{command}") if @too_long
+    return IOError("the output is too long: #{command}") if @too_long
     return error if error := @error
-    @unread then IOError(message: "cannot read the output of: #{command}")
+    @unread then IOError("cannot read the output of: #{command}")
 
   # Stops the program, as a copy that fails or an output that is too long does (see failed_copy).
   stop = (program: Program) ->
@@ -137,7 +136,7 @@ class Copies
   fail = (error: Error) -> @error = @error ? error
 
 pipe_of := (stream: String, command: String) ->
-  Handle pointer: lerta_pipe_new("the #{stream} of #{command}")
+  Handle lerta_pipe_new("the #{stream} of #{command}")
 
 # The file of the end of a Pipe that the program takes, if the Pipe is a system pipe or becomes
 # one; a Pipe that this program uses is read or written as its Reader or Writer instead.
@@ -285,26 +284,26 @@ env_name := (entry: Binary) ->
   entry[0...end]
 
 check_options := (options: RunOptions) ->
-  throw ValueError(message: 'kill a program after a negative time') if options.kill_after < 0
+  throw ValueError('kill a program after a negative time') if options.kill_after < 0
   if options.output_limit ? 0 < 0
-    throw ValueError(message: "a negative limit of output: #{options.output_limit!}")
+    throw ValueError("a negative limit of output: #{options.output_limit!}")
   set_names := options.env.keys().to_array()
   for name in [set_names..., options.unset_env...]
     if name.is_empty() or name.contains('=') or holds_nul(name)
-      throw ValueError(message: "not a name of an environment variable: '#{name}'")
+      throw ValueError("not a name of an environment variable: '#{name}'")
   for name, i in set_names
     if set_names.find_index((each) -> same_env_name(each.binary, name.binary))! < i
-      throw ValueError(message: "the environment variable #{name} is set twice")
+      throw ValueError("the environment variable #{name} is set twice")
   for name in options.unset_env
     if set_names.any((each) -> same_env_name(each.binary, name.binary))
-      throw ValueError(message: "the environment variable #{name} is both set and removed")
+      throw ValueError("the environment variable #{name} is both set and removed")
 
 # No variable's name holds `=`, which the system would take as the end of the name, nor a NUL byte.
 export env := (name: String) ->
   return nil if name.contains('=') or holds_nul(name)
   value := lerta_env(name)
   return nil if not value
-  value.text() ? throw ValueError(message: "the environment variable #{name} is not valid UTF-8")
+  value.text() ? throw ValueError("the environment variable #{name} is not valid UTF-8")
 
 export platform := lerta_platform()
 

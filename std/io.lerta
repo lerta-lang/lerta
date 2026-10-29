@@ -28,7 +28,7 @@ names_nothing := (path: String) -> path.contains("\0")
 # Fails as the operation `failure` does on a path that names nothing, if one of `paths` does,
 # reported by the first.
 require_names := (failure: String, paths: String...) ->
-  throw IOError(message: "#{failure}#{paths[0]}") if paths.any(names_nothing)
+  throw IOError("#{failure}#{paths[0]}") if paths.any(names_nothing)
 
 export read_file := (path: String) ->
   require_names 'cannot read file: ', path
@@ -118,7 +118,7 @@ export remove_tree := (path: String) ->
 # An empty path names no directory.
 export make_dir := (path: String) ->
   require_names 'cannot make directory: ', path
-  throw IOError(message: 'cannot make directory: ') if path.is_empty()
+  throw IOError('cannot make directory: ') if path.is_empty()
   lerta_make_dir path
 
 export rename := (from: String, to: String) ->
@@ -170,7 +170,7 @@ class StandardOutput
   ended = false
 
   write = (data: String | Binary) ->
-    throw IOError(message: "cannot write to #{@name}") if @ended
+    throw IOError("cannot write to #{@name}") if @ended
     await lerta_stream_write(@fd, bytes_of(data))
 
   end = -> @ended = true
@@ -287,9 +287,9 @@ class PipeWriter
   # Closes the end that a program has started with, which the program holds now.
   give = (reading: Bool) -> @system?.give(side_of(reading))
 
-ended_pipe := -> IOError(message: 'cannot write to a pipe that has ended')
+ended_pipe := -> IOError('cannot write to a pipe that has ended')
 
-closed_pipe := -> IOError(message: 'cannot write to a pipe whose reader has closed')
+closed_pipe := -> IOError('cannot write to a pipe whose reader has closed')
 
 READING := 0
 WRITING := 1
@@ -404,9 +404,9 @@ extern lerta_list_dir_names: (String) -> Binary[]
 # An empty path is refused, as Windows would read `\*` in it as the root of the drive.
 export list_dir := (path: String) ->
   require_names 'cannot list directory: ', path
-  throw IOError(message: 'cannot list directory: ') if path.is_empty()
+  throw IOError('cannot list directory: ') if path.is_empty()
   names := [
-    name.text() ? throw ValueError(message: "a name is not valid UTF-8 in the directory: #{path}")
+    name.text() ? throw ValueError("a name is not valid UTF-8 in the directory: #{path}")
     for name in lerta_list_dir_names(path)
   ]
   names.sorted (a, b) -> a.compare(b)
@@ -432,18 +432,18 @@ export class Reader
   # The next line, without its "\n" and a "\r" before it, or nil at the end. A LineTooLongError
   # if more than `max` bytes, a "\r" among them, come before its "\n", which leaves them unread.
   read_line = (max: Int = INT_MAX) ->
-    throw ValueError(message: "read a line of a negative count of bytes: #{max}") if max < 0
+    throw ValueError("read a line of a negative count of bytes: #{max}") if max < 0
     await @exclusive(-> await @line(max))
 
   # The bytes there are to read, at most `max`, waiting for some only if there are none; nil at the
   # end.
   read = (max: Int) ->
-    throw ValueError(message: "read a count of bytes below 1: #{max}") if max < 1
+    throw ValueError("read a count of bytes below 1: #{max}") if max < 1
     await @exclusive(-> await @some(max))
 
   # `count` bytes, or nil at the end. An IOError if the end comes after some of them.
   read_exactly = (count: Int) ->
-    throw ValueError(message: "read a count of bytes below 1: #{count}") if count < 1
+    throw ValueError("read a count of bytes below 1: #{count}") if count < 1
     await @exclusive(->
       bytes := await @part(count) ? return nil
       # Chunks that were empty, before the end.
@@ -451,7 +451,7 @@ export class Reader
       if bytes.length < count
         # Left for the next read, as a read that throws leaves what it has taken.
         @taken = bytes
-        throw IOError(message: "the end came after #{bytes.length} of #{count} bytes")
+        throw IOError("the end came after #{bytes.length} of #{count} bytes")
       bytes
     )
 
@@ -494,7 +494,7 @@ export class Reader
       end := @chunk.index_of("\n".binary, @start) ? @chunk.length
       @taken += @chunk[@start...end]
       @start = end
-      throw LineTooLongError(message: "a line is longer than #{max} bytes") if @taken.length > max
+      throw LineTooLongError("a line is longer than #{max} bytes") if @taken.length > max
       if end < @chunk.length
         @start = end + 1
         return ended_line_text(@taken_out())
@@ -529,7 +529,6 @@ ended_line_text := (bytes: Binary) ->
   ends_with_return := not bytes.is_empty() and bytes[bytes.length - 1] == "\r"
   utf8_line ends_with_return then bytes[0...(bytes.length - 1)] else bytes
 
-utf8_line := (bytes: Binary) ->
-  bytes.text() ? throw ValueError(message: 'a line is not valid UTF-8')
+utf8_line := (bytes: Binary) -> bytes.text() ? throw ValueError('a line is not valid UTF-8')
 
-export stdin := Reader(read_chunk: -> lerta_stdin_read())
+export stdin := Reader(-> lerta_stdin_read())

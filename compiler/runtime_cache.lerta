@@ -46,7 +46,7 @@ export cached_runtime := (optimize: Bool, memory_checks: Bool, target: String?, 
     # there at once. Otherwise a person has removed some of them; removing the rest here could
     # pull them from under a build that is linking with them.
     return await runtime() if is_complete(files)
-    throw CompileError(message: "the cached runtime #{dir} is incomplete: remove it")
+    throw CompileError("the cached runtime #{dir} is incomplete: remove it")
   await remove_abandoned_staging(cache, runtime_name)
   staging_dir := "#{dir}#{STAGING_INFIX}#{process_id}-#{basename(temp_dir)}"
   make_dir staging_dir
@@ -86,10 +86,10 @@ remove_abandoned_staging := (cache: String, name: String) ->
 clang_version_text := ->
   output: Byte[]
   return nil if (await run('clang', '--version', stdout: output)).code != 0
-  output.to_binary().text() ? throw CompileError(message: 'clang --version is not valid UTF-8')
+  output.to_binary().text() ? throw CompileError('clang --version is not valid UTF-8')
 
 read_text_or_throw := (path: String) ->
-  await read_text(path) ? throw CompileError(message: "#{path} is not valid UTF-8")
+  await read_text(path) ? throw CompileError("#{path} is not valid UTF-8")
 
 # `$LERTA_CACHE_DIR`, or else the system's place for caches, made if missing. An empty variable
 # counts as unset, as the XDG specification has it.
@@ -98,19 +98,19 @@ export cache_dir := ->
   try
     make_dir dir
   catch _
-    throw CompileError(message: "cannot make the cache directory: #{dir}")
+    throw CompileError("cannot make the cache directory: #{dir}")
   dir
 
 default_cache_dir := -> platform == 'windows' then windows_cache_dir() else posix_cache_dir()
 
 windows_cache_dir := ->
   return join(local_data, 'lerta') if local_data := non_empty_env('LOCALAPPDATA')
-  throw CompileError(message: 'no cache directory: set LOCALAPPDATA or LERTA_CACHE_DIR')
+  throw CompileError('no cache directory: set LOCALAPPDATA or LERTA_CACHE_DIR')
 
 posix_cache_dir := ->
   return join(cache_home, 'lerta') if cache_home := non_empty_env('XDG_CACHE_HOME')
   return join(home, '.cache/lerta') if home := non_empty_env('HOME')
-  throw CompileError(message: 'no cache directory: set HOME or LERTA_CACHE_DIR')
+  throw CompileError('no cache directory: set HOME or LERTA_CACHE_DIR')
 
 non_empty_env := (name: String) ->
   value := env(name)
@@ -135,7 +135,7 @@ runtime_kind := (optimize: Bool, memory_checks: Bool) ->
 # A target names a directory of the cache, so it cannot be a path.
 reject_path_target := (target: String) ->
   is_path := target.split('/').length > 1 or target.split('\').length > 1
-  throw CompileError(message: "not a target: #{target}") if is_path
+  throw CompileError("not a target: #{target}") if is_path
 
 # The rest of the line of `clang --version` that starts with `prefix`.
 version_line_value := (clang_version: String, prefix: String) ->
@@ -226,7 +226,7 @@ clang_probe_ir := (flags: String[], temp_dir: String) ->
   output: Byte[]
   args := ['-x', 'c++', '-std=c++20', '-S', '-emit-llvm', flags..., source, '-o', '-']
   return nil if (await run('clang', args..., stdout: output)).code != 0
-  output.to_binary().text() ? throw CompileError(message: 'clang IR is not valid UTF-8')
+  output.to_binary().text() ? throw CompileError('clang IR is not valid UTF-8')
 
 # The attributes of the target that clang gives its function, as `"target-cpu"="x86-64"`.
 function_attributes := (ir: String) ->
@@ -238,7 +238,7 @@ function_attributes := (ir: String) ->
 # The attributes of the group that the IR's one function has, as in `define void @f() #0 {`.
 attribute_group_of_function := (ir: String) ->
   lines := ir.split("\n")
-  missing := CompileError(message: 'clang IR has no function attributes')
+  missing := CompileError('clang IR has no function attributes')
   definition := lines.find((line) -> line.starts_with('define ')) ? throw missing
   group := definition.split(' ').find((word) -> word.starts_with('#')) ? throw missing
   lines.find((line) -> line.starts_with("attributes #{group} = { ")) ? throw missing
@@ -248,7 +248,7 @@ TARGET_ATTRIBUTES := ['target-cpu', 'target-features', 'tune-cpu']
 # The type that clang's LLVM gives llvm.coro.end, which LLVM 23 changed from i1 to void, as in
 # `declare i1 @llvm.coro.end(ptr, i1, token)`.
 coro_end_type := (ir: String) ->
-  missing := CompileError(message: 'clang IR has no declaration of llvm.coro.end')
+  missing := CompileError('clang IR has no declaration of llvm.coro.end')
   is_declaration := (line: String) ->
     line.starts_with('declare ') and line.split(' @llvm.coro.end(').length == 2
   declaration := ir.split("\n").find(is_declaration) ? throw missing
@@ -264,4 +264,4 @@ move_into_place := (staging_dir: String, dir: String, files: String[]) ->
   catch _
     await remove_tree(staging_dir)
     if not is_complete(files)
-      throw CompileError(message: "cannot move the compiled runtime into the cache: #{dir}")
+      throw CompileError("cannot move the compiled runtime into the cache: #{dir}")

@@ -34,13 +34,13 @@ export class Client
 
   fetch_body = (url: String, options: FetchOptions, body: Binary | Reader) ->
     { method } := options
-    throw ValueError(message: "not a method: #{method}") if not is_token(method)
+    throw ValueError("not a method: #{method}") if not is_token(method)
     check_field name, value for (name, value) in options.headers.fields
     var request = Outgoing(method, body, target: parse_url(url), headers: options.headers)
     var response = await @exchange(request)
     var redirects = 0
     while next := options.follow_redirects then redirected(request, response) else nil
-      throw IOError(message: "too many redirects: #{url}") if redirects == MAX_REDIRECTS
+      throw IOError("too many redirects: #{url}") if redirects == MAX_REDIRECTS
       redirects += 1
       # Read to its end, so that its connection is kept.
       await response.binary()
@@ -64,11 +64,11 @@ export class Client
       try
         return await @send(socket, request)
       catch error: NoAnswer
-        throw IOError(message: error.message) if not RESENDABLE.contains(request.method)
+        throw IOError(error.message) if not RESENDABLE.contains(request.method)
     try
       await @send(await connect_tcp(target.host, target.port), request)
     catch error: NoAnswer
-      throw IOError(message: error.message)
+      throw IOError(error.message)
 
   # Closes the connection on a failure, after which what it holds is not known. A body that is a
   # Reader is sent while the response is read, as a server may answer before it has read it all, and
@@ -97,10 +97,7 @@ export class Client
       body := BodyChunks(socket, finish, left, chunks)
       # A body that is empty by its framing does not hold the connection until it is read.
       body.end() if left == 0 and not chunked
-      Response
-        body: Reader(read_chunk: -> await body.next())
-        status: head.status
-        headers: head.headers
+      Response body: Reader(-> await body.next()), status: head.status, headers: head.headers
     catch error
       sending?.cancel()
       socket.close()
@@ -192,12 +189,12 @@ struct Target
 # Throws an IOError for an https URL, which needs TLS, and a ValueError for one that is not http, or
 # that holds a user, which the client does not send.
 parse_url := (url: String) ->
-  not_url := -> ValueError(message: "not an http URL: #{url}")
+  not_url := -> ValueError("not an http URL: #{url}")
   # A space or a control character would break the request line.
   throw not_url() if url.any((c) -> c.to_int() <= 0x20 or c.to_int() == 0x7F)
   (scheme, rest) := url.split_once('://') ? throw not_url()
   lower_scheme := scheme.to_lower()
-  throw IOError(message: "https is not supported so far: #{url}") if lower_scheme == 'https'
+  throw IOError("https is not supported so far: #{url}") if lower_scheme == 'https'
   throw not_url() if lower_scheme != 'http'
   var authority = ''
   for c in rest
@@ -254,7 +251,7 @@ read_head := (socket: Socket, request: Outgoing, writes: Bool) ->
   var head = await read_any_head(reader, await first_line(socket, request, writes))
   while head.status < 200
     # What follows a 101 is another protocol, which the client does not speak.
-    throw IOError(message: 'switching protocols not supported') if head.status == 101
+    throw IOError('switching protocols not supported') if head.status == 101
     head = await read_any_head(reader, await read_line(reader) ? throw ended_early())
   head
 
@@ -266,9 +263,9 @@ first_line := (socket: Socket, request: Outgoing, writes: Bool) ->
       await socket.write(request_bytes(request)) if writes
       await socket.reader.read_line(MAX_LINE)
     catch error: IOError
-      throw NoAnswer(message: error.message)
+      throw NoAnswer(error.message)
   line := await well_formed(send(), 'response')
-  line ? throw NoAnswer(message: 'the connection closed before a response')
+  line ? throw NoAnswer('the connection closed before a response')
 
 read_any_head := (reader: Reader, line: String) ->
   (version, rest) := line.split_once(' ') ? throw malformed()
@@ -293,9 +290,9 @@ read_line := (reader: Reader) -> await well_formed(reader.read_line(MAX_LINE), '
 
 MAX_FIELDS := 256
 
-malformed := -> IOError(message: 'a malformed response')
+malformed := -> IOError('a malformed response')
 
-ended_early := -> IOError(message: 'a response ended early')
+ended_early := -> IOError('a response ended early')
 
 # How the body of a response is told to end: `left`, the bytes of a body of a Content-Length, or nil
 # for one that ends with the connection; or `chunked`.
@@ -308,8 +305,7 @@ framing := (head: Head, method: String) ->
   { status, headers } := head
   return Framing(left: 0) if method == 'HEAD' or status == 204 or status == 304
   if coding := headers.get('transfer-encoding')
-    if coding.to_lower() != 'chunked'
-      throw IOError(message: "a transfer coding not supported: #{coding}")
+    throw IOError("a transfer coding not supported: #{coding}") if coding.to_lower() != 'chunked'
     return Framing(left: 0, chunked: true)
   text := headers.get('content-length') ? return Framing(left: nil)
   throw malformed() if text.is_empty() or not text.all((c) -> c.is_digit())
@@ -359,7 +355,7 @@ redirected := (request: Outgoing, response: Response) ->
     try
       parse_url resolve(request.target, location)
     catch _: ValueError
-      throw IOError(message: "a malformed redirect: #{location}")
+      throw IOError("a malformed redirect: #{location}")
   headers := Headers()
   headers.fields = [field for field in request.headers.fields]
   if target.authority != request.target.authority

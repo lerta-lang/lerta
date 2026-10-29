@@ -138,8 +138,7 @@ resolve_type := (program: ProgramWide, resolver: Resolver, type_name: TypeName, 
       when FunctionTypeName then resolve_function(program, resolver, type_name)
       when TupleTypeName then resolve_tuple(program, resolver, type_name)
       when NamedType then resolve_name(program, resolver, type_name, is_result)
-      when ArrayTypeName
-        ArrayType element: resolve_element(program, resolver, type_name.element)
+      when ArrayTypeName then ArrayType(resolve_element(program, resolver, type_name.element))
   optional_if program, type, type_name.position, type_name.optional
 
 optional_if := (program: ProgramWide, type: Type, at: Position, optional: Bool) ->
@@ -160,7 +159,7 @@ resolve_record := (program: ProgramWide, resolver: Resolver, type_name: RecordTy
   record_type [resolve_field(field) for field in type_name.fields]
 
 resolve_tuple := (program: ProgramWide, resolver: Resolver, type_name: TupleTypeName): Type ->
-  TupleType items: [resolve(program, resolver, item) for item in type_name.items]
+  TupleType [resolve(program, resolver, item) for item in type_name.items]
 
 resolve_function := (program: ProgramWide, resolver: Resolver, type_name: FunctionTypeName): Type ->
   params := [resolve(program, resolver, param) for param in type_name.params]
@@ -235,11 +234,11 @@ resolve_core_type := (
   case name
     when 'Iter'
       fail_here 'Iter takes one type argument' if args.length != 1
-      return IterType(item: resolve(program, resolver, args[0]))
+      return IterType(resolve(program, resolver, args[0]))
     when 'Promise'
       fail_here 'Promise takes one type argument, or none' if args.length > 1
-      return PromiseType(value: void_type) if args.is_empty()
-      return PromiseType(value: resolve(program, resolver, args[0]))
+      return PromiseType(void_type) if args.is_empty()
+      return PromiseType(resolve(program, resolver, args[0]))
     when 'Map'
       fail_here 'Map takes two type arguments' if args.length != 2
       key := resolve_key(program, resolver, args[0])

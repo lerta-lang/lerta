@@ -10,21 +10,21 @@ from '../types'
 # The type parameters standing for themselves, for resolving the types written with them.
 export placeholders := (type_params: TypeParameter[]) ->
   types: Map<String, Type>
-  types[param.name.name] = TypeParameterType(name: param.name.name) for param in type_params
+  types[param.name.name] = TypeParameterType(param.name.name) for param in type_params
   types
 
 # The type with each type it is made of replaced by `replace` of it.
 map_parts := (type: Type, replace: (Type) -> Type): Type ->
   case type
-    when ArrayType then ArrayType(element: replace(type.element))
-    when IterType then IterType(item: replace(type.item))
-    when PromiseType then PromiseType(value: replace(type.value))
+    when ArrayType then ArrayType(replace(type.element))
+    when IterType then IterType(replace(type.item))
+    when PromiseType then PromiseType(replace(type.value))
     when MapType then MapType(key: replace(type.key), value: replace(type.value))
     when OptionalType then optional_type(replace(type.inner))
     when RecordType
       replace_field := (field: RecordField) -> RecordField(field..., type: replace(field.type))
       record_type [replace_field(field) for field in type.fields]
-    when TupleType then TupleType(items: [replace(item) for item in type.items])
+    when TupleType then TupleType([replace(item) for item in type.items])
     when UnionType then union_type([replace(member) for member in type.members])
     when InterfaceType
       args := [replace(arg) for arg in type.args]
@@ -97,7 +97,7 @@ export overlaps := (a: Type, b: Type): Bool ->
   true
 
 # The type without the types it is made of: _[] for any array.
-shape_key := (type: Type) -> type_key(map_parts(type, (_) -> TypeParameterType(name: '_')))
+shape_key := (type: Type) -> type_key(map_parts(type, (_) -> TypeParameterType('_')))
 
 export has_type_parameters := (type: Type): Bool ->
   type is TypeParameterType or parts_of(type).any(has_type_parameters)

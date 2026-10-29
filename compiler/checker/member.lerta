@@ -41,7 +41,7 @@ export type_of_method_call := (body: Body, call: Call, member: Member, expected:
     result := check_arguments(body, call, method, method_literal_of(body, source, member))
     warn_if_kept body, call, member, source
     return result
-  record_member body, member, Method(source: source!)
+  record_member body, member, Method(source!)
   method := type_of_generic_method_call(body, call, member, generic, receiver, expected)
   set_type body, member, method
   method.result
@@ -73,7 +73,7 @@ type_of_method := (body: Body, member: Member, receiver: Type, source: MethodSou
       return common_field_type(body, receiver, member)
     field_type(body, receiver, member) ? no_method()
   method := from_source ? field()
-  record_member body, member, from_source then Method(source: source!) else Property(kind: FIELD)
+  record_member body, member, from_source then Method(source!) else Property(FIELD)
   set_type body, member, method
 
 find := (body: Body, receiver: Type, name: Identifier) ->
@@ -135,7 +135,7 @@ find_callable := (body: Body, receiver: Type, name: Identifier): MethodSource? -
     from := "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
     gets := "has a member '#{name.name}', and gets a method of that name #{from}"
     fail body.program, name.position, "#{format_type(receiver)} #{gets}"
-  ExtensionSource method: extended
+  ExtensionSource extended
 
 # The type of the method, checking its body first if needed. A generic one's comes from its
 # instance for the receiver, if the receiver gives all its type arguments; `call`, if given, calls
@@ -158,9 +158,8 @@ export find_member := (body: Body, type: Type, name: Identifier, call: Call? = n
     return { target: Method(source), type: method }
   if type is UnionType
     common := common_field_type_by_name(body, type, name) ? return nil
-    return { target: Property(kind: FIELD), type: common }
-  if field := field_type_by_name(body, type, name)
-    return { target: Property(kind: FIELD), type: field }
+    return { target: Property(FIELD), type: common }
+  return { target: Property(FIELD), type: field } if field := field_type_by_name(body, type, name)
   property_of body, type, name.name
 
 # A property of a builtin type, or of an interface value, by the name.
@@ -181,7 +180,7 @@ interface_property := (body: Body, type: Type, name: String) ->
   found := interface_member(body.program, type, name) ? return nil
   member_type := found.member.type
   return nil if member_type is FunctionType
-  FoundMember target: InterfaceProperty(index: found.index), type: member_type
+  FoundMember target: InterfaceProperty(found.index), type: member_type
 
 # Records what the member refers to, which codegen generates it by.
 export record_member := (body: Body, member: Member, target: MemberTarget) ->
@@ -199,10 +198,10 @@ export type_of_property := (body: Body, member: Member): Type ->
   probe_member body, object_type if name == COMPLETION_NAME
   reject_deinit body, object_type, member
   if object_type is UnionType
-    record_member body, member, Property(kind: FIELD)
+    record_member body, member, Property(FIELD)
     return common_field_type(body, object_type, member)
   if field := field_type(body, object_type, member)
-    record_member body, member, Property(kind: FIELD)
+    record_member body, member, Property(FIELD)
     return narrowed_field_type(body, member) ? field
   if property := property_of(body, object_type, name)
     record_member body, member, property.target

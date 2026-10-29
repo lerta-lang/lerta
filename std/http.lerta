@@ -61,13 +61,13 @@ check_options := (options: ServerOptions) ->
     ('max_fields', options.max_fields)
     ('max_body', options.max_body)
   for (name, limit) in limits
-    throw ValueError(message: "a negative #{name}: #{limit}") if limit < 0
+    throw ValueError("a negative #{name}: #{limit}") if limit < 0
   timeouts :=
     ('idle_timeout', options.idle_timeout)
     ('head_timeout', options.head_timeout)
     ('body_timeout', options.body_timeout)
   for (name, seconds) in timeouts
-    throw ValueError(message: "a negative #{name}: #{seconds}") if seconds < 0.0
+    throw ValueError("a negative #{name}: #{seconds}") if seconds < 0.0
 
 accept_all := (server: Server) ->
   while true
@@ -205,7 +205,7 @@ read_request := (socket: Socket, server: Server) ->
   chunks := chunked then ChunkedBody(reader, name: 'body', room: max_body) else nil
   body := BodyChunks(reader, chunks, left: length, seconds: body_timeout)
   url := url_of(host, target) ? throw bad_request()
-  request := Request(method, url, headers, body: Reader(read_chunk: -> await body.next()))
+  request := Request(method, url, headers, body: Reader(-> await body.next()))
   Incoming request, body, keep_alive: keeps_alive(version, headers), chunked: version == 'HTTP/1.1'
 
 VERSIONS := ['HTTP/1.1', 'HTTP/1.0']
@@ -309,7 +309,7 @@ class BodyChunks
 
   sized = ->
     return nil if @left == 0
-    ended_early := IOError(message: 'a body ended early')
+    ended_early := IOError('a body ended early')
     chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw ended_early
     @left -= chunk.length
     chunk
@@ -319,7 +319,7 @@ class BodyChunks
     try
       await timeout(read, @seconds)
     catch _: TimeoutError
-      throw IOError(message: 'a body timed out')
+      throw IOError('a body timed out')
 
   # Reads what the handler has left of the body, so that the next request starts after it.
   skip = ->
@@ -333,7 +333,7 @@ class BodyChunks
 # have put in its fields itself.
 response_bytes := (response: Response, keep_alive: Bool, method: String, chunked: Bool) ->
   { status, body } := response
-  throw ValueError(message: "not a final status: #{status}") if status < 200 or status > 599
+  throw ValueError("not a final status: #{status}") if status < 200 or status > 599
   var head = "HTTP/1.1 #{status} #{REASONS[status] ? ''}\r\n"
   for (name, value) in response.headers.fields
     check_field name, value
