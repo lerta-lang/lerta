@@ -1,13 +1,13 @@
-# The items of lists, and the literals that hold them: arrays, maps and records; and the values after
-# `=`, `key:` and `return`, which may take the lines below (see Multi-line literals).
+# The items of lists, and the literals that hold them: arrays, maps and records; and the values
+# after `=`, `key:` and `return`, which may take the lines below (see Multi-line literals).
 import
-  ArrayLiteral, BooleanLiteral, Call, Case, Comprehension, Expression, FloatLiteral,
-  FunctionLiteral, Identifier, If, Index, IntegerLiteral, is_spread, MapEntry, MapLiteral, Member,
-  NamedValue, NilLiteral, Position, RecordLiteral, StringLiteral, Try
+  ArrayLiteral, BinaryOperation, BooleanLiteral, Call, Case, Comprehension, Expression,
+  FloatLiteral, FunctionLiteral, Identifier, If, Index, IntegerLiteral, is_spread, MapEntry,
+  MapLiteral, Member, NamedValue, NilLiteral, Position, RecordLiteral, StringLiteral, Try
 from '../ast'
 import
-  breaking, choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated, text,
-  token
+  breaking, choice, Choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated,
+  text, token
 from './doc'
 import annotation_key from './annotated'
 import function_block_doc from './print_block'
@@ -17,7 +17,7 @@ import
   BRANCHES, EXPECTED_TYPES, INSIDE_BRACES, LINE_LENGTH, MULTI_LINE_LITERALS, SHORTHAND
 from './rules'
 import
-  arguments, call_doc, clarified, comprehension_forms, expression_doc, index_doc,
+  arguments, call_doc, clarified, comprehension_forms, expression_doc, index_doc, operation_start,
   takes_block_arguments
 from './print_expression'
 import bracketed, bracketed_or, Context, Item, lines_of_items, opened_list from './printing'
@@ -190,6 +190,13 @@ export value_after := (value: Expression, context: Context) ->
       else
         on_line
     when FunctionLiteral then on_line
+    when BinaryOperation
+      # On the next line, deeper, if it fits there and not on this one; otherwise broken after its
+      # operators, on this line if its first line fits there, and else on the next.
+      next_line := indent(join([line_feed(), expression_doc(value, context)]))
+      start := join([text(' '), operation_start(value, context)])
+      broken := Choice(flat: on_line, broken: next_line, measured: start)
+      breaking LINE_LENGTH, on_line, choice(next_line, broken)
     else
       if block := literal_block_with_members(value, context)
         return breaking(MULTI_LINE_LITERALS, on_line, block)

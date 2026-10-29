@@ -16,7 +16,8 @@ initialize_check := ->
   Check name: 'lerta lsp negotiates UTF-16 positions and exits after shutdown', run: ->
     dir := new_cli_dir('lsp-initialize')
     ran := await session(dir, '')
-    utf32_init := '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{"general":{"positionEncodings":["utf-16","utf-32"]}}}}'
+    utf32_init := '{"jsonrpc":"2.0","id":0,"method":"initialize",' +
+      '"params":{"capabilities":{"general":{"positionEncodings":["utf-16","utf-32"]}}}}'
     utf32_dir := new_cli_dir('lsp-utf32-no-shutdown')
     utf32 := await run_command(
       compiler
@@ -54,8 +55,10 @@ error_request_check := ->
         'responses'
         [
           initialize_response('utf-16')
-          '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"no method textDocument/references"}}'
-          "{\"jsonrpc\":\"2.0\",\"id\":2,\"error\":{\"code\":-32602,\"message\":#{encode_json('$.params: missing the key "textDocument"')}}}"
+          '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"no method ' +
+            'textDocument/references"}}'
+          '{"jsonrpc":"2.0","id":2,"error":{"code":-32602,' +
+            "\"message\":#{encode_json('$.params: missing the key "textDocument"')}}}"
           shutdown_response
         ].join(
           "\n"
@@ -70,7 +73,9 @@ diagnostic_check := -> Check(name: 'lerta lsp reports diagnostics for an opened 
   await write_file(path, ''.binary)
   uri := uri_of(path)
   message := frame
-    "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"print missing\\n\"}}}"
+    '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
+      "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
+      '"text":"print missing\n"}}}'
   ran := await session(dir, message)
   [
     expect_status(0, ran.status)...
@@ -96,16 +101,23 @@ diagnostic_lifecycle_check := ->
     uri := uri_of(path)
     messages :=
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"print missing\\n\"}}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\"," +
+          '"version":1,"text":"print missing\n"}}}'
       )
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":2},\"contentChanges\":[{\"text\":\"unused := 1\\n\"}]}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didChange",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":2}," +
+          '"contentChanges":[{"text":"unused := 1\n"}]}}'
       )
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":3},\"contentChanges\":[{\"text\":\"print 1\\n\"}]}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didChange",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":3}," +
+          '"contentChanges":[{"text":"print 1\n"}]}}'
       )
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didClose",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
       )
     .join('')
     ran := await session(dir, messages)
@@ -136,7 +148,9 @@ imported_diagnostic_check := ->
     await write_file(imported, "export b := '😀' + nothing\n".binary)
     uri := uri_of(path)
     message := frame
-      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"import b from './b'\\nprint b\\n\"}}}"
+      '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
+        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
+        "\"text\":\"import b from './b'\\nprint b\\n\"}}}"
     ran := await session(dir, message)
     [
       expect_status(0, ran.status)...
@@ -168,10 +182,13 @@ uri_import_check := ->
     await write_file("#{dir}/lib.lerta", "export x := missing\n".binary)
     uri := uri_of(path)
     message := frame
-      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"import x from '../lib'\\nprint x\\n\"}}}"
+      '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
+        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
+        "\"text\":\"import x from '../lib'\\nprint x\\n\"}}}"
     other_uri := did_open('untitled:Untitled-1', 'print missing\n')
     formatting := frame
-      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{imported}\"}}}"
+      '{"jsonrpc":"2.0","id":1,"method":"textDocument/formatting",' +
+        "\"params\":{\"textDocument\":{\"uri\":\"#{imported}\"}}}"
     ran := await session(dir, message + other_uri + formatting)
     [
       expect_status(0, ran.status)...
@@ -195,7 +212,8 @@ malformed_message_check := ->
         'responses'
         [
           initialize_response('utf-16')
-          "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":#{encode_json("$: expected a key, found 'b'")}}}"
+          '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,' +
+            "\"message\":#{encode_json("$: expected a key, found 'b'")}}}"
           shutdown_response
         ].join(
           "\n"
@@ -250,7 +268,8 @@ empty_body_check := -> Check(name: 'lerta lsp reports empty message bodies as pa
     frame(initialize)
     frame('{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":1}}}')
     frame(
-      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":\"#{uri_of(path)}\"},\"contentChanges\":[]}}"
+      '{"jsonrpc":"2.0","method":"textDocument/didChange",' +
+        "\"params\":{\"textDocument\":{\"uri\":\"#{uri_of(path)}\"},\"contentChanges\":[]}}"
     )
     "Content-Length: 0\r\n\r\nContent-Length: -1\r\n\r\n"
     finish
@@ -262,8 +281,10 @@ empty_body_check := -> Check(name: 'lerta lsp reports empty message bodies as pa
       'responses'
       [
         initialize_response('utf-16')
-        '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, found the end of the text"}}'
-        '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, found the end of the text"}}'
+        '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, ' +
+          'found the end of the text"}}'
+        '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, ' +
+          'found the end of the text"}}'
         shutdown_response
       ].join(
         "\n"
@@ -280,18 +301,23 @@ formatting_check := -> Check(name: 'lerta lsp formats an open document', run: ->
   uri := uri_of(path)
   messages :=
     frame(
-      "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"value  := 1\\nprint value\\n\"}}}"
+      '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
+        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
+        '"text":"value  := 1\nprint value\n"}}}'
     )
     frame(
-      "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+      '{"jsonrpc":"2.0","id":1,"method":"textDocument/formatting",' +
+        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
     )
     did_change_at(uri, "value := 1\nprint value\n", 2)
     frame(
-      "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+      '{"jsonrpc":"2.0","id":2,"method":"textDocument/formatting",' +
+        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
     )
     did_change_at(uri, "print (\n", 3)
     frame(
-      "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+      '{"jsonrpc":"2.0","id":3,"method":"textDocument/formatting",' +
+        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
     )
   .join('')
   ran := await session(dir, messages)
@@ -301,7 +327,9 @@ formatting_check := -> Check(name: 'lerta lsp formats an open document', run: ->
       ran.stdout.text()!
       [
         published_diagnostics(uri, [])
-        "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":2,\"character\":0}},\"newText\":#{encode_json("value := 1\nprint value\n")}}]}"
+        '{"jsonrpc":"2.0","id":1,"result":[{"range":{"start":{"line":0,' +
+          '"character":0},"end":{"line":2,"character":0}},' +
+          "\"newText\":#{encode_json("value := 1\nprint value\n")}}]}"
         published_diagnostics(uri, [])
         '{"jsonrpc":"2.0","id":2,"result":[]}'
         published_diagnostics(uri, [diagnostic_body(0, 6, 1, "'(' is never closed")])
@@ -320,7 +348,8 @@ formatting_new_document_check := ->
     messages :=
       did_open(uri, text)
       frame(
-        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
+        '{"jsonrpc":"2.0","id":1,"method":"textDocument/formatting",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
       )
     .join('')
     ran := await session(dir, messages)
@@ -330,7 +359,9 @@ formatting_new_document_check := ->
         'responses'
         [
           initialize_response('utf-16')
-          "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":11}},\"newText\":#{encode_json("print '#{emoji}'\n")}}]}"
+          '{"jsonrpc":"2.0","id":1,"result":[{"range":{"start":{"line":0,' +
+            '"character":0},"end":{"line":0,"character":11}},' +
+            "\"newText\":#{encode_json("print '#{emoji}'\n")}}]}"
           shutdown_response
         ].join(
           "\n"
@@ -352,7 +383,8 @@ shared_import_check := ->
       did_open(c, imports)
       did_open(d, imports)
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{c}\"}}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didClose",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{c}\"}}}"
       )
     .join('')
     ran := await session(dir, messages)
@@ -420,13 +452,15 @@ close_unsaved_import_check := ->
       did_open(b, "export f := -> 1\n")
       did_change(b, "export f := -> zzz\n")
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{b}\"}}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didClose",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{b}\"}}}"
       )
     .join('')
     ran := await session(dir, messages)
     last :=
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\":\"#{b}\",\"diagnostics\":[]}}"
+        '{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics",' +
+          "\"params\":{\"uri\":\"#{b}\",\"diagnostics\":[]}}"
       )
       frame('{"jsonrpc":"2.0","id":"end","result":null}')
     .join('')
@@ -447,13 +481,19 @@ hover_definition_check := ->
     uri := uri_of(path)
     messages :=
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"value := 1\\nprint value\\n\"}}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\"," +
+          '"version":1,"text":"value := 1\nprint value\n"}}}'
       )
       frame(
-        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
+        '{"jsonrpc":"2.0","id":1,"method":"textDocument/hover",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1," +
+          '"character":6}}}'
       )
       frame(
-        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/definition\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
+        '{"jsonrpc":"2.0","id":2,"method":"textDocument/definition",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1," +
+          '"character":6}}}'
       )
     .join('')
     ran := await session(dir, messages)
@@ -474,13 +514,19 @@ generic_hover_check := ->
     uri := uri_of(path)
     messages :=
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1,\"text\":\"id := <T>(v: T) -> v\\nprint id(1)\\nprint id('a')\\n\"}}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\"," +
+          "\"version\":1,\"text\":\"id := <T>(v: T) -> v\\nprint id(1)\\nprint id('a')\\n\"}}}"
       )
       frame(
-        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1,\"character\":6}}}"
+        '{"jsonrpc":"2.0","id":1,"method":"textDocument/hover",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1," +
+          '"character":6}}}'
       )
       frame(
-        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":2,\"character\":6}}}"
+        '{"jsonrpc":"2.0","id":2,"method":"textDocument/hover",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":2," +
+          '"character":6}}}'
       )
       hover_request(uri, 0, 24, 3)
     .join('')
@@ -714,7 +760,8 @@ open_import_hover_check := ->
       hover_request(b, 0, 7, 10)
       did_open(b, b_text)
       frame(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":\"#{a}\"}}}"
+        '{"jsonrpc":"2.0","method":"textDocument/didClose",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{a}\"}}}"
       )
       hover_request(a, 1, 6, 11)
     .join('')
@@ -805,7 +852,8 @@ syntax_error_check := ->
 
 partial_parse_check := ->
   Check
-    name: 'lerta lsp checks the statements that parse, and reports only the parse errors of their file'
+    name: 'lerta lsp checks the statements that parse, and reports only the parse errors of ' +
+      'their file'
     run: ->
       dir := new_cli_dir('lsp-partial-parse')
       path := "#{dir}/a.lerta"
@@ -1054,7 +1102,8 @@ partial_import_check := ->
 
 imported_syntax_error_check := ->
   Check
-    name: 'lerta lsp finds no declaration that an imported text no longer writes, nor a program never loaded'
+    name: 'lerta lsp finds no declaration that an imported text no longer writes, nor a program ' +
+      'never loaded'
     run: ->
       dir := new_cli_dir('lsp-imported-syntax-error')
       lib := "#{dir}/lib.lerta"
@@ -1089,11 +1138,11 @@ imported_hover_definition_check := ->
       dir := new_cli_dir('lsp-imported-hover-definition')
       lib := "#{dir}/lib.lerta"
       path := "#{dir}/a.lerta"
-      text := "import make from './lib'\np := make(1)\nprint p.x\nid := <T>(v: T) -> v\nprint id(1) + id(2)\nprint id('a')\n"
-      await write_file(
-        lib
-        "export struct Point\n  x: Int\n  y: Int\nexport make := (x: Int) -> Point(x, y: 0)\n".binary
-      )
+      text := "import make from './lib'\np := make(1)\nprint p.x\nid := <T>(v: T) -> v\n" +
+        "print id(1) + id(2)\nprint id('a')\n"
+      lib_text :=
+        "export struct Point\n  x: Int\n  y: Int\n" + "export make := (x: Int) -> Point(x, y: 0)\n"
+      await write_file(lib, lib_text.binary)
       await write_file(path, ''.binary)
       uri := uri_of(path)
       asks := [(1, 5), (2, 8), (3, 19), (4, 6), (5, 6), (0, 7), (1, 2)]
@@ -1130,7 +1179,9 @@ extern_definition_check := ->
   Check name: 'lerta lsp finds extern definitions in the current and imported modules', run: ->
     dir := new_cli_dir('lsp-extern-definition')
     path := "#{dir}/a.lerta"
-    text := "import float_text, float_text as t from './conversions'\nextern lerta_float_to_string as text_of: (Float) -> String\nprint text_of(1.0)\nprint float_text(2.0)\nprint t(3.0)\n"
+    text := "import float_text, float_text as t from './conversions'\n" +
+      "extern lerta_float_to_string as text_of: (Float) -> String\nprint text_of(1.0)\n" +
+      "print float_text(2.0)\nprint t(3.0)\n"
     await write_file(path, ''.binary)
     await write_file(
       "#{dir}/conversions.lerta"

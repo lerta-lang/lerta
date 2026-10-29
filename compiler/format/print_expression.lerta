@@ -10,8 +10,8 @@ from '../ast'
 import Token from '../lexer/tokens'
 import common_indentation, is_blank from '../lexer/string_literal'
 import
-  breaking, choice, closing, Doc, indent, join, line_feed, LiteralLines, rule, separated, text,
-  token
+  breaking, choice, Choice, closing, Doc, indent, join, line_feed, LiteralLines, rule, separated,
+  text, token
 from './doc'
 import cast_type_doc, type_arguments, type_doc from './print_type'
 import if_doc, is_command_callee from './print_statement'
@@ -47,10 +47,12 @@ export expression_doc := (expression: Expression, context: Context) ->
   operand expression, context, 0, true
 
 # The expression where it must bind at least as tightly as `level`. One that runs to the end of
-# what holds it, as `return x` and a function literal do, can do so only `last`.
+# what holds it, as `return x` and a function literal do, can do so only `last`. An operand of
+# another expression, at a level above 0, breaks no operation outside brackets (see Context).
 export operand := (expression: Expression, context: Context, level: Int, last: Bool) ->
   runs_on := runs_to_end(expression) and not last
-  in_parentheses expression, context, precedence(expression) < level or runs_on
+  inner := level > 0 then context.unbroken() else context
+  in_parentheses expression, inner, precedence(expression) < level or runs_on
 
 # Parentheses that the style asks for although the precedence does not.
 export clarified := (expression: Expression, context: Context) ->
@@ -61,8 +63,10 @@ in_parentheses := (expression: Expression, context: Context, needed: Bool) ->
   was_in_parentheses := written_in_parentheses(expression, context)
   if needed
     open := was_in_parentheses then token('(', expression.position) else text('(')
-    return
-      rule(PARENTHESES, join([open, bare_doc(expression, context.inside_brackets()), text(')')]))
+    # Broken there, an operation would end its last line with the `)`, rather than put it on a
+    # line of its own (see Layout).
+    inside_parentheses := context.inside_brackets().unbroken()
+    return rule(PARENTHESES, join([open, bare_doc(expression, inside_parentheses), text(')')]))
   was_in_parentheses then rule(PARENTHESES, bare) else bare
 
 # An expression written in place of another, which reports its rule, and where the other ended.
@@ -276,16 +280,52 @@ unary_doc := (unary: UnaryOperation, context: Context) ->
       operand unary.operand, context, PREFIX, true
   join [token('-', unary.position), operand_doc]
 
+# An operation on one line if it fits, and otherwise broken after each operator of its chain, the
+# operations of its level on its left, with the operands after the first one level deeper, each on
+# a line of its own (see Long operations), where the context breaks operations and the first line
+# fits, as breaking it otherwise would only add lines that are as long.
 binary_doc := (binary: BinaryOperation, context: Context) ->
   level := binary_precedence(binary.operator)
+  chain := operation_chain(binary, level, context)
   left_level := level == COMPARISON then COALESCE else level
   right_level := level == COMPARISON then COALESCE else level + 1
-  side := (child: Expression, child_level: Int, last: Bool) ->
-    # `and` mixed with `or` is clarified (see Parentheses).
-    mixes := binary.operator == 'or' and child is BinaryOperation and child.operator == 'and'
-    mixes then clarified(child, context) else operand(child, context, child_level, last)
-  left := side(binary.left, left_level, false)
-  join [left, text(" #{binary.operator} "), side(binary.right, right_level, true)]
+  first := operation_side(chain[0], chain[0].left, left_level, false, context)
+  rights := [
+    operation_side(operation, operation.right, right_level, i == chain.length - 1, context)
+    for operation, i in chain
+  ]
+  on_line := [join([text(" #{chain[i].operator} "), right]) for right, i in rights]
+  flat := join([first, on_line...])
+  return flat if not context.breaks_operations
+  continued := [join([text(" #{chain[i].operator}"), line_feed(), right]) for right, i in rights]
+  broken := join([first, indent(join(continued))])
+  start := join([first, text(" #{chain[0].operator}")])
+  breaking LINE_LENGTH, flat, Choice(flat: broken, broken: flat, measured: start)
+
+# The first line of the operation where it is broken: its first operand and operator.
+export operation_start := (binary: BinaryOperation, context: Context) ->
+  level := binary_precedence(binary.operator)
+  first := operation_chain(binary, level, context)[0]
+  left_level := level == COMPARISON then COALESCE else level
+  join [operation_side(first, first.left, left_level, false, context), text(" #{first.operator}")]
+
+operation_side := (
+  operation: BinaryOperation, child: Expression, level: Int, last: Bool, context: Context
+) ->
+  # `and` mixed with `or` is clarified (see Parentheses).
+  mixes := operation.operator == 'or' and child is BinaryOperation and child.operator == 'and'
+  mixes then clarified(child, context) else operand(child, context, level, last)
+
+# The operations of a chain from its first, innermost on the left, to `binary`: those of the level
+# on its left, whose parentheses the formatter leaves out (see Parentheses), so that it breaks the
+# chain alike once they are. A comparison takes no chain.
+operation_chain := (binary: BinaryOperation, level: Int, context: Context) ->
+  chain := [binary]
+  return chain if level == COMPARISON
+  while left := chain[chain.length - 1].left as BinaryOperation?
+    break if binary_precedence(left.operator) != level or left in context.reported
+    chain.push left
+  chain.reversed()
 
 # An end of a range that is an operation is in parentheses (see Ranges).
 range_end := (end: Expression, context: Context, last: Bool) ->

@@ -43,7 +43,7 @@ lerta fmt [--fix] <path>...
 checks that each file is in the [style](style.md).
 
 - **Paths.** The paths are files, and directories, whose `.lerta` files it takes, in the order of their names and through the directories inside them, but for those whose names start with `.`. `--fix` must come first; no path, or another argument that starts with `-`, is a usage error.
-- **Reports.** It prints each file again from its syntax tree, in the style, and reports each place where the file differs from that, as a diagnostic is: `<path>:<line>:<column>: <message> (<rule>)`, where the rule is named by its bold label in the style, once for each line, or each run of lines, that differs; a run of a different number of lines, as where lines are joined or broken, is reported once, at its first difference, and what else breaks the style in it once that is fixed.
+- **Reports.** It prints each file again from its syntax tree, in the style, and reports each place where the file differs from that, as a diagnostic is: `<path>:<line>:<column>: <message> (<rule>)`, where the rule is named by its bold label in the style, once for each line, or each run of lines, that differs; a run of a different number of lines, as where lines are joined or broken, is reported once, at its first difference, and what else breaks the style in it once that is fixed. A line that it keeps, but over 100 columns, such as one of a comment or a string, which it cannot break, is reported under **Line length** at its 101st column, but one kept as it is written (see below).
 - **Programs checked.** It also checks a program that holds the file, reading the modules that it imports: that of which a file given that no other file given imports is the entry module, once for all the files given that it holds, and for the other files given, their own. If the program does not check, the types of its entry module are kept and its errors are not reported; the other files it holds are checked as the entry modules of their own programs.
 - **Type annotations left out.** It leaves out the types written in the file that its checking shows the checker can infer (see **Type annotations** in the style), of those that the style leaves out:
   - a parameter's type that the function type expected, or a literal default, gives it;
@@ -68,9 +68,9 @@ checks that each file is in the [style](style.md).
     0, 1
   ]
   ```
-- **`--fix`** writes the files that differ instead, and reports nothing else.
+- **`--fix`** writes the files that differ instead, and reports only the lines over 100 columns that remain.
 - **What it keeps.** The comments, and the blank lines, at most one in a row; the spelling of literals, such as `0xFF` and the escapes of a string, but `'...'` for a string that can be written so; and the names of a destructuring.
-- **Exit code.** 1 if a file differs (without `--fix`), and if a path names nothing (`'<path>' is not a file or a directory`), a file is not valid UTF-8 or does not parse (its compile error), and 0 otherwise; the other files are still taken.
+- **Exit code.** 1 if a file differs (without `--fix`), or holds a line over 100 columns that it reports (with it too), and if a path names nothing (`'<path>' is not a file or a directory`), a file is not valid UTF-8 or does not parse (its compile error), and 0 otherwise; the other files are still taken.
 - **Self-check.** Before it reports or writes, it parses the text that it printed: if that is another program, which would be a bug of the formatter, it reports `<path>: the formatter would change the program, which is a bug` and leaves the file.
 
 What of the style it does not apply yet, and its known faults, are in [the roadmap](../roadmap/programs.md#tools).

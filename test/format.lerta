@@ -1,10 +1,10 @@
 # Formatter checks. Each tests/format/<name>.in is copied to <name>.lerta in a directory of its own,
 # where `lerta fmt <name>.lerta` must report <name>.report on stderr, failing exactly when that is
-# not empty (a missing file means empty); `lerta fmt --fix <name>.lerta` must then succeed and leave
-# <name>.formatted (the input itself if it is missing); and `lerta fmt <name>.lerta` must then report
-# nothing, as the formatted text is in the style. Then the command line: the paths it takes, and
-# what it does with a file that does not parse. Whether the code of the repository is in the style
-# is checked by `make check`.
+# not empty (a missing file means empty); `lerta fmt --fix <name>.lerta` must then leave
+# <name>.formatted (the input itself if it is missing) and report <name>.remaining, what it cannot
+# fix, failing likewise; and `lerta fmt <name>.lerta` must then report that too. Then the command
+# line: the paths it takes, and what it does with a file that does not parse. Whether the code of
+# the repository is in the style is checked by `make check`.
 import Check, run_checks, select from './lib/report'
 import compare_text, expect_status from './lib/expect'
 import compiler, FileRun, read_text_or_throw, root_dir, run_file, suite_dir from './lib/lerta'
@@ -25,15 +25,17 @@ case_check := (name: String) -> Check(name: "tests/format/#{name}", run: ->
   file := "#{name}.lerta"
   await write_file("#{dir}/#{file}", input.binary)
   expected_report := await read_or("#{cases_dir}/#{name}.report", '')
+  remaining := await read_or("#{cases_dir}/#{name}.remaining", '')
+  remaining_status := remaining.is_empty() then 0 else 1
   checked := await fmt(dir, [file])
   fixed := await fmt(dir, ['--fix', file])
   formatted := await read_text_or_throw("#{dir}/#{file}")
   rechecked := await fmt(dir, [file])
   [
     expect_run(checked, expected_report, expected_report.is_empty() then 0 else 1, 'report')...
-    expect_run(fixed, '', 0, '--fix stderr')...
+    expect_run(fixed, remaining, remaining_status, '--fix stderr')...
     compare_text('formatted', await read_or("#{cases_dir}/#{name}.formatted", input), formatted)...
-    expect_run(rechecked, '', 0, 'report on the formatted file')...
+    expect_run(rechecked, remaining, remaining_status, 'report on the formatted file')...
   ]
 )
 
@@ -66,7 +68,8 @@ expect_unchanged := (path: String, time: Float): String[] ->
 
 unformatted := "print(1)\n"
 # What `lerta fmt` reports on it.
-calls_report := 'call without parentheses at the start of a statement, with them after `then` or `->` (Calls without parentheses)'
+calls_report := 'call without parentheses at the start of a statement, with them after `then` or ' +
+  '`->` (Calls without parentheses)'
 
 type_report := (at: String) ->
   "#{at}: leave out the type, which can be inferred (Type annotations)\n"
@@ -107,7 +110,8 @@ command_checks: Check[] =
     expect_run result, "bad.lerta: the file is not valid UTF-8\n", 1
   }
   {
-    name: 'lerta fmt leaves out the types of the files that a program holds, checked once, or alone where it does not check'
+    name: 'lerta fmt leaves out the types of the files that a program holds, checked once, or ' +
+      'alone where it does not check'
     run: ->
       dir := await tree(
         'programs'
@@ -125,7 +129,8 @@ command_checks: Check[] =
       ]
   }
   {
-    name: 'lerta fmt takes a file given twice once, files that import each other, and keeps the types where an import does not parse'
+    name: 'lerta fmt takes a file given twice once, files that import each other, and keeps the ' +
+      'types where an import does not parse'
     run: ->
       dir := await tree(
         'cycles'
@@ -145,53 +150,73 @@ command_checks: Check[] =
       expect_run result, expected.join(''), 1
   }
   {
-    name: 'lerta fmt --fix leaves out the types of the files of one program, but one that alone uses an import'
+    name: 'lerta fmt --fix leaves out the types of the files of one program, but one that alone ' +
+      'uses an import'
     run: ->
       dir := await tree(
         'fix_program'
         {
           'lib.lerta': "export one := (): Int -> 1\n"
-          'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nout: Writer = stdout\ntwo: Int = one() + 1\nprint two\n"
+          'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\n" +
+            "out: Writer = stdout\ntwo: Int = one() + 1\nprint two\n"
         }
       )
       result := await fmt(dir, ['--fix', '.'])
       expected :=
         'lib.lerta': "export one := -> 1\n"
-        'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\nout: Writer = stdout\ntwo := one() + 1\nprint two\n"
+        'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\n" +
+          "out: Writer = stdout\ntwo := one() + 1\nprint two\n"
       [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
   }
   {
-    name: 'lerta fmt --fix writes the members of enums alone, through the checks of the calls that the checker rewrites, and leaves out the imports of the enums that it leaves unused'
+    name: 'lerta fmt --fix writes the members of enums alone, through the checks of the calls ' +
+      'that the checker rewrites, and leaves out the imports of the enums that it leaves unused'
     run: ->
       dir := await tree(
         'members'
         {
-          'kinds.lerta': "export enum Kind\n  A\n  B\n\nexport struct Field\n  name: String\n  kind: Kind\n\nexport count := (kinds: Kind...) -> kinds.length\n\nexport pick := (n: Int, options: { kind: Kind }) -> options.kind\n"
-          'made.lerta': "import Field, Kind from './kinds'\n\nexport made := Field(name: 'a', kind: Kind.A)\n"
-          'named.lerta': "import Field from './kinds'\nimport Kind from './kinds'\n\nname := 'b'\nexport named := Field(name, kind: Kind.B)\n"
-          'counted.lerta': "import count from './kinds'\nimport Kind from './kinds'\n\nexport counted := count(Kind.A, Kind.A)\n"
-          'picked.lerta': "import Kind, pick from './kinds'\n\nexport picked := pick(1, kind: Kind.A)\n"
-          'test.lerta': "import Kind from './kinds'\n\nexport is_b := (kind: Kind) -> kind == Kind.B\n"
+          'kinds.lerta': "export enum Kind\n  A\n  B\n\nexport struct Field\n  name: String\n" +
+            "  kind: Kind\n\nexport count := (kinds: Kind...) -> kinds.length\n\n" +
+            "export pick := (n: Int, options: { kind: Kind }) -> options.kind\n"
+          'made.lerta': "import Field, Kind from './kinds'\n\n" +
+            "export made := Field(name: 'a', kind: Kind.A)\n"
+          'named.lerta': "import Field from './kinds'\nimport Kind from './kinds'\n\n" +
+            "name := 'b'\nexport named := Field(name, kind: Kind.B)\n"
+          'counted.lerta': "import count from './kinds'\nimport Kind from './kinds'\n\n" +
+            "export counted := count(Kind.A, Kind.A)\n"
+          'picked.lerta': "import Kind, pick from './kinds'\n\n" +
+            "export picked := pick(1, kind: Kind.A)\n"
+          'test.lerta': "import Kind from './kinds'\n\n" +
+            "export is_b := (kind: Kind) -> kind == Kind.B\n"
           'unused.lerta': "import Kind from './kinds'\n\nexport one := 1\n"
-          'typed.lerta': "import Kind, pick from './kinds'\n\nexport typed := (n: Int) ->\n  kind: Kind = pick(n, kind: A)\n  kind\n"
+          'typed.lerta': "import Kind, pick from './kinds'\n\nexport typed := (n: Int) ->\n" +
+            "  kind: Kind = pick(n, kind: A)\n  kind\n"
           'parsed.lerta': "import Kind from './kinds'\n\nexport parsed := Kind.parse('A')\n"
-          'main.lerta': "import counted from './counted'\nimport made from './made'\nimport named from './named'\nimport picked from './picked'\nimport is_b from './test'\nimport one from './unused'\nimport typed from './typed'\nimport parsed from './parsed'\n\nprint is_b(made.kind).to_string()\nprint counted\nprint is_b(picked).to_string()\nprint named.name\nprint one\nprint is_b(typed(1)).to_string()\nprint parsed == nil\n"
+          'main.lerta': "import counted from './counted'\nimport made from './made'\n" +
+            "import named from './named'\nimport picked from './picked'\n" +
+            "import is_b from './test'\nimport one from './unused'\nimport typed from './typed'\n" +
+            "import parsed from './parsed'\n\nprint is_b(made.kind).to_string()\nprint counted\n" +
+            "print is_b(picked).to_string()\nprint named.name\nprint one\n" +
+            "print is_b(typed(1)).to_string()\nprint parsed == nil\n"
         }
       )
       result := await fmt(dir, ['--fix', '.'])
       expected :=
         'made.lerta': "import Field from './kinds'\n\nexport made := Field(name: 'a', kind: A)\n"
-        'named.lerta': "import Field from './kinds'\n\nname := 'b'\nexport named := Field(name, kind: B)\n"
+        'named.lerta': "import Field from './kinds'\n\nname := 'b'\n" +
+          "export named := Field(name, kind: B)\n"
         'counted.lerta': "import count from './kinds'\n\nexport counted := count(A, A)\n"
         'picked.lerta': "import pick from './kinds'\n\nexport picked := pick(1, kind: A)\n"
         'test.lerta': "import Kind from './kinds'\n\nexport is_b := (kind: Kind) -> kind == B\n"
         'unused.lerta': "import Kind from './kinds'\n\nexport one := 1\n"
-        'typed.lerta': "import pick from './kinds'\n\nexport typed := (n: Int) ->\n  kind := pick(n, kind: A)\n  kind\n"
+        'typed.lerta': "import pick from './kinds'\n\nexport typed := (n: Int) ->\n" +
+          "  kind := pick(n, kind: A)\n  kind\n"
         'parsed.lerta': "import Kind from './kinds'\n\nexport parsed := Kind.parse('A')\n"
       [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
   }
   {
-    name: 'lerta fmt checks once the files that a program holds through others, beside a file whose import is missing'
+    name: 'lerta fmt checks once the files that a program holds through others, beside a file ' +
+      'whose import is missing'
     run: ->
       dir := await tree(
         'chain'

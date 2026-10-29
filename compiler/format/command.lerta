@@ -36,7 +36,7 @@ add_sources := (files: String[], dir: String): void ->
       files.push path
 
 # Whether the file is in the style, without the annotations of `removable`, or is written so with
-# `fix`.
+# `fix`, but for what the formatter cannot fix, as a line too long that it cannot break.
 format_file := (path: String, fix: Bool, removable: String[]) ->
   source := await read_text(path) ? return failed("#{path}: the file is not valid UTF-8")
   formatted :=
@@ -44,13 +44,16 @@ format_file := (path: String, fix: Bool, removable: String[]) ->
       format_source source, path, removable
     catch error: CompileError
       return failed(error.message)
-  if fix
-    await write_file(path, formatted.text.binary) if formatted.text != source
-    return true
-  for finding in formatted.findings
+  findings :=
+    if fix and formatted.text != source
+      await write_file(path, formatted.text.binary)
+      format_source(formatted.text, path, []).findings
+    else
+      formatted.findings
+  for finding in findings
     { at, rule } := finding
     print_error "#{path}:#{at.line}:#{at.column}: #{rule.message} (#{rule.label})"
-  formatted.findings.is_empty()
+  findings.is_empty()
 
 failed := (message: String) ->
   print_error message

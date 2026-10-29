@@ -8,11 +8,11 @@ import parse from '../parser/statement'
 import Annotation, imported_name, key_line from './annotated'
 import left_out_candidates from './annotations'
 import hunks from './diff'
-import join, lay_out, Layout, line_feed, RulePlace, text from './doc'
+import join, lay_out, Layout, line_feed, RulePlace, text, WIDTH from './doc'
 import StatementLines from './kept'
 import block_doc, is_left_out_import, left_out_import_mark from './print_statement'
 import Context from './printing'
-import BLANK_LINES, COMMENTS, LAYOUT, SPACING, StyleRule from './rules'
+import BLANK_LINES, COMMENTS, LAYOUT, LINE_LENGTH, SPACING, StyleRule from './rules'
 import columns, source_text, SourceText from './source'
 
 # A place where the source differs from the style, at its position in the source.
@@ -40,7 +40,7 @@ export format_source := (source: String, path: String, left_out: String[]) ->
     else
       printed lexed, text_source, path, outside(left_out, kept_lines, text_source)
   check_same_program result.statements, result.layout.text, path
-  found := findings(text_source, result.layout.text, result.layout.rules)
+  found := findings(text_source, result.layout.text, result.layout.rules, kept_lines)
   in_order := found.sorted((a, b) -> compare_positions(a.at, b.at))
   Formatted text: result.layout.text, findings: in_order
 
@@ -112,8 +112,9 @@ check_same_program := (statements: Statement[], formatted: String, path: String)
 
 # Where the formatted text differs from the source: at the first difference of each run of lines
 # that differ, with the innermost rule whose part holds that place in the formatted text, or else
-# the rule that the kind of difference points to.
-findings := (source: SourceText, formatted: String, rules: RulePlace[]) ->
+# the rule that the kind of difference points to; and the lines that it keeps but that are too
+# long, such as of a comment or a string, which it cannot break, but those kept as written.
+findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lines: Set<Int>) ->
   source_lines := source.raw_lines
   # Lines end with LF, and so does a file (see Layout): the first that ends with CRLF, and a last
   # line without LF, are places of their own, and the lines are compared without them.
@@ -128,7 +129,9 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[]) ->
   if not old[last].is_empty()
     result.push { rule: LAYOUT, at: { line: last + 1, column: columns(old[last]) + 1 } }
     old.push ''
+  differing: Set<Int>
   for hunk in hunks(old, new)
+    differing.add line for line in hunk.old_start...(hunk.old_start + hunk.old_count)
     # Where as many lines differ in each, each pair of lines is a place of its own.
     pairs := hunk.old_count == hunk.new_count then hunk.old_count else 1
     for i in 0...pairs
@@ -150,6 +153,9 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[]) ->
           found := inner then inner else first_rule_from(rules, in_new, last_line)
           found ? kind_of_difference(old_lines, new_lines, source, at.line)
       result.push { at, rule }
+  for i in 0...old.length
+    too_long := columns(old[i]) > WIDTH and i not in differing and i + 1 not in kept_lines
+    result.push { rule: LINE_LENGTH, at: { line: i + 1, column: WIDTH + 1 } } if too_long
   result
 
 # The column where the lines first differ, counted in code points from 1.

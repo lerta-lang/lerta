@@ -13,7 +13,9 @@ import SourceText from './source'
 
 # Where a part is printed. Inside brackets, a call without parentheses would take the items after
 # it, and no block can be written; on the line of an arm or of a function literal, a call keeps
-# its parentheses (see Calls without parentheses).
+# its parentheses (see Calls without parentheses). An operation is not broken in the head of a
+# block, as of an `if`, where the lines below are the block, nor as an operand outside brackets,
+# where the lines it went on to would read as the operands of the operation that holds it.
 export struct Context
   source: SourceText
   # The keys of the annotations left out of the syntax tree (see annotation_key), which are reported
@@ -24,6 +26,7 @@ export struct Context
   reported: Map<Expression, StyleRule>
   in_brackets = default false
   on_own_line = default true
+  breaks_operations = default true
 
   inside_brackets = -> @with(true, false)
 
@@ -33,7 +36,10 @@ export struct Context
   # On the line of an arm or a function literal.
   after_head = -> @with(@in_brackets, false)
 
-  with = (in_brackets: Bool, on_own_line: Bool) -> Context(@..., in_brackets, on_own_line)
+  unbroken = -> Context(@..., breaks_operations: false)
+
+  with = (in_brackets: Bool, on_own_line: Bool) ->
+    Context(@..., in_brackets, on_own_line, breaks_operations: true)
 
 # The item of a list, and whether it is simple: a name, a literal, or `name: value` or a parameter
 # `name: Type` of such, which share a line with others when the list does not fit on one.

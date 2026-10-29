@@ -173,9 +173,8 @@ export statement_doc := (statement: Statement, context: Context): Doc ->
 
 # A statement that an arm or a function literal can hold on its line.
 export is_inline := (statement: Statement, context: Context) ->
-  is_simple_statement(statement) or (not context.in_brackets and has_postfix_form(
-    statement, context
-  ))
+  is_simple_statement(statement) or
+    (not context.in_brackets and has_postfix_form(statement, context))
 
 # A statement that holds no block and has no postfix form.
 is_simple_statement := (statement: Statement) ->
@@ -255,7 +254,8 @@ condition_doc := (condition: Condition, context: Context) ->
 
 # `if` and its block, and `else if` or `else` and its block (see Branches).
 export if_doc := (if_node: If, context: Context): Doc ->
-  head := join([keyword('if ', if_node.position), condition_doc(if_node.condition, context)])
+  condition := condition_doc(if_node.condition, context.unbroken())
+  head := join([keyword('if ', if_node.position), condition])
   parts := [head, block_below(if_node.then_body, context)]
   else_body := if_node.else_body
   if is_else_if(else_body, context)
@@ -313,7 +313,7 @@ ends_open := (statement: Statement): Bool ->
     else false
 
 while_doc := (while_node: While, context: Context) ->
-  condition := condition_doc(while_node.condition, context)
+  condition := condition_doc(while_node.condition, context.unbroken())
   word := keyword('while ', while_node.position)
   block := join([word, condition, block_below(while_node.body, context)])
   body := while_postfix(while_node, context) ? return block
@@ -334,7 +334,7 @@ postfix_statement := (body: Statement[], at: Position, context: Context) ->
 # them for `for (a, b) in xs`.
 for_doc := (for_node: For, context: Context) ->
   body := loop_body(for_node)
-  header := loop_header(for_node.variable, for_node.index, for_node.iterable, context)
+  header := loop_header(for_node.variable, for_node.index, for_node.iterable, context.unbroken())
   block := join([header, block_below(body, context)])
   only := for_postfix(for_node, context) ? return block
   postfix := join([statement_doc(only, context), text(' '), header])
