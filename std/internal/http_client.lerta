@@ -200,11 +200,13 @@ parse_url := (url: String) ->
   for c in rest
     break if '/?#'.contains(c.to_string())
     authority += c
-  (path, _fragment) :=
-    rest.without_prefix(authority)!.split_once('#') ? (rest.without_prefix(authority)!, '')
+  (path, _fragment) := split_or_whole(rest.without_prefix(authority)!, '#')
   throw not_url() if authority.contains('@')
   (host, port) := host_and_port(authority) ? throw not_url()
   Target authority, host, port, path: path.starts_with('/') then path else "/#{path}"
+
+# The text before the first separator and the text after it, or the whole text and '' without one.
+split_or_whole := (text: String, separator: String) -> text.split_once(separator) ? (text, '')
 
 # The host, without the brackets of an IPv6 address, and the port, 80 if none is written.
 host_and_port := (authority: String) ->
@@ -216,7 +218,7 @@ host_and_port := (authority: String) ->
   port <= 65535 then (host, port) else nil
 
 split_authority := (authority: String) ->
-  inside := authority.without_prefix('[') ? return authority.split_once(':') ? (authority, '')
+  inside := authority.without_prefix('[') ? return split_or_whole(authority, ':')
   (address, after) := inside.split_once(']') ? return nil
   return (address, '') if after.is_empty()
   port_text := after.without_prefix(':') ? return nil
@@ -270,7 +272,7 @@ first_line := (socket: Socket, request: Outgoing, writes: Bool) ->
 read_any_head := (reader: Reader, line: String) ->
   (version, rest) := line.split_once(' ') ? throw malformed()
   throw malformed() if version != 'HTTP/1.1' and version != 'HTTP/1.0'
-  (code, _reason) := rest.split_once(' ') ? (rest, '')
+  (code, _reason) := split_or_whole(rest, ' ')
   throw malformed() if code.binary.length != 3 or not code.all((c) -> c.is_digit())
   Head version, status: code.parse_int()!, headers: await read_fields(reader)
 
@@ -370,10 +372,12 @@ redirected := (request: Outgoing, response: Response) ->
     catch _: ValueError
       throw IOError("a malformed redirect: #{location}")
   headers := Headers()
-  headers.fields = [field for field in request.headers.fields]
+  headers.fields = [request.headers.fields...]
   if target.authority != request.target.authority
     headers.delete name for name in CREDENTIALS
-  as_get := (status == 303 and request.method != 'HEAD') or ((status == 301 or status == 302) and request.method == 'POST')
+  see_other := status == 303 and request.method != 'HEAD'
+  moved_post := (status == 301 or status == 302) and request.method == 'POST'
+  as_get := see_other or moved_post
   if not as_get
     # A body that is a Reader has been read as it was sent.
     return request.body is Reader then nil else Outgoing(request..., target, headers)
@@ -400,7 +404,7 @@ resolve := (base: Target, location: String) ->
   # The same document, whose fragment the request leaves out.
   return origin + base.path if location.is_empty() or location.starts_with('#')
   return origin + location if location.starts_with('/')
-  (path, _query) := base.path.split_once('?') ? (base.path, '')
+  (path, _query) := split_or_whole(base.path, '?')
   return origin + path + location if location.starts_with('?')
   segments := path.split('/')
   "#{origin}#{segments.slice(0, segments.length - 1).join('/')}/#{location}"

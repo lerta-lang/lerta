@@ -115,7 +115,7 @@ destructuring_doc := (holder: Declaration, context: Context) ->
   ]
   open_token := source.tokens[open]
   is_tuple := open_token.kind == '('
-  at_open := at_token(open_token.line, open_token.column)
+  at_open := open_token.position()
   pattern :=
     if is_tuple
       join [token('(', at_open), separated(names, text(', ')), text(')')]
@@ -123,7 +123,7 @@ destructuring_doc := (holder: Declaration, context: Context) ->
       join [token('{ ', at_open), separated(names, text(', ')), text(' }')]
   value := value_after(holder.value, context)
   if word := var_before(source, open)
-    join [token('var ', at_token(word.line, word.column)), pattern, text(' ='), value]
+    join [token('var ', word.position()), pattern, text(' ='), value]
   else
     join [pattern, text(' :='), value]
 
@@ -132,8 +132,6 @@ var_before := (source: SourceText, open: Int) ->
   return nil if open == 0
   before := source.tokens[open - 1]
   before.kind == 'var' then before
-
-at_token := (line: Int, column: Int) -> Position(line, column)
 
 # The index of the bracket that the names of the destructuring are in.
 destructuring_open := (holder: Declaration, context: Context) ->
@@ -309,7 +307,7 @@ ends_open := (statement: Statement): Bool ->
     when Range then ends_open(statement.end)
     when Call
       args := statement.args
-      not args.is_empty() and ends_open(args[args.length - 1])
+      not args.is_empty() and ends_open(args.last()!)
     when FunctionLiteral, Case, Try then true
     when If then not statement.nil_safe
     else false

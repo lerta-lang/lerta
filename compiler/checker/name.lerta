@@ -12,7 +12,7 @@ from './imports'
 import object_type from './object_types'
 import ExternReference, FunctionReference, Reference, ScopedLocal, TopLevelValue from './references'
 import Local from './scopes'
-import Body from './shared'
+import Body, Shared from './shared'
 import abort_if_failed, fail_runs_later, reject_pending from './top_level_values'
 import has_alias from './type_names'
 import has_declared_type from './interfaces'
@@ -34,9 +34,7 @@ export named_function_literal := (body: Body, callee: Expression): FunctionLiter
   name := callee.name
   return nil if lookup(body, name) != nil
   return entry.literal if entry := shared.functions.entries[name]
-  imported := shared.imports.names[name]
-  builtin := -> builtin_export(shared, name)
-  exported := imported then imported_export(program, imported) else builtin()
+  exported := export_named(shared, name)
   return nil if exported is not FunctionExport
   program.shared[exported.module_index].functions.entries[exported.name]!.literal
 
@@ -94,23 +92,21 @@ export qualified_name := (body: Body, member: Member): Identifier? ->
 # unless a local or another name of the module takes the name.
 export generic_callee := (body: Body, callee: Expression) ->
   return nil if callee is not Identifier
-  { program, shared } := body
+  shared := body.shared
   name := callee.name
   return nil if lookup(body, name) != nil
   return nil if body.sees_top_level and shared.top_level.names.has(name)
   return nil if has_declared_type(shared, name) or has_alias(shared, name)
   return generic_function(shared, name) if has_function(shared, name)
-  imported := shared.imports.names[name]
-  exported :=
-    if imported
-      imported_export program, imported
-    else
-      builtin_export(shared, name) ? return nil
-  if exported is GenericExport
-    use_import shared, name
-    exported.generic
-  else
-    nil
+  exported := export_named(shared, name)
+  return nil if exported is not GenericExport
+  use_import shared, name
+  exported.generic
+
+# The export that the name is imported by, or else that of std:builtins of the name, if any.
+export_named := (shared: Shared, name: String) ->
+  imported := shared.imports.names[name] ? return builtin_export(shared, name)
+  imported_export shared.program, imported
 
 # A generic function is called through generic_callee, so here it is used as a value. A value
 # whose type is not known yet is reported by type_of_identifier.

@@ -7,6 +7,7 @@ import compile_errors, Located from '../errors'
 import is_standard_module, Module from '../loader'
 import is_nested_name, is_standard_name, module_location from '../source'
 import CheckError, Diagnostic, ProgramWide, Shared from './shared'
+import ImportedName, ModuleAlias from './imports'
 import Local from './scopes'
 
 # Ends the checking of the part of the program being checked, whose error is kept, or that cannot
@@ -57,14 +58,16 @@ export abort_part := ->
 # checked. The stacks of what is being checked are left as the part found them.
 export check_part := (program: ProgramWide, check: () -> void) ->
   { module_paths, contexts, functions_checked, annotated_call } := program
-  depths := [module_paths.length, contexts.length, functions_checked.length]
+  module_depth := module_paths.length
+  context_depth := contexts.length
+  function_depth := functions_checked.length
   try
     check()
     true
   catch _: CheckAborted
-    module_paths.truncate depths[0]
-    contexts.truncate depths[1]
-    functions_checked.truncate depths[2]
+    module_paths.truncate module_depth
+    contexts.truncate context_depth
+    functions_checked.truncate function_depth
     program.annotated_call = annotated_call
     false
 
@@ -133,10 +136,9 @@ located_diagnostics := (program: ProgramWide, path: String?, diagnostics: Diagno
 warn_unused := (shared: Shared) ->
   if scope := shared.top_level_scope
     warn_if_unused shared, local for local in scope.values()
-  for imported in shared.imports.names.values()
-    { name, used } := imported
-    warn shared, name.position, "'#{name.name}' is imported but never used" if not used
-  for imported in shared.imports.modules.values()
+  { names, modules } := shared.imports
+  imports: (ImportedName | ModuleAlias)[] = [names.values()..., modules.values()...]
+  for imported in imports
     { name, used } := imported
     warn shared, name.position, "'#{name.name}' is imported but never used" if not used
 
