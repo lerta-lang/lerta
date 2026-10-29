@@ -1,0 +1,68 @@
+# How std:http's server writes a response: its head, and its body, at once or as it comes.
+
+import Reader from 'std:io'
+import Socket from 'std:net'
+import chunk_bytes, CHUNK_SIZE, LAST_CHUNK from './http_chunks'
+import date_now from './http_date'
+import check_field, Response from './http_message'
+import bytes_of from './utf8'
+
+# The bytes of the response to a request of `method`, but for a body that is a Reader, which follows
+# them as it comes, in chunks when `chunked`. A response to HEAD, and one of 204 or 304, has no
+# body, but for HEAD its fields tell how the body that a GET would give comes. Throws a ValueError
+# for a status that is no final one, and for fields that Headers would not have taken, which a
+# handler may have put in its fields itself. A Date field is given unless the handler gave one.
+export response_bytes := (response: Response, keep_alive: Bool, method: String, chunked: Bool) ->
+  { status, body } := response
+  throw ValueError("not a final status: #{status}") if status < 200 or status > 599
+  var head = "HTTP/1.1 #{status} #{REASONS[status] ? ''}\r\n"
+  for (name, value) in response.headers.fields
+    check_field name, value
+    head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name.to_lower())
+  head += "date: #{date_now()}\r\n" if 'date' not in response.headers
+  var bytes = ''.binary
+  if body is Reader
+    head += "transfer-encoding: chunked\r\n" if has_length(status) and chunked
+  else
+    bytes = bytes_of(body)
+    head += "content-length: #{bytes.length}\r\n" if has_length(status)
+  head += "connection: #{keep_alive then 'keep-alive' else 'close'}\r\n\r\n"
+  has_body(status, method) then head.binary + bytes else head.binary
+
+# A handler need not give a 304 the body that a 200 would have, to give its length.
+has_length := (status: Int) -> status != 204 and status != 304
+
+export has_body := (status: Int, method: String) -> has_length(status) and method != 'HEAD'
+
+# Writes the bytes of `body` as they come, each read as a chunk of its own when `chunked`, or else
+# as they are, which the end of the connection ends; for HTTP/1.0, a body that a failed read cuts
+# short so cannot be told from a whole one. Each write is awaited before the next read, so that the
+# body comes no faster than the peer takes it.
+export write_body := (socket: Socket, body: Reader, chunked: Bool) ->
+  while chunk := await body.read(CHUNK_SIZE)
+    await socket.write(chunked then chunk_bytes(chunk) else chunk)
+  await socket.write(LAST_CHUNK) if chunked
+
+# The fields that the server writes itself, as they tell where the response ends.
+FRAMING_FIELDS := ['content-length', 'transfer-encoding', 'connection']
+
+REASONS :=
+  200: 'OK'
+  201: 'Created'
+  204: 'No Content'
+  301: 'Moved Permanently'
+  302: 'Found'
+  304: 'Not Modified'
+  400: 'Bad Request'
+  401: 'Unauthorized'
+  403: 'Forbidden'
+  404: 'Not Found'
+  405: 'Method Not Allowed'
+  408: 'Request Timeout'
+  413: 'Content Too Large'
+  414: 'URI Too Long'
+  431: 'Request Header Fields Too Large'
+  500: 'Internal Server Error'
+  501: 'Not Implemented'
+  503: 'Service Unavailable'
+  505: 'HTTP Version Not Supported'

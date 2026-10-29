@@ -1,32 +1,21 @@
 # An HTTP/1.1 server and client over std:net, whose handler takes a Request and gives a Response, as
 # fetch does.
 
-import Deferred, TimeoutError from 'std:async'
-import LineTooLongError, Reader from 'std:io'
+import Deferred from 'std:async'
+import Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
 import address_text from './internal/handle'
 import Deadline from './internal/deadline'
-import CHUNK_SIZE, chunk_bytes, ChunkedBody, LAST_CHUNK from './internal/http_chunks'
-import date_now from './internal/http_date'
-import check_field, Headers, keeps_alive, Request, Response from './internal/http_message'
-import bytes_of from './internal/utf8'
+import CHUNK_SIZE from './internal/http_chunks'
+import Request, Response from './internal/http_message'
+import
+  read_rest_of_request, read_request_line, RequestError, ServerOptions
+from './internal/http_request'
+import has_body, response_bytes, write_body from './internal/http_response'
 
 export Body, Headers, Request, Response from './internal/http_message'
+export ServerOptions from './internal/http_request'
 export Client, fetch, FetchOptions from './internal/http_client'
-
-# Where a server listens, at a free port if `port` is 0, and how much and how long it waits for of a
-# request: the bytes of its request line or of a field, its fields, and the bytes of its body; the
-# seconds before the request line of a request comes, before the rest of its head does, and before
-# each chunk of its body does.
-export struct ServerOptions
-  host = default '127.0.0.1'
-  port = default 0
-  max_line = default 8192
-  max_fields = default 100
-  max_body = default 10485760
-  idle_timeout = default 5.0
-  head_timeout = default 30.0
-  body_timeout = default 30.0
 
 export class Server
   listener: Listener
@@ -97,11 +86,6 @@ accept_all := (server: Server) ->
       socket.close()
       return
     _serving := serve_connection(socket, server)
-
-# A request the server answers itself, with `status`, rather than handing it to the handler.
-struct RequestError: Error
-  status: Int
-  message: String
 
 serve_connection := (socket: Socket, server: Server) ->
   server.connections += 1
@@ -197,14 +181,6 @@ serve_request := (socket: Socket, server: Server, deadline: Deadline) ->
   await incoming.body.skip()
   true
 
-struct Incoming
-  request: Request
-  body: BodyChunks
-  keep_alive: Bool
-  # Whether a body that the response sends as it comes may go in chunks,
-  # which HTTP/1.0 does not take.
-  chunked: Bool
-
 # The next request, or nil if the connection ends, or stays idle, before it starts. A server that
 # is closed meanwhile closes the connection, which the read throws for.
 read_request := (socket: Socket, server: Server, deadline: Deadline) ->
@@ -218,220 +194,4 @@ read_request := (socket: Socket, server: Server, deadline: Deadline) ->
       await read_request_line(reader, options, deadline) ? return nil
     finally
       server.waiting.remove socket
-  parts := line.split(' ')
-  throw bad_request() if parts.length != 3
-  (method, target, version) := (parts[0], parts[1], parts[2])
-  throw bad_request() if method.is_empty() or target.is_empty()
-  throw RequestError(status: 505, message: 'http version not supported') if version not in VERSIONS
-  headers :=
-    try
-      await deadline.within(read_headers(reader, options), options.head_timeout)
-    catch _: TimeoutError
-      throw RequestError(status: 408, message: 'request timeout')
-  chunked := is_chunked(headers, version)
-  hosts := [value for (name, value) in headers.fields when name == 'host']
-  # HTTP/1.0 came before Host, which HTTP/1.1 requires.
-  throw bad_request() if hosts.length > 1 or (hosts.is_empty() and version == 'HTTP/1.1')
-  host := hosts.first() ? server.address
-  throw bad_request() if not is_host(host)
-  length := content_length(headers)
-  throw RequestError(status: 413, message: 'content too large') if length > options.max_body
-  { max_body, body_timeout } := options
-  chunks := chunked then ChunkedBody(reader, name: 'body', room: max_body)
-  body := BodyChunks(reader, chunks, deadline, left: length, seconds: body_timeout)
-  # HTTP/1.0 has no 100 Continue.
-  expects := (headers.get('expect') ? '').to_lower() == '100-continue'
-  body.continue_on = socket if expects and version == 'HTTP/1.1' and (chunked or length > 0)
-  url := url_of(host, target) ? throw bad_request()
-  request := Request(method, url, headers, body: Reader(-> await body.next()))
-  Incoming request, body, keep_alive: keeps_alive(version, headers), chunked: version == 'HTTP/1.1'
-
-VERSIONS := ['HTTP/1.1', 'HTTP/1.0']
-
-CONTINUE := "HTTP/1.1 100 Continue\r\n\r\n"
-
-bad_request := -> RequestError(status: 400, message: 'bad request')
-
-# The request line, which comes within the idle timeout, after an empty line that a client may send
-# after the body of the request before; nil if none does.
-read_request_line := (reader: Reader, options: ServerOptions, deadline: Deadline) ->
-  read := ->
-    line := await read_limited_line(reader, options.max_line, 414) ? return nil
-    line.is_empty() then await read_limited_line(reader, options.max_line, 414) else line
-  try
-    await deadline.within(read(), options.idle_timeout)
-  catch _: TimeoutError
-    nil
-
-read_headers := (reader: Reader, options: ServerOptions) ->
-  headers := Headers()
-  while line := await read_limited_line(reader, options.max_line, 431)
-    return headers if line.is_empty()
-    if headers.fields.length == options.max_fields
-      throw RequestError(status: 431, message: 'too many fields')
-    (name, value) := line.split_once(':') ? throw bad_request()
-    headers.append name, value.trim()
-  throw bad_request()
-
-# A line of at most `max` bytes before its CR LF, or its LF alone; a longer one is answered with
-# `status`. The reader takes a CR more, which the line then leaves out.
-read_limited_line := (reader: Reader, max: Int, status: Int) ->
-  too_long := -> RequestError(status, message: 'line too long')
-  line :=
-    try
-      await reader.read_line(min(max, INT_MAX - 1) + 1) ? return nil
-    catch _: LineTooLongError
-      throw too_long()
-  throw too_long() if line.binary.length > max
-  line
-
-# Whether the body comes in chunks. Another coding is not implemented; a Content-Length besides
-# chunks could tell another end to a proxy before the server, and HTTP/1.0 has no chunks.
-is_chunked := (headers: Headers, version: String) ->
-  coding := headers.get('transfer-encoding') ? return false
-  throw bad_request() if 'content-length' in headers or version == 'HTTP/1.0'
-  names := [each.trim().to_lower() for each in coding.split(',')]
-  # An empty element of a list is no element.
-  codings := [name for name in names when not name.is_empty()]
-  throw bad_request() if codings.is_empty()
-  if not codings.all((each) -> each == 'chunked')
-    throw RequestError(status: 501, message: 'transfer-encoding not implemented')
-  # Chunks are not put in chunks again.
-  throw bad_request() if codings.length > 1
-  true
-
-content_length := (headers: Headers) ->
-  text := headers.get('content-length') ? return 0
-  # Digits alone, as parse_int would also take a sign.
-  throw bad_request() if not text.is_digits()
-  text.parse_int() ? throw bad_request()
-
-# Whether a Host names a host and a port alone, so that it cannot change the path of the URL.
-is_host := (host: String) ->
-  not host.is_empty() and not host.any((c) -> NOT_IN_HOST.contains(c.to_string()))
-
-NOT_IN_HOST := "/\\?#@ \t"
-
-# A target in absolute form is the URL itself, and one in origin form a path on the host; nil for
-# another, as `*`.
-url_of := (host: String, target: String) ->
-  lower := target.to_lower()
-  return target if lower.starts_with('http://') or lower.starts_with('https://')
-  target.starts_with('/') then "http://#{host}#{target}"
-
-# The chunks of a body, read from the connection's reader, each within `seconds`, which for `chunks`
-# bounds the lines read before a chunk too, as the trailer: `left` bytes, or those of `chunks`. A
-# read that fails leaves the place in the body unknown, so the later ones fail too.
-class BodyChunks
-  reader: Reader
-  left: Int
-  chunks: ChunkedBody?
-  deadline: Deadline
-  seconds: Float
-  ended = false
-  # Only an IOError is kept: the reads throw no other but a cancel, which leaves the place known.
-  failure: IOError? = nil
-  # The connection of a client that waits for 100 Continue before it sends the body, which is sent
-  # before the first read.
-  continue_on: Socket? = nil
-
-  next = ->
-    throw failure if failure := @failure
-    return nil if @ended
-    chunk :=
-      try
-        await @send_continue()
-        await @within_seconds(@chunk())
-      catch error: IOError
-        @failure = error
-        throw error
-    @ended = chunk == nil
-    chunk
-
-  chunk = ->
-    chunks := @chunks
-    chunks != nil then await chunks.next() else await @sized()
-
-  sized = ->
-    return nil if @left == 0
-    ended_early := IOError('a body ended early')
-    chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw ended_early
-    @left -= chunk.length
-    chunk
-
-  send_continue = ->
-    socket := @continue_on ? return
-    @continue_on = nil
-    await socket.write(CONTINUE)
-
-  # A client that is too slow is taken to have gone.
-  within_seconds = (read: Promise<Binary?>) ->
-    try
-      await @deadline.within(read, @seconds)
-    catch _: TimeoutError
-      throw IOError('a body timed out')
-
-  # Reads what the handler has left of the body, so that the next request starts after it.
-  skip = ->
-    var chunk = await @next()
-    chunk = await @next() while chunk != nil
-
-# The bytes of the response to a request of `method`, but for a body that is a Reader, which follows
-# them as it comes, in chunks when `chunked`. A response to HEAD, and one of 204 or 304, has no
-# body, but for HEAD its fields tell how the body that a GET would give comes. Throws a ValueError
-# for a status that is no final one, and for fields that Headers would not have taken, which a
-# handler may have put in its fields itself. A Date field is given unless the handler gave one.
-response_bytes := (response: Response, keep_alive: Bool, method: String, chunked: Bool) ->
-  { status, body } := response
-  throw ValueError("not a final status: #{status}") if status < 200 or status > 599
-  var head = "HTTP/1.1 #{status} #{REASONS[status] ? ''}\r\n"
-  for (name, value) in response.headers.fields
-    check_field name, value
-    head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name.to_lower())
-  head += "date: #{date_now()}\r\n" if 'date' not in response.headers
-  var bytes = ''.binary
-  if body is Reader
-    head += "transfer-encoding: chunked\r\n" if has_length(status) and chunked
-  else
-    bytes = bytes_of(body)
-    head += "content-length: #{bytes.length}\r\n" if has_length(status)
-  head += "connection: #{keep_alive then 'keep-alive' else 'close'}\r\n\r\n"
-  has_body(status, method) then head.binary + bytes else head.binary
-
-# A handler need not give a 304 the body that a 200 would have, to give its length.
-has_length := (status: Int) -> status != 204 and status != 304
-
-has_body := (status: Int, method: String) -> has_length(status) and method != 'HEAD'
-
-# Writes the bytes of `body` as they come, each read as a chunk of its own when `chunked`, or else
-# as they are, which the end of the connection ends; for HTTP/1.0, a body that a failed read cuts
-# short so cannot be told from a whole one. Each write is awaited before the next read, so that the
-# body comes no faster than the peer takes it.
-write_body := (socket: Socket, body: Reader, chunked: Bool) ->
-  while chunk := await body.read(CHUNK_SIZE)
-    await socket.write(chunked then chunk_bytes(chunk) else chunk)
-  await socket.write(LAST_CHUNK) if chunked
-
-# The fields that the server writes itself, as they tell where the response ends.
-FRAMING_FIELDS := ['content-length', 'transfer-encoding', 'connection']
-
-REASONS :=
-  200: 'OK'
-  201: 'Created'
-  204: 'No Content'
-  301: 'Moved Permanently'
-  302: 'Found'
-  304: 'Not Modified'
-  400: 'Bad Request'
-  401: 'Unauthorized'
-  403: 'Forbidden'
-  404: 'Not Found'
-  405: 'Method Not Allowed'
-  408: 'Request Timeout'
-  413: 'Content Too Large'
-  414: 'URI Too Long'
-  431: 'Request Header Fields Too Large'
-  500: 'Internal Server Error'
-  501: 'Not Implemented'
-  503: 'Service Unavailable'
-  505: 'HTTP Version Not Supported'
+  await read_rest_of_request(line, socket, options, server.address, deadline)
