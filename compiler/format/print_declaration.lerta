@@ -18,39 +18,20 @@ export declaration_doc := (statement: Statement, context: Context) ->
     when TypeDeclaration
       word := statement.is_struct then 'struct ' else 'class '
       head :=
-        exported(statement.exported, statement.position, context)
-        keyword(word, statement.position)
-        name_doc(statement.name)
-        type_parameters(statement.type_params)
+        join([declared_head(word, statement, context), type_parameters(statement.type_params)])
       interface_type := statement.satisfies
       satisfies := interface_type then join([text(': '), named_type(interface_type)]) else text('')
-      join [join(head), satisfies, members_doc(statement.members, context)]
+      join [head, satisfies, members_doc(statement.members, context)]
     when InterfaceDeclaration
       head := join
-        [
-          exported(statement.exported, statement.position, context)
-          keyword('interface ', statement.position)
-          name_doc(statement.name)
-          type_parameters(statement.type_params)
-        ]
+        [declared_head('interface ', statement, context), type_parameters(statement.type_params)]
       join [head, members_doc(statement.members, context)]
     when EnumDeclaration
-      head := join
-        [
-          exported(statement.exported, statement.position, context)
-          keyword('enum ', statement.position)
-          name_doc(statement.name)
-        ]
+      head := declared_head('enum ', statement, context)
       members := [enum_member(member, context) for member in statement.members]
       join [head, indent(join([line_feed(), separated(members, line_feed())]))]
     when TypeAlias
-      head := join
-        [
-          exported(statement.exported, statement.position, context)
-          keyword('type ', statement.position)
-          name_doc(statement.name)
-          text(' =')
-        ]
+      head := join([declared_head('type ', statement, context), text(' =')])
       join [head, aliased_type(statement)]
     when Extern
       parts :=
@@ -73,6 +54,13 @@ export declaration_doc := (statement: Statement, context: Context) ->
       join [head, members_doc(statement.members, context)]
     when Import then import_doc(statement, context)
     else text('')
+
+type NamedDeclaration = TypeDeclaration | InterfaceDeclaration | EnumDeclaration | TypeAlias
+
+# The start of a declaration: `export ` if it has it, the keyword, and the name.
+declared_head := (word: String, statement: NamedDeclaration, context: Context) ->
+  { position, name } := statement
+  join [exported(statement.exported, position, context), keyword(word, position), name_doc(name)]
 
 # `export ` before a declaration that has it, at the position of the token before the declaration.
 export exported := (is_exported: Bool, at: Position, context: Context) ->

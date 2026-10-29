@@ -322,27 +322,32 @@ while_doc := (while_node: While, context: Context) ->
   postfix := join([statement_doc(body, context), text(' while '), condition])
   rule POSTFIX_FORMS, choice(postfix, block)
 
-# The one statement of the block, if the `while` can be written in its postfix form.
+# The one statement of the `while`'s block, if it can be written in its postfix form.
 while_postfix := (while_node: While, context: Context) ->
-  body := while_node.body
-  has_comments := context.source.block_has_comments(while_node.position)
+  postfix_statement while_node.body, while_node.position, context
+
+# The one statement of a loop's block, if the loop can be written in its postfix form: the statement
+# takes it, and the block of the loop at the position has no comments.
+postfix_statement := (body: Statement[], at: Position, context: Context) ->
+  has_comments := context.source.block_has_comments(at)
   body.length == 1 and takes_postfix(body[0]) and not has_comments then body[0]
 
 # A `for`, whose block starts with the declarations that take its item apart, as the parser makes
 # them for `for (a, b) in xs`.
 for_doc := (for_node: For, context: Context) ->
-  body := [statement for statement in for_node.body when not is_loop_part(statement)]
+  body := loop_body(for_node)
   header := loop_header(for_node.variable, for_node.index, for_node.iterable, context)
   block := join([header, block_below(body, context)])
   only := for_postfix(for_node, context) ? return block
   postfix := join([statement_doc(only, context), text(' '), header])
   rule POSTFIX_FORMS, choice(postfix, block)
 
-# The one statement of the block, if the `for` can be written in its postfix form.
+# The one statement of the `for`'s block, if it can be written in its postfix form.
 for_postfix := (for_node: For, context: Context) ->
-  body := [statement for statement in for_node.body when not is_loop_part(statement)]
-  has_comments := context.source.block_has_comments(for_node.position)
-  body.length == 1 and takes_postfix(body[0]) and not has_comments then body[0]
+  postfix_statement loop_body(for_node), for_node.position, context
+
+loop_body := (for_node: For) ->
+  [statement for statement in for_node.body when not is_loop_part(statement)]
 
 is_loop_part := (statement: Statement) -> statement is Declaration and statement.of_loop
 

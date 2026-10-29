@@ -37,11 +37,12 @@ opened_doc := (expression: Expression, context: Context): Doc? ->
   case expression
     when ArrayLiteral
       return nil if expression.elements.is_empty()
-      items := [item(element, inside) for element in expression.elements]
-      opened_list token('[', at), items, closing_of(']')
+      opened_list token('[', at), array_items(expression, inside), closing_of(']')
     when MapLiteral
-      items := [entry_item(entry, inside) for entry in expression.entries]
-      opened_list opening_brace(expression, '{', context), items, closing_of('}')
+      opened_list
+        opening_brace(expression, '{', context)
+        map_items(expression, inside)
+        closing_of('}')
     when RecordLiteral
       return nil if expression.fields.is_empty()
       opened_list
@@ -59,11 +60,10 @@ flat_literal := (literal: Expression, context: Context) ->
   at := literal.position
   case literal
     when ArrayLiteral
-      items := [item(element, inside) for element in literal.elements]
+      items := array_items(literal, inside)
       closing_bracket := closing(']', closing_at(at, context))
       join [token('[', at), separated([item.doc for item in items], text(', ')), closing_bracket]
-    when MapLiteral
-      flat_braces literal, [entry_item(entry, inside) for entry in literal.entries], context
+    when MapLiteral then flat_braces(literal, map_items(literal, inside), context)
     when RecordLiteral then flat_braces(literal, record_items(literal, inside), context)
     else expression_doc(literal, context)
 
@@ -95,12 +95,18 @@ export closing_at := (open: Position, context: Context) ->
   closing.position()
 
 export array_doc := (array: ArrayLiteral, context: Context) ->
-  items := [item(element, context.inside_brackets()) for element in array.elements]
+  items := array_items(array, context.inside_brackets())
   bracketed token('[', array.position), items, ']', closing_at(array.position, context)
 
+array_items := (array: ArrayLiteral, context: Context) ->
+  [item(element, context) for element in array.elements]
+
 export map_doc := (map: MapLiteral, context: Context) ->
-  items := [entry_item(entry, context.inside_brackets()) for entry in map.entries]
+  items := map_items(map, context.inside_brackets())
   braced map, items, context
+
+map_items := (map: MapLiteral, context: Context) ->
+  [entry_item(entry, context) for entry in map.entries]
 
 # A map's key that is a name is written in parentheses, as it would be a field's name otherwise.
 entry_item := (entry: MapEntry, context: Context) ->
@@ -125,14 +131,11 @@ record_items := (record: RecordLiteral, context: Context) ->
   [item(spread, context), fields...]
 
 field_item := (field: NamedValue, context: Context) ->
+  return named_item(field, context) if not is_shorthand(field)
   name := token(field.name.name, field.name.position)
-  value := field.value
-  if is_shorthand(field)
-    commented := context.source.comment_before(field.name.position)
-    return Item(doc: rule(SHORTHAND, name), simple: true, after_comment: commented)
-  doc := join([name, text(': '), expression_doc(value, context)])
   after_comment := context.source.comment_before(field.name.position)
-  Item doc, after_comment, simple: is_simple(value)
+  doc := rule(SHORTHAND, name)
+  Item doc, after_comment, simple: true
 
 is_shorthand := (field: NamedValue) ->
   value := field.value
@@ -207,11 +210,11 @@ literal_block := (literal: Expression, context: Context) ->
       when ArrayLiteral
         spreads := literal.elements.find_index(is_spread) != nil
         return nil if literal.elements.length < 2 or spreads
-        [item(element, context) for element in literal.elements]
+        array_items literal, context
       when RecordLiteral
         return nil if literal.fields.any(is_shorthand)
         record_items literal, context
-      when MapLiteral then [entry_item(entry, context) for entry in literal.entries]
+      when MapLiteral then map_items(literal, context)
       else return nil
   return nil if items.is_empty()
   indent join([line_feed(), lines_of_items(items)])
