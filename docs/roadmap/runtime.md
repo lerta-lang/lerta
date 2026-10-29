@@ -52,6 +52,7 @@ The size classes of the allocator ([internals](../internals.md#allocation)), the
 - **What awaits**: an operation whose wait has no bound, set by the outside world or by the amount of data, gives a `Promise`: processes, timers, the network, standard input, reading, writing and copying a file's contents, and removing a tree. One that is a single small system call stays synchronous, as `is_file`, `stat`, `real_path`, `make_dir`, `make_temp_dir`, `make_link` and `rename` do: it is over in microseconds on a local disk, less than handing it to libuv's thread pool takes, and an `await` would spread to every caller, as it cannot be written in a lazy comprehension. An asynchronous version can be added where a slow file system, such as a network one, calls for it.
 - Parallel computation uses **workers that do not share a heap, with message passing** (Node's worker_threads / the Erlang approach).
 - Programs stay single-threaded (see [philosophy](../philosophy.md#safety)), with no thread API, to avoid the GIL path of Python and Ruby.
+- A way to start a promise that nothing awaits, as `spawn f()`, whose error ends at its task (see [exceptions](#exceptions)). A promise must be awaited now, so std holds such a promise in a const that is never used, as `_accepting := accept_all(server)` in `std/http.lerta`, and catches its errors itself.
 
 ## Platforms
 
@@ -68,3 +69,4 @@ The size classes of the allocator ([internals](../internals.md#allocation)), the
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - Whether the runtime should collect cycles (as Nim's ORC does by trial deletion). It is decided by the leak check's report of cycles on a few programs driven by events, of the size of `examples/editor.lerta` or larger, written for it, before the APIs that keep callbacks are designed, which set their shape, rather than after async/await is complete.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).
+- Which error an argument out of its range throws: `truncate` of a negative length and `index_of` from a negative place throw an `IndexError`, and `repeat` of a negative count, `Array(n, value)` and the reads of std:io a `ValueError`. One rule, as an `IndexError` only for an index, would be stated in [errors](../reference/errors.md). A `Reader`'s `read(0)` throws while `read_line(0)` does not.
