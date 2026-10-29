@@ -6,6 +6,7 @@
 import connect_tcp from 'std:net'
 import sleep from 'std:time'
 import Request, Response, serve from 'std:http'
+import masked_dates from './lib/date'
 
 handle := (request: Request) ->
   return Response(body: 'ignored') if request.url.ends_with('/ignore')
@@ -26,7 +27,7 @@ ask := (requests: String | Binary, slow = false) ->
   client := await connect_tcp('127.0.0.1', server.port())
   await client.write(requests)
   client.end() if not slow
-  print (await client.reader.read_all()).text()!.replace("\r\n", ' | ')
+  print masked_dates((await client.reader.read_all()).text()!).replace("\r\n", ' | ')
 
 chunked := (path: String, body: String) ->
   "POST #{path} HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: Chunked\r\n\r\n#{body}"
@@ -81,7 +82,7 @@ trickle := ->
     # The server may have closed the connection already.
     nil
 await trickle()
-print (await trickling.reader.read_all()).text()!.replace("\r\n", ' | ')
+print masked_dates((await trickling.reader.read_all()).text()!).replace("\r\n", ' | ')
 
 # Sizes: zeros before 15 digits, more than 15 digits, and lines too long or not UTF-8.
 await ask(chunked('/', "00000000000000003\r\nabc\r\n0\r\n\r\n") + last)

@@ -1,0 +1,45 @@
+# A response's Date field, whose value changes with the time, written as `date: DATE` when it is the
+# time of the test, to the minute, in the form of RFC 9110's IMF-fixdate, `Sun, 06 Nov 1994 08:49:37
+# GMT`, and as it is otherwise, so that a test's output holds still and still fails for a wrong one.
+import time from 'std:time'
+
+DAYS := ['Thu,', 'Fri,', 'Sat,', 'Sun,', 'Mon,', 'Tue,', 'Wed,']
+MONTHS := ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+# The lines of a response's text, between its CR LFs.
+export masked_dates := (text: String) ->
+  [masked_date(line) for line in text.split("\r\n")].join("\r\n")
+
+export masked_date := (line: String) ->
+  value := line.without_prefix('date: ') ? return line
+  seconds := seconds_of(value) ? return line
+  now := time().to_int()!
+  is_now := seconds > now - 60 and seconds < now + 60
+  is_now then 'date: DATE' else line
+
+# The Unix time of an IMF-fixdate, if the text is one whose weekday is its date's.
+seconds_of := (text: String) ->
+  parts := text.split(' ')
+  return nil if parts.length != 6 or parts[5] != 'GMT'
+  clock := parts[4].split(':')
+  numbers := [parts[1], parts[3], clock...]
+  widths := [2, 4, 2, 2, 2]
+  return nil if [part.binary.length for part in numbers] != widths
+  return nil if numbers.any((part) -> part.parse_int() == nil)
+  value := (i: Int) -> numbers[i].parse_int()!
+  month := MONTHS.index_of(parts[2]) ? return nil
+  return nil if value(2) >= 24 or value(3) >= 60 or value(4) >= 60
+  days := days_since_1970(value(1), month + 1, value(0)) ? return nil
+  return nil if parts[0] != DAYS[days % 7]
+  days * 86400 + value(2) * 3600 + value(3) * 60 + value(4)
+
+# The days from 1970-01-01 to the date, counted by years, then months, as a check of the server's
+# own reckoning by eras; nil for a day that its month does not have.
+days_since_1970 := (year: Int, month: Int, day: Int) ->
+  is_leap := (y: Int) -> y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)
+  lengths := [31, is_leap(year) then 29 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  return nil if day < 1 or day > lengths[month - 1]
+  var days = 0
+  days += is_leap(y) then 366 else 365 for y in 1970...year
+  days += lengths[m] for m in 0...(month - 1)
+  days + day - 1

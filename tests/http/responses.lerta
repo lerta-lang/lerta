@@ -1,9 +1,11 @@
 # What a response holds: no body for HEAD, though its content-length is that of the body, and for
 # 204 and 304; a status that has no reason phrase; the content-length, transfer-encoding and
 # connection that the server writes in place of the handler's; and the URL of a target in absolute
-# form, and of one that names no host. A body is read as a Binary too.
+# form, and of one that names no host. A body is read as a Binary too. Every response has a Date
+# field, but one that the handler gives its own.
 import connect_tcp, Socket from 'std:net'
 import Headers, Request, Response, serve from 'std:http'
+import masked_date, masked_dates from './lib/date'
 
 handle := (request: Request) ->
   body := await request.binary()
@@ -18,13 +20,17 @@ handle := (request: Request) ->
     headers.set 'Connection', 'upgrade'
     headers.set 'Transfer-Encoding', 'chunked'
     return Response(headers, body: 'own')
+  if path == 'dated'
+    headers := Headers()
+    headers.set 'Date', 'yesterday'
+    return Response(headers, body: 'old')
   Response body: "#{request.url} #{body.length}"
 
 # Sends the request, and prints the head of its response.
 ask := (client: Socket, request: String) ->
   await client.write(request)
   while line := await client.reader.read_line()
-    print line
+    print masked_date(line)
     break if line.is_empty()
 
 server := serve(handle)
@@ -38,11 +44,13 @@ await ask(client, "GET /teapot HTTP/1.1\r\nHost: a\r\n\r\n")
 print (await client.reader.read_exactly(3))!.text()!
 await ask(client, "GET /own HTTP/1.1\r\nHost: a\r\n\r\n")
 print (await client.reader.read_exactly(3))!.text()!
+await ask(client, "GET /dated HTTP/1.1\r\nHost: a\r\n\r\n")
+print (await client.reader.read_exactly(3))!.text()!
 await ask(
   client
   "POST HTTP://b/abs HTTP/1.1\r\nHost: a\r\nContent-Length: 2\r\nConnection: close\r\n\r\nab"
 )
-print (await client.reader.read_all()).text()!
+print masked_dates((await client.reader.read_all()).text()!)
 
 server.close()
 
@@ -54,5 +62,8 @@ for host in ['127.0.0.1', '::1']
     old_client := await connect_tcp(host, old_server.port())
     await ask(old_client, request)
     print
-      (await old_client.reader.read_all()).text()!.replace(old_server.port().to_string(), 'PORT')
+      masked_dates((await old_client.reader.read_all()).text()!).replace(
+        old_server.port().to_string()
+        'PORT'
+      )
   old_server.close()
