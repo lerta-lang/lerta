@@ -1,0 +1,42 @@
+# Sends requests to the path of the server at the port of 127.0.0.1 for `seconds`, one after
+# another on each of `connections` connections, checks each response, and prints how many were
+# answered.
+# Usage: load <port> <path> <seconds> <connections>
+import all from 'std:async'
+import Client from 'std:http'
+import argv, exit from 'std:process'
+import time from 'std:time'
+
+ECHOED := 'x'.repeat(1024)
+# What each path answers.
+EXPECTED :=
+  'hello': 'Hello, world!'
+  'json': '{"id":1,"name":"lerta","tags":["fast","small"]}'
+  'echo': ECHOED
+
+port := argv[0]
+path := argv[1]
+seconds := argv[2].parse_float()!
+connections := argv[3].parse_int()!
+url := "http://127.0.0.1:#{port}/#{path}"
+expected := EXPECTED[path]!
+(method, body) := path == 'echo' then ('POST', ECHOED) else ('GET', '')
+# From this program's start, which those that run.lerta starts together reach within milliseconds.
+deadline := time() + seconds
+
+send_all := ->
+  client := Client(max_idle: 1)
+  var count = 0
+  while time() < deadline
+    response := await client.fetch(url, method: method, body: body)
+    text := await response.text()
+    if response.status != 200 or text != expected
+      print_error "#{url} answered #{response.status}: #{text}"
+      exit 1
+    # One sent before the deadline but answered after it is not answered within the seconds.
+    count += 1 if time() < deadline
+  client.close()
+  count
+
+counts := await all([send_all() for _ in 0...connections])
+print counts.sum()

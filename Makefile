@@ -200,7 +200,10 @@ check: bin/lerta
 bench: bin/lerta
 	@bin/lerta run bench/run.lerta
 
+bench-http: bin/lerta
+	@bin/lerta run bench/http/run.lerta
+
 clean:
 	rm -rf build bin
 
-.PHONY: all bench check seed test test-bootstrap test-cross clean
+.PHONY: all bench bench-http check seed test test-bootstrap test-cross clean

@@ -1,0 +1,111 @@
+# Builds the HTTP server in Lerta, Go and JavaScript (Node.js) and load.lerta, and for each path
+# that the servers answer, starts each server, loads it for SECONDS from PROCESSES programs of
+# load.lerta at once, each over CONNECTIONS connections, RUNS times, and prints the best number of
+# requests answered per second. Each server runs its handlers on one thread. Go runs only where
+# go is; Node.js must be there.
+# Run it from the repository's root, as `make bench-http` does after building bin/lerta; the
+# programs go to build/bench/.
+import all from 'std:async'
+import make_dir, Pipe from 'std:io'
+import cpu_count, Exit, run from 'std:process'
+
+PATHS := ['hello', 'json', 'echo']
+LANGUAGES := ['lerta', 'go', 'node']
+RUNS := 3
+SECONDS := 3.0
+# Every processor but the server's loads it; at least one.
+PROCESSES := cpu_count > 1 then cpu_count - 1 else 1
+CONNECTIONS := 16
+OUT := 'build/bench'
+NAME_COLUMN := 12
+COLUMN := 10
+
+struct Command
+  program: String
+  args: String[]
+
+# Thrown, rather than an exit, so that the server running is stopped first.
+fail := (message: String) -> throw IOError(message)
+
+is_found := (command: String) ->
+  (await run('sh', '-c', "command -v #{command} >/dev/null")).code == 0
+
+has_go := await is_found('go')
+
+run_checked := (label: String, command: Command, output: Byte[]? = nil) ->
+  code := (await run(command.program, command.args..., stdout: output)).code
+  fail "#{label} failed with exit code #{code}" if code != 0
+
+# The command that runs the server in the language, built first if it is compiled; nil where the
+# language's compiler is missing.
+build := (language: String) ->
+  return Command(program: 'node', args: ['bench/http/server.js']) if language == 'node'
+  return nil if language == 'go' and not has_go
+  executable := "#{OUT}/http-server-#{language}"
+  compile :=
+    case language
+      when 'lerta'
+        args := ['build', 'bench/http/server.lerta', '-O', '-o', executable]
+        Command args, program: 'bin/lerta'
+      else Command(program: 'go', args: ['build', '-o', executable, 'bench/http/server.go'])
+  await run_checked("building the server in #{language}", compile)
+  Command program: executable, args: []
+
+LOAD := "#{OUT}/http-load"
+
+# The requests answered per second while the load programs run against the server.
+measure := (label: String, port: String, path: String) ->
+  args := [port, path, SECONDS.to_string(), CONNECTIONS.to_string()]
+  loads := [load_count(label, args) for _ in 0...PROCESSES]
+  try
+    (await all(loads)).sum().to_float() / SECONDS
+  catch error
+    # The others would go on against a server stopped, and bury the first error under theirs.
+    load.cancel() for load in loads
+    throw error
+
+load_count := (label: String, args: String[]) ->
+  output: Byte[]
+  await run_checked(label, { program: LOAD, args }, output)
+  text := output.to_binary().text() ? fail("#{label} printed what is not UTF-8")
+  text.trim().parse_int() ? fail("#{label} printed no count: #{text}")
+
+stop := (serving: Promise<Exit>) ->
+  serving.cancel()
+  try
+    _ := await serving
+  catch _: CancelledError
+    return
+
+# The best rate of the runs, each against a server started anew.
+best_rate := (label: String, server: Command, path: String) ->
+  var best = 0.0
+  for _ in 0...RUNS
+    output := Pipe()
+    serving := run(server.program, server.args..., stdout: output)
+    var rate = 0.0
+    try
+      port := await output.reader.read_line() ? fail("#{label}: the server printed no port")
+      rate = await measure(label, port.trim(), path)
+    finally
+      await stop(serving)
+    best = rate if rate > best
+  best
+
+make_dir OUT
+build_load := ['build', 'bench/http/load.lerta', '-O', '-o', LOAD]
+await run_checked('building load.lerta', { program: 'bin/lerta', args: build_load })
+print "#{PROCESSES} load programs of #{CONNECTIONS} connections each, #{SECONDS} seconds"
+print 'requests per second'
+headings := [language.pad_start(COLUMN) for language in LANGUAGES]
+print ['path'.pad_end(NAME_COLUMN), headings...].join(' ')
+servers := [await build(language) for language in LANGUAGES]
+for path in PATHS
+  cells := [path.pad_end(NAME_COLUMN)]
+  for (language, server) in LANGUAGES.zip(servers)
+    if server == nil
+      cells.push '-'.pad_start(COLUMN)
+      continue
+    rate := await best_rate("#{path} in #{language}", server, path)
+    cells.push rate.to_fixed(0).pad_start(COLUMN)
+  print cells.join(' ')
