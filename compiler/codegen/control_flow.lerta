@@ -5,6 +5,7 @@ import
   statement_else_body, While
 from '../ast'
 import emit_array_new, emit_push from './array'
+import function_type_of from './closure'
 import generate, generate_condition, release_if_reference, type_of from './expression'
 import
   generate_block, generate_block_with, generate_closure, no_locals, release_scope, statements_code,
@@ -13,8 +14,8 @@ from './function'
 import CodegenLocal, Generator, ValueLocal from './generator'
 import emit_if_else, emit_when from './ir_builder'
 import
-  emit_comprehension_iter, emit_range_iter, emit_sequence_get, emit_sequence_length,
-  emit_source_iter
+  emit_comprehension_iter, emit_range_iter, emit_reading_iter, emit_sequence_get,
+  emit_sequence_length, emit_source_start
 from './iter'
 import emit_exception_check, leave_scopes, while_holding from './exceptions'
 import emit_iter_loop, emit_iter_start from './iter_protocol'
@@ -95,23 +96,29 @@ iterated := (g: Generator, iterable: Expression) ->
   return call if call := g.facts.iter_calls[iterable]
   iterable
 
-# The source is evaluated first, then the closures, which capture the values they see then.
+# The source is evaluated first, then the closures, which capture the values they see then. The
+# Iter is made before the traversal of a source Iter starts, which may throw, so that LLVM can tell
+# which Iter a function that gives it gives (see docs/internals.md#iter).
 generate_iter_comprehension := (g: Generator, iterable: Expression, lazy: LazyFunctions) ->
   ir := g.ir
-  source :=
-    if iterable is Range
-      emit_range_iter ir, generate(g, iterable.start), generate(g, iterable.end)
-    else
-      type := type_of(g, iterable)
-      iter := emit_source_iter(ir, generate(g, iterable), type)
-      # An Iter's traversal starts here, which throws if one has.
-      while_holding g, iter, type, -> emit_exception_check(g)
-      iter
-  item: Type = iterable is Range then int_type else iterable_item(type_of(g, iterable))!
+  if iterable is Range
+    range := emit_range_iter(ir, generate(g, iterable.start), generate(g, iterable.end))
+    return generate_lazy_iter(g, range, int_type, lazy)
+  type := type_of(g, iterable)
+  value := generate(g, iterable)
+  source := emit_reading_iter(ir, value, type)
+  iter := generate_lazy_iter(g, source, iterable_item(type)!, lazy)
+  emit_source_start ir, value, type
+  element_type := function_type_of(type_of(g, lazy.element)).result
+  while_holding g, iter, IterType(element_type), -> emit_exception_check(g)
+  iter
+
+# The comprehension's Iter of the source, whose items are of the type, with its closures.
+generate_lazy_iter := (g: Generator, source: String, item: Type, lazy: LazyFunctions) ->
   lazy_guard := lazy.guard
   guard := lazy_guard then generate_closure(g, lazy_guard)
   element := generate_closure(g, lazy.element)
-  emit_comprehension_iter ir, source, item, guard, element, type_of(g, lazy.element)
+  emit_comprehension_iter g.ir, source, item, guard, element, type_of(g, lazy.element)
 
 # The body generates the loop's code in its scope, where the loop variable, and the index if the
 # loop names it, are defined.
