@@ -318,6 +318,22 @@ function_body := (lines: String[], name: String): String[]? ->
   last += 1 while lines[last] != '}'
   lines.slice start, last
 
+JOINED_LITERALS := "#{root_dir}/tests/string/joined_literals.lerta"
+
+# Literals joined by `+` are one String in the IR, which the runtime does not join.
+dump_joined_literals_check := ->
+  Check name: 'lerta dump-llvm joins String literals joined by +', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', JOINED_LITERALS])
+    ir := dumped.result.stdout.text()!
+    reasons := expect_status(0, dumped.result.status)
+    body := function_body(ir.split("\n"), 'joined') ? return [reasons..., 'no function joined']
+    reasons.push 'a call in joined' if body.any((line) -> 'call ' in line)
+    joined_text :=
+      'a text too long for a line of its own, which is split over lines, with an escape\09' +
+        'and joined by the compiler'
+    reasons.push 'no joined literal' if joined_text not in ir
+    reasons
+
 UNCHECKED_METHODS := "#{root_dir}/tests/operator/unchecked_methods.lerta"
 
 # A builtin method after which no exception is pending is not followed by a check for one: no
@@ -614,6 +630,7 @@ checks.push optimized_runtime_check()
 checks.push dump_llvm_check()
 checks.push dump_symbols_check()
 checks.push dump_seldom_check()
+checks.push dump_joined_literals_check()
 checks.push dump_unchecked_methods_check()
 checks.push dump_float_ranges_check()
 checks.push dump_item_tag_check()

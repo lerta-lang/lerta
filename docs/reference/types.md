@@ -82,7 +82,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 ## String
 
 - A `String` is immutable text in UTF-8.
-- `+` concatenates two `String`s into a new one, and `s + c` of a [Char](#char) `c` appends its UTF-8: a string literal there is a `String`, as `+` expects one. `+=` appends to a variable.
+- `+` concatenates two `String`s into a new one, and `s + c` of a [Char](#char) `c` appends its UTF-8: a string literal there is a `String`, as `+` expects one. `+=` appends to a variable. String literals joined by `+`, as `'a long ' +` and `'text'` on the next line, are joined by the compiler, into one literal, at no cost when the program runs.
   - `+=` appends in place to a `String` that nothing else holds, so that a loop of `+=` is O(n) in all. One that something else holds, as another variable, an array, a closure or a `for` going through it, is copied first, once: the copy is held by the variable alone. A loop that shares the `String` again at each step, as one that pushes it onto an array before each `+=`, copies it each time, which is O(n²).
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in a `String[]`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`, and `s.ends_with(suffix)` whether it ends with those of `suffix`.
