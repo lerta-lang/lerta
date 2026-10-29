@@ -100,7 +100,7 @@ generate_index_assignment := (g: Generator, assignment: Assignment, target: Inde
   return generate_map_assignment(g, assignment, target, object_type) if object_type is MapType
   ir := g.ir
   element := type_of(g, target)
-  (array, is_owned) := generate_borrowed(g, target.object)
+  (array, is_owned) := generate_borrowed(g, target.object, [target.index, assignment.value])
   depth := g.temporaries.length
   push_temporary g, array, object_type if is_owned
   index := generate(g, target.index)
@@ -126,7 +126,9 @@ generate_index_assignment := (g: Generator, assignment: Assignment, target: Inde
 # `=` sets a map value, and `+=` and so on update that of `m[k, default: d]`. The key, like an
 # index, is evaluated before the value.
 generate_map_assignment := (g: Generator, assignment: Assignment, target: Index, type: MapType) ->
-  (map, is_owned) := generate_borrowed(g, target.object)
+  later := [target.index, assignment.value]
+  later.push default_value if default_value := target.default_value
+  (map, is_owned) := generate_borrowed(g, target.object, later)
   depth := g.temporaries.length
   push_temporary g, map, type if is_owned
   key := generate(g, target.index)

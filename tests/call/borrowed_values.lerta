@@ -7,6 +7,7 @@ interface Named
 class Box
   name: String
   label = -> "box #{@name}"
+  label_with = (note: String) -> "box #{kept(@).name} #{note}"
 
 class Holder
   weak! box: Box
@@ -91,6 +92,105 @@ changes_meanwhile := ->
   print show(current, replace())
   print current.name
 
+# A var that no closure captures is borrowed, unless what is evaluated while it is used assigns
+# it: the old value stays alive for the call, the method, the index or the assignment.
+vars := (replacing: Bool) ->
+  var current = Box('old')
+  print describe(current)
+  shown := show_with(current, case
+    when replacing
+      current = Box('new')
+      'replaced'
+    else 'kept'
+  )
+  print shown
+  shown_later := show_after(current, 'then', case
+    when replacing
+      current = Box('later')
+      'replaced'
+    else 'kept'
+  )
+  print shown_later
+  print current.name
+  labeled := current.label_with(case
+    when replacing
+      current = Box('newer')
+      'replaced'
+    else 'kept'
+  )
+  print labeled
+  print current.name
+  var boxes = [Box('first')]
+  print boxes[  # fmt: skip
+    case
+      when replacing
+        boxes = [Box('second')]
+        0
+      else 0
+  ].name
+  boxes[0] =
+    case
+      when replacing
+        boxes = [Box('third')]
+        Box 'fourth'
+      else Box('fourth')
+  print boxes[0].name
+  var names = { 'a': Box('a') }
+  names['a'] =
+    case
+      when replacing
+        names = { 'b': Box('b') }
+        Box 'c'
+      else Box('c')
+  print names.length
+  var notes = { 'a': 'note' }
+  notes['a', default: ''] +=
+    case
+      when replacing
+        notes = { 'b': 'other' }
+        '!'
+      else '!'
+  print notes.length
+  var spares = { 'a': Box('spare') }
+  print spares[  # fmt: skip
+    'z', default: case
+      when replacing
+        spares = { 'b': Box('b') }
+        Box('default')
+      else Box('default')
+  ].name
+  var words = ['word']
+  words[0] +=
+    case
+      when replacing
+        words = ['other']
+        '!'
+      else '!'
+  print words[0]
+  var pair = Pair(first: Box('one'), second: Box('two'))
+  shown_first := show_with(pair.first, case
+    when replacing
+      pair = { first: Box('three'), second: Box('four') }
+      'replaced'
+    else 'kept'
+  )
+  print shown_first
+  current = renamed(current)
+  print current.name
+
+show_with := (box: Box, note: String) -> "#{kept(box).name} #{note}"
+show_after := (box: Box, first: String, second: String) -> "#{kept(box).name} #{first} #{second}"
+renamed := (box: Box) -> Box("#{box.name}!")
+# Retains the box, which the debug runtime checks to be alive.
+kept := (box: Box) -> [box][0]
+
+# A top-level var that the call assigns is not borrowed.
+var LATEST = Box('first')
+replace_latest := (box: Box) ->
+  LATEST = Box('next')
+  kept(box).name
+use_latest := -> print(replace_latest(LATEST))
+
 # A weak! field of a borrowed object whose box is gone throws, and the object is released once.
 gone := ->
   holder := Holder(Box('gone'))
@@ -105,4 +205,8 @@ throws()
 print describe(TOP)
 print TOP.label()
 changes_meanwhile()
+vars true
+vars false
+print replace_latest(LATEST)
+use_latest()
 gone()
