@@ -163,22 +163,19 @@ export interface Writer
   end: () -> void
 
 # stdout or stderr, by its file descriptor (for buffering, see docs/reference/std.md#stdio).
-# An end leaves the descriptor open, as one that a later file opened would take its number.
+# An end does nothing: a run ends the Writers it is given, and the program writes on to stdout after
+# it; the descriptor stays open, as a file opened later would take its number.
 class StandardOutput
   fd: Int
-  name: String
-  ended = false
 
-  write = (data: String | Binary) ->
-    throw IOError("cannot write to #{@name}") if @ended
-    await lerta_stream_write(@fd, bytes_of(data))
+  write = (data: String | Binary) -> await lerta_stream_write(@fd, bytes_of(data))
 
-  end = -> @ended = true
+  end = -> return
 
   flush = -> await lerta_stream_flush(@fd)
 
-export stdout := StandardOutput(fd: 1, name: 'stdout')
-export stderr := StandardOutput(fd: 2, name: 'stderr')
+export stdout := StandardOutput(fd: 1)
+export stderr := StandardOutput(fd: 2)
 
 # A Reader that reads what its Writer writes: a write is resolved once the reader has taken its
 # chunk, and the reader reads nil once the writer has ended and all has been taken, or throws the
