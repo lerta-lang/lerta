@@ -1,0 +1,57 @@
+# Builds an expression tree of one variable picked by a pseudo-random generator, evaluates it
+# modulo a prime for many values of the variable, and prints the sum of the values modulo the prime.
+DEPTH := 22
+VALUES := 150
+MODULUS := 1000003
+
+struct Num
+  value: Int
+
+struct Var
+  coefficient: Int
+
+struct Add
+  left: Expr
+  right: Expr
+
+struct Mul
+  left: Expr
+  right: Expr
+
+struct Neg
+  operand: Expr
+
+type Expr = Num | Var | Add | Mul | Neg
+
+# MINSTD, whose products fit in the integers of every language compared.
+var seed = 1
+next_random := ->
+  seed = seed * 48271 % 2147483647
+  seed
+
+make := (depth: Int): Expr ->
+  if depth == 0
+    is_num := next_random() % 2 == 0
+    digit := next_random() % 10
+    return is_num then Num(digit) else Var(digit)
+  case next_random() % 3
+    when 0
+      left := make(depth - 1)
+      Add left, right: make(depth - 1)
+    when 1
+      left := make(depth - 1)
+      Mul left, right: make(depth - 1)
+    else Neg(make(depth - 1))
+
+eval := (expr: Expr, x: Int): Int ->
+  case expr
+    when Num then expr.value
+    when Var then expr.coefficient * x % MODULUS
+    when Add then (eval(expr.left, x) + eval(expr.right, x)) % MODULUS
+    when Mul then eval(expr.left, x) * eval(expr.right, x) % MODULUS
+    when Neg then (MODULUS - eval(expr.operand, x)) % MODULUS
+
+tree := make(DEPTH)
+var sum = 0
+sum = (sum + eval(tree, x)) % MODULUS for x in 0...VALUES
+print sum
