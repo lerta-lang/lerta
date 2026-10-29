@@ -1,0 +1,124 @@
+# Makes the JSON text of an array of objects picked by a pseudo-random generator, parses it a
+# number of times into values of arrays, objects, integers, strings and booleans, and prints a sum
+# over each value parsed. The parser takes only what the text holds: no floats, escapes, nulls or
+# errors.
+OBJECTS := 200000
+PARSES := 5
+
+struct JsonArray
+  items: Json[]
+
+struct JsonObject
+  fields: Map<String, Json>
+
+type Json = Int | String | Bool | JsonArray | JsonObject
+
+# MINSTD, whose products fit in the integers of every language compared.
+var seed = 1
+next_random := ->
+  seed = seed * 48271 % 2147483647
+  seed
+
+make_text := ->
+  var text = '['
+  for i in 0...OBJECTS
+    text += ', ' if i > 0
+    id := next_random() % 1000000
+    name := next_random() % 5000
+    text += "{\"id\": #{id}, \"name\": \"w#{name}\", \"tags\": ["
+    tags := next_random() % 4
+    for t in 0...tags
+      text += ', ' if t > 0
+      text += "\"t#{next_random() % 100}\""
+    active := next_random() % 2 == 0
+    text += "], \"active\": #{active}}"
+  text + ']'
+
+# Each part read skips the spaces after it, so that the next starts at its first byte.
+class Parser
+  bytes: Binary
+  position = 0
+
+  skip_spaces = -> @position += 1 while @position < @bytes.length and @bytes[@position] == ' '
+
+  # Skips a punctuation byte, as `[` or `,`, which the text has at the position.
+  skip_byte = ->
+    @position += 1
+    @skip_spaces()
+
+  parse_value = (): Json ->
+    case @bytes[@position]
+      when '[' then @parse_array()
+      when '{' then @parse_object()
+      when '"' then @parse_string()
+      when 't' then @parse_word(4, true)
+      when 'f' then @parse_word(5, false)
+      else @parse_int()
+
+  parse_word = (length: Int, value: Bool) ->
+    @position += length
+    @skip_spaces()
+    value
+
+  parse_array = ->
+    @skip_byte()
+    items: Json[]
+    if @bytes[@position] != ']'
+      items.push @parse_value()
+      while @bytes[@position] == ','
+        @skip_byte()
+        items.push @parse_value()
+    @skip_byte()
+    JsonArray items
+
+  parse_object = ->
+    @skip_byte()
+    fields: Map<String, Json>
+    if @bytes[@position] != '}'
+      @parse_field fields
+      while @bytes[@position] == ','
+        @skip_byte()
+        @parse_field fields
+    @skip_byte()
+    JsonObject fields
+
+  parse_field = (fields: Map<String, Json>) ->
+    key := @parse_string()
+    @skip_byte()
+    fields[key] = @parse_value()
+
+  parse_string = ->
+    start := @position + 1
+    @position = start
+    @position += 1 while @bytes[@position] != '"'
+    text := @bytes.text(start, @position)!
+    @skip_byte()
+    text
+
+  parse_int = ->
+    var value = 0
+    while @bytes[@position].is_digit()
+      value = value * 10 + (@bytes[@position] - '0').to_int()
+      @position += 1
+    @skip_spaces()
+    value
+
+# The integers, the lengths of the strings, the true booleans and the items and fields, added up.
+sum := (value: Json): Int ->
+  case value
+    when Int then value
+    when String then value.binary.length
+    when Bool then value then 1 else 0
+    when JsonArray
+      var total = value.items.length
+      total += sum(item) for item in value.items
+      total
+    when JsonObject
+      var total = value.fields.length
+      total += sum(field) for field in value.fields.values()
+      total
+
+text := make_text()
+var total = 0
+total += sum(Parser(bytes: text.binary).parse_value()) for _ in 0...PARSES
+print total
