@@ -1,0 +1,63 @@
+# A request of HTTP/1.1 that expects 100-continue and has a body gets `100 Continue` once the handler
+# starts to read its body, or before the head of a response whose body, sent as it comes, may read
+# it, whether it does or not, and the connection then goes on. It gets none if the handler answers,
+# or throws, without reading it, which then closes the connection, as the client may not send the
+# body. HTTP/1.0, a request without a body, and another expectation get none.
+import timeout, TimeoutError from 'std:async'
+import Reader from 'std:io'
+import connect_tcp from 'std:net'
+import Request, Response, serve from 'std:http'
+
+handle := (request: Request) ->
+  return Response(body: 'ignored') if request.url.ends_with('/ignore')
+  throw ValueError('thrown') if request.url.ends_with('/throw')
+  return Response(body: request.body) if request.url.ends_with('/echo')
+  return Response(body: streamed()) if request.url.ends_with('/stream')
+  Response body: "read #{await request.text()}"
+
+# A body sent as it comes that does not read the request's.
+streamed := ->
+  var sent = false
+  Reader read_chunk: ->
+    return nil if sent
+    sent = true
+    'streamed'.binary
+
+server := serve(handle)
+
+# Sends the head, prints what comes before the body is sent: `100 Continue` when it `continues`, or
+# else whatever comes within a while; then sends the body and prints the rest, until the server
+# closes the connection.
+ask := (head: String, body: String, continues = false) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  await client.write(head)
+  if continues
+    print "before the body: #{await client.reader.read_line() ? 'end'}"
+  else
+    try
+      print "before the body: #{await timeout(client.reader.read_line(), 0.3) ? 'end'}"
+    catch _: TimeoutError
+      print 'before the body: nothing'
+  await client.write(body)
+  client.end()
+  print (await client.reader.read_all()).text()!.replace("\r\n", ' | ')
+
+expecting := (path: String, version: String, fields: String, expect = '100-Continue') ->
+  "POST #{path} #{version}\r\nHost: a\r\nExpect: #{expect}\r\n#{fields}\r\n"
+LENGTH := "Content-Length: 3\r\n"
+next_request := "GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n"
+
+CHUNKED := "Transfer-Encoding: chunked\r\n"
+CHUNKS := "3\r\nabc\r\n0\r\n\r\n"
+
+await ask(expecting('/', 'HTTP/1.1', LENGTH), "abc#{next_request}", true)
+await ask(expecting('/', 'HTTP/1.1', CHUNKED), CHUNKS, true)
+await ask(expecting('/echo', 'HTTP/1.1', LENGTH), "abc#{next_request}", true)
+await ask(expecting('/stream', 'HTTP/1.1', LENGTH), "abc#{next_request}", true)
+await ask(expecting('/ignore', 'HTTP/1.1', LENGTH), 'abc')
+await ask(expecting('/ignore', 'HTTP/1.1', CHUNKED), CHUNKS)
+await ask(expecting('/throw', 'HTTP/1.1', LENGTH), 'abc')
+await ask(expecting('/', 'HTTP/1.0', LENGTH), 'abc')
+await ask(expecting('/', 'HTTP/1.1', "Content-Length: 0\r\nConnection: close\r\n"), '')
+await ask(expecting('/', 'HTTP/1.1', "#{LENGTH}Connection: close\r\n", 'x'), 'abc')
+server.close()

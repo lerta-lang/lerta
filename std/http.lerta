@@ -142,11 +142,16 @@ serve_request := (socket: Socket, server: Server) ->
       return false
   { body } := response
   sends_reader := body is Reader and has_body(response.status, method)
-  # A body whose read has failed cannot be read past to the next request, and one sent as it comes
-  # to HTTP/1.0 ends with the connection.
+  # A body sent as it comes may read the request's body once the head has gone, too late for 100
+  # Continue, which goes before the head then.
+  await incoming.body.send_continue() if sends_reader
+  # A body whose read has failed cannot be read past to the next request, nor can one that the
+  # client holds back until 100 Continue, which it was not sent; and one sent as it comes to
+  # HTTP/1.0 ends with the connection.
   # A closed server ends the connection, rather than wait for the next request.
   goes_on := incoming.keep_alive and not server.closed
-  keep_alive := goes_on and incoming.body.failure == nil and (chunked or not sends_reader)
+  body_left := incoming.body.failure == nil and incoming.body.continue_on == nil
+  keep_alive := goes_on and body_left and (chunked or not sends_reader)
   try
     bytes :=
       try
@@ -204,11 +209,16 @@ read_request := (socket: Socket, server: Server) ->
   { max_body, body_timeout } := options
   chunks := chunked then ChunkedBody(reader, name: 'body', room: max_body) else nil
   body := BodyChunks(reader, chunks, left: length, seconds: body_timeout)
+  # HTTP/1.0 has no 100 Continue.
+  expects := (headers.get('expect') ? '').to_lower() == '100-continue'
+  body.continue_on = socket if expects and version == 'HTTP/1.1' and (chunked or length > 0)
   url := url_of(host, target) ? throw bad_request()
   request := Request(method, url, headers, body: Reader(-> await body.next()))
   Incoming request, body, keep_alive: keeps_alive(version, headers), chunked: version == 'HTTP/1.1'
 
 VERSIONS := ['HTTP/1.1', 'HTTP/1.0']
+
+CONTINUE := "HTTP/1.1 100 Continue\r\n\r\n"
 
 bad_request := -> RequestError(status: 400, message: 'bad request')
 
@@ -290,12 +300,16 @@ class BodyChunks
   ended = false
   # Only an IOError is kept: the reads throw no other but a cancel, which leaves the place known.
   failure: IOError? = nil
+  # The connection of a client that waits for 100 Continue before it sends the body, which is sent
+  # before the first read.
+  continue_on: Socket? = nil
 
   next = ->
     throw failure if failure := @failure
     return nil if @ended
     chunk :=
       try
+        await @send_continue()
         await @within_seconds(@chunk())
       catch error: IOError
         @failure = error
@@ -313,6 +327,11 @@ class BodyChunks
     chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw ended_early
     @left -= chunk.length
     chunk
+
+  send_continue = ->
+    socket := @continue_on ? return
+    @continue_on = nil
+    await socket.write(CONTINUE)
 
   # A client that is too slow is taken to have gone.
   within_seconds = (read: Promise<Binary?>) ->
