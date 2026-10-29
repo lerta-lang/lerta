@@ -176,8 +176,6 @@ LertaString *lerta_float_to_string(double value);
 LertaString *lerta_float32_to_string(float value);
 // The nearest float, an infinity beyond the largest.
 float lerta_float_to_float32(double value);
-// Whether the value is finite as a float, which only the seed's std asks.
-bool lerta_float_fits_float32(double value);
 double lerta_float32_to_float(float value);
 // The positive infinity, which std:builtins names INFINITY.
 double lerta_float_infinity(void);
@@ -196,11 +194,7 @@ uint64_t lerta_string_hash(const LertaString *s);
 // The place of `text` among an enum's `count` member texts, or -1 if none has it (`E.parse`).
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);
 
-// Binary (binary.c): the same representation as String, without the UTF-8 guarantee. An index out
-// of range throws. Only the seed's IR calls these two; the compiler reads the length and bytes in
-// place.
-int64_t lerta_binary_length(const LertaString *binary);
-uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
+// Binary (binary.c): the same representation as String, without the UTF-8 guarantee.
 // The bytes from `start` up to, but not including, `end`, copied into a new Binary; throws unless
 // 0 <= start <= end <= the length.
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
@@ -316,11 +310,6 @@ void lerta_program_free(int64_t pointer);
 // programs that inherit them expect, to `files`; throws an IOError on failure.
 void lerta_system_pipe(LertaArray *files);
 void lerta_file_close(int64_t file);
-// What the seed's std:process links, which only `run` called, and which the seed does not call.
-LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
-                        const LertaString *input, LertaArray *output, LertaArray *errors,
-                        const LertaString *cwd, const LertaArray *env, int64_t output_limit,
-                        double kill_after);
 // Whether two names of environment variables name the same variable.
 bool lerta_same_env_name(const LertaString *a, const LertaString *b);
 // The system's name: linux, macos or windows.

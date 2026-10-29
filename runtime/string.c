@@ -173,8 +173,6 @@ LertaString *lerta_float32_to_string(float value) { return shortest_text(value, 
 
 float lerta_float_to_float32(double value) { return (float)value; }
 
-bool lerta_float_fits_float32(double value) { return isfinite((float)value); }
-
 double lerta_float_infinity(void) { return INFINITY; }
 
 double lerta_float32_to_float(float value) { return value; }

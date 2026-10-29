@@ -289,15 +289,6 @@ void lerta_program_free(int64_t pointer) {
   free_program_if_done(program);
 }
 
-LertaPromise *lerta_run(const LertaString *command, const LertaArray *args,
-                        const LertaString *input, LertaArray *output, LertaArray *errors,
-                        const LertaString *cwd, const LertaArray *env, int64_t output_limit,
-                        double kill_after) {
-  (void)command, (void)args, (void)input, (void)output, (void)errors, (void)cwd, (void)env,
-    (void)output_limit, (void)kill_after;
-  lerta_panic("lerta_run is the seed's std's, which the seed does not call");
-}
-
 bool lerta_same_env_name(const LertaString *a, const LertaString *b) {
   char *c_a = lerta_c_string(a);
   char *c_b = lerta_c_string(b);
