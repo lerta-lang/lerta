@@ -1,0 +1,129 @@
+# A const that a field initializes borrows it where nothing can replace it while the const is in
+# scope, and holds its own reference otherwise: what it holds stays alive while it is used, and
+# after, where it is returned, captured or stored.
+import sleep from 'std:time'
+
+class Tag
+  name: String
+  deinit = -> print("tag #{@name} gone")
+
+struct Label
+  tag: Tag
+
+class Shelf
+  tag: Tag
+  label: Label
+  var spare: Tag
+  name_of = ->
+    tag := @tag
+    tag.name
+
+shelf := Shelf(tag: Tag('kept'), label: { tag: Tag('labelled') }, spare: Tag('spare'))
+
+# Of a parameter, of a const and through a struct field, of a top-level const and of `@`.
+describe := (shelf: Shelf) ->
+  tag := shelf.tag
+  label := shelf.label.tag
+  "#{tag.name} #{label.name}"
+print describe(shelf)
+from_top := shelf.tag
+print from_top.name
+print shelf.name_of()
+
+# One that leaves its scope, returned, captured or stored, is retained as it goes.
+returned := (shelf: Shelf) ->
+  tag := shelf.label.tag
+  tag
+captured := (shelf: Shelf) ->
+  tag := shelf.tag
+  -> tag.name
+stored := (shelf: Shelf) ->
+  tag := shelf.tag
+  [tag]
+print returned(shelf).name
+print captured(shelf)()
+print stored(shelf)[0].name
+
+# A var field, which an assignment may replace while the const is in scope, is held.
+replace_spare := (shelf: Shelf) ->
+  spare := shelf.spare
+  shelf.spare = Tag('new spare')
+  print "#{spare.name} still held"
+replace_spare shelf
+
+# Of a var, which the scope may assign, is held.
+reassign := ->
+  var current = Shelf(tag: Tag('first'), label: { tag: Tag('first label') }, spare: Tag('x'))
+  tag := current.tag
+  current = shelf
+  print "#{tag.name} still held"
+reassign()
+
+# In a function that yields, it is held while the function is suspended.
+tags := (shelf: Shelf) ->
+  tag := shelf.spare
+  yield tag.name
+  yield tag.name
+names := tags(shelf)
+print names.next()
+shelf.spare = Tag('replaced while suspended')
+print names.next()
+
+# A struct value, returned and captured; one in a loop's body, borrowed again each time; and one
+# converted by its type, which holds the converted value.
+whole := (shelf: Shelf) ->
+  label := shelf.label
+  label
+show_later := (shelf: Shelf) ->
+  label := shelf.label
+  -> label.tag.name
+print whole(shelf).tag.name
+print show_later(shelf)()
+for each in [shelf, Shelf(tag: Tag('looped'), label: { tag: Tag('loop label') }, spare: Tag('y'))]
+  tag := each.tag
+  print tag.name
+maybe := (shelf: Shelf) ->
+  tag: Tag? = shelf.tag
+  tag?.name ? 'none'
+print maybe(shelf)
+
+# Given to a constructor, which takes its own reference; of a parameter as it is; and in scope where
+# the function throws or returns early.
+class Box
+  tag: Tag
+boxed := (shelf: Shelf) ->
+  tag := shelf.tag
+  Box tag
+renamed := (tag: Tag) ->
+  same := tag
+  same.name
+early := (shelf: Shelf, fail: Bool) ->
+  tag := shelf.tag
+  throw ValueError('failed') if fail
+  return tag.name if tag.name == 'kept'
+  'other'
+print boxed(shelf).tag.name
+print renamed(shelf.tag)
+print early(shelf, false)
+try
+  early shelf, true
+catch error: ValueError
+  print error.message
+
+# Of a struct var, which the scope may assign, is held.
+reassign_struct := ->
+  var label = Label(tag: Tag('struct first'))
+  tag := label.tag
+  label = shelf.label
+  print "#{tag.name} still held"
+reassign_struct()
+
+# In an async function, it is held while the function waits.
+later_name := (shelf: Shelf) ->
+  tag := shelf.spare
+  await sleep(0.01)
+  tag.name
+waiting := later_name(shelf)
+shelf.spare = Tag('replaced while waiting')
+print await waiting
+print 'done'

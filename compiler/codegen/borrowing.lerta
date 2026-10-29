@@ -50,13 +50,18 @@ export generate_borrowed := (
   return (generate(g, expression), true) if not is_borrowable(g, expression, later, in_place)
   (generate_borrowed_value(g, expression), false)
 
+# Whether the value can be borrowed for the whole scope of a const that it initializes: as
+# generate_borrowed borrows it, but never from a var, which any statement of the scope may assign.
+export is_borrowable_in_scope := (g: Generator, expression: Expression) ->
+  is_borrowable g, expression, nil, false
+
 # Whether the value can be borrowed (see generate_borrowed): a local's that cannot go meanwhile; and
 # a field's of a class or struct whose object can be borrowed in the same way, so that nothing can
 # replace it meanwhile: anywhere, one that holds the same value as long as its object lives, and any
 # one in place, where no code of the program runs before its consumer is done with it, as for `a.b`
 # in `a.b.c`. An anonymous struct's field is not borrowed so far.
 is_borrowable := (
-  g: Generator, expression: Expression, later: Expression[], in_place: Bool
+  g: Generator, expression: Expression, later: Expression[]?, in_place: Bool
 ): Bool ->
   return false if expression in g.facts.conversions
   if local := named_local(g, expression)
@@ -76,9 +81,10 @@ keeps_value := (g: Generator, member: Member, field: FieldInfo) ->
 
 # Whether the var keeps its value while `later` are evaluated. One that no function literal captures
 # and that is not top-level can be assigned only by its function's own code, not by a function
-# called meanwhile; so it keeps its value if none of `later` assigns its name.
-is_var_kept := (local: SlotLocal, expression: Expression, later: Expression[]) ->
-  return false if local.cell or local.top_level
+# called meanwhile; so it keeps its value if none of `later` assigns its name. Without `later`, what
+# will be evaluated is not known, and no var is kept.
+is_var_kept := (local: SlotLocal, expression: Expression, later: Expression[]?) ->
+  return false if local.cell or local.top_level or later == nil
   name := (expression as Identifier!).name
   name not in names_assigned(later)
 
@@ -94,7 +100,7 @@ export plain_field_of := (g: Generator, member: Member) ->
   field
 
 # The value of an expression that is_borrowable, borrowed.
-generate_borrowed_value := (g: Generator, expression: Expression): String ->
+export generate_borrowed_value := (g: Generator, expression: Expression): String ->
   return read_borrowed(g, local, type_of(g, expression)) if local := named_local(g, expression)
   member := expression as Member!
   object := generate_borrowed_value(g, member.object)

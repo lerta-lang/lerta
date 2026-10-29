@@ -10,6 +10,7 @@ import FieldInfo, is_argument, ObjectInfo from '../checker/object_types'
 import Capture from '../checker/shared'
 import all_but_last from '../arrays'
 import generate_assignment from './assignment'
+import generate_borrowed_value, is_borrowable_in_scope from './borrowing'
 import emit_await_owned, emit_loop_run, generate_awaiting_function from './awaiting'
 import call_user_function from './call'
 import
@@ -499,6 +500,10 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
   code := g.code
   is_top_level := g.top_level_code and g.locals.depth() == 1
   global := is_top_level then code.globals[code.module.index][name]
+  if global == nil and holds_borrowed(g, declaration)
+    borrowed := generate_borrowed_value(g, declaration.value)
+    g.locals.define name, ValueLocal(type, operand: borrowed)
+    return
   generated := generate_declared_value(g, declaration, global == nil and not weak)
   value := weak then weak_box_of(g, generated, type) else generated
   emit_release ir, generated if weak
@@ -515,6 +520,14 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
   ir.emit "store #{ir_type(type)} #{value}, ptr #{global.pointer}"
   emit_mark_initialized ir, global
   g.locals.define name, top_level_slot(global, false)
+
+# Whether the local, which is no top-level value, holds its value borrowed, retaining nothing: a
+# const whose value stays where it is borrowed from while the local is in scope (see
+# is_borrowable_in_scope). A body that suspends holds it, as it does its parameters, since what it
+# is borrowed from may change while the body is suspended.
+holds_borrowed := (g: Generator, declaration: Declaration) ->
+  return false if declaration.mutable or declaration.weak or g.coroutine != nil
+  is_borrowable_in_scope g, declaration.value
 
 # The value of a local that is a const and is held as it is: the closure of a function literal
 # is local if the local never leaves the function, being only called (see escaping_locals).
