@@ -1,6 +1,8 @@
 # Locals passed to calls, read from, tested against nil and called on are borrowed where they
 # cannot change meanwhile, and taken otherwise: each value is released once, and lives as long as
 # something holds it.
+import platform from 'std:process'
+
 interface Named
   name: String
 
@@ -80,6 +82,19 @@ throws := ->
 refuse := (): String -> throw ValueError('before the call')
 
 TOP := Box('top')
+
+# A top-level const, of this module or imported, is borrowed in a function too, and still alive
+# when a deinit run by the release of a later one at the end of the program borrows it.
+use_top := -> print(show_with(TOP, 'in a function'))
+use_imported := -> print(kept_text(platform) == platform)
+kept_text := (text: String) -> [text][0]
+
+class Witness
+  name: String
+  deinit = -> print(show_with(KEPT, 'at the end'))
+
+KEPT := Box('kept')
+WITNESS := Witness('witness')
 
 # A var that the call assigns, through the closure, is not borrowed: the old value stays alive for
 # the call.
@@ -203,6 +218,9 @@ passes()
 reads()
 throws()
 print describe(TOP)
+use_top()
+use_imported()
+print WITNESS.name
 print TOP.label()
 changes_meanwhile()
 vars true

@@ -3,7 +3,7 @@ import Expression, Identifier, Member, This from '../ast'
 import is_assigned_field from '../checker/fields'
 import names_assigned from '../checker/literal_assignments'
 import Property from '../checker/member_targets'
-import ScopedLocal from '../checker/references'
+import ScopedLocal, TopLevelValue from '../checker/references'
 import FieldInfo, info_of from '../checker/object_types'
 import pop_temporaries, push_temporary from './exceptions'
 import
@@ -103,11 +103,14 @@ generate_borrowed_value := (g: Generator, expression: Expression): String ->
   held := held_field(g, object, object_type, name)
   emit_narrowed g.ir, held, declared_field_type(g, object_type, name)!, type_of(g, member)
 
-# The local of a scope that the expression names, `@` among them, if it names one.
+# The local of a scope or the top-level value that the expression names, `@` among them, if it
+# names one. A top-level const keeps its value until the program ends, when the values are released
+# one by one, each unset first, so that code that a release runs finds it unset or still held.
 named_local := (g: Generator, expression: Expression) ->
   case expression
     when This then g.locals.lookup('@')
     when Identifier
-      return nil if g.facts.references[expression] is not ScopedLocal
+      reference := g.facts.references[expression]
+      return nil if reference is not ScopedLocal and reference is not TopLevelValue
       local_of g, expression
     else nil
