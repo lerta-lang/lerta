@@ -3,7 +3,8 @@
 # constructions of structs, `S(x: 1)`, written as records, `{ x: 1 }` (see Expected types in
 # docs/reference/style.md); the named arguments of constructions written as names alone (see
 # Shorthand there); the casts left out (see Redundant casts); and the tests of emptiness written
-# with `is_empty()` (see Emptiness tests); and how to write them so in the syntax tree.
+# with `is_empty()` (see Emptiness tests); the calls of `contains` written with `in` (see Membership
+# tests); and how to write them so in the syntax tree.
 import
   BinaryOperation, BooleanLiteral, Call, Case, CaseArm, Cast, construction_arguments,
   construction_spread, Expression, FloatLiteral, Identifier, IntegerLiteral, is_spread, Member,
@@ -12,7 +13,7 @@ import
 from '../ast'
 import dump_ast_without_positions from '../ast_dump'
 import Annotation, annotation_key from './annotated'
-import EMPTINESS_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS from './rules'
+import EMPTINESS_TESTS, MEMBERSHIP_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS from './rules'
 import Place, places_of from './places'
 
 # In the order of the source, but for a cast and a construction after those inside them, and the
@@ -29,6 +30,7 @@ export rewrites_of := (program: Statement[]) ->
       found.push shared_arms(value, run) for run in runs_of_alike_arms(value)
     if value is Call
       found.push spread_copy(value, source) if source := copied_source(value)
+      found.push membership(value, place) if is_membership_call(value)
       for named, i in value.named_args
         found.push shorthand(value, named) if is_shorthand(value, i)
       found.push recorded(value, place)
@@ -115,6 +117,38 @@ emptied := (expression: Expression, test: EmptinessTest, place: Place) ->
     remove: -> place(written)
     restore: -> place(expression)
 
+# `xs.contains(x)`, of operands that run no code, as `x in xs` evaluates `x` first: names, `@`,
+# fields of them and literals.
+is_membership_call := (call: Call) ->
+  member := call.callee as Member ? return false
+  is_one_argument := call.args.length == 1 and call.named_args.is_empty()
+  return false if member.name.name != 'contains' or not is_one_argument
+  return false if not call.type_args.is_empty()
+  runs_no_code(member.object) and runs_no_code(call.args[0])
+
+runs_no_code := (expression: Expression): Bool ->
+  case expression
+    # Not the name that `x?.contains(y)` gives the value of `x`, which is no name written.
+    when Identifier then not expression.name.starts_with('?')
+    when This, StringLiteral, IntegerLiteral, FloatLiteral, BooleanLiteral then true
+    when Member then runs_no_code(expression.object)
+    else false
+
+# The call written as `x in xs`, at its place.
+membership := (call: Call, place: Place) ->
+  member := call.callee as Member!
+  written := BinaryOperation
+    operator: 'in'
+    left: call.args[0]
+    right: member.object
+    position: call.args[0].position
+  Annotation
+    membership: call
+    reported: { written, rule: MEMBERSHIP_TESTS }
+    key: annotation_key('in', member.name.position)
+    remove: -> place(written)
+    restore: -> place(call)
+
 # The runs of two or more arms next to each other whose bodies are written alike, which may be one
 # arm of all their patterns (see Shared arm bodies); an arm of nil is in none, as nil must be the
 # only pattern of its arm, and so is an arm of a case without a subject, whose arms have one
@@ -150,7 +184,7 @@ shared_arms := (case_value: Case, run: CaseArm[]) ->
     reported: { written: patterns[first.patterns.length], rule: SHARED_ARM_BODIES }
     key: annotation_key('arms', first.patterns[0].position)
     remove: ->
-      kept := [each for each in case_value.arms when not others.contains(each)]
+      kept := [each for each in case_value.arms when each not in others]
       case_value.arms = [each == first then arm else each for each in kept]
     restore: ->
       restored: CaseArm[]
@@ -197,8 +231,7 @@ copied_source := (call: Call) ->
   if not copies.all((named) -> dump_ast_without_positions([copied_field(named)!.object]) == key)
     return nil
   last_copy := call.named_args.index_of(copies.last()!)!
-  before :=
-    [named for named, i in call.named_args when i < last_copy and not copies.contains(named)]
+  before := [named for named, i in call.named_args when i < last_copy and named not in copies]
   before.all((named) -> has_no_effects(named.value)) then source
 
 # The field that the named argument copies: of its own name.
