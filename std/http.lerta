@@ -35,15 +35,19 @@ export class Server
   closed = false
   # The connections that wait for their next request, before the whole of its request line has come.
   waiting = Set<Socket>()
+  # The connections that read and drop what the client still sends, before they close.
+  lingering = Set<Socket>()
 
   port = -> @listener.port
 
-  # Stops listening, and closes the connections that wait for their next request. Those being served
-  # go on to their response, and end then.
+  # Stops listening, and closes the connections that wait for their next request or linger after
+  # their last, even if what a lingering one leaves unread resets it, so that closing ends at once.
+  # Those being served go on to their response, and end then, lingering as ever.
   close = ->
     @closed = true
     @listener.close()
     socket.close() for socket in @waiting
+    socket.close() for socket in @lingering
 
 # Listens at once, and serves each connection until the server is closed.
 export serve := (handler: (Request) -> Promise<Response>, options: ServerOptions) ->
@@ -93,12 +97,14 @@ serve_connection := (socket: Socket, server: Server) ->
     # left the connection in no state to go on: it ends, and the server serves the others.
     nil
   finally
-    await close_lingering(socket)
+    await close_lingering(socket, server)
 
 # Closes the connection once the client has read the response: what the client still sends, as a
 # body that the server did not read, is read and dropped first, for a time and a size, as a socket
 # closed with input unread may be reset, which can lose the response before the client reads it.
-close_lingering := (socket: Socket) ->
+# A server that is closed while it lingers closes it at once.
+close_lingering := (socket: Socket, server: Server) ->
+  server.lingering.add socket
   try
     socket.end()
     await timeout(drain(socket.reader), LINGER_SECONDS)
@@ -106,6 +112,7 @@ close_lingering := (socket: Socket) ->
     # A peer that has gone, or keeps sending: it is closed anyway.
     nil
   finally
+    server.lingering.remove socket
     socket.close()
 
 drain := (reader: Reader) ->

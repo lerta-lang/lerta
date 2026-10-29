@@ -1,0 +1,25 @@
+# Closing a server closes at once a connection that reads and drops what its client still sends
+# after the last response, well within the 2 seconds it would otherwise take; the client's writes
+# then fail.
+import connect_tcp from 'std:net'
+import Request, serve from 'std:http'
+import sleep, time from 'std:time'
+
+server := serve((_: Request) -> { body: "ok\n" })
+client := await connect_tcp('127.0.0.1', server.port())
+await client.write("GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+while line := await client.reader.read_line()
+  break if line == 'ok'
+print 'ok'
+
+start := time()
+server.close()
+var failed = false
+while not failed and time() - start < 1.5
+  try
+    await client.write('more')
+    await sleep(0.05)
+  catch _: IOError
+    failed = true
+print failed
+client.close()
