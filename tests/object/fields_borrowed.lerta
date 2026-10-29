@@ -93,3 +93,35 @@ class Owner
 owner := Owner(inner: make('c'), data: 'xyz'.binary)
 print owner.first_after_replace()
 print "#{owner.data[0]} #{owner.data[2]}"
+
+# Fields that hold the same value while their object lives, of a struct or `const` ones of a class,
+# given to a call or as its object: one under a var field stays held while the call replaces it.
+struct Fixed
+  inner: Inner
+
+class Holder
+  const fixed: Fixed
+  var swappable: Fixed
+
+holder := Holder(fixed: { inner: make('d') }, swappable: { inner: make('e') })
+describe := (tag: Tag) ->
+  holder.swappable = { inner: make('f') }
+  print "#{tag.name} after the swap"
+describe holder.fixed.inner.tag
+describe holder.swappable.inner.tag
+print holder.fixed.inner.tag.name.starts_with('d')
+
+# A struct field under a var field from `@`, and an assignment to an index of a const field's array,
+# which releases the item it replaces.
+class Keeper
+  var held: Fixed
+  const items: Tag[]
+  show_after_swap = -> @describe_own(@held.inner.tag)
+  describe_own = (tag: Tag) ->
+    @held = { inner: make('h') }
+    print "#{tag.name} after the own swap"
+
+keeper := Keeper(held: { inner: make('g') }, items: [Tag(name: 'old item')])
+keeper.show_after_swap()
+keeper.items[0] = Tag(name: 'new item')
+print keeper.items[0].name

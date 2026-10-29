@@ -33,16 +33,19 @@ export borrowing_all := (g: Generator, expressions: Expression[], use: (String[]
 
 # The value of the expression and whether it is owned: borrowed when it is a local whose scope
 # keeps the value for as long as its consumer uses it, so that using an array in a loop retains and
-# releases nothing (see docs/internals.md#memory-management), or `in_place`, where the consumer
-# runs no code of the program before it is done, a field (see is_borrowable); owned otherwise, as
-# where it is converted to another type, which makes a new value.
+# releases nothing (see docs/internals.md#memory-management), or a field that holds the same value
+# as long as its object lives, or any field `in_place`, where the consumer runs no code of the
+# program before it is done (see is_borrowable); owned otherwise, as where it is converted to
+# another type, which makes a new value.
 export generate_borrowed := (g: Generator, expression: Expression, in_place = false) ->
   return (generate(g, expression), true) if not is_borrowable(g, expression, in_place)
   (generate_borrowed_value(g, expression), false)
 
 # Whether the value can be borrowed (see generate_borrowed): a local's that cannot go meanwhile; and
-# in place, where no code of the program runs before its consumer is done with it, as for `a.b` in
-# `a.b.c`, a field's of an object that can be borrowed, which nothing can replace meanwhile.
+# a field's of a class or struct whose object can be borrowed in the same way, so that nothing can
+# replace it meanwhile: anywhere, one that holds the same value as long as its object lives, and any
+# one in place, where no code of the program runs before its consumer is done with it, as for `a.b`
+# in `a.b.c`. An anonymous struct's field is not borrowed so far.
 is_borrowable := (g: Generator, expression: Expression, in_place: Bool): Bool ->
   return false if g.facts.conversions.has(expression)
   if local := named_local(g, expression)
@@ -51,17 +54,19 @@ is_borrowable := (g: Generator, expression: Expression, in_place: Bool): Bool ->
     return not local.weak and not (local is SlotLocal and local.is_var)
   member := expression as Member?
   return false if member == nil
-  in_place and is_plain_field(g, member) and is_borrowable(g, member.object, true)
+  field := plain_field(g, member) ? return false
+  (in_place or not field.mutable) and is_borrowable(g, member.object, in_place)
 
-# Whether the member is a field of a class or struct that holds its value as it is read: not weak,
-# nor narrowed to a member of a union in a box, which the read takes out.
-is_plain_field := (g: Generator, member: Member) ->
+# The field of a class or struct that the member reads, if it holds its value as it is read: not
+# weak, nor narrowed to a member of a union in a box, which the read takes out.
+plain_field := (g: Generator, member: Member) ->
   target := g.facts.members[member]
-  return false if target is not Property or target.kind != FIELD
+  return nil if target is not Property or target.kind != FIELD
   object_type := type_of(g, member.object) as ObjectType?
-  return false if object_type == nil
+  return nil if object_type == nil
   field := field_named(info_of(g.code.program, object_type), member.name.name)
-  not field.weak and not is_boxed_narrowing(field.type!, type_of(g, member))
+  return nil if field.weak or is_boxed_narrowing(field.type!, type_of(g, member))
+  field
 
 # The value of an expression that is_borrowable, borrowed.
 generate_borrowed_value := (g: Generator, expression: Expression): String ->
