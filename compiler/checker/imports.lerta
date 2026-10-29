@@ -97,7 +97,7 @@ export reexports_of := (module: Module) ->
     exporter := module.imported[statement]!
     for name in statement.names
       local := (name.alias ? name.name).name
-      if not reexported.has(local)
+      if not reexported.contains(local)
         reexported[local] = { module_index: exporter, name: name.name.name }
   reexported
 
@@ -109,7 +109,7 @@ export export_ref := (program: ProgramWide, module_index: Int, name: String) ->
 # `passed` holds the names of the modules that the export has been followed through.
 followed_export := (program: ProgramWide, ref: ExportRef, passed: Set<String>): ExportRef? ->
   shared := program.shared[ref.module_index]
-  return ref if shared.exported.has(ref.name)
+  return ref if shared.exported.contains(ref.name)
   key := "#{ref.module_index} #{ref.name}"
   return nil if not passed.add(key)
   next := shared.reexported[ref.name] ? return nil
@@ -162,7 +162,7 @@ check_reexport := (shared: Shared, statement: Import, exporter: Int, reexported:
     { name } := exported
     fail_no_export program, statement.module, name if not export_ref(program, exporter, name.name)
     local := exported.alias ? name
-    is_twice := shared.exported.has(local.name) or reexported.has(local.name)
+    is_twice := shared.exported.contains(local.name) or reexported.contains(local.name)
     fail_already_defined program, local if is_twice
     reexported.add local.name
 
@@ -174,7 +174,8 @@ add_import := (shared: Shared, statement: Import, exporter: Int) ->
   names := shared.imports.names
   if alias := statement.alias
     modules := shared.imports.modules
-    fail_already_defined program, alias if names.has(alias.name) or modules.has(alias.name)
+    if names.contains(alias.name) or modules.contains(alias.name)
+      fail_already_defined program, alias
     modules[alias.name] = ModuleAlias(name: alias, module_index: exporter, module: statement.module)
   for imported in statement.names
     { name } := imported
@@ -207,7 +208,7 @@ export add_extern := (shared: Shared, name: Identifier, type: Type, symbol: Stri
   names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
 
 export has_import := (shared: Shared, name: String) ->
-  shared.imports.names.has(name) or shared.imports.modules.has(name)
+  shared.imports.names.contains(name) or shared.imports.modules.contains(name)
 
 # Imports the export that a written type's name `alias.export` names, so that the type is found by
 # that name, which this gives (see qualified_import).
@@ -231,7 +232,7 @@ export qualified_import := (shared: Shared, alias: String, exported: Identifier)
   )
   qualified := "#{alias}.#{name}"
   names := shared.imports.names
-  if not names.has(qualified)
+  if not names.contains(qualified)
     local := Identifier(exported..., name: qualified)
     names[qualified] = ImportedName(source, name: local, used: true, module: imported.module)
   qualified

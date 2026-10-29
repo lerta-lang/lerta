@@ -80,8 +80,8 @@ export type_of_construction := (
       expect_type body, value, field_type
   required := [field.name.name for field in required_fields(info)]
   for name in required
-    fail program, call.position, "missing argument '#{name}'" if not given.has(name)
-  is_given := (field: FieldInfo) -> not is_argument(field) or given.has(field.name.name)
+    fail program, call.position, "missing argument '#{name}'" if not given.contains(name)
+  is_given := (field: FieldInfo) -> not is_argument(field) or given.contains(field.name.name)
   body.facts.full_constructions.add call if info.fields.all(is_given)
   type
 
@@ -147,7 +147,7 @@ constructed_instance := (
   type_bindings: Map<String, Type>
   bind := (name: String, type: Type) ->
     return if is_kind(type, 'nil') or is_kind(type, 'never')
-    type_bindings[name] = type if not type_bindings.has(name)
+    type_bindings[name] = type if not type_bindings.contains(name)
   infer declared, inner_of(expected), bind if expected
   infer_from := (arg: NamedValue, expected_type: Type?) ->
     type := type_of(body, arg.value, expected_type)
@@ -175,7 +175,7 @@ constructed_instance := (
 # The class or struct of the type, if it has a method of the name.
 export method_owner := (body: Body, object_type: Type, name: String) ->
   return nil if object_type is not ObjectType
-  info_of(body.program, object_type).methods.has(name) then object_type
+  info_of(body.program, object_type).methods.contains(name) then object_type
 
 # The type of the method `name` of an object, or nil if the type is no class or struct with that
 # method.
@@ -214,7 +214,7 @@ spread_construction := (body: Body, call: Call, declared: ObjectType): Call? ->
   names := Set([arg.name.name for arg in construction_arguments(written)])
   fields := info_of(body.program, object!).fields
   arguments := [field.name.name for field in fields when is_argument(field)]
-  copied := [read_field(source, name) for name in arguments when not names.has(name)]
+  copied := [read_field(source, name) for name in arguments when not names.contains(name)]
   Call callee, type_args, position, args: rest, named_args: [copied..., named_args...]
 
 # A field of the value of a spread, read where it is, as the argument of that name.
@@ -278,7 +278,8 @@ spread_record := (body: Body, record: RecordLiteral, spread: Comprehension) ->
     message := "a spread of an anonymous struct must be one, not #{format_type(type)}"
     fail body.program, source.position, message
   names := Set([field.name.name for field in record.fields])
-  copied := [read_field(source, field.name) for field in type.fields when not names.has(field.name)]
+  copied :=
+    [read_field(source, field.name) for field in type.fields when not names.contains(field.name)]
   RecordLiteral fields: [copied..., record.fields...], position: record.position
 
 expected_record_fields := (expected: Type?): RecordField[] ->

@@ -23,7 +23,7 @@ export removable_annotations := (paths: String[]) ->
   wanted.add module_key(path) for path in paths
   removable: Map<String, String[]>
   for entry in [await not_imported(paths)..., paths...]
-    await add_removable(removable, entry, wanted) if not removable.has(module_key(entry))
+    await add_removable(removable, entry, wanted) if not removable.contains(module_key(entry))
   removable
 
 # Those of the files that none of them imports; all of them that do not parse.
@@ -36,7 +36,7 @@ not_imported := (paths: String[]) ->
       catch _: CompileError
         continue
     imported.add key for key in keys
-  [path for path in paths when not imported.has(module_key(path))]
+  [path for path in paths when not imported.contains(module_key(path))]
 
 # The written types, the enums of members and the names of constructions that may be left out, in
 # the order of the source.
@@ -46,22 +46,22 @@ export left_out_candidates := (program: Statement[]) ->
 # The imports are left out after the others, once these leave them unused (see unused_type_imports).
 can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) ->
   return false if annotation.imported
-  return shared.facts.unqualifiable.has(member) if member := annotation.member
-  return shared.facts.recordable.has(call) if call := annotation.construction
+  return shared.facts.unqualifiable.contains(member) if member := annotation.member
+  return shared.facts.recordable.contains(call) if call := annotation.construction
   if call := annotation.shorthand
-    return false if not shared.facts.object_constructions.has(call)
+    return false if not shared.facts.object_constructions.contains(call)
     left_out_cast := annotation.shorthand_cast ? return true
-    return shared.facts.redundant_casts.has(left_out_cast)
-  return shared.facts.redundant_casts.has(cast) if cast := annotation.cast
+    return shared.facts.redundant_casts.contains(left_out_cast)
+  return shared.facts.redundant_casts.contains(cast) if cast := annotation.cast
   if call := annotation.spread_copy
-    return false if not shared.facts.full_constructions.has(call)
+    return false if not shared.facts.full_constructions.contains(call)
     { types } := shared.facts
     source_type := types[annotation.spread_source!] ? return false
     constructed := types[call] ? return false
     return source_type == constructed
   return has_is_empty(shared.facts.types[emptied]) if emptied := annotation.emptied
   # Not in the body of a generic function, whose types are those of its instances.
-  return shared.facts.types.has(run[0].patterns[0]) if run := annotation.shared_arms
+  return shared.facts.types.contains(run[0].patterns[0]) if run := annotation.shared_arms
   inferable annotation, shared, program
 
 # Whether std gives the type `is_empty` (see EMPTINESS_TESTS). One test serves the tests of a length
@@ -85,8 +85,11 @@ add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<S
   if not checks(checked)
     removable[module_key(entry)] = []
     return
-  held :=
-    [module for module in modules when wanted.has(module.key) and not removable.has(module.key)]
+  held := [
+    module
+    for module in modules
+    when wanted.contains(module.key) and not removable.contains(module.key)
+  ]
   removable[module.key] = [] for module in held
   candidates := candidates_of(held, checked)
   return if candidates.is_empty()

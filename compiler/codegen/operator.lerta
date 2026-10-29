@@ -82,7 +82,7 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   # gives no NaN, as its ranges tell (see float_ranges): a root with its operands, which check none,
   # and one of no tree alone, as its operands check theirs.
   safe := is_root then g.nan_free.whole else g.nan_free.alone
-  unchecked := not g.defers_float_checks and safe.has(binary)
+  unchecked := not g.defers_float_checks and safe.contains(binary)
   g.defers_float_checks = true if unchecked
   result := apply_binary(g, operator, left, right, operand_type)
   g.defers_float_checks = false if unchecked
@@ -97,7 +97,7 @@ is_bytes := (type: Type) -> is_one_of_kinds(type, ['String', 'Binary'])
 # reported at the root's position rather than at that operation's.
 float_tree := (g: Generator, binary: BinaryOperation) ->
   return false if not ['+', '-', '*', '/'].contains(binary.operator)
-  return false if g.facts.operator_calls.has(binary) or not is_float(type_of(g, binary))
+  return false if g.facts.operator_calls.contains(binary) or not is_float(type_of(g, binary))
   float_leaf(g, binary.left) and float_leaf(g, binary.right)
 
 float_leaf := (g: Generator, expression: Expression): Bool ->
@@ -105,7 +105,7 @@ float_leaf := (g: Generator, expression: Expression): Bool ->
     when FloatLiteral, IntegerLiteral then true
     when Identifier then g.facts.references[expression] is ScopedLocal
     when UnaryOperation
-      is_negation := expression.operator == '-' and not g.facts.operator_calls.has(expression)
+      is_negation := expression.operator == '-' and not g.facts.operator_calls.contains(expression)
       is_negation and float_leaf(g, expression.operand)
     when BinaryOperation then float_tree(g, expression)
     else false

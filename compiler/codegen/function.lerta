@@ -224,7 +224,7 @@ export generate_function := (
 # Whether the function returns a Promise that its body settles: one that awaits, or one that
 # settles it without awaiting (see NodeFacts.settling).
 is_awaiting := (g: Generator, literal: FunctionLiteral) ->
-  literal.awaits or g.facts.settling.has(literal)
+  literal.awaits or g.facts.settling.contains(literal)
 
 # The body of a coroutine may run after its call returns, so it holds its parameters, its object
 # and its closure, which its scope releases; that of a function that yields waits for its first
@@ -502,7 +502,7 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
   generated := generate_declared_value(g, declaration, global == nil and not weak)
   value := weak then weak_box_of(g, generated, type) else generated
   emit_release ir, generated if weak
-  if g.facts.shared_vars.has(declaration.name)
+  if g.facts.shared_vars.contains(declaration.name)
     cell := emit_cell(ir, type, value)
     pointer := emit_cell_pointer(ir, type, cell)
     owned := CellSlot(cell, is_owned: true)
@@ -521,7 +521,7 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
 generate_declared_value := (g: Generator, declaration: Declaration, is_held_as_is: Bool) ->
   value := declaration.value
   if value is FunctionLiteral and is_held_as_is and not declaration.mutable
-    return generate_closure(g, value, not g.facts.escaping_locals.has(declaration.name))
+    return generate_closure(g, value, not g.facts.escaping_locals.contains(declaration.name))
   generate g, value
 
 export store_in_slot := (g: Generator, value: String, type: Type) ->
