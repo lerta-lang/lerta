@@ -11,6 +11,7 @@
 
 LERTA_STATIC_STRING(cannot_listen, "cannot listen at ");
 LERTA_STATIC_STRING(cannot_accept, "cannot accept at ");
+LERTA_STATIC_STRING(gone_peer, "a peer that has gone");
 LERTA_STATIC_STRING(cannot_connect, "cannot connect to ");
 LERTA_STATIC_STRING(cannot_read, "cannot read from ");
 LERTA_STATIC_STRING(cannot_write, "cannot write to ");
@@ -220,18 +221,19 @@ static LertaString *peer_address(Handle *socket) {
   return status == 0 ? address_text(host, port_of(&peer)) : NULL;
 }
 
-// The connection goes into the socket, which takes the peer's address.
+// The connection goes into the socket, which takes the peer's address. One whose address cannot be
+// read, as of a peer that has reset it before it was taken, is given all the same, whose reads fail
+// or end, rather than failing the accept, which a server would take for its listener's end.
 static void take_connection(Handle *listener, LertaPromise *promise) {
   Handle *socket = listener->accepted;
   listener->accepted = NULL;
   listener->connections--;
-  bool accepted = uv_accept(listener->stream, socket->stream) == 0;
-  LertaString *address = accepted ? peer_address(socket) : NULL;
-  if (address == NULL) {
+  if (uv_accept(listener->stream, socket->stream) != 0) {
     lerta_promise_reject_io(promise, &cannot_accept, listener->address);
     return;
   }
-  set_address(socket, address);
+  LertaString *address = peer_address(socket);
+  set_address(socket, address != NULL ? address : (LertaString *)&gone_peer);
   lerta_promise_resolve(promise);
 }
 

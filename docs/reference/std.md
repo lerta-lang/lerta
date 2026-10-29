@@ -163,6 +163,7 @@ TCP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-await).
 - A socket or a listener closes once nothing holds it, and keeps the program running only while a read or an accept of it waits, so that one left open does not keep the program from ending; a write that is under way does.
 - `close` fails what waits for the socket or the listener, a read, an accept, and what is asked of it after the close, but `close` itself, which does nothing then. A write that is under way may still go out.
 - A cancelled read loses nothing, as the next read gets what comes; a cancelled accept leaves the connection for the next; a cancelled write goes on, which cannot be stopped.
+- A connection whose peer's address cannot be read, as one that its peer resets before an accept takes it, is given all the same, its address `a peer that has gone`, and its reads fail or end, so that a server goes on accepting.
 - A server serves each connection in a function of its own that it does not await, `_serving := serve(await listener.accept())`, which must catch what it throws, since a rejected promise that nothing awaits ends the program (see [functions that await](functions.md#functions-that-await)).
 
 ## std:process
