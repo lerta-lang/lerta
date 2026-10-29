@@ -1,6 +1,8 @@
 # The names of a checked program by their positions, for an editor's hover and going to a
 # definition: what the checker found of the name at a place, its types and its declaration.
-import EnumDeclaration, Identifier, Import, Member, Position from '../ast'
+import
+  EnumDeclaration, Identifier, Import, InterfaceDeclaration, Member, NamedType, Position
+from '../ast'
 import generic_of, GenericFunction from '../checker/generics'
 import export_ref, ExportRef, ExternExport from '../checker/imports'
 import EnumValue, Method, Property from '../checker/member_targets'
@@ -10,7 +12,7 @@ import Constructor, ExternReference, FunctionReference, TopLevelValue from '../c
 import NodeFacts, ProgramWide, Shared from '../checker/shared'
 import is_name_character from './complete'
 import module_location from '../source'
-import EnumType, format_type, ObjectType, Type from '../types'
+import EnumType, format_type, InterfaceType, ObjectType, Type from '../types'
 
 # A declaration: a name of a module, by the module's place.
 export struct Declared
@@ -68,6 +70,8 @@ candidates_at := (program: ProgramWide, module_index: Int, source: String, at: P
         }
       else if node is Member
         add { type, name: node.name, declaration: -> member_declaration(program, facts, node) }
+        if enum_name := enum_name_of(node, facts)
+          add { type, name: enum_name, declaration: -> type_declaration(program, type) }
     for (call, link) in facts.instances.entries()
       callee := call.callee
       continue if callee is not Identifier
@@ -75,6 +79,13 @@ candidates_at := (program: ProgramWide, module_index: Int, source: String, at: P
       generic := generic_of(program, instance.generic)
       declared := Declared(module_index: generic.module_index, name: generic.name)
       add { name: callee, type: instance.entry.type, declaration: -> declared }
+  for (type_name, types) in shared.type_names.entries()
+    alias := shared.alias_names[type_name]
+    for type in types
+      declaration := ->
+        return Declared(module_index, name: alias) if alias
+        type_declaration program, type
+      add { type, name: written_name(type_name), declaration }
   for imported in shared.imports.names.values()
     source := imported.source
     continue if source is not ExportRef
@@ -155,19 +166,59 @@ member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) -
     when EnumValue then enum_member_declaration(program, facts.types[member]!, name)
     else nil
 
-# The member of the enum by its name, as its declaration writes it, in the module that declares
-# the enum, the one whose own enum of its name is it.
+# The member of the enum by its name, as its declaration writes it.
 enum_member_declaration := (program: ProgramWide, type: Type, name: String) ->
   enum_type := type as EnumType ? return nil
-  declares := (shared: Shared) -> shared.enums[enum_type.name]?.symbol == enum_type.symbol
+  (module_index, declaration) := enum_statement(program, enum_type) ? return nil
+  for each in declaration.members
+    return Declared(module_index, name: each) if each is Identifier and each.name == name
+  nil
+
+# The name of the enum of an enum's member written with it, as `Color` of `Color.RED` or of
+# `m.Color.RED`.
+enum_name_of := (member: Member, facts: NodeFacts) ->
+  return nil if facts.members[member] is not EnumValue
+  object := member.object
+  case object
+    when Identifier then object
+    when Member then object.name
+    else nil
+
+# The declaration of the class, struct, interface or enum that the type is.
+type_declaration := (program: ProgramWide, type: Type) ->
+  case type
+    when ObjectType
+      info := info_of(program, type)
+      Declared module_index: info.module_index, name: info.declaration.name
+    when EnumType
+      (module_index, declaration) := enum_statement(program, type) ? return nil
+      Declared module_index, name: declaration.name
+    when InterfaceType then interface_declaration(program, type)
+    else nil
+
+# The enum's declaration, in the module that declares the enum, the one whose own enum of its name
+# is it.
+enum_statement := (program: ProgramWide, type: EnumType) ->
+  declares := (shared: Shared) -> shared.enums[type.name]?.symbol == type.symbol
   module_index := program.shared.find(declares)?.index ? return nil
   for statement in program.modules[module_index].program
-    continue if statement is not EnumDeclaration
-    declaration := statement
-    continue if declaration.name.name != enum_type.name
-    for each in declaration.members
-      return Declared(module_index, name: each) if each is Identifier and each.name == name
+    if statement is EnumDeclaration and statement.name.name == type.name
+      return (module_index, statement)
   nil
+
+# The interface's declaration, in the module whose own interface of its name is it.
+interface_declaration := (program: ProgramWide, type: InterfaceType) ->
+  declares := (shared: Shared) -> shared.interfaces[type.name]?.type.symbol == type.symbol
+  module_index := program.shared.find(declares)?.index ? return nil
+  for statement in program.modules[module_index].program
+    if statement is InterfaceDeclaration and statement.name.name == type.name
+      return Declared(module_index, name: statement.name)
+  nil
+
+# The type name as an identifier, which spans the name as written, as `m.Point` of a qualified one,
+# without its type arguments.
+written_name := (type_name: NamedType) ->
+  Identifier name: type_name.name, position: type_name.position
 
 declared_member := (program: ProgramWide, type: ObjectType, name: String) ->
   info := info_of(program, type)

@@ -834,6 +834,83 @@ partial_parse_check := ->
         )...
       ]
 
+type_name_check := -> Check(name: 'lerta lsp gives type names their types and declarations', run: ->
+  dir := new_cli_dir('lsp-type-names')
+  path := "#{dir}/a.lerta"
+  other := "#{dir}/b.lerta"
+  await write_file(path, ''.binary)
+  await write_file(other, "export enum Hue\n  WARM\nexport struct Far\n  n: Int\n".binary)
+  uri := uri_of(path)
+  text :=
+    "import './b' as m"
+    'struct Point'
+    '  x: Int'
+    'enum Color'
+    '  RED'
+    'interface Shape'
+    '  area: () -> Int'
+    'type Spot = Point'
+    'struct Box<T>'
+    '  item: T'
+    'f := (p: Point, s: Shape, c: Color): Spot -> p'
+    'g := <T: Shape>(t: T, b: Box<Int>, n: Int, far: m.Far) -> 1'
+    'print Color.RED'
+    'print m.Hue.WARM'
+    'h := <U>(u: U) ->'
+    '  b: Box<U> = { item: u }'
+    '  b'
+    'print h(1)'
+    "print h('a')"
+    ''
+  .join("\n")
+  messages :=
+    did_open(uri, text)
+    definition_request(uri, 10, 9, 1)
+    definition_request(uri, 10, 19, 2)
+    definition_request(uri, 10, 29, 3)
+    definition_request(uri, 10, 37, 4)
+    definition_request(uri, 12, 6, 5)
+    definition_request(uri, 11, 9, 6)
+    definition_request(uri, 11, 25, 7)
+    definition_request(uri, 11, 50, 8)
+    definition_request(uri, 13, 8, 9)
+    hover_request(uri, 10, 9, 10)
+    hover_request(uri, 12, 6, 11)
+    hover_request(uri, 10, 37, 12)
+    hover_request(uri, 10, 19, 13)
+    hover_request(uri, 11, 38, 14)
+    hover_request(uri, 11, 48, 15)
+    hover_request(uri, 15, 5, 16)
+    hover_request(uri, 11, 19, 17)
+  .join('')
+  ran := await session(dir, messages)
+  [
+    expect_status(0, ran.status)...
+    exact_responses(
+      ran.stdout.text()!
+      [
+        location_fragment(1, uri, 1, 7, 12)
+        location_fragment(2, uri, 5, 10, 15)
+        location_fragment(3, uri, 3, 5, 10)
+        location_fragment(4, uri, 7, 5, 9)
+        location_fragment(5, uri, 3, 5, 10)
+        location_fragment(6, uri, 5, 10, 15)
+        location_fragment(7, uri, 8, 7, 10)
+        location_fragment(8, uri_of(other), 2, 14, 17)
+        location_fragment(9, uri_of(other), 0, 12, 15)
+        hover_fragment(10, 'Point: Point')
+        hover_fragment(11, 'Color: Color')
+        hover_fragment(12, 'Spot: Point')
+        hover_fragment(13, 'Shape: Shape')
+        '"id":14,"result":null'
+        hover_fragment(15, 'm.Far: Far')
+        hover_fragment(16, "Box: Box<Int>\nBox: Box<String>")
+        '"id":17,"result":null'
+      ]
+    )...
+  ]
+)
+
 partial_block_check := ->
   Check name: 'lerta lsp checks the statements of a block that parse', run: ->
     dir := new_cli_dir('lsp-partial-block')
@@ -1141,6 +1218,7 @@ export checks :=
   partial_parse_check()
   partial_import_check()
   partial_block_check()
+  type_name_check()
   imported_hover_definition_check()
   extern_definition_check()
   reexport_definition_check()

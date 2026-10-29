@@ -2,8 +2,8 @@
 # others may read, and the state of the checking of one body. Objects refer to the modules, and to
 # what each module declares, by index, so that no two of them refer to each other.
 import
-  Call, Cast, Exportable, Expression, FunctionLiteral, Identifier, Member, Node, Position,
-  StringLiteral
+  Call, Cast, Exportable, Expression, FunctionLiteral, Identifier, Member, NamedType, Node,
+  Position, StringLiteral
 from '../ast'
 import CompletionProbe from './completion_probe'
 import ExtensionMethod, Extensions from './extensions'
@@ -171,6 +171,11 @@ export class Shared
   # Type aliases, resolved on first use, so that they can refer to each other in any order.
   aliases: Map<String, AliasEntry> = Map()
   resolving: Set<String> = Set()
+  # The types that each type name of the module's code names, one for each instance of a generic
+  # body it is in, and the alias's name for one that names an alias, for an editor's hover and going
+  # to a definition (see compiler/lsp and record_type_name).
+  type_names: Map<NamedType, Type[]> = Map()
+  alias_names: Map<NamedType, Identifier> = Map()
   # The methods of the module's extends, which the modules that import it get.
   own_methods: ExtensionMethod[] = []
   # Whether the module's top-level code awaits, which makes the program's a coroutine (see main).
@@ -307,3 +312,8 @@ export module_symbol_name := (program: ProgramWide, index: Int) ->
 # The symbol of a type that the module declares.
 export declared_symbol := (shared: Shared, name: String) ->
   "#{module_symbol_name(shared.program, shared.index)}.#{name}"
+
+# Records the type that the type name of the module's code names (see Shared.type_names).
+export record_type_name := (shared: Shared, type_name: NamedType, type: Type) ->
+  types := shared.type_names[type_name, default: []]
+  types.push type if not types.contains(type)

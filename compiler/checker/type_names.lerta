@@ -11,7 +11,7 @@ from './imports'
 import
   has_declared_type, imported_interface, named_interface, value_interface_type
 from './interfaces'
-import ProgramWide, Shared from './shared'
+import ProgramWide, record_type_name, Shared from './shared'
 import reject_invalid_instance from './type_validity'
 import
   ArrayType, binary_type, bool_type, char_type, float32_type, float_type, format_type, FunctionType,
@@ -212,10 +212,19 @@ resolve_name := (
   generic_object := named is ObjectType and not named.args.is_empty()
   takes_arguments := interface_info != nil or generic_object
   fail_here "'#{name}' takes no type arguments" if not args.is_empty() and not takes_arguments
-  return value_interface_type(program, resolver, interface_info, type_name) if interface_info
-  return instantiate_object(program, resolver, named as ObjectType!, type_name) if generic_object
-  return named if named
-  resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
+  declared :=
+    case
+      when interface_info then value_interface_type(program, resolver, interface_info, type_name)
+      when generic_object
+        instantiate_object program, resolver, named as ObjectType!, type_name
+      else named
+  if declared
+    record_type_name shared, type_name, declared
+    return declared
+  type := resolve_alias(program, resolver, name, position) ? fail_here("unknown type '#{name}'")
+  record_type_name shared, type_name, type
+  shared.alias_names[type_name] = shared.aliases[name]!.alias.name
+  type
 
 # A type of a name that is_core_type_name accepts.
 resolve_core_type := (

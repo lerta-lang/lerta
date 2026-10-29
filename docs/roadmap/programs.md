@@ -49,7 +49,7 @@ The planned design of modules, FFI, the standard library and tools.
 - `lerta fmt` reports each difference under the rule that it breaks, and each run of differing lines apart, as [the reference](../reference/compiler.md#fmt) states: now some are reported under another rule, as the shorthand of `{ x: x }` under **Layout**, a cast left out before a space, or a rewrite that starts the body of a function on the line of `->`, under the rule of what holds it, and the named arguments that a name written alone goes before under **Long lists**, and separate runs that differ may be reported as one. The formatter has no options, as it applies the style as written; settings wait for a configuration file (see [open questions](#open-questions)).
 - The rest of [`lerta lsp`](../reference/compiler.md#lsp):
   - In completion: the methods of extends of interfaces (as `map` of `Iterable` for an array), an enum's member written alone where the enum is expected, the body of a generic function that no call checks, which needs checking generic bodies at definition, and the code after an error in the same function's body.
-  - Hover and going to a definition from a type name, as one in an annotation or the enum of `Color.RED`, and from a named argument's label.
+  - Hover and going to a definition from a named argument's label.
   - A diagnostic's range over the whole token of its position, rather than the position alone.
   - Checking a document that is no file yet, which the loader takes a program's modules to be; and finding the open documents that import a file by real paths, so that two spellings of one directory through a symbolic link are one.
 - Package management.
