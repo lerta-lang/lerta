@@ -47,10 +47,11 @@ through_method := (g: Generator, assignment: Assignment) ->
   Assignment(assignment..., operator: '=', value: call)
 
 # The field takes the new value's reference and releases the old one. Through a union, the field
-# is that of the member the object is.
+# is that of the member the object is. The object is borrowed where it can be while the value is
+# evaluated (see generate_borrowed), so that assigning a field of a local retains nothing.
 generate_field_assignment := (g: Generator, assignment: Assignment, target: Member) ->
   object_type := type_of(g, target.object)
-  object := generate(g, target.object)
+  (object, owned) := generate_borrowed(g, target.object, [assignment.value])
   name := target.name.name
   pointer_of := (type: Type) -> field_pointer(g, object, type, name)
   pointer :=
@@ -65,6 +66,7 @@ generate_field_assignment := (g: Generator, assignment: Assignment, target: Memb
       assign_weak g, assignment, pointer, field_type
     else
       assign_through g, assignment, pointer, field_type
+  return assign() if not owned
   while_holding g, object, object_type, assign
   emit_release g.ir, object
 

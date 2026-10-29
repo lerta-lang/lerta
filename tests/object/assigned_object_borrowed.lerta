@@ -1,0 +1,67 @@
+# The object whose field is assigned is borrowed where nothing can replace it while the value is
+# evaluated, and held otherwise: the old object stays alive until its field is assigned.
+class Counter
+  name: String
+  var count: Int
+  deinit = -> print("counter #{@name} gone")
+
+class Shelf
+  var counter: Counter
+  replace = ->
+    @counter = Counter(name: 'replacing', count: 0)
+    10
+
+struct Fixed
+  counter: Counter
+
+class Tally
+  var total: Int
+  bump = (n: Int) -> @total += n
+
+# A const local, `@` and a struct field under a const local, assigned with `=` and `+=`.
+counter := Counter(name: 'local', count: 1)
+counter.count += 2
+counter.count = counter.count * 10
+print counter.count
+tally := Tally(total: 1)
+tally.bump 4
+print tally.total
+fixed := Fixed(counter: Counter(name: 'fixed', count: 5))
+fixed.counter.count += 1
+print fixed.counter.count
+
+# A union's field and a weak field, of const locals.
+class Other
+  var count: Int
+
+class Watcher
+  weak watched: Counter?
+
+either: Counter | Other = Other(count: 1)
+either.count += 2
+print either.count
+watcher := Watcher(watched: nil)
+watcher.watched = counter
+print watcher.watched?.name ? 'none'
+
+# A var whose value the assigned value replaces, through a function that captures it.
+var current = Counter(name: 'first', count: 0)
+swap := ->
+  current = Counter(name: 'second', count: 0)
+  7
+current.count = swap()
+print "#{current.name} #{current.count}"
+
+# A var field under the object, which the value replaces: its old object is assigned.
+shelf := Shelf(counter: Counter(name: 'shelved', count: 0))
+shelf.counter.count += shelf.replace()
+print "#{shelf.counter.name} #{shelf.counter.count}"
+
+# A value that throws leaves the borrowed object alive and as it was.
+fail := (): Int -> throw ValueError('failed')
+try
+  counter.count += fail()
+catch error: ValueError
+  print error.message
+print counter.count
+print 'done'
