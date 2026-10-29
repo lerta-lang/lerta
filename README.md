@@ -86,7 +86,7 @@ make clean
 `make test-cross` runs the tests as 32-bit Linux programs and as 64-bit and 32-bit Windows programs (mingw-w64 and Wine), with the bootstrap through a compiler for each. On a host other than Linux, it also runs `make test` on Linux in Docker.
 
 - Each runs on the host if the host can run it, and otherwise in Docker when Docker runs it without emulation, which for the 32-bit and the Windows programs takes an x86-64 host.
-- The targets run at the same time, so their outputs come one after another once all are done. It ends with what ran and what was skipped, and why.
+- The targets run one after another. It ends with what ran and what was skipped, and why, except what a container skips, such as the Windows bootstrap in the Wine image without a clang for Windows, which only its output tells.
 - On an Apple silicon Mac, for instance, it runs Linux in Docker and skips 32-bit Linux. It runs Windows only with mingw-w64, lld and Wine installed, and the Windows bootstrap only with a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s) on Wine's `PATH` (`WINEPATH`) too.
 
 ### Tests

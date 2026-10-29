@@ -1,8 +1,8 @@
 #!/bin/sh
 # Runs the tests for every environment but the host's own (see README.md#building-and-testing).
 #
-# The targets run at the same time, each container's and the host's own, with their outputs kept
-# apart (see start).
+# The targets run one after another, each container's and the host's own. The summary at the end
+# leaves out what a container skips, which only its output tells.
 #
 # With --here and triples, the tests of those targets run on this machine only, as the
 # containers do.
@@ -34,34 +34,11 @@ test_target() {
   nice make --no-print-directory test-bootstrap TARGET="$1"
 }
 
-# Wine updates a prefix that another version of it made, in place, as it starts, which
-# test/lib/wine.lerta does before a run copies it. Targets that run at the same time would update it
-# while another copies it, so it is updated once, before they start, and test/lib/wine.lerta is
-# told so.
-update_wine_prefix() {
-  wine cmd /c exit && wineserver --wait \
-    && export LERTA_WINE_PREFIX_UPDATED="${WINEPREFIX:-$HOME/.wine}"
-}
-
-# Starts the targets that this machine runs, as jobs reported as each with the label added.
-start_targets() { # <label> <triple>...
+# Runs the targets that this machine runs, reported as each with the label added.
+run_targets() { # <label> <triple>...
   label=$1
   shift
-  wine_ready=unknown
-  for triple; do
-    if is_windows "$triple"; then
-      if [ "$wine_ready" = unknown ]; then
-        if update_wine_prefix; then wine_ready=true; else wine_ready=false; fi
-      fi
-      if ! $wine_ready; then
-        # Printed too, as the summary of --here is not.
-        echo "cannot update the Wine prefix for $triple" >&2
-        record_failure "$triple$label (cannot update the Wine prefix)"
-        continue
-      fi
-    fi
-    start "$triple$label" test_target "$triple"
-  done
+  for triple; do run "$triple$label" test_target "$triple"; done
 }
 
 # The compiler for Windows builds the next stage of the bootstrap with it.
@@ -85,9 +62,8 @@ runs_here() {
   return $status
 }
 
-# Starts a job in a container of the image, built first, on the Linux one as the others are; built
-# before the job starts, as jobs that built it at the same time would each build it.
-start_in_docker() { # <what> <image> <command>
+# Runs a command in a container of the image, built first, on the Linux one as the others are.
+run_in_docker() { # <what> <image> <command>
   for name in linux "$2"; do
     if ! docker build --quiet --tag "lerta-test-$name" "tools/docker/$name" >/dev/null; then
       record_failure "$1 (cannot build the image)"
@@ -96,89 +72,53 @@ start_in_docker() { # <what> <image> <command>
   done
   container_count=$((container_count + 1))
   container="lerta-test-$$-$container_count"
-  containers="$containers $container"
-  start "$1" in_docker "$container" "$2" "$3"
+  run "$1" in_docker "$container" "$2" "$3"
+  container=''
 }
-# Named, so that an interruption can stop them (see stop_jobs), which stopping docker run does not.
-containers=''
+# Named, so that an interruption can stop it (see stop), which stopping docker run does not.
+container=''
 container_count=0
 
 # The container works on the tree mounted read-only, with build/ and bin/, where the build writes,
-# each its own empty volume: the containers that run at the same time, and the host, would
-# otherwise share their builds. Their mount points must already be in the tree, which is read-only:
-# they are, since the host builds bin/lerta first.
+# each its own empty volume: the containers and the host would otherwise share their builds. Their
+# mount points must already be in the tree, which is read-only: they are, since the host builds
+# bin/lerta first.
 in_docker() { # <container> <image> <command>
-  container=$1
-  image=lerta-test-$2
-  shift 2
-  docker run --rm --name "$container" --volume "$root:/lerta:ro" --volume /lerta/build \
-    --volume /lerta/bin --workdir /lerta "$image" sh -c "$*"
+  docker run --rm --name "$1" --volume "$root:/lerta:ro" --volume /lerta/build \
+    --volume /lerta/bin --workdir /lerta "lerta-test-$2" sh -c "$3" &
+  # Run in the background and waited for, as a trap runs only once a foreground command ends, and
+  # the container's shell, its PID 1, ignores the interruption that docker run would pass on.
+  wait $!
 }
 
 summary=''
 failed=0
-# A job, whose own summary is lost, prints it instead, for finish to add.
-SKIP_MARK='test_cross.sh skipped: '
+# Printed too, as the summary of --here is not.
 skip() { # <what> <why>
-  if ${in_job:-false}; then echo "$SKIP_MARK$1 ($2)"; fi
+  echo "skipped: $1 ($2)"
   summary="$summary  skipped: $1 ($2)\n"
 }
 
-# The jobs that run at the same time, each with its output kept in a file, so that their outputs
-# do not mix: one line each, of its process, its file and what it tests.
-jobs=''
-start() { # <what> <command...>
+run() { # <what> <command...>
   what=$1
   shift
-  log=$(mktemp)
   echo "started: $what"
-  (in_job=true; "$@") >"$log" 2>&1 &
-  jobs="$jobs$! $log $what
-"
-}
-# Waits for the jobs, then prints their outputs and reports them, in the order they started.
-finish() {
-  while read -r pid log what; do
-    [ -n "$pid" ] || continue
-    if wait "$pid"; then summary="$summary  passed:  $what\n"
-    else record_failure "$what"; fi
-    # --here keeps them for its caller, which reports them.
-    if $here; then cat "$log"; else sed "/^$SKIP_MARK/d" "$log"; fi
-    skipped=$(sed -n "s/^$SKIP_MARK/  skipped: /p" "$log")
-    if [ -n "$skipped" ]; then summary="$summary$skipped\n"; fi
-    rm -f "$log"
-  done <<EOF_JOBS
-$jobs
-EOF_JOBS
-  jobs=''
+  if "$@"; then summary="$summary  passed:  $what\n"
+  else record_failure "$what"; fi
 }
 
-# An interruption stops the jobs and their containers too, which would otherwise go on: the jobs,
-# which ignore SIGINT as background commands do, by a SIGTERM to the process group, which this
-# script then ignores.
-stop_jobs() {
-  for container in $containers; do docker kill "$container" >/dev/null 2>&1; done
-  trap '' TERM
-  kill -TERM 0
-  while read -r pid log what; do
-    [ -n "$pid" ] && rm -f "$log"
-  done <<EOF_JOBS
-$jobs
-EOF_JOBS
+stop() {
+  if [ -n "$container" ]; then docker kill "$container" >/dev/null 2>&1; fi
   exit 130
 }
-trap stop_jobs HUP INT TERM
+trap stop HUP INT TERM
 
-# The harness too, once, as the jobs that run it at the same time would each build it.
 make --no-print-directory bin/lerta bin/test || exit 1
 
-here=false
 if [ "${1-}" = --here ]; then
-  here=true
   shift
   # The caller reports the result, so a summary here would only repeat it.
-  start_targets '' "$@"
-  finish
+  run_targets '' "$@"
   exit $failed
 fi
 
@@ -206,28 +146,27 @@ case $host_linux in x86_64-*) x86_64=true ;; *) x86_64=false ;; esac
 if [ "$host_os" != Linux ]; then
   if ! $has_docker; then skip "$host_linux" 'no Docker'
   elif $x86_64; then
-    start_in_docker "$(comma_list $host_linux $linux_left) in Docker" linux \
+    run_in_docker "$(comma_list $host_linux $linux_left) in Docker" linux \
       "make --no-print-directory test; native=\$?; tools/test_cross.sh --here$linux_left; exit \$((native || \$?))"
     linux_left=''
   else
-    start_in_docker "$host_linux in Docker" linux 'make --no-print-directory test'
+    run_in_docker "$host_linux in Docker" linux 'make --no-print-directory test'
   fi
 fi
 for triple in $linux_left; do
   if ! $x86_64; then skip "$triple" 'needs an x86-64 host'
   elif ! $has_docker; then skip "$triple" 'needs the 32-bit C library, or Docker'
-  else start_in_docker "$triple in Docker" linux "tools/test_cross.sh --here $triple"
+  else run_in_docker "$triple in Docker" linux "tools/test_cross.sh --here $triple"
   fi
 done
 if [ -n "$windows_left" ]; then
   if $x86_64 && $has_docker; then
-    start_in_docker "$(comma_list $windows_left) in Docker with Wine" wine \
+    run_in_docker "$(comma_list $windows_left) in Docker with Wine" wine \
       "tools/test_cross.sh --here$windows_left"
   else
     skip "$(comma_list $windows_left)" 'needs mingw-w64, lld and Wine, or Docker on an x86-64 host'
   fi
 fi
-start_targets ' on the host' $host_left
-finish
+run_targets ' on the host' $host_left
 printf '\ntest_cross.sh:\n%b' "$summary"
 exit $failed
