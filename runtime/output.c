@@ -29,16 +29,19 @@ typedef struct {
   int64_t bytes;
 } Segments;
 
-// A write out of the buffer on libuv's thread pool, with blocking writes, which leave the file
-// descriptors blocking for print and the programs that inherit them. One at most is in flight.
-typedef struct {
+// A write out of the buffer on a thread of its own, with blocking writes, which leave the file
+// descriptors blocking for print and the programs that inherit them; not on libuv's thread pool,
+// whose few threads long file operations may hold. One at most is in flight.
+typedef struct WriteOut {
   Segments segments;
   // Which streams have failed: those known as it starts, and those that fail in it.
   bool failed[STDERR_FD + 1];
-  // Set by the worker once it has written; atomic for a panic, which does not lock the mutex.
+  // Set by the thread once it has written; atomic for a panic, which does not lock the mutex.
   atomic_bool done;
   // Whether the main thread has taken its outcome.
   bool finished;
+  // The next of those the thread has written, which the loop has yet to end.
+  struct WriteOut *next;
 } WriteOut;
 
 // A promise of a Writer, settled once the bytes up to `target` are written out.
@@ -52,6 +55,17 @@ static Segments buffered;
 static WriteOut *in_flight = NULL;
 static uv_mutex_t mutex;
 static uv_cond_t written_out;
+// The thread, and what the mutex guards for it: the write out it is asked for, and those it has
+// written, in order, which the async handle tells the loop of. The handle is referenced while a
+// write out has yet to end, as a request of the thread pool would be.
+static uv_thread_t thread;
+static bool thread_started = false;
+static uv_cond_t wanted;
+static WriteOut *requested = NULL;
+static WriteOut *written_first = NULL;
+static WriteOut *written_last = NULL;
+static uv_async_t written_async;
+static int64_t unended = 0;
 static bool failed[STDERR_FD + 1];
 // The bytes written to the buffer and those written out of it, so far.
 static int64_t appended = 0;
@@ -114,8 +128,7 @@ static Segments take_buffered(void) {
   return taken;
 }
 
-static void work(void *data) {
-  WriteOut *write_out = data;
+static void write_out_segments(WriteOut *write_out) {
   write_segments(&write_out->segments, write_out->failed);
   // Set before the lock, which a panicking main thread may hold as it spins on it. A waiter that
   // saw it unset under the lock is in uv_cond_wait by the time the lock is taken here.
@@ -126,7 +139,7 @@ static void work(void *data) {
 }
 
 // Takes the outcome of a write out that is done. It frees nothing, as a panic may take it; the
-// write out is freed by after_work, which does not run if the program ends first.
+// write out is freed by end_write_out, which does not run if the program ends first.
 static void finish(WriteOut *write_out) {
   // Merged before in_flight is cleared, so that the next write out starts knowing the failures.
   for (int fd = STDOUT_FD; fd <= STDERR_FD; fd++) failed[fd] = failed[fd] || write_out->failed[fd];
@@ -170,8 +183,7 @@ static void settle_waiters(void) {
 
 static void start_write_out(void);
 
-static void after_work(void *data) {
-  WriteOut *write_out = data;
+static void end_write_out(WriteOut *write_out) {
   if (!write_out->finished) finish(write_out);
   free_segments(&write_out->segments);
   free(write_out);
@@ -179,15 +191,65 @@ static void after_work(void *data) {
   if (waiter_start < waiter_end || buffered.bytes >= BUFFER_LIMIT) start_write_out();
 }
 
+// A write out is asked for only once the one before is done, so the thread takes each before the
+// next comes.
+static void write_out_requests(void *unused) {
+  (void)unused;
+  for (;;) {
+    uv_mutex_lock(&mutex);
+    while (requested == NULL) uv_cond_wait(&wanted, &mutex);
+    WriteOut *write_out = requested;
+    requested = NULL;
+    uv_mutex_unlock(&mutex);
+    write_out_segments(write_out);
+    uv_mutex_lock(&mutex);
+    if (written_last == NULL) written_first = write_out;
+    else written_last->next = write_out;
+    written_last = write_out;
+    uv_mutex_unlock(&mutex);
+    uv_async_send(&written_async);
+  }
+}
+
+// One callback may come for several sends.
+static void end_written(uv_async_t *handle) {
+  uv_mutex_lock(&mutex);
+  WriteOut *write_out = written_first;
+  written_first = written_last = NULL;
+  uv_mutex_unlock(&mutex);
+  while (write_out != NULL) {
+    WriteOut *next = write_out->next;
+    if (--unended == 0) uv_unref((uv_handle_t *)handle);
+    end_write_out(write_out);
+    write_out = next;
+  }
+}
+
+// Started with the first write out, as most programs write only through print, which needs no
+// thread.
+static void start_thread(void) {
+  thread_started = true;
+  bool started = uv_cond_init(&wanted) == 0 &&
+                 uv_async_init(uv_default_loop(), &written_async, end_written) == 0 &&
+                 uv_thread_create(&thread, write_out_requests, NULL) == 0;
+  if (!started) lerta_panic("cannot start the thread that writes out stdout and stderr");
+  uv_unref((uv_handle_t *)&written_async);
+}
+
 static void start_write_out(void) {
   if (in_flight != NULL || buffered.count == 0) return;
+  if (!thread_started) start_thread();
   WriteOut *write_out = lerta_checked_calloc(1, sizeof(WriteOut));
   write_out->segments = take_buffered();
   memcpy(write_out->failed, failed, sizeof failed);
-  lerta_loop_work(write_out, work, after_work);
-  // Only once it is queued: a panic in lerta_loop_work, as for a stack overflow, would otherwise wait
-  // for a write out that never runs. Its bytes are then lost, or come out of order with the panic's
-  // report if the worker has started, as the program ends.
+  if (unended++ == 0) uv_ref((uv_handle_t *)&written_async);
+  uv_mutex_lock(&mutex);
+  requested = write_out;
+  uv_cond_signal(&wanted);
+  uv_mutex_unlock(&mutex);
+  // Only once it is asked for: a panic before, as for a stack overflow, would otherwise wait for a
+  // write out that never runs. Its bytes are then lost, or come out of order with the panic's
+  // report if the thread has started, as the program ends.
   in_flight = write_out;
 }
 
