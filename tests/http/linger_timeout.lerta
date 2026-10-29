@@ -1,0 +1,25 @@
+# A connection that reads and drops what its client still sends after the last response closes
+# once its 2 seconds have passed, even while the client goes on sending; the client's writes then
+# fail.
+import connect_tcp from 'std:net'
+import Request, serve from 'std:http'
+import monotonic, sleep from 'std:time'
+
+server := serve((_: Request) -> { body: "ok\n" })
+client := await connect_tcp('127.0.0.1', server.port())
+await client.write("GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+while line := await client.reader.read_line()
+  break if line == 'ok'
+print 'ok'
+
+start := monotonic()
+var failed = false
+while not failed and monotonic() - start < 10.0
+  try
+    await client.write('more')
+    await sleep(0.05)
+  catch _: IOError
+    failed = true
+print failed
+client.close()
+server.close()

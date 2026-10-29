@@ -1,0 +1,64 @@
+# Timeouts of one waiting after another, as those of the reads of a connection, which one sleep that
+# watches them all bounds, rather than a sleep and a race for each, as `timeout` of std:async has.
+
+import TimeoutError from 'std:async'
+import INFINITY from 'std:math'
+import monotonic, sleep from 'std:time'
+
+export class Deadline
+  # When the promise that `within` waits for is cancelled, if it has not settled.
+  at = INFINITY
+  cancel_waited: (() -> void)? = nil
+  expired = false
+  # When the watch wakes next, and its sleep, which a sooner deadline cancels to wake it then.
+  wake = INFINITY
+  sleeping: Promise? = nil
+  stopped = false
+  # The waits started, so that one tells whether the deadline is still its own.
+  waits = 0
+
+  # Watches the deadlines until `stop`; started once, and not awaited.
+  watch = ->
+    while not @stopped
+      now := monotonic()
+      @expire() if @at <= now
+      @wake = @at
+      sleeping := sleep(@at - now)
+      @sleeping = sleeping
+      try
+        await sleeping
+      catch _: CancelledError
+        # A sooner deadline, or the stop.
+        continue
+      finally
+        @sleeping = nil
+
+  stop = ->
+    @stopped = true
+    @sleeping?.cancel()
+
+  # As `timeout` of std:async: the value or the error of the promise if it is settled within the
+  # seconds; a TimeoutError otherwise, which cancels it. A wait that starts before the last has
+  # ended takes the deadline from it, which then waits without one.
+  within = <T>(promise: Promise<T>, seconds: Float): Promise<T> ->
+    @waits += 1
+    wait := @waits
+    @at = monotonic() + seconds
+    @expired = false
+    @cancel_waited = -> promise.cancel()
+    @sleeping?.cancel() if @at < @wake
+    try
+      await promise
+    catch error: CancelledError
+      timed_out := @expired and @waits == wait
+      throw TimeoutError(message: "timed out after #{seconds} seconds") if timed_out
+      throw error
+    finally
+      if @waits == wait
+        @at = INFINITY
+        @cancel_waited = nil
+
+  expire = ->
+    @expired = true
+    @at = INFINITY
+    cancel_waited() if cancel_waited := @cancel_waited

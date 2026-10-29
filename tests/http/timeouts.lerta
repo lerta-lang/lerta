@@ -7,6 +7,8 @@ import sleep from 'std:time'
 import Request, Response, serve, Server from 'std:http'
 
 handle := (request: Request) ->
+  # Longer than the idle timeout, which then bounds the wait for the next request all the same.
+  await sleep(1.0) if request.url.ends_with('/slow')
   try
     Response body: "#{(await request.binary()).length} bytes"
   catch error: IOError
@@ -16,6 +18,8 @@ handle := (request: Request) ->
 # Each server has one short timeout, so that a case passes only through it.
 idle := serve(handle, idle_timeout: 0.3)
 head := serve(handle, head_timeout: 0.3)
+# A head timeout past the idle one, which the pause before the rest of the head stays within.
+later_head := serve(handle, idle_timeout: 0.3, head_timeout: 3.0)
 body := serve(handle, body_timeout: 0.3)
 
 # What comes until the server closes the connection, after `request`, sent as its parts, with a
@@ -32,6 +36,8 @@ ask := (server: Server, parts: String[]) ->
 await ask(idle, [])
 await ask(idle, ["GET / HTTP/1.1\r\nHost: a\r\n\r\n"])
 await ask(idle, ['GET / ', "HTTP/1.1\r\nHost: a\r\n\r\n"])
+await ask(idle, ["GET /slow HTTP/1.1\r\nHost: a\r\n\r\n"])
 await ask(head, ["GET / HTTP/1.1\r\n", "Host: a\r\n\r\n"])
+await ask(later_head, ["GET / HTTP/1.1\r\n", "Host: a\r\n\r\n"])
 await ask(body, ["POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 4\r\n\r\nab", 'cd'])
-server.close() for server in [idle, head, body]
+server.close() for server in [idle, head, later_head, body]

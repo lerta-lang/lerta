@@ -1,10 +1,11 @@
 # An HTTP/1.1 server and client over std:net, whose handler takes a Request and gives a Response, as
 # fetch does.
 
-import timeout, TimeoutError from 'std:async'
+import TimeoutError from 'std:async'
 import LineTooLongError, Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
 import address_text from './internal/handle'
+import Deadline from './internal/deadline'
 import CHUNK_SIZE, chunk_bytes, ChunkedBody, LAST_CHUNK from './internal/http_chunks'
 import check_field, Headers, keeps_alive, Request, Response from './internal/http_message'
 import bytes_of from './internal/utf8'
@@ -89,25 +90,30 @@ struct RequestError: Error
   message: String
 
 serve_connection := (socket: Socket, server: Server) ->
+  deadline := Deadline()
+  _watching := deadline.watch()
   try
     var going_on = true
-    going_on = await serve_request(socket, server) while going_on
+    going_on = await serve_request(socket, server, deadline) while going_on
   catch _
     # The peer has gone, or sent less than it said, or a read that the handler left going on has
     # left the connection in no state to go on: it ends, and the server serves the others.
     nil
   finally
-    await close_lingering(socket, server)
+    # close_lingering throws nothing, and the sleep of the deadline would otherwise keep the
+    # program going.
+    await close_lingering(socket, server, deadline)
+    deadline.stop()
 
 # Closes the connection once the client has read the response: what the client still sends, as a
 # body that the server did not read, is read and dropped first, for a time and a size, as a socket
 # closed with input unread may be reset, which can lose the response before the client reads it.
 # A server that is closed while it lingers closes it at once.
-close_lingering := (socket: Socket, server: Server) ->
+close_lingering := (socket: Socket, server: Server, deadline: Deadline) ->
   server.lingering.add socket
   try
     socket.end()
-    await timeout(drain(socket.reader), LINGER_SECONDS)
+    await deadline.within(drain(socket.reader), LINGER_SECONDS)
   catch _
     # A peer that has gone, or keeps sending: it is closed anyway.
     nil
@@ -127,10 +133,10 @@ LINGER_BYTES := 65536
 # Serves the next request on the connection, and tells whether the connection goes on. A response
 # that the server gives itself has an empty body, which is right for HEAD too. A body that is a
 # Reader is closed once sent, or once it is not to be.
-serve_request := (socket: Socket, server: Server) ->
+serve_request := (socket: Socket, server: Server, deadline: Deadline) ->
   incoming :=
     try
-      await read_request(socket, server) ? return false
+      await read_request(socket, server, deadline) ? return false
     catch error: RequestError
       await socket.write(response_bytes({ status: error.status }, false, 'GET', true))
       return false
@@ -183,7 +189,7 @@ struct Incoming
 
 # The next request, or nil if the connection ends, or stays idle, before it starts. A server that
 # is closed meanwhile closes the connection, which the read throws for.
-read_request := (socket: Socket, server: Server) ->
+read_request := (socket: Socket, server: Server, deadline: Deadline) ->
   { reader } := socket
   options := server.options
   server.waiting.add socket
@@ -191,7 +197,7 @@ read_request := (socket: Socket, server: Server) ->
   socket.close() if server.closed
   line :=
     try
-      await read_request_line(reader, options) ? return nil
+      await read_request_line(reader, options, deadline) ? return nil
     finally
       server.waiting.remove socket
   parts := line.split(' ')
@@ -202,7 +208,7 @@ read_request := (socket: Socket, server: Server) ->
     throw RequestError(status: 505, message: 'http version not supported')
   headers :=
     try
-      await timeout(read_headers(reader, options), options.head_timeout)
+      await deadline.within(read_headers(reader, options), options.head_timeout)
     catch _: TimeoutError
       throw RequestError(status: 408, message: 'request timeout')
   chunked := is_chunked(headers, version)
@@ -215,7 +221,7 @@ read_request := (socket: Socket, server: Server) ->
   throw RequestError(status: 413, message: 'content too large') if length > options.max_body
   { max_body, body_timeout } := options
   chunks := chunked then ChunkedBody(reader, name: 'body', room: max_body) else nil
-  body := BodyChunks(reader, chunks, left: length, seconds: body_timeout)
+  body := BodyChunks(reader, chunks, deadline, left: length, seconds: body_timeout)
   # HTTP/1.0 has no 100 Continue.
   expects := (headers.get('expect') ? '').to_lower() == '100-continue'
   body.continue_on = socket if expects and version == 'HTTP/1.1' and (chunked or length > 0)
@@ -231,12 +237,12 @@ bad_request := -> RequestError(status: 400, message: 'bad request')
 
 # The request line, which comes within the idle timeout, after an empty line that a client may send
 # after the body of the request before; nil if none does.
-read_request_line := (reader: Reader, options: ServerOptions) ->
+read_request_line := (reader: Reader, options: ServerOptions, deadline: Deadline) ->
   read := ->
     line := await read_limited_line(reader, options.max_line, 414) ? return nil
     line.is_empty() then await read_limited_line(reader, options.max_line, 414) else line
   try
-    await timeout(read(), options.idle_timeout)
+    await deadline.within(read(), options.idle_timeout)
   catch _: TimeoutError
     nil
 
@@ -303,6 +309,7 @@ class BodyChunks
   reader: Reader
   left: Int
   chunks: ChunkedBody?
+  deadline: Deadline
   seconds: Float
   ended = false
   # Only an IOError is kept: the reads throw no other but a cancel, which leaves the place known.
@@ -343,7 +350,7 @@ class BodyChunks
   # A client that is too slow is taken to have gone.
   within_seconds = (read: Promise<Binary?>) ->
     try
-      await timeout(read, @seconds)
+      await @deadline.within(read, @seconds)
     catch _: TimeoutError
       throw IOError('a body timed out')
 
