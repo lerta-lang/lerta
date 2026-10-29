@@ -197,7 +197,8 @@ uint64_t lerta_string_hash(const LertaString *s);
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);
 
 // Binary (binary.c): the same representation as String, without the UTF-8 guarantee. An index out
-// of range throws.
+// of range throws. Only the seed's IR calls these two; the compiler reads the length and bytes in
+// place.
 int64_t lerta_binary_length(const LertaString *binary);
 uint8_t lerta_binary_get(const LertaString *binary, int64_t index);
 // The bytes from `start` up to, but not including, `end`, copied into a new Binary; throws unless

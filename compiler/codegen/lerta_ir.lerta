@@ -147,11 +147,14 @@ export shared_string_constant := (ir: IrBuilder, value: String) ->
     module.define_global symbol, string_definition(value)
   ir.module.named "string #{value}", '@lerta.name', define
 
+# The LLVM type of a LertaString (see runtime/lerta.h) whose bytes have the IR type: the header
+# (reference count and type, none), the length and the bytes.
+export string_layout := (bytes_type: String) -> "{ i64, ptr, i64, #{bytes_type} }"
+
 string_definition := (value: String) ->
   bytes := value.binary
   bytes_type := "[#{bytes.length} x i8]"
-  # The header (reference count and type, none), the length and the bytes.
-  type := "{ i64, ptr, i64, #{bytes_type} }"
+  type := string_layout(bytes_type)
   bytes_init := "#{bytes_type} c\"#{ir_string_bytes(bytes)}\""
   init := "{ i64 #{LERTA_IMMORTAL}, ptr null, i64 #{bytes.length}, #{bytes_init} }"
   "private unnamed_addr constant #{type} #{init}"
