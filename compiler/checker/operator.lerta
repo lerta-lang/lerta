@@ -13,14 +13,12 @@ import holds_float_literal, is_contextual from './literals'
 import where_right_operand from './narrowing'
 import Body from './shared'
 import
-  bool_type, FLOAT_KINDS, format_type, inner_of, INTEGER_KINDS, is_identity_type, is_kind,
-  is_one_of_kinds, members_of, ObjectType, OptionalType, SIGNED_INTEGER_KINDS, string_type, Type,
-  TypeKind
+  bool_type, FLOAT_KINDS, format_type, inner_of, inner_of_expected, INTEGER_KINDS, is_identity_type,
+  is_kind, is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType, OptionalType,
+  SIGNED_INTEGER_KINDS, string_type, Type, TypeKind
 from '../types'
 
-NUMERIC_KINDS: TypeKind[] = [INTEGER_KINDS..., FLOAT_KINDS...]
-
-EQUALITY_KINDS: TypeKind[] = [NUMERIC_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
+EQUALITY_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
 
 # The arithmetic and bitwise operators, which give a value of their operands' type, as a comparison
 # does not.
@@ -76,8 +74,7 @@ export describe_kinds := (kinds: TypeKind[]) ->
 # The expected type, or that inside an expected optional type, if it is of one of the kinds, as a
 # hint for the operands: `1 + 2` is a Float where a `Float?` is expected.
 hint_of := (expected: Type?, kinds: TypeKind[]) ->
-  given := expected ? return nil
-  type := inner_of(given)
+  type := inner_of_expected(expected) ? return nil
   is_one_of_kinds(type, kinds) then type
 
 export type_of_unary := (body: Body, unary: UnaryOperation, expected: Type?): Type ->
@@ -108,11 +105,11 @@ export type_of_coalesce := (body: Body, coalesce: Coalesce) ->
 
 export operand_kinds := (operator: String): TypeKind[] ->
   # Strings order by their compare, and Chars by their numbers.
-  return [NUMERIC_KINDS..., 'Char', 'String'] if is_order_operator(operator)
+  return [NUMBER_KINDS..., 'Char', 'String'] if is_order_operator(operator)
   case operator
-    when '+' then [NUMERIC_KINDS..., 'String', 'Binary']
+    when '+' then [NUMBER_KINDS..., 'String', 'Binary']
     when '%', '&', '|', '^', '<<', '>>' then INTEGER_KINDS
-    else NUMERIC_KINDS
+    else NUMBER_KINDS
 
 # An arithmetic or bitwise operator passes the expected type to its operands; a comparison's operands have their own.
 export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?): Type ->

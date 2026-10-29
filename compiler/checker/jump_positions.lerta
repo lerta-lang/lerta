@@ -39,8 +39,7 @@ visit_statements := (program: ProgramWide, statements: Statement[], jumps: Jumps
   visit_statement program, statement, jumps for statement in statements
 
 visit_statement := (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
-  { may_return, reason, yield_reason } := jumps
-  in_loop := Jumps(may_return, reason, yield_reason, may_leave_loop: true)
+  in_loop := Jumps(jumps..., may_leave_loop: true)
   case statement
     when Declaration then visit(program, statement.value, jumps)
     when Assignment
@@ -103,9 +102,7 @@ visit := (program: ProgramWide, expression: Expression, jumps: Jumps): void ->
         visit_statements program, arm.body, jumps
       visit_statements program, otherwise, jumps if otherwise := expression.otherwise
     when Try
-      { may_return, may_leave_loop, reason } := jumps
-      yield_reason := FINALLY_YIELD_REASON
-      finally_inside := Jumps(may_return, may_leave_loop, reason, yield_reason)
+      finally_inside := Jumps(jumps..., yield_reason: FINALLY_YIELD_REASON)
       inside := expression.finally_body then finally_inside else jumps
       visit_statements program, expression.body, inside
       visit_statements program, clause.body, inside for clause in expression.catches

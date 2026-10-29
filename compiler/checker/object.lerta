@@ -17,8 +17,8 @@ import reject_invalid_instance from './type_validity'
 import needs_context from './type_argument_inference'
 import has_type_parameters, infer, substitute from './type_patterns'
 import
-  format_type, inner_of, is_kind, is_one_of_kinds, ObjectType, OptionalType, record_type,
-  RecordField, RecordType, Type
+  format_type, inner_of, inner_of_expected, is_kind, is_one_of_kinds, ObjectType, OptionalType,
+  record_type, RecordField, RecordType, Type
 from '../types'
 
 # A call to the name of a class or struct, not shadowed by a local or a function, constructs one.
@@ -41,8 +41,7 @@ export struct_construction := (
 
 # The struct that the expected type is, or makes optional.
 export expected_struct := (expected: Type?) ->
-  given := expected ? return nil
-  type := inner_of(given)
+  type := inner_of_expected(expected) ? return nil
   type is ObjectType and type.is_struct then type
 
 # A construction of the struct that is expected (see struct_construction), whose type arguments are
@@ -169,8 +168,7 @@ constructed_instance := (
     name := param.name.name
     args.push
       type_bindings[name] ? fail_cannot_infer(program, call.position, name, type_name, type_name)
-  { name, symbol, module, is_struct } := declared
-  type := ObjectType(name, symbol, module, is_struct, args)
+  type := ObjectType(declared..., args)
   reject_invalid_instance program, body.resolver.module_index, type, call.position
   type
 
@@ -284,8 +282,7 @@ spread_record := (body: Body, record: RecordLiteral, spread: Comprehension) ->
   RecordLiteral fields: [copied..., record.fields...], position: record.position
 
 expected_record_fields := (expected: Type?): RecordField[] ->
-  type := expected ? return []
-  record := inner_of(type)
+  record := inner_of_expected(expected) ? return []
   record is RecordType then record.fields else []
 
 # A construction's arguments are named, or names alone (see construction_arguments).
