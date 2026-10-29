@@ -278,8 +278,8 @@ dump_llvm_check := -> Check(name: 'lerta dump-llvm prints the IR and leaves no f
   dumped := await run_in_new_dir(compiler, ['dump-llvm', hello])
   ir := dumped.result.stdout.text()!
   ir_reasons: String[]
-  ir_reasons.push 'no lerta_main in the IR' if not ir.contains('define external void @lerta_main()')
-  ir_reasons.push 'target attributes in the IR' if ir.contains('attributes #')
+  ir_reasons.push 'no lerta_main in the IR' if 'define external void @lerta_main()' not in ir
+  ir_reasons.push 'target attributes in the IR' if 'attributes #' in ir
   [
     expect_status(0, dumped.result.status)...
     ir_reasons...
@@ -301,17 +301,17 @@ dump_seldom_check := ->
       lines.append dumped.result.stdout.text()!.split("\n")
     weights := '!prof !{!"branch_weights", i32 1, i32 2000}'
     targets := ['label %unwind.', 'label %raise.', 'label %generator.reject.']
-    to := (line: String, target: String) -> line.starts_with('  br i1 ') and line.contains(target)
+    to := (line: String, target: String) -> line.starts_with('  br i1 ') and target in line
     for target in targets
       branches := [line for line in lines when to(line, target)]
       reasons.push "no branch to #{target}" if branches.is_empty()
-      reasons.append ["no weights: #{line}" for line in branches when not line.contains(weights)]
+      reasons.append ["no weights: #{line}" for line in branches when weights not in line]
     reasons
 
 # The lines of the body of the program's function with the name, among the lines of the IR, or nil
 # where the module defines no such function; a thunk that passes it as a value is not it.
 function_body := (lines: String[], name: String): String[]? ->
-  is_definition := (line: String) -> line.starts_with('define ') and line.contains('@"lerta.fn.')
+  is_definition := (line: String) -> line.starts_with('define ') and '@"lerta.fn.' in line
   start := lines.find_index((line) -> is_definition(line) and line.contains(".#{name}\"("))
   return nil if start == nil
   var last = start
@@ -343,14 +343,14 @@ dump_unchecked_methods_check := ->
       'float_quotient'
     checked := ['joined', 'bytes_joined']
     reads_exception := (body: String[]) ->
-      body.any (line) -> line.contains('load ptr, ptr @lerta_exception')
+      body.any (line) -> 'load ptr, ptr @lerta_exception' in line
     reasons := expect_status(0, dumped.result.status)
     for name in [unchecked..., checked...]
       body := function_body(lines, name)
       if body == nil
         reasons.push "no function #{name}"
         continue
-      expected := checked.contains(name)
+      expected := name in checked
       if reads_exception(body) != expected
         reasons.push "#{name} #{expected then 'does not read' else 'reads'} the pending exception"
     reasons
@@ -405,13 +405,13 @@ dump_float_ranges_check := ->
       if body == nil
         reasons.push "no function #{name}"
         continue
-      expected := checked.contains(name)
-      checks := body.any((line) -> line.contains(' = fcmp uno '))
+      expected := name in checked
+      checks := body.any((line) -> ' = fcmp uno ' in line)
       if checks != expected
         reasons.push "#{name} #{expected then 'does not check' else 'checks'} for NaN"
     # An operation of no tree checks alone: the division of calls checks, the subtraction does not.
     spread := function_body(lines, 'spread') ? return [reasons..., 'no function spread']
-    count := spread.filter((line) -> line.contains(' = fcmp uno ')).count()
+    count := spread.filter((line) -> ' = fcmp uno ' in line).count()
     reasons.push "spread checks for NaN #{count} times, not once" if count != 1
     reasons
 
@@ -433,8 +433,7 @@ dump_item_tag_check := -> Check(name: 'lerta dump-llvm tags the loads and stores
   return ["no node of clang's root of type-based alias analysis, #{root}"] if not has_root
   types := ['i8', 'i32', 'float', 'i64', '{ ptr, ptr }']
   accesses := [["load #{type}, ptr" for type in types]..., ["store #{type} " for type in types]...]
-  is_tagged := (access: String) ->
-    lines.any (line) -> line.contains(access) and line.ends_with(tagged)
+  is_tagged := (access: String) -> lines.any((line) -> access in line and line.ends_with(tagged))
   [
     expect_status(0, dumped.result.status)...
     ["no #{access} with the tag" for access in accesses when not is_tagged(access)]...
@@ -472,7 +471,7 @@ dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in sy
     '@"lerta.fn.std:builtins/text.print<String>"'
   [
     expect_status(0, dumped.result.status)...
-    ["no #{symbol}" for symbol in symbols when not ir.contains(symbol)]...
+    ["no #{symbol}" for symbol in symbols when symbol not in ir]...
     expect_left('files left', [], dumped.left)...
     expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
   ]
@@ -566,7 +565,7 @@ source_lines_build_check := (flags: String[]) ->
           [
             "no row of line #{line} in the line table"
             for line in expected_lines
-            when not rows.contains(line)
+            when line not in rows
           ]...
           (rows.is_empty() then ['the line table has no rows'] else no_reasons)...
         ])...

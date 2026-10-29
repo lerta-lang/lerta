@@ -94,15 +94,12 @@ completion_names_check := ->
     words := [item.label for item in items when item.kind == 14]
     keywords := await compiler_keywords()
     expected_names := ['local', 'p', 'top', 'Point']
-    missing_names := [name for name in expected_names when not labels.contains(name)]
+    missing_names := [name for name in expected_names when name not in labels]
     [
       expect_status(0, ran.status)...
       compare_text('keywords', keywords.join(' '), words.join(' '))...
       ["missing completion name #{name}" for name in missing_names]...
-      check_reason(
-        not labels.contains('later')
-        'completion exposed a local declared after the cursor'
-      )...
+      check_reason('later' not in labels, 'completion exposed a local declared after the cursor')...
       compare_text('response order', '0 1 end', response_ids(output).join(' '))...
     ]
 
@@ -452,12 +449,12 @@ completion_coverage_check := ->
         if expected.join(' ') != labels.join(' ')
           reasons.push "unexpected completion labels for #{each.here}: #{labels.join(' ')}"
       for label in each.holds
-        reasons.push "missing completion #{label} for #{each.here}" if not labels.contains(label)
+        reasons.push "missing completion #{label} for #{each.here}" if label not in labels
       for label in each.lacks
-        reasons.push "unexpected completion #{label} for #{each.here}" if labels.contains(label)
+        reasons.push "unexpected completion #{label} for #{each.here}" if label in labels
       seen: String[]
       for label in labels
-        if seen.contains(label)
+        if label in seen
           reasons.push "duplicate completion label #{label} for #{each.here}"
         else
           seen.push label
@@ -468,9 +465,8 @@ completion_coverage_check := ->
       "local 6 String\nf 3 null\nPoint 22 null\nCounter 7 null\nColor 13 null\nconst 14 null"
     expected_ids := ['0', ["#{10 + i}" for i in 0...cases.length]..., '97', '98', '99', 'end']
     formatting_response := response_body(output, 98)
-    preserved := formatting_response.contains('print lo\n') and not formatting_response.contains(
-      '__lerta_completion__'
-    )
+    preserved :=
+      'print lo\n' in formatting_response and '__lerta_completion__' not in formatting_response
     [
       expect_status(0, ran.status)...
       reasons...

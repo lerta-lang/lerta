@@ -28,7 +28,7 @@ export class SourceText
   # Whether a comment is on a line from `first` through `last`.
   has_comment = (first: Int, last: Int) ->
     for line in first...(last + 1)
-      return true if @comment_lines.contains(line)
+      return true if line in @comment_lines
     false
 
   # Whether a comment is in the indented block that follows the head that starts with the token at
@@ -113,7 +113,7 @@ export class SourceText
   # The line before that of the first token after the line, or the last line.
   line_before_next = (line: Int) ->
     for token in @tokens
-      continue if token.line <= line or LAYOUT_KINDS.contains(token.kind)
+      continue if token.line <= line or token.kind in LAYOUT_KINDS
       return token.line - 1
     @lines.length
 
@@ -156,7 +156,7 @@ index_tokens := (tokens: Token[]) ->
   indexes: Map<Position, Int>
   for token, index in tokens
     position := token.position()
-    indexes[position] = index if not LAYOUT_KINDS.contains(token.kind)
+    indexes[position] = index if token.kind not in LAYOUT_KINDS
   indexes
 
 LAYOUT_KINDS: TokenKind[] = [NEWLINE, INDENT, DEDENT, EOF]
@@ -173,18 +173,18 @@ text_of := (comment: Comment, lines: String[]) ->
 lines_marked := (lines: String[], tokens: Token[], comments: Comment[]) ->
   token_lines: Set<Int>
   for token in tokens
-    token_lines.add token.line if not LAYOUT_KINDS.contains(token.kind)
+    token_lines.add token.line if token.kind not in LAYOUT_KINDS
   marked: Set<Int>
   mark := (first: Int, last: Int) ->
     for line in first...(last + 1)
-      marked.add line if token_lines.contains(line)
+      marked.add line if line in token_lines
   var off_line: Int?
   for comment in comments
     text := text_of(comment, lines)
     if text == '# fmt: skip'
       if comment.own_line
         var line = comment.line + 1
-        line += 1 while line <= lines.length and not token_lines.contains(line)
+        line += 1 while line <= lines.length and line not in token_lines
         marked.add line
       else
         marked.add comment.line

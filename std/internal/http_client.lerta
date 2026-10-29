@@ -64,7 +64,7 @@ export class Client
       try
         return await @send(socket, request)
       catch error: NoAnswer
-        throw IOError(error.message) if not RESENDABLE.contains(request.method)
+        throw IOError(error.message) if request.method not in RESENDABLE
     try
       await @send(await connect_tcp(target.host, target.port), request)
     catch error: NoAnswer
@@ -201,7 +201,7 @@ parse_url := (url: String) ->
     break if '/?#'.contains(c.to_string())
     authority += c
   (path, _fragment) := split_or_whole(rest.without_prefix(authority)!, '#')
-  throw not_url() if authority.contains('@')
+  throw not_url() if '@' in authority
   (host, port) := host_and_port(authority) ? throw not_url()
   Target authority, host, port, path: path.starts_with('/') then path else "/#{path}"
 
@@ -231,8 +231,7 @@ request_bytes := (request: Outgoing) ->
   for (name, value) in request.headers.fields
     head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name.to_lower())
   return (head + "transfer-encoding: chunked\r\n\r\n").binary if body is Reader
-  if not body.is_empty() or SENDING_BODY.contains(method)
-    head += "content-length: #{body.length}\r\n"
+  head += "content-length: #{body.length}\r\n" if not body.is_empty() or method in SENDING_BODY
   (head + "\r\n").binary + body
 
 # The fields that the client writes itself, as they tell where the request goes and ends.
@@ -364,7 +363,7 @@ class BodyChunks
 # leaves out the credentials, which were meant for the first.
 redirected := (request: Outgoing, response: Response) ->
   { status } := response
-  return nil if not REDIRECTS.contains(status)
+  return nil if status not in REDIRECTS
   location := response.headers.get('location') ? return nil
   target :=
     try

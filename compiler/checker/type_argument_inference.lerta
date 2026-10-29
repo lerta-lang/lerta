@@ -38,12 +38,12 @@ export receiver_type_arguments := (
   body: Body, generic: GenericFunction, receiver: Type, at: Position
 ) ->
   bindings: Map<String, Type>
-  bind := (name: String, type: Type) -> bindings[name] = type if not bindings.contains(name)
+  bind := (name: String, type: Type) -> bindings[name] = type if name not in bindings
   pattern := generic.receiver!.type
   infer pattern, receiver, bind
   # The receiver of an extend of an interface is Self, the first type parameter.
   infer_through_members body, generic.bounds[0]!, receiver, at, bind if pattern is TypeParameterType
-  return nil if generic.type_params.any((param) -> not bindings.contains(param.name.name))
+  return nil if generic.type_params.any((param) -> param.name.name not in bindings)
   [bindings[param.name.name]! for param in generic.type_params]
 
 # The call's arguments, as it passes them, are as many as the generic has parameters.
@@ -61,7 +61,7 @@ export infer_type_arguments := (
       # nil and never tell nothing about the type.
       return if is_kind(bound_type, 'nil') or is_kind(bound_type, 'never')
       if bound := bindings[name]
-        return if written.contains(name) or not widens(bound.type, bound_type)
+        return if name in written or not widens(bound.type, bound_type)
       bindings[name] = { at, type: bound_type }
   # A value converts to an interface type, whose type arguments its members may give.
   bind_from := (pattern: Type, type: Type, at: Position) ->

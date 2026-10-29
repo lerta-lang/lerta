@@ -167,7 +167,7 @@ class Server
 
   initialize = (request: Request<InitializeParams>) ->
     encodings := request.params.capabilities.general?.position_encodings ? []
-    @encoding = UTF32 if encodings.contains('utf-32')
+    @encoding = UTF32 if 'utf-32' in encodings
     encoding := @encoding == UTF32 then 'utf-32' else 'utf-16'
     capabilities := ServerCapabilities
       position_encoding: encoding
@@ -258,12 +258,12 @@ class Server
   program_of = (path: String) ->
     return own if own := @programs[path]
     for (doc, files) in @found.entries()
-      return @programs[doc] if files.contains(path) and @programs.contains(doc)
+      return @programs[doc] if path in files and doc in @programs
     nil
 
   # The other open documents whose programs hold the document at the path.
   importers = (path: String) ->
-    [doc for (doc, files) in @found.entries() when doc != path and files.contains(path)]
+    [doc for (doc, files) in @found.entries() when doc != path and path in files]
 
   # Checks the program whose entry module is the open document at the path, and publishes the
   # diagnostics of the files of its program, as of this check and of the last one. Its program is
@@ -274,7 +274,7 @@ class Server
     found := checked.by_path
     @found[path] = found
     @programs[path] = program if program := checked.program
-    files := [file for file in before when not found.contains(file)]
+    files := [file for file in before when file not in found]
     files.append found.keys().to_array()
     await @publish(file) for file in files
 
@@ -283,7 +283,7 @@ class Server
     diagnostics: LspDiagnostic[]
     for found in @found.values()
       for each in found[file] ? []
-        diagnostics.push each if not diagnostics.contains(each)
+        diagnostics.push each if each not in diagnostics
     params := PublishDiagnosticsParams(uri: uri_of_path(file), diagnostics: diagnostics)
     await notify('textDocument/publishDiagnostics', params)
 

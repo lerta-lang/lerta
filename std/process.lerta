@@ -43,7 +43,7 @@ export struct Exit
   signal: Int?
 
 # The system reads a text only up to a NUL byte, so none that it is given may hold one.
-holds_nul := (text: String) -> text.contains("\0")
+holds_nul := (text: String) -> "\0" in text
 
 # POSIX systems keep only 8 bits of an exit code, so a code outside 0 to 255 would be misread.
 export exit := (code: Int) ->
@@ -289,7 +289,7 @@ check_options := (options: RunOptions) ->
     throw ValueError("a negative limit of output: #{options.output_limit!}")
   set_names := options.env.keys().to_array()
   for name in [set_names..., options.unset_env...]
-    if name.is_empty() or name.contains('=') or holds_nul(name)
+    if name.is_empty() or '=' in name or holds_nul(name)
       throw ValueError("not a name of an environment variable: '#{name}'")
   for name, i in set_names
     if set_names.find_index((each) -> same_env_name(each.binary, name.binary))! < i
@@ -300,7 +300,7 @@ check_options := (options: RunOptions) ->
 
 # No variable's name holds `=`, which the system would take as the end of the name, nor a NUL byte.
 export env := (name: String) ->
-  return nil if name.contains('=') or holds_nul(name)
+  return nil if '=' in name or holds_nul(name)
   value := lerta_env(name)
   return nil if not value
   value.text() ? throw ValueError("the environment variable #{name} is not valid UTF-8")

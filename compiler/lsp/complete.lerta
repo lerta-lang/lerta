@@ -86,7 +86,7 @@ export completion_items := (
   outer := [
     item
     for item in module_items(program, shared, found.in_top_level)
-    when not found.locals.contains(item.label)
+    when item.label not in found.locals
   ]
   [locals..., outer..., keyword_items()...]
 
@@ -145,14 +145,13 @@ local_items := (locals: Map<String, Type>) ->
 # sees the top-level values that it has declared, which are among its locals, and no others yet.
 module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
   own := names_of(program, shared)
-  declared_later := (item: CompletionItem) ->
-    in_top_level and shared.top_level.locals.contains(item.label)
+  declared_later := (item: CompletionItem) -> in_top_level and item.label in shared.top_level.locals
   items := [item for item in own when not declared_later(item)]
   items.push { label: name, kind: MODULE, detail: nil } for name in shared.imports.modules.keys()
   # An imported name is as its module declares it, under the name it is imported by; a name of a
   # module imported as a name, `m.x`, is no name of its own.
   for (name, imported) in shared.imports.names.entries()
-    continue if name.contains('.') or items.any((each) -> each.label == name)
+    continue if '.' in name or items.any((each) -> each.label == name)
     source := imported.source
     item :=
       case source
@@ -192,7 +191,7 @@ names_of := (program: ProgramWide, shared: Shared) ->
     items.push { label: name, kind: VARIABLE, detail: format_type(local.type) }
   # A method's entry is named by its receiver too, as `Point.sum`.
   for (name, entry) in shared.functions.entries.entries()
-    continue if name.contains('.')
+    continue if '.' in name
     items.push { label: name, kind: FUNCTION, detail: formatted(entry.type) }
   for generic in shared.generics
     items.push { label: generic.name.name, kind: FUNCTION, detail: nil } if generic.receiver == nil

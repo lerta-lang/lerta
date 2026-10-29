@@ -167,7 +167,7 @@ forget_assigned := (analysis: Analysis, expressions: Expression[]) ->
   forget_locals analysis, assigned_in_blocks(analysis, [nodes])
 
 follow := (analysis: Analysis, name: Identifier, range: Range) ->
-  return if analysis.facts.shared_vars.contains(name) or analysis.top_level_values.contains(name)
+  return if name in analysis.facts.shared_vars or name in analysis.top_level_values
   analysis.ranges[name] = range
 
 # The declaration of the followed local that the target names, if it is one: a local of the
@@ -176,8 +176,7 @@ followed_local := (analysis: Analysis, target: Expression) ->
   return nil if target is not Identifier
   return nil if analysis.facts.references[target] is not ScopedLocal
   local := analysis.facts.local_declarations[target] ? return nil
-  followed :=
-    not analysis.facts.shared_vars.contains(local) and not analysis.top_level_values.contains(local)
+  followed := local not in analysis.facts.shared_vars and local not in analysis.top_level_values
   followed then local
 
 is_float_node := (analysis: Analysis, expression: Expression) ->
@@ -256,7 +255,7 @@ and_found := (analysis: Analysis, binary: BinaryOperation) ->
 binary_found := (analysis: Analysis, binary: BinaryOperation): Found ->
   left := found_of(analysis, binary.left)
   right := found_of(analysis, binary.right)
-  is_float := is_float_node(analysis, binary) and not analysis.facts.operator_calls.contains(binary)
+  is_float := is_float_node(analysis, binary) and binary not in analysis.facts.operator_calls
   return { range: UNKNOWN, nan_free: true } if not is_float
   # An operation whose range is not followed may give a NaN.
   square := is_square(analysis, binary)

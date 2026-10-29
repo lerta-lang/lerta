@@ -84,13 +84,13 @@ add_edges := (
 ) ->
   { params, module_index } := declaration
   shared := program.shared[module_index]
-  is_parameter := (name: String) -> params.contains(name) or method_params.contains(name)
+  is_parameter := (name: String) -> name in params or name in method_params
   for named in named_types_in(written)
     continue if named.args.is_empty() or is_parameter(named.name)
     held := generic_symbol(named_type(shared, named.name)) ? continue
     for arg, i in named.args
       for param, index in params
-        continue if method_params.contains(param) or named_in(arg, param).is_empty()
+        continue if param in method_params or named_in(arg, param).is_empty()
         edges.push {
           module_index
           from: vertex(declaration.symbol, index)
@@ -123,7 +123,7 @@ components_of := (edges: Edge[]) ->
     else
       search.successors[edge.from] = [edge.to]
   for edge in edges
-    visit search, edge.from if not search.order.contains(edge.from)
+    visit search, edge.from if edge.from not in search.order
   search.component
 
 class Search
@@ -142,10 +142,10 @@ visit := (search: Search, vertex: String): void ->
   search.stack.push vertex
   search.on_stack.add vertex
   for next in search.successors[vertex] ? []
-    if not search.order.contains(next)
+    if next not in search.order
       visit search, next
       lower search, vertex, search.low[next]!
-    else if search.on_stack.contains(next)
+    else if next in search.on_stack
       lower search, vertex, search.order[next]!
   return if search.low[vertex] != number
   while true

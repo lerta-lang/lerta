@@ -67,7 +67,7 @@ directory_tree := (dir: String, excluded: String[]): String[] ->
   ]
   tree := [dir]
   for path in subdirs
-    continue if excluded.contains(path)
+    continue if path in excluded
     tree.push path for path in directory_tree(path, excluded)
   tree
 
@@ -95,7 +95,7 @@ suites := (skipped: String[]) ->
     (
       Suite(source_dir: dir, expected_dir: dir, extensions: EXPECTED_EXTENSIONS)
       for dir in test_dirs
-      when not skipped.contains(dir)
+      when dir not in skipped
     )...
     (self_check_dir then no_suites else [examples])...
   ]
@@ -133,7 +133,7 @@ stray_files := (suite: Suite) ->
   expected_files: String[]
   for extension in EXPECTED_EXTENSIONS
     for name in names_with_extension(suite.expected_dir, extension)
-      if not sources.contains(name) or not suite.extensions.contains(extension)
+      if name not in sources or extension not in suite.extensions
         expected_files.push "#{suite.expected_dir}/#{name}.#{extension}"
   misplaced_sources: String[] =
     if suite.expected_dir == suite.source_dir
@@ -268,7 +268,7 @@ run_test := (test: TestCase, optimize: Bool): Promise<String[]?> ->
   pending := compile_and_run(test, optimize)
   unoptimized_runs[test.label] = pending if not optimize
   outcome := await pending
-  expects_failure := expected.contains('err')
+  expects_failure := 'err' in expected
   failed := outcome.exit?.code != 0
   expectation := expects_failure then 'fail' else 'succeed'
   status_reasons: String[] =
