@@ -1,12 +1,12 @@
 # Builds a program: has clang compile the IR that codegen generates for it, written to a temporary
 # directory, which is removed afterwards, and link it with the runtime's cached objects.
-import is_file, make_temp_dir, remove_tree, write_file from 'std:io'
+import is_file, make_temp_dir, open, remove_tree from 'std:io'
 import exit, run from 'std:process'
 import ProgramWide from './checker/shared'
 import run_clang_jobs from './clang_jobs'
 import build_flags, executable_suffix, lto_cache_flags from './clang_flags'
 import generate from './codegen/codegen'
-import check_program from './compile'
+import check_program, write_ir from './compile'
 import CompileError from './errors'
 import basename, is_absolute, join from './paths'
 import target_system from './libuv'
@@ -126,9 +126,13 @@ link_path := (cwd: String, path: String) -> is_absolute(path) then path else "#{
 
 # Has clang compile the IR of each module, written to `dir`, into an object file there, as many at
 # once as there are CPUs; nil if it fails for any.
-compile_modules := (modules: String[], flags: String[], dir: String) ->
+compile_modules := (modules: String[][], flags: String[], dir: String) ->
   paths := [join(dir, "module#{i}") for _, i in modules]
-  await write_file("#{path}.ll", text.binary) for (path, text) in paths.zip(modules)
+  for (path, lines) in paths.zip(modules)
+    { writer } := open("#{path}.ll", WRITE)
+    await write_ir(lines, writer)
+    await writer.flush()
+    writer.end()
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
   job := (path: String) -> ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]
   jobs := [job(path) for path in paths]

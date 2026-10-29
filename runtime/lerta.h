@@ -340,6 +340,12 @@ LertaPromise *lerta_read_file_async(const LertaString *path);
 LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data);
 LertaPromise *lerta_remove_tree_async(const LertaString *path);
 LertaPromise *lerta_copy_file_async(const LertaString *from, const LertaString *to);
+// A file that std:io's open opens for writing, by its address (see runtime/file.c).
+int64_t lerta_open_for_writing(const LertaString *path);
+void lerta_open_file_check(int64_t pointer);
+LertaPromise *lerta_open_file_write(int64_t pointer, const LertaString *data);
+void lerta_open_file_end(int64_t pointer, const LertaString *rest);
+void lerta_open_file_free(int64_t pointer, const LertaString *rest);
 bool lerta_is_file(const LertaString *path);
 bool lerta_is_dir(const LertaString *path);
 // Whether the path names something, through symbolic links; if it does, its kind (0 a file, 1 a

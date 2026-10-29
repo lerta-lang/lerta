@@ -15,6 +15,11 @@ extern lerta_rename: (String, String) -> void
 extern lerta_make_link: (String, String) -> void
 extern lerta_copy_file_async: (String, String) -> Promise
 extern lerta_stat_fields: (String, Int[]) -> Bool
+extern lerta_open_for_writing: (String) -> Int
+extern lerta_open_file_check: (Int) -> void
+extern lerta_open_file_write: (Int, Binary) -> Promise
+extern lerta_open_file_end: (Int, Binary) -> void
+extern lerta_open_file_free: (Int, Binary) -> void
 
 # A path that holds a NUL byte names nothing, as the system reads a path only up to its first; the
 # runtime takes none.
@@ -35,6 +40,68 @@ export read_text := (path: String) -> (await read_file(path)).text()
 export write_file := (path: String, data: Binary) ->
   require_names 'cannot write file: ', path
   await lerta_write_file_async(path, data)
+
+# How open opens a file: so far only for writing, emptied or made.
+export enum OpenMode
+  WRITE
+
+# A file that open has opened (see docs/reference/std.md#stdio), closed once nothing holds it.
+export struct File
+  writer: FileWriter
+
+# Opening is one system call, so it does not await (see docs/roadmap/runtime.md#concurrency).
+export open := (path: String, mode: OpenMode) ->
+  require_names 'cannot open file: ', path
+  case mode
+    when WRITE then File(writer: FileWriter(pointer: lerta_open_for_writing(path)))
+
+# As much as stdout's buffer holds before a write waits (see runtime/output.c).
+FILE_BUFFER_SIZE := 65536
+
+# A file's Writer, which gathers what is written and writes it out on the event loop once it holds
+# FILE_BUFFER_SIZE bytes, or when flushed. Its end writes out the rest on the event loop and closes
+# the file after; what is left when it is freed, it writes out at once. A write out that fails fails
+# every later write and flush (see lerta_open_file_check).
+class FileWriter
+  pointer: Int
+  var buffer = ''.binary
+  ended = false
+  # The write out on the event loop, one at a time, which a flush waits for before its own.
+  writing: Promise? = nil
+
+  write = (data: String | Binary) ->
+    @check_open()
+    @buffer += bytes_of(data)
+    await @flush() if @buffer.length >= FILE_BUFFER_SIZE
+
+  end = ->
+    return if @ended
+    @ended = true
+    lerta_open_file_end @pointer, @buffer
+    @buffer = ''.binary
+
+  # Resolves once all that was written before it is in the file.
+  flush = ->
+    @check_open()
+    while true
+      if writing := @writing
+        await writing
+        continue
+      lerta_open_file_check @pointer
+      return if @buffer.is_empty()
+      bytes := @buffer
+      @buffer = ''.binary
+      @writing = lerta_open_file_write(@pointer, bytes)
+      try
+        await @writing!
+      finally
+        @writing = nil
+
+  check_open = ->
+    throw IOError(message: 'cannot write to a file that has ended') if @ended
+    lerta_open_file_check @pointer
+
+  deinit = -> lerta_open_file_free(@pointer, @buffer)
 
 export is_file := (path: String) -> not names_nothing(path) and lerta_is_file(path)
 

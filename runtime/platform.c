@@ -43,15 +43,17 @@ uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
   return contents;
 }
 
-static bool write_all(uv_file file, const uint8_t *bytes, int64_t length) {
+// From `offset`, or from the file's position if it is -1.
+static bool write_all(uv_file file, int64_t offset, const uint8_t *bytes, int64_t length) {
   while (length > 0) {
     uv_buf_t chunk = uv_buf_init((char *)bytes, request_size(length));
     uv_fs_t request;
-    int64_t written = uv_fs_write(NULL, &request, file, &chunk, 1, -1, NULL);
+    int64_t written = uv_fs_write(NULL, &request, file, &chunk, 1, offset, NULL);
     uv_fs_req_cleanup(&request);
     if (written <= 0) return false;
     bytes += written;
     length -= written;
+    if (offset >= 0) offset += written;
   }
   return true;
 }
@@ -60,10 +62,20 @@ bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length)
   int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_TRUNC;
   uv_file file = open_file(path, flags, 0644);
   if (file < 0) return false;
-  bool written = write_all(file, bytes, length);
+  bool written = write_all(file, -1, bytes, length);
   close_file(file);
   return written;
 }
+
+int64_t lerta_os_open_for_writing(const char *path) {
+  return open_file(path, UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_TRUNC, 0644);
+}
+
+bool lerta_os_write_at(int64_t file, int64_t offset, const uint8_t *bytes, int64_t length) {
+  return write_all((uv_file)file, offset, bytes, length);
+}
+
+void lerta_os_close(int64_t file) { close_file((uv_file)file); }
 
 // The libuv error of the stat, 0 if it succeeds, with what it found in `found`.
 static int stat_path(const char *path, uv_stat_t *found) {

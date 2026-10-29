@@ -26,6 +26,7 @@ The planned design of modules, FFI, the standard library and tools.
   - A promise that `server.close()` settles once the connections it ends have ended (graceful shutdown); an accept that fails while the server is open, as for too many open files, retried after a pause rather than ending the program.
   - A `Date` field, and `Expect: 100-continue`.
   - Later: TLS, through that of std:net, for the server and for `fetch`; a URL module for the parts of `request.url`, which `fetch` would parse its URLs with; a cookie jar that a `Client` may be given, which stores the cookies of `Set-Cookie` and sends them with the requests they match; and HTTP/2.
+- In [std:io](../reference/std.md#stdio), the other modes of `open`: `READ`, whose `File` has a `reader`, a `Reader`, and `APPEND`, whose writes go after what the file holds. Later, the position of a stream, and a mode that reads and writes at the places it is given, as a database does, through methods of the `File` of their own.
 - `make_link` of [std:io](../reference/std.md#stdio) followed on Windows itself: Wine, which the tests run under, makes the links but does not follow them.
 - The `Exit` of [std:process](../reference/std.md#stdprocess) of a Windows program that an exception or `TerminateProcess` ended, tested.
 

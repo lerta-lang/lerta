@@ -5,7 +5,7 @@ import dump_ast from './ast_dump'
 import build, build_and_run, BuildRequest from './build'
 import dump_checked from './checked_dump'
 import executable_suffix from './clang_flags'
-import check_program, generate_ir from './compile'
+import check_program, generate_ir, write_ir from './compile'
 import CompileError from './errors'
 import format_command from './format/command'
 import lsp_command from './lsp/server'
@@ -32,6 +32,11 @@ is_value := (arg: String) -> not arg.starts_with('-')
 fail_usage := ->
   print_error USAGE
   exit 2
+
+# Prints the IR of the source file, line by line, as it is too large to make one String of.
+run_dump_ir := (args: String[]) ->
+  fail_usage() if args.length != 1 or not is_value(args[0])
+  await write_ir(await generate_ir(args[0], false), stdout)
 
 # Prints what `dump` makes of the source file.
 run_dump := (args: String[], dump: (String) -> Promise<String>) ->
@@ -174,7 +179,7 @@ try
     when 'dump-tokens' then await run_dump(args, dump_file_tokens)
     when 'dump-ast' then await run_dump(args, dump_file_ast)
     when 'dump-checked' then await run_dump(args, dump_program_checked)
-    when 'dump-llvm' then await run_dump(args, (path) -> generate_ir(path, false))
+    when 'dump-llvm' then await run_dump_ir(args)
     else fail_usage()
 catch error: CompileError
   print_error error.message

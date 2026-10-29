@@ -194,6 +194,11 @@ uint8_t *lerta_os_read_file(const char *path, int64_t *length);
 #define LERTA_STDIN_MIN_READ 6
 int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size);
 bool lerta_os_write_file(const char *path, const uint8_t *bytes, int64_t length);
+// A file opened for writing, emptied or made, as lerta_os_write_file opens it, or a negative number
+// on failure; the writes give their places in it, so that two at once do not race for the position.
+int64_t lerta_os_open_for_writing(const char *path);
+bool lerta_os_write_at(int64_t file, int64_t offset, const uint8_t *bytes, int64_t length);
+void lerta_os_close(int64_t file);
 // What lerta_os_stat writes of what a path names: its kind, its size in bytes and the time it was
 // last modified, in nanoseconds since the Unix epoch.
 enum { LERTA_FILE_KIND, LERTA_DIR_KIND, LERTA_OTHER_KIND };

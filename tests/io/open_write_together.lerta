@@ -1,0 +1,19 @@
+# Writes that wait together, each filling the buffer, keep their order; after a flush, an end closes
+# the file, a second end does nothing, and later writes and flushes fail.
+import all from 'std:async'
+import open, read_text from 'std:io'
+
+file := open('together.txt', WRITE)
+{ writer } := file
+parts := [c.to_string().repeat(70000) for c in 'abc']
+await all([writer.write(part) for part in parts])
+await writer.flush()
+writer.end()
+writer.end()
+text := (await read_text('together.txt'))!
+print text == parts.join('')
+for attempt in [-> writer.write('more'), -> writer.flush()]
+  try
+    await attempt()
+  catch error: IOError
+    print error.message
