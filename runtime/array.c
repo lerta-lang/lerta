@@ -14,9 +14,13 @@ int64_t lerta_item_size(LertaItemKind kind) {
   }
 }
 
+static bool holds_references(LertaItemKind kind) {
+  return kind == LERTA_REFERENCE_ITEMS || kind == LERTA_INTERFACE_ITEMS;
+}
+
 // The reference an item holds is its first 8 bytes: a reference, or an interface value's data.
 static void *reference_of(LertaItemKind kind, const void *item) {
-  if (kind != LERTA_REFERENCE_ITEMS && kind != LERTA_INTERFACE_ITEMS) return NULL;
+  if (!holds_references(kind)) return NULL;
   void *reference;
   memcpy(&reference, item, sizeof reference);
   return reference;
@@ -57,6 +61,9 @@ int64_t lerta_word_item(const LertaArray *array, int64_t index) {
 
 static inline void visit_array(void *object, LertaVisitor visitor) {
   LertaArray *array = object;
+  // Items that hold no reference would each be visited as NULL; the C compiler does not always drop
+  // that loop, which costs a pass over a long array of numbers.
+  if (!holds_references(array->item_kind)) return;
   for (int64_t i = 0; i < array->length; i++) {
     lerta_visit_item(array->item_kind, item_at(array, i), visitor);
   }
