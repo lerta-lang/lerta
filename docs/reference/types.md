@@ -87,7 +87,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in a `String[]`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`, and `s.ends_with(suffix)` whether it ends with those of `suffix`.
 - `s.without_prefix(prefix)` gives what follows `prefix` in `s`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. `s.without_suffix(suffix)` gives what comes before `suffix`, or nil.
-- `s.contains(part)` tells whether the bytes of `part` occur in `s`; every `String` contains the empty one.
+- `s.contains(part)` tells whether the bytes of `part` occur in `s`; every `String` contains the empty one. A `Char` is taken as the `String` of it: `'abc'.contains(c)`.
 - `s.is_digits()` tells whether `s` is one or more ASCII digits, `0` to `9`: no sign, and not empty.
 - `s.split_once(separator)` gives what comes before the first occurrence of `separator` and what comes after it, as a `(String, String)`, or nil if there is none: `'k = v = w'.split_once(' = ')` is `('k', 'v = w')`; an empty `separator` throws a `ValueError`, as it does for `split`.
 - `s.replace(part, by)` gives `s` with each occurrence of `part`, from the start and without overlapping, replaced by `by`; an empty `part` throws a `ValueError`.
@@ -168,7 +168,7 @@ print ages['ann'] ? 0
 - `{ k: v, ... }` makes a map (over several lines too, as an array). Its types come from the expected type if there is one, otherwise the key type from the keys and the value type from the values, each as an [array](#array)'s item type comes from its items (`{ 'a': 1, 'b': 2.5 }` is a `Map<String, Float>`); of entries with the same key, the last one wins. Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed: to use a name's value as a key, put it in parentheses, `{ (k): v }`. The empty map is `Map<K, V>()`, or `Map()` where a map type is expected.
 - `m[k]` is the value of the key `k`, or nil if there is none, so its type is `V?`. `m[k] = v` adds the key or replaces its value. `+=` and so on do not apply to it, since the key may be missing.
 - `m[k, default: d]` is the value of `k`, of type `V`: where `k` is missing, `d` is evaluated, then and only then, and the map holds it under `k` first, even where the index is only read. So `counts[word, default: 0] += 1` counts and `groups[key, default: []].push(item)` groups, each array made for its own key. To read a value without changing the map, write `m[k] ? d`. `+=` and so on read the value, or `d`, and add the key once the result is written, so that one that throws, as an overflow, leaves the map as it was; `m[k, default: d] = v` is an error, as the default would go unused.
-- `m.length` is the number of keys, `m.has(k)` tells whether `k` is there and `m.remove(k)` removes it, if it is there.
+- `m.length` is the number of keys, `m.has(k)` and `m.contains(k)` tell whether `k` is there and `m.remove(k)` removes it, if it is there.
 - `m.entries()` is an `Iter<(K, V)>` of the keys and their values as [tuples](#tuples), `for (key, value) in m.entries()`, in the order the keys were first added (a key removed and added again counts as new), of the entries there when it is made: one removed before the Iter reaches it is skipped, and one added meanwhile is not given, even under a key that was there before. `m.keys()` is an `Iter<K>` of their keys likewise, and `m.values()` an `Iter<V>` of their values; `m.keys().to_array()` gives the keys as an array.
 
 ## Set
@@ -182,7 +182,7 @@ print primes.has(4)
 
 - `Set<T>` holds distinct items of type `T`, which take the rules of a [map](#map)'s keys. It is a map without values: it cannot be compared with `==`, nor be a map key or a set item, as a map cannot.
 - `Set<T>()` makes an empty set, or `Set()` where a set type is expected. `Set(xs)` or `Set<T>(xs)` makes one of the items of the array `xs`, the first of equal ones kept, in order.
-- `s.length` is the number of items, `s.has(x)` tells whether `x` is there, `s.add(x)` adds it if it is not, and tells whether it did, so that `continue if not seen.add(x)` skips what was seen, and `s.remove(x)` removes it, if it is there.
+- `s.length` is the number of items, `s.has(x)` and `s.contains(x)` tell whether `x` is there, `s.add(x)` adds it if it is not, and tells whether it did, so that `continue if not seen.add(x)` skips what was seen, and `s.remove(x)` removes it, if it is there.
 - `a | b`, `a & b`, `a - b` and `a ^ b` give new sets: the items of either, those of both, those of `a` that `b` has not, and those of one that the other has not, in the order of `a`, followed by the items taken from `b` in its order (see [operators](objects.md#operators)); `a |= b` and the like replace `a`. `a.is_subset(b)` tells whether `b` has every item of `a`.
 - `s.iter()` is an `Iter<T>` of the items in the order they were first added, of those there when it is made, as `m.entries()` gives a map's entries; `for x in s` goes through it. A set has no indexing, no literal, and none of a map's other methods, nor those of an extend of `Map<K, V>`.
 

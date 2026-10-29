@@ -119,6 +119,7 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
     where_right_operand body, binary, -> expect_condition(body, binary.right)
     return bool_type
   return type_of_nil_test(body, binary) if is_nil_test(binary)
+  return type_of_in_test(body, binary) if operator == 'in'
   if is_equality_operator(operator)
     reject := (type: Type) -> "cannot compare values of type #{format_type(type)}"
     type_of_operands body, binary, nil, EQUALITY_KINDS, reject
@@ -130,6 +131,31 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
     order_by_compare body, binary if is_kind(type, 'String')
     return bool_type
   type_of_operands body, binary, hint_of(expected, allowed), allowed, reject
+
+# `x in xs` tests the call of `xs.contains(x)`, of the Contains interface, the facts record for
+# codegen to make (see in_tests). A String also takes a Char, as the String of it, as `+` appends
+# one.
+type_of_in_test := (body: Body, binary: BinaryOperation) ->
+  { left, right, position } := binary
+  container := type_of(body, right)
+  if member_type_by_name(body, container, Identifier(position, name: 'contains')) == nil
+    message := "#{format_type(container)} has no contains, by which `in` applies"
+    fail body.program, right.position, message
+  # The item is typed by the call, as the parameter's type may decide it, as of `[]`, but for the
+  # Char that a String takes.
+  text := is_kind(container, 'String') then char_as_text(container, type_of(body, left), left)
+  call := method_call(right, 'contains', [text then text else left], position)
+  body.facts.in_tests[binary] = call
+  result := type_of(body, call)
+  if result != bool_type
+    fail body.program, position, "contains gives #{format_type(result)}, but `in` needs a Bool"
+  bool_type
+
+# The call of `to_string()` of a Char that a String's contains takes, as `+` appends one: nil for
+# any other part.
+export char_as_text := (container: Type, part: Type, value: Expression) ->
+  takes_char := is_kind(container, 'String') and is_kind(part, 'Char')
+  takes_char then method_call(value, 'to_string', [], value.position)
 
 type_of_operands := (
   body: Body, binary: BinaryOperation, expected: Type?, allowed_kinds: TypeKind[],

@@ -32,7 +32,7 @@ import
   constructed_type, expected_struct, positional_value, type_of_construction, type_of_record,
   type_of_this
 from './object'
-import type_of_binary, type_of_coalesce, type_of_unary from './operator'
+import char_as_text, type_of_binary, type_of_coalesce, type_of_unary from './operator'
 import check_return, check_yield, type_of_await from './result'
 import check_interpolated from './satisfaction'
 import Body from './shared'
@@ -167,6 +167,9 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     return type
   return type_of_json_call(body, call, direction) if direction := json_direction(body, callee)
   if callee is Member
+    if text_call := contains_of_char(body, call, callee)
+      body.facts.replacements[call] = text_call
+      return type_of(body, text_call, expected)
     if parse := enum_parse_type(body, callee)
       reject_type_arguments body, call
       return check_arguments(body, call, set_type(body, callee, parse), nil)
@@ -178,6 +181,16 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     else
       type_of body, callee
   check_arguments body, call, callee_type, named_function_literal(body, callee)
+
+# `s.contains(c)` of a String and a Char, as `s.contains(c.to_string())` (see char_as_text).
+contains_of_char := (body: Body, call: Call, callee: Member): Call? ->
+  return nil if callee.name.name != 'contains' or call.args.length != 1
+  return nil if not call.named_args.is_empty()
+  container := type_of(body, callee.object)
+  return nil if not is_kind(container, 'String')
+  part := call.args[0]
+  text := char_as_text(container, type_of(body, part), part) ? return nil
+  Call(call..., args: [text])
 
 export reject_type_arguments := (body: Body, call: Call) ->
   return if call.type_args.is_empty()

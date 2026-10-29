@@ -114,17 +114,18 @@ total := sum
 
 ## Operators
 
-From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is` and `as`) < `?` (nil coalescing) < range `...` < `+` `-` `|` `^` < `*` `/` `%` `&` `<<` `>>` < prefix `-`.
+From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is`, `as` and `in`) < `?` (nil coalescing) < range `...` < `+` `-` `|` `^` < `*` `/` `%` `&` `<<` `>>` < prefix `-`.
 
 - `x!` unwraps an optional value; no space is allowed before `!`. `x?.name` reads a member of an optional value (see [optional values](types.md#optional-values)); no space is allowed before `?` or `.`.
 - Arithmetic and bitwise operators are left-associative (`10 - 4 - 3` is `3`). As they bind tighter than comparisons, `x & 0xF == 0` compares `x & 0xF`. `<<` and `>>` are each two `<` or `>` with no space between them, so that `Map<String, Set<Int>>` ends with two closing brackets. `then`/`else` and `?` are right-associative: `a then x else b then y else z` is `a then x else (b then y else z)`.
 - An expression or a type nests at most 500 deep, counting each bracket, interpolation, prefix operator, `then`/`else`, `?`, type argument or `[]`, and each operator, call, index or member of a chain, as `1 + 2 + 3` or `a.b.c`, as one level; deeper is a compile error, `nesting deeper than 500`, so that the compiler does not overflow its stack. Indented blocks are not counted, as their indentation makes the source grow with the square of their depth.
-- Comparisons, `is` and `as` included, cannot be chained: `a < b < c` is a syntax error; use parentheses, as in `(x as T?) == nil`.
+- `x in xs` tells whether `xs` contains `x`, by `xs.contains(x)`, with `x` evaluated first, as written; `x not in xs` is `not (x in xs)` (see [Contains](builtins.md#contains)).
+- Comparisons, `is`, `as` and `in` included, cannot be chained: `a < b < c` is a syntax error; use parentheses, as in `(x as T?) == nil`.
 - `as` binds as comparisons do, weaker than `.`: a member of a cast is read as `(x as T!).name`.
 - `true` `false` `nil` `and` `or` `not` `const` `var` `if` `else` `while` `for` `break` `continue` `return` `case` `then` `class` `struct` `throw` `import` `export` `extern` `extend` `enum` `interface` `try` `catch` `finally` `yield` `await` are keywords and cannot be used as names. These words are not keywords, and act as one only where they are written so, staying usable as names elsewhere:
   - `in` and `when` after the variables of a `for` (`for x in xs when c`, also in comprehensions) and `when` at the start of a `case` arm, so `for x in in` reads a variable `in`;
   - `pass` alone as an arm's body (see [case](control-flow.md#case-without-a-subject));
-  - `is` and `as` after an operand (see [unions](types.md#unions)), and `as` in an [import](modules.md), an [export](modules.md#exports) or an [extern](functions.md#c-functions);
+  - `is`, `as` and `in`, as `not in` too, after an operand (see [unions](types.md#unions) and [operators](#operators)), so that a call without parentheses does not start with one of them as a name, `print(in)`; `as` also in an [import](modules.md), an [export](modules.md#exports) or an [extern](functions.md#c-functions);
   - `from` in an [import](modules.md) or an [export](modules.md#exports);
   - `type` before an alias's name and `=` (see [unions](types.md#unions));
   - `default` before an operand in a field (see [members](objects.md#members)): `default -1` is a default, and `default - 1` a subtraction;

@@ -171,7 +171,12 @@ parse_not := (tokens: TokenStream): Expression ->
     position: token.position()
 
 at_comparison_start := (tokens: TokenStream) ->
-  tokens.continues_with_word('is') or tokens.continues_with_word('as') or at_comparison(tokens)
+  is_word := (word: String) -> tokens.continues_with_word(word)
+  is_word('is') or is_word('as') or is_word('in') or at_not_in(tokens) or at_comparison(tokens)
+
+at_not_in := (tokens: TokenStream) ->
+  after := tokens.peek_at(1)
+  tokens.peek_continuation() == 'not' and after.kind == IDENTIFIER and after.text == 'in'
 
 parse_comparison := (tokens: TokenStream) ->
   left := parse_coalesce(tokens)
@@ -180,9 +185,11 @@ parse_comparison := (tokens: TokenStream) ->
     case
       when tokens.continues_with_word('is') then parse_is(tokens, left)
       when tokens.continues_with_word('as') then parse_cast(tokens, left)
+      when tokens.continues_with_word('in') or at_not_in(tokens) then parse_in(tokens, left)
       else parse_binary_comparison(tokens, left)
   if at_comparison_start(tokens)
-    tokens.fail tokens.peek().position(), 'comparisons, is tests and casts cannot be chained'
+    message := 'comparisons, is tests, in tests and casts cannot be chained'
+    tokens.fail tokens.peek().position(), message
   comparison
 
 # `x is not T` is read as `not (x is T)`.
@@ -192,6 +199,14 @@ parse_is := (tokens: TokenStream, value: Expression): Expression ->
   tokens.next() if negated
   test := IsTest(value, type: parse_union_member(tokens), position: value.position)
   negated then UnaryOperation(operator: 'not', operand: test, position: value.position) else test
+
+# `x not in xs` is read as `not (x in xs)`.
+parse_in := (tokens: TokenStream, item: Expression): Expression ->
+  negated := tokens.accept('not')
+  tokens.next()
+  container := parse_coalesce(tokens)
+  test := BinaryOperation(operator: 'in', left: item, right: container, position: item.position)
+  negated then UnaryOperation(operator: 'not', operand: test, position: item.position) else test
 
 # The `?` is read as the type's, which the checker takes as the form instead. `x as T ? y`, with a
 # space before `?`, is read as `(x as T?) ? y`.

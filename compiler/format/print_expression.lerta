@@ -17,8 +17,8 @@ import cast_type_doc, type_arguments, type_doc from './print_type'
 import if_doc, is_command_callee from './print_statement'
 import annotation_key from './annotated'
 import
-  CAST_FALLBACKS, EXPECTED_TYPES, LINE_LENGTH, NEGATED_IS_TESTS, PARENTHESES, SHORTHAND,
-  STRING_LITERALS
+  CAST_FALLBACKS, EXPECTED_TYPES, LINE_LENGTH, NEGATED_IN_TESTS, NEGATED_IS_TESTS, PARENTHESES,
+  SHORTHAND, STRING_LITERALS
 from './rules'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
@@ -258,9 +258,11 @@ unary_doc := (unary: UnaryOperation, context: Context) ->
   if unary.operator == 'not'
     test := unary.operand as IsTest?
     return is_not_doc(test, context) if test
-    # `not x is not T` would read as two tests.
+    in_test := unary.operand as BinaryOperation?
+    return not_in_doc(in_test, context) if in_test and is_in_test(in_test)
+    # `not x is not T` and `not x not in xs` would read as two tests.
     operand_doc :=
-      if is_negated_is_test(unary.operand)
+      if is_negated_test(unary.operand)
         clarified unary.operand, context
       else
         operand unary.operand, context, NOT, true
@@ -422,9 +424,19 @@ is_doc := (test: IsTest, context: Context, word: String) ->
 is_not_doc := (test: IsTest, context: Context) ->
   rule NEGATED_IS_TESTS, is_doc(test, context, ' is not ')
 
-is_negated_is_test := (expression: Expression) ->
+# `not (x in xs)` is written `x not in xs` (see Negated in tests).
+not_in_doc := (test: BinaryOperation, context: Context) ->
+  left := operand(test.left, context, COALESCE, false)
+  rule
+    NEGATED_IN_TESTS
+    join([left, text(' not in '), operand(test.right, context, COALESCE, true)])
+
+is_in_test := (expression: Expression) ->
+  expression is BinaryOperation and expression.operator == 'in'
+
+is_negated_test := (expression: Expression) ->
   unary := expression as UnaryOperation ? return false
-  unary.operator == 'not' and unary.operand is IsTest
+  unary.operator == 'not' and (unary.operand is IsTest or is_in_test(unary.operand))
 
 # `x as T`, then `form`. The `?` of `as T?` is read as the type's, so it is not printed with it.
 cast_doc := (cast: Cast, context: Context, form: String) ->

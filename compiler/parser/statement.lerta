@@ -345,8 +345,11 @@ export starts_spaced_operand := (tokens: TokenStream, offset: Int) ->
   token := tokens.peek_at(offset)
   return false if not token.spaced
   return not tokens.peek_at(offset + 1).spaced if token.kind == '-'
-  # `is` and `as` are not keywords, but `x is T` is a test and `x as T?` a cast, not calls of x.
-  return false if token.kind == IDENTIFIER and (token.text == 'is' or token.text == 'as')
+  # `is`, `as` and `in` are not keywords, but `x is T` is a test, `x as T?` a cast and `x in xs`
+  # and `x not in xs` tests, not calls of x.
+  is_word := (each: Token, word: String) -> each.kind == IDENTIFIER and each.text == word
+  return false if is_word(token, 'is') or is_word(token, 'as') or is_word(token, 'in')
+  return false if token.kind == 'not' and is_word(tokens.peek_at(offset + 1), 'in')
   is_one_of token.kind, COMMAND_ARGUMENT_STARTS
 
 # The number of tokens of the callee of a call without parentheses at the next token: a name or

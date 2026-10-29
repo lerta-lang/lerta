@@ -409,12 +409,19 @@ leftmost := (expression: Expression): Expression ->
         expression
     else expression
 
+CONTINUING_WORDS := ['is', 'as', 'in']
+
+# A name `is`, `as` or `in` would continue the expression with the callee instead, as `x in xs`
+# does, and so would `not in`.
 starts_argument := (expression: Expression) ->
   case expression
+    when Identifier then not CONTINUING_WORDS.contains(expression.name)
+    when UnaryOperation
+      first := leftmost(expression.operand)
+      expression.operator != 'not' or not (first is Identifier and first.name == 'in')
     when
-      Identifier, StringLiteral, Interpolation, IntegerLiteral, FloatLiteral, BooleanLiteral,
-      NilLiteral, This, ArrayLiteral, MapLiteral, RecordLiteral, TupleLiteral, Case, Throw, Await,
-      UnaryOperation
+      StringLiteral, Interpolation, IntegerLiteral, FloatLiteral, BooleanLiteral, NilLiteral, This,
+      ArrayLiteral, MapLiteral, RecordLiteral, TupleLiteral, Case, Throw, Await
     then true
     when Comprehension then not expression.spread
     when FunctionLiteral then expression.type_params.is_empty()

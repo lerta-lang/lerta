@@ -143,23 +143,52 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
   (object, is_owned) := generate_borrowed(g, member.object)
   call_method := ->
     emit_call := (operands: String[]) ->
-      args := typed_arguments(g, arguments_of(g.facts, call), operands)
-      instance := g.facts.instances[call]?.instance
-      check := -> emit_exception_check(g)
-      method_call := MethodCall
-        name: member.name.name
-        type: type_of(g, member)
-        operands: operands
-        args: args
-        instance: instance
-        check: check
-      emit_method_call g, source, object, object_type, method_call
+      emit_method_call g, source, object, object_type, method_call_of(g, call, member, operands)
     with_arguments g, arguments_of(g.facts, call), emit_call
   result := is_owned then holding(g, object, object_type, call_method) else call_method()
   release_if_reference g, member.object, object if is_owned
+  check_after_method g, source, object_type
+  result
+
+# `x in xs`, the call of `xs.contains(x)` that the checker made (see in_tests), with its argument
+# evaluated before its object, as they are written.
+export generate_in_test := (g: Generator, call: Call) ->
+  member := call.callee as Member!
+  target := g.facts.members[member]!
+  object_type := type_of(g, member.object)
+  argument := arguments_of(g.facts, call)[0]
+  if target is Method
+    result := borrowing_all(g, [argument, member.object], (operands) ->
+      method_call := method_call_of(g, call, member, [operands[0]])
+      emit_method_call g, target.source, operands[1], object_type, method_call
+    )
+    check_after_method g, target.source, object_type
+    return result
+  # A field that holds a function, which the call owns and releases, as call_closure does.
+  field_type := type_of(g, member)
+  result := borrowing_all(g, [argument, member.object], (operands) ->
+    closure := read_any_field(g, operands[1], object_type, member.name.name, field_type, false)
+    called := holding(g, closure, field_type, ->
+      emit_closure_call g.ir, closure, field_type, [operands[0]]
+    )
+    emit_release g.ir, closure
+    called
+  )
+  emit_exception_check g
+  result
+
+method_call_of := (g: Generator, call: Call, member: Member, operands: String[]) ->
+  MethodCall
+    name: member.name.name
+    type: type_of(g, member)
+    operands: operands
+    args: typed_arguments(g, arguments_of(g.facts, call), operands)
+    instance: g.facts.instances[call]?.instance
+    check: -> emit_exception_check(g)
+
+check_after_method := (g: Generator, source: MethodSource, object_type: Type) ->
   may_throw := source is not BuiltinMethod or may_leave_exception(source.member, object_type)
   emit_exception_check g if may_throw
-  result
 
 # A call of a method, of the type, once its object and its arguments are evaluated: `operands`,
 # and `args`, the operands with their IR types. A generic method's instance is the one it calls,
