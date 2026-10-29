@@ -18,13 +18,34 @@ from '../types'
 # The two header fields come before the object's own.
 HEADER_FIELDS := 2
 
-# A field, by its IR type and how it holds references, which the drop function releases.
+# A field, by its IR type and how it holds references, which the drop function releases. A fixed
+# one is written only as its object is made (see invariant).
 export struct HeapField
   ir_type: String
   owned: Ownership
+  fixed = default false
 
 # A field that holds a value of the type.
 export value_field := (type: Type) -> HeapField(ir_type: ir_type(type), owned: ownership(type))
+
+# The field, written only as its object is made.
+export fixed := (field: HeapField) -> HeapField(field..., fixed: true)
+
+# The metadata of an access to a field that keeps the value written as its object is made, which
+# lets LLVM take what was written for what is read, through calls that it cannot see into, so that
+# an Iter's or a closure's code is called directly and inlined. The object's pointer is laundered
+# as it is made (see emit_laundered), so that an object made later at the same place, which LLVM
+# might take for it, is no longer the same pointer.
+invariant := (ir: IrBuilder) -> ", !invariant.group #{ir.module.metadata.node('!{}')}"
+
+# The metadata of an access to the field: invariant for a fixed one.
+export access_tag := (ir: IrBuilder, field: HeapField) -> field.fixed then invariant(ir) else ''
+
+# The new object, as a pointer of its own for the fields that it keeps (see invariant).
+export emit_laundered := (ir: IrBuilder, object: String) ->
+  launder := 'llvm.launder.invariant.group.p0'
+  ir.module.declare launder, "declare ptr @#{launder}(ptr)"
+  ir.assign "call ptr @#{launder}(ptr #{object})"
 
 # A field that holds no reference, such as a pointer to code, of the IR type.
 export plain_field := (ir: String) -> HeapField(ir_type: ir, owned: NONE)

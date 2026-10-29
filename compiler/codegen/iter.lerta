@@ -1,7 +1,7 @@
 # The kinds of Iter, and the methods of Iters, in the generated code (see docs/internals.md#iter).
 import emit_get, emit_length from './array'
 import emit_closure_call, function_type_of from './closure'
-import value_field from './heap_object'
+import fixed, value_field from './heap_object'
 import emit_check_or_return_thrown, emit_check_with, emit_return_thrown from './exceptions'
 import emit_interface_call from './interface'
 import IrBuilder from './ir_builder'
@@ -40,7 +40,7 @@ emit_sequence_iter := (ir: IrBuilder, sequence: String, type: Type) ->
     item := emit_sequence_get(body, load_state(body, kind, 0), index, type)
     store_state body, kind, 1, body.assign("add nsw i64 #{index}, 1")
     body.emit "ret #{ir_type(element)} #{item}"
-  state := [value_field(type), value_field(int_type)]
+  state := [fixed(value_field(type)), value_field(int_type)]
   kind := define_kind(ir, "sequence #{type_key(type)}", state, element, has_next, next)
   emit_iter ir, kind, [sequence, '0']
 
@@ -57,7 +57,7 @@ export emit_adapter_iter := (ir: IrBuilder, source: String, source_type: Type, i
     value := emit_interface_call(body, load_state(body, kind, 0), 1, type, [])
     emit_check_or_return_thrown body, item
     body.emit "ret #{ir_type(item)} #{value}"
-  state := [value_field(source_type)]
+  state := [fixed(value_field(source_type))]
   kind := define_kind(ir, "adapter #{type_key(source_type)}", state, item, has_next, next)
   emit_iter ir, kind, [source]
 
@@ -73,7 +73,7 @@ export emit_range_iter := (ir: IrBuilder, start: String, end: String) ->
     current := load_state(body, kind, 0)
     store_state body, kind, 0, body.assign("add nsw i64 #{current}, 1")
     body.emit "ret i64 #{current}"
-  state := [value_field(int_type), value_field(int_type)]
+  state := [value_field(int_type), fixed(value_field(int_type))]
   emit_iter ir, define_kind(ir, 'range', state, int_type, has_next, next), [start, end]
 
 # The results of a function of one item, a closure of the type, for each item of the source.
@@ -91,7 +91,7 @@ emit_map_iter := (ir: IrBuilder, source: String, mapper: String, type: Type) ->
     emit_release_value body, value, item
     emit_check_or_return_thrown body, function_type.result
     body.emit "ret #{ir_type(function_type.result)} #{result}"
-  state := [value_field(IterType(item)), value_field(type)]
+  state := [fixed(value_field(IterType(item))), fixed(value_field(type))]
   key := "map #{type_key(type)}"
   kind := define_kind(ir, key, state, function_type.result, has_next, next)
   emit_iter ir, kind, [source, mapper]
@@ -143,8 +143,8 @@ emit_filter_iter := (ir: IrBuilder, source: String, test: String, item: Type) ->
     store_state body, kind, 3, 'zeroinitializer' if ownership(item) != NONE
     body.emit "ret #{ir_type(item)} #{value}"
   state :=
-    value_field(IterType(item))
-    value_field(test_type)
+    fixed(value_field(IterType(item)))
+    fixed(value_field(test_type))
     value_field(bool_type)
     value_field(item)
   kind := define_kind(ir, "filter #{type_key(item)}", state, item, has_next, next)

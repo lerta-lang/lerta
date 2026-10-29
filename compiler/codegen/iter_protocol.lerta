@@ -1,7 +1,7 @@
 # The protocol of Iters in the generated code (see docs/internals.md#iter).
 import
-  define_heap_object, emit_heap_allocate, emit_heap_field_pointer, HeapField, heap_object_type,
-  plain_field
+  access_tag, define_heap_object, emit_heap_allocate, emit_heap_field_pointer, emit_laundered,
+  fixed, HeapField, heap_object_type, plain_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
 import ir_type, suffixed_symbol from './lerta_ir'
@@ -9,7 +9,9 @@ import call_void_runtime from './runtime_calls'
 import Type from '../types'
 
 # The fields every Iter starts with, and the layout through which those of any Iter are reached.
-PROTOCOL := [plain_field('ptr'), plain_field('ptr'), plain_field('i1')]
+# The code of has_next and next is fixed (see invariant).
+CODE := fixed(plain_field('ptr'))
+PROTOCOL := [CODE, CODE, plain_field('i1')]
 HAS_NEXT_FIELD := 0
 NEXT_FIELD := 1
 STARTED_FIELD := 2
@@ -58,36 +60,41 @@ emit_throw_unless := (ir: IrBuilder, condition: String, check: () -> void) ->
 
 # A new Iter of the kind, not started, which takes over the values of its state.
 export emit_iter := (ir: IrBuilder, kind: IterKind, state_values: String[]) ->
-  iter := emit_heap_allocate(ir, kind.layout, symbol_of(kind, 'type'))
+  iter := emit_laundered(ir, emit_heap_allocate(ir, kind.layout, symbol_of(kind, 'type')))
   values := [symbol_of(kind, 'has_next'), symbol_of(kind, 'next'), 'false', state_values...]
   fields := all_fields(kind)
   for field, i in fields
     pointer := emit_heap_field_pointer(ir, kind.layout, iter, i)
-    ir.emit "store #{field.ir_type} #{values[i]}, ptr #{pointer}"
+    ir.emit "store #{field.ir_type} #{values[i]}, ptr #{pointer}#{access_tag(ir, field)}"
   iter
 
 state_pointer := (ir: IrBuilder, kind: IterKind, index: Int) ->
   emit_heap_field_pointer ir, kind.layout, '%iter', PROTOCOL.length + index
 
 export load_state := (ir: IrBuilder, kind: IterKind, index: Int) ->
+  field := kind.state[index]
   pointer := state_pointer(ir, kind, index)
-  ir.assign "load #{kind.state[index].ir_type}, ptr #{pointer}"
+  ir.assign "load #{field.ir_type}, ptr #{pointer}#{access_tag(ir, field)}"
 
 export store_state := (ir: IrBuilder, kind: IterKind, index: Int, value: String) ->
+  field := kind.state[index]
+  panic "the fixed field #{index} of an Iter is written after it is made" if field.fixed
   pointer := state_pointer(ir, kind, index)
-  ir.emit "store #{kind.state[index].ir_type} #{value}, ptr #{pointer}"
+  ir.emit "store #{field.ir_type} #{value}, ptr #{pointer}"
 
 protocol_field := (ir: IrBuilder, iter: String, index: Int) ->
   emit_heap_field_pointer ir, PROTOCOL_LAYOUT, iter, index
 
 # Whether the Iter, which is borrowed, has a next item.
 export emit_has_next := (ir: IrBuilder, iter: String) ->
-  code := ir.assign("load ptr, ptr #{protocol_field(ir, iter, HAS_NEXT_FIELD)}")
+  pointer := protocol_field(ir, iter, HAS_NEXT_FIELD)
+  code := ir.assign("load ptr, ptr #{pointer}#{access_tag(ir, CODE)}")
   ir.assign "call i1 #{code}(ptr #{iter})"
 
 # The next item, owned, of a borrowed Iter whose has_next is true.
 export emit_next := (ir: IrBuilder, iter: String, item: Type) ->
-  code := ir.assign("load ptr, ptr #{protocol_field(ir, iter, NEXT_FIELD)}")
+  pointer := protocol_field(ir, iter, NEXT_FIELD)
+  code := ir.assign("load ptr, ptr #{pointer}#{access_tag(ir, CODE)}")
   ir.assign "call #{ir_type(item)} #{code}(ptr #{iter})"
 
 # The next item, owned, of a borrowed Iter, which code outside the Iters asks for without knowing

@@ -1,14 +1,16 @@
 # Function values in the generated code (see docs/internals.md#objects).
 import
-  define_type, emit_heap_allocate, emit_heap_field_pointer, heap_object_type, HeapField, plain_field
+  define_type, emit_heap_allocate, emit_heap_field_pointer, emit_laundered, heap_object_type,
+  access_tag, fixed, HeapField, plain_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
 import ir_return_type, ir_type, LERTA_IMMORTAL, prefixed_symbol, suffixed_symbol from './lerta_ir'
 import emit_valueless_call from './runtime_calls'
 import FunctionType, Type from '../types'
 
-# The code pointer comes after the header.
+# The code pointer comes after the header; it is fixed (see invariant).
 CODE_FIELD := 2
+CODE := fixed(plain_field('ptr'))
 
 export function_type_of := (type: Type) -> type as FunctionType!
 
@@ -45,7 +47,7 @@ emit_code_pointer := (ir: IrBuilder, closure: String) ->
 # Calls a closure with the operands of its arguments; the closure is borrowed.
 export emit_closure_call := (ir: IrBuilder, closure: String, type: Type, args: String[]) ->
   { params, result } := function_type_of(type)
-  code := ir.assign("load ptr, ptr #{emit_code_pointer(ir, closure)}")
+  code := ir.assign("load ptr, ptr #{emit_code_pointer(ir, closure)}#{access_tag(ir, CODE)}")
   all_args := ["ptr #{closure}"]
   all_args.push "#{ir_type(param)} #{arg}" for (param, arg) in params.zip(args)
   return_type := ir_return_type(result)
@@ -58,7 +60,7 @@ export emit_closure_call := (ir: IrBuilder, closure: String, type: Type, args: S
 export CELL_SLOT := HeapField(ir_type: 'ptr', owned: REFERENCE)
 
 # The IR type of a closure that holds these captures.
-closure_ir_type := (slots: HeapField[]) -> heap_object_type([plain_field('ptr'), slots...])
+closure_ir_type := (slots: HeapField[]) -> heap_object_type([CODE, slots...])
 
 # The pointer to the closure's `index`th capture.
 export emit_capture_pointer := (ir: IrBuilder, closure: String, slots: HeapField[], index: Int) ->
@@ -71,7 +73,7 @@ export emit_closure := (
 ) ->
   type := suffixed_symbol(symbol, 'type')
   define_closure_type ir, type, name, slots
-  closure := emit_heap_allocate(ir, closure_ir_type(slots), type)
+  closure := emit_laundered(ir, emit_heap_allocate(ir, closure_ir_type(slots), type))
   emit_fill_closure ir, closure, symbol, slots, operands
   closure
 
@@ -92,13 +94,13 @@ export emit_local_closure := (
 emit_fill_closure := (
   ir: IrBuilder, closure: String, symbol: String, slots: HeapField[], operands: String[]
 ) ->
-  ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}"
+  ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}#{access_tag(ir, CODE)}"
   for slot, i in slots
     pointer := emit_capture_pointer(ir, closure, slots, i)
     ir.emit "store #{slot.ir_type} #{operands[i]}, ptr #{pointer}"
 
 define_closure_type := (ir: IrBuilder, type: String, name: String, slots: HeapField[]) ->
   define := (module: IrModule) ->
-    fields := [plain_field('ptr'), slots...]
+    fields := [CODE, slots...]
     define_type module, closure_ir_type(slots), type, 'private ', fields, name
   ir.module.define_once type, define
