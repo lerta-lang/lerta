@@ -1,10 +1,10 @@
 # Closing a server, once or twice, closes at once the connections that wait for their next request,
 # or for their first, however long its idle timeout; a request that is being served gets its
-# response first, and its connection ends then.
+# response first, and its connection ends then, after which both closes resolve.
 import connect_tcp, Socket from 'std:net'
 import Deferred from 'std:async'
 import Request, Response, serve from 'std:http'
-import time from 'std:time'
+import sleep, time from 'std:time'
 
 started := Deferred<Bool>()
 answered := Deferred<Bool>()
@@ -34,19 +34,31 @@ await started.promise()
 silent := await connect_tcp('127.0.0.1', server.port())
 
 start := time()
-server.close()
-server.close()
+var closed = 0
+# Counts the close once it resolves.
+counted := (closing: Promise) ->
+  await closing
+  closed += 1
+closing := counted(server.close())
+closing_again := counted(server.close())
 print await idle.reader.read_line() ? 'end'
 # Reset instead if the listener was closed before the server took it.
 try
   print await silent.reader.read_line() ? 'end'
 catch _: IOError
   print 'end'
+await sleep(0.1)
+print "closed while one is served: #{closed}"
 answered.resolve true
 lines := await read_response(busy)
 print "#{lines.contains('connection: close')} #{lines.last()!}"
 print await busy.reader.read_line() ? 'end'
 print time() - start < 1.0
+# The served connection lingers, as ever, until its client ends it.
+busy.close()
+await closing
+await closing_again
+print "closed: #{closed}"
+print time() - start < 1.0
 idle.close()
 silent.close()
-busy.close()

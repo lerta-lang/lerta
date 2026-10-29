@@ -1,7 +1,7 @@
 # An HTTP/1.1 server and client over std:net, whose handler takes a Request and gives a Response, as
 # fetch does.
 
-import TimeoutError from 'std:async'
+import Deferred, TimeoutError from 'std:async'
 import LineTooLongError, Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
 import address_text from './internal/handle'
@@ -39,17 +39,25 @@ export class Server
   waiting = Set<Socket>()
   # The connections that read and drop what the client still sends, before they close.
   lingering = Set<Socket>()
+  # The connections that have not ended.
+  connections = 0
+  # Resolved once the server is closed and no connection is left, which close waits for.
+  ended = Deferred<Bool>()
 
   port = -> @listener.port
 
   # Stops listening, and closes the connections that wait for their next request or linger after
-  # their last, even if what a lingering one leaves unread resets it, so that closing ends at once.
-  # Those being served go on to their response, and end then, lingering as ever.
+  # their last, even if what a lingering one leaves unread resets it. Those being served go on to
+  # their response, and end then, lingering as ever. Resolves once every connection has ended.
   close = ->
     @closed = true
     @listener.close()
     socket.close() for socket in @waiting
     socket.close() for socket in @lingering
+    @end_if_done()
+    _ended := await @ended.promise()
+
+  end_if_done = -> @ended.resolve(true) if @closed and @connections == 0
 
 # Listens at once, and serves each connection until the server is closed.
 export serve := (handler: (Request) -> Promise<Response>, options: ServerOptions) ->
@@ -83,6 +91,11 @@ accept_all := (server: Server) ->
       catch error: IOError
         return if server.closed
         throw error
+    # Taken as the server was closed: close may have found no connection left and resolved already,
+    # so it is closed rather than served, which would count it only after that.
+    if server.closed
+      socket.close()
+      return
     _serving := serve_connection(socket, server)
 
 # A request the server answers itself, with `status`, rather than handing it to the handler.
@@ -91,6 +104,7 @@ struct RequestError: Error
   message: String
 
 serve_connection := (socket: Socket, server: Server) ->
+  server.connections += 1
   deadline := Deadline()
   _watching := deadline.watch()
   try
@@ -105,6 +119,8 @@ serve_connection := (socket: Socket, server: Server) ->
     # program going.
     await close_lingering(socket, server, deadline)
     deadline.stop()
+    server.connections -= 1
+    server.end_if_done()
 
 # Closes the connection once the client has read the response: what the client still sends, as a
 # body that the server did not read, is read and dropped first, for a time and a size, as a socket
