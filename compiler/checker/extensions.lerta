@@ -28,14 +28,14 @@ export class Extensions
   module_index: Int
   module_name: String
   in_effect: ExtensionMethod[] = []
-  # methods_reachable_from's results by the type arguments' keys, which every generic call asks
-  # again; a method added to those in effect may change them (see add_in_effect).
-  reachable: Map<String, ReachableMethods> = Map()
+  # The same methods, to tell fast whether one is in effect.
+  in_effect_set: Set<ExtensionMethod> = Set()
 
-# The methods, which hold for good if `inferred_fields` is nil, or else only while
-# ProgramWide.inferred_fields is still the same: a field whose type its initializer gives has none
-# until the initializer is checked, so the methods reached before then may be more afterwards.
-struct ReachableMethods
+# The methods of every module's extends, in effect or not, which hold for good if `inferred_fields`
+# is nil, or else only while ProgramWide.inferred_fields is still the same: a field whose type its
+# initializer gives has none until the initializer is checked, so the methods reached before then
+# may be more afterwards.
+export struct ReachableMethods
   methods: ExtensionMethod[]
   inferred_fields: Int?
 
@@ -49,7 +49,7 @@ export add_imported := (
   program: ProgramWide, extensions: Extensions, methods: ExtensionMethod[], statement: Import
 ) ->
   for method in methods
-    continue if extensions.in_effect.contains(method)
+    continue if extensions.in_effect_set.has(method)
     if other := overlapping(extensions, method)
       modules := "#{other.module_name} and #{method.module_name}"
       method_name := "a method '#{method.name.name}'"
@@ -85,38 +85,43 @@ export add_own := (shared: Shared, method: ExtensionMethod) ->
   add_in_effect extensions, method
   shared.own_methods.push method
   shared.program.methods_matching = Map()
+  shared.program.methods_reachable = Map()
 
 # The extends in effect here, with `methods` before them, as an instance of a generic function
 # sees them (see GenericFunction).
 export with_methods := (extensions: Extensions, methods: ExtensionMethod[]) ->
   { module_index, module_name } := extensions
   seen := Extensions(module_index, module_name)
-  seen.in_effect.append methods
+  add_in_effect seen, method for method in methods
   for method in extensions.in_effect
-    seen.in_effect.push method if not methods.contains(method)
+    add_in_effect seen, method if not seen.in_effect_set.has(method)
   seen
 
 # The methods that the extends in effect give the types and the types they are made of, fields
 # included: those that the body of an instance with these type arguments may reach.
 export methods_reachable_from := (program: ProgramWide, extensions: Extensions, types: Type[]) ->
   key := [type_key(type) for type in types].join("\n")
-  if cached := extensions.reachable[key]
+  matching := methods_matching_reachable(program, key, types)
+  [method for method in matching.methods when extensions.in_effect_set.has(method)]
+
+# The methods of every module's extends that match the types and the types they reach, found once
+# for each key while they hold.
+methods_matching_reachable := (program: ProgramWide, key: String, types: Type[]) ->
+  if cached := program.methods_reachable[key]
     inferred_fields := cached.inferred_fields
-    return cached.methods if inferred_fields == nil or inferred_fields == program.inferred_fields
+    return cached if inferred_fields == nil or inferred_fields == program.inferred_fields
   reach := Reach()
   visit_reachable program, reach, type for type in types
-  # A generic extend's methods, as those of T[], may be in effect for several of the types.
-  in_effect := Set<ExtensionMethod>(extensions.in_effect)
+  # A generic extend's methods, as those of T[], may match several of the types.
   found: Set<ExtensionMethod>
   for (reached, type) in reach.seen.entries()
-    for method in methods_matching(program, reached, type)
-      found.add method if in_effect.has(method)
+    found.add method for method in methods_matching(program, reached, type)
+  inferred_fields := reach.is_complete then nil else program.inferred_fields
   methods := [method for method in found]
+  matching := ReachableMethods(methods, inferred_fields)
   # Until then, the classes and structs may get more fields (see ProgramWide.members_known).
-  if program.members_known
-    inferred_fields := reach.is_complete then nil else program.inferred_fields
-    extensions.reachable[key] = { methods, inferred_fields }
-  methods
+  program.methods_reachable[key] = matching if program.members_known
+  matching
 
 # The types visit_reachable has reached by their keys, and whether it has reached every field's
 # type.
@@ -137,7 +142,7 @@ own_methods_matching := (program: ProgramWide, type: Type) ->
 
 add_in_effect := (extensions: Extensions, method: ExtensionMethod) ->
   extensions.in_effect.push method
-  extensions.reachable = Map()
+  extensions.in_effect_set.add method
 
 visit_reachable := (program: ProgramWide, reach: Reach, type: Type): void ->
   key := type_key(type)
