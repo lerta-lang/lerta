@@ -1,9 +1,10 @@
 # Borrowing: which values a consumer can use without retaining them, and their operands.
 import Expression, Identifier, Member, This from '../ast'
+import is_assigned_field from '../checker/fields'
 import names_assigned from '../checker/literal_assignments'
 import Property from '../checker/member_targets'
 import ScopedLocal from '../checker/references'
-import info_of from '../checker/object_types'
+import FieldInfo, info_of from '../checker/object_types'
 import pop_temporaries, push_temporary from './exceptions'
 import
   declared_field_type, emit_narrowed, generate, held_field, is_boxed_narrowing, read_borrowed,
@@ -65,7 +66,13 @@ is_borrowable := (
   member := expression as Member?
   return false if member == nil
   field := plain_field(g, member) ? return false
-  (in_place or not field.mutable) and is_borrowable(g, member.object, later, in_place)
+  (in_place or keeps_value(g, member, field)) and is_borrowable(g, member.object, later, in_place)
+
+# Whether the field holds the same value as long as its object lives: a const one, or one that no
+# assignment in the program changes.
+keeps_value := (g: Generator, member: Member, field: FieldInfo) ->
+  object_type := type_of(g, member.object) as ObjectType!
+  not field.mutable or not is_assigned_field(g.code.program, object_type, member.name.name)
 
 # Whether the var keeps its value while `later` are evaluated. One that no function literal captures
 # and that is not top-level can be assigned only by its function's own code, not by a function

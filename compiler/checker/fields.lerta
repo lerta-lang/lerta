@@ -5,7 +5,7 @@ import fail from './diagnostics'
 import type_of from './expression'
 import field_type as info_field_type, FieldInfo, info_of from './object_types'
 import method_owner from './object'
-import Body from './shared'
+import Body, ProgramWide from './shared'
 import
   format_member, format_type, format_types, InterfaceType, ObjectType, RecordType, Type, UnionType
 from '../types'
@@ -123,6 +123,7 @@ common_field_target := (body: Body, union: UnionType, member: Member) ->
       reason := "it is a weak field of #{member_name}"
       message := "'#{name}' cannot be changed through #{format_type(union)} yet: #{reason}"
       fail body.program, position, message
+    body.program.assigned_fields.add field_key(member_type as ObjectType!, name)
   fields[0].type
 
 # The type of a field that is assigned to, which must be a field that can be changed.
@@ -149,8 +150,17 @@ export field_target := (body: Body, member: Member) ->
     const_field := "'#{name}' is a const field"
     message := is_struct then 'a struct field cannot be changed' else const_field
     fail program, position, message
+  program.assigned_fields.add field_key(object_type as ObjectType!, name)
   body.facts.types[member] = found.type
   found.type
+
+# Whether an assignment anywhere in the program changes the field of the class, of any instance of
+# a generic one; one that none changes holds the same value as long as its object lives, as a const
+# one does.
+export is_assigned_field := (program: ProgramWide, type: ObjectType, name: String) ->
+  field_key(type, name) in program.assigned_fields
+
+field_key := (type: ObjectType, name: String) -> "#{type.symbol}.#{name}"
 
 # The field `member` names, with its type, if its object is a class or struct.
 field_of := (body: Body, object_type: Type, member: Member) ->

@@ -1,0 +1,70 @@
+# A class field passed to a call is borrowed if no assignment in the program changes it, and taken
+# otherwise, where an assignment of any instance of a generic class or of any member of a union
+# counts: what is evaluated meanwhile may replace it, and the old value stays alive for the call.
+class Box
+  name: String
+
+class Shelf
+  box: Box
+  spare: Box
+  extra: Box
+  label: String
+  swap_extra = ->
+    @extra = Box('new')
+    'replaced'
+
+class Cell<T>
+  value: T
+
+extend<T> Cell<T>
+  replace = (value: T) ->
+    @value = value
+    'replaced'
+
+class Left
+  box: Box
+  other = default Box('other')
+
+class Right
+  box: Box
+
+# Retains the box, which the debug runtime checks to be alive.
+kept := (box: Box) -> [box][0]
+
+show := (box: Box, note: String) -> "#{kept(box).name} #{note}"
+
+replace_box := (shelf: Shelf) ->
+  shelf.box = Box('new')
+  'replaced'
+
+replace_either := (either: Left | Right) ->
+  either.box = Box('new')
+  'replaced'
+
+replace_left := (either: Left | Right) ->
+  either.other = Box('new') if either is Left
+  'replaced'
+
+append_label := (shelf: Shelf) ->
+  shelf.label += '!'
+  'appended'
+
+show_text := (text: String, note: String) -> "#{[text][0]} #{note}"
+
+shelf :=
+  Shelf(box: Box('box'), spare: Box('spare'), extra: Box('extra'), label: ['la', 'bel'].join(''))
+print show(shelf.spare, 'kept')
+print show(shelf.box, replace_box(shelf))
+print shelf.box.name
+print show(shelf.extra, shelf.swap_extra())
+print shelf.extra.name
+print show_text(shelf.label, append_label(shelf))
+print shelf.label
+cell := Cell(value: Box('cell'))
+print show(cell.value, cell.replace(Box('new')))
+print cell.value.name
+left := Left(box: Box('left'))
+print show(left.box, replace_either(left))
+print left.box.name
+print show(left.other, replace_left(left))
+print left.other.name
