@@ -4,10 +4,8 @@ Known defects, most severe first.
 
 | # | Title | Severity |
 |---|---|---|
-| 1 | std writes `else nil`, which the style leaves out | Info |
+| 1 | `lerta fmt` reports a removal before a trailing comment as Layout | Info |
 
-## 1. std writes `else nil`, which the style leaves out
+## 1. `lerta fmt` reports a removal before a trailing comment as Layout
 
-`std/http.lerta` and `std/internal/http_client.lerta` write `c then x else nil` in several places, as `chunked then ChunkedBody(...) else nil`, where `docs/reference/style.md` says to leave out `else nil`. `lerta fmt` has no rule for it.
-
-The fix is a rule in `lerta fmt` that drops the `else nil` of a `then`, which then rewrites std.
+Where `lerta fmt` leaves out what ends a line with a comment after it, as the `= nil` of `var x: Int? = nil  # note` or the `else nil` of `x := c then 1 else nil  # note`, it reports `indent by two spaces for each level, and end the lines with LF (Layout)` at the start of what it leaves out, rather than Nil initial values or Else nil, which it reports without the comment. The comment moves on the line, and the report names the rule of that difference rather than of the removal, at least where the line is alone in the lines that change. `tests/format/nil_initial.report` records it.

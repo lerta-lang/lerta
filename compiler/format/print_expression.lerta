@@ -17,8 +17,8 @@ import cast_type_doc, type_arguments, type_doc from './print_type'
 import if_doc, is_command_callee from './print_statement'
 import annotation_key from './annotated'
 import
-  CAST_FALLBACKS, EXPECTED_TYPES, LINE_LENGTH, NEGATED_IN_TESTS, NEGATED_IS_TESTS, PARENTHESES,
-  SHORTHAND, STRING_LITERALS
+  CAST_FALLBACKS, ELSE_NIL, EXPECTED_TYPES, LINE_LENGTH, NEGATED_IN_TESTS, NEGATED_IS_TESTS,
+  PARENTHESES, SHORTHAND, STRING_LITERALS
 from './rules'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
@@ -292,7 +292,8 @@ range_end := (end: Expression, context: Context, last: Bool) ->
   is_operation := end is BinaryOperation or end is UnaryOperation
   is_operation then clarified(end, context) else operand(end, context, ADDITIVE, last)
 
-# A `then`/`else` inside the `then` value of another is in parentheses (see Parentheses).
+# A `then`/`else` inside the `then` value of another is in parentheses (see Parentheses), and an
+# `else nil` is left out, as `then` gives nil without `else` (see Else nil).
 conditional_doc := (conditional: Conditional, context: Context) ->
   condition := operand(conditional.condition, context, OR, false)
   then_value :=
@@ -302,6 +303,7 @@ conditional_doc := (conditional: Conditional, context: Context) ->
       operand conditional.then_value, context, CONDITIONAL, false
   head := join([condition, text(' then '), then_value])
   return head if conditional.without_else
+  return join([head, rule(ELSE_NIL, text(''))]) if conditional.else_value is NilLiteral
   join [head, text(' else '), operand(conditional.else_value, context, CONDITIONAL, true)]
 
 # `x?.rest`, which the parser reads as an `if` that binds x (see parse_nil_safe).
