@@ -26,7 +26,7 @@
 - A line that is empty, or contains only spaces and optionally a comment, is ignored, whatever its indentation.
 - A line indented less than the previous one must return to the indentation of an enclosing block.
 
-## Lines inside brackets
+## Continued lines
 
 ```
 keywords := [
@@ -38,18 +38,21 @@ print add(
   1
   2
 )
-total := (1 +
-  2)
+total := 1 +
+  2 *
+  3
 doubled := xs.map((x) ->
   y := x * 2
   y + 1
 )
 ```
 
-- Lines inside brackets, `(` `[` `{`, continue the line that opened them, whatever their indentation, until the brackets close. The `<` `>` of type arguments are not brackets.
+- A line that ends where an operand or an item is to come, after an operator, a comma, `then`, `else` or an opening bracket, `(` `[` `{`, continues on the lines indented deeper than it, a block of their own, laid out by indentation as any block, inside brackets too. In that block, a line that ends where an operand is to come continues on the next line at its indentation, as `2 *` does above. The `<` `>` of type arguments are not brackets.
 - In a list (the brackets of an array or a map, the parentheses of a call's arguments or of a function's parameters), a line end separates items as a comma does. Items on one line are separated by commas, and a comma may also end a line, separating it from the next as the line end alone would. An item must follow a comma, so the last item does not end with one.
-- In grouping parentheses and an index, `xs[i]`, lines simply continue the expression, but for a line end before the `default:` of a map's index, which separates it from the key as a comma does; a line there cannot start with `.` or `?.` to continue it with a member (see [statements](#statements)).
-- A line inside brackets that ends with `->`, followed by a line indented deeper than it, opens the function's body as an indented block, laid out as any block, `case`s, loops and brackets of its own inside it. A line no deeper than the one with `->` ends the block, and continues the brackets, whatever it starts with (`)`, the next item); so does a closing bracket of the brackets around the block, wherever it is in the block, as on the line of its last statement (`  y + 1)`). A comma cannot follow such a body, so an item that holds one is the last on its line. No other item inside brackets opens a block: a `case` as an argument goes in such a function, or before the call under a name.
+- In grouping parentheses and an index, `xs[i]`, the lines continue the expression, and a line end before the `default:` of a map's index separates it from the key as a comma does. A line there cannot start with `.` or `?.` to continue it with a member (see [statements](#statements)), but one may start with the `for` or the `when` of a comprehension.
+- A closing bracket goes on the line of the last item, or at the start of the line after the block, at the indentation of the line that opened the brackets.
+- An item, as any value, may take the lines below, as a function's body after `->`, a `case` or a `try` does. The item after it starts its line, or follows a comma that does.
+- A line that continues the head of an `if`, a `while` or a `for` would be the block of its body, so a head that takes several lines does so inside brackets, whose closing bracket goes back to the head's indentation (`if f(`, the arguments, `) == 3`).
 
 ## Bracketless blocks
 
@@ -67,7 +70,7 @@ total := sum
   3
 ```
 
-- After a trailing `=` or `:=` (of a declaration, a destructuring one among them, an assignment or a field), a trailing `key:` or a `return`, an indented block on the next lines is a literal. Its items, one or more on each line separated by commas as inside brackets, decide its kind: all `name: value` make an anonymous struct, which a spread may start, `p...` before them (see [anonymous structs](types.md#anonymous-structs)), all `key: value` (a key that is not a name) a map, and all plain values an array. Mixing them is an error. A value may take the lines below, as an `if`, a `case` or a function literal does. A block of one plain value is that value itself, not an array of it, so that a value can start on the next line; an array of one item is written `[x]`.
+- After a trailing `=` or `:=` (of a declaration, a destructuring one among them, an assignment or a field), a trailing `key:` or a `return`, an indented block on the next lines is a literal. Its items, one or more on each line separated by commas as in a list, decide its kind: all `name: value` make an anonymous struct, which a spread may start, `p...` before them (see [anonymous structs](types.md#anonymous-structs)), all `key: value` (a key that is not a name) a map, and all plain values an array. Mixing them is an error. A value may take the lines below, as an `if`, a `case` or a function literal does. A block of one plain value is that value itself, not an array of it, so that a value can start on the next line; an array of one item is written `[x]`.
 - **Arguments in a block.** A callee, the name, `@name` or member of a [call without parentheses](#calls), or a call, followed by an indented block, gives the block as the call's arguments, after those on its line: `sum` above is `sum(1, 2, 3)`, and `draw 'p'` is `draw('p', x: 10, y: 20)`. It is written as a statement, or as a whole value where a block literal may be, after `=`, `key:` or a `return`, and as the operand of `throw` or `yield`; a callee inside an operation, as in `1 + f` or `await f`, takes no block. Its items are separated as a literal's are, with the positional arguments before the named ones (`name: value`, see [anonymous structs](types.md#anonymous-structs)), and `xs...` a spread; a key that is not a name is an error. A positional item is an expression, as on the line, that may take a block of arguments of its own and the member lines below it; an `if` is not one, but `c then a else b` is. Named arguments are all on the line or all in the block. An array inside an array cannot be written without brackets.
 
 ## Declarations and assignment
@@ -88,7 +91,7 @@ total := sum
     'b'
   .join('')
   ```
-  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `g := (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead (see [lines inside brackets](#lines-inside-brackets)). After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with [arguments in a block](#bracketless-blocks), the line is an error; a value that ends with arguments in a block takes it, as it takes one after a literal.
+  The line holds members only: an operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)). A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`. Where several such values start on that line, the line continues the innermost one that ends before it: after `g := (x) -> x`, the body `x`, as after `when 1 then 'a'` the value `'a'`, while a function literal whose body takes the lines below ends there, so the member applies to the function. Inside brackets, the lines are items instead (see [continued lines](#continued-lines)). After `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with [arguments in a block](#bracketless-blocks), the line is an error; a value that ends with arguments in a block takes it, as it takes one after a literal.
 
 ## Calls
 
@@ -99,7 +102,7 @@ total := sum
   3. There are no nested parenthesis-free calls. (`f g x` is an error; write `f g(x)`.)
   4. At the start of a statement, whitespace after the callee marks the start of the arguments: `f (a), b` is `f((a), b)`, while `f(a)` is a call with parentheses. `f -1` is `f(-1)`; if there is also whitespace after the operator, as in `f - 1`, it is a binary operator. In the middle of an expression there are no parenthesis-free calls, so `x -1` is `x - 1`.
   5. **A call with zero arguments requires parentheses**: `f()`. A bare `f` is the function value.
-  6. If the last argument is a function literal, its body may continue as an indented block on the next lines: `each xs, (x) ->` followed by the body. With parentheses it cannot, as an item inside brackets cannot open a block (see [lines inside brackets](#lines-inside-brackets)); give the arguments in a block instead (see [arguments in a block](#bracketless-blocks)).
+  6. If the last argument is a function literal, its body may continue as an indented block on the next lines: `each xs, (x) ->` followed by the body, as it may in parentheses (see [continued lines](#continued-lines)).
 - Parsing is decided purely by syntax. If `f` is not a function, the type checker rejects it.
 - `(x)` groups an expression.
 - Arguments may be named, `f(name: value)`, after the positional ones: those of a constructor, and those of a last struct or [anonymous struct](types.md#anonymous-structs) parameter (see [functions](functions.md)).

@@ -2,15 +2,14 @@
 # tokens the parser uses so far; any other character is an unexpected character until the feature
 # that needs it is implemented.
 import Position from '../position'
-import compile_error from '../errors'
 import SourceLine from './source_line'
 import
   MultilineLiteral, scan_double_quoted, scan_multiline, TemplatePart, TextPart
 from './string_literal'
 
 # A keyword or a punctuation is its own kind, whose text is its own. The others are named:
-# INTERPOLATED is a string with interpolations, LINE_BREAK a line end inside brackets (see
-# Brackets), and INDENT and DEDENT the start and the end of an indented block.
+# INTERPOLATED is a string with interpolations, and INDENT and DEDENT the start and the end of an
+# indented block.
 export enum TokenKind
   IDENTIFIER
   INTEGER
@@ -18,7 +17,6 @@ export enum TokenKind
   STRING
   INTERPOLATED
   NEWLINE
-  LINE_BREAK
   INDENT
   DEDENT
   EOF
@@ -144,16 +142,16 @@ export lex := (source: String, path: String) ->
     layout.start_line line, indent
     var scanner = LineScanner(line, position: indent)
     while true
-      layout.add token for token in scanner.run()
+      tokens.push token for token in scanner.run()
       start := scanner.multiline_start ? break
       literal := scan_multiline(lines, scanner.line.number - 1, start)
-      layout.add multiline_token(scanner.line, start, literal)
+      tokens.push multiline_token(scanner.line, start, literal)
       scanner = LineScanner(line: literal.line, position: literal.end)
       literal_end = literal.line.number
     last := scanner.line
     if index := scanner.comment_index
       comments.push { own_line: false, line: last.number, column: last.column(index) }
-    layout.end_line last, indent
+    layout.end_line last
   layout.finish lines.length
   Lexed tokens, comments
 
@@ -183,98 +181,30 @@ export tokenize_fragment := (source: String, path: String, line: Int, column: In
 layout_token := (kind: TokenKind, line: Int, column: Int) ->
   Token kind, line, column, text: '', spaced: true
 
-# A level of the layout: the indentation of its blocks, from its base, and the brackets open in it.
-# The file is one; a line inside brackets that ends with `->` opens another, of an indented block
-# on the lines after it, whose base is that line's indentation (see Layout).
-class Frame
-  indents: Int[]
-  open: Token[] = []
-
-  # The indentation that ends the frame's block: no deeper than its base.
-  base = -> @indents[0]
-
-# Lines are laid out by indentation into blocks, which INDENT, NEWLINE and DEDENT mark. Lines inside
-# brackets continue the line that opened them, whatever their indentation, and end with a
-# LINE_BREAK, which the parser reads as it reads the brackets: a separator in a list, and nothing in
-# a grouping. A line inside brackets that ends with `->`, followed by a line indented deeper, opens
-# an indented block there, a function's body, laid out as any block, which a line no deeper than
-# the one with `->`, or a closing bracket of the brackets it is in, ends.
+# Lines are laid out by indentation into blocks, which INDENT, NEWLINE and DEDENT mark, inside
+# brackets too: the parser reads the lines of a block that continues a line as its continuation
+# (see TokenStream.continue_line).
 class Layout
   path: String
   tokens: Token[]
-  frames = [Frame(indents: [0])]
-  # The indentation of the line inside brackets that ended with `->`, if the last one did.
-  arrow_indent: Int? = nil
-
-  frame = -> @frames.last()!
-
-  in_brackets = -> not @frame().open.is_empty()
+  indents = [0]
 
   start_line = (line: SourceLine, indent: Int) ->
     column := line.column(indent)
-    if base := @arrow_indent
-      @arrow_indent = nil
-      if indent > base
-        # The line break after `->` ends the line that the block's body follows.
-        arrow_end := @tokens.pop()
-        @tokens.push layout_token(NEWLINE, arrow_end.line, arrow_end.column)
-        @frames.push Frame(indents: [base, indent])
-        @tokens.push layout_token(INDENT, line.number, column)
-        return
-    while @frames.length > 1 and not @in_brackets() and indent <= @frame().base()
-      @close_frame line.number, column
-      @tokens.push layout_token(LINE_BREAK, line.number, column)
-    return if @in_brackets()
-    # A closing bracket that starts a line of a block closes the brackets around it, whatever its
-    # indentation (see add).
-    first := line.bytes[indent]
-    return if @frames.length > 1 and (first == ')' or first == ']' or first == '}')
-    indents := @frame().indents
-    if indent > indents.last()!
-      indents.push indent
+    if indent > @indents.last()!
+      @indents.push indent
       @tokens.push layout_token(INDENT, line.number, column)
       return
-    while indent < indents.last()!
-      indents.pop()
+    while indent < @indents.last()!
+      @indents.pop()
       @tokens.push layout_token(DEDENT, line.number, column)
-    line.fail 'indentation does not match any outer block', indent if indent != indents.last()!
+    line.fail 'indentation does not match any outer block', indent if indent != @indents.last()!
 
-  # A closing bracket in a block that has none open closes the brackets that the block is in,
-  # which ends the block first.
-  add = (token: Token) ->
-    open := @frame().open
-    case token.kind
-      when '(', '[', '{' then open.push(token)
-      when ')', ']', '}'
-        if open.is_empty() and @frames.length > 1
-          # A bracket at the start of a line follows the line end of the block's last line.
-          after_line_end := @tokens.last()!.kind == NEWLINE
-          @tokens.push layout_token(NEWLINE, token.line, token.column) if not after_line_end
-          @close_frame token.line, token.column
-        # An extra closing bracket is left to the parser to report.
-        @frame().open.pop() if @in_brackets()
-      else pass
-    @tokens.push token
-
-  end_line = (line: SourceLine, indent: Int) ->
-    in_brackets := @in_brackets()
-    ends_with_arrow := not @tokens.is_empty() and @tokens.last()!.kind == '->'
-    @arrow_indent = indent if in_brackets and ends_with_arrow
-    kind: TokenKind = in_brackets then LINE_BREAK else NEWLINE
-    @tokens.push layout_token(kind, line.number, line.column(line.length))
-
-  # Ends the innermost frame's block, which leaves the line in the brackets around it.
-  close_frame = (line: Int, column: Int) ->
-    frame := @frames.pop()
-    @tokens.push layout_token(DEDENT, line, column) for _ in 1...frame.indents.length
+  end_line = (line: SourceLine) ->
+    @tokens.push layout_token(NEWLINE, line.number, line.column(line.length))
 
   finish = (eof_line: Int) ->
-    unclosed := @frames.find((frame) -> not frame.open.is_empty())
-    if frame := unclosed
-      bracket := frame.open.last()!
-      compile_error @path, bracket.line, bracket.column, "'#{bracket.kind}' is never closed"
-    indents := @frame().indents
-    @tokens.push layout_token(DEDENT, eof_line, 1) for _ in 1...indents.length
+    @tokens.push layout_token(DEDENT, eof_line, 1) for _ in 1...@indents.length
     @tokens.push layout_token(EOF, eof_line, 1)
 
 # The tokens of one line, from `position`.
@@ -410,8 +340,7 @@ plain_text := (parts: TemplatePart[]) ->
 keyword_kind := (word: String) ->
   kind := TokenKind.parse(word) ? return nil
   case kind
-    when IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, NEWLINE, LINE_BREAK, INDENT, DEDENT, EOF
-      nil
+    when IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, NEWLINE, INDENT, DEDENT, EOF then nil
     else kind
 
 is_space := (c: Byte) -> c == ' '

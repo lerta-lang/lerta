@@ -161,6 +161,7 @@ parse_left_associative := (
   left
 
 parse_not := (tokens: TokenStream): Expression ->
+  tokens.continue_line()
   token := tokens.peek()
   return parse_comparison(tokens) if token.kind != 'not'
   tokens.next()
@@ -245,8 +246,7 @@ parse_range := (tokens: TokenStream): Expression ->
 export at_spread := (tokens: TokenStream) ->
   tokens.peek().kind == '...' and is_one_of(tokens.peek_at(1).kind, SPREAD_FOLLOWERS)
 
-export SPREAD_FOLLOWERS: TokenKind[] =
-  ',', ']', ')', '}', 'for', LINE_BREAK, NEWLINE, INDENT, DEDENT, EOF
+export SPREAD_FOLLOWERS: TokenKind[] = [',', ']', ')', '}', 'for', NEWLINE, INDENT, DEDENT, EOF]
 
 # Not at `<<=` or `>>=`, which starts an assignment.
 at_comparison := (tokens: TokenStream) ->
@@ -291,6 +291,7 @@ shift_ahead := (tokens: TokenStream, rest: String) ->
   "#{first}#{second.kind}"
 
 parse_unary := (tokens: TokenStream): Expression ->
+  tokens.continue_line()
   token := tokens.peek()
   if token.kind == 'await'
     tokens.next()
@@ -363,19 +364,20 @@ extend_by_postfix := (tokens: TokenStream, expression: Expression): Expression? 
     else Member(position, object: expression, name: parse_identifier(tokens))
 
 # The index after `[`, and the default of a map's value after it, `m[k, default: d]`, through `]`;
-# line ends inside are skipped, so that they continue the index, but for one before `default`,
-# which separates the two as a comma does, as a list's items are.
+# a line end before `default` separates the two as a comma does, as a list's items are.
 parse_index := (tokens: TokenStream, object: Expression, position: Position) ->
   parse_contents := ->
     index := parse_expression(tokens)
     default_value := parse_index_default(tokens)
-    tokens.expect ']'
+    tokens.expect_close ']'
     Index position, object, index, default_value
-  tokens.inside SKIP, parse_contents
+  tokens.inside parse_contents
 
 parse_index_default := (tokens: TokenStream): Expression? ->
-  if not tokens.accept(',')
-    return nil if not tokens.at_line_break() or not tokens.at_word('default')
+  if tokens.accept(',')
+    tokens.continue_line()
+  else if not tokens.continue_line_before('default')
+    return nil
   tokens.expect_word 'default'
   tokens.expect ':'
   parse_expression tokens
@@ -389,6 +391,7 @@ export parse_loop_header := (tokens: TokenStream) ->
   index := tokens.accept(',') then parse_identifier(tokens)
   tokens.expect_word 'in'
   iterable := parse_expression(tokens)
+  tokens.continue_line_before 'when'
   guard := tokens.accept_word('when') then parse_expression(tokens)
   LoopHeader variable, index, iterable, guard, parts
 
@@ -427,6 +430,7 @@ export parse_arguments := (tokens: TokenStream) ->
   items := [parse_argument(tokens)]
   while tokens.peek_continuation() == ','
     tokens.next()
+    tokens.continue_line()
     next := tokens.peek()
     tokens.fail_expecting next, "an item after ','" if next.kind == NEWLINE
     items.push parse_argument(tokens)

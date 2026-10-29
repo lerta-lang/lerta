@@ -31,12 +31,19 @@ export class SourceText
       return true if @comment_lines.has(line)
     false
 
-  # Whether a comment is in the indented block that follows the line of the token at the position,
-  # deeper than that line, or ends that line, as one that the postfix form of the block, or the
-  # block on that line, would move.
+  # Whether a comment is in the indented block that follows the head that starts with the token at
+  # the position, deeper than the head's first line, or ends the head's last line, as one that the
+  # postfix form of the block, or the block on that line, would move. The head ends at the first
+  # line end outside its brackets.
   block_has_comments = (at: Position) ->
     var index = @token_at(at) ? return false
-    index += 1 while @tokens[index].kind != NEWLINE and @tokens[index].kind != EOF
+    var brackets = 0
+    while @tokens[index].kind != EOF and (@tokens[index].kind != NEWLINE or brackets > 0)
+      kind := @tokens[index].kind
+      brackets += 1 if is_opening(kind)
+      brackets -= 1 if is_closing(kind)
+      index += 1
+    head_end := @tokens[index].line
     return false if @tokens[index + 1].kind != INDENT
     var depth = 0
     index += 1
@@ -50,8 +57,8 @@ export class SourceText
     indentation := @indentation(at.line)
     for comment in @comments
       # One that ends the line of the head would go before the statement of the block.
-      return true if comment.line == at.line
-      inside := comment.line > at.line and comment.line < end_line
+      return true if comment.line == head_end
+      inside := comment.line > head_end and comment.line < end_line
       return true if inside and comment.column > indentation
     false
 
@@ -93,7 +100,7 @@ export class SourceText
         break if depth == 0 and @tokens[index + 1].kind != INDENT
       else if kind == EOF
         break
-      else if kind != LINE_BREAK
+      else
         last = index
     @tokens[last].end_line
 
@@ -152,7 +159,7 @@ index_tokens := (tokens: Token[]) ->
     indexes[position] = index if not LAYOUT_KINDS.contains(token.kind)
   indexes
 
-LAYOUT_KINDS: TokenKind[] = [NEWLINE, LINE_BREAK, INDENT, DEDENT, EOF]
+LAYOUT_KINDS: TokenKind[] = [NEWLINE, INDENT, DEDENT, EOF]
 LINE_STARTS_AFTER: TokenKind[] = [NEWLINE, INDENT, DEDENT]
 
 # The text of the comment as written, without the spaces after it.

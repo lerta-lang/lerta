@@ -19,9 +19,13 @@ import parse_result_annotation, parse_type_annotation, parse_type_parameters fro
 # `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
 # `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
 # map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
-# The lookahead skips line breaks, which may separate the parameters.
+# The parameters may start on the line after the `(`.
 export starts_function_literal := (tokens: TokenStream) ->
-  tokens.inside SKIP, -> looks_like_function_literal(tokens)
+  first := tokens.peek().kind
+  return true if first == '->' or first == '<'
+  return false if first != '('
+  starts_block := tokens.peek_at(1).kind == NEWLINE and tokens.peek_at(2).kind == INDENT
+  looks_like_parameters tokens, starts_block then 3 else 1
 
 export starts_weak_function_literal := (tokens: TokenStream) ->
   return false if not tokens.at_word('weak')
@@ -31,17 +35,14 @@ export starts_weak_function_literal := (tokens: TokenStream) ->
   tokens.index = start
   starts
 
-looks_like_function_literal := (tokens: TokenStream) ->
-  first := tokens.peek().kind
-  second := tokens.peek_at(1).kind
-  third := tokens.peek_at(2).kind
-  return true if first == '->' or first == '<'
-  return false if first != '('
+# Whether the `(` next starts parameters, the first of which is `offset` tokens ahead.
+looks_like_parameters := (tokens: TokenStream, offset: Int) ->
+  second := tokens.peek_at(offset).kind
+  third := tokens.peek_at(offset + 1).kind
   return third == ':' or third == '->' if second == ')'
   # `(x = 1)` is no expression, as an assignment is a statement.
   return true if second == IDENTIFIER and (third == ':' or third == '=')
-  on_line := (kind: TokenKind) -> kind != NEWLINE and kind != EOF
-  close := tokens.closing_offset('(', ')', on_line) ? return false
+  close := tokens.closing_offset('(', ')', (kind) -> kind != EOF) ? return false
   tokens.peek_at(close + 1).kind == '->'
 
 # `(a: Int, b: Int): Int -> body`; the parameters and the return type may be omitted, and so may
@@ -91,17 +92,16 @@ parse_parameter := (tokens: TokenStream) ->
 # `xs...` gives the items of `xs` in its place.
 export parse_array_literal := (tokens: TokenStream, position: Position) ->
   parse_contents := ->
-    tokens.accept LINE_BREAK
     return ArrayLiteral(position, elements: []) if tokens.accept(']')
     first := parse_element(tokens)
-    tokens.next() if tokens.peek().kind == LINE_BREAK and tokens.peek_at(1).kind == 'for'
+    tokens.continue_line_before 'for'
     if tokens.peek().kind == 'for'
       if is_spread(first)
         tokens.fail first.position, 'a spread cannot be the element of a comprehension'
       return parse_comprehension(tokens, first, position, ']')
     elements := tokens.parse_list_rest(']', -> parse_element(tokens), [first])
     ArrayLiteral elements, position
-  tokens.inside SEPARATE, parse_contents
+  tokens.inside parse_contents
 
 # An item, which a spread `xs...` may be (see spread_of_value).
 export parse_element := (tokens: TokenStream) -> spread_of(tokens, parse_expression(tokens))
@@ -112,31 +112,27 @@ export spread_of := (tokens: TokenStream, value: Expression) ->
   tokens.next()
   spread_of_value value
 
-# `(a)`, a tuple, `(a, b)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension; line ends
-# inside are skipped.
+# `(a)`, a tuple, `(a, b)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension.
 export parse_parenthesized := (tokens: TokenStream, position: Position) ->
   parse_contents := ->
     first := parse_expression(tokens)
+    tokens.continue_line_before 'for'
     return parse_comprehension(tokens, first, position, ')') if tokens.peek().kind == 'for'
     if tokens.peek().kind == ','
       items := tokens.parse_list_rest(')', -> parse_expression(tokens), [first])
       return TupleLiteral(items, position)
-    tokens.expect ')'
+    tokens.expect_close ')'
     # Diagnostics about the group point at its opening parenthesis.
     first.position = position
     first
-  tokens.inside SKIP, parse_contents
+  tokens.inside parse_contents
 
-# `for x in xs when guard]`, after the element, or `... guard)` for an Iter; line ends inside
-# are skipped.
+# `for x in xs when guard]`, after the element, or `... guard)` for an Iter.
 parse_comprehension := (
   tokens: TokenStream, element: Expression, position: Position, close: TokenKind
 ): Expression ->
-  parse_header := ->
-    header := parse_loop_header(tokens)
-    tokens.expect close
-    header
-  header := tokens.inside(SKIP, parse_header)
+  header := parse_loop_header(tokens)
+  tokens.expect_close close
   { variable, index, iterable, guard } := header
   is_lazy := close == ')'
   if is_lazy and index != nil
@@ -146,10 +142,13 @@ parse_comprehension := (
   lazy := is_lazy then lazy_functions(element, variable, guard, bindings)
   Comprehension element, variable, iterable, guard, lazy, position, index, bindings: bindings()
 
-export parse_map_literal := (tokens: TokenStream, position: Position): Expression ->
+export parse_map_literal := (tokens: TokenStream, position: Position) ->
+  tokens.inside -> parse_map_contents(tokens, position)
+
+parse_map_contents := (tokens: TokenStream, position: Position): Expression ->
   if starts_record_field(tokens) or starts_spread(tokens)
     return parse_record_literal(tokens, position)
-  entries := tokens.parse_list('}', -> parse_map_entry(tokens))
+  entries := tokens.parse_list_rest<MapEntry>('}', -> parse_map_entry(tokens), [])
   if entries.is_empty()
     tokens.fail position, 'the empty map is written `Map()`, and the empty set `Set()`'
   MapLiteral entries, position
@@ -165,18 +164,17 @@ parse_map_entry := (tokens: TokenStream) ->
   MapEntry key, value: parse_expression(tokens)
 
 # A name followed by `:`, `,`, `}` or the end of its line starts a field of an anonymous struct; a
-# map's keys are other expressions. The line may end before the name, right after the `{`.
+# map's keys are other expressions.
 starts_record_field := (tokens: TokenStream) ->
-  index := tokens.item_index()
-  follows_name := is_one_of(tokens.tokens[index + 1].kind, [':', ',', '}', LINE_BREAK])
-  tokens.tokens[index].kind == IDENTIFIER and follows_name
+  follows_name := is_one_of(tokens.peek_at(1).kind, [':', ',', '}', NEWLINE])
+  tokens.peek().kind == IDENTIFIER and follows_name
 
 # An item that ends with `...`, which spreads the fields of a struct into a construction or an
 # anonymous struct (see the checker's spread_argument), before a `,`, `}`, `:` or the end of its
 # line outside brackets of its own, which end a field or a map's key.
 export starts_spread := (tokens: TokenStream) ->
   var depth = 0
-  var index = tokens.item_index()
+  var index = tokens.index_at(0)
   while true
     kind := tokens.tokens[index].kind
     return false if kind == EOF
@@ -186,14 +184,14 @@ export starts_spread := (tokens: TokenStream) ->
       return false if depth == 0
       depth -= 1
     else if depth == 0
-      return false if is_one_of(kind, [',', ':', LINE_BREAK, NEWLINE])
+      return false if is_one_of(kind, [',', ':', NEWLINE])
       return true if kind == '...' and is_one_of(tokens.tokens[index + 1].kind, SPREAD_FOLLOWERS)
     index += 1
   false
 
 # `{ x: 1, y }`; a field without a value takes that of the name. A spread comes first, alone.
 parse_record_literal := (tokens: TokenStream, position: Position) ->
-  items := tokens.parse_list('}', -> parse_record_item(tokens))
+  items := tokens.parse_list_rest<RecordItem>('}', -> parse_record_item(tokens), [])
   record_of tokens, items, position
 
 type RecordItem = NamedValue | Comprehension
