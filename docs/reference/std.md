@@ -211,3 +211,4 @@ print "#{name}: #{scanner.rest()}"
 |---|---|
 | `sleep(seconds: Float): Promise` | A promise that is resolved once at least the seconds have passed (a time of zero only lets other work run first), for a [function that awaits](functions.md#functions-that-await) to wait for. Throws a `ValueError`, `sleep for a negative time`, for a negative time. |
 | `time(): Float` | The seconds since the Unix epoch, 1970-01-01T00:00:00Z, with their fraction, as the system's clock tells them; it may go back if the clock is set back. |
+| `monotonic(): Float` | The seconds, with their fraction, since a time that is not specified, as a clock that only goes forward tells them, which a setting of the system's clock does not move: what a time that has passed is measured by. |

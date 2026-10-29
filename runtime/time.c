@@ -66,3 +66,8 @@ LertaPromise *lerta_sleep(double seconds) {
 double lerta_unix_time(void) {
   return lerta_os_unix_time();
 }
+
+// libuv's high-resolution clock, which no setting of the system's clock moves.
+double lerta_monotonic_time(void) {
+  return (double)uv_hrtime() / 1e9;
+}

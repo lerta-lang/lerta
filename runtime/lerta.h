@@ -286,6 +286,8 @@ void lerta_finish_top_level(LertaPromise *promise);
 LertaPromise *lerta_sleep(double seconds);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_unix_time(void);
+// Seconds since an unspecified time, which only go forward.
+double lerta_monotonic_time(void);
 
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.
