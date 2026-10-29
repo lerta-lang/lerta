@@ -1,7 +1,7 @@
 # An HTTP/1.1 server and client over std:net, whose handler takes a Request and gives a Response, as
 # fetch does.
 
-import Signal from 'std:async'
+import Signal, spawn from 'std:async'
 import Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
 import address_text from './internal/handle'
@@ -55,7 +55,7 @@ export serve := (handler: (Request) -> Promise<Response>, options: ServerOptions
   listener := listen_tcp(host, options.port)
   address := address_text(host, listener.port)
   server := Server(listener, handler, options, address)
-  _accepting := accept_all(server)
+  spawn accept_all(server)
   server
 
 check_options := (options: ServerOptions) ->
@@ -85,12 +85,12 @@ accept_all := (server: Server) ->
     if server.closed
       socket.close()
       return
-    _serving := serve_connection(socket, server)
+    spawn serve_connection(socket, server)
 
 serve_connection := (socket: Socket, server: Server) ->
   server.connections += 1
   deadline := Deadline()
-  _watching := deadline.watch()
+  spawn deadline.watch()
   try
     var going_on = true
     going_on = await serve_request(socket, server, deadline) while going_on

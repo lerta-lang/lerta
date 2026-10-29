@@ -70,6 +70,10 @@ settled_by := <T>(fired: Promise, outcome: Outcome<T>): Promise<T> ->
   value := outcome.value!
   value()
 
+# Lets the work of the promise go on without awaiting it, as the event loop keeps it running: an
+# error that it ends with, which nothing awaits, ends the program, as that of any promise dropped.
+export spawn := <T>(task: Promise<T>) -> return
+
 # The value of each promise, in their order, once all are resolved, or nothing for promises without
 # a value; the error of the first that is rejected, at once.
 export all := <P>(promises: P[]) -> await promises.gathered()
@@ -105,7 +109,7 @@ extend<T> Promise<T>[]
         all_values.resolve [box[0] for box in boxes] if left == 0
       catch error
         all_values.reject error
-    _settling := [settle(i, promise) for promise, i in @]
+    spawn settle(i, promise) for promise, i in @
     try
       await all_values.promise()
     # Only a cancel of all cancels them: the error of one leaves the others, whose work may still
