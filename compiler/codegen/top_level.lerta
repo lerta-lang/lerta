@@ -2,6 +2,7 @@
 import Shared from '../checker/shared'
 import top_level_value from '../checker/top_level_values'
 import Module from '../loader'
+import top_level_tag from './alias_tags'
 import Generator, TopLevelGlobal from './generator'
 import throw_if from './runtime_errors'
 import IrBuilder, IrModule from './ir_builder'
@@ -21,11 +22,11 @@ export define_top_level_globals := (ir_module: IrModule, module: Module, shared:
   globals
 
 export emit_mark_initialized := (ir: IrBuilder, global: TopLevelGlobal) ->
-  ir.emit "store i1 true, ptr #{global.flag}"
+  ir.emit "store i1 true, ptr #{global.flag}#{top_level_tag(ir)}"
 
 # Throws an InitError unless the value has been initialized.
 export emit_initialized_check := (g: Generator, global: TopLevelGlobal) ->
-  is_set := g.ir.assign("load i1, ptr #{global.flag}")
+  is_set := g.ir.assign("load i1, ptr #{global.flag}#{top_level_tag(g.ir)}")
   is_unset := g.ir.assign("xor i1 #{is_set}, true")
   message := "'#{global.name}' is used before it is initialized"
   throw_if g, is_unset, { message, type_name: 'InitError' }
@@ -34,5 +35,5 @@ export emit_initialized_check := (g: Generator, global: TopLevelGlobal) ->
 # deinit run by the releases fails the initialized check instead of reading a released value.
 export emit_release_globals := (ir: IrBuilder, globals: TopLevelGlobal[]) ->
   for global in globals
-    ir.emit "store i1 false, ptr #{global.flag}"
+    ir.emit "store i1 false, ptr #{global.flag}#{top_level_tag(ir)}"
     emit_release_stored ir, global.pointer, ir_type(global.type), ownership(global.type)

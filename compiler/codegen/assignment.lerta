@@ -2,12 +2,15 @@
 import Assignment, Call, combining_operator, Expression, Identifier, Index, Member from '../ast'
 import Method from '../checker/member_targets'
 import info_of from '../checker/object_types'
+import field_tag from './alias_tags'
 import emit_checked_items, emit_get, emit_is_out_of_range, emit_set_in from './array'
 import
   emit_exception_check, emit_exception_check_if, holding, pop_temporaries, push_temporary,
   while_holding
 from './exceptions'
-import generate, release_if_reference, slot_pointer, type_at_use, type_of from './expression'
+import
+  generate, release_if_reference, slot_pointer, slot_tag, type_at_use, type_of
+from './expression'
 import generate_borrowed from './borrowing'
 import emit_method_call, MethodCall from './call'
 import weak_box_of from './function'
@@ -36,7 +39,7 @@ export generate_assignment := (g: Generator, written: Assignment) ->
       if slot.weak
         assign_weak g, assignment, pointer, slot.type
       else
-        assign_through g, assignment, pointer, slot.type
+        assign_through g, assignment, pointer, slot.type, slot_tag(g.ir, slot)
 
 # `a += b` through a method assigns the call of it that the checker made, `a.add(b)` (see
 # check_operator_assignment), but for a target with a default, which update_with_default reads
@@ -65,7 +68,7 @@ generate_field_assignment := (g: Generator, assignment: Assignment, target: Memb
     if weak
       assign_weak g, assignment, pointer, field_type
     else
-      assign_through g, assignment, pointer, field_type
+      assign_through g, assignment, pointer, field_type, field_tag(g.ir, field_type)
   return assign() if not owned
   while_holding g, object, object_type, assign
   emit_release g.ir, object
@@ -202,16 +205,18 @@ combine_by_method := (
 # what the value did to the target, as a method that assigns the same field does. The target's
 # reference to the old value passes to `combine`, which consumes it, so that a String or a Binary
 # that nothing else holds grows in place; `=` releases the old value once the new one is stored.
-assign_through := (g: Generator, assignment: Assignment, pointer: String, type: Type) ->
+assign_through := (
+  g: Generator, assignment: Assignment, pointer: String, type: Type, tag: String
+) ->
   ir := g.ir
-  load := -> ir.assign("load #{ir_type(type)}, ptr #{pointer}")
+  load := -> ir.assign("load #{ir_type(type)}, ptr #{pointer}#{tag}")
   operand := appended(g, assignment.value)
   value := generate(g, operand)
   is_plain := assignment.operator == '='
   old := is_plain then '' else load()
   result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
   replaced := is_plain and ownership(type) != NONE then load() else ''
-  ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}"
+  ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}#{tag}"
   emit_release_value ir, replaced, type if not replaced.is_empty()
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.

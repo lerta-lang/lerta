@@ -438,12 +438,7 @@ ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
 dump_item_tag_check := -> Check(name: 'lerta dump-llvm tags the loads and stores of items', run: ->
   dumped := await run_in_new_dir(compiler, ['dump-llvm', ITEM_WRITES])
   lines := dumped.result.stdout.text()!.split("\n")
-  item := [line for line in lines when line.contains('!"lerta item"')]
-  return ["the item's node is defined #{item.length} times"] if item.length != 1
-  name := item[0].split(' = ')[0]
-  tag := [line for line in lines when line.ends_with(" = !{#{name}, #{name}, i64 0}")]
-  return ["the item's tag is defined #{tag.length} times"] if tag.length != 1
-  tagged := ", !tbaa #{tag[0].split(' = ')[0]}"
+  tagged := alias_tag_of(lines, 'lerta item') ? return ['the tag of items is not defined once']
   root := await clang_tbaa_root(dumped.cwd)
   has_root := lines.any((line) -> line.ends_with(" = #{root}"))
   return ["no node of clang's root of type-based alias analysis, #{root}"] if not has_root
@@ -455,6 +450,58 @@ dump_item_tag_check := -> Check(name: 'lerta dump-llvm tags the loads and stores
     ["no #{access} with the tag" for access in accesses when not is_tagged(access)]...
   ]
 )
+
+# What an access with the alias tag of the type of the name ends with, among the lines of the IR,
+# or nil unless the module defines the type's node and the tag's once each.
+alias_tag_of := (lines: String[], name: String) ->
+  type := [line for line in lines when line.contains("!\"#{name}\"")]
+  return nil if type.length != 1
+  node := type[0].split(' = ')[0]
+  tag := [line for line in lines when line.ends_with(" = !{#{node}, #{node}, i64 0}")]
+  return nil if tag.length != 1
+  ", !tbaa #{tag[0].split(' = ')[0]}"
+
+FIELD_WRITES := "#{root_dir}/tests/float/field_writes.lerta"
+
+# In a function that writes Float and Float32 fields in a loop, the accesses to the fields, to the
+# top-level values and their flags, and the read of the pending exception each name their own
+# alias tag, and an Int field names none.
+dump_field_tag_check := ->
+  Check name: 'lerta dump-llvm tags fields, top-level values and the exception', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', FIELD_WRITES])
+    lines := dumped.result.stdout.text()!.split("\n")
+    body := function_body(lines, 'move') ? return ['no function move']
+    undefined := (name: String) -> ["the tag of #{name} is not defined once"]
+    float := alias_tag_of(lines, 'lerta float') ? return undefined('lerta float')
+    top_level := alias_tag_of(lines, 'lerta top level') ? return undefined('lerta top level')
+    pointer := alias_tag_of(lines, 'any pointer') ? return undefined('any pointer')
+    value := (name: String) -> "ptr @\"lerta.value../field_writes.lerta.#{name}"
+    accesses :=
+      { access: 'load double, ptr %', tagged: float }
+      { access: 'store double ', tagged: float }
+      { access: 'store float ', tagged: float }
+      { access: 'load float, ptr %', tagged: float }
+      { access: "load ptr, #{value('points')}\"", tagged: top_level }
+      { access: "load i1, #{value('points')}.set\"", tagged: top_level }
+      { access: "load double, #{value('total')}\"", tagged: top_level }
+      { access: "load i1, #{value('total')}.set\"", tagged: top_level }
+      { access: 'load ptr, ptr @lerta_exception', tagged: pointer }
+    is_tagged := (access: String, tagged: String) ->
+      body.any (line) -> access in line and line.ends_with(tagged)
+    reasons := expect_status(0, dumped.result.status)
+    for expected in accesses
+      if not is_tagged(expected.access, expected.tagged)
+        reasons.push "no #{expected.access} with its tag"
+    for flag in ['true', 'false']
+      store := "store i1 #{flag}, #{value('points')}.set\""
+      if not lines.any((line) -> store in line and line.ends_with(top_level))
+        reasons.push "no #{store} with its tag"
+    # id, the Int field, comes first after the header's two fields.
+    id := body.find((line) -> 'Point", ptr %' in line and line.ends_with(', i32 0, i32 2'))
+    id_load :=
+      id and body.find((line) -> line.ends_with(" = load i64, ptr #{id.split(' = ')[0].trim()}"))
+    reasons.push 'no load of the Int field without a tag' if not id_load
+    reasons
 
 # The root node of the alias analysis that clang gives the runtime's C, without its number, so that
 # the items' type is in the same tree as the C types of the runtime.
@@ -635,6 +682,7 @@ checks.push dump_joined_literals_check()
 checks.push dump_unchecked_methods_check()
 checks.push dump_float_ranges_check()
 checks.push dump_item_tag_check()
+checks.push dump_field_tag_check()
 checks.push item_tag_source_lines_check()
 checks.push source_lines_check()
 checks.push no_trace_check()
