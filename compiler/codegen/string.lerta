@@ -43,10 +43,13 @@ export emit_binary_length := (ir: IrBuilder, binary: String) ->
   length := ir.assign("getelementptr #{LAYOUT}, ptr #{binary}, i32 0, i32 #{LENGTH_FIELD}")
   ir.assign "load i64, ptr #{length}"
 
-# Whether the index is out of the Binary's range; compared as unsigned, a negative index is out of
-# range too.
+# Whether the index is out of the Binary's range: negative, or at or beyond the length, compared as
+# signed rather than at once as unsigned, so that LLVM drops the second where a loop's condition
+# such as `i < bytes.length` has checked it, which leaves the test of the sign.
 export emit_binary_out_of_range := (ir: IrBuilder, binary: String, index: String) ->
-  ir.assign "icmp uge i64 #{index}, #{emit_binary_length(ir, binary)}"
+  negative := ir.assign("icmp slt i64 #{index}, 0")
+  beyond := ir.assign("icmp sge i64 #{index}, #{emit_binary_length(ir, binary)}")
+  ir.assign "or i1 #{negative}, #{beyond}"
 
 # The bytes of the Binary from `start` up to `end`, copied into a new one, owned; the runtime throws
 # unless 0 <= start <= end <= its length.
