@@ -1,6 +1,6 @@
 # The Linux image, for x86-64 only, with mingw-w64, lld and Wine, to build Windows programs, 64-bit
 # and 32-bit, and run them, and llvm-mingw, a clang for Windows that the compiler for Windows runs
-# under Wine. tools/test_cross.sh builds lerta-test-linux first.
+# under Wine. tools/docker/run.sh builds lerta-test-linux first.
 FROM lerta-test-linux
 RUN dpkg --add-architecture i386 \
   && apt-get update \

@@ -62,14 +62,8 @@ runs_here() {
   return $status
 }
 
-# Runs a command in a container of the image, built first, on the Linux one as the others are.
+# Runs a command in a container of the image (see tools/docker/run.sh).
 run_in_docker() { # <what> <image> <command>
-  for name in linux "$2"; do
-    if ! docker build --quiet --tag "lerta-test-$name" "tools/docker/$name" >/dev/null; then
-      record_failure "$1 (cannot build the image)"
-      return
-    fi
-  done
   container_count=$((container_count + 1))
   container="lerta-test-$$-$container_count"
   run "$1" in_docker "$container" "$2" "$3"
@@ -79,17 +73,17 @@ run_in_docker() { # <what> <image> <command>
 container=''
 container_count=0
 
-# The container works on the tree mounted read-only, with build/ and bin/, where the build writes,
-# each its own empty volume: the containers and the host would otherwise share their builds. Their
-# mount points must already be in the tree, which is read-only: they are, since the host builds
-# bin/lerta first.
 in_docker() { # <container> <image> <command>
-  docker run --rm --name "$1" --volume "$root:/lerta:ro" --volume /lerta/build \
-    --volume /lerta/bin --workdir /lerta "lerta-test-$2" sh -c "$3" &
+  tools/docker/run.sh --name "$1" "$2" sh -c "$3" &
   # Run in the background and waited for, as a trap runs only once a foreground command ends, and
   # the container's shell, its PID 1, ignores the interruption that docker run would pass on.
-  wait $!
+  in_docker_pid=$!
+  wait $in_docker_pid
+  status=$?
+  in_docker_pid=''
+  return $status
 }
+in_docker_pid=''
 
 summary=''
 failed=0
@@ -108,7 +102,11 @@ run() { # <what> <command...>
 }
 
 stop() {
-  if [ -n "$container" ]; then docker kill "$container" >/dev/null 2>&1; fi
+  # The background run.sh ignores the interruption, and would otherwise go on to start the
+  # container after this exits. A docker build that it runs still finishes on its own.
+  if [ -n "$in_docker_pid" ]; then kill "$in_docker_pid" 2>/dev/null; fi
+  # Removed, not killed, as one that docker run created but did not start is left otherwise.
+  if [ -n "$container" ]; then docker rm --force "$container" >/dev/null 2>&1; fi
   exit 130
 }
 trap stop HUP INT TERM

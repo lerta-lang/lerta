@@ -57,7 +57,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `runtime/` | The C runtime, which the compiler embeds |
 | `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals.md#bootstrap)) |
 | `third_party/` | libuv, with its license, and `libuv.txt`, which says how the runtime builds it for each system. Its license notice goes with the compiler, and with the programs it builds (see [the reference](docs/reference/compiler.md)) |
-| `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs, and the Docker images it uses in `docker/` |
+| `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs, and the Docker images it uses in `docker/`, where `run.sh` runs a command, bash by default, in one of them |
 | `test/` | The test scripts (see [Tests](#tests)) |
 | `tests/` | Run tests: Lerta sources and their expected output; also the files of the CLI checks (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
