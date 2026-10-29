@@ -9,6 +9,10 @@ The definition of safety is in [philosophy](../philosophy.md#safety). Planned:
 - FFI and raw pointer operations only inside `unsafe` blocks.
 - A panic prints a stack trace, besides its message, perhaps through a **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach). Exceptions do not need one: their traces are made as they unwind ([internals](../internals.md#exception-traces)).
 
+## Index checks
+
+Each read or write of an array's item checks its index against the length (`lerta_array_checked_items`, inlined). A loop whose bounds already keep the index in range checks it again each time: `bench/sieve`, whose array `Array(n, false)` is indexed by `i` of `for i in 2...n` and by `j` of `while j < n`, takes 0.21 s with the checks and 0.187 s with every check removed by hand, as long as Go's 0.188 s, which proves them in range itself. Telling LLVM that the length is `n` right after `Array(n, v)` (`llvm.assume`) did not let it drop them: it compared the outer loop's index with `n` instead, but read the length again in the inner loop. Removing them needs the compiler to know that the array's length does not change while the loop runs and that the index stays in range, as a range of a `for` does and a `while`'s condition with a variable that only grows from a value in range does. The compiler's own `dump-llvm`, built with `-O` and without the memory checks, ran 0.9% fewer instructions with every check of an array's index removed, and 3.0% fewer with those of a `Binary`'s index removed too, in about the same time.
+
 ## Discarded values
 
 These apply when a value in statement position is not captured, beyond [the reference](../reference/errors.md#discarded-values).
