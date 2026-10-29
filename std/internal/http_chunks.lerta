@@ -45,8 +45,15 @@ export class ChunkedBody
   # The size of the next chunk, in hexadecimal before its extensions.
   size = ->
     line := await @line() ? throw @ended_early()
-    (digits, _extensions) := line.split_once(';') ? (line, '')
-    hex := digits.trim().binary
+    var size_text = line
+    if parts := line.split_once(';')
+      (before, _extensions) := parts
+      # Whitespace may go before the extensions, as RFC 9112 has it, and nowhere else.
+      size_text = before
+      while true
+        trimmed := size_text.without_suffix(' ') ? size_text.without_suffix("\t") ? break
+        size_text = trimmed
+    hex := size_text.binary
     throw @malformed() if hex.is_empty()
     var zeros = 0
     zeros += 1 while zeros < hex.length and hex[zeros] == '0'
