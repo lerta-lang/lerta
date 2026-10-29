@@ -1,0 +1,84 @@
+# A function value that is called is borrowed where nothing can replace it while its arguments
+# are evaluated and the call runs, and held otherwise: what it captures stays alive until the call
+# is done.
+class Tag
+  name: String
+  deinit = -> print("tag #{@name} gone")
+
+labeller := (tag: Tag) -> (x: Int) -> "#{tag.name} #{x}"
+
+# A parameter, a const and a captured const, called.
+apply := (f: (Int) -> String, x: Int) -> f(x)
+print apply(labeller(Tag('param')), 1)
+label := labeller(Tag('const'))
+print label(2)
+twice := (f: (Int) -> String) -> (x: Int) -> "#{f(x)}, #{f(x + 1)}"
+print twice(label)(3)
+
+# A var that an argument replaces: the old function is called, and kept until the call is done.
+replace_while_called := ->
+  var current = labeller(Tag('old'))
+  # fmt: skip
+  print current(
+    case
+      when true
+        current = labeller(Tag('new'))
+        4
+      else 0
+  )
+  print current(5)
+replace_while_called()
+
+# A captured var that the argument's call replaces is held too.
+replace_captured := ->
+  var current = labeller(Tag('captured old'))
+  swap := ->
+    current = labeller(Tag('captured new'))
+    6
+  print current(swap())
+  print current(7)
+replace_captured()
+
+# A field's function, an array item's and a const's that a field holds; one that an argument
+# replaces is held.
+class Holder
+  var f: (Int) -> String
+  replace = ->
+    @f = labeller(Tag('field new'))
+    8
+
+holder := Holder(f: labeller(Tag('field old')))
+print holder.f(holder.replace())
+print holder.f(9)
+functions := [labeller(Tag('item'))]
+print functions[0](10)
+from_field := (holder: Holder) ->
+  f := holder.f
+  f 11
+print from_field(holder)
+
+# A const field's function, borrowed, directly and through a field of another object.
+class Fixed
+  const f: (Int) -> String
+
+class Outer
+  const fixed: Fixed
+
+call_fixed := (outer: Outer) -> "#{outer.fixed.f(14)}; #{outer.fixed.f(15)}"
+print call_fixed(Outer(fixed: Fixed(f: labeller(Tag('fixed')))))
+
+# A top-level var that the argument's call replaces is held.
+var global = labeller(Tag('global old'))
+replace_global := ->
+  global = labeller(Tag('global new'))
+  12
+print global(replace_global())
+
+# An argument that throws leaves the borrowed function as it was.
+fail := (): Int -> throw ValueError('failed')
+try
+  print label(fail())
+catch error: ValueError
+  print error.message
+print label(13)
+print 'done'

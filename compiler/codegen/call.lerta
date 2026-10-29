@@ -48,7 +48,7 @@ export generate_call := (g: Generator, call: Call): String ->
     symbol := instance_symbol(g.code.program, instance)
     return call_function(g, symbol, instance.entry.type!, arguments_of(g.facts, call), nil)
   return generate_named_call(g, call, callee) if callee is Identifier
-  call_closure g, generate(g, callee), type_of(g, callee), arguments_of(g.facts, call)
+  call_closure g, callee, arguments_of(g.facts, call)
 
 # A call of a name: of the builtin Map, Set or Array, std:json's write_json or read_json, a
 # constructor, a C function, a function written in Lerta, or a local or a top-level value that holds
@@ -72,7 +72,7 @@ generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
       result
     when FunctionReference
       call_function g, function_reference_symbol(g, reference), callee_type(), args, nil
-    when ScopedLocal, TopLevelValue then call_closure(g, generate(g, callee), callee_type(), args)
+    when ScopedLocal, TopLevelValue then call_closure(g, callee, args)
     when EnumValue then panic('an enum value is not called')
 
 generate_new_collection := (g: Generator, call: Call, type: MapType | ArrayType) ->
@@ -116,11 +116,7 @@ generate_member_call := (g: Generator, call: Call, member: Member) ->
     when EnumParse
       with_arguments g, arguments_of(g.facts, call), (operands) ->
         emit_parse g.ir, operands[0], target.type
-    when Property
-      object := generate(g, member.object)
-      field_type := type_of(g, member)
-      closure := read_any_field(g, object, type_of(g, member.object), member.name.name, field_type)
-      call_closure g, closure, field_type, arguments_of(g.facts, call)
+    when Property then call_closure(g, member, arguments_of(g.facts, call))
     when Method then generate_method_call(g, call, member, target.source)
     when InterfaceProperty then panic('a member of an interface that is called is a method')
     when EnumValue then panic('an enum value is not called')
@@ -282,12 +278,17 @@ export call_user_function := (ir: IrBuilder, symbol: String, type: Type, args: S
   return ir.assign(call) if not returns_nothing(result)
   emit_valueless_call ir, call, result
 
-# Calls a function value, a closure, which the call owns and releases; it is evaluated before
-# the arguments, as a named function is known before them.
-call_closure := (g: Generator, closure: String, type: Type, args: Expression[]) ->
+# Calls a function value, a closure: a local's, a field's or any other, borrowed where it can be
+# while the arguments are evaluated and the call runs (see generate_borrowed), and otherwise owned
+# and released after the call; it is evaluated before the arguments, as a named function is known
+# before them.
+call_closure := (g: Generator, callee: Expression, args: Expression[]) ->
+  type := type_of(g, callee)
+  (closure, is_owned) := generate_borrowed(g, callee, args)
   emit_call := (operands: String[]) -> emit_closure_call(g.ir, closure, type, operands)
-  result := holding(g, closure, type, -> with_arguments(g, args, emit_call))
-  emit_release g.ir, closure
+  call_with_arguments := -> with_arguments(g, args, emit_call)
+  result := is_owned then holding(g, closure, type, call_with_arguments) else call_with_arguments()
+  emit_release g.ir, closure if is_owned
   emit_exception_check g
   result
 
