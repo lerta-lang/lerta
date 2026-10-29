@@ -170,8 +170,7 @@ static void end_task(void *data) {
     }
     lerta_promise_resolve(task->promise);
   } else {
-    lerta_raise_with(LERTA_IO_ERROR, task->failure, task->path);
-    lerta_promise_reject(task->promise);
+    lerta_promise_reject_io(task->promise, task->failure, task->path);
   }
   lerta_release(task->promise);
   lerta_release(task->path);
@@ -299,8 +298,7 @@ static void end_file_write(void *data) {
     if (write->succeeded) {
       lerta_promise_resolve(write->promise);
     } else {
-      lerta_raise_with(LERTA_IO_ERROR, &cannot_write, open->path);
-      lerta_promise_reject(write->promise);
+      lerta_promise_reject_io(write->promise, &cannot_write, open->path);
     }
     lerta_release(write->promise);
   }

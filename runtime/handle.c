@@ -132,11 +132,6 @@ static int64_t port_of(const struct sockaddr_storage *address) {
   return ntohs(((struct sockaddr_in *)address)->sin_port);
 }
 
-static void reject_with(LertaPromise *promise, const void *failure, const LertaString *address) {
-  lerta_raise_with(LERTA_IO_ERROR, failure, address);
-  lerta_promise_reject(promise);
-}
-
 // The promise that the Handle held, taken from it.
 static LertaPromise *take_pending(Handle *handle) {
   LertaPromise *promise = handle->pending;
@@ -195,7 +190,7 @@ void lerta_handle_close(int64_t pointer) {
   if (handle->pending == NULL) return;
   handle->accepted = NULL;
   LertaPromise *promise = take_pending(handle);
-  reject_with(promise, handle->pending_failure, handle->address);
+  lerta_promise_reject_io(promise, handle->pending_failure, handle->address);
   lerta_release(promise);
 }
 
@@ -233,7 +228,7 @@ static void take_connection(Handle *listener, LertaPromise *promise) {
   bool accepted = uv_accept(listener->stream, socket->stream) == 0;
   LertaString *address = accepted ? peer_address(socket) : NULL;
   if (address == NULL) {
-    reject_with(promise, &cannot_accept, listener->address);
+    lerta_promise_reject_io(promise, &cannot_accept, listener->address);
     return;
   }
   set_address(socket, address);
@@ -251,7 +246,7 @@ static void come_connection(uv_stream_t *stream, int status) {
     take_connection(listener, promise);
   } else {
     listener->accepted = NULL;
-    reject_with(promise, &cannot_accept, listener->address);
+    lerta_promise_reject_io(promise, &cannot_accept, listener->address);
   }
   lerta_release(promise);
 }
@@ -295,7 +290,7 @@ LertaPromise *lerta_tcp_accept(int64_t listener_pointer, int64_t socket_pointer)
   }
   LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
   if (listener->stream == NULL) {
-    reject_with(promise, &cannot_accept, listener->address);
+    lerta_promise_reject_io(promise, &cannot_accept, listener->address);
     return promise;
   }
   listener->accepted = handle_of(socket_pointer);
@@ -308,12 +303,16 @@ LertaPromise *lerta_tcp_accept(int64_t listener_pointer, int64_t socket_pointer)
   return promise;
 }
 
-static void end_connect(Handle *socket, bool connected) {
+static void free_addresses(Handle *socket) {
   uv_freeaddrinfo(socket->addresses);
   socket->addresses = NULL;
+}
+
+static void end_connect(Handle *socket, bool connected) {
+  free_addresses(socket);
   LertaPromise *promise = take_pending(socket);
   if (connected) lerta_promise_resolve(promise);
-  else reject_with(promise, &cannot_connect, socket->address);
+  else lerta_promise_reject_io(promise, &cannot_connect, socket->address);
   lerta_release(promise);
 }
 
@@ -324,8 +323,7 @@ static void end_connect_attempt(uv_connect_t *request, int status) {
   Handle *socket = request->data;
   socket->requests--;
   if (socket->stream == NULL) {
-    uv_freeaddrinfo(socket->addresses);
-    socket->addresses = NULL;
+    free_addresses(socket);
     free_handle_if_done(socket);
   } else if (status == 0) {
     end_connect(socket, true);
@@ -353,12 +351,12 @@ static void try_next_address(Handle *socket) {
 static void end_resolve(uv_getaddrinfo_t *request, int status, struct addrinfo *addresses) {
   Handle *socket = request->data;
   socket->requests--;
+  socket->addresses = addresses;
   if (socket->stream == NULL) {
-    uv_freeaddrinfo(addresses);
+    free_addresses(socket);
     free_handle_if_done(socket);
     return;
   }
-  socket->addresses = addresses;
   socket->next_address = status == 0 ? addresses : NULL;
   try_next_address(socket);
 }
@@ -381,7 +379,7 @@ LertaPromise *lerta_tcp_connect(int64_t pointer, const LertaString *host, int64_
   set_address(socket, address_text(name, port));
   if (socket->stream == NULL) {
     free(name);
-    reject_with(promise, &cannot_connect, socket->address);
+    lerta_promise_reject_io(promise, &cannot_connect, socket->address);
     return promise;
   }
   hold_pending(socket, promise, &cannot_connect, cancel_connect);
@@ -420,7 +418,7 @@ static void read_chunk(uv_stream_t *stream, ssize_t count, const uv_buf_t *buffe
     *(LertaString **)lerta_promise_slot(promise) = NULL;
     lerta_promise_resolve(promise);
   } else if (count < 0) {
-    reject_with(promise, &cannot_read, socket->address);
+    lerta_promise_reject_io(promise, &cannot_read, socket->address);
   } else {
     *(LertaString **)lerta_promise_slot(promise) = lerta_string_from_bytes(buffer->base, count);
     lerta_promise_resolve(promise);
@@ -441,7 +439,7 @@ LertaPromise *lerta_handle_read(int64_t pointer) {
   bool started = socket->stream != NULL &&
                  uv_read_start(socket->stream, allocate_chunk, read_chunk) == 0;
   if (!started) {
-    reject_with(promise, &cannot_read, socket->address);
+    lerta_promise_reject_io(promise, &cannot_read, socket->address);
     return promise;
   }
   uv_ref((uv_handle_t *)socket->stream);
@@ -468,7 +466,7 @@ static void end_write(uv_write_t *request, int status) {
   } else if (status == 0) {
     lerta_promise_resolve(write->promise);
   } else {
-    reject_with(write->promise, &cannot_write, write->address);
+    lerta_promise_reject_io(write->promise, &cannot_write, write->address);
   }
   lerta_release(write->promise);
   lerta_release(write->bytes);
@@ -507,7 +505,7 @@ LertaPromise *lerta_handle_write(int64_t pointer, const LertaString *bytes) {
   Handle *socket = handle_of(pointer);
   LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
   if (socket->stream == NULL) {
-    reject_with(promise, &cannot_write, socket->address);
+    lerta_promise_reject_io(promise, &cannot_write, socket->address);
     return promise;
   }
   Write *write = lerta_checked_malloc(sizeof(Write));
@@ -516,7 +514,7 @@ LertaPromise *lerta_handle_write(int64_t pointer, const LertaString *bytes) {
   write->request.data = write;
   if (start_write(write) != 0) {
     free(write);
-    reject_with(promise, &cannot_write, socket->address);
+    lerta_promise_reject_io(promise, &cannot_write, socket->address);
     return promise;
   }
   socket->requests++;

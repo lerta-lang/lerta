@@ -205,6 +205,11 @@ void lerta_promise_reject_cancelled(LertaPromise *promise) {
   lerta_promise_reject(promise);
 }
 
+void lerta_promise_reject_io(LertaPromise *promise, const void *prefix, const LertaString *detail) {
+  lerta_raise_with(LERTA_IO_ERROR, prefix, detail);
+  lerta_promise_reject(promise);
+}
+
 // The body that waits deepest, through the promises that the bodies wait for, throws a
 // CancelledError as it resumes; the work at the end, if it can be stopped, is, which rejects its
 // promise, so that the body resumes at once. Work that cannot be stopped ends first.

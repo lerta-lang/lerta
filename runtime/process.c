@@ -36,27 +36,31 @@ void lerta_exit(int64_t code) {
   lerta_os_exit(flushed || code != 0 ? (int)code : 1);
 }
 
-// The command and the arguments as C strings, ending with NULL, which free_c_args frees.
+static char *c_string_item(const LertaArray *strings, int64_t index) {
+  return lerta_c_string((const LertaString *)(intptr_t)lerta_word_item(strings, index));
+}
+
+// The command and the arguments as C strings, ending with NULL, which free_c_strings frees.
 static char **c_args_of(const LertaString *command, const LertaArray *args) {
   int64_t count = args->length + 1;
   char **c_args = lerta_checked_calloc((size_t)count + 1, sizeof(char *));
   c_args[0] = lerta_c_string(command);
   for (int64_t i = 1; i < count; i++) {
-    c_args[i] = lerta_c_string((const LertaString *)(intptr_t)lerta_word_item(args, i - 1));
+    c_args[i] = c_string_item(args, i - 1);
   }
   return c_args;
 }
 
-static void free_c_args(char **c_args, int64_t count) {
-  for (int64_t i = 0; i < count; i++) free(c_args[i]);
-  free(c_args);
+static void free_c_strings(char **c_strings) {
+  for (char **string = c_strings; *string != NULL; string++) free(*string);
+  free(c_strings);
 }
 
-// The strings as C strings, ending with NULL, which free_c_args frees.
+// The strings as C strings, ending with NULL, which free_c_strings frees.
 static char **c_strings_of(const LertaArray *strings) {
   char **c_strings = lerta_checked_calloc((size_t)strings->length + 1, sizeof(char *));
   for (int64_t i = 0; i < strings->length; i++) {
-    c_strings[i] = lerta_c_string((const LertaString *)(intptr_t)lerta_word_item(strings, i));
+    c_strings[i] = c_string_item(strings, i);
   }
   return c_strings;
 }
@@ -220,7 +224,6 @@ static bool spawn(Program *program, char *file, char **args, char **env, const c
 int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
                             const LertaString *cwd, const LertaArray *env,
                             const LertaArray *streams, double kill_after) {
-  int64_t count = args->length + 1;
   char **c_args = c_args_of(command, args);
   char *file = lerta_os_program_file(c_args[0]);
   char **c_env = env == NULL ? NULL : c_strings_of(env);
@@ -235,9 +238,9 @@ int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
   const int64_t handles[3] = {
     lerta_word_item(streams, 0), lerta_word_item(streams, 1), lerta_word_item(streams, 2)};
   bool spawned = file != NULL && spawn(program, file, c_args, c_env, c_cwd, handles);
-  free_c_args(c_args, count);
+  free_c_strings(c_args);
   free(file);
-  if (c_env != NULL) free_c_args(c_env, env->length);
+  if (c_env != NULL) free_c_strings(c_env);
   free(c_cwd);
   if (spawned) return (int64_t)(intptr_t)program;
   program->freed = true;

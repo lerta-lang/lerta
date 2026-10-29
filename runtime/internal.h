@@ -84,6 +84,8 @@ void lerta_array_append(LertaArray *array, const void *item);
 typedef void (*LertaCancel)(void *context);
 void lerta_promise_on_cancel(LertaPromise *promise, LertaCancel cancel, void *context);
 void lerta_promise_reject_cancelled(LertaPromise *promise);
+// Rejects the promise with an IOError, its message made as by lerta_raise_with.
+void lerta_promise_reject_io(LertaPromise *promise, const void *prefix, const LertaString *detail);
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
 
