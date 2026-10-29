@@ -1,6 +1,6 @@
 # Files, and the standard output and error streams (see runtime/file.c, io.c, output.c and stdin.c).
 
-import Deferred from 'std:async'
+import Signal from 'std:async'
 import bytes_of from './internal/utf8'
 
 extern lerta_read_file_async: (String) -> Promise<Binary>
@@ -200,7 +200,7 @@ class PipeWriter
   read_no_more = false
   # The takes that wait while nothing is queued, each on its own, so that a cancel of one leaves
   # the others waiting.
-  arrivals: Deferred<Bool>[] = []
+  arrivals: Signal[] = []
 
   # An empty chunk is not queued, as the reader would take it for the end.
   write = (data: String | Binary) ->
@@ -259,7 +259,7 @@ class PipeWriter
       if @ended
         throw failure if failure := @failure
         return nil
-      arrival := Deferred<Bool>()
+      arrival := Signal()
       @arrivals.push arrival
       try
         await arrival.promise()
@@ -269,14 +269,14 @@ class PipeWriter
     first := @queued[0]
     @queued = @queued.slice(1)
     first.was_taken = true
-    first.taken.resolve true
+    first.taken.resolve()
     first.bytes
 
   # Every take that waits looks again, as it may find the queue empty again once another has taken.
   wake = ->
     arrivals := @arrivals
     @arrivals = []
-    arrival.resolve true for arrival in arrivals
+    arrival.resolve() for arrival in arrivals
 
   # The file of an end for a program to take, which makes the Pipe a system pipe if nothing has
   # used it yet; nil once this program uses the Pipe, or that end, or has given it.
@@ -320,7 +320,7 @@ class SystemPipe
   ending = false
   # The read under way, as the handle takes one at a time, and the reads that wait for it.
   reading = false
-  turns: Deferred<Bool>[] = []
+  turns: Signal[] = []
 
   deinit = ->
     for file in @files
@@ -349,7 +349,7 @@ class SystemPipe
 
   read = ->
     while @reading
-      turn := Deferred<Bool>()
+      turn := Signal()
       @turns.push turn
       try
         await turn.promise()
@@ -369,7 +369,7 @@ class SystemPipe
       @reading = false
       turns := @turns
       @turns = []
-      turn.resolve true for turn in turns
+      turn.resolve() for turn in turns
 
   # The end that writes is closed once the writes under way have finished.
   end = ->
@@ -397,7 +397,7 @@ system_pipe_files := ->
 
 class PipeChunk
   bytes: Binary
-  taken = Deferred<Bool>()
+  taken = Signal()
   was_taken = false
 
 extern lerta_list_dir_names: (String) -> Binary[]

@@ -2,15 +2,15 @@
 # or for their first, however long its idle timeout; a request that is being served gets its
 # response first, and its connection ends then, after which both closes resolve.
 import connect_tcp, Socket from 'std:net'
-import Deferred from 'std:async'
+import Signal from 'std:async'
 import Request, Response, serve from 'std:http'
 import sleep, time from 'std:time'
 
-started := Deferred<Bool>()
-answered := Deferred<Bool>()
+started := Signal()
+answered := Signal()
 handle := (request: Request) ->
   if request.url.ends_with('/slow')
-    started.resolve true
+    started.resolve()
     await answered.promise()
   Response body: "ok\n"
 
@@ -49,7 +49,7 @@ catch _: IOError
   print 'end'
 await sleep(0.1)
 print "closed while one is served: #{closed}"
-answered.resolve true
+answered.resolve()
 lines := await read_response(busy)
 print "#{lines.contains('connection: close')} #{lines.last()!}"
 print await busy.reader.read_line() ? 'end'

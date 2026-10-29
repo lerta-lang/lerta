@@ -1,7 +1,7 @@
 # An HTTP/1.1 server and client over std:net, whose handler takes a Request and gives a Response, as
 # fetch does.
 
-import Deferred from 'std:async'
+import Signal from 'std:async'
 import Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
 import address_text from './internal/handle'
@@ -31,7 +31,7 @@ export class Server
   # The connections that have not ended.
   connections = 0
   # Resolved once the server is closed and no connection is left, which close waits for.
-  ended = Deferred<Bool>()
+  ended = Signal()
 
   port = -> @listener.port
 
@@ -44,9 +44,9 @@ export class Server
     socket.close() for socket in @waiting
     socket.close() for socket in @lingering
     @end_if_done()
-    _ended := await @ended.promise()
+    await @ended.promise()
 
-  end_if_done = -> @ended.resolve(true) if @closed and @connections == 0
+  end_if_done = -> @ended.resolve() if @closed and @connections == 0
 
 # Listens at once, and serves each connection until the server is closed.
 export serve := (handler: (Request) -> Promise<Response>, options: ServerOptions) ->

@@ -1,0 +1,38 @@
+# A Signal's promise, of no value, waits until resolve or reject settles it; the first of them
+# settles it, and promise() gives one promise, however many times it is asked for.
+import all, Signal from 'std:async'
+import sleep from 'std:time'
+
+resolved := Signal()
+later := ->
+  await sleep(0.01)
+  resolved.resolve()
+  resolved.reject ValueError('too late')
+_resolving := later()
+first_ask := resolved.promise()
+await resolved.promise()
+await first_ask
+print 'resolved'
+
+rejected := Signal()
+rejected.reject ValueError('refused')
+rejected.resolve()
+try
+  await rejected.promise()
+catch error: ValueError
+  print error.message
+
+# Every task that waits for one Signal goes on once it is resolved.
+together := Signal()
+waits := (name: String) ->
+  await together.promise()
+  print "#{name} went on"
+first := waits('first')
+second := waits('second')
+together.resolve()
+await all([first, second])
+
+# A Signal that is never settled, or whose promise is never asked for, leaves nothing waiting.
+_unsettled := Signal()
+unasked := Signal()
+unasked.resolve()

@@ -5,8 +5,8 @@ import sleep from 'std:time'
 extern lerta_promise_pending: () -> Promise
 extern lerta_promise_fire: (Promise) -> void
 
-# What a Deferred is settled with: a function that gives the value, rather than an array of it,
-# since an array cannot hold an optional Int, Byte, Float or Bool; or an error.
+# What a Deferred or a Signal is settled with: a function that gives the value, rather than an array
+# of it, since an array cannot hold an optional Int, Byte, Float or Bool; or an error.
 class Outcome<T>
   value: (() -> T)? = nil
   error: Error? = nil
@@ -16,28 +16,56 @@ class Outcome<T>
 # first of them settles it, and later ones change nothing. The promise is made once it is asked
 # for, so that a Deferred that is never settled leaves nothing waiting.
 export class Deferred<T>
-  signal = lerta_promise_pending()
+  fired = lerta_promise_pending()
   outcome = Outcome<T>()
   waiting: Promise<T>? = nil
 
   promise = ->
     return waiting if waiting := @waiting
-    started := settled_by(@signal, @outcome)
+    started := settled_by(@fired, @outcome)
     @waiting = started
     started
 
   resolve = (value: T) ->
     return if @outcome.is_settled()
     @outcome.value = -> value
-    lerta_promise_fire @signal
+    lerta_promise_fire @fired
 
   reject = (error: Error) ->
     return if @outcome.is_settled()
     @outcome.error = error
-    lerta_promise_fire @signal
+    lerta_promise_fire @fired
 
-settled_by := <T>(signal: Promise, outcome: Outcome<T>): Promise<T> ->
-  await signal
+# As a Deferred, of a promise that gives no value: `resolve()` takes none. A type argument cannot be
+# void, so a Deferred<void> cannot stand for it.
+export class Signal
+  fired = lerta_promise_pending()
+  # Only whether it is settled, and its error, matter; the Bool is never read.
+  outcome = Outcome<Bool>()
+  waiting: Promise? = nil
+
+  promise = ->
+    return waiting if waiting := @waiting
+    started := fired_by(@fired, @outcome)
+    @waiting = started
+    started
+
+  resolve = ->
+    return if @outcome.is_settled()
+    @outcome.value = -> true
+    lerta_promise_fire @fired
+
+  reject = (error: Error) ->
+    return if @outcome.is_settled()
+    @outcome.error = error
+    lerta_promise_fire @fired
+
+fired_by := (fired: Promise, outcome: Outcome<Bool>): Promise ->
+  await fired
+  throw error if error := outcome.error
+
+settled_by := <T>(fired: Promise, outcome: Outcome<T>): Promise<T> ->
+  await fired
   throw error if error := outcome.error
   value := outcome.value!
   value()
