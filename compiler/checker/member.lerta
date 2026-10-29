@@ -23,10 +23,16 @@ import method_owner, object_method_type from './object'
 import info_of from './object_types'
 import find_interface_extension from './satisfaction'
 import Body from './shared'
+import record_taken_items from './taken_items'
 import
-  format_member, format_type, format_types, FunctionType, InterfaceType, OptionalType, Type,
-  UnionType
+  ArrayType, format_member, format_type, format_types, FunctionType, InterfaceType, OptionalType,
+  Type, UnionType
 from '../types'
+
+# An array's `pop` takes out an item (see are_items_taken).
+record_pop := (body: Body, receiver: Type, source: MethodSource?) ->
+  is_pop := source is BuiltinMethod and source.member == ARRAY_POP
+  record_taken_items body.program, receiver as ArrayType! if is_pop
 
 # The result of a call of the method that `member` names: a method of the object's type (see
 # find_method), or a field that holds a function.
@@ -40,6 +46,7 @@ export type_of_method_call := (body: Body, call: Call, member: Member, expected:
     method := type_of_method(body, member, receiver, source)
     result := check_arguments(body, call, method, method_literal_of(body, source, member))
     warn_if_kept body, call, member, source
+    record_pop body, receiver, source
     return result
   record_member body, member, Method(source!)
   method := type_of_generic_method_call(body, call, member, generic, receiver, expected)

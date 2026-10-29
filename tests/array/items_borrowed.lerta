@@ -1,0 +1,162 @@
+# An array's item is borrowed where no code of the program takes out an item of an array of its
+# type, by `xs[i] = x` or `pop`, even through a generic function or `truncate`, and its array stays:
+# each kind of item here is a type of its own, as the program takes out items of some of them.
+class Kept
+  name: String
+  deinit = -> print("kept #{@name} gone")
+
+class Assigned
+  name: String
+  deinit = -> print("assigned #{@name} gone")
+
+class Popped
+  name: String
+  deinit = -> print("popped #{@name} gone")
+
+class Generic
+  name: String
+  deinit = -> print("generic #{@name} gone")
+
+class Truncated
+  name: String
+  deinit = -> print("truncated #{@name} gone")
+
+class InStack
+  name: String
+  deinit = -> print("in stack #{@name} gone")
+
+class Maybe
+  name: String
+  deinit = -> print("maybe #{@name} gone")
+
+class Chained
+  name: String
+  deinit = -> print("chained #{@name} gone")
+  shout = -> "#{@name}!"
+
+class Positioned
+  name: String
+  deinit = -> print("positioned #{@name} gone")
+
+struct Wrapper
+  kept: Kept
+
+class Holder
+  items: Chained[]
+
+class Stack<T>
+  items: T[]
+  drop = -> @items.pop()
+
+class Shelf
+  var items: Kept[]
+
+# Kept items, borrowed from a const and a parameter, used, returned, captured and stored.
+kept := [Kept('a'), Kept('b')]
+first := kept[0]
+print first.name
+names := (items: Kept[]) ->
+  item := items[1]
+  "#{items[0].name} #{item.name}"
+print names(kept)
+returned := (items: Kept[]) ->
+  item := items[0]
+  item
+captured := (items: Kept[]) ->
+  item := items[1]
+  -> item.name
+print returned(kept).name
+print captured(kept)()
+print [kept[1]][0].name
+
+# An index out of range still throws.
+try
+  print kept[5].name
+catch error: IndexError
+  print error.message
+
+# Items whose array a var field holds, which an assignment may replace, are held.
+shelf := Shelf(items: [Kept('shelved')])
+replace := (shelf: Shelf) ->
+  item := shelf.items[0]
+  shelf.items = []
+  print "#{item.name} still held"
+replace shelf
+
+# Items of a var's array are borrowed where nothing reassigns it meanwhile, and held where the
+# position does.
+show := (item: Kept) -> print("#{item.name} shown")
+from_var := ->
+  var items = [Kept('var a')]
+  show items[0]
+  # fmt: skip
+  show items[
+    case
+      when items.length > 0
+        items = [Kept('var b')]
+        0
+      else 0
+  ]
+from_var()
+
+# Items of the types whose items the program takes out are held, wherever that is done.
+assign_item := (items: Assigned[]) ->
+  item := items[0]
+  items[0] = Assigned('new')
+  print "#{item.name} still held"
+assign_item [Assigned('old')]
+
+pop_item := (items: Popped[]) ->
+  item := items[0]
+  items.pop()
+  print "#{item.name} still held"
+pop_item [Popped('last')]
+
+drop_last := <T>(items: T[]) -> items.pop()
+pop_generic := (items: Generic[]) ->
+  item := items[0]
+  drop_last items
+  print "#{item.name} still held"
+pop_generic [Generic('last')]
+
+truncate_items := (items: Truncated[]) ->
+  item := items[0]
+  items.truncate 0
+  print "#{item.name} still held"
+truncate_items [Truncated('last')]
+pop_in_stack := (stack: Stack<InStack>) ->
+  item := stack.items[0]
+  stack.drop()
+  print "#{item.name} still held"
+pop_in_stack Stack(items: [InStack('last')])
+
+clear_maybe := (items: Maybe?[]) ->
+  item := items[0]
+  items[0] = nil
+  print "#{item?.name ? 'none'} still held"
+clear_maybe [Maybe('only')]
+
+extend_word := (words: String[]) ->
+  word := words[0]
+  words[0] += '!'
+  print "#{word} then #{words[0]}"
+extend_word ['hi'.to_string()]
+
+# A pop through optional chaining, and one that the position does while the item is an argument.
+pop_chained := (holder: Holder?) ->
+  item := holder!.items[0]
+  holder?.items.pop()
+  print "#{item.shout()} still held"
+pop_chained Holder(items: [Chained('chained')])
+
+show_positioned := (item: Positioned, note: String) -> print("#{item.name} #{note}")
+positioned := [Positioned('first'), Positioned('second')]
+last_place := ->
+  positioned.pop()
+  0
+show_positioned positioned[last_place()], 'shown'
+
+# A struct item, whose reference field is read through it.
+wrappers := [Wrapper(kept: Kept('wrapped'))]
+print wrappers[0].kept.name
+print 'done'

@@ -82,7 +82,8 @@ can_borrow_in_place := (g: Generator, index: Index, object_type: Type) ->
   are_keys_found := object_type is not MapType or are_keys_plain(g.code.program, object_type.key)
   is_simple and index.default_value == nil and are_keys_found
 
-export generate_index := (g: Generator, index: Index) ->
+# The item at the index, owned, or `borrowed` from an array where it can be (see is_borrowable).
+export generate_index := (g: Generator, index: Index, borrowed = false) ->
   range := index.index as Range?
   return generate_slice(g, index.object, range) if range
   object_type := type_of(g, index.object)
@@ -103,7 +104,7 @@ export generate_index := (g: Generator, index: Index) ->
     is_owned then holding(g, object, object_type, held_position) else held_position()
   item :=
     case
-      when items then emit_get_from(g.ir, items, position, type_of(g, index))
+      when items then emit_get_from(g.ir, items, position, type_of(g, index), not borrowed)
       when index.default_value then get_or_put(index.default_value!)
       when object_type is MapType then emit_map_get(g.ir, object, position, object_type)
       else emit_binary_get_unless(g.ir, object, position, outside!)

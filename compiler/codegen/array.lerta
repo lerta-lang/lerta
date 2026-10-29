@@ -107,11 +107,18 @@ export emit_length := (ir: IrBuilder, array: String) ->
 export emit_get := (ir: IrBuilder, array: String, index: String, element: Type) ->
   emit_get_from ir, emit_checked_items(ir, array, index), index, element
 
-# The item, owned, of items that emit_checked_items gives, or poison where it gives none.
-export emit_get_from := (ir: IrBuilder, items: String, index: String, element: Type) ->
+# The item, owned or else borrowed, of items that emit_checked_items gives, or poison where it gives
+# none.
+export emit_get_from := (
+  ir: IrBuilder
+  items: String
+  index: String
+  element: Type
+  owned = true
+) ->
   read := ->
     item := emit_load_item(ir, emit_item_address(ir, items, index, element), element)
-    emit_retain_value ir, item, element
+    emit_retain_value ir, item, element if owned
     item
   emit_branch ir, ir_type(element), emit_is_in_range(ir, items), read, 'poison'
 
