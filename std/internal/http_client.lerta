@@ -276,15 +276,28 @@ read_any_head := (reader: Reader, line: String) ->
 
 read_fields := (reader: Reader) ->
   headers := Headers()
+  var lines = 0
   while line := await read_line(reader)
     return headers if line.is_empty()
-    throw malformed() if headers.fields.length == MAX_FIELDS
-    (name, value) := line.split_once(':') ? throw malformed()
+    throw malformed() if lines == MAX_FIELDS
+    lines += 1
+    # A line that starts with whitespace goes on with the field before it, as RFC 9112 has a user
+    # agent take it, joined by a space.
+    is_folded := line.starts_with(' ') or line.starts_with("\t")
+    throw malformed() if is_folded and headers.fields.is_empty()
+    field := is_folded then folded(headers.fields.pop(), line) else line.split_once(':')
+    (name, value) := field ? throw malformed()
+    # A value joined of lines may be as long as a line, so that each join copies a bounded value.
+    throw malformed() if value.binary.length > MAX_LINE
     try
       headers.append name, value.trim()
     catch _: ValueError
       throw malformed()
   throw ended_early()
+
+folded := (field: (String, String), line: String) ->
+  (name, value) := field
+  (name, "#{value} #{line.trim()}")
 
 read_line := (reader: Reader) -> await well_formed(reader.read_line(MAX_LINE), 'response')
 

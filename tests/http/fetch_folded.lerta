@@ -1,0 +1,32 @@
+# A field of a response folded onto lines that start with a space or a tab is read as one value, the
+# lines joined by a space, but a fold before any field is malformed, as are more than 256 lines of
+# fields, folded or not, and a value joined longer than 64 KiB. A folded Content-Length is read as
+# it is joined, which is malformed here.
+import fetch from 'std:http'
+import RawRequest, raw_server, Reply from './lib/raw_server'
+
+head := (fields: String) -> "HTTP/1.1 200 OK\r\n#{fields}content-length: 0\r\n\r\n"
+
+heads :=
+  head("x-folded: a\r\n b\r\n")
+  head("x-folded: a\r\n\t  b \r\n \tc\r\nx-next: d\r\n")
+  head("x-folded:\r\n b\r\n")
+  head("x-folded: a\r\n \r\n")
+  head(" x-folded: a\r\n")
+  head("x-folded: a\r\n#{" b\r\n".repeat(254)}")
+  head("x-folded: a\r\n#{" b\r\n".repeat(255)}")
+  head("x-folded: #{'a'.repeat(40000)}\r\n #{'b'.repeat(25535)}\r\n")
+  head("x-folded: #{'a'.repeat(40000)}\r\n #{'b'.repeat(25536)}\r\n")
+  "HTTP/1.1 200 OK\r\ncontent-length: 1\r\n 0\r\n\r\n#{'x'.repeat(10)}"
+reply := (request: RawRequest) ->
+  Reply text: heads[request.line.split(' ')[1].without_prefix('/')!.parse_int()!], close: true
+server := raw_server(reply)
+for index in 0...heads.length
+  try
+    response := await fetch(server.url("/#{index}"))
+    folded := response.headers.get('x-folded') ? 'none'
+    shown := folded.binary.length > 20 then "#{folded.binary.length} bytes" else "'#{folded}'"
+    print "#{shown} '#{response.headers.get('x-next') ? 'none'}' '#{await response.text()}'"
+  catch error: IOError
+    print error.message
+server.close()
