@@ -1,5 +1,6 @@
 # A Pipe's reader reads what its writer writes, in order, and nil once the writer has ended; a write
-# is resolved once its chunk is taken, and one that is cancelled before writes nothing.
+# is resolved once its chunk is taken, and one that is cancelled before writes nothing, and one
+# cancelled after is done.
 import all from 'std:async'
 import Pipe, Reader from 'std:io'
 import run from 'std:process'
@@ -45,6 +46,27 @@ catch error: CancelledError
   print 'cancelled'
 print (await cancelled.reader.read_chunk())!.text()!
 await kept
+
+# A write cancelled once its chunk is taken, before it goes on, is done.
+late := Pipe()
+late_write := late.writer.write('taken')
+reading_late := late.reader.read_chunk()
+late_write.cancel()
+await late_write
+print "#{(await reading_late)!.text()!}, and written"
+# The pipe goes on, with nothing of that write left.
+next_write := late.writer.write('next')
+print (await late.reader.read_chunk())!.text()!
+await next_write
+# A write whose chunk the reader's close rejects, cancelled before it goes on, fails as cancelled.
+closing_late := Pipe()
+rejected := closing_late.writer.write('rejected')
+closing_late.reader.close()
+rejected.cancel()
+try
+  await rejected
+catch error: Error
+  print error.message
 
 # A read that waits is woken by a write, and by the end.
 waiting := Pipe()
