@@ -9,6 +9,7 @@ import integer_float_text from '../float_literals'
 import TextPart from '../lexer/string_literal'
 import emit_length from './array'
 import generate_await from './awaiting'
+import generate_borrowed from './borrowing'
 import float_constant from './float'
 import generate_call from './call'
 import generate_case, generate_conditional, generate_if_value from './case'
@@ -268,7 +269,7 @@ read_field := (g: Generator, object: String, type: Type, name: String, is_owned:
   value
 
 # What a field of a class or struct holds, borrowed: its value, or a weak field's box.
-held_field := (g: Generator, object: String, type: ObjectType, name: String) ->
+export held_field := (g: Generator, object: String, type: ObjectType, name: String) ->
   info := info_of(g.code.program, type)
   pointer := emit_field_pointer(g.ir, object, info, name)
   g.ir.assign "load #{ir_type(field_named(info, name).type!)}, ptr #{pointer}"
@@ -315,7 +316,7 @@ generate_property := (g: Generator, member: Member) ->
   field_type := declared_field_type(g, object_type, name) ? return value
   emit_narrowed_owned g.ir, value, field_type, type
 
-declared_field_type := (g: Generator, object_type: Type, name: String) ->
+export declared_field_type := (g: Generator, object_type: Type, name: String) ->
   case object_type
     when RecordType then object_type.fields[record_field_index(object_type, name)].type
     when ObjectType then field_named(info_of(g.code.program, object_type), name).type
@@ -373,24 +374,6 @@ export holding_all := (g: Generator, expressions: Expression[], use: (String[]) 
   pop_temporaries g, depth
   result
 
-# The operands of the expressions, which `use` borrows: borrowed from their locals where they can
-# be (see generate_borrowed), and otherwise owned, held while the later ones are evaluated, which
-# may throw, and released after `use`.
-export borrowing_all := (g: Generator, expressions: Expression[], use: (String[]) -> String) ->
-  depth := g.temporaries.length
-  operands: String[]
-  owned: Bool[]
-  for expression in expressions
-    (operand, is_owned) := generate_borrowed(g, expression)
-    push_temporary g, operand, type_at_use(g, expression) if is_owned
-    operands.push operand
-    owned.push is_owned
-  result := use(operands)
-  pop_temporaries g, depth
-  for expression, i in expressions
-    release_if_reference g, expression, operands[i] if owned[i]
-  result
-
 export release_if_reference := (g: Generator, expression: Expression, operand: String) ->
   emit_release_value g.ir, operand, type_at_use(g, expression)
 
@@ -407,57 +390,6 @@ generate_identifier := (g: Generator, identifier: Identifier) ->
     # A C function can only be called, and generate_named_call generates the callee of a
     # construction or of Map or Set.
     else panic("no value for '#{identifier.name}'")
-
-# The value of the expression and whether it is owned: borrowed when it is a local whose scope
-# keeps the value for as long as its consumer uses it, so that using an array in a loop retains and
-# releases nothing (see docs/internals.md#memory-management), or `in_place`, where the consumer
-# runs no code of the program before it is done, a field (see is_borrowable); owned otherwise, as
-# where it is converted to another type, which makes a new value.
-export generate_borrowed := (g: Generator, expression: Expression, in_place = false) ->
-  return (generate(g, expression), true) if not is_borrowable(g, expression, in_place)
-  (generate_borrowed_value(g, expression), false)
-
-# Whether the value can be borrowed (see generate_borrowed): a local's that cannot go meanwhile; and
-# in place, where no code of the program runs before its consumer is done with it, as for `a.b` in
-# `a.b.c`, a field's of an object that can be borrowed, which nothing can replace meanwhile.
-is_borrowable := (g: Generator, expression: Expression, in_place: Bool): Bool ->
-  return false if g.facts.conversions.has(expression)
-  if local := named_local(g, expression)
-    # A var may be reassigned by what comes after it, as the other arguments, and a weak local's
-    # object may go.
-    return not local.weak and not (local is SlotLocal and local.is_var)
-  member := expression as Member?
-  return false if member == nil
-  in_place and is_plain_field(g, member) and is_borrowable(g, member.object, true)
-
-# Whether the member is a field of a class or struct that holds its value as it is read: not weak,
-# nor narrowed to a member of a union in a box, which the read takes out.
-is_plain_field := (g: Generator, member: Member) ->
-  target := g.facts.members[member]
-  return false if target is not Property or target.kind != FIELD
-  object_type := type_of(g, member.object) as ObjectType?
-  return false if object_type == nil
-  field := field_named(info_of(g.code.program, object_type), member.name.name)
-  not field.weak and not is_boxed_narrowing(field.type!, type_of(g, member))
-
-# The value of an expression that is_borrowable, borrowed.
-generate_borrowed_value := (g: Generator, expression: Expression): String ->
-  return read_borrowed(g, local, type_of(g, expression)) if local := named_local(g, expression)
-  member := expression as Member!
-  object := generate_borrowed_value(g, member.object)
-  object_type := type_of(g, member.object) as ObjectType!
-  name := member.name.name
-  held := held_field(g, object, object_type, name)
-  emit_narrowed g.ir, held, declared_field_type(g, object_type, name)!, type_of(g, member)
-
-# The local of a scope that the expression names, `@` among them, if it names one.
-named_local := (g: Generator, expression: Expression) ->
-  case expression
-    when This then g.locals.lookup('@')
-    when Identifier
-      return nil if g.facts.references[expression] is not ScopedLocal
-      local_of g, expression
-    else nil
 
 # The slot's pointer, once a top-level value is known to be initialized.
 export slot_pointer := (g: Generator, local: SlotLocal) ->
@@ -488,7 +420,7 @@ export held_value := (g: Generator, local: CodegenLocal) ->
 
 # The value of the declared type as the narrower one where it is narrowed: without nil, or as one
 # member of its union, out of its box if the union holds one; borrowed as `value` is.
-emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
+export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
   if not is_boxed_narrowing(declared, type)
     present := declared is OptionalType and type is not OptionalType
     return present then emit_unwrap(ir, value, declared) else value
@@ -506,7 +438,7 @@ emit_narrowed_owned := (ir: IrBuilder, value: String, declared: Type, type: Type
   narrowed
 
 # Whether the value of the union narrowed to the type, one member, optional or not, is in a box.
-is_boxed_narrowing := (declared: Type, type: Type) ->
+export is_boxed_narrowing := (declared: Type, type: Type) ->
   inner_of(declared) is UnionType and is_boxed(inner_of(type))
 
 # A box of the value, owned, for a union, and of a T? a box or null.
