@@ -213,7 +213,7 @@ host_and_port := (authority: String) ->
   (host, port_text) := split_authority(authority) ? return nil
   return nil if host.is_empty()
   return (host, 80) if port_text.is_empty()
-  return nil if not port_text.all((c) -> c.is_digit())
+  return nil if not port_text.is_digits()
   port := port_text.parse_int() ? return nil
   port <= 65535 then (host, port) else nil
 
@@ -273,7 +273,7 @@ read_any_head := (reader: Reader, line: String) ->
   (version, rest) := line.split_once(' ') ? throw malformed()
   throw malformed() if version != 'HTTP/1.1' and version != 'HTTP/1.0'
   (code, _reason) := split_or_whole(rest, ' ')
-  throw malformed() if code.binary.length != 3 or not code.all((c) -> c.is_digit())
+  throw malformed() if code.binary.length != 3 or not code.is_digits()
   Head version, status: code.parse_int()!, headers: await read_fields(reader)
 
 read_fields := (reader: Reader) ->
@@ -323,7 +323,7 @@ framing := (head: Head, method: String) ->
     throw IOError("a transfer coding not supported: #{coding}") if coding.to_lower() != 'chunked'
     return Framing(left: 0, chunked: true)
   text := headers.get('content-length') ? return Framing(left: nil)
-  throw malformed() if text.is_empty() or not text.all((c) -> c.is_digit())
+  throw malformed() if not text.is_digits()
   Framing left: text.parse_int() ? throw malformed()
 
 # The chunks of a body as they come, after which the connection is finished with.

@@ -88,6 +88,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`, and `s.ends_with(suffix)` whether it ends with those of `suffix`.
 - `s.without_prefix(prefix)` gives what follows `prefix` in `s`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. `s.without_suffix(suffix)` gives what comes before `suffix`, or nil.
 - `s.contains(part)` tells whether the bytes of `part` occur in `s`; every `String` contains the empty one.
+- `s.is_digits()` tells whether `s` is one or more ASCII digits, `0` to `9`: no sign, and not empty.
 - `s.split_once(separator)` gives what comes before the first occurrence of `separator` and what comes after it, as a `(String, String)`, or nil if there is none: `'k = v = w'.split_once(' = ')` is `('k', 'v = w')`; an empty `separator` throws a `ValueError`, as it does for `split`.
 - `s.replace(part, by)` gives `s` with each occurrence of `part`, from the start and without overlapping, replaced by `by`; an empty `part` throws a `ValueError`.
 - `s.trim()` drops the whitespace at both ends, the ASCII spaces, tabs, carriage returns and newlines, and `s.trim_start()` and `s.trim_end()` drop it at the start or the end only.
