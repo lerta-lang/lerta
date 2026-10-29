@@ -25,23 +25,21 @@ extend Float
   to_int = (): Int? -> lerta_float_fits_int(@) then lerta_float_to_int(@)
   # The nearest Float32, an infinity beyond the largest.
   to_float32 = -> lerta_float_to_float32(@)
-  # The text with `digits` digits after the point, of the value times 10 to the `digits` rounded
-  # half away from zero to an Int, which it must fit in. The product may round, so a value just
-  # below a half may round up; the rest after truncating it is exact, so that rounding adds no
-  # error of its own, as adding 0.5 would.
+  # The text with `digits` digits after the point: the whole part exactly, and the fraction times
+  # 10 to the `digits` rounded half away from zero, carried into the whole part if it rounds up to
+  # it. The product may round, so a fraction just below a half may round up; the rest after
+  # truncating it is exact, so that rounding adds no error of its own, as adding 0.5 would.
   to_fixed = (digits: Int) ->
     if digits < 0 or digits > 18
       throw ValueError(message: "to_fixed of #{digits} digits, not 0 to 18")
     var scale = 1
     scale *= 10 for _ in 0...digits
     size := @ < 0.0 then -@ else @
-    product := size * scale.to_float()
-    truncated := product.to_int() ? throw ArithmeticError(message: 'integer overflow')
-    units := product - truncated.to_float() >= 0.5 then truncated + 1 else truncated
-    sign := @ < 0.0 and units != 0 then '-' else ''
-    whole := "#{sign}#{units / scale}"
-    return whole if digits == 0
-    "#{whole}.#{(units % scale).to_string().pad_start(digits, '0')}"
+    throw ValueError(message: 'to_fixed of an infinity') if size == INFINITY
+    (whole, units) := whole_and_units(size, scale)
+    sign := @ < 0.0 and (whole != '0' or units != 0) then '-' else ''
+    return "#{sign}#{whole}" if digits == 0
+    "#{sign}#{whole}.#{units.to_string().pad_start(digits, '0')}"
 
 extend Float32
   to_string = -> lerta_float32_to_string(@)
@@ -121,3 +119,39 @@ digits_text := (n: UInt64, base: UInt64, negative = false) ->
     bytes += DIGITS[(n / scale % base).to_int()!]
     scale /= base
   lerta_binary_as_string bytes
+
+# The digits of the whole part of a finite Float of no sign, and its fraction in units of 1 / `scale`.
+# Below 2 to the 53rd, the whole part fits an Int and the fraction times `scale` does too; from it
+# on, a Float is whole.
+whole_and_units := (value: Float, scale: Int): (String, Int) ->
+  return (whole_digits(value), 0) if value >= TWO_TO_53
+  whole := value.to_int()!
+  product := (value - whole.to_float()) * scale.to_float()
+  truncated := product.to_int()!
+  units := product - truncated.to_float() >= 0.5 then truncated + 1 else truncated
+  units == scale then ((whole + 1).to_string(), 0) else (whole.to_string(), units)
+
+# The digits of a whole Float of 2 to the 53rd or more: a 53-bit whole number times a power of 2,
+# which halving finds exactly, made decimal by doubling it in limbs of 9 digits, the lowest first.
+whole_digits := (value: Float) ->
+  var mantissa = value
+  var doublings = 0
+  while mantissa >= TWO_TO_53
+    mantissa = mantissa / 2.0
+    doublings += 1
+  whole := mantissa.to_int()!
+  limbs := [whole % LIMB, whole / LIMB]
+  for _ in 0...doublings
+    var carry = 0
+    for i in 0...limbs.length
+      doubled := limbs[i] * 2 + carry
+      limbs[i] = doubled % LIMB
+      carry = doubled / LIMB
+    limbs.push carry if carry > 0
+  highest_first := limbs.reversed()
+  rest :=
+    [limb.to_string().pad_start(9, '0') for limb in highest_first.slice(1, highest_first.length)]
+  "#{highest_first[0]}#{rest.join('')}"
+
+TWO_TO_53 := 9007199254740992.0
+LIMB := 1000000000
