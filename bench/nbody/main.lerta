@@ -1,0 +1,104 @@
+# Simulates the Sun and the four giant planets for a number of steps, and prints their energy before
+# and after, in billionths, rounded.
+import PI, round, sqrt from 'std:math'
+
+SOLAR_MASS := 4.0 * PI * PI
+DAYS_PER_YEAR := 365.24
+STEPS := 10000000
+
+class Body
+  x: Float
+  y: Float
+  z: Float
+  vx: Float
+  vy: Float
+  vz: Float
+  mass: Float
+
+planet := (x: Float, y: Float, z: Float, vx: Float, vy: Float, vz: Float, mass: Float) ->
+  Body
+    x
+    y
+    z
+    vx: vx * DAYS_PER_YEAR
+    vy: vy * DAYS_PER_YEAR
+    vz: vz * DAYS_PER_YEAR
+    mass: mass * SOLAR_MASS
+
+bodies :=
+  Body(x: 0.0, y: 0.0, z: 0.0, vx: 0.0, vy: 0.0, vz: 0.0, mass: SOLAR_MASS)
+  planet(
+    4.84143144246472090e+00, -1.16032004402742839e+00, -1.03622044471123109e-01,
+    1.66007664274403694e-03, 7.69901118419740425e-03, -6.90460016972063023e-05,
+    9.54791938424326609e-04
+  )
+  planet(
+    8.34336671824457987e+00, 4.12479856412430479e+00, -4.03523417114321381e-01,
+    -2.76742510726862411e-03, 4.99852801234917238e-03, 2.30417297573763929e-05,
+    2.85885980666130812e-04
+  )
+  planet(
+    1.28943695621391310e+01, -1.51111514016986312e+01, -2.23307578892655734e-01,
+    2.96460137564761618e-03, 2.37847173959480950e-03, -2.96589568540237556e-05,
+    4.36624404335156298e-05
+  )
+  planet(
+    1.53796971148509165e+01, -2.59193146099879641e+01, 1.79258772950371181e-01,
+    2.68067772490389322e-03, 1.62824170038242295e-03, -9.51592254519715870e-05,
+    5.15138902046611451e-05
+  )
+
+# Gives the Sun the momentum that makes the system's total zero.
+offset_momentum := ->
+  var px = 0.0
+  var py = 0.0
+  var pz = 0.0
+  for body in bodies
+    px += body.vx * body.mass
+    py += body.vy * body.mass
+    pz += body.vz * body.mass
+  sun := bodies[0]
+  sun.vx = -px / SOLAR_MASS
+  sun.vy = -py / SOLAR_MASS
+  sun.vz = -pz / SOLAR_MASS
+
+advance := (dt: Float) ->
+  for i in 0...bodies.length
+    a := bodies[i]
+    for j in (i + 1)...bodies.length
+      b := bodies[j]
+      dx := a.x - b.x
+      dy := a.y - b.y
+      dz := a.z - b.z
+      distance_squared := dx * dx + dy * dy + dz * dz
+      magnitude := dt / (distance_squared * sqrt(distance_squared))
+      a.vx -= dx * b.mass * magnitude
+      a.vy -= dy * b.mass * magnitude
+      a.vz -= dz * b.mass * magnitude
+      b.vx += dx * a.mass * magnitude
+      b.vy += dy * a.mass * magnitude
+      b.vz += dz * a.mass * magnitude
+  for body in bodies
+    body.x += dt * body.vx
+    body.y += dt * body.vy
+    body.z += dt * body.vz
+
+energy := ->
+  var e = 0.0
+  for i in 0...bodies.length
+    a := bodies[i]
+    e += 0.5 * a.mass * (a.vx * a.vx + a.vy * a.vy + a.vz * a.vz)
+    for j in (i + 1)...bodies.length
+      b := bodies[j]
+      dx := a.x - b.x
+      dy := a.y - b.y
+      dz := a.z - b.z
+      e -= a.mass * b.mass / sqrt(dx * dx + dy * dy + dz * dz)
+  e
+
+in_billionths := (e: Float) -> round(e * 1e9).to_int()!
+
+offset_momentum()
+print in_billionths(energy())
+advance 0.01 for _ in 0...STEPS
+print in_billionths(energy())
