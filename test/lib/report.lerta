@@ -20,13 +20,15 @@ export at_once := (reasons: String[]): Promise<String[]?> ->
 
 # What the driver asks of the suites: the checks whose names hold `pattern`, and, unless `only` is
 # nil, are among those it names by their keys (see key); whether to list them rather than run them;
-# whether to print only the failures; and how many checks of a suite run at once.
+# whether to print only the failures; how many checks of a suite run at once; and whether to run a
+# failed check once more.
 export struct Options
   pattern: String
   only: Set<String>?
   listing: Bool
   quiet: Bool
   jobs: Int
+  retry: Bool
 
 # Set by the driver before any suite selects its checks.
 var given_options: Options?
@@ -96,25 +98,36 @@ format_duration := (duration: Float) ->
   return "#{rounded}ms" if rounded < 1000
   "#{(duration / 1000.0).to_fixed(1)}s"
 
-# Runs the checks that select gave, and gives the number of those that failed.
+# Runs the checks that select gave, and gives the number of those that failed. With retry, a check
+# that failed is shown as FAIL? and run once more after the others, alone, as a check that failed
+# only because of the load of the others then passes; it is then counted as passed, and as flaky.
 export run_checks := (title: String, checks: Check[]) ->
   # Results are printed as they come, so the width also counts checks that turn out not to apply.
   name_width := min((width(check.name) for check in checks).max() ? 0, MAX_NAME_WIDTH)
   started := milliseconds()
   failed: String[]
+  retried: Check[]
+  var flaky_count = 0
   var run_count = 0
+  show := (status: String, check: Check, result: Result, reasons: String[]) ->
+    duration := format_duration(result.duration).pad_start(6)
+    print "#{status.pad_end(5)} #{check.name.pad_end(name_width)}  #{duration}"
+    print "      #{reason}" for reason in reasons
+  fail := (check: Check) ->
+    failed.push check.name
+    failed_keys.push key(title, check.name)
   report := (check: Check, result: Result) ->
     ran_keys.push key(title, check.name)
     reasons := result.reasons ? return
     run_count += 1
-    if not reasons.is_empty()
-      failed.push check.name
-      failed_keys.push key(title, check.name)
-    return if options().quiet and reasons.is_empty()
-    status := reasons.is_empty() then 'ok  ' else 'FAIL'
-    duration := format_duration(result.duration).pad_start(6)
-    print "#{status}  #{check.name.pad_end(name_width)}  #{duration}"
-    print "      #{reason}" for reason in reasons
+    if reasons.is_empty()
+      show 'ok', check, result, reasons if not options().quiet
+    else if options().retry
+      retried.push check
+      show 'FAIL?', check, result, reasons
+    else
+      fail check
+      show 'FAIL', check, result, reasons
   results: Result?[] = [nil for _ in checks]
   var next_to_print = 0
   var next_to_start = 0
@@ -128,8 +141,22 @@ export run_checks := (title: String, checks: Check[]) ->
         report checks[next_to_print], result
         next_to_print += 1
   await all([worker() for _ in 0...jobs()])
+  if not retried.is_empty()
+    print "#{title}: running the #{retried.length} that failed once more, one at a time"
+  for check in retried
+    result := await run_one(check)
+    # A check that does not apply now did not pass either.
+    reasons := result.reasons ? ['did not apply when run once more']
+    if reasons.is_empty()
+      # Shown even with quiet, as the end of the FAIL? that was shown.
+      flaky_count += 1
+      show 'ok', check, result, reasons
+    else
+      fail check
+      show 'FAIL', check, result, reasons
   total := format_duration(milliseconds() - started)
-  print "#{title}: #{run_count - failed.length} passed, #{failed.length} failed in #{total}"
+  flaky := flaky_count > 0 then ", #{flaky_count} flaky" else ''
+  print "#{title}: #{run_count - failed.length} passed, #{failed.length} failed#{flaky} in #{total}"
   print "  FAIL #{name}" for name in failed
   print ''
   failed.length

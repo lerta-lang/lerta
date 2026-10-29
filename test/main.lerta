@@ -1,6 +1,7 @@
 # The test driver, bin/test, which runs the suites, all of them by default, from the root of the
 # repository:
 #   bin/test [<suite>...] [-k <text>] [--target <triple>] [--list] [--failed] [-j <count>] [-q]
+#            [--no-retry]
 #   <suite>            run (run.lerta), cli (cli.lerta), format (format.lerta), runtime
 #                      (runtime.lerta) or self (self.lerta)
 #   -k <text>          only the checks whose names hold the text
@@ -9,7 +10,9 @@
 #   --list             the names of the checks that would run, rather than running them
 #   --failed           only the checks that failed when they last ran for the host (see FAILED_FILE)
 #   -j <count>         how many checks of a suite run at once; by default, the number of CPUs
-#   -q                 only the failures and the summaries
+#   -q                 only the failures, the run once more of those that failed and how each
+#                      ended, and the summaries
+#   --no-retry         a failed check is not run once more (see run_checks in lib/report)
 # It exits with 0 if no check failed, 1 if one did or a suite could not run them, and 2 for wrong
 # arguments or when no check is selected, as when -k is mistyped. The self checks (self.lerta) run
 # it with LERTA_TEST_RUN_DIR, which has the run tests be those of another directory (see run.lerta),
@@ -40,7 +43,7 @@ struct Arguments
 usage := (problem: String) ->
   print_error problem
   print_error
-    'usage: bin/test [<suite>...] [-k <text>] [--target <triple>] [--list] [--failed] [-j <count>] [-q]'
+    'usage: bin/test [<suite>...] [-k <text>] [--target <triple>] [--list] [--failed] [-j <count>] [-q] [--no-retry]'
   await remove_work_root()
   exit 2
 
@@ -52,6 +55,7 @@ parse_arguments := ->
   var failed = false
   var jobs = cpu_count
   var quiet = false
+  var retry = true
   var i = 0
   # The value of the option at i, which it takes too.
   value := ->
@@ -70,6 +74,7 @@ parse_arguments := ->
         jobs = text.parse_int() ? 0
         await usage("-j needs a count above 0: #{text}") if jobs < 1
       when '-q' then quiet = true
+      when '--no-retry' then retry = false
       else
         if not SUITE_NAMES.contains(arg)
           await usage("not a suite: #{arg} (the suites: #{SUITE_NAMES.join(', ')})")
@@ -79,7 +84,7 @@ parse_arguments := ->
     await usage('--target is for the run suite alone') if suites.any((name) -> name != 'run')
     await usage('--failed is for the host alone') if failed
   chosen := not suites.is_empty() then suites else triple then ['run'] else SUITE_NAMES
-  options := Options(pattern, listing, jobs, quiet, only: nil)
+  options := Options(pattern, listing, jobs, quiet, retry, only: nil)
   Arguments triple, failed, options, suites: chosen
 
 read_failed_keys := (): Promise<String[]> ->
@@ -128,8 +133,8 @@ main := ->
     if before.is_empty()
       print 'no check failed when it last ran'
       return 0
-    { pattern, listing, jobs, quiet } := options
-    set_options { pattern, listing, jobs, quiet, only: Set(before) }
+    { pattern, listing, jobs, quiet, retry } := options
+    set_options { pattern, listing, jobs, quiet, retry, only: Set(before) }
   else
     set_options options
   failed_suites := await run_suites(arguments.suites, arguments.triple)
