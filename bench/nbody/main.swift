@@ -4,7 +4,7 @@ let solarMass = 4.0 * Double.pi * Double.pi
 let daysPerYear = 365.24
 let steps = 10000000
 
-final class Body {
+struct Body {
   var x, y, z, vx, vy, vz, mass: Double
 
   init(_ x: Double, _ y: Double, _ z: Double, _ vx: Double, _ vy: Double, _ vz: Double,
@@ -18,7 +18,7 @@ func planet(_ x: Double, _ y: Double, _ z: Double, _ vx: Double, _ vy: Double, _
   Body(x, y, z, vx * daysPerYear, vy * daysPerYear, vz * daysPerYear, mass * solarMass)
 }
 
-let bodies = [
+let solarSystem = [
   Body(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, solarMass),
   planet(4.84143144246472090e+00, -1.16032004402742839e+00, -1.03622044471123109e-01,
          1.66007664274403694e-03, 7.69901118419740425e-03, -6.90460016972063023e-05,
@@ -35,43 +35,41 @@ let bodies = [
 ]
 
 // Gives the Sun the momentum that makes the system's total zero.
-func offsetMomentum() {
+func offsetMomentum(_ bodies: inout [Body]) {
   var px = 0.0, py = 0.0, pz = 0.0
   for body in bodies {
     px += body.vx * body.mass
     py += body.vy * body.mass
     pz += body.vz * body.mass
   }
-  let sun = bodies[0]
-  sun.vx = -px / solarMass
-  sun.vy = -py / solarMass
-  sun.vz = -pz / solarMass
+  bodies[0].vx = -px / solarMass
+  bodies[0].vy = -py / solarMass
+  bodies[0].vz = -pz / solarMass
 }
 
-func advance(_ dt: Double) {
+func advance(_ bodies: inout [Body], _ dt: Double) {
   for i in 0..<bodies.count {
-    let a = bodies[i]
     for j in (i + 1)..<bodies.count {
-      let b = bodies[j]
+      let a = bodies[i], b = bodies[j]
       let dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z
       let distanceSquared = dx * dx + dy * dy + dz * dz
       let magnitude = dt / (distanceSquared * distanceSquared.squareRoot())
-      a.vx -= dx * b.mass * magnitude
-      a.vy -= dy * b.mass * magnitude
-      a.vz -= dz * b.mass * magnitude
-      b.vx += dx * a.mass * magnitude
-      b.vy += dy * a.mass * magnitude
-      b.vz += dz * a.mass * magnitude
+      bodies[i].vx -= dx * b.mass * magnitude
+      bodies[i].vy -= dy * b.mass * magnitude
+      bodies[i].vz -= dz * b.mass * magnitude
+      bodies[j].vx += dx * a.mass * magnitude
+      bodies[j].vy += dy * a.mass * magnitude
+      bodies[j].vz += dz * a.mass * magnitude
     }
   }
-  for body in bodies {
-    body.x += dt * body.vx
-    body.y += dt * body.vy
-    body.z += dt * body.vz
+  for i in 0..<bodies.count {
+    bodies[i].x += dt * bodies[i].vx
+    bodies[i].y += dt * bodies[i].vy
+    bodies[i].z += dt * bodies[i].vz
   }
 }
 
-func energy() -> Double {
+func energy(_ bodies: [Body]) -> Double {
   var e = 0.0
   for i in 0..<bodies.count {
     let a = bodies[i]
@@ -87,7 +85,14 @@ func energy() -> Double {
 
 func inBillionths(_ e: Double) -> Int { Int((e * 1e9).rounded()) }
 
-offsetMomentum()
-print(inBillionths(energy()))
-for _ in 0..<steps { advance(0.01) }
-print(inBillionths(energy()))
+// Keeps the array out of globals, so that no function can read it as a global var: Swift would check
+// exclusive access on every access, making the program several times slower.
+func simulate() {
+  var bodies = solarSystem
+  offsetMomentum(&bodies)
+  print(inBillionths(energy(bodies)))
+  for _ in 0..<steps { advance(&bodies, 0.01) }
+  print(inBillionths(energy(bodies)))
+}
+
+simulate()
