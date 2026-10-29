@@ -78,8 +78,9 @@ static int64_t waiter_capacity = 0;
 
 void lerta_output_init(void) {
   lerta_os_stdio_init();
-  uv_mutex_init(&mutex);
-  uv_cond_init(&written_out);
+  if (uv_mutex_init(&mutex) != 0 || uv_cond_init(&written_out) != 0) {
+    lerta_panic("cannot make the lock of stdout and stderr");
+  }
 }
 
 static void append(int fd, const uint8_t *bytes, int64_t length) {

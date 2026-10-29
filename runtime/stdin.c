@@ -93,13 +93,11 @@ static void end_stdin_read(uv_async_t *handle) {
 
 static void start_stdin_thread(void) {
   stdin_started = true;
-  uv_mutex_init(&stdin_mutex);
-  uv_cond_init(&stdin_wanted);
-  uv_async_init(uv_default_loop(), &stdin_done, end_stdin_read);
+  bool started = uv_mutex_init(&stdin_mutex) == 0 && uv_cond_init(&stdin_wanted) == 0 &&
+                 uv_async_init(uv_default_loop(), &stdin_done, end_stdin_read) == 0 &&
+                 uv_thread_create(&stdin_thread, read_stdin_chunks, NULL) == 0;
+  if (!started) lerta_panic("cannot start the thread that reads stdin");
   uv_unref((uv_handle_t *)&stdin_done);
-  if (uv_thread_create(&stdin_thread, read_stdin_chunks, NULL) != 0) {
-    lerta_panic("cannot start the thread that reads stdin");
-  }
 }
 
 static void request_stdin_chunk(void) {
