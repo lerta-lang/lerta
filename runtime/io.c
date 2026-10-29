@@ -37,6 +37,5 @@ void lerta_print_stdout(const LertaString *text) {
 }
 
 void lerta_print_stderr(const LertaString *text) {
-  lerta_output_flush();
-  lerta_stderr_write_string(text);
+  lerta_output_write_now(STDERR_FD, text->bytes, text->length);
 }

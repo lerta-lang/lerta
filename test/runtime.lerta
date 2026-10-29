@@ -135,8 +135,8 @@ build_and_run := (source: String, optimize: Bool, macros: String[] = []) ->
 expect_clean := (outcome: Outcome) ->
   [compare_text('stderr', '', outcome.stderr)..., expect_status(0, outcome.status)...]
 
-clean_check := (name: String, source: String, optimize: Bool) ->
-  Check name, run: -> expect_clean(await build_and_run(source, optimize))
+clean_check := (name: String, source: String, optimize: Bool, macros: String[] = []) ->
+  Check name, run: -> expect_clean(await build_and_run(source, optimize, macros))
 
 # A debug program that must stop with the message.
 stop_check := (name: String, source: String, message: String, macros: String[] = []) ->
@@ -225,6 +225,21 @@ checks := [
   )
   clean_check('the optimized runtime does not count objects', 'leak', true)
   clean_check('a write of more than 2 GiB is done whole', 'write_large', false)
+  clean_check('print_error drops its output once stderr has failed', 'print_error_failed', false)
+  clean_check(
+    'print_error drops its output once a write to stderr has failed'
+    'print_error_failed'
+    false
+    ['FAIL_BY_WRITE']
+  )
+  # The write is rejected, which no one awaits, so the program reports it and exits with 1.
+  Check(name: 'a write to stderr is rejected once print_error has failed', run: ->
+    outcome := await build_and_run('print_error_failed', false, ['DROP_BY_WRITE'])
+    [
+      compare_text('stderr', "cannot write to stderr\n", outcome.stderr)...
+      expect_status(1, outcome.status)...
+    ]
+  )
   Check(name: 'a write to a non-blocking pipe waits while the pipe is full', run: ->
     outcome := await build_and_run('write_non_blocking', false)
     length := outcome.stdout.binary.length
