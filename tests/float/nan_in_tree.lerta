@@ -1,5 +1,6 @@
-# A NaN anywhere in a tree of `+ - * /` of locals and literals throws, as it stays a NaN up to the
-# root, which alone checks it; an overflow is an infinity, which throws only where it makes a NaN.
+# A NaN anywhere in a tree of `+ - * /` of locals, their fields and literals throws, as it stays a
+# NaN up to the root, which alone checks it; an overflow is an infinity, which throws only where it
+# makes a NaN.
 # A tree with a call in it throws before the call, as each of its operations is checked where it
 # is.
 attempt := (name: String, f: () -> Float) ->
@@ -41,7 +42,25 @@ captured := ->
   grow()
   attempt 'captured', -> big * big - big * big
 
+# Fields of a local, of `@` and of a struct field are leaves too.
+struct Size
+  big: Float
+
+class Holder
+  big: Float
+  size: Size
+  spread = -> @big * @big - @size.big * @size.big
+
+fields := (big: Float) ->
+  holder := Holder(big, size: { big })
+  attempt 'field', -> holder.big * holder.big - holder.big * holder.big
+  attempt 'field of a field', -> holder.size.big * holder.size.big - big * big
+  attempt 'field of @', -> holder.spread()
+  measure := (size: Size) -> size.big * size.big - size.big * size.big
+  attempt 'field of a struct', -> measure(holder.size)
+
 trees 1e300
+fields 1e300
 calls 1e300
 narrow 3e38
 captured()

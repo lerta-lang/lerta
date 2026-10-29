@@ -1,13 +1,13 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import
   BinaryOperation, Coalesce, Expression, FloatLiteral, Identifier, IntegerLiteral, is_nil_test,
-  is_order_operator, NilLiteral, StringLiteral, UnaryOperation, Unwrap
+  is_order_operator, Member, NilLiteral, StringLiteral, This, UnaryOperation, Unwrap
 from '../ast'
 import ScopedLocal from '../checker/references'
 import compares_by_contents, own_equality from '../checker/equality'
 import is_numeric_operator, operator_of_method from '../checker/operator'
 import apply_integer_operator from './checked_int'
-import generate_borrowed from './borrowing'
+import generate_borrowed, plain_field_of from './borrowing'
 import generate_in_test from './call'
 import holding from './exceptions'
 import apply_float_arithmetic, emit_float_comparison, emit_float_negation from './float'
@@ -104,11 +104,12 @@ constant_text := (g: Generator, expression: Expression): String? ->
 
 is_bytes := (type: Type) -> is_one_of_kinds(type, ['String', 'Binary'])
 
-# Whether the operation is a tree of float `+ - * /` whose leaves are locals and literals, maybe
-# negated: a NaN in it, which each of them gives for a NaN operand, is a NaN at its root, so that
-# its root alone need check that its result is no NaN. The leaves neither throw nor do anything
-# else, so nothing runs between the operation that makes the NaN and the root; the error is
-# reported at the root's position rather than at that operation's.
+# Whether the operation is a tree of float `+ - * /` whose leaves are locals, fields read through
+# them or `@` (see is_field_path) and literals, maybe negated: a NaN in it, which each of them
+# gives for a NaN operand, is a NaN at its root, so that its root alone need check that its result
+# is no NaN. The leaves neither throw nor do anything else, so nothing runs between the operation
+# that makes the NaN and the root; the error is reported at the root's position rather than at
+# that operation's.
 float_tree := (g: Generator, binary: BinaryOperation) ->
   return false if not ['+', '-', '*', '/'].contains(binary.operator)
   return false if binary in g.facts.operator_calls or not is_float(type_of(g, binary))
@@ -117,11 +118,20 @@ float_tree := (g: Generator, binary: BinaryOperation) ->
 float_leaf := (g: Generator, expression: Expression): Bool ->
   case expression
     when FloatLiteral, IntegerLiteral then true
-    when Identifier then g.facts.references[expression] is ScopedLocal
+    when Identifier, Member then is_field_path(g, expression)
     when UnaryOperation
       is_negation := expression.operator == '-' and expression not in g.facts.operator_calls
       is_negation and float_leaf(g, expression.operand)
     when BinaryOperation then float_tree(g, expression)
+    else false
+
+# Whether the expression reads, as a leaf does, a local, `@` or a field of one, through fields of
+# classes and structs that it reads as they are held (see plain_field_of).
+is_field_path := (g: Generator, expression: Expression): Bool ->
+  case expression
+    when This then true
+    when Identifier then g.facts.references[expression] is ScopedLocal
+    when Member then plain_field_of(g, expression) != nil and is_field_path(g, expression.object)
     else false
 
 # The operator applied to the values of the operands, of the type, which it takes over.
