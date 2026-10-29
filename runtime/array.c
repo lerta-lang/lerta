@@ -129,7 +129,7 @@ void lerta_raise_index_out_of_range(void) {
 }
 
 uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index) {
-  if (index >= 0 && index < array->length) return array->items;
+  if ((uint64_t)index < (uint64_t)array->length) return array->items;
   lerta_raise_index_out_of_range();
   return NULL;
 }

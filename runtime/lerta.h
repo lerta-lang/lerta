@@ -185,6 +185,9 @@ bool lerta_float_fits_int(double value);
 int64_t lerta_float_to_int(double value);
 // Takes `count` borrowed `LertaString *` arguments and returns their concatenation.
 LertaString *lerta_string_concat(int64_t count, ...);
+// As lerta_string_concat, of arguments that it takes; it extends in place the longest that nothing
+// else holds and whose place has room for the result, if any.
+LertaString *lerta_string_concat_taken(int64_t count, ...);
 // `s + part` and `s + byte` of a String or a Binary, which take `s` and borrow `part`: the bytes are
 // appended in place when nothing else holds `s`, so that a loop of `+=` is O(n).
 LertaString *lerta_string_extend(LertaString *s, const LertaString *part);

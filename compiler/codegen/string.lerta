@@ -5,15 +5,14 @@ import emit_release, string_layout from './lerta_ir'
 import call_runtime from './runtime_calls'
 import is_kind, Type from '../types'
 
-# A new String holding the parts, which are owned Strings, one after another; the parts are
-# released.
+# A String holding the parts, which are owned Strings, one after another; the runtime takes the
+# parts, and extends in place the longest that nothing else holds and whose place has room for the
+# result, if any.
 export emit_concat := (ir: IrBuilder, parts: String[]) ->
-  ir.module.declare 'lerta_string_concat', 'declare ptr @lerta_string_concat(i64, ...)'
+  ir.module.declare 'lerta_string_concat_taken', 'declare ptr @lerta_string_concat_taken(i64, ...)'
   args := ["ptr #{part}" for part in parts].join(', ')
-  call := "call ptr (i64, ...) @lerta_string_concat(i64 #{parts.length}, #{args})"
-  result := ir.assign(call)
-  emit_release ir, part for part in parts
-  result
+  call := "call ptr (i64, ...) @lerta_string_concat_taken(i64 #{parts.length}, #{args})"
+  ir.assign call
 
 # `left + right` of a String or a Binary, both owned and released, `right` being one of the same
 # type or a Byte: the runtime appends in place when nothing else holds `left`.

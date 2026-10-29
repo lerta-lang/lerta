@@ -61,15 +61,16 @@ __attribute__((noinline)) static void *move_to_room(void *object, int64_t size) 
 #endif
 }
 
-void *lerta_grow(void *object, int64_t size) {
+bool lerta_has_room(void *object, int64_t size) {
 #ifdef LERTA_DEBUG
-  void *place = (LertaPrefix *)object - 1;
-  int64_t needed = (int64_t)sizeof(LertaPrefix) + size;
+  return (int64_t)sizeof(LertaPrefix) + size <= lerta_mem_capacity((LertaPrefix *)object - 1);
 #else
-  void *place = object;
-  int64_t needed = size;
+  return size <= lerta_mem_capacity(object);
 #endif
-  if (needed <= lerta_mem_capacity(place)) return object;
+}
+
+void *lerta_grow(void *object, int64_t size) {
+  if (lerta_has_room(object, size)) return object;
   return move_to_room(object, size);
 }
 

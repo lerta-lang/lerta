@@ -34,21 +34,75 @@ LertaString *lerta_string_from_c(const char *text) {
   return lerta_string_from_bytes(text, (int64_t)strlen(text));
 }
 
+// The concatenation of the `count` parts that `args` holds, which it takes if `taken`: then the
+// longest part that nothing else holds and whose place has room for the result is extended there,
+// its bytes moved to their place, rather than all copied into a new String. One without the room
+// is not grown, which would leave the result in a place of twice the size, as lerta_grow gives a
+// String that `+=` extends.
+static LertaString *concat(int64_t count, va_list args, bool taken) {
+  va_list parts;
+  va_copy(parts, args);
+  int64_t length = 0;
+  for (int64_t i = 0; i < count; i++) length += va_arg(parts, const LertaString *)->length;
+  va_end(parts);
+  int64_t size = (int64_t)sizeof(LertaString) + length;
+  int64_t kept = -1;
+  LertaString *kept_part = NULL;
+  int64_t kept_start = 0;
+  int64_t kept_length = 0;
+  if (taken) {
+    int64_t start = 0;
+    va_copy(parts, args);
+    for (int64_t i = 0; i < count; i++) {
+      LertaString *part = va_arg(parts, LertaString *);
+      bool fits = part->header.ref_count == 1 && lerta_has_room(part, size);
+      if (fits && (kept < 0 || part->length > kept_length)) {
+        kept = i;
+        kept_part = part;
+        kept_start = start;
+        kept_length = part->length;
+      }
+      start += part->length;
+    }
+    va_end(parts);
+  }
+
+  LertaString *result;
+  if (kept < 0) {
+    result = lerta_string_new(length);
+  } else {
+    result = kept_part;
+    memmove(result->bytes + kept_start, result->bytes, (size_t)kept_length);
+    result->length = length;
+  }
+  int64_t offset = 0;
+  va_copy(parts, args);
+  for (int64_t i = 0; i < count; i++) {
+    LertaString *part = va_arg(parts, LertaString *);
+    if (i == kept) {
+      offset += kept_length;
+      continue;
+    }
+    memcpy(result->bytes + offset, part->bytes, (size_t)part->length);
+    offset += part->length;
+    if (taken) lerta_release(part);
+  }
+  va_end(parts);
+  return result;
+}
+
 LertaString *lerta_string_concat(int64_t count, ...) {
   va_list args;
   va_start(args, count);
-  int64_t length = 0;
-  for (int64_t i = 0; i < count; i++) length += va_arg(args, const LertaString *)->length;
+  LertaString *result = concat(count, args, false);
   va_end(args);
+  return result;
+}
 
-  LertaString *result = lerta_string_new(length);
-  int64_t offset = 0;
+LertaString *lerta_string_concat_taken(int64_t count, ...) {
+  va_list args;
   va_start(args, count);
-  for (int64_t i = 0; i < count; i++) {
-    const LertaString *part = va_arg(args, const LertaString *);
-    memcpy(result->bytes + offset, part->bytes, (size_t)part->length);
-    offset += part->length;
-  }
+  LertaString *result = concat(count, args, true);
   va_end(args);
   return result;
 }

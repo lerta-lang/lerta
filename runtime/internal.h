@@ -56,6 +56,8 @@ void lerta_untrack_frame(void);
 // room, else moving it to one of twice the size, so that growing it step by step copies it
 // O(log n) times. The caller ensures that no weak box or trace knows the object by its place.
 void *lerta_grow(void *object, int64_t size);
+// Whether the object's place has room for `size` bytes, so that lerta_grow keeps it there.
+bool lerta_has_room(void *object, int64_t size);
 
 // Strings (string.c). A new string or Binary value whose bytes the caller fills.
 LertaString *lerta_string_new(int64_t length);
