@@ -442,8 +442,42 @@ lto_link_flags_check := ->
     reasons.push "the ThinLTO cache is #{LTO_CACHE}" if LTO_CACHE != 'thinlto-devirt-8'
     reasons
 
+# `lerta clean` removes what builds keep in the cache, by their names, and leaves anything else
+# there; without a cache directory, it removes nothing and makes none.
+clean_check := ->
+  Check name: 'lerta clean removes the runtimes and the ThinLTO caches only', run: ->
+    cache := new_cli_dir('cache-clean')
+    made :=
+      LTO_CACHE
+      'runtime-debug-x.staging-1-temp'
+      'thinlto'
+      'thinlto-devirt-0'
+      'runtime-debug-x'
+    make_dir "#{cache}/#{name}" for name in made
+    await write_file("#{cache}/#{LTO_CACHE}/entry", 'cached'.binary)
+    await write_file("#{cache}/runtime-file", 'cached'.binary)
+    await write_file("#{cache}/notes.txt", 'kept'.binary)
+    make_dir "#{cache}/thinlto-other"
+    env: Map<String, String>
+    env['LERTA_CACHE_DIR'] = cache
+    cleaned := await run_in_new_dir(compiler, ['clean'], ''.binary, env)
+    in_order := [made..., 'runtime-file'].sorted((a, b) -> a.compare(b))
+    removed := ["removed #{printed_path("#{cache}/#{name}")}\n" for name in in_order].join('')
+    missing := "#{cache}/missing"
+    env['LERTA_CACHE_DIR'] = missing
+    none := await run_in_new_dir(compiler, ['clean'], ''.binary, env)
+    [
+      expect_success('clean', cleaned.result)...
+      compare_text('removed', removed, cleaned.result.stdout.text()!)...
+      expect_left('left in the cache', ['notes.txt', 'thinlto-other'], list_dir(cache))...
+      expect_success('clean without a cache', none.result)...
+      check_reason(none.result.stdout.is_empty(), 'clean without a cache printed something')...
+      check_reason(not is_dir(missing), 'clean made the cache directory')...
+    ]
+
 export checks :=
   lto_link_flags_check()
+  clean_check()
   cached_runtime_check([], 'debug')
   cached_runtime_check(['-O'], 'release')
   cached_runtime_check(['-O', '--memory-checks'], 'release-checked')

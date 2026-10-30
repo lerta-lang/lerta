@@ -1,6 +1,6 @@
 # Compiles the runtime, with libuv, once for each kind of build, and keeps its object files in a
 # cache directory, so that a build only links them (see docs/reference/compiler.md).
-import is_file, list_dir, make_dir, read_text, remove_tree, rename, write_file from 'std:io'
+import is_dir, is_file, list_dir, make_dir, read_text, remove_tree, rename, write_file from 'std:io'
 import env, is_running, platform, process_id, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
 import run_clang_jobs from './clang_jobs'
@@ -91,15 +91,41 @@ clang_version_text := ->
 read_text_or_throw := (path: String) ->
   await read_text(path) ? throw CompileError("#{path} is not valid UTF-8")
 
-# `$LERTA_CACHE_DIR`, or else the system's place for caches, made if missing. An empty variable
-# counts as unset, as the XDG specification has it.
+# `$LERTA_CACHE_DIR`, or else the system's place for caches. An empty variable counts as unset, as
+# the XDG specification has it.
+cache_path := -> non_empty_env('LERTA_CACHE_DIR') ? default_cache_dir()
+
+# The cache directory, made if missing.
 export cache_dir := ->
-  dir := non_empty_env('LERTA_CACHE_DIR') ? default_cache_dir()
+  dir := cache_path()
   try
     make_dir dir
   catch _
     throw CompileError("cannot make the cache directory: #{dir}")
   dir
+
+# Removes what builds keep in the cache directory, if there is one: the compiled runtimes, their
+# staging directories and the linker's ThinLTO caches, of this compiler (see LTO_CACHE) or an
+# earlier one, by the names that builds give them, so that nothing else in a directory that
+# `$LERTA_CACHE_DIR` names goes. The paths removed, in the order of their names.
+export clean_cache := (): Promise<String[]> ->
+  dir := cache_path()
+  return [] if not is_dir(dir)
+  removed: String[]
+  for name in list_dir(dir)
+    continue if not is_made_by_builds(name)
+    path := join(dir, name)
+    try
+      await remove_tree(path)
+    catch error: IOError
+      # A build may have renamed or removed it meanwhile, as one does with its staging directory.
+      continue if not is_dir(path) and not is_file(path)
+      throw error
+    removed.push path
+  removed
+
+is_made_by_builds := (name: String) ->
+  name.starts_with('runtime-') or name == 'thinlto' or name.starts_with('thinlto-devirt-')
 
 default_cache_dir := -> platform == 'windows' then windows_cache_dir() else posix_cache_dir()
 
