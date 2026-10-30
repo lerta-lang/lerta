@@ -431,6 +431,18 @@ dump_float_ranges_check := ->
     reasons.push "spread checks for NaN #{count} times, not once" if count != 1
     reasons
 
+# `x -= e`, where e is a tree, checks for NaN once, at the subtraction, of a local and of a field.
+dump_compound_tree_check := ->
+  Check name: 'lerta dump-llvm checks a compound assignment of a tree for NaN once', run: ->
+    source := "#{root_dir}/tests/float/nan_in_compound_tree_trace.lerta"
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
+    reasons := expect_status(0, dumped.result.status)
+    body := function_body(dumped.result.stdout.text()!.split("\n"), 'shrink')
+    return [reasons..., 'no function shrink'] if not body
+    count := body.filter((line) -> ' = fcmp uno ' in line).count()
+    reasons.push "shrink checks for NaN #{count} times, not twice" if count != 2
+    reasons
+
 ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
 
 # Each load and store of an item of an array or a value of a map, of each size, names the alias tag
@@ -681,6 +693,7 @@ checks.push dump_seldom_check()
 checks.push dump_joined_literals_check()
 checks.push dump_unchecked_methods_check()
 checks.push dump_float_ranges_check()
+checks.push dump_compound_tree_check()
 checks.push dump_item_tag_check()
 checks.push dump_field_tag_check()
 checks.push item_tag_source_lines_check()

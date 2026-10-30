@@ -20,9 +20,9 @@ import emit_branch from './ir_builder'
 import emit_field_pointer, emit_member_dispatch, field_named from './heap_object'
 import emit_release, emit_release_value, ir_type, ownership from './lerta_ir'
 import emit_find, emit_held_at, emit_map_set, emit_place, emit_set_at from './map'
-import appended, apply_numeric from './operator'
+import appended, apply_numeric, is_float_leaf from './operator'
 import emit_extend from './string'
-import is_one_of_kinds, MapType, ObjectType, Type, UnionType from '../types'
+import is_float, is_one_of_kinds, MapType, ObjectType, Type, UnionType from '../types'
 
 # The new value is stored before the old one is released, which is safe even if they are the
 # same object.
@@ -211,8 +211,14 @@ assign_through := (
   ir := g.ir
   load := -> ir.assign("load #{ir_type(type)}, ptr #{pointer}#{tag}")
   operand := appended(g, assignment.value)
-  value := generate(g, operand)
   is_plain := assignment.operator == '='
+  # `x += e` of a Float or a Float32, where e is a tree (see float_tree) or a leaf, is a tree whose
+  # root is the combining operation, as the old value, loaded after e, is a leaf too.
+  is_root :=
+    not is_plain and is_float(type) and not g.defers_float_checks and is_float_leaf(g, operand)
+  g.defers_float_checks = true if is_root
+  value := generate(g, operand)
+  g.defers_float_checks = false if is_root
   old := is_plain then '' else load()
   result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
   replaced := is_plain and ownership(type) != NONE then load() else ''
