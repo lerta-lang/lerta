@@ -4,7 +4,7 @@ import is_file, make_temp_dir, open, remove_tree from 'std:io'
 import exit, run from 'std:process'
 import ProgramWide from './checker/shared'
 import run_clang_jobs from './clang_jobs'
-import build_flags, executable_suffix, lto_cache_flags from './clang_flags'
+import build_flags, executable_suffix, LTO_CACHE, lto_link_flags from './clang_flags'
 import generate from './codegen/codegen'
 import check_program, write_ir from './compile'
 import CompileError from './errors'
@@ -83,9 +83,9 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
     link_path(cwd, request.output ? join(work_dir, "program#{executable_suffix(request.target)}"))
   # libm, which std:math calls, is apart from libc on Linux; elsewhere -lm links nothing more.
   libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
-  lto_cache := join(real_path_text(cache_dir()), 'thinlto')
+  lto_cache := join(real_path_text(cache_dir()), LTO_CACHE)
   system := target_system(request.target)
-  cache_flags := request.optimize then lto_cache_flags(system, lto_cache)
+  lto_flags := request.optimize then lto_link_flags(system, lto_cache)
   # dsymutil (below) reads the debug information from the objects, which the link-time optimizer
   # makes in a directory that it removes unless told one.
   keeps_objects := source_lines and system == 'macos' and request.optimize
@@ -94,7 +94,7 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   args := [
     [basename(object) for object in objects]...
     flags...
-    (cache_flags ? [])...
+    (lto_flags ? [])...
     lto_objects...
     [real_path_text(object) for object in runtime.objects]...
     libraries...

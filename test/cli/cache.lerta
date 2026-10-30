@@ -1,4 +1,5 @@
 # Runtime caches are isolated, complete, reused, and selected from the documented environment.
+import LTO_CACHE, lto_link_flags from '../../compiler/clang_flags'
 import Check from '../lib/report'
 import compare_text, expect_status from '../lib/expect'
 import compiler, host_systems, read_text_or_throw, root_dir from '../lib/lerta'
@@ -18,7 +19,7 @@ check_reason := (condition: Bool, reason: String): String[] -> condition then []
 printed_path := (path: String) -> path.split('//').join('/')
 
 # What a cache holds but the linker's ThinLTO cache, which only optimized builds have.
-runtimes_in := (cache: String) -> [entry for entry in list_dir(cache) when entry != 'thinlto']
+runtimes_in := (cache: String) -> [entry for entry in list_dir(cache) when entry != LTO_CACHE]
 
 is_hex_digit := (character: Char) -> character.is_digit() or ('A' <= character and character <= 'F')
 
@@ -61,7 +62,7 @@ runtime_file_names := ->
   )
 
 thinlto_entries := (cache: String): String[] ->
-  directory := "#{cache}/thinlto"
+  directory := "#{cache}/#{LTO_CACHE}"
   return [] if not is_dir(directory)
   entries: String[]
   for entry in list_dir(directory)
@@ -427,7 +428,22 @@ unremovable_staging_check := ->
       await complete_runtime(cache, name)...
     ]
 
+# The link of an optimized build gives each linker the limit of LLVM's devirtualization, as that
+# linker takes an option of LLVM's, and the cache is named after it, as docs/reference/compiler.md
+# gives it.
+lto_link_flags_check := ->
+  Check name: 'the link gives each linker the devirtualization limit', run: ->
+    expected :=
+      { system: 'macos', flag: '-Wl,-mllvm,-max-devirt-iterations=8' }
+      { system: 'windows', flag: '-Wl,-mllvm,-max-devirt-iterations=8' }
+      { system: 'linux', flag: '-Wl,-plugin-opt=-max-devirt-iterations=8' }
+    missing := [e.system for e in expected when e.flag not in lto_link_flags(e.system, 'cache')]
+    reasons := ["no #{system} flag for the limit" for system in missing]
+    reasons.push "the ThinLTO cache is #{LTO_CACHE}" if LTO_CACHE != 'thinlto-devirt-8'
+    reasons
+
 export checks :=
+  lto_link_flags_check()
   cached_runtime_check([], 'debug')
   cached_runtime_check(['-O'], 'release')
   cached_runtime_check(['-O', '--memory-checks'], 'release-checked')

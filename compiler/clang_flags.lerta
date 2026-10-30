@@ -10,13 +10,24 @@ optimization_flags := (optimize: Bool): String[] -> optimize then ['-O2', '-flto
 memory_check_flags := (memory_checks: Bool): String[] ->
   memory_checks then ['-D', 'LERTA_DEBUG'] else []
 
-# For Linux, the options are GNU ld's LLVM plugin's, which clang uses by default there, as lld takes
-# none of them.
-export lto_cache_flags := (system: String, dir: String) ->
+# How often LLVM optimizes a function again where a call in it becomes direct, rather than 4: the
+# chain of an Iter's methods inlines one more call at each (see docs/internals.md#iter).
+DEVIRT_ITERATIONS := 8
+
+# What the link of an optimized build is given for its link-time optimization: the cache, in `dir`,
+# and DEVIRT_ITERATIONS. For Linux, the options are GNU ld's LLVM plugin's, which clang uses by
+# default there, as lld takes none of them.
+export lto_link_flags := (system: String, dir: String) ->
+  devirt := "-max-devirt-iterations=#{DEVIRT_ITERATIONS}"
   case system
-    when 'macos' then ["-Wl,-cache_path_lto,#{dir}"]
-    when 'windows' then ["-Wl,--thinlto-cache-dir=#{dir}"]
-    else ["-Wl,-plugin-opt,cache-dir=#{dir}"]
+    when 'macos' then ["-Wl,-cache_path_lto,#{dir}", "-Wl,-mllvm,#{devirt}"]
+    when 'windows' then ["-Wl,--thinlto-cache-dir=#{dir}", "-Wl,-mllvm,#{devirt}"]
+    else ["-Wl,-plugin-opt,cache-dir=#{dir}", "-Wl,-plugin-opt=#{devirt}"]
+
+# The directory of the cache of the link-time optimization in the cache directory, named after
+# DEVIRT_ITERATIONS, which the linker does not count in the keys of its entries, so that a build
+# with another limit takes none made with this one.
+export LTO_CACHE := "thinlto-devirt-#{DEVIRT_ITERATIONS}"
 
 export is_mingw := (target: String) -> target.ends_with('-w64-mingw32')
 
