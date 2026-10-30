@@ -30,8 +30,8 @@ import
   ValueLocal
 from './generator'
 import
-  emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of,
-  emit_weak_object, emit_weak_slot_or_null, HeapField, value_field
+  access_tag, emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of,
+  emit_weak_object, emit_weak_slot_or_null, fixed, HeapField, value_field
 from './heap_object'
 import emit_when, IrBuilder, IrModule from './ir_builder'
 import
@@ -122,7 +122,7 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
   for capture in captures
     local := local_of(capture)
     if not capture.is_var
-      slots.push value_field(capture.type)
+      slots.push fixed(value_field(capture.type))
       borrowed := -> read_borrowed(g, local, capture.type)
       operands.push on_stack then borrowed() else captured_value(g, local, capture)
       continue
@@ -143,11 +143,12 @@ export emit_settling_closure := (g: Generator, closure: String, source: Type, ta
   body_generator := function_generator(g.code, g.extensions, g.facts, name)
   { params } := function_type_of(source)
   value := (function_type_of(target).result as PromiseType!).value
-  slots := [value_field(source)]
+  slots := [fixed(value_field(source))]
   args := ["%p#{i}" for _, i in params]
   generate_body := ->
     ir := body_generator.ir
-    callee := ir.assign("load ptr, ptr #{emit_capture_pointer(ir, '%closure', slots, 0)}")
+    pointer := emit_capture_pointer(ir, '%closure', slots, 0)
+    callee := ir.assign("load ptr, ptr #{pointer}#{access_tag(ir, slots[0])}")
     result := emit_closure_call(ir, callee, source, args)
     emit_exception_check body_generator
     emit_return body_generator, result, value
@@ -251,12 +252,13 @@ generate_function_body := (
   bind '(closure)', '%closure', type if holds and captures != nil
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
   captured := captures ? []
-  slot_of := (capture: Capture) -> capture.is_var then CELL_SLOT else value_field(capture.type)
+  slot_of := (capture: Capture) ->
+    capture.is_var then CELL_SLOT else fixed(value_field(capture.type))
   slots := [slot_of(capture) for capture in captured]
   for capture, i in captured
     { name, type, is_var } := capture
     pointer := emit_capture_pointer(ir, '%closure', slots, i)
-    value := ir.assign("load #{slots[i].ir_type}, ptr #{pointer}")
+    value := ir.assign("load #{slots[i].ir_type}, ptr #{pointer}#{access_tag(ir, slots[i])}")
     cell := CellSlot(cell: value, is_owned: false)
     weak := capture.is_weak
     scope[name] =

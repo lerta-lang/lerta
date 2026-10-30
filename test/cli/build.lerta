@@ -443,6 +443,32 @@ dump_compound_tree_check := ->
     reasons.push "shrink checks for NaN #{count} times, not twice" if count != 2
     reasons
 
+REMADE_IN_LOOPS := "#{root_dir}/tests/iter/remade_in_loops.lerta"
+
+# A closure reads each of its captures, which it never writes after it is made, as fixed (see
+# invariant), so that LLVM keeps a captured function across calls that it cannot see into; one on
+# the stack, made on each round of a loop at one place, is laundered each time, and its captures
+# written as fixed.
+dump_fixed_captures_check := ->
+  Check name: 'lerta dump-llvm reads the captures of a closure as fixed', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', REMADE_IN_LOOPS])
+    reasons := expect_status(0, dumped.result.status)
+    lines := dumped.result.stdout.text()!.split("\n")
+    is_capture := (line: String) -> '%closure, i32 0, i32 ' in line and not line.ends_with(' 2')
+    captures := [i for line, i in lines when is_capture(line)]
+    unfixed := [i for i in captures when '!invariant.group' not in lines[i + 1]]
+    reasons.push 'no capture read' if captures.length < 2
+    reasons.append ["not read as fixed: #{lines[i + 1].trim()}" for i in unfixed]
+    body := function_body(lines, 'rounds') ? return [reasons..., 'no function rounds']
+    stack := [line.trim().split(' = ')[0] for line in body when ' = alloca {' in line]
+    is_laundered := (place: String) ->
+      body.any (line) -> "@llvm.launder.invariant.group.p0(ptr #{place})" in line
+    reasons.push 'no stack closure laundered' if not stack.any(is_laundered)
+    is_fixed_store := (line: String) ->
+      line.trim().starts_with('store i64 ') and '!invariant.group' in line
+    reasons.push 'no capture written as fixed' if body.filter(is_fixed_store).count() < 2
+    reasons
+
 ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
 
 # Each load and store of an item of an array or a value of a map, of each size, names the alias tag
@@ -694,6 +720,7 @@ checks.push dump_joined_literals_check()
 checks.push dump_unchecked_methods_check()
 checks.push dump_float_ranges_check()
 checks.push dump_compound_tree_check()
+checks.push dump_fixed_captures_check()
 checks.push dump_item_tag_check()
 checks.push dump_field_tag_check()
 checks.push item_tag_source_lines_check()

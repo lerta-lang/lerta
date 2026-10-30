@@ -57,7 +57,7 @@ export emit_closure_call := (ir: IrBuilder, closure: String, type: Type, args: S
 
 # What a closure holds for each capture is a field (see HeapField): a value, or the cell of a
 # captured var (see heap_object), which is an owned reference.
-export CELL_SLOT := HeapField(ir_type: 'ptr', owned: REFERENCE)
+export CELL_SLOT := fixed({ ir_type: 'ptr', owned: REFERENCE })
 
 # The IR type of a closure that holds these captures.
 closure_ir_type := (slots: HeapField[]) -> heap_object_type([CODE, slots...])
@@ -79,12 +79,14 @@ export emit_closure := (
 
 # A closure of the code `symbol` on the stack, for one that never outlives the call that makes it,
 # which borrows the captured operands, as they outlive it. It is immortal, as a static closure is,
-# so that counting it does nothing, and LLVM, which sees its code, can call it directly.
+# so that counting it does nothing, and LLVM, which sees its code, can call it directly. Its place,
+# one for the function, is laundered each time it is made, so that a closure made again in a loop,
+# whose fixed fields hold other values, is another object to LLVM.
 export emit_local_closure := (
   ir: IrBuilder, symbol: String, slots: HeapField[], operands: String[]
 ) ->
   layout := closure_ir_type(slots)
-  closure := ir.alloca(layout)
+  closure := emit_laundered(ir, ir.alloca(layout))
   ir.emit "store i64 #{LERTA_IMMORTAL}, ptr #{closure}"
   type := ir.assign("getelementptr #{layout}, ptr #{closure}, i32 0, i32 1")
   ir.emit "store ptr null, ptr #{type}"
@@ -97,7 +99,7 @@ emit_fill_closure := (
   ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}#{access_tag(ir, CODE)}"
   for slot, i in slots
     pointer := emit_capture_pointer(ir, closure, slots, i)
-    ir.emit "store #{slot.ir_type} #{operands[i]}, ptr #{pointer}"
+    ir.emit "store #{slot.ir_type} #{operands[i]}, ptr #{pointer}#{access_tag(ir, slot)}"
 
 define_closure_type := (ir: IrBuilder, type: String, name: String, slots: HeapField[]) ->
   define := (module: IrModule) ->
