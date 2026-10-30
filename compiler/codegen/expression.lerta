@@ -11,7 +11,7 @@ import field_tag, top_level_tag from './alias_tags'
 import emit_length from './array'
 import generate_await from './awaiting'
 import generate_borrowed from './borrowing'
-import float_constant from './float'
+import emit_nan_check, float_constant from './float'
 import generate_call from './call'
 import generate_case, generate_conditional, generate_if_value from './case'
 import emit_function_closure from './closure'
@@ -146,7 +146,7 @@ generate_node := (g: Generator, expression: Expression): String ->
       "#{expression.value!}"
     when FloatLiteral then float_constant(expression.text, type_of(g, expression))
     when BooleanLiteral then "#{expression.value}"
-    when Call then generate_call_ending_if_never(g, expression)
+    when Call then generate_call_in_tree(g, expression)
     when UnaryOperation then generate_unary(g, expression)
     when BinaryOperation then generate_binary(g, expression)
     when Case then generate_case(g, expression)
@@ -416,7 +416,27 @@ export read_borrowed := (g: Generator, local: CodegenLocal, type: Type) ->
   held := held_value(g, local)
   # A weak local's object, which may be gone, is never narrowed.
   value := local.weak then emit_weak_object(ir, held) else held
+  emit_nan_check g, value, local.type if is_checked_where_read(g, local)
   emit_narrowed ir, value, local.type, type
+
+# Whether the local holds a float not checked for NaN yet (see defers_declaration), read where no
+# root checks it for NaN: but as an operand of a tree whose root does.
+is_checked_where_read := (g: Generator, local: CodegenLocal) ->
+  return false if local is not SlotLocal or g.unchecked_floats[local.pointer] == nil
+  not g.defers_float_checks or g.checks_deferred_reads
+
+# A call, which may be a leaf of a tree of float arithmetic (see float_tree), checks its arguments
+# where it is called, as their values leave the tree; the trees in them are their own, whose roots
+# leave the tree's way of checking as it was.
+generate_call_in_tree := (g: Generator, call: Call) ->
+  defers := g.defers_float_checks
+  checks := g.checks_deferred_reads
+  g.defers_float_checks = false
+  g.checks_deferred_reads = false
+  value := generate_call_ending_if_never(g, call)
+  g.defers_float_checks = defers
+  g.checks_deferred_reads = checks
+  value
 
 # What the local holds, borrowed: its value, or a weak local's box.
 export held_value := (g: Generator, local: CodegenLocal) ->

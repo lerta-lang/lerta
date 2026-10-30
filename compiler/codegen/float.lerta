@@ -33,9 +33,13 @@ export apply_float_arithmetic := (
       when '/' then 'fdiv'
       else panic("no Float operator #{operator}")
   result := ir.assign("#{instruction} #{float} #{left}, #{right}")
-  return result if g.defers_float_checks
-  throw_if g, ir.assign("fcmp uno #{float} #{result}, 0.0"), NOT_A_NUMBER
+  emit_nan_check g, result, type if not g.defers_float_checks
   result
+
+# Throws where the float of the type is NaN.
+export emit_nan_check := (g: Generator, value: String, type: Type) ->
+  float := scalar_of(type)!.ir_type
+  throw_if g, g.ir.assign("fcmp uno #{float} #{value}, 0.0"), NOT_A_NUMBER
 
 export emit_float_negation := (ir: IrBuilder, operand: String, type: Type) ->
   ir.assign "fneg #{scalar_of(type)!.ir_type} #{operand}"

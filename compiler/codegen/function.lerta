@@ -1,9 +1,9 @@
 # Generates a function of a program: its blocks, declarations, returns and constructors;
 # control_flow generates control flow, and assignment assignments.
 import
-  Assignment, Declaration, EnumDeclaration, Expression, Extend, Extern, For, FunctionLiteral, If,
-  Import, InterfaceDeclaration, Jump, NilLiteral, Pass, Return, Statement, TypeAlias,
-  TypeDeclaration, While
+  Assignment, BinaryOperation, Declaration, EnumDeclaration, Expression, Extend, Extern, For,
+  FunctionLiteral, If, Import, InterfaceDeclaration, Jump, NilLiteral, Pass, Return, Statement,
+  TypeAlias, TypeDeclaration, While
 from '../ast'
 import required_params from '../checker/functions'
 import FieldInfo, is_argument, ObjectInfo from '../checker/object_types'
@@ -14,6 +14,7 @@ import batched_field_writes, generate_assignment, generate_batched_field_writes 
 import generate_borrowed_value, is_borrowable_in_scope from './borrowing'
 import emit_await_owned, emit_loop_run, generate_awaiting_function from './awaiting'
 import call_user_function from './call'
+import float_tree from './operator'
 import
   CELL_SLOT, emit_capture_pointer, emit_closure, emit_closure_call, emit_local_closure,
   emit_static_closure, function_type_of
@@ -520,7 +521,10 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
     borrowed := generate_borrowed_value(g, declaration.value)
     g.locals.define name, ValueLocal(type, operand: borrowed)
     return
+  defers := global == nil and defers_declaration(g, declaration)
+  g.defers_float_checks = true if defers
   generated := generate_declared_value(g, declaration, global == nil and not weak)
+  g.defers_float_checks = false if defers
   value := weak then weak_box_of(g, generated, type) else generated
   emit_release ir, generated if weak
   if declaration.name in g.facts.shared_vars
@@ -531,11 +535,23 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
     return
   if global == nil
     slot := store_in_slot(g, value, type)
+    g.unchecked_floats[slot.pointer] = true if defers
     g.locals.define name, SlotLocal(type, weak, is_var: declaration.mutable, pointer: slot.pointer)
     return
   ir.emit "store #{ir_type(type)} #{value}, ptr #{global.pointer}#{top_level_tag(ir)}"
   emit_mark_initialized ir, global
   g.locals.define name, top_level_slot(global, false)
+
+# Whether the const, which is no top-level value, holds its value unchecked for NaN: a tree of float
+# arithmetic (see float_tree) whose root may give a NaN, which is checked where the value leaves
+# the local, read but as an operand of a tree whose root checks it (see is_checked_where_read), so
+# that the trees it goes on into check it once at their roots. A NaN that never leaves it throws
+# nowhere.
+defers_declaration := (g: Generator, declaration: Declaration) ->
+  return false if declaration.mutable or declaration.name in g.facts.shared_vars
+  value := declaration.value
+  return false if value is not BinaryOperation or g.defers_float_checks
+  float_tree(g, value) and value not in g.nan_free.whole
 
 # Whether the local, which is no top-level value, holds its value borrowed, retaining nothing: a
 # const whose value stays where it is borrowed from while the local is in scope (see

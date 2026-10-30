@@ -219,8 +219,11 @@ assign_through := (
   is_plain := assignment.operator == '='
   # `x += e` of a Float or a Float32, where e is a tree (see float_tree) or a leaf, is a tree whose
   # root is the combining operation, as the old value, loaded after e, is a leaf too.
-  is_root :=
-    not is_plain and is_float(type) and not g.defers_float_checks and is_float_leaf(g, operand)
+  is_root := not is_plain and
+    is_float(type) and
+    not g.defers_float_checks and
+    not g.code.eager_nan_checks and
+    is_float_leaf(g, operand)
   g.defers_float_checks = true if is_root
   value := generate(g, operand)
   g.defers_float_checks = false if is_root
@@ -262,13 +265,22 @@ export batched_field_writes := (g: Generator, statements: Statement[], start: In
   count
 
 is_batched_write := (g: Generator, statement: Statement) ->
-  return false if statement is not Assignment
+  return false if statement is not Assignment or g.code.eager_nan_checks
   return false if statement.operator == '=' or statement in g.facts.operator_calls
   target := statement.target
   return false if target is not Member or not is_float(type_of(g, target))
   if not is_local_or_this(g, target.object) or type_of(g, target.object) is not ObjectType
     return false
-  is_float_leaf g, appended(g, statement.value)
+  value := appended(g, statement.value)
+  is_float_leaf(g, value) and calls_nothing(value)
+
+# Whether a leaf or a tree of float arithmetic calls nothing, which could change a field.
+calls_nothing := (expression: Expression): Bool ->
+  case expression
+    when Call then false
+    when BinaryOperation then calls_nothing(expression.left) and calls_nothing(expression.right)
+    when UnaryOperation then calls_nothing(expression.operand)
+    else true
 
 is_local_or_this := (g: Generator, expression: Expression) ->
   case expression

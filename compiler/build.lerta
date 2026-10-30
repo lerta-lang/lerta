@@ -30,6 +30,9 @@ export struct BuildRequest
   traces: Bool
   # `--source-lines`: the program tells a debugger where its code comes from in the source.
   source_lines: Bool
+  # `--eager-nan-checks`: each float operation checks its own result for NaN where it is (see
+  # docs/internals.md#floats).
+  eager_nan_checks = default false
 
 export build := (request: BuildRequest) -> build_then(request, nil)
 
@@ -69,9 +72,10 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   { optimize, memory_checks, target } := request
   runtime := await cached_runtime(optimize, memory_checks, target, dir) ? return 1
   { function_attributes, coro_end_type } := runtime
-  { traces, source_lines } := request
-  modules :=
-    generate(program, function_attributes, coro_end_type, true, traces, source_lines, optimize)
+  { traces, source_lines, eager_nan_checks } := request
+  modules := generate
+    program, function_attributes, coro_end_type, true, traces, source_lines, optimize,
+    eager_nan_checks
   flags := build_flags(optimize, memory_checks, target)
   objects := await compile_modules(modules, flags, dir) ? return 1
   # The link runs in the temporary directory and names the modules' objects in it, and the paths it

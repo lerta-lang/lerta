@@ -1,0 +1,87 @@
+# A local whose value, a tree of float arithmetic, is NaN holds it unchecked, and throws where the
+# value leaves it: as the argument of a call, which is not made, into a field, in a comparison, as
+# a return value, and in a tree whose root gives no NaN, as an infinity plus one, and so checks
+# nothing. A NaN that never leaves its local throws nowhere. tests/cli/eager_nan_locals runs this
+# with `--eager-nan-checks`, where each throws at the subtraction, the unused one too.
+class Box
+  x: Float
+
+attempt := (name: String, f: () -> void) ->
+  try
+    f()
+    print "#{name}: fine"
+  catch e: ArithmeticError
+    print "#{name}: #{e.message}"
+
+show := (x: Float) -> print("shown: #{x}")
+
+pass_on := (x: Float) ->
+  print "passed on: #{x}"
+  x
+
+locals := (big: Float) ->
+  box := Box(x: 1.0)
+  attempt 'unused', ->
+    _nan := big * big - big * big
+  attempt 'argument', ->
+    nan := big * big - big * big
+    show nan
+  attempt 'field', ->
+    nan := big * big - big * big
+    box.x = nan
+  attempt 'comparison', ->
+    nan := big * big - big * big
+    print nan < 1.0
+  attempt 'return', ->
+    give := ->
+      nan := big * big - big * big
+      nan
+    give()
+  attempt 'tree that gives no NaN', ->
+    nan := big * big - big * big
+    _one_more := nan + 1.0
+  attempt 'after a call in a tree that gives no NaN', ->
+    nan := big * big - big * big
+    half := 0.5
+    _sum := (half * half).to_int()!.to_float() + nan
+  attempt 'compound assignment of a field', ->
+    nan := big * big - big * big
+    box.x += nan
+    box.x += 1.0
+  attempt 'batch of field writes', ->
+    nan := big * big - big * big
+    box.x += 1.0
+    box.x *= nan
+    box.x += 1.0
+  attempt 'negated in a tree that gives no NaN', ->
+    nan := big * big - big * big
+    _sum := -nan + 1.0
+  attempt 'argument in a tree that gives no NaN', ->
+    nan := big * big - big * big
+    _sum := pass_on(nan) + 1.0
+  attempt 'nested in a tree that gives no NaN', ->
+    nan := big * big - big * big
+    _sum := 2.0 + (nan + 1.0)
+  attempt 'string', ->
+    nan := big * big - big * big
+    print "#{nan}"
+  attempt 'conversion', ->
+    nan := big * big - big * big
+    print nan.to_int() == nil
+  attempt 'item', ->
+    nan := big * big - big * big
+    _items := [nan]
+  attempt 'capture', ->
+    nan := big * big - big * big
+    _later := -> nan
+  attempt 'compound assignment', ->
+    nan := big * big - big * big
+    var total = 1.0
+    total += nan
+    print total
+  attempt 'negated argument', ->
+    nan := big * big - big * big
+    show -nan
+  print "box: #{box.x}"
+
+locals 1e300

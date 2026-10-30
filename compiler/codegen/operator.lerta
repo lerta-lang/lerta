@@ -1,7 +1,7 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import
-  BinaryOperation, Coalesce, Expression, FloatLiteral, Identifier, IntegerLiteral, is_nil_test,
-  is_order_operator, Member, NilLiteral, StringLiteral, This, UnaryOperation, Unwrap
+  BinaryOperation, Call, Coalesce, Expression, FloatLiteral, Identifier, IntegerLiteral,
+  is_nil_test, is_order_operator, Member, NilLiteral, StringLiteral, This, UnaryOperation, Unwrap
 from '../ast'
 import ScopedLocal from '../checker/references'
 import compares_by_contents, own_equality from '../checker/equality'
@@ -71,12 +71,18 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   # The root of a tree of float arithmetic alone checks its result, which its operands leave
   # unchecked.
   is_root := not g.defers_float_checks and float_tree(g, binary)
+  # A root that gives no NaN checks none, so the locals not checked yet are checked where it reads
+  # them.
+  checks_leaves := is_root and binary in g.nan_free.whole
   g.defers_float_checks = true if is_root
+  checks_before := g.checks_deferred_reads
+  g.checks_deferred_reads = true if checks_leaves
   left := generate(g, binary.left)
   operand_type := type_at_use(g, binary.left)
   right_operand := appended(g, binary.right)
   right := holding(g, left, operand_type, -> generate(g, right_operand))
   g.defers_float_checks = false if is_root
+  g.checks_deferred_reads = checks_before
   if is_bytes(operand_type) and operator == '+'
     return emit_extend(g.ir, left, right, type_at_use(g, right_operand))
   # An operation that would check its result, a tree's root or one of no tree, checks none where it
@@ -105,19 +111,23 @@ constant_text := (g: Generator, expression: Expression): String? ->
 is_bytes := (type: Type) -> is_one_of_kinds(type, ['String', 'Binary'])
 
 # Whether the operation is a tree of float `+ - * /` whose leaves are locals, fields read through
-# them or `@` (see is_field_path) and literals, maybe negated: a NaN in it, which each of them
-# gives for a NaN operand, is a NaN at its root, so that its root alone need check that its result
-# is no NaN. The leaves neither throw nor do anything else, so nothing runs between the operation
-# that makes the NaN and the root; the error is reported at the root's position rather than at
-# that operation's.
-float_tree := (g: Generator, binary: BinaryOperation) ->
-  return false if not ['+', '-', '*', '/'].contains(binary.operator)
+# them or `@` (see is_field_path), literals, maybe negated, and calls that give a float: a NaN in
+# it, which each operation gives for a NaN operand, is a NaN at its root, so that its root alone
+# need check that its result is no NaN, and the error is reported at the root's position rather
+# than at that operation's. A call in it runs before the root, even after the operation that makes
+# a NaN, as code runs after a local whose value is not checked yet (see defers_declaration); its
+# arguments are checked as it is called. With `--eager-nan-checks`, there are no trees, so that each
+# operation checks its result where it is.
+export float_tree := (g: Generator, binary: BinaryOperation) ->
+  return false if g.code.eager_nan_checks or not ['+', '-', '*', '/'].contains(binary.operator)
   return false if binary in g.facts.operator_calls or not is_float(type_of(g, binary))
   is_float_leaf(g, binary.left) and is_float_leaf(g, binary.right)
 
 export is_float_leaf := (g: Generator, expression: Expression): Bool ->
   case expression
     when FloatLiteral, IntegerLiteral then true
+    # A call checks its arguments, and its result is checked where it returns.
+    when Call then is_float(type_of(g, expression))
     when Identifier, Member then is_field_path(g, expression)
     when UnaryOperation
       is_negation := expression.operator == '-' and expression not in g.facts.operator_calls
