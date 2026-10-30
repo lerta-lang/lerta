@@ -349,3 +349,7 @@ void lerta_os_unmap_region(void *region, int64_t size) {
   (void)size;
   VirtualFree(region, 0, MEM_RELEASE);
 }
+
+void lerta_os_discard_region(void *region, int64_t size) {
+  VirtualAlloc(region, (SIZE_T)size, MEM_RESET, PAGE_READWRITE);
+}

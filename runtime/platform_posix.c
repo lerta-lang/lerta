@@ -205,3 +205,11 @@ void *lerta_os_map_region(int64_t size) {
 }
 
 void lerta_os_unmap_region(void *region, int64_t size) { munmap(region, (size_t)size); }
+
+void lerta_os_discard_region(void *region, int64_t size) {
+#ifdef MADV_FREE
+  madvise(region, (size_t)size, MADV_FREE);
+#else
+  madvise(region, (size_t)size, MADV_DONTNEED);
+#endif
+}

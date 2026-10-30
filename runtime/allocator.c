@@ -41,8 +41,17 @@ static int64_t empty_slab_count = 0;
 static Region *empty_slabs[EMPTY_SLABS_KEPT];
 static int64_t oldest_empty_slab = 0;
 #else
-// The empty slabs kept for reuse, linked through their headers' `next`.
-static Region *empty_slabs = NULL;
+// The empty slabs kept for reuse, the one emptied last at the end, in a region of their own, so
+// that a slab discarded keeps nothing that the allocator needs; the first `discarded_slab_count` of
+// them are discarded.
+static Region **empty_slabs = NULL;
+static int64_t empty_slab_capacity = 0;
+static int64_t discarded_slab_count = 0;
+// The most slabs in use at once, which sets how long a round is (see end_round_if_due); the fewest
+// slabs empty in a round are those that no part of it took.
+static int64_t peak_slabs_in_use = 0;
+static int64_t round_events = 0;
+static int64_t round_fewest_empty = 0;
 #endif
 
 static Region *region_of(const void *memory) {
@@ -97,8 +106,12 @@ static bool is_full(const Region *slab) {
   return slab->free_first == NULL && !has_fresh_room(slab);
 }
 
+static void end_round_if_due(void);
+
 #ifdef LERTA_DEBUG
 static Region *take_empty_slab(void) { return NULL; }
+
+static void end_round_if_due(void) {}
 
 static void keep_empty_slab(Region *slab) {
   if (empty_slab_count == EMPTY_SLABS_KEPT) {
@@ -113,29 +126,50 @@ static void keep_empty_slab(Region *slab) {
 static bool takes_free_place(const Region *slab) { return !has_fresh_room(slab); }
 #else
 static Region *take_empty_slab(void) {
-  Region *slab = empty_slabs;
-  if (slab == NULL) return NULL;
-  empty_slabs = slab->next;
-  empty_slab_count--;
+  if (empty_slab_count == 0) return NULL;
+  Region *slab = empty_slabs[--empty_slab_count];
+  if (discarded_slab_count > empty_slab_count) discarded_slab_count = empty_slab_count;
+  if (round_fewest_empty > empty_slab_count) round_fewest_empty = empty_slab_count;
+  end_round_if_due();
   return slab;
 }
 
-// As many empty slabs are kept as there are slabs in use, and at least EMPTY_SLABS_KEPT, so that a
-// program that makes and drops a structure over and over, as large as those it keeps, maps no
-// slab again, while what it keeps empty is no more than what it uses. Freeing a slab leaves one
-// fewer in use, so that two may be beyond that; those after the slab freed last, which is warm, go.
-static void keep_empty_slab(Region *slab) {
-  slab->next = empty_slabs;
-  empty_slabs = slab;
-  empty_slab_count++;
-  int64_t kept = slabs_in_use > EMPTY_SLABS_KEPT ? slabs_in_use : EMPTY_SLABS_KEPT;
-  // Beyond EMPTY_SLABS_KEPT, there is always one after the first.
-  while (empty_slab_count > kept) {
-    Region *unkept = empty_slabs->next;
-    empty_slabs->next = unkept->next;
-    empty_slab_count--;
-    lerta_os_unmap_region(unkept, LERTA_REGION_SIZE);
+static void grow_empty_slabs(void) {
+  int64_t capacity = empty_slab_capacity == 0 ? LERTA_REGION_SIZE / (int64_t)sizeof(Region *)
+                                              : 2 * empty_slab_capacity;
+  Region **grown = map_region(capacity * (int64_t)sizeof(Region *));
+  if (empty_slabs != NULL) {
+    memcpy(grown, empty_slabs, (size_t)empty_slab_count * sizeof(Region *));
+    lerta_os_unmap_region(empty_slabs, empty_slab_capacity * (int64_t)sizeof(Region *));
   }
+  empty_slabs = grown;
+  empty_slab_capacity = capacity;
+}
+
+// A round ends after twice as many events as slabs were ever in use at once, an event being a slab
+// taken or kept, or an allocation that takes the slow way, which may also take one, so that a
+// program that allocates goes on to discard what it no longer uses. The empty slabs that none of it
+// took, the first of empty_slabs, are discarded then, but for as many as are in use, or
+// EMPTY_SLABS_KEPT, whichever is more; so a program that makes and drops a structure over and over
+// discards none for it, while what it keeps empty for long is no more than it uses.
+static void end_round_if_due(void) {
+  if (++round_events < 2 * peak_slabs_in_use) return;
+  int64_t kept = slabs_in_use > EMPTY_SLABS_KEPT ? slabs_in_use : EMPTY_SLABS_KEPT;
+  int64_t beyond_kept = empty_slab_count - kept;
+  int64_t unused = round_fewest_empty < beyond_kept ? round_fewest_empty : beyond_kept;
+  while (discarded_slab_count < unused) {
+    lerta_os_discard_region(empty_slabs[discarded_slab_count++], LERTA_REGION_SIZE);
+  }
+  round_events = 0;
+  round_fewest_empty = empty_slab_count;
+}
+
+// Every empty slab is kept, so that a program that makes and drops a structure over and over maps
+// no slab again for it.
+static void keep_empty_slab(Region *slab) {
+  if (empty_slab_count == empty_slab_capacity) grow_empty_slabs();
+  empty_slabs[empty_slab_count++] = slab;
+  end_round_if_due();
 }
 
 static bool takes_free_place(const Region *slab) { return slab->free_first != NULL; }
@@ -143,6 +177,9 @@ static bool takes_free_place(const Region *slab) { return slab->free_first != NU
 
 static Region *new_slab(int size_class) {
   slabs_in_use++;
+#ifndef LERTA_DEBUG
+  if (peak_slabs_in_use < slabs_in_use) peak_slabs_in_use = slabs_in_use;
+#endif
   Region *slab = take_empty_slab();
   if (slab == NULL) slab = map_region(LERTA_REGION_SIZE);
   uint8_t *places = (uint8_t *)slab + PLACES_START;
@@ -162,6 +199,7 @@ __attribute__((noinline)) static void *alloc_large(int64_t size) {
 // Allocates where lerta_mem_alloc's own part does not: a large place, or a small one that may leave
 // its slab full or needs a new slab.
 __attribute__((noinline)) static void *alloc_slow(int64_t size) {
+  end_round_if_due();
   if (size > SLAB_LIMIT) return alloc_large(size);
   int size_class = size_class_of(size);
   Region *slab = slabs_with_room[size_class];
@@ -208,9 +246,14 @@ __attribute__((noinline)) static void free_slab(Region *slab, int size_class) {
   keep_empty_slab(slab);
 }
 
-void lerta_mem_slab_counts(int64_t *in_use, int64_t *empty) {
+void lerta_mem_slab_counts(int64_t *in_use, int64_t *empty, int64_t *discarded) {
   *in_use = slabs_in_use;
   *empty = empty_slab_count;
+#ifdef LERTA_DEBUG
+  *discarded = 0;
+#else
+  *discarded = discarded_slab_count;
+#endif
 }
 
 // A release build puts the place first in the free list, a debug build last (see

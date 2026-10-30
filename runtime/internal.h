@@ -22,10 +22,12 @@ int64_t lerta_mem_capacity(void *memory);
 // Keeps the place when it holds `size` bytes and is not more than twice as large; else moves what
 // it holds, as far as it fits, to a new one. NULL is none.
 void *lerta_mem_realloc(void *memory, int64_t size);
-// The fewest empty slabs that the allocator keeps for reuse (see keep_empty_slab).
+// The fewest empty slabs that a release build keeps undiscarded (see end_round_if_due), and the
+// most that a debug build keeps (see keep_empty_slab).
 #define EMPTY_SLABS_KEPT 4
-// The slabs given to a size class, and the empty ones kept for reuse, for the runtime checks.
-void lerta_mem_slab_counts(int64_t *in_use, int64_t *empty);
+// The slabs given to a size class, the empty ones kept for reuse, and those of them discarded, for
+// the runtime checks.
+void lerta_mem_slab_counts(int64_t *in_use, int64_t *empty, int64_t *discarded);
 
 // The leak check (leaks.c), of the debug runtime, as the program ends: of what is left alive, and,
 // as `exit` ends it, which holds what is still in use, of the objects that nothing in use holds.
@@ -185,10 +187,12 @@ _Noreturn void lerta_os_exit(int code);
 // Ends the program as a failure that is not an exit code, as C's abort does.
 _Noreturn void lerta_os_abort(void);
 // Memory from the system for the allocator (allocator.c): `size` bytes, a multiple of
-// LERTA_REGION_SIZE, aligned to it, or NULL; and back to the system.
+// LERTA_REGION_SIZE, aligned to it, or NULL; and back to the system. A region discarded stays
+// mapped, but the system may take its pages, so that what it held is undefined until written again.
 #define LERTA_REGION_SIZE ((int64_t)1 << 16)
 void *lerta_os_map_region(int64_t size);
 void lerta_os_unmap_region(void *region, int64_t size);
+void lerta_os_discard_region(void *region, int64_t size);
 // As lerta_read_chunks returns them; `length` is left as it is if the file cannot be opened, so the
 // caller sets it first.
 uint8_t *lerta_os_read_file(const char *path, int64_t *length);
