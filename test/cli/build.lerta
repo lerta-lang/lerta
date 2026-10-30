@@ -431,6 +431,19 @@ dump_float_ranges_check := ->
     reasons.push "spread checks for NaN #{count} times, not once" if count != 1
     reasons
 
+# The writes of Float fields that follow one another in grow are a batch, which one branch checks
+# for NaN before it stores them, and takes them one by one only where one is NaN.
+dump_batched_writes_check := ->
+  Check name: 'lerta dump-llvm checks a batch of writes of Float fields at once', run: ->
+    source := "#{root_dir}/tests/float/nan_in_batched_writes_trace.lerta"
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
+    reasons := expect_status(0, dumped.result.status)
+    body := function_body(dumped.result.stdout.text()!.split("\n"), 'grow')
+    return [reasons..., 'no function grow'] if not body
+    batches := body.filter((line) -> line.starts_with('nan.one.by.one.')).count()
+    reasons.push "grow has #{batches} batches, not one" if batches != 1
+    reasons
+
 # `x -= e`, where e is a tree, checks for NaN once, at the subtraction, of a local and of a field.
 dump_compound_tree_check := ->
   Check name: 'lerta dump-llvm checks a compound assignment of a tree for NaN once', run: ->
@@ -720,6 +733,7 @@ checks.push dump_joined_literals_check()
 checks.push dump_unchecked_methods_check()
 checks.push dump_float_ranges_check()
 checks.push dump_compound_tree_check()
+checks.push dump_batched_writes_check()
 checks.push dump_fixed_captures_check()
 checks.push dump_item_tag_check()
 checks.push dump_field_tag_check()

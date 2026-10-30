@@ -1,0 +1,78 @@
+# Writes of Float fields that follow one another are computed together and checked for NaN once;
+# one that is NaN throws where its assignment is, after the writes before it, and leaves its field
+# and those after it as they were. An assignment that reads a field that one before it writes sees
+# the field written. Each function below ends with a statement of its own, as the last statement of
+# a body is no part of a batch.
+var rounds = 0
+
+class Body
+  x: Float
+  y: Float
+  vx: Float
+
+  # Through `@`.
+  drift = (dt: Float) ->
+    @x += @vx * dt
+    @y += big * big - big * big
+    rounds += 1
+
+class Pair
+  first: Float32
+  second: Float32
+
+attempt := (name: String, body: Body, write: (Body) -> void) ->
+  try
+    write body
+    print "#{name}: #{body.x} #{body.y} #{body.vx}"
+  catch e: ArithmeticError
+    print "#{name}: #{e.message}, #{body.x} #{body.y} #{body.vx}"
+
+big := 1e300
+body := -> Body(x: 1.0, y: 2.0, vx: 3.0)
+attempt 'fine', body(), (b) ->
+  b.x += b.vx * 2.0
+  b.y -= b.vx * 0.5
+  b.vx *= 2.0
+  rounds += 1
+attempt 'first', body(), (b) ->
+  b.x += big * big - big * big
+  b.y += 1.0
+  rounds += 1
+attempt 'first of three', body(), (b) ->
+  b.x += big * big - big * big
+  b.y += 1.0
+  b.vx += 1.0
+  rounds += 1
+attempt 'in a loop', body(), (b) ->
+  for _ in 0...3
+    b.x += b.vx
+    b.y *= 2.0
+attempt 'second', body(), (b) ->
+  b.x += 1.0
+  b.y += big * big - big * big
+  b.vx += 1.0
+  rounds += 1
+attempt 'reads a field written', body(), (b) ->
+  b.x += 1.0
+  b.y += b.x
+  rounds += 1
+attempt 'writes a field twice', body(), (b) ->
+  b.x += 1.0
+  b.x *= 3.0
+  rounds += 1
+attempt 'through another name', body(), (b) ->
+  other := b
+  b.x += 1.0
+  other.y += other.x
+  rounds += 1
+attempt 'through @', body(), (b) -> b.drift(2.0)
+
+# Float32 fields, whose overflow is an infinity of their own range.
+pair := Pair(first: 1.0, second: 3e38)
+try
+  pair.first += 1.0
+  pair.second -= pair.second * pair.second - pair.second * pair.second
+  rounds += 1
+catch e: ArithmeticError
+  print "Float32: #{e.message}, #{pair.first} #{pair.second}"
+print "rounds: #{rounds}"

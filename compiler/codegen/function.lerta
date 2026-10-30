@@ -10,7 +10,7 @@ import FieldInfo, is_argument, ObjectInfo from '../checker/object_types'
 import Capture from '../checker/shared'
 import all_but_last from '../arrays'
 import top_level_tag from './alias_tags'
-import generate_assignment from './assignment'
+import batched_field_writes, generate_assignment, generate_batched_field_writes from './assignment'
 import generate_borrowed_value, is_borrowable_in_scope from './borrowing'
 import emit_await_owned, emit_loop_run, generate_awaiting_function from './awaiting'
 import call_user_function from './call'
@@ -268,7 +268,7 @@ generate_function_body := (
         ValueLocal type, weak, operand: value
   hold_weak_this g, scope if literal.weak
   emit_suspend g if literal.yields
-  generate_statement g, statement for statement in all_but_last(literal.body)
+  generate_statements g, all_but_last(literal.body)
   generate_last_statement g, literal.body, result
   g.locals.pop()
 
@@ -391,7 +391,7 @@ export finish := (g: Generator, signature: String) -> g.ir.finish(signature)
 # while it holds the owned value of the type, which it then returns. The function's result type
 # decides the instruction: a returned value that never comes (`return throw ...`) is poison. The
 # body of a coroutine gives its value to `on_return`, if any, and goes to its end instead.
-emit_return := (g: Generator, value: String, type: Type) ->
+emit_return := (g: Generator, value: String, type: Type): void ->
   while_holding g, value, type, -> leave_scopes(g, 0)
   on_return value if on_return := g.on_return
   if coroutine := g.coroutine
@@ -434,7 +434,7 @@ export generate_block_value := (
 ) ->
   scope := g.locals.push()
   define scope
-  generate_statement g, statement for statement in all_but_last(body)
+  generate_statements g, all_but_last(body)
   last := body.last()!
   expression := last as Expression?
   # nil that ends a branch of an if or a try that gives no value has no type to be converted to.
@@ -453,8 +453,21 @@ export generate_block := (
 
 # What generates the statements, for a block whose code is given that way.
 export statements_code := (g: Generator, statements: Statement[]) ->
-  generate_all := -> generate_statement(g, statement) for statement in statements
+  generate_all := -> generate_statements(g, statements)
   generate_all
+
+# The statements in order, those that are a batch of writes of Float fields together (see
+# batched_field_writes).
+generate_statements := (g: Generator, statements: Statement[]) ->
+  var i = 0
+  while i < statements.length
+    count := batched_field_writes(g, statements, i)
+    if count > 1
+      generate_batched_field_writes g, statements.slice(i, i + count)
+      i += count
+    else
+      generate_statement g, statements[i]
+      i += 1
 
 # A block whose code `generate` generates in its scope.
 export generate_block_with := (
