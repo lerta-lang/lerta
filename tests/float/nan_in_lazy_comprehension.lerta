@@ -1,0 +1,39 @@
+# A closure that captures a local that holds a NaN throws as it is made, before it retains any
+# capture; a lazy comprehension one of whose closures throws as it is made releases its source, of
+# any kind, and the closure made before it.
+numbers := (n: Int) -> yield i.to_float() for i in 0...n
+
+f := (big: Float) ->
+  nan := big * big - big * big
+  text := "abc #{big}"
+  try
+    items := (nan * 0.0 + 1.0 for _ in 0...2)
+    print items.to_array()
+  catch e: ArithmeticError
+    print "range: #{e.message}"
+  try
+    items := (x + nan for x in [1.0, 2.0])
+    print items.to_array()
+  catch e: ArithmeticError
+    print "array: #{e.message}"
+  try
+    items := (x + nan for x in numbers(3) when text != '')
+    print items.to_array()
+  catch e: ArithmeticError
+    print "generator: #{e.message}"
+  try
+    items := (i for i in 0...2 when nan < 1.0)
+    print items.to_array()
+  catch e: ArithmeticError
+    print "guard: #{e.message}"
+  try
+    items := (x + nan for x in [1.0, 2.0] when x > 1.0)
+    print items.to_array()
+  catch e: ArithmeticError
+    print "element: #{e.message}"
+  try
+    functions := [(x: Float) -> not text.is_empty() and x + nan > 0.0]
+    print functions[0](1.0)
+  catch e: ArithmeticError
+    print "closure: #{e.message}"
+f 1e300

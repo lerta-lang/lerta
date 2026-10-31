@@ -25,7 +25,8 @@ import emit_suspend from './coroutine'
 import nan_free_operations from './float_ranges'
 import emit_exception_check, leave_scopes, while_holding from './exceptions'
 import
-  generate, held_value, read_borrowed, read_local, release_if_reference, type_at_use, type_of
+  emit_deferred_check, generate, held_value, read_borrowed, read_local, release_if_reference,
+  type_at_use, type_of
 from './expression'
 import
   CellSlot, CodegenLocal, function_generator, Generator, locate, SlotLocal, TopLevelGlobal,
@@ -123,6 +124,9 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
   is_weak := (capture: Capture) -> capture.is_weak or local_of(capture).weak
   is_coroutine := literal.yields or is_awaiting(g, literal)
   on_stack := is_local and not is_coroutine and not literal.weak and not captures.any(is_weak)
+  # A float that holds a NaN throws before any capture is retained, so that none is left held.
+  for capture in captures
+    emit_deferred_check g, local_of(capture) if not capture.is_var
   slots: HeapField[]
   operands: String[]
   for capture in captures
