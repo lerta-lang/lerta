@@ -1,0 +1,125 @@
+# Generates batches of writes of Float fields, which check their values for NaN at once.
+import
+  Assignment, BinaryOperation, Call, Expression, Identifier, Member, Position, Statement, This,
+  UnaryOperation
+from '../ast'
+import ScopedLocal from '../checker/references'
+import field_tag from './alias_tags'
+import combine, field_pointer from './assignment'
+import generate_borrowed from './borrowing'
+import pop_temporaries, push_temporary from './exceptions'
+import generate, type_at_use, type_of from './expression'
+import Generator, locate from './generator'
+import emit_seldom_branch from './ir_builder'
+import emit_release, ir_type from './lerta_ir'
+import appended, is_float_leaf from './operator'
+import NOT_A_NUMBER, throw_if from './runtime_errors'
+import is_float, ObjectType from '../types'
+
+# How many of the statements from `start` on are a batch of writes of Float fields: the
+# assignments that follow one another as `x.f += e`, `-=`, `*=` or `/=` of a Float or a Float32
+# field, where x is a local or `@` of a class, no union, and e is a tree of float arithmetic (see
+# float_tree in operator.lerta) or a leaf, so that it calls nothing, up to one that reads a field
+# of a name that one before it writes, its target's old value too, which would see the field
+# before the write is stored (see generate_batched_field_writes). The last statement of a body,
+# which generate_last_statement generates, is in none.
+export batched_field_writes := (g: Generator, statements: Statement[], start: Int) ->
+  written: String[]
+  var count = 0
+  while start + count < statements.length
+    statement := statements[start + count]
+    break if not is_batched_write(g, statement)
+    assignment := statement as Assignment!
+    target := assignment.target as Member!
+    read := [field_names_read(target)..., field_names_read(appended(g, assignment.value))...]
+    break if read.any((name) -> name in written)
+    written.push target.name.name
+    count += 1
+  count
+
+is_batched_write := (g: Generator, statement: Statement) ->
+  return false if statement is not Assignment or g.code.eager_nan_checks
+  return false if statement.operator == '=' or statement in g.facts.operator_calls
+  target := statement.target
+  return false if target is not Member or not is_float(type_of(g, target))
+  if not is_local_or_this(g, target.object) or type_of(g, target.object) is not ObjectType
+    return false
+  value := appended(g, statement.value)
+  is_float_leaf(g, value) and calls_nothing(value)
+
+# Whether a leaf or a tree of float arithmetic calls nothing, which could change a field.
+calls_nothing := (expression: Expression): Bool ->
+  case expression
+    when Call then false
+    when BinaryOperation then calls_nothing(expression.left) and calls_nothing(expression.right)
+    when UnaryOperation then calls_nothing(expression.operand)
+    else true
+
+is_local_or_this := (g: Generator, expression: Expression) ->
+  case expression
+    when This then true
+    when Identifier then g.facts.references[expression] is ScopedLocal
+    else false
+
+# The names of the fields that a leaf or a tree of float arithmetic reads.
+field_names_read := (expression: Expression): String[] ->
+  case expression
+    when Member then [expression.name.name, field_names_read(expression.object)...]
+    when BinaryOperation
+      [field_names_read(expression.left)..., field_names_read(expression.right)...]
+    when UnaryOperation then field_names_read(expression.operand)
+    else []
+
+# The writes of a batch (see batched_field_writes) compute every value first, each as
+# assign_through in assignment.lerta does, then one branch checks them all for NaN, and the stores
+# follow, so that LLVM can keep the writes together. Where one is NaN, the branch takes the writes
+# one by one, each checked where its statement is and then stored, as they are without a batch, so
+# that the first that is NaN throws and the fields before it are written.
+export generate_batched_field_writes := (g: Generator, statements: Statement[]) ->
+  ir := g.ir
+  outer := g.position
+  depth := g.temporaries.length
+  owned: String[]
+  writes: BatchedWrite[]
+  for statement in statements
+    locate g, statement.position
+    assignment := statement as Assignment!
+    target := assignment.target as Member!
+    object_type := type_of(g, target.object)
+    (object, is_owned) := generate_borrowed(g, target.object, [assignment.value])
+    if is_owned
+      push_temporary g, object, object_type
+      owned.push object
+    type := type_of(g, target)
+    pointer := field_pointer(g, object, object_type, target.name.name)
+    tag := field_tag(ir, type)
+    operand := appended(g, assignment.value)
+    g.defers_float_checks = true
+    value := generate(g, operand)
+    old := ir.assign("load #{ir_type(type)}, ptr #{pointer}#{tag}")
+    result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
+    g.defers_float_checks = false
+    is_nan := ir.assign("fcmp uno #{ir_type(type)} #{result}, 0.0")
+    store := "store #{ir_type(type)} #{result}, ptr #{pointer}#{tag}"
+    writes.push { is_nan, store, position: statement.position }
+  var any = writes[0].is_nan
+  any = ir.assign("or i1 #{any}, #{write.is_nan}") for write in writes.slice(1, writes.length)
+  one_by_one := ir.fresh_label('nan.one.by.one')
+  stored := ir.fresh_label('nan.none')
+  emit_seldom_branch ir, any, one_by_one, stored
+  ir.start_block one_by_one
+  for write in writes
+    locate g, write.position
+    throw_if g, write.is_nan, NOT_A_NUMBER
+    ir.emit write.store
+  ir.emit "br label %#{stored}"
+  ir.start_block stored
+  ir.emit write.store for write in writes
+  pop_temporaries g, depth
+  emit_release ir, object for object in owned
+  locate g, outer
+
+struct BatchedWrite
+  position: Position
+  is_nan: String
+  store: String
