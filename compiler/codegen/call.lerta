@@ -25,7 +25,7 @@ import
 from './expression'
 import function_reference_symbol from './references'
 import emit_exception_check, holding from './exceptions'
-import Generator from './generator'
+import deferred_value, Generator from './generator'
 import emit_member_dispatch from './heap_object'
 import emit_interface_call from './interface'
 import IrBuilder from './ir_builder'
@@ -128,24 +128,25 @@ generate_member_call := (g: Generator, call: Call, member: Member) ->
 generate_method_call := (g: Generator, call: Call, member: Member, source: MethodSource) ->
   if instance := inlined_method(g, call, member, source)
     return generate_inlined_method(g, call, member, instance)
-  object_type := type_of(g, member.object)
+  receiver := deferred_value(g, member.object)
+  object_type := type_of(g, receiver)
   # An Iter's has_next and next run the code of its kind, which may throw.
   if source is BuiltinMethod and takes_object(source.member)
     # The object is owned, and held until the Iter's method takes it over.
-    object := generate(g, member.object)
+    object := generate(g, receiver)
     check := -> emit_exception_check(g)
     call_iter := ->
       call_builtin_method g.ir, g.code.program, source.member, object, object_type, [], check
     result := holding(g, object, object_type, call_iter)
     emit_exception_check g
     return result
-  (object, is_owned) := generate_borrowed(g, member.object, arguments_of(g.facts, call))
+  (object, is_owned) := generate_borrowed(g, receiver, arguments_of(g.facts, call))
   call_method := ->
     emit_call := (operands: String[]) ->
       emit_method_call g, source, object, object_type, method_call_of(g, call, member, operands)
     with_arguments g, arguments_of(g.facts, call), emit_call
   result := is_owned then holding(g, object, object_type, call_method) else call_method()
-  release_if_reference g, member.object, object if is_owned
+  release_if_reference g, receiver, object if is_owned
   check_after_method g, source, object_type
   result
 
@@ -154,10 +155,11 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
 export generate_in_test := (g: Generator, call: Call) ->
   member := call.callee as Member!
   target := g.facts.members[member]!
-  object_type := type_of(g, member.object)
+  object := deferred_value(g, member.object)
+  object_type := type_of(g, object)
   argument := arguments_of(g.facts, call)[0]
   if target is Method
-    result := borrowing_all(g, [argument, member.object], (operands) ->
+    result := borrowing_all(g, [argument, object], (operands) ->
       method_call := method_call_of(g, call, member, [operands[0]])
       emit_method_call g, target.source, operands[1], object_type, method_call
     )
@@ -165,7 +167,7 @@ export generate_in_test := (g: Generator, call: Call) ->
     return result
   # A field that holds a function, which the call owns and releases, as call_closure does.
   field_type := type_of(g, member)
-  result := borrowing_all(g, [argument, member.object], (operands) ->
+  result := borrowing_all(g, [argument, object], (operands) ->
     closure := read_any_field(g, operands[1], object_type, member.name.name, field_type, false)
     called := holding(g, closure, field_type, ->
       emit_closure_call g.ir, closure, field_type, [operands[0]]

@@ -32,6 +32,7 @@ import
   CellSlot, CodegenLocal, function_generator, Generator, locate, SlotLocal, TopLevelGlobal,
   ValueLocal
 from './generator'
+import is_fused_source from './inlined_methods'
 import
   access_tag, emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of,
   emit_weak_object, emit_weak_slot_or_null, fixed, HeapField, value_field
@@ -413,6 +414,16 @@ emit_return := (g: Generator, value: String, type: Type): void ->
   result := g.result_type
   g.ir.emit returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}"
 
+# The only read of the local, if its value is generated there rather than where it is declared: one
+# that a loop goes through in place, whose parts that are evaluated before its loop cannot change
+# in between, and which the read goes through, as a loop or a comprehension does or as the object
+# of a method, in the local's own scope, so that what the value reads by name is the same there.
+defers_to_read := (g: Generator, declaration: Declaration) ->
+  read := g.facts.lazy_reads[declaration.name] ? return nil
+  # A top-level value is read by functions too, which the checker counts no reads of.
+  return nil if g.top_level_code and g.locals.depth() == 1
+  is_fused_source(g, declaration.value, false) then read
+
 # Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
 # function releases it where the code goes on.
 export hold := (g: Generator, value: String, type: Type) ->
@@ -522,6 +533,9 @@ generate_statement_node := (g: Generator, statement: Statement): void ->
     else release_if_reference(g, statement, generate(g, statement))
 
 generate_declaration := (g: Generator, declaration: Declaration) ->
+  if read := defers_to_read(g, declaration)
+    g.deferred_values[read] = declaration.value
+    return
   ir := g.ir
   type := type_of(g, declaration.name)
   weak := declaration.weak

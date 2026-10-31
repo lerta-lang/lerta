@@ -22,7 +22,7 @@ import
 from './function'
 import fused_call, fused_comprehension, is_builtins from './fusion'
 import
-  CodegenLocal, Generator, locate, ModuleCode, SlotLocal, trace_name, ValueLocal
+  CodegenLocal, deferred_value, Generator, locate, ModuleCode, SlotLocal, trace_name, ValueLocal
 from './generator'
 import local_of from './references'
 import ir_type from './lerta_ir'
@@ -39,7 +39,7 @@ export inlined_method := (g: Generator, call: Call, member: Member, source: Meth
   literal := instance.entry.literal
   return nil if literal.yields or literal.awaits or literal in g.fused
   return nil if not goes_through_this_once(literal.body)
-  receiver := member.object
+  receiver := deferred_value(g, member.object)
   # Arguments without effects cannot assign a field that the receiver reads.
   reads_fields :=
     arguments_of(g.facts, call).all((arg) -> arg is FunctionLiteral or is_plain(g, arg))
@@ -49,7 +49,7 @@ export inlined_method := (g: Generator, call: Call, member: Member, source: Meth
   is_sequence and is_stable(g, receiver, reads_fields) then instance
 
 # A range is one only as a comprehension's source, as no method is called on one.
-is_fused_source := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
+export is_fused_source := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
   stable := (part: Expression) -> is_stable(g, part, reads_fields)
   return stable(expression.start) and stable(expression.end) if expression is Range
   return fused.args.all(stable) if fused := fused_call(g, expression)
@@ -165,7 +165,7 @@ export generate_inlined_method := (
   inner.fused_exit = { unwind, label: exit_label }
   # The method's generator is passed rather than captured, as it holds the function.
   inner.iterates_this = (method, variable, body) ->
-    go_through_receiver g, method, member.object, variable, body
+    go_through_receiver g, method, deferred_value(g, member.object), variable, body
   scope := inner.locals.push()
   for param, i in literal.params
     param_type := type.params[i]

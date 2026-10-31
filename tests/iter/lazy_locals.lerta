@@ -1,0 +1,74 @@
+# A local that holds a lazy comprehension, a call of map or filter given a function literal, or a
+# call of a function that yields, read once in its own scope, as what a loop or a comprehension goes
+# through or as the object of a method, gives what its Iter gives: through a for, a comprehension,
+# a method generated in place and one that is not, with a return before the read, and with a var
+# that the functions read and that changes in between. A local read twice, in a loop, in a function
+# literal, in an inner block, in a while's condition or a comprehension's element, or whose source
+# is a var, gives what its Iter gives as well, and so does one of the top-level code.
+class Noisy
+  name: String
+  deinit = -> print("drop #{@name}")
+
+numbers := (n: Int) -> yield i for i in 0...n
+
+f := (n: Int, xs: Int[]) ->
+  evens := (x for x in numbers(n) when x % 2 == 0)
+  print e for e in evens
+  big := xs.filter((x) -> x > 1)
+  print big.count()
+  doubled := (x * 2 for x in xs)
+  print [d + 1 for d in doubled]
+  kept := (x for x in xs when x != 2)
+  print kept.to_array()
+  var step = 1
+  stepped := xs.map((x) -> x + step)
+  step = 10
+  print stepped.sum()
+  names := (Noisy("n#{x}") for x in xs)
+  print names.any((item) -> item.name == 'n2')
+  twice := (x for x in xs)
+  print twice.sum()
+  try
+    print twice.sum()
+  catch e
+    print e.message
+  looped := (x for x in xs)
+  for _ in 0...2
+    try
+      print looped.count()
+    catch e
+      print e.message
+  captured := (x for x in xs)
+  count := -> captured.count()
+  print count()
+  inner := (x for x in xs)
+  if n > 0
+    total := inner.sum()
+    print total
+  var source = xs
+  from_var := (x for x in source)
+  source = [7]
+  print from_var.sum()
+  pending := (x for x in xs)
+  var rounds = 0
+  rounds += pending.next() while pending.has_next()
+  print rounds
+  each := (x for x in xs)
+  try
+    print [each.count() for _ in 0...2]
+  catch e
+    print e.message
+
+g := (xs: Int[], stop: Bool) ->
+  items := (Noisy("g#{x}") for x in xs)
+  return 'stopped' if stop
+  "#{items.count()}"
+
+f 5, [1, 2, 3]
+print g([1], true)
+print g([1], false)
+top := (x * 3 for x in [1, 2])
+print top.sum()
+if true
+  nested := (x * 4 for x in [1, 2])
+  print nested.sum()

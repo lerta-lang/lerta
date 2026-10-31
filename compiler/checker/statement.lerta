@@ -143,6 +143,16 @@ export check_block := (
   finish()
   scope := body.scopes.pop()
   warn_if_unused body.shared, local for local in scope.values()
+  record_only_read body, local for local in scope.values()
+
+# A `:=` local that is read once, in its own scope, as what a loop or a comprehension goes through
+# or as the object of a method, and nowhere else, so that codegen may evaluate its value there
+# instead (see lazy_reads in NodeFacts).
+record_only_read := (body: Body, local: Local) ->
+  return if not local.declared or local.mutable or local.weak or local.captured
+  return if local.reads.length != 1 or local.read_in_inner_scope
+  read := local.reads[0]
+  body.facts.lazy_reads[local.identifier] = read if read in body.facts.consuming_reads
 
 export check_statement := (body: Body, statement: Statement): void ->
   is_top_level := body.is_top_level()
@@ -221,8 +231,10 @@ check_declaration := (body: Body, declaration: Declaration) ->
   declared := not declaration.of_loop
   is_this := value is This and not mutable and not weak
   assigned_by_literal := mutable and name.name in body.names_literals_assign
+  scope_depth := body.scopes.depth()
   local := Local
-    type, mutable, declared, weak, is_this, assigned_by_literal, identifier: name, used: exported
+    type, mutable, declared, weak, is_this, assigned_by_literal, scope_depth, identifier: name,
+    used: exported
   define_local body, local
 
 # `var x: T` without a value, which is nil.
