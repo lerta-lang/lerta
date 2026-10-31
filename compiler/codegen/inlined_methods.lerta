@@ -26,12 +26,13 @@ import
 from './generator'
 import local_of from './references'
 import ir_type from './lerta_ir'
-import ArrayType, is_float, iterable_item, IterType, Type from '../types'
+import ArrayType, is_float, is_kind, iterable_item, IterType, Type from '../types'
 
 # The instance of the method that the call calls, if its body can be generated in place: a method
 # of std:builtins whose body goes through `@` in one `for` and reads it nowhere else, over a
-# receiver that a loop goes through in place, or an array, whose parts that are evaluated before its
-# loop starts cannot throw or have effects, as they are evaluated after the method's arguments.
+# receiver that a loop goes through in place, or an array or a Binary, whose parts that are
+# evaluated before its loop starts cannot throw or have effects, as they are evaluated after the
+# method's arguments.
 export inlined_method := (g: Generator, call: Call, member: Member, source: MethodSource) ->
   return nil if source is not ExtensionSource or not is_builtins(source.method.module_name)
   instance := g.facts.instances[call]?.instance ? return nil
@@ -43,7 +44,9 @@ export inlined_method := (g: Generator, call: Call, member: Member, source: Meth
   reads_fields :=
     arguments_of(g.facts, call).all((arg) -> arg is FunctionLiteral or is_plain(g, arg))
   return instance if is_fused_source(g, receiver, reads_fields)
-  type_of(g, receiver) is ArrayType and is_stable(g, receiver, reads_fields) then instance
+  type := type_of(g, receiver)
+  is_sequence := type is ArrayType or is_kind(type, 'Binary')
+  is_sequence and is_stable(g, receiver, reads_fields) then instance
 
 # A range is one only as a comprehension's source, as no method is called on one.
 is_fused_source := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
@@ -53,12 +56,13 @@ is_fused_source := (g: Generator, expression: Expression, reads_fields: Bool): B
   lazy := fused_comprehension(g, expression) ? return false
   stable(lazy.source) or is_fused_source(g, lazy.source, reads_fields)
 
-# A plain value, or, if `reads_fields`, a field of a field, and so on, of one, which neither throws
-# nor has effects either, as long as no argument assigns it.
+# A plain value, or, if `reads_fields`, a field of a field, and so on, of one, or the Binary of a
+# String, which neither throw nor have effects either, as long as no argument assigns a field.
 is_stable := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
   return is_plain(g, expression) if expression is not Member or not reads_fields
   property := g.facts.members[expression] as Property ? return false
-  return false if property.kind != FIELD or not is_unchanging_type(type_of(g, expression))
+  return false if property.kind != FIELD and property.kind != STRING_BINARY
+  return false if not is_unchanging_type(type_of(g, expression))
   is_stable g, expression.object, reads_fields
 
 # A literal, or a value that no code changes and whose read cannot throw: a local or a top-level
