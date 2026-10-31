@@ -1,0 +1,103 @@
+# A subject that a parameter or a const names is borrowed from it through the arms, also by those
+# that leave the case by a return, a throw, a break or a continue, and one that a var names, which
+# an arm may assign, is held by the case: each object is dropped once, when nothing holds it.
+import sleep from 'std:time'
+
+class Shape
+  name: String
+  deinit = -> print("drop #{@name}")
+
+struct Circle
+  shape: Shape
+
+struct Square
+  shape: Shape
+
+type Figure = Circle | Square
+
+describe := (figure: Figure) ->
+  case figure
+    when Circle
+      return 'round' if figure.shape.name == 'sun'
+      throw ValueError('no moon') if figure.shape.name == 'moon'
+      'circle'
+    when Square then 'square'
+
+attempt := (figure: Figure) ->
+  try
+    print describe(figure)
+  catch e: ValueError
+    print e.message
+
+attempt Circle(Shape('sun'))
+attempt Circle(Shape('moon'))
+attempt Square(Shape('box'))
+
+figures: Figure[] = [Circle(Shape('a')), Square(Shape('b')), Circle(Shape('c'))]
+for figure in figures
+  first := figure
+  case first
+    when Square then continue
+    when Circle then break if first.shape.name == 'c'
+  print "kept #{first.shape.name}"
+figures.truncate 0
+
+var current: Figure = Circle(Shape('old'))
+case current
+  when Circle
+    current = Square(Shape('new'))
+    print 'replaced'
+  when Square then print('square')
+print 'end'
+
+# A field or an item that an arm replaces is held by the case until it ends, as a var is.
+class Holder
+  figure: Figure
+
+holder := Holder(Circle(Shape('field')))
+case holder.figure
+  when Circle
+    holder.figure = Square(Shape('next field'))
+    print 'field replaced'
+  when Square then print('square')
+print 'after field'
+
+slots: Figure[] = [Circle(Shape('item'))]
+case slots[0]
+  when Circle
+    slots[0] = Square(Shape('next item'))
+    print 'item replaced'
+  when Square then print('square')
+print 'after item'
+
+# A top-level const, which keeps its value to the end, is borrowed by a function's case.
+ROUND: Figure = Circle(Shape('top'))
+kind := ->
+  case ROUND
+    when Circle then 'circle'
+    when Square then 'square'
+print kind()
+
+# A field that nothing replaces is borrowed through its object, a parameter.
+inner_kind := (holder: Holder) ->
+  case holder.figure
+    when Circle then holder.figure.shape.name
+    when Square then 'square'
+print inner_kind(Holder(Circle(Shape('kept field'))))
+
+# A function that suspends in an arm holds its parameters, so a subject borrowed from one stays.
+names := (figure: Figure) ->
+  case figure
+    when Circle
+      yield 'circle'
+      yield figure.shape.name
+    when Square then yield 'square'
+print name for name in names(Circle(Shape('yielded')))
+
+waited := (figure: Figure) ->
+  case figure
+    when Circle
+      await sleep(0)
+      print "waited for #{figure.shape.name}"
+    when Square then print('square')
+await waited(Circle(Shape('awaited')))
