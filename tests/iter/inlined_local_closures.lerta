@@ -1,0 +1,40 @@
+# A function literal given to a method of an Iterable whose body is generated in place, and that
+# the method only calls: capturing values, an object and a var that it changes, throwing, nested in
+# another such literal, made anew in each round of a loop with that round's object, over a
+# function that yields and a filter, and capturing weakly.
+class Box
+  label: String
+
+f := (n: Int, box: Box) ->
+  numbers := [1, 2, 3, 4]
+  print numbers.any((x) -> x == n)
+  print numbers.all((x) -> "#{box.label}#{x}" != 'box9')
+  var seen = 0
+  print numbers.find((x) ->
+    seen += 1
+    x > n
+  ) ? -1
+  print seen
+  print numbers.fold(0, (total, x) -> total + x * n)
+  print numbers.any((x) -> numbers.all((y) -> y <= x + n))
+  try
+    print numbers.all((x) ->
+      throw ValueError("too large: #{x}") if x > n
+      true
+    )
+  catch e: ValueError
+    print e.message
+
+counted := (n: Int) -> yield i for i in 0...n
+
+g := (n: Int) ->
+  for i in 0...3
+    box := Box("b#{i}")
+    print counted(n).any((x) -> box.label == "b#{x}")
+    print [1, 2, 3].filter((x) -> x != i).fold(box.label, (text, x) -> "#{text}#{x}")
+  box := Box('weak')
+  weak held := box
+  print counted(n).all((x) -> held?.label ? '' != "#{x}")
+
+f 2, Box('box')
+g 2

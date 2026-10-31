@@ -3,8 +3,8 @@
 # receiver in place too and no Iter is made (see docs/internals.md#inlined-methods).
 import
   Assignment, Binding, BooleanLiteral, Call, Case, Condition, Declaration, Expression, For,
-  FunctionLiteral, Identifier, If, IntegerLiteral, Member, operands_of, Position, Range, Statement,
-  StringLiteral, This, Try, While
+  FunctionLiteral, Identifier, If, IntegerLiteral, Member, operands_of, Parameter, Position, Range,
+  Statement, StringLiteral, This, Try, While
 from '../ast'
 import Instance from '../checker/generics'
 import ExtensionSource, MethodSource from '../checker/methods'
@@ -18,7 +18,8 @@ import emit_traced_unwind, TRACE_PUSH from './exceptions'
 import generate, held_value, type_at_use, type_of from './expression'
 import nan_free_operations from './float_ranges'
 import
-  generate_block_with, generate_last_statement, generate_statements, release_scope, store_in_slot
+  generate_block_with, generate_closure, generate_last_statement, generate_statements,
+  release_scope, store_in_slot
 from './function'
 import fused_call, fused_comprehension, is_builtins from './fusion'
 import
@@ -151,7 +152,7 @@ export generate_inlined_method := (
   arguments_scope := g.locals.push()
   operands: String[]
   for arg, i in arguments_of(g.facts, call)
-    operand := generate(g, arg)
+    operand := generate_argument(g, arg, literal.params.get(i), instance)
     arguments_scope["(inlined argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
     operands.push operand
   at_call := call_state(g, position)
@@ -183,6 +184,12 @@ export generate_inlined_method := (
   release_scope g, arguments_scope
   g.locals.pop()
   result
+
+# A function literal that the method only calls is on the stack, as it never outlives the call (see
+# generate_closure).
+generate_argument := (g: Generator, arg: Expression, param: Parameter?, instance: Instance) ->
+  return generate(g, arg) if arg is not FunctionLiteral or param == nil
+  generate_closure g, arg, param.name not in instance.facts.escaping_locals
 
 # The generator of the method's body, named as its function is in traces, with the code of its
 # module.
