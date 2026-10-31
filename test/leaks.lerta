@@ -1,0 +1,54 @@
+# Checks the compiler for its own leaks and uses of dropped objects. bin/lerta is built without the
+# memory checks, so the bootstrap's stage2, which `make test` builds with them, runs `dump-llvm` and
+# `fmt` on each source of the tests and the examples. A check fails when stage2 reports a leak or
+# stops on a dropped object, which aborts it, but not on the errors of a source that does not
+# compile or is not in the style, as some tests are on purpose. The sources for other systems are
+# compiled for the host, and the other commands, such as `build`, `fmt --fix` and `lsp`, are not
+# checked.
+import Check, run_checks, select from './lib/report'
+import FileRun, root_dir, run_file, SetupError from './lib/lerta'
+import is_file from 'std:io'
+import env, run from 'std:process'
+
+# LERTA_TEST_CHECKED_COMPILER names another, for the self checks (see self.lerta).
+checked_compiler := env('LERTA_TEST_CHECKED_COMPILER') ? "#{root_dir}/build/bootstrap/stage2"
+
+# What runtime/internal.h names LERTA_LEAK_EXIT_CODE.
+LEAK_EXIT_CODE := 23
+
+# The sources that git lists, those not added yet included.
+sources := ->
+  output: Byte[]
+  args :=
+    'ls-files'
+    '--cached'
+    '--others'
+    '--exclude-standard'
+    '--'
+    'tests/*.lerta'
+    'examples/*.lerta'
+  listed := await run('git', args..., cwd: root_dir, stdout: output)
+  throw SetupError('git ls-files failed') if listed.code != 0
+  text := output.to_binary().text()!
+  [path for path in text.split("\n") when not path.is_empty() and is_file("#{root_dir}/#{path}")]
+
+# Why the run failed the check, if it did.
+reasons_of := (what: String, ran: FileRun): String[] ->
+  if ran.status == LEAK_EXIT_CODE or ran.failure.starts_with('signal')
+    ["#{what} ended with #{ran.failure}:\n#{ran.errors}"]
+  else
+    []
+
+source_check := (path: String) -> Check(name: path, run: ->
+  dumped := await run_file(checked_compiler, ['dump-llvm', path], root_dir)
+  formatted := await run_file(checked_compiler, ['fmt', path], root_dir)
+  [reasons_of('dump-llvm', dumped)..., reasons_of('fmt', formatted)...]
+)
+
+# The number of the checks that failed.
+export suite := ->
+  title := 'leak checks'
+  checks := select(title, [source_check(path) for path in await sources()]) ? return 0
+  if not is_file(checked_compiler)
+    throw SetupError("#{checked_compiler} is missing: make test builds it")
+  await run_checks(title, checks)

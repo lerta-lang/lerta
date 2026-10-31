@@ -1,7 +1,7 @@
 # Where the tests find the repository and the compiler they check, bin/lerta, which `make` builds,
 # how they run it, and what they need of it before they start. The tests run from the repository's
 # root, as the Makefile runs them.
-import is_file, make_dir, make_temp_dir, read_text, real_path, remove_tree from 'std:io'
+import is_file, make_dir, make_temp_dir, read_text, real_path, remove_tree, open from 'std:io'
 import exit, platform, run from 'std:process'
 
 export root_dir := real_path('.').text()!
@@ -49,9 +49,9 @@ export struct FileRun
   failure: String
   errors: String
 
+null_device := platform == 'windows' then 'NUL' else '/dev/null'
+
 export run_file := (file: String, args: String[], cwd: String) ->
-  # Its standard output is dropped, as nothing that it would print there is checked.
-  output: Byte[]
   errors: Byte[]
   env := { 'LERTA_CACHE_DIR': cache_dir }
   exit := await run(
@@ -59,7 +59,8 @@ export run_file := (file: String, args: String[], cwd: String) ->
     args...
     cwd: cwd
     env: env
-    stdout: output
+    # Its standard output is dropped, as nothing that it would print there is checked.
+    stdout: open(null_device, WRITE).writer
     stderr: errors
     output_limit: OUTPUT_LIMIT
   )

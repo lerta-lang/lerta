@@ -113,20 +113,20 @@ build/stage1.ll: build/minilerta build/host_llvm.sed $(SOURCES) $(EMBEDDED)
 build/stage1: build/stage1.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,$<,$@)
 
-# The compiler keeps the memory checks, so that the tests, which run it on every source of the tests
-# and examples, those for other systems in make test-cross, find its own leaks and uses of dropped
-# objects (see docs/internals.md#leak-checking).
+# The compiler's own leaks are found by the stage2 of the bootstrap, which keeps the memory checks
+# (see test/leaks.lerta).
 bin/lerta: build/stage1
 	@mkdir -p bin
-	build/stage1 build $(MAIN) -o $@ -O --memory-checks -Werror
+	build/stage1 build $(MAIN) -o $@ -O -Werror
 
 ifdef TARGET
 $(COMPILER): bin/lerta
 	bin/lerta build $(MAIN) -o $@ -O -Werror $(TARGET_FLAGS)
 endif
 
-# stage2 is unoptimized, which clang builds far faster, and its runs, which build stage3 and print
-# its IR, check for leaks.
+# stage2 is unoptimized, which clang builds far faster, and so keeps the memory checks: its runs,
+# which build stage3 and print its IR, and those of the leak checks (see test/leaks.lerta) find the
+# compiler's own leaks.
 $(STAGE2): bin/lerta
 	@mkdir -p $(BOOTSTRAP)
 	bin/lerta build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
@@ -176,8 +176,8 @@ ifdef TARGET
 test test-cross:
 	@echo 'make $@ does not take TARGET: run bin/test --target <triple>' >&2; exit 2
 else
-# Every suite runs even if one before it fails.
-test: bin/lerta bin/test
+# Every suite runs even if one before it fails. stage2 is built first, as the leak checks run it.
+test: bin/lerta bin/test $(STAGE2)
 	@status=0; \
 	nice bin/test || status=1; \
 	nice $(MAKE) --no-print-directory test-bootstrap || status=1; \

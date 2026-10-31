@@ -1,6 +1,6 @@
 # Compiler
 
-`lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)); it carries the standard modules and the runtime in it, so it needs no other file of the repository. It is built with `-O --memory-checks` (see [build](#build)), so a leak of its own ends it with exit code 23 after its work, and a use of an object after it is dropped stops it. Arguments that do not fit a command's usage print the usage to stderr and exit with code 2. An argument that starts with `-` is taken as an option, but for the value of `-o` and `--target`, which is the next argument whatever it starts with; a path that starts with `-` is written as `./-name.lerta`.
+`lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)); it carries the standard modules and the runtime in it, so it needs no other file of the repository. It is built with `-O`, without the memory checks (see [build](#build)). Arguments that do not fit a command's usage print the usage to stderr and exit with code 2. An argument that starts with `-` is taken as an option, but for the value of `-o` and `--target`, which is the next argument whatever it starts with; a path that starts with `-` is written as `./-name.lerta`.
 
 ## Commands
 

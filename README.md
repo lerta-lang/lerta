@@ -107,6 +107,7 @@ The suites:
 - `cli` (`test/cli.lerta`, with its checks in `test/cli/*.lerta`): the command line.
 - `format` (`test/format.lerta`): the formatter, whose cases are the exact specification of the style.
 - `runtime` (`test/runtime.lerta`): what no Lerta program can trigger; each check links a C program of `test/runtime/`, which stands in for the generated code, with the runtime.
+- `leaks` (`test/leaks.lerta`): the compiler's own leaks and uses of dropped objects, which the bootstrap's stage2, built with the memory checks, reports when it runs `dump-llvm` and `fmt` on each source of the tests and examples.
 - `self` (`test/self.lerta`): the driver itself, run as a program, which must report the tests of `tests/harness/`, most of which must fail, each as it should, and take its options as it says.
 
 Their modules, in `test/lib/`, are `lerta` (where the repository and the compiler are, running it, the directories of the run and caching the runtimes before the tests), `report` (selecting, running and reporting checks), `expect` (what checks expect of the programs they run), `target` (`--target`), `wine` (running Windows programs under Wine), `cli` (running the compiler in directories of its own) and `lsp` (sessions with the language server).
