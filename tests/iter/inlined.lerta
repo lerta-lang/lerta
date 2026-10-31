@@ -1,0 +1,90 @@
+# A method of an Iterable that goes through its items in one loop, called on a function that yields,
+# on a lazy comprehension or on map and filter given a function literal, gives what it gives
+# through their Iters: with each method that does so, with a default left out, with a return out
+# of the method's loop, with objects that each item releases, with a var that the functions read
+# and change, inside a function that yields that a loop goes through in place, with an exception
+# out of the functions, inside a loop that a break, a continue or a return leaves, nested in a
+# function that another such call is given, and with a receiver that the arguments could change or
+# whose arguments are not locals, a comprehension over a range whose bounds are not, or a local Iter
+# that the arguments traverse, which call the method; and with an object that the method holds
+# while an exception goes through it.
+class Noisy
+  name: String
+  deinit = -> print("drop #{@name}")
+
+numbers := (n: Int) -> yield i for i in 0...n
+
+noisy := (n: Int) -> yield Noisy("n#{i}") for i in 0...n
+
+f := (n: Int) ->
+  print numbers(n).filter((x) -> x % 2 == 1).map((x) -> x * 10).sum()
+  print (x * x for x in 0...n when x > 1).sum()
+  floats := [1.5, 2.5]
+  print floats.map((x) -> x * 2.0).sum(1.0)
+  print numbers(n).map((x) -> "#{x}").sum('>')
+  print numbers(n).fold(100, (total, x) -> total - x)
+  print numbers(n).count()
+  print numbers(n).any((x) -> x == 2)
+  print numbers(n).all((x) -> x < 2)
+  print numbers(n).find((x) -> x > 2) ? -1
+  print noisy(n).any((item) -> item.name == 'n1')
+  print noisy(n).map((item) -> item.name).find((name) -> name == 'n2') ? ''
+  var seen = 0
+  print numbers(n).filter((x) ->
+    seen += x
+    x > seen - 3
+  ).count()
+  print seen
+  sums := (m: Int) -> yield numbers(i).filter((x) -> x != 1).sum() for i in 0...m
+  print sums(n).sum()
+  for total in sums(n)
+    print total
+    break if total > 1
+  try
+    print numbers(n).fold(0, (total, x) ->
+      throw ValueError('three') if x == 3
+      total + x
+    )
+  catch e: ValueError
+    print e.message
+  print numbers(n + 0).filter((x) -> x % 2 == 1).sum()
+  var m = 3
+  bump := ->
+    m = 10
+    0
+  print numbers(m).fold(bump(), (total, x) -> total + x)
+  half := n / 2
+  print numbers(half.to_int()).sum()
+  print numbers(n).map((x) -> numbers(x).filter((y) -> y > 0).sum()).sum()
+  for i in 0...n
+    continue if numbers(i).sum() == 1
+    print numbers(i).map((x) -> x * 2).sum()
+    break if i == 3
+  print first_over(n, 4)
+  print (x for x in 0...(n + 0) when x > 2).sum()
+  items := numbers(n)
+  try
+    print (x * 2 for x in items).fold(items.count(), (total, x) -> total + x)
+  catch e
+    print e.message
+  try
+    print noisy(n).fold(Noisy('init'), (kept, item) ->
+      throw ValueError('n3') if item.name == 'n3'
+      kept
+    ).name
+  catch e: ValueError
+    print e.message
+
+# The first i of 0...n whose numbers add up to more than `least`, through a return out of a loop.
+first_over := (n: Int, least: Int) ->
+  for i in 0...n
+    return i if numbers(i).filter((x) -> x > 0).sum() > least
+  -1
+
+f 5
+# A top-level value as the receiver's argument: read without a check in the top-level code, which
+# generates the method in place, and checked as initialized in a function, which calls it.
+LIMIT := 4
+print numbers(LIMIT).filter((x) -> x > 1).sum()
+limited := -> numbers(LIMIT).filter((x) -> x > 1).sum()
+print limited()

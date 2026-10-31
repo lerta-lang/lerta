@@ -1,0 +1,258 @@
+# Calls of the methods of std:builtins that go through `@` once, over a receiver that a loop goes
+# through in place, which generate the method's body in place, so that its loop goes through the
+# receiver in place too and no Iter is made (see docs/internals.md#inlined-methods).
+import
+  Assignment, Binding, BooleanLiteral, Call, Case, Condition, Declaration, Expression, For,
+  FunctionLiteral, Identifier, If, IntegerLiteral, Member, operands_of, Position, Range, Statement,
+  StringLiteral, This, Try, While
+from '../ast'
+import Instance from '../checker/generics'
+import ExtensionSource, MethodSource from '../checker/methods'
+import ScopedLocal, TopLevelValue from '../checker/references'
+import arguments_of from '../checker/shared'
+import all_but_last from '../arrays'
+import function_type_of from './closure'
+import generate_iteration from './control_flow'
+import emit_traced_unwind, TRACE_PUSH from './exceptions'
+import generate, held_value, type_at_use, type_of from './expression'
+import nan_free_operations from './float_ranges'
+import
+  generate_block_with, generate_last_statement, generate_statements, release_scope, store_in_slot
+from './function'
+import fused_call, fused_comprehension, is_builtins from './fusion'
+import
+  CodegenLocal, Generator, locate, ModuleCode, SlotLocal, trace_name, ValueLocal
+from './generator'
+import local_of from './references'
+import ir_type from './lerta_ir'
+import is_float, iterable_item, IterType from '../types'
+
+# The instance of the method that the call calls, if its body can be generated in place: a method
+# of std:builtins whose body goes through `@` in one `for` and reads it nowhere else, over a
+# receiver that a loop goes through in place, whose parts that are evaluated before its loop
+# starts cannot throw or have effects, as they are evaluated after the method's arguments.
+export inlined_method := (g: Generator, call: Call, member: Member, source: MethodSource) ->
+  return nil if source is not ExtensionSource or not is_builtins(source.method.module_name)
+  instance := g.facts.instances[call]?.instance ? return nil
+  literal := instance.entry.literal
+  return nil if literal.yields or literal.awaits or literal in g.fused
+  return nil if not goes_through_this_once(literal.body)
+  is_fused_source(g, member.object) then instance
+
+# A range is one only as a comprehension's source, as no method is called on one.
+is_fused_source := (g: Generator, expression: Expression): Bool ->
+  return is_plain(g, expression.start) and is_plain(g, expression.end) if expression is Range
+  if fused := fused_call(g, expression)
+    return fused.args.all((arg) -> is_plain(g, arg))
+  lazy := fused_comprehension(g, expression) ? return false
+  is_plain(g, lazy.source) or is_fused_source(g, lazy.source)
+
+# A literal, or a value that no code changes and whose read cannot throw: a local or a top-level
+# value that is not a var, which the method's arguments could assign, nor an Iter, which they could
+# traverse, not read as a float, which a read checks for NaN, and not checked as initialized where
+# read.
+is_plain := (g: Generator, expression: Expression) ->
+  case expression
+    when IntegerLiteral, BooleanLiteral, StringLiteral then true
+    when Identifier
+      reference := g.facts.references[expression]
+      return false if reference is not ScopedLocal and reference is not TopLevelValue
+      type := type_of(g, expression)
+      # A comprehension starts the Iter that it goes through as it is made, before the arguments
+      # that may traverse it.
+      return false if is_float(type) or type is IterType
+      local := local_of(g, expression)
+      case local
+        when ValueLocal then true
+        when SlotLocal
+          checked := local.top_level?.is_checked ? false
+          not local.is_var and not checked
+    else false
+
+goes_through_this_once := (body: Statement[]) ->
+  loops := [statement as For! for statement in body when goes_through_this(statement)]
+  outside := [statement for statement in body when not goes_through_this(statement)]
+  loops.length == 1 and not loops[0].body.any(reads_this) and not outside.any(reads_this)
+
+goes_through_this := (statement: Statement) ->
+  statement is For and statement.iterable is This and statement.index == nil
+
+reads_this := (statement: Statement): Bool ->
+  case statement
+    when If
+      condition_reads_this(statement.condition) or
+        statement.then_body.any(reads_this) or
+        statement.else_body.any(reads_this)
+    when While then condition_reads_this(statement.condition) or statement.body.any(reads_this)
+    when For then expression_reads_this(statement.iterable) or statement.body.any(reads_this)
+    when Case
+      subject := statement.subject
+      return true if subject != nil and expression_reads_this(subject)
+      return true if statement.arms.any((arm) -> arm.patterns.any(expression_reads_this))
+      return true if statement.arms.any((arm) -> arm.body.any(reads_this))
+      (statement.otherwise ? []).any(reads_this)
+    when Try
+      return true if statement.body.any(reads_this)
+      return true if statement.catches.any((clause) -> clause.body.any(reads_this))
+      (statement.finally_body ? []).any(reads_this)
+    when Declaration then expression_reads_this(statement.value)
+    when Assignment
+      expression_reads_this(statement.value) or expression_reads_this(statement.target)
+    else
+      expression := statement as Expression ? return false
+      expression_reads_this expression
+
+expression_reads_this := (expression: Expression): Bool ->
+  case expression
+    when This then true
+    when FunctionLiteral then expression.body.any(reads_this)
+    when If, Case, Try then reads_this(expression)
+    else operands_of(expression).any(expression_reads_this)
+
+condition_reads_this := (condition: Condition) ->
+  expression_reads_this condition is Binding then condition.value else condition
+
+# The value of the call, whose body is generated by a generator of its own, with the instance's
+# facts, which shares the IR. The arguments are evaluated first, owned, and held until it ends; the
+# defaults of those left out are computed by the body's generator. Its `return` goes to its end,
+# and an exception that leaves it goes on from the call, as from a call there.
+export generate_inlined_method := (
+  g: Generator, call: Call, member: Member, instance: Instance
+): String ->
+  ir := g.ir
+  position := g.position
+  literal := instance.entry.literal
+  type := function_type_of(instance.entry.type!)
+  arguments_scope := g.locals.push()
+  operands: String[]
+  for arg, i in arguments_of(g.facts, call)
+    operand := generate(g, arg)
+    arguments_scope["(inlined argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
+    operands.push operand
+  at_call := call_state(g, position)
+  inner := method_generator(g, instance)
+  inner.result_type = type.result
+  result_type := ir_type(type.result)
+  result_slot := ir.alloca(result_type)
+  inner.on_return = (value) -> ir.emit("store #{result_type} #{value}, ptr #{result_slot}")
+  exit_label := ir.fresh_label('inlined.exit')
+  unwind := -> at_call(-> emit_traced_unwind(g, TRACE_PUSH))
+  inner.fused_exit = { unwind, label: exit_label }
+  # The method's generator is passed rather than captured, as it holds the function.
+  inner.iterates_this = (method, variable, body) ->
+    go_through_receiver g, method, member.object, variable, body
+  scope := inner.locals.push()
+  for param, i in literal.params
+    param_type := type.params[i]
+    name := param.name.name
+    if i < operands.length
+      scope[name] = ValueLocal(operand: operands[i], type: param_type)
+    else
+      scope[name] = store_in_slot(inner, generate(inner, param.default!), param_type)
+  generate_statements inner, all_but_last(literal.body)
+  generate_last_statement inner, literal.body, type.result
+  inner.locals.pop()
+  ir.start_block exit_label
+  locate g, position
+  result := ir.assign("load #{result_type}, ptr #{result_slot}")
+  release_scope g, arguments_scope
+  g.locals.pop()
+  result
+
+# The generator of the method's body, named as its function is in traces, with the code of its
+# module.
+method_generator := (g: Generator, instance: Instance) ->
+  { code, ir } := g
+  { program } := code
+  { module_index, index } := instance.generic
+  shared := program.shared[module_index]
+  module := program.modules[module_index]
+  { globals, ir_module, traces, eager_nan_checks } := code
+  method_code := ModuleCode(program, globals, ir_module, shared, traces, eager_nan_checks, module)
+  { entry, extensions, facts } := instance
+  name := trace_name(shared.generics[index].name.name, entry.this_type)
+  inner :=
+    Generator(extensions, facts, ir, code: method_code, function_name: name, top_level_code: false)
+  inner.fused = [g.fused..., entry.literal]
+  inner.fused_copies = g.fused_copies
+  inner.nan_free = nan_free_operations(facts, entry.literal.body, false)
+  inner
+
+# Generates code as at the call, with what the receiver's loop has added since set aside: the
+# scopes, the handlers and the temporaries, which the method's generator has released.
+call_state := (g: Generator, position: Position?) ->
+  scope_depth := g.locals.depth()
+  handler_depth := g.handlers.length
+  temporary_depth := g.temporaries.length
+  (emit: () -> void) ->
+    scopes := g.locals.scopes.slice(scope_depth)
+    handlers := g.handlers.slice(handler_depth)
+    temporaries := g.temporaries.slice(temporary_depth)
+    g.locals.scopes.truncate scope_depth
+    g.handlers.truncate handler_depth
+    g.temporaries.truncate temporary_depth
+    inner_position := g.position
+    traceless := g.traceless
+    g.traceless = false
+    locate g, position
+    emit()
+    locate g, inner_position
+    g.traceless = traceless
+    g.locals.scopes.append scopes
+    g.handlers.append handlers
+    g.temporaries.append temporaries
+
+# The method's loop over `@`, whose body the method's generator generates with each item of the
+# receiver, which the call's generator goes through. Each generator holds the other's scopes under
+# names that the source cannot write, so that a jump, a `return` or an exception out of either
+# releases them: the method's scopes while the receiver's code is generated, and the receiver's
+# loop's while the body is. An exception out of the receiver goes on from the method's loop, as
+# from the call of its Iter's methods there, without a site of the call's own, which a call would
+# not add.
+go_through_receiver := (
+  g: Generator, inner: Generator, receiver: Expression, variable: Identifier, body: () -> void
+) ->
+  ir := g.ir
+  loop_position := inner.position
+  base_depth := g.locals.depth()
+  for scope in inner.locals.scopes
+    held := g.locals.push()
+    held["(inlined #{local_name})"] = local for (local_name, local) in scope.entries()
+  iteration_depth := g.locals.depth()
+  unwind_label := ir.fresh_label('inlined.unwind')
+  g.handlers.push {
+    label: unwind_label
+    scope_depth: iteration_depth
+    temporary_depth: g.temporaries.length
+  }
+  item_type := iterable_item(type_of(g, receiver))!
+  held_item := Identifier(variable..., name: '(inlined item)')
+  each := ->
+    item := held_value(g, g.locals.lookup(held_item.name)!)
+    inner_depth := inner.locals.depth()
+    for scope in g.locals.scopes.slice(iteration_depth)
+      held := inner.locals.push()
+      held["(receiver #{local_name})"] = local for (local_name, local) in scope.entries()
+    loop := g.loops.last()!
+    scope_depth := inner_depth + loop.scope_depth - iteration_depth
+    break_depth := inner_depth + loop.break_depth - iteration_depth
+    { break_label, continue_label } := loop
+    inner.loops.push { break_label, continue_label, scope_depth, break_depth }
+    inner.fused_copies = g.fused_copies
+    define := (scope: Map<String, CodegenLocal>) ->
+      scope[variable.name] = ValueLocal(operand: item, type: item_type)
+    generate_block_with inner, body, define
+    inner.loops.pop()
+    inner.locals.scopes.truncate inner_depth
+  traceless := g.traceless
+  g.traceless = true
+  generate_iteration g, receiver, held_item, nil, each
+  g.traceless = traceless
+  g.handlers.pop()
+  g.locals.scopes.truncate base_depth
+  next_label := ir.fresh_label('inlined.next')
+  ir.emit "br label %#{next_label}"
+  ir.start_block unwind_label
+  locate inner, loop_position
+  emit_traced_unwind inner, TRACE_PUSH
+  ir.start_block next_label

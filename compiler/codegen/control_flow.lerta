@@ -2,7 +2,7 @@
 # comprehensions, `break` and `continue`.
 import
   Binding, Comprehension, Condition, Expression, For, Identifier, If, Jump, LazyFunctions, Range,
-  statement_else_body, While
+  statement_else_body, This, While
 from '../ast'
 import emit_array_new, emit_push from './array'
 import function_type_of from './closure'
@@ -63,8 +63,11 @@ export generate_while := (g: Generator, while_statement: While) ->
 # in a scope of its own, so a `return` from the body releases it too.
 export generate_for := (g: Generator, for_statement: For) ->
   { variable, index } := for_statement
+  body := statements_code(g, for_statement.body)
+  if go_through := g.iterates_this
+    return go_through(g, variable, body) if for_statement.iterable is This and index == nil
   iterable := iterated(g, for_statement.iterable)
-  generate_iteration g, iterable, variable, index, statements_code(g, for_statement.body)
+  generate_iteration g, iterable, variable, index, body
 
 # A new array, of the comprehension's elements, which the loop pushes. Its loop can be the target
 # of no `break` or `continue`, which its element and guard cannot hold (see jump_positions).
@@ -95,7 +98,7 @@ export push_comprehension := (g: Generator, comprehension: Comprehension, result
 
 # What a `for` or a comprehension goes through: the iterable, or the call of its `iter()` that
 # the checker made (see type_of_iterated).
-iterated := (g: Generator, iterable: Expression) ->
+export iterated := (g: Generator, iterable: Expression) ->
   return call if call := g.facts.iter_calls[iterable]
   iterable
 
@@ -131,7 +134,7 @@ generate_lazy_iter := (g: Generator, source: String, item: Type, lazy: LazyFunct
 
 # The body generates the loop's code in its scope, where the loop variable, and the index if the
 # loop names it, are defined.
-generate_iteration := (
+export generate_iteration := (
   g: Generator, iterable: Expression, variable: Identifier, index: Identifier?, body: () -> void
 ): void ->
   define_index := (scope: Map<String, CodegenLocal>, place: String) ->
@@ -149,11 +152,10 @@ generate_iteration := (
     if fused := fused_call(g, iterable)
       generate_fused_loop g, fused, iterable_item(type)!, variable, body
       return
-    if comprehension := fused_comprehension(g, iterable)
+    if lazy := fused_comprehension(g, iterable)
       go_through := (source: Expression, held: Identifier, each: () -> void) ->
         generate_iteration g, source, held, nil, each
-      source := iterated(g, comprehension.iterable)
-      generate_fused_comprehension g, comprehension, variable, body, go_through, source
+      generate_fused_comprehension g, lazy, variable, body, go_through
       return
   return generate_iter_loop(g, iterable, type, variable, define_index, body) if type is IterType
   item_type := iterable_item(type)!

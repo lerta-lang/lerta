@@ -35,6 +35,7 @@ import
   constructor_symbol, default_entry_symbol, emit_release, extension_symbol, instance_symbol,
   ir_return_type, ir_type, method_symbol, returns_nothing
 from './lerta_ir'
+import generate_inlined_method, inlined_method from './inlined_methods'
 import emit_add_items, emit_map_new from './map'
 import apply_operator_method from './operator'
 import nil_constant from './optional'
@@ -125,6 +126,8 @@ generate_member_call := (g: Generator, call: Call, member: Member) ->
 # methods borrow them, and the object, if owned (see generate_borrowed), is released after the
 # call.
 generate_method_call := (g: Generator, call: Call, member: Member, source: MethodSource) ->
+  if instance := inlined_method(g, call, member, source)
+    return generate_inlined_method(g, call, member, instance)
   object_type := type_of(g, member.object)
   # An Iter's has_next and next run the code of its kind, which may throw.
   if source is BuiltinMethod and takes_object(source.member)
