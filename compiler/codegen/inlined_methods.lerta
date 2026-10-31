@@ -90,9 +90,14 @@ is_plain := (g: Generator, expression: Expression) ->
 is_unchanging_type := (type: Type) -> not is_float(type) and type is not IterType
 
 goes_through_this_once := (body: Statement[]) ->
-  loops := [statement as For! for statement in body when goes_through_this(statement)]
-  outside := [statement for statement in body when not goes_through_this(statement)]
-  loops.length == 1 and not loops[0].body.any(reads_this) and not outside.any(reads_this)
+  loops := (statement for statement in body when goes_through_this(statement)).count()
+  loops == 1 and not body.any(reads_this_besides_loop)
+
+# Whether the statement reads `@` other than by being a loop that goes through it; such a loop
+# counts only for what its body reads.
+reads_this_besides_loop := (statement: Statement) ->
+  return (statement as For!).body.any(reads_this) if goes_through_this(statement)
+  reads_this statement
 
 goes_through_this := (statement: Statement) ->
   statement is For and statement.iterable is This and statement.index == nil
