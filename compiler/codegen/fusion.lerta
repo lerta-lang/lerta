@@ -1,17 +1,23 @@
-# Loops over a call of a function that yields, which generate its body in place, so that no Iter
-# or coroutine is made (see docs/internals.md#fused-loops).
+# Loops over a call of a function that yields, which generate its body in place, and loops over a
+# lazy comprehension, which go through its source and generate its functions in place, so that no
+# Iter or coroutine is made (see docs/internals.md#fused-loops).
 import
-  Assignment, Binding, Call, Case, Condition, Declaration, Expression, For, FunctionLiteral,
-  Identifier, If, operands_of, Statement, Try, While, Yield
+  Assignment, Binding, Call, Case, Comprehension, Condition, Declaration, Expression, For,
+  FunctionLiteral, Identifier, If, operands_of, Position, Statement, Try, While, Yield
 from '../ast'
 import FunctionReference from '../checker/references'
 import arguments_of from '../checker/shared'
 import generate_loop_body from './control_flow'
 import emit_traced_unwind, TRACE_PUSH from './exceptions'
-import generate, type_at_use, type_of from './expression'
+import generate, held_value, type_at_use, type_of from './expression'
 import nan_free_operations from './float_ranges'
 import all_but_last from '../arrays'
-import generate_last_statement, generate_statements, release_scope, store_in_slot from './function'
+import
+  generate_block_value, generate_block_with, generate_last_statement, generate_statements,
+  no_locals, release_scope, store_in_slot
+from './function'
+import emit_when from './ir_builder'
+import referred_local from './references'
 import CodegenLocal, Generator, locate, trace_name, ValueLocal from './generator'
 import function_type_of from './closure'
 import Type, void_type from '../types'
@@ -179,3 +185,69 @@ has_yield := (expression: Expression): Bool ->
 
 condition_yields := (condition: Condition) ->
   has_yield condition is Binding then condition.value else condition
+
+# The comprehension, if a loop can go through its source and take its functions in place: one of
+# no index and no bindings, whose functions capture nothing weakly.
+export fused_comprehension := (g: Generator, iterable: Expression) ->
+  return nil if iterable is not Comprehension or iterable.index != nil
+  return nil if not iterable.bindings.is_empty()
+  lazy := iterable.lazy ? return nil
+  functions := [lazy.element]
+  functions.push guard if guard := lazy.guard
+  takes_in_place := (literal: FunctionLiteral) ->
+    captures := g.facts.captures[literal] ? []
+    not literal.weak and not captures.any((capture) -> capture.is_weak)
+  functions.all(takes_in_place) then iterable
+
+# The loop over the comprehension's source, where the guard's function, if any, and then the
+# element's are generated in place for each item, with the item, and the loop's body with the
+# element. The source's item is held under a name that the source cannot write.
+export generate_fused_comprehension := (
+  g: Generator, comprehension: Comprehension, variable: Identifier, body: () -> void,
+  generate_iteration: (Expression, Identifier, () -> void) -> void, source: Expression
+) ->
+  ir := g.ir
+  lazy := comprehension.lazy!
+  element_type := function_type_of(type_of(g, lazy.element)).result
+  held := Identifier(name: '(fused item)', position: comprehension.position)
+  position := g.position
+  each := ->
+    local := g.locals.lookup(held.name)!
+    item := held_value(g, local)
+    element := ->
+      value := generate_in_place(g, lazy.element, item, position)
+      define := (scope: Map<String, CodegenLocal>) ->
+        scope[variable.name] = store_in_slot(g, value, element_type)
+      generate_block_with g, body, define
+    if guard := lazy.guard
+      emit_when ir, generate_in_place(g, guard, item, position), element
+    else
+      element()
+  generate_iteration source, held, each
+
+# The value of a function of one item, generated in place with the item, borrowed, as its
+# parameter: by a generator of its own, named as the closure would be in traces, whose scope
+# holds what the function captures as the locals of the loop's generator, and whose exception
+# goes on from the loop, as from the call of the closure there.
+generate_in_place := (g: Generator, literal: FunctionLiteral, item: String, position: Position?) ->
+  { code, extensions, facts, ir } := g
+  name := "#{g.function_name}.<anonymous>"
+  inner := Generator(code, extensions, facts, ir, function_name: name, top_level_code: false)
+  inner.fused = g.fused
+  inner.fused_copies = g.fused_copies
+  inner.unchecked_floats = g.unchecked_floats
+  inner.nan_free = nan_free_operations(g.facts, literal.body, false)
+  unwind := ->
+    inner_position := g.position
+    locate g, position
+    emit_traced_unwind g, TRACE_PUSH
+    locate g, inner_position
+  inner.fused_exit = { unwind, label: '' }
+  scope := inner.locals.push()
+  for capture in g.facts.captures[literal] ? []
+    scope[capture.name] = referred_local(g, capture.source, capture.name)
+  type := function_type_of(type_of(g, literal))
+  scope[literal.params[0].name.name] = ValueLocal(operand: item, type: type.params[0])
+  value := generate_block_value(inner, literal.body, no_locals)
+  inner.locals.pop()
+  value

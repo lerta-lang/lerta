@@ -18,7 +18,9 @@ import
   emit_sequence_length, emit_source_start
 from './iter'
 import emit_exception_check, leave_scopes, while_holding from './exceptions'
-import fused_call, generate_fused_loop from './fusion'
+import
+  fused_call, fused_comprehension, generate_fused_comprehension, generate_fused_loop
+from './fusion'
 import emit_iter_loop, emit_iter_start from './iter_protocol'
 import emit_is_present, emit_unwrap from './optional'
 import ArrayType, int_type, iterable_item, IterType, OptionalType, Type from '../types'
@@ -125,7 +127,7 @@ generate_lazy_iter := (g: Generator, source: String, item: Type, lazy: LazyFunct
 # loop names it, are defined.
 generate_iteration := (
   g: Generator, iterable: Expression, variable: Identifier, index: Identifier?, body: () -> void
-) ->
+): void ->
   define_index := (scope: Map<String, CodegenLocal>, place: String) ->
     scope[index.name] = ValueLocal(operand: place, type: int_type) if index
   if iterable is Range
@@ -140,6 +142,12 @@ generate_iteration := (
   if index == nil
     if fused := fused_call(g, iterable)
       generate_fused_loop g, fused, iterable_item(type)!, variable, body
+      return
+    if comprehension := fused_comprehension(g, iterable)
+      go_through := (source: Expression, held: Identifier, each: () -> void) ->
+        generate_iteration g, source, held, nil, each
+      source := iterated(g, comprehension.iterable)
+      generate_fused_comprehension g, comprehension, variable, body, go_through, source
       return
   return generate_iter_loop(g, iterable, type, variable, define_index, body) if type is IterType
   item_type := iterable_item(type)!
