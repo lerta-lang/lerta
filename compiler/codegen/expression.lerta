@@ -416,30 +416,30 @@ export read_borrowed := (g: Generator, local: CodegenLocal, type: Type) ->
   held := held_value(g, local)
   # A weak local's object, which may be gone, is never narrowed.
   value := local.weak then emit_weak_object(ir, held) else held
-  emit_nan_check g, value, local.type if is_checked_where_read(g, local)
+  check_where_read g, local, value
   emit_narrowed ir, value, local.type, type
 
 # Checks the local for NaN if it holds a float not checked yet, as a read of it would.
 export emit_deferred_check := (g: Generator, local: CodegenLocal) ->
-  emit_nan_check g, held_value(g, local), local.type if is_checked_where_read(g, local)
+  check_where_read g, local, held_value(g, local)
 
-# Whether the local holds a float not checked for NaN yet (see defers_declaration), read where no
-# root checks it for NaN: but as an operand of a tree whose root does.
-is_checked_where_read := (g: Generator, local: CodegenLocal) ->
-  return false if local is not SlotLocal or g.unchecked_floats[local.pointer] == nil
-  not g.defers_float_checks or g.checks_deferred_reads
+# Checks the value read from the local for NaN if the local holds a float not checked yet (see
+# defers_declaration): but as an operand of a tree, whose root checks it.
+check_where_read := (g: Generator, local: CodegenLocal, value: String) ->
+  return if local is not SlotLocal or g.unchecked_floats[local.pointer] == nil
+  if g.defers_float_checks
+    g.reads_unchecked_floats = true
+  else
+    emit_nan_check g, value, local.type
 
 # A call, which may be a leaf of a tree of float arithmetic (see float_tree), checks its arguments
 # where it is called, as their values leave the tree; the trees in them are their own, whose roots
 # leave the tree's way of checking as it was.
 generate_call_in_tree := (g: Generator, call: Call) ->
   defers := g.defers_float_checks
-  checks := g.checks_deferred_reads
   g.defers_float_checks = false
-  g.checks_deferred_reads = false
   value := generate_call_ending_if_never(g, call)
   g.defers_float_checks = defers
-  g.checks_deferred_reads = checks
   value
 
 # What the local holds, borrowed: its value, or a weak local's box.

@@ -1,8 +1,10 @@
 # A local whose value, a tree of float arithmetic, is NaN holds it unchecked, and throws where the
 # value leaves it: as the argument of a call, which is not made, into a field, in a comparison, as
-# a return value, and in a tree whose root gives no NaN, as an infinity plus one, and so checks
-# nothing. A NaN that never leaves its local throws nowhere. tests/cli/eager_nan_locals runs this
-# with `--eager-nan-checks`, where each throws at the subtraction, the unused one too.
+# a return value, and in a tree whose root gives no NaN of its own, as an infinity plus one, which
+# checks its result for the locals' NaNs, after the calls in it. A NaN that never leaves its local
+# throws nowhere.
+# tests/cli/eager_nan_locals runs this with `--eager-nan-checks`, where each throws at the
+# subtraction, the unused one too.
 class Box
   x: Float
 
@@ -14,6 +16,10 @@ attempt := (name: String, f: () -> void) ->
     print "#{name}: #{e.message}"
 
 show := (x: Float) -> print("shown: #{x}")
+
+counted := ->
+  print 'counted'
+  1
 
 pass_on := (x: Float) ->
   print "passed on: #{x}"
@@ -62,6 +68,13 @@ locals := (big: Float) ->
   attempt 'nested in a tree that gives no NaN', ->
     nan := big * big - big * big
     _sum := 2.0 + (nan + 1.0)
+  attempt 'sum of squares of locals', ->
+    dx := big * big - big * big
+    dy := big - 1.0
+    _sum := dx * dx + dy * dy
+  attempt 'before a call in a tree that gives no NaN', ->
+    nan := big * big - big * big
+    _sum := nan + counted().to_float()
   attempt 'string', ->
     nan := big * big - big * big
     print "#{nan}"
