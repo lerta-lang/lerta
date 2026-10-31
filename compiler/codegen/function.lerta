@@ -112,6 +112,10 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
   symbol := g.code.ir_module.fresh_symbol('lerta.lambda')
   name := "#{g.function_name}.<anonymous>"
   body_generator := function_generator(g.code, g.extensions, g.facts, name)
+  # It is generated within the functions taken in place around it, and copied as many times as the
+  # code it is in (see fusion).
+  body_generator.fused = g.fused
+  body_generator.fused_copies = g.fused_copies
   # Its symbol is numbered within the module.
   generate_function body_generator, 'private ', symbol, literal, nil, captures
   return emit_static_closure(g.ir, symbol) if captures.is_empty()
@@ -309,7 +313,7 @@ generate_default_entry := (
   finish g, "#{linkage}#{ir_return_type(type.result)} #{entry}(#{params.join(', ')})"
 
 # The last statement returns its value, if it is an expression and the function has a result.
-generate_last_statement := (g: Generator, body: Statement[], result: Type) ->
+export generate_last_statement := (g: Generator, body: Statement[], result: Type) ->
   has_result := not is_kind(result, 'void')
   last := body.last()
   if last
@@ -396,6 +400,9 @@ export finish := (g: Generator, signature: String) -> g.ir.finish(signature)
 emit_return := (g: Generator, value: String, type: Type): void ->
   while_holding g, value, type, -> leave_scopes(g, 0)
   on_return value if on_return := g.on_return
+  if exit := g.fused_exit
+    g.ir.emit "br label %#{exit.label}"
+    return
   if coroutine := g.coroutine
     g.ir.emit "br label %#{coroutine.end_label}"
     return
@@ -460,7 +467,7 @@ export statements_code := (g: Generator, statements: Statement[]) ->
 
 # The statements in order, those that are a batch of writes of Float fields together (see
 # batched_field_writes).
-generate_statements := (g: Generator, statements: Statement[]) ->
+export generate_statements := (g: Generator, statements: Statement[]) ->
   var i = 0
   while i < statements.length
     count := batched_field_writes(g, statements, i)

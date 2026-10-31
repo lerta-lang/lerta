@@ -1,7 +1,7 @@
 # The state of the generation of a module's code, and of one function of it. Objects refer to the
 # checker's results and to the IR being built, never back to the generator, so that they form no
 # cycle.
-import Position, Statement from '../ast'
+import FunctionLiteral, Position, Statement from '../ast'
 import Extensions from '../checker/extensions'
 import NodeFacts, ProgramWide, Shared from '../checker/shared'
 import NanFree from './float_ranges'
@@ -116,11 +116,18 @@ export struct Finally
   scope_depth: Int
   handler_depth: Int
 
-# Where `break` and `continue` jump, and how many scopes enclose the loop.
+# Where `break` and `continue` jump, how many scopes enclose the loop, and how many a break leaves.
 export struct Loop
   break_label: String
   continue_label: String
   scope_depth: Int
+  break_depth: Int
+
+# Where a function that a loop takes in place goes as it ends (see generate_fused_loop): `label`
+# once it has released its locals, and `unwind` with an exception that leaves it.
+export struct FusedExit
+  label: String
+  unwind: () -> void
 
 # A body that suspends, an LLVM coroutine (see coroutine): its `id` token and its `handle`. It
 # leaves through `end_label`, rather than by returning, once it has released what it holds;
@@ -142,7 +149,7 @@ export class Generator
   facts: NodeFacts
   top_level_code: Bool
   function_name: String
-  ir = IrBuilder(module: @code.ir_module, scope: source_scope(@code, @function_name))
+  ir = default IrBuilder(module: @code.ir_module, scope: source_scope(@code, @function_name))
   locals = Locals()
   loops: Loop[] = []
   # The result type of the function being generated; the top-level code returns nothing.
@@ -163,6 +170,14 @@ export class Generator
   yield_kind: IterKind? = nil
   # What the body of a coroutine does with the value it returns, owned, or '', before it ends.
   on_return: ((String) -> void)? = nil
+  # The functions that loops take in place around the code (see fusion), outermost first.
+  fused: FunctionLiteral[] = []
+  # How many copies of the code being generated they make (see MOST_COPIES in fusion).
+  fused_copies = 1
+  # Set while a function that a loop takes in place is generated: where it ends, and what its
+  # yields do with their values, owned.
+  fused_exit: FusedExit? = nil
+  on_yield: ((String) -> void)? = nil
   # Where the code being generated is in the source, the innermost statement or expression; nil
   # outside them, as in the code that a function runs before its body.
   position: Position? = nil

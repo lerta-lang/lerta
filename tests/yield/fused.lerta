@@ -1,0 +1,74 @@
+# A for over a call of a function that yields, of the module, runs its body in place, as the Iter
+# would give its items: a break, a continue and a return in the loop's body, and an exception out
+# of either, release what the function holds; the function's catch does not take an exception of
+# the loop's body; the body's names are its own, even where the function has the same; and a
+# recursive function still yields.
+class Noisy
+  name: String
+  deinit = -> print("drop #{@name}")
+
+counted := (n: Int) -> yield i for i in 0...n
+
+held := (outer: Noisy) ->
+  inner := Noisy('inner')
+  yield name for name in ['a', 'b']
+  print "end of #{inner.name} in #{outer.name}"
+
+var total = 0
+for x in counted(4)
+  continue if x == 1
+  total += x
+print "sum: #{total}"
+
+print name for name in held(Noisy('all'))
+for name in held(Noisy('broken'))
+  print name
+  break
+print 'after break'
+
+first_b := ->
+  for name in held(Noisy('returned'))
+    return name if name == 'b'
+  'none'
+print first_b()
+
+failing := (n: Int) ->
+  inner := Noisy('failing')
+  for i in 0...n
+    throw ValueError('three') if i == 3
+    yield i
+  print inner.name
+
+try
+  print "got #{i}" for i in failing(5)
+catch e: ValueError
+  print "caught #{e.message}"
+
+catching := ->
+  try
+    yield 1
+    yield 2
+  catch e: ValueError
+    print "the function caught #{e.message}"
+
+try
+  for i in catching()
+    throw ValueError('from the body') if i == 1
+catch e: ValueError
+  print "the loop's caller caught #{e.message}"
+
+shadowed := ->
+  inner := 'the function'
+  yield inner
+
+inner := 'the loop'
+print "#{value}, #{inner}" for value in shadowed()
+
+down := (n: Int): Iter<Int> ->
+  yield n
+  if n > 0
+    yield x for x in down(n - 1)
+
+print [x for x in down(3)]
+for x in down(2)
+  print "#{x} #{y}" for y in counted(x)

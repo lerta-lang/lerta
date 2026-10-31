@@ -1,0 +1,86 @@
+# A loop that takes a function that yields in place goes as through its Iter where the function
+# returns early, takes a default, holds an owned argument or is itself in such a loop, where the
+# loop is in a try with a catch and a finally, and where loops in place nest with a break, a
+# continue, a return and an exception out of the outermost.
+class Noisy
+  name: String
+  deinit = -> print("drop #{@name}")
+
+early := (n: Int) ->
+  _local := Noisy('fn')
+  for i in 0...n
+    return if i == 2
+    yield i
+  print 'unreached'
+
+outer := ->
+  keep := Noisy('outer local')
+  print i for i in early(5)
+  print "after: #{keep.name}"
+outer()
+
+withdefault := (n: Int, m = 2) -> yield n + m
+print x for x in withdefault(1)
+
+arg_owned := (s: Noisy) -> yield s.name
+print n for n in arg_owned(Noisy('temp'))
+print 'done temp'
+
+nested_break := ->
+  for i in 0...3
+    for j in early(5)
+      break if j == 1
+      print "#{i} #{j}"
+nested_break()
+
+gen := -> yield x * 10 for x in early(3)
+print [y for y in gen()]
+it := gen()
+print it.next()
+
+f := ->
+  try
+    print i for i in early(5)
+    print 'after loop'
+  finally
+    print 'finally'
+  print 'end f'
+f()
+thrower := ->
+  yield 1
+  throw ValueError('x')
+g := ->
+  try
+    print i for i in thrower()
+  catch e: ValueError
+    print "caught #{e.message}"
+  finally
+    print 'fin2'
+g()
+h := ->
+  for i in 0...2
+    for j in early(5)
+      continue if j == 0
+      print "#{i} #{j}"
+      return 'ret' if i == 1
+  'no'
+print h()
+
+b := (n: Int) ->
+  _hb := Noisy('b')
+  yield i for i in 0...n
+a := ->
+  _ha := Noisy('a')
+  for x in b(3)
+    continue if x == 0
+    yield x * 2
+  print 'a end'
+for v in a()
+  print v
+  break if v == 4
+print 'next'
+try
+  for v in a()
+    throw ValueError('t') if v == 4
+catch e: ValueError
+  print "caught #{e.message}"

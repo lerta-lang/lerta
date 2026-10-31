@@ -1,0 +1,52 @@
+# A function that a loop takes in place gets its arguments converted as a call does, borrows none
+# from the loop, sees its module's top-level values whatever the loop's locals hide, and may be
+# declared after the loop.
+class Noisy
+  name: String
+  deinit = -> print("drop #{@name}")
+
+opt := (s: String?) -> yield s ? 'none'
+print x for x in opt('given')
+fl := (x: Float) -> yield x * 2
+print y for y in fl(3)
+interface Named
+  name: () -> String
+class Dog
+  name = -> 'dog'
+named := (n: Named) -> yield n.name()
+print z for z in named(Dog())
+
+arg_owned := (s: Noisy) ->
+  local := Noisy('local')
+  yield s.name
+  print local.name
+borrowing := ->
+  v := Noisy('v')
+  print n for n in arg_owned(v)
+  print "still #{v.name}"
+  for n in arg_owned(Noisy('t'))
+    print n
+    print 'body end'
+  print 'after t'
+borrowing()
+
+limit := 3
+var counter = 0
+f := ->
+  counter += 1
+  yield limit
+g := ->
+  limit := 99
+  counter := 'shadow'
+  print "#{x} #{limit} #{counter}" for x in f()
+g()
+print counter
+print x for x in f()
+print counter
+
+outer := ->
+  gen := (n: Int) -> yield n
+  print x for x in gen(2)
+outer()
+print x for x in later(3)
+later := (n: Int) -> yield n + 1

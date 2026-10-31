@@ -18,6 +18,7 @@ import
   emit_sequence_length, emit_source_start
 from './iter'
 import emit_exception_check, leave_scopes, while_holding from './exceptions'
+import fused_call, generate_fused_loop from './fusion'
 import emit_iter_loop, emit_iter_start from './iter_protocol'
 import emit_is_present, emit_unwrap from './optional'
 import ArrayType, int_type, iterable_item, IterType, OptionalType, Type from '../types'
@@ -136,6 +137,10 @@ generate_iteration := (
     generate_counting_loop g, start, -> end, body, define
     return
   type := type_of(g, iterable)
+  if index == nil
+    if fused := fused_call(g, iterable)
+      generate_fused_loop g, fused, iterable_item(type)!, variable, body
+      return
   return generate_iter_loop(g, iterable, type, variable, define_index, body) if type is IterType
   item_type := iterable_item(type)!
   sequence_scope := g.locals.push()
@@ -208,11 +213,18 @@ generate_counting_loop := (
 
   ir.start_block exit_label
 
-generate_loop_body := (
-  g: Generator, body: () -> void, break_label: String, continue_label: String,
+# A break leaves the scopes from `break_depth` on, where it is given: those that a loop of a
+# function taken in place holds (see generate_fused_loop).
+export generate_loop_body := (
+  g: Generator
+  body: () -> void
+  break_label: String
+  continue_label: String
   define: (Map<String, CodegenLocal>) -> void
+  break_depth: Int? = nil
 ): void ->
-  g.loops.push { break_label, continue_label, scope_depth: g.locals.depth() }
+  scope_depth := g.locals.depth()
+  g.loops.push { break_label, continue_label, scope_depth, break_depth: break_depth ? scope_depth }
   generate_block_with g, body, define
   g.loops.pop()
 
@@ -220,7 +232,8 @@ generate_loop_body := (
 # finally blocks inside the loop.
 export generate_control_jump := (g: Generator, jump: Jump) ->
   loop := g.loops.last()!
-  leave_scopes g, loop.scope_depth
-  target := jump.kind == 'break' then loop.break_label else loop.continue_label
+  is_break := jump.kind == 'break'
+  leave_scopes g, is_break then loop.break_depth else loop.scope_depth
+  target := is_break then loop.break_label else loop.continue_label
   g.ir.emit "br label %#{target}"
   g.ir.start_unreachable()
