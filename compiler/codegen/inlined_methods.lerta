@@ -8,6 +8,7 @@ import
 from '../ast'
 import Instance from '../checker/generics'
 import ExtensionSource, MethodSource from '../checker/methods'
+import Property from '../checker/member_targets'
 import ScopedLocal, TopLevelValue from '../checker/references'
 import arguments_of from '../checker/shared'
 import all_but_last from '../arrays'
@@ -25,27 +26,40 @@ import
 from './generator'
 import local_of from './references'
 import ir_type from './lerta_ir'
-import is_float, iterable_item, IterType from '../types'
+import ArrayType, is_float, iterable_item, IterType, Type from '../types'
 
 # The instance of the method that the call calls, if its body can be generated in place: a method
 # of std:builtins whose body goes through `@` in one `for` and reads it nowhere else, over a
-# receiver that a loop goes through in place, whose parts that are evaluated before its loop
-# starts cannot throw or have effects, as they are evaluated after the method's arguments.
+# receiver that a loop goes through in place, or an array, whose parts that are evaluated before its
+# loop starts cannot throw or have effects, as they are evaluated after the method's arguments.
 export inlined_method := (g: Generator, call: Call, member: Member, source: MethodSource) ->
   return nil if source is not ExtensionSource or not is_builtins(source.method.module_name)
   instance := g.facts.instances[call]?.instance ? return nil
   literal := instance.entry.literal
   return nil if literal.yields or literal.awaits or literal in g.fused
   return nil if not goes_through_this_once(literal.body)
-  is_fused_source(g, member.object) then instance
+  receiver := member.object
+  # Arguments without effects cannot assign a field that the receiver reads.
+  reads_fields :=
+    arguments_of(g.facts, call).all((arg) -> arg is FunctionLiteral or is_plain(g, arg))
+  return instance if is_fused_source(g, receiver, reads_fields)
+  type_of(g, receiver) is ArrayType and is_stable(g, receiver, reads_fields) then instance
 
 # A range is one only as a comprehension's source, as no method is called on one.
-is_fused_source := (g: Generator, expression: Expression): Bool ->
-  return is_plain(g, expression.start) and is_plain(g, expression.end) if expression is Range
-  if fused := fused_call(g, expression)
-    return fused.args.all((arg) -> is_plain(g, arg))
+is_fused_source := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
+  stable := (part: Expression) -> is_stable(g, part, reads_fields)
+  return stable(expression.start) and stable(expression.end) if expression is Range
+  return fused.args.all(stable) if fused := fused_call(g, expression)
   lazy := fused_comprehension(g, expression) ? return false
-  is_plain(g, lazy.source) or is_fused_source(g, lazy.source)
+  stable(lazy.source) or is_fused_source(g, lazy.source, reads_fields)
+
+# A plain value, or, if `reads_fields`, a field of a field, and so on, of one, which neither throws
+# nor has effects either, as long as no argument assigns it.
+is_stable := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
+  return is_plain(g, expression) if expression is not Member or not reads_fields
+  property := g.facts.members[expression] as Property ? return false
+  return false if property.kind != FIELD or not is_unchanging_type(type_of(g, expression))
+  is_stable g, expression.object, reads_fields
 
 # A literal, or a value that no code changes and whose read cannot throw: a local or a top-level
 # value that is not a var, which the method's arguments could assign, nor an Iter, which they could
@@ -54,13 +68,11 @@ is_fused_source := (g: Generator, expression: Expression): Bool ->
 is_plain := (g: Generator, expression: Expression) ->
   case expression
     when IntegerLiteral, BooleanLiteral, StringLiteral then true
+    when This then is_unchanging_type(type_of(g, expression))
     when Identifier
       reference := g.facts.references[expression]
       return false if reference is not ScopedLocal and reference is not TopLevelValue
-      type := type_of(g, expression)
-      # A comprehension starts the Iter that it goes through as it is made, before the arguments
-      # that may traverse it.
-      return false if is_float(type) or type is IterType
+      return false if not is_unchanging_type(type_of(g, expression))
       local := local_of(g, expression)
       case local
         when ValueLocal then true
@@ -68,6 +80,10 @@ is_plain := (g: Generator, expression: Expression) ->
           checked := local.top_level?.is_checked ? false
           not local.is_var and not checked
     else false
+
+# Not a float, which a read checks for NaN, nor an Iter, which the arguments could traverse: a
+# comprehension starts the Iter that it goes through as it is made, before them.
+is_unchanging_type := (type: Type) -> not is_float(type) and type is not IterType
 
 goes_through_this_once := (body: Statement[]) ->
   loops := [statement as For! for statement in body when goes_through_this(statement)]
