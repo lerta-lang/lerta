@@ -1,4 +1,5 @@
 # Top-level values in the generated code (see docs/internals.md#modules).
+import BooleanLiteral, Declaration, FloatLiteral, IntegerLiteral, StringLiteral from '../ast'
 import Shared from '../checker/shared'
 import top_level_value from '../checker/top_level_values'
 import Module from '../loader'
@@ -6,7 +7,11 @@ import top_level_tag from './alias_tags'
 import Generator, TopLevelGlobal from './generator'
 import throw_if from './runtime_errors'
 import IrBuilder, IrModule from './ir_builder'
-import emit_release_stored, ir_type, ownership, suffixed_symbol, top_level_symbol from './lerta_ir'
+import
+  emit_release_stored, ir_type, ownership, string_constant, suffixed_symbol, top_level_symbol
+from './lerta_ir'
+import scalar_literal from './scalar'
+import format_type, is_kind, Type from '../types'
 
 export define_top_level_globals := (ir_module: IrModule, module: Module, shared: Shared) ->
   globals: Map<String, TopLevelGlobal>
@@ -16,10 +21,30 @@ export define_top_level_globals := (ir_module: IrModule, module: Module, shared:
     type := shared.facts.types[declaration.name]!
     pointer := top_level_symbol(module.symbol_name, name)
     flag := suffixed_symbol(pointer, 'set')
+    # A const that is a literal keeps its slot, which no read reads, so that its declaration is
+    # generated as any other's.
     ir_module.define_variable pointer, ir_type(type), 'zeroinitializer'
     ir_module.define_variable flag, 'i1', 'false'
-    globals[name] = { name, type, pointer, flag, is_var: declaration.mutable }
+    constant := constant_of(declaration, type, shared)
+    globals[name] = { name, type, pointer, flag, is_var: declaration.mutable, constant }
   globals
+
+# The operand of the const's value, if it is a literal of its own type, a Bool, a number or a
+# String: such a const is initialized from the start and never released, so that reading it, in its
+# module or another, checks nothing. The literal's type is known only to its module's facts, so its
+# operand is worked out here, but for a String's, which each IR module defines for itself.
+constant_of := (declaration: Declaration, type: Type, shared: Shared): ((IrBuilder) -> String)? ->
+  return nil if declaration.mutable
+  value := declaration.value
+  return nil if format_type(shared.facts.types[value]!) != format_type(type)
+  case value
+    when BooleanLiteral, FloatLiteral, IntegerLiteral
+      operand := scalar_literal(value, type)
+      (_) -> operand
+    when StringLiteral
+      return nil if not is_kind(type, 'String')
+      (ir) -> string_constant(ir, value.value)
+    else nil
 
 export emit_mark_initialized := (ir: IrBuilder, global: TopLevelGlobal) ->
   ir.emit "store i1 true, ptr #{global.flag}#{top_level_tag(ir)}"

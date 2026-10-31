@@ -5,13 +5,12 @@ import
   Interpolation, IsTest, Jump, MapLiteral, Member, NilLiteral, Node, Range, RecordLiteral, Return,
   StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, TypeName, UnaryOperation, Unwrap, Yield
 from '../ast'
-import integer_float_text from '../float_literals'
 import TextPart from '../lexer/string_literal'
 import field_tag, top_level_tag from './alias_tags'
 import emit_length from './array'
 import generate_await from './awaiting'
 import generate_borrowed from './borrowing'
-import emit_nan_check, float_constant from './float'
+import emit_nan_check from './float'
 import generate_call from './call'
 import generate_case, generate_conditional, generate_if_value from './case'
 import emit_function_closure from './closure'
@@ -46,11 +45,12 @@ import
 from './optional'
 import emit_binary_length, emit_concat from './string'
 import DEAD_OBJECT, FAILED_CAST, throw_if from './runtime_errors'
+import scalar_literal from './scalar'
 import emit_initialized_check from './top_level'
 import generate_yield from './yielding'
 import
-  boxes_into, inner_of, InterfaceType, is_assignable, is_boxed, is_float, is_kind, IterType,
-  ObjectType, optional_type, OptionalType, RecordType, settles_into, string_type, Type, UnionType
+  boxes_into, inner_of, InterfaceType, is_assignable, is_boxed, is_kind, IterType, ObjectType,
+  optional_type, OptionalType, RecordType, settles_into, string_type, Type, UnionType
 from '../types'
 
 # The type that the checker gave the node.
@@ -140,12 +140,8 @@ generate_node := (g: Generator, expression: Expression): String ->
       return "#{expression.value.iter().next().to_int()}" if is_kind(type_of(g, expression), 'Char')
       string_constant g.ir, expression.value
     when Interpolation then generate_interpolation(g, expression)
-    when IntegerLiteral
-      type := type_of(g, expression)
-      return float_constant(integer_float_text(expression), type) if is_float(type)
-      "#{expression.value!}"
-    when FloatLiteral then float_constant(expression.text, type_of(g, expression))
-    when BooleanLiteral then "#{expression.value}"
+    when BooleanLiteral, FloatLiteral, IntegerLiteral
+      scalar_literal expression, type_of(g, expression)
     when Call then generate_call_in_tree(g, expression)
     when UnaryOperation then generate_unary(g, expression)
     when BinaryOperation then generate_binary(g, expression)

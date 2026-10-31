@@ -3,22 +3,26 @@
 import Identifier from '../ast'
 import FunctionReference, Reference, ScopedLocal, TopLevelValue from '../checker/references'
 import module_symbol_name from '../checker/shared'
-import Generator, SlotLocal, TopLevelGlobal, TopLevelSlot from './generator'
+import
+  CodegenLocal, Generator, SlotLocal, TopLevelGlobal, TopLevelSlot, ValueLocal
+from './generator'
 import function_symbol from './lerta_ir'
 
 # The local that the name refers to (see checker references): one of the scopes, or a top-level
 # value. A function checks the top-level value to be initialized, since it may run while the values
-# are released at exit; top-level code checks only an imported value of its cycle.
+# are released at exit; top-level code checks only an imported value of its cycle. A const whose
+# value is a literal is that literal, generated where it is read.
 export local_of := (g: Generator, identifier: Identifier) ->
   referred_local g, g.facts.references[identifier]!, identifier.name
 
-export referred_local := (g: Generator, reference: Reference, name: String) ->
+export referred_local := (g: Generator, reference: Reference, name: String): CodegenLocal ->
   code := g.code
   case reference
     when ScopedLocal then g.locals.lookup(reference.name)!
     when TopLevelValue
       { module_index } := reference
       global := code.globals[module_index][reference.name]!
+      return ValueLocal(operand: constant(g.ir), type: global.type) if constant := global.constant
       is_in_cycle := module_index in code.module.cycle
       return top_level_slot(global, true) if is_in_cycle or not g.top_level_code
       top_level_slot global, false

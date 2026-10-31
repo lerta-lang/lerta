@@ -1,8 +1,11 @@
 # The representation of the types whose values are not references, one row per type: the integer
 # types, whose bits and sign come from types, Float, Float32, Bool and enums, whose values are the
-# places of their members among them.
+# places of their members among them; and the operands of their literals.
+import BooleanLiteral, FloatLiteral, IntegerLiteral from '../ast'
+import integer_float_text from '../float_literals'
+import float_constant from './float'
 import IrBuilder from './ir_builder'
-import integer_bits, is_signed, kind_of, SimpleType, Type, TypeKind from '../types'
+import integer_bits, is_float, is_signed, kind_of, SimpleType, Type, TypeKind from '../types'
 
 export struct Scalar
   ir_type: String
@@ -63,3 +66,11 @@ export narrowed_from_word := (ir: IrBuilder, word: String, scalar: Scalar) ->
   bits := scalar.bits == 64 then word else ir.assign("trunc i64 #{word} to #{bits_type}")
   return bits if not scalar.is_float
   ir.assign "bitcast #{bits_type} #{bits} to #{scalar.ir_type}"
+
+# The operand of a literal of a scalar type, which a number literal of a float type is.
+export scalar_literal := (literal: BooleanLiteral | IntegerLiteral | FloatLiteral, type: Type) ->
+  case literal
+    when BooleanLiteral then "#{literal.value}"
+    when IntegerLiteral
+      is_float(type) then float_constant(integer_float_text(literal), type) else "#{literal.value!}"
+    when FloatLiteral then float_constant(literal.text, type)
