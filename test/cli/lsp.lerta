@@ -6,9 +6,10 @@ import new_cli_dir, run_command from '../lib/cli'
 import make_dir, write_file from 'std:io'
 import encode_json from 'std:json'
 import
-  uri_of, frame, did_open, did_change, did_change_at, definition_request, hover_request,
-  location_fragment, hover_fragment, initialize, finish, session, message_bodies, diagnostic_body,
-  published_diagnostics, initialize_response, shutdown_response, exact_responses, exact_messages
+  uri_of, frame, did_open, did_change, did_change_at, did_close, formatting_request,
+  definition_request, hover_request, location_fragment, hover_fragment, initialize, finish, session,
+  message_bodies, diagnostic_body, published_diagnostics, initialize_response, shutdown_response,
+  exact_responses, exact_messages
 from '../lib/lsp'
 
 initialize_check := ->
@@ -71,10 +72,7 @@ diagnostic_check := -> Check(name: 'lerta lsp reports diagnostics for an opened 
   path := "#{dir}/a.lerta"
   await write_file(path, ''.binary)
   uri := uri_of(path)
-  message := frame
-    '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
-      "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
-      '"text":"print missing\n"}}}'
+  message := did_open(uri, "print missing\n")
   ran := await session(dir, message)
   [
     expect_status(0, ran.status)...
@@ -99,25 +97,10 @@ diagnostic_lifecycle_check := ->
     await write_file(path, ''.binary)
     uri := uri_of(path)
     messages :=
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\"," +
-          '"version":1,"text":"print missing\n"}}}'
-      )
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didChange",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":2}," +
-          '"contentChanges":[{"text":"unused := 1\n"}]}}'
-      )
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didChange",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":3}," +
-          '"contentChanges":[{"text":"print 1\n"}]}}'
-      )
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didClose",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
-      )
+      did_open(uri, "print missing\n")
+      did_change_at(uri, "unused := 1\n", 2)
+      did_change_at(uri, "print 1\n", 3)
+      did_close(uri)
     .join('')
     ran := await session(dir, messages)
     [
@@ -146,10 +129,7 @@ imported_diagnostic_check := ->
     await write_file(path, ''.binary)
     await write_file(imported, "export b := '😀' + nothing\n".binary)
     uri := uri_of(path)
-    message := frame
-      '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
-        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
-        "\"text\":\"import b from './b'\\nprint b\\n\"}}}"
+    message := did_open(uri, "import b from './b'\nprint b\n")
     ran := await session(dir, message)
     [
       expect_status(0, ran.status)...
@@ -180,14 +160,9 @@ uri_import_check := ->
     await write_file(path, ''.binary)
     await write_file("#{dir}/lib.lerta", "export x := missing\n".binary)
     uri := uri_of(path)
-    message := frame
-      '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
-        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
-        "\"text\":\"import x from '../lib'\\nprint x\\n\"}}}"
+    message := did_open(uri, "import x from '../lib'\nprint x\n")
     other_uri := did_open('untitled:Untitled-1', 'print missing\n')
-    formatting := frame
-      '{"jsonrpc":"2.0","id":1,"method":"textDocument/formatting",' +
-        "\"params\":{\"textDocument\":{\"uri\":\"#{imported}\"}}}"
+    formatting := formatting_request(imported, 1)
     ran := await session(dir, message + other_uri + formatting)
     [
       expect_status(0, ran.status)...
@@ -299,25 +274,12 @@ formatting_check := -> Check(name: 'lerta lsp formats an open document', run: ->
   await write_file(path, ''.binary)
   uri := uri_of(path)
   messages :=
-    frame(
-      '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
-        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
-        '"text":"value  := 1\nprint value\n"}}}'
-    )
-    frame(
-      '{"jsonrpc":"2.0","id":1,"method":"textDocument/formatting",' +
-        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
-    )
+    did_open(uri, "value  := 1\nprint value\n")
+    formatting_request(uri, 1)
     did_change_at(uri, "value := 1\nprint value\n", 2)
-    frame(
-      '{"jsonrpc":"2.0","id":2,"method":"textDocument/formatting",' +
-        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
-    )
+    formatting_request(uri, 2)
     did_change_at(uri, "print (\n", 3)
-    frame(
-      '{"jsonrpc":"2.0","id":3,"method":"textDocument/formatting",' +
-        "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
-    )
+    formatting_request(uri, 3)
   .join('')
   ran := await session(dir, messages)
   [
@@ -344,13 +306,7 @@ formatting_new_document_check := ->
     uri := uri_of("#{dir}/new.lerta")
     emoji := "\u{1F600}"
     text := "print  '#{emoji}'"
-    messages :=
-      did_open(uri, text)
-      frame(
-        '{"jsonrpc":"2.0","id":1,"method":"textDocument/formatting",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"}}}"
-      )
-    .join('')
+    messages := [did_open(uri, text), formatting_request(uri, 1)].join('')
     ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
@@ -378,14 +334,7 @@ shared_import_check := ->
     await write_file("#{dir}/c.lerta", ''.binary)
     await write_file("#{dir}/d.lerta", ''.binary)
     imports := "import b from './b'\nprint b\n"
-    messages :=
-      did_open(c, imports)
-      did_open(d, imports)
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didClose",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{c}\"}}}"
-      )
-    .join('')
+    messages := [did_open(c, imports), did_open(d, imports), did_close(c)].join('')
     ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
@@ -450,10 +399,7 @@ close_unsaved_import_check := ->
       did_open(a, "import f from './b'\nprint f()\n")
       did_open(b, "export f := -> 1\n")
       did_change(b, "export f := -> zzz\n")
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didClose",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{b}\"}}}"
-      )
+      did_close(b)
     .join('')
     ran := await session(dir, messages)
     last :=
@@ -479,21 +425,9 @@ hover_definition_check := ->
     await write_file(path, text.binary)
     uri := uri_of(path)
     messages :=
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\"," +
-          '"version":1,"text":"value := 1\nprint value\n"}}}'
-      )
-      frame(
-        '{"jsonrpc":"2.0","id":1,"method":"textDocument/hover",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1," +
-          '"character":6}}}'
-      )
-      frame(
-        '{"jsonrpc":"2.0","id":2,"method":"textDocument/definition",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1," +
-          '"character":6}}}'
-      )
+      did_open(uri, text)
+      hover_request(uri, 1, 6, 1)
+      definition_request(uri, 1, 6, 2)
     .join('')
     ran := await session(dir, messages)
     [
@@ -512,21 +446,9 @@ generic_hover_check := ->
     await write_file(path, text.binary)
     uri := uri_of(path)
     messages :=
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\"," +
-          "\"version\":1,\"text\":\"id := <T>(v: T) -> v\\nprint id(1)\\nprint id('a')\\n\"}}}"
-      )
-      frame(
-        '{"jsonrpc":"2.0","id":1,"method":"textDocument/hover",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":1," +
-          '"character":6}}}'
-      )
-      frame(
-        '{"jsonrpc":"2.0","id":2,"method":"textDocument/hover",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":2," +
-          '"character":6}}}'
-      )
+      did_open(uri, text)
+      hover_request(uri, 1, 6, 1)
+      hover_request(uri, 2, 6, 2)
       hover_request(uri, 0, 24, 3)
     .join('')
     ran := await session(dir, messages)
@@ -758,10 +680,7 @@ open_import_hover_check := ->
       did_open(a, "import b from './b'\nprint b\n")
       hover_request(b, 0, 7, 10)
       did_open(b, b_text)
-      frame(
-        '{"jsonrpc":"2.0","method":"textDocument/didClose",' +
-          "\"params\":{\"textDocument\":{\"uri\":\"#{a}\"}}}"
-      )
+      did_close(a)
       hover_request(a, 1, 6, 11)
     .join('')
     ran := await session(dir, messages)

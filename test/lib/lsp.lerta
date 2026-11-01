@@ -4,7 +4,7 @@ import compare_text from './expect'
 import cli_work_dir, host_platform, run_command from './cli'
 import compiler from './lerta'
 import real_path from 'std:io'
-import decode_json, encode_json from 'std:json'
+import decode_json, encode_json, Jsonable from 'std:json'
 
 real_work_dir := host_platform == 'windows' then cli_work_dir else real_path(cli_work_dir).text()!
 
@@ -31,37 +31,39 @@ export uri_of := (path: String) ->
 
 export frame := (json: String) -> "Content-Length: #{json.binary.length}\r\n\r\n#{json}"
 
+# The message, framed, of the fields.
+framed_json := <T: Jsonable>(fields: T) -> frame(encode_json(fields))
+
 export did_open := (uri: String, text: String) ->
-  frame
-    '{"jsonrpc":"2.0","method":"textDocument/didOpen",' +
-      "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"languageId\":\"lerta\",\"version\":1," +
-      "\"text\":#{encode_json(text)}}}}"
+  params := { textDocument: { uri, languageId: 'lerta', version: 1, text } }
+  framed_json { jsonrpc: '2.0', method: 'textDocument/didOpen', params }
 
 export did_change := (uri: String, text: String) -> did_change_at(uri, text, 2)
 
 export did_change_at := (uri: String, text: String, version: Int) ->
-  frame
-    '{"jsonrpc":"2.0","method":"textDocument/didChange",' +
-      "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\",\"version\":#{version}}," +
-      "\"contentChanges\":[{\"text\":#{encode_json(text)}}]}}"
+  params := { textDocument: { uri, version }, contentChanges: [{ text }] }
+  framed_json { jsonrpc: '2.0', method: 'textDocument/didChange', params }
+
+export did_close := (uri: String) ->
+  framed_json { jsonrpc: '2.0', method: 'textDocument/didClose', params: { textDocument: { uri } } }
+
+export formatting_request := (uri: String, id: Int) ->
+  params := { textDocument: { uri } }
+  framed_json { jsonrpc: '2.0', id, method: 'textDocument/formatting', params }
+
+# A request of the method about the place in the document.
+position_request := (method: String, uri: String, line: Int, character: Int, id: Int) ->
+  params := { textDocument: { uri }, position: { line, character } }
+  framed_json { jsonrpc: '2.0', id, method: "textDocument/#{method}", params }
 
 export completion_request := (uri: String, line: Int, character: Int, id = 1) ->
-  frame
-    "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/completion\"," +
-      "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line}," +
-      "\"character\":#{character}}}}"
+  position_request 'completion', uri, line, character, id
 
 export definition_request := (uri: String, line: Int, character: Int, id: Int) ->
-  frame
-    "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/definition\"," +
-      "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line}," +
-      "\"character\":#{character}}}}"
+  position_request 'definition', uri, line, character, id
 
 export hover_request := (uri: String, line: Int, character: Int, id: Int) ->
-  frame
-    "{\"jsonrpc\":\"2.0\",\"id\":#{id},\"method\":\"textDocument/hover\"," +
-      "\"params\":{\"textDocument\":{\"uri\":\"#{uri}\"},\"position\":{\"line\":#{line}," +
-      "\"character\":#{character}}}}"
+  position_request 'hover', uri, line, character, id
 
 export location_fragment := (id: Int, uri: String, line: Int, start: Int, end: Int) ->
   "\"id\":#{id},\"result\":{\"uri\":\"#{uri}\",\"range\":{\"start\":{\"line\":#{line}," +
