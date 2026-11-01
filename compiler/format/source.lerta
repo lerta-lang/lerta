@@ -14,8 +14,12 @@ export class SourceText
   # The index in `tokens` of the token that starts at each position.
   token_indexes = index_tokens(@tokens)
   comment_lines = lines_of(@comments)
-  # The lines that hold tokens that `# fmt: skip` and `# fmt: off` mark (see lines_marked).
-  marked_lines = lines_marked(@lines, @tokens, @comments)
+  # The comments that end the line of a `(`, a prefix operator or a `not in`, which the formatter
+  # cannot put its operand after (see stranded_comments).
+  stranded = stranded_comments(@lines, @tokens, @comments)
+  # The lines that hold tokens that `# fmt: skip` and `# fmt: off` mark (see lines_marked), and
+  # those of the stranded comments, which are kept as written.
+  marked_lines = lines_marked(@lines, @tokens, @comments, @stranded)
 
   # The text of the token as written.
   spelling = (token: Token) -> @slice(token.line, token.column, token.end_column)
@@ -170,11 +174,12 @@ text_of := (comment: Comment, lines: String[]) ->
 # The lines that hold tokens that the comments mark: the line that `# fmt: skip` ends, or the next
 # that holds a token after `# fmt: skip` on a line of its own, and those from `# fmt: off` up to
 # `# fmt: on`, or to the end of the file.
-lines_marked := (lines: String[], tokens: Token[], comments: Comment[]) ->
+lines_marked := (lines: String[], tokens: Token[], comments: Comment[], stranded: Comment[]) ->
   token_lines: Set<Int>
   for token in tokens
     token_lines.add token.line if token.kind not in LAYOUT_KINDS
   marked: Set<Int>
+  marked.add comment.line for comment in stranded
   mark := (first: Int, last: Int) ->
     for line in first...(last + 1)
       marked.add line if line in token_lines
@@ -196,6 +201,38 @@ lines_marked := (lines: String[], tokens: Token[], comments: Comment[]) ->
         off_line = nil
   mark off + 1, lines.length if off := off_line
   marked
+
+# The comments that end a line whose last token is `not`, `not in`, or a `(` or a `-` that does not
+# follow an operand, as the `(` of a call, written without a space, and an operator between
+# operands do: the formatter flushes a comment before the next token, which would then start a line
+# of its own, where it does not parse as the operand. A `# fmt:` comment is left out, as
+# lines_marked keeps its line anyway.
+stranded_comments := (lines: String[], tokens: Token[], comments: Comment[]) ->
+  # The last token of each line, and the kind of the one before it.
+  last_tokens: Map<Int, Token>
+  kinds_before: Map<Int, TokenKind>
+  var previous: TokenKind?
+  for token in tokens
+    continue if token.kind in LAYOUT_KINDS
+    last_tokens[token.line] = token
+    kinds_before[token.line] = previous ? NEWLINE
+    previous = token.kind
+  is_stranded := (comment: Comment) ->
+    last := last_tokens[comment.line] ? return false
+    before := kinds_before[comment.line]!
+    follows_operand := before in OPERAND_ENDS
+    call := last.kind == '(' and not last.spaced and follows_operand
+    opens := (last.kind == '(' and not call) or (last.kind == '-' and not follows_operand)
+    not_in := before == 'not' and last.kind == IDENTIFIER and last.text == 'in'
+    stranded := opens or last.kind == 'not' or not_in
+    is_directive := text_of(comment, lines).starts_with('# fmt: ')
+    not comment.own_line and stranded and not is_directive
+  [comment for comment in comments when is_stranded(comment)]
+
+# The kinds of the tokens that end an operand, after which a `-` is the operator between two, and a
+# `(` without a space before it opens the arguments of a call.
+OPERAND_ENDS: TokenKind[] =
+  IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, 'true', 'false', 'nil', '@', '!', ')', ']', '}'
 
 is_opening := (kind: TokenKind) -> kind == '(' or kind == '[' or kind == '{'
 is_closing := (kind: TokenKind) -> kind == ')' or kind == ']' or kind == '}'

@@ -2,23 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `lerta fmt` breaks an expression after a comment that ends the line of `(`, `not` or `-`
-
-Severity: Medium.
-
-A comment that ends the line of an opening parenthesis or a prefix operator is flushed before the next token, which forces a line end, so the rest of the expression lands at column 1 of the next line, as a value after `=` did before `follows_comment` (compiler/format/printing.lerta).
-
-```
-a := 1
-x := (  # c
-  a + 2) * 3
-print x
-```
-
-The program compiles and prints 9; `lerta fmt` reports `the formatter would write a program that does not parse, which is a bug`. So do `z := not  # c` and `w := -  # c` with their operand on the next line.
-
-Fix: print the operand of a prefix operator, and the expression in parentheses, on the next line, deeper, when `SourceText.comment_before` its first token holds, as `spaced_value` does.
-
 ## `lerta fmt` prints a comment between `weak` and what it qualifies
 
 Severity: Medium.
