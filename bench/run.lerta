@@ -6,17 +6,15 @@
 # to build/bench/.
 import is_dir, list_dir, make_dir from 'std:io'
 import pow from 'std:math'
-import exit, run from 'std:process'
+import exit from 'std:process'
 import time from 'std:time'
-import Command, is_found from './shared'
+import Command, is_found, OUT, print_row, run_failure from './shared'
 
 # The directories of bench/, one for each benchmark, in order; http/ has a runner of its own.
 BENCHMARKS := [name for name in list_dir('bench') when is_dir("bench/#{name}") and name != 'http']
 # The languages, in the order of the columns, and the extensions of their sources.
 EXTENSIONS := { 'lerta': 'lerta', 'c': 'c', 'swift': 'swift', 'go': 'go', 'node': 'js' }
 RUNS := 3
-OUT := 'build/bench'
-NAME_COLUMN := 12
 COLUMN := 8
 
 fail := (message: String) ->
@@ -32,10 +30,9 @@ c_compiler := await find_c_compiler()
 has_swift := await is_found('swiftc')
 has_go := await is_found('go')
 
-# Runs the command, which must succeed; with `output`, its standard output is appended to it.
+# Runs the command, which must succeed (see run_failure).
 run_checked := (label: String, command: Command, output: Byte[]? = nil) ->
-  code := (await run(command.program, command.args..., stdout: output)).code
-  fail "#{label} failed with exit code #{code}" if code != 0
+  fail failure if failure := await run_failure(label, command, output)
 
 # The command that runs the benchmark in the language, built first if it is compiled; nil where the
 # language's compiler is missing.
@@ -57,46 +54,44 @@ build := (name: String, language: String) ->
 
 # The best time of the runs, in seconds, and what each printed, which must be the same.
 measure := (label: String, command: Command) ->
-  var best = 0.0
+  times: Float[]
   var printed = ''
   for i in 0...RUNS
     bytes: Byte[]
     start := time()
     await run_checked(label, command, bytes)
-    seconds := time() - start
+    times.push time() - start
     output := bytes.to_binary().text() ? fail("#{label} printed what is not UTF-8")
     fail "#{label} printed differently in two runs" if i > 0 and output != printed
-    best = seconds if i == 0 or seconds < best
     printed = output
-  (best, printed)
+  (times.min()!, printed)
 
 make_dir OUT
 no_swift := has_swift then '' else '; no swiftc, so no Swift'
 no_go := has_go then '' else '; no go, so no Go'
 print "C: #{c_compiler}#{no_swift}#{no_go}"
-headings := [language.pad_start(COLUMN) for language in EXTENSIONS.keys()]
-print ['benchmark'.pad_end(NAME_COLUMN), headings...].join(' ')
+print_row 'benchmark', EXTENSIONS.keys().to_array(), COLUMN
 # The times of each language, one for each benchmark; none for a language whose compiler is missing.
 times: Map<String, Float[]>
 for name in BENCHMARKS
-  var expected = ''
-  var expected_language = ''
-  cells := [name.pad_end(NAME_COLUMN)]
+  # What the first language that ran printed, which every other must print.
+  var expected: { language: String, output: String }?
+  cells: String[]
   for language in EXTENSIONS.keys()
     command := await build(name, language)
     if command == nil
-      cells.push '-'.pad_start(COLUMN)
+      cells.push '-'
       continue
     label := "#{name} in #{language}"
     (seconds, output) := await measure(label, command)
-    if expected_language.is_empty()
-      expected = output
-      expected_language = language
-    else if output != expected
-      fail "#{label} printed:\n#{output}#{expected_language} printed:\n#{expected}"
+    if first := expected
+      if output != first.output
+        fail "#{label} printed:\n#{output}#{first.language} printed:\n#{first.output}"
+    else
+      expected = { language, output }
     times[language, default: []].push(seconds)
-    cells.push seconds.to_fixed(2).pad_start(COLUMN)
-  print cells.join(' ')
+    cells.push seconds.to_fixed(2)
+  print_row name, cells, COLUMN
 
 geometric_mean := (xs: Float[]) ->
   product := xs.fold(1.0, (product, x) -> product * x)
@@ -104,7 +99,6 @@ geometric_mean := (xs: Float[]) ->
 
 mean_cell := (language: String) ->
   xs := times[language]
-  (xs == nil then '-' else geometric_mean(xs).to_fixed(2)).pad_start(COLUMN)
+  xs == nil then '-' else geometric_mean(xs).to_fixed(2)
 
-means := [mean_cell(language) for language in EXTENSIONS.keys()]
-print ['geomean'.pad_end(NAME_COLUMN), means...].join(' ')
+print_row 'geomean', [mean_cell(language) for language in EXTENSIONS.keys()], COLUMN

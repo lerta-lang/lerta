@@ -1,4 +1,4 @@
-# A command to run, and whether a program is found, for bench/run.lerta and bench/http/run.lerta.
+# What bench/run.lerta and bench/http/run.lerta share: commands to run, and the table they print.
 import run from 'std:process'
 
 export struct Command
@@ -7,3 +7,17 @@ export struct Command
 
 export is_found := (command: String) ->
   (await run('sh', '-c', "command -v #{command} >/dev/null")).code == 0
+
+# Runs the command; with `output`, its standard output is appended to it. Gives why it failed, or
+# nil if it succeeded.
+export run_failure := (label: String, command: Command, output: Byte[]? = nil) ->
+  code := (await run(command.program, command.args..., stdout: output)).code
+  code != 0 then "#{label} failed with exit code #{code}"
+
+# Where the programs are built.
+export OUT := 'build/bench'
+NAME_COLUMN := 12
+
+# A row of the table: its name, then the cells, each right-aligned in `column` characters.
+export print_row := (name: String, cells: String[], column: Int) ->
+  print [name.pad_end(NAME_COLUMN), (cell.pad_start(column) for cell in cells)...].join(' ')

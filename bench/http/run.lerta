@@ -8,7 +8,7 @@
 import all from 'std:async'
 import make_dir, Pipe from 'std:io'
 import cpu_count, Exit, run from 'std:process'
-import Command, is_found from '../shared'
+import Command, is_found, OUT, print_row, run_failure from '../shared'
 
 PATHS := ['hello', 'json', 'echo']
 LANGUAGES := ['lerta', 'go', 'node']
@@ -17,8 +17,6 @@ SECONDS := 3.0
 # Every processor but the server's loads it; at least one.
 PROCESSES := cpu_count > 1 then cpu_count - 1 else 1
 CONNECTIONS := 16
-OUT := 'build/bench'
-NAME_COLUMN := 12
 COLUMN := 10
 
 # Thrown, rather than an exit, so that the server running is stopped first.
@@ -27,8 +25,7 @@ fail := (message: String) -> throw IOError(message)
 has_go := await is_found('go')
 
 run_checked := (label: String, command: Command, output: Byte[]? = nil) ->
-  code := (await run(command.program, command.args..., stdout: output)).code
-  fail "#{label} failed with exit code #{code}" if code != 0
+  fail failure if failure := await run_failure(label, command, output)
 
 # The command that runs the server in the language, built first if it is compiled; nil where the
 # language's compiler is missing.
@@ -91,15 +88,14 @@ build_load := ['build', 'bench/http/load.lerta', '-O', '-o', LOAD]
 await run_checked('building load.lerta', { program: 'bin/lerta', args: build_load })
 print "#{PROCESSES} load programs of #{CONNECTIONS} connections each, #{SECONDS} seconds"
 print 'requests per second'
-headings := [language.pad_start(COLUMN) for language in LANGUAGES]
-print ['path'.pad_end(NAME_COLUMN), headings...].join(' ')
+print_row 'path', LANGUAGES, COLUMN
 servers := [await build(language) for language in LANGUAGES]
 for path in PATHS
-  cells := [path.pad_end(NAME_COLUMN)]
+  cells: String[]
   for (language, server) in LANGUAGES.zip(servers)
     if server == nil
-      cells.push '-'.pad_start(COLUMN)
+      cells.push '-'
       continue
     rate := await best_rate("#{path} in #{language}", server, path)
-    cells.push rate.to_fixed(0).pad_start(COLUMN)
-  print cells.join(' ')
+    cells.push rate.to_fixed(0)
+  print_row path, cells, COLUMN
