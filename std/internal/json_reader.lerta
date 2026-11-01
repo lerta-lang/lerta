@@ -43,8 +43,8 @@ export class JsonReader
     for byte in number.binary
       out_of_range() if not byte.is_digit()
       digit := (byte - '0').to_uint64()
-      out_of_range() if value > (MAX_UINT64 - digit) / TEN
-      value = value * TEN + digit
+      out_of_range() if value > (MAX_UINT64 - digit) / 10
+      value = value * 10 + digit
     @at += number.binary.length
     value
 
@@ -113,8 +113,7 @@ export class JsonReader
     @skip_space()
     @fail_expected "':'" if @peek() != ':'
     @at += 1
-    @fail "the key #{quoted(key)} twice" if @seen_keys.last()!.contains(key)
-    @seen_keys.last()!.add(key)
+    @fail "the key #{quoted(key)} twice" if not @seen_keys.last()!.add(key)
     key
 
   # The value where the reader is, of whatever kind, as that of a key that is no field.
@@ -234,23 +233,23 @@ export class JsonReader
     var end = @at
     digits := ->
       start := end
-      end += 1 while end < bytes.length and bytes[end].is_digit()
+      end += 1 while bytes.get(end)?.is_digit()
       end > start
-    end += 1 if end < bytes.length and bytes[end] == '-'
-    if end < bytes.length and bytes[end] == '0'
+    end += 1 if bytes.get(end) == '-'
+    if bytes.get(end) == '0'
       end += 1
     else if not digits()
       return nil
-    if end < bytes.length and bytes[end] == '.'
+    if bytes.get(end) == '.'
       end += 1
       return nil if not digits()
-    if end < bytes.length and (bytes[end] == 'e' or bytes[end] == 'E')
+    if bytes.get(end) == 'e' or bytes.get(end) == 'E'
       end += 1
-      end += 1 if end < bytes.length and (bytes[end] == '+' or bytes[end] == '-')
+      end += 1 if bytes.get(end) == '+' or bytes.get(end) == '-'
       return nil if not digits()
     bytes.text(@at, end)!
 
-  skip_space = -> @at += 1 while @at < @bytes.length and @bytes[@at].is_space()
+  skip_space = -> @at += 1 while @peek()?.is_space()
 
   peek = -> @bytes.get(@at)
 
@@ -302,7 +301,6 @@ byte_text := (byte: Byte) ->
 
 ZERO: UInt64 = 0
 ONE: UInt64 = 1
-TEN: UInt64 = 10
 MAX_UINT64 := ZERO.wrapping_sub(ONE)
 
 # The Float32 nearest to the number, or nil where it is beyond the finite ones, as JSON holds no

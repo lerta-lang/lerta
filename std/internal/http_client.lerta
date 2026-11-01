@@ -3,6 +3,7 @@
 
 import Reader from 'std:io'
 import connect_tcp, Socket from 'std:net'
+import scan from 'std:scanner'
 import time from 'std:time'
 import CHUNK_SIZE, chunk_bytes, ChunkedBody, LAST_CHUNK, MAX_LINE, well_formed from './http_chunks'
 import Body, check_field, Headers, is_token, keeps_alive, Response from './http_message'
@@ -196,11 +197,9 @@ parse_url := (url: String) ->
   lower_scheme := scheme.to_lower()
   throw IOError("https is not supported so far: #{url}") if lower_scheme == 'https'
   throw not_url() if lower_scheme != 'http'
-  var authority = ''
-  for c in rest
-    break if '/?#'.contains(c.to_string())
-    authority += c
-  (path, _fragment) := split_or_whole(rest.without_prefix(authority)!, '#')
+  scanner := scan(rest)
+  authority := scanner.take_while((c) -> c not in '/?#')
+  (path, _fragment) := split_or_whole(scanner.rest(), '#')
   throw not_url() if '@' in authority
   (host, port) := host_and_port(authority) ? throw not_url()
   Target authority, host, port, path: path.starts_with('/') then path else "/#{path}"
@@ -331,15 +330,14 @@ class BodyChunks
   finish: () -> void
   # The bytes left of a body that is not chunked; nil for one that ends with the connection.
   left: Int?
-  chunks: ChunkedBody?
+  const chunks: ChunkedBody?
   ended = false
 
   next = ->
     return nil if @ended
     chunk :=
       try
-        chunks := @chunks
-        await (chunks != nil then chunks.next() else @next_sized())
+        await (@chunks then @chunks.next() else @next_sized())
       # A cancelled read leaves the reader where it was, for the next read to go on from.
       catch error: IOError
         @socket.close()
@@ -389,7 +387,7 @@ has_scheme := (location: String) ->
   (scheme, _rest) := location.split_once(':') ? return false
   not scheme.is_empty() and scheme.all(is_scheme_char)
 
-is_scheme_char := (c: Char) -> c.is_letter() or c.is_digit() or '+-.'.contains(c.to_string())
+is_scheme_char := (c: Char) -> c.is_letter() or c.is_digit() or c in '+-.'
 
 REDIRECTS := [301, 302, 303, 307, 308]
 
