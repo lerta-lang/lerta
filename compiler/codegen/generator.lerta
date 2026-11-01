@@ -72,7 +72,8 @@ export struct SlotLocal
 export type CodegenLocal = ValueLocal | SlotLocal
 
 # Nested scopes of locals, innermost last. A name that refers to no local of a scope is found by
-# its reference (see local_of of references).
+# its reference (see local_of of references). The scopes are read only through its methods, by
+# convention, as Lerta has no private fields.
 export class Locals
   scopes: Map<String, CodegenLocal>[] = []
 
@@ -99,6 +100,7 @@ export class Locals
   # The scopes from `depth` inward, innermost first.
   inner_scopes = (depth: Int) -> @scopes_from(depth).reversed()
 
+  # The scopes from `depth` inward, in order.
   scopes_from = (depth: Int) -> @scopes.slice(depth)
 
   # The scopes from `from` up to `to`, in order.
@@ -117,6 +119,9 @@ export class Locals
     for scope in scopes
       held := @push()
       held["(#{prefix} #{name})"] = local for (name, local) in scope.entries()
+
+  # As hold_all, for every scope of the other locals.
+  hold_all_of = (other: Locals, prefix: String) -> @hold_all(other.scopes, prefix)
 
 # An owned value that an expression holds, by how it holds references.
 export struct Temporary
