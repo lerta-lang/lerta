@@ -10,7 +10,7 @@ import parse_block_literal, starts_block from './block_literal'
 import integer_literal, parse_primary from './primary'
 import parse_element, spread_of from './compound'
 import parse_if from './statement'
-import is_one_of, TokenStream from './token_stream'
+import TokenStream from './token_stream'
 import
   parse_cast_type, parse_type_arguments, parse_union_member, starts_type_arguments
 from './type'
@@ -153,7 +153,7 @@ parse_left_associative := (
 ) ->
   nesting := tokens.nesting
   var left = parse_operand()
-  while is_one_of(tokens.peek_continuation(), operators)
+  while tokens.peek_continuation() in operators
     tokens.deepen()
     operator := tokens.next().kind.to_string()
     left = BinaryOperation(operator, left, right: parse_operand(), position: left.position)
@@ -259,13 +259,13 @@ parse_range := (tokens: TokenStream): Expression ->
 # array's item takes it (see parse_array_literal); where nothing does, it is rejected as found
 # (see TokenStream.fail_expecting).
 export at_spread := (tokens: TokenStream) ->
-  tokens.peek().kind == '...' and is_one_of(tokens.peek_at(1).kind, SPREAD_FOLLOWERS)
+  tokens.peek().kind == '...' and tokens.peek_at(1).kind in SPREAD_FOLLOWERS
 
 export SPREAD_FOLLOWERS: TokenKind[] = [',', ']', ')', '}', 'for', NEWLINE, INDENT, DEDENT, EOF]
 
 # Not at `<<=` or `>>=`, which starts an assignment.
 at_comparison := (tokens: TokenStream) ->
-  is_one_of(tokens.peek_continuation(), COMPARISON_OPERATORS) and shift_ahead(tokens, '=') == nil
+  tokens.peek_continuation() in COMPARISON_OPERATORS and shift_ahead(tokens, '=') == nil
 
 parse_arithmetic := (tokens: TokenStream, level: Int): Expression ->
   return parse_unary(tokens) if level == ARITHMETIC_PRECEDENCE.length
@@ -286,7 +286,7 @@ parse_arithmetic := (tokens: TokenStream, level: Int): Expression ->
 export operator_at := (tokens: TokenStream, kinds: TokenKind[], shift_rest: String?) ->
   if rest := shift_rest
     return shift if shift := shift_at(tokens, rest)
-  return nil if not is_one_of(tokens.peek_continuation(), kinds)
+  return nil if tokens.peek_continuation() not in kinds
   tokens.next().kind.to_string()
 
 # `<<` or `>>`, consumed, and then `rest`, as `=` of `<<=`: two tokens with no space between them,
@@ -369,7 +369,7 @@ extend_by_postfix := (tokens: TokenStream, expression: Expression): Expression? 
     tokens.next()
     return call_of(expression, parse_parenthesized_arguments(tokens), type_args)
   token := tokens.peek()
-  return nil if token.spaced or not is_one_of(token.kind, POSTFIX_OPERATORS)
+  return nil if token.spaced or token.kind not in POSTFIX_OPERATORS
   tokens.next()
   position := expression.position
   case token.kind
