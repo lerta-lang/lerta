@@ -26,20 +26,21 @@ export check_arguments := (
   gathers := not call.named_args.is_empty() or leaves_out_struct
   gathered := gathers then gathered_argument(body, call, params.last())
   passed := gathered then [args..., gathered] else args
-  check_argument_count body, call, passed.length, params.length, declaration
+  check_argument_count body, call, declaration, given: passed.length, params: params.length
   expect_type body, arg, params[i] for arg, i in args
   check_gathered body, gathered, params.last()! if gathered
   body.facts.arguments[call] = passed if packed or gathered
   callee_type.result
 
 export check_argument_count := (
-  body: Body, call: Call, count: Int, param_count: Int, declaration: FunctionLiteral?
+  body: Body, call: Call, declaration: FunctionLiteral?, counts: { given: Int, params: Int }
 ) ->
-  required := declaration then required_params(declaration) else param_count
-  return if count >= required and count <= param_count
-  range := required == param_count then '' else "#{required} to "
-  expected := "#{range}#{param_count}"
-  fail body.program, call.position, "expected #{expected} argument(s), got #{count}"
+  { given, params } := counts
+  required := declaration then required_params(declaration) else params
+  return if given >= required and given <= params
+  range := required == params then '' else "#{required} to "
+  expected := "#{range}#{params}"
+  fail body.program, call.position, "expected #{expected} argument(s), got #{given}"
 
 # The arguments with those from the place of the declaration's variadic parameter on packed into
 # one, an array literal of them, `f(a, [b, c])` of `f(a, b, c)` for `f = (x: Int, rest: Int...)`, as
