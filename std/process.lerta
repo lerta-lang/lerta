@@ -59,33 +59,28 @@ export run := (command: String, args: String..., options: RunOptions) ->
   throw IOError("cannot run: #{command}") if texts.any(holds_nul)
   changes_env := not env.is_empty() or not unset_env.is_empty()
   program_env := changes_env then env_with(env, unset_env)
-  input_file := file_of(options.stdin, true)
-  output_file := file_of(options.stdout, false)
-  error_file := file_of(options.stderr, false)
-  stdin := not input_file then source_of(options.stdin)
-  stdout := not output_file then sink_of(options.stdout)
-  stderr := not error_file then sink_of(options.stderr)
-  input := stdin != nil then pipe_of('standard input', command)
-  output := stdout != nil then pipe_of('standard output', command)
-  errors := stderr != nil then pipe_of('standard error', command)
+  input := input_of(options.stdin, command)
+  output := output_of(options.stdout, 'standard output', command)
+  errors := output_of(options.stderr, 'standard error', command)
   streams :=
-    stream_of(input, input_file)
-    stream_of(output, output_file)
-    stream_of(errors, error_file)
+    stream_of(input.pipe, input.file)
+    stream_of(output.pipe, output.file)
+    stream_of(errors.pipe, errors.file)
   program := Program(lerta_program_start(command, args, cwd, program_env, streams, kill_after))
   give options.stdin, true
   give options.stdout, false
   give options.stderr, false
   copies := Copies(command)
-  feeding := input then feed(input, stdin!, program, copies)
-  outputting := output then copy_output(output, stdout!, output_limit, program, copies)
-  erroring := errors then copy_output(errors, stderr!, output_limit, program, copies)
+  feeding := input.pipe then feed(input.pipe, input.source!, program, copies)
+  outputting :=
+    output.pipe then copy_output(output.pipe, output.sink!, output_limit, program, copies)
+  erroring := errors.pipe then copy_output(errors.pipe, errors.sink!, output_limit, program, copies)
   status :=
     try
       await lerta_program_wait(program.pointer)
     catch error: CancelledError
       await give_up(copies, feeding, outputting, erroring)
-      end_writers stdout, stderr, copies
+      end_writers output.sink, errors.sink, copies
       throw error
   # What the program did not read is not wanted any more.
   await give_up(copies, feeding, nil, nil)
@@ -96,10 +91,10 @@ export run := (command: String, args: String..., options: RunOptions) ->
   output_bytes := outputting and not copies.stopped then await outputting
   error_bytes := erroring and not copies.stopped then await erroring
   await give_up(copies, nil, outputting, erroring) if copies.stopped
-  end_writers stdout, stderr, copies
+  end_writers output.sink, errors.sink, copies
   throw error if error := copies.error
-  append_to stdout, output_bytes
-  append_to stderr, error_bytes
+  append_to output.sink, output_bytes
+  append_to errors.sink, error_bytes
   status >= 0 then Exit(code: status) else Exit(code: 128 - status, signal: -status)
 
 # A program that runs, which runs on, if it has not ended, once nothing holds it.
@@ -135,10 +130,20 @@ file_of := (stream: Binary | Reader | Byte[] | Writer | Pipe?, reading: Bool) ->
 give := (stream: Binary | Reader | Byte[] | Writer | Pipe?, reading: Bool) ->
   stream.writer.give reading if stream is Pipe
 
-source_of := (stdin: Binary | Reader | Pipe?) -> stdin is Pipe then stdin.reader else stdin
+# How the program takes its input: the `file` of a system pipe's end, or else a `pipe` that this
+# program writes its `source` to, or neither, for this program's own input, which it shares.
+input_of := (stdin: Binary | Reader | Pipe?, command: String) ->
+  file := file_of(stdin, true)
+  source := not file then (stdin is Pipe then stdin.reader else stdin)
+  { file, source, pipe: source != nil then pipe_of('standard input', command) }
 
-sink_of := (output: Byte[] | Writer | Pipe?): Byte[] | Writer? ->
-  output is Pipe then output.writer else output
+# As input_of, for an output: the `file` of a system pipe's end, or else a `pipe` that this program
+# reads into its `sink`, or neither, for this program's own output, which it shares.
+output_of := (output: Byte[] | Writer | Pipe?, stream: String, command: String) ->
+  file := file_of(output, false)
+  # Of the type written, so that a Pipe's writer counts as a Writer.
+  sink: Byte[] | Writer? = not file then (output is Pipe then output.writer else output)
+  { file, sink, pipe: sink != nil then pipe_of(stream, command) }
 
 # As lerta_program_start takes them: a file as -1 minus it, a pipe by its handle, or 0 for the
 # program's own stream, which the program shares.
