@@ -20,7 +20,7 @@ import emit_branch from './ir_builder'
 import emit_field_pointer, emit_member_dispatch, field_named from './heap_object'
 import emit_release, emit_release_value, ir_type, ownership from './lerta_ir'
 import emit_find, emit_held_at, emit_map_set, emit_place, emit_set_at from './map'
-import appended, apply_numeric, is_float_leaf from './operator'
+import apply_numeric, is_float_leaf from './operator'
 import emit_extend from './string'
 import is_float, is_one_of_kinds, MapType, ObjectType, Type, UnionType from '../types'
 
@@ -109,7 +109,7 @@ generate_index_assignment := (g: Generator, assignment: Assignment, target: Inde
   depth := g.temporaries.length
   push_temporary g, array, object_type if is_owned
   index := generate(g, target.index)
-  operand := appended(g, assignment.value)
+  operand := assignment.value
   value := generate(g, operand)
   push_temporary g, value, type_at_use(g, operand)
   old := assignment.operator == '=' then '' else emit_get(ir, array, index, element)
@@ -159,9 +159,8 @@ update_with_default := (
 ) ->
   ir := g.ir
   by_method := g.facts.operator_calls[assignment]
-  operand := by_method then assignment.value else appended(g, assignment.value)
-  value := generate(g, operand)
-  value_type := type_at_use(g, operand)
+  value := generate(g, assignment.value)
+  value_type := type_at_use(g, assignment.value)
   place := emit_find(ir, map, key, type)
   found := ir.assign("icmp ne ptr #{place}, null")
   missing := ir.assign("xor i1 #{found}, true")
@@ -210,7 +209,7 @@ assign_through := (
 ) ->
   ir := g.ir
   load := -> ir.assign("load #{ir_type(type)}, ptr #{pointer}#{tag}")
-  operand := appended(g, assignment.value)
+  operand := assignment.value
   is_plain := assignment.operator == '='
   # `x += e` of a Float or a Float32, where e is a tree (see float_tree) or a leaf, is a tree whose
   # root is the combining operation, as the old value, loaded after e, is a leaf too.

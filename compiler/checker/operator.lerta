@@ -188,7 +188,7 @@ type_of_operands := (
   reject_operand body, operator, first, type, reject if not is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
   second_type := type_of(body, second, type)
-  is_unit := not right_first and operator == '+' and appends_unit(body, second, type, second_type)
+  is_unit := not right_first and operator == '+' and appends_unit(type, second_type)
   return type if is_unit
   reject_text_and_bytes body, second, type, second_type
   require_type body, second, second_type, type
@@ -205,7 +205,6 @@ type_of_operation_call := (
   # the String it appends to.
   if right_first and operator == '+' and is_kind(type, 'Char') and second is StringLiteral
     expect_type body, second, string_type
-    appends_unit body, first, string_type, type
     return string_type
   return nil if not is_numeric_operator(operator) or is_one_of_kinds(type, allowed_kinds)
   # The method is that of the left operand.
@@ -242,15 +241,10 @@ order_by_compare := (body: Body, binary: BinaryOperation) ->
   body.facts.order_calls[binary] = call
   type_of body, call
 
-# `+` appends a Char to a String, as the text of the call of its `to_string()`, which the facts
-# record for codegen to generate in its place (see appended_texts), and a Byte to a Binary.
-export appends_unit := (body: Body, value: Expression, target: Type, value_type: Type) ->
-  if is_kind(target, 'String') and is_kind(value_type, 'Char')
-    call := method_call(value, 'to_string', [], value.position)
-    body.facts.appended_texts[value] = call
-    type_of body, call
-    return true
-  is_kind(target, 'Binary') and is_kind(value_type, 'Byte')
+# `+` appends a Char to a String, as its UTF-8, and a Byte to a Binary.
+export appends_unit := (target: Type, value_type: Type) ->
+  appends_char := is_kind(target, 'String') and is_kind(value_type, 'Char')
+  appends_char or (is_kind(target, 'Binary') and is_kind(value_type, 'Byte'))
 
 # `+` joins two Strings or two Binarys, but not one of each, whose bytes `.binary` gives.
 export reject_text_and_bytes := (body: Body, operand: Expression, first: Type, second: Type) ->

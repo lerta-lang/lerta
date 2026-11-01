@@ -51,12 +51,6 @@ export apply_operator_method := (
     return emit_concat(g.ir, [object, args[0]])
   apply_numeric g, operator_of_method(name)!, object, args[0], type
 
-# What `+` appends: the operand, or the call of `to_string()` that gives the text of a Char that the
-# checker made (see appends_unit).
-export appended := (g: Generator, operand: Expression) ->
-  return call if call := g.facts.appended_texts[operand]
-  operand
-
 # An operator that applies through a method is the call of it that the checker made (see
 # type_of_operator_call).
 export generate_binary := (g: Generator, binary: BinaryOperation) ->
@@ -76,15 +70,14 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   g.reads_unchecked_floats = false if is_root
   left := generate(g, binary.left)
   operand_type := type_at_use(g, binary.left)
-  right_operand := appended(g, binary.right)
-  right := holding(g, left, operand_type, -> generate(g, right_operand))
+  right := holding(g, left, operand_type, -> generate(g, binary.right))
   g.defers_float_checks = false if is_root
   # A NaN that a local not checked yet holds reaches the root, which checks it there once, rather
   # than each such local where it is read, even where the root gives no NaN of its own.
   reads_unchecked := is_root and g.reads_unchecked_floats
   g.reads_unchecked_floats = reads_before if is_root
   if is_bytes(operand_type) and operator == '+'
-    return emit_extend(g.ir, left, right, type_at_use(g, right_operand))
+    return emit_extend(g.ir, left, right, type_at_use(g, binary.right))
   # An operation that would check its result, a tree's root or one of no tree, checks none where it
   # gives no NaN, as its ranges tell (see float_ranges): a root with its operands, which check none,
   # and one of no tree alone, as its operands check theirs.

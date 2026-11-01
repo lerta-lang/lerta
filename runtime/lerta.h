@@ -192,6 +192,7 @@ LertaString *lerta_string_concat_taken(int64_t count, ...);
 // appended in place when nothing else holds `s`, so that a loop of `+=` is O(n).
 LertaString *lerta_string_extend(LertaString *s, const LertaString *part);
 LertaString *lerta_binary_push(LertaString *binary, uint8_t byte);
+LertaString *lerta_string_push(LertaString *s, uint32_t c);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
 uint64_t lerta_string_hash(const LertaString *s);
 // The place of `text` among an enum's `count` member texts, or -1 if none has it (`E.parse`).

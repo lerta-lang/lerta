@@ -144,6 +144,26 @@ LertaString *lerta_binary_push(LertaString *binary, uint8_t byte) {
   return result;
 }
 
+// `s`, taken, with the UTF-8 of `c`, a scalar value beyond ASCII, appended. Kept out of
+// lerta_string_push, so that an ASCII character's push is short enough for LLVM to inline.
+__attribute__((noinline)) static LertaString *pushed_beyond_ascii(LertaString *s, uint32_t c) {
+  int64_t length = c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+  LertaString *result = extended(s, length);
+  uint8_t *bytes = result->bytes + result->length - length;
+  static const uint8_t leads[] = {0, 0, 0xC0, 0xE0, 0xF0};
+  for (int64_t i = length - 1; i > 0; i--) {
+    bytes[i] = (uint8_t)(0x80 | (c & 0x3F));
+    c >>= 6;
+  }
+  bytes[0] = (uint8_t)(leads[length] | c);
+  return result;
+}
+
+LertaString *lerta_string_push(LertaString *s, uint32_t c) {
+  if (c < 0x80) return lerta_binary_push(s, (uint8_t)c);
+  return pushed_beyond_ascii(s, c);
+}
+
 // FNV-1a over the bytes.
 uint64_t lerta_string_hash(const LertaString *s) {
   uint64_t hash = 0xCBF29CE484222325u;

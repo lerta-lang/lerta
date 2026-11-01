@@ -14,12 +14,15 @@ export emit_concat := (ir: IrBuilder, parts: String[]) ->
   call := "call ptr (i64, ...) @lerta_string_concat_taken(i64 #{parts.length}, #{args})"
   ir.assign call
 
-# `left + right` of a String or a Binary, both owned and released, `right` being one of the same
-# type or a Byte: the runtime appends in place when nothing else holds `left`.
+# `left + right` of a String or a Binary, owned and released, `right` being one of the same type,
+# owned and released too, a Byte or a Char: the runtime appends in place when nothing else holds
+# `left`.
 export emit_extend := (ir: IrBuilder, left: String, right: String, right_type: Type) ->
   if is_kind(right_type, 'Byte')
     push := 'ptr @lerta_binary_push(ptr, i8 zeroext)'
     return call_runtime(ir, push, "ptr #{left}, i8 zeroext #{right}")
+  if is_kind(right_type, 'Char')
+    return call_runtime(ir, 'ptr @lerta_string_push(ptr, i32)', "ptr #{left}, i32 #{right}")
   result := call_runtime(ir, 'ptr @lerta_string_extend(ptr, ptr)', "ptr #{left}, ptr #{right}")
   emit_release ir, right
   result
