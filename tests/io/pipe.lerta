@@ -96,6 +96,15 @@ _shared_x := shared.writer.write('x')
 _shared_y := shared.writer.write('y')
 print "#{(await one_read)!.text()!}#{(await other_read)!.text()!}"
 
+# A read that waits may be cancelled, and the one waiting with it is still woken.
+left_waiting := Pipe()
+cancelled_read := left_waiting.reader.read_chunk()
+still_waiting := left_waiting.reader.read_chunk()
+await sleep(0.05)
+cancelled_read.cancel()
+_left_write := left_waiting.writer.write('still woken')
+print (await still_waiting)!.text()!
+
 # The chunks written before the end are read before it, and their writes resolved then.
 ended := Pipe()
 before_end := ended.writer.write("a line\nsplit ")

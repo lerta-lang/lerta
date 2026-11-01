@@ -198,9 +198,9 @@ class PipeWriter
   # What the reader throws in place of its end.
   failure: Error? = nil
   read_no_more = false
-  # The takes that wait while nothing is queued, each on its own, so that a cancel of one leaves
-  # the others waiting.
-  arrivals: Signal[] = []
+  # The takes that wait while nothing is queued. Every one looks again once something comes, as it
+  # may find the queue empty again once another has taken.
+  arrivals = Waiters()
 
   # An empty chunk is not queued, as the reader would take it for the end.
   write = (data: String | Binary) ->
@@ -212,7 +212,7 @@ class PipeWriter
     return if bytes.is_empty()
     chunk := PipeChunk(bytes)
     @queued.push chunk
-    @wake()
+    @arrivals.wake_all()
     try
       await chunk.taken.promise()
       return
@@ -227,7 +227,7 @@ class PipeWriter
     @ended = true
     return system.end() if system := @system
     @used = true
-    @wake()
+    @arrivals.wake_all()
 
   fail = (error: Error) ->
     return if @ended or not @writes_here()
@@ -245,7 +245,7 @@ class PipeWriter
     chunks := @queued
     @queued = []
     chunk.taken.reject closed_pipe() for chunk in chunks
-    @wake()
+    @arrivals.wake_all()
 
   take = ->
     if system := @system
@@ -259,24 +259,12 @@ class PipeWriter
       if @ended
         throw failure if failure := @failure
         return nil
-      arrival := Signal()
-      @arrivals.push arrival
-      try
-        await arrival.promise()
-      catch error: CancelledError
-        @arrivals = [each for each in @arrivals when each != arrival]
-        throw error
+      await @arrivals.wait()
     first := @queued[0]
     @queued = @queued.slice(1)
     first.was_taken = true
     first.taken.resolve()
     first.bytes
-
-  # Every take that waits looks again, as it may find the queue empty again once another has taken.
-  wake = ->
-    arrivals := @arrivals
-    @arrivals = []
-    arrival.resolve() for arrival in arrivals
 
   # The file of an end for a program to take, which makes the Pipe a system pipe if nothing has
   # used it yet; nil once this program uses the Pipe, or that end, or has given it.
@@ -320,7 +308,7 @@ class SystemPipe
   ending = false
   # The read under way, as the handle takes one at a time, and the reads that wait for it.
   reading = false
-  turns: Signal[] = []
+  turns = Waiters()
 
   deinit = ->
     for file in @files
@@ -348,14 +336,7 @@ class SystemPipe
       @close WRITING if @ending and @writes == 0
 
   read = ->
-    while @reading
-      turn := Signal()
-      @turns.push turn
-      try
-        await turn.promise()
-      catch error: CancelledError
-        @turns = [each for each in @turns when each != turn]
-        throw error
+    await @turns.wait() while @reading
     handle := @handle(READING) ? return nil
     @reading = true
     try
@@ -367,9 +348,7 @@ class SystemPipe
       throw error
     finally
       @reading = false
-      turns := @turns
-      @turns = []
-      turn.resolve() for turn in turns
+      @turns.wake_all()
 
   # The end that writes is closed once the writes under way have finished.
   end = ->
@@ -394,6 +373,25 @@ system_pipe_files := ->
   files: Int[]
   lerta_system_pipe files
   files
+
+# Those that wait until the next `wake_all`, each on its own, so that a cancel of one leaves the
+# others waiting.
+class Waiters
+  signals: Signal[] = []
+
+  wait = ->
+    signal := Signal()
+    @signals.push signal
+    try
+      await signal.promise()
+    catch error: CancelledError
+      @signals = [each for each in @signals when each != signal]
+      throw error
+
+  wake_all = ->
+    signals := @signals
+    @signals = []
+    signal.resolve() for signal in signals
 
 class PipeChunk
   bytes: Binary

@@ -109,18 +109,20 @@ rest := await turns.reader.read_all()
 await turns_run
 print taken_turns.map((chunk) -> chunk.length).sum() + rest.length
 
-# A read that waits its turn may be cancelled, and the reads under way and waiting when the reader
-# is closed read nil.
+# A read that waits its turn may be cancelled, and the one waiting after it still takes its turn;
+# the reads under way and waiting when the reader is closed read nil.
 closing := Pipe()
 closing_run := run('repeat', '1', 'kept', stdout: closing)
 under_way := closing.reader.read_chunk()
 cancelled_turn := closing.reader.read_chunk()
+next_turn := closing.reader.read_chunk()
 cancelled_turn.cancel()
 try
   await cancelled_turn
 catch error: CancelledError
   print 'turn cancelled'
 print (await under_way)!.text()!.trim()
+print await next_turn == nil
 await closing_run
 silent := Pipe()
 silent_run := run('print_after', '0.5', 'too late', stdout: silent)
