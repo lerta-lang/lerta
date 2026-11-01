@@ -269,14 +269,23 @@ export emit_seldom_branch := (
   ir.emit "br i1 #{condition}, label %#{seldom}, label %#{otherwise}, #{weights}"
 
 # Emits `body` to run only where the condition holds.
-export emit_when := (ir: IrBuilder, condition: String, body: () -> void) ->
+export emit_when := (ir: IrBuilder, condition: String, body: () -> void): void ->
+  run := ->
+    body()
+    ''
+  emit_when_valued ir, condition, run
+
+# As emit_when, with the value that `body` gives and the block where it ends, which a phi takes.
+emit_when_valued := (ir: IrBuilder, condition: String, body: () -> String) ->
   then_label := ir.fresh_label('branch.then')
   end_label := ir.fresh_label('branch.end')
   ir.branch_if condition, then_label, end_label
   ir.start_block then_label
-  body()
+  value := body()
+  value_block := ir.current_block
   ir.branch end_label
   ir.start_block end_label
+  (value, value_block)
 
 # Emits `then_body` to run where the condition holds, and `else_body` elsewhere.
 export emit_if_else := (
@@ -300,14 +309,7 @@ export emit_branch := (
   ir: IrBuilder, type: String, condition: String, then_value: () -> String, otherwise: String
 ) ->
   from := ir.current_block
-  then_label := ir.fresh_label('branch.then')
-  end_label := ir.fresh_label('branch.end')
-  ir.branch_if condition, then_label, end_label
-  ir.start_block then_label
-  value := then_value()
-  value_block := ir.current_block
-  ir.branch end_label
-  ir.start_block end_label
+  (value, value_block) := emit_when_valued(ir, condition, then_value)
   ir.assign "phi #{type} [ #{otherwise}, %#{from} ], [ #{value}, %#{value_block} ]"
 
 # Runs `body` with each index from 0 up to `count`, as an i64.

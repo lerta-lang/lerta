@@ -14,7 +14,7 @@ import apply_float_arithmetic, emit_float_comparison, emit_float_negation from '
 import generate, generate_condition, release_if_reference, type_at_use, type_of from './expression'
 import emit_own_compare, GREATER, LESS from './comparison_methods'
 import emit_equals_by_contents, emit_value_equals from './equality'
-import Generator from './generator'
+import Generator, with_deferred_checks from './generator'
 import emit_branch, IrBuilder from './ir_builder'
 import emit_release, emit_retain, ir_type, string_constant from './lerta_ir'
 import emit_is_nil, emit_is_present, emit_unwrap from './optional'
@@ -82,10 +82,8 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   # and one of no tree alone, as its operands check theirs.
   safe := is_root then g.nan_free.whole else g.nan_free.alone
   unchecked := not g.defers_float_checks and binary in safe and not reads_unchecked
-  g.defers_float_checks = true if unchecked
-  result := apply_binary(g, operator, left, right, operand_type)
-  g.defers_float_checks = false if unchecked
-  result
+  apply := -> apply_binary(g, operator, left, right, operand_type)
+  with_deferred_checks g, g.defers_float_checks or unchecked, apply
 
 # The text of a String that literals joined by `+` make, which the compiler joins, so that a long
 # literal can be split over lines at no cost.

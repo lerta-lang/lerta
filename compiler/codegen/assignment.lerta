@@ -15,7 +15,7 @@ import generate_borrowed from './borrowing'
 import emit_method_call, MethodCall from './call'
 import weak_box_of from './function'
 import local_of from './references'
-import Generator, SlotLocal from './generator'
+import Generator, SlotLocal, with_deferred_checks from './generator'
 import emit_branch from './ir_builder'
 import emit_field_pointer, emit_member_dispatch, field_named from './heap_object'
 import emit_release, emit_release_value, ir_type, ownership from './lerta_ir'
@@ -218,9 +218,7 @@ assign_through := (
     not g.defers_float_checks and
     not g.code.eager_nan_checks and
     is_float_leaf(g, operand)
-  g.defers_float_checks = true if is_root
-  value := generate(g, operand)
-  g.defers_float_checks = false if is_root
+  value := with_deferred_checks(g, g.defers_float_checks or is_root, -> generate(g, operand))
   old := is_plain then '' else load()
   result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
   replaced := is_plain and ownership(type) != NONE then load() else ''

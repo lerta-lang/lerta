@@ -30,7 +30,7 @@ import
 from './expression'
 import
   CellSlot, CodegenLocal, function_generator, Generator, located, SlotLocal, TopLevelGlobal,
-  ValueLocal
+  with_deferred_checks, ValueLocal
 from './generator'
 import is_fused_source from './inlined_methods'
 import
@@ -355,7 +355,7 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
   for field, i in arguments
     store_argument := -> store_field(g, object, info, field, "%p#{i}")
     if field.has_default
-      emit_when ir, "%given#{i}", store_argument
+      emit_when ir, given(field), store_argument
     else
       store_argument()
   scope := g.locals.push()
@@ -573,9 +573,8 @@ generate_local_declaration := (g: Generator, declaration: Declaration) ->
     g.locals.define name, ValueLocal(type, operand: borrowed)
     return
   defers := defers_declaration(g, declaration)
-  g.defers_float_checks = true if defers
-  generated := generate_declared_value(g, declaration, not weak)
-  g.defers_float_checks = false if defers
+  generate_value := -> generate_declared_value(g, declaration, not weak)
+  generated := with_deferred_checks(g, g.defers_float_checks or defers, generate_value)
   value := held_value_of(g, declaration, generated, type)
   if declaration.name in g.facts.shared_vars
     cell := emit_cell(ir, type, value)
