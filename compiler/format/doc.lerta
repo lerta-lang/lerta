@@ -1,6 +1,5 @@
 # What the formatter prints, before it is laid out in lines (see docs/internals.md#formatter).
 import Position from '../ast'
-import Comment from '../lexer/tokens'
 import StyleRule from './rules'
 import columns, SourceText from './source'
 
@@ -108,8 +107,6 @@ class Printer
   next_comment = 0
   # The last line of the source that the output has reached, by a token or a comment.
   source_line = 0
-  # The lines of the source that hold a comment.
-  comment_lines = lines_of(@source.comments)
 
   run = (doc: Doc) ->
     steps: Step[] = [Work(doc, indent: 0)]
@@ -140,7 +137,7 @@ class Printer
         # Mid-line, a comment not printed yet would end the line inside `flat`.
         from_line := @pending_indent then 0 else @source_line
         measured := doc.measured ? doc.flat
-        fitting := fits(measured, room, indent, steps, @comment_lines, from_line)
+        fitting := fits(measured, room, indent, steps, @source.comment_lines, from_line)
         if not fitting
           @start_rule breaking_rule, steps if breaking_rule := doc.breaking_rule
         steps.push Work(indent, doc: fitting then doc.flat else doc.broken)
@@ -275,12 +272,6 @@ shifted := (line: String, shift: Int) ->
     rest = rest.without_prefix(' ')!
     removed += 1
   rest
-
-# Whether the comment on each line that holds one is on a line of its own.
-lines_of := (comments: Comment[]) ->
-  lines: Map<Int, Bool>
-  lines[comment.line] = comment.own_line for comment in comments
-  lines
 
 # A part that `fits` measures, as deep as `depth`, and inside a choice of the flat form if `nested`.
 struct Measured
