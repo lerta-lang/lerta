@@ -4,7 +4,7 @@ import is_dir, is_file, list_dir, make_dir, read_text, remove_tree, rename, writ
 import env, is_running, platform, process_id, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
 import run_clang_jobs from './clang_jobs'
-import build_flags from './clang_flags'
+import build_flags, BuildKind from './clang_flags'
 import CompileError from './errors'
 import is_for, libuv_build, LibuvBuild, LIBUV_PATHS, write_libuv_sources from './libuv'
 import basename, join from './paths'
@@ -24,15 +24,14 @@ export struct CachedRuntime
   libraries: String[]
   coro_end_type: String
 
-# The runtime for a build with `optimize` and `memory_checks`, for `target` or else the host,
-# compiled into the cache first if it does not have it; nil if clang fails, after printing its
-# messages. `temp_dir` is the build's own temporary directory.
-export cached_runtime := (optimize: Bool, memory_checks: Bool, target: String?, temp_dir: String) ->
-  reject_path_target target if target
+# The runtime for a kind of build, compiled into the cache first if it does not have it; nil if
+# clang fails, after printing its messages. `temp_dir` is the build's own temporary directory.
+export cached_runtime := (kind: BuildKind, temp_dir: String) ->
+  reject_path_target target if target := kind.target
   clang_version := await clang_version_text() ? return nil
-  libuv := libuv_build(target)
+  libuv := libuv_build(kind.target)
   cache := cache_dir()
-  runtime_name := cached_runtime_name(optimize, memory_checks, target, clang_version, libuv)
+  runtime_name := cached_runtime_name(kind, clang_version, libuv)
   dir := join(cache, runtime_name)
   objects := [join(dir, name) for name in object_names(libuv)]
   files := [join(dir, name) for name in cached_file_names(libuv)]
@@ -52,7 +51,7 @@ export cached_runtime := (optimize: Bool, memory_checks: Bool, target: String?, 
   make_dir staging_dir
   compiled :=
     try
-      await compile_runtime(optimize, memory_checks, target, libuv, staging_dir, temp_dir)
+      await compile_runtime(kind, libuv, staging_dir, temp_dir)
     catch error
       await remove_tree(staging_dir)
       throw error
@@ -144,19 +143,17 @@ non_empty_env := (name: String) ->
 
 # See Names in docs/reference/compiler.md#cache. A target given is no path (see
 # reject_path_target).
-cached_runtime_name := (
-  optimize: Bool, memory_checks: Bool, target: String?, clang_version: String, libuv: LibuvBuild
-) ->
-  kind := runtime_kind(optimize, memory_checks)
-  target_name := target ? version_line_value(clang_version, 'Target: ') ? 'unknown'
+cached_runtime_name := (kind: BuildKind, clang_version: String, libuv: LibuvBuild) ->
+  kind_name := runtime_kind_name(kind)
+  target_name := kind.target ? version_line_value(clang_version, 'Target: ') ? 'unknown'
   clang_name := "clang#{major_version(clang_version) ? 'unknown'}"
-  flags := build_flags(optimize, memory_checks, target).join(' ')
+  flags := build_flags(kind).join(' ')
   hash := runtime_hash([clang_version, flags, cached_file_names(libuv)...]).to_hex(8).to_upper()
-  "runtime-#{kind}-#{target_name}-#{clang_name}-#{hash}"
+  "runtime-#{kind_name}-#{target_name}-#{clang_name}-#{hash}"
 
-runtime_kind := (optimize: Bool, memory_checks: Bool) ->
-  return 'debug' if not optimize
-  memory_checks then 'release-checked' else 'release'
+runtime_kind_name := (kind: BuildKind) ->
+  return 'debug' if not kind.optimize
+  kind.memory_checks then 'release-checked' else 'release'
 
 # A target names a directory of the cache, so it cannot be a path.
 reject_path_target := (target: String) ->
@@ -214,10 +211,7 @@ cached_file_names := (libuv: LibuvBuild) -> [object_names(libuv)..., ATTRIBUTES_
 
 # Writes the runtime's sources and libuv's to `temp_dir`, compiles each C file into `staging_dir`
 # and writes what it reads from clang's IR there; false if clang fails.
-compile_runtime := (
-  optimize: Bool, memory_checks: Bool, target: String?, libuv: LibuvBuild, staging_dir: String,
-  temp_dir: String
-) ->
+compile_runtime := (kind: BuildKind, libuv: LibuvBuild, staging_dir: String, temp_dir: String) ->
   source_dir := join(temp_dir, 'runtime')
   make_dir source_dir
   for path in RUNTIME_PATHS
@@ -226,7 +220,7 @@ compile_runtime := (
   libuv_includes := await write_libuv_sources(libuv_dir)
   # uv.h, which the runtime includes, asks nothing of its users but where it is; libuv's own flags
   # are for its sources, whose warnings are not the program's, which a build prints.
-  flags := [build_flags(optimize, memory_checks, target)..., libuv_includes...]
+  flags := [build_flags(kind)..., libuv_includes...]
   runtime_job := (path: String) ->
     ['-c', flags..., join(source_dir, basename(path)), '-o', join(staging_dir, object_name(path))]
   libuv_flags := [flags..., libuv.flags..., '-w']

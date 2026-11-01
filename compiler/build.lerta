@@ -4,7 +4,7 @@ import is_file, make_temp_dir, open, remove_tree from 'std:io'
 import exit, run from 'std:process'
 import ProgramWide from './checker/shared'
 import run_clang_jobs from './clang_jobs'
-import build_flags, executable_suffix, LTO_CACHE, lto_link_flags from './clang_flags'
+import build_flags, BuildKind, executable_suffix, LTO_CACHE, lto_link_flags from './clang_flags'
 import generate from './codegen/codegen'
 import check_program, write_ir from './compile'
 import CompileError from './errors'
@@ -13,17 +13,13 @@ import target_system from './libuv'
 import real_path_text from './loader'
 import cache_dir, cached_runtime from './runtime_cache'
 
-# What to build: the executable `output`, or one in the temporary directory if nil, for `target`
-# (a triple such as i686-linux-gnu) or else for the host, linked with `linked_files`, such as C
-# files that define the program's externs.
+# What to build: the executable `output`, or one in the temporary directory if nil, of `kind`,
+# linked with `linked_files`, such as C files that define the program's externs.
 export struct BuildRequest
   source: String
   linked_files: String[]
   output: String?
-  optimize: Bool
-  # `--memory-checks`, or no `-O`: the program checks for leaks and for the use of dropped objects.
-  memory_checks: Bool
-  target: String?
+  kind: BuildKind
   # `-Werror`: a warning stops the build, as an error does.
   warnings_as_errors: Bool
   # Without `--no-trace`: an uncaught exception prints its trace (see generate).
@@ -69,14 +65,20 @@ reject_input_as_output := (request: BuildRequest, program: ProgramWide) ->
 
 # What build_then exits with: 1 if clang fails.
 build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_args: String[]?) ->
-  { optimize, memory_checks, target } := request
-  runtime := await cached_runtime(optimize, memory_checks, target, dir) ? return 1
+  { kind } := request
+  runtime := await cached_runtime(kind, dir) ? return 1
   { function_attributes, coro_end_type } := runtime
   { traces, source_lines, eager_nan_checks } := request
   modules := generate
-    program, function_attributes, coro_end_type, true, traces, source_lines, optimize,
+    program
+    function_attributes
+    coro_end_type
+    true
+    traces
+    source_lines
+    kind.optimize
     eager_nan_checks
-  flags := build_flags(optimize, memory_checks, target)
+  flags := build_flags(kind)
   objects := await compile_modules(modules, flags, dir) ? return 1
   # The link runs in the temporary directory and names the modules' objects in it, and the paths it
   # is given besides are under the directory the compiler runs in (see
@@ -84,15 +86,15 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   cwd := real_path_text('.')
   work_dir := real_path_text(dir)
   executable :=
-    link_path(cwd, request.output ? join(work_dir, "program#{executable_suffix(request.target)}"))
+    link_path(cwd, request.output ? join(work_dir, "program#{executable_suffix(kind.target)}"))
   # libm, which std:math calls, is apart from libc on Linux; elsewhere -lm links nothing more.
   libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
   lto_cache := join(real_path_text(cache_dir()), LTO_CACHE)
-  system := target_system(request.target)
-  lto_flags := request.optimize then lto_link_flags(system, lto_cache)
+  system := target_system(kind.target)
+  lto_flags := kind.optimize then lto_link_flags(system, lto_cache)
   # dsymutil (below) reads the debug information from the objects, which the link-time optimizer
   # makes in a directory that it removes unless told one.
-  keeps_objects := source_lines and system == 'macos' and request.optimize
+  keeps_objects := source_lines and system == 'macos' and kind.optimize
   lto_objects: String[] =
     keeps_objects then ["-Wl,-object_path_lto,#{join(work_dir, 'lto')}"] else []
   args := [

@@ -3,8 +3,8 @@ import stdout from 'std:io'
 import argv, exit from 'std:process'
 import dump_ast from './ast_dump'
 import build, build_and_run, BuildRequest from './build'
-import dump_checked from './checked_dump'
 import executable_suffix from './clang_flags'
+import dump_checked from './checked_dump'
 import check_program, generate_ir, write_ir from './compile'
 import CompileError from './errors'
 import format_command from './format/command'
@@ -50,17 +50,22 @@ LINKED_EXTENSIONS := ['.c', '.o', '.ll', '.a', '.obj', '.lib']
 
 is_linked_file := (path: String) -> LINKED_EXTENSIONS.any((extension) -> path.ends_with(extension))
 
+# The options that each turn one thing on or off.
+SWITCHES :=
+  '-O'
+  '--memory-checks'
+  '-Werror'
+  '--no-trace'
+  '--source-lines'
+  '--eager-nan-checks'
+
+# The request, with no output and no target unless given, and the program's arguments after `--`.
 parse_build_arguments := (args: String[]) ->
   var source: String?
   linked_files: String[]
   var output: String?
   var target: String?
-  var optimize = false
-  var memory_checks = false
-  var warnings_as_errors = false
-  var traces = true
-  var source_lines = false
-  var eager_nan_checks = false
+  switches: Set<String>
   var program_args: String[]?
   var i = 0
   # The value is the next argument, even one that starts with `-`, as `-o -out` gives `-out`.
@@ -71,89 +76,47 @@ parse_build_arguments := (args: String[]) ->
   while i < args.length
     arg := args[i]
     case arg
-      when '-O'
-        fail_usage() if optimize
-        optimize = true
-      when '--memory-checks'
-        fail_usage() if memory_checks
-        memory_checks = true
-      when '-Werror'
-        fail_usage() if warnings_as_errors
-        warnings_as_errors = true
-      when '--no-trace'
-        fail_usage() if not traces
-        traces = false
-      when '--source-lines'
-        fail_usage() if source_lines
-        source_lines = true
-      when '--eager-nan-checks'
-        fail_usage() if eager_nan_checks
-        eager_nan_checks = true
       when '-o' then output = take_value(output)
       when '--target' then target = take_value(target)
       when '--'
-        program_args = [args[rest] for rest in (i + 1)...args.length]
+        program_args = args.slice(i + 1)
         break
       else
-        fail_usage() if not is_value(arg)
-        if source == nil
-          source = arg
+        if arg in SWITCHES
+          fail_usage() if not switches.add(arg)
         else
-          fail_usage() if not is_linked_file(arg)
-          linked_files.push arg
+          fail_usage() if not is_value(arg)
+          if source == nil
+            source = arg
+          else
+            fail_usage() if not is_linked_file(arg)
+            linked_files.push arg
     i += 1
   given_source := source ? fail_usage()
-  {
-    source: given_source
+  optimize := '-O' in switches
+  memory_checks := '--memory-checks' in switches or not optimize
+  request := BuildRequest
     linked_files
     output
-    target
-    optimize
-    memory_checks: memory_checks or not optimize
-    warnings_as_errors
-    traces
-    source_lines
-    eager_nan_checks
-    program_args
-  }
+    source: given_source
+    kind: { optimize, memory_checks, target }
+    warnings_as_errors: '-Werror' in switches
+    traces: '--no-trace' not in switches
+    source_lines: '--source-lines' in switches
+    eager_nan_checks: '--eager-nan-checks' in switches
+  { request, program_args }
 
 build_command := (args: String[]) ->
-  parsed := parse_build_arguments(args)
-  { source, linked_files, output, target, optimize, memory_checks } := parsed
-  { warnings_as_errors, traces } := parsed
-  fail_usage() if parsed.program_args != nil
-  executable := output ? default_output(source, target)
-  request := BuildRequest
-    source
-    linked_files
-    optimize
-    memory_checks
-    target
-    warnings_as_errors
-    traces
-    output: executable
-    source_lines: parsed.source_lines
-    eager_nan_checks: parsed.eager_nan_checks
-  build request
+  { request, program_args } := parse_build_arguments(args)
+  fail_usage() if program_args != nil
+  output := request.output ? default_output(request.source, request.kind.target)
+  build { request..., output }
 
 # The program is built in the temporary directory, for the host.
 run_command := (args: String[]) ->
-  parsed := parse_build_arguments(args)
-  { source, linked_files, output, target, optimize, memory_checks } := parsed
-  { warnings_as_errors, traces } := parsed
-  fail_usage() if output != nil or target != nil
-  request := BuildRequest
-    source
-    linked_files
-    optimize
-    memory_checks
-    target
-    output
-    warnings_as_errors
-    traces
-    source_lines: parsed.source_lines
-    eager_nan_checks: parsed.eager_nan_checks
-  build_and_run request, parsed.program_args ? []
+  { request, program_args } := parse_build_arguments(args)
+  fail_usage() if request.output != nil or request.kind.target != nil
+  build_and_run request, program_args ? []
 
 default_output := (source: String, target: String?) ->
   name := basename(source)
@@ -164,7 +127,7 @@ default_output := (source: String, target: String?) ->
 # `--fix` may come before the paths, of which there is at least one.
 fmt_command := (args: String[]) ->
   fix := not args.is_empty() and args[0] == '--fix'
-  paths := [arg for arg, i in args when i > 0 or not fix]
+  paths := fix then args.slice(1) else args
   fail_usage() if paths.is_empty() or paths.any((path) -> not is_value(path))
   exit await format_command(paths, fix)
 
