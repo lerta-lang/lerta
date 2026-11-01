@@ -36,18 +36,16 @@ work_dir := suite_dir('run')
 
 # `label` is shown in failures, such as `examples/hello`. The expected files are read before the
 # checks start, so that a check reaches its first wait only in its build (see unoptimized_runs).
-struct TestCase
-  label: String
-  name: String
-  source_dir: String
-  expected_dir: String
-  extensions: String[]
-  expected: Map<String, Binary>
-
 struct Suite
   source_dir: String
   expected_dir: String
   extensions: String[]
+
+struct TestCase
+  label: String
+  name: String
+  suite: Suite
+  expected: Map<String, Binary>
 
 EXPECTED_EXTENSIONS := ['out', 'err', 'warn']
 
@@ -114,15 +112,7 @@ collect := (suite: Suite) ->
     for extension in suite.extensions
       path := "#{root_dir}/#{suite.expected_dir}/#{name}.#{extension}"
       expected[extension] = await read_file(path) if is_file(path)
-    { source_dir, expected_dir, extensions } := suite
-    tests.push {
-      name
-      source_dir
-      expected_dir
-      extensions
-      expected
-      label: "#{source_dir}/#{name}"
-    }
+    tests.push { name, suite, expected, label: "#{suite.source_dir}/#{name}" }
   tests
 
 # Files in the expected directory that no test would read, such as the expected output of a
@@ -173,7 +163,7 @@ compile_and_run := (test: TestCase, optimize: Bool) ->
   executable := "#{work_dir}/#{name}#{target.executable_suffix}"
   optimize_args: String[] = optimize then ['-O'] else []
   args := ['build', source_file, '-o', executable, optimize_args..., target.args...]
-  built := await run_file(compiler, args, "#{root_dir}/#{test.source_dir}")
+  built := await run_file(compiler, args, "#{root_dir}/#{test.suite.source_dir}")
   diagnostics := [line for line in built.errors.split("\n") when line != '']
   warnings := [line for line in diagnostics when is_warning(line)]
   others := [line for line in diagnostics when not is_warning(line)]
@@ -262,8 +252,8 @@ unoptimized_runs: Map<String, Promise<Outcome>>
 run_test := (test: TestCase, optimize: Bool): Promise<String[]?> ->
   expected := test.expected
   if expected.is_empty()
-    candidates := ["#{test.name}.#{extension}" for extension in test.extensions]
-    return ["needs #{candidates.join(' or ')} in #{test.expected_dir}"]
+    candidates := ["#{test.name}.#{extension}" for extension in test.suite.extensions]
+    return ["needs #{candidates.join(' or ')} in #{test.suite.expected_dir}"]
   pending := compile_and_run(test, optimize)
   unoptimized_runs[test.label] = pending if not optimize
   outcome := await pending
