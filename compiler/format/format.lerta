@@ -195,29 +195,16 @@ first_difference := (old: String, new: String) ->
 # place after the spaces that the formatted line puts after it, such as those before a comment:
 # the source has spaces there too, so the lines first differ after them.
 innermost_rule := (rules: RulePlace[], at: Position, marks_from: Position) ->
-  var found: RulePlace?
-  for place in rules
-    within_spaces := before_or_at(marks_from, place.start) and before_or_at(place.start, at)
-    marks := place.start == place.end and within_spaces
-    if marks or (before_or_at(place.start, at) and is_before(at, place.end))
-      if previous := found
-        found = place if is_before(previous.start, place.start)
-      else
-        found = place
-  found?.rule
+  holds := (place: RulePlace) ->
+    marks := place.start == place.end and marks_from <= place.start and place.start <= at
+    marks or (place.start <= at and at < place.end)
+  [place for place in rules when holds(place)].max_by((place) -> place.start)?.rule
 
 # The rule of the first part that starts from the position up to the line, as one that the
 # difference begins just before.
 first_rule_from := (rules: RulePlace[], at: Position, last_line: Int) ->
-  var found: RulePlace?
-  for place in rules
-    within := before_or_at(at, place.start) and place.start.line < last_line
-    if within
-      if previous := found
-        found = place if is_before(place.start, previous.start)
-      else
-        found = place
-  found?.rule
+  within := [place for place in rules when at <= place.start and place.start.line < last_line]
+  within.min_by((place) -> place.start)?.rule
 
 # The spaces just before the column, counted in code points from 1.
 spaces_before := (line: String, column: Int) ->
@@ -225,12 +212,6 @@ spaces_before := (line: String, column: Int) ->
   var count = 0
   count += 1 while count < column - 1 and points[column - 2 - count] == ' '
   count
-
-before_or_at := (a: Position, b: Position) ->
-  a.line < b.line or (a.line == b.line and a.column <= b.column)
-
-is_before := (a: Position, b: Position) ->
-  a.line < b.line or (a.line == b.line and a.column < b.column)
 
 only_blank_lines_differ := (old: String[], new: String[]) ->
   not_blank := (lines: String[]) -> [line for line in lines when without_spaces(line) != '']
