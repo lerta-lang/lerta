@@ -282,10 +282,6 @@ lines_of := (comments: Comment[]) ->
   lines[comment.line] = comment.own_line for comment in comments
   lines
 
-# Whether the first line of `flat` fits in `room` columns, with what follows it on `steps` up to
-# the next line feed. The choices in `flat` are taken flat, and those after it broken, as each of
-# those is laid out later in what is left of the line. A comment of the source between the first
-# and the last texts of that line does not fit either, as it ends a line.
 # A part that `fits` measures, as deep as `depth`, and inside a choice of the flat form if `nested`.
 struct Measured
   doc: Doc
@@ -302,65 +298,88 @@ struct Measured
 fits := (
   flat: Doc, room: Int, indent: Int, steps: Step[], comment_lines: Map<Int, Bool>, from_line: Int
 ) ->
-  var left = room
-  pending := [Measured(doc: flat, depth: indent, nested: false)]
-  var next_step = steps.length - 1
-  var in_flat = true
-  var has_text = false
-  var first_line = 0
-  var last_line = 0
-  var closing_line = 0
-  # A comment between the texts, or one on a line of its own before a closing bracket after them.
-  comment_inside := ->
-    start := from_line > 0 then from_line else first_line
-    between := has_comment_line(comment_lines, start, last_line, false)
-    between or has_comment_line(comment_lines, last_line, closing_line, true)
-  while true
-    if pending.is_empty()
-      if in_flat
-        in_flat = false
-        return false if comment_inside()
-      return true if next_step < 0
-      step := steps[next_step]
-      next_step -= 1
-      pending.push { doc: step.doc, depth: step.indent, nested: false } if step is Work
-      continue
-    measured := pending.pop()
+  pending: Measured[] = [{ doc: flat, depth: indent, nested: false }]
+  measurer := Measurer(steps, comment_lines, from_line, pending, left: room)
+  measurer.fits()
+
+# Measures the parts on `pending`, the last first, and then the works on `steps`, the last first,
+# in what is `left` of the line (see fits).
+class Measurer
+  steps: Step[]
+  comment_lines: Map<Int, Bool>
+  from_line: Int
+  pending: Measured[]
+  left: Int
+  # The next work on `steps` to measure, once those on `pending` are measured.
+  next_step = @steps.length - 1
+  # Whether the parts on `pending` are those of `flat`.
+  in_flat = true
+  has_text = false
+  # The lines of the first and the last texts of `flat`, and of its last closing bracket.
+  first_line = 0
+  last_line = 0
+  closing_line = 0
+
+  fits = ->
+    while true
+      if @pending.is_empty()
+        if @in_flat
+          @in_flat = false
+          return false if @comment_inside()
+        return true if @next_step < 0
+        step := @steps[@next_step]
+        @next_step -= 1
+        @pending.push { doc: step.doc, depth: step.indent, nested: false } if step is Work
+      else if fit := @measure(@pending.pop())
+        return fit
+    true
+
+  # Whether the line fits, if the part tells; nil if what follows it does.
+  measure = (measured: Measured) ->
     { doc, depth, nested } := measured
-    inner := (part: Doc, part_depth: Int, part_nested: Bool) ->
-      Measured doc: part, depth: part_depth, nested: part_nested
     case doc
-      when Text
-        left -= columns(doc.text)
-        return false if left < 0
-        has_text = has_text or not doc.text.is_empty()
-        if in_flat and not nested
-          if at := doc.at
-            if doc.closes
-              closing_line = at.line if at.line > closing_line
-            else
-              first_line = at.line if first_line == 0
-              last_line = at.line if at.line > last_line
+      when Text then return false if not @measure_text(doc, nested)
       when Newline
-        if in_flat and not has_text
-          left = WIDTH - depth * INDENT_WIDTH
-        else
-          return not in_flat or not comment_inside()
-      when Indent then pending.push(inner(doc.doc, depth + 1, nested))
-      when Concat then pending.push(inner(part, depth, nested)) for part in doc.docs.reversed()
+        return @fits_at_line_end() if @has_text or not @in_flat
+        @left = WIDTH - depth * INDENT_WIDTH
+      when Indent then @pending.push({ measured..., doc: doc.doc, depth: depth + 1 })
+      when Concat then @pending.push({ measured..., doc: part }) for part in doc.docs.reversed()
       # What follows a choice on the line, if it breaks, is up to its first line feed.
       when Choice
-        if in_flat
-          pending.push inner(doc.flat, depth, true)
+        if @in_flat
+          @pending.push { measured..., doc: doc.flat, nested: true }
         else
-          pending.push inner(doc.broken, depth, nested)
-      when Rule then pending.push(inner(doc.doc, depth, nested))
+          @pending.push { measured..., doc: doc.broken }
+      when Rule then @pending.push({ measured..., doc: doc.doc })
       # Its lines are those of a statement, which a line feed comes before.
-      when Verbatim then return not in_flat
+      when Verbatim then return not @in_flat
       when LiteralLines
-        left = WIDTH - (depth + 1) * INDENT_WIDTH - columns(doc.lines.last()!)
-        return false if left < 0
-  true
+        @left = WIDTH - (depth + 1) * INDENT_WIDTH - columns(doc.lines.last()!)
+        return false if @left < 0
+    nil
+
+  # Whether the text fits in what is left of the line, which it takes.
+  measure_text = (text: Text, nested: Bool) ->
+    @left -= columns(text.text)
+    @has_text = @has_text or not text.text.is_empty()
+    @mark_lines text if @in_flat and not nested
+    @left >= 0
+
+  mark_lines = (text: Text) ->
+    at := text.at ? return
+    if text.closes
+      @closing_line = at.line if at.line > @closing_line
+    else
+      @first_line = at.line if @first_line == 0
+      @last_line = at.line if at.line > @last_line
+
+  fits_at_line_end = -> not @in_flat or not @comment_inside()
+
+  # A comment between the texts, or one on a line of its own before a closing bracket after them.
+  comment_inside = ->
+    start := @from_line > 0 then @from_line else @first_line
+    between := has_comment_line(@comment_lines, start, @last_line, false)
+    between or has_comment_line(@comment_lines, @last_line, @closing_line, true)
 
 # Whether a comment, or one on a line of its own if `own_line`, is from the line `first` up to
 # `last`.
