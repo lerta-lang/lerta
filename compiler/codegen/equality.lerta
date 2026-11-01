@@ -3,14 +3,14 @@
 # such a value compares as `==` compares it: by value, by its bytes, or as the same object.
 # Numbers compare here too, giving an Ordering, as their builtin compare.
 import compares_by_contents, has_own_hash, own_equality from '../checker/equality'
-import info_of from '../checker/object_types'
+import FieldInfo, info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import from_item from './array'
 import emit_member_value from './boxes'
 import emit_own_equals, emit_own_hash, EQUAL, GREATER, LESS from './comparison_methods'
 import emit_float_word from './float'
 import
-  emit_field_pointer, emit_member_dispatch, emit_object_type, emit_value_pointer, value_types
+  emit_borrowed_field, emit_borrowed_value, emit_member_dispatch, emit_object_type, value_types
 from './heap_object'
 import all_of, emit_branch, IrBuilder, IrModule from './ir_builder'
 import ir_type from './lerta_ir'
@@ -102,16 +102,13 @@ emit_equals := (
     when type is OptionalType then emit_optional_equals(ir, program, left, right, type)
     when type is ObjectType and type.is_struct
       info := info_of(program, type)
-      field_equals := (name: String, field_type: Type) ->
-        load := (object: String) ->
-          ir.load ir_type(field_type), emit_field_pointer(ir, object, info, name)
-        nested field_type, load(left), load(right)
-      all_of ir, [field_equals(field.name.name, field.type!) for field in info.fields]
+      field_equals := (field: FieldInfo) ->
+        load := (object: String) -> emit_borrowed_field(ir, object, info, field)
+        nested field.type!, load(left), load(right)
+      all_of ir, [field_equals(field) for field in info.fields]
     when is_one_of_kinds(type, [RECORD, TUPLE])
       value_equals := (value_type: Type, index: Int) ->
-        load := (object: String) ->
-          pointer := emit_value_pointer(ir, object, type, index)
-          ir.load ir_type(value_type), pointer
+        load := (object: String) -> emit_borrowed_value(ir, object, type, index)
         nested value_type, load(left), load(right)
       all_of ir, [value_equals(each, i) for each, i in value_types(type)]
     when type is ArrayType
@@ -160,15 +157,13 @@ emit_hash := (ir: IrBuilder, program: ProgramWide, value: String, type: Type): S
       emit_branch ir, 'i64', emit_is_present(ir, value, type), hash_inner, '0'
     when type is ObjectType and type.is_struct
       info := info_of(program, type)
-      field_hash := (name: String, field_type: Type) ->
-        pointer := emit_field_pointer(ir, value, info, name)
-        loaded := ir.load(ir_type(field_type), pointer)
-        emit_hash_by_contents ir, program, loaded, field_type
-      combine ir, [field_hash(field.name.name, field.type!) for field in info.fields]
+      field_hash := (field: FieldInfo) ->
+        loaded := emit_borrowed_field(ir, value, info, field)
+        emit_hash_by_contents ir, program, loaded, field.type!
+      combine ir, [field_hash(field) for field in info.fields]
     when is_one_of_kinds(type, [RECORD, TUPLE])
       value_hash := (value_type: Type, index: Int) ->
-        pointer := emit_value_pointer(ir, value, type, index)
-        loaded := ir.load(ir_type(value_type), pointer)
+        loaded := emit_borrowed_value(ir, value, type, index)
         emit_hash_by_contents ir, program, loaded, value_type
       combine ir, [value_hash(each, i) for each, i in value_types(type)]
     when type is ArrayType

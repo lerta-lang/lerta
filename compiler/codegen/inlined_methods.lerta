@@ -16,11 +16,11 @@ import all_but_last from '../arrays'
 import function_type_of from './closure'
 import generate_iteration from './control_flow'
 import emit_traced_unwind, TRACE_PUSH from './exceptions'
-import generate, held_value, type_at_use, type_of from './expression'
+import generate, held_value, type_of from './expression'
 import nan_free_operations from './float_ranges'
 import
-  generate_block_with, generate_closure, generate_last_statement, is_awaiting, generate_statements,
-  release_scope, store_in_slot
+  generate_block_with, generate_closure, generate_last_statement, hold_arguments, is_awaiting,
+  generate_statements, release_scope, store_in_slot
 from './function'
 import fused_call, fused_comprehension, generate_in_place, is_builtins from './fusion'
 import
@@ -151,12 +151,10 @@ export generate_inlined_method := (
   position := g.position
   literal := instance.entry.literal
   type := function_type_of(instance.entry.type!)
-  arguments_scope := g.locals.push()
-  operands: String[]
-  for arg, i in arguments_of(g.facts, call)
-    operand := generate_argument(g, arg, literal.params.get(i), instance)
-    arguments_scope["(inlined argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
-    operands.push operand
+  generate_arg := (arg: Expression, i: Int) ->
+    generate_argument g, arg, literal.params.get(i), instance
+  (arguments_scope, operands) :=
+    hold_arguments(g, arguments_of(g.facts, call), 'inlined', generate_arg)
   at_call := call_state(g, position)
   inner := method_generator(g, instance)
   inner.result_type = type.result

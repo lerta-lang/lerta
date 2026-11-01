@@ -12,12 +12,12 @@ import FunctionReference from '../checker/references'
 import arguments_of from '../checker/shared'
 import generate_loop_body, iterated from './control_flow'
 import unwind_from from './exceptions'
-import generate, held_value, type_at_use, type_of from './expression'
+import generate, held_value, type_of from './expression'
 import nan_free_operations from './float_ranges'
 import all_but_last from '../arrays'
 import
-  generate_block_with, generate_last_statement, generate_statements, is_awaiting, release_scope,
-  store_in_slot
+  generate_block_with, generate_last_statement, generate_statements, hold_arguments, is_awaiting,
+  release_scope, store_in_slot
 from './function'
 import emit_when from './ir_builder'
 import ir_type, returns_nothing from './lerta_ir'
@@ -75,12 +75,7 @@ export generate_fused_loop := (
   ir := g.ir
   position := g.position
   { literal, name, args } := fused
-  arguments_scope := g.locals.push()
-  operands: String[]
-  for arg, i in args
-    operand := generate(g, arg)
-    arguments_scope["(fused argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
-    operands.push operand
+  (arguments_scope, operands) := hold_arguments(g, args, 'fused', (arg, _i) -> generate(g, arg))
   exit_label := ir.fresh_label('fused.exit')
   outer_depth := g.locals.depth()
   code := g.code

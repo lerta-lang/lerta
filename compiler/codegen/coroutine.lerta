@@ -39,10 +39,17 @@ export emit_final_suspension := (g: Generator) ->
   coroutine := g.coroutine!
   state := emit_suspend_call(ir, true)
   resumed_label := ir.fresh_label('coroutine.resumed')
-  cases := "i8 0, label %#{resumed_label} i8 1, label %#{coroutine.free_label}"
-  ir.emit "switch i8 #{state}, label %#{coroutine.suspended_label} [ #{cases} ]"
+  emit_suspend_switch ir, state, coroutine, resumed_label, coroutine.free_label
   ir.start_block resumed_label
   ir.emit 'unreachable'
+
+# Goes on by the state that a suspension gives: at `resumed` where the body is resumed, at
+# `destroyed` where it is destroyed, and back to the caller while it is suspended.
+emit_suspend_switch := (
+  ir: IrBuilder, state: String, coroutine: Coroutine, resumed: String, destroyed: String
+) ->
+  cases := "i8 0, label %#{resumed} i8 1, label %#{destroyed}"
+  ir.emit "switch i8 #{state}, label %#{coroutine.suspended_label} [ #{cases} ]"
 
 # Frees the frame, and gives control back to the caller, or to whatever resumed the body.
 finish_coroutine := (ir: IrBuilder, coroutine: Coroutine) ->
@@ -81,8 +88,7 @@ emit_suspension := (g: Generator, destroy: () -> void) ->
   state := emit_suspend_call(ir, false)
   resume_label := ir.fresh_label('coroutine.resume')
   destroy_label := ir.fresh_label('coroutine.destroy')
-  cases := "i8 0, label %#{resume_label} i8 1, label %#{destroy_label}"
-  ir.emit "switch i8 #{state}, label %#{coroutine.suspended_label} [ #{cases} ]"
+  emit_suspend_switch ir, state, coroutine, resume_label, destroy_label
   ir.start_block destroy_label
   destroy()
   ir.start_block resume_label

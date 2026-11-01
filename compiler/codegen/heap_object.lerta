@@ -1,6 +1,6 @@
 # Objects on the heap with fields: classes and structs, anonymous structs and tuples, and cells
 # (see docs/internals.md#objects).
-import info_of, ObjectInfo from '../checker/object_types'
+import FieldInfo, info_of, ObjectInfo from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import emit_box_test from './boxes'
 import any_of, emit_branch, IrBuilder, IrModule from './ir_builder'
@@ -143,6 +143,10 @@ export emit_heap_allocate := (ir: IrBuilder, layout: String, type: String) ->
 # The pointer to the field of the name.
 export emit_field_pointer := (ir: IrBuilder, object: String, info: ObjectInfo, name: String) ->
   emit_heap_field_pointer ir, object_ir_type(info.type), object, field_index(info, name)
+
+# The value of the field of the class or struct, borrowed.
+export emit_borrowed_field := (ir: IrBuilder, object: String, info: ObjectInfo, field: FieldInfo) ->
+  ir.load ir_type(field.type!), emit_field_pointer(ir, object, info, field.name.name)
 
 # The field of the name, which the class or struct has.
 export field_named := (info: ObjectInfo, name: String) -> info.fields[field_index(info, name)]
@@ -299,11 +303,14 @@ export emit_value_pointer := (ir: IrBuilder, object: String, type: Type, index: 
 
 # The value at the index, retained if a reference; the object is borrowed.
 export emit_value_at := (ir: IrBuilder, object: String, type: Type, index: Int) ->
-  value_type := value_types(type)[index]
-  pointer := emit_value_pointer(ir, object, type, index)
-  value := ir.load(ir_type(value_type), pointer)
-  emit_retain_value ir, value, value_type
+  value := emit_borrowed_value(ir, object, type, index)
+  emit_retain_value ir, value, value_types(type)[index]
   value
+
+# The value of an anonymous struct or a tuple at the index, borrowed.
+export emit_borrowed_value := (ir: IrBuilder, values: String, type: Type, index: Int) ->
+  value_type := value_types(type)[index]
+  ir.load ir_type(value_type), emit_value_pointer(ir, values, type, index)
 
 # The value of a field of an anonymous struct, as emit_value_at gives it.
 export emit_record_field := (ir: IrBuilder, record: String, type: Type, name: String) ->

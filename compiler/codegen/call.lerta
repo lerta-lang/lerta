@@ -67,7 +67,7 @@ generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
     when ExternReference
       emit_call := (operands: String[]) ->
         emit_runtime_call g.ir, reference.symbol, function_type_of(callee_type()), operands
-      result := with_arguments(g, args, emit_call)
+      result := borrowing_all(g, args, emit_call)
       # A C function of the runtime may throw (see lerta_raise).
       emit_exception_check g
       result
@@ -106,7 +106,7 @@ generate_json_conversion := (g: Generator, call: Call, conversion: JsonConversio
         emit_write_json g.ir, g.code.program, coder_type, operands[0], operands[1], conversion.type
         ''
       when READ then emit_read_json(g.ir, g.code.program, coder_type, operands[0], conversion.type)
-  result := with_arguments(g, call.args, emit_call)
+  result := borrowing_all(g, call.args, emit_call)
   emit_exception_check g
   result
 
@@ -115,7 +115,7 @@ generate_member_call := (g: Generator, call: Call, member: Member) ->
   target := g.facts.members[member]!
   case target
     when EnumParse
-      with_arguments g, arguments_of(g.facts, call), (operands) ->
+      borrowing_all g, arguments_of(g.facts, call), (operands) ->
         emit_parse g.ir, operands[0], target.type
     when Property then call_closure(g, member, arguments_of(g.facts, call))
     when Method then generate_method_call(g, call, member, target.source)
@@ -144,7 +144,7 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
   call_method := ->
     emit_call := (operands: String[]) ->
       emit_method_call g, source, object, object_type, method_call_of(g, call, member, operands)
-    with_arguments g, arguments_of(g.facts, call), emit_call
+    borrowing_all g, arguments_of(g.facts, call), emit_call
   result := is_owned then holding(g, object, object_type, call_method) else call_method()
   release_if_reference g, receiver, object if is_owned
   check_after_method g, source, object_type
@@ -256,7 +256,7 @@ call_function := (
 ) ->
   emit_call := (operands: String[]) ->
     emit_function_call g, symbol, type, typed_arguments(g, args, operands), receiver
-  result := with_arguments(g, args, emit_call)
+  result := borrowing_all(g, args, emit_call)
   # A method's receiver is released after the check.
   emit_exception_check g if receiver == nil
   result
@@ -290,11 +290,11 @@ export call_user_function := (ir: IrBuilder, symbol: String, type: Type, args: S
 call_closure := (g: Generator, callee: Expression, args: Expression[]) ->
   if call_in_place := in_place_call(g, callee)
     unwind := unwind_from(g, g.position)
-    return with_arguments(g, args, (operands) -> call_in_place(operands, unwind))
+    return borrowing_all(g, args, (operands) -> call_in_place(operands, unwind))
   type := type_of(g, callee)
   (closure, is_owned) := generate_borrowed(g, callee, args)
   emit_call := (operands: String[]) -> emit_closure_call(g.ir, closure, type, operands)
-  call_with_arguments := -> with_arguments(g, args, emit_call)
+  call_with_arguments := -> borrowing_all(g, args, emit_call)
   result := is_owned then holding(g, closure, type, call_with_arguments) else call_with_arguments()
   emit_release g.ir, closure if is_owned
   emit_exception_check g
@@ -306,10 +306,6 @@ in_place_call := (g: Generator, callee: Expression) ->
   return nil if callee is not Identifier
   declaration := g.facts.local_declarations[callee] ? return nil
   g.in_place_calls[declaration]
-
-# Generates the arguments, which `emit_call` borrows (see borrowing_all).
-with_arguments := (g: Generator, args: Expression[], emit_call: (String[]) -> String) ->
-  borrowing_all g, args, emit_call
 
 # The named arguments are evaluated in the order they are written, then passed in the order of
 # the fields; an optional field left out is nil. One with a default is followed by whether it is

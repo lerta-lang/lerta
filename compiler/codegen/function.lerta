@@ -431,6 +431,19 @@ export hold := (g: Generator, value: String, type: Type) ->
     release_scope g, scope
     g.locals.pop()
 
+# The arguments' operands, which `generate_arg` generates, held in a scope pushed for them, under
+# names that the source cannot write, `(<prefix> argument <i>)`; the caller releases and pops it.
+export hold_arguments := (
+  g: Generator, args: Expression[], prefix: String, generate_arg: (Expression, Int) -> String
+) ->
+  scope := g.locals.push()
+  operands: String[]
+  for arg, i in args
+    operand := generate_arg(arg, i)
+    scope["(#{prefix} argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
+    operands.push operand
+  (scope, operands)
+
 # Pushes a scope that holds an owned reference, which a jump out of it releases.
 push_held_scope := (g: Generator, value: String, type: Type) ->
   scope := g.locals.push()
