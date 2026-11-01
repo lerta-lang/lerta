@@ -46,22 +46,22 @@ binary_precedence := (operator: String) ->
     else COMPARISON
 
 export range_doc := (range: Range, context: Context) ->
-  start := range_end(range.start, context, false)
-  join [start, text('...'), range_end(range.end, context, true)]
+  start := range_end(range.start, context, last: false)
+  join [start, text('...'), range_end(range.end, context, last: true)]
 
 # `x ? y`, or `x as T ? y` (see Cast fallbacks).
 export coalesce_doc := (coalesce: Coalesce, context: Context) ->
   cast := cast_of(coalesce)
   takes_cast := cast != nil and is_cast(coalesce.fallback)
   fallback_level := takes_cast then COMPARISON else COALESCE
-  fallback := operand(coalesce.fallback, context, fallback_level, true)
+  fallback := operand(coalesce.fallback, context, fallback_level, last: true)
   if cast
     # The style's part starts where the old form differs: at the `(` around the cast, if any.
     written_cast := cast_doc(cast, context, '')
     if written_in_parentheses(cast, context)
       return join([rule(CAST_FALLBACKS, join([written_cast, text(' ? ')])), fallback])
     return join([written_cast, rule(CAST_FALLBACKS, text(' ? ')), fallback])
-  join [operand(coalesce.value, context, RANGE, false), text(' ? '), fallback]
+  join [operand(coalesce.value, context, RANGE, last: false), text(' ? '), fallback]
 
 export unary_doc := (unary: UnaryOperation, context: Context) ->
   if unary.operator == 'not'
@@ -74,7 +74,7 @@ export unary_doc := (unary: UnaryOperation, context: Context) ->
       if is_negated_test(unary.operand)
         clarified unary.operand, context
       else
-        operand unary.operand, context, NOT, true
+        operand unary.operand, context, NOT, last: true
     return join([keyword('not ', unary.position), operand_doc])
   # `-1` would be a literal of its own.
   literal := unary.operand is IntegerLiteral or unary.operand is FloatLiteral
@@ -82,7 +82,7 @@ export unary_doc := (unary: UnaryOperation, context: Context) ->
     if literal
       clarified unary.operand, context
     else
-      operand unary.operand, context, PREFIX, true
+      operand unary.operand, context, PREFIX, last: true
   join [token('-', unary.position), operand_doc]
 
 # An operation on one line if it fits, and otherwise broken after each operator of its chain, the
@@ -94,9 +94,9 @@ export binary_doc := (binary: BinaryOperation, context: Context) ->
   chain := operation_chain(binary, level, context)
   left_level := level == COMPARISON then COALESCE else level
   right_level := level == COMPARISON then COALESCE else level + 1
-  first := operation_side(chain[0], chain[0].left, left_level, false, context)
+  first := operation_side(chain[0], chain[0].left, left_level, context, last: false)
   rights := [
-    operation_side(operation, operation.right, right_level, i == chain.length - 1, context)
+    operation_side(operation, operation.right, right_level, context, last: i == chain.length - 1)
     for operation, i in chain
   ]
   on_line := [join([text(" #{chain[i].operator} "), right]) for right, i in rights]
@@ -112,14 +112,17 @@ export operation_start := (binary: BinaryOperation, context: Context) ->
   level := binary_precedence(binary.operator)
   first := operation_chain(binary, level, context)[0]
   left_level := level == COMPARISON then COALESCE else level
-  join [operation_side(first, first.left, left_level, false, context), text(" #{first.operator}")]
+  join [
+    operation_side(first, first.left, left_level, context, last: false)
+    text(" #{first.operator}")
+  ]
 
 operation_side := (
-  operation: BinaryOperation, child: Expression, level: Int, last: Bool, context: Context
+  operation: BinaryOperation, child: Expression, level: Int, context: Context, flags: { last: Bool }
 ) ->
   # `and` mixed with `or` is clarified (see Parentheses).
   mixes := operation.operator == 'or' and child is BinaryOperation and child.operator == 'and'
-  mixes then clarified(child, context) else operand(child, context, level, last)
+  mixes then clarified(child, context) else operand(child, context, level, flags)
 
 # The operations of a chain from its first, innermost on the left, to `binary`: those of the level
 # on its left, whose parentheses the formatter leaves out (see Parentheses), so that it breaks the
@@ -133,28 +136,28 @@ operation_chain := (binary: BinaryOperation, level: Int, context: Context) ->
   chain.reversed()
 
 # An end of a range that is an operation is in parentheses (see Ranges).
-range_end := (end: Expression, context: Context, last: Bool) ->
+range_end := (end: Expression, context: Context, flags: { last: Bool }) ->
   is_operation := end is BinaryOperation or end is UnaryOperation
-  is_operation then clarified(end, context) else operand(end, context, ADDITIVE, last)
+  is_operation then clarified(end, context) else operand(end, context, ADDITIVE, flags)
 
 # A `then`/`else` inside the `then` value of another is in parentheses (see Parentheses), and an
 # `else nil` is left out, as `then` gives nil without `else` (see Else nil).
 export conditional_doc := (conditional: Conditional, context: Context) ->
-  condition := operand(conditional.condition, context, OR, false)
+  condition := operand(conditional.condition, context, OR, last: false)
   then_value :=
     if conditional.then_value is Conditional
       clarified conditional.then_value, context
     else
-      operand conditional.then_value, context, CONDITIONAL, false
+      operand conditional.then_value, context, CONDITIONAL, last: false
   head :=
     join([condition, text(' then'), spaced_value(conditional.then_value, then_value, context)])
   return head if conditional.without_else
   return join([head, rule(ELSE_NIL, text(''))]) if conditional.else_value is NilLiteral
-  else_value := operand(conditional.else_value, context, CONDITIONAL, true)
+  else_value := operand(conditional.else_value, context, CONDITIONAL, last: true)
   join [head, text(' else'), spaced_value(conditional.else_value, else_value, context)]
 
 export is_doc := (test: IsTest, context: Context, word: String) ->
-  join [operand(test.value, context, COALESCE, false), text(word), type_doc(test.type)]
+  join [operand(test.value, context, COALESCE, last: false), text(word), type_doc(test.type)]
 
 # `not (x is T)` is written `x is not T` (see Negated is tests).
 is_not_doc := (test: IsTest, context: Context) ->
@@ -162,10 +165,10 @@ is_not_doc := (test: IsTest, context: Context) ->
 
 # `not (x in xs)` is written `x not in xs` (see Negated in tests).
 not_in_doc := (test: BinaryOperation, context: Context) ->
-  left := operand(test.left, context, COALESCE, false)
+  left := operand(test.left, context, COALESCE, last: false)
   rule
     NEGATED_IN_TESTS
-    join([left, text(' not in '), operand(test.right, context, COALESCE, true)])
+    join([left, text(' not in '), operand(test.right, context, COALESCE, last: true)])
 
 is_in_test := (expression: Expression) ->
   expression is BinaryOperation and expression.operator == 'in'
@@ -176,7 +179,7 @@ is_negated_test := (expression: Expression) ->
 
 # `x as T`, then `form`. The `?` of `as T?` is read as the type's, so it is not printed with it.
 export cast_doc := (cast: Cast, context: Context, form: String) ->
-  value := operand(cast.value, context, COALESCE, false)
+  value := operand(cast.value, context, COALESCE, last: false)
   join [value, text(' as '), cast_type_doc(cast.type), text(form)]
 
 # `(x as T?) ? y`, written `x as T ? y` (see Cast fallbacks).

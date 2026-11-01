@@ -31,13 +31,13 @@ import
 from './printing'
 
 export expression_doc := (expression: Expression, context: Context) ->
-  operand expression, context, 0, true
+  operand expression, context, 0, last: true
 
 # The expression where it must bind at least as tightly as `level`. One that runs to the end of
 # what holds it, as `return x` and a function literal do, can do so only `last`. An operand of
 # another expression, at a level above 0, breaks no operation outside brackets (see Context).
-export operand := (expression: Expression, context: Context, level: Int, last: Bool) ->
-  runs_on := runs_to_end(expression) and not last
+export operand := (expression: Expression, context: Context, level: Int, flags: { last: Bool }) ->
+  runs_on := runs_to_end(expression) and not flags.last
   inner := level > 0 then context.unbroken() else context
   in_parentheses expression, inner, precedence(expression) < level or runs_on
 
@@ -92,10 +92,10 @@ bare_doc := (expression: Expression, context: Context): Doc ->
     when This then token('@', expression.position)
     when Member then member_doc(expression, context)
     when Index
-      object := operand(expression.object, context, POSTFIX, false)
+      object := operand(expression.object, context, POSTFIX, last: false)
       join [object, index_doc(expression, context)]
-    when Unwrap then join([operand(expression.operand, context, POSTFIX, false), text('!')])
-    when Call then call_doc(expression, context, false)
+    when Unwrap then join([operand(expression.operand, context, POSTFIX, last: false), text('!')])
+    when Call then call_doc(expression, context, whole: false)
     when UnaryOperation then unary_doc(expression, context)
     when BinaryOperation then binary_doc(expression, context)
     when Range then range_doc(expression, context)
@@ -106,7 +106,7 @@ bare_doc := (expression: Expression, context: Context): Doc ->
     when Await
       join [
         keyword('await ', expression.position)
-        operand(expression.operand, context, PREFIX, true)
+        operand(expression.operand, context, PREFIX, last: true)
       ]
     when Throw
       join [keyword('throw ', expression.position), expression_doc(expression.message, context)]
@@ -207,25 +207,25 @@ fits_single_quotes := (value: String) ->
 member_doc := (member: Member, context: Context) ->
   name := token(member.name.name, member.name.position)
   return join([token('@', member.object.position), name]) if member.object is This
-  join [operand(member.object, context, POSTFIX, false), text('.'), name]
+  join [operand(member.object, context, POSTFIX, last: false), text('.'), name]
 
 # `x?.rest`, which the parser reads as an `if` that binds x (see parse_nil_safe).
 nil_safe_doc := (nil_safe: If, context: Context) ->
   binding := nil_safe.condition as Binding!
-  object := operand(binding.value, context, POSTFIX, false)
+  object := operand(binding.value, context, POSTFIX, last: false)
   rest := nil_safe.then_body[0] as Expression!
   join [object, text('?'), bare_doc(rest, context)]
 
 # `whole` tells that the call is a statement or a whole value, which may take its arguments in a
 # block (see takes_block_arguments).
-export call_doc := (call: Call, context: Context, whole: Bool) ->
-  callee := operand(call.callee, context, POSTFIX, false)
+export call_doc := (call: Call, context: Context, flags: { whole: Bool }) ->
+  callee := operand(call.callee, context, POSTFIX, last: false)
   inside := context.inside_brackets()
   items := arguments(call, inside)
   open := join([callee, type_arguments(call.type_args), text('(')])
   closing_text := closing(')', arguments_closing_at(call, context))
   opened :=
-    if whole and takes_block_arguments(call, context)
+    if flags.whole and takes_block_arguments(call, context)
       indent join([callee, line_feed(), lines_of_items(items)])
     else
       opened_list open, items, closing_text
@@ -273,7 +273,7 @@ positional_item := (arg: Expression, context: Context) ->
 comprehension_doc := (comprehension: Comprehension, context: Context) ->
   inside := context.inside_brackets()
   if comprehension.spread
-    return join([operand(comprehension.iterable, inside, ADDITIVE, false), text('...')])
+    return join([operand(comprehension.iterable, inside, ADDITIVE, last: false), text('...')])
   forms := comprehension_forms(comprehension, context)
   breaking LINE_LENGTH, forms.flat, forms.broken
 
