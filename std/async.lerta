@@ -5,8 +5,8 @@ import sleep from 'std:time'
 extern lerta_promise_pending: () -> Promise
 extern lerta_promise_fire: (Promise) -> void
 
-# What a Deferred or a Signal is settled with: a function that gives the value, rather than an array
-# of it, since an array cannot hold an optional Int, Byte, Float or Bool; or an error.
+# What a Deferred is settled with: a function that gives the value, rather than an array of it,
+# since an array cannot hold an optional Int, Byte, Float or Bool; or an error.
 class Outcome<T>
   value: (() -> T)? = nil
   error: Error? = nil
@@ -39,30 +39,20 @@ export class Deferred<T>
 # As a Deferred, of a promise that gives no value: `resolve()` takes none. A type argument cannot be
 # void, so a Deferred<void> cannot stand for it.
 export class Signal
-  fired = lerta_promise_pending()
   # Only whether it is settled, and its error, matter; the Bool is never read.
-  outcome = Outcome<Bool>()
+  deferred = Deferred<Bool>()
   waiting: Promise? = nil
 
   promise = ->
     return waiting if waiting := @waiting
-    started := fired_by(@fired, @outcome)
+    started := ended(@deferred.promise())
     @waiting = started
     started
 
-  resolve = ->
-    return if @outcome.is_settled()
-    @outcome.value = -> true
-    lerta_promise_fire @fired
+  resolve = -> @deferred.resolve(true)
+  reject = (error: Error) -> @deferred.reject(error)
 
-  reject = (error: Error) ->
-    return if @outcome.is_settled()
-    @outcome.error = error
-    lerta_promise_fire @fired
-
-fired_by := (fired: Promise, outcome: Outcome<Bool>): Promise ->
-  await fired
-  throw error if error := outcome.error
+ended := (promise: Promise<Bool>): Promise -> await promise
 
 settled_by := <T>(fired: Promise, outcome: Outcome<T>): Promise<T> ->
   await fired
