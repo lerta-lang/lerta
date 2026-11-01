@@ -46,8 +46,7 @@ export class Client
     while next := options.follow_redirects then redirected(request, response)
       throw IOError("too many redirects: #{url}") if redirects == MAX_REDIRECTS
       redirects += 1
-      # Read to its end, so that its connection is kept.
-      await response.binary()
+      await drain(response.body)
       request = next
       response = await @exchange(request)
     response
@@ -105,7 +104,8 @@ export class Client
       body := BodyChunks(socket, finish, chunks)
       # A body that is empty by its framing does not hold the connection until it is read.
       body.end() if left == 0 and not chunked
-      Response body: Reader(-> await body.next()), status: head.status, headers: head.headers
+      read_body := Reader(read_chunk: -> await body.next(), on_close: -> body.abandon())
+      Response body: read_body, status: head.status, headers: head.headers
     catch error
       sending?.cancel()
       socket.close()
@@ -139,6 +139,20 @@ struct IdleSocket
   since: Float
 
 MAX_REDIRECTS := 20
+
+# The most of a redirect's body that is read past to keep its connection; a longer one has it
+# closed instead, as reading it would take longer than a new connection.
+MAX_DRAINED := 1024 * 1024
+
+# Reads a redirect's body to its end, dropping it, so that its connection is kept, or closes it.
+drain := (body: Body) ->
+  return if body is not Reader
+  var drained = 0
+  while chunk := await body.read(CHUNK_SIZE)
+    drained += chunk.length
+    if drained > MAX_DRAINED
+      body.close()
+      return
 
 # The methods that a request does the same with when sent twice.
 RESENDABLE := ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS', 'TRACE']
@@ -351,6 +365,12 @@ class BodyChunks
   end = ->
     @ended = true
     @finish()
+
+  # Closes the connection of a body left before its end, which cannot be kept with the rest unread.
+  abandon = ->
+    return if @ended
+    @ended = true
+    @socket.close()
 
 # The request that a redirect asks for, or nil for a response that is none. A 303, and a 301 or a
 # 302 to POST, as browsers do, ask for a GET without the body. A request to another host or port

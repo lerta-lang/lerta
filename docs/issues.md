@@ -2,14 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `fetch` buffers the whole body of a redirect response
-
-Severity: Medium.
-
-To keep the connection, the redirect loop in `Client.fetch_body` (std/internal/http_client.lerta:46) reads the redirect response's body with `response.binary()`, which accumulates every chunk into one `Binary` with no cap. A server that answers a redirect with `Content-Length: 300000000` and 300 MB of body makes the client hold 400 MB (measured by maximum RSS) before following it; without a redirect the body is a `Reader` and the client itself buffers nothing.
-
-Fix: drain the body chunk by chunk, and close the connection instead past a few MB, as curl and Go do.
-
 ## A `return` in a `map` or `filter` literal that a loop fuses emits malformed IR
 
 Severity: Medium.

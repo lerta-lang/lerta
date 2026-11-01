@@ -1,0 +1,25 @@
+# fetch follows a redirect whose body is too long to read past without reading it all, as one that
+# says 100 MB and sends 2 MiB, after which the server waits, on a new connection; and one of
+# 512 KiB, more than one chunk, on the connection it kept.
+import timeout from 'std:async'
+import Client from 'std:http'
+import RawRequest, raw_server, Reply from './lib/raw_server'
+
+redirect := (length: Int, sent: Int) ->
+  head := "HTTP/1.1 302 Found\r\nlocation: /target\r\ncontent-length: #{length}\r\n\r\n"
+  Reply head + 'x'.repeat(sent)
+
+reply := (request: RawRequest) ->
+  path := request.line.split(' ')[1]
+  case path
+    when '/large' then redirect(100000000, 2 * 1024 * 1024)
+    when '/medium' then redirect(512 * 1024, 512 * 1024)
+    else Reply("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")
+
+server := raw_server(reply)
+client := Client()
+for path in ['/large', '/medium']
+  response := await timeout(client.fetch(server.url(path)), 10.0)
+  print "#{path}: #{response.status} #{await response.text()}, #{server.connections} connections"
+client.close()
+server.close()
