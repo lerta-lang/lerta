@@ -40,53 +40,67 @@ void lerta_append_c_string(LertaArray *array, const char *text) {
   lerta_release(string);
 }
 
+static int64_t total_length(int64_t count, va_list args) {
+  va_list parts;
+  va_copy(parts, args);
+  int64_t length = 0;
+  for (int64_t i = 0; i < count; i++) length += va_arg(parts, const LertaString *)->length;
+  va_end(parts);
+  return length;
+}
+
+// A part of a concatenation, by its index, its length and where its bytes start in the result.
+typedef struct {
+  int64_t index;
+  LertaString *part;
+  int64_t length;
+  int64_t start;
+} PlacedPart;
+
+// The longest of the parts that nothing else holds and whose place has room for `size` bytes; its
+// index is -1 if there is none.
+static PlacedPart longest_with_room(int64_t count, va_list args, int64_t size) {
+  PlacedPart longest = {.index = -1};
+  int64_t start = 0;
+  va_list parts;
+  va_copy(parts, args);
+  for (int64_t i = 0; i < count; i++) {
+    LertaString *part = va_arg(parts, LertaString *);
+    bool fits = part->header.ref_count == 1 && lerta_has_room(part, size);
+    if (fits && (longest.index < 0 || part->length > longest.length)) {
+      longest = (PlacedPart){.index = i, .part = part, .length = part->length, .start = start};
+    }
+    start += part->length;
+  }
+  va_end(parts);
+  return longest;
+}
+
 // The concatenation of the `count` parts that `args` holds, which it takes if `taken`: then the
 // longest part that nothing else holds and whose place has room for the result is extended there,
 // its bytes moved to their place, rather than all copied into a new String. One without the room
 // is not grown, which would leave the result in a place of twice the size, as lerta_grow gives a
 // String that `+=` extends.
 static LertaString *concat(int64_t count, va_list args, bool taken) {
-  va_list parts;
-  va_copy(parts, args);
-  int64_t length = 0;
-  for (int64_t i = 0; i < count; i++) length += va_arg(parts, const LertaString *)->length;
-  va_end(parts);
+  int64_t length = total_length(count, args);
   int64_t size = (int64_t)sizeof(LertaString) + length;
-  int64_t kept = -1;
-  LertaString *kept_part = NULL;
-  int64_t kept_start = 0;
-  int64_t kept_length = 0;
-  if (taken) {
-    int64_t start = 0;
-    va_copy(parts, args);
-    for (int64_t i = 0; i < count; i++) {
-      LertaString *part = va_arg(parts, LertaString *);
-      bool fits = part->header.ref_count == 1 && lerta_has_room(part, size);
-      if (fits && (kept < 0 || part->length > kept_length)) {
-        kept = i;
-        kept_part = part;
-        kept_start = start;
-        kept_length = part->length;
-      }
-      start += part->length;
-    }
-    va_end(parts);
-  }
-
+  PlacedPart kept = taken ? longest_with_room(count, args, size) : (PlacedPart){.index = -1};
   LertaString *result;
-  if (kept < 0) {
+  if (kept.index < 0) {
     result = lerta_string_new(length);
   } else {
-    result = kept_part;
-    memmove(result->bytes + kept_start, result->bytes, (size_t)kept_length);
+    result = kept.part;
+    memmove(result->bytes + kept.start, result->bytes, (size_t)kept.length);
     result->length = length;
   }
   int64_t offset = 0;
+  va_list parts;
   va_copy(parts, args);
   for (int64_t i = 0; i < count; i++) {
     LertaString *part = va_arg(parts, LertaString *);
-    if (i == kept) {
-      offset += kept_length;
+    if (i == kept.index) {
+      // Its own length is the result's by now.
+      offset += kept.length;
       continue;
     }
     memcpy(result->bytes + offset, part->bytes, (size_t)part->length);
@@ -236,9 +250,12 @@ char *lerta_c_string(const LertaString *s) {
   return result;
 }
 
-int64_t lerta_float_literal_bits(const LertaString *text) {
+// The bits of the value that the text reads as, a double, or a float if is_float32, which is
+// widened to a double; -1 if it is beyond the largest.
+static int64_t literal_bits(const LertaString *text, bool is_float32) {
   char *digits = lerta_c_string(text);
-  double value = strtod(digits, NULL);
+  // A float is read as one at once, rather than through a double, which could round it twice.
+  double value = is_float32 ? strtof(digits, NULL) : strtod(digits, NULL);
   free(digits);
   if (!isfinite(value)) return -1;
   int64_t bits;
@@ -246,16 +263,9 @@ int64_t lerta_float_literal_bits(const LertaString *text) {
   return bits;
 }
 
-int64_t lerta_float32_literal_bits(const LertaString *text) {
-  char *digits = lerta_c_string(text);
-  // Rounded to a float at once, rather than through a double, which could round it twice.
-  double value = strtof(digits, NULL);
-  free(digits);
-  if (!isfinite(value)) return -1;
-  int64_t bits;
-  memcpy(&bits, &value, sizeof bits);
-  return bits;
-}
+int64_t lerta_float_literal_bits(const LertaString *text) { return literal_bits(text, false); }
+
+int64_t lerta_float32_literal_bits(const LertaString *text) { return literal_bits(text, true); }
 
 double lerta_float_from_bits(int64_t bits) {
   double value;
