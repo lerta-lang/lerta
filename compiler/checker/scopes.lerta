@@ -36,70 +36,63 @@ export struct PathView
   root: Local?
   type: Type
 
+# The names of one scope, and its narrowed views of names, such as a const `x: Int?` known to be an
+# Int, and of paths of fields, by `x.a.b`, which end with it. The views are separate from the
+# definitions, which they do not redefine.
+class Scope
+  locals: Map<String, Local> = Map()
+  overlays: Map<String, Local> = Map()
+  paths: Map<String, PathView> = Map()
+
 export class Scopes
-  scopes: Map<String, Local>[] = []
-  # Narrowed views of names, such as a const `x: Int?` known to be an Int; per scope, so that
-  # they end with it. They are separate from the definitions, which they do not redefine.
-  overlays: Map<String, Local>[] = []
-  # Narrowed types of paths of fields, by `x.a.b`, per scope as the overlays.
-  paths: Map<String, PathView>[] = []
+  scopes: Scope[] = []
 
   depth = -> @scopes.length
 
-  push = ->
-    @scopes.push Map()
-    @overlays.push Map()
-    @paths.push Map()
+  push = -> @scopes.push(Scope())
 
-  pop = ->
-    @paths.pop()
-    @overlays.pop()
-    @scopes.pop()
+  # The innermost scope ends; returns its locals.
+  pop = -> @scopes.pop().locals
 
   # Until the innermost scope ends, the name is seen as `local`.
-  narrow = (name: String, local: Local) -> @overlays.last()![name] = local
+  narrow = (name: String, local: Local) -> @scopes.last()!.overlays[name] = local
 
   # Until the innermost scope ends, the `var`s narrowed outside it are seen as declared, as a loop's
   # condition and body see them: a round may assign one before the next.
   hide_var_views = ->
-    hidden := @overlays.last()!
-    for overlays in @overlays
-      for name in overlays.keys()
+    hidden := @scopes.last()!.overlays
+    for scope in @scopes
+      for name in scope.overlays.keys()
         current := @lookup_local(name) ? continue
         origin := current.original()
         hidden[name] = origin if current != origin and origin.mutable
 
   # The local is assigned: its narrowed views end, in every scope.
   forget_views = (local: Local) ->
-    for overlays in @overlays
+    for scope in @scopes
+      overlays := scope.overlays
       names := [name for (name, view) in overlays.entries() when view.original() == local]
       overlays.remove name for name in names
 
-  narrow_path = (key: String, view: PathView) -> @paths.last()![key] = view
+  narrow_path = (key: String, view: PathView) -> @scopes.last()!.paths[key] = view
 
   lookup_path = (key: String) ->
-    var depth = @paths.length - 1
-    while depth >= 0
-      return view if view := @paths[depth][key]
-      depth -= 1
+    for scope in @scopes.reversed()
+      return view if view := scope.paths[key]
     nil
 
   # Returns false, without defining the name, if the innermost scope already has it.
   define = (name: String, local: Local) ->
     innermost := @scopes.last()!
-    return false if name in innermost
-    innermost[name] = local
+    return false if name in innermost.locals
+    innermost.locals[name] = local
     # The new name replaces a narrowed view of the outer one in this scope.
-    @overlays.last()!.remove(name)
+    innermost.overlays.remove name
     true
 
   # The name in the scopes, not outside them.
   lookup_local = (name: String) ->
-    var depth = @scopes.length - 1
-    while depth >= 0
-      overlay := @overlays[depth][name]
-      return overlay if overlay
-      local := @scopes[depth][name]
-      return local if local
-      depth -= 1
+    for scope in @scopes.reversed()
+      return overlay if overlay := scope.overlays[name]
+      return local if local := scope.locals[name]
     nil
