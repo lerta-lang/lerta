@@ -2,7 +2,9 @@
 import Check from '../lib/report'
 import compare_output, compare_text, expect_status, reason_unless from '../lib/expect'
 import compiler, root_dir from '../lib/lerta'
-import executable_suffix, expect_success, host_platform, new_cli_dir, run_command from '../lib/cli'
+import
+  executable_suffix, expect_success, host_platform, new_cli_dir, posix_check, run_command
+from '../lib/cli'
 import is_file from 'std:io'
 
 struct BuiltProgram
@@ -42,8 +44,7 @@ program_check := (
 )
 
 invalid_argument_check := ->
-  Check name: 'a built program rejects command-line arguments that are not UTF-8', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program rejects command-line arguments that are not UTF-8', ->
     source := "#{root_dir}/examples/wc.lerta"
     built := await build_program('invalid-argument', source)
     return built.errors if not built.errors.is_empty()
@@ -73,8 +74,7 @@ invalid_argument_check := ->
     ]
 
 decode_argument_bytes_check := ->
-  Check name: 'a built program decodes command-line arguments at UTF-8 boundaries', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program decodes command-line arguments at UTF-8 boundaries', ->
     built := await build_program(
       'decode-argument-bytes'
       "#{root_dir}/tests/binary/lib/decode_arguments.lerta"
@@ -107,8 +107,7 @@ decode_argument_bytes_check := ->
     ]
 
 invalid_environment_check := ->
-  Check name: 'a built program rejects an environment value that is not UTF-8', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program rejects an environment value that is not UTF-8', ->
     source := "#{root_dir}/tests/process/lib/print_env.lerta"
     built := await build_program('invalid-environment', source)
     return built.errors if not built.errors.is_empty()
@@ -123,16 +122,14 @@ invalid_environment_check := ->
       )...
     ]
 
-closed_stdout_check := -> Check(name: 'a built program reports a failed stdout write', run: ->
-  return nil if host_platform == 'windows'
+closed_stdout_check := -> posix_check('a built program reports a failed stdout write', ->
   built := await build_program('closed-stdout', "#{root_dir}/tests/print/lib/print_lost.lerta")
   return built.errors if not built.errors.is_empty()
   ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
   [expect_status(1, ran.status)..., compare_output('stderr', "reported\n".binary, ran.stderr)...]
 )
 
-closed_write_check := -> Check(name: 'a built program reports a rejected stdout write', run: ->
-  return nil if host_platform == 'windows'
+closed_write_check := -> posix_check('a built program reports a rejected stdout write', ->
   built := await build_program('closed-write', "#{root_dir}/tests/io/lib/write_closed.lerta")
   return built.errors if not built.errors.is_empty()
   ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
@@ -143,8 +140,7 @@ closed_write_check := -> Check(name: 'a built program reports a rejected stdout 
 )
 
 closed_stderr_check := ->
-  Check name: 'a built program reports a rejected stderr write without failing', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program reports a rejected stderr write without failing', ->
     built :=
       await build_program('closed-stderr', "#{root_dir}/tests/io/lib/write_closed_stderr.lerta")
     return built.errors if not built.errors.is_empty()
@@ -155,8 +151,7 @@ closed_stderr_check := ->
     ]
 
 closed_stdio_check := ->
-  Check name: 'a built program keeps closed stdout and stderr from being reused', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program keeps closed stdout and stderr from being reused', ->
     built := await build_program('closed-stdio', "#{root_dir}/tests/process/lib/closed_stdio.lerta")
     return built.errors if not built.errors.is_empty()
     # An uncaught error ends with 1 too, so the file that the program makes at its end tells them
@@ -176,27 +171,25 @@ closed_stdio_check := ->
       await run_closed('<&- >&- 2>&-', 'all-closed')...
     ]
 
-broken_pipe_check := ->
-  Check name: 'a built program ends with SIGPIPE when its reader closes', run: ->
-    return nil if host_platform == 'windows'
-    built := await build_program('broken-pipe', "#{root_dir}/tests/io/lib/print_many.lerta")
-    return built.errors if not built.errors.is_empty()
-    script := '{ "$0"; echo $? >&2; } | head -1'
-    ran := await run_command('sh', ['-c', script, built.executable], built.dir)
-    ignoring :=
-      await run_command('sh', ['-c', "trap '' PIPE; #{script}", built.executable], built.dir)
-    [
-      expect_status(0, ran.status)...
-      compare_output('stdout', "y\n".binary, ran.stdout)...
-      compare_output('stderr', "141\n".binary, ran.stderr)...
-      expect_status(0, ignoring.status)...
-      compare_output('stdout', "y\n".binary, ignoring.stdout)...
-      compare_output('stderr', "141\n".binary, ignoring.stderr)...
-    ]
+broken_pipe_check := -> posix_check('a built program ends with SIGPIPE when its reader closes', ->
+  built := await build_program('broken-pipe', "#{root_dir}/tests/io/lib/print_many.lerta")
+  return built.errors if not built.errors.is_empty()
+  script := '{ "$0"; echo $? >&2; } | head -1'
+  ran := await run_command('sh', ['-c', script, built.executable], built.dir)
+  ignoring :=
+    await run_command('sh', ['-c', "trap '' PIPE; #{script}", built.executable], built.dir)
+  [
+    expect_status(0, ran.status)...
+    compare_output('stdout', "y\n".binary, ran.stdout)...
+    compare_output('stderr', "141\n".binary, ran.stderr)...
+    expect_status(0, ignoring.status)...
+    compare_output('stdout', "y\n".binary, ignoring.stdout)...
+    compare_output('stderr', "141\n".binary, ignoring.stderr)...
+  ]
+)
 
 stdin_redirection_check := ->
-  Check name: 'a built program reads closed stdin as empty and rejects a directory', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program reads closed stdin as empty and rejects a directory', ->
     built := await build_program('stdin-redirection', "#{root_dir}/tests/io/lib/read_much.lerta")
     return built.errors if not built.errors.is_empty()
     closed := await run_command('sh', ['-c', '"$0" <&-', built.executable], built.dir)
@@ -208,33 +201,29 @@ stdin_redirection_check := ->
       compare_text('stderr', "cannot read stdin\n", first_line(directory.stderr_text()))...
     ]
 
-unawaited_write_check := ->
-  Check name: 'a built program reports an unawaited rejected write', run: ->
-    return nil if host_platform == 'windows'
-    built :=
-      await build_program('unawaited-write', "#{root_dir}/tests/io/lib/write_unawaited.lerta")
-    return built.errors if not built.errors.is_empty()
-    ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
-    [
-      expect_status(1, ran.status)...
-      compare_text('stderr', "cannot write to stdout\n", first_line(ran.stderr_text()))...
-    ]
+unawaited_write_check := -> posix_check('a built program reports an unawaited rejected write', ->
+  built := await build_program('unawaited-write', "#{root_dir}/tests/io/lib/write_unawaited.lerta")
+  return built.errors if not built.errors.is_empty()
+  ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
+  [
+    expect_status(1, ran.status)...
+    compare_text('stderr', "cannot write to stdout\n", first_line(ran.stderr_text()))...
+  ]
+)
 
-slow_reader_check := ->
-  Check name: 'a built program keeps writing while a slow reader waits', run: ->
-    return nil if host_platform == 'windows'
-    built := await build_program('slow-reader', "#{root_dir}/tests/io/lib/write_slowly_read.lerta")
-    return built.errors if not built.errors.is_empty()
-    ran := await run_command(
-      'sh'
-      ['-c', '"$0" | { sleep 1; cat >/dev/null; }', built.executable]
-      built.dir
-    )
-    [expect_status(0, ran.status)..., compare_output('stderr', "on time\n".binary, ran.stderr)...]
+slow_reader_check := -> posix_check('a built program keeps writing while a slow reader waits', ->
+  built := await build_program('slow-reader', "#{root_dir}/tests/io/lib/write_slowly_read.lerta")
+  return built.errors if not built.errors.is_empty()
+  ran := await run_command(
+    'sh'
+    ['-c', '"$0" | { sleep 1; cat >/dev/null; }', built.executable]
+    built.dir
+  )
+  [expect_status(0, ran.status)..., compare_output('stderr', "on time\n".binary, ran.stderr)...]
+)
 
 read_before_exit_check := ->
-  Check name: 'a built program exits after its pending stdin read ends', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program exits after its pending stdin read ends', ->
     built := await build_program('read-before-exit', "#{root_dir}/tests/io/lib/read_one_line.lerta")
     return built.errors if not built.errors.is_empty()
     script := 'start=$(date +%s); "$0"; echo $(( $(date +%s) - start ))'
@@ -247,22 +236,20 @@ read_before_exit_check := ->
       reason_unless(['0', '1', '2'].contains(lines[1]), "program took #{lines[1]} seconds")...
     ]
 
-read_then_run_check := ->
-  Check name: 'a built program preserves stdin for a process it runs', run: ->
-    return nil if host_platform == 'windows'
-    built := await build_program('read-then-run', "#{root_dir}/tests/io/lib/read_then_run.lerta")
-    return built.errors if not built.errors.is_empty()
-    script := "{ printf 'first\\n'; sleep 0.5; printf 'second\\n'; } | \"$0\""
-    ran := await run_command('sh', ['-c', script, built.executable], built.dir)
-    [
-      expect_status(0, ran.status)...
-      compare_output('stdout', "first\nsecond\ntrue\n".binary, ran.stdout)...
-      compare_output('stderr', ''.binary, ran.stderr)...
-    ]
+read_then_run_check := -> posix_check('a built program preserves stdin for a process it runs', ->
+  built := await build_program('read-then-run', "#{root_dir}/tests/io/lib/read_then_run.lerta")
+  return built.errors if not built.errors.is_empty()
+  script := "{ printf 'first\\n'; sleep 0.5; printf 'second\\n'; } | \"$0\""
+  ran := await run_command('sh', ['-c', script, built.executable], built.dir)
+  [
+    expect_status(0, ran.status)...
+    compare_output('stdout', "first\nsecond\ntrue\n".binary, ran.stdout)...
+    compare_output('stderr', ''.binary, ran.stderr)...
+  ]
+)
 
 run_without_stdout_check := ->
-  Check name: 'a built program can run a process when stdout is closed', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program can run a process when stdout is closed', ->
     built := await build_program(
       'run-without-stdout'
       "#{root_dir}/tests/process/lib/capture_without_stdout.lerta"
@@ -314,8 +301,7 @@ read_bodies_check := ->
     "100000\nthe end came after 4 of 10 bytes\n"
 
 read_bodies_streaming_check := ->
-  Check name: 'a built program reads a body that arrives in separate chunks', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program reads a body that arrives in separate chunks', ->
     built :=
       await build_program('read-bodies-streaming', "#{root_dir}/tests/io/lib/read_bodies.lerta")
     return built.errors if not built.errors.is_empty()
@@ -357,8 +343,7 @@ write_both_check := ->
     'b'
 
 write_both_order_check := ->
-  Check name: 'a built program preserves stdout and stderr write order when combined', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program preserves stdout and stderr write order when combined', ->
     built := await build_program('write-both-order', "#{root_dir}/tests/io/lib/write_both.lerta")
     return built.errors if not built.errors.is_empty()
     ran := await run_command('sh', ['-c', '"$0" 2>&1', built.executable], built.dir)
@@ -376,8 +361,7 @@ write_then_error_check := ->
     "error\n"
 
 merged_output_order_check := ->
-  Check name: 'a built program preserves write order when stdout and stderr are combined', run: ->
-    return nil if host_platform == 'windows'
+  posix_check 'a built program preserves write order when stdout and stderr are combined', ->
     built := await build_program(
       'merged-output-order'
       "#{root_dir}/tests/print/lib/write_then_print_error.lerta"
@@ -422,9 +406,7 @@ empty_temp_dir_check := ->
     ''.binary
     "true\n"
     env
-  Check name: check.name, run: ->
-    return nil if host_platform == 'windows'
-    await check.run()
+  posix_check check.name, check.run
 
 argv_check := ->
   program_check
@@ -463,8 +445,7 @@ terminal_color_check := (
   color_variables: Map<String, String>
   expected: String[]
   redirect = ''
-) -> Check(name, run: ->
-  return nil if host_platform == 'windows'
+) -> posix_check(name, ->
   built := await build_program(name, "#{root_dir}/tests/io/lib/print_color.lerta")
   return built.errors if not built.errors.is_empty()
   command := "'#{built.executable}'#{redirect}"

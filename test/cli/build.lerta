@@ -4,7 +4,7 @@ import compare_output, compare_text, expect_status from '../lib/expect'
 import compiler, root_dir from '../lib/lerta'
 import
   executable_suffix, expect_left, expect_success, hello_output, run_command, run_in_dir,
-  run_in_new_dir, cli_work_dir, new_cli_dir, new_cli_dirs, runtime_flags, host_platform
+  run_in_new_dir, cli_work_dir, new_cli_dir, new_cli_dirs, runtime_flags, host_platform, posix_check
 from '../lib/cli'
 import is_file, list_dir, make_dir, make_link, read_file, write_file from 'std:io'
 import env from 'std:process'
@@ -116,9 +116,8 @@ input_checks := [input_check(test) for test in input_cases]
 # into, where the output must be written, as clang wrote it before the link ran in the build's own
 # directory.
 symlink_output_check := ->
-  Check name: 'lerta build writes an output whose path goes through a symbolic link', run: ->
-    # Wine makes symbolic links but does not follow them (see std:io in the reference).
-    return nil if host_platform == 'windows'
+  # Wine makes symbolic links but does not follow them (see std:io in the reference).
+  posix_check 'lerta build writes an output whose path goes through a symbolic link', ->
     (cwd, temp) := new_cli_dirs()
     make_dir "#{cwd}/under"
     make_dir "#{cwd}/under/below"
@@ -140,9 +139,8 @@ symlink_output_check := ->
 # (see real_path in std:io in the reference), which the build must not write into instead. An output
 # that names a directory is clang's to report too, rather than the file its name as text would be.
 missing_output_directory_check := ->
-  Check name: 'lerta build reports an output directory that only the path as text has', run: ->
-    # Wine makes symbolic links but does not follow them (see std:io in the reference).
-    return nil if host_platform == 'windows'
+  # Wine makes symbolic links but does not follow them (see std:io in the reference).
+  posix_check 'lerta build reports an output directory that only the path as text has', ->
     (cwd, temp) := new_cli_dirs()
     make_dir "#{cwd}/under"
     make_dir "#{cwd}/under/below"
@@ -167,10 +165,9 @@ missing_output_directory_check := ->
 # A `..` after a name that is not there names no file for the system, so an output written there as
 # text would be an input of the build that reject_input_as_output does not see.
 missing_input_output_check := ->
-  Check name: 'lerta build does not write an input that only the output path as text names', run: ->
-    # Windows works a `..` out as text (see real_path in std:io in the reference), so the output
-    # does name the input there, which only reject_input_as_output could tell.
-    return nil if host_platform == 'windows'
+  # Windows works a `..` out as text (see real_path in std:io in the reference), so the output
+  # does name the input there, which only reject_input_as_output could tell.
+  posix_check 'lerta build does not write an input that only the output path as text names', ->
     (cwd, temp) := new_cli_dirs()
     source := "#{cwd}/hi.lerta"
     await write_file(source, await read_file(hello))
