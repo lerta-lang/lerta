@@ -11,17 +11,19 @@ import ExtensionSource from '../checker/methods'
 import FunctionReference from '../checker/references'
 import arguments_of from '../checker/shared'
 import generate_loop_body, iterated from './control_flow'
-import emit_traced_unwind, TRACE_PUSH from './exceptions'
+import unwind_from from './exceptions'
 import generate, held_value, type_at_use, type_of from './expression'
 import nan_free_operations from './float_ranges'
 import all_but_last from '../arrays'
 import
-  generate_block_value, generate_block_with, generate_last_statement, generate_statements,
-  no_locals, release_scope, store_in_slot
+  generate_block_with, generate_last_statement, generate_statements, release_scope, store_in_slot
 from './function'
 import emit_when from './ir_builder'
+import ir_type, returns_nothing from './lerta_ir'
 import referred_local from './references'
-import CodegenLocal, deferred_value, Generator, locate, trace_name, ValueLocal from './generator'
+import
+  CodegenLocal, deferred_value, Generator, locate, SlotLocal, trace_name, ValueLocal
+from './generator'
 import function_type_of from './closure'
 import BUILTINS_MODULE from '../loader'
 import InterfaceType, iterable_item, Type, void_type from '../types'
@@ -98,12 +100,7 @@ export generate_fused_loop := (
   copies := g.fused_copies * fused.yields
   inner.nan_free = nan_free_operations(facts, literal.body, false)
   # The function's exception goes on from the loop, as from a call there.
-  unwind := ->
-    inner_position := g.position
-    locate g, position
-    emit_traced_unwind g, TRACE_PUSH
-    locate g, inner_position
-  inner.fused_exit = { unwind, label: exit_label }
+  inner.fused_exit = { unwind: unwind_from(g, position), label: exit_label }
   # The function's scopes, which its generator holds, are captured rather than the generator, which
   # holds the function. Their names cannot be written in the source, so that the loop's body finds
   # none of the function's locals.
@@ -265,7 +262,7 @@ export generate_fused_comprehension := (
         scope[variable.name] = element_local(g, lazy, item, position)
       generate_block_with g, body, define
     if guard := lazy.guard
-      emit_when ir, generate_in_place(g, guard, item, position), element
+      emit_when ir, generate_in_place(g, guard, [item], unwind_from(g, position)), element
     else
       element()
   generate_iteration lazy.source, held, each
@@ -275,13 +272,21 @@ element_local := (
   g: Generator, lazy: LazySource, item: String, position: Position?
 ): CodegenLocal ->
   literal := lazy.element ? return ValueLocal(operand: item, type: lazy.item)
-  store_in_slot g, generate_in_place(g, literal, item, position), lazy.item
+  value := generate_in_place(g, literal, [item], unwind_from(g, position))
+  store_in_slot g, value, lazy.item
 
-# The value of a function of one item, generated in place with the item, borrowed, as its
-# parameter: by a generator of its own, named as the closure would be in traces, whose scope
-# holds what the function captures as the locals of the loop's generator, and whose exception
-# goes on from the loop, as from the call of the closure there.
-generate_in_place := (g: Generator, literal: FunctionLiteral, item: String, position: Position?) ->
+# The local of `g` as the function's generator holds it, which its return and its exception, which
+# release all its scopes, leave to `g`.
+borrowed_view := (local: CodegenLocal): CodegenLocal ->
+  local is SlotLocal then SlotLocal(local..., is_borrowed: true) else local
+
+# The value of a function literal, owned, generated in place with the arguments, borrowed, as its
+# parameters: by a generator of its own, named as the closure would be in traces, whose scope holds
+# what the function captures as the locals of `g`, whose `return` goes to its end, and whose
+# exception is left to `unwind`, as from the call of the closure there.
+export generate_in_place := (
+  g: Generator, literal: FunctionLiteral, args: String[], unwind: () -> void
+) ->
   { code, extensions, facts, ir } := g
   name := "#{g.function_name}.<anonymous>"
   inner := Generator(code, extensions, facts, ir, function_name: name, top_level_code: false)
@@ -289,17 +294,22 @@ generate_in_place := (g: Generator, literal: FunctionLiteral, item: String, posi
   inner.fused_copies = g.fused_copies
   inner.unchecked_floats = g.unchecked_floats
   inner.nan_free = nan_free_operations(g.facts, literal.body, false)
-  unwind := ->
-    inner_position := g.position
-    locate g, position
-    emit_traced_unwind g, TRACE_PUSH
-    locate g, inner_position
-  inner.fused_exit = { unwind, label: '' }
+  type := function_type_of(type_of(g, literal))
+  inner.result_type = type.result
+  result_type := ir_type(type.result)
+  has_value := not returns_nothing(type.result)
+  result_slot := has_value then ir.alloca(result_type) else ''
+  if has_value
+    inner.on_return = (value) -> ir.emit("store #{result_type} #{value}, ptr #{result_slot}")
+  exit_label := ir.fresh_label('in_place.exit')
+  inner.fused_exit = { unwind, label: exit_label }
   scope := inner.locals.push()
   for capture in g.facts.captures[literal] ? []
-    scope[capture.name] = referred_local(g, capture.source, capture.name)
-  type := function_type_of(type_of(g, literal))
-  scope[literal.params[0].name.name] = ValueLocal(operand: item, type: type.params[0])
-  value := generate_block_value(inner, literal.body, no_locals)
+    scope[capture.name] = borrowed_view(referred_local(g, capture.source, capture.name))
+  for param, i in literal.params
+    scope[param.name.name] = ValueLocal(operand: args[i], type: type.params[i])
+  generate_statements inner, all_but_last(literal.body)
+  generate_last_statement inner, literal.body, type.result
   inner.locals.pop()
-  value
+  ir.start_block exit_label
+  has_value then ir.assign("load #{result_type}, ptr #{result_slot}") else ''

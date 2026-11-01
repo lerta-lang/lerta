@@ -1,12 +1,12 @@
 # Exceptions in the generated code (see docs/internals.md#exceptions).
-import Catch, Statement, Try from '../ast'
+import Catch, Position, Statement, Try from '../ast'
 import pointer_tag from './alias_tags'
 import merge from './case'
 import type_of from './expression'
 import
   generate_block, generate_block_value, no_locals, release_scope, store_in_slot
 from './function'
-import CodegenLocal, Finally, Generator, Handler, SlotLocal from './generator'
+import CodegenLocal, Finally, Generator, Handler, locate, SlotLocal from './generator'
 import emit_seldom_branch, IrBuilder from './ir_builder'
 import emit_type_test from './heap_object'
 import
@@ -108,6 +108,13 @@ emit_trace_entry := (g: Generator, add: String) ->
   definition := "private unnamed_addr constant { ptr, ptr, i32, i32 } { #{fields.join(', ')} }"
   site := g.ir.module.global('lerta.site', definition)
   call_void_runtime g.ir, add, "ptr #{site}"
+
+# Goes on with the exception from the position, as from the call of a closure there.
+export unwind_from := (g: Generator, position: Position?) -> ->
+  inner_position := g.position
+  locate g, position
+  emit_traced_unwind g, TRACE_PUSH
+  locate g, inner_position
 
 # Releases what the code holds up to the innermost `try`, and goes to its catches; outside every
 # `try`, releases what the function holds and returns a value that the caller never reads.
