@@ -76,7 +76,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
   give options.stdin, true
   give options.stdout, false
   give options.stderr, false
-  copies := Copies()
+  copies := Copies(command)
   feeding := input then feed(input, stdin!, program, copies)
   outputting := output then copy_output(output, stdout!, output_limit, program, copies)
   erroring := errors then copy_output(errors, stderr!, output_limit, program, copies)
@@ -97,7 +97,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
   error_bytes := erroring and not copies.stopped then await erroring
   await give_up(copies, nil, outputting, erroring) if copies.stopped
   end_writers stdout, stderr, copies
-  throw error if error := copies.failure(command)
+  throw error if error := copies.error
   append_to stdout, output_bytes
   append_to stderr, error_bytes
   status >= 0 then Exit(code: status) else Exit(code: 128 - status, signal: -status)
@@ -107,30 +107,18 @@ class Program
   pointer: Int
   deinit = -> lerta_program_free(@pointer)
 
-# How the copies of a program's streams went: whether an output went past the limit, which stops
-# the program, whether one could not be read, and the error of a Reader or a Writer that one read
-# or wrote.
+# How the copies of a program's streams went: the error that fails the run, of an output past the
+# limit or that could not be read, or of a Reader or a Writer that a copy read or wrote.
 class Copies
-  too_long = false
-  unread = false
+  # The program's command, which errors name.
+  command: String
   error: Error? = nil
-  # Whether one of them stopped the program, for one of those.
+  # Whether a copy that failed stopped the program.
   stopped = false
   # Whether run has cancelled the copy of the input, and those of the outputs, which a
   # CancelledError of a Reader or a Writer is not.
   input_given_up = false
   outputs_given_up = false
-
-  # Why the run fails, if it does.
-  failure = (command: String): Error? ->
-    return IOError("the output is too long: #{command}") if @too_long
-    return error if error := @error
-    @unread then IOError("cannot read the output of: #{command}")
-
-  # Stops the program, as a copy that fails or an output that is too long does (see failed_copy).
-  stop = (program: Program) ->
-    @stopped = true
-    lerta_program_stop program.pointer
 
   # The first error tells why the run fails; the later ones follow from it as often as not.
   fail = (error: Error) -> @error = @error ? error
@@ -202,9 +190,7 @@ copy_output := (
       else
         bytes += chunk
         if bytes.length > limit ? INT_MAX
-          copies.too_long = true
-          copies.stop program
-          return nil
+          return failed_copy(copies, IOError("the output is too long: #{copies.command}"), program)
     output is Writer then nil else bytes
   catch error: CancelledError
     throw error if copies.outputs_given_up
@@ -216,7 +202,8 @@ copy_output := (
 # though it is cut short, or wait for ever once the pipe of an output that is read no more is full.
 failed_copy := (copies: Copies, error: Error, program: Program): Binary? ->
   copies.fail error
-  copies.stop program
+  copies.stopped = true
+  lerta_program_stop program.pointer
   nil
 
 # The Writers are ended once both copies have ended, as one Writer may take both outputs, as `2>&1`
@@ -236,9 +223,7 @@ next_chunk := (reader: Reader, program: Program, copies: Copies) ->
   try
     await reader.read_chunk()
   catch _: IOError
-    copies.unread = true
-    copies.stop program
-    nil
+    failed_copy copies, IOError("cannot read the output of: #{copies.command}"), program
 
 # The copies that are not wanted any more are cancelled, and awaited, so that a Writer is ended
 # before run settles: a cancelled copy stops reading, and ends at once with nothing to tell.

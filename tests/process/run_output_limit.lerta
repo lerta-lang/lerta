@@ -1,5 +1,6 @@
 # Output up to the limit is read; past it, on either stream, the program is stopped, the output of
 # both dropped, and the run fails.
+import Writer from 'std:io'
 import run from 'std:process'
 
 output: Byte[]
@@ -48,5 +49,22 @@ print [at_limit.code, both_output.length, both_errors.length]
 only_errors: Byte[]
 try
   await run('echo_input', 'a'.repeat(1000), stderr: only_errors, output_limit: 1000)
+catch error: IOError
+  print error.message
+
+# The error of an output past the limit fails the run, not that of a Writer that fails after it.
+class FailingEnd: Writer
+  write = (data: String | Binary): Promise -> return
+  end = (): void -> throw IOError('cannot end')
+past_limit: Byte[]
+try
+  await run(
+    'repeat'
+    '20000'
+    'abcdefghi'
+    stdout: past_limit
+    stderr: FailingEnd()
+    output_limit: 1000
+  )
 catch error: IOError
   print error.message
