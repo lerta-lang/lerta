@@ -207,9 +207,6 @@ LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_
 LertaString *lerta_string_slice(const LertaString *s, int64_t start, int64_t end);
 // The same object as a String (retained) if its bytes are valid UTF-8, else NULL.
 LertaString *lerta_binary_text(LertaString *binary);
-// The same object as a String (retained), unchecked. Only the seed's std calls it.
-LertaString *lerta_binary_as_string(LertaString *binary);
-
 // Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; pop writes
 // the item owned.
 // The type of every array, whatever its items, which a union tests (see docs/internals.md#objects).

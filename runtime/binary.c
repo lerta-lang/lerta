@@ -91,13 +91,6 @@ static bool is_utf8(const LertaString *binary) {
   return true;
 }
 
-// The same object as a String, unchecked, which only the seed's std calls; it goes with the next
-// refresh of the seed.
-LertaString *lerta_binary_as_string(LertaString *binary) {
-  lerta_retain(binary);
-  return binary;
-}
-
 LertaString *lerta_binary_text(LertaString *binary) {
   if (!is_utf8(binary)) return NULL;
   lerta_retain(binary);
