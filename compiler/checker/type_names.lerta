@@ -77,6 +77,10 @@ export module_resolver := (module_index: Int) -> Resolver(module_index, type_par
 export with_type_parameters := (resolver: Resolver, type_parameters: Map<String, Type>) ->
   Resolver(resolver..., type_parameters)
 
+# The Shared of the module whose names the resolver resolves.
+export resolver_shared := (program: ProgramWide, resolver: Resolver) ->
+  program.shared[resolver.module_index]
+
 # A class, struct, enum or imported type of the name, or else a type that std:builtins exports
 # unless an alias takes the name, marking its import as used.
 export named_type := (shared: Shared, name: String): Type? ->
@@ -91,7 +95,7 @@ export named_type := (shared: Shared, name: String): Type? ->
 
 # Whether the name is that of a type, which a type parameter cannot take.
 export has_type := (program: ProgramWide, resolver: Resolver, name: String) ->
-  shared := program.shared[resolver.module_index]
+  shared := resolver_shared(program, resolver)
   return true if is_core_type_name(name) or named_type(shared, name) != nil
   has_alias shared, name
 
@@ -184,7 +188,7 @@ resolve_union := (program: ProgramWide, resolver: Resolver, type_name: UnionType
   fail program, type_name.position, message
 
 resolve_alias := (program: ProgramWide, resolver: Resolver, name: String, at: Position) ->
-  shared := program.shared[resolver.module_index]
+  shared := resolver_shared(program, resolver)
   entry := shared.aliases[name] ? return nil
   return type if type := entry.type
   fail program, at, "the type '#{name}' refers to itself" if not shared.resolving.add(name)
@@ -198,7 +202,7 @@ resolve_name := (
 ): Type ->
   { name, args, position } := type_name
   fail_here := (message: String) -> fail(program, position, message)
-  shared := program.shared[resolver.module_index]
+  shared := resolver_shared(program, resolver)
   import_qualified_type shared, type_name
   if parameter := resolver.type_parameters[name]
     fail_here "'#{name}' takes no type arguments" if not args.is_empty()

@@ -11,7 +11,7 @@ from './imports'
 import is_jsonable_bound, is_jsonable_declaration from './json'
 import declared_symbol, ProgramWide, record_type_name, Shared from './shared'
 import
-  has_type, module_resolver, named_in, resolve, Resolver, with_type_parameters
+  has_type, module_resolver, named_in, resolve, Resolver, resolver_shared, with_type_parameters
 from './type_names'
 import placeholders, substitute from './type_patterns'
 import reject_invalid_instance from './type_validity'
@@ -132,7 +132,7 @@ export imported_interface := (shared: Shared, name: String) ->
 # The interface of the name where the resolver resolves names: one of the module, an imported one,
 # or one that std:builtins exports, unless another type takes its name.
 export named_interface := (program: ProgramWide, resolver: Resolver, name: String) ->
-  shared := program.shared[resolver.module_index]
+  shared := resolver_shared(program, resolver)
   return own if own := shared.interfaces[name]
   return imported if imported := imported_interface(shared, name)
   is_other_name := has_type(program, resolver, name) or has_import(shared, name)
@@ -161,13 +161,13 @@ export value_interface_type := (
 # type arguments.
 export bound_interface := (program: ProgramWide, resolver: Resolver, bound: NamedType) ->
   { name, position } := bound
-  import_qualified_type program.shared[resolver.module_index], bound
+  shared := resolver_shared(program, resolver)
+  import_qualified_type shared, bound
   if info := named_interface(program, resolver, name)
     fail program, position, 'a bound cannot be optional' if bound.optional
     type := instantiate(program, resolver, info, bound)
-    record_type_name program.shared[resolver.module_index], bound, type
+    record_type_name shared, bound, type
     return type
-  shared := program.shared[resolver.module_index]
   is_other_name := has_type(program, resolver, name) or has_import(shared, name)
   message :=
     if is_other_name
