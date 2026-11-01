@@ -1,6 +1,7 @@
 # The state of the generation of a module's code, and of one function of it. Objects refer to the
 # checker's results and to the IR being built, never back to the generator, so that they form no
 # cycle.
+import take_from from '../arrays'
 import Expression, FunctionLiteral, Identifier, Position, Statement from '../ast'
 import Extensions from '../checker/extensions'
 import NodeFacts, ProgramWide, Shared from '../checker/shared'
@@ -91,16 +92,26 @@ export class Locals
     innermost[name] = local
 
   lookup = (name: String) ->
-    var depth = @scopes.length - 1
-    while depth >= 0
-      return local if local := @scopes[depth][name]
-      depth -= 1
+    for scope in @scopes.reversed()
+      return local if local := scope[name]
     nil
 
   # The scopes from `depth` inward, innermost first.
-  inner_scopes = (depth: Int) ->
-    innermost := @scopes.length - 1
-    [@scopes[innermost - i] for i in 0...(@scopes.length - depth)]
+  inner_scopes = (depth: Int) -> @scopes.slice(depth).reversed()
+
+  truncate = (depth: Int) -> @scopes.truncate(depth)
+
+  # Removes the scopes from `depth` inward and gives them, in order, for `put_back`.
+  set_aside = (depth: Int) -> take_from(@scopes, depth)
+
+  put_back = (scopes: Map<String, CodegenLocal>[]) -> @scopes.append(scopes)
+
+  # Pushes a scope for each of the scopes, holding its locals under names that the source cannot
+  # write, `(<prefix> <name>)`, so that a jump or an exception out of the code releases them.
+  hold_all = (scopes: Map<String, CodegenLocal>[], prefix: String) ->
+    for scope in scopes
+      held := @push()
+      held["(#{prefix} #{name})"] = local for (name, local) in scope.entries()
 
 # An owned value that an expression holds, by how it holds references.
 export struct Temporary

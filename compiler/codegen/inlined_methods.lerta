@@ -1,6 +1,7 @@
 # Calls of the methods of std:builtins that go through `@` once, over a receiver that a loop goes
 # through in place, which generate the method's body in place, so that its loop goes through the
 # receiver in place too and no Iter is made (see docs/internals.md#inlined-methods).
+import take_from from '../arrays'
 import
   Assignment, Binding, BooleanLiteral, Call, Case, Condition, Declaration, Expression, For,
   FunctionLiteral, Identifier, If, IntegerLiteral, Member, operands_of, Parameter, Position, Range,
@@ -235,17 +236,14 @@ call_state := (g: Generator, position: Position?) ->
   handler_depth := g.handlers.length
   temporary_depth := g.temporaries.length
   (emit: () -> void) ->
-    scopes := g.locals.scopes.slice(scope_depth)
-    handlers := g.handlers.slice(handler_depth)
-    temporaries := g.temporaries.slice(temporary_depth)
-    g.locals.scopes.truncate scope_depth
-    g.handlers.truncate handler_depth
-    g.temporaries.truncate temporary_depth
+    scopes := g.locals.set_aside(scope_depth)
+    handlers := take_from(g.handlers, handler_depth)
+    temporaries := take_from(g.temporaries, temporary_depth)
     traceless := g.traceless
     g.traceless = false
     located g, position, emit
     g.traceless = traceless
-    g.locals.scopes.append scopes
+    g.locals.put_back scopes
     g.handlers.append handlers
     g.temporaries.append temporaries
 
@@ -262,9 +260,7 @@ go_through_receiver := (
   ir := g.ir
   loop_position := inner.position
   base_depth := g.locals.depth()
-  for scope in inner.locals.scopes
-    held := g.locals.push()
-    held["(inlined #{local_name})"] = local for (local_name, local) in scope.entries()
+  g.locals.hold_all inner.locals.scopes, 'inlined'
   iteration_depth := g.locals.depth()
   unwind_label := ir.fresh_label('inlined.unwind')
   g.handlers.push {
@@ -277,9 +273,7 @@ go_through_receiver := (
   each := ->
     item := held_value(g, g.locals.lookup(held_item.name)!)
     inner_depth := inner.locals.depth()
-    for scope in g.locals.scopes.slice(iteration_depth)
-      held := inner.locals.push()
-      held["(receiver #{local_name})"] = local for (local_name, local) in scope.entries()
+    inner.locals.hold_all g.locals.scopes.slice(iteration_depth), 'receiver'
     loop := g.loops.last()!
     scope_depth := inner_depth + loop.scope_depth - iteration_depth
     break_depth := inner_depth + loop.break_depth - iteration_depth
@@ -290,13 +284,13 @@ go_through_receiver := (
       scope[variable.name] = ValueLocal(operand: item, type: item_type)
     generate_block_with inner, body, define
     inner.loops.pop()
-    inner.locals.scopes.truncate inner_depth
+    inner.locals.truncate inner_depth
   traceless := g.traceless
   g.traceless = true
   generate_iteration g, receiver, held_item, nil, each
   g.traceless = traceless
   g.handlers.pop()
-  g.locals.scopes.truncate base_depth
+  g.locals.truncate base_depth
   next_label := ir.fresh_label('inlined.next')
   ir.branch next_label
   ir.start_block unwind_label

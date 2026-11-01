@@ -8,7 +8,7 @@ import emit_array_new, emit_push from './array'
 import function_type_of from './closure'
 import generate, generate_condition, release_if_reference, type_of from './expression'
 import
-  generate_block, generate_block_with, generate_closure, no_locals, release_scope, statements_code,
+  generate_block, generate_block_with, generate_closure, hold, no_locals, statements_code,
   store_in_slot
 from './function'
 import CodegenLocal, deferred_value, Generator, ValueLocal from './generator'
@@ -159,17 +159,15 @@ export generate_iteration := (
       return
   return generate_iter_loop(g, iterable, type, variable, define_index, body) if type is IterType
   item_type := iterable_item(type)!
-  sequence_scope := g.locals.push()
   sequence := generate(g, iterable)
-  sequence_scope[' iterated sequence'] = store_in_slot(g, sequence, type)
+  release := hold(g, sequence, type)
   define := (scope: Map<String, CodegenLocal>, current: String) ->
     item := emit_sequence_get(g.ir, sequence, current, type)
     scope[variable.name] = store_in_slot(g, item, item_type)
     define_index scope, current
   end := -> emit_sequence_length(g.ir, sequence, type)
   generate_counting_loop g, '0', end, body, define
-  release_scope g, sequence_scope
-  g.locals.pop()
+  release()
 
 # The items' places are counted in a slot, which each round reads and increments first.
 generate_iter_loop := (
@@ -177,9 +175,8 @@ generate_iter_loop := (
   define_index: (Map<String, CodegenLocal>, String) -> void, body: () -> void
 ) ->
   item := iterable_item(type)!
-  iter_scope := g.locals.push()
   iter := generate(g, iterable)
-  iter_scope[' iterated Iter'] = store_in_slot(g, iter, type)
+  release := hold(g, iter, type)
   emit_iter_start g.ir, iter
   emit_exception_check g
   counter := g.ir.alloca('i64')
@@ -193,8 +190,7 @@ generate_iter_loop := (
       define_index scope, place
     generate_loop_body g, body, exit_label, next_label, define
   emit_iter_loop g.ir, iter, item, loop_body, -> emit_exception_check(g)
-  release_scope g, iter_scope
-  g.locals.pop()
+  release()
 
 # Counts from start while the counter is below the end, which is evaluated in the header. The
 # counter is a phi in the header, incremented in the latch block; it cannot overflow there, since

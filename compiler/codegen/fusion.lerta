@@ -107,9 +107,7 @@ export generate_fused_loop := (
   # none of the function's locals.
   inner_locals := inner.locals
   inner.on_yield = (value) ->
-    for scope in inner_locals.scopes
-      held := g.locals.push()
-      held["(fused #{local_name})"] = local for (local_name, local) in scope.entries()
+    g.locals.hold_all inner_locals.scopes, 'fused'
     resume_label := ir.fresh_label('fused.resume')
     define := (scope: Map<String, CodegenLocal>) ->
       scope[variable.name] = store_in_slot(g, value, item)
@@ -120,7 +118,7 @@ export generate_fused_loop := (
     g.fused_copies = outer_copies
     ir.branch resume_label
     ir.start_block resume_label
-    g.locals.scopes.truncate outer_depth
+    g.locals.truncate outer_depth
   params := function_type_of(type_of(inner, literal)).params
   scope := inner.locals.push()
   for param, i in literal.params

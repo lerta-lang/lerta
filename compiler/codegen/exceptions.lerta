@@ -1,4 +1,5 @@
 # Exceptions in the generated code (see docs/internals.md#exceptions).
+import take_from from '../arrays'
 import Catch, Position, Statement, Try from '../ast'
 import pointer_tag from './alias_tags'
 import merge from './case'
@@ -255,26 +256,16 @@ export leave_scopes := (g: Generator, scope_depth: Int) ->
 
 # Releases the scopes from `from` up to `to`, innermost first.
 release_scopes_between := (g: Generator, from: Int, to: Int) ->
-  var depth = to - 1
-  while depth >= from
-    release_scope g, g.locals.scopes[depth]
-    depth -= 1
+  release_scope g, scope for scope in g.locals.scopes.slice(from, to).reversed()
 
 run_finally_left := (g: Generator, left: Finally, finally_depth: Int) ->
-  scopes := take_from(g.locals.scopes, left.scope_depth)
+  scopes := g.locals.set_aside(left.scope_depth)
   handlers := take_from(g.handlers, left.handler_depth)
   finallies := take_from(g.finallies, finally_depth)
   generate_block g, left.body, no_locals
-  g.locals.scopes.append scopes
+  g.locals.put_back scopes
   g.handlers.append handlers
   g.finallies.append finallies
-
-# Removes the items from `length` on, and gives them, in order; `length`, recorded when the stack
-# was no deeper, is at most the number of items.
-take_from := <T>(items: T[], length: Int) ->
-  taken := items.slice(length)
-  items.truncate length
-  taken
 
 with_handler := (g: Generator, label: String, generate_body: () -> void) ->
   handler := Handler(label, scope_depth: g.locals.depth(), temporary_depth: g.temporaries.length)
