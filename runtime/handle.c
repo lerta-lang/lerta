@@ -483,19 +483,16 @@ static void cancel_write(void *context) {
   lerta_promise_reject_cancelled(write->promise);
 }
 
-// A buffer's length is an unsigned long on Windows, of 32 bits, so the bytes go in parts of 1 GiB.
-enum { WRITE_PART = 1 << 30 };
-
 // libuv copies the buffers, but not the bytes. An empty write is one empty buffer, as libuv takes
 // at least one.
 static int start_write(Write *write) {
   int64_t length = write->bytes->length;
-  int64_t count = length == 0 ? 1 : (length + WRITE_PART - 1) / WRITE_PART;
+  int64_t count = length == 0 ? 1 : (length + LERTA_IO_CHUNK - 1) / LERTA_IO_CHUNK;
   uv_buf_t *buffers = lerta_checked_malloc((size_t)count * sizeof(uv_buf_t));
   for (int64_t i = 0; i < count; i++) {
-    int64_t part = length - i * WRITE_PART;
-    if (part > WRITE_PART) part = WRITE_PART;
-    buffers[i] = uv_buf_init((char *)write->bytes->bytes + i * WRITE_PART, (unsigned int)part);
+    int64_t start = i * LERTA_IO_CHUNK;
+    unsigned int part = (unsigned int)lerta_io_chunk(length - start);
+    buffers[i] = uv_buf_init((char *)write->bytes->bytes + start, part);
   }
   int status = uv_write(&write->request, write->socket->stream, buffers,
                         (unsigned int)count, end_write);

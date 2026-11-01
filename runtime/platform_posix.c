@@ -47,12 +47,6 @@ void lerta_os_arguments(int *argc, char ***argv) {
   (void)argv;
 }
 
-// macOS rejects a read or a write of more than INT_MAX bytes, so each asks for 1 GiB at most, as
-// on Windows.
-static size_t request_size(int64_t length) {
-  return length > (1 << 30) ? (size_t)1 << 30 : (size_t)length;
-}
-
 // A non-blocking fd, such as the pipe that Node.js gives a child for its stdout, takes nothing
 // while it is full, and gives nothing while it is empty, so a write or a read waits for it as a
 // blocking one would, for `events`, POLLOUT or POLLIN.
@@ -74,7 +68,7 @@ static void end_by_broken_pipe(void) {
 
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
   while (length > 0) {
-    ssize_t written = write(fd, bytes, request_size(length));
+    ssize_t written = write(fd, bytes, (size_t)lerta_io_chunk(length));
     if (written < 0 && errno == EINTR) continue;
     if (written < 0 && errno == EPIPE) end_by_broken_pipe();
     bool is_full = written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK);
@@ -109,7 +103,7 @@ void lerta_os_abort(void) {
 
 static int64_t read_fd(void *file, uint8_t *buffer, int64_t size) {
   for (;;) {
-    ssize_t count = read((int)(intptr_t)file, buffer, request_size(size));
+    ssize_t count = read((int)(intptr_t)file, buffer, (size_t)lerta_io_chunk(size));
     if (count >= 0 || errno != EINTR) return count < 0 ? -1 : count;
   }
 }

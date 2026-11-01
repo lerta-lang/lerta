@@ -8,12 +8,6 @@
 // The platform functions that libuv makes the same on every system, through its synchronous file
 // system calls, which take no loop and no callback (see docs/internals.md#platforms).
 
-// Each read or write asks for 1 GiB at most, as macOS rejects one of more than INT_MAX bytes and
-// libuv's buffers count their bytes in an unsigned int on Windows.
-static unsigned int request_size(int64_t length) {
-  return length > (1 << 30) ? 1u << 30 : (unsigned int)length;
-}
-
 static uv_file open_file(const char *path, int flags, int mode) {
   uv_fs_t request;
   int file = uv_fs_open(NULL, &request, path, flags, mode, NULL);
@@ -28,7 +22,7 @@ static void close_file(uv_file file) {
 }
 
 static int64_t read_file(void *file, uint8_t *buffer, int64_t size) {
-  uv_buf_t chunk = uv_buf_init((char *)buffer, request_size(size));
+  uv_buf_t chunk = uv_buf_init((char *)buffer, (unsigned int)lerta_io_chunk(size));
   uv_fs_t request;
   int64_t count = uv_fs_read(NULL, &request, (uv_file)(intptr_t)file, &chunk, 1, -1, NULL);
   uv_fs_req_cleanup(&request);
@@ -46,7 +40,7 @@ uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
 // From `offset`, or from the file's position if it is -1.
 static bool write_all(uv_file file, int64_t offset, const uint8_t *bytes, int64_t length) {
   while (length > 0) {
-    uv_buf_t chunk = uv_buf_init((char *)bytes, request_size(length));
+    uv_buf_t chunk = uv_buf_init((char *)bytes, (unsigned int)lerta_io_chunk(length));
     uv_fs_t request;
     int64_t written = uv_fs_write(NULL, &request, file, &chunk, 1, offset, NULL);
     uv_fs_req_cleanup(&request);

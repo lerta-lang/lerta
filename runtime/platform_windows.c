@@ -52,7 +52,7 @@ void lerta_os_arguments(int *argc, char ***argv) {
 
 static bool write_all(HANDLE handle, const uint8_t *bytes, int64_t length) {
   while (length > 0) {
-    DWORD chunk = length > (1 << 30) ? (1 << 30) : (DWORD)length;
+    DWORD chunk = (DWORD)lerta_io_chunk(length);
     DWORD written;
     if (!WriteFile(handle, bytes, chunk, &written, NULL) || written == 0) return false;
     bytes += written;
@@ -145,7 +145,7 @@ void lerta_os_abort(void) {
 }
 
 static int64_t read_handle(void *file, uint8_t *buffer, int64_t size) {
-  DWORD chunk = size > (1 << 30) ? (1 << 30) : (DWORD)size;
+  DWORD chunk = (DWORD)lerta_io_chunk(size);
   DWORD count;
   return ReadFile(file, buffer, chunk, &count, NULL) ? (int64_t)count : -1;
 }
