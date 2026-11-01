@@ -9,7 +9,7 @@ import Deadline from './internal/deadline'
 import CHUNK_SIZE from './internal/http_chunks'
 import Request, Response from './internal/http_message'
 import
-  read_rest_of_request, read_request_line, RequestError, ServerOptions
+  Incoming, read_rest_of_request, read_request_line, RequestError, ServerOptions
 from './internal/http_request'
 import has_body, response_bytes, write_body from './internal/http_response'
 
@@ -131,23 +131,26 @@ drain := (reader: Reader) ->
 LINGER_SECONDS := 2.0
 LINGER_BYTES := 65536
 
-# Serves the next request on the connection, and tells whether the connection goes on. A response
-# that the server gives itself has an empty body, which is right for HEAD too. A body that is a
-# Reader is closed once sent, or once it is not to be.
+# Serves the next request on the connection, and tells whether the connection goes on.
 serve_request := (socket: Socket, server: Server, deadline: Deadline) ->
   incoming :=
     try
       await read_request(socket, server, deadline) ? return false
     catch error: RequestError
-      await socket.write(response_bytes({ status: error.status }, false, 'GET', true))
+      await socket.write(own_response(error.status, { method: 'GET', chunked: true }))
       return false
     catch _: ValueError
       # A line that is not UTF-8, or a header that Headers does not take.
-      await socket.write(response_bytes({ status: 400 }, false, 'GET', true))
+      await socket.write(own_response(400, { method: 'GET', chunked: true }))
       return false
+  await respond(socket, server, incoming)
+
+# Writes the handler's response to the request, and tells whether the connection goes on. A body
+# that is a Reader is closed once sent, or once it is not to be.
+respond := (socket: Socket, server: Server, incoming: Incoming) ->
   { request, chunked } := incoming
   { method } := request
-  failed := -> await socket.write(response_bytes({ status: 500 }, false, method, chunked))
+  failed := -> await socket.write(own_response(500, { method, chunked }))
   response :=
     try
       await server.handler(request)
@@ -169,7 +172,7 @@ serve_request := (socket: Socket, server: Server, deadline: Deadline) ->
   try
     bytes :=
       try
-        response_bytes response, keep_alive, method, chunked
+        response_bytes response, { keep_alive, method, chunked }
       catch _
         await failed()
         return false
@@ -180,6 +183,12 @@ serve_request := (socket: Socket, server: Server, deadline: Deadline) ->
   return false if not keep_alive
   await incoming.body.skip()
   true
+
+# The bytes of a response that the server gives itself, after which the connection ends. Its body is
+# empty, which is right for HEAD too.
+own_response := (status: Int, framing: { method: String, chunked: Bool }) ->
+  { method, chunked } := framing
+  response_bytes { status }, { method, chunked, keep_alive: false }
 
 # The next request, or nil if the connection ends, or stays idle, before it starts. A server that
 # is closed meanwhile closes the connection, which the read throws for.
