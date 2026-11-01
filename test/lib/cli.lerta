@@ -1,7 +1,7 @@
 # Runs the compiler for CLI checks and gives each invocation isolated working and temporary
 # directories.
 import compare_text, lines from './expect'
-import cache_dir, OUTPUT_LIMIT, root_dir, suite_dir from './lerta'
+import cache_dir, OUTPUT_LIMIT, root_dir, shown_text, suite_dir from './lerta'
 import is_file, list_dir, make_dir, read_file from 'std:io'
 import platform, run from 'std:process'
 
@@ -9,6 +9,9 @@ export struct CliRun
   status: Int
   stdout: Binary
   stderr: Binary
+  # The text of each stream, which every check that reads it as text expects to be UTF-8.
+  stdout_text = -> @stdout.text()!
+  stderr_text = -> @stderr.text()!
 
 export run_command := (
   command: String
@@ -39,7 +42,7 @@ export run_command := (
 host_triple_run := await run_command('clang', ['-print-target-triple'], '.')
 if host_triple_run.status != 0
   throw ValueError("clang -print-target-triple failed: #{host_triple_run.status}")
-export host_triple := host_triple_run.stdout.text()!.split("\n")[0]
+export host_triple := host_triple_run.stdout_text().split("\n")[0]
 export runtime_flags: String[][] = [[], ['-O'], ['--target', host_triple]]
 export host_platform := platform
 export executable_suffix := platform == 'windows' then '.exe' else ''
@@ -84,7 +87,7 @@ export run_in_new_dir := (
 
 export expect_success := (what: String, result: CliRun): String[] ->
   return [] if result.status == 0
-  stderr := result.stderr.text() ? '(not valid UTF-8)'
+  stderr := shown_text(result.stderr)
   ["#{what} failed (exit status #{result.status}), stderr:\n#{stderr}"]
 
 export expect_left := (what: String, expected: String[], actual: String[]) ->

@@ -94,8 +94,8 @@ ended_process_id := ->
   await write_file(program, "import process_id from 'std:process'\nprint process_id\n".binary)
   ran := await run_command(compiler, ['run', program], dir)
   if ran.status != 0
-    throw ValueError("the program could not report its process id: #{ran.stderr.text()!}")
-  ran.stdout.text()!.split("\n")[0]
+    throw ValueError("the program could not report its process id: #{ran.stderr_text()}")
+  ran.stdout_text().split("\n")[0]
 
 var next_ended_process = 0
 
@@ -161,7 +161,7 @@ incomplete_runtime_check := (flags: String[], kind: String) ->
       compare_text(
         'stderr'
         "the cached runtime #{dir} is incomplete: remove it\n"
-        second.result.stderr.text()!
+        second.result.stderr_text()
       )...
     ]
 
@@ -175,14 +175,14 @@ invalid_target_check := ->
     unsupported := await build_in_cache(unsupported_cache, ['--target', 'x86_64-unknown-freebsd'])
     [
       expect_status(1, path_target.result.status)...
-      compare_text('stderr', "not a target: ../outside\n", path_target.result.stderr.text()!)...
+      compare_text('stderr', "not a target: ../outside\n", path_target.result.stderr_text())...
       expect_status(1, windows_path.result.status)...
-      compare_text('stderr', "not a target: ..\\outside\n", windows_path.result.stderr.text()!)...
+      compare_text('stderr', "not a target: ..\\outside\n", windows_path.result.stderr_text())...
       expect_status(1, unsupported.result.status)...
       compare_text(
         'stderr'
         "not a target that the runtime is built for: x86_64-unknown-freebsd\n"
-        unsupported.result.stderr.text()!
+        unsupported.result.stderr_text()
       )...
       expect_left('files beside the cache', [], list_dir(beside_cache))...
       reason_unless(
@@ -288,7 +288,7 @@ no_cache_location_check := ->
         'stderr'
         "no cache directory: set #{host_platform == 'windows' then 'LOCALAPPDATA' else 'HOME'} " +
           "or LERTA_CACHE_DIR\n"
-        ran.stderr.text()!
+        ran.stderr_text()
       )...
     ]
 
@@ -304,7 +304,7 @@ cache_creation_failure_check := ->
       compare_text(
         'stderr'
         "cannot make the cache directory: #{blocked}\n"
-        ran.result.stderr.text()!
+        ran.result.stderr_text()
       )...
     ]
 
@@ -351,7 +351,7 @@ occupied_runtime_directory_check := ->
       compare_text(
         'stderr'
         "cannot move the compiled runtime into the cache: #{dir}\n"
-        built.result.stderr.text()!
+        built.result.stderr_text()
       )...
     ]
 
@@ -384,8 +384,8 @@ unremovable_staging_check := ->
   Check name: 'lerta build continues when a stale staging directory cannot be removed', run: ->
     return nil if host_platform == 'windows'
     uid := await run_command('id', ['-u'], cli_work_dir)
-    return ["id -u failed: #{uid.stderr.text()!}"] if uid.status != 0
-    return nil if uid.stdout.text()!.split("\n")[0] == '0'
+    return ["id -u failed: #{uid.stderr_text()}"] if uid.status != 0
+    return nil if uid.stdout_text().split("\n")[0] == '0'
     cache := new_cli_dir('cache-unremovable-staging')
     name := await debug_runtime_name()
     staging := "#{cache}/#{name}.staging-#{await ended_process_id()}-lerta-killed"
@@ -394,14 +394,14 @@ unremovable_staging_check := ->
     make_dir locked
     await write_file("#{locked}/array.o", ''.binary)
     restricted := await run_command('chmod', ['500', locked], cli_work_dir)
-    return ["chmod failed: #{restricted.stderr.text()!}"] if restricted.status != 0
+    return ["chmod failed: #{restricted.stderr_text()}"] if restricted.status != 0
     built :=
       try
         await build_in_cache(cache, [])
       finally
         restored := await run_command('chmod', ['700', locked], cli_work_dir)
         if restored.status != 0
-          throw ValueError("chmod could not restore #{locked}: #{restored.stderr.text()!}")
+          throw ValueError("chmod could not restore #{locked}: #{restored.stderr_text()}")
     reasons := expect_success('build', built.result)
     return reasons if not reasons.is_empty()
     [
@@ -448,7 +448,7 @@ clean_check := ->
     none := await run_in_new_dir(compiler, ['clean'], ''.binary, env)
     [
       expect_success('clean', cleaned.result)...
-      compare_text('removed', removed, cleaned.result.stdout.text()!)...
+      compare_text('removed', removed, cleaned.result.stdout_text())...
       expect_left('left in the cache', ['notes.txt', 'thinlto-other'], list_dir(cache))...
       expect_success('clean without a cache', none.result)...
       reason_unless(none.result.stdout.is_empty(), 'clean without a cache printed something')...

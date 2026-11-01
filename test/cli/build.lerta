@@ -105,7 +105,7 @@ input_check := (test: InputCase) ->
       compare_text(
         'stderr'
         "the output '#{test.args.last()!}' is an input of the build\n"
-        built.result.stderr.text()!
+        built.result.stderr_text()
       )...
       compare_output(test.input, before, await read_file("#{cwd}/#{test.input}"))...
     ]
@@ -246,8 +246,8 @@ optimized_runtime_check := ->
     objdump_args := ['-d', '--no-show-raw-insn', executable]
     args := host_platform == 'macos' then ['-tvV', executable] else objdump_args
     code := await run_command(disassembler, args, built.cwd)
-    return ["#{disassembler} failed: #{code.stderr.text()!}"] if code.status != 0
-    lines := code.stdout.text()!.split("\n")
+    return ["#{disassembler} failed: #{code.stderr_text()}"] if code.status != 0
+    lines := code.stdout_text().split("\n")
     # objdump shows a call as `call   1234 <lerta_retain>`, otool as `bl\t_lerta_retain`.
     is_call_opcode := (word: String) ->
       word.starts_with('call') or word == 'jmp' or word == 'bl' or word == 'b'
@@ -270,7 +270,7 @@ optimized_runtime_check := ->
 
 dump_llvm_check := -> Check(name: 'lerta dump-llvm prints the IR and leaves no file', run: ->
   dumped := await run_in_new_dir(compiler, ['dump-llvm', hello])
-  ir := dumped.result.stdout.text()!
+  ir := dumped.result.stdout_text()
   ir_reasons: String[]
   ir_reasons.push 'no lerta_main in the IR' if 'define external void @lerta_main()' not in ir
   ir_reasons.push 'target attributes in the IR' if 'attributes #' in ir
@@ -292,7 +292,7 @@ dump_seldom_check := ->
     for source in sources
       dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
       reasons.append expect_status(0, dumped.result.status)
-      lines.append dumped.result.stdout.text()!.split("\n")
+      lines.append dumped.result.stdout_text().split("\n")
     weights := '!prof !{!"branch_weights", i32 1, i32 2000}'
     targets := ['label %unwind.', 'label %raise.', 'label %generator.reject.']
     to := (line: String, target: String) -> line.starts_with('  br i1 ') and target in line
@@ -318,7 +318,7 @@ JOINED_LITERALS := "#{root_dir}/tests/string/joined_literals.lerta"
 dump_joined_literals_check := ->
   Check name: 'lerta dump-llvm joins String literals joined by +', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', JOINED_LITERALS])
-    ir := dumped.result.stdout.text()!
+    ir := dumped.result.stdout_text()
     reasons := expect_status(0, dumped.result.status)
     body := function_body(ir.split("\n"), 'joined') ? return [reasons..., 'no function joined']
     reasons.push 'a call in joined' if body.any((line) -> 'call ' in line)
@@ -336,7 +336,7 @@ UNCHECKED_METHODS := "#{root_dir}/tests/operator/unchecked_methods.lerta"
 dump_unchecked_methods_check := ->
   Check name: 'lerta dump-llvm checks for no exception after a builtin that leaves none', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', UNCHECKED_METHODS])
-    lines := dumped.result.stdout.text()!.split("\n")
+    lines := dumped.result.stdout_text().split("\n")
     unchecked :=
       'code'
       'char_of'
@@ -370,7 +370,7 @@ dump_unchecked_methods_check := ->
 dump_float_ranges_check := ->
   Check name: 'lerta dump-llvm checks no NaN where the ranges of Floats give none', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', "#{root_dir}/tests/float/ranges.lerta"])
-    lines := dumped.result.stdout.text()!.split("\n")
+    lines := dumped.result.stdout_text().split("\n")
     unchecked :=
       'bounded_loop'
       'squares'
@@ -432,7 +432,7 @@ dump_batched_writes_check := ->
     source := "#{root_dir}/tests/float/nan_in_batched_writes_trace.lerta"
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
-    body := function_body(dumped.result.stdout.text()!.split("\n"), 'grow')
+    body := function_body(dumped.result.stdout_text().split("\n"), 'grow')
     return [reasons..., 'no function grow'] if not body
     batches := body.filter((line) -> line.starts_with('nan.one.by.one.')).count()
     reasons.push "grow has #{batches} batches, not one" if batches != 1
@@ -444,7 +444,7 @@ dump_compound_tree_check := ->
     source := "#{root_dir}/tests/float/nan_in_compound_tree_trace.lerta"
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
-    body := function_body(dumped.result.stdout.text()!.split("\n"), 'shrink')
+    body := function_body(dumped.result.stdout_text().split("\n"), 'shrink')
     return [reasons..., 'no function shrink'] if not body
     count := body.filter((line) -> ' = fcmp uno ' in line).count()
     reasons.push "shrink checks for NaN #{count} times, not twice" if count != 2
@@ -460,7 +460,7 @@ dump_fixed_captures_check := ->
   Check name: 'lerta dump-llvm reads the captures of a closure as fixed', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', REMADE_IN_LOOPS])
     reasons := expect_status(0, dumped.result.status)
-    lines := dumped.result.stdout.text()!.split("\n")
+    lines := dumped.result.stdout_text().split("\n")
     is_capture := (line: String) -> '%closure, i32 0, i32 ' in line and not line.ends_with(' 2')
     captures := [i for line, i in lines when is_capture(line)]
     unfixed := [i for i in captures when '!invariant.group' not in lines[i + 1]]
@@ -482,7 +482,7 @@ ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
 # of the items, whose nodes the module defines once each.
 dump_item_tag_check := -> Check(name: 'lerta dump-llvm tags the loads and stores of items', run: ->
   dumped := await run_in_new_dir(compiler, ['dump-llvm', ITEM_WRITES])
-  lines := dumped.result.stdout.text()!.split("\n")
+  lines := dumped.result.stdout_text().split("\n")
   tagged := alias_tag_of(lines, 'lerta item') ? return ['the tag of items is not defined once']
   root := await clang_tbaa_root(dumped.cwd)
   has_root := lines.any((line) -> line.ends_with(" = #{root}"))
@@ -514,7 +514,7 @@ FIELD_WRITES := "#{root_dir}/tests/float/field_writes.lerta"
 dump_field_tag_check := ->
   Check name: 'lerta dump-llvm tags fields, top-level values and the exception', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', FIELD_WRITES])
-    lines := dumped.result.stdout.text()!.split("\n")
+    lines := dumped.result.stdout_text().split("\n")
     body := function_body(lines, 'move') ? return ['no function move']
     undefined := (name: String) -> ["the tag of #{name} is not defined once"]
     float := alias_tag_of(lines, 'lerta float') ? return undefined('lerta float')
@@ -554,7 +554,7 @@ clang_tbaa_root := (cwd: String) ->
   await write_file("#{cwd}/load.c", 'long load(long *p) { return *p; }'.binary)
   args := ['-O1', '-S', '-emit-llvm', '-o', '-', 'load.c']
   compiled := await run_command('clang', args, cwd)
-  lines := compiled.stdout.text()!.split("\n")
+  lines := compiled.stdout_text().split("\n")
   root := lines.find((line) -> line.ends_with('TBAA"}')) ? return "none in clang's IR"
   root.split(' = ')[1]
 
@@ -568,7 +568,7 @@ item_tag_source_lines_check := ->
 dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in symbol names', run: ->
   source := "#{root_dir}/tests/module/escaped_path.lerta"
   dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
-  ir := dumped.result.stdout.text()!
+  ir := dumped.result.stdout_text()
   symbols :=
     '@"lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
     '@"lerta.thunk.lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
@@ -625,7 +625,7 @@ line_table_rows := (path: String) ->
       if result := await run_dwarfdump(command, path)
         if result.status == 0
           rows: Int[]
-          for line in result.stdout.text()!.split("\n")
+          for line in result.stdout_text().split("\n")
             fields := [field for field in line.split(' ') when field != '']
             if fields.length >= 2 and fields[0].starts_with('0x')
               rows.push number if number := source_line_number(fields[1])
@@ -686,7 +686,7 @@ no_trace_check := ->
     program := await read_file(executable)
     [
       expect_status(1, ran.status)...
-      compare_text('stderr', "failed\n", ran.stderr.text()!)...
+      compare_text('stderr', "failed\n", ran.stderr_text())...
       (program.index_of('<top level>'.binary) != nil then [
         'the program holds the names of traces'
       ] else no_reasons)...
