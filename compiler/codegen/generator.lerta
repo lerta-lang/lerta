@@ -234,6 +234,28 @@ export locate := (g: Generator, position: Position?) ->
   g.position = position
   g.ir.location = position
 
+# Generates `body` at the position, after which the place is where it was.
+export located := (g: Generator, position: Position?, body: () -> void) ->
+  outer := g.position
+  locate g, position
+  body()
+  locate g, outer
+
+# The operand that `value` generates at the position, as `located` generates.
+export located_value := (g: Generator, position: Position?, value: () -> String) ->
+  var result = ''
+  located g, position, -> result = value()
+  result
+
+# What `body` generates with the float checks deferred or not (see float_tree), after which they
+# are as they were.
+export with_deferred_checks := (g: Generator, defers: Bool, body: () -> String) ->
+  outer := g.defers_float_checks
+  g.defers_float_checks = defers
+  result := body()
+  g.defers_float_checks = outer
+  result
+
 # How a trace names a function: a method by its type and its name, as `Point.length`.
 export trace_name := (name: String, this_type: Type?) ->
   this_type then "#{format_type(this_type)}.#{name}" else name

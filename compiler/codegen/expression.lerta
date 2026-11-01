@@ -18,7 +18,9 @@ import generate_array, generate_index, generate_map from './collection'
 import generate_comprehension from './control_flow'
 import emit_settling_closure, generate_closure, generate_jump from './function'
 import function_reference_symbol, local_of from './references'
-import CodegenLocal, Generator, locate, SlotLocal, ValueLocal from './generator'
+import
+  CodegenLocal, Generator, located_value, SlotLocal, ValueLocal, with_deferred_checks
+from './generator'
 import
   emit_field_pointer, emit_member_dispatch, emit_record, emit_record_field, emit_type_test,
   emit_value_at, emit_values, emit_weak_object, field_named, record_field_index
@@ -105,11 +107,7 @@ generate_call_ending_if_never := (g: Generator, call: Call) ->
   operand
 
 generate_value := (g: Generator, expression: Expression) ->
-  outer := g.position
-  locate g, expression.position
-  value := generate_node(g, replaced(g, expression))
-  locate g, outer
-  value
+  located_value g, expression.position, -> generate_node(g, replaced(g, expression))
 
 # What the checker replaced the expression with, through each replacement in turn, or the
 # expression itself (see NodeFacts.replacements).
@@ -432,11 +430,7 @@ check_where_read := (g: Generator, local: CodegenLocal, value: String) ->
 # where it is called, as their values leave the tree; the trees in them are their own, whose roots
 # leave the tree's way of checking as it was.
 generate_call_in_tree := (g: Generator, call: Call) ->
-  defers := g.defers_float_checks
-  g.defers_float_checks = false
-  value := generate_call_ending_if_never(g, call)
-  g.defers_float_checks = defers
-  value
+  with_deferred_checks g, false, -> generate_call_ending_if_never(g, call)
 
 # What the local holds, borrowed: its value, or a weak local's box.
 export held_value := (g: Generator, local: CodegenLocal) ->
