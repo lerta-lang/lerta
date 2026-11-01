@@ -145,13 +145,12 @@ local_items := (locals: Map<String, Type>) ->
 module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
   own := names_of(program, shared)
   declared_later := (item: CompletionItem) -> in_top_level and item.label in shared.top_level.locals
-  items := by_label([item for item in own when not declared_later(item)])
-  for name in shared.imports.modules.keys()
-    add_new items, { label: name, kind: MODULE, detail: nil }
+  items := [item for item in own when not declared_later(item)]
+  items.push { label: name, kind: MODULE, detail: nil } for name in shared.imports.modules.keys()
   # An imported name is as its module declares it, under the name it is imported by; a name of a
   # module imported as a name, `m.x`, is no name of its own.
   for (name, imported) in shared.imports.names.entries()
-    continue if '.' in name or name in items
+    continue if '.' in name or has_label(items, name)
     source := imported.source
     item :=
       case source
@@ -159,31 +158,28 @@ module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
           declared := exported_items(program, program.shared[source.module_index])
           declared.find((each) -> each.label == source.name) ? continue
         when ExternExport then extern_item(name, source.type)
-    add_new items, { item..., label: name }
+    items.push { item..., label: name }
   if builtins := shared.imports.builtins
-    add_new items, item for item in exported_items(program, program.shared[builtins])
-  items.values().to_array()
+    for item in exported_items(program, program.shared[builtins])
+      items.push item if not has_label(items, item.label)
+  items
 
 # The names that the module exports: its own, C functions, as `panic` of std:builtins, and those
 # it exports from other modules.
 exported_items := (program: ProgramWide, shared: Shared): CompletionItem[] ->
-  items := by_label([item for item in names_of(program, shared) when item.label in shared.exported])
+  items := [item for item in names_of(program, shared) when item.label in shared.exported]
   for name in shared.exported.keys()
-    continue if name in items
+    continue if has_label(items, name)
     exported := export_of(program, shared.index, name)
-    add_new items, extern_item(name, exported.type) if exported is ExternExport
+    items.push extern_item(name, exported.type) if exported is ExternExport
   for name in shared.reexported.keys()
     ref := export_ref(program, shared.index, name) ? continue
     declared := exported_items(program, program.shared[ref.module_index])
     item := declared.find((each) -> each.label == ref.name) ? continue
-    add_new items, { item..., label: name }
-  items.values().to_array()
+    items.push { item..., label: name }
+  items
 
-# The items by their labels, each label once, in the order the items first give them.
-by_label := (items: CompletionItem[]) ->
-  labeled: Map<String, CompletionItem>
-  add_new labeled, item for item in items
-  labeled
+has_label := (items: CompletionItem[], label: String) -> items.any((each) -> each.label == label)
 
 # Adds the item, unless one of its label is there.
 add_new := (items: Map<String, CompletionItem>, item: CompletionItem) ->

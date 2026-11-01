@@ -251,6 +251,42 @@ completion_reexports_check := ->
       compare_text('name in its module', '', completion_items_named(items, 'helper'))...
     ]
 
+completion_mixed_exports_check := ->
+  Check name: 'lerta lsp completes the own and the reexported names of a module, in order', run: ->
+    dir := new_cli_dir('lsp-completion-mixed-exports')
+    path := "#{dir}/a.lerta"
+    text := "import './facade' as f\nx := f.\n"
+    await write_file(path, ''.binary)
+    await write_file("#{dir}/lib.lerta", "export helper := -> 1\n".binary)
+    await write_file(
+      "#{dir}/facade.lerta"
+      "export helper from './lib'\nexport own := -> 2\n".binary
+    )
+    uri := uri_of(path)
+    messages := [did_open(uri, text), did_change(uri, text), completion_request(uri, 1, 7)].join('')
+    ran := await session(dir, messages)
+    items := completion_items(ran.stdout_text(), 1)
+    [
+      expect_status(0, ran.status)...
+      compare_text('labels', 'own helper', completion_labels(items))...
+    ]
+
+completion_import_clash_check := ->
+  Check name: 'lerta lsp completes a name that is both imported and declared once', run: ->
+    dir := new_cli_dir('lsp-completion-import-clash')
+    path := "#{dir}/a.lerta"
+    text := "import helper from './lib'\nhelper := 3\ny := he\n"
+    await write_file(path, ''.binary)
+    await write_file("#{dir}/lib.lerta", "export helper := -> 1\n".binary)
+    uri := uri_of(path)
+    messages := [did_open(uri, text), did_change(uri, text), completion_request(uri, 2, 7)].join('')
+    ran := await session(dir, messages)
+    items := completion_items(ran.stdout_text(), 1)
+    [
+      expect_status(0, ran.status)...
+      compare_text('helper', 'helper 3 () -> Int', completion_items_named(items, 'helper'))...
+    ]
+
 completion_coverage_check := ->
   Check name: 'lerta lsp completes the same member and name contexts as the CLI reference', run: ->
     completion_text := (here: String) ->
@@ -508,4 +544,6 @@ export checks :=
   completion_contexts_check()
   completion_imports_check()
   completion_reexports_check()
+  completion_mixed_exports_check()
+  completion_import_clash_check()
   completion_coverage_check()
