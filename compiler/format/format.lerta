@@ -121,58 +121,81 @@ check_same_program := (statements: Statement[], formatted: String, path: String)
     throw CompileError("#{path}: the formatter would change the program, which is a bug")
 
 # Where the formatted text differs from the source: at the first difference of each run of lines
-# that differ, with the innermost rule whose part holds that place in the formatted text, or else
-# the rule that the kind of difference points to; and the lines that it keeps but that are too
-# long, such as of a comment or a string, which it cannot break, but those kept as written.
+# that differ (see difference_finding), at the ends of lines that are not LF (see
+# line_end_findings), at the lines that it keeps but that are too long (see
+# long_line_findings), and at the comments that strand an operand.
 findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lines: Set<Int>) ->
-  source_lines := source.raw_lines
-  # Lines end with LF, and so does a file (see Layout): the first that ends with CRLF, and a last
-  # line without LF, are places of their own, and the lines are compared without them.
-  # A copy, as a last line without LF gets an empty one after it below.
+  # A copy, as a last line without LF gets an empty one after it, and the lines are compared
+  # without it.
   old := [source.lines...]
   new := formatted.split("\n")
-  result: Finding[]
-  if crlf := source_lines.find_index((line) -> line.ends_with("\r"))
-    column := columns(old[crlf]) + 1
-    result.push { rule: LAYOUT, at: { column, line: crlf + 1 } }
-  last := old.length - 1
-  if not old[last].is_empty()
-    result.push { rule: LAYOUT, at: { line: last + 1, column: columns(old[last]) + 1 } }
-    old.push ''
+  result := line_end_findings(source)
+  old.push '' if not old.last()!.is_empty()
   differing: Set<Int>
   for hunk in hunks(old, new)
     differing.add line for line in hunk.old_start...(hunk.old_start + hunk.old_count)
-    # Where as many lines differ in each, and none has moved, each pair of lines is a place of its
-    # own.
-    paired := hunk.old_count == hunk.new_count and not moves(old, new, hunk)
-    pairs := paired then hunk.old_count else 1
-    for i in 0...pairs
-      old_count := pairs == 1 then hunk.old_count else 1
-      new_count := pairs == 1 then hunk.new_count else 1
-      old_lines := [old[hunk.old_start + i + k] for k in 0...old_count]
-      new_lines := [new[hunk.new_start + i + k] for k in 0...new_count]
-      column := first_difference(old_lines.first() ? '', new_lines.first() ? '')
-      at := Position(column, line: hunk.old_start + i + 1)
-      in_new := Position(column, line: hunk.new_start + i + 1)
-      new_line := new_lines.first() ? ''
-      marks_from := Position(column: column - spaces_before(new_line, column), line: in_new.line)
-      rule :=
-        if only_blank_lines_differ(old_lines, new_lines)
-          BLANK_LINES
-        else if only_indentation_differs(old_lines, new_lines)
-          LAYOUT
-        else
-          last_line := in_new.line + new_count
-          inner := innermost_rule(rules, in_new, marks_from)
-          found := inner then inner else first_rule_from(rules, in_new, last_line)
-          found ? kind_of_difference(old_lines, new_lines, source, at.line)
-      result.push { at, rule }
-  for i in 0...old.length
-    too_long := columns(old[i]) > WIDTH and i not in differing and i + 1 not in kept_lines
-    result.push { rule: LINE_LENGTH, at: { line: i + 1, column: WIDTH + 1 } } if too_long
-  for comment in source.stranded
-    result.push { rule: STRANDED_COMMENTS, at: { line: comment.line, column: comment.column } }
-  result
+    for place in places_of(old, new, hunk)
+      result.push difference_finding(old, new, place, rules, source)
+  stranded: Finding[] = [
+    { rule: STRANDED_COMMENTS, at: { line: comment.line, column: comment.column } }
+    for comment in source.stranded
+  ]
+  [result..., long_line_findings(old, differing, kept_lines)..., stranded...]
+
+# Lines end with LF, and so does a file (see Layout): the first that ends with CRLF, and a last
+# line without LF, are places of their own.
+line_end_findings := (source: SourceText) ->
+  lines := source.lines
+  found: Finding[]
+  if crlf := source.raw_lines.find_index((line) -> line.ends_with("\r"))
+    found.push { rule: LAYOUT, at: { line: crlf + 1, column: columns(lines[crlf]) + 1 } }
+  last := lines.last()!
+  if not last.is_empty()
+    found.push { rule: LAYOUT, at: { line: lines.length, column: columns(last) + 1 } }
+  found
+
+# The places of the hunk: where as many lines differ in each, and none has moved, each pair of
+# lines is a place of its own.
+places_of := (old: String[], new: String[], hunk: Hunk) ->
+  paired := hunk.old_count == hunk.new_count and not moves(old, new, hunk)
+  return [hunk] if not paired
+  [
+    Hunk(old_start: hunk.old_start + i, old_count: 1, new_start: hunk.new_start + i, new_count: 1)
+    for i in 0...hunk.old_count
+  ]
+
+# The first difference of the place, with the innermost rule whose part holds that place in the
+# formatted text, or else the rule that the kind of difference points to.
+difference_finding := (
+  old: String[], new: String[], place: Hunk, rules: RulePlace[], source: SourceText
+): Finding ->
+  old_lines := old.slice(place.old_start, place.old_start + place.old_count)
+  new_lines := new.slice(place.new_start, place.new_start + place.new_count)
+  new_line := new_lines.first() ? ''
+  column := first_difference(old_lines.first() ? '', new_line)
+  at := Position(column, line: place.old_start + 1)
+  in_new := Position(column, line: place.new_start + 1)
+  marks_from := Position(column: column - spaces_before(new_line, column), line: in_new.line)
+  rule :=
+    if only_blank_lines_differ(old_lines, new_lines)
+      BLANK_LINES
+    else if only_indentation_differs(old_lines, new_lines)
+      LAYOUT
+    else
+      last_line := in_new.line + place.new_count
+      inner := innermost_rule(rules, in_new, marks_from)
+      found := inner then inner else first_rule_from(rules, in_new, last_line)
+      found ? kind_of_difference(old_lines, new_lines, source, at.line)
+  { at, rule }
+
+# The lines that the formatter keeps but that are too long, such as of a comment or a string, which
+# it cannot break, but those kept as written.
+long_line_findings := (old: String[], differing: Set<Int>, kept_lines: Set<Int>) ->
+  found: Finding[]
+  for line, i in old
+    too_long := columns(line) > WIDTH and i not in differing and i + 1 not in kept_lines
+    found.push { rule: LINE_LENGTH, at: { line: i + 1, column: WIDTH + 1 } } if too_long
+  found
 
 # Whether a line of the hunk, but for its indentation, is at another line of it in the other text,
 # as the lines below a line that a body joins are, which shift up by one.
