@@ -618,15 +618,15 @@ run_dwarfdump := (command: String, path: String) ->
 
 line_table_rows := (path: String) ->
   for tool in ['dwarfdump', 'llvm-dwarfdump']
-    if command := tool_on_path(tool)
-      if result := await run_dwarfdump(command, path)
-        if result.status == 0
-          rows: Int[]
-          for line in result.stdout_text().split("\n")
-            fields := [field for field in line.split(' ') when field != '']
-            if fields.length >= 2 and fields[0].starts_with('0x')
-              rows.push number if number := source_line_number(fields[1])
-          return rows
+    command := tool_on_path(tool) ? continue
+    result := await run_dwarfdump(command, path) ? continue
+    continue if result.status != 0
+    rows: Int[]
+    for line in result.stdout_text().split("\n")
+      fields := [field for field in line.split(' ') when field != '']
+      if fields.length >= 2 and fields[0].starts_with('0x')
+        rows.push number if number := source_line_number(fields[1])
+    return rows
   nil
 
 source_lines_build_check := (flags: String[]) ->
@@ -689,31 +689,33 @@ no_trace_check := ->
       ] else no_reasons)...
     ]
 
-export checks: Check[] = [build_and_run(flags) for flags in runtime_flags]
-checks.push default_output_check()
-checks.push leading_dash_check()
-checks.push symlink_output_check()
-checks.push missing_output_directory_check()
-checks.push missing_input_output_check()
-checks.push relative_temp_check()
-checks.append input_checks
-checks.push no_clang_check()
-checks.push failed_target_check()
-checks.push optimized_runtime_check()
-checks.push dump_llvm_check()
-checks.push dump_symbols_check()
-checks.push dump_seldom_check()
-checks.push dump_joined_literals_check()
-checks.push dump_unchecked_methods_check()
-checks.push dump_float_ranges_check()
-checks.push dump_compound_tree_check()
-checks.push dump_batched_writes_check()
-checks.push dump_fixed_captures_check()
-checks.push dump_item_tag_check()
-checks.push dump_field_tag_check()
-checks.push item_tag_source_lines_check()
-checks.push source_lines_check()
-checks.push no_trace_check()
-checks.push source_lines_build_check(no_build_flags)
-checks.push source_lines_build_check(['-O'])
-checks.push no_source_lines_check()
+export checks: Check[] = [
+  [build_and_run(flags) for flags in runtime_flags]...
+  default_output_check()
+  leading_dash_check()
+  symlink_output_check()
+  missing_output_directory_check()
+  missing_input_output_check()
+  relative_temp_check()
+  input_checks...
+  no_clang_check()
+  failed_target_check()
+  optimized_runtime_check()
+  dump_llvm_check()
+  dump_symbols_check()
+  dump_seldom_check()
+  dump_joined_literals_check()
+  dump_unchecked_methods_check()
+  dump_float_ranges_check()
+  dump_compound_tree_check()
+  dump_batched_writes_check()
+  dump_fixed_captures_check()
+  dump_item_tag_check()
+  dump_field_tag_check()
+  item_tag_source_lines_check()
+  source_lines_check()
+  no_trace_check()
+  source_lines_build_check(no_build_flags)
+  source_lines_build_check(['-O'])
+  no_source_lines_check()
+]
