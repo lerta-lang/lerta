@@ -30,6 +30,25 @@ print_stderr_line := (text: String) -> lerta_print_stderr(text + "\n")
 # The String of the Char, made anew.
 text_of := (c: Char) -> lerta_binary_as_string(utf8_of(c))
 
+upper_of := (b: Byte) -> b >= 'a' and b <= 'z' then b - 'a' + 'A' else b
+lower_of := (b: Byte) -> b >= 'A' and b <= 'Z' then b - 'A' + 'a' else b
+
+# The String with each ASCII character mapped by `map` and the others kept. A byte below 0x80 of
+# valid UTF-8 is a whole character, so it is taken as a Char without decoding a sequence.
+mapped_ascii := (text: String, map: (Byte) -> Byte) ->
+  bytes := text.binary
+  var mapped = ''
+  var i = 0
+  while i < bytes.length
+    byte := bytes[i]
+    if byte < 0x80
+      mapped += map(byte).to_char()
+      i += 1
+    else
+      mapped += char_at(bytes, i)
+      i += sequence_length(byte)
+  mapped
+
 # The String of each ASCII character, by its code.
 ASCII_TEXTS := [text_of(code.to_char()!) for code in 0...0x80]
 
@@ -147,14 +166,9 @@ extend String
   replace = (part: String, by: String) ->
     throw ValueError(message: 'replace of an empty part') if part == ''
     @split(part).join(by)
-  # Only the ASCII letters change: each is a byte that no multi-byte character holds, so that what
-  # is left is valid UTF-8.
-  to_upper = ->
-    bytes := [b >= 'a' and b <= 'z' then b - 'a' + 'A' else b for b in @binary]
-    lerta_binary_as_string bytes.to_binary()
-  to_lower = ->
-    bytes := [b >= 'A' and b <= 'Z' then b - 'A' + 'a' else b for b in @binary]
-    lerta_binary_as_string bytes.to_binary()
+  # Only the ASCII letters change.
+  to_upper = -> mapped_ascii(@, upper_of)
+  to_lower = -> mapped_ascii(@, lower_of)
   # The String after as many of `fill`, one code point, as make it `width` code points long, or the
   # String itself if it is no shorter.
   pad_start = (width: Int, fill = ' ') -> padding(@, width, fill) + @
