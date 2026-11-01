@@ -3,24 +3,11 @@
 
 #include "internal.h"
 
-static void **ready = NULL;
-static int64_t ready_start = 0;
-static int64_t ready_end = 0;
-static int64_t ready_capacity = 0;
+// The coroutines to resume.
+static LertaQueue ready;
 
 static void push_ready(void *coroutine) {
-  // The ones already resumed are dropped from the front before the queue grows.
-  if (ready_end == ready_capacity && ready_start > 0) {
-    int64_t length = ready_end - ready_start;
-    memmove(ready, ready + ready_start, (size_t)length * sizeof(void *));
-    ready_start = 0;
-    ready_end = length;
-  }
-  if (ready_end == ready_capacity) {
-    ready_capacity = ready_capacity == 0 ? 16 : ready_capacity * 2;
-    ready = lerta_checked_realloc(ready, (size_t)ready_capacity * sizeof(void *));
-  }
-  ready[ready_end++] = coroutine;
+  *(void **)lerta_queue_push(&ready, sizeof(void *)) = coroutine;
 }
 
 enum { PENDING, RESOLVED, REJECTED };
@@ -233,7 +220,12 @@ void lerta_promise_cancel(LertaPromise *promise) {
 
 void lerta_loop_run(void (*resume)(void *coroutine)) {
   for (;;) {
-    while (ready_start < ready_end) resume(ready[ready_start++]);
+    void **next;
+    while ((next = lerta_queue_front(&ready, sizeof(void *))) != NULL) {
+      void *coroutine = *next;
+      lerta_queue_shift(&ready);
+      resume(coroutine);
+    }
     if (!lerta_loop_wait()) break;
   }
 }

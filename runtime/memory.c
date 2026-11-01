@@ -14,6 +14,11 @@ void *lerta_checked_realloc(void *memory, size_t size) {
   return grown;
 }
 
+void *lerta_grow_buffer(void *items, int64_t *capacity, size_t item_size, int64_t first) {
+  *capacity = *capacity == 0 ? first : *capacity * 2;
+  return lerta_checked_realloc(items, (size_t)*capacity * item_size);
+}
+
 void *lerta_checked_calloc(size_t count, size_t size) {
   void *memory = calloc(count, size);
   if (memory == NULL) lerta_panic("out of memory");
@@ -118,8 +123,7 @@ static bool draining = false;
 
 static void push_pending(void *object) {
   if (pending_length == pending_capacity) {
-    pending_capacity = pending_capacity == 0 ? 64 : pending_capacity * 2;
-    pending = lerta_checked_realloc(pending, (size_t)pending_capacity * sizeof(void *));
+    pending = lerta_grow_buffer(pending, &pending_capacity, sizeof(void *), 64);
   }
   pending[pending_length++] = object;
 }

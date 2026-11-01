@@ -70,11 +70,8 @@ static bool failed[STDERR_FD + 1];
 // The bytes written to the buffer and those written out of it, so far.
 static int64_t appended = 0;
 static int64_t written = 0;
-// A queue of the promises that wait, from waiter_start up to waiter_end.
-static Waiter *waiters = NULL;
-static int64_t waiter_start = 0;
-static int64_t waiter_end = 0;
-static int64_t waiter_capacity = 0;
+// The Waiters of the promises that wait.
+static LertaQueue waiters;
 
 void lerta_output_init(void) {
   lerta_os_stdio_init();
@@ -88,9 +85,7 @@ static void append(int fd, const uint8_t *bytes, int64_t length) {
   Segment *last = buffered.count == 0 ? NULL : &buffered.items[buffered.count - 1];
   if (last == NULL || last->fd != fd) {
     if (buffered.count == buffered.capacity) {
-      buffered.capacity = buffered.capacity == 0 ? 4 : buffered.capacity * 2;
-      buffered.items =
-          lerta_checked_realloc(buffered.items, (size_t)buffered.capacity * sizeof(Segment));
+      buffered.items = lerta_grow_buffer(buffered.items, &buffered.capacity, sizeof(Segment), 4);
     }
     last = &buffered.items[buffered.count++];
     *last = (Segment){fd, NULL, 0, 0};
@@ -174,8 +169,11 @@ static void reject_failed(LertaPromise *promise, int fd) {
 // rise in the order they were added. Each is taken out before it is settled, as a release may end
 // the program (a rejected promise that nothing awaits), which writes out again.
 static void settle_waiters(void) {
-  while (waiter_start < waiter_end && waiters[waiter_start].target <= written) {
-    Waiter waiter = waiters[waiter_start++];
+  for (;;) {
+    Waiter *first = lerta_queue_front(&waiters, sizeof(Waiter));
+    if (first == NULL || first->target > written) break;
+    Waiter waiter = *first;
+    lerta_queue_shift(&waiters);
     if (failed[waiter.fd]) reject_failed(waiter.promise, waiter.fd);
     else lerta_promise_resolve(waiter.promise);
     lerta_release(waiter.promise);
@@ -189,7 +187,8 @@ static void end_write_out(WriteOut *write_out) {
   free_segments(&write_out->segments);
   free(write_out);
   settle_waiters();
-  if (waiter_start < waiter_end || buffered.bytes >= BUFFER_LIMIT) start_write_out();
+  bool waited = lerta_queue_front(&waiters, sizeof(Waiter)) != NULL;
+  if (waited || buffered.bytes >= BUFFER_LIMIT) start_write_out();
 }
 
 // A write out is asked for only once the one before is done, so the thread takes each before the
@@ -256,19 +255,8 @@ static void start_write_out(void) {
 
 static LertaPromise *wait_for_written(int fd, int64_t target) {
   LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
-  // The settled ones are dropped from the front before the queue grows.
-  if (waiter_end == waiter_capacity && waiter_start > 0) {
-    int64_t length = waiter_end - waiter_start;
-    memmove(waiters, waiters + waiter_start, (size_t)length * sizeof(Waiter));
-    waiter_start = 0;
-    waiter_end = length;
-  }
-  if (waiter_end == waiter_capacity) {
-    waiter_capacity = waiter_capacity == 0 ? 4 : waiter_capacity * 2;
-    waiters = lerta_checked_realloc(waiters, (size_t)waiter_capacity * sizeof(Waiter));
-  }
   lerta_retain(promise);
-  waiters[waiter_end++] = (Waiter){promise, fd, target};
+  *(Waiter *)lerta_queue_push(&waiters, sizeof(Waiter)) = (Waiter){promise, fd, target};
   start_write_out();
   settle_waiters();
   return promise;

@@ -3,6 +3,8 @@
 
 // What only the runtime's own C code uses; lerta.h declares what the generated code, std and the C
 // files linked with a program use.
+#include <string.h>
+
 #include "lerta.h"
 
 // Memory (memory.c).
@@ -14,6 +16,37 @@ void lerta_visit_pending(LertaVisitor visitor);
 void *lerta_checked_malloc(size_t size);
 void *lerta_checked_realloc(void *memory, size_t size);
 void *lerta_checked_calloc(size_t count, size_t size);
+// Moves a buffer of `capacity` items from malloc to one of twice as many, or of `first` if it has
+// none, and sets `capacity` to that.
+void *lerta_grow_buffer(void *items, int64_t *capacity, size_t item_size, int64_t first);
+// A queue of items of one size, in a buffer from malloc: those from `start` up to `end`.
+typedef struct {
+  uint8_t *items;
+  int64_t start;
+  int64_t end;
+  int64_t capacity;
+} LertaQueue;
+// The place of a new item at the end, which the caller fills. The items shifted from the front are
+// dropped before the queue grows.
+static inline void *lerta_queue_push(LertaQueue *queue, size_t item_size) {
+  if (queue->end == queue->capacity && queue->start > 0) {
+    int64_t length = queue->end - queue->start;
+    memmove(queue->items, queue->items + queue->start * (int64_t)item_size,
+            (size_t)length * item_size);
+    queue->start = 0;
+    queue->end = length;
+  }
+  if (queue->end == queue->capacity) {
+    queue->items = lerta_grow_buffer(queue->items, &queue->capacity, item_size, 16);
+  }
+  return queue->items + queue->end++ * (int64_t)item_size;
+}
+// The place of the first item, or NULL if the queue is empty, which a push may move.
+static inline void *lerta_queue_front(const LertaQueue *queue, size_t item_size) {
+  if (queue->start == queue->end) return NULL;
+  return queue->items + queue->start * (int64_t)item_size;
+}
+static inline void lerta_queue_shift(LertaQueue *queue) { queue->start++; }
 // The allocator (allocator.c), which frees with no size, and NULL as free does.
 void *lerta_mem_alloc(int64_t size);
 void lerta_mem_free(void *memory);

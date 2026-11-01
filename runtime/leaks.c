@@ -45,8 +45,7 @@ static void reach(void *reference) {
   if (object == NULL || object->ref_count == LERTA_IMMORTAL || object->ref_count > 0) return;
   object->ref_count = 1;
   if (reached_length == reached_capacity) {
-    reached_capacity = reached_capacity == 0 ? 64 : reached_capacity * 2;
-    reached = lerta_checked_realloc(reached, (size_t)reached_capacity * sizeof(LertaHeader *));
+    reached = lerta_grow_buffer(reached, &reached_capacity, sizeof(LertaHeader *), 64);
   }
   reached[reached_length++] = object;
 }
