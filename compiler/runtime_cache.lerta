@@ -157,8 +157,7 @@ runtime_kind_name := (kind: BuildKind) ->
 
 # A target names a directory of the cache, so it cannot be a path.
 reject_path_target := (target: String) ->
-  is_path := target.split('/').length > 1 or target.split('\').length > 1
-  throw CompileError("not a target: #{target}") if is_path
+  throw CompileError("not a target: #{target}") if '/' in target or '\' in target
 
 # The rest of the line of `clang --version` that starts with `prefix`.
 version_line_value := (clang_version: String, prefix: String) ->
@@ -200,8 +199,7 @@ object_name := (c_path: String) -> "#{basename(c_path).without_suffix('.c')!}.o"
 
 # libuv's object files are named by their sources' paths, as its directories for different systems
 # hold files of the same names, as `src/unix/async.c` and `src/win/async.c`.
-libuv_object_name := (source: String) ->
-  "libuv-#{source.without_suffix('.c')!.split('/').join('-')}.o"
+libuv_object_name := (source: String) -> "libuv-#{source.without_suffix('.c')!.replace('/', '-')}.o"
 
 object_names := (libuv: LibuvBuild) ->
   runtime := [object_name(path) for path in c_paths(libuv.system)]
@@ -269,8 +267,7 @@ TARGET_ATTRIBUTES := ['target-cpu', 'target-features', 'tune-cpu']
 # `declare i1 @llvm.coro.end(ptr, i1, token)`.
 coro_end_type := (ir: String) ->
   missing := CompileError('clang IR has no declaration of llvm.coro.end')
-  is_declaration := (line: String) ->
-    line.starts_with('declare ') and line.split(' @llvm.coro.end(').length == 2
+  is_declaration := (line: String) -> line.starts_with('declare ') and ' @llvm.coro.end(' in line
   declaration := ir.split("\n").find(is_declaration) ? throw missing
   declaration.split(' ')[1]
 
