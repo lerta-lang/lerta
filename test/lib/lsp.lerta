@@ -65,13 +65,43 @@ export definition_request := (uri: String, line: Int, character: Int, id: Int) -
 export hover_request := (uri: String, line: Int, character: Int, id: Int) ->
   position_request 'hover', uri, line, character, id
 
+# The values of the expected answers, as structs, whose fields encode_json writes in the order that
+# they are declared in, which is the server's.
+struct Position
+  line: Int
+  character: Int
+
+struct Range
+  start: Position
+  end: Position
+
+struct Location
+  uri: String
+  range: Range
+
+struct MarkupContent
+  kind: String
+  value: String
+
+struct Hover
+  contents: MarkupContent
+
+struct Diagnostic
+  range: Range
+  severity: Int
+  source: String
+  message: String
+
+# The members of a response but its "jsonrpc", given its result as JSON.
+result_fragment := (id: Int, result: String) -> "\"id\":#{id},\"result\":#{result}"
+
 export location_fragment := (id: Int, uri: String, line: Int, start: Int, end: Int) ->
-  "\"id\":#{id},\"result\":{\"uri\":\"#{uri}\",\"range\":{\"start\":{\"line\":#{line}," +
-    "\"character\":#{start}},\"end\":{\"line\":#{line},\"character\":#{end}}}}"
+  range := Range(start: { line, character: start }, end: { line, character: end })
+  result_fragment id, encode_json(Location(uri, range))
 
 export hover_fragment := (id: Int, text: String) ->
-  "\"id\":#{id},\"result\":{\"contents\":{\"kind\":\"markdown\"," +
-    "\"value\":#{encode_json("```lerta\n#{text}\n```")}}}"
+  value := "```lerta\n#{text}\n```"
+  result_fragment id, encode_json(Hover(contents: { value, kind: 'markdown' }))
 
 export initialize := '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{}}}'
 export finish :=
@@ -116,9 +146,9 @@ export response_ids := (output: String) ->
   ["#{decode_json<ResponseHeader>(body).id}" for body in response_bodies(output)]
 
 export diagnostic_body := (line: Int, character: Int, severity: Int, message: String) ->
-  position := "{\"line\":#{line},\"character\":#{character}}"
-  "{\"range\":{\"start\":#{position},\"end\":#{position}},\"severity\":#{severity}," +
-    "\"source\":\"lerta\",\"message\":#{encode_json(message)}}"
+  position := Position(line, character)
+  range := Range(start: position, end: position)
+  encode_json Diagnostic(range, severity, message, source: 'lerta')
 
 export published_diagnostics := (uri: String, diagnostics: String[]) ->
   '{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics",' +
