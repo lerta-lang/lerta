@@ -5,7 +5,7 @@ import
   IsTest, Member, Position, Range, This, Unwrap
 from '../ast'
 import TokenKind from '../lexer/tokens'
-import annotation_key, import_prefix from './annotated'
+import annotation_key, AnnotationKey from './annotated'
 import
   breaking, choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated, text,
   token
@@ -50,9 +50,9 @@ export spaced_value := (value: Expression, doc: Doc, context: Context) ->
 # where the lines it went on to would read as the operands of the operation that holds it.
 export struct Context
   source: SourceText
-  # The keys of the annotations left out of the syntax tree (see annotation_key), which are reported
+  # The keys of the annotations left out of the syntax tree (see AnnotationKey), which are reported
   # where they were.
-  left_out: String[]
+  left_out: AnnotationKey[]
   lines: StatementLines
   # The expressions written in place of others, which report the rules (see Annotation.reported).
   reported: Map<Expression, StyleRule>
@@ -141,17 +141,16 @@ export lines_of_items := (items: Item[]) ->
       parts.push item.doc
   join parts
 
-# Where an annotation was left out of the syntax tree (see `kind` in annotation_key), the place
+# Where an annotation was left out of the syntax tree (see `kind` in AnnotationKey), the place
 # that reports it, which holds no text.
 export removed_type := (kind: String, at: Position, context: Context) ->
-  removed := context.left_out.contains(annotation_key(kind, at))
+  removed := annotation_key(kind, at) in context.left_out
   removed then rule(TYPE_ANNOTATIONS, text('')) else text('')
 
 # Whether names were left out of the import (see import_names_of): all of them, if it has none left
 # and is not `import 'module' as name`, which takes none.
 export has_left_out_names := (import_node: Import, context: Context) ->
-  prefix := import_prefix(import_node)
-  context.left_out.any (key) -> key.starts_with(prefix)
+  context.left_out.any (key) -> key.kind == 'import' and key.at == import_node.position
 
 # A keyword at the position, where the source has it there.
 export keyword := (word: String, at: Position) -> token(word, at)

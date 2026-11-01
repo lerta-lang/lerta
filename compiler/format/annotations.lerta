@@ -7,7 +7,7 @@ import ProgramWide, Shared from '../checker/shared'
 import CompileError from '../errors'
 import imported_files, load_modules, Module, module_key from '../loader'
 import ArrayType, bool_type, MapType, SimpleType, Type from '../types'
-import Annotation, annotations_of, key_position, Placed from './annotated'
+import Annotation, AnnotationKey, annotations_of, Placed from './annotated'
 import
   CheckResult, checks, imports_type, quiet_program, result_of, same_result
 from './check_result'
@@ -16,12 +16,12 @@ import import_names_of from './left_out_imports'
 import rewrites_of from './rewrites'
 import in_body, in_shared_body, shares_types from './shared_arms'
 
-# The keys (see annotation_key) of the annotations that can be left out of each of the files at
+# The keys (see AnnotationKey) of the annotations that can be left out of each of the files at
 # `paths`, by the key of its module (see module_key); none for a file whose program does not check.
 export removable_annotations := (paths: String[]) ->
   wanted: Set<String>
   wanted.add module_key(path) for path in paths
-  removable: Map<String, String[]>
+  removable: Map<String, AnnotationKey[]>
   for entry in [await not_imported(paths)..., paths...]
     await add_removable(removable, entry, wanted) if not removable.contains(module_key(entry))
   removable
@@ -75,7 +75,7 @@ has_is_empty := (type: Type?) ->
 
 # Adds the removable annotations of the modules `wanted` that the program of `entry` holds and that
 # have none yet, or none for `entry` if the program does not check.
-add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<String>) ->
+add_removable := (removable: Map<String, AnnotationKey[]>, entry: String, wanted: Set<String>) ->
   modules :=
     try
       await load_modules(entry)
@@ -133,7 +133,7 @@ accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> Pr
   # Nor are those in the body of arms made one, which the checking decided with the narrowing of the
   # first arm alone, as a cast that only that narrowing makes redundant.
   is_outside := (placed: Placed) ->
-    at := key_position(placed.annotation.key)
+    at := placed.annotation.key.at
     not merged.any((arms) -> arms.key == placed.key and in_body(arms, at))
   outside := [placed for placed in others when is_outside(placed)]
   removable_among

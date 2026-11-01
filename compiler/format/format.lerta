@@ -5,7 +5,7 @@ import dump_ast_without_positions from '../ast_dump'
 import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
-import Annotation, imported_name, key_line from './annotated'
+import Annotation, AnnotationKey from './annotated'
 import left_out_candidates from './annotations'
 import Hunk, hunks, kept_lines from './diff'
 import join, lay_out, Layout, line_feed, RulePlace, text, WIDTH from './doc'
@@ -26,10 +26,10 @@ export struct Formatted
   text: String
   findings: Finding[]
 
-# The source in the style, without the annotations of `left_out` (see annotation_key), and
+# The source in the style, without the annotations of `left_out` (see AnnotationKey), and
 # where it differs from it. Throws a CompileError if the source does not parse, or if the text in
 # the style would not parse to the same program, which would be a bug.
-export format_source := (source: String, path: String, left_out: String[]) ->
+export format_source := (source: String, path: String, left_out: AnnotationKey[]) ->
   return Formatted(text: source, findings: []) if is_off_throughout(source)
   lexed := lex(source, path)
   text_source := source_text(source, lexed)
@@ -65,7 +65,7 @@ struct Printed
   layout: Layout
   lines: StatementLines
 
-printed := (lexed: Lexed, source: SourceText, path: String, left_out: String[]) ->
+printed := (lexed: Lexed, source: SourceText, path: String, left_out: AnnotationKey[]) ->
   statements := parse(lexed.tokens, path)
   reported: Map<Expression, StyleRule>
   for annotation in left_out_candidates(statements)
@@ -92,13 +92,13 @@ holds_comments := (annotation: Annotation, source: SourceText) ->
 
 # The annotations of `left_out` that are not on the lines kept as written, but for the names of
 # imports that those lines use.
-outside := (left_out: String[], kept_lines: Set<Int>, source: SourceText) ->
+outside := (left_out: AnnotationKey[], kept_lines: Set<Int>, source: SourceText) ->
   used: Set<String>
   for token in source.tokens
     used.add source.spelling(token) if token.kind == IDENTIFIER and token.line in kept_lines
-  leaves_out := (key: String) ->
-    name := imported_name(key)
-    not kept_lines.contains(key_line(key)) and not (name != nil and name in used)
+  leaves_out := (key: AnnotationKey) ->
+    name := key.name
+    key.at.line not in kept_lines and not (name != nil and name in used)
   [key for key in left_out when leaves_out(key)]
 
 # The imports left out last are reported where they were (see left_out_import_mark).

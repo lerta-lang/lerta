@@ -13,11 +13,21 @@ export struct Reported
   written: Expression
   rule: StyleRule
 
+# The checking and the printer find an annotation in syntax trees parsed apart, by what it annotates
+# (`return`, `parameter`, `variable` or `field`) and where that is: the function literal, or the
+# name; or by `member` and where the member is, by `record` and where the construction is, by
+# `shorthand` and where the name of the argument is, by `cast` and where the type of the cast is,
+# by `empty` and where the test is, or by `import` and where the import is, with the name it gives.
+export struct AnnotationKey
+  kind: String
+  at: Position
+  name: String? = default nil
+
 # A written type, the enum of a member, the name of a construction (see rewrites_of) or a
-# name that an import gives, named by `key` (see annotation_key), which `remove` takes out of the
-# syntax tree and `restore` puts back.
+# name that an import gives, named by `key`, which `remove` takes out of the syntax tree and
+# `restore` puts back.
 export struct Annotation
-  key: String
+  key: AnnotationKey
   remove: () -> void
   restore: () -> void
   # What the type is given to, which tells whether it can be inferred (see inferable): the name of a
@@ -63,32 +73,11 @@ export struct Placed
   key: String
   annotation: Annotation
 
-# The checking and the printer find an annotation in syntax trees parsed apart, by what it annotates
-# (`return`, `parameter`, `variable` or `field`) and where that is: the function literal, or the
-# name; or by `member` and where the member is, by `record` and where the construction is, by
-# `shorthand` and where the name of the argument is, by `cast` and where the type of the cast is,
-# or by `empty` and where the test is.
-export annotation_key := (kind: String, at: Position) -> "#{kind} #{at.line}:#{at.column}"
-
-# The line of what the key names.
-export key_line := (key: String) -> key_position(key).line
-
-# Where what the key names is.
-export key_position := (key: String) ->
-  place := key.split(' ')[1].split(':')
-  Position line: place[0].parse_int()!, column: place[1].parse_int()!
-
-# The name that an import gives, if the key names one (see import_key).
-export imported_name := (key: String) ->
-  words := key.split(' ')
-  words.length == 3 then words[2]
+export annotation_key := (kind: String, at: Position) -> AnnotationKey(kind, at)
 
 # A name left out of an import, by the import and the name it gives (see import_names_of).
-export import_key := (import_node: Import, name: String) -> "#{import_prefix(import_node)}#{name}"
-
-# What the keys of the names left out of the import start with.
-export import_prefix := (import_node: Import) ->
-  "#{annotation_key('import', import_node.position)} "
+export import_key := (import_node: Import, name: String) ->
+  AnnotationKey name, kind: 'import', at: import_node.position
 
 # The annotations that may be left out, in the order of the source. Those in generic functions and
 # types are not: the checker checks their code only for each instance, which tells nothing of the
